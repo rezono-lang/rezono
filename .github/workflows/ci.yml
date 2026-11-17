@@ -50,17 +50,17 @@ jobs:
         component: ${{ fromJson(needs.discover.outputs.python) }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
-      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0  # v7.1.0
-        with:
-          python-version-file: requirements/.python-version
-          cache: pip
-          cache-dependency-path: requirements/dev.txt
       - name: Cache locked Python environment
         id: environment
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830  # v4.3.0
         with:
           path: .venv
           key: python-env-v2-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('requirements/.python-version', 'requirements/dev.txt') }}
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0  # v7.1.0
+        with:
+          python-version-file: requirements/.python-version
+          cache: ${{ steps.environment.outputs.cache-hit != 'true' && 'pip' || '' }}
+          cache-dependency-path: requirements/dev.txt
       - name: Install from lockfile
         env:
           CACHE_HIT: ${{ steps.environment.outputs.cache-hit }}
@@ -83,7 +83,17 @@ jobs:
           echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
           python -m pip install -q --no-deps --no-build-isolation ${{ needs.discover.outputs.python_editable }}
           python scripts/check-pinned.py requirements/dev.txt
+      - name: Cache generated contract types
+        id: types
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830  # v4.3.0
+        with:
+          path: |
+            contracts/python/rezono_contracts/*.py
+            contracts/python/rezono_contracts/*.schema.json
+            viewer/src/lib/contract/generated
+          key: contract-types-v1-${{ runner.os }}-${{ hashFiles('requirements/.python-version', 'requirements/dev.txt', 'contracts/*.yaml', 'contracts/gen-types.sh', 'contracts/python/rezono_contracts/**', 'viewer/package.json', 'viewer/src/lib/contract/generated/**') }}
       - name: Generate contract types
+        if: steps.types.outputs.cache-hit != 'true'
         run: contracts/gen-types.sh
       - name: Check ${{ matrix.component.folder }}
         shell: bash

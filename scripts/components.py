@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import shutil
@@ -227,16 +228,21 @@ def run_shard(folder: str, shard: int, total: int, report_dir: Path) -> int:
     workers = runner_cores() if folder in PARALLEL else 1
     report_dir.mkdir(parents=True, exist_ok=True)
 
-    def execute(worker: int) -> int:
+    def execute(worker: int, state: str) -> int:
         args = [
             sys.executable, str(Path(__file__).resolve()), "pytest-worker", folder,
-            str(shard), str(total), str(worker), str(workers), str(report_dir),
+            str(shard), str(total), str(worker), str(workers), str(report_dir), state,
         ]
         env = {**os.environ, "PYTHONHASHSEED": os.environ.get("PYTHONHASHSEED", "0")}
         return subprocess.run(args, cwd=ROOT, env=env, check=False).returncode
 
-    with ThreadPoolExecutor(max_workers=workers) as pool:
-        statuses = list(pool.map(execute, range(workers)))
+    with tempfile.TemporaryDirectory() as state, ThreadPoolExecutor(max_workers=workers) as pool:
+        statuses = list(pool.map(lambda worker: execute(worker, state), range(workers)))
+        if not any(statuses) and folder in PARALLEL:
+            manifests = [(Path(state) / f"collection-{worker}").read_bytes() for worker in range(workers)]
+            if len(set(manifests)) != 1:
+                print("Workers collected different tests", file=sys.stderr)
+                return 1
     if all(code == 5 for code in statuses):
         blocked = {
             entry.read_text(encoding="utf-8").split(":", 1)[0].strip()
@@ -246,13 +252,16 @@ def run_shard(folder: str, shard: int, total: int, report_dir: Path) -> int:
     return next((code for code in statuses if code), 0)
 
 
-def pytest_worker(folder: str, shard: int, total: int, worker: int, workers: int, reports: Path) -> int:
+def pytest_worker(folder: str, shard: int, total: int, worker: int, workers: int, reports: Path, state: Path) -> int:
     import pytest
 
     # Match python -m pytest's import path while registering the partition
     # after normal collection, including conftest exclusions and plug-ins.
     sys.path.insert(0, str(ROOT))
     files = test_files(folder)
+    dynamic = workers > 1 and folder != "examples"
+    claims = state / "claims"
+    claims.mkdir(exist_ok=True)
 
     class Partition:
         had_items = False
@@ -263,6 +272,8 @@ def pytest_worker(folder: str, shard: int, total: int, worker: int, workers: int
             collected = {item.path.relative_to(ROOT).as_posix() for item in items}
             assigned = set(sorted(set(files) | collected)[shard::total])
             local = [item for item in items if item.path.relative_to(ROOT).as_posix() in assigned]
+            digest = hashlib.sha256(json.dumps([item.nodeid for item in local]).encode()).hexdigest()
+            (state / f"collection-{worker}").write_text(digest, encoding="ascii")
             if folder == "examples":
                 # Examples share per-file coverage counters and cached pack
                 # states. Keep their module fixtures and collection order.
@@ -270,7 +281,34 @@ def pytest_worker(folder: str, shard: int, total: int, worker: int, workers: int
                 worker_files = set(by_file[worker::workers])
                 items[:] = [item for item in local if item.path in worker_files]
             else:
-                items[:] = local[worker::workers]
+                items[:] = local
+
+        @pytest.hookimpl(tryfirst=True)
+        def pytest_runtestloop(self, session):
+            if not dynamic or session.testsfailed or session.config.option.collectonly:
+                return None
+
+            def acquire():
+                for index, item in enumerate(session.items):
+                    try:
+                        (claims / str(index)).touch(exist_ok=False)
+                    except FileExistsError:
+                        continue
+                    yield item
+
+            # Reserve work just in time. Passing the next item through pytest's
+            # standard protocol preserves fixture setup and teardown.
+            available = acquire()
+            item = next(available, None)
+            while item is not None:
+                following = next(available, None)
+                item.config.hook.pytest_runtest_protocol(item=item, nextitem=following)
+                if session.shouldfail:
+                    raise session.Failed(session.shouldfail)
+                if session.shouldstop:
+                    raise session.Interrupted(session.shouldstop)
+                item = following
+            return True
 
         @pytest.hookimpl(wrapper=True)
         def pytest_make_collect_report(self, collector):
@@ -293,8 +331,8 @@ def pytest_worker(folder: str, shard: int, total: int, worker: int, workers: int
 
 def main() -> int:
     if sys.argv[1:2] == ["pytest-worker"]:
-        folder, shard, total, worker, workers, reports = sys.argv[2:]
-        return pytest_worker(folder, int(shard), int(total), int(worker), int(workers), Path(reports))
+        folder, shard, total, worker, workers, reports, state = sys.argv[2:]
+        return pytest_worker(folder, int(shard), int(total), int(worker), int(workers), Path(reports), Path(state))
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest="cmd", required=True)
     sub.add_parser("list", help="List discovered component folders and kinds.")
