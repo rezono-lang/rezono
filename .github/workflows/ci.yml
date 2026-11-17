@@ -96,9 +96,36 @@ jobs:
             contracts/python/rezono_contracts/*.schema.json
             viewer/src/lib/contract/generated
           key: contract-types-v1-${{ runner.os }}-${{ hashFiles('requirements/.python-version', 'requirements/dev.txt', 'contracts/*.yaml', 'contracts/gen-types.sh', 'contracts/python/rezono_contracts/**', 'viewer/package.json', 'viewer/src/lib/contract/generated/**') }}
+      - name: Cache the pinned oracle and its distribution packages
+        if: matrix.component.folder == 'compiler' || matrix.component.folder == 'examples'
+        id: oracle
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830  # v4.3.0
+        with:
+          path: |
+            ${{ runner.temp }}/oracle-debs/*.deb
+            ${{ runner.temp }}/oracle-debs/SHA256SUMS
+          key: oracle-ubuntu-24.04-${{ runner.arch }}-${{ hashFiles('scripts/install-souffle.sh') }}
       - name: Install the pinned Souffle oracle
         if: matrix.component.folder == 'compiler' || matrix.component.folder == 'examples'
-        run: bash scripts/install-souffle.sh
+        env:
+          CACHE_HIT: ${{ steps.oracle.outputs.cache-hit }}
+        run: |
+          set -euo pipefail
+          packages="$RUNNER_TEMP/oracle-debs"
+          mkdir -p "$packages"
+          if [[ "$CACHE_HIT" == true ]]; then
+            (cd "$packages" && sha256sum --check SHA256SUMS)
+            if sudo apt-get install -y --no-download "$packages"/*.deb; then
+              souffle --version
+              exit 0
+            fi
+          fi
+          # Retain the packages apt authenticates while the pinned installer runs.
+          printf 'Dir::Cache::archives "%s";\nAPT::Keep-Downloaded-Packages "true";\n' "$packages" |
+            sudo tee /etc/apt/apt.conf.d/99-rezono-oracle-cache > /dev/null
+          bash scripts/install-souffle.sh
+          cp "$RUNNER_TEMP"/*souffle*.deb "$packages/"
+          (cd "$packages" && sha256sum ./*.deb > SHA256SUMS)
       - name: Generate contract types
         if: steps.types.outputs.cache-hit != 'true'
         run: contracts/gen-types.sh
