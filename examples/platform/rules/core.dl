@@ -1,0 +1,79 @@
+// The trial rules: from services, product knowledge and roles to needs, zones, flows, firewall rules and findings.
+
+// What a service offers and asks follows from its product.
+.decl provides(s: symbol, f: symbol, port: number)
+provides(s, f, p) :- service__product(s, pr), offer__product(o, pr), offer__function(o, f), offer__port(o, p).
+.decl provider(s: symbol, f: symbol)
+provider(s, f) :- provides(s, f, _).
+.decl asks(s: symbol, f: symbol)
+asks(s, f) :- service__product(s, pr), demand__product(d, pr), demand__function(d, f).
+
+// Who serves a need: a written choice wins; else the only provider.
+.decl chosen(s: symbol, f: symbol)
+chosen(s, f) :- choice__service(c, s), choice__function(c, f).
+.decl providers(f: symbol, n: number)
+providers(f, n) :- function(f), n = count : { provider(_, f) }.
+.decl needs(a: symbol, b: symbol, f: symbol)
+needs(a, b, f) :- asks(a, f), choice__service(c, a), choice__function(c, f), choice__provider(c, b).
+needs(a, b, f) :- asks(a, f), !chosen(a, f), provider(b, f), providers(f, n), n = 1.
+.decl ambiguous_provider(a: symbol, f: symbol)
+ambiguous_provider(a, f) :- asks(a, f), !chosen(a, f), providers(f, n), n > 1.
+.decl unmet_need(a: symbol, f: symbol)
+unmet_need(a, f) :- asks(a, f), providers(f, n), n = 0.
+
+// Zone and cluster class follow from the role.
+.decl zone_of(s: symbol, z: symbol)
+zone_of(s, z) :- service__role(s, r), platform_role__zone(r, z).
+.decl on_cluster(s: symbol, c: symbol)
+on_cluster(s, c) :- service__role(s, r), platform_role__cluster_class(r, c).
+.decl must_separate(a: symbol, b: symbol)
+must_separate(a, b) :- on_cluster(a, ca), on_cluster(b, cb), ca != cb.
+
+// A need plus a port is a flow; between zones it crosses the firewall, inside a zone it is a network policy.
+.decl flow(a: symbol, b: symbol, f: symbol, port: number)
+flow(a, b, f, p) :- needs(a, b, f), provides(b, f, p).
+.decl crossing(a: symbol, b: symbol, za: symbol, zb: symbol, port: number)
+crossing(a, b, za, zb, p) :- flow(a, b, _, p), zone_of(a, za), zone_of(b, zb), za != zb.
+.decl firewall_rule(za: symbol, zb: symbol, port: number)
+firewall_rule(za, zb, p) :- crossing(_, _, za, zb, p).
+.decl in_zone_policy(a: symbol, b: symbol, port: number)
+in_zone_policy(a, b, p) :- flow(a, b, _, p), zone_of(a, z), zone_of(b, z).
+
+// A flow holds from the later step of its two ends.
+.decl flow_from_step(a: symbol, b: symbol, n: number)
+flow_from_step(a, b, n) :- needs(a, b, _), service__step(a, n), service__step(b, m), n >= m.
+flow_from_step(a, b, m) :- needs(a, b, _), service__step(a, n), service__step(b, m), m > n.
+
+// The version: a pin wins; else the newest stable release of the product.
+.decl stable_release(r: symbol, p: symbol, d: number)
+stable_release(r, p, d) :- release__product(r, p), release__stable(r, s), s = "yes", release__released_on_day(r, d).
+.decl has_stable(p: symbol)
+has_stable(p) :- stable_release(_, p, _).
+.decl newest_day(p: symbol, d: number)
+newest_day(p, d) :- has_stable(p), d = max x : { stable_release(_, p, x) }.
+.decl pinned(s: symbol)
+pinned(s) :- pin__service(_, s).
+.decl runs(s: symbol, r: symbol)
+runs(s, r) :- pin__service(k, s), pin__release(k, r).
+runs(s, r) :- service__product(s, p), !pinned(s), newest_day(p, d), stable_release(r, p, d).
+.decl behind_newest(s: symbol, r: symbol)
+behind_newest(s, r) :- runs(s, r), release__product(r, p), release__released_on_day(r, d), newest_day(p, n), d < n.
+
+// The checks: each row is a finding.
+.decl outside_reaches_inside(a: symbol, b: symbol)
+outside_reaches_inside(a, b) :- crossing(a, b, za, zb, _), za = "external", zb != "entry".
+.decl recovery_reached(a: symbol, b: symbol)
+recovery_reached(a, b) :- crossing(a, b, _, zb, _), zb = "recovery".
+.decl recovery_reaches_out(a: symbol, b: symbol, f: symbol)
+recovery_reaches_out(a, b, f) :- flow(a, b, f, _), zone_of(a, za), za = "recovery", zone_of(b, zb), zb != "recovery", function__recovery_allowed(f, ok), ok = "no".
+.decl authenticates(s: symbol)
+authenticates(s) :- asks(s, f), f = "identity".
+authenticates(s) :- provider(s, f), f = "identity".
+.decl unauthenticated_target(b: symbol, f: symbol)
+unauthenticated_target(b, f) :- crossing(_, b, _, _, p), provides(b, f, p), function__open_by_design(f, o), o = "no", !authenticates(b).
+.decl verified(s: symbol)
+verified(s) :- artifact__for_service(x, s), artifact__built_by(x, b), service__role(b, rb), rb = "build", artifact__signed(x, y), y = "yes".
+.decl unverified_supply(s: symbol)
+unverified_supply(s) :- service__role(s, r), platform_role__runs_images(r, y), y = "yes", !verified(s).
+.decl build_reaches_tenant(a: symbol, b: symbol)
+build_reaches_tenant(a, b) :- flow(a, b, _, _), service__role(a, r), r = "build", zone_of(b, z), z = "tenant".
