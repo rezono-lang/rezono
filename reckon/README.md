@@ -120,7 +120,7 @@ The result names the violations, the undecided violations with state, reason and
 The compiler reads a pack written in Reckon through the JSON form of its modules, not through a second parser ([expressions.md §12](../docs/reckon/expressions.md#12-work-packages); RV-C32). `moduleForm(text)` gives that form, `moduleToJson` its bytes, and the command writes them to a file:
 
 ```bash
-cd reckon && node src/write-form.ts ../examples/zorgtoeslag/facts.reckon facts.json
+cd reckon && node src/write-form.ts ../examples/zorgtoeslag/facts.rezono facts.json
 ```
 
 Its shape is the contract [`contracts/reckon-module.yaml`](../contracts/reckon-module.yaml) (`rede.reckon-module/1`), with three members:
@@ -137,7 +137,7 @@ Its shape is the contract [`contracts/reckon-module.yaml`](../contracts/reckon-m
 - **A decision table is in the form as its tree** (`Table` in the contract; [above](#a-module-read)). The form says what the text wrote and nothing of what was proven: writing a form needs no schema, so the overlap of `unique` rows (R031) and a gap (W112, R024) are not looked for there. They are the check's ([below](#a-decision-table)), and whoever lowers a table proves them again over its own schema (RV-C36).
 - **Unknown is never an absent member.** An absent member is something the text did not write (a slot without a cardinality, a module without a `reckon` line). A value in a state is the literal the text wrote, `{"lit": "n/a"}`, `{"lit": "unknown not_measured"}` or `{"lit": "invalid out_of_range"}`, beside `{"lit": "3 GiB"}` for a known one; a fact row has one cell for each column (above), and canonical JSON refuses `null`.
 - **An id that is spelled like a name** is a path of one name in a fact cell too (`{"path": ["ann"]}` beside `{"lit": "h-ann"}`), as in a question ([below](#choices-this-slice-makes)): the type of its column decides, which is name resolution and not the parse.
-- **Accepted on** `examples/zorgtoeslag`, case Z22: `facts.reckon` has a form (fact tables with `n/a` and `unknown no_cover_report`, fact versions with `valid` and `known`), the same bytes twice, and it reads back; `zorgtoeslag.reckon` has none, because of the R015 of Z20 (its time selection; its two tables no longer stand in the way). Both modules print and read back as the same module. The contract's check validates the form of [`test/module.reckon`](test/module.reckon), a module made up to hold every member, as the fixture [`every-member.yaml`](../contracts/fixtures/reckon-module/ModuleForm/valid/every-member.yaml); `test/module-json.test.ts` holds that file to the bytes this implementation writes.
+- **Accepted on** `examples/zorgtoeslag`, case Z22: `facts.rezono` has a form (fact tables with `n/a` and `unknown no_cover_report`, fact versions with `valid` and `known`), the same bytes twice, and it reads back; `zorgtoeslag.rezono` has none, because of the R015 of Z20 (its time selection; its two tables no longer stand in the way). Both modules print and read back as the same module. The contract's check validates the form of [`test/module.rezono`](test/module.rezono), a module made up to hold every member, as the fixture [`every-member.yaml`](../contracts/fixtures/reckon-module/ModuleForm/valid/every-member.yaml); `test/module-json.test.ts` holds that file to the bytes this implementation writes.
 
 ## A decision table
 

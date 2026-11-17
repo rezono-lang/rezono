@@ -1,4 +1,4 @@
-// The cases of an example written in Reckon (examples/<name>/cases.yaml beside its *.reckon files) run here as far
+// The cases of an example written in Reckon (examples/<name>/cases.yaml beside its *.rezono files) run here as far
 // as this implementation reaches. A case with `evidence: current` must give its outcome now; one with
 // `evidence: future` is design input, listed as a todo with the current case that blocks it, never run. The
 // kinds of current case this implementation runs are `compile`: the diagnostics of the example's files, read as
@@ -26,7 +26,7 @@ const root = new URL('../../examples/', import.meta.url);
 const examples = readdirSync(root, { withFileTypes: true })
 	.filter((e) => e.isDirectory() && existsSync(new URL(`${e.name}/cases.yaml`, root)))
 	.map((e) => e.name)
-	.filter((name) => readdirSync(new URL(`${name}/`, root)).some((f) => f.endsWith('.reckon')))
+	.filter((name) => readdirSync(new URL(`${name}/`, root)).some((f) => f.endsWith('.rezono')))
 	.sort();
 
 test('at least one example is written in Reckon', () => assert.ok(examples.length > 0));
@@ -36,8 +36,8 @@ for (const name of examples) {
 	const { pack, cases } = yaml(readFileSync(new URL('cases.yaml', dir), 'utf8')) as { pack: string; cases: Case[] };
 	// The pack's own file first, then the others by name.
 	const files = readdirSync(dir)
-		.filter((f) => f.endsWith('.reckon'))
-		.sort((a, b) => Number(b === `${pack}.reckon`) - Number(a === `${pack}.reckon`) || (a < b ? -1 : a > b ? 1 : 0));
+		.filter((f) => f.endsWith('.rezono'))
+		.sort((a, b) => Number(b === `${pack}.rezono`) - Number(a === `${pack}.rezono`) || (a < b ? -1 : a > b ? 1 : 0));
 	const texts = files.map((f) => readFileSync(new URL(f, dir), 'utf8'));
 	const read = files.map((f, i) => ({ file: f, ...parseModule(texts[i]) }));
 	const forms = files.map((f, i) => ({ file: f, ...moduleForm(texts[i]) }));

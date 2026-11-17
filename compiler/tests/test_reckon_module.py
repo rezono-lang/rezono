@@ -1,6 +1,6 @@
 """Modules written in Reckon (docs/reckon/publication.md §2, §3, §5.1, §5.2): the compiler reads a module's JSON
 form and lowers its kinds, slots and enums to the schema a LinkML file would hold. One fixture is written twice,
-as schema/ and as a module (fixtures/reckon: kinds.yaml, and kinds.reckon with the form `reckon/` wrote of it,
+as schema/ and as a module (fixtures/reckon: kinds.yaml, and kinds.rezono with the form `reckon/` wrote of it,
 kinds.json); everything this slice does not lower is refused at its line. Neutral names; no domain."""
 
 from __future__ import annotations
@@ -21,7 +21,7 @@ SHARED = FIXTURE.parent / "shared"
 LABELS = ("gamma: gamma\ngamma.since: sinds\ngamma.note: notitie\ngamma.grade: graad\ndelta: delta\n"
           "delta.gamma: gamma\ndelta.alpha: alfa\ndelta.state: stand\ndelta.grade: graad\ngrade: graad\n"
           "grade.first: eerste\ngrade.second: tweede\ngrade.third: derde\n")
-KINDS = {"module": "reckon/kinds.reckon", "form": "reckon/kinds.json", "layer": "facts"}
+KINDS = {"module": "reckon/kinds.rezono", "form": "reckon/kinds.json", "layer": "facts"}
 
 
 def add(path: Path, more: str) -> None:
@@ -51,7 +51,7 @@ def written(tmp_path: Path, how: str) -> Path:
         shutil.copy(HERE / "kinds.yaml", d / "schema" / "kinds.yaml")
     else:
         (d / "reckon").mkdir()
-        for f in ("kinds.reckon", "kinds.json"):
+        for f in ("kinds.rezono", "kinds.json"):
             shutil.copy(HERE / f, d / "reckon" / f)
         declare(d, [KINDS])
     return d
@@ -66,16 +66,16 @@ def test_a_module_gives_the_bundle_and_the_engine_of_the_schema_file_that_says_t
     # The bundle differs in one thing only: where the module's text is, which is its file and the places in it.
     bundle = as_schema["bundle/schema-bundle.json"]
     b = json.loads(as_module["bundle/schema-bundle.json"])
-    assert unplaced(b) == unplaced(json.loads(bundle.replace('"schema/kinds.yaml"', '"reckon/kinds.reckon"')))
+    assert unplaced(b) == unplaced(json.loads(bundle.replace('"schema/kinds.yaml"', '"reckon/kinds.rezono"')))
     # A kind and a slot of the module are placed at their names in its text (MOD2), a sentence where its owner is.
-    lines = (HERE / "kinds.reckon").read_text(encoding="utf-8").splitlines()
+    lines = (HERE / "kinds.rezono").read_text(encoding="utf-8").splitlines()
     placed = {e["stable_id"]: e["span"] for e in b["kinds"] + b["arrows"] + b["attributes"]
-              if e["span"]["file"] == "reckon/kinds.reckon"}
+              if e["span"]["file"] == "reckon/kinds.rezono"}
     assert len(placed) == 9
     for stable, span in placed.items():
         assert lines[int(span["line"]) - 1][int(span["column"]) - 1:].startswith(re.split("[/#]", stable)[-1])
     assert all(e["sentence"]["span"] == e["span"] for e in b["arrows"] + b["attributes"])
-    assert [(s["module"], s["file"]) for s in b["schemas"]] == [("kinds", "reckon/kinds.reckon"),
+    assert [(s["module"], s["file"]) for s in b["schemas"]] == [("kinds", "reckon/kinds.rezono"),
                                                                 ("minimal", "schema/minimal.yaml")]
     assert {k["id"]: (k["module"], k["layer"], k["world"]) for k in b["kinds"]}["delta"] == ("kinds", "facts", "closed")
     assert {a["id"]: a["target"] for a in b["arrows"]} == {"beta.alpha": "alpha", "delta.alpha": "alpha",
@@ -103,9 +103,9 @@ def test_a_writer_reads_the_classes_of_a_module_as_it_reads_a_schema_file(tmp_pa
 def test_a_changed_module_or_form_changes_the_definition_hash(tmp_path):
     d = written(tmp_path, "module")
     before = modules.pack_hash(d)
-    assert {p.relative_to(d).as_posix() for p in modules.definition_files(d)} >= {"reckon/kinds.reckon",
+    assert {p.relative_to(d).as_posix() for p in modules.definition_files(d)} >= {"reckon/kinds.rezono",
                                                                                "reckon/kinds.json"}
-    add(d / "reckon" / "kinds.reckon", "\n")
+    add(d / "reckon" / "kinds.rezono", "\n")
     after = modules.pack_hash(d)
     add(d / "reckon" / "kinds.json", " ")
     assert len({before, after, modules.pack_hash(d)}) == 3
@@ -134,7 +134,7 @@ def test_a_module_of_an_imported_pack_is_read_as_its_schema_is(tmp_path):
     meta["imports"] = [{"name": "lib", "path": "../lib", "sha256": modules.pack_hash(imported)}]
     (d / "pack.yaml").write_bytes(yaml.safe_dump(meta, sort_keys=False).encode("utf-8"))
     b = json.loads(compile_dir(d, tmp_path / "out")["bundle/schema-bundle.json"])
-    assert {"module": "lib:holder", "file": "reckon/holder.reckon", "pack": "lib", "name": "holder",
+    assert {"module": "lib:holder", "file": "reckon/holder.rezono", "pack": "lib", "name": "holder",
             "id": "https://rezono.org/reckon/lib/holder"} in b["schemas"]
     assert {k["id"]: k["module"] for k in b["kinds"]}["holder"] == "lib:holder"
     assert {a["id"]: (a["target"], a["required"]) for a in b["arrows"]}["holder.party"] == ("party", True)
@@ -176,9 +176,9 @@ def module(d: Path, decls: list, pack: str = "minimal", use=(), reckon: str | No
                                                             "spans": [s | {"start": "0", "end": "1"} for s in spans]},
                                                            sort_keys=True).encode("utf-8"))
     header = (f"reckon {reckon}\n" if reckon is not None else "") + f"pack {pack}\n"
-    (d / "reckon" / f"{name}.reckon").write_bytes(header.encode("utf-8"))
+    (d / "reckon" / f"{name}.rezono").write_bytes(header.encode("utf-8"))
     meta = yaml.safe_load((d / "pack.yaml").read_text(encoding="utf-8"))
-    entry = {"module": f"reckon/{name}.reckon", "form": f"reckon/{name}.json", "layer": layer}
+    entry = {"module": f"reckon/{name}.rezono", "form": f"reckon/{name}.json", "layer": layer}
     declare(d, [e for e in meta.get("reckon") or [] if e["module"] != entry["module"]] + [entry])
 
 
@@ -226,7 +226,7 @@ REFUSALS = {
 def test_what_the_slice_does_not_lower_is_refused_at_its_line(tmp_path, decls, line, message):
     d = Path(shutil.copytree(FIXTURE, tmp_path / "minimal"))
     module(d, decls)
-    with pytest.raises(pack.CompileError, match=re.escape(f"minimal/reckon/m.reckon:{line}: {message}")):
+    with pytest.raises(pack.CompileError, match=re.escape(f"minimal/reckon/m.rezono:{line}: {message}")):
         pack.read(d)
 
 
@@ -238,18 +238,18 @@ def test_what_the_slice_does_not_lower_is_refused_at_its_line(tmp_path, decls, l
 def test_a_header_line_is_refused_at_its_line(tmp_path, header, line, message):
     d = Path(shutil.copytree(FIXTURE, tmp_path / "minimal"))
     module(d, [eta()], **header)
-    with pytest.raises(pack.CompileError, match=re.escape(f"minimal/reckon/m.reckon:{line}: {message}")):
+    with pytest.raises(pack.CompileError, match=re.escape(f"minimal/reckon/m.rezono:{line}: {message}")):
         pack.read(d)
 
 
 @pytest.mark.parametrize("change, message", [
-    (lambda d: (d / "reckon" / "stray.reckon").write_bytes(b"reckon 0\n"),
-     "minimal/reckon/stray.reckon: pack.yaml names no module or form at this path"),
+    (lambda d: (d / "reckon" / "stray.rezono").write_bytes(b"reckon 0\n"),
+     "minimal/reckon/stray.rezono: pack.yaml names no module or form at this path"),
     (lambda d: (d / "reckon" / "m.json").unlink(), "form reckon/m.json is not a file"),
     (lambda d: (d / "reckon" / "m.json").write_bytes(b'{"format": "rede.reckon-module/1"}'),
      "minimal/reckon/m.json: not the form of a module"),
     (lambda d: module(d, [eta()], layer="middle"), "layer must be one of"),
-    (lambda d: declare(d, [{"module": "m.reckon", "form": "reckon/m.json", "layer": "facts"}]),
+    (lambda d: declare(d, [{"module": "m.rezono", "form": "reckon/m.json", "layer": "facts"}]),
      "module is a path under reckon/"),
 ], ids=["a file pack.yaml does not name", "no form", "not a form", "no layer", "outside reckon/"])
 def test_pack_yaml_names_each_module_with_its_form_and_layer(tmp_path, change, message):

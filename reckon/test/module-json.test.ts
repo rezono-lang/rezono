@@ -1,5 +1,5 @@
 // The JSON form of a module (src/module-json.ts, contracts/reckon-module.yaml), its printer (src/print.ts) and
-// the command that writes it (src/write-form.ts). The module of `module.reckon` is made up for the test and
+// the command that writes it (src/write-form.ts). The module of `module.rezono` is made up for the test and
 // holds every member the form carries; its form is a fixture of the contract, so the bytes this implementation
 // writes are the bytes the contract's check validates.
 import assert from 'node:assert/strict';
@@ -15,7 +15,7 @@ import { JsonFormError, MODULE_FORMAT, moduleForm, moduleFromJson, moduleToJson,
 import { lineOf } from '../src/module-json.ts';
 import { writeForm } from '../src/write-form.ts';
 
-const source = fileURLToPath(new URL('module.reckon', import.meta.url));
+const source = fileURLToPath(new URL('module.rezono', import.meta.url));
 // The form counts offsets, so a checkout that turned the line ends into CRLF would be another text.
 const text = readFileSync(source, 'utf8').replace(/\r\n/g, '\n');
 const made = moduleForm(text);
@@ -44,7 +44,7 @@ const at = (value: unknown, pointer: string): unknown =>
 
 test('the same text gives the same bytes, and they are the bytes of the contract fixture', () => {
 	assert.equal(moduleToJson(moduleForm(text).form!), json);
-	assert.equal(readFileSync(fixture, 'utf8'), json, 'write it again: node src/write-form.ts test/module.reckon ../contracts/fixtures/reckon-module/ModuleForm/valid/every-member.yaml');
+	assert.equal(readFileSync(fixture, 'utf8'), json, 'write it again: node src/write-form.ts test/module.rezono ../contracts/fixtures/reckon-module/ModuleForm/valid/every-member.yaml');
 	// Canonical JSON and nothing after it: reading the bytes and writing them again changes nothing.
 	assert.equal(canonicalJson(JSON.parse(json)), json);
 	assert.deepEqual(Object.keys(JSON.parse(json)), ['format', 'module', 'spans']);
@@ -223,12 +223,12 @@ test('the reader refuses what its tree could only hold by dropping a part', () =
 	assert.deepEqual(refused(['pack lab', 'extend Host', '  derived a: Int = 1', '    unless b then 2', '      when c then 3']), ['R000 line 5']);
 	assert.deepEqual(refused(['pack lab', 'extend Host', '  derived a: Int', '    version 1 = 2', '      unless b then 3']), ['R000 line 5']);
 	const dir = mkdtempSync(join(tmpdir(), 'reckon-form-'));
-	writeFileSync(join(dir, 'deep.reckon'), deep.join('\n') + '\n');
+	writeFileSync(join(dir, 'deep.rezono'), deep.join('\n') + '\n');
 	const said: string[] = [];
-	assert.equal(writeForm(join(dir, 'deep.reckon'), join(dir, 'deep.json'), (line) => said.push(line)), 1);
+	assert.equal(writeForm(join(dir, 'deep.rezono'), join(dir, 'deep.json'), (line) => said.push(line)), 1);
 	assert.equal(existsSync(join(dir, 'deep.json')), false);
 	assert.equal(said.length, 1);
-	assert.match(said[0], /deep\.reckon:6: R000 at `when`: this is not Reckon here; expected no line under this one$/);
+	assert.match(said[0], /deep\.rezono:6: R000 at `when`: this is not Reckon here; expected no line under this one$/);
 });
 
 test('a text in a form holds no line end: the reader refuses one, as the contract does', () => {
@@ -250,12 +250,12 @@ test('a text in a form holds no line end: the reader refuses one, as the contrac
 	assert.throws(() => moduleFromJson(form), /R000/);
 	// And the command writes no file for it.
 	const dir = mkdtempSync(join(tmpdir(), 'reckon-form-'));
-	writeFileSync(join(dir, 'late.reckon'), late.join('\n') + '\n');
+	writeFileSync(join(dir, 'late.rezono'), late.join('\n') + '\n');
 	const said: string[] = [];
-	assert.equal(writeForm(join(dir, 'late.reckon'), join(dir, 'late.json'), (line) => said.push(line)), 1);
+	assert.equal(writeForm(join(dir, 'late.rezono'), join(dir, 'late.json'), (line) => said.push(line)), 1);
 	assert.equal(existsSync(join(dir, 'late.json')), false);
 	assert.equal(said.length, 1);
-	assert.match(said[0], /late\.reckon:2: R000 at `"too late,`: this is not Reckon here; expected a text that ends on its line$/);
+	assert.match(said[0], /late\.rezono:2: R000 at `"too late,`: this is not Reckon here; expected a text that ends on its line$/);
 });
 
 test('reading a form refuses what is not the tree of its own text', () => {
@@ -312,20 +312,20 @@ test('the command writes the bytes of the form, and leaves no file for a module 
 	// The file is read as it is checked out, so only a text with LF line ends gives the fixture's bytes.
 	if (!readFileSync(source, 'utf8').includes('\r')) assert.equal(readFileSync(target, 'utf8'), json);
 	assert.equal(said.length, 1);
-	assert.match(said[0], /module\.reckon:36: W108 at `rate`: /);
+	assert.match(said[0], /module\.rezono:36: W108 at `rate`: /);
 
-	const refusedText = join(dir, 'refused.reckon');
+	const refusedText = join(dir, 'refused.rezono');
 	writeFileSync(refusedText, 'pack lab\nextend Host\n  derived before: GiB = memory at since\n');
 	writeFileSync(join(dir, 'refused.json'), 'the form of an earlier text');
 	said.length = 0;
 	assert.equal(writeForm(refusedText, join(dir, 'refused.json'), (line) => said.push(line)), 1);
 	assert.equal(existsSync(join(dir, 'refused.json')), false);
 	assert.equal(said.length, 1);
-	assert.match(said[0], /refused\.reckon:3: R015 at `at since`: at on a value is reserved/);
+	assert.match(said[0], /refused\.rezono:3: R015 at `at since`: at on a value is reserved/);
 
 	// A text that cannot be read leaves no earlier form either, and a form is never written over its text.
 	writeFileSync(join(dir, 'gone.json'), 'the form of a text that is gone');
-	assert.throws(() => writeForm(join(dir, 'gone.reckon'), join(dir, 'gone.json')), /ENOENT/);
+	assert.throws(() => writeForm(join(dir, 'gone.rezono'), join(dir, 'gone.json')), /ENOENT/);
 	assert.equal(existsSync(join(dir, 'gone.json')), false);
 	assert.throws(() => writeForm(refusedText, refusedText), /over its own text/);
 	assert.equal(existsSync(refusedText), true);
@@ -335,10 +335,10 @@ test('the command writes the bytes of the form, and leaves no file for a module 
 	const run = (...args: string[]) => spawnSync(process.execPath, [command, ...args], { encoding: 'utf8' });
 	const refusedRun = run(refusedText, join(dir, 'refused.json'));
 	assert.equal(refusedRun.status, 1, refusedRun.stderr);
-	assert.match(refusedRun.stderr, /refused\.reckon:3: R015/);
+	assert.match(refusedRun.stderr, /refused\.rezono:3: R015/);
 	assert.equal(existsSync(join(dir, 'refused.json')), false);
 	assert.equal(run(refusedText).status, 2);
-	const small = join(dir, 'small.reckon');
+	const small = join(dir, 'small.rezono');
 	writeFileSync(small, 'pack lab\nunit GiB = 1024 MiB\n');
 	const written = run(small, join(dir, 'small.json'));
 	assert.equal(written.status, 0, written.stderr);

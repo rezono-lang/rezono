@@ -4,7 +4,7 @@ schema model (docs/reckon/publication.md §2, §3, §5.1, §5.2).
 The compiler does not parse Reckon. It reads the JSON form that `reckon/` writes of a module
 (contracts/reckon-module.yaml) and lowers its kinds, slots and enums to the LinkML schema that says the same, so
 that every check after this one is the check a schema file gets. A module is a schema module of its pack, named
-by its path under `reckon/` without `.reckon`; pack.yaml names it with its form and the layer of its kinds.
+by its path under `reckon/` without `.rezono`; pack.yaml names it with its form and the layer of its kinds.
 
 A name a module uses resolves against the kinds and enums of its pack, declared by a module or by `schema/`: one
 name space. A name declared twice in a pack is refused, as is everything this slice does not lower, at its line
@@ -29,7 +29,7 @@ FORMAT = "rede.reckon-module/1"
 DIR = "reckon"
 KEY = "reckon"  # the key of pack.yaml (contract ReckonModule in contracts/pack.yaml)
 PAGE = "docs/reckon/publication.md"
-PATH = re.compile(r"^reckon/[a-z][a-z0-9_]*(/[a-z][a-z0-9_]*)*\.(reckon|json)$")
+PATH = re.compile(r"^reckon/[a-z][a-z0-9_]*(/[a-z][a-z0-9_]*)*\.(rezono|json)$")
 # The two types a slot may have beside a kind or an enum (§5.1), and the LinkML type each lowers to.
 TYPES = {"Date": "date", "Text": "string"}
 # Declarations this slice does not lower, by the member that names them: what, and where the page says so.
@@ -50,14 +50,14 @@ ENUM = {"enum", "world", "values"}
 @dataclass(frozen=True)
 class Declared:
     """One module as pack.yaml names it."""
-    module: str  # reckon/<path>.reckon
+    module: str  # reckon/<path>.rezono
     form: str  # reckon/<path>.json
     layer: str
 
     @property
     def id(self) -> str:
-        """The module's name: its path under reckon/ without .reckon."""
-        return self.module[len(DIR) + 1:-len(".reckon")]
+        """The module's name: its path under reckon/ without .rezono."""
+        return self.module[len(DIR) + 1:-len(".rezono")]
 
 
 @dataclass
@@ -89,7 +89,7 @@ def declared(meta: dict, pack_dir: Path, errors: list[str]) -> list[Declared]:
             continue
         module, form, layer = (str(entry[k]) for k in ("module", "form", "layer"))
         ok = True
-        for what, path, suffix in (("module", module, ".reckon"), ("form", form, ".json")):
+        for what, path, suffix in (("module", module, ".rezono"), ("form", form, ".json")):
             if path in named:
                 errors.append(f"{at}: {path} is named twice")
                 ok = False
@@ -108,7 +108,7 @@ def declared(meta: dict, pack_dir: Path, errors: list[str]) -> list[Declared]:
     if (pack_dir / DIR).is_dir():
         for p in sorted((pack_dir / DIR).rglob("*")):
             rel = p.relative_to(pack_dir).as_posix()
-            if p.is_file() and p.suffix in (".reckon", ".json") and rel not in named:
+            if p.is_file() and p.suffix in (".rezono", ".json") and rel not in named:
                 errors.append(f"{pack_dir.name}/{rel}: pack.yaml names no module or form at this path ({KEY})")
     return out
 
@@ -362,7 +362,7 @@ def view(schema: dict, importmap: dict) -> SchemaView:
 
 
 def schema_classes(pack_dir: Path, rel: str) -> dict:
-    """The classes of the module at `rel` (reckon/<path>.reckon) as `lower` lowers them, in the order of the
+    """The classes of the module at `rel` (reckon/<path>.rezono) as `lower` lowers them, in the order of the
     text, for a reader that wants a module's classes as a schema file holds them. Only for a pack that compiles."""
     meta = yaml.safe_load((pack_dir / "pack.yaml").read_text(encoding="utf-8")) or {}
     d = next(d for d in declared(meta, pack_dir, []) if d.module == rel)

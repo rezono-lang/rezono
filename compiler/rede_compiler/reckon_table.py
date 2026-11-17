@@ -34,7 +34,7 @@ SECTION = "§9.1"
 @dataclass
 class Generated:
     """The rules of one module's tables as the text of a rule file, and the module's line of each of its lines."""
-    module: str  # reckon/<path>.reckon: the file every origin and refusal names
+    module: str  # reckon/<path>.rezono: the file every origin and refusal names
     stem: str  # the rule module of its rules: the module's id, `/` as `_`
     lines: list[str] = field(default_factory=list)
     at: list[int] = field(default_factory=list)  # at[i] is the module's line of lines[i]

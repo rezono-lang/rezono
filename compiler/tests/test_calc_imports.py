@@ -324,7 +324,7 @@ def test_an_imported_calculation_is_bound_to_the_names_of_the_importing_pack(tmp
     assert got["share"]["i0"] == ("known", "6", "", "rated", "v2")
 
 
-HASHED = ("pack.yaml", "channels.yaml", "schema/**/*.yaml", "reckon/**/*.reckon", "reckon/**/*.json",
+HASHED = ("pack.yaml", "channels.yaml", "schema/**/*.yaml", "reckon/**/*.rezono", "reckon/**/*.json",
           "labels/*.yaml", "messages/*.mf2", "rules/*.dl", "calc/*.yaml", "sweeps.yaml", "questions.yaml",
           "views.yaml", "icons/*.svg", "icons/sources.yaml")
 

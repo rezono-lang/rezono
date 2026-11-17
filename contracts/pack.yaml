@@ -55,10 +55,10 @@ classes:
   ReckonModule:
     description: >-
       One module written in Reckon. The compiler reads its JSON form (contracts/reckon-module.yaml), never its
-      text, and lowers it beside schema/; the module is named by its path under reckon/ without .reckon, and both
+      text, and lowers it beside schema/; the module is named by its path under reckon/ without .rezono, and both
       files are definition (the pack's hash covers them). A file under reckon/ that no entry names is an error.
     attributes:
-      module: {required: true, pattern: "^reckon/[a-z][a-z0-9_]*(/[a-z][a-z0-9_]*)*\\.reckon$", description: "The module's text, relative to the pack; a refusal names it with a line."}
+      module: {required: true, pattern: "^reckon/[a-z][a-z0-9_]*(/[a-z][a-z0-9_]*)*\\.rezono$", description: "The module's text, relative to the pack; a refusal names it with a line."}
       form: {required: true, pattern: "^reckon/[a-z][a-z0-9_]*(/[a-z][a-z0-9_]*)*\\.json$", description: "Its JSON form as `reckon/` writes it (`node src/write-form.ts`), relative to the pack."}
       layer: {required: true, pattern: "^(source|facts|conclusions|plan|output|observation)$", description: "The layer of every kind of the module: Reckon has no word for one, and the compiler asks one of every kind."}
 

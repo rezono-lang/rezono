@@ -109,7 +109,7 @@ def layout(pack_dir: str | Path) -> Layout:
     kinds, declared = [], {}
     for s in model.schemas:
         d = pack_dir if s["pack"] == model.meta["name"] else dirs[s["pack"]]
-        if s["file"].endswith(".reckon"):  # a module written in Reckon: its classes as it lowers them
+        if s["file"].endswith(".rezono"):  # a module written in Reckon: its classes as it lowers them
             doc = {"classes": reckon_module.schema_classes(d, s["file"])}
         else:
             doc = yaml.safe_load((d / s["file"]).read_text("utf-8")) or {}

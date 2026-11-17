@@ -405,7 +405,7 @@ def namespace(value, where: str, errors: list[str]) -> str | None:
 
 def module_path(m: modules.Module) -> str:
     """A module's name in its pack's `modules:`: its path under schema/ without .yaml, or, for a module written in
-    Reckon, its path under reckon/ without .reckon (the path a schema file of it would have)."""
+    Reckon, its path under reckon/ without .rezono (the path a schema file of it would have)."""
     return m.id.split(":", 1)[-1]
 
 

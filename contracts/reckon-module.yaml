@@ -5,7 +5,7 @@ description: >-
   The JSON form of one module written in Reckon: what `reckon/` writes and the compiler reads beside `schema/`
   and `rules/`, so that the compiler needs no second parser. The module is a file of docs/reckon/v0.md §4 and
   §5; the seam is that of docs/reckon/expressions.md §12; the command is
-  `node src/write-form.ts <module.reckon> <form.json>` in `reckon/`. The file is canonical JSON (RFC 8785,
+  `node src/write-form.ts <module.rezono> <form.json>` in `reckon/`. The file is canonical JSON (RFC 8785,
   docs/contracts.md#canonical-hash) and nothing after it: the same text gives the same bytes, and every number
   is decimal text. `module` is the tree of the module as the reader reads it, declaration by declaration in
   the order of the text; an expression is the tree of docs/reckon/expressions.md §4a. `spans` gives the place in

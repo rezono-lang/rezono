@@ -17,7 +17,7 @@ date. The date is never compared with a clock, so the same pack always gives the
 without an interface keeps everything public. The module itself, and only it, uses its private elements.
 An entry may also, or only, name the `namespace` of the module's kinds; `pack.iris` reads and checks it.
 
-A module written in Reckon (`reckon/**/*.reckon`, named in pack.yaml with its JSON form) is a module of its pack
+A module written in Reckon (`reckon/**/*.rezono`, named in pack.yaml with its JSON form) is a module of its pack
 too, named by its path under `reckon/`: `reckon_module` lowers it to the schema a LinkML file would hold, and it
 imports the modules of its pack whose kinds and enums it names (docs/reckon/publication.md §2, §3).
 """
@@ -39,7 +39,7 @@ from . import reckon_module
 # The files that define a pack: everything the compiler reads but facts, scenarios and diagnostics (data)
 # and expected output. Its hash covers exactly these: the import pin and the publication's
 # definition_sha256 (decisions C1, C3, O8). A new kind of definition file is added here, and only here.
-DEFINITION = ("pack.yaml", "channels.yaml", "schema/**/*.yaml", "reckon/**/*.reckon", "reckon/**/*.json",
+DEFINITION = ("pack.yaml", "channels.yaml", "schema/**/*.yaml", "reckon/**/*.rezono", "reckon/**/*.json",
               "labels/*.yaml", "messages/*.mf2", "rules/*.dl", "calc/*.yaml", "sweeps.yaml", "questions.yaml",
               "views.yaml", "icons/*.svg", "icons/sources.yaml")
 PACK_NAME = re.compile(r"^[a-z][a-z0-9]*(-[a-z0-9]+)*$")
@@ -273,7 +273,7 @@ def reckon_modules(d: Path, meta: dict, name: str | None, pack: str, schemas: di
     declared_by = {mid: set(m.sv.all_classes(imports=False)) | set(m.sv.all_enums(imports=False))
                    for mid, m in local.items()}
     lowered = reckon_module.lower_pack(d, meta, pack, declared_by, errors, imported=name is not None)
-    key = {x: f"{pack}:{x}" for x in local} | {low.declared.id: f"{pack}:{reckon_module.DIR}/{low.declared.id}.reckon"
+    key = {x: f"{pack}:{x}" for x in local} | {low.declared.id: f"{pack}:{reckon_module.DIR}/{low.declared.id}.rezono"
                                                  for low in lowered}
     for low in lowered:
         low.schema["imports"] += [key[x] for x in low.uses]

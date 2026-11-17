@@ -110,14 +110,14 @@ def of(rel: str) -> SourceFormat:
 
 # --- A stub of Reckon facts ----------------------------------------------------------------------------------
 
-RECKON_FILE = re.compile(r"^reckon/[a-z][a-z0-9_]*(/[a-z][a-z0-9_]*)*\.reckon$")
+RECKON_FILE = re.compile(r"^reckon/[a-z][a-z0-9_]*(/[a-z][a-z0-9_]*)*\.rezono$")
 FACT_HEAD = re.compile(r"^fact +([A-Za-z][A-Za-z0-9_]*) *$")
 TABLE_ROW = re.compile(r"^ +\|.*\| *$")
 NOT_BUILT = "the Reckon source format is a stub (B13): {what} waits for the Reckon writer (D12)"
 
 
 class ReckonStub(SourceFormat):
-    """Fact tables of Reckon modules (`reckon/**/*.reckon`): only `set` of a cell that has a value is built.
+    """Fact tables of Reckon modules (`reckon/**/*.rezono`): only `set` of a cell that has a value is built.
 
     A table is `fact <Kind>`, then a header row of column names, the first `id`, then one row per record, each
     `| cell | cell |`. A `set` replaces the text of one cell within the cell's width, so every other byte stays;
@@ -134,7 +134,7 @@ class ReckonStub(SourceFormat):
         if "facts" not in dirs:  # the fact tables of a module are main state
             return []
         root = Path(pack_dir)
-        found = ((f.relative_to(root).as_posix(), f) for f in sorted((root / "reckon").rglob("*.reckon")))
+        found = ((f.relative_to(root).as_posix(), f) for f in sorted((root / "reckon").rglob("*.rezono")))
         return [(rel, f) for rel, f in found if self.fact_file(rel)]
 
     def tables(self, text: str) -> dict[str, tuple[list[str], list[tuple[int, list[str]]]]]:

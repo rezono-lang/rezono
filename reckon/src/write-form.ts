@@ -1,6 +1,6 @@
 // The command that writes the JSON form of a module to a file (module-json.ts):
 //
-//   node src/write-form.ts <module.reckon> <form.json>
+//   node src/write-form.ts <module.rezono> <form.json>
 //
 // It writes the canonical JSON and nothing after it, so the bytes of the file are those the form's hash is taken
 // over. Each diagnostic is printed with its line and its sentence (messages/en.json). A module with an error
@@ -33,7 +33,7 @@ export function writeForm(source: string, target: string, say: (line: string) =>
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
 	const [source, target, ...more] = process.argv.slice(2);
 	if (!source || !target || more.length) {
-		console.error('usage: node src/write-form.ts <module.reckon> <form.json>');
+		console.error('usage: node src/write-form.ts <module.rezono> <form.json>');
 		process.exitCode = 2;
 	} else process.exitCode = writeForm(source, target);
 }

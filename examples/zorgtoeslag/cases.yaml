@@ -1,4 +1,4 @@
-# Expected outcomes for the zorgtoeslag pack (zorgtoeslag.reckon, data in facts.reckon). #401 D28.
+# Expected outcomes for the zorgtoeslag pack (zorgtoeslag.rezono, data in facts.rezono). #401 D28.
 #
 # Each case asks one thing of the pack and gives the expected result:
 #   value     a derived value of one subject: `subject.slot`; expect `value` (Reckon literal) or `state` + `reason`
@@ -243,11 +243,11 @@ cases:
     form: true
     expect:
       forms:
-        - {file: zorgtoeslag.reckon, written: false, note: the R015 of Z20; a reserved construct has no form}
-        - {file: facts.reckon, written: true, note: "fact tables with `n/a` and `unknown no_cover_report`, fact versions with `valid` and `known`"}
+        - {file: zorgtoeslag.rezono, written: false, note: the R015 of Z20; a reserved construct has no form}
+        - {file: facts.rezono, written: true, note: "fact tables with `n/a` and `unknown no_cover_report`, fact versions with `valid` and `known`"}
     note: >-
       the JSON form is what the compiler reads of a module (contracts/reckon-module.yaml, RV-C32); a module with
-      an error has none, so nothing of `zorgtoeslag.reckon` reaches the compiler until its time selection is read
+      an error has none, so nothing of `zorgtoeslag.rezono` reaches the compiler until its time selection is read
       or the module is cut to what is (RV-X46). Its two decision tables no longer stand in the way: a table has
       its form since RV-C31
     uses: [§5 facts, §5a rule 5, §7b value states, §13 reserved]

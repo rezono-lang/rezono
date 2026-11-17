@@ -159,11 +159,11 @@ alpha_size_band(x, "unknown", "no_row_applies") :- alpha(x), !alpha_size_band_ap
     assert outcome.outcome == "alpha"
     # Each rule is the module's: its file, and the line of the derived value (the form places no row here).
     assert {(r.module, r.origin) for r in rules.rules.values() if r.head.relation.startswith("alpha_size_band")} == {
-        ("m", ("reckon/m.reckon", 25))}
+        ("m", ("reckon/m.rezono", 25))}
     # And the pack compiles as with a rule file: every engine, the bundle with the rule's place in the module.
     files = compile_dir(d, tmp_path / "out")
     spans = {r["relation"]: r["span"]["file"] for r in json.loads(files["bundle/schema-bundle.json"])["rules"]}
-    assert spans["alpha_size_band"] == "reckon/m.reckon"
+    assert spans["alpha_size_band"] == "reckon/m.rezono"
     assert '"alpha_size_band"' in files["engine/rules.sql"]
 
 
@@ -198,5 +198,5 @@ REFUSALS = {
 @pytest.mark.parametrize("decls, line, message", REFUSALS.values(), ids=REFUSALS)
 def test_what_the_slice_does_not_lower_is_refused_at_its_line(tmp_path, decls, line, message):
     d = written(tmp_path, *decls)
-    with pytest.raises(pack.CompileError, match=re.escape(f"minimal/reckon/m.reckon:{line}: {message}")):
+    with pytest.raises(pack.CompileError, match=re.escape(f"minimal/reckon/m.rezono:{line}: {message}")):
         pack.read(d)
