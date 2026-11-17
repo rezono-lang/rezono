@@ -198,7 +198,7 @@ def test_every_proof_is_valid_and_acyclic(seed, n, rows, degree, pick):
 
 
 def check_partition(prog, parts, budget):
-    """Decision E6: every relation once, a recursive core whole, within budget, and only earlier parts read.
+    """Every relation once, a recursive core whole, within budget, and only earlier parts read.
     A part above the budget holds one relation that is not recursive, and is what `over_budget` reports.
     A part may be empty only in the middle (a place kept from a previous partition)."""
     assert sorted(x for p in parts for x in p) == sorted(prog.derived())

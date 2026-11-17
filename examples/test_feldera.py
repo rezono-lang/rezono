@@ -18,7 +18,7 @@ pytestmark = pytest.mark.skipif(not URL, reason="set FELDERA_URL to a running Fe
 
 
 def read(name):
-    """The violations per logical check, as (subject, value): decision E11 keeps one view per check kind."""
+    """The violations per logical check, as (subject, value): one view is kept per check kind."""
     out = {}
     for r in query(name, "SELECT info, subject, value FROM validation_result"):
         out.setdefault(r["info"], set()).add((r["subject"], r["value"]))

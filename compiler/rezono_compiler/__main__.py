@@ -16,7 +16,7 @@ def main(argv=None) -> int:
     c.add_argument("pack")
     c.add_argument("out")
     c.add_argument("--profile", type=Path, help="deploy profile (deploy/profiles/<profile>.yaml) whose engine budget "
-                                               "(build_memory_mb or view_budget) bounds each Feldera pipeline (decision E6)")
+                                               "(build_memory_mb or view_budget) bounds each Feldera pipeline")
     c.add_argument("--max-views", type=int, help=f"view budget per pipeline, instead of a profile's (default {emit.MAX_VIEWS})")
     c.add_argument("--previous", type=Path, help="engine/pipelines.json of an earlier compile: keep its cut where it "
                                                 "still fits, so a small change moves few views")
@@ -106,7 +106,7 @@ def compile_files(model, args) -> dict[str, str]:
     files = emit.compile_pack(model, budget, previous, profile)
     from . import sources
     files["generated/sources.json"] = sources.compile_sources(model, args.pack)
-    # Decision E6: going over the budget warns. Only a recursive core above it blocks (in the partition);
+    # Going over the budget warns. Only a recursive core above it blocks (in the partition);
     # integrity and the calculation rules are not split yet.
     plan = json.loads(files.get("engine/pipelines.json", "{}"))
     for p in plan.get("pipelines", []):
@@ -119,8 +119,8 @@ def compile_files(model, args) -> dict[str, str]:
 def explained(model, pack_dir) -> dict[str, str]:
     """Per fact state: the first row (in key order) of every derived relation, with its proof, and
     complete snapshots of every relation those proofs refer to. A rule that reads a calculation selection runs
-    after the calculation (`batch.phases`); its proof holds the calculation witnesses it reaches (decision
-    W12), and the selection is a snapshot as a publication holds it (`batch.calculate`). Needs the batch extra
+    after the calculation (`batch.phases`); its proof holds the calculation witnesses it reaches,
+    and the selection is a snapshot as a publication holds it (`batch.calculate`). Needs the batch extra
     (DuckDB)."""
     from . import batch, calc, explain, scenarios
     from . import rules as ir

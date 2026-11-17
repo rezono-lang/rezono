@@ -1,4 +1,4 @@
-"""One rule program as several Feldera pipelines that read each other's output (decision E6).
+"""One rule program as several Feldera pipelines that read each other's output.
 
 The compiler cuts the program itself, within the budget of the deploy profile: an estimated build memory,
 each view weighed by its kind, or a number of views (derived relations, materialized witnesses and
@@ -18,7 +18,7 @@ of its exported relations (every column as text) plus an epoch marker. One strea
 order of steps, so when the relay sees marker e, it has seen every change before it. That is the
 processing barrier between pipelines; no clock, no polling of views (formal/Epochs.tla).
 
-The seal's relations (`k__refused`, `k__accepted`, decision E3) are base relations for the rules but views
+The seal's relations (`k__refused`, `k__accepted`) are base relations for the rules but views
 of the `integrity` pipeline: computed there once and forwarded like an exported relation, so `integrity`
 is the first producer of the chain and every part reads the same accepted rows (docs/compiler.md).
 """
@@ -93,7 +93,7 @@ def partition(prog, budget, previous=None, cost=None, whole=None, unit="views", 
         if any(not selected.issuperset(core) for core in comps):
             raise ValueError("a phase cannot split a recursive core")
     size = {i: sum(cost(n) for n in c) for i, c in enumerate(comps)}
-    alone = set()  # one relation above the budget that is not recursive: a part of its own (decision E6)
+    alone = set()  # one relation above the budget that is not recursive: a part of its own
     for i, c in enumerate(comps):
         if size[i] <= budget:
             continue
@@ -174,7 +174,7 @@ def partition(prog, budget, previous=None, cost=None, whole=None, unit="views", 
 
 def over_budget(prog, parts, budget, cost=None):
     """The parts of a partition above the budget, as (relation, cost): each holds one relation that is
-    not recursive (see `partition`). The compiler warns for each (decision E6)."""
+    not recursive (see `partition`). The compiler warns for each."""
     cost = cost or (lambda n: sql.views(prog, n))
     return [(p[0], sum(cost(n) for n in p)) for p in parts if sum(cost(n) for n in p) > budget]
 

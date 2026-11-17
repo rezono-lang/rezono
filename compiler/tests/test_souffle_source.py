@@ -1,4 +1,4 @@
-"""RV-K10: the Soufflé oracle on a pack's source reads the import closure (tests/souffle.py, decision S28).
+"""RV-K10: the Soufflé oracle on a pack's source reads the import closure (tests/souffle.py).
 
 An imported pack brings its rules, and the program is the union over the import closure. So the oracle's
 program is the rule text as written, of the pack and of every pack it imports, the imported text under the

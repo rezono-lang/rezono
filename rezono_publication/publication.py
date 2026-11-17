@@ -21,8 +21,8 @@ the row, and each column is a known `Text` slot marked `derived`. An enum relati
 Exact values only: an integer is `Integer` with Rezono's BIGINT bounds; nothing is ever a float.
 
 A subkind (`is_a`) is a kind with a `parent` that restates its parent's slots (§2.1). In Rezono an element of a
-subkind is also a row of every kind above it; the form writes it once, at its most specific kind (decision S2,
-§3.1), with every slot. A role that reads an element as the subkind only gets the slots of the kinds above as
+subkind is also a row of every kind above it; the form writes it once, at its most specific kind
+(§3.1), with every slot. A role that reads an element as the subkind only gets the slots of the kinds above as
 any slot it does not read in full (O8).
 
 `relations` maps a form back onto Rezono relations, so a reader can check that a form says exactly what the
@@ -182,7 +182,7 @@ def _chain(by_id: dict, kind: str) -> list[str]:
 
 
 def _elements(doc: dict, plan: dict, rows: dict) -> dict[tuple, str]:
-    """(root kind, id) → the most specific kind the role reads the element as (decision S2): in Rezono an element
+    """(root kind, id) → the most specific kind the role reads the element as: in Rezono an element
     of a subkind is a row of every kind above it too, and those rows are one element. Two kinds of one tree with
     neither above the other cannot both hold it (one identity per kind tree, S1)."""
     at: dict[tuple, str] = {}

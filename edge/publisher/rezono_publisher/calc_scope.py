@@ -1,4 +1,4 @@
-"""The calculation program as the publisher reads it (ir/calc.json; decisions W12 and O8).
+"""The calculation program as the publisher reads it (ir/calc.json).
 
 The filter decides which calculated rows and witnesses a role gets (access.calc_visible). The checker checks
 that decision with its own reading of the same program (rezono_checker.calc, rezono_checker.access). The two

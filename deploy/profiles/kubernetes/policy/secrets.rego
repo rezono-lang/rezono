@@ -1,4 +1,4 @@
-# Names, never values (decision X8), and manifests and automation in sync (AGENTS.md): no Secret object lives in
+# Names, never values, and manifests and automation in sync (AGENTS.md): no Secret object lives in
 # Git; every Secret a pod names, with every key it names, is made by an ExternalSecret of the same render; and no
 # ConfigMap or literal environment value carries what looks like a secret.
 package main

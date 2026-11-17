@@ -1,4 +1,4 @@
-"""The seal (decision E3, docs/compiler.md#design-m3-the-seal): refused and accepted input of the sealed kind.
+"""The seal (docs/compiler.md#design-m3-the-seal): refused and accepted input of the sealed kind.
 
 A close (PeriodClose) closes every period before its `closed_until` and lists the rows it closes in `covers`:
 an arrow `element` to the row and the row's canonical hash. A close refuses an element when it closes the

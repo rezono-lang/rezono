@@ -1,4 +1,4 @@
-"""The check rezono:assets (decision B10): the images one role gets are exactly those its cells name, intact,
+"""The check rezono:assets: the images one role gets are exactly those its cells name, intact,
 with source and licence, and unable to act or reach outside the file."""
 import hashlib
 import json

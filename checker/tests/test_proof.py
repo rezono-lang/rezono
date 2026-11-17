@@ -1,4 +1,4 @@
-"""The check of a role's proof pieces (rezono_checker.proof, decision R10): the relation `step` rebuilt from
+"""The check of a role's proof pieces (rezono_checker.proof): the relation `step` rebuilt from
 the rules and the snapshots, and trees that must hold exactly it. Generic: a neutral, hand-made program."""
 
 import copy

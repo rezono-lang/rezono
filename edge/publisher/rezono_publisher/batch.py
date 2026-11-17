@@ -1,4 +1,4 @@
-"""One epoch on the batch backend (DuckDB, decision E1): a pack's facts in, relations, checks and witnesses out.
+"""One epoch on the batch backend (DuckDB): a pack's facts in, relations, checks and witnesses out.
 
 The facts are the pack's `facts/` (the main state; scenarios are What-ifs, not main), every file loaded
 as it is: a record that two files (or one file twice) give with the same id stays twice, so the
@@ -34,7 +34,7 @@ ASSET_ENTRY = {"file", "sha256", "media_type", "source", "licence"}
 
 
 def asset_files(pack_dir: Path) -> dict[str, dict]:
-    """The pack's images (decision B10): assets/sources.yaml lists each file under assets/ with its hash, media
+    """The pack's images: assets/sources.yaml lists each file under assets/ with its hash, media
     type, source and licence. A listing that does not hold blocks; what an image may contain is the checker's."""
     path = pack_dir / "assets" / "sources.yaml"
     if not path.exists():
@@ -78,7 +78,7 @@ def tree_sha256(root: Path, suffixes=None) -> str:
 
 def definition_sha256(pack_dir: Path) -> str:
     """The hash of the pack's definition, without facts, scenarios or anything else that holds rows: the
-    fingerprint a role may see (decision O8). It is the compiler's `pack_hash`, over the one list of
+    fingerprint a role may see. It is the compiler's `pack_hash`, over the one list of
     definition files (`modules.DEFINITION`), so whatever the compiler reads, a calculation and a sweep
     included, changes it. `pack_sha256` hashes the facts too, so a role never gets it."""
     from rezono_compiler import modules
@@ -87,7 +87,7 @@ def definition_sha256(pack_dir: Path) -> str:
 
 
 def columns(model) -> dict[str, tuple]:
-    """Per base relation, the kind of each column, or None for a value (decision O8): a kind table holds an
+    """Per base relation, the kind of each column, or None for a value: a kind table holds an
     element of its kind, a slot table the element and, for an arrow, an element of its target. Enum and
     parameter tables come from the schema and hold no element."""
     from rezono_compiler import emit
@@ -101,7 +101,7 @@ def columns(model) -> dict[str, tuple]:
         out[e] = (None,)
     for table, _, _ in emit.slot_parameters(model):
         out[table] = (None,)
-    for s in model.seals:  # decision E3: refused input names the element and the close that refused it
+    for s in model.seals:  # refused input names the element and the close that refused it
         out[s.refused] = (s.kind, "period_close")
         out[s.accepted] = (s.kind,)
         out[s.row_sha256] = (s.kind, None)
@@ -203,8 +203,8 @@ def engine_component() -> dict:
 
 
 def compute_rules(con, prog, relations=None) -> None:
-    """rezono_compiler.batch.compute, with a counter that reached its bound left to its check view (decision R16,
-    RV-K18). The compiler raises `bound_reached` after every statement of the run has executed; here the run
+    """rezono_compiler.batch.compute, with a counter that reached its bound left to its check view
+    (RV-K18). The compiler raises `bound_reached` after every statement of the run has executed; here the run
     goes on, and `rule_checks` reads the rows past the bound from `<relation>__exhausted` as a red check like
     any other, so the publication is blocked (or a variant diagnosed) by one path, without a traceback."""
     from rezono_compiler import batch
@@ -217,7 +217,7 @@ def compute_rules(con, prog, relations=None) -> None:
 
 def rule_checks(con, prog) -> list[dict]:
     """The checks of the rules, as manifest checks, per derived relation in name order: a named outcome's
-    (`<outcome>__total`, `<outcome>__state`, decision W7) and a counter's bound (`<relation>__exhausted`, R16),
+    (`<outcome>__total`, `<outcome>__state`) and a counter's bound (`<relation>__exhausted`, R16),
     the views `rezono_compiler.rules_sql.checks` names. A row in any of them is a red check."""
     from rezono_compiler import emit, rules_sql
 
@@ -262,7 +262,7 @@ def epoch(pack_dir, *, epoch: int, knowledge_time: str, sources, proposal: str =
     for table, rs in sorted((params | facts).items()):
         if rs:
             db.executemany(f"INSERT INTO {emit.q(table)} VALUES ({', '.join('?' * len(rs[0]))})", rs)
-    # Decision E11: one view per check kind. Each logical check gets its count from validation_result,
+    # One view per check kind. Each logical check gets its count from validation_result,
     # 0 when it has no rows, under the name it always had.
     logical = json.loads(files["bundle/schema-bundle.json"])["checks"]
     counts = dict(db.execute("SELECT info, COUNT(*) FROM validation_result GROUP BY info").fetchall()) if logical else {}
@@ -272,7 +272,7 @@ def epoch(pack_dir, *, epoch: int, knowledge_time: str, sources, proposal: str =
     tables = [r[0] for r in db.execute("SELECT table_name FROM information_schema.tables "
                                        "WHERE table_type = 'BASE TABLE' ORDER BY table_name").fetchall()
               if not r[0].startswith(check_meta.P)]
-    # Refused and accepted input of a seal (decision E3) are named rows, not violations: in the snapshot
+    # Refused and accepted input of a seal are named rows, not violations: in the snapshot
     # like a table, from the engine's SQL, so the checker holds them against the rows the rules read.
     tables += [n for n, _ in seal.views(model)]
     # The check metadata as the engine loaded it, duplicates kept: the checker compares it with the bundle.
@@ -285,7 +285,7 @@ def epoch(pack_dir, *, epoch: int, knowledge_time: str, sources, proposal: str =
 
     calc_program = calc.build(model, model.calc) if model.calc is not None else None
     calc_witnesses, witnesses = [], []
-    if model.rules:  # decision W12: the calculation in its phase of the rules, on the same tables
+    if model.rules:  # the calculation in its phase of the rules, on the same tables
         prog = ir.load(model.rules)
         con = batch.connect(prog, scenarios.rule_rows(model, prog, facts))
         calc_witnesses = batch.phases(con, prog, calc_program, lambda: calculate(calc_program, db, con, rows),
@@ -296,7 +296,7 @@ def epoch(pack_dir, *, epoch: int, knowledge_time: str, sources, proposal: str =
             checks.append({"name": name, "status": "red" if n else "green", "violations": n})
         checks += rule_checks(con, prog)
         # Every instance, not only the chosen proof: the publisher chooses a proof per role among the
-        # instances that role can read (decision O8).
+        # instances that role can read.
         thetas = batch.witnesses(con, prog)
         ex = explain.Explainer(prog, batch.read(con, prog, prog.base_used()) | derived, thetas)
         witnesses = [ex.instance(prog.rules[rid], dict(zip(prog.rules[rid].variables, theta)))

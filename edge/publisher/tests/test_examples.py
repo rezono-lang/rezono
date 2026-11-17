@@ -138,7 +138,7 @@ def test_an_invariant_with_rows_blocks(tmp_path):
 
 
 def test_a_key_in_a_relation_and_in_the_relation_it_closes_blocks(tmp_path):
-    """`// @closes` (decision W14): the compiler adds the invariant, so the publisher stops as on any other."""
+    """`// @closes`: the compiler adds the invariant, so the publisher stops as on any other."""
     closes = (".decl wide(a: symbol, s: number)\nwide(a, s) :- alpha__size(a, s), s >= 4.\n"
               "// @closes wide\n.decl narrow(a: symbol)\nnarrow(a) :- alpha__size(a, s), s < 5.\n")
     e, m = publish_pack(pack_with(tmp_path / "ok", {"a.yaml": alpha(("a1", 1), ("a2", 7))}, closes), tmp_path / "ok")
@@ -162,7 +162,7 @@ def test_an_invariant_nothing_checks_blocks(tmp_path):
         publish_pack(pack_with(tmp_path, {"a.yaml": alpha(("a1", 1))}, schema=declared), tmp_path)
 
 
-# Decision W7: a named outcome without a row for an element, or with two states, blocks.
+# A named outcome without a row for an element, or with two states, blocks.
 SIZING = """// @outcome alpha
 .decl sizing(a: symbol, state: symbol, reason: symbol)
 sizing(a, "unknown", "small") :- alpha__size(a, s), s < 2.
@@ -192,7 +192,7 @@ def test_an_incomplete_outcome_blocks(tmp_path, rules, check):
         publish_pack(outcome_pack(tmp_path / "pack", rules), tmp_path)
 
 
-# Decision R16, RV-K18: a counter that reaches its bound blocks as a red check, `<relation>__exhausted`.
+# RV-K18: a counter that reaches its bound blocks as a red check, `<relation>__exhausted`.
 # The count of an element goes up to its size, and the bound stops it at 3.
 COUNTER = """.decl depth(a: symbol, n: number)
 depth(a, 0) :- alpha(a).
@@ -390,7 +390,7 @@ def _members(source):
 
 
 def test_an_archive_carries_the_packs_its_pack_imports(v2_imports):
-    """Each imported pack's definition files, at their place relative to the pack (decision S9 pins them)."""
+    """Each imported pack's definition files, at their place relative to the pack (pinned imports)."""
     from rezono_compiler import modules
 
     names = _members(v2_imports)
@@ -529,7 +529,7 @@ def _pack_of(published):
 
 def key(uri):
     return kept.key(uri)
-# Decision O8 with real rules: the compiler's neutral pack, read rules and every aggregate function.
+# Access checks with real rules: the compiler's neutral pack, read rules and every aggregate function.
 ACCESS = """.decl may_read(role: symbol, kind: symbol, element: symbol)
 may_read("viewer", "alpha", x) :- {alpha}.
 may_read("viewer", "beta", x) :- beta(x).
@@ -612,7 +612,7 @@ def test_the_command_line_names_a_role_the_read_rules_give_nothing(tmp_path, cap
     assert role_file(tmp_path, "propose", "relations/alpha.json") == []
 
 
-# Calculation rules (decision W12) on the neutral pack: half the size of an alpha, rounded half away from zero.
+# Calculation rules on the neutral pack: half the size of an alpha, rounded half away from zero.
 HALF = """format: rezono.calc/1
 pack: minimal
 subject: alpha
@@ -721,7 +721,7 @@ def test_an_invalid_result_refuses_the_epoch_and_names_its_reason(tmp_path):
     assert "calc_invalid" in refused and "division by zero" in refused, refused
 
 
-# --- Decision E11: the check metadata (rezono__*) comes from the definition only ----------------------------
+# --- The check metadata (rezono__*) comes from the definition only ----------------------------
 
 def test_the_loaded_check_metadata_is_the_bundles_and_never_a_snapshot(tmp_path):
     from rezono_checker import metadata

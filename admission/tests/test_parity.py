@@ -27,7 +27,7 @@ from rezono_admission import CODES, Schema, rows  # noqa: E402
 ROOT = Path(__file__).resolve().parents[2]
 PACKS = sorted({p.parent for pattern in ("examples/**/pack.yaml", "packs/*/pack.yaml", "compiler/tests/fixtures/*/pack.yaml")
                 for p in ROOT.glob(pattern) if "node_modules" not in p.parts})
-SEALED = re.compile(r"__row_sha256$")  # decision E3's generated tables: not in the bundle yet (see rows.rows)
+SEALED = re.compile(r"__row_sha256$")  # generated tables: not in the bundle yet (see rows.rows)
 
 # The loader's messages, and the code admission gives for each.
 MESSAGES = [

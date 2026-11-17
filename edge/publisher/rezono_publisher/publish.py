@@ -1,7 +1,7 @@
 """The publisher: after a green epoch, snapshots per role and then the manifest (contracts/manifest.yaml).
 
 Correctness blocks: one red check and nothing is written. The epoch gives every witness instance of the
-engine; a proof is chosen per role among the instances that role can read (access.py, decision O8). Before
+engine; a proof is chosen per role among the instances that role can read (access.py). Before
 anything is written, the independent checker (checker/) checks every chosen witness of every role against
 that role's snapshots, the same bytes, and that every derived row in them has exactly one witness (R7).
 One error is a red check `rezono:proofs`. The manifest is written last, so a reader
@@ -20,7 +20,7 @@ Store layout, per pack:
                                  which object is what, and for which role: a reader follows its uris, never a path.
   <pack>/<manifest>/<role>/…   a role's views and publication form with their indexes, before the manifest
                                (views.py, forms.py): the gate holds them to that prefix
-  <pack>/assets/<sha256>   an image (decision B10), written once, shared by roles and epochs; the gate serves it
+  <pack>/assets/<sha256>   an image, written once, shared by roles and epochs; the gate serves it
                            only to a role whose rows name it
   <pack>/bundles/<definition_sha256>/<compiler_sha256>.json   the compiled schema bundle, shared by epochs
   <pack>/bundles/<definition_sha256>/<compiler_sha256>.rules.json   the compiled rule IR
@@ -85,14 +85,14 @@ class Epoch:
     columns: dict = field(default_factory=dict)  # base relation -> the kind of each column, or None (O8)
     sweeps: str = ""  # the compiled sweep grid (ir/sweeps.json), if the pack has a sweep: the gate's whole grid
     variant: dict = field(default_factory=dict)  # a sweep's grid value (contracts/manifest.yaml, Variant)
-    seals: tuple = ()  # the sealed kinds of the pack (decision E3): the rule IR must carry each, or nothing is checked
+    seals: tuple = ()  # the sealed kinds of the pack: the rule IR must carry each, or nothing is checked
     calc: str = ""  # the compiled calculation program (ir/calc.json), if the pack has calculation rules (W12)
     calc_witnesses: list = field(default_factory=list)  # one CalcWitness per published calculation row
-    # The pack's assets/ (decision B10), by file: {sha256, media_type, source, licence, bytes}. Data, like facts:
+    # The pack's assets/, by file: {sha256, media_type, source, licence, bytes}. Data, like facts:
     # a role gets only the files its image cells name.
     assets: dict = field(default_factory=dict)
     theory: bool = False  # source-pack metadata from the trusted epoch producer; never a public bundle field
-    # The check metadata the engine loaded (rezono__*: table -> rows of canonical text, decision E11). Schema, not
+    # The check metadata the engine loaded (rezono__*: table -> rows of canonical text). Schema, not
     # data: never a snapshot; the checker holds it against the bundle. None when the engine gave none.
     check_metadata: dict | None = None
     # S25: the compiler's source entries of the facts (rezono_compiler.sources.read), one per base row; a
@@ -103,8 +103,8 @@ class Epoch:
 
 PROOFS = "rezono:proofs"  # the check of the witnesses by the checker; not a relation name (no colon there)
 ACCESS_CHECK = "rezono:access"  # the read rules give a kind in full, and the data agrees
-ACCESS_SEMANTICS = 2  # decision O8; the gate refuses a manifest without it
-ASSETS = "rezono:assets"  # the images each role gets: exactly those its image cells name (decision B10)
+ACCESS_SEMANTICS = 2  # the gate refuses a manifest without it
+ASSETS = "rezono:assets"  # the images each role gets: exactly those its image cells name
 SOURCES = fact_sources.SOURCES  # the sources each role gets: exactly those of the base rows it reads (S25)
 
 
@@ -193,14 +193,14 @@ def instance_pack(e: Epoch) -> None:
 
 
 def diagnose(e: Epoch, store) -> dict:
-    """The diagnosis of a red variant (decision B7) instead of its manifest: the checks and the grid value,
+    """The diagnosis of a red variant instead of its manifest: the checks and the grid value,
     against the main manifest it varies. Nothing reads it as a state; a red variant never blocks main."""
     instance_pack(e)
     if not e.variant or not e.base_manifest:
         raise ValueError("only a variant gets a diagnosis here")
     if not any(c["status"] == "red" for c in e.checks):
         raise ValueError("a diagnosis needs a red check")
-    metadata_checked(e)  # a diagnosis read with switched-off checks would under-report (decision E11)
+    metadata_checked(e)  # a diagnosis read with switched-off checks would under-report
     d = {"id": manifest_id(e), "epoch": e.epoch, "knowledge_time": e.knowledge_time,
          "last_good_manifest": e.base_manifest, "checks": sorted(e.checks, key=lambda c: c["name"]),
          "variant": e.variant}
@@ -260,7 +260,7 @@ def verify(e: Epoch, snapshots=None, witnesses=None, full=None, calc_witnesses=N
 
     Without arguments: the proofs chosen among all instances of the epoch, against its complete snapshots.
     The checker also chooses the proofs itself among all `instances` (R7) and requires the same set.
-    For a filtered role (`full` given, decision O8): the checker derives from the `complete` snapshots, the
+    For a filtered role (`full` given): the checker derives from the `complete` snapshots, the
     schema and the role which rows it may read and which relations it reads in full, compares that with
     its `snapshots` and `full`, and with the evidence for `full` when it carries it (`access.Full`;
     rezono_checker.access), and checks its chosen proofs against its own
@@ -309,7 +309,7 @@ def verify(e: Epoch, snapshots=None, witnesses=None, full=None, calc_witnesses=N
 
 
 def metadata_args(e: Epoch, full) -> dict:
-    """What the checker needs to hold the loaded check metadata against the bundle (decision E11): once, for
+    """What the checker needs to hold the loaded check metadata against the bundle: once, for
     the complete epoch. Only a bundle without kinds and no metadata has nothing to compare (a pack without
     kinds has no checks); anything else is compared, and a missing side is refused (fail closed)."""
     if full is not None:
@@ -321,7 +321,7 @@ def metadata_args(e: Epoch, full) -> dict:
 
 
 def metadata_checked(e: Epoch) -> None:
-    """Blocked unless the loaded check metadata is the bundle's (decision E11), for a diagnosis too."""
+    """Blocked unless the loaded check metadata is the bundle's, for a diagnosis too."""
     args = metadata_args(e, None)
     errors = checker_metadata.check(args["bundle"], args["check_metadata"]) if args else []
     if errors:
@@ -466,7 +466,7 @@ def plan(e: Epoch, store, roles: dict[str, str], base: dict | None = None,
         body = canonical(sees)
         uri = put(object_key(e.pack, body), body)
         witness_sets.append({"role": role, "uri": uri, "sha256": sha256(body)})
-        if images:  # decision B10: only the images this role's own rows name (O8)
+        if images:  # only the images this role's own rows name (O8)
             pictures: list = []
             index = assets_of(e, store, role, rows if mode == access.COMPLETE else readable, data, images, pictures,
                               set())

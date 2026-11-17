@@ -78,8 +78,8 @@ def check(rules, rows, read=()) -> list:
 
 
 def exhausted(rules, rows) -> list:
-    """One `bound_reached` for each counter that reached its bound on the complete snapshots (decision R16,
-    RV-K18): the relation was cut off where its count stopped, which is an error and never a meaning.
+    """One `bound_reached` for each counter that reached its bound on the complete snapshots
+    (RV-K18): the relation was cut off where its count stopped, which is an error and never a meaning.
 
     The counter is found here from the rule's shape (`counter`), not taken from the compiler. The rows the rule
     would add beyond its bound are its instances with the conditions that bound the counter replaced by

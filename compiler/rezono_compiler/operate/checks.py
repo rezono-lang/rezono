@@ -38,7 +38,7 @@ def violations(p: packs.Pack, rows: dict[str, list[tuple]]) -> Counter:
         for table, rs in tables.items():
             if rs:
                 db.executemany(f"INSERT INTO {emit.q(table)} VALUES ({', '.join('?' * len(rs[0]))})", rs)
-        # decision E11: one view per check kind; validation_result names the logical check in `info`
+        # one view per check kind; validation_result names the logical check in `info`
         by_name = {c["view"]: c for c in checks}
         out: Counter = Counter()
         for info, subject, value in db.execute("SELECT info, subject, value FROM validation_result").fetchall():

@@ -62,22 +62,22 @@ def check_epoch(witnesses: list, manifest: dict, rules: dict, read_bytes, *, der
     `unproven_row`. A witness that is not shaped as the contract says is `malformed_witness`. There is no
     root, so no reachability.
 
-    For one role (decision O8) the snapshots are that role's, read as its closed world, and `full` names
+    For one role the snapshots are that role's, read as its closed world, and `full` names
     the relations it reads in full. A negation or an aggregate over any other relation would tell about
     rows the role cannot read: `outside_full_scope`.
 
     For the complete epoch (no `full`) the obligations of the rule IR are held against the snapshots
     themselves: every invariant relation is empty (`invariant_violated`), and every outcome gives each
-    element of its kind exactly one state (`outcome_total`, `outcome_state`, decision W7). And the snapshots
+    element of its kind exactly one state (`outcome_total`, `outcome_state`). And the snapshots
     are closed where a missing row is read: every instance of a rule of a relation that is negated, aggregated
     over, an invariant, an outcome or read by the calculation, or that such a relation depends on, has its
-    head row (`underived_row`, closure.py). And no counter reached its bound (decision R16): the rule of a
+    head row (`underived_row`, closure.py). And no counter reached its bound: the rule of a
     counter with an explicit bound would add no row past it on the snapshots (`bound_reached`, closure.py).
 
     `seals` (rules.load_seals) are recomputed from the complete snapshots: row hashes, refused and accepted
-    input of the sealed kind must be exactly what the snapshots give (`seal_mismatch`, decision E3).
+    input of the sealed kind must be exactly what the snapshots give (`seal_mismatch`).
 
-    `calc_witnesses` are recomputed with `calc_ir` (ir/calc.json, decision W12, calc.check). Every row of a
+    `calc_witnesses` are recomputed with `calc_ir` (ir/calc.json, calc.check). Every row of a
     calculation view has exactly one (`unproven_row`); a derived premise needs a witness (`unproven_premise`);
     for a role, every relation a version reads, absences included, must be one it reads in full
     (`outside_full_scope`). A result that is `invalid` never publishes, even when proven right (`calc_invalid`).
@@ -86,7 +86,7 @@ def check_epoch(witnesses: list, manifest: dict, rules: dict, read_bytes, *, der
 
     With `bundle` (the publication's schema bundle, as a dict), the check metadata the engine loaded
     (`check_metadata`: table -> rows of canonical text) must be exactly what the bundle's schema gives
-    (`check_metadata_mismatch`, `malformed_check_metadata`; decision E11, metadata.check).
+    (`check_metadata_mismatch`, `malformed_check_metadata`, metadata.check).
     """
     findings = []
     if bundle is not None or check_metadata is not None:  # either alone is refused: nothing to compare
@@ -134,7 +134,7 @@ def _check_obligations(rules, rows, findings) -> None:
     """The obligations of the rule IR, held against the complete snapshots: an invariant relation is empty
     (`invariant_violated`, one per row), and an outcome gives every element of its kind a row and no row to
     anything else (`outcome_total`), with one state: `known` once with reason "", or `unknown` or
-    `not_applicable` with one or more reason codes (`outcome_state`, decision W7)."""
+    `not_applicable` with one or more reason codes (`outcome_state`)."""
     for relation in sorted(getattr(rules, "invariants", ())):
         for key in sorted(rows(relation, None)):
             findings.append({"reason": "invariant_violated", "relation": relation, "key": key})
@@ -159,7 +159,7 @@ def _check_obligations(rules, rows, findings) -> None:
 
 
 def _check_calc(witnesses, ir, rows, concluded, derived, full, findings):
-    """The calculation witnesses of an epoch (decision W12): each recomputed, the set complete."""
+    """The calculation witnesses of an epoch: each recomputed, the set complete."""
     if ir is None:
         findings.append({"reason": "malformed_witness", "detail": "calculation witnesses without ir/calc.json"})
         return []
@@ -198,7 +198,7 @@ def _check_calc(witnesses, ir, rows, concluded, derived, full, findings):
 
 
 def _check_seal(seal: dict, rows, findings) -> None:
-    """The row hashes and the refused and accepted input of the sealed kind (decision E3), recomputed from the
+    """The row hashes and the refused and accepted input of the sealed kind, recomputed from the
     snapshots. A row hash is the canonical JSON (C1) of {table: sorted values} over the seal's tables; a
     subkind's table has no values, so membership is the empty list. A close applies to an element when the
     element's period lies before its boundary or the close covers it, and refuses it unless it covers it with

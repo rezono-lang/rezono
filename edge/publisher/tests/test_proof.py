@@ -1,4 +1,4 @@
-"""The proof graph of a role as key-range pieces (rezono_publisher.proof, decision R10).
+"""The proof graph of a role as key-range pieces (rezono_publisher.proof).
 
 Each tree the publisher makes is checked by the independent checker (rezono_checker.proof): a neutral,
 hand-made graph cut into small pieces so that trees get several levels, and every example pack as published

@@ -1,4 +1,4 @@
-"""Explanation questions as data (decision R10; docs/gui.md, "Questions as data"): std-explain imported and
+"""Explanation questions as data (docs/gui.md, "Questions as data"): std-explain imported and
 pinned, a pack's own questions.yaml after it, every name checked, messages merged. The minimal fixture."""
 
 import json

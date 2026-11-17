@@ -1,4 +1,4 @@
-"""The DCAT entry of a published epoch (M10, decision O12a): what it says, back and forth, and what it leaves out.
+"""The DCAT entry of a published epoch (M10): what it says, back and forth, and what it leaves out.
 
 There is no validator of plain DCAT to hold it against, and the DCAT-AP shapes are not in the repository, so
 the entry is checked four ways: the exact triples for one input; a round trip through Turtle that gives the

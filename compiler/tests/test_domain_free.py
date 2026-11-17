@@ -1,4 +1,4 @@
-"""The core holds no domain knowledge (AGENTS.md rule 1, decision S4).
+"""The core holds no domain knowledge (AGENTS.md rule 1).
 
 Names that only an example can give, such as a use case, a pack name with a hyphen, a compound kind name, or a
 compound id of a role the example's facts name (a domain role, which the core reaches only through the generic
@@ -19,7 +19,7 @@ CORE = [ROOT / "compiler" / "rezono_compiler", ROOT / "checker" / "rezono_checke
         ROOT / "edge" / "publisher" / "rezono_publisher", ROOT / "edge" / "gate" / "src", ROOT / "compiler" / "tests"]
 SUFFIXES = {".py", ".ts", ".svelte", ".js"}
 # Names the engine itself gives meaning to, so an example uses them by design: the closing fact of a seal
-# (decision E3, docs/compiler.md#design-m3-the-seal).
+# (docs/compiler.md#design-m3-the-seal).
 ENGINE = {"period_close"}
 # One line on purpose, by the start of its text: the Catlab oracle's one real pack (test_catlab.py reads it through
 # test_operate.py). catlab.yml runs compiler/tests/test_catlab.py alone with Julia, so the sample stays there

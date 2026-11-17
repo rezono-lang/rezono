@@ -498,7 +498,7 @@ export function reader(checked: Pick<Checked, 'typed' | 'heads'>, schema: Schema
 			});
 			if (name === 'all') return and(parts);
 			const some = or(parts);
-			// Over an open relation "no member found" proves nothing: unknown, never false (§6, decision W6).
+			// Over an open relation "no member found" proves nothing: unknown, never false (§6).
 			if (name === 'any') return some.s === 'known' && some.v === false && opens(of) ? { s: 'unknown', reason: OPEN_WORLD } : some;
 			return not(some);
 		}

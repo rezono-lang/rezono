@@ -38,7 +38,7 @@ from . import rezono_module
 
 # The files that define a pack: everything the compiler reads but facts, scenarios and diagnostics (data)
 # and expected output. Its hash covers exactly these: the import pin and the publication's
-# definition_sha256 (decisions C1, C3, O8). A new kind of definition file is added here, and only here.
+# definition_sha256. A new kind of definition file is added here, and only here.
 DEFINITION = ("pack.yaml", "channels.yaml", "schema/**/*.yaml", "rezono/**/*.rezono", "rezono/**/*.json",
               "labels/*.yaml", "messages/*.mf2", "rules/*.dl", "calc/*.yaml", "sweeps.yaml", "questions.yaml",
               "views.yaml", "icons/*.svg", "icons/sources.yaml")
@@ -74,7 +74,7 @@ class Imported:
 
 
 def pack_hash(pack_dir: str | Path) -> str:
-    """The canonical hash (decision C1) of {path: sha256 of the file's bytes} over every definition file."""
+    """The canonical hash of {path: sha256 of the file's bytes} over every definition file."""
     pack_dir = Path(pack_dir)
     files = {p for g in DEFINITION for p in pack_dir.glob(g) if p.is_file()}
     return canonical_sha256({p.relative_to(pack_dir).as_posix(): sha256_hex(p.read_bytes()) for p in files})
@@ -90,7 +90,7 @@ def closure(pack_dir: str | Path) -> tuple[Path, list[tuple[str, Path]]]:
     """What must travel with a pack for its imports to resolve: the directory that holds the pack and every
     pack it imports (directly or not), and each directory an import names, with the pack's name. A pack
     reached by two paths (a diamond) is listed at both, since each importer's pack.yaml names its own path.
-    Each import is checked against its pinned hash first (decision S9). Paths stay as written: an import
+    Each import is checked against its pinned hash first. Paths stay as written: an import
     through a symbolic link is refused, as a copy could not keep the link's alias. An import is a path
     relative to the pack, so a copy keeps them where they are relative to each other: under that common
     directory. Raises ValueError for an import that does not hold."""

@@ -1,4 +1,4 @@
-"""`// @closes <relation>` (decision W14) on the minimal, domain-free fixture pack: what the marker becomes in
+"""`// @closes <relation>` on the minimal, domain-free fixture pack: what the marker becomes in
 the rule IR and the bundle, what is refused, and that the invariant it generates finds a key that holds in both
 relations, on the batch backend, for the independent checker and, bounded, against Soufflé."""
 

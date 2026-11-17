@@ -50,7 +50,7 @@ def relation(name, role, arity):
 
 
 # The toy's rule IR (contracts/rules.yaml). The guest's rights come from `grant`; with FULL, every role
-# reads every node, by the shape of rule a2 (decision O8).
+# reads every node, by the shape of rule a2.
 BASE = [("node", 1), ("role", 1), ("edge", 2), ("salary", 2), ("grant", 2)]
 DERIVED = [("may_read", 3), ("path", 2), ("reach", 1), ("touched", 1), ("isolated", 1), ("degree", 2), ("hub", 1),
            ("wage", 1), ("total", 1)]
@@ -177,7 +177,7 @@ def epoch(full=False, function=FUNCTION, nodes=NODES, edges=EDGES, salaries=SALA
 
 
 def loaded(bundle_text: str) -> dict | None:
-    """The check metadata an engine would load for this bundle (decision E11): what the checker expects."""
+    """The check metadata an engine would load for this bundle: what the checker expects."""
     return metadata.expected(json.loads(bundle_text)) if bundle_text else None
 
 
@@ -1205,7 +1205,7 @@ def test_unknown_access_mode_is_refused(tmp_path):
         publish.publish(epoch(), store.FileStore(tmp_path), {"guest": "everything"})
 
 
-# Images (decision B10): the bundle binds node.image (table node__image) as the node's image.
+# Images: the bundle binds node.image (table node__image) as the node's image.
 def svg(name):
     return f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1 1"><title>{name}</title></svg>'.encode()
 
@@ -1391,7 +1391,7 @@ def test_the_base_must_be_the_epochs_base_manifest(tmp_path):
 
 
 def test_a_diagnosis_needs_the_bundles_check_metadata(tmp_path):
-    """Decision E11: a red variant read with switched-off checks would under-report; it is refused too."""
+    """A red variant read with switched-off checks would under-report; it is refused too."""
     e = dataclasses.replace(epoch(), variant={"sweep": "s", "index": 1}, base_manifest="m-1",
                             checks=[{"name": "node__unique", "status": "red", "violations": 1}])
     meta = {t: rs for t, rs in e.check_metadata.items() if t != "rezono__required"}

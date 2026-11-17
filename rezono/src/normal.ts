@@ -1,4 +1,4 @@
-// The normal form of a question, and the question hash taken from it (decision Q21). Two ways of writing one
+// The normal form of a question, and the question hash taken from it. Two ways of writing one
 // question have one normal form, so they have one hash, and a link to an answer does not depend on how the
 // question was written. The written text stays what is shown (`print` of the tree as written); the normal form
 // is what is hashed.
@@ -11,7 +11,7 @@
 //    one (§5 rule 1). Where that name would be another name at a place a path is written from the binder (a
 //    parameter, a slot of a kind in scope there, an id, a value of an enum, a keyword), the first of `<name>_2`,
 //    `<name>_3`, … that is none of them. The slots and parameters are those of the pack's whole schema, not the
-//    role's: the definition of a pack is the same for every role (decision O10), so one question has one hash for
+//    role's: the definition of a pack is the same for every role, so one question has one hash for
 //    every role, whatever each reads. A check statement keeps its binder: the language fixes it (v0 §5).
 // 2. Every path is written in full: a bare slot of the question's row from the binder (`memory_need` is
 //    `host.memory_need`, §5 rule 1), and a bare slot of the innermost element from `it` (`it` is that element,
@@ -101,7 +101,7 @@ function rebuild(e: Expr, levels: Levels, kindOf: (e: Expr) => string | undefine
 }
 
 /**
- * The normal form of a checked question (decision Q21). `pack` is the pack's whole schema, whose names the binder
+ * The normal form of a checked question. `pack` is the pack's whole schema, whose names the binder
  * avoids (O10); the question itself is checked against the role's. Where the role's schema names every slot and
  * parameter of the pack, as the gate's does (`roleSchema` maps every kind and slot of the bundle), it is that one.
  */

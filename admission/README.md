@@ -29,7 +29,7 @@ result = step.admit(data, source="feed", event="e-17")
 `tests/test_parity.py` holds admission equal to `rezono_compiler.facts` (the oracle) over every pack with facts in `examples/`, `packs/` and `compiler/tests/fixtures/`: the same rows byte for byte for every fact file, and the same refusal (the loader's first, admission's first) for the loader's refused documents and for broken copies of the first record of every section (no identifier, a wrong identifier, an unknown slot, each slot with a wrong value).
 
 **Not covered yet, and why:**
-- The generated tables of sealed kinds (`<kind>__row_sha256`, decision E3): the bundle does not say which kinds are sealed, so admission does not make them and the parity test leaves them out. The bundle gains that in a pull request of COMPILER (ruling 2: admission never reaches into the `Pack` model).
+- The generated tables of sealed kinds (`<kind>__row_sha256`): the bundle does not say which kinds are sealed, so admission does not make them and the parity test leaves them out. The bundle gains that in a pull request of COMPILER (ruling 2: admission never reaches into the `Pack` model).
 - A fact file's source sidecar (`.sources.yaml`): the compiler still reads it.
 
 **Next (ruling 2, order):** COMPILER's next pull request calls admission from `facts.py` and removes what it replaces, keeping the error codes its callers know.

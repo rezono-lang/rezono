@@ -1,4 +1,4 @@
-"""The proof graph of a role as key-range pieces (decision R10; docs/gui.md, "The proof graph as relations").
+"""The proof graph of a role as key-range pieces (docs/gui.md, "The proof graph as relations").
 
 Per main manifest and filtered role, made with the views (rezono_publisher.views) and listed in the same view
 index. The role's chosen witnesses become the relation `step` (rezono_compiler.trace.steps), published as

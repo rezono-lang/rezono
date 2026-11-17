@@ -1,4 +1,4 @@
-"""Icons per kind (decision B10, docs/gui.md#icons-and-images): an SVG in a pack's `icons/`, listed in
+"""Icons per kind (docs/gui.md#icons-and-images): an SVG in a pack's `icons/`, listed in
 `icons/sources.yaml` with its hash, a pinned source and a licence. The compiler checks every icon against a
 strict safe list and gives the viewer a tree of elements, never SVG text: the viewer draws the tree in ink
 (`currentColor`), so an icon never carries a status colour and never runs anything.

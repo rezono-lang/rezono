@@ -12,7 +12,7 @@ another):
 
 - **a base relation** is read from the view: `k(id)` as the elements of the kind, `k__a(id, v)` as the known
   values of the slot (a state is a blank node and `rd:emptySet` is no member, so neither is a row); an enum and
-  a bound of a slot as their values (a union of `BIND`s); the seal's accepted and refused rows (decision E3) as
+  a bound of a slot as their values (a union of `BIND`s); the seal's accepted and refused rows as
   below;
 - **a value** is in one canonical form, so that a join is an equality of terms: an integer as an `xsd:integer`,
   a text as an element IRI spells an id (`rdf.spell`, §3.4), which for an element or a reference is the local

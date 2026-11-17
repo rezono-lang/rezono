@@ -1,4 +1,4 @@
-"""What one filtered role may read, derived by the checker itself (decision O8, R7).
+"""What one filtered role may read, derived by the checker itself.
 
 The publisher filters a role's rows and names the relations the role reads in full (`full`). If the checker
 took both as given, a bug in that filter would go green: the role's proofs would be checked against

@@ -1,6 +1,6 @@
 # Profile `kubernetes`: the manifests
 
-The target profile ([operations](../../../docs/operations.md#profiles), decision X4) as Kustomize manifests: the same containers as on `edge`, on any conformant Kubernetes (OpenShift, Rancher, a plain cluster), with plain Kubernetes features only. The profile's data (roles, storage, Git host) stays in [`../kubernetes.yaml`](../kubernetes.yaml); this directory is how it runs. An installation builds its viewer for [`../kubernetes-gate.yaml`](../kubernetes-gate.yaml), which is `kubernetes` plus the gate: a name of its own because `kubernetes` stays the viewer's default profile for development and its tests, which read the example data without a gate.
+The target profile ([operations](../../../docs/operations.md#profiles)) as Kustomize manifests: the same containers as on `edge`, on any conformant Kubernetes (OpenShift, Rancher, a plain cluster), with plain Kubernetes features only. The profile's data (roles, storage, Git host) stays in [`../kubernetes.yaml`](../kubernetes.yaml); this directory is how it runs. An installation builds its viewer for [`../kubernetes-gate.yaml`](../kubernetes-gate.yaml), which is `kubernetes` plus the gate: a name of its own because `kubernetes` stays the viewer's default profile for development and its tests, which read the example data without a gate.
 
 ```
 browser ──> Gateway (the platform's; TLS) ──HTTPRoute──> front :4180 (oauth2-proxy: OIDC login, passes the ID token)

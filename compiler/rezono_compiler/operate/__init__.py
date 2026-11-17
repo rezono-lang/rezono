@@ -1,4 +1,4 @@
-"""Schema operations (docs/compiler.md#schema-operations, decision S13).
+"""Schema operations (docs/compiler.md#schema-operations).
 
 `operate` applies an operation set (contracts/operation.yaml, rezono.operations/1) to a pack in a work dir. Each
 operation edits the text of the schema, fact, label, channel and rule files (only the lines it concerns), then

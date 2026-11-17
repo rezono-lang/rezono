@@ -1,4 +1,4 @@
-# The independent oracle for schema operations (docs/compiler.md#the-oracle-catlab, decision R3). Tests only.
+# The independent oracle for schema operations (docs/compiler.md#the-oracle-catlab). Tests only.
 #
 #   julia --project=compiler/tests/catlab compiler/tests/catlab/oracle.jl cases.json results.json
 #
@@ -6,7 +6,7 @@
 # operation as the author wrote it, with its names resolved. From the operation alone the oracle builds the new
 # schema and the functor between the two, and migrates every state with Catlab's Δ (`migrate!`), and back with
 # the inverse functor. It shares no code with the compiler: it derives the engine names, which the embedded ids
-# are made of, from the declared names alone (decision S8), before and after the operation.
+# are made of, from the declared names alone, before and after the operation.
 #
 # One case is no operation: `glue` (B10). It gives the parts of a pack and the modules they share, and the oracle
 # builds the one pack as their colimit, the schema and every fact state, without ever seeing that pack.

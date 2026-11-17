@@ -1,4 +1,4 @@
-"""AUD-C2: the checker holds the open and the closed world itself (decision W6), at negation and aggregation.
+"""AUD-C2: the checker holds the open and the closed world itself, at negation and aggregation.
 It derives each relation's world from the rule IR, so a proof that negates an open relation outside an
 `absence` relation is refused even when the compiler let it through."""
 

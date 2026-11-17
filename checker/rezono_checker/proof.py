@@ -1,4 +1,4 @@
-"""Check the proof pieces of one role (decision R10) against the role's witnesses and snapshots.
+"""Check the proof pieces of one role against the role's witnesses and snapshots.
 
 The publisher writes the role's proof graph as key-range trees (rezono_publisher.proof). This module trusts
 none of it: it rebuilds the relation `step` on its own, from the rule definitions (premise positions in

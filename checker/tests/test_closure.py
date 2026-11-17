@@ -318,7 +318,7 @@ def test_a_minimum_over_nothing_owes_no_row():
         ("flags", ["3"], "flags")]
 
 
-# --- a counter with an explicit bound (decision R16, RV-K18) ---------------------------------------
+# --- a counter with an explicit bound (RV-K18) ---------------------------------------
 
 def counting(condition):
     """`depth(a, 0) :- seed(a).  depth(b, m) :- depth(a, n), <condition>, step(a, b), m = n + 1.`"""

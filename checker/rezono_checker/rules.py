@@ -174,7 +174,7 @@ def _names(value, keys) -> bool:
 
 
 def load_seals(doc: dict) -> list[dict]:
-    """The sealed kind of a rule IR (decision E3): the tables to recompute row hashes and refused and accepted
+    """The sealed kind of a rule IR: the tables to recompute row hashes and refused and accepted
     input from, and its parts (`parts`, optional): each with the arrow to its owner, the sealed kind or an
     earlier part. Raises ValueError on bad input."""
     out = []
@@ -205,7 +205,7 @@ def load_rules(doc: dict) -> dict:
         if r.get("role") == "derived" and r.get("values"):  # a witness proves a key; nothing would prove a value
             raise ValueError(f"{r['name']}: a derived relation is a set, without value columns")
         if "release" in r:  # O8: a release has proof obligations this checker does not verify yet
-            raise ValueError(f"{r['name']}: release is not supported yet: a role reads a negation or an aggregate only over relations it reads in full (decision O8; docs/architecture.md, delimited release)")
+            raise ValueError(f"{r['name']}: release is not supported yet: a role reads a negation or an aggregate only over relations it reads in full (docs/architecture.md, delimited release)")
     rules = Rules()
     if ir:
         rules.invariants, rules.outcomes = _obligations(doc)
@@ -325,7 +325,7 @@ def _check_safety(rule: Rule) -> None:
 
 
 def check_worlds(doc: dict, rules: dict) -> dict:
-    """Decision W6, derived here and not taken from the compiler: a base relation has its declared world (left
+    """Derived independently from the compiler: a base relation has its declared world (left
     out: closed); a derived relation is open when a rule reads an open relation positively, unless it is marked
     `absence`, which is closed. Negation of an open relation, and an aggregate over one, holds only in an
     `absence` relation: elsewhere a missing row is unknown, not false. A declared world of a derived relation

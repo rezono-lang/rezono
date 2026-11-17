@@ -1,4 +1,4 @@
-"""Integrity checks as data (decision E11, docs/compiler.md#design-checks-as-data-e11).
+"""Integrity checks as data (docs/compiler.md#design-checks-as-data-e11).
 
 One materialised view per check kind instead of one per slot. Which slot has which check is a row of a
 metadata table `rezono__<facet>` (in engine/parameters.json, loaded like the parameters), and the generic views

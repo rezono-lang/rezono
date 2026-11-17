@@ -11,7 +11,7 @@ A record it writes is in canonical form (docs/compiler.md#the-canonical-writer):
 
 A file written as JSON lines (`- {"id": "a1", ...}`, as generated packs do) keeps that dialect: a
 record is written the way its section, or else the file, already writes records. In JSON a date is
-ISO text (decision W5).
+ISO text.
 
 Rows are kept in identifier order (numbers by value, text in natural order), sections in schema
 order. Removing the last row of a section removes the section. Comment lines directly above a row or
@@ -124,7 +124,7 @@ def layout(pack_dir: str | Path) -> Layout:
 # --- Values: from the delta's JSON into typed facts, and back -------------------------------------
 
 def scalar(sql_type: str, v, where: str):
-    """A value in its fact type. In JSON a whole number may be decimal text (decision W3), a date ISO text (W5)."""
+    """A value in its fact type. In JSON a whole number may be decimal text, a date ISO text (W5)."""
     if sql_type == "BIGINT":
         if isinstance(v, int) and not isinstance(v, bool):
             return v

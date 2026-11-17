@@ -712,7 +712,7 @@ def outputs(prog: Program) -> list[dict]:
 # --- Witnesses: the witness relations read back as CalcWitness (contracts/proof.yaml) -------------
 
 def witnesses(con, prog: Program) -> list[dict]:
-    """Every calculation witness of a computed program (decision W12): one per row of each rule's view,
+    """Every calculation witness of a computed program: one per row of each rule's view,
     and one per row of a version that a rule names as `rule@version`. It reads the witness relations
     on a DuckDB connection and evaluates nothing: an `if` is followed by its recorded condition."""
     dates = con.execute(f"SELECT DISTINCT valid_at, known_at FROM {q(AS_OF)} WHERE id = 'as_of'").fetchall()
@@ -764,7 +764,7 @@ def witnesses(con, prog: Program) -> list[dict]:
 
 def reads(prog: Program, vid: str | None) -> list[str]:
     """Every relation an evaluation of a version reads, sorted (the evaluation date always): an absence
-    decides a state there, so a role must read each in full to see the result (decision O8)."""
+    decides a state there, so a role must read each in full to see the result."""
     out = {AS_OF}
     if vid is not None:
         for d in prog.versions[vid].definitions:

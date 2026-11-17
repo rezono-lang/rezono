@@ -1,6 +1,6 @@
 // The syntax tree of a question. It is the JSON form of docs/rezono/expressions.md §4a itself: one plain object
 // per node, strings and arrays only, so `JSON.stringify` of a tree is the JSON form, and the canonical JSON (RFC
-// 8785) of the tree's normal form (normal.ts, decision Q21) is what the question hash is taken over. Parentheses
+// 8785) of the tree's normal form (normal.ts) is what the question hash is taken over. Parentheses
 // are not in the tree; the printer writes them where precedence needs them (§9).
 //
 // Three members are not in the table of §4a, because the text there does not give them a JSON form:

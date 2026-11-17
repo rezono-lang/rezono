@@ -1,6 +1,6 @@
 // The JSON form of a question (docs/rezono/expressions.md §4a). The tree is the JSON form, so reading it is a
 // check and writing it is canonical JSON (RFC 8785, Rezono's one canonical form: viewer/src/lib/canon.ts). The
-// question hash is taken from the normal form of the checked tree (normal.ts, decision Q21), so the text of a
+// question hash is taken from the normal form of the checked tree (normal.ts), so the text of a
 // question and its JSON form have one hash (E52).
 import { canonicalJson } from '../../viewer/src/lib/canon.ts';
 import { grammar } from './grammar.ts';

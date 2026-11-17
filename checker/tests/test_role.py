@@ -1,4 +1,4 @@
-"""RV-K04: what one filtered role may read (rezono_checker/access.py, decision O8), on a filter that got it wrong.
+"""RV-K04: what one filtered role may read (rezono_checker/access.py), on a filter that got it wrong.
 
 One small world, written by hand: nothing here comes from the compiler or the publisher. The role `guest` reads
 every person, the documents it was granted, and what follows from those. `world()` is what a correct filter

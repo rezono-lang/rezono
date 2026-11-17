@@ -8,7 +8,7 @@ The Energy-Saving Subsidy Regulation 2026 of a fictional municipality, as a fact
 |---|---|
 | the kinds: articles, scheme parameters, the calendar their dates are days of, the evaluation day, cost items, households, applications, quote lines, income statements, advice reports (`schema/subsidy.yaml`) | the decided amounts and rates (`scheme_parameter` rows with their decision): facts with a decider, never part of a definition |
 | the rules of assessment and award: `rules/costs.dl`, `rules/assessment.dl`, `rules/scheme.dl`, `rules/findings.dl` | the cases: households, applications, quotes, income statements, advice reports |
-| the calculation of the award in six steps (`calc/award.yaml`) | the date the calculation is evaluated on (`as_of`, decision W10) |
+| the calculation of the award in six steps (`calc/award.yaml`) | the date the calculation is evaluated on (`as_of`) |
 | the labels and messages of all of the above, and its signs (`channels.yaml`) | the roles and what each may read (`rules/access.dl`): grants are the consumer's |
 | | the payment ledger, its close and the drift against the award: a reference source (R13) |
 

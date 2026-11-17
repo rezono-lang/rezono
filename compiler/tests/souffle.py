@@ -109,8 +109,8 @@ def _rules(toks, code):
 
 
 def bound(text, names):
-    """The rule text of an imported pack under the names its tables have in the importing pack (decision
-    S28). The compiler binds the statements its parser made (rules_dl.remap_statement); this rewrites the
+    """The rule text of an imported pack under the names its tables have in the importing pack.
+    The compiler binds the statements its parser made (rules_dl.remap_statement); this rewrites the
     text itself, token by token, so that Soufflé still reads what was written and not what the parser read.
     `names` maps a class or enum of the imported pack to its name in the importing pack. What follows it:
     a relation `kind` or `kind__slot`; the kind constant in the second column of an access atom; and a
@@ -204,7 +204,7 @@ def lowered(prog):
 
 
 def closure(pack_dir, prog=None):
-    """The rule texts of a pack's import closure (decision S28: an imported pack brings its rules, and the
+    """The rule texts of a pack's import closure (an imported pack brings its rules, and the
     program is the union over the closure): rules/*.dl of every imported pack, each pack after the packs it
     imports and under the importing pack's names (`bound`), then the pack's own, then the rules of the pack's
     decision tables (rezono_table, docs/rezono/publication.md §9.1): a table is a rule file of its pack whose

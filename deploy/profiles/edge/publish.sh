@@ -1,5 +1,5 @@
 #!/bin/sh
-# Publish one epoch of each pack (decision P3: a CI job on DuckDB), from a full Git checkout of main.
+# Publish one epoch of each pack (a CI job on DuckDB), from a full Git checkout of main.
 # Everything comes from Git, never from the clock: the epoch is the number of commits, the knowledge
 # time the commit time, the source position the commit. Packs: the arguments, else publish.packs in
 # the profile. Exit 0: all published. Exit 2: a red check somewhere, nothing published for that pack.

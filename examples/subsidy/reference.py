@@ -59,7 +59,7 @@ def states():
         yield f.stem, t
 
 
-# --- The seal of the ledger (decision E3) ----------------------------------------------------------
+# --- The seal of the ledger ----------------------------------------------------------
 
 def row_hash(payment):
     """The canonical hash of a ledger payment's row (C1): per table ledger_payment__<slot> its values as

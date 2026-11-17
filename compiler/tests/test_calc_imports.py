@@ -1,5 +1,5 @@
-"""A pack import brings its calculation definitions (decision S28), and the evaluation date is the importing
-pack's (decision W10): a theory with one calculation, two importing packs with their own dates and parameter
+"""A pack import brings its calculation definitions, and the evaluation date is the importing
+pack's: a theory with one calculation, two importing packs with their own dates and parameter
 facts, and the same definition written in one pack. Neutral names; it describes no domain."""
 
 from __future__ import annotations

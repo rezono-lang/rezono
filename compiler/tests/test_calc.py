@@ -616,7 +616,7 @@ def test_compile_writes_the_calculation(tmp_path):
 
 
 def test_above_the_budget_the_calculation_gets_the_last_pipeline():
-    """Split (decision E6), the calculation is the last pipeline: it imports the derived relations it reads
+    """Split, the calculation is the last pipeline: it imports the derived relations it reads
     from the parts and gets the tables it reads, and on what the parts export it gives what it gives in one
     pipeline."""
     import duckdb

@@ -2,7 +2,7 @@
 above LARGE bytes, which becomes a line in large-files.json (path, sha256, bytes). The tests compare
 this form; every regenerated large file would otherwise stay in the history for good. CI uploads the
 full output too when it differs (artifact compiled-full). A file named in FULL is kept in full at any
-size: other tools read it back from the golden, and a hash cannot be read (decision A8).
+size: other tools read it back from the golden, and a hash cannot be read.
 
 Usage: python compiler/tests/golden.py <pack> <out>   (writes the golden form of <pack> to <out>)
 """

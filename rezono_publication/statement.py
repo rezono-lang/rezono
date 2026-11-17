@@ -1,4 +1,4 @@
-"""The epoch statement of one role (RV-X41; docs/ring2/signing.md, "What is signed"; decisions Y2.7, Y2.8).
+"""The epoch statement of one role (RV-X41; docs/ring2/signing.md, "What is signed").
 
   python -m rezono_publication.statement verify DIR [--policy profile.yaml | --key seal.pub]
 

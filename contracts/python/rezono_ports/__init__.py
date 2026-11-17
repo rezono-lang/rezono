@@ -1,4 +1,4 @@
-"""Port declarations held to contracts/port.yaml at run time (PC3, decision O12a). Written by hand.
+"""Port declarations held to contracts/port.yaml at run time (PC3). Written by hand.
 
 A port reads its own declaration with `load` before it does anything, so a declaration that is not a valid
 port of its kind never runs: an in-port that would write anything but observations, an out-port on anything

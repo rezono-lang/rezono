@@ -1,4 +1,4 @@
-# A calculated value (decision W12): run_min_cents = round(ratio(hourly_cents, hours_min, 1)) for one
+# A calculated value: run_min_cents = round(ratio(hourly_cents, hours_min, 1)) for one
 # offer, with the witness of hourly_cents as its premise. Constants have no step.
 root: {relation: calc__run_min_cents, key: '["niveau1/scaleway","158","known",""]'}
 manifest_id: manifest-epoch-7

@@ -1,4 +1,4 @@
-// The normal form of a question and the question hash taken from it (src/normal.ts, decision Q21): two ways of
+// The normal form of a question and the question hash taken from it (src/normal.ts): two ways of
 // writing one question hash equal, two questions hash apart, the normal form is a question that checks and is
 // its own normal form, and the output schema of an answer is named by the hash. The written variants are
 // generated with a fixed seed from the questions of the conformance cases and a few more, each checked and

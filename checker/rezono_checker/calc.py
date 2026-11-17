@@ -1,4 +1,4 @@
-"""Calculation witnesses (decision W12), recomputed on their own: Python fractions over ir/calc.json and
+"""Calculation witnesses, recomputed on their own: Python fractions over ir/calc.json and
 the complete snapshots. Nothing here comes from the compiler; the meaning is docs/compiler.md
 ("Calculation rules", "Design M3: calculation witnesses") and docs/formal.md §6.
 

@@ -22,7 +22,7 @@ ANNOTATIONS = {"layer", "path_equations", "outcome", "explain", "invariants", "s
                "currency", "plane", "owner", "renamed_from"}
 CURRENCY = re.compile(r"^[A-Z]{3}$")  # ISO 4217
 CLASS = re.compile(r"[a-z][a-z0-9]*(-[a-z0-9]+)*")  # a pack's class (pack.yaml, SO-5), as contracts/pack.yaml says
-# What a missing row means (decision W6): closed, not true; open, unknown.
+# What a missing row means: closed, not true; open, unknown.
 WORLDS = ("closed", "open")
 BIGINT = (-(2**63), 2**63 - 1)
 # A sweep computes one epoch per grid value (docs/interaction.md, 1); v1 allows this many, and one sweep per pack.
@@ -151,7 +151,7 @@ class Kind:
 
 
 ACCESS = ("may_read", "may_propose", "may_review", "may_publish")  # std-access (O4); their `kind` column names kinds
-CLOSE = "period_close"  # the kind of the closing fact of a seal (decision E3), with these slots
+CLOSE = "period_close"  # the kind of the closing fact of a seal, with these slots
 CLOSED_UNTIL, COVERS, ELEMENT, SHA256 = "closed_until", "covers", "element", "sha256"
 
 
@@ -173,7 +173,7 @@ class Part:
 
 @dataclass
 class Seal:
-    """The sealed kind (decision E3, docs/compiler.md#design-m3-the-seal): its period, a required date, and
+    """The sealed kind (docs/compiler.md#design-m3-the-seal): its period, a required date, and
     the kind of a cover in PeriodClose.covers (an arrow `element` to the sealed kind and its `sha256`). The
     compiler makes `<kind>__refused(id, period_close)` and `<kind>__accepted(id)`; the loader fills
     `<kind>__row_sha256(id, v)` with the canonical hash of each element's row, over `tables` and the rows of its
@@ -231,7 +231,7 @@ class Pack:
     sweeps: list[dict] = field(default_factory=list)  # from sweeps.yaml: one fact cell each, with its grid
     questions: list[dict] = field(default_factory=list)  # explanation questions (R10): imports first, then own
     reader_questions: list[dict] = field(default_factory=list)  # reader questions (RV-C04): imports first, then own
-    seals: list[Seal] = field(default_factory=list)  # the sealed kind, if any (decision E3)
+    seals: list[Seal] = field(default_factory=list)  # the sealed kind, if any
     iri: dict = field(default_factory=dict)  # pack.yaml `iri:` resolved (`iris`): base, kind -> IRI, reason IRIs
     folds: dict[str, str] = field(default_factory=dict)  # derived relations marked `@explain fold` -> their .decl
     # Per rule id, the kind of each body literal in source order (MOD14): the rule IR keeps atoms, aggregates,
@@ -338,7 +338,7 @@ def renamed_from(element, where: str, errors: list[str]) -> str | None:
 
 
 def reason_messages(doc) -> list[str]:
-    """The message `reason.<reason>` of every reason a named outcome gives (decision W7); known has none."""
+    """The message `reason.<reason>` of every reason a named outcome gives; known has none."""
     outcomes = {r["name"] for r in (doc or {}).get("relations", []) if r.get("outcome")}
     return sorted({f"reason.{r['head']['terms'][2]}" for r in (doc or {}).get("rules", [])
                    if r["head"]["relation"] in outcomes and r["head"]["terms"][2]})
@@ -729,7 +729,7 @@ def read(pack_dir: str | Path) -> Pack:
                                                       bodies=pack.rule_bodies, spans=pack.rule_spans,
                                                       generated=generated)
             pack.warnings += rule_warnings
-            if pack.rules:   # decision R17: a variable or a column that joins two currencies is an error
+            if pack.rules:   # a variable or a column that joins two currencies is an error
                 amounts.columns(pack.rules, amounts.tables(pack))
         except rules_dl.RuleError as e:
             errors.append(str(e))
@@ -1118,7 +1118,7 @@ def planes(pack: Pack, errors: list[str]) -> None:
 
 
 def seals(pack: Pack, errors: list[str]) -> list[Seal]:
-    """The sealed kind (decision E3): `seal: <slot>` on a root kind names its period, a required single date.
+    """The sealed kind: `seal: <slot>` on a root kind names its period, a required single date.
     A pack with a seal has PeriodClose with the required date closed_until and covers, an inlined list of a
     kind without identifier that has exactly the required arrow `element` to the sealed kind and the
     required text `sha256`. One sealed kind per pack for now; its parts are kinds with `sealed_with` (`parts`)."""
@@ -1641,7 +1641,7 @@ def claim_messages(pack: Pack) -> list[str]:
 
 
 def image_bindings(pack: Pack, raw, names: dict, where: str, errors: list[str]) -> list[dict]:
-    """Image bindings (`ImageBinding` in contracts/view.yaml, decision B10): per kind one single-valued text slot
+    """Image bindings (`ImageBinding` in contracts/view.yaml): per kind one single-valued text slot
     that the kind has, own or inherited, by element id. The binding makes the slot an image; what it means is
     the pack's. Whether each cell names a listed file is checked at publication (`rezono:assets`), as it is data."""
     out = []
@@ -1752,7 +1752,7 @@ def order_slot(pack: Pack, kind: str) -> Slot | None:
 
 def ordered_lane(pack: Pack, s: Slot, what: str, where: str, errors: list[str]) -> None:
     """A lane bound at level `ordered` says that the place of a lane means something, so its order is declared and
-    never the alphabet (decision B12). On an arrow it is the order of the target kind (`order_slot`): without one
+    never the alphabet. On an arrow it is the order of the target kind (`order_slot`): without one
     the binding is refused. On an enum it is the order in which the schema lists the values, which this compiler
     does not keep yet (`read` holds an enum's values by name, and so does the bundle): that warns, and names what is
     drawn, until the bundle carries the schema's order."""
@@ -2068,7 +2068,7 @@ def sheet_messages(pack: Pack) -> dict[str, str]:
 
 
 def report_binding(pack: Pack, raw, names: dict, where: str, errors: list[str]) -> dict | None:
-    """A Report binding (`ReportSheet` in contracts/view.yaml, decision B5): an id, a title and an ordered list of
+    """A Report binding (`ReportSheet` in contracts/view.yaml): an id, a title and an ordered list of
     parts: cards of page-template fields, a paged series of existing Waterfalls for an amount slot, a Matrix, or a
     comparison of a derived relation in three classes (`comparison_part`).
     Slots use element ids; their declaring kind uses the same role-filtered page as Cards, never bound instance ids."""
@@ -2249,7 +2249,7 @@ def variables(block: str) -> set[str]:
 
 
 def questions(pack: Pack, pack_dir: Path, packs: dict, errors: list[str]) -> list[dict]:
-    """The explanation questions (decision R10, docs/gui.md "Questions as data"): those of the imported packs
+    """The explanation questions (docs/gui.md "Questions as data"): those of the imported packs
     first, a dependency before the pack that imports it, then the pack's own `questions.yaml`, each in file
     order. Every name a question uses must exist in this pack; a term is used once in the whole closure."""
     sources = [(p.dir / "questions.yaml", f"{name}/questions.yaml") for name, p in packs.items()]

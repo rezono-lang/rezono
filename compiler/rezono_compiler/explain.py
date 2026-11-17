@@ -10,7 +10,7 @@ formal.md §3, computed when asked, not stored in the engine. Each chosen witnes
 strictly lower rank, so the proof graph is acyclic by construction.
 
 Aggregates carry their evidence: count, the contributors hash and the result. The hash is computed here,
-not in the engine (decision R2): SHA-256 over the compact JSON of the sorted [key, value] of every row in
+not in the engine: SHA-256 over the compact JSON of the sorted [key, value] of every row in
 the group (only [key] for count), the same as the checker.
 """
 
@@ -150,7 +150,7 @@ class Explainer:
 
 
 def with_calculation(proof: dict, calc_witnesses: list[dict]) -> dict:
-    """The proof with the calculation witnesses of its graph (decision W12, `calc_witnesses` of a Proof): the
+    """The proof with the calculation witnesses of its graph (`calc_witnesses` of a Proof): the
     witness of every calculated row a premise names, and of every row those name, in the order given. A proof
     that reaches none is returned as it is."""
     by_row = {(w["conclusion"]["relation"], w["conclusion"]["key"]): w for w in calc_witnesses}
