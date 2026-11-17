@@ -7,6 +7,8 @@ import argparse
 import json
 import os
 import subprocess
+import sys
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -174,16 +176,89 @@ def affected_components(
     return [c for c in components if c.folder in selected]
 
 
+# Files are assigned to jobs round-robin. Within a job pytest items share the
+# runner's cores, so one large parametrized file can use more than one core.
+SHARDS = {"compiler": 3, "examples": 2}
+PARALLEL = {"compiler", "examples", "edge/publisher"}
+
+
+def test_files(folder: str) -> list[str]:
+    directory = ROOT / folder
+    return sorted({
+        path.relative_to(ROOT).as_posix()
+        for pattern in ("test_*.py", "*_test.py")
+        for path in directory.rglob(pattern)
+        if path.is_file()
+    })
+
+
+def run_shard(folder: str, shard: int, total: int, report_dir: Path) -> int:
+    files = test_files(folder)
+    assigned = files[shard::total]
+    print(f"{folder} shard {shard + 1}/{total}: {json.dumps(assigned)}", flush=True)
+    ignores = [f"--ignore={path}" for path in files if path not in assigned]
+    cores = min(4, len(os.sched_getaffinity(0))) if hasattr(os, "sched_getaffinity") else 1
+    workers = cores if folder in PARALLEL else 1
+    report_dir.mkdir(parents=True, exist_ok=True)
+
+    def execute(worker: int) -> int:
+        args = [
+            sys.executable, str(Path(__file__).resolve()), "pytest-worker", folder,
+            str(worker), str(workers), str(report_dir), *ignores,
+        ]
+        return subprocess.run(args, cwd=ROOT, check=False).returncode
+
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        statuses = list(pool.map(execute, range(workers)))
+    if all(code == 5 for code in statuses):
+        blocked = {
+            entry.read_text(encoding="utf-8").split(":", 1)[0].strip()
+            for entry in (ROOT / "blocked").glob("*.txt")
+        }
+        return 0 if files and set(files) <= blocked else 5
+    return next((code for code in statuses if code), 0)
+
+
+def pytest_worker(folder: str, worker: int, workers: int, reports: str, ignores: list[str]) -> int:
+    import pytest
+
+    class Partition:
+        had_items = False
+
+        @pytest.hookimpl(trylast=True)
+        def pytest_collection_modifyitems(self, items):
+            self.had_items = bool(items)
+            items[:] = items[worker::workers]
+
+    partition = Partition()
+    report = Path(reports) / f"pytest-{worker}.xml"
+    args = ["-q", "--durations=5", f"--junitxml={report}", *ignores, folder]
+    status = pytest.main(args, plugins=[partition])
+    if status == pytest.ExitCode.NO_TESTS_COLLECTED and partition.had_items:
+        return 0
+    return int(status)
+
+
 def main() -> int:
+    if sys.argv[1:2] == ["pytest-worker"]:
+        folder, worker, workers, reports, *ignores = sys.argv[2:]
+        return pytest_worker(folder, int(worker), int(workers), reports, ignores)
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest="cmd", required=True)
     sub.add_parser("list", help="List discovered component folders and kinds.")
     sub.add_parser("python-packages", help="Print editable Python package directories.")
+    shard_p = sub.add_parser("run-shard", help="Run the selected pytest file partition.")
+    shard_p.add_argument("folder")
+    shard_p.add_argument("shard", type=int)
+    shard_p.add_argument("total", type=int)
+    shard_p.add_argument("reports", type=Path)
     matrix_p = sub.add_parser("ci-matrix", help="Emit GitHub Actions matrix outputs.")
     matrix_p.add_argument("--base-ref", default=os.environ.get("GITHUB_BASE_REF", ""))
     matrix_p.add_argument("--before", default=os.environ.get("GITHUB_EVENT_BEFORE", ""))
 
     args = parser.parse_args()
+    if args.cmd == "run-shard":
+        return run_shard(args.folder, args.shard, args.total, args.reports)
     if args.cmd == "list":
         for comp in discover_components():
             print(f"{comp.folder}\t{comp.kind}")
@@ -200,9 +275,12 @@ def main() -> int:
         )
         active = affected_components(comps, changed)
         py_items = [
-            {"folder": c.folder, "kind": c.kind}
+            {"folder": c.folder, "kind": c.kind, "shard": shard, "total": total,
+             "label": c.folder if total == 1 else f"{c.folder} {shard + 1}/{total}"}
             for c in active
             if c.kind in ("contracts", "python")
+            for total in [min(SHARDS.get(c.folder, 1), max(1, len(test_files(c.folder))))]
+            for shard in range(total)
         ]
         node_items = [
             {"folder": c.folder, "kind": c.kind}
