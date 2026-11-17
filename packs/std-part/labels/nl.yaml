@@ -1,0 +1,8 @@
+# Neutrale labels van std-part. Een domein geeft zijn eigen woorden in zijn eigen labels en messages (view).
+constituent: {text: deel of geheel, gender: neuter}
+constituent.part_of: deel van
+constituent.repeat: aantal keren
+within: binnen
+has_whole: heeft een geheel
+outermost: buitenste geheel
+part_cycle: deel van zichzelf

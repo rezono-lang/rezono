@@ -1,0 +1,31 @@
+# Arithmetic inside a recursive component: reach(m) from reach(n) with m = n + 1 never ends.
+format: rede.rules/1
+pack: fixture
+relations:
+  - name: start
+    role: base
+    key: [{name: n, type: integer}]
+  - name: reach
+    role: derived
+    key: [{name: n, type: integer}]
+    module: count
+    explain: on_demand
+rules:
+  - id: reach_start
+    module: count
+    stratum: "1"
+    head: {relation: reach, terms: ["?n"]}
+    body:
+      - {relation: start, terms: ["?n"], polarity: positive, stratum: "0"}
+    witness: {relation: reach_start__witness, variables: ["?n"]}
+    origin: {file: rules/count.dl, line: "1"}
+  - id: reach_next
+    module: count
+    stratum: "1"
+    head: {relation: reach, terms: ["?m"]}
+    body:
+      - {relation: reach, terms: ["?n"], polarity: positive, stratum: "1"}
+    assignments:
+      - {var: "?m", op: add, left: "?n", right: "1"}
+    witness: {relation: reach_next__witness, variables: ["?m", "?n"]}
+    origin: {file: rules/count.dl, line: "2"}

@@ -1,0 +1,5 @@
+[
+{"id":"ADJ-1","cells":{"adjustment__of_claim":{"value":"A-001","state":"known"},"adjustment__prior_paid":{"currency":"EUR","state":"not_applicable"},"adjustment__amount":{"minor_units":"9450","currency":"EUR","state":"known"}}},
+{"id":"ADJ-2","cells":{"adjustment__of_claim":{"value":"A-001","state":"known"},"adjustment__prior_paid":{"minor_units":"24000","currency":"EUR","state":"known"},"adjustment__amount":{"minor_units":"-24000","currency":"EUR","state":"known"}}},
+{"id":"ADJ-3","cells":{"adjustment__of_claim":{"value":"A-002","state":"known"},"adjustment__prior_paid":{"currency":"EUR","state":"not_applicable"},"adjustment__amount":{"currency":"EUR","state":"unknown"}}}
+]

@@ -1,0 +1,8 @@
+# Neutral labels of std-part. A domain gives its own words in its own labels and messages (view).
+constituent: part or whole
+constituent.part_of: part of
+constituent.repeat: number of times
+within: within
+has_whole: has a whole
+outermost: outermost whole
+part_cycle: part of itself

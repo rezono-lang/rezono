@@ -1,0 +1,16 @@
+connector: prov-o-out
+standard: PROV-O
+standard_version: "2013-04-30"
+direction: out
+losses:
+  - subject: proof
+    what: A negative premise. PROV-O has no term for the absence of a row.
+    fate: extension
+    carried_by: ["rd:absent"]
+  - subject: unit
+    what: The unit is text inside the literal; it is not a term a reader can compute with.
+    fate: weakened
+    carried_by: ["rdfs:Literal"]
+  - subject: access
+    what: Which role the export was made for.
+    fate: dropped

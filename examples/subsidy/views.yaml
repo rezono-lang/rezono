@@ -1,0 +1,41 @@
+# How this pack reads the theory std-time (docs/compiler.md, "Views that execute"): a scheme parameter is an
+# interval from valid_from up to, and not including, valid_until; the evaluation day is the reference point;
+# the calendar is the axis. The theory's rules (begun_at, ended_at, holds_at, judgement) then run over the
+# scheme's own facts, and a proof ends at a parameter's own date.
+#
+# Left unmapped: Series (the pack has no kind for a parameter apart from its versions, so allen relates
+# nothing), unbounded, extension_end and known_from (the scheme records none). The theory then says of a
+# scheme parameter what it says of any interval without them: its validity ends without an extension, and
+# nobody recorded from which day it is known. A role reads those two from an absence, so it must read
+# std-time's own kinds in full (rules/access.dl).
+format: rede.views/1
+views:
+  - theory: std-time
+    kinds:
+      - name: interval
+        union:
+          - populated_from: scheme_parameter
+      - name: axis
+        union:
+          - populated_from: calendar
+      - name: reference_point
+        union:
+          - populated_from: evaluation_day
+    attributes:
+      - {of: interval, name: start, populated_from: valid_from, reading: days}
+      - {of: interval, name: end, populated_from: valid_until, reading: days}
+      - {of: reference_point, name: position, populated_from: day, reading: yyyymmdd}
+      - {of: reference_point, name: horizon, populated_from: horizon}
+    arrows:
+      - name: on_axis
+        of: interval
+        paths:
+          - populated_from: scheme_parameter
+            steps:
+              - slot: calendar
+      - name: on_axis
+        of: reference_point
+        paths:
+          - populated_from: evaluation_day
+            steps:
+              - slot: calendar

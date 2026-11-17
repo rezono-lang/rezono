@@ -1,0 +1,11 @@
+group: groep
+group.title: titel
+group.limit: grens
+item: ding
+item.group: groep
+item.size: grootte
+item.state: stand
+item.next: volgende
+state: stand
+state.low: laag
+state.high: hoog

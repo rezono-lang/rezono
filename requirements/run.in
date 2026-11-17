@@ -1,0 +1,10 @@
+# What a publication runs with: canon, compiler with DuckDB, publisher with S3, the Git-host port.
+-e ./admission
+-e ./canon
+-e ./compiler[batch]
+-e ./edge/publisher[s3]
+-e ./edge/githost
+# The standards exports of a role's form (rede_publisher.forms, RV-K20): the ODCS contract takes its columns from
+# the library's Arrow writer (reckon_data.arrow), as the columnar form will (RV-K19).
+pyarrow==26.0.1
+setuptools

@@ -1,0 +1,3 @@
+sweeps:
+  - {name: first, kind: alpha, key: a1, slot: size}
+  - {name: second, kind: alpha, key: a2, slot: size}

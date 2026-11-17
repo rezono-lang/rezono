@@ -1,0 +1,38 @@
+@locale nl
+---
+# Zinnen van std-identity, neutraal. Een domein vervangt ze met een bericht met dezelfde id (S14).
+arrow.total = {{Elk {$kind} heeft precies één {$arrow}.}}
+arrow.partial = {{Elk {$kind} heeft hoogstens één {$arrow}.}}
+attribute.total = {{Elk {$kind} heeft precies één {$attribute}.}}
+attribute.partial = {{Elk {$kind} heeft hoogstens één {$attribute}.}}
+arrow.many.partial = {{Elk {$kind} kan meer dan één {$arrow} hebben.}}
+attribute.many.partial = {{Elk {$kind} kan meer dan één {$attribute} hebben.}}
+is_a = {{Elk {$kind} is een {$parent}.}}
+unique_key = {{{$key} hoort bij hoogstens één {$kind}.}}
+path_equation = {{Voor elk {$kind}: {$equation}.}}
+# Eén zin per regel (rules/identity.dl): rule.<regel-id>, met de variabelen van de regel.
+rule.stated_same_1 = {{Een bron stelt dat {$a} hetzelfde is als {$b}.}}
+rule.stated_same_2 = {{Een bron stelt dat {$a} hetzelfde is als {$b}.}}
+rule.equivalent_1 = {{{$a} is hetzelfde als zichzelf.}}
+rule.equivalent_2 = {{{$a} is hetzelfde als {$b}, en een bron stelt dat {$b} en {$c} hetzelfde zijn.}}
+rule.has_equivalent = {{{$a} is hetzelfde als {$b}, een andere referent.}}
+rule.chosen = {{{$a} is hetzelfde als {$x}, en een bron noemt {$r} als vertegenwoordiger.}}
+rule.has_chosen = {{{$r} is genoemd als vertegenwoordiger van {$a}.}}
+rule.disputed = {{Zowel {$r} als {$s} is genoemd als vertegenwoordiger van {$a}.}}
+rule.representatives_disagree = {{Zowel {$r} als {$s} is genoemd als vertegenwoordiger van {$a}: één ding heeft twee vertegenwoordigers.}}
+rule.representative_outside_class = {{{$r} is genoemd als vertegenwoordiger van {$x}, en niets stelt dat zij hetzelfde zijn.}}
+rule.representative_1 = {{{$r} is genoemd als vertegenwoordiger van {$a}, is hetzelfde als {$a}, en geen ander is genoemd.}}
+rule.representative_2 = {{{$a} is hetzelfde als geen andere referent, dus vertegenwoordigt het zichzelf.}}
+rule.representative_not_recorded = {{{$a} is meer dan eens vastgelegd, en niemand heeft genoemd welke het vertegenwoordigt.}}
+rule.identity_conflict_1 = {{{$a} en {$b} zijn hetzelfde, maar {$a} geeft {$v} op voor {$s} en {$b} geeft {$w} op.}}
+rule.identity_conflict_2 = {{{$a} en {$b} zijn hetzelfde, maar {$a} geeft {$v} op voor {$s} en {$b} geeft {$w} op.}}
+rule.class_text = {{{$a} geeft {$v} op voor {$s}, en {$r} vertegenwoordigt het.}}
+rule.class_number = {{{$a} geeft {$v} op voor {$s}, en {$r} vertegenwoordigt het.}}
+# Uitlegvragen: de algemene grondslag en het bereik, toegespitst op hetzelfde-als en zijn klassen.
+explain.identity_grounds = Waarom het hetzelfde is
+explain.identity_grounds.question = {{Waarom is {$element} hetzelfde als dit?}}
+explain.identity_reach = Wat hetzelfde is
+explain.identity_reach.question = {{Wat is hetzelfde als {$element}?}}
+explain.outside = Buiten je zicht
+explain.more = Verder vanaf hier
+explain.empty = {{Geen antwoord voor {$element}.}}

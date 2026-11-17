@@ -1,0 +1,70 @@
+# rede-repl-session/0
+# pack subsidy
+# manifest m-1
+# role propose
+# access -
+# bundle e9a867bb7b5c2db460530d6eb7d4911e688376580fc938882900f17d183ae900
+rede> :use subsidy m-1 as propose
+using subsidy m-1 as propose
+rede> :kinds
+kind                full  rows
+advice_report       yes   yes
+alternative         yes   yes
+application         yes   yes
+article             yes   yes
+axis                yes   none
+calendar            yes   yes
+closed_payment      yes   none
+cost_item           yes   yes
+cost_line           yes   yes
+credential          yes   yes
+credential_claim    yes   yes
+decision            yes   yes
+evaluation_day      yes   yes
+exception           yes   yes
+household           yes   yes
+identity_statement  yes   yes
+income_statement    yes   yes
+interval            yes   none
+ledger_payment      yes   yes
+period_close        yes   none
+principle           yes   yes
+purpose             yes   yes
+reference_date      yes   yes
+reference_point     yes   none
+role                yes   yes
+scheme_parameter    yes   yes
+series              yes   none
+status_lookup       yes   yes
+trust_entry         yes   yes
+rede> :row application A001
+application A001
+slot           value
+claimed_costs  11000.00 EUR
+household      H001
+assessment     known
+rede> :schema ledger_payment
+slot         type            world
+amount       amount EUR      closed
+application  -> application  closed
+booked_on    date            closed
+outcomes: none
+rede> :row ledger_payment P001
+ledger_payment P001
+slot         value
+amount       2694.00 EUR
+application  A001
+booked_on    2026-10-06
+rede> :grounds ledger_paid A001
+dist  relation                     key                       via
+0     ledger_paid                  ["A001","269400"]         -
+1     ledger_line                  ["A001","P001","269400"]  contributes ledger_paid
+1     paid                         ["A001"]                  positive ledger_paid
+2     ledger_payment__accepted     ["P001"]                  positive ledger_line
+2     ledger_payment__amount       ["P001","269400"]         positive ledger_line
+2     ledger_payment__application  ["P001","A001"]           positive ledger_line
+rede> :reach ledger_payment P001
+dist  relation        key                                       via
+0     ledger_payment  ["P001"]                                  -
+1     may_read        ["case_officer","ledger_payment","P001"]  positive may_read_26
+      may_read        ["propose","ledger_payment","P001"]       positive may_read_39

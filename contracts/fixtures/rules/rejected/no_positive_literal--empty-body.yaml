@@ -1,0 +1,20 @@
+# An empty body: a fact written as a rule. A body of aggregates only is a rule; a body of nothing is not.
+format: rede.rules/1
+pack: fixture
+relations:
+  - name: member
+    role: base
+    key: [{name: id, type: string}]
+  - name: always
+    role: derived
+    key: [{name: flag, type: string}]
+    module: load
+    explain: materialize
+rules:
+  - id: always
+    module: load
+    stratum: "1"
+    head: {relation: always, terms: ["yes"]}
+    body: []
+    witness: {relation: always__witness, variables: []}
+    origin: {file: rules/load.dl, line: "1"}

@@ -1,0 +1,19 @@
+reckon 0
+pack minimal
+
+--- Kinds, slots and an enum written in Reckon (docs/reckon/publication.md §5.1, §5.2), beside the pack
+--- `minimal`, whose kind Alpha and enum State it names. kinds.yaml says the same in LinkML; the compiler
+--- gives both the same bundle and the same engine. Neutral names on purpose; it describes no domain.
+
+enum Grade = first | second | third
+
+kind Gamma world closed
+  since: Date?
+  note: Text
+  grade: Grade?
+
+kind Delta world closed
+  gamma: Gamma
+  alpha: Alpha
+  state: State?
+  grade: Grade

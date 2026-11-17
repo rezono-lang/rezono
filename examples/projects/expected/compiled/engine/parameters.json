@@ -1,0 +1,60 @@
+{
+  "rede__arrow": [
+    {"kind": "budget_line", "slot": "project", "target": "project"},
+    {"kind": "dependency", "slot": "prerequisite", "target": "task"},
+    {"kind": "dependency", "slot": "task", "target": "task"},
+    {"kind": "milestone", "slot": "project", "target": "project"},
+    {"kind": "task", "slot": "milestone", "target": "milestone"},
+    {"kind": "task", "slot": "project", "target": "project"}
+  ],
+  "rede__constant": [],
+  "rede__enum": [
+    {"kind": "task", "slot": "status", "enumeration": "task_status"}
+  ],
+  "rede__is_a": [],
+  "rede__maximum": [
+    {"kind": "task", "slot": "estimate", "v": 200}
+  ],
+  "rede__maximum_cardinality": [],
+  "rede__minimum": [
+    {"kind": "budget_line", "slot": "amount", "v": 0},
+    {"kind": "project", "slot": "budget", "v": 0},
+    {"kind": "task", "slot": "estimate", "v": 1}
+  ],
+  "rede__minimum_cardinality": [],
+  "rede__required": [
+    {"kind": "budget_line", "slot": "amount"},
+    {"kind": "budget_line", "slot": "description"},
+    {"kind": "budget_line", "slot": "project"},
+    {"kind": "dependency", "slot": "prerequisite"},
+    {"kind": "dependency", "slot": "task"},
+    {"kind": "milestone", "slot": "name"},
+    {"kind": "milestone", "slot": "project"},
+    {"kind": "project", "slot": "budget"},
+    {"kind": "project", "slot": "name"},
+    {"kind": "task", "slot": "name"},
+    {"kind": "task", "slot": "project"},
+    {"kind": "task", "slot": "status"}
+  ],
+  "rede__single": [
+    {"kind": "budget_line", "slot": "amount"},
+    {"kind": "budget_line", "slot": "description"},
+    {"kind": "budget_line", "slot": "project"},
+    {"kind": "dependency", "slot": "prerequisite"},
+    {"kind": "dependency", "slot": "task"},
+    {"kind": "milestone", "slot": "due"},
+    {"kind": "milestone", "slot": "name"},
+    {"kind": "milestone", "slot": "project"},
+    {"kind": "project", "slot": "budget"},
+    {"kind": "project", "slot": "name"},
+    {"kind": "task", "slot": "estimate"},
+    {"kind": "task", "slot": "milestone"},
+    {"kind": "task", "slot": "name"},
+    {"kind": "task", "slot": "project"},
+    {"kind": "task", "slot": "status"}
+  ],
+  "task_status": [
+    {"id": "done"},
+    {"id": "open"}
+  ]
+}

@@ -1,0 +1,6 @@
+# A LinkML rule of a class: preconditions, then postconditions.
+view: invoice__rule_1__rule
+check: rule
+kind: invoice
+subject: rule_1
+path: route => vat

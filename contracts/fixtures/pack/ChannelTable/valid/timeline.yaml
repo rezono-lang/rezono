@@ -1,0 +1,5 @@
+# A Timeline sheet in a pack's channel table: its rows, the slots of start and end, the main phase's name.
+kinds:
+  - {kind: period, shape: rect}
+timelines:
+  - {id: periods, title_message: timeline.periods, rows: period, start: period.opens, end: period.closes, main_message: phase.open}

@@ -1,0 +1,9 @@
+row: {relation: node__label, key: '["node-1","First node"]'}
+sources:
+  - kind: document
+    name: Example manual
+    url: https://docs.example.invalid/manual
+    position: section-2
+    fragment_sha256: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    licence: LicenseRef-fixture
+    attribution: Example author

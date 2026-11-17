@@ -1,0 +1,7 @@
+id: narrow
+module: core
+explain: on_demand
+closes: wide
+columns:
+- name: a
+  type: string

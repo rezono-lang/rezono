@@ -1,0 +1,26 @@
+# A small program for the compile path (pack.read, emit, the command line): an attribute, a sum
+# from a derived relation, whether a relation holds, a parameter and the evaluation date.
+format: rede.calc/1
+pack: calc
+subject: item
+parameters: setting.value
+inputs: {kind: entry, subject: item, fact: name, integer: number, boolean: truth}
+as_of: {valid_at: 2026-03-01, known_at: 2026-10-01}
+rules:
+  - id: total@v1
+    rule: total
+    version: v1
+    output: total.value
+    unit: x
+    valid_from: "2026-01-01"
+    valid_until: "2027-01-01"
+    known_from: "2025-12-01"
+    definitions:
+      - name: with_entries
+        when: {fact: has_entry}
+        value: {op: add, args: [{fact: item.amount}, {fact: entry_total.total}, {parameter: s0}]}
+        overrides:
+          - {definition: "total@v1#without", reason: "Met invoer telt de som mee."}
+      - name: without
+        when: {op: or, args: [{fact: has_entry}, {boolean: true}]}
+        value: {fact: item.amount}

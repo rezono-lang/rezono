@@ -1,0 +1,16 @@
+# An accepted plan was applied; the call timed out, so nobody knows yet whether it happened.
+id: change-4
+author: {subject: exporter, role: system}
+effect: execute
+channel: plugin
+cause: plan
+base_manifest: manifest-epoch-8
+content_sha256: "3b5a0f2c9d8e7f6a5b4c3d2e1f0a9b8c7d6e5f4a3b2c1d0e9f8a7b6c5d4e3f2a"
+plugin: exec-webhook
+input_sha256: "9c8b7a6f5e4d3c2b1a0f9e8d7c6b5a4f3e2d1c0b9a8f7e6d5c4b3a2f1e0d9c8b"
+state: unknown
+reviews:
+  - reviewer: {subject: bob, role: reviewer}
+    verdict: accepted
+    at: "2026-11-06T11:00:00Z"
+    content_sha256: "3b5a0f2c9d8e7f6a5b4c3d2e1f0a9b8c7d6e5f4a3b2c1d0e9f8a7b6c5d4e3f2a"

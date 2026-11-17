@@ -1,0 +1,6 @@
+id: granted
+module: access
+explain: materialize
+extend: sometimes
+columns:
+  - {name: subject, type: string}

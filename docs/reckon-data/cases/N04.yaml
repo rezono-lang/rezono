@@ -1,0 +1,27 @@
+id: N04
+class: invalid
+status: settled
+schema:
+  from: fixture.schema.json
+  merge:
+    reasons:
+      not_assigned:
+        label:
+          en: not yet assigned
+        states:
+        - unknown
+form: row
+input:
+  $kind: Host
+  $id: host-a
+  memory_need: 400 GiB
+  owner:
+    $na: not_assigned
+  tags:
+  - gpu
+  - lab
+expect:
+  accept: false
+  error: '`not_assigned` may not label `not_applicable`'
+sources:
+- '#369 L0 rev 2 §8'

@@ -1,0 +1,19 @@
+[project]
+name = "rede-canon"
+version = "0.1.0"
+description = "The one canonical JSON form and hash of Rede (docs/contracts.md#canonical-hash)."
+requires-python = ">=3.11"
+dependencies = []
+
+[project.optional-dependencies]
+test = ["pytest>=8", "rfc8785==0.1.4"]
+
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["rede_canon"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

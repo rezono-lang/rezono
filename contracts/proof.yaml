@@ -1,0 +1,103 @@
+id: https://rede.dev/contracts/proof
+name: rede_proof
+title: Witnesses and proofs
+description: >-
+  What the engine produces and the checker verifies. A conclusion is separate from its
+  witnesses. A proof is an acyclic graph of witnesses, checked against one manifest.
+prefixes:
+  linkml: https://w3id.org/linkml/
+  rede: https://rede.dev/contracts/
+default_prefix: rede
+default_range: string
+imports:
+  - linkml:types
+  - value
+
+enums:
+  Polarity:
+    description: Whether a premise must be present or absent.
+    permissible_values:
+      positive: {description: The premise holds in the model at the snapshot.}
+      negative: {description: The premise is absent from its (lower) stratum at the snapshot.}
+
+classes:
+  RowRef:
+    description: A reference to one row of one relation.
+    attributes:
+      relation: {required: true, description: Relation name.}
+      key: {required: true, description: "Canonical key of the row: stable and deterministic."}
+
+  Premise:
+    description: One body atom of a witness, with its polarity and stratum.
+    attributes:
+      row: {range: RowRef, required: true, inlined: true, description: The row the premise refers to.}
+      polarity: {range: Polarity, required: true, description: Whether the row must be present or absent.}
+      stratum: {range: integer, required: true, description: Stratum of the premise relation.}
+
+  Aggregate:
+    description: Evidence for an aggregate premise; the checker recomputes it over the group.
+    attributes:
+      relation: {required: true, description: Relation that is aggregated.}
+      position: {range: integer, description: "The place of this aggregate in the rule (from 0). Two aggregates over the same relation and group (a count and a sum) are told apart by it."}
+      group_key: {required: true, description: Canonical key of the group.}
+      count: {range: integer, required: true, description: Number of contributing rows in the group.}
+      contributors_sha256: {required: true, description: Hash over the sorted keys and values of all contributing rows.}
+      result: {required: true, description: Canonical text of the aggregate value with its state.}
+
+  Witness:
+    description: One rule instance that derives a conclusion.
+    attributes:
+      conclusion: {range: RowRef, required: true, inlined: true, description: The row this witness derives.}
+      rule_id: {required: true, description: Identifier of the rule.}
+      bindings: {multivalued: true, range: Binding, inlined_as_list: true, description: The substitution of the rule variables.}
+      premises: {multivalued: true, range: Premise, inlined_as_list: true, description: The instantiated body atoms.}
+      aggregates: {multivalued: true, range: Aggregate, inlined_as_list: true, description: Evidence for the aggregate body atoms.}
+
+  Binding:
+    description: One variable of the rule bound to a canonical value.
+    attributes:
+      variable: {required: true, description: Variable name.}
+      value: {required: true, description: Canonical value.}
+
+  CalcStep:
+    description: >-
+      One evaluated node of a calculation (docs/compiler.md, "Design M3: calculation witnesses"). A
+      constant has no step; an untaken branch of an `if` and the value of a definition that does not
+      apply are not evaluated.
+    attributes:
+      path: {required: true, pattern: "^[^/]+/(when|value)(/(0|[1-9][0-9]*))*$", description: "The node: <definition>/when or <definition>/value, then one argument index per level."}
+      op: {required: true, pattern: "^[a-z]+$", description: "What the node is, as the program has it: fact, parameter or rule for a leaf, else the operator (add, if, round, ...)."}
+      ref: {description: "For a leaf: the fact, the parameter or the rule (rule or rule@version) it names, so an explanation can name and link it. Absent for an operator."}
+      relation: {description: "For a leaf: the table or view it is read from (the attribute table, the derived relation, the parameter table, the rule's view). Absent for an operator and for an input concept."}
+      value: {description: "Canonical text of the value (a number as n or n/d in lowest terms, a boolean as true or false); empty unless the state is known."}
+      state: {range: ValueState, required: true, description: State of the value.}
+      reason: {description: Why the value is not known; empty when it is.}
+      element: {description: "For a parameter leaf: the id of the parameter element it read, so an explanation reaches the row and its source. Absent when no row was read or chosen."}
+
+  CalcWitness:
+    description: >-
+      One evaluation of a calculation rule for one subject (decision W12): the chosen version, the
+      definition that applies, the result, and the steps along the path taken. The checker recomputes
+      every step from its arguments and every leaf from the snapshots.
+    attributes:
+      conclusion: {range: RowRef, required: true, inlined: true, description: "The row it explains, (subject, value, state, reason), in the rule's view (or a version's view, for a version named as rule@version)."}
+      rule: {required: true, description: The calculation rule.}
+      version: {description: The chosen version; empty when none was chosen.}
+      valid_at: {description: "The evaluation date the version was chosen on (ISO date); empty when there is none."}
+      known_at: {description: "The knowledge date the version was chosen on (ISO date); empty when there is none."}
+      definition: {description: The name of the definition that applies; empty when none applies.}
+      value: {description: "Canonical text of the result; empty unless the state is known."}
+      state: {range: ValueState, required: true, description: State of the result.}
+      reason: {description: Why the result is not known; empty when it is.}
+      premises: {multivalued: true, range: RowRef, inlined_as_list: true, description: "The other conclusions it read: rows of derived relations and the results of other calculation rules."}
+      reads: {multivalued: true, required: true, description: "Every relation the evaluation reads, sorted: absences decide states there (a missing fact is unknown or not_applicable, two values invalid), so a role sees the result only while it reads each in full (decision O8)."}
+      steps: {multivalued: true, range: CalcStep, inlined_as_list: true, description: "The evaluated nodes, in evaluation order: the conditions of all definitions in program order, then the value of the definition that applies; a node before its arguments."}
+
+  Proof:
+    description: The chosen proof for one conclusion; acyclic, shortest first, then lexicographic.
+    attributes:
+      root: {range: RowRef, required: true, inlined: true, description: The conclusion this proof explains.}
+      manifest_id: {required: true, description: The manifest this proof is checked against.}
+      witnesses: {multivalued: true, range: Witness, inlined_as_list: true, description: The witnesses of the proof graph.}
+      calc_witnesses: {multivalued: true, range: CalcWitness, inlined_as_list: true, description: "The calculation witnesses of the proof graph (decision W12)."}
+      hidden: {multivalued: true, range: RowRef, inlined_as_list: true, description: "Conclusions whose witnesses the viewer may not see. The witnesses stay in the proof and are checked; the explainer redacts them afterwards."}

@@ -1,0 +1,61 @@
+# unassigned is @absence, but its rule negates no open relation and reads no other @absence relation.
+format: rede.rules/1
+pack: fixture
+relations:
+- name: assigned
+  role: derived
+  key:
+  - {name: task, type: string}
+  module: planning
+  explain: materialize
+  world: open
+- name: assignment__task
+  role: base
+  key:
+  - {name: id, type: string}
+  - {name: v, type: string}
+  world: open
+- name: task
+  role: base
+  key:
+  - {name: id, type: string}
+  world: closed
+- name: unassigned
+  role: derived
+  key:
+  - {name: task, type: string}
+  module: planning
+  explain: materialize
+  absence: true
+  world: closed
+rules:
+- id: assigned
+  module: planning
+  stratum: '1'
+  head:
+    relation: assigned
+    terms: ['?t']
+  body:
+  - relation: assignment__task
+    terms: ['?a', '?t']
+    polarity: positive
+    stratum: '0'
+  witness:
+    relation: assigned__witness
+    variables: ['?a', '?t']
+  origin: {file: rules/planning.dl, line: '1'}
+- id: unassigned
+  module: planning
+  stratum: '1'
+  head:
+    relation: unassigned
+    terms: ['?t']
+  body:
+  - relation: task
+    terms: ['?t']
+    polarity: positive
+    stratum: '0'
+  witness:
+    relation: unassigned__witness
+    variables: ['?t']
+  origin: {file: rules/planning.dl, line: '5'}

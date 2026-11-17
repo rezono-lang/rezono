@@ -1,0 +1,7 @@
+diagnostics:
+  - code: not_functional
+    severity: error
+    message: "views.yaml: views[static-theory].arrows[next]: not statically functional; an explicit assume_functional check is required"
+    where: views[static-theory].arrows[next]
+    span: {file: views.yaml, line: "12", column: "7"}
+    hint: "map a multivalued theory arrow, or add `assume_functional: true` to the arrow map"

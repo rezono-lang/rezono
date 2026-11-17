@@ -1,0 +1,94 @@
+id: https://rede.dev/contracts/diagnostic
+name: rede_diagnostic
+title: Diagnostics
+description: >-
+  One error model for every component that judges what an author wrote (D15, #394 A6; milestone MOD
+  principle 5): the compiler, admission, and later the Reckon parser, the checker, the gate's model check
+  (MOD6), the REPL and a language server. A diagnostic is a code, a severity, where it was found (a logical
+  place and, where the text is known, a span in the form of the schema bundle's MOD2 spans) and a hint.
+  The code names the diagnostic; its sentence for a reader comes from the message files where it has one,
+  and `message` is the component's own English sentence.
+prefixes:
+  linkml: https://w3id.org/linkml/
+  rede: https://rede.dev/contracts/
+default_prefix: rede
+default_range: string
+imports:
+  - linkml:types
+
+types:
+  DiagnosticCode:
+    typeof: string
+    description: >-
+      A snake_case code of the compiler or admission (admission's refusal codes, in the form of Reckon
+      Data L0), or a Reckon code: R and three digits for an error, W and three digits for a warning
+      (docs/reckon/v0.md §10).
+    pattern: "^([a-z][a-z0-9_]*|[RW][0-9]{3})$"
+  Position:
+    typeof: string
+    description: A line or a column, counted from 1, as decimal text (as the schema bundle writes a span).
+    pattern: "^[1-9][0-9]*$"
+  Text:
+    typeof: string
+    description: One or more words; never empty.
+    pattern: "\\S"
+
+enums:
+  Severity:
+    description: "What a diagnostic does to the run (AGENTS.md rule 5: correctness blocks, taste warns)."
+    permissible_values:
+      error: {description: "The run stops: nothing is compiled, admitted or published."}
+      warning: {description: The run goes on; the reader is told.}
+
+classes:
+  Span:
+    description: >-
+      Where a diagnostic points in a file: the schema bundle's Span (contracts/bundle.yaml, MOD2) with the
+      same fields and the same meaning, and an optional end. The file is named as a rule origin names it
+      (relative to its pack, `<pack>:` before a file of an imported pack); line and column count from 1.
+    attributes:
+      file: {required: true, description: "The file, as a rule origin names it."}
+      line: {range: Position, required: true, description: The line where the span starts.}
+      column: {range: Position, required: true, description: "The column where the span starts, in characters."}
+      end_line: {range: Position, description: "The line of the first character after the span; left out when only the start is known."}
+      end_column: {range: Position, description: "The column of the first character after the span; given with end_line."}
+    rules:
+      - description: An end is a line and a column.
+        preconditions: {slot_conditions: {end_line: {value_presence: PRESENT}}}
+        postconditions: {slot_conditions: {end_column: {required: true}}}
+      - description: An end column has its line.
+        preconditions: {slot_conditions: {end_column: {value_presence: PRESENT}}}
+        postconditions: {slot_conditions: {end_line: {required: true}}}
+
+  Diagnostic:
+    description: One thing a component found in what an author wrote.
+    attributes:
+      code: {range: DiagnosticCode, required: true, description: What was found; a reader's sentence for it is in the message files.}
+      severity: {range: Severity, required: true, description: "error or warning."}
+      message: {range: Text, description: "The component's own English sentence, for a log and a reader without the message files."}
+      where:
+        range: Text
+        description: >-
+          The logical place, as a path of keys and positions in the component's form: a view key such as
+          `views[t].arrows[a].paths[0].steps[1]`, an admission place such as `Host[3].memory`. Left out
+          when the diagnostic is about the whole input.
+      span:
+        range: Span
+        inlined: true
+        description: >-
+          Where it is in a file. Left out when no file text is known, as for a fact document given to
+          admission as data: then `where` is the place.
+      hint: {range: Text, description: "What to write instead, or how to resolve it, where the component knows."}
+
+  DiagnosticList:
+    tree_root: true
+    description: >-
+      The diagnostics of one run, in the order the component found them. `diagnostics` is required and is
+      empty only when nothing was found.
+    attributes:
+      diagnostics:
+        range: Diagnostic
+        multivalued: true
+        inlined_as_list: true
+        required: true
+        description: One entry per diagnostic.

@@ -1,0 +1,4 @@
+[
+{"id":"I-1","cells":{"inspection__of_lot":{"value":"L-1","state":"known"},"inspection__result":{"value":"pass","state":"known"}}},
+{"id":"I-3","cells":{"inspection__of_lot":{"value":"L-3","state":"known"},"inspection__result":{"value":"pass","state":"known"}}}
+]

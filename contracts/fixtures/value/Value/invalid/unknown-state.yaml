@@ -1,0 +1,3 @@
+# Invalid: zero is not a state.
+value: "0"
+state: zero

@@ -1,0 +1,16 @@
+name: lab-k8s
+version: 0.1.0
+kind: effect
+runs_on: approved_plan
+writes: world
+row_source: journal
+runtime: in_process
+effect: {plan: lab-plan, apply: lab-apply, status: lab-status}
+consumes: [gitops-files, lab-pins]
+produces: [lab-cluster, lab-health]
+freshness: {cadence: on_request}
+mapping_owner: lab
+losses: []
+secrets: []
+requires: [may_execute]
+footprint: {makes: [probe_pod], plan_label: rede.dev/plan}

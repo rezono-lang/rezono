@@ -1,0 +1,41 @@
+id: G05
+class: admission
+status: settled
+schema:
+  from: fixture.schema.json
+  merge:
+    kinds:
+      ZoneRule:
+        world: closed
+        id:
+          type: Text
+        plane: control
+        owner: network
+        slots:
+          decision:
+            card: '1'
+            type: Text
+            states:
+            - known
+          allowed:
+            card: '1'
+            type: Bool
+            states:
+            - known
+form: delta
+input:
+  reviewed:
+  - prop-412
+  delta:
+  - $kind: ZoneRule
+    $id: dmz-to-core
+    decision: prop-999
+    allowed: true
+expect:
+  accept: false
+  error: names no reviewed proposal
+note: 'The same delta with `decision: prop-412` is admitted; a data-plane delta needs no review.'
+sources:
+- l0.md §3.7 (O13, O14)
+- LS0
+- DV1

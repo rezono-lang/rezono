@@ -1,0 +1,6 @@
+# A new value from the viewer, which knows the record but not its file: the writer finds the one file.
+format: rede.delta/1
+pack: library
+base_manifest: m-1
+changes:
+  - {op: set, kind: work, key: w3, slot: year, value: "1500"}

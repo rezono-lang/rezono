@@ -1,0 +1,64 @@
+# Neutral labels of std-decision. A domain gives its own words in its own labels and messages.
+decision: decision
+decision.title: title
+decision.subject: subject
+decision.decider: decided by
+decision.decided_on: decided on
+decision.valid_from: in force from
+decision.valid_until: in force until
+decision.valid_from_day: in force from (day number)
+decision.valid_until_day: in force until (day number)
+decision.state: state
+decision.supersedes: supersedes
+decision.reassesses: reassesses
+decision.rationale: rationale
+ground: ground
+ground.decision: decision
+ground.rests_on: rests on
+ground.ground_pair: Every combination of a decision and a decision it rests on
+decision_state: state of a decision
+decision_state.proposed: proposed
+decision_state.in_force: in force
+decision_state.superseded: superseded
+decision_state.withdrawn: withdrawn
+subject: subject
+subject.title: title
+reference_date: reference date
+reference_date.title: name
+reference_date.day: day number
+replaces: replaces
+supersession_cycle: cycle of superseded decisions
+window_inverted: end not after start
+took_effect: took effect
+ended: ended
+replaced: replaced
+was_replaced: replaced
+in_force_on: in force
+has_successor: has a successor
+superseded_in_force: superseded and still in force
+has_decider: has a decider
+in_force_without_decider: in force without a decider
+has_start: has a first day
+in_force_without_start: in force without a first day
+# The justification layer: why a decision is so (EX9). An explanation shows these beside the proof.
+decision.warrant: rests on
+decision.owner: owner
+decision.review_on: review on
+purpose: purpose
+purpose.decision: decision
+purpose.title: what it serves
+purpose.served: for whom
+principle: principle
+principle.title: principle
+principle.decision: adopted by
+alternative: rejected alternative
+alternative.decision: decision
+alternative.title: alternative
+alternative.reason: why rejected
+exception: exception
+exception.decision: decision
+exception.title: what is excepted
+withdrawn_without_start: withdrawn without a first day
+proposal: proposal
+ground_chain: rests on, directly or through other decisions
+ground_cycle: cycle of grounds

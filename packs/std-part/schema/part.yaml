@@ -1,0 +1,38 @@
+id: https://rede.example/std-part/part
+name: std_part
+description: >-
+  Part and whole. A constituent is part of at most one direct whole, and may occur in it more than once. The
+  axioms make the parts a forest: nothing is part of itself, directly or through others. The derived
+  relations are in rules/part.dl. The mapping annotations compare with SKOS and Dublin Core (decision
+  O12b); no rule reads them.
+in_language: en
+prefixes:
+  linkml: https://w3id.org/linkml/
+  skos: http://www.w3.org/2004/02/skos/core#
+  dcterms: http://purl.org/dc/terms/
+imports:
+  - linkml:types
+default_range: string
+annotations:
+  layer: facts
+
+classes:
+  Constituent:
+    abstract: true
+    description: >-
+      Anything a domain reads as a part of a whole, as a whole with parts, or as both. A view supplies its
+      elements.
+    attributes:
+      id:
+        identifier: true
+      part_of:
+        range: Constituent
+        description: >-
+          The direct whole this is a part of. At most one: the parts form a forest. Absent for a whole that
+          is part of nothing.
+        close_mappings: ["dcterms:isPartOf"]
+        broad_mappings: ["skos:broader"]
+      repeat:
+        range: integer
+        minimum_value: 1
+        description: How many times this part occurs in its direct whole. Absent when it occurs once.

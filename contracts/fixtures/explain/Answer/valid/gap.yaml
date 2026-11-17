@@ -1,0 +1,21 @@
+format: rede.answer/1
+question: gap
+manifest_id: m-1
+start: {relation: t, key: '["k"]'}
+nodes:
+  - {relation: t, key: '["k"]', distance: 0}
+  - {relation: s, key: '["k",null]', distance: 1}
+  - {relation: u, key: '["k"]', distance: 2}
+  - {outside: true, distance: 2}
+steps: []
+witnesses: []
+gap:
+  premises:
+    - {distance: 0, node: {relation: t, key: '["k"]'}, rule: t, item: 1, kind: positive, index: 0, relation: s, bindings: [{variable: "?x", value: k}]}
+    - {distance: 1, node: {relation: s, key: '["k",null]'}, rule: s_1, item: 1, kind: positive, index: 0, relation: a, bindings: [{variable: "?x", value: k}]}
+    - {distance: 1, node: {relation: s, key: '["k",null]'}, rule: s_2, item: 2, kind: positive, index: 1, relation: f, bindings: [{variable: "?x", value: k}], outside: true}
+  candidates:
+    - {change: insert, relation: a, key: '["k",null]', status: to_test, premise: 1}
+  cut: false
+more:
+  - {relation: u, key: '["k"]'}

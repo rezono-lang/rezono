@@ -1,0 +1,29 @@
+# The explanation questions of std-time, built only from the generic building blocks of std-explain
+# (docs/gui.md, "Questions as data"). They narrow the generic grounds and reach to intervals and references:
+# a domain that imports std-explain keeps those too. The label and sentence are in messages/<lang>.mf2.
+format: rede.questions/1
+questions:
+  # Why does this stand so at the reference? From a judgement, a holds_at or a known_at conclusion back to
+  # what it rests on: begun_at, ended_at, the extension, the bounds that are stated, and a bound or a knowledge
+  # time nobody recorded.
+  - term: time_grounds
+    start: present
+    applies_to: {derivation: conclusion, relations: [judgement, holds_at, known_at]}
+    steps:
+      - trace:
+          direction: back
+          depth: all
+          keep:
+            relations: [judgement, holds_at, known_at, begun_at, ended_at, in_extension, start_stated, end_stated,
+                        extension_stated, known_from_stated, start_not_recorded, end_not_recorded,
+                        known_from_not_recorded]
+    answer: route
+    limit: 200
+  # What holds at this reference? The intervals that cover its position, and how each stands at it.
+  - term: time_reach
+    start: present
+    applies_to: {kinds: [reference_point]}
+    steps:
+      - trace: {direction: forward, depth: 2, keep: {relations: [holds_at, judgement]}}
+    answer: rings
+    limit: 200

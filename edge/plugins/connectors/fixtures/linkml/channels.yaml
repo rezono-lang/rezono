@@ -1,0 +1,15 @@
+kinds:
+  - {kind: thing, shape: rect}
+  - {kind: part, shape: rect}
+  - {kind: whole, shape: rect}
+  - {kind: lead, shape: ellipse}
+  - {kind: note, shape: ellipse}
+  - {kind: link, shape: ellipse}
+arrows:
+  - {arrow: whole.parts, dash: none}
+  - {arrow: whole.main, dash: none}
+  - {arrow: whole.notes, dash: none}
+  - {arrow: lead.whole, dash: none}
+  - {arrow: lead.part, dash: none}
+  - {arrow: link.from_part, dash: none}
+  - {arrow: link.to_part, dash: none}

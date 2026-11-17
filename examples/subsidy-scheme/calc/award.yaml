@@ -1,0 +1,110 @@
+# The award per application, as calculation rules (contracts/calc.yaml). Each rule is one step of the
+# regulation and gives one value per application, with a state: known, unknown, not_applicable or invalid.
+# The inputs come from rules/assessment.dl; the amounts and rates are the scheme parameters, rows of the
+# pack that imports this one. A leaf names a parameter by its name, and the row valid on the evaluation date
+# is chosen (W13), so the partial rate before 1 July 2026 differs from the one after. The evaluation date is
+# not part of the definition: the importing pack states it (as_of, decision W10).
+# Numbers are exact fractions; the only rounding is `round`, half away from zero, once per cost share.
+format: rede.calc/1
+pack: subsidy-scheme
+subject: application
+parameters: scheme_parameter.value
+parameter_choice: {name: name}
+rules:
+  # Article 4: a base amount plus an amount per person in the household.
+  - id: income_threshold@2026
+    rule: income_threshold
+    version: "2026"
+    output: income_threshold.cents
+    unit: cents
+    valid_from: "2026-01-01"
+    valid_until: "2027-01-01"
+    known_from: "2025-12-09"
+    definitions:
+      - name: base_plus_persons
+        when: {boolean: true}
+        value:
+          op: add
+          args:
+            - {parameter: income_threshold_base}
+            - {op: ratio, args: [{fact: household_size.persons}, {parameter: income_threshold_per_person}, {integer: "1"}]}
+  # Article 4: the limit above which there is no cost share.
+  - id: income_limit@2026
+    rule: income_limit
+    version: "2026"
+    output: income_limit.cents
+    unit: cents
+    valid_from: "2026-01-01"
+    valid_until: "2027-01-01"
+    known_from: "2025-12-09"
+    definitions:
+      - name: threshold_plus_margin
+        when: {boolean: true}
+        value: {op: add, args: [{rule: income_threshold}, {parameter: income_margin}]}
+  # Article 5: three bands of income, each a definition. Exactly one applies; the proof names it.
+  - id: cost_share@2026
+    rule: cost_share
+    version: "2026"
+    output: cost_share.cents
+    unit: cents
+    valid_from: "2026-01-01"
+    valid_until: "2027-01-01"
+    known_from: "2025-12-09"
+    definitions:
+      - name: full_rate
+        when: {op: lte, args: [{fact: assessed_income.cents}, {rule: income_threshold}]}
+        value: {op: round, args: [{op: ratio, args: [{fact: assessed_costs.cents}, {parameter: full_rate}, {integer: "1000000"}]}]}
+      - name: partial_rate
+        when:
+          op: and
+          args:
+            - {op: lt, args: [{rule: income_threshold}, {fact: assessed_income.cents}]}
+            - {op: lte, args: [{fact: assessed_income.cents}, {rule: income_limit}]}
+        value: {op: round, args: [{op: ratio, args: [{fact: assessed_costs.cents}, {parameter: partial_rate}, {integer: "1000000"}]}]}
+      - name: above_the_limit
+        when: {op: lt, args: [{rule: income_limit}, {fact: assessed_income.cents}]}
+        value: {integer: "0"}
+  # Article 6: a fixed allowance for an advised household, on top of a cost share above zero.
+  - id: advice_allowance@2026
+    rule: advice_allowance
+    version: "2026"
+    output: advice_allowance.cents
+    unit: cents
+    valid_from: "2026-01-01"
+    valid_until: "2027-01-01"
+    known_from: "2025-12-09"
+    definitions:
+      - name: allowance_or_nothing
+        when: {boolean: true}
+        value:
+          op: if
+          args:
+            - {op: and, args: [{fact: advised}, {op: lt, args: [{integer: "0"}, {rule: cost_share}]}]}
+            - {parameter: advice_allowance}
+            - {integer: "0"}
+  # What the household would receive without a maximum.
+  - id: entitlement@2026
+    rule: entitlement
+    version: "2026"
+    output: entitlement.cents
+    unit: cents
+    valid_from: "2026-01-01"
+    valid_until: "2027-01-01"
+    known_from: "2025-12-09"
+    definitions:
+      - name: share_plus_allowance
+        when: {boolean: true}
+        value: {op: add, args: [{rule: cost_share}, {rule: advice_allowance}]}
+  # Article 7: the award is the entitlement, at most the maximum.
+  - id: award@2026
+    rule: award
+    version: "2026"
+    output: award.cents
+    unit: cents
+    valid_from: "2026-01-01"
+    valid_until: "2027-01-01"
+    known_from: "2025-12-09"
+    definitions:
+      - name: at_most_the_maximum
+        when: {boolean: true}
+        value: {op: min, args: [{rule: entitlement}, {parameter: maximum_award}]}

@@ -1,0 +1,9 @@
+# A mark is a date attribute of the row kind, not a fixed date.
+id: support
+title_message: timeline.support
+rows: release
+start: release__supported_from
+end: release__full_support_until
+main_message: phase.full_support
+marks:
+  - {date: "2026-02-12"}

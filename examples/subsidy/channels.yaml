@@ -1,0 +1,19 @@
+# Signs: a shape per kind and a dash per arrow, with the values of contracts/view.yaml. The scheme's kinds
+# and arrows have theirs in the pack that defines them (examples/subsidy-scheme).
+kinds:
+  - {kind: ledger_payment, shape: bar}
+  - {kind: period_close, shape: bar}
+  - {kind: closed_payment, shape: bar}
+  - {kind: trust_entry, shape: diamond}
+  - {kind: credential, shape: rect}
+  - {kind: credential_claim, shape: bar}
+  - {kind: status_lookup, shape: bar}
+  - {kind: identity_statement, shape: rect}
+arrows:
+  # A ledger payment names the application it paid; a close names every payment it closes (the seal).
+  - {arrow: ledger_payment.application, dash: "4 2"}
+  - {arrow: closed_payment.element, dash: "6 4"}
+  # A claim and a status lookup name the credential, or the identity statement, they are of (schema/credentials.yaml).
+  - {arrow: credential_claim.credential, dash: none}
+  - {arrow: status_lookup.credential, dash: "2 2"}
+  - {arrow: status_lookup.statement, dash: "2 2"}

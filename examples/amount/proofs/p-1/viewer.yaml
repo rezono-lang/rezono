@@ -1,0 +1,109 @@
+# Gekozen bewijzen per conclusie (contracts/proof.yaml), fictief.
+- root: {relation: adjustment__amount, key: ADJ-1}
+  manifest_id: p-1
+  witnesses:
+    - conclusion: {relation: adjustment__amount, key: ADJ-1}
+      rule_id: distance_supplement
+      bindings:
+        - {variable: distance, value: "42 km"}
+        - {variable: per_km, value: "225 EUR"}
+      premises:
+        - {row: {relation: claim__distance_km, key: A-001}, polarity: positive, stratum: 0}
+        - {row: {relation: rate__amount, key: R-KM}, polarity: positive, stratum: 0}
+- root: {relation: adjustment__amount, key: ADJ-2}
+  manifest_id: p-1
+  witnesses:
+    - conclusion: {relation: adjustment__amount, key: ADJ-2}
+      rule_id: prior_deduction
+      bindings:
+        - {variable: paid, value: "24000 EUR"}
+      premises:
+        - {row: {relation: adjustment__prior_paid, key: ADJ-2}, polarity: positive, stratum: 0}
+- root: {relation: adjustment__amount, key: ADJ-3}
+  manifest_id: p-1
+  witnesses:
+    - conclusion: {relation: adjustment__amount, key: ADJ-3}
+      rule_id: distance_supplement
+      bindings:
+        - {variable: distance, value: "unknown"}
+        - {variable: per_km, value: "225 EUR"}
+      premises:
+        - {row: {relation: claim__distance_km, key: A-002}, polarity: positive, stratum: 0}
+        - {row: {relation: rate__amount, key: R-KM}, polarity: positive, stratum: 0}
+- root: {relation: claim__base, key: A-001}
+  manifest_id: p-1
+  witnesses:
+    - conclusion: {relation: claim__base, key: A-001}
+      rule_id: base_from_rate
+      bindings:
+        - {variable: rate, value: "126000 EUR"}
+      premises:
+        - {row: {relation: rate__amount, key: R-STD}, polarity: positive, stratum: 0}
+- root: {relation: claim__base, key: A-002}
+  manifest_id: p-1
+  witnesses:
+    - conclusion: {relation: claim__base, key: A-002}
+      rule_id: base_from_rate
+      bindings:
+        - {variable: rate, value: "126000 EUR"}
+      premises:
+        - {row: {relation: rate__amount, key: R-STD}, polarity: positive, stratum: 0}
+- root: {relation: claim__payout, key: A-001}
+  manifest_id: p-1
+  witnesses:
+    - conclusion: {relation: claim__payout, key: A-001}
+      rule_id: payout_sum
+      bindings:
+        - {variable: count, value: "2"}
+      premises:
+        - {row: {relation: claim__base, key: A-001}, polarity: positive, stratum: 1}
+        - {row: {relation: adjustment__amount, key: ADJ-1}, polarity: positive, stratum: 1}
+        - {row: {relation: adjustment__amount, key: ADJ-2}, polarity: positive, stratum: 1}
+      aggregates:
+        - {relation: adjustment__amount, group_key: A-001, count: 2, contributors_sha256: 0359eb87b0e1ed37c56c2ee5aa31eec12646caa71ad8df2704666423f82616ed, result: "-14550 EUR known"}
+    - conclusion: {relation: claim__base, key: A-001}
+      rule_id: base_from_rate
+      bindings:
+        - {variable: rate, value: "126000 EUR"}
+      premises:
+        - {row: {relation: rate__amount, key: R-STD}, polarity: positive, stratum: 0}
+    - conclusion: {relation: adjustment__amount, key: ADJ-1}
+      rule_id: distance_supplement
+      bindings:
+        - {variable: distance, value: "42 km"}
+        - {variable: per_km, value: "225 EUR"}
+      premises:
+        - {row: {relation: claim__distance_km, key: A-001}, polarity: positive, stratum: 0}
+        - {row: {relation: rate__amount, key: R-KM}, polarity: positive, stratum: 0}
+    - conclusion: {relation: adjustment__amount, key: ADJ-2}
+      rule_id: prior_deduction
+      bindings:
+        - {variable: paid, value: "24000 EUR"}
+      premises:
+        - {row: {relation: adjustment__prior_paid, key: ADJ-2}, polarity: positive, stratum: 0}
+- root: {relation: claim__payout, key: A-002}
+  manifest_id: p-1
+  witnesses:
+    - conclusion: {relation: claim__payout, key: A-002}
+      rule_id: payout_sum
+      bindings:
+        - {variable: count, value: "1"}
+      premises:
+        - {row: {relation: claim__base, key: A-002}, polarity: positive, stratum: 1}
+        - {row: {relation: adjustment__amount, key: ADJ-3}, polarity: positive, stratum: 1}
+      aggregates:
+        - {relation: adjustment__amount, group_key: A-002, count: 1, contributors_sha256: 314fa4d85ec3d67eae02eba6af7ffb2a17ec00eb0ca376f908f824e77261fed0, result: "unknown EUR"}
+    - conclusion: {relation: claim__base, key: A-002}
+      rule_id: base_from_rate
+      bindings:
+        - {variable: rate, value: "126000 EUR"}
+      premises:
+        - {row: {relation: rate__amount, key: R-STD}, polarity: positive, stratum: 0}
+    - conclusion: {relation: adjustment__amount, key: ADJ-3}
+      rule_id: distance_supplement
+      bindings:
+        - {variable: distance, value: "unknown"}
+        - {variable: per_km, value: "225 EUR"}
+      premises:
+        - {row: {relation: claim__distance_km, key: A-002}, polarity: positive, stratum: 0}
+        - {row: {relation: rate__amount, key: R-KM}, polarity: positive, stratum: 0}

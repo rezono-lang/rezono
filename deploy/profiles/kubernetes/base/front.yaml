@@ -1,0 +1,76 @@
+# The OIDC front: oauth2-proxy logs the reader in at the platform's identity provider (Keycloak, or another OIDC
+# issuer) and passes the ID token on as `Authorization: Bearer`, which the viewer forwards and the gate verifies
+# itself (issuer, audience, asymmetric signature, expiry; edge/gate/README.md). The front decides no role: the
+# gate does, from the token. Its settings come from the ConfigMap `front` (the overlay's), its client secret and
+# cookie secret from the Secret `rede-front` (External Secrets, secrets.yaml).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: front
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: front
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: front
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: front
+          image: oauth2-proxy
+          args:
+            - --http-address=0.0.0.0:4180
+            - --upstream=http://viewer:3000
+            - --provider=oidc
+            - --pass-authorization-header=true
+            - --reverse-proxy=true
+            - --cookie-secure=true
+            - --skip-provider-button=true
+            - --email-domain=*
+            # Refresh the ID token before it expires (Keycloak's default lifetime is 5 minutes); without it the cookie
+            # outlives the token and the gate refuses every request until a new login.
+            - --cookie-refresh=4m
+          envFrom:
+            - configMapRef:
+                name: front
+          env:
+            - name: OAUTH2_PROXY_CLIENT_ID
+              valueFrom:
+                secretKeyRef: { name: rede-front, key: client-id }
+            - name: OAUTH2_PROXY_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef: { name: rede-front, key: client-secret }
+            - name: OAUTH2_PROXY_COOKIE_SECRET
+              valueFrom:
+                secretKeyRef: { name: rede-front, key: cookie-secret }
+          ports:
+            - { name: http, containerPort: 4180 }
+          readinessProbe:
+            httpGet: { path: /ready, port: http }
+          livenessProbe:
+            httpGet: { path: /ping, port: http }
+          resources:
+            requests: { cpu: 20m, memory: 64Mi }
+            limits: { memory: 128Mi }
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: front
+spec:
+  selector:
+    app.kubernetes.io/name: front
+  ports:
+    - { name: http, port: 4180, targetPort: http }

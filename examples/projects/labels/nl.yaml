@@ -1,0 +1,28 @@
+# Labels als feiten: label(element_id, nl, tekst). Een geslacht is optioneel;
+# de zinnen in messages/nl.mf2 kiezen er hun lidwoord mee (neuter: "elk").
+project: {text: project, gender: neuter}
+project.name: naam
+project.budget: budget
+project.project_name: Elke naam
+budget_line: begrotingsregel
+budget_line.project: project
+budget_line.description: omschrijving
+budget_line.amount: bedrag
+milestone: mijlpaal
+milestone.project: project
+milestone.name: naam
+milestone.due: deadline
+task: taak
+task.project: project
+task.milestone: mijlpaal
+task.name: naam
+task.status: status
+task.estimate: schatting in uren
+task.same_project: het project van de mijlpaal is het project van de taak
+dependency: afhankelijkheid
+dependency.task: taak
+dependency.prerequisite: voorwaarde
+dependency.dependency_pair: Elke combinatie van taak en voorwaarde
+task_status: taakstatus
+task_status.open: open
+task_status.done: klaar

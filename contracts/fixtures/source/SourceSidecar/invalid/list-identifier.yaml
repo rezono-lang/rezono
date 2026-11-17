@@ -1,0 +1,2 @@
+records:
+  - {of: {kind: alpha, id: [a]}, kind: pack, name: facts/data.yaml, position: "2"}

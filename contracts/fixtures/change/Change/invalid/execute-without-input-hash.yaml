@@ -1,0 +1,10 @@
+# An effect without an idempotency key could happen twice.
+id: change-4
+author: {subject: exporter, role: system}
+effect: execute
+channel: plugin
+cause: plan
+base_manifest: manifest-epoch-8
+content_sha256: "3b5a0f2c9d8e7f6a5b4c3d2e1f0a9b8c7d6e5f4a3b2c1d0e9f8a7b6c5d4e3f2a"
+plugin: exec-webhook
+state: proposed

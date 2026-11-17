@@ -1,0 +1,4 @@
+format: rede.operations/1
+pack: library
+operations:
+  - {op: split_by, kind: Member, slot: membership, cases: []}

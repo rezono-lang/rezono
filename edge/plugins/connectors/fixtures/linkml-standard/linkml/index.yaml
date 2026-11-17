@@ -1,0 +1,14 @@
+# A LinkML schema written the way LinkML's own examples write one, not the way a Rede pack does: an index that
+# imports the model, slots declared once at the top and used by name, `slot_usage`, a slot-only file, subsets.
+# test_linkml_schema.py imports it into the pack skeleton beside it and holds the pack to LinkML's own reading.
+id: https://example.org/registry
+name: registry
+title: A neutral registry
+license: CC0-1.0
+version: 1.0.0
+prefixes:
+  linkml: https://w3id.org/linkml/
+imports:
+  - linkml:types
+  - model/core
+  - model/extra

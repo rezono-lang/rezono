@@ -1,0 +1,15 @@
+id: A04
+class: round-trip
+status: pending
+schema:
+  from: fixture.schema.json
+form: parquet
+input: 'R01: the collection of l0.md §3.1'
+expect:
+  storage_values_as_written: true
+  readers:
+  - DuckDB
+  - Polars
+note: Extension types present; the readers do not know them. Runs with the writer (E04).
+sources:
+- '#369 L0 rev 2 §8'

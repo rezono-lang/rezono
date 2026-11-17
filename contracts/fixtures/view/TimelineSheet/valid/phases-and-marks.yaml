@@ -1,0 +1,13 @@
+# Releases with a main phase, an extension, a judgement and a decision date.
+id: support
+title_message: timeline.support
+rows: release
+label: release__name
+start: release__supported_from
+end: release__full_support_until
+extension: release__support_ends
+main_message: phase.full_support
+extension_message: phase.maintenance
+judgement: {channel: tone, slot: release__support_state, level: ordered, meaning_message: channel.support_state}
+marks:
+  - {slot: release__pinned_on}

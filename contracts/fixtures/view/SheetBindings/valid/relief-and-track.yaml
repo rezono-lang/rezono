@@ -1,0 +1,19 @@
+# A relief of regions by a quantity, and a track of stations in waves on lanes.
+relief:
+  region: region
+  member: item__in_region
+  label: region__name
+  height:
+    channel: elevation
+    slot: region__total
+    level: quantitative
+    meaning_message: channel.total
+    scale: {zero: 0, exponent_numerator: 1, exponent_denominator: 2, unit_message: channel.unit}
+track:
+  station: step
+  plan: step__in_plan
+  wave: step__in_wave
+  time: wave__start
+  label: step__name
+  line: {channel: lane, slot: step__lane, level: nominal, meaning_message: channel.lane}
+  depends: {via: link, from: link__step, to: link__after}

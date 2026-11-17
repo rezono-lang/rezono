@@ -1,0 +1,100 @@
+# A pack's schema as LinkML (linkml_schema.py, M02), read by a tool that knows LinkML only: what it does not get
+# that the compiler does. Rede's own annotations are LinkML annotations, so the documents are valid LinkML; a
+# reader that does not know a tag loses its meaning. test_linkml_schema.py holds this list to the export.
+connector: linkml-out
+standard: LinkML
+standard_version: "1.12"
+direction: out
+losses:
+  - subject: rule
+    what: >-
+      How a conclusion follows: the derivation rules (`rules/*.dl`), the calculations (`calc/`), the views that
+      execute (`views.yaml`) and the explanation questions. LinkML describes data, not what follows from it.
+    fate: dropped
+  - subject: check
+    what: >-
+      The invariants of the rules: a derived relation that must stay empty. The integrity checks are not lost:
+      they follow from the facets LinkML carries itself (`required`, `range`, `pattern`, the limits and
+      cardinalities, `unique_keys` and the class `rules`).
+    fate: dropped
+  - subject: check
+    what: >-
+      A path equation: two paths of arrows from a kind that end in the same element.
+    fate: extension
+    carried_by: ["annotations.path_equations"]
+  - subject: state
+    what: >-
+      The four states of a value. What a missing value means is left to `required`: unknown for a required slot,
+      not applicable for an optional one. A state recorded as such, and an invalid value, are not schema.
+    fate: weakened
+    carried_by: ["required"]
+  - subject: reason
+    what: The reason codes of a value that is not known, and their messages.
+    fate: dropped
+  - subject: proof
+    what: The witnesses of a row. A schema has none.
+    fate: dropped
+  - subject: source
+    what: Where each fact comes from (its source sidecar, file, row and pinned revision).
+    fate: dropped
+  - subject: money
+    what: >-
+      That a whole number is an amount in minor units of a currency. LinkML's `unit` is not written for it: a
+      currency is no UCUM unit.
+    fate: extension
+    carried_by: ["annotations.currency", "annotations.semantic"]
+  - subject: unit
+    what: >-
+      The unit of a quantity, as the semantic type says it. No slot has one yet (P10.3); LinkML's `unit` is
+      written once a unit has its dimension.
+    fate: extension
+    carried_by: ["annotations.semantic"]
+  - subject: time
+    what: >-
+      That a slot is the validity or the knowledge time of its row. The reader gets the slot's URI
+      (`schema:validFrom`, `prov:generatedAtTime`), not that Rede reads the row by it.
+    fate: weakened
+    carried_by: ["slot_uri"]
+  - subject: world
+    what: Whether a kind or a slot is closed or open, and so what an absent row means.
+    fate: extension
+    carried_by: ["annotations.world"]
+  - subject: access
+    what: >-
+      Which role reads what: the facts and rules of std-access are not schema, and a module of it is written
+      as plain kinds.
+    fate: dropped
+  - subject: access
+    what: A kind of decided values and who reviews a change to it (DV1).
+    fate: extension
+    carried_by: ["annotations.plane", "annotations.owner"]
+  - subject: identity
+    what: >-
+      The engine name of a kind and the language-free element ids (`kind.slot`): a reader gets the class and
+      slot names they are made of, not the rule that qualifies a name two modules declare.
+    fate: weakened
+    carried_by: ["name"]
+  - subject: identity
+    what: >-
+      The first name of a renamed class or slot, which its stable id keeps, and the pin (version and hash) of
+      every imported pack, whose modules are written beside the pack's own.
+    fate: extension
+    carried_by: ["annotations.renamed_from", "annotations.packs"]
+  - subject: structure
+    what: >-
+      The layer of a kind, the seal and the parts sealed with it, the grid of a sweep, a helper kind folded in
+      an explanation, a named outcome and the invariants a kind names, and the semantic type of each slot as
+      the schema bundle has it (B10).
+    fate: extension
+    carried_by: ["annotations.layer", "annotations.seal", "annotations.sealed_with", "annotations.explore",
+                 "annotations.explain", "annotations.outcome", "annotations.invariants", "annotations.semantic"]
+  - subject: structure
+    what: >-
+      The pack's other definition files: the key (`channels.yaml`) and its icons, the sweeps (`sweeps.yaml`),
+      and the module interfaces in `pack.yaml`. The export is the schema.
+    fate: dropped
+  - subject: text
+    what: >-
+      The labels and sentences per language (`labels/`, `messages/`). A description and the module's language
+      (`in_language`) are carried.
+    fate: dropped

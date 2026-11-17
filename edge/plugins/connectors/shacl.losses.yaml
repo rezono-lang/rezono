@@ -1,0 +1,52 @@
+# The SHACL shapes of a Reckon Data schema (docs/reckon-data/l0.md §5; shacl.py), read by a SHACL validator:
+# what it does not check that Rede's own reader does, and what the shapes do not say. The shapes are plain
+# SHACL Core: no extension. test_shacl.py holds this list to the shapes.
+connector: shacl-out
+standard: SHACL
+standard_version: "2017-07-20"
+direction: out
+losses:
+  - subject: structure
+    what: >-
+      The bounds and the normal form of a value that is not a core integer: a ratio, a quantity, money, a
+      period, an integer of a local type. SHACL compares the literals of its own datatypes only, so the
+      shape says the datatype and the validator accepts any text of it.
+    fate: weakened
+    carried_by: ["sh:datatype"]
+  - subject: structure
+    what: >-
+      The pattern of a text type and the unit of a quantity are regular expressions. The schema's pattern
+      is written for one dialect and a validator reads it in SPARQL's, which differs in rare constructs.
+    fate: weakened
+    carried_by: ["sh:pattern"]
+  - subject: identity
+    what: >-
+      That an element's IRI is the percent-encoded form of its id. The shape says the IRI lies in the
+      kind's own space and no more.
+    fate: weakened
+    carried_by: ["sh:pattern"]
+  - subject: world
+    what: >-
+      That a kind or a relation is closed. A validator checks the elements that are there; no shape can
+      say that these are all of them.
+    fate: dropped
+  - subject: proof
+    what: The annotation that names the witness of a value. No shape looks at it.
+    fate: dropped
+  - subject: source
+    what: The annotation that names the source of a fact. No shape looks at it.
+    fate: dropped
+  - subject: check
+    what: >-
+      The pack's own checks and invariants. The shapes hold the structure of the schema document; a check
+      written as a rule is not a shape here.
+    fate: dropped
+  - subject: rule
+    what: The rules. A validator sees what was derived, not that it follows.
+    fate: dropped
+  - subject: text
+    what: The labels of the reason codes. The shape lists the codes a state may carry, without their labels.
+    fate: dropped
+  - subject: access
+    what: Which role the view was made for. The shapes are the same for every role that has the schema.
+    fate: dropped

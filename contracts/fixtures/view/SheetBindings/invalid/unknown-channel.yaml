@@ -1,0 +1,10 @@
+# Colour is a reserved channel (status), never a free one.
+relief:
+  region: region
+  member: item__in_region
+  height:
+    channel: colour
+    slot: region__total
+    level: quantitative
+    meaning_message: channel.total
+    scale: {zero: 0, exponent_numerator: 1, exponent_denominator: 1, unit_message: channel.unit}

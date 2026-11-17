@@ -1,0 +1,36 @@
+# Dezelfde toestand met opzettelijke fouten; zie expected/violations/errors.json.
+branch:
+  - code: centrum
+    name: Centrale bibliotheek
+    address: {street: Markt 1, city: Middelburg, postcode: 4331 LK}
+  - code: oost
+    name: Vestiging Oost
+    address: {street: Oostweg 5}                     # geen plaats -> address__city__totality (ingebed)
+  - code: west
+    name: Vestiging West
+    address: {street: Westweg 2, city: Middelburg, postcode: 4331-lk}  # -> address__postcode__pattern
+category:
+  - {id: c1, name: Romans}
+  - {id: c2, name: Detectives, parent: c1}
+  - {id: c4, name: Poëzie, parent: c99}               # losse verwijzing -> category__parent__reference
+  - {id: c5, name: Detectives, parent: c1}            # zelfde naam onder c1 -> category__name_within_parent__unique
+work:
+  - {id: w1, title: De avonden, category: c1, year: 1947, authors: [Gerard Reve]}
+  - {id: w3, title: Te vroeg, category: c1, year: 1200, authors: [A, B, C, D]}  # voor 1450, en vier auteurs -> work__year__value_range, work__authors__cardinality
+copy:
+  - {barcode: 1001, work: w1, branch: centrum, reference_only: false}
+  - {barcode: 1002, work: w1, branch: oost, reference_only: [false, true]}  # -> copy__reference_only__functionality
+  - {barcode: 1003, work: w1, branch: centrum, reference_only: true}
+  - {barcode: 1004, work: w1, reference_only: false}  # geen vestiging -> copy__branch__totality
+member:
+  - {id: m1, name: An, membership: adult, home_branch: centrum}
+  - {id: m3, name: Ed, membership: senior}            # buiten de enum -> member__membership__value_range
+  - {id: m4, membership: adult}                       # geen naam (geërfd) -> person__name__totality,
+                                                      # volwassen zonder thuisvestiging -> member__rule_1__rule
+staff:
+  - {id: s1, name: Cas, branch: centrum}
+  - {id: s2, name: Dee, branch: oost}
+loan:
+  - {id: l1, copy: 1001, member: m1, lent_by: s1, lent_on: 2026-10-01}
+  - {id: l3, copy: 1003, member: m1, lent_by: s2, lent_on: 2026-10-04}  # andere vestiging -> loan__lent_at_home__path_equation
+  - {id: l4, copy: 1001, member: s1, lent_by: s1, lent_on: 2026-10-05}  # personeelslid is geen lid -> loan__member__reference

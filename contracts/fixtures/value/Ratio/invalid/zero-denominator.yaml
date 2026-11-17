@@ -1,0 +1,4 @@
+# Invalid: the denominator is at least 1.
+numerator: 1
+denominator: 0
+state: known

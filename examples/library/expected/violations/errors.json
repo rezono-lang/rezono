@@ -1,0 +1,15 @@
+{
+  "address__city__totality": [["oost/branch.address"]],
+  "address__postcode__pattern": [["west/branch.address", "4331-lk"]],
+  "category__name_within_parent__unique": [["c2"], ["c5"]],
+  "category__parent__reference": [["c4", "c99"]],
+  "copy__branch__totality": [[1004]],
+  "copy__reference_only__functionality": [[1002, 2]],
+  "loan__lent_at_home__path_equation": [["l3", "centrum", "oost"]],
+  "loan__member__reference": [["l4", "s1"]],
+  "member__membership__value_range": [["m3", "senior"]],
+  "member__rule_1__rule": [["m4"]],
+  "person__name__totality": [["m4"]],
+  "work__authors__cardinality": [["w3", 4]],
+  "work__year__value_range": [["w3", 1200]]
+}

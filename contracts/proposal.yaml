@@ -1,0 +1,135 @@
+id: https://rede.dev/contracts/proposal
+name: rede_proposal
+title: Proposal on a Git host
+description: >-
+  What the Git-host plugin gives back, the same for every host (docs/architecture.md#the-git-host-plugin):
+  a proposal (a pull request) with its state and commits, and a host-neutral event made from a
+  signed webhook (push or pull_request) for the Git ingest. Adapters: edge/githost. And what the gate
+  signs when it dispatches a proposal: the verified proposer and exactly what they proposed
+  (ProposerReceipt, defect F5), so that four eyes can still be checked after the gate-to-Git boundary.
+prefixes:
+  linkml: https://w3id.org/linkml/
+  rede: https://rede.dev/contracts/
+default_prefix: rede
+default_range: string
+imports:
+  - linkml:types
+
+enums:
+  ProposalState:
+    permissible_values:
+      open: {}
+      merged: {description: Merged into the base branch; the main pipeline takes the delta.}
+      closed: {description: Closed without merging.}
+  HostEventKind:
+    permissible_values:
+      push: {}
+      pull_request: {}
+  GateKeyType:
+    description: JWK key types (RFC 7518, RFC 8037); public keys only, never oct.
+    permissible_values:
+      OKP: {}
+      EC: {}
+  GateKeyCurve:
+    permissible_values:
+      Ed25519: {}
+      P-256: {}
+  SignatureAlgorithm:
+    description: >-
+      JWS algorithm names (RFC 7518, RFC 8037). Asymmetric only: whoever verifies a receipt needs the
+      gate's public key, never a secret it shares with the gate.
+    permissible_values:
+      EdDSA: {description: Ed25519 (RFC 8037).}
+      ES256: {description: ECDSA over P-256 with SHA-256 (RFC 7518).}
+
+classes:
+  Proposal:
+    tree_root: true
+    description: open_proposal and proposal_status return this.
+    attributes:
+      id: {required: true, pattern: "^[1-9][0-9]*$", description: "The host's number for the pull request, as text."}
+      url: {required: true, range: uri, description: "The pull request on the host, for people."}
+      state: {range: ProposalState, required: true}
+      head: {required: true, pattern: "^[0-9a-f]{40}$", description: The commit of the proposal branch.}
+      base: {required: true, pattern: "^[0-9a-f]{40}$", description: The commit of the base branch the host compares against.}
+      head_branch: {required: true}
+      base_branch: {required: true}
+
+  HostEvent:
+    description: A webhook after its signature is checked; other events are dropped.
+    attributes:
+      event: {range: HostEventKind, required: true}
+      ref: {description: "push: the ref, such as refs/heads/main."}
+      before: {pattern: "^[0-9a-f]{40}$"}
+      after: {pattern: "^[0-9a-f]{40}$"}
+      action: {description: "pull_request: the action in GitHub's names (opened, synchronize, closed, reopened); Forgejo's synchronized becomes synchronize."}
+      proposal: {range: Proposal, inlined: true}
+    rules:
+      - preconditions: {slot_conditions: {event: {equals_string: push}}}
+        postconditions: {slot_conditions: {ref: {required: true}, before: {required: true}, after: {required: true}}}
+      - preconditions: {slot_conditions: {event: {equals_string: pull_request}}}
+        postconditions: {slot_conditions: {action: {required: true}, proposal: {required: true}}}
+
+  VerifiedPrincipal:
+    description: >-
+      Who proposed, as the gate's identity port verified it for this request (OIDC), never taken from
+      the delta, the request body or the address. Nothing in it is specific to one identity provider,
+      so a federated issuer fits as well.
+    attributes:
+      issuer: {range: uri, required: true, description: "The namespace in which the subject is stable: the token's issuer (OIDC iss)."}
+      subject: {required: true, pattern: '^\S(.*\S)?$', description: "The stable subject in that issuer (OIDC sub), not an e-mail address or a display name."}
+      role: {required: true, pattern: "^[a-z][a-z0-9]*([_-][a-z0-9]+)*$", description: "The Rede role the gate served this request in; proposing needs it."}
+      verified_at: {range: datetime, required: true, description: "When the gate verified the token, with a time zone."}
+
+  GateSignature:
+    description: >-
+      The gate's signature over the canonical JSON (docs/contracts.md#canonical-hash) of the receipt
+      without its member signature. A verifier trusts only the gate keys pinned in the target
+      repository, in the file .rede/gate-keys.json (a GateKeySet), as it is on the base commit of the
+      receipt: never a key that comes with the receipt, the pull request or the request. It refuses a
+      key_id that the set does not list, and an algorithm that is not the alg of that key.
+    attributes:
+      key_id: {required: true, pattern: '^[A-Za-z0-9._~:-]{1,128}$', description: "The kid of the signing key in the pinned GateKeySet."}
+      algorithm: {range: SignatureAlgorithm, required: true}
+      value: {required: true, pattern: '^[A-Za-z0-9_-]+$', description: "The signature, base64url without padding (RFC 7515)."}
+
+  ProposerReceipt:
+    tree_root: true
+    description: >-
+      What the gate signs when it dispatches a proposal: the verified proposer, bound to exactly the
+      proposal it dispatched. The Git host carries it with the proposal (pull request body and commit
+      trailer) and verifies it there (B07); a receipt that does not verify is not a proposer.
+    attributes:
+      principal: {range: VerifiedPrincipal, required: true, inlined: true}
+      repository: {range: uri, required: true, description: "The target repository the proposal is for, as its canonical clone URI (https, without .git and a trailing slash). It is the receipt's audience: a fork or another repository with the same history refuses it."}
+      pack_dir: {required: true, pattern: '^[A-Za-z0-9_][A-Za-z0-9._-]*(/[A-Za-z0-9_][A-Za-z0-9._-]*)*$', description: "The directory of the pack in the repository, as the gate dispatched it; no segment starts with a dot."}
+      base_commit: {required: true, pattern: "^[0-9a-f]{40}$", description: "The commit the delta was checked against and applies to."}
+      delta_sha256: {required: true, pattern: "^[0-9a-f]{64}$", description: "The SHA-256 of the canonical delta text the gate dispatched."}
+      key: {required: true, pattern: "^[0-9a-f]{64}$", description: "The proposal key, which names the proposal branch: the SHA-256 of the UTF-8 text pack_dir, newline, base_commit, newline, the canonical delta text (proposalKey in edge/gate/src/dispatch.ts). A verifier recomputes it from the delta in the proposal."}
+      signature: {range: GateSignature, required: true, inlined: true}
+
+  GateKey:
+    description: >-
+      One public key of the gate, as a JWK (RFC 7517) with its intended algorithm. Public parts only:
+      a set with a private member (d) or a symmetric key is refused.
+    attributes:
+      kid: {required: true, pattern: '^[A-Za-z0-9._~:-]{1,128}$', description: The key_id a receipt names.}
+      alg: {range: SignatureAlgorithm, required: true, description: The only algorithm this key verifies.}
+      kty: {range: GateKeyType, required: true}
+      crv: {range: GateKeyCurve, required: true}
+      x: {required: true, pattern: '^[A-Za-z0-9_-]+$', description: "The public key (OKP) or its x coordinate (EC), base64url without padding."}
+      y: {pattern: '^[A-Za-z0-9_-]+$', description: "EC only: the y coordinate, base64url without padding."}
+    rules:
+      - preconditions: {slot_conditions: {alg: {equals_string: EdDSA}}}
+        postconditions: {slot_conditions: {kty: {equals_string: OKP}, crv: {equals_string: Ed25519}}}
+      - preconditions: {slot_conditions: {alg: {equals_string: ES256}}}
+        postconditions: {slot_conditions: {kty: {equals_string: EC}, crv: {equals_string: P-256}, y: {required: true}}}
+
+  GateKeySet:
+    tree_root: true
+    description: >-
+      The gate keys a repository trusts for proposer receipts, pinned in the repository as
+      .rede/gate-keys.json. Rotating a key is a reviewed commit to this file; a receipt verifies against
+      the set on its own base commit.
+    attributes:
+      keys: {range: GateKey, required: true, multivalued: true, inlined_as_list: true}

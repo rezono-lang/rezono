@@ -1,0 +1,16 @@
+format: rede.views/1
+views:
+  - theory: std-structure
+    kinds:
+      - name: element
+        union:
+          - populated_from: alpha
+          - populated_from: beta
+    arrows:
+      - name: depends_on
+        paths:
+          - populated_from: alpha
+            steps:
+              - slot: left
+                inverse: true
+              - slot: right

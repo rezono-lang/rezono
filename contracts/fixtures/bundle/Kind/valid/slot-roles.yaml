@@ -1,0 +1,18 @@
+id: item
+stable_id: "Item"
+span: {file: schema/core.yaml, line: "4", column: "3"}
+class: Item
+layer: facts
+abstract: false
+id_type: text
+module: main
+table: item
+name_attribute: item.title
+slot_roles:
+  name: item.title
+  description: item.detail
+  image: item.picture
+  order: item.rank
+  valid_from: item.starts
+  valid_until: item.ends
+  known_from: item.recorded

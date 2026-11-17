@@ -1,0 +1,4 @@
+# Invalid: an unknown amount has no minor units, not even zero (K11).
+minor_units: 0
+currency: EUR
+state: unknown

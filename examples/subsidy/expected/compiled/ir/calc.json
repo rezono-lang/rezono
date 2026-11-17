@@ -1,0 +1,434 @@
+{
+  "format": "rede.calc-ir/1",
+  "pack": "subsidy",
+  "subject": "application",
+  "subject_table": "application",
+  "as_of": "calc__as_of",
+  "parameters": "scheme_parameter__value",
+  "parameter_choice": {
+    "name": "scheme_parameter__name",
+    "valid_from": "scheme_parameter__valid_from",
+    "valid_until": "scheme_parameter__valid_until"
+  },
+  "facts": [
+    {
+      "id": "advised",
+      "type": "boolean",
+      "reads": "presence",
+      "table": "advised",
+      "index": 0
+    },
+    {
+      "id": "assessed_costs.cents",
+      "type": "number",
+      "reads": "column",
+      "table": "assessed_costs",
+      "index": 1
+    },
+    {
+      "id": "assessed_income.cents",
+      "type": "number",
+      "reads": "column",
+      "table": "assessed_income",
+      "index": 1
+    },
+    {
+      "id": "household_size.persons",
+      "type": "number",
+      "reads": "column",
+      "table": "household_size",
+      "index": 1
+    },
+    {
+      "id": "ledger_paid.cents",
+      "type": "number",
+      "reads": "column",
+      "table": "ledger_paid",
+      "index": 1
+    },
+    {
+      "id": "paid",
+      "type": "boolean",
+      "reads": "presence",
+      "table": "paid",
+      "index": 0
+    }
+  ],
+  "rules": [
+    {
+      "rule": "advice_allowance",
+      "view": "calc__advice_allowance",
+      "type": "number",
+      "versions": [
+        "advice_allowance@2026"
+      ]
+    },
+    {
+      "rule": "award",
+      "view": "calc__award",
+      "type": "number",
+      "versions": [
+        "award@2026"
+      ]
+    },
+    {
+      "rule": "cost_share",
+      "view": "calc__cost_share",
+      "type": "number",
+      "versions": [
+        "cost_share@2026"
+      ]
+    },
+    {
+      "rule": "entitlement",
+      "view": "calc__entitlement",
+      "type": "number",
+      "versions": [
+        "entitlement@2026"
+      ]
+    },
+    {
+      "rule": "income_limit",
+      "view": "calc__income_limit",
+      "type": "number",
+      "versions": [
+        "income_limit@2026"
+      ]
+    },
+    {
+      "rule": "income_threshold",
+      "view": "calc__income_threshold",
+      "type": "number",
+      "versions": [
+        "income_threshold@2026"
+      ]
+    },
+    {
+      "rule": "payment_difference",
+      "view": "calc__payment_difference",
+      "type": "number",
+      "versions": [
+        "payment_difference@2026"
+      ]
+    }
+  ],
+  "versions": [
+    {
+      "id": "advice_allowance@2026",
+      "rule": "advice_allowance",
+      "version": "2026",
+      "view": "calc__advice_allowance__2026",
+      "valid_from": "2026-01-01",
+      "valid_until": "2027-01-01",
+      "known_from": "2025-12-09",
+      "definitions": [
+        {
+          "name": "allowance_or_nothing",
+          "when": {
+            "boolean": true
+          },
+          "value": {
+            "op": "if",
+            "args": [
+              {
+                "op": "and",
+                "args": [
+                  {
+                    "fact": "advised"
+                  },
+                  {
+                    "op": "lt",
+                    "args": [
+                      {
+                        "integer": "0"
+                      },
+                      {
+                        "rule": "cost_share"
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "parameter": "advice_allowance"
+              },
+              {
+                "integer": "0"
+              }
+            ]
+          },
+          "before": []
+        }
+      ]
+    },
+    {
+      "id": "award@2026",
+      "rule": "award",
+      "version": "2026",
+      "view": "calc__award__2026",
+      "valid_from": "2026-01-01",
+      "valid_until": "2027-01-01",
+      "known_from": "2025-12-09",
+      "definitions": [
+        {
+          "name": "at_most_the_maximum",
+          "when": {
+            "boolean": true
+          },
+          "value": {
+            "op": "min",
+            "args": [
+              {
+                "rule": "entitlement"
+              },
+              {
+                "parameter": "maximum_award"
+              }
+            ]
+          },
+          "before": []
+        }
+      ]
+    },
+    {
+      "id": "cost_share@2026",
+      "rule": "cost_share",
+      "version": "2026",
+      "view": "calc__cost_share__2026",
+      "valid_from": "2026-01-01",
+      "valid_until": "2027-01-01",
+      "known_from": "2025-12-09",
+      "definitions": [
+        {
+          "name": "full_rate",
+          "when": {
+            "op": "lte",
+            "args": [
+              {
+                "fact": "assessed_income.cents"
+              },
+              {
+                "rule": "income_threshold"
+              }
+            ]
+          },
+          "value": {
+            "op": "round",
+            "args": [
+              {
+                "op": "ratio",
+                "args": [
+                  {
+                    "fact": "assessed_costs.cents"
+                  },
+                  {
+                    "parameter": "full_rate"
+                  },
+                  {
+                    "integer": "1000000"
+                  }
+                ]
+              }
+            ]
+          },
+          "before": []
+        },
+        {
+          "name": "partial_rate",
+          "when": {
+            "op": "and",
+            "args": [
+              {
+                "op": "lt",
+                "args": [
+                  {
+                    "rule": "income_threshold"
+                  },
+                  {
+                    "fact": "assessed_income.cents"
+                  }
+                ]
+              },
+              {
+                "op": "lte",
+                "args": [
+                  {
+                    "fact": "assessed_income.cents"
+                  },
+                  {
+                    "rule": "income_limit"
+                  }
+                ]
+              }
+            ]
+          },
+          "value": {
+            "op": "round",
+            "args": [
+              {
+                "op": "ratio",
+                "args": [
+                  {
+                    "fact": "assessed_costs.cents"
+                  },
+                  {
+                    "parameter": "partial_rate"
+                  },
+                  {
+                    "integer": "1000000"
+                  }
+                ]
+              }
+            ]
+          },
+          "before": []
+        },
+        {
+          "name": "above_the_limit",
+          "when": {
+            "op": "lt",
+            "args": [
+              {
+                "rule": "income_limit"
+              },
+              {
+                "fact": "assessed_income.cents"
+              }
+            ]
+          },
+          "value": {
+            "integer": "0"
+          },
+          "before": []
+        }
+      ]
+    },
+    {
+      "id": "entitlement@2026",
+      "rule": "entitlement",
+      "version": "2026",
+      "view": "calc__entitlement__2026",
+      "valid_from": "2026-01-01",
+      "valid_until": "2027-01-01",
+      "known_from": "2025-12-09",
+      "definitions": [
+        {
+          "name": "share_plus_allowance",
+          "when": {
+            "boolean": true
+          },
+          "value": {
+            "op": "add",
+            "args": [
+              {
+                "rule": "cost_share"
+              },
+              {
+                "rule": "advice_allowance"
+              }
+            ]
+          },
+          "before": []
+        }
+      ]
+    },
+    {
+      "id": "income_limit@2026",
+      "rule": "income_limit",
+      "version": "2026",
+      "view": "calc__income_limit__2026",
+      "valid_from": "2026-01-01",
+      "valid_until": "2027-01-01",
+      "known_from": "2025-12-09",
+      "definitions": [
+        {
+          "name": "threshold_plus_margin",
+          "when": {
+            "boolean": true
+          },
+          "value": {
+            "op": "add",
+            "args": [
+              {
+                "rule": "income_threshold"
+              },
+              {
+                "parameter": "income_margin"
+              }
+            ]
+          },
+          "before": []
+        }
+      ]
+    },
+    {
+      "id": "income_threshold@2026",
+      "rule": "income_threshold",
+      "version": "2026",
+      "view": "calc__income_threshold__2026",
+      "valid_from": "2026-01-01",
+      "valid_until": "2027-01-01",
+      "known_from": "2025-12-09",
+      "definitions": [
+        {
+          "name": "base_plus_persons",
+          "when": {
+            "boolean": true
+          },
+          "value": {
+            "op": "add",
+            "args": [
+              {
+                "parameter": "income_threshold_base"
+              },
+              {
+                "op": "ratio",
+                "args": [
+                  {
+                    "fact": "household_size.persons"
+                  },
+                  {
+                    "parameter": "income_threshold_per_person"
+                  },
+                  {
+                    "integer": "1"
+                  }
+                ]
+              }
+            ]
+          },
+          "before": []
+        }
+      ]
+    },
+    {
+      "id": "payment_difference@2026",
+      "rule": "payment_difference",
+      "version": "2026",
+      "view": "calc__payment_difference__2026",
+      "valid_from": "2026-01-01",
+      "valid_until": "2027-01-01",
+      "known_from": "2025-12-09",
+      "definitions": [
+        {
+          "name": "paid_minus_award",
+          "when": {
+            "fact": "paid"
+          },
+          "value": {
+            "op": "sub",
+            "args": [
+              {
+                "fact": "ledger_paid.cents"
+              },
+              {
+                "rule": "award"
+              }
+            ]
+          },
+          "before": []
+        }
+      ]
+    }
+  ]
+}

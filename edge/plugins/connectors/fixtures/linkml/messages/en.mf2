@@ -1,0 +1,12 @@
+@locale en
+---
+# Neutral sentences of the fixture.
+arrow.total = {{Every {$kind} has exactly one {$arrow}.}}
+arrow.partial = {{Every {$kind} has at most one {$arrow}.}}
+attribute.total = {{Every {$kind} has exactly one {$attribute}.}}
+attribute.partial = {{Every {$kind} has at most one {$attribute}.}}
+arrow.many.partial = {{Every {$kind} can have more than one {$arrow}.}}
+attribute.many.partial = {{Every {$kind} can have more than one {$attribute}.}}
+is_a = {{Every {$kind} is a {$parent}.}}
+unique_key = {{{$key} belongs to at most one {$kind}.}}
+path_equation = {{For every {$kind}: {$equation}.}}

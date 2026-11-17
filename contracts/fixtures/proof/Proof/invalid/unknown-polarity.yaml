@@ -1,0 +1,8 @@
+# Invalid: maybe is not a polarity.
+root: {relation: open, key: '["a","b"]'}
+manifest_id: manifest-epoch-7
+witnesses:
+  - conclusion: {relation: open, key: '["a","b"]'}
+    rule_id: open
+    premises:
+      - {row: {relation: blocked, key: '["b"]'}, polarity: maybe, stratum: 0}

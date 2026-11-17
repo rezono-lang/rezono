@@ -1,0 +1,8 @@
+# The binding names no element: one sheet per element of the first level.
+id: site
+title_message: nest.site
+part_message: nest.part_of
+root: site-north
+levels:
+  - {kind: site, flow: row}
+  - {kind: cell, part_of: cell__site}

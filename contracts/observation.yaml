@@ -1,0 +1,47 @@
+id: https://rede.dev/contracts/observation
+name: rede_observation
+title: Observations and drift
+description: >-
+  A fact in the layer Observation: a measurement or the status that a reconciler reports, with its
+  source and its event time, linked to the expectation it is compared with. Drift ("expected is not
+  observed") is an ordinary derived relation with witnesses, so Why shows which observation, from
+  which source, disagrees with which expectation. The event time comes from the source, never from
+  the clock of the ingester.
+prefixes:
+  linkml: https://w3id.org/linkml/
+  rede: https://rede.dev/contracts/
+default_prefix: rede
+default_range: string
+imports:
+  - linkml:types
+  - value
+  - proof
+  - source
+
+types:
+  DecimalText:
+    typeof: string
+    pattern: "^(0|[1-9][0-9]*)$"
+
+classes:
+  Observation:
+    tree_root: true
+    attributes:
+      id: {identifier: true, required: true, description: "Stable id, derived from source name and position."}
+      subject: {required: true, description: The element id that is observed.}
+      attribute: {required: true, description: The attribute or status that is observed (an element id of the schema).}
+      value: {range: Value, required: true, inlined: true}
+      event_time: {range: datetime, required: true, description: When it was true at the source. Never the ingest time.}
+      source: {range: Source, required: true, inlined: true}
+      expectation: {range: RowRef, required: true, inlined: true, description: "The expected row (desired state, plan, norm) this observation is compared with."}
+
+  DriftRow:
+    description: >-
+      One row of a drift view, as the viewer reads it. The rule that derives it has a witness relation
+      (contracts/rules.yaml) whose substitution names the observation and the expectation.
+    attributes:
+      expectation: {range: RowRef, required: true, inlined: true}
+      expected: {range: Value, required: true, inlined: true}
+      observed: {range: Value, required: true, inlined: true}
+      observation: {required: true, description: The id of the observation.}
+      event_time: {range: datetime, required: true}

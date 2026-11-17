@@ -1,0 +1,6 @@
+# Signs of std-time (contracts/view.yaml): a shape per kind.
+kinds:
+  - {kind: interval, shape: rect}
+  - {kind: axis, shape: bar}
+  - {kind: series, shape: bar}
+  - {kind: reference_point, shape: pill}

@@ -1,0 +1,7 @@
+# Periods with a start and an end only.
+id: periods
+title_message: timeline.periods
+rows: period
+start: period__opens
+end: period__closes
+main_message: phase.open

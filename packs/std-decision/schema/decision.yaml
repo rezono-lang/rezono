@@ -1,0 +1,286 @@
+id: https://rede.example/std-decision/decision
+name: std_decision
+description: >-
+  The decision record. A decision is an origin of facts (S32, class decision): somebody decided it, on a day, and
+  it applies from a day until it ends or a later decision supersedes it. A fact of a domain that is a decision
+  points to a Decision with an arrow of its own; rules read whether that decision is in force on a reference
+  date (rules/decision.dl). The fields follow MADR: title, status, deciders, date, supersedes. A decision may
+  rest on other decisions (Ground) and may look at an earlier one again (reassesses).
+in_language: en
+prefixes:
+  linkml: https://w3id.org/linkml/
+  rdfs: http://www.w3.org/2000/01/rdf-schema#
+  schema: http://schema.org/
+  prov: http://www.w3.org/ns/prov#
+  dcterms: http://purl.org/dc/terms/
+  skos: http://www.w3.org/2004/02/skos/core#
+imports:
+  - linkml:types
+default_range: string
+annotations:
+  layer: facts
+
+enums:
+  DecisionState:
+    description: What the decision record says about its standing.
+    permissible_values:
+      proposed: {description: "put forward, not taken"}
+      in_force: {description: taken and standing}
+      superseded: {description: replaced by a later decision}
+      withdrawn: {description: taken back without a replacement}
+
+classes:
+  Decision:
+    description: >-
+      One decision, as its record states it: what was decided, about which subject, by whom, when, from when and
+      until when it applies, how it stands, and which earlier decisions it replaces.
+    attributes:
+      id:
+        identifier: true
+      title:
+        required: true
+        slot_uri: rdfs:label
+        description: What was decided, in the words of the record.
+      subject:
+        range: Subject
+        close_mappings: [dcterms:subject]
+        description: The matter the decision is about. Decisions that succeed each other share it.
+      decider:
+        multivalued: true
+        close_mappings: [prov:wasAttributedTo]
+        description: >-
+          Who took the decision: a person or a body, by the identifier the domain uses for its parties. Open
+          world (W6): a record that names nobody leaves unknown who decided.
+        annotations:
+          world: open
+      decided_on:
+        range: date
+        slot_uri: prov:generatedAtTime
+        description: The day the decision was taken (knowledge time). Absent while it is proposed.
+      valid_from:
+        range: date
+        slot_uri: schema:validFrom
+        description: The first day the decision applies (validity). Often the day it was taken.
+      valid_until:
+        range: date
+        slot_uri: schema:validThrough
+        description: >-
+          The day the decision stops applying; from that day on it does not apply. Absent when the record
+          names no end.
+      valid_from_day:
+        range: integer
+        minimum_value: 19000101
+        maximum_value: 99991231
+        description: >-
+          valid_from as the whole number YYYYMMDD, which orders as the calendar does. A stopgap: rules cannot
+          read a date yet (docs/roadmap.md, open questions), so the rules read this slot. It goes when they can.
+      valid_until_day:
+        range: integer
+        minimum_value: 19000101
+        maximum_value: 99991231
+        description: valid_until as the whole number YYYYMMDD; the same stopgap as valid_from_day.
+      state:
+        range: DecisionState
+        required: true
+        slot_uri: schema:creativeWorkStatus
+        description: >-
+          The standing the record gives the decision today. Rules take time from the validity days and from
+          supersedes, and check the state against them.
+      supersedes:
+        range: Decision
+        multivalued: true
+        exact_mappings: [dcterms:replaces]
+        description: An earlier decision this one replaces, from the day this one takes effect.
+      reassesses:
+        range: Decision
+        multivalued: true
+        description: >-
+          An earlier decision this one looked at again. A reassessment replaces nothing: the earlier decision
+          stands as its own record says. A domain's rule reads it to say that a decision was looked at again
+          after one of its grounds stopped standing. Open world (W6): that no record reassesses a decision
+          leaves unknown whether anybody looked at it again.
+        annotations:
+          world: open
+      rationale:
+        close_mappings: [skos:scopeNote]
+        description: Why it was decided, in the words of the record. Text, and no rule reads it.
+      warrant:
+        range: Principle
+        multivalued: true
+        description: >-
+          A principle the decision rests on: what makes it right (the warrant of an explanation). Open world
+          (W6): a record that names no principle leaves unknown what the decision rests on. No rule reads it.
+        annotations:
+          world: open
+      owner:
+        multivalued: true
+        close_mappings: [schema:maintainer]
+        description: >-
+          Who answers for the decision today, by the identifier the domain uses for its parties. Not the
+          decider: the one who keeps it and is asked about it. Open world (W6), and no rule reads it.
+        annotations:
+          world: open
+      review_on:
+        range: date
+        description: The day the decision is looked at again. Absent when the record names none.
+    rules:
+      - description: A validity date and its day number come together (four rules, one per direction).
+        preconditions:
+          slot_conditions:
+            valid_from: {value_presence: PRESENT}
+        postconditions:
+          slot_conditions:
+            valid_from_day: {value_presence: PRESENT}
+      - preconditions:
+          slot_conditions:
+            valid_from_day: {value_presence: PRESENT}
+        postconditions:
+          slot_conditions:
+            valid_from: {value_presence: PRESENT}
+      - preconditions:
+          slot_conditions:
+            valid_until: {value_presence: PRESENT}
+        postconditions:
+          slot_conditions:
+            valid_until_day: {value_presence: PRESENT}
+      - preconditions:
+          slot_conditions:
+            valid_until_day: {value_presence: PRESENT}
+        postconditions:
+          slot_conditions:
+            valid_until: {value_presence: PRESENT}
+      - description: A decision that applied and was withdrawn names the day it stopped applying.
+        preconditions:
+          slot_conditions:
+            state: {equals_string: withdrawn}
+            valid_from: {value_presence: PRESENT}
+        postconditions:
+          slot_conditions:
+            valid_until: {value_presence: PRESENT}
+
+  Ground:
+    description: >-
+      One decision rests on another: its record names the other decision as a ground. A link, named by its two
+      ends (S27), and its source is the record that names the ground. It says nothing about time: whether the
+      ground stands on a reference date is read from the other decision (in_force_on).
+    represents_relationship: true
+    attributes:
+      id:
+        identifier: true
+      decision:
+        range: Decision
+        required: true
+        description: The decision whose record names the ground.
+      rests_on:
+        range: Decision
+        required: true
+        close_mappings: [prov:wasInfluencedBy]
+        description: The decision it rests on.
+    unique_keys:
+      ground_pair:
+        unique_key_slots: [decision, rests_on]
+
+  # The justification layer (EX9): why a decision is so, as recorded facts that point to it. An explanation
+  # shows them beside the proof; no rule reads these kinds. Each row has its own source (S25).
+  Purpose:
+    description: >-
+      Something a decision serves, and for whom: the purpose of an explanation. One row per thing served.
+    attributes:
+      id:
+        identifier: true
+      decision:
+        range: Decision
+        required: true
+        description: The decision that serves it.
+      title:
+        required: true
+        slot_uri: rdfs:label
+        description: What is served, in the words of the record.
+      served:
+        multivalued: true
+        description: >-
+          Who is served, by the identifier the domain uses for its parties. Open world (W6): a record that
+          names nobody leaves unknown for whom.
+        annotations:
+          world: open
+
+  Principle:
+    description: >-
+      A statement that makes decisions right: the warrant of an explanation. A decision names the principles it
+      rests on (Decision.warrant). A principle has no state of its own: it stands as the decision that adopted
+      it stands.
+    attributes:
+      id:
+        identifier: true
+      title:
+        required: true
+        slot_uri: rdfs:label
+        description: The principle, in the words of its record.
+      decision:
+        range: Decision
+        description: >-
+          The decision that adopted the principle. Its state, decider and validity are the principle's. Open
+          world (W6): a principle whose record names no decision is of unknown standing, never of no standing.
+          A pack whose rules read a principle's standing makes this slot required for its own principles.
+        annotations:
+          world: open
+
+  Alternative:
+    description: An option that was weighed for a decision and rejected.
+    attributes:
+      id:
+        identifier: true
+      decision:
+        range: Decision
+        required: true
+        description: The decision that rejected it.
+      title:
+        required: true
+        slot_uri: rdfs:label
+        description: The alternative, in the words of the record.
+      reason:
+        close_mappings: [skos:scopeNote]
+        description: Why it was rejected, in the words of the record. Text, and no rule reads it.
+
+  Exception:
+    description: >-
+      Something a decision leaves out, in the words of its record: where what was decided does not hold. An
+      exception that is itself decided separately is a Decision of its own.
+    attributes:
+      id:
+        identifier: true
+      decision:
+        range: Decision
+        required: true
+        description: The decision that makes the exception.
+      title:
+        required: true
+        slot_uri: rdfs:label
+        description: What is excepted, in the words of the record.
+
+  Subject:
+    description: A matter that is decided on, named by the domain. A Flow groups decisions by it.
+    attributes:
+      id:
+        identifier: true
+      title:
+        required: true
+        slot_uri: rdfs:label
+
+  ReferenceDate:
+    description: >-
+      A day for which the registration is read: "in force" is always in force on such a day. A fact, never the
+      clock (rule 3), and itself a choice of the domain. The decision records are read as they stand on it.
+    attributes:
+      id:
+        identifier: true
+      title:
+        required: true
+        slot_uri: rdfs:label
+        description: The day as people write it.
+      day:
+        range: integer
+        required: true
+        minimum_value: 19000101
+        maximum_value: 99991231
+        description: The day as the whole number YYYYMMDD (the stopgap of Decision.valid_from_day).

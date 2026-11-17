@@ -1,0 +1,62 @@
+# The RDF view of Reckon Data (docs/reckon-data/l0.md §5; reckon_data/rdf.py: Turtle and JSON-LD), read by a
+# reader that knows RDF and not the `rd:` terms. A Reckon Data reader loses nothing: the converter gives the rows
+# back (case T03). test_losses.py holds this list to what the converter writes.
+connector: rdf-out
+standard: RDF
+standard_version: "1.1"
+direction: out
+losses:
+  - subject: state
+    what: >-
+      That a value is unknown, not applicable or invalid. Where a value would be, the reader finds a
+      blank node whose one property it does not know.
+    fate: extension
+    carried_by: ["rd:unknown", "rd:notApplicable", "rd:invalid"]
+  - subject: reason
+    what: The reason code of such a value. It is the literal on the state term.
+    fate: extension
+    carried_by: ["rd:unknown", "rd:notApplicable", "rd:invalid"]
+  - subject: world
+    what: >-
+      That a kind is closed, and that a many-valued slot is known to be empty. RDF is open: the absence
+      of a triple says nothing, so both are stated in terms of their own.
+    fate: extension
+    carried_by: ["rd:world", "rd:closed", "rd:emptySet"]
+  - subject: proof
+    what: >-
+      Which witness proves an element or a value. It is an annotation on the statement (an
+      rdf:Statement) whose predicate the reader does not know.
+    fate: extension
+    carried_by: ["rd:why"]
+  - subject: source
+    what: Where a fact comes from, as the canonical JSON of each Source, annotated on the statement.
+    fate: extension
+    carried_by: ["rd:source"]
+  - subject: unit
+    what: >-
+      A quantity is one literal, the text of its row JSON, with a datatype of the schema. No unit
+      vocabulary names the unit or the dimension, so the reader cannot compute with it or convert it.
+    fate: weakened
+    carried_by: ["<schema>/types/<Type>"]
+  - subject: money
+    what: >-
+      An amount is one literal, the text of its row JSON, with a datatype of the schema. The currency
+      and the scale are in that text and in the schema document, not in terms.
+    fate: weakened
+    carried_by: ["<schema>/types/<Type>"]
+  - subject: structure
+    what: >-
+      The schema document is not in the graph: cardinality, the bounds and patterns of types, enums
+      and their order. The graph holds elements, their kinds and their values only.
+    fate: dropped
+  - subject: rule
+    what: The rules. A witness is named; the rule it applied and the calculation behind a value are not exported here.
+    fate: dropped
+  - subject: access
+    what: Which role the view was made for. The graph holds what that role reads and does not say so.
+    fate: dropped
+  - subject: identity
+    what: >-
+      The schema id and the hash pin of the dataset. The graph does not name them; they are in the
+      address it is published at.
+    fate: dropped

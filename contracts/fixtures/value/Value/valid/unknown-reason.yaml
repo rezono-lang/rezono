@@ -1,0 +1,3 @@
+# State unknown with its reason code (docs/semantics/value-cases.yaml, value-reason).
+state: unknown
+reason: not_assigned

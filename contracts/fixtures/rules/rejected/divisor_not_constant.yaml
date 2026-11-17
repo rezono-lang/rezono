@@ -1,0 +1,23 @@
+# A variable divisor: refused, since it could be 0 (Feldera stops on an integer division by zero).
+format: rede.rules/1
+pack: fixture
+relations:
+  - name: size
+    role: base
+    key: [{name: a, type: string}, {name: n, type: integer}]
+  - name: share
+    role: derived
+    key: [{name: a, type: string}, {name: q, type: integer}]
+    module: count
+    explain: on_demand
+rules:
+  - id: share
+    module: count
+    stratum: "1"
+    head: {relation: share, terms: ["?a", "?q"]}
+    body:
+      - {relation: size, terms: ["?a", "?n"], polarity: positive, stratum: "0"}
+    assignments:
+      - {var: "?q", op: div, left: "60", right: "?n"}
+    witness: {relation: share__witness, variables: ["?a", "?n", "?q"]}
+    origin: {file: rules/count.dl, line: "1"}

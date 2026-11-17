@@ -1,0 +1,33 @@
+id: R06
+class: invalid
+status: settled
+schema:
+  from: fixture.schema.json
+  merge:
+    types:
+      Count:
+        of: Integer
+        min: '0'
+        max: '1000'
+    kinds:
+      Host:
+        slots:
+          count:
+            card: '1'
+            type: Count
+            states:
+            - known
+form: json-text
+input:
+- '{"$rows": [{"$kind": "Host", "$id": "host-a", "memory_need": "400 GiB", "owner": {"$unknown": "not_assigned"}, "tags":
+  ["gpu", "lab"], "count": 12.0}]}'
+- '{"$rows": [{"$kind": "Host", "$id": "host-a", "memory_need": "400 GiB", "owner": {"$unknown": "not_assigned"}, "tags":
+  ["gpu", "lab"], "count": 1e1}]}'
+- '{"$rows": [{"$kind": "Host", "$id": "host-a", "memory_need": "400 GiB", "owner": {"$unknown": "not_assigned"}, "tags":
+  ["gpu", "lab"], "count": -0}]}'
+expect:
+  accept: false
+  error: not an integer
+note: 'Each text is rejected: a float, an exponent, a negative zero (the bounds hold 0, so only the spelling refuses it).'
+sources:
+- '#369 L0 rev 2 §8'

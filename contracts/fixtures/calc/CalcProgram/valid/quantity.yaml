@@ -1,0 +1,17 @@
+# A constant with its unit (P10.3): a unit the pack declares on a type of its schema (fictitious names).
+format: rede.calc/1
+pack: fixture
+subject: host
+rules:
+  - id: large@1
+    rule: large
+    version: "1"
+    output: large.flag
+    unit: boolean
+    valid_from: "2026-01-01"
+    valid_until: "2027-01-01"
+    known_from: "2026-01-01"
+    definitions:
+      - name: above
+        when: {boolean: true}
+        value: {op: gte, args: [{fact: host.memory}, {integer: "384", unit: GiB}]}

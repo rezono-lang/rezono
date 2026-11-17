@@ -1,0 +1,20 @@
+# Drift against the payment ledger (decision R13): what the ledger paid minus the award the rules derive,
+# per application. Zero means the two agree. Without a payment the comparison does not apply; while the
+# award is unknown the difference is unknown too, never a difference against zero.
+# The ledger is a reference source: this file reads the award, the award never reads this file.
+format: rede.calc/1
+pack: subsidy
+subject: application
+rules:
+  - id: payment_difference@2026
+    rule: payment_difference
+    version: "2026"
+    output: payment_difference.cents
+    unit: cents
+    valid_from: "2026-01-01"
+    valid_until: "2027-01-01"
+    known_from: "2025-12-09"
+    definitions:
+      - name: paid_minus_award
+        when: {fact: paid}
+        value: {op: sub, args: [{fact: ledger_paid.cents}, {rule: award}]}

@@ -1,0 +1,7 @@
+format: rede.view-capture/1
+pack: p
+manifest: m-2
+role: viewer
+relayout: false
+previous: {manifest: m-1, sha256: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa}
+layouts: [{path: map, sha256: bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb}]

@@ -1,0 +1,27 @@
+id: M01
+class: change
+status: settled
+schema:
+  from: fixture.schema.json
+successor:
+  merge:
+    kinds:
+      Host:
+        slots:
+          zone:
+            card: '?'
+            type: Text
+            states:
+            - known
+            - not_applicable
+            backfill:
+              $na: added_later
+form: schema
+expect:
+  change_class: minor
+  read_old_rows:
+    host-a:
+      zone:
+        $na: added_later
+sources:
+- '#369 L0 rev 2 §8'

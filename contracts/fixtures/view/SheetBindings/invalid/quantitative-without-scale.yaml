@@ -1,0 +1,5 @@
+# A quantitative meaning needs a unit, a scale and a zero.
+relief:
+  region: region
+  member: item__in_region
+  height: {channel: elevation, slot: region__total, level: quantitative, meaning_message: channel.total}

@@ -1,0 +1,108 @@
+id: https://rede.dev/contracts/offload
+name: rede_offload
+title: Offloaded steps
+description: >-
+  A step that the engine hands to a worker (a solver or planner as a job) and whose result comes
+  back as a fact. Per step the compiler makes three relations: <step>_input(unit, input_sha256,
+  payload), <step>_pending(unit, input_sha256) and <step>_result(unit, input_sha256, status, payload).
+  A unit is pending when its current input hash has no result. A result whose hash differs from the
+  current input is stale (contracts/freshness.yaml). The worker is idempotent on input_sha256.
+  Every integer is decimal text.
+prefixes:
+  linkml: https://w3id.org/linkml/
+  rede: https://rede.dev/contracts/
+default_prefix: rede
+default_range: string
+imports:
+  - linkml:types
+
+types:
+  DecimalText:
+    typeof: string
+    pattern: "^(0|[1-9][0-9]*)$"
+  SignedDecimalText:
+    typeof: string
+    description: A signed integer as canonical decimal text (no leading zeros, no "-0").
+    pattern: "^(0|-?[1-9][0-9]*)$"
+  Sha256:
+    typeof: string
+    pattern: "^[0-9a-f]{64}$"
+  Name:
+    typeof: string
+    pattern: "^[a-z][a-z0-9]*(_[a-z0-9]+)*$"
+
+enums:
+  ResultStatus:
+    description: The status of an outcome (docs/glossary.md, Status), as the worker reports it.
+    permissible_values:
+      optimal: {description: Proven optimal; the same input hash gives the same result.}
+      best-found: {description: "The best solution within the time limit; not byte-for-byte repeatable, and marked as such."}
+      infeasible: {description: Proven to have no solution.}
+
+classes:
+  OffloadStep:
+    tree_root: true
+    description: The declaration of one step in offload.yaml of a pack.
+    attributes:
+      name: {range: Name, identifier: true, required: true, description: "The prefix of the relations <name>_input, <name>_pending and <name>_result."}
+      unit: {range: Name, required: true, description: The kind whose elements are the units of work.}
+      input_relation: {required: true, description: The derived relation that gives the payload per unit.}
+      solver: {range: Component, required: true, inlined: true}
+      model: {range: ModelRef, required: true, inlined: true}
+      time_limit_ms: {range: DecimalText, required: true}
+      seed: {range: DecimalText, required: true, description: A fixed seed; no randomness without one.}
+
+  Component:
+    attributes:
+      name: {required: true, description: For example minizinc+cp-sat.}
+      version: {required: true}
+
+  ModelRef:
+    attributes:
+      path: {required: true, description: Path of the model in the pack.}
+      sha256: {range: Sha256, required: true}
+
+  InputHash:
+    description: >-
+      What input_sha256 covers: SHA-256 over the canonical JSON of this object (RFC 8785 with integers
+      as decimal text; docs/contracts.md#canonical-hash). A new solver version or model gives a new hash,
+      so a new job.
+    attributes:
+      model_sha256: {range: Sha256, required: true}
+      solver: {range: Component, required: true, inlined: true}
+      time_limit_ms: {range: DecimalText, required: true}
+      seed: {range: DecimalText, required: true}
+      parameters_sha256: {range: Sha256, required: true, description: Hash over the parameter facts the step reads.}
+      payload_sha256: {range: Sha256, required: true, description: Hash over the canonical payload of the unit.}
+
+  OffloadInput:
+    description: One row of <step>_input.
+    attributes:
+      step: {range: Name, required: true}
+      unit: {required: true}
+      input_sha256: {range: Sha256, required: true}
+      payload: {required: true, description: Canonical JSON of the unit's input.}
+
+  OffloadPending:
+    description: One row of <step>_pending; a view, never written by hand.
+    attributes:
+      step: {range: Name, required: true}
+      unit: {required: true}
+      input_sha256: {range: Sha256, required: true}
+
+  OffloadResult:
+    description: >-
+      One row of <step>_result, written by the worker as a fact. It has a source like every fact:
+      the job and its input hash. No wall-clock time: the duration of a job is telemetry, not a fact.
+      It becomes a fact only through admission (edge/plugins/admission, S9): the step, unit, input hash,
+      solver and model hash must be those of the current input, and a result for an input hash that
+      already has one is a replay.
+    attributes:
+      step: {range: Name, required: true}
+      unit: {required: true}
+      input_sha256: {range: Sha256, required: true}
+      model_sha256: {range: Sha256, required: true, description: "The hash of the model the worker ran; admission compares it with the step's model."}
+      status: {range: ResultStatus, required: true}
+      objective: {range: SignedDecimalText, description: "The objective value, if the model has one; it may be negative (a profit to maximise as a cost)."}
+      payload: {description: "Canonical JSON of the solution; empty when infeasible."}
+      solver: {range: Component, required: true, inlined: true}

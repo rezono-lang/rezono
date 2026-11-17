@@ -1,0 +1,11 @@
+id: item
+stable_id: "Item"
+span: {file: schema/core.yaml, line: "4", column: "3"}
+class: Item
+layer: facts
+abstract: false
+id_type: text
+module: main
+table: item
+slot_roles:
+  colour: item.colour

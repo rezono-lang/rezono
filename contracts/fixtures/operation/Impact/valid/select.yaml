@@ -1,0 +1,9 @@
+format: rede.impact/1
+pack: example
+operations:
+  - index: 0
+    op: select
+    lossless: false
+    migration: 0-select.yaml
+    omissions:
+      - {kind: Helper, reason: Outside the selected model}

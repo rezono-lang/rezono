@@ -1,0 +1,87 @@
+// Rules of std-identity (#314 §5.2, T5), in the Datalog subset, so Soufflé is the oracle.
+// The base relations are the theory's tables: referent(x), referent__same_as(a, b) and
+// referent__represented_by(x, r). The values a domain compares come from its own rules, in the two relations it
+// extends: stated_text(x, slot, value) and stated_number(x, slot, value).
+//
+// same_as is a claim with a source of its own (S25): a merge is never inferred from a shared value or name. A
+// pair without a same_as row is not stated to be one; no rule concludes from that that it is two.
+
+// stated_same: a source states that a and b are the same, read either way (symmetry).
+.decl stated_same(a: symbol, b: symbol)
+stated_same(a, b) :- referent__same_as(a, b).
+stated_same(b, a) :- referent__same_as(a, b).
+
+// equivalent: the reflexive, symmetric and transitive closure of same_as. Each referent is equivalent to
+// itself, and a stated_same step leads further (linear recursion). The proof of a row is the chain of same_as
+// claims between the two.
+.decl equivalent(a: symbol, b: symbol)
+equivalent(a, a) :- referent(a).
+equivalent(a, c) :- equivalent(a, b), stated_same(b, c).
+
+// has_equivalent: x is one of a class of more than one member. Its absence is the ground of a singleton.
+.decl has_equivalent(referent: symbol)
+has_equivalent(a) :- equivalent(a, b), a != b.
+
+// chosen: a source names r for the class of a, at a or at another member.
+.decl chosen(referent: symbol, representative: symbol)
+chosen(a, r) :- equivalent(a, x), referent__represented_by(x, r).
+
+// has_chosen: someone named a representative for the class of a. A helper of representative_not_recorded.
+// @explain fold
+.decl has_chosen(referent: symbol)
+has_chosen(a) :- chosen(a, r).
+
+// disputed: two different representatives are named for the class of a.
+.decl disputed(referent: symbol)
+disputed(a) :- chosen(a, r), chosen(a, s), r != s.
+
+// Axiom: one representative per class. Two different names for one class are a violation.
+// @invariant
+.decl representatives_disagree(representative: symbol, other: symbol)
+representatives_disagree(r, s) :- chosen(a, r), chosen(a, s), r != s.
+
+// Axiom: the representative is a member of the class it stands for.
+// @invariant
+.decl representative_outside_class(referent: symbol, representative: symbol)
+representative_outside_class(x, r) :- referent__represented_by(x, r), !equivalent(x, r).
+
+// representative: the one member that stands for the class of a. Where a source names it, that member, if it
+// lies in the class and no other is named. A referent equivalent to no other stands for itself. A class of more
+// than one member whose representative nobody named has no row: representative_not_recorded names it.
+.decl representative(referent: symbol, representative: symbol)
+representative(a, r) :- chosen(a, r), equivalent(a, r), !disputed(a).
+representative(a, a) :- referent(a), !has_equivalent(a).
+
+// Nobody named a representative for the class of a, which has more than one member. About the registration,
+// not the world: the class has its one thing, and the record does not say which id stands for it. A finding,
+// not a violation: the class stays, without a representative. represented_by is closed, so its absence here is
+// read from the record, not guessed.
+.decl representative_not_recorded(referent: symbol)
+representative_not_recorded(a) :- has_equivalent(a), !has_chosen(a).
+
+// The values a domain compares across a class: one row per referent, slot and value, from the domain's own
+// rules (a slot that has one value per referent in the domain). A declaration alone denotes the empty set.
+// @extend
+.decl stated_text(referent: symbol, slot: symbol, value: symbol)
+// @extend
+.decl stated_number(referent: symbol, slot: symbol, value: number)
+
+// Axiom: the members of a class agree. Two different members that state different values for one slot are a
+// conflict, with both values and both sources in the proof. A domain that decides which value wins does so
+// before it states the value (a precedence rule); a conflict that remains is a violation.
+// @invariant
+.decl identity_conflict(a: symbol, b: symbol, slot: symbol)
+identity_conflict(a, b, s) :- equivalent(a, b), a != b, stated_text(a, s, v), stated_text(b, s, w), v != w.
+identity_conflict(a, b, s) :- equivalent(a, b), a != b, stated_number(a, s, v), stated_number(b, s, w), v != w.
+
+// class_text, class_number: the values of the members of a class, carried to its representative. The quotient
+// of the stated values along same_as: where the members agree, the class has one value per slot.
+.decl class_text(representative: symbol, slot: symbol, value: symbol)
+class_text(r, s, v) :- representative(a, r), stated_text(a, s, v).
+
+.decl class_number(representative: symbol, slot: symbol, value: number)
+class_number(r, s, v) :- representative(a, r), stated_number(a, s, v).
+
+.output stated_same, equivalent, has_equivalent, chosen, has_chosen, disputed, representatives_disagree
+.output representative_outside_class, representative, representative_not_recorded, identity_conflict
+.output class_text, class_number

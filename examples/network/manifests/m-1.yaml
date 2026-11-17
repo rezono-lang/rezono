@@ -1,0 +1,28 @@
+# Manifest (contracts/manifest.yaml), fictief.
+id: m-1
+epoch: 1
+knowledge_time: "2026-01-15T09:00:00Z"
+pack_sha256: 2646bebfb1ba3b0b19c901954e46bc76da21509db8c52ec0bc5811f1c5ea5708
+compiler_sha256: 0468acaecd54566da55d43fae61ec6f7c198b32cd2e9d77095cd2dcbf5814d55
+engine: {name: fixture, version: 0.0.0, sha256: fce51d366236f0da157455fff9a72d8ee5d891d555fc524f8f947bba33878ece}
+schema_version: 0.1.0
+sources:
+  - {source_id: rules, position: a461b472cb41}
+checks:
+  - {name: integrity, status: green, violations: 0}
+  - {name: invariants, status: green, violations: 0}
+# Aantallen over alle rollen; een viewer krijgt ze niet te zien (niet per rol in het contract).
+counts:
+  - {relation: inspection, rows: 3}
+  - {relation: lot, rows: 3}
+  - {relation: release, rows: 2}
+  - {relation: site, rows: 2}
+snapshots:
+  - {relation: inspection, role: viewer, complete: false, uri: "s3://rede-fixtures/network/m-1/viewer/inspection.json", sha256: ca8df12ddd61fff316d36ddcfa3448165bf5966b70975a3fd4bf93cbac574add, format: json}
+  - {relation: lot, role: viewer, complete: true, uri: "s3://rede-fixtures/network/m-1/viewer/lot.json", sha256: abded1f3a42935df21c05ad7feb3290216b0ae5b8c5a0bb9ba6ea19e180bafd8, format: json}
+  - {relation: release, role: viewer, complete: true, uri: "s3://rede-fixtures/network/m-1/viewer/release.json", sha256: 9f53eb8458d94aa5f447d091c57ff19d655ed78990702a215d6a22bf716f9140, format: json}
+  - {relation: site, role: viewer, complete: true, uri: "s3://rede-fixtures/network/m-1/viewer/site.json", sha256: 29906a8c21ac5603b03c075b61dcd8d492df5c32d5c746ef1e723855d12c85ec, format: json}
+  - {relation: inspection, role: admin, complete: true, uri: "s3://rede-fixtures/network/m-1/admin/inspection.json", sha256: 8ebdcf991bec6555bfaaa8d9a6ad2eb262a5c51f3e8a9637c21c728150ff9f93, format: json}
+  - {relation: lot, role: admin, complete: true, uri: "s3://rede-fixtures/network/m-1/viewer/lot.json", sha256: abded1f3a42935df21c05ad7feb3290216b0ae5b8c5a0bb9ba6ea19e180bafd8, format: json}
+  - {relation: release, role: admin, complete: true, uri: "s3://rede-fixtures/network/m-1/viewer/release.json", sha256: 9f53eb8458d94aa5f447d091c57ff19d655ed78990702a215d6a22bf716f9140, format: json}
+  - {relation: site, role: admin, complete: true, uri: "s3://rede-fixtures/network/m-1/viewer/site.json", sha256: 29906a8c21ac5603b03c075b61dcd8d492df5c32d5c746ef1e723855d12c85ec, format: json}

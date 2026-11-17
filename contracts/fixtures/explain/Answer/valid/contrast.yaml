@@ -1,0 +1,16 @@
+format: rede.answer/1
+question: contrast
+manifest_id: m-1
+start: {relation: flow, key: '["a","b"]'}
+nodes:
+  - {relation: flow, key: '["a","b"]', distance: 0}
+  - {relation: s, key: '["a",null]', distance: 1}
+steps: []
+witnesses: []
+gap:
+  premises:
+    - {distance: 0, node: {relation: flow, key: '["a","b"]'}, rule: flow, item: 1, kind: positive, index: 0, relation: s, bindings: [{variable: "?x", value: a}]}
+  cut: false
+  closed_by:
+    - {relation: closed, key: '["a","b"]'}
+computed: true

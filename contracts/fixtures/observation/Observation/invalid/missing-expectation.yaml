@@ -1,0 +1,7 @@
+# Argo CD reports the synced revision of an application; compared with the desired revision.
+id: argocd/app-web/rev-4711
+subject: app-web
+attribute: application.synced_revision
+value: {value: 9f2c1e0, state: known}
+event_time: "2026-11-06T10:15:00Z"
+source: {kind: tool, name: argocd, position: "4711"}

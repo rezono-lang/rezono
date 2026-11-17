@@ -1,0 +1,34 @@
+# Signs: a shape per kind and a dash per arrow, with the values of contracts/view.yaml.
+kinds:
+  - {kind: article, shape: rect}
+  - {kind: decision, shape: diamond}
+  - {kind: scheme_parameter, shape: diamond}
+  - {kind: calendar, shape: rect}
+  - {kind: evaluation_day, shape: pill}
+  - {kind: cost_item, shape: rect}
+  - {kind: household, shape: pill}
+  - {kind: application, shape: ellipse}
+  - {kind: cost_line, shape: bar}
+  - {kind: income_statement, shape: rect}
+  - {kind: advice_report, shape: rect}
+arrows:
+  - {arrow: scheme_parameter.article, dash: none}
+  - {arrow: scheme_parameter.decision, dash: none}
+  - {arrow: scheme_parameter.calendar, dash: "2 2"}
+  - {arrow: evaluation_day.calendar, dash: "2 2"}
+  - {arrow: cost_item.article, dash: none}
+  - {arrow: application.household, dash: none}
+  - {arrow: cost_line.application, dash: none}
+  - {arrow: cost_line.item, dash: none}
+  - {arrow: income_statement.household, dash: none}
+  - {arrow: advice_report.household, dash: none}
+# Timeline (RV-V31): a scheme parameter is valid from `valid_from` up to, not on, `valid_until` (the schema's
+# "exclusive", the sheet's half-open phase). A new value is a new row, so the versions of one name stand in a row.
+timelines:
+  - id: parameter_validity
+    title_message: timeline.parameter_validity
+    rows: scheme_parameter
+    label: scheme_parameter.name
+    start: scheme_parameter.valid_from
+    end: scheme_parameter.valid_until
+    main_message: timeline.parameter_validity.valid

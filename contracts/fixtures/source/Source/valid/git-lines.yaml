@@ -1,0 +1,4 @@
+kind: git
+name: example/docs
+revision: "0123456789abcdef0123456789abcdef01234567"
+position: guide/manual.adoc#L12-L24

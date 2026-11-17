@@ -1,0 +1,8 @@
+id: E02
+status: settled
+mode: parse
+source: 'ask h: Host where h.memory_need > 384 GiB show h, h.memory_need'
+expect:
+  print: 'ask h: Host where h.memory_need > 384 GiB show h, h.memory_need'
+sources:
+- '#350 P10.2a §11'

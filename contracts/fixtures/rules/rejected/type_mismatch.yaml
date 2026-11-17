@@ -1,0 +1,25 @@
+# A negated literal compares an integer variable with a string column.
+format: rede.rules/1
+pack: fixture
+relations:
+  - name: score
+    role: base
+    key: [{name: member, type: string}, {name: n, type: integer}]
+  - name: banned
+    role: base
+    key: [{name: id, type: string}]
+  - name: allowed
+    role: derived
+    key: [{name: member, type: string}]
+    module: access
+    explain: on_demand
+rules:
+  - id: allowed
+    module: access
+    stratum: "1"
+    head: {relation: allowed, terms: ["?m"]}
+    body:
+      - {relation: score, terms: ["?m", "?n"], polarity: positive, stratum: "0"}
+      - {relation: banned, terms: ["?n"], polarity: negative, stratum: "0"}
+    witness: {relation: allowed__witness, variables: ["?m", "?n"]}
+    origin: {file: rules/access.dl, line: "1"}

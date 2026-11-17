@@ -1,0 +1,10 @@
+# No fractions in a scale: an exponent is a numerator and a denominator.
+relief:
+  region: region
+  member: item__in_region
+  height:
+    channel: elevation
+    slot: region__total
+    level: quantitative
+    meaning_message: channel.total
+    scale: {zero: 0, exponent_numerator: 1.5, exponent_denominator: 1, unit_message: channel.unit}

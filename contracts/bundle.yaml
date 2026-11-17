@@ -1,0 +1,461 @@
+id: https://rede.dev/contracts/bundle
+name: rede_bundle
+title: Schema bundle
+description: >-
+  What the compiler gives the viewer: the olog of one pack, its labels and messages, its page
+  templates and its part of the key. The compiler writes exactly this (bundle/schema-bundle.json);
+  the viewer reads it only through viewer/src/lib/contract/bundle.ts. Element ids are language
+  neutral: a kind (`task`), a slot (`task.project`), a key or path equation (`task.same_project`),
+  an enum (`task_status`) and its values (`task_status.open`). Integers cross this boundary as
+  decimal text.
+prefixes:
+  linkml: https://w3id.org/linkml/
+  rede: https://rede.dev/contracts/
+default_prefix: rede
+default_range: string
+imports:
+  - linkml:types
+  - view
+  - explain
+
+types:
+  DecimalInteger:
+    typeof: string
+    pattern: "^-?(0|[1-9][0-9]*)$"
+    description: A whole number as canonical decimal text, so JavaScript never loses precision.
+
+enums:
+  World:
+    description: Decision W6.
+    permissible_values:
+      closed: {description: A missing row is not true.}
+      open: {description: A row that is there is true; a missing row is unknown.}
+  Layer:
+    permissible_values: {source: {}, facts: {}, conclusions: {}, plan: {}, output: {}, observation: {}}
+  Plane:
+    description: "Decision O13 and DV1: the plane of a kind. Only control is ever written; a data-plane kind leaves `plane` out."
+    permissible_values:
+      control: {description: "Decided values: rows a reviewed proposal sets, each naming its decision. Admission refuses a direct delta on them."}
+  ValueType:
+    description: The type of a value in the engine. Arrows carry the id type of their target.
+    permissible_values: {text: {}, integer: {}, boolean: {}, date: {}, enum: {}}
+  Derivation:
+    permissible_values: {fact: {}, conclusion: {}}
+  SemanticCase:
+    description: "The S3 case of a value (B09, `rede_compiler.types.Type.case`). Derived wins over money and quantity; its unit or currency stays on the type."
+    permissible_values: {scalar: {}, quantity: {}, money: {}, date: {}, enum: {}, ref: {}, derived: {}}
+  SemanticBase:
+    description: "What a value is stored as: a scalar, or `number` for a calculation's exact fraction."
+    permissible_values: {string: {}, integer: {}, boolean: {}, date: {}, number: {}}
+  Check:
+    permissible_values:
+      identification: {}
+      totality: {}
+      functionality: {}
+      reference: {}
+      value_range: {}
+      unique: {}
+      path_equation: {}
+      pattern: {}
+      cardinality: {}
+      rule: {}
+
+  RuleColumnType:
+    permissible_values: {string: {}, integer: {}}
+  ExplainMode:
+    permissible_values: {materialize: {}, on_demand: {}}
+  AggregateFunction:
+    permissible_values: {count: {}, sum: {}, min: {}, max: {}}
+  RuleLiteralKind:
+    description: "What one literal of a rule body is (MOD14)."
+    permissible_values:
+      atom: {description: "A relation read with `terms`; `negative` for `!relation(…)`."}
+      comparison: {description: "`op` over its two `terms`."}
+      assignment: {description: "`result` bound to `op` over its two `terms`."}
+      aggregate: {description: "`result` bound to `function` over the rows of `relation` that match `terms`."}
+  RuleTermKind:
+    permissible_values:
+      variable: {description: "`?name`. A `_` in a positive atom is a variable of its own (`?anon_<n>`), as in the rule IR."}
+      constant: {description: "Text, or a whole number as decimal text, as in the rule IR."}
+      wildcard: {description: "`_`: in an aggregate only, a column the aggregate neither groups on nor folds."}
+  RulePolarity:
+    permissible_values:
+      positive: {}
+      negative: {description: "Negation as failure; only an atom."}
+  RuleOperator:
+    description: "The operator of a comparison (eq, ne, lt, le, gt, ge) or an assignment (add, sub, mul, div, days), as in the rule IR (contracts/rules.yaml)."
+    permissible_values: {eq: {}, ne: {}, lt: {}, le: {}, gt: {}, ge: {}, add: {}, sub: {}, mul: {}, div: {}, days: {}}
+
+classes:
+  Bundle:
+    tree_root: true
+    attributes:
+      format: {required: true, pattern: "^rede\\.schema-bundle/1$"}
+      pack: {range: PackInfo, required: true, inlined: true}
+      imports: {range: ImportedPack, multivalued: true, inlined_as_list: true, description: "Every pack this pack imports, also indirectly, by name; each pinned on its hash."}
+      schemas: {range: SchemaFile, multivalued: true, inlined_as_list: true, required: true}
+      layers: {range: Layer, multivalued: true, required: true}
+      order: {multivalued: true, required: true, description: "Kind ids by layer, then by id. Map layouts read left to right in this order."}
+      kinds: {range: Kind, multivalued: true, inlined_as_list: true, required: true}
+      arrows: {range: Arrow, multivalued: true, inlined_as_list: true}
+      attributes: {range: Attribute, multivalued: true, inlined_as_list: true}
+      enums: {range: PackEnum, multivalued: true, inlined_as_list: true}
+      unique_keys: {range: UniqueKey, multivalued: true, inlined_as_list: true}
+      path_equations: {range: PathEquation, multivalued: true, inlined_as_list: true}
+      rules: {range: Rule, multivalued: true, inlined_as_list: true, description: Derivation rules; from M2 on.}
+      relations: {range: DerivedRelation, multivalued: true, inlined_as_list: true, description: "Relations derived by rules (sets, contracts/rules.yaml); from M2 on."}
+      checks: {range: CheckView, multivalued: true, inlined_as_list: true}
+      pages: {range: Page, multivalued: true, inlined_as_list: true}
+      labels: {range: Label, multivalued: true, inlined_as_list: true}
+      messages: {range: MessageResource, multivalued: true, inlined_as_list: true, required: true}
+      channels: {range: Channels, required: true, inlined: true}
+      jurisdictions: {multivalued: true, description: Reserved for std-jurisdiction; empty in M1.}
+      questions: {range: Question, multivalued: true, inlined_as_list: true, description: "The explanation questions (contracts/explain.yaml): imported ones first, then the pack's own. Absent when there are none."}
+      reader_questions: {range: ReaderQuestion, multivalued: true, inlined_as_list: true, description: "The reader questions (contracts/explain.yaml, RV-C04): imported ones first, then the pack's own. Absent when there are none."}
+      reasons: {range: ReasonIri, multivalued: true, inlined_as_list: true, description: "The IRI of every reason code of the pack's named outcomes, by code (docs/ring2/iris.md section 4). Only when pack.yaml declares `iri:` (contracts/pack.yaml, PackIri); absent otherwise."}
+
+  PackInfo:
+    attributes:
+      id: {required: true}
+      version: {required: true}
+      default_language: {required: true, description: BCP 47 code.}
+      base: {pattern: "^https://[^ #?]+/$", description: "The pack's `base` as pack.yaml `iri:` declares it (contracts/pack.yaml, PackIri): the IRI under which one publication's names hang (docs/ring2/iris.md section 4). Absent: the pack declares none, and a reader takes its stand-in."}
+
+  ReasonIri:
+    description: A reason code and its IRI, `<namespace>reason/<code>`.
+    attributes:
+      code: {required: true, pattern: "^[a-z][a-z0-9_]*$"}
+      iri: {required: true, pattern: "^https://[^ #?]+/reason/[a-z][a-z0-9_]*$"}
+
+  ImportedPack:
+    description: A pack whose schema modules are part of this pack, pinned on the hash of its files.
+    attributes:
+      name: {required: true, pattern: "^[a-z][a-z0-9]*(-[a-z0-9]+)*$"}
+      version: {required: true}
+      sha256: {required: true, pattern: "^[0-9a-f]{64}$"}
+
+  SchemaFile:
+    description: One schema module, a LinkML file of this pack or of an imported pack.
+    attributes:
+      name: {required: true}
+      id: {required: true}
+      file: {required: true, description: The path within its own pack.}
+      module: {required: true, description: "`<path under schema/>`, or `<pack>:<path>` for a module of an imported pack."}
+      pack: {required: true, description: The pack the module belongs to.}
+
+  Sentence:
+    description: >-
+      A message id and its arguments. Every argument value is an element id; the viewer fills
+      `$name` with that element's label and `$name_gender` with its gender, or `other`.
+    attributes:
+      message: {required: true}
+      args: {range: Anything, required: true, inlined: true}
+      id: {description: "MOD2: `sentence:` and the stable id of the element it is said of. Present on the sentence of a kind, a slot, a unique key and a path equation."}
+      span: {range: Span, inlined: true, description: "MOD2: where that element is declared."}
+
+  Span:
+    description: "MOD2: where an element is written. The file as a rule origin names it (relative to its pack, `<pack>:` before a file of an imported pack); line and column count from 1, as decimal text."
+    attributes:
+      file: {required: true}
+      line: {required: true, pattern: "^[1-9][0-9]*$"}
+      column: {required: true, pattern: "^[1-9][0-9]*$"}
+
+  Anything:
+    class_uri: linkml:Any
+
+  Kind:
+    attributes:
+      id: {required: true}
+      stable_id: {required: true, pattern: "^([a-z0-9_:/-]+/)?[A-Za-z][A-Za-z0-9_]*$", description: "MOD2: the id that a rename and an added element leave as it is (docs/compiler.md#stable-ids-and-spans). `id` stays the name the engine, labels and messages use."}
+      span: {range: Span, required: true, inlined: true, description: "MOD2: where it is declared."}
+      renamed_from: {description: "MOD2: the first name of a renamed class (annotation `renamed_from`), which its stable id keeps."}
+      class: {required: true, description: The LinkML class.}
+      layer: {range: Layer, required: true}
+      parent: {description: The kind this one is a part of (is_a).}
+      abstract: {range: boolean, required: true}
+      identifier: {description: The identifying slot; none for a kind that only exists inlined.}
+      id_type: {range: ValueType, required: true}
+      identifier_patterns: {multivalued: true, description: "Regular expressions every id must match (pattern on the identifier or its type)."}
+      module: {required: true, description: The schema module that declares the class.}
+      table: {required: true}
+      world: {range: World, description: "What a missing row means (decision W6): closed, not true; open, unknown. Left out: closed."}
+      sentence: {range: Sentence, inlined: true}
+      name_attribute: {description: "The attribute whose value names an element of this kind: its slot with `slot_uri: rdfs:label`, declared here or inherited. Left out: the kind has none."}
+      name_arrows: {multivalued: true, description: "For a kind without a name attribute that is identified by its ends (a unique key of single-valued arrows only, the first one): those arrows, in the key's order, if one of their ends has a name. An element is named by the names of its ends. Left out: it is named by its id."}
+      slot_roles: {range: SlotRoles, inlined: true, description: "Recognised slot_uri roles, declared here or inherited, as slot element ids (S26). Left out when none exist. name_attribute remains for existing readers."}
+      relationship: {range: boolean, description: "Present as true for a kind declared with represents_relationship (S27); its ends name it. Left out: an ordinary kind."}
+      ends: {multivalued: true, minimum_cardinality: 2, description: "For a relationship: the distinct single-valued arrows of its identifying unique key, in key order, as slot element ids (S27)."}
+      plane: {range: Plane, description: "control for a kind of decided values (DV1; Reckon Data L0 section 3.7): it has a required, single-valued slot `decision`, and admission takes its rows only from a reviewed proposal. Declared on this class; its subkinds are control kinds too. Left out: a data-plane kind."}
+      owner: {description: "For a control kind: the role or team that reviews a change to it."}
+      iri: {pattern: "^https://[^ #?]+/[A-Z][A-Za-z0-9]*$", description: "The kind's lasting IRI, `<namespace><class>`, from pack.yaml `iri:` of the pack that declares it, else of the compiled pack (contracts/pack.yaml, PackIri; docs/ring2/iris.md section 4). Absent when neither declares the block: a reader takes `<base><class>`."}
+      fold: {range: boolean, description: "Present as true for a helper kind the pack folds (`annotations: {explain: fold}`): an explanation shows no step of its own for it. Display only. Left out: not folded."}
+    rules:
+      - preconditions: {slot_conditions: {relationship: {value_presence: PRESENT}}}
+        postconditions: {slot_conditions: {ends: {required: true}}}
+      - preconditions: {slot_conditions: {plane: {value_presence: PRESENT}}}
+        postconditions: {slot_conditions: {owner: {required: true}}}
+      - preconditions: {slot_conditions: {owner: {value_presence: PRESENT}}}
+        postconditions: {slot_conditions: {plane: {required: true}}}
+
+  SlotRoles:
+    description: One single-valued attribute per recognised role of a kind (S26).
+    attributes:
+      name: {description: "rdfs:label: the text that names an element."}
+      description: {description: "schema:description: the element's description, as text."}
+      image: {description: "schema:image: the attribute naming a file in assets/ (B10)."}
+      order: {description: "schema:position: a whole-number ordering value."}
+      valid_from: {description: "schema:validFrom: the start of validity."}
+      valid_until: {description: "schema:validThrough: the end of validity."}
+      known_from: {description: "prov:generatedAtTime: when the row became known."}
+
+  Slot:
+    abstract: true
+    attributes:
+      id: {required: true}
+      stable_id: {required: true, pattern: "^.+#[A-Za-z][A-Za-z0-9_]*$", description: "MOD2: the id that a rename and an added element leave as it is (docs/compiler.md#stable-ids-and-spans). `id` stays the name the engine, labels and messages use."}
+      span: {range: Span, required: true, inlined: true, description: "MOD2: where it is declared."}
+      renamed_from: {description: "MOD2: the first name of a renamed slot (annotation `renamed_from`), which its stable id keeps."}
+      kind: {required: true, description: The kind that declares the slot.}
+      name: {required: true}
+      required: {range: boolean, required: true}
+      table: {required: true, description: The engine relation `<kind>__<slot>`.}
+      multivalued: {range: boolean, required: true, description: "A multivalued slot is a link kind: any number of rows per element, without a functionality check."}
+      minimum_cardinality: {range: DecimalInteger, description: Least number of distinct values; only on a multivalued slot.}
+      maximum_cardinality: {range: DecimalInteger, description: Most number of distinct values; only on a multivalued slot.}
+      world: {range: World, description: "What a missing row means (decision W6): closed, not true; open, unknown. Left out: closed."}
+      semantic: {range: SemanticType, required: true, inlined: true, description: "What the slot's value means (B10, S3b), so a consumer reads it instead of guessing. Cardinality and world stay on the slot."}
+      sentence: {range: Sentence, required: true, inlined: true}
+
+  SemanticType:
+    description: >-
+      The meaning of one value (B10, S3b), projected from the compiler's one type model (B09,
+      `rede_compiler.types.Type`). Only what the model knows is written; a field without a value is left out,
+      and nothing is inferred from a name. A dimension is not modelled yet (P10.3).
+    attributes:
+      case: {range: SemanticCase, required: true}
+      base: {range: SemanticBase, required: true, description: "What is stored. A reference stores its target root's identifier type."}
+      range: {description: "The schema's name as written: the LinkML type, enum or class."}
+      enum: {description: "An enum value: the enum it belongs to."}
+      open: {range: boolean, description: "Present as true for an open enum: values beyond the declared ones."}
+      target: {description: "A reference: the kind of the element it names."}
+      currency: {pattern: "^[A-Z]{3}$", description: "Money: whole minor units of this ISO 4217 currency."}
+      unit: {description: "A quantity: a number of this unit, as written; no conversion."}
+      derived: {description: "A derived value: the calc rule (or `rule@version`) or derived relation that computes it, its binding."}
+
+  Arrow:
+    is_a: Slot
+    attributes:
+      target: {required: true, description: The kind the arrow points to.}
+      inlined: {range: boolean, required: true}
+
+  Attribute:
+    is_a: Slot
+    attributes:
+      type: {range: ValueType, required: true}
+      schema_type: {required: true, description: "The LinkML range, for example a pack type such as Cents."}
+      derivation: {range: Derivation, required: true}
+      enum: {}
+      minimum: {range: DecimalInteger}
+      maximum: {range: DecimalInteger}
+      patterns: {multivalued: true, description: "Regular expressions every value must match (pattern on the slot or its type); see docs/compiler.md for the portable subset."}
+      constant: {description: "The one allowed value (equals_string or equals_number); an integer as decimal text."}
+      currency: {pattern: "^[A-Z]{3}$", description: "An amount: the integer values are whole minor units of this ISO 4217 currency (annotation `currency` on the slot or its type). The viewer shows them as money, exactly (contracts/value.yaml, Amount)."}
+
+  PackEnum:
+    description: >-
+      An enum of the pack with its values. Not named Enum: generated Python would shadow enum.Enum.
+    attributes:
+      id: {required: true}
+      values: {multivalued: true, required: true, description: Element ids of the permissible values.}
+
+  UniqueKey:
+    attributes:
+      id: {required: true}
+      kind: {required: true}
+      slots: {multivalued: true, required: true}
+      sentence: {range: Sentence, required: true, inlined: true}
+
+  PathEquation:
+    attributes:
+      id: {required: true}
+      kind: {required: true}
+      left: {multivalued: true, required: true}
+      right: {multivalued: true, required: true}
+      sentence: {range: Sentence, required: true, inlined: true}
+
+  Rule:
+    description: >-
+      A derivation rule as the viewer needs it. The message `rule.<id>` is optional in a pack; the viewer
+      then shows the rule id. Its variables are named without '?' in the message.
+    attributes:
+      id: {required: true}
+      stable_id: {required: true, pattern: "^[a-z][a-z0-9_]*~[0-9a-f]{12}$", description: "MOD2: the id that a rename and an added element leave as it is (docs/compiler.md#stable-ids-and-spans). `id` stays the name the engine, labels and messages use."}
+      span: {range: Span, required: true, inlined: true, description: "MOD2: where its head is written; for a rule a view generates, the view in views.yaml."}
+      message: {required: true}
+      relation: {description: The derived relation of the head.}
+      module: {description: The rule module (rules/<module>.dl).}
+      variables: {range: RuleVariable, multivalued: true, inlined_as_list: true}
+      aggregates: {range: RuleAggregate, multivalued: true, inlined_as_list: true, description: "The aggregates of the rule, in the order of the rule IR (contracts/rules.yaml), which the checker reads: what each folds. Left out for a rule without aggregates. A witness names its aggregate by `position` (contracts/proof.yaml), so a reader never guesses the function from the numbers."}
+      head: {range: RuleAtom, required: true, inlined: true, description: "The head of the rule (MOD14): its relation and terms, each typed by its column."}
+      body: {range: RuleLiteral, multivalued: true, inlined_as_list: true, required: true, description: "Every literal of the body in source order (MOD14), from the rule IR: atoms, comparisons, assignments and aggregates. A rule a view generates has no order as written; its body is its atoms, then its aggregates, assignments and comparisons, each in the order of the rule IR. Published for every role (O10)."}
+      origin: {range: RuleOrigin, inlined: true}
+
+  RuleAtom:
+    description: A relation and its terms.
+    attributes:
+      relation: {required: true}
+      terms: {range: RuleTerm, multivalued: true, inlined_as_list: true, required: true}
+
+  RuleTerm:
+    description: "One term, as the rule IR writes it, with its type: an atom's term that of its column; another a variable's own, a constant compared with a variable that variable's, any other constant that of its own form."
+    attributes:
+      kind: {range: RuleTermKind, required: true}
+      value: {required: true, description: "The term as in the rule IR: `?name`, `_` or the constant."}
+      type: {range: RuleColumnType, required: true}
+
+  RuleLiteral:
+    description: >-
+      One literal of a rule body (MOD14). The rule IR (contracts/rules.yaml) holds atoms, aggregates, assignments
+      and comparisons in four lists; here they are one list, in the order the rule was written. Filtered to atoms,
+      it is the IR's `body`; to aggregates, its `aggregates`.
+    attributes:
+      kind: {range: RuleLiteralKind, required: true}
+      position: {range: integer, required: true, minimum_value: 1, description: "The place of the literal in the body, from 1."}
+      polarity: {range: RulePolarity, required: true}
+      relation: {description: "The relation an atom or an aggregate reads."}
+      op: {range: RuleOperator, description: "The operator of a comparison or an assignment."}
+      terms: {range: RuleTerm, multivalued: true, inlined_as_list: true, required: true, description: "An atom's or an aggregate's terms, by column; a comparison's or an assignment's left and right."}
+      result: {range: RuleTerm, inlined: true, description: "The variable an assignment or an aggregate binds; an integer."}
+      function: {range: AggregateFunction, description: "The function of an aggregate."}
+      over: {description: "The column that an aggregate's `sum`, `min` or `max` folds; left out for `count`."}
+      aggregate_position: {range: integer, minimum_value: 0, description: "An aggregate's place in `aggregates` (from 0), the `position` a witness names it by."}
+    rules:
+      - preconditions: {slot_conditions: {kind: {equals_string: atom}}}
+        postconditions: {slot_conditions: {relation: {required: true}}}
+      - preconditions: {slot_conditions: {kind: {equals_string: comparison}}}
+        postconditions: {slot_conditions: {op: {required: true}, polarity: {equals_string: positive}}}
+      - preconditions: {slot_conditions: {kind: {equals_string: assignment}}}
+        postconditions: {slot_conditions: {op: {required: true}, result: {required: true}, polarity: {equals_string: positive}}}
+      - preconditions: {slot_conditions: {kind: {equals_string: aggregate}}}
+        postconditions: {slot_conditions: {relation: {required: true}, function: {required: true}, result: {required: true}, aggregate_position: {required: true}, polarity: {equals_string: positive}}}
+
+  RuleAggregate:
+    description: >-
+      One aggregate of a rule, said once per rule and not per witness: the function is the rule's, not a row's.
+    attributes:
+      position: {range: integer, required: true, description: "The place of the aggregate in the rule (from 0), as `position` on a witness's aggregate."}
+      relation: {required: true, description: The relation that is aggregated.}
+      function: {range: AggregateFunction, required: true}
+      over: {description: "The column that `sum`, `min` or `max` folds; left out for `count`."}
+
+  RuleVariable:
+    attributes:
+      name: {required: true, pattern: "^\\?[a-z][a-z0-9_]*$"}
+      type: {required: true, range: RuleColumnType}
+
+  RuleOrigin:
+    attributes:
+      file: {required: true}
+      line: {required: true, pattern: "^(0|[1-9][0-9]*)$"}
+
+  DerivedRelation:
+    attributes:
+      extend: {range: boolean, description: "True: the owning pack explicitly permits consumers to add rules (S28). Without rules the relation is empty."}
+      id: {required: true, description: The relation name; also the element id of its label.}
+      module: {required: true}
+      explain: {required: true, range: ExplainMode}
+      columns: {range: RuleColumn, multivalued: true, inlined_as_list: true, required: true}
+      world: {range: World, description: "What a missing row means (decision W6): closed, not true; open, unknown. Left out: closed."}
+      absence: {range: boolean, description: "True: the relation says what is not recorded (`// @absence`); closed, and it may negate an open relation."}
+      semantic: {range: SemanticType, inlined: true, description: "For a calculation's view (`calc`): the type of its value column, derived by the rule it names, with its unit (B10). Left out: not a calculation."}
+      outcome: {description: "A named outcome (decision W7): the kind whose every element has one state (column `state`) and a reason (column `reason`, message `reason.<reason>`)."}
+      closes: {description: "The derived relation this one closes (decision W14, `// @closes <relation>`): a row states, for its key, that no row of that relation holds there, and its proof says why. The key is a prefix of that relation's columns. The invariant `<id>_closes_<relation>` holds the two apart."}
+      checks: {multivalued: true, description: "The engine views that check a named outcome (`<relation>__total`, `<relation>__state`); a row in one is a red check."}
+      fold: {range: boolean, description: "Present as true for a helper relation the pack folds (`// @explain fold`): an explanation shows the premises of its step in its place and no step named after it. Display only, and apart from `explain`, which says how its witnesses are kept; the rule IR does not carry it. Left out: not folded."}
+      calc: {description: "A calculation's view (decision W12): the rule, or rule@version for a version another rule names. Its rows are (subject, value, state, reason), each explained by a CalcWitness; module calc."}
+
+  RuleColumn:
+    attributes:
+      name: {required: true}
+      type: {required: true, range: RuleColumnType}
+      currency: {pattern: "^[A-Z]{3}$", description: "An amount, where the rules determine it: whole minor units of this ISO 4217 currency, as `currency` on an Attribute. Derived, never declared: the column is bound to an amount attribute, or to a `sum`, `min` or `max` over an amount column, or to a sum or difference of such amounts, in every rule of the relation. A count, a product and a quotient have none. Two currencies in one variable or one column is a compiler error."}
+
+  CheckView:
+    description: >-
+      One logical check: a check kind on one slot, key or rule. With decision E11 the engine holds the rows of
+      all logical checks of one kind in one view (`relation`), and which slot has which check is a metadata row.
+    attributes:
+      view: {required: true, description: "The name of the logical check, `<kind>__<subject>__<check>` or `<kind>__<check>`: `validation_result.info` and the manifest's check name. Until E11 is built, also the engine view."}
+      relation: {description: "The engine view that holds this check's rows, `rede__<check>` (E11). Absent until E11 step 2; then required."}
+      check: {range: Check, required: true}
+      kind: {required: true}
+      subject: {}
+      path: {}
+      sentence: {range: Sentence, inlined: true, description: "`check.<check>` with the kind and slot as arguments (E11 step 5)."}
+
+  Page:
+    attributes:
+      kind: {required: true}
+      path: {required: true}
+      fields: {multivalued: true, description: "Slot element ids, inherited slots included."}
+
+  Label:
+    description: One fact label(element, lang, text).
+    attributes:
+      element: {required: true}
+      lang: {required: true}
+      text: {required: true}
+      gender: {}
+
+  MessageResource:
+    description: One MessageFormat 2 resource (`@locale`, `---`, then `id = message`).
+    attributes:
+      lang: {required: true}
+      resource: {required: true}
+
+  Channels:
+    description: "The pack's part of the key; colour roles, glyphs and statuses come from std-view, and a house style gives the pack's own values for some of those roles."
+    attributes:
+      kinds: {range: KindSign, multivalued: true, inlined_as_list: true}
+      arrows: {range: ArrowSign, multivalued: true, inlined_as_list: true}
+      relief: {range: ReliefSheet, inlined: true, description: "The pack's relief binding, by element id (`<kind>.<slot>`), checked by the compiler."}
+      flows: {range: FlowSheet, multivalued: true, inlined_as_list: true, description: "Flow sheets, by element id (`<kind>.<slot>`) and relation name, checked by the compiler."}
+      matrices: {range: MatrixSheet, multivalued: true, inlined_as_list: true, description: "Matrix sheets, by element id (`<kind>.<slot>`) and relation name, checked by the compiler."}
+      timelines: {range: TimelineSheet, multivalued: true, inlined_as_list: true, description: "Timeline sheets, by element id (`<kind>.<slot>`), checked by the compiler."}
+      nests: {range: NestSheet, multivalued: true, inlined_as_list: true, description: "Nest sheets, by element id (`<kind>.<slot>`) and relation name, checked by the compiler."}
+      reports: {range: ReportSheet, multivalued: true, inlined_as_list: true, description: "Reports, by element id (`<kind>.<slot>`), checked by the compiler."}
+      home: {range: HomeSheet, inlined: true, description: "The pack home's hero and claim, from the pack's own channel table or one import's (one home per pack), checked by the compiler."}
+      house_style: {range: HouseStyle, inlined: true, description: "The pack's house style, from the pack's own channel table or one import's (one house style per pack), checked by the compiler: palettes in the order light, dark, print, and in each the roles sorted by name."}
+      images: {range: ImageBinding, multivalued: true, inlined_as_list: true, description: "The image slot per kind, by element id, sorted by kind (decision B10)."}
+      icons: {range: Icon, multivalued: true, inlined_as_list: true, description: "The icons the kind signs name, by sha256, checked by the compiler against the safe list (docs/gui.md#icons-and-images)."}
+      sources: {range: ChannelSource, multivalued: true, inlined_as_list: true, description: "MOD2: where each binding above is written, sorted by id. Left out when the pack binds nothing."}
+
+  ChannelSource:
+    attributes:
+      id: {required: true, pattern: "^(relief|home|house_style|(kinds|arrows|flows|matrices|timelines|nests|reports|images)/.+)$", description: "The binding: `<section>/<kind, arrow or sheet id>`, or the section of the one relief, home or house style."}
+      span: {range: Span, required: true, inlined: true}
+
+  Icon:
+    description: >-
+      An icon of a kind (decision B10): an SVG of the pack, as a tree of safe elements, never as text. The viewer
+      draws it in ink (currentColor) at icon.size; every paint in it is none or currentColor.
+    attributes:
+      sha256: {identifier: true, pattern: "^[0-9a-f]{64}$", description: SHA-256 of the file's bytes.}
+      file: {required: true, description: "The file in the pack that names it, such as icons/server.svg."}
+      source: {required: true, description: "Where it comes from, pinned: <repository>@<commit>:<path>, or a URL."}
+      licence: {required: true, description: An SPDX id or a licence file in the pack.}
+      view_box: {required: true, description: The root's viewBox.}
+      attributes: {range: IconAttribute, multivalued: true, inlined_as_list: true, description: "The root's other attributes, such as stroke and stroke-width, sorted by name."}
+      children: {range: IconElement, multivalued: true, inlined_as_list: true, description: The root's elements in document order.}
+
+  IconElement:
+    description: One element of an icon, from the safe list (g, path, circle, ellipse, rect, line, polyline, polygon).
+    attributes:
+      tag: {required: true}
+      attributes: {range: IconAttribute, multivalued: true, inlined_as_list: true, description: Sorted by name.}
+      children: {range: IconElement, multivalued: true, inlined_as_list: true}
+
+  IconAttribute:
+    attributes:
+      name: {required: true}
+      value: {required: true}

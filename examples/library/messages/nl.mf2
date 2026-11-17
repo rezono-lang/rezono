@@ -1,0 +1,42 @@
+@locale nl
+---
+# Zinnen bij de olog in ICU MessageFormat 2, één bericht per id.
+# Een bericht begint in de eerste kolom met "id ="; vervolgregels springen in.
+# Elk argument is een element-id. De viewer vult $x met het label van x en
+# $x_gender met het geslacht van dat label, of "other" als het er niet is.
+arrow.total =
+  .input {$kind_gender :string}
+  .match $kind_gender
+  neuter {{Elk {$kind} heeft precies één {$arrow}.}}
+  * {{Elke {$kind} heeft precies één {$arrow}.}}
+arrow.partial =
+  .input {$kind_gender :string}
+  .match $kind_gender
+  neuter {{Elk {$kind} heeft hoogstens één {$arrow}.}}
+  * {{Elke {$kind} heeft hoogstens één {$arrow}.}}
+attribute.total =
+  .input {$kind_gender :string}
+  .match $kind_gender
+  neuter {{Elk {$kind} heeft precies één {$attribute}.}}
+  * {{Elke {$kind} heeft precies één {$attribute}.}}
+attribute.partial =
+  .input {$kind_gender :string}
+  .match $kind_gender
+  neuter {{Elk {$kind} heeft hoogstens één {$attribute}.}}
+  * {{Elke {$kind} heeft hoogstens één {$attribute}.}}
+attribute.many.partial =
+  .input {$kind_gender :string}
+  .match $kind_gender
+  neuter {{Elk {$kind} kan meer dan één {$attribute} hebben.}}
+  * {{Elke {$kind} kan meer dan één {$attribute} hebben.}}
+is_a =
+  .input {$kind_gender :string}
+  .match $kind_gender
+  neuter {{Elk {$kind} is een {$parent}.}}
+  * {{Elke {$kind} is een {$parent}.}}
+unique_key = {$key} hoort bij hoogstens één {$kind}.
+path_equation =
+  .input {$kind_gender :string}
+  .match $kind_gender
+  neuter {{Voor elk {$kind} geldt: {$equation}.}}
+  * {{Voor elke {$kind} geldt: {$equation}.}}

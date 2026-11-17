@@ -1,0 +1,7 @@
+id: measurements/node-1/revision-1
+subject: node-1
+attribute: node.label
+value: {value: First node, state: known}
+event_time: "2026-11-06T10:15:00Z"
+source: {kind: query, name: measurements}
+expectation: {relation: node__label, key: '["node-1","First node"]'}

@@ -1,0 +1,14 @@
+# A cardinality is a whole number as decimal text.
+id: outage.target
+stable_id: "Outage#target"
+span: {file: schema/core.yaml, line: "4", column: "3"}
+kind: outage
+name: target
+required: false
+table: outage__target
+multivalued: true
+maximum_cardinality: "1.5"
+target: infrastructure
+inlined: false
+sentence: {message: arrow.multivalued, args: {kind: outage, arrow: outage.target, range: infrastructure}, id: "sentence:Outage#target", span: {file: schema/core.yaml, line: "4", column: "3"}}
+semantic: {case: ref, base: string, range: infrastructure, target: infrastructure}

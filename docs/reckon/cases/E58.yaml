@@ -1,0 +1,44 @@
+id: E58
+status: settled
+mode: evaluate
+source: ask Host where (Host where it.memory_need > 300 GiB).count() = 2
+data: appendix-b
+role: viewer
+expect:
+  answer:
+    rows: []
+    undecided:
+    - binder: host-a
+      state: unknown
+      reason: no_spec
+      cause:
+        relation: host__memory_need
+        key:
+        - host-d
+    - binder: host-b
+      state: unknown
+      reason: no_spec
+      cause:
+        relation: host__memory_need
+        key:
+        - host-d
+    - binder: host-c
+      state: unknown
+      reason: no_spec
+      cause:
+        relation: host__memory_need
+        key:
+        - host-d
+    - binder: host-d
+      state: unknown
+      reason: no_spec
+      cause:
+        relation: host__memory_need
+        key:
+        - host-d
+    not_applicable: 0
+note: A filter is a decision point. host-a and host-c are in, host-b is out, and host-d stays with its unknown on its
+  membership. A count is strict in the memberships and does not reason about bounds, so it is unknown on every row.
+sources:
+- expressions.md §7 (sets and absence), formerly §13 point 14
+- arbiter, 11-11-2026, on #696

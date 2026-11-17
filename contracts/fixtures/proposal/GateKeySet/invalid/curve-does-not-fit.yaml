@@ -1,0 +1,6 @@
+keys:
+- kid: gate-2031-01
+  alg: EdDSA
+  kty: OKP
+  crv: P-256
+  x: 11qYAYKxCrfVS_7TyWQHOg7hcvPapiMlrwIaaPcHURo

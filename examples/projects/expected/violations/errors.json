@@ -1,0 +1,12 @@
+{
+  "budget_line__amount__value_range": [["b2", -500]],
+  "dependency__dependency_pair__unique": [["d1"], ["d4"]],
+  "dependency__prerequisite__reference": [["d3", "t99"]],
+  "project__identification": [["p1", 2]],
+  "project__project_name__unique": [["p1"], ["p3"]],
+  "task__estimate__value_range": [["t9", 500]],
+  "task__project__totality": [["t5"]],
+  "task__same_project__path_equation": [["t7", "p1", "p2"]],
+  "task__status__functionality": [["t6", 2]],
+  "task__status__value_range": [["t8", "bezig"]]
+}

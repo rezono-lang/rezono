@@ -1,0 +1,7 @@
+format: rede.operations/1
+pack: example
+operations:
+  - op: select
+    keep: [{kind: Core}]
+    omit: [{kind: Helper}]
+    accept_loss: true

@@ -1,0 +1,5 @@
+id: effect-1
+plan_hash: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\n"
+budget_cents: 150
+currency: EUR
+dry_run_ref: {relation: dry_run, key: '["dry-run-1"]'}

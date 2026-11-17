@@ -1,0 +1,9 @@
+format: rede.answer/1
+question: scenario
+manifest_id: m-1
+delta: {kind: proposal, id: '7', manifest: p-7-2}
+nodes: []
+difference:
+  counts: []
+  entries:
+    - {relation: b, key: '["b1"]', change: moved}

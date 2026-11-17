@@ -1,0 +1,54 @@
+# A pack's invariants as SHACL-SPARQL constraints (shacl_sparql.py; M08, second half), read by a SHACL validator
+# with SPARQL-based constraints: what it does not get of Rede's checks. The constraints are plain SHACL and
+# SPARQL 1.1: no extension. test_shacl_sparql.py holds the translation to Rede's own result on a fixture pack.
+connector: shacl-sparql-out
+standard: SHACL
+standard_version: "2017-07-20"
+direction: out
+losses:
+  - subject: check
+    what: >-
+      An invariant over a recursive relation. SPARQL has no fixpoint, so its shape is deactivated
+      (`sh:deactivated true`) and its message says why; the validator does not check it.
+    fate: weakened
+    carried_by: ["sh:deactivated", "sh:message"]
+  - subject: check
+    what: >-
+      An invariant that reads an outcome (W7), a calculation input or a relation the view does not carry.
+      Its shape is deactivated with the reason, as for recursion.
+    fate: weakened
+    carried_by: ["sh:deactivated", "sh:message"]
+  - subject: check
+    what: >-
+      The seal (E3) once a close is in the view. Whether a row is refused depends on its row hash, which the
+      view does not carry, so an invariant that reads accepted rows is decided only while no close is there.
+      With a close the shape reports that it cannot decide, never that the data conforms.
+    fate: weakened
+    carried_by: ["sh:sparql"]
+  - subject: check
+    what: >-
+      The integrity checks of the schema (totality, functionality, reference, value range, pattern) are the
+      Core shapes of shacl-out. Unique keys, path equations and the class rules of the schema are in neither.
+    fate: dropped
+  - subject: identity
+    what: >-
+      Which row of the derived relation a result is. A result names the relation (its IRI in the view) as
+      the focus node and the row as its value: the columns in their canonical form, a text percent-encoded
+      and an integer in decimal, joined by `/`. It is not the IRI the view gives that row.
+    fate: weakened
+    carried_by: ["sh:value"]
+  - subject: proof
+    what: >-
+      Why a row breaks the invariant: the witness of the derivation. A validator reports the row, not the
+      rule applications that made it.
+    fate: dropped
+  - subject: text
+    what: >-
+      The sentence of the invariant in the pack's languages. A result's message is the relation's name and
+      the row.
+    fate: dropped
+  - subject: access
+    what: >-
+      Which role the view was made for. The constraints are the same for every role; on a view that hides
+      rows from a role, a validator checks what that role reads.
+    fate: dropped

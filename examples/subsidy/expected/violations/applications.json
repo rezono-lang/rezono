@@ -1,0 +1,13 @@
+{
+ "cost_line__item__reference": [
+  ["L0001", "heat-pump"],
+  ["L0002", "roof-insulation"],
+  ["L0003", "scaffolding"],
+  ["L0004", "wall-insulation"],
+  ["L0005", "insulating-glazing"],
+  ["L0006", "heat-pump"],
+  ["L0007", "floor-insulation"],
+  ["L0008", "roof-insulation"],
+  ["L0009", "solar-boiler"]
+ ]
+}

@@ -1,0 +1,14 @@
+# An undo as the writer returns it: with the exact lines to put back (restore), here one value.
+format: rede.delta/1
+pack: library
+changes:
+  - op: set
+    file: facts/valid.yaml
+    kind: work
+    key: w1
+    slot: year
+    value: "1948"
+    restore:
+      at: 13
+      old: "  - {id: w1, title: De avonden, category: c1, year: 1947}\n"
+      new: "  - {id: w1, title: De avonden, category: c1, year: 1948}\n"

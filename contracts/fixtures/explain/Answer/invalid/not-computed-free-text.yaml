@@ -1,0 +1,8 @@
+format: rede.answer/1
+question: consequence
+manifest_id: m-1
+start: {relation: decision, key: '["d2"]'}
+nodes:
+  - {relation: decision, key: '["d2"]', distance: 0}
+computed: true
+not_computed: No variant was published

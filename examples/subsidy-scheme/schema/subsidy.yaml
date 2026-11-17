@@ -1,0 +1,146 @@
+id: https://rede.example/subsidy
+name: subsidy
+description: >-
+  A municipal energy-saving subsidy scheme, entirely synthetic: the regulation and the decisions that
+  set its amounts, households and their applications with quoted costs, and the registers a case
+  officer consults. The award follows from these by rules (rules/, calc/); nothing here stores it.
+in_language: en
+prefixes:
+  linkml: https://w3id.org/linkml/
+  rdfs: http://www.w3.org/2000/01/rdf-schema#
+  schema: http://schema.org/
+imports:
+  - linkml:types
+  - std-decision:decision
+default_range: string
+annotations:
+  layer: facts
+
+types:
+  Cents:
+    typeof: integer
+    description: An amount in whole euro cents.
+    annotations: {currency: EUR}
+
+enums:
+  Eligibility:
+    description: Whether the regulation counts a cost towards the subsidy (article 3).
+    permissible_values: {eligible: {}, not_eligible: {}}
+  ParameterUnit:
+    description: What the whole number of a parameter counts.
+    permissible_values: {cents: {}, ppm: {}}
+
+classes:
+  Article:
+    description: >-
+      An article of the Energy-Saving Subsidy Regulation 2026. Origin: the regulation as published.
+    attributes:
+      id: {identifier: true}
+      title: {required: true, slot_uri: rdfs:label}
+      text: {required: true, slot_uri: schema:description, description: What the article says.}
+
+  SchemeParameter:
+    description: >-
+      An amount or rate of the scheme, valid from a date until (exclusive) another. Origin: the decision
+      that set it, under the article that uses it. A new value is a new row, never an edit. The decision
+      is a Decision of the standard pack std-decision: who took it, when, from when it applies and how it
+      stands are its slots, and its rules say whether it is in force on a reference date. A decided value
+      (plane: control): a new row comes only from a reviewed proposal, which the policy adviser reviews.
+    annotations:
+      plane: control
+      owner: policy_adviser
+    attributes:
+      id: {identifier: true}
+      name:
+        required: true
+        pattern: "^[a-z][a-z0-9_]*$"
+        description: The name a calculation rule reads. Of the rows with one name, the row valid on the evaluation date is chosen.
+      value: {range: integer, required: true, minimum_value: 0}
+      unit: {range: ParameterUnit, required: true}
+      valid_from: {range: date, required: true, slot_uri: schema:validFrom}
+      valid_until: {range: date, required: true, slot_uri: schema:validThrough, description: Exclusive.}
+      calendar: {range: Calendar, required: true, description: The calendar its two dates are days of.}
+      article: {range: Article, required: true}
+      decision: {range: Decision, required: true}
+
+  Calendar:
+    description: >-
+      A calendar whose days the scheme counts: the axis on which a validity and a reference day are
+      compared (std-time reads it as its Axis, views.yaml). Origin: a design choice of this example. The
+      regulation dates everything by the civil calendar, so the pack has one.
+    attributes:
+      id: {identifier: true}
+      title: {required: true, slot_uri: rdfs:label}
+
+  EvaluationDay:
+    is_a: ReferenceDate
+    description: >-
+      The reference date of the scheme, with what std-time needs to read validity at it (views.yaml reads
+      it as a ReferencePoint): the calendar its day is a day of, and how far ahead an end counts as near.
+      The same element as the ReferenceDate of std-decision, never a second day. Origin: a design choice of
+      this example, as the reference date is.
+    attributes:
+      calendar: {range: Calendar, required: true}
+      horizon:
+        range: integer
+        required: true
+        minimum_value: 0
+        description: >-
+          The number of days ahead of the day within which the end of a validity counts as near. Origin: a
+          design choice of this example: the council sets the amounts of the next year in the last quarter,
+          so an amount that ends within ninety days is one to decide about now.
+
+  CostItem:
+    description: >-
+      A kind of cost a quote can name. Origin: the regulation, which lists the measures that count and
+      the costs that do not (article 3).
+    attributes:
+      id: {identifier: true}
+      title: {required: true, slot_uri: rdfs:label}
+      eligibility: {range: Eligibility, required: true}
+      article: {range: Article, required: true}
+
+  Household:
+    description: >-
+      A household that applies. Origin: an observation, the population register as consulted for the
+      application.
+    attributes:
+      id: {identifier: true}
+      persons: {range: integer, required: true, minimum_value: 1}
+
+  Application:
+    description: >-
+      An application for the subsidy. Origin: an observation, the application form as received.
+    attributes:
+      id: {identifier: true}
+      household: {range: Household, required: true}
+      claimed_costs: {range: Cents, required: true, minimum_value: 0, description: The total cost the applicant states on the form.}
+
+  CostLine:
+    description: >-
+      One line of a quote submitted with an application. Origin: an observation, the quote as received.
+      An application without any line has no quote yet: its costs are unknown, not zero.
+    attributes:
+      id: {identifier: true}
+      application: {range: Application, required: true}
+      item: {range: CostItem, required: true}
+      amount: {range: Cents, required: true, minimum_value: 0}
+
+  IncomeStatement:
+    description: >-
+      The verified yearly income of a household. Origin: an observation, the statement of the income
+      register. Open world: a household without a statement has an unknown income, never an income of zero.
+    annotations:
+      world: open
+    attributes:
+      id: {identifier: true}
+      household: {range: Household, required: true}
+      income: {range: Cents, required: true, minimum_value: 0}
+
+  AdviceReport:
+    description: >-
+      A registered energy-advice report for a household. Origin: an observation, the advice register.
+      Closed world: the register is complete, so a household without a report took no advice.
+    attributes:
+      id: {identifier: true}
+      household: {range: Household, required: true}

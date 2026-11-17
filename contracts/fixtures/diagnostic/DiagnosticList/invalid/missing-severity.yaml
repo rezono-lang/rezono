@@ -1,0 +1,3 @@
+diagnostics:
+  - code: wrong_type
+    where: Host[3].memory

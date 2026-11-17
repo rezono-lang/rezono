@@ -1,0 +1,64 @@
+# Neutrale labels van std-decision. Een domein geeft zijn eigen woorden in zijn eigen labels en berichten.
+decision: {text: besluit, gender: neuter}
+decision.title: titel
+decision.subject: onderwerp
+decision.decider: besloten door
+decision.decided_on: besloten op
+decision.valid_from: geldig vanaf
+decision.valid_until: geldig tot
+decision.valid_from_day: geldig vanaf (dagnummer)
+decision.valid_until_day: geldig tot (dagnummer)
+decision.state: status
+decision.supersedes: vervangt
+decision.reassesses: herbeoordeelt
+decision.rationale: motivering
+ground: {text: grond, gender: common}
+ground.decision: besluit
+ground.rests_on: rust op
+ground.ground_pair: Elke combinatie van een besluit en een besluit waarop het rust
+decision_state: status van een besluit
+decision_state.proposed: voorgesteld
+decision_state.in_force: van kracht
+decision_state.superseded: vervangen
+decision_state.withdrawn: ingetrokken
+subject: {text: onderwerp, gender: neuter}
+subject.title: titel
+reference_date: {text: peildatum, gender: common}
+reference_date.title: naam
+reference_date.day: dagnummer
+replaces: vervangt
+supersession_cycle: kring van vervangen besluiten
+window_inverted: einde niet na begin
+took_effect: ingegaan
+ended: geëindigd
+replaced: vervangen
+was_replaced: vervangen
+in_force_on: van kracht
+has_successor: heeft een opvolger
+superseded_in_force: vervangen en toch van kracht
+has_decider: heeft een beslisser
+in_force_without_decider: van kracht zonder beslisser
+has_start: heeft een eerste dag
+in_force_without_start: van kracht zonder eerste dag
+# De verantwoordingslaag: waarom een besluit zo is (EX9). Een uitleg toont dit naast het bewijs.
+decision.warrant: steunt op
+decision.owner: eigenaar
+decision.review_on: herbeoordeling op
+purpose: {text: doel, gender: neuter}
+purpose.decision: besluit
+purpose.title: wat het dient
+purpose.served: voor wie
+principle: {text: principe, gender: neuter}
+principle.title: principe
+principle.decision: vastgesteld door
+alternative: {text: verworpen alternatief, gender: neuter}
+alternative.decision: besluit
+alternative.title: alternatief
+alternative.reason: waarom verworpen
+exception: {text: uitzondering, gender: common}
+exception.decision: besluit
+exception.title: wat is uitgezonderd
+withdrawn_without_start: ingetrokken zonder eerste dag
+proposal: voorstel
+ground_chain: rust op, direct of via andere besluiten
+ground_cycle: kring van gronden

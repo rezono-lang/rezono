@@ -1,0 +1,8 @@
+format: rede.view-build/1
+files: [{path: viewer/package-lock.json}]
+node:
+  executable_sha256: bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+  version: v24.0.0
+  platform: linux
+  architecture: x64
+  versions: [{name: v8, version: 13.6.233}]

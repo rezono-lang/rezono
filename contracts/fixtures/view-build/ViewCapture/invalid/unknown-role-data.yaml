@@ -1,0 +1,6 @@
+format: rede.view-capture/1
+pack: p
+manifest: m-2
+role: viewer
+relayout: false
+other_role: private

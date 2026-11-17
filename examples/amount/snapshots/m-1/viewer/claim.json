@@ -1,0 +1,4 @@
+[
+{"id":"A-001","cells":{"claim__distance_km":{"minor_units":"42","scale":0,"unit":"km","state":"known"},"claim__base":{"minor_units":"120000","currency":"EUR","state":"known"},"claim__payout":{"minor_units":"105450","currency":"EUR","state":"known"}}},
+{"id":"A-002","cells":{"claim__distance_km":{"scale":0,"unit":"km","state":"unknown"},"claim__base":{"minor_units":"120000","currency":"EUR","state":"known"},"claim__payout":{"currency":"EUR","state":"unknown"}}}
+]

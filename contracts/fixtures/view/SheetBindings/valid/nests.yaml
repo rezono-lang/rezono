@@ -1,0 +1,8 @@
+# A nest in a channel table.
+nests:
+  - id: ledger
+    title_message: nest.ledger
+    part_message: nest.part_of
+    levels:
+      - {kind: ledger, flow: column}
+      - {kind: account, part_of: account__ledger}

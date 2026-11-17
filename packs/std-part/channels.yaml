@@ -1,0 +1,14 @@
+# Signs of std-part (contracts/view.yaml): a shape per kind, a line per arrow, and one standard Flow.
+kinds:
+  - {kind: constituent, shape: rect}
+arrows:
+  - {arrow: constituent.part_of, dash: none}
+# Flow (docs/gui.md): the constituents as nodes and part_of as the lines, so a whole reads as what points to it.
+flows:
+  - id: parts
+    title_message: flow.parts
+    direction: right
+    nodes:
+      - {kind: constituent}
+    edges:
+      - {arrow: constituent.part_of}

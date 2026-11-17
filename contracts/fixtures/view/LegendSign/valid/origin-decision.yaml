@@ -1,0 +1,5 @@
+# A glyph sign: the mark is in ink.
+sign: origin_decision
+form: glyph
+glyph: "◆"
+label_message: sign.origin_decision

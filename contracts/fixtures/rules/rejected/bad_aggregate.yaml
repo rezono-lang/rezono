@@ -1,0 +1,129 @@
+# sum is over an integer value column; task is a key column.
+format: rede.rules/1
+pack: fixture
+relations:
+- name: busy_member
+  role: derived
+  key:
+  - {name: member, type: string}
+  module: load
+  explain: materialize
+- name: hours
+  role: base
+  key:
+  - {name: member, type: string}
+  - {name: task, type: string}
+  values:
+  - {name: h, type: integer}
+- name: member
+  role: base
+  key:
+  - {name: id, type: string}
+- name: member_hours
+  role: derived
+  key:
+  - {name: member, type: string}
+  - {name: total, type: integer}
+  module: load
+  explain: materialize
+- name: shortest_task
+  role: derived
+  key:
+  - {name: member, type: string}
+  - {name: h, type: integer}
+  module: load
+  explain: on_demand
+- name: with_margin
+  role: derived
+  key:
+  - {name: member, type: string}
+  - {name: total, type: integer}
+  module: load
+  explain: on_demand
+rules:
+- id: busy_member
+  module: load
+  stratum: '1'
+  head:
+    relation: busy_member
+    terms: ['?m']
+  body:
+  - relation: member
+    terms: ['?m']
+    polarity: positive
+    stratum: '0'
+  aggregates:
+  - relation: hours
+    terms: ['?m', _]
+    function: count
+    as: ?n
+    stratum: '0'
+  conditions:
+  - {op: ge, left: '?n', right: '3'}
+  witness:
+    relation: busy_member__witness
+    variables: ['?m', '?n']
+  origin: {file: rules/load.dl, line: '1'}
+- id: member_hours
+  module: load
+  stratum: '1'
+  head:
+    relation: member_hours
+    terms: ['?m', '?s']
+  body:
+  - relation: member
+    terms: ['?m']
+    polarity: positive
+    stratum: '0'
+  aggregates:
+  - relation: hours
+    terms: ['?m', _]
+    function: sum
+    over: task
+    as: ?s
+    stratum: '0'
+  witness:
+    relation: member_hours__witness
+    variables: ['?m', '?s']
+  origin: {file: rules/load.dl, line: '4'}
+- id: shortest_task
+  module: load
+  stratum: '1'
+  head:
+    relation: shortest_task
+    terms: ['?m', '?x']
+  body:
+  - relation: member
+    terms: ['?m']
+    polarity: positive
+    stratum: '0'
+  aggregates:
+  - relation: hours
+    terms: ['?m', _]
+    function: min
+    over: h
+    as: ?x
+    stratum: '0'
+  witness:
+    relation: shortest_task__witness
+    variables: ['?m', '?x']
+  origin: {file: rules/load.dl, line: '7'}
+- id: with_margin
+  module: load
+  stratum: '2'
+  head:
+    relation: with_margin
+    terms: ['?m', '?t']
+  body:
+  - relation: member_hours
+    terms: ['?m', '?s']
+    polarity: positive
+    stratum: '1'
+  assignments:
+  - {var: '?t', op: add, left: '?s', right: '8'}
+  conditions:
+  - {op: lt, left: '?s', right: '40'}
+  witness:
+    relation: with_margin__witness
+    variables: ['?m', '?s', '?t']
+  origin: {file: rules/load.dl, line: '10'}

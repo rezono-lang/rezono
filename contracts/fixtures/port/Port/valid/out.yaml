@@ -1,0 +1,12 @@
+name: files-out
+version: 0.1.0
+kind: out
+runs_on: checked_epoch
+writes: projection
+row_source: output_index
+runtime: in_process
+consumes: [published-manifest, generator-mapping]
+produces: [gitops-files, output-index]
+freshness: {cadence: on_request}
+mapping_owner: steel-thread
+losses: []

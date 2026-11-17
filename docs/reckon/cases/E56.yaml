@@ -1,0 +1,30 @@
+id: E56
+status: settled
+mode: evaluate
+source: ask Host where Team.any(true)
+data: appendix-b
+role: viewer
+given:
+- '- Team team-platform'
+expect:
+  answer:
+    rows: []
+    undecided:
+    - binder: host-a
+      state: unknown
+      reason: open_world
+    - binder: host-b
+      state: unknown
+      reason: open_world
+    - binder: host-c
+      state: unknown
+      reason: open_world
+    - binder: host-d
+      state: unknown
+      reason: open_world
+    not_applicable: 0
+note: Team is open. With no team listed, "no member found" proves nothing, so `any` is unknown and never false; a set
+  over an open kind has no row to name as cause.
+sources:
+- expressions.md §7 (sets and absence), formerly §13 point 13
+- arbiter, 11-11-2026, on #691 and #696

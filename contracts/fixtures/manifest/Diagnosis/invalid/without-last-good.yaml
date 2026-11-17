@@ -1,0 +1,6 @@
+# A diagnosis must name the state that stays visible.
+id: diagnosis-epoch-8
+epoch: 8
+knowledge_time: "2026-01-02T00:00:00Z"
+checks:
+  - {name: integrity, status: red, violations: 1}

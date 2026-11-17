@@ -1,0 +1,15 @@
+# Signs of std-order (contracts/view.yaml): a shape per kind, a line per arrow, and one standard Flow.
+kinds:
+  - {kind: ordered, shape: rect}
+  - {kind: scale, shape: bar}
+arrows:
+  - {arrow: ordered.precedes, dash: none}
+# Flow (docs/gui.md): one lane per scale, and precedes as the lines, so the order reads along the flow.
+flows:
+  - id: order
+    title_message: flow.order
+    direction: right
+    nodes:
+      - {kind: ordered, lane: {channel: lane, slot: ordered.on_scale, level: nominal, meaning_message: channel.ordered_scale}}
+    edges:
+      - {arrow: ordered.precedes}

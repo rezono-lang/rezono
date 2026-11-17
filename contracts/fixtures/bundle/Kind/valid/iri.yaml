@@ -1,0 +1,12 @@
+# A kind with the IRI its pack declares (pack.yaml `iri:`): its namespace and its class name.
+id: probe
+stable_id: lab/Probe
+span: {file: schema/lab.yaml, line: "3", column: "3"}
+class: Probe
+layer: facts
+abstract: false
+identifier: id
+id_type: text
+module: lab
+table: probe
+iri: https://w3id.org/example-publisher/lab/Probe

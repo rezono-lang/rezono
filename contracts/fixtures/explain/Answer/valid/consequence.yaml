@@ -1,0 +1,13 @@
+format: rede.answer/1
+question: consequence
+manifest_id: m-1
+start: {relation: decision, key: '["d1"]'}
+nodes:
+  - {relation: decision, key: '["d1"]', distance: 0}
+  - {relation: allowed, key: '["a","b"]', distance: 1}
+steps:
+  - {conclusion: {relation: allowed, key: '["a","b"]'}, premise: {relation: decision, key: '["d1"]'}, how: positive, position: 0}
+difference:
+  counts:
+    - {relation: allowed, added: 0, removed: 1, changed: 0}
+computed: true

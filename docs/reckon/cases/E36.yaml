@@ -1,0 +1,31 @@
+id: E36
+status: open
+mode: parse
+source: ask Host as known 2026-10-26 at 2026-11-01 where memory_need > 384 GiB
+expect:
+  print: ask Host at 2026-11-01 as known 2026-10-26 where memory_need > 384 GiB
+  diagnostics:
+  - code: R015
+    span:
+      text: as known 2026-10-26
+      start: 9
+      end: 28
+  - code: R015
+    span:
+      text: at 2026-11-01
+      start: 29
+      end: 42
+alternatives:
+- by: '#350 P10.2a §11 table (R015 at `at` only)'
+  expect:
+    print: ask Host at 2026-11-01 as known 2026-10-26 where memory_need > 384 GiB
+    diagnostics:
+    - code: R015
+      span:
+        text: at 2026-11-01
+        start: 29
+        end: 42
+note: The P10.2a table lists R015 at `at 2026-11-01` only; §1 reports every reserved construct at its span, so `expect`
+  lists both axes and `alternatives` keeps the table's reading (expressions.md §13 point 8).
+sources:
+- '#350 P10.2a §11'

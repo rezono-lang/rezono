@@ -1,0 +1,44 @@
+id: https://rede.example/std-order/order
+name: std_order
+description: >-
+  Order and rank. An ordered element may come before others (precedes), may carry a whole-number rank,
+  and may lie on a named scale. The axioms are rule invariants (rules/order.dl): precedes is a strict
+  partial order, and a rank never contradicts it. The mapping annotations compare with schema.org's
+  item lists (decision O12b); no rule reads them.
+in_language: en
+prefixes:
+  linkml: https://w3id.org/linkml/
+  schema: http://schema.org/
+imports:
+  - linkml:types
+default_range: string
+annotations:
+  layer: facts
+
+classes:
+  Ordered:
+    abstract: true
+    description: Anything a domain places in an order. A view supplies its elements.
+    close_mappings: ["schema:ListItem"]
+    attributes:
+      id:
+        identifier: true
+      precedes:
+        range: Ordered
+        multivalued: true
+        description: This element comes directly before the target. The closure is the rule before.
+        close_mappings: ["schema:nextItem"]
+      rank:
+        range: integer
+        description: An optional whole-number position; it increases along before wherever both ends have one.
+        close_mappings: ["schema:position"]
+      on_scale:
+        range: Scale
+        description: The named ordering this element belongs to.
+
+  Scale:
+    description: A named ordering, such as a sequence or a hierarchy of levels.
+    close_mappings: ["schema:ItemList"]
+    attributes:
+      id:
+        identifier: true

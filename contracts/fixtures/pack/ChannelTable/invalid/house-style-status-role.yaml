@@ -1,0 +1,7 @@
+kinds:
+  - {kind: alpha, shape: rect}
+house_style:
+  palettes:
+    - theme: light
+      tokens:
+        - {role: status.valid, value: "#2d6a30"}

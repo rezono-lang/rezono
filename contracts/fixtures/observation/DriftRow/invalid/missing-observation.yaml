@@ -1,0 +1,4 @@
+expectation: {relation: application__desired_revision, key: '["app-web"]'}
+expected: {value: a01b2c3, state: known}
+observed: {value: 9f2c1e0, state: known}
+event_time: "2026-11-06T10:15:00Z"

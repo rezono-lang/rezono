@@ -1,0 +1,15 @@
+# total(b) is unknown: one contributor is unknown, and a sum is strict in unknown.
+root: {relation: total, key: '["b","unknown"]'}
+manifest_id: manifest-epoch-7
+witnesses:
+  - conclusion: {relation: total, key: '["b","unknown"]'}
+    rule_id: total
+    bindings: [{variable: "?x", value: b}, {variable: "?s", value: unknown}]
+    premises:
+      - {row: {relation: node, key: '["b"]'}, polarity: positive, stratum: 0}
+    aggregates:
+      - relation: weight
+        group_key: '["b"]'
+        count: 2
+        contributors_sha256: "37a5cdd30d938789cf03cbda54a6ce8ae3996eda13437aee30f3f61056273e85"
+        result: unknown

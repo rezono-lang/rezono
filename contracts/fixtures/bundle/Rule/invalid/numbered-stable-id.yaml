@@ -1,0 +1,44 @@
+# A stable rule id is the head relation and twelve hex digits of its content, never a number by position.
+id: total
+stable_id: "total_2"
+span: {file: rules/core.dl, line: "4", column: "3"}
+message: rule.total
+relation: total
+module: core
+variables:
+  - {name: "?a", type: string}
+  - {name: "?n", type: integer}
+  - {name: "?t", type: integer}
+aggregates:
+  - {position: 0, relation: line, function: count}
+  - {position: 1, relation: line, function: sum, over: amount}
+head:
+  relation: total
+  terms:
+    - {kind: variable, value: "?a", type: string}
+    - {kind: variable, value: "?n", type: integer}
+    - {kind: variable, value: "?t", type: integer}
+body:
+  - kind: atom
+    position: 1
+    polarity: positive
+    relation: order
+    terms: [{kind: variable, value: "?a", type: string}]
+  - kind: aggregate
+    position: 2
+    polarity: positive
+    relation: line
+    terms: [{kind: variable, value: "?a", type: string}, {kind: wildcard, value: _, type: integer}]
+    function: count
+    result: {kind: variable, value: "?n", type: integer}
+    aggregate_position: 0
+  - kind: aggregate
+    position: 3
+    polarity: positive
+    relation: line
+    terms: [{kind: variable, value: "?a", type: string}, {kind: wildcard, value: _, type: integer}]
+    function: sum
+    over: amount
+    result: {kind: variable, value: "?t", type: integer}
+    aggregate_position: 1
+origin: {file: rules/core.dl, line: "4"}

@@ -1,0 +1,7 @@
+format: rede.views/1
+views:
+  - theory: std-structure
+    kinds:
+      - name: element
+        union:
+          - populated_from: [alpha, beta]

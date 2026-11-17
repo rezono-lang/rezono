@@ -1,0 +1,105 @@
+id: https://rede.dev/contracts/connector
+name: rede_connector
+title: Connector loss lists
+description: >-
+  What a mapping between Rede and an external standard does not carry (decision N7, M01). A connector
+  states it as a loss list: one entry for every part of the meaning that a reader on the other side
+  does not get, with what happens to it. The list is published beside what the connector writes and is
+  tested: an export gives back the input except for the listed losses. The port contract (decision
+  O12a, PC1) declares the connector itself (the standard, its version, the mapping owner, the
+  round-trip fixture); this contract fixes the format of a loss entry and of the published list.
+prefixes:
+  linkml: https://w3id.org/linkml/
+  rede: https://rede.dev/contracts/
+default_prefix: rede
+default_range: string
+imports:
+  - linkml:types
+
+types:
+  ConnectorName:
+    typeof: string
+    description: The name of the connector in the catalogue, as the port contract spells a port name.
+    pattern: "^[a-z][a-z0-9]*([-_][a-z0-9]+)*$"
+  Token:
+    typeof: string
+    description: A name or version without white space.
+    pattern: "^\\S+$"
+  Sentence:
+    typeof: string
+    description: One or more words; never empty.
+    pattern: "\\S"
+
+enums:
+  LossDirection:
+    description: Which way the mapping runs, and so who loses.
+    permissible_values:
+      out: {description: "From a published epoch to the standard. A reader that knows only the standard loses what is listed."}
+      in: {description: "From a document in the standard to Rede. Rede does not take over what is listed."}
+  LossSubject:
+    description: >-
+      The part of the meaning that is lost. For `out` these are the parts of Rede's model
+      (docs/concepts.md, "The model"); for `in` the entry names the standard's own construct in `what`
+      and the nearest part here. A new part is a change of this contract.
+    permissible_values:
+      state: {description: "Whether there is a value: unknown, not applicable or invalid, beside known."}
+      reason: {description: The reason code of a value that is not known.}
+      proof: {description: "Why a row holds: its witnesses, with premises, polarity, bindings and aggregates."}
+      source: {description: "Where a fact comes from: file, row and pinned revision."}
+      rule: {description: "How a conclusion follows: derivation, calculation and allocation rules."}
+      check: {description: "What must hold: integrity checks and invariants."}
+      unit: {description: "The unit and dimension of a quantity, and its exact storage."}
+      money: {description: "Exact money: the currency, the scale and the named rounding."}
+      time: {description: "Validity and knowledge time of a row, and versions of an element."}
+      world: {description: "Whether a kind or a relation is closed or open: what an absent row means."}
+      access: {description: "Which role reads what, and that a role's view is complete for that role."}
+      identity: {description: "What names an element or an epoch: ids, IRIs, the schema id and hash pins."}
+      structure: {description: "The shape of the schema: kinds, arrows, cardinality, enums and their order, path equations."}
+      text: {description: "Labels and sentences per language."}
+  LossFate:
+    description: What happens to the part on the way.
+    permissible_values:
+      dropped: {description: "Not written at all. The other side cannot recover it from what the connector wrote."}
+      weakened: {description: "Written with less meaning, in a member of the target that `carried_by` names; `what` says what is left out."}
+      extension: {description: "Written in full in terms outside the standard, named in `carried_by`. A reader that knows those terms loses nothing; one that knows only the standard loses the part."}
+
+classes:
+  Loss:
+    description: One part of the meaning that the mapping does not carry, and what happens to it.
+    attributes:
+      subject: {range: LossSubject, required: true, description: The part of the meaning that is lost.}
+      what: {range: Sentence, required: true, description: "What exactly the reader on the other side does not get, in one or two sentences."}
+      fate: {range: LossFate, required: true, description: "Dropped, weakened or carried by an extension."}
+      carried_by:
+        range: Token
+        multivalued: true
+        description: >-
+          For `extension` the terms outside the standard that carry the part; for `weakened` the
+          member of the target that keeps what is left. Absent for `dropped`.
+    rules:
+      - description: An extension names its terms.
+        preconditions: {slot_conditions: {fate: {equals_string: extension}}}
+        postconditions: {slot_conditions: {carried_by: {required: true}}}
+      - description: A weakened part names the member that keeps the rest.
+        preconditions: {slot_conditions: {fate: {equals_string: weakened}}}
+        postconditions: {slot_conditions: {carried_by: {required: true}}}
+      - description: What is dropped is carried by nothing.
+        preconditions: {slot_conditions: {fate: {equals_string: dropped}}}
+        postconditions: {slot_conditions: {carried_by: {value_presence: ABSENT}}}
+
+  LossList:
+    tree_root: true
+    description: >-
+      The loss list of one connector in one direction, as published beside what the connector writes.
+      `losses` is required and is empty only when nothing is lost.
+    attributes:
+      connector: {range: ConnectorName, required: true, description: The connector the list belongs to.}
+      standard: {range: Token, required: true, description: "The standard, for example PROV-O, SHACL, ODCS or DCAT."}
+      standard_version: {range: Token, required: true, description: The version of the standard the mapping is written against.}
+      direction: {range: LossDirection, required: true, description: "out or in."}
+      losses:
+        range: Loss
+        multivalued: true
+        inlined_as_list: true
+        required: true
+        description: One entry per loss.

@@ -1,0 +1,4 @@
+# The key is one letter.
+verb: why
+label_message: verb.why
+key: ctrl+w

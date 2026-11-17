@@ -1,0 +1,21 @@
+# An undo of a change in a fact file with a source companion (S25): the value goes back by its exact lines,
+# the companion by its exact text, and only on the bytes the hashes name.
+format: rede.delta/1
+pack: library
+changes:
+  - op: set
+    file: facts/valid.yaml
+    kind: work
+    key: w1
+    slot: year
+    value: "1947"
+    restore:
+      at: 13
+      old: "  - {id: w1, title: De avonden, category: c1, year: 1948}\n"
+      new: "  - {id: w1, title: De avonden, category: c1, year: 1947}\n"
+sources:
+  - file: facts/valid.sources.yaml
+    sources_sha256: 5f2b0a1c9d3e4f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8
+    facts_sha256: 0a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f9
+    restored_facts_sha256: 9f8e7d6c5b4a39281706f5e4d3c2b1a09f8e7d6c5b4a39281706f5e4d3c2b1a0
+    text: "default: {kind: person, name: catalogue, position: card-index}\n"

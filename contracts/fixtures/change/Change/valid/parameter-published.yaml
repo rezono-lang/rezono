@@ -1,0 +1,17 @@
+# The same change, accepted by someone else and published in the next epoch.
+id: change-1
+author: {subject: alice, role: editor}
+effect: publish
+channel: git
+cause: edit
+base_manifest: manifest-epoch-7
+content_sha256: "3b5a0f2c9d8e7f6a5b4c3d2e1f0a9b8c7d6e5f4a3b2c1d0e9f8a7b6c5d4e3f2a"
+delta: deltas/change-1.json
+proposal: https://git.example/rede/pulls/12
+state: published
+manifest: manifest-epoch-8
+reviews:
+  - reviewer: {subject: bob, role: reviewer}
+    verdict: accepted
+    at: "2026-11-06T10:00:00Z"
+    content_sha256: "3b5a0f2c9d8e7f6a5b4c3d2e1f0a9b8c7d6e5f4a3b2c1d0e9f8a7b6c5d4e3f2a"

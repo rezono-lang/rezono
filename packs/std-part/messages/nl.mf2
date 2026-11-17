@@ -1,0 +1,28 @@
+@locale nl
+---
+# Zinnen van std-part, neutraal. Een domein vervangt ze met een bericht met dezelfde id (S14).
+arrow.total = {{Elk {$kind} heeft precies één {$arrow}.}}
+arrow.partial = {{Elk {$kind} heeft hoogstens één {$arrow}.}}
+attribute.total = {{Elk {$kind} heeft precies één {$attribute}.}}
+attribute.partial = {{Elk {$kind} heeft hoogstens één {$attribute}.}}
+arrow.many.partial = {{Elk {$kind} kan meer dan één {$arrow} hebben.}}
+attribute.many.partial = {{Elk {$kind} kan meer dan één {$attribute} hebben.}}
+is_a = {{Elk {$kind} is een {$parent}.}}
+unique_key = {{{$key} hoort bij hoogstens één {$kind}.}}
+path_equation = {{Voor elk {$kind}: {$equation}.}}
+# Eén zin per regel (rules/part.dl): rule.<regel-id>, met de variabelen van de regel.
+rule.within_1 = {{{$x} is een deel van {$w}.}}
+rule.within_2 = {{{$x} ligt binnen {$v}, en {$v} is een deel van {$w}, dus {$x} ligt binnen {$w}.}}
+rule.has_whole = {{{$x} is een deel van {$w}.}}
+rule.outermost = {{{$x} ligt binnen {$w}, en {$w} is nergens een deel van.}}
+rule.part_cycle = {{{$x} ligt binnen zichzelf: de delen vormen een kring.}}
+# Uitlegvragen: de algemene grondslag en het bereik, toegespitst op deel en geheel.
+explain.part_grounds = Waar het deel van is
+explain.part_grounds.question = {{Waar is {$element} een deel van?}}
+explain.part_reach = Waaruit het bestaat
+explain.part_reach.question = {{Waaruit bestaat {$element}?}}
+explain.outside = Buiten je zicht
+explain.more = Verder vanaf hier
+explain.empty = {{Geen antwoord voor {$element}.}}
+# De standaard-Flow.
+flow.parts = Delen en gehelen

@@ -1,0 +1,20 @@
+id: E60
+status: settled
+mode: evaluate
+source: ask Host where (Host where it.memory_need > 300 GiB).all(it.owner is n/a or it.memory_need > 300 GiB)
+data: appendix-b
+role: viewer
+expect:
+  answer:
+    rows:
+    - host-a
+    - host-b
+    - host-c
+    - host-d
+    undecided: []
+    not_applicable: 0
+note: '`all(p)` folds `and` over "in => p". For host-d, whose membership is unknown, p is true (it has no owner), so
+  "in => p" is true whether it is a member or not: a member that is known to match still decides.'
+sources:
+- expressions.md §7 (sets and absence), formerly §13 point 14
+- arbiter, 11-11-2026, on #696

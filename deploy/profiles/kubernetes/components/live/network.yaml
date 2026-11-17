@@ -1,0 +1,14 @@
+# The engine fetches the repository over ssh (port 22) with its deploy key. Everything else it reads (the store) is
+# on 443, which the gate's policy already allows.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: gate-live
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: gate
+  policyTypes: [Egress]
+  egress:
+    - ports:
+        - { protocol: TCP, port: 22 }

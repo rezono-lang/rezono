@@ -1,0 +1,6 @@
+format: rede.answer/1
+question: reach
+manifest_id: m-1
+start: {relation: e, key: '["a","b"]'}
+nodes:
+  - {relation: e, key: '["a","b"]'}

@@ -1,0 +1,6 @@
+term: sweep
+start: sweep
+steps:
+  - suppose: {delta: given}
+answer: series
+limit: 64

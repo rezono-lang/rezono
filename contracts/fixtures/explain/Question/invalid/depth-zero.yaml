@@ -1,0 +1,6 @@
+term: reach
+start: present
+steps:
+  - trace: {direction: forward, depth: "0"}
+answer: rings
+limit: 200

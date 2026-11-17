@@ -1,0 +1,19 @@
+# An unknown input is never zero: the price is missing, so the ratio and the result are unknown.
+root: {relation: calc__hourly_cents, key: '["niveau2/vultr","","unknown","fact offer_hourly.price_e4 is missing"]'}
+manifest_id: manifest-epoch-7
+calc_witnesses:
+  - conclusion: {relation: calc__hourly_cents, key: '["niveau2/vultr","","unknown","fact offer_hourly.price_e4 is missing"]'}
+    rule: hourly_cents
+    version: "1"
+    valid_at: "2026-10-26"
+    known_at: "2026-11-06"
+    definition: every_host_fits
+    state: unknown
+    reason: fact offer_hourly.price_e4 is missing
+    premises:
+      - {relation: offer_complete, key: '["niveau2/vultr"]'}
+    reads: [calc__as_of, offer_complete, offer_hourly]
+    steps:
+      - {path: every_host_fits/when, op: fact, ref: offer_complete, relation: offer_complete, value: "true", state: known}
+      - {path: every_host_fits/value, op: ratio, state: unknown, reason: fact offer_hourly.price_e4 is missing}
+      - {path: every_host_fits/value/0, op: fact, ref: offer_hourly.price_e4, relation: offer_hourly, state: unknown, reason: fact offer_hourly.price_e4 is missing}

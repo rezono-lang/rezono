@@ -1,0 +1,18 @@
+kinds:
+  - {kind: alpha, shape: rect}
+house_style:
+  palettes:
+    - theme: light
+      tokens:
+        - {role: paper, value: "#f1eee6"}
+        - {role: ink, value: "#1a2330"}
+        - {role: ink.muted, value: "#56606b"}
+        - {role: rule, value: "#8b9299"}
+        - {role: proof, value: "#1f4f7a"}
+    - theme: dark
+      tokens:
+        - {role: paper, value: "#10161d"}
+        - {role: ink, value: "#e6e1d6"}
+    - theme: print
+      tokens:
+        - {role: proof, value: "#000000"}

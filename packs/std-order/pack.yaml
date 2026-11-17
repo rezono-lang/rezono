@@ -1,0 +1,7 @@
+# Theory std-order: order and rank (#314 §5.2). Neutral concepts, axioms and rules, and no facts.
+# A domain maps its own kinds and arrows onto it with a view (docs/compiler.md, theories and views).
+name: std-order
+version: 0.1.0
+default_language: nl
+theory: true
+imports: []

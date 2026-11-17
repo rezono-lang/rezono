@@ -1,0 +1,94 @@
+id: https://rede.dev/contracts/delta
+name: rede_delta
+title: Delta on fact files
+description: >-
+  A change to the facts of a pack, as the viewer makes it and the canonical writer applies it
+  (`python -m rede_compiler.writer apply <pack> <delta.json>`; docs/compiler.md#the-canonical-writer). Each change names
+  one record by its kind and identifier, in one fact file. Values are JSON as the compiler reads
+  them: a whole number may be decimal text (decision W3), a date is ISO text (W5), an inlined
+  object is an object, and more than one value is a list (a functionality violation, but a fact).
+  Applying a delta also gives the delta that undoes it, in this same form.
+prefixes:
+  linkml: https://w3id.org/linkml/
+  rede: https://rede.dev/contracts/
+default_prefix: rede
+default_range: string
+imports:
+  - linkml:types
+
+enums:
+  ChangeOp:
+    permissible_values:
+      insert:
+        description: A new record. Its identifier is `key`, its other slots are `values`; written in schema order.
+      delete:
+        description: Remove the record, with the comments on and directly above its lines.
+      set:
+        description: Give one slot a value. An existing slot keeps its place in the record.
+      unset:
+        description: >-
+          Remove one slot's value. An absent slot means unknown when it is required and
+          not applicable otherwise (docs/compiler.md).
+
+classes:
+  Delta:
+    tree_root: true
+    attributes:
+      format: {required: true, equals_string: rede.delta/1}
+      pack: {required: true, pattern: "^[a-z][a-z0-9]*(-[a-z0-9]+)*$", description: "The name in the pack's pack.yaml."}
+      base_manifest: {description: "The manifest the change was computed against (V1); absent outside the viewer."}
+      changes: {range: Change, multivalued: true, inlined_as_list: true, required: true, description: Applied in order.}
+      sources:
+        range: SourceRestore
+        multivalued: true
+        inlined_as_list: true
+        description: >-
+          Set by the writer on an undo delta, one entry per source companion (facts/<file>.sources.yaml,
+          decision S25) the undone delta changed. Never in a delta from the viewer: a delta cannot supply the
+          origin of a fact, so the writer honours it only when its caller says the delta is the writer's own
+          undo, and the gate refuses it.
+
+  Change:
+    attributes:
+      op: {range: ChangeOp, required: true}
+      file: {pattern: "^facts/[a-z0-9][a-z0-9_-]*\\.yaml$", description: "The fact file, relative to the pack. Required for insert; otherwise, when absent, the writer takes the one fact file that holds the record (the viewer knows records, not files) and refuses none or more than one. An undo delta always names it."}
+      kind: {required: true, pattern: "^[a-z][a-z0-9]*(_[a-z0-9]+)*$", description: "The kind, as the section name in the fact file."}
+      key: {required: true, description: "The record's identifier as text; a whole number as decimal text."}
+      slot: {pattern: "^[a-z][a-z0-9]*(_[a-z0-9]+)*$", description: For set and unset. Never the identifier.}
+      value: {range: Anything, inlined: true, description: For set.}
+      values: {range: Anything, inlined: true, description: "For insert: slot name to value, without the identifier."}
+      restore:
+        range: Restore
+        inlined: true
+        description: >-
+          Set by the writer on the changes of an undo delta: the exact lines to put back, so that the
+          undo gives the same bytes. Used only when they still fit and give the facts this change describes.
+    rules:
+      - preconditions: {slot_conditions: {op: {equals_string: insert}}}
+        postconditions: {slot_conditions: {file: {required: true}}}
+      - preconditions: {slot_conditions: {op: {equals_string: set}}}
+        postconditions: {slot_conditions: {slot: {required: true}, value: {required: true}}}
+      - preconditions: {slot_conditions: {op: {equals_string: unset}}}
+        postconditions: {slot_conditions: {slot: {required: true}}}
+
+  Restore:
+    description: "A line patch: at line `at` (from 0), the text `old` becomes `new`."
+    attributes:
+      at: {range: integer, required: true, minimum_value: 0}
+      old: {required: true, description: "The exact lines there now, with their line ends; may be empty."}
+      new: {required: true, description: "The exact lines to put there, with their line ends; may be empty."}
+
+  SourceRestore:
+    description: >-
+      The source companion of one fact file as it was before the undone delta, with the hashes of the bytes
+      this undo fits. It is put back only when the companion and its fact file are exactly as that delta left
+      them and the undo's changes give the fact file back exactly; otherwise the writer changes nothing.
+    attributes:
+      file: {required: true, pattern: "^facts/[a-z0-9][a-z0-9_-]*\\.sources\\.yaml$", description: "The companion, relative to the pack."}
+      sources_sha256: {required: true, pattern: "^[0-9a-f]{64}$", description: The companion as the undone delta left it.}
+      facts_sha256: {required: true, pattern: "^[0-9a-f]{64}$", description: Its fact file as the undone delta left it.}
+      restored_facts_sha256: {required: true, pattern: "^[0-9a-f]{64}$", description: Its fact file after this undo's changes.}
+      text: {required: true, description: "The exact companion to put back, with its line ends."}
+
+  Anything:
+    class_uri: linkml:Any

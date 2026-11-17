@@ -1,0 +1,23 @@
+id: T06
+status: settled
+mode: check-only
+source: |
+  enum Size = small | large
+
+  extend Host
+    derived size: Size
+      table unique
+        | memory_need | -> size |
+        | ..<400 GiB  | small   |
+        | 300 GiB..   | large   |
+expect:
+  diagnostics:
+  - code: R031
+    span:
+      text: 300 GiB..
+      start: 149
+      end: 158
+note: unique rows that overlap (300 GiB up to 400 GiB) are R031 at the test of the later row.
+sources:
+- docs/reckon/tables.md §3, §4 (RV-C24)
+- v0 §5c

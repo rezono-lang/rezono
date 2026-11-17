@@ -1,0 +1,44 @@
+# big(a, d) :- size(a, s), s >= 5, !frozen(a), d = s - 5, label(a, "large").
+id: big
+stable_id: "big~0123456789ab"
+span: {file: rules/core.dl, line: "4", column: "3"}
+message: rule.big
+relation: big
+module: core
+variables:
+  - {name: "?a", type: string}
+  - {name: "?d", type: integer}
+  - {name: "?s", type: integer}
+head:
+  relation: big
+  terms:
+    - {kind: variable, value: "?a", type: string}
+    - {kind: variable, value: "?d", type: integer}
+body:
+  - kind: atom
+    position: 1
+    polarity: positive
+    relation: size
+    terms: [{kind: variable, value: "?a", type: string}, {kind: variable, value: "?s", type: integer}]
+  - kind: comparison
+    position: 2
+    polarity: positive
+    op: ge
+    terms: [{kind: variable, value: "?s", type: integer}, {kind: constant, value: "5", type: integer}]
+  - kind: atom
+    position: 3
+    polarity: negative
+    relation: frozen
+    terms: [{kind: variable, value: "?a", type: string}]
+  - kind: assignment
+    position: 4
+    polarity: positive
+    op: sub
+    terms: [{kind: variable, value: "?s", type: integer}, {kind: constant, value: "5", type: integer}]
+    result: {kind: variable, value: "?d", type: integer}
+  - kind: atom
+    position: 5
+    polarity: positive
+    relation: label
+    terms: [{kind: variable, value: "?a", type: string}, {kind: constant, value: large, type: string}]
+origin: {file: rules/core.dl, line: "9"}

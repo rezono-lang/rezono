@@ -1,0 +1,31 @@
+# A negation may only use variables that a positive literal binds, not the result of an aggregate.
+format: rede.rules/1
+pack: fixture
+relations:
+  - name: member
+    role: base
+    key: [{name: id, type: string}]
+  - name: hours
+    role: base
+    key: [{name: member, type: string}, {name: task, type: string}]
+    values: [{name: h, type: integer}]
+  - name: quota
+    role: base
+    key: [{name: n, type: integer}]
+  - name: off_quota
+    role: derived
+    key: [{name: member, type: string}]
+    module: load
+    explain: on_demand
+rules:
+  - id: off_quota
+    module: load
+    stratum: "1"
+    head: {relation: off_quota, terms: ["?m"]}
+    body:
+      - {relation: member, terms: ["?m"], polarity: positive, stratum: "0"}
+      - {relation: quota, terms: ["?n"], polarity: negative, stratum: "0"}
+    aggregates:
+      - {relation: hours, terms: ["?m", "_"], function: count, as: "?n", stratum: "0"}
+    witness: {relation: off_quota__witness, variables: ["?m", "?n"]}
+    origin: {file: rules/load.dl, line: "1"}

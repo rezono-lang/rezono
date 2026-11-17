@@ -1,0 +1,5 @@
+port: metrics-in
+kind: in
+operation: read
+unit: prometheus/cluster-a
+input_sha256: 1f9b6e1e0c3b

@@ -1,0 +1,19 @@
+# Een kleine, geldige toestand: alle violation views zijn leeg.
+project:
+  - {id: p1, name: Website, budget: 1200000}
+  - {id: p2, name: Verhuizing, budget: 500000}
+budget_line:
+  - {id: b1, project: p1, description: Ontwerp, amount: 700000}
+  - {id: b2, project: p1, description: Bouw, amount: 500000}
+  - {id: b3, project: p2, description: Vervoer, amount: 500000}
+milestone:
+  - {id: m1, project: p1, name: Ontwerp klaar, due: 2026-12-01}
+  - {id: m2, project: p2, name: Sleutel over}
+task:
+  - {id: t1, project: p1, milestone: m1, name: Schetsen, status: done, estimate: 16}
+  - {id: t2, project: p1, milestone: m1, name: Huisstijl, status: open, estimate: 24}
+  - {id: t3, project: p1, name: Bouwen, status: open, estimate: 80}
+  - {id: t4, project: p2, milestone: m2, name: Dozen inpakken, status: open}
+dependency:
+  - {id: d1, task: t2, prerequisite: t1}
+  - {id: d2, task: t3, prerequisite: t2}

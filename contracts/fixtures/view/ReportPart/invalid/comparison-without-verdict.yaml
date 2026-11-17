@@ -1,0 +1,2 @@
+# A comparison names its relation and the column of its verdict.
+comparison: {relation: alike, equal: [same]}

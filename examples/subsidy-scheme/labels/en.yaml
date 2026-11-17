@@ -1,0 +1,65 @@
+# Labels as facts: label(element_id, en, text). One per kind, slot, enum value and derived relation,
+# so nothing a reader sees is an identifier.
+article: article
+article.title: title
+article.text: text
+scheme_parameter: scheme parameter
+scheme_parameter.name: name
+scheme_parameter.value: value
+scheme_parameter.unit: unit
+scheme_parameter.valid_from: valid from
+scheme_parameter.valid_until: valid until
+scheme_parameter.article: article
+scheme_parameter.decision: decision
+scheme_parameter.calendar: calendar
+parameter_unit: unit
+parameter_unit.cents: euro cents
+parameter_unit.ppm: parts per million
+cost_item: cost item
+cost_item.title: title
+cost_item.eligibility: eligibility
+cost_item.article: article
+eligibility: eligibility
+eligibility.eligible: eligible
+eligibility.not_eligible: not eligible
+household: household
+household.persons: persons
+application: application
+application.household: household
+application.claimed_costs: claimed costs
+cost_line: quote line
+cost_line.application: application
+cost_line.item: cost item
+cost_line.amount: amount
+income_statement: income statement
+income_statement.household: household
+income_statement.income: income
+advice_report: advice report
+advice_report.household: household
+calendar: calendar
+calendar.title: title
+evaluation_day: evaluation day
+evaluation_day.calendar: calendar
+evaluation_day.horizon: horizon in days
+# Derived relations (rules/*.dl).
+line: quote line of an application
+has_quote: application with a quote
+quoted_costs: quoted costs
+eligible_line: eligible quote line
+eligible_costs: eligible costs
+costs_mismatch: claimed costs differ from the quotes
+has_income_statement: household with an income statement
+income_not_received: income statement not received
+income_missing: application without an income statement
+quote_missing: application without a quote
+assessment: assessment
+assessed_income: assessed income
+assessed_costs: assessed costs
+household_size: household size
+advised: advised application
+application_count: applications per household
+repeat_application: household with more than one application
+maximum_applied: application whose award the maximum cut
+decided_parameter: parameter set by a decision in force
+has_decision_in_force: parameter with a decision in force
+undecided_parameter: parameter without a decision in force

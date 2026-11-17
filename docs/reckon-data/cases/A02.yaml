@@ -1,0 +1,22 @@
+id: A02
+class: invalid
+status: settled
+schema:
+  from: fixture.schema.json
+form: arrow-field
+input:
+  name: memory_need
+  storage: int64
+  extension:
+    name: reckon.quantity
+    metadata:
+      type: GiB
+      unit: GiB
+      storage_unit: B
+      factor: '1073741824'
+      scale: '2'
+expect:
+  accept: false
+  error: extension metadata `scale` differs from the schema
+sources:
+- '#369 L0 rev 2 §8'

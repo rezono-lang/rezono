@@ -1,0 +1,6 @@
+kinds:
+  - {kind: group, shape: rect}
+  - {kind: item, shape: ellipse}
+arrows:
+  - {arrow: item.group, dash: none}
+  - {arrow: item.next, dash: none}

@@ -1,0 +1,6 @@
+# A module entry declares an interface, a namespace, or both.
+name: example-pack
+version: 0.1.0
+default_language: en
+modules:
+  - {module: network}

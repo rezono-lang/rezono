@@ -1,0 +1,16 @@
+# Text with a pattern from its type and from the slot, and a constant.
+id: entry.evidence
+stable_id: "Entry#evidence"
+span: {file: schema/core.yaml, line: "4", column: "3"}
+kind: entry
+name: evidence
+required: true
+table: entry__evidence
+multivalued: true
+type: text
+schema_type: Reference
+derivation: fact
+patterns: ["^[a-z]+:", "[a-z0-9]$"]
+constant: "synthetic:capital"
+sentence: {message: attribute.multivalued, args: {kind: entry, attribute: entry.evidence}, id: "sentence:Entry#evidence", span: {file: schema/core.yaml, line: "4", column: "3"}}
+semantic: {case: scalar, base: string, range: Reference}

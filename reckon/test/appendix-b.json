@@ -1,0 +1,9 @@
+{
+	"rows": [
+		{ "$kind": "Team", "$id": "team-platform" },
+		{ "$kind": "Host", "$id": "host-a", "owner": { "$unknown": "not_assigned" }, "memory_need": "400 GiB" },
+		{ "$kind": "Host", "$id": "host-b", "owner": { "$na": "" }, "memory_need": "200 GiB" },
+		{ "$kind": "Host", "$id": "host-c", "owner": { "$ref": "team-platform" }, "memory_need": "512 GiB" },
+		{ "$kind": "Host", "$id": "host-d", "owner": { "$na": "" }, "memory_need": { "$unknown": "no_spec" } }
+	]
+}

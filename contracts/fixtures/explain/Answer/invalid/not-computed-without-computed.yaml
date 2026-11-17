@@ -1,0 +1,7 @@
+format: rede.answer/1
+question: consequence
+manifest_id: m-1
+start: {relation: decision, key: '["d2"]'}
+nodes:
+  - {relation: decision, key: '["d2"]', distance: 0}
+not_computed: no_variant

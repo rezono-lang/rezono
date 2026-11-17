@@ -1,0 +1,9 @@
+id: consumer
+stable_id: "Consumer"
+span: {file: schema/core.yaml, line: "4", column: "3"}
+class: Consumer
+layer: facts
+abstract: true
+identifier: id
+id_type: text
+table: consumer

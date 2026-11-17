@@ -1,0 +1,4 @@
+port: metrics-in
+kind: in
+operation: read
+unit: prometheus/cluster-a

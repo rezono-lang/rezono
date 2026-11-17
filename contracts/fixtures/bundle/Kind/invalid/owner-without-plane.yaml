@@ -1,0 +1,11 @@
+id: rate
+stable_id: "Rate"
+span: {file: schema/core.yaml, line: "4", column: "3"}
+class: Rate
+layer: facts
+abstract: false
+identifier: id
+id_type: text
+module: core
+table: rate
+owner: board

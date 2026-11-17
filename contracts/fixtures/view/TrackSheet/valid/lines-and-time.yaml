@@ -1,0 +1,8 @@
+# The binding as it was: stations in waves on declared lines, the waves by their date.
+station: step
+plan: step__in_plan
+wave: step__in_wave
+time: wave__start
+label: step__name
+line: {channel: lane, slot: step__lane, level: nominal, meaning_message: channel.lane}
+depends: {arrow: step__after}

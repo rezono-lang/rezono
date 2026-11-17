@@ -1,0 +1,5 @@
+# Stale but shown as known: the picture would lie. The schema cannot say this; the compiler and viewer must.
+value: {value: "1240", state: known}
+freshness: stale
+staleness: {reason: offload, step: plan_route, since_epoch: "8", input_sha256: "bbbb"}
+last_known: {value: "1240", state: known}

@@ -1,0 +1,21 @@
+# A body of negations only: nothing to range over.
+format: rede.rules/1
+pack: fixture
+relations:
+  - name: member
+    role: base
+    key: [{name: id, type: string}]
+  - name: nobody
+    role: derived
+    key: [{name: flag, type: string}]
+    module: load
+    explain: materialize
+rules:
+  - id: nobody
+    module: load
+    stratum: "1"
+    head: {relation: nobody, terms: ["yes"]}
+    body:
+      - {relation: member, terms: ["ann"], polarity: negative, stratum: "0"}
+    witness: {relation: nobody__witness, variables: []}
+    origin: {file: rules/load.dl, line: "1"}

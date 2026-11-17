@@ -1,0 +1,10 @@
+# A step path names a definition and then when or value; "body" is neither.
+root: {relation: calc__hourly_cents, key: '["niveau1/scaleway"]'}
+manifest_id: manifest-epoch-7
+calc_witnesses:
+  - conclusion: {relation: calc__hourly_cents, key: '["niveau1/scaleway"]'}
+    rule: hourly_cents
+    state: known
+    value: "264/5"
+    steps:
+      - {path: every_host_fits/body/0, op: fact, value: "5280", state: known}

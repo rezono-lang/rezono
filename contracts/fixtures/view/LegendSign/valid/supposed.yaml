@@ -1,0 +1,5 @@
+# The new value takes the accent; the form itself strikes the old one.
+sign: supposed
+form: replaced
+accent: true
+label_message: sign.supposed

@@ -1,0 +1,670 @@
+id: https://rede.dev/contracts/view
+name: rede_view
+title: Key (visual language)
+description: >-
+  The visual language as data, used by std-view. The viewer only interprets this.
+  A pack may override values (a house style) but never the meaning of a channel.
+prefixes:
+  linkml: https://w3id.org/linkml/
+  rede: https://rede.dev/contracts/
+default_prefix: rede
+default_range: string
+imports:
+  - linkml:types
+  - explain
+
+enums:
+  Theme:
+    description: Display themes.
+    permissible_values: {light: {}, dark: {}, print: {}, forced_colors: {}}
+  HouseStyleTheme:
+    description: "The display themes a house style may give colours for. Never forced_colors: there the reader's system colours stay."
+    permissible_values: {light: {}, dark: {}, print: {}}
+  Shape:
+    description: Node shapes.
+    permissible_values: {rect: {}, pill: {}, ellipse: {}, diamond: {}, bar: {}}
+  Typography:
+    description: Type styles that separate facts from conclusions.
+    permissible_values: {upright: {}, italic: {}}
+  StatusName:
+    description: Statuses that have a sign.
+    permissible_values:
+      valid: {}
+      changed: {}
+      violated: {}
+      unknown: {}
+      not_applicable: {}
+      absent: {description: "Checked and not there: a negative premise of a proof, a row that holds by being absent from its snapshot. Never the sign of a present fact."}
+  Tone:
+    description: "Evaluation, distinct from nominal hue. Unknown is not a numeric rank."
+    permissible_values: {positive: {}, neutral: {}, caution: {}, negative: {}, unknown: {}}
+  SignName:
+    description: >-
+      The reserved signs of the epistemic legend (docs/gui.md, Reserved channels): what is known about a
+      value, before what domain it belongs to. Each has one meaning in every pack and every theme; a pack
+      may restyle a sign, never rename it or give it another meaning. A sign is drawn only where the bundle
+      provides its fact.
+    permissible_values:
+      origin_decision: {description: "A base fact whose origin is a decision: someone decided it."}
+      origin_vendor: {description: "A base fact whose origin is a publication of a vendor or a legislator."}
+      origin_design: {description: "A base fact whose origin is a design choice."}
+      origin_observation: {description: "A base fact whose origin is an observation."}
+      derived: {description: "A conclusion of a rule, not a base fact; its text takes conclusion_typography."}
+      assumption: {description: "A value taken as given until its source answers."}
+      drift: {description: "What Rede derives beside what a reference source says (decision R13); always two lines, never one."}
+      screened: {description: "Present, and not visible for the reader's role: no content and no size."}
+      proposal: {description: "A proposed value: the other side of the fold."}
+      sealed: {description: "Closed by a seal: it no longer changes."}
+      supposed: {description: "A what-if value beside the current one it replaces."}
+  DifferenceName:
+    description: >-
+      What a difference does to one value, between the state a sheet shows and the state it is compared with
+      (a proposal, a supposition, an older manifest): the published per-role difference's three changes.
+    permissible_values:
+      added: {description: "The value is there only in the state compared with."}
+      removed: {description: "The value is there only in the state the sheet compares against."}
+      changed: {description: "The value is on both sides and differs."}
+  SignForm:
+    description: >-
+      How a legend sign is drawn. No form depends on colour: each is a glyph, a line pattern, a frame, a bar
+      or a struck value, and keeps that form in the palette's system colours when colours are forced. That
+      is its forced-colours form.
+    permissible_values:
+      glyph: {description: The sign's glyph before the value.}
+      underline: {description: "A line under the value, in the sign's dash."}
+      double_line: {description: "Two parallel lines: the first solid, the second in the sign's dash."}
+      bar: {description: "A solid bar of one fixed length in the place of the value, whatever the value's length."}
+      frame: {description: "A frame around the value in the sign's dash, with the glyph before the value."}
+      stamp: {description: "The sign's label in capitals in a frame, beside the value."}
+      replaced: {description: "The old value struck through, then the new value."}
+  Placement:
+    permissible_values: {top: {}, bottom: {}, start: {}, end: {}}
+  BlockEdge:
+    description: Above or below the rest of the sheet.
+    permissible_values: {top: {}, bottom: {}}
+  InlineEdge:
+    description: Before or after the value, in reading direction.
+    permissible_values: {start: {}, end: {}}
+  CartoucheField:
+    permissible_values: {title: {}, pack: {}, manifest: {}, knowledge_time: {}, zoom: {}}
+  ChannelType:
+    description: >-
+      Free channels (docs/gui.md, Vrije kanalen). A pack's channel table gives each one a meaning;
+      tone carries evaluation and hue a nominal category. Accent, hatching and selection are not free.
+    permissible_values:
+      lane: {description: A named band or column in a fixed reading order.}
+      ink: {description: "Neutral lightness steps, always with a label or rank."}
+      shape: {description: "A shape with a kind word, small enough to tell apart."}
+      stroke_style: {description: A line style that stays visible in print.}
+      size: {description: "A quantity, with scale, zero and the exact value as text."}
+      elevation: {description: "Height on a relief, drawn as contour lines, with scale, zero and the exact value as text."}
+      badge: {description: "A sign plus a word, outside the selection outline."}
+      weight: {description: Text weight; upright and italic stay reserved.}
+      presence: {description: "Opacity, supporting only; never for unknown, absent or screened."}
+      tone: {description: Evaluation; pack bindings are not drawn yet (V1b).}
+      hue: {description: Nominal category; pack bindings are not drawn yet (V1b).}
+  ScaleLevel:
+    description: The level of measurement of a meaning.
+    permissible_values: {nominal: {}, ordered: {}, quantitative: {}}
+  VerbName:
+    description: >-
+      The six verbs a reader has on a value, the same in every pack and on every sheet (the verb bar). A
+      verb that cannot answer for a value in its context is not shown there.
+    permissible_values:
+      why: {description: "What the value rests on: its proof."}
+      depends: {description: What depends on the value.}
+      missing: {description: What is missing for the value.}
+      suppose: {description: "What if: the value under a supposed change."}
+      compare: {description: "The value beside another state: another time, a proposal or a reference."}
+      propose: {description: Propose a change of the value.}
+  NestFlow:
+    description: "How a container of a Nest lays out its parts: `row`, side by side; `column`, below each other."
+    permissible_values: {row: {}, column: {}}
+  FlowDirection:
+    description: "How a Flow lays out its lanes: `down`, lanes as rows; `right`, lanes as columns."
+    permissible_values: {down: {}, right: {}}
+
+classes:
+  Key:
+    description: The visual language of the viewer as data.
+    attributes:
+      palettes: {multivalued: true, range: Palette, inlined_as_list: true, required: true, description: One palette per theme.}
+      statuses: {multivalued: true, range: StatusSign, inlined_as_list: true, required: true, description: One sign per status.}
+      kinds: {multivalued: true, range: KindSign, inlined_as_list: true, description: Shape per kind.}
+      arrows: {multivalued: true, range: ArrowSign, inlined_as_list: true, description: Line style per arrow.}
+      proof_role: {required: true, description: "Legacy alias of accent_role; when both occur they must agree."}
+      accent_role: {description: "Colour role for the reader's current focus, route, proof or hover; defaults to proof_role."}
+      tones: {multivalued: true, range: ToneSign, inlined_as_list: true, description: "Evaluation signs. Legacy keys without these keep their status colour roles."}
+      hues: {multivalued: true, range: HueRole, inlined_as_list: true, description: "Nominal palette places, not ranks or pack bindings. More than eight warns, never truncates."}
+      signs: {multivalued: true, range: LegendSign, inlined_as_list: true, description: "The epistemic legend: at most one entry per reserved sign. A key without it draws none of them."}
+      differences: {multivalued: true, range: DifferenceSign, inlined_as_list: true, description: "One sign per difference, the same on every sheet that draws one (RV-C02). A key without them draws no difference."}
+      fact_typography: {range: Typography, required: true, description: Type style for facts.}
+      conclusion_typography: {range: Typography, required: true, description: Type style for conclusions.}
+      strokes: {multivalued: true, range: StrokeToken, inlined_as_list: true, description: "Line widths per role: line, proof, hairline, frame, selection."}
+      hatch: {range: Hatch, inlined: true, description: The hatching that marks unknown.}
+      typefaces: {multivalued: true, range: TypefaceToken, inlined_as_list: true}
+      arrowhead: {range: Arrowhead, required: true, inlined: true}
+      channels: {multivalued: true, range: ChannelGrammar, inlined_as_list: true, description: The levels each free channel can carry.}
+
+  Palette:
+    description: The colour tokens for one theme.
+    attributes:
+      theme: {range: Theme, required: true, description: The theme this palette is for.}
+      tokens: {multivalued: true, range: ColorToken, inlined_as_list: true, required: true, description: The colour tokens.}
+
+  ColorToken:
+    description: One colour role with its value.
+    attributes:
+      role: {required: true, description: "For example status.valid, proof, ink, paper."}
+      value:
+        required: true
+        description: A hex colour, or a CSS system colour for the forced_colors theme.
+        pattern: "^(#[0-9a-fA-F]{6}|Canvas|CanvasText|LinkText|GrayText|Highlight|HighlightText|ButtonFace|ButtonText|ButtonBorder|Mark|MarkText)$"
+
+  StatusSign:
+    description: How one status is drawn.
+    attributes:
+      status: {range: StatusName, required: true, description: The status.}
+      tone: {range: Tone, description: "Evaluation sign supplying the colour; absent in legacy keys."}
+      color_role: {required: true, description: Colour role used for the status.}
+      glyph: {required: true, description: Glyph shown next to the value.}
+      label_message: {required: true, description: Message id in the i18n catalogue.}
+      hatched: {range: boolean, description: Whether the fill is hatched.}
+
+  ToneSign:
+    description: One evaluation sign in the shared visual language.
+    attributes:
+      tone: {range: Tone, required: true}
+      color_role: {required: true}
+      glyph: {required: true}
+      label_message: {required: true}
+
+  HueRole:
+    description: A named nominal palette place; its meaning is supplied by a future pack binding.
+    attributes:
+      id: {required: true}
+      color_role: {required: true}
+
+  LegendSign:
+    description: >-
+      How one reserved sign of the epistemic legend is drawn: its form, its glyph where it has one, its
+      label and its colour. Without `tone` or `accent` the mark is in ink.
+    attributes:
+      sign: {range: SignName, required: true, description: The reserved sign.}
+      form: {range: SignForm, required: true, description: How the sign is drawn.}
+      glyph: {description: "The sign's glyph; required for the form glyph."}
+      label_message: {required: true, description: Message id in the i18n catalogue.}
+      tone: {range: Tone, description: "The evaluation that colours the mark, through the key's tone signs."}
+      accent: {range: boolean, description: "The mark takes the accent colour: the reader follows or moves this value. Never together with tone."}
+      dash: {description: "SVG dash array of the form's broken line, or none; in running text it is a dashed line."}
+    rules:
+      - description: The form glyph has a glyph.
+        preconditions: {slot_conditions: {form: {equals_string: glyph}}}
+        postconditions: {slot_conditions: {glyph: {required: true}}}
+
+  DifferenceSign:
+    description: >-
+      How one difference is drawn on every sheet: a sign before the value and its label, and the tone that
+      colours the sign. Never colour alone: the sign and the label say it in forced colours too.
+    attributes:
+      change: {range: DifferenceName, required: true, description: The difference.}
+      glyph: {required: true, description: "The sign before the value, for example + or −."}
+      label_message: {required: true, description: Message id in the i18n catalogue.}
+      tone: {range: Tone, description: "The evaluation that colours the sign, through the key's tone signs; without it the sign is in ink."}
+
+  KindSign:
+    description: How one kind is drawn.
+    attributes:
+      kind: {required: true, description: Kind id from a schema.}
+      shape: {range: Shape, required: true, description: Shape of the node.}
+      icon: {description: "Icon of the kind, beside its shape (decision B10). In channels.yaml an .svg file under the pack's icons/, listed in icons/sources.yaml; in the schema bundle the sha256 of that file, which names an entry of Channels.icons."}
+
+  ArrowSign:
+    description: How one arrow is drawn.
+    attributes:
+      arrow: {required: true, description: "Arrow id from a schema, or a derived relation that a Flow draws as lines."}
+      dash: {required: true, description: "SVG dash array, or none."}
+
+  StrokeToken:
+    attributes:
+      role: {required: true}
+      width: {range: integer, required: true, minimum_value: 1, description: Width in CSS pixels.}
+
+  Hatch:
+    attributes:
+      color_role: {required: true}
+      spacing: {range: integer, required: true, minimum_value: 2}
+      angle: {range: integer, required: true, description: Degrees.}
+      width: {range: integer, required: true, minimum_value: 1}
+
+  Arrowhead:
+    description: A triangle at the end of a line, in units of the line width.
+    attributes:
+      length: {range: integer, required: true, minimum_value: 1}
+      width: {range: integer, required: true, minimum_value: 1}
+
+  SizeToken:
+    description: "A size in CSS pixels per role: space.*, type.*, leading.*, tracking.*, sample.*, sign.*, focus.*, selection.*, page.*."
+    attributes:
+      role: {required: true}
+      px: {range: integer, required: true, minimum_value: 0}
+
+  TypefaceToken:
+    attributes:
+      role: {required: true, description: For example text or figures.}
+      family: {required: true, description: A CSS font-family list.}
+
+  Sheets:
+    description: Sheet layout (sheets.yaml) - frame, cartouche, key extract, fold and Lens.
+    attributes:
+      frame_stroke_role: {required: true}
+      metrics: {range: Metrics, required: true, inlined: true}
+      sizes: {multivalued: true, range: SizeToken, inlined_as_list: true, required: true}
+      cartouche: {range: Cartouche, required: true, inlined: true}
+      key_extract: {range: KeyExtract, required: true, inlined: true}
+      fold: {range: Fold, required: true, inlined: true}
+      lens: {range: LensLayout, required: true, inlined: true}
+      verbs: {multivalued: true, range: Verb, inlined_as_list: true, description: "The verb bar, in its fixed order; each verb at most once. Without it a sheet has no verb bar."}
+      relief: {range: ReliefLayout, inlined: true, description: Sizes for Landscape as relief.}
+      sheets: {multivalued: true, range: SheetSign, inlined_as_list: true, required: true}
+
+  Metrics:
+    description: Sizes in CSS pixels that the deterministic layout uses; text is measured by character count.
+    attributes:
+      font_size: {range: integer, required: true}
+      char_width: {range: integer, required: true, description: Average glyph advance used to size node boxes.}
+      line_height: {range: integer, required: true}
+      padding: {range: integer, required: true}
+      gap: {range: integer, required: true, description: Spacing between nodes and between layers.}
+      bar_width: {range: integer, required: true}
+      chart_height: {range: integer, required: true}
+      narrow_width: {range: integer, required: true, description: Below this viewport width a sheet stacks in one column.}
+
+  Cartouche:
+    attributes:
+      placement: {range: BlockEdge, required: true}
+      fields: {multivalued: true, range: CartoucheField, required: true}
+
+  KeyExtract:
+    attributes:
+      placement: {range: Placement, required: true}
+      title_message: {required: true}
+
+  Fold:
+    description: The double hairline on an Impact sheet, current on the start side, proposal on the end side.
+    attributes:
+      current_message: {required: true}
+      proposal_message: {required: true}
+      stroke_role: {required: true}
+
+  LensLayout:
+    attributes:
+      placement: {range: InlineEdge, required: true}
+      glyphs: {multivalued: true, range: LensGlyph, inlined_as_list: true, required: true, description: "One glyph per answer shape: every question with that shape gets it, a pack's own too."}
+
+  LensGlyph:
+    description: The glyph of the questions whose answer has this shape (contracts/explain.yaml).
+    attributes:
+      answer: {range: AnswerShape, required: true}
+      glyph: {required: true}
+
+  Verb:
+    description: >-
+      One verb of the verb bar: its label, its key, and the question of the bundle that answers it where
+      it is one.
+    attributes:
+      verb: {range: VerbName, required: true, description: The verb.}
+      label_message: {required: true, description: Message id in the i18n catalogue.}
+      key: {required: true, pattern: "^[a-z]$", description: "The key that opens the verb: one letter, the same on every sheet."}
+      question: {description: "Term of the question that answers the verb (contracts/explain.yaml, Question.term); absent where the verb is no question."}
+      primary: {range: boolean, description: "The verb that changes something, drawn as the filled button. At most one."}
+
+  SheetSign:
+    attributes:
+      sheet: {required: true, description: "Sheet name: index, kind, answer or impact."}
+      title_message: {required: true}
+      fold: {range: boolean}
+
+  ReliefLayout:
+    description: Sizes in CSS pixels for Landscape as relief, and the number of contour steps.
+    attributes:
+      levels: {range: integer, required: true, minimum_value: 1, description: Contour lines from the coast to the highest summit on the sheet.}
+      radius: {range: integer, required: true, minimum_value: 1, description: Radius of the summit of an island.}
+      cell: {range: integer, required: true, minimum_value: 1, description: Grid step for the contour lines.}
+      count_scale: {range: VisualScale, required: true, inlined: true, description: "The scale of an island's height when it is its number of members: a relief without a height binding, or an island of a kind."}
+
+  ChannelGrammar:
+    description: The levels of measurement one free channel can carry. A binding at another level is refused.
+    attributes:
+      channel: {range: ChannelType, required: true}
+      levels: {range: ScaleLevel, multivalued: true, required: true}
+
+  VisualScale:
+    description: >-
+      How a quantity maps to a channel: (value - zero) to the power numerator/denominator, as a share
+      of the largest value on the sheet. Integers only, so the scale itself is exact (AGENTS.md rule 3).
+      The zero is in the value's own units (minor units for an amount). A value below the zero is
+      outside the scale and stops the sheet, never drawn as zero.
+    attributes:
+      zero: {range: integer, required: true}
+      exponent_numerator: {range: integer, required: true, minimum_value: 1}
+      exponent_denominator: {range: integer, required: true, minimum_value: 1}
+      unit_message: {required: true, description: "Message id of the unit, shown with the exact value of an integer."}
+
+  ChannelBinding:
+    description: A free channel bound to one slot, with the meaning the pack gives it.
+    attributes:
+      channel: {range: ChannelType, required: true}
+      slot: {required: true, description: "The relation (`<kind>__<slot>`) the channel shows: an attribute or an arrow."}
+      level: {range: ScaleLevel, required: true}
+      meaning_message: {required: true, description: "Message id of the meaning, for the key."}
+      scale: {range: VisualScale, inlined: true, description: Required for a quantitative meaning.}
+    rules:
+      - description: A quantitative meaning has a unit, a scale and a zero.
+        preconditions: {slot_conditions: {level: {equals_string: quantitative}}}
+        postconditions: {slot_conditions: {scale: {required: true}}}
+
+  ImageBinding:
+    description: >-
+      An image per element (decision B10, docs/gui.md#icons-and-images): a single-valued text slot of the kind,
+      or of a kind above it, whose value names a file in the pack's assets/. The binding makes the slot an image,
+      one per kind; a subkind's own binding wins for its elements. Its meaning is the pack's.
+    attributes:
+      kind: {required: true, description: Kind id from a schema.}
+      slot: {required: true, description: "The slot, by element id (`<kind>.<slot>`, the kind that declares it)."}
+
+  ReliefSheet:
+    description: >-
+      Landscape as relief. Every row of `region` is an island. Its height is `height`, or its number of
+      members; the rows that point to it with `member` shape its coast and make its ring of status shares.
+    attributes:
+      region: {required: true, description: The kind whose rows are the islands.}
+      member: {required: true, description: Arrow from the member kind to the region kind.}
+      label: {description: "Text attribute of the region kind that names an island; without it, the id."}
+      height: {range: ChannelBinding, inlined: true, description: "An elevation binding on an attribute of the region kind; without it, the number of members on std-view's count scale."}
+
+  TrackDepends:
+    description: >-
+      The rails of a Track: one arrow from station to station (`arrow`), or a link kind (`via`) with an
+      arrow to the station that waits (`from`) and one to the station it waits for (`to`).
+    attributes:
+      arrow: {description: Arrow from the station kind to the station kind.}
+      via: {description: "Link kind, for more than one dependency per station."}
+      from: {description: Arrow from the link kind to the station that waits.}
+      to: {description: Arrow from the link kind to the station it waits for.}
+
+  TrackSheet:
+    description: >-
+      Track as rail map: one sheet per plan row. A wave is a column of stations, a dependency is rail,
+      the time of a wave is the kilometre marker at the bottom, and `line` gives the bands. The waves stand
+      in the order of the wave kind's order role, or by `time` where it is bound; every rail runs with that
+      order, so a station never waits on anything after it, and a dependency against the order stops the
+      sheet. Inline place is order, not calendar time. Without `line`, block place means nothing.
+    attributes:
+      station: {required: true, description: The kind whose rows are the stations.}
+      plan: {required: true, description: Arrow from the station kind to the plan kind.}
+      wave: {required: true, description: Arrow from the station kind to the wave kind.}
+      time: {description: "ISO date attribute of the wave kind; where bound it orders the waves (then their order role and id) and labels the markers."}
+      label: {description: "Text attribute of the station kind that names a station; without it, the id."}
+      line: {range: ChannelBinding, inlined: true, description: "A lane binding on an attribute or arrow of the station kind: the rows. Without it the layout places the stations across the rails and that place means nothing."}
+      depends: {range: TrackDepends, required: true, inlined: true}
+      critical: {range: EdgeSource, inlined: true, description: "A derived relation edge source whose rows are the dependencies on the critical path: `from` the column of the station that waits, `to` the column of the station it waits for, both of the station kind. Such a rail is drawn in the accent, on top; the sheet never works out a critical path itself."}
+      duration: {description: "A single-valued attribute of the station kind shown under its mark: how long the step takes. An unknown cell is hatched and written as unknown, never zero."}
+      done: {description: "A single-valued boolean attribute of the station kind: the step is finished. A finished station carries the key's positive sign; the reference date stands between the finished stations and the rest, where one line parts them."}
+
+  EdgeSource:
+    description: >-
+      What a sheet draws as lines (docs/gui.md, Edge source): an arrow (`arrow`); a link kind and its arrow to
+      each end (`via`, `from`, `to`); or a derived relation and two of its symbol columns (`relation`, `from`,
+      `to`), with the node kinds the ids in each column belong to (`from_kinds`, `to_kinds`). Exactly one of
+      `arrow`, `via` and `relation`.
+    attributes:
+      arrow: {description: An arrow from one node kind to another.}
+      via: {description: "A link kind (a kind whose first unique key holds only single-valued arrows) whose rows are the lines; `from` and `to` are arrows of that key."}
+      relation: {description: A derived relation of the rules whose rows are the lines.}
+      from: {description: "With `via`, the arrow to the start; with `relation`, the column of the start."}
+      to: {description: "With `via`, the arrow to the end; with `relation`, the column of the end."}
+      from_kinds: {multivalued: true, description: "With `relation`: the node kinds an id in `from` can be."}
+      to_kinds: {multivalued: true, description: "With `relation`: the node kinds an id in `to` can be."}
+      quantity: {range: ChannelBinding, inlined: true, description: "With `relation` or `via`: a size binding at level quantitative on an integer column of the relation (its slot is the column's name) or an integer attribute of the link kind. The line is a band, its width the sum over the pair's rows."}
+
+  FlowNode:
+    description: >-
+      One node kind of a Flow. It is one lane, or with `lane` one lane per value. At level `ordered` the
+      lanes stand in a declared order: an arrow's targets by the order role of their kind (S26; until every
+      pack carries it, their integer attribute `lane_order`), and the compiler refuses the binding where the
+      kind has none; an enum's values as the bundle gives them. At level `nominal` the lanes are categories.
+      With `group`, its nodes stand in a box per target of that arrow.
+    attributes:
+      kind: {required: true}
+      label: {description: "Text attribute of the kind that names a node; without it, the element's name."}
+      lane: {range: ChannelBinding, inlined: true, description: A lane binding on a single-valued enum attribute or arrow of the kind.}
+      group: {description: "A single-valued arrow of the kind to a kind that is no node kind: the box, within the lane, the node stands in (one level)."}
+
+  FlowSheet:
+    description: >-
+      Flow: typed nodes in ordered lanes, with lines from edge sources (docs/gui.md, Flow). One sheet per
+      binding, at `/<pack>/flow/<id>`.
+    attributes:
+      id: {required: true, pattern: "^[a-z][a-z0-9_]*$"}
+      title_message: {required: true, description: Message id of the sheet's title.}
+      nodes: {range: FlowNode, multivalued: true, required: true, inlined_as_list: true}
+      edges: {range: EdgeSource, multivalued: true, required: true, inlined_as_list: true}
+      direction: {range: FlowDirection, description: "Without it, `right`."}
+      routes: {range: EdgeSource, inlined: true, description: "A relation edge source whose rows are routes, listed by their start (`from` is its first column). A route is no line; a chosen one draws its proof (`grounds`) over the lines."}
+
+  MatrixAxis:
+    description: >-
+      One axis of a Matrix: the elements of a kind (and its subkinds), in the kind's order where it has one, else
+      in name order (docs/gui.md, Names). With `lane`, on `columns` only, the Matrix is a Board (docs/gui.md,
+      Board): the sheet has one column per value of the lane, in the enum's declared order, and a cell holds the
+      elements of the kind with that value that the cells' source pairs with the row, each as a chip. An element
+      without a value stands in a strip of unknown, never in a column.
+    attributes:
+      kind: {required: true}
+      lane: {range: ChannelBinding, inlined: true, description: "On `columns` only: a lane binding on a single-valued enum attribute of the kind. Its values are the sheet's columns."}
+
+  MatrixSheet:
+    description: >-
+      Matrix: the elements of one kind as rows, of another (or the same) as columns, and a cell per pair that
+      an edge source gives (docs/gui.md, Matrix). A cell is the rows behind its pair, each with its proof; an
+      empty cell is blank where the source is closed and unknown (hatched) where it is open (W6). One sheet per
+      binding, at `/<pack>/matrix/<id>`.
+    attributes:
+      id: {required: true, pattern: "^[a-z][a-z0-9_]*$"}
+      title_message: {required: true, description: Message id of the sheet's title.}
+      rows: {range: MatrixAxis, required: true, inlined: true}
+      columns: {range: MatrixAxis, required: true, inlined: true}
+      cells: {range: EdgeSource, required: true, inlined: true, description: "From the row kind to the column kind."}
+
+  TimelineMark:
+    description: >-
+      A dated event on a row of a Timeline: a single-valued date attribute of the row kind, drawn as a mark at
+      that date with the attribute's label and the date. An element without that date has no mark. The mark
+      takes the legend sign of the fact's origin where the bundle provides it.
+    attributes:
+      slot: {required: true, description: "A single-valued date attribute of the row kind, by its relation (`<kind>__<slot>`)."}
+
+  TimelineSheet:
+    description: >-
+      Timeline (Intervals): validity in time (docs/gui.md, Intervals). One row per element of a kind on one
+      date axis. A row has a main phase, from `start` to `end`, and optionally an extension, from `end` to
+      `extension`; each is half-open (valid from its first date up to, not on, its last). A date whose cell is
+      unknown is drawn hatched and written as unknown, never as "no end". Rows stand in the order of the
+      kind's order role where it has one, else by start (unknown last), then by name and id. The reference
+      date is the reader's (the date of the context; until a context has one, the date of the manifest's
+      knowledge time), never a field of the binding. One sheet per binding, at `/<pack>/timeline/<id>`.
+    attributes:
+      id: {required: true, pattern: "^[a-z][a-z0-9_]*$"}
+      title_message: {required: true, description: Message id of the sheet's title.}
+      rows: {required: true, description: The kind whose elements are the rows.}
+      label: {description: "Text attribute of the row kind that names a row; without it, the element's name."}
+      start: {required: true, description: "A single-valued date attribute of the row kind (`<kind>__<slot>`): the first date of the main phase."}
+      end: {required: true, description: "A single-valued date attribute of the row kind: the end of the main phase."}
+      extension: {description: "A single-valued date attribute of the row kind: the end of the extension. Without it, a row ends at `end`."}
+      main_message: {required: true, description: "Message id of the main phase's name, for the key and the table twin."}
+      extension_message: {description: "Message id of the extension's name; required with `extension`."}
+      judgement: {range: ChannelBinding, inlined: true, description: "A tone binding at level ordered on a single-valued attribute of the row kind: what the pack's rules conclude about a row. The sheet never judges a row by where its bar ends. Drawn once a tone binding has an encoding of its values (as a Matrix's `value`)."}
+      marks: {range: TimelineMark, multivalued: true, inlined_as_list: true, description: "Dated events on a row, each a date attribute of the row kind."}
+    rules:
+      - description: An extension has a name.
+        preconditions: {slot_conditions: {extension: {required: true}}}
+        postconditions: {slot_conditions: {extension_message: {required: true}}}
+
+  NestLevel:
+    description: >-
+      One level of a Nest, from the outside in: the kind whose elements are the parts at this depth, the
+      arrow that says what each is part of, and how an element of this level lays out its own parts.
+    attributes:
+      kind: {required: true, description: The kind whose elements are the parts at this level.}
+      part_of: {description: "A single-valued arrow from this kind to the kind of the level before it: what an element is part of. Required on every level but the first, and never on the first."}
+      label: {description: "Text attribute of the kind that names a part; without it, the element's name."}
+      flow: {range: NestFlow, description: "How an element of this level lays out its parts: side by side or below each other, in the order of the next level's kind (its order role). Required on every level but the last."}
+      order_message: {description: "Message id of what that order means, for the key."}
+
+  NestPerspective:
+    description: >-
+      A perspective on a Nest: another set of bindings on the same parts. It changes no geometry. Without
+      `relation` it is the nest as it is. With `relation`, a derived relation of the rules gives a part its
+      state: `part` is the column that holds the part, `state` binds a tone to one more column, and `origin`
+      is the column of the element the perspective starts from (what the reader supposes), drawn with the
+      legend sign for supposed. A part the role may not read gets no state.
+    attributes:
+      id: {required: true, pattern: "^[a-z][a-z0-9_]*$"}
+      label_message: {required: true, description: Message id of the perspective's name.}
+      relation: {description: A derived relation of the rules whose rows say what holds for a part in this perspective.}
+      part: {description: "With `relation`: the symbol column that holds the part."}
+      origin: {description: "With `relation`: the symbol column of the element the perspective starts from; the reader chooses it."}
+      state: {range: ChannelBinding, inlined: true, description: "With `relation`: a tone binding at level ordered on a column of the relation (its slot is the column's name). Drawn once a tone binding has an encoding of its values."}
+    rules:
+      - description: A perspective over a relation names the column of the part and the state it binds.
+        preconditions: {slot_conditions: {relation: {required: true}}}
+        postconditions: {slot_conditions: {part: {required: true}, state: {required: true}}}
+
+  NestSheet:
+    description: >-
+      Nest: containment (docs/gui.md, Nest). Inside means part of: an element of a level is drawn inside the
+      element its `part_of` arrow points to. Place within a container is the order of the level's kind, as a
+      row or a column, and nothing else; box size carries no meaning. A level's arrow is single-valued and
+      points one level out, so the parts form a tree. An element whose container is unknown stands in no
+      container: the sheet names it apart, as unknown. One sheet per element of the first level, at
+      `/<pack>/nest/<id>/<element>`; a perspective is chosen in the address.
+    attributes:
+      id: {required: true, pattern: "^[a-z][a-z0-9_]*$"}
+      title_message: {required: true, description: Message id of the sheet's title.}
+      part_message: {required: true, description: "Message id of what nesting means in this pack, for the key."}
+      levels: {range: NestLevel, multivalued: true, required: true, inlined_as_list: true, minimum_cardinality: 2, description: "The levels from the outside in; at least two."}
+      perspectives: {range: NestPerspective, multivalued: true, inlined_as_list: true, description: "In reading order; the first is shown when none is chosen. Without any, the nest as it is."}
+
+  CardsPart:
+    description: >-
+      A Report part: one card per row of a kind, each the head of its page per kind
+      with the named fields of the kind's page template, in that order, and a link to that page (docs/gui.md,
+      Cards). The cards are read a page at a time, in id order, from the role's rows.
+    attributes:
+      kind: {required: true}
+      fields: {multivalued: true, required: true, description: "Slots of the kind's page template, by element id (`<kind>.<slot>`), in the order shown."}
+
+  WaterfallPart:
+    description: >-
+      A paged series of existing Waterfalls for the role's elements of an amount attribute's declaring
+      kind, using the same rowsPage selection and cursor as Cards. No instance ids or new selector in the binding.
+      Without a role-visible derivation proof an item is unavailable, never a raw amount value.
+    attributes:
+      slot: {required: true, description: "An amount attribute by element id (`<kind>.<slot>`); its declaring kind is paged through the Report's published manifest and role."}
+
+  MatrixPart:
+    description: One existing Matrix binding's published overview in this Report's manifest and role; no instance, file or context selector.
+    attributes:
+      sheet: {required: true, pattern: "^[a-z][a-z0-9_]*$", description: ID of a Matrix binding in this pack's channel table.}
+
+  ComparisonPart:
+    description: >-
+      A Report part (docs/gui.md, Comparison; RV-U19): one derived relation that compares the pack with a
+      reference source (decision R13), counted in three classes by the verdict column of its rows, each count a
+      link to the rows of that class with their proofs. The mapping of verdicts to classes is pack data; the
+      compiler stops a pack whose rules can give a verdict that no class names (unknown is explicit).
+    attributes:
+      relation: {required: true, pattern: "^[a-z][a-z0-9_]*$", description: A derived relation of the pack's rules.}
+      verdict: {required: true, pattern: "^[a-z][a-z0-9_]*$", description: The column of the relation that holds its verdict.}
+      equal: {multivalued: true, description: The verdicts that count as equal.}
+      different: {multivalued: true, description: The verdicts that count as different.}
+      not_compared: {multivalued: true, description: "The verdicts that count as not compared (a row whose two sides have one source, decision Q11, among them)."}
+
+  ReportPart:
+    description: One part of a Report, in composition order; exactly one of cards, a Waterfall, a Matrix or a comparison.
+    attributes:
+      cards: {range: CardsPart, inlined: true}
+      waterfall: {range: WaterfallPart, inlined: true}
+      matrix: {range: MatrixPart, inlined: true}
+      comparison: {range: ComparisonPart, inlined: true}
+    exactly_one_of:
+      - slot_conditions: {cards: {required: true}}
+      - slot_conditions: {waterfall: {required: true}}
+      - slot_conditions: {matrix: {required: true}}
+      - slot_conditions: {comparison: {required: true}}
+
+  ReportSheet:
+    description: >-
+      Report: a fixed composition of parts from one published manifest (docs/gui.md, Report; decision B5).
+      One sheet per binding, at `/<pack>/reports/<id>`.
+    attributes:
+      id: {required: true, pattern: "^[a-z][a-z0-9_]*$"}
+      title_message: {required: true, description: Message id of the report's title.}
+      parts: {range: ReportPart, multivalued: true, required: true, inlined_as_list: true}
+
+  HomeHero:
+    description: >-
+      The hero of a pack home: one sheet the pack declares, by its form and id. Exactly one form, which the
+      compiler checks; today the only form is a Flow.
+    attributes:
+      flow: {description: "The id of a Flow of the pack."}
+
+  HomeSheet:
+    description: >-
+      What a pack declares for its home (docs/gui.md, The hero of a pack home): the hero, the picture under the
+      claim and above the attention cards, and the claim it proves; each is optional. One home per pack. Without
+      it the home is the cards alone.
+    attributes:
+      hero: {range: HomeHero, inlined: true}
+      claim: {multivalued: true, description: "Derived relations of the rules, each with exactly one rule and its message in every language of the pack. The home's claim is the sentences of the relations of which the role reads exactly one row, in this order, each with its `grounds`; a relation with no row or more than one gives no sentence. With none left the home keeps the claim of its cards."}
+
+  HouseStyle:
+    description: >-
+      A pack's house style (docs/gui.md, House style): its own values for colour roles that std-view defines,
+      per display theme. It gives values only. It adds no role and changes no sign, glyph, dash, stroke,
+      hatching or label, so the legend reads the same in every house style. One house style per pack; a pack
+      without one is drawn in std-view's colours.
+    attributes:
+      palettes: {range: HouseStylePalette, multivalued: true, inlined_as_list: true, required: true, minimum_cardinality: 1, description: "At most one palette per display theme, which the compiler checks. A theme without one keeps std-view's palette."}
+
+  HouseStylePalette:
+    description: The house style's colours for one display theme.
+    attributes:
+      theme: {range: HouseStyleTheme, required: true}
+      tokens: {range: HouseStyleColor, multivalued: true, inlined_as_list: true, required: true, minimum_cardinality: 1, description: "At most one value per role, which the compiler checks. A role without one keeps std-view's value."}
+
+  HouseStyleColor:
+    description: One colour role of std-view with the house style's value.
+    attributes:
+      role:
+        required: true
+        description: >-
+          A colour role a house style may set: the ground, the inks, the rule and the accent. The colours of
+          statuses, tones and hues are not in this list; they stay std-view's.
+        pattern: "^(paper|ink|ink\\.muted|rule|proof)$"
+      value: {required: true, description: "A hex colour.", pattern: "^#[0-9a-fA-F]{6}$"}
+
+  SheetBindings:
+    description: >-
+      The sheet part of a pack's channel table: which kinds and slots a map sheet draws, and with
+      which free channels. Optional per sheet; a pack without it keeps the plain Map.
+    attributes:
+      home: {range: HomeSheet, inlined: true, description: "The pack home's hero and claim."}
+      relief: {range: ReliefSheet, inlined: true}
+      track: {range: TrackSheet, inlined: true}
+      flows: {range: FlowSheet, multivalued: true, inlined_as_list: true}
+      matrices: {range: MatrixSheet, multivalued: true, inlined_as_list: true}
+      timelines: {range: TimelineSheet, multivalued: true, inlined_as_list: true, description: "Timelines, each at `/<pack>/timeline/<id>`."}
+      nests: {range: NestSheet, multivalued: true, inlined_as_list: true, description: "Nests, each at `/<pack>/nest/<id>/<element>`."}
+      reports: {range: ReportSheet, multivalued: true, inlined_as_list: true}

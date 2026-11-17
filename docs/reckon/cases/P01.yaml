@@ -1,0 +1,18 @@
+id: P01
+status: settled
+mode: publish
+source: 'check memory_bound: host.memory_need <= 600 GiB'
+data: appendix-b
+expect:
+  publication:
+    outcome: publishes
+    violations: []
+    undecided:
+    - binder: host-d
+      state: unknown
+      reason: no_spec
+    blocking: []
+note: An unknown check publishes one undecided violation row, counted.
+sources:
+- '#350/6751612214 owner settlement, point 3'
+- '#350 v0 §5, §7b'

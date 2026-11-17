@@ -1,0 +1,38 @@
+# A decision table on a derived value (docs/reckon/tables.md §2): each hit policy, a cell without a test, a cell
+# of two tests, a range with both ends and with one end left open, and `total`. Written by hand to show the shape:
+# `spans` is left empty, which this check does not see; a whole form with a table is every-member.yaml.
+format: rede.reckon-module/1
+module:
+  pack: lab
+  use: []
+  decls:
+    - extend: Host
+      derived:
+        - derived: band
+          type: Tier
+          table:
+            table: unique
+            inputs: [{path: [roomy]}, {path: [memory]}]
+            output: band
+            rows:
+              - {tests: [[{lit: "true"}], [{between: {op: "..<", to: {lit: 64 GiB}}}]], value: {lit: low}}
+              - {tests: [[{lit: "true"}], [{between: {from: {lit: 64 GiB}, op: ".."}}]], value: {lit: high}}
+              - {tests: [[{lit: "false"}], "-"], value: {lit: low}}
+        - derived: rank
+          type: Tier
+          table:
+            table: first
+            inputs: [{path: [memory]}]
+            output: rank
+            rows:
+              - {tests: [[{between: {from: {lit: 64 GiB}, op: "..", to: {lit: 128 GiB}}}, {lit: 512 GiB}]], value: {lit: high}}
+              - {tests: ["-"], value: {lit: low}}
+        - derived: best
+          totality: total
+          type: Tier
+          table: {table: priority, inputs: [{path: [roomy]}], output: best, rows: [{tests: ["-"], value: {lit: low}}]}
+        - derived: all
+          type: Tier
+          card: "*"
+          table: {table: collect, inputs: [{path: [owner]}], output: all, rows: []}
+spans: []

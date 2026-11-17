@@ -1,0 +1,68 @@
+id: https://rede.dev/contracts/freshness
+name: rede_freshness
+title: Freshness of a value
+description: >-
+  How current a value is, separate from its Status (exact, optimal, best-found, ...) and from its
+  state (known, unknown, ...). The picture never lies about it: a stale value is shown as unknown,
+  with the reason and the last known value (docs/gui.md, Freshness). The terms are English; the
+  labels per language are messages of std-view.
+prefixes:
+  linkml: https://w3id.org/linkml/
+  rede: https://rede.dev/contracts/
+default_prefix: rede
+default_range: string
+imports:
+  - linkml:types
+  - value
+
+types:
+  DecimalText:
+    typeof: string
+    pattern: "^(0|[1-9][0-9]*)$"
+
+enums:
+  Freshness:
+    permissible_values:
+      current: {description: Computed from the current input.}
+      stale: {description: "The input changed, the recomputation has not finished; the value shown is unknown."}
+      pending: {description: "Being recomputed: an offload, a compilation or the next epoch."}
+  StaleReason:
+    permissible_values:
+      offload: {description: "An offloaded step has a new input hash and no result for it yet."}
+      compilation: {description: A structural change waits for its pipeline.}
+      epoch: {description: Input arrived after the epoch of the manifest.}
+
+classes:
+  Staleness:
+    attributes:
+      reason: {range: StaleReason, required: true}
+      step: {description: "The offloaded step or pipeline; empty for epoch."}
+      since_epoch: {range: DecimalText, required: true}
+      input_sha256: {description: "For an offload, the input hash that has no result yet."}
+      estimated_ms: {range: DecimalText, description: "For pending, the expected duration."}
+
+  FreshValue:
+    tree_root: true
+    description: >-
+      A value as the explainer and viewer receive it. When freshness is stale, `value` has the state
+      unknown and `last_known` holds the previous value; current has no staleness.
+    attributes:
+      value: {range: Value, required: true, inlined: true}
+      freshness: {range: Freshness, required: true}
+      staleness: {range: Staleness, inlined: true}
+      last_known: {range: Value, inlined: true, description: "The last current value, marked as such in the Lens."}
+    rules:
+      - description: A stale or pending value says why and since when.
+        preconditions:
+          slot_conditions:
+            freshness: {any_of: [{equals_string: stale}, {equals_string: pending}]}
+        postconditions:
+          slot_conditions:
+            staleness: {required: true}
+      - description: A stale value shows unknown, with the last known value.
+        preconditions:
+          slot_conditions:
+            freshness: {equals_string: stale}
+        postconditions:
+          slot_conditions:
+            last_known: {required: true}

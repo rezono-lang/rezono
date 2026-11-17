@@ -1,0 +1,12 @@
+# A range of a test has at least one end: `18..` or `..<18`, never `..` alone.
+format: rede.reckon-module/1
+module:
+  pack: lab
+  use: []
+  decls:
+    - extend: Host
+      derived:
+        - derived: band
+          type: Tier
+          table: {table: unique, inputs: [{path: [memory]}], output: band, rows: [{tests: [[{between: {op: ".."}}]], value: {lit: high}}]}
+spans: []

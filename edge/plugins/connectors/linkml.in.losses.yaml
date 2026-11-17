@@ -1,0 +1,42 @@
+# A LinkML schema as a pack's schema modules (linkml_schema.py, M02): what the pack does not take over. What has
+# a meaning in LinkML that Rede does not read is refused with its place, not listed here; what is here has none
+# in a pack, or comes from elsewhere. test_linkml_schema.py holds this list to the import.
+connector: linkml-in
+standard: LinkML
+standard_version: "1.12"
+direction: in
+losses:
+  - subject: structure
+    what: >-
+      Subsets: a schema's `subsets` and the `in_subset` of each element. They group elements for a
+      document; no rule or check reads a group.
+    fate: dropped
+  - subject: structure
+    what: >-
+      A top-level slot is one definition that many classes use. It becomes an attribute of each class that uses
+      it, with `slot_usage` on that class folded in; that they were one slot is lost, and one no class uses is
+      not written.
+    fate: weakened
+    carried_by: ["attributes"]
+  - subject: structure
+    what: >-
+      A schema that declares no type, enum or class (an index, or a file of top-level slots) is no module: its
+      imports stand in its place, and its own header and documentation are not written.
+    fate: dropped
+  - subject: structure
+    what: >-
+      The bookkeeping of a schema and of the tools that made it: `settings`, `emit_prefixes`,
+      `default_curi_maps`, `metamodel_version`, `source_file`, `source_file_date`, `source_file_size`,
+      `generation_date`, `slot_names_unique`, `id_prefixes`, `id_prefixes_are_closed`, `definition_uri`,
+      `local_names`, `conforms_to`, `implements`, `instantiates` and `extensions`.
+    fate: dropped
+  - subject: structure
+    what: >-
+      The annotation `semantic` the export writes: the compiler derives each slot's semantic type again from
+      the schema, so a changed `semantic` changes nothing.
+    fate: dropped
+  - subject: identity
+    what: >-
+      A module of a pack the pack imports, written beside the root under that pack's name. The pack takes it by
+      its pin in `pack.yaml`, not from the document.
+    fate: dropped

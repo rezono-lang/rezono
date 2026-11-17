@@ -1,0 +1,8 @@
+# Invalid: an aggregate carries its count.
+root: {relation: total, key: '["a","known:12"]'}
+manifest_id: manifest-epoch-7
+witnesses:
+  - conclusion: {relation: total, key: '["a","known:12"]'}
+    rule_id: total
+    aggregates:
+      - {relation: weight, group_key: '["a"]', contributors_sha256: "00", result: "known:12"}

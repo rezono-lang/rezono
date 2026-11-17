@@ -1,0 +1,7 @@
+# The block needs a base.
+name: example-pack
+version: 0.1.0
+default_language: en
+iri:
+  namespaces:
+    - {iri: "https://w3id.org/example-publisher/lab/", kinds: [Probe]}

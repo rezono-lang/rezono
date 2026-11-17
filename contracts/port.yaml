@@ -1,0 +1,201 @@
+id: https://rede.dev/contracts/port
+name: rede_port
+title: Port declarations
+description: >-
+  One contract for every boundary port (decision O12a, PC1), with three kinds. `in`: what arrives is an
+  observation, never a curated fact; it becomes one only through a proposal (lifting, I29). `out`: runs
+  only on a published epoch the checker accepted, and writes a projection of it per role with its own
+  loss list. `effect`: changes the world exactly once per approved plan hash through the effect journal
+  (A03), and its result returns as an observation. Each call is a PortInvocation identified by its input
+  hash (A02). This contract replaces the contract parts of A02 (contracts/plugin.yaml, a deprecated alias
+  for one wave), I16 and M01; I16 keeps the mapping format and the first out-port, M01 the connector
+  checklist and the loss-list format.
+prefixes:
+  linkml: https://w3id.org/linkml/
+  rede: https://rede.dev/contracts/
+default_prefix: rede
+default_range: string
+imports:
+  - linkml:types
+  - connector  # Loss: the format of a loss-list entry (M01, #710)
+
+types:
+  PortName:
+    typeof: string
+    description: A stable name for a port in the catalogue.
+    pattern: "^[a-z][a-z0-9]*([-_][a-z0-9]+)*$"
+  DeclarationName:
+    typeof: string
+    description: A name of a kind consumed or produced, an operation, a secret reference or a pack requirement.
+    pattern: "^[A-Za-z_][A-Za-z0-9_.-]*$"
+  PinnedImage:
+    typeof: string
+    description: A container image reference pinned by a SHA-256 digest.
+    pattern: "^[^@\\s]+@sha256:[0-9a-f]{64}$"
+  InputSha256:
+    typeof: string
+    description: >-
+      SHA-256 in lowercase hexadecimal over the canonical JSON of an invocation's input
+      (docs/contracts.md#canonical-hash).
+    pattern: "^[0-9a-f]{64}$"
+
+enums:
+  PortKind:
+    description: What a port does at the boundary (O12a).
+    permissible_values:
+      in: {description: "Reads a source; what arrives is an observation. A stream arrives as deltas (RD6)."}
+      out: {description: "Writes a projection of a checked, published epoch per role, with its loss list."}
+      effect: {description: "Changes the world once per approved plan hash through the effect journal; its result returns as an observation."}
+  PortInput:
+    description: What a run of the port starts from. Each kind has exactly one.
+    permissible_values:
+      source: {description: "A source and a position in it, outside Rede (kind in)."}
+      checked_epoch: {description: "A published epoch the checker accepted, read per role by hash (kind out)."}
+      approved_plan: {description: "The plan hash the approver accepted; the effect journal claims it once (kind effect)."}
+  PortOutput:
+    description: >-
+      What a port writes. There is no value for curated facts: no port writes them. A curated fact
+      changes only through a proposal that a person or a gate accepts.
+    permissible_values:
+      observation: {description: "Rows of the observation layer, each with its source, observed time and knowledge time (kind in)."}
+      projection: {description: "A target outside Rede made from a checked epoch: files, a table, an artifact or a descriptor (kind out)."}
+      world: {description: "A change outside Rede, once per plan hash (kind effect). Its result is read back as an observation."}
+  PortRowSource:
+    description: How each row a port writes names where it comes from ("a source per row").
+    permissible_values:
+      source: {description: "Each observation carries a Source (contracts/source.yaml) with its event time."}
+      output_index: {description: "Each written line names its rows and proof hashes (contracts/output-index.yaml)."}
+      journal: {description: "Each change is bound to its plan hash in the effect journal; what it created is listed by that tag."}
+  PortRuntime:
+    description: Where the port runs.
+    permissible_values:
+      in_process: {description: "On the operator's host or in the core's process, until ports run as Jobs (M6)."}
+      job: {description: "As a container Job; the image is pinned by digest."}
+  Cadence:
+    description: The desired freshness of what the port reads or writes (O11).
+    permissible_values:
+      live: {description: "As it changes; the delay bound is max_delay_seconds."}
+      hourly: {description: Once an hour.}
+      daily: {description: Once a day.}
+      on_request: {description: "Only when a person or a pipeline asks for it."}
+
+classes:
+  Port:
+    tree_root: true
+    description: >-
+      The static declaration of a port. The kind fixes what a run starts from, what it writes and how each
+      row names its source; the declaration states all three so a port that would write curated facts, or
+      an out-port that would run on an unchecked epoch, cannot be declared.
+    attributes:
+      name: {range: PortName, identifier: true, required: true, description: Port identity in the catalogue.}
+      version: {required: true, pattern: "^\\S+$", description: The declared implementation version.}
+      kind: {range: PortKind, required: true, description: "in, out or effect."}
+      runs_on: {range: PortInput, required: true, description: What each run starts from; fixed by the kind.}
+      writes: {range: PortOutput, required: true, description: What each run writes; fixed by the kind.}
+      row_source: {range: PortRowSource, required: true, description: How each written row names its source; fixed by the kind.}
+      runtime: {range: PortRuntime, required: true, description: Where the port runs.}
+      image: {range: PinnedImage, description: "The digest-pinned container; required when the port runs as a Job."}
+      connector: {range: PortConnector, inlined: true, description: "The external standard, when the port is a connector."}
+      consumes: {range: DeclarationName, multivalued: true, required: true, minimum_cardinality: 1, description: "The kinds read: sources, Output schemas, files or plans."}
+      produces: {range: DeclarationName, multivalued: true, required: true, minimum_cardinality: 1, description: "The kinds written: observations, projections, or the results of an effect."}
+      freshness: {range: PortFreshness, inlined: true, required: true, description: "The port's freshness facts (O11)."}
+      mapping_owner: {required: true, pattern: "^\\S+$", description: "Who answers for the mapping between Rede's kinds and the outside: a role or a team, never a person's account."}
+      losses:
+        range: Loss
+        multivalued: true
+        inlined_as_list: true
+        required: true
+        description: >-
+          What the mapping loses, one entry per lost part; empty only when nothing is lost. An entry
+          is a Loss of contracts/connector.yaml (M01), the format a connector's published loss list uses.
+      effect: {range: PortEffect, inlined: true, description: The operations of an effect; required for kind effect only.}
+      footprint: {range: PortFootprint, inlined: true, description: "What an in-port makes in its source for the length of a run; absent when it makes nothing. Kind in only."}
+      secrets: {range: DeclarationName, multivalued: true, description: Names of secret references the port resolves; never values.}
+      requires: {range: DeclarationName, multivalued: true, description: Pack requirements checked before a run.}
+    rules:
+      - description: "An in-port reads a source and writes observations with a source each; it has no effect beyond its declared footprint."
+        preconditions: {slot_conditions: {kind: {equals_string: in}}}
+        postconditions:
+          slot_conditions:
+            runs_on: {equals_string: source}
+            writes: {equals_string: observation}
+            row_source: {equals_string: source}
+            effect: {value_presence: ABSENT}
+      - description: "An out-port runs only on a checked, published epoch and writes a projection with an output index; it has no effect."
+        preconditions: {slot_conditions: {kind: {equals_string: out}}}
+        postconditions:
+          slot_conditions:
+            runs_on: {equals_string: checked_epoch}
+            writes: {equals_string: projection}
+            row_source: {equals_string: output_index}
+            effect: {value_presence: ABSENT}
+      - description: "An effect port runs on an approved plan through the journal and names plan, apply and status."
+        preconditions: {slot_conditions: {kind: {equals_string: effect}}}
+        postconditions:
+          slot_conditions:
+            runs_on: {equals_string: approved_plan}
+            writes: {equals_string: world}
+            row_source: {equals_string: journal}
+            effect: {required: true}
+      # One absent slot per rule: the generated JSON Schema reads two in one rule as "not both".
+      - description: "An out-port makes nothing in a source: it has no footprint."
+        preconditions: {slot_conditions: {kind: {equals_string: out}}}
+        postconditions: {slot_conditions: {footprint: {value_presence: ABSENT}}}
+      - description: "What an effect makes goes through the journal: it has no footprint."
+        preconditions: {slot_conditions: {kind: {equals_string: effect}}}
+        postconditions: {slot_conditions: {footprint: {value_presence: ABSENT}}}
+      - description: A port that runs as a Job is pinned by digest.
+        preconditions: {slot_conditions: {runtime: {equals_string: job}}}
+        postconditions: {slot_conditions: {image: {required: true}}}
+      - description: A port that runs in-process names no image; its invocation has none either.
+        preconditions: {slot_conditions: {runtime: {equals_string: in_process}}}
+        postconditions: {slot_conditions: {image: {value_presence: ABSENT}}}
+
+  PortFootprint:
+    description: >-
+      What an in-port makes in its source to be able to read it, such as a probe (ruling of 12-11-2026 on
+      O12a). Allowed only when the source itself was made by an approved effect plan of Rede: every
+      resource the port makes carries that plan's hash under `plan_label`, the port removes it in the same
+      run, and what it could not remove is reported by the run, which then fails (PC11). The approval is
+      that plan's, so the footprint needs no journal row of its own. A port that makes something in a source no approved plan
+      of Rede made, or that leaves something behind on purpose, is a port of kind effect.
+    attributes:
+      makes: {range: DeclarationName, multivalued: true, required: true, minimum_cardinality: 1, description: "The kinds of resource the port makes in its source; each is removed in the same run."}
+      plan_label: {required: true, pattern: "^\\S+$", description: "The label or tag every such resource carries; its value is the hash of the approved effect plan that made the source."}
+
+  PortConnector:
+    description: The external standard a connector port maps to, and the fixture its mapping round-trips on.
+    attributes:
+      standard: {required: true, pattern: "^\\S+$", description: "The standard, for example ODCS, DCAT, SHACL, DTDL, Iceberg or OCI."}
+      standard_version: {required: true, pattern: "^\\S+$", description: The version of the standard.}
+      round_trip: {required: true, pattern: "^\\S+$", description: "The fixture the mapping is tested on: out and back with only the declared losses."}
+
+  PortFreshness:
+    description: >-
+      The freshness facts of a port (O11): the desired cadence and the largest delay. Rows carry their
+      own observed time and knowledge time; rules may read those, never the cadence.
+    attributes:
+      cadence: {range: Cadence, required: true, description: "How often the port should read or write: live, hourly, daily or on request."}
+      max_delay_seconds: {range: integer, minimum_value: 0, description: "The largest delay between a change and its row, when bounded."}
+
+  PortEffect:
+    description: The three operations of an effect (A02, A03).
+    attributes:
+      plan: {range: DeclarationName, required: true, description: "Produces the dry-run difference and the plan hash; changes nothing."}
+      apply: {range: DeclarationName, required: true, description: "Applies the approved plan once, through the effect journal."}
+      status: {range: DeclarationName, required: true, description: "Reconciles the attempt by the plan-hash tag; changes nothing."}
+
+  PortInvocation:
+    description: >-
+      One call of a declared port. The input hash is required for every kind and, with the port, its
+      image, the operation and the unit, identifies the attempt. For an in-port it covers the source and
+      position read; for an out-port the checked epoch read; for an effect's plan the canonical export,
+      and for its apply and status the plan hash of the EffectPlan (contracts/effect.yaml). This record
+      describes an attempt and guarantees nothing at runtime; the effect journal claims an attempt durably.
+    attributes:
+      port: {range: PortName, required: true, description: The name of the declared Port.}
+      kind: {range: PortKind, required: true, description: The kind of the declared Port.}
+      image: {range: PinnedImage, description: "The digest-pinned image that ran; absent for a port that runs in-process."}
+      operation: {range: DeclarationName, required: true, description: "The operation called: read (in), write (out), or the effect's plan, apply or status name."}
+      unit: {required: true, description: "What the call is about: the source for in, the epoch and role for out, the effect unit for effect."}
+      input_sha256: {range: InputSha256, required: true, description: "The hash of the call's input."}

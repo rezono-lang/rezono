@@ -1,0 +1,18 @@
+# A seal with a part and a part of a part (docs/compiler.md#parts).
+format: rede.rules/1
+pack: example
+relations: []
+seals:
+  - kind: entry
+    period: entry__occurred_on
+    row_sha256: entry__row_sha256
+    tables: [entry__occurred_on]
+    closed_until: period_close__closed_until
+    covers: period_close__covers
+    element: closed_entry__element
+    sha256: closed_entry__sha256
+    refused: entry__refused
+    accepted: entry__accepted
+    parts:
+      - {kind: posting, arrow: posting__entry, owner: entry, tables: [posting__amount, posting__entry], accepted: posting__accepted}
+      - {kind: tag, arrow: tag__posting, owner: posting, tables: [tag__posting], accepted: tag__accepted}

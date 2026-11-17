@@ -1,0 +1,3 @@
+# Exactly one form per part.
+comparison: {relation: alike, verdict: verdict, equal: [same]}
+matrix: {sheet: grid}

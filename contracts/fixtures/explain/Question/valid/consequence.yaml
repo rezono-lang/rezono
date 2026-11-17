@@ -1,0 +1,8 @@
+term: consequence
+start: present
+applies_to: {derivation: fact}
+steps:
+  - suppose: {delta: without}
+  - trace: {direction: forward, depth: "3"}
+answer: rings
+limit: 200

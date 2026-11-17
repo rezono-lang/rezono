@@ -1,0 +1,9 @@
+alpha: alfa
+alpha.title: titel
+alpha.size: grootte
+beta: bèta
+beta.alpha: alfa
+beta.state: stand
+state: stand
+state.low: laag
+state.high: hoog

@@ -1,0 +1,8 @@
+# Theory std-identity: same-as and the classes it makes (#314 §5.2, work package T5). Neutral concepts, axioms
+# and rules, and no facts. A domain maps its own kinds and arrows onto it with a view (docs/compiler/schema-operations.md, views
+# that execute), or lets a kind of its own be a Referent.
+name: std-identity
+version: 0.1.0
+default_language: en
+theory: true
+imports: []

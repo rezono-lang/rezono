@@ -1,0 +1,19 @@
+# Neutral labels of std-identity. A domain gives its own words in its own labels and messages (view).
+referent: referent
+referent.same_as: same as
+referent.represented_by: represented by
+equivalent: the same as
+has_equivalent: recorded more than once
+chosen: named as representative
+has_chosen: has a named representative
+disputed: two representatives named
+representatives_disagree: two representatives for one class
+representative_outside_class: representative outside the class
+representative: representative
+representative_not_recorded: representative not recorded
+stated_text: stated value
+stated_number: stated number
+identity_conflict: members that disagree
+class_text: value of the class
+class_number: number of the class
+stated_same: stated to be the same

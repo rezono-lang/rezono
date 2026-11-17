@@ -1,0 +1,4 @@
+# A module that declares nothing: no `reckon` line, no `use`, no declaration. The two lists are there and empty.
+format: rede.reckon-module/1
+module: {pack: lab, use: [], decls: []}
+spans: []

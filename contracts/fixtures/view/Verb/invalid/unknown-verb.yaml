@@ -1,0 +1,4 @@
+# The six verbs are closed: a pack cannot add one.
+verb: share
+label_message: verb.share
+key: x

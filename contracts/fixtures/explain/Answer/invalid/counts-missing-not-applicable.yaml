@@ -1,0 +1,7 @@
+# Missing is never zero: every count is given.
+format: rede.answer/1
+question: ask
+manifest_id: m-1
+nodes: []
+output_schema: s-e60191303ae97ad776d3b3c7136793c24ef83be5862327865b412399f5c9ac72
+counts: {rows: 1, undecided: 0}

@@ -1,0 +1,85 @@
+id: https://rede.dev/contracts/plugin
+name: rede_plugin
+title: Plugin declarations
+description: >-
+  Deprecated alias for one wave (O12a): declare ports with contracts/port.yaml (PC1). A digest-pinned boundary plugin and the capabilities it declares (G2), and one invocation of it
+  identified by its input hash.
+prefixes:
+  linkml: https://w3id.org/linkml/
+  rede: https://rede.dev/contracts/
+default_prefix: rede
+default_range: string
+imports:
+  - linkml:types
+
+types:
+  PluginName:
+    typeof: string
+    description: A stable name for a plugin in the catalogue.
+    pattern: "^[a-z][a-z0-9]*([-_][a-z0-9]+)*$"
+  DeclarationName:
+    typeof: string
+    description: A name of a declaration, capability, secret reference or pack requirement.
+    pattern: "^[A-Za-z_][A-Za-z0-9_.-]*$"
+  PinnedImage:
+    typeof: string
+    description: A container image reference pinned by a SHA-256 digest.
+    pattern: "^[^@\\s]+@sha256:[0-9a-f]{64}$"
+  InputSha256:
+    typeof: string
+    description: >-
+      SHA-256 in lowercase hexadecimal over the canonical JSON of an invocation's input
+      (docs/contracts.md#canonical-hash).
+    pattern: "^[0-9a-f]{64}$"
+
+classes:
+  Plugin:
+    deprecated: "Deprecated alias for one wave (O12a): declare ports with contracts/port.yaml (PC1). Port, PortEffect and PortInvocation replace it."
+    tree_root: true
+    description: The static declaration of a plugin. Each invocation carries its own input identity.
+    attributes:
+      name: {range: PluginName, identifier: true, required: true, description: Plugin identity in the catalogue.}
+      version: {required: true, pattern: "^\\S+$", description: The declared implementation version.}
+      image: {range: PinnedImage, required: true, description: The digest-pinned container for this implementation.}
+      direction:
+        range: string
+        required: true
+        multivalued: true
+        minimum_cardinality: 1
+        equals_string_in: [in, compute, out]
+        description: The directions served by this plugin.
+      effect: {range: PluginEffect, inlined: true, description: Declared operations for an effect in the out direction.}
+      consumes: {range: DeclarationName, multivalued: true, description: "Names of the sources, relations or Output schemas read."}
+      produces: {range: DeclarationName, multivalued: true, description: "Names of the declared deltas, results or observations returned."}
+      capabilities: {range: DeclarationName, multivalued: true, description: Additional capability names declared by this plugin.}
+      secrets: {range: DeclarationName, multivalued: true, description: Names of secret references resolved by the plugin.}
+      requires: {range: DeclarationName, multivalued: true, description: Pack requirements checked before applying an effect.}
+    rules:
+      - description: Declaring an effect requires the out direction.
+        preconditions: {slot_conditions: {direction: {equals_string_in: [in, compute]}}}
+        postconditions: {slot_conditions: {effect: {value_presence: ABSENT}}}
+
+  PluginEffect:
+    deprecated: "Deprecated alias for one wave (O12a): declare ports with contracts/port.yaml (PC1). Port, PortEffect and PortInvocation replace it."
+    description: The three capability names for a planned effect.
+    attributes:
+      plan: {range: DeclarationName, required: true, description: Produces the dry-run difference.}
+      apply: {range: DeclarationName, required: true, description: Applies the accepted plan.}
+      status: {range: DeclarationName, required: true, description: Reconciles the result of an attempt.}
+
+  PluginInvocation:
+    deprecated: "Deprecated alias for one wave (O12a): declare ports with contracts/port.yaml (PC1). Port, PortEffect and PortInvocation replace it."
+    description: >-
+      One call of a declared plugin. The input hash is required in every direction and, with the
+      plugin image, operation and unit, identifies the attempt: what was called, on which unit, with
+      which input. For an effect, plan runs before any plan exists, so its input hash is the hash of
+      the canonical export; apply and status take the accepted plan, so theirs is the plan hash of the
+      EffectPlan (contracts/effect.yaml).
+      This record describes an attempt and guarantees nothing at runtime; the effect journal claims
+      the attempt durably and reconciles its result.
+    attributes:
+      plugin: {range: PluginName, required: true, description: The name of the declared Plugin.}
+      image: {range: PinnedImage, required: true, description: "The digest-pinned image that ran, as declared."}
+      operation: {range: DeclarationName, required: true, description: "The operation called, which fixes the direction: read (in), submit (compute), or an effect's plan, apply or status name (out)."}
+      unit: {required: true, description: "The unit the call is about: the source for in, the step unit for compute, the effect unit for out."}
+      input_sha256: {range: InputSha256, required: true, description: "The hash of the call's input: for in the source and position read, for compute the step input, for an effect's plan the canonical export, for its apply and status the plan hash of the EffectPlan."}

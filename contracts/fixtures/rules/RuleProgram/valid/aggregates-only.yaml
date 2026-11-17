@@ -1,0 +1,39 @@
+# A body of aggregates only: a count and a sum over a whole relation, and a maximum. No literal, so no group
+# key: each relation has one row at most (the maximum none, when there are no hours).
+format: rede.rules/1
+pack: fixture
+relations:
+  - name: hours
+    role: base
+    key: [{name: member, type: string}, {name: task, type: string}]
+    values: [{name: h, type: integer}]
+  - name: hours_booked
+    role: derived
+    key: [{name: entries, type: integer}, {name: total, type: integer}]
+    module: load
+    explain: materialize
+  - name: longest_entry
+    role: derived
+    key: [{name: h, type: integer}]
+    module: load
+    explain: materialize
+rules:
+  - id: hours_booked
+    module: load
+    stratum: "1"
+    head: {relation: hours_booked, terms: ["?n", "?s"]}
+    body: []
+    aggregates:
+      - {relation: hours, terms: ["_", "_"], function: count, as: "?n", stratum: "0"}
+      - {relation: hours, terms: ["_", "_"], function: sum, over: h, as: "?s", stratum: "0"}
+    witness: {relation: hours_booked__witness, variables: ["?n", "?s"]}
+    origin: {file: rules/load.dl, line: "1"}
+  - id: longest_entry
+    module: load
+    stratum: "1"
+    head: {relation: longest_entry, terms: ["?x"]}
+    body: []
+    aggregates:
+      - {relation: hours, terms: ["_", "_"], function: max, over: h, as: "?x", stratum: "0"}
+    witness: {relation: longest_entry__witness, variables: ["?x"]}
+    origin: {file: rules/load.dl, line: "4"}

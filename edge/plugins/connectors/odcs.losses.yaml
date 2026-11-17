@@ -1,0 +1,97 @@
+# The ODCS contract of a Reckon Data schema (docs/reckon-data/l0.md §2.5; odcs.py), read by a tool that knows
+# ODCS: what it does not get that a reader of Reckon Data does. The contract describes the columnar form (§4);
+# what ODCS has no member for is written in `customProperties`. test_odcs.py holds this list to the contract.
+connector: odcs-out
+standard: ODCS
+standard_version: "3.2.0"
+direction: out
+losses:
+  - subject: state
+    what: >-
+      That a column holds the state of a slot, or the reason beside it, and what the codes mean. A reader
+      of ODCS alone sees a small integer and a text with rules on them: the codes the slot allows, a value
+      that is null exactly beside a state, a reason only where its state may carry it.
+    fate: extension
+    carried_by: ["customProperties.reckonField"]
+  - subject: unit
+    what: >-
+      The unit of a quantity, its storage unit and the factor between them. The column is the stored
+      integer; a reader of ODCS alone does not know in which unit.
+    fate: extension
+    carried_by: ["customProperties.reckonExtension"]
+  - subject: money
+    what: >-
+      The currency of an amount and, for a rate, the unit it is per. The column is a decimal at the type's
+      scale; a reader of ODCS alone does not know in which currency.
+    fate: extension
+    carried_by: ["customProperties.reckonExtension"]
+  - subject: identity
+    what: >-
+      The target of a reference that is not one row of this contract: an element of another pack, with the
+      schema and the data it is pinned to, an element of a versioned kind, which has a row per version, and
+      an element of a kind with subkinds, which is a row of that kind's table or of a subkind's. ODCS has a
+      foreign key for a reference to one row of one table inside the contract only, so these have none.
+    fate: extension
+    carried_by: ["customProperties.reckonExtension"]
+  - subject: world
+    what: >-
+      Whether a kind or a relation is open or closed: whether a row that is not there says anything. ODCS
+      has no member for it.
+    fate: extension
+    carried_by: ["customProperties.reckonWorld"]
+  - subject: proof
+    what: >-
+      That the table `$why` names the witness of a value. A reader of ODCS alone sees a table of five text
+      columns with no relation to the others.
+    fate: extension
+    carried_by: ["customProperties.reckonTable"]
+  - subject: source
+    what: >-
+      That the table `$src` names the sources of a fact, each as the JSON text of one source. A reader of
+      ODCS alone sees a table of five text columns with no relation to the others.
+    fate: extension
+    carried_by: ["customProperties.reckonTable"]
+  - subject: time
+    what: >-
+      That the columns `$valid` and `$known` of a versioned kind say when a version applies and when it
+      was known. `$valid` is the JSON text of the validity; a reader of ODCS alone sees a text and a date
+      in the key.
+    fate: extension
+    carried_by: ["customProperties.reckonField"]
+  - subject: structure
+    what: >-
+      The bounds of a ratio and of an integer that is stored as text, and the normal form of a value: a
+      text after its normalisation, a ratio in lowest terms, a period whose start is before its end. The
+      contract names the storage; no rule compares inside a struct or a text.
+    fate: weakened
+    carried_by: ["physicalType"]
+  - subject: structure
+    what: >-
+      The pattern of a text type is a regular expression. The schema's pattern is written for one dialect
+      and the engine that runs the rule reads it in its own, which differs in rare constructs.
+    fate: weakened
+    carried_by: ["quality"]
+  - subject: structure
+    what: >-
+      What the schema document says beyond the columnar form: that a slot is derived, an inverse slot,
+      the predecessor of the schema and the state an added slot is backfilled with. The contract names
+      the schema id; the schema document has the rest.
+    fate: dropped
+  - subject: check
+    what: >-
+      The pack's own checks and invariants. The quality rules hold the structure of the schema document;
+      a check written as a rule is not a quality rule here.
+    fate: dropped
+  - subject: rule
+    what: The rules. The contract describes what was derived, not that it follows.
+    fate: dropped
+  - subject: text
+    what: >-
+      The labels of the reason codes. A rule lists the codes a state may carry, without their labels, and
+      no column or table gets a description: texts for readers are in the pack's message files.
+    fate: dropped
+  - subject: access
+    what: >-
+      Which role the view was made for. The contract is the same for every role that has the schema; with
+      a hash pin its version names one role's dataset, not the role.
+    fate: dropped

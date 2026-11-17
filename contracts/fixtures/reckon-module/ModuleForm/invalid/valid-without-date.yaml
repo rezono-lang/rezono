@@ -1,0 +1,11 @@
+# `valid` holds one date (a range without an end) or two; a version without `valid` leaves the member out.
+format: rede.reckon-module/1
+module:
+  pack: lab
+  use: []
+  decls:
+    - param: rate
+      type: Ratio
+      versions:
+        - {version: "1", valid: [], value: {lit: 10 %}}
+spans: []

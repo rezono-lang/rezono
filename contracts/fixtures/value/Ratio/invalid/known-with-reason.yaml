@@ -1,0 +1,5 @@
+# Invalid: a known ratio carries no reason except added_later.
+numerator: 1
+denominator: 3
+state: known
+reason: empty

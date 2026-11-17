@@ -1,0 +1,39 @@
+# A witness as PROV-O (decision O12c; docs/reckon-data/l0.md §5; reckon_data/rdf.py: witness_to_prov), read by
+# a reader that knows PROV-O and not the `rd:` terms. A Reckon Data reader loses nothing: prov_to_witness gives
+# the witness back. test_losses.py holds this list to what the export writes and to `rdf.PROV_LOSS`.
+connector: prov-o-out
+standard: PROV-O
+standard_version: "2013-04-30"
+direction: out
+losses:
+  - subject: proof
+    what: >-
+      A negative premise: that a row was absent. PROV-O has no absence, so the premise is not
+      `prov:used` and the reader does not see that the conclusion rests on it.
+    fate: extension
+    carried_by: ["rd:absent"]
+  - subject: proof
+    what: The polarity, the stratum and the position of each premise, on its prov:Usage.
+    fate: extension
+    carried_by: ["rd:polarity", "rd:stratum", "rd:position"]
+  - subject: rule
+    what: Which rule was applied. No PROV-O term names a rule; to the reader the activity has no name.
+    fate: extension
+    carried_by: ["rd:rule"]
+  - subject: proof
+    what: The substitution of the rule's variables.
+    fate: extension
+    carried_by: ["rd:binding", "rd:variable", "rd:value", "rd:position"]
+  - subject: proof
+    what: Aggregate evidence, as the canonical JSON of each aggregate.
+    fate: extension
+    carried_by: ["rd:aggregate"]
+  - subject: source
+    what: >-
+      The source of a base row is a literal of canonical JSON, not an entity with a description of
+      its own: the reader sees that the row was derived from something and cannot follow it.
+    fate: weakened
+    carried_by: ["prov:wasDerivedFrom"]
+  - subject: access
+    what: Which role the witness was chosen for. The bundle names the epoch and its hash pin, not the role.
+    fate: dropped

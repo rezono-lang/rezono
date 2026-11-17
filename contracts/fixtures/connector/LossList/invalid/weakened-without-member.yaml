@@ -1,0 +1,8 @@
+connector: odcs-out
+standard: ODCS
+standard_version: "3.0.2"
+direction: out
+losses:
+  - subject: unit
+    what: The unit is a description only.
+    fate: weakened

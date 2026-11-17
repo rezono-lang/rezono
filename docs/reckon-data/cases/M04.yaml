@@ -1,0 +1,25 @@
+id: M04
+class: change
+status: settled
+schema:
+  from: fixture.schema.json
+successor:
+  merge:
+    types:
+      MiB:
+        of: Quantity
+        dimension: information
+        unit: MiB
+        storage_unit: B
+        factor: '1048576'
+        storage: int64
+    kinds:
+      Host:
+        slots:
+          memory_need:
+            type: MiB
+form: schema
+expect:
+  change_class: major
+sources:
+- '#369 L0 rev 2 §8'

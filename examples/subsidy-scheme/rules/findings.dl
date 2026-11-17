@@ -1,0 +1,23 @@
+// Findings: worth a case officer's attention, but no reason to stop publication. A finding is a derived
+// relation without @invariant (docs/concepts.md); each row has a proof like any other conclusion.
+
+// How many applications a household has.
+.decl application_count(household: symbol, n: number)
+application_count(h, n) :- household(h), n = count : { application__household(_, h) }.
+
+// A household with more than one application. The maximum of article 7 holds per application, so
+// applications of one household are worth reading together.
+.decl repeat_application(household: symbol, n: number)
+repeat_application(h, n) :- application_count(h, n), n >= 2.
+
+// An application whose award is below its entitlement: the maximum of article 7 cut in. It reads two results of
+// calc/award.yaml, both known: `entitlement` (the cost share of articles 3 to 5 plus the allowance of article 6)
+// and `award` (the entitlement, at most the parameter `maximum_award` of article 7, whose row the award's proof
+// names). Only a known value is a fact for a rule, so an application whose award is unknown is not in it
+// (docs/compiler/rules.md, "Calculation values in rules"). Worth a look before deciding: the household asked
+// for more than the scheme pays (Q11).
+.decl maximum_applied(application: symbol, entitlement: number, award: number)
+maximum_applied(a, e, w) :- calc__entitlement(a, e, "known", ""), calc__award(a, w, "known", ""), w < e.
+
+.output repeat_application
+.output maximum_applied

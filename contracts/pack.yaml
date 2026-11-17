@@ -1,0 +1,210 @@
+id: https://rede.dev/contracts/pack
+name: rede_pack
+title: Pack files
+description: >-
+  The files of a pack that are not LinkML: pack.yaml (name, version, language) and
+  channels.yaml (the pack's part of the key: a shape and an optional icon per kind, a dash per arrow), icons/ (the icons, listed in icons/sources.yaml), and sweeps.yaml
+  (the fact cell of a sweep) with the grid the compiler makes of it, ir/sweeps.json.
+  views.yaml has a closed structural profile; loading it does not enable view execution.
+  Labels and messages are checked by the compiler (`python -m rede_compiler check`),
+  because their element ids come from the schema.
+prefixes:
+  linkml: https://w3id.org/linkml/
+  rede: https://rede.dev/contracts/
+default_prefix: rede
+default_range: string
+imports:
+  - linkml:types
+  - view
+
+classes:
+  PackMeta:
+    description: pack.yaml.
+    attributes:
+      name: {required: true, pattern: "^[a-z][a-z0-9]*(-[a-z0-9]+)*$", description: "Pack name: lower case, words joined by hyphens."}
+      version: {required: true, pattern: "^[0-9]+\\.[0-9]+\\.[0-9]+$", description: "Semantic version."}
+      default_language: {required: true, pattern: "^[a-z]{2,3}$", description: "Language in which every element has a label and a message."}
+      theory: {range: boolean, ifabsent: "false", description: "A fact-free theory that can compile for checks but cannot publish an instance; false when omitted."}
+      class: {pattern: "^[a-z][a-z0-9]*(-[a-z0-9]+)*$", description: "What the pack's data is, said by whoever owns it (SO-5): a deploy profile publishes the pack only if its list publish.classes holds this class. Absent means unclassified, which a profile must list too. No class is known to code by name."}
+      imports: {range: PackImport, multivalued: true, inlined_as_list: true, description: "Packs whose schema modules this pack uses, each pinned on the hash of its files."}
+      modules: {range: ModuleInterface, multivalued: true, inlined_as_list: true, description: "The interface of a schema module: the kinds and enums other modules may use, and the namespace of its kinds. A module without one keeps everything public."}
+      reckon: {range: ReckonModule, multivalued: true, inlined_as_list: true, description: "The pack's modules written in Reckon (docs/reckon/publication.md §2, §3), each with its JSON form and the layer of its kinds."}
+      iri: {range: PackIri, inlined: true, description: "The pack's `base` and the namespaces of its kinds and reason codes (docs/ring2/iris.md section 4). Absent: the pack's published forms keep their stand-in base."}
+
+  PackIri:
+    description: >-
+      The block `iri:` (arbiter, 12-11-2026, ruling 2). `base` is where the names of one publication hang: the
+      definition pin and the epochs. A kind takes the namespace of an entry of `namespaces` that names it, else
+      the `namespace` of its module (`modules:`), else `base`; its IRI is that namespace and its class name. A
+      reason code takes the namespace of an entry that names it, else `base`; its IRI is `<namespace>reason/<code>`.
+      Every value is a whole https IRI ending in `/`; no part is put together in code. The compiler refuses a kind
+      or reason code named in two entries, one the pack does not declare, and two packs of one compile with one
+      `base`. Changing a published `base` or namespace is a major change (Reckon Data L0 section 2.4); no check
+      catches it yet.
+    attributes:
+      base: {required: true, pattern: "^https://[^ #?]+/$", description: "Never shared by two packs, never reused."}
+      namespaces: {range: IriNamespace, multivalued: true, inlined_as_list: true}
+
+  IriNamespace:
+    description: One namespace and the kinds and reason codes of this pack that live in it, overriding a module's namespace.
+    attributes:
+      iri: {required: true, pattern: "^https://[^ #?]+/$"}
+      kinds: {multivalued: true, description: "LinkML class names this pack declares."}
+      reasons: {multivalued: true, pattern: "^[a-z][a-z0-9_]*$", description: "Reason codes of this pack's named outcomes."}
+
+  ReckonModule:
+    description: >-
+      One module written in Reckon. The compiler reads its JSON form (contracts/reckon-module.yaml), never its
+      text, and lowers it beside schema/; the module is named by its path under reckon/ without .reckon, and both
+      files are definition (the pack's hash covers them). A file under reckon/ that no entry names is an error.
+    attributes:
+      module: {required: true, pattern: "^reckon/[a-z][a-z0-9_]*(/[a-z][a-z0-9_]*)*\\.reckon$", description: "The module's text, relative to the pack; a refusal names it with a line."}
+      form: {required: true, pattern: "^reckon/[a-z][a-z0-9_]*(/[a-z][a-z0-9_]*)*\\.json$", description: "Its JSON form as `reckon/` writes it (`node src/write-form.ts`), relative to the pack."}
+      layer: {required: true, pattern: "^(source|facts|conclusions|plan|output|observation)$", description: "The layer of every kind of the module: Reckon has no word for one, and the compiler asks one of every kind."}
+
+  PackImport:
+    description: >-
+      One pack import. A schema of this pack names a module of the imported pack as `<name>:<path>`.
+      `sha256` is the hash of the imported pack's files (`python -m rede_compiler hash <pack>`); a
+      different hash is an error, so an import never changes unnoticed.
+    attributes:
+      name: {required: true, pattern: "^[a-z][a-z0-9]*(-[a-z0-9]+)*$", description: The name in the imported pack.yaml.}
+      path: {required: true, description: "The imported pack's directory, relative to this pack."}
+      sha256: {required: true, pattern: "^[0-9a-f]{64}$"}
+
+  ModuleInterface:
+    description: >-
+      The public surface of one schema module (ticket F04, Reckon v0 §4c). Another module, of this pack or of
+      a pack that imports it, may name only these kinds and enums, as a parent or a range; naming any other
+      is a compile error. The module itself uses all it declares.
+    attributes:
+      module: {required: true, description: "The module's path under schema/, without .yaml (`platform/core`)."}
+      public: {range: PublicElement, multivalued: true, inlined_as_list: true, description: "Its public kinds and enums. Left out (an entry with only a namespace): everything stays public."}
+      namespace: {pattern: "^https://[^ #?]+/$", description: "The namespace of the module's kinds (PackIri); needs the block `iri:`."}
+    rules:
+      - preconditions: {slot_conditions: {namespace: {value_presence: ABSENT}}}
+        postconditions: {slot_conditions: {public: {required: true}}}
+
+  PublicElement:
+    description: >-
+      One public kind or enum. A use of a deprecated element from another module is a compile warning that
+      names the date; the compiler never compares the date with a clock.
+    attributes:
+      name: {required: true, description: The LinkML name of a class or enum the module declares.}
+      deprecated: {range: date, description: "The date from which the element is deprecated (YYYY-MM-DD)."}
+
+  ViewFile:
+    description: >-
+      views.yaml. The reader validates and returns these definitions. A view inside the bounded profile
+      executes (docs/compiler.md, "Views that execute"): one view per theory, one source kind per theory kind,
+      one path per arrow, attribute maps without a path. Outside it, and in an imported pack, a views.yaml is
+      still refused.
+      Kind tokens (kind-map name and populated_from) are already resolved engine-kind names.
+      Arrow-map name and step slot are unqualified slot components, not engine table names.
+      This profile has no LinkML/module name resolver; theory names the imported pack.
+    attributes:
+      format: {required: true, equals_string: rede.views/1}
+      views: {range: ViewSpec, multivalued: true, inlined_as_list: true, required: true, minimum_cardinality: 1}
+
+  ViewSpec:
+    attributes:
+      theory: {required: true, pattern: "^[a-z][a-z0-9]*(-[a-z0-9]+)*$"}
+      kinds: {range: ViewKindMap, multivalued: true, inlined_as_list: true, required: true, minimum_cardinality: 1}
+      arrows: {range: ViewArrowMap, multivalued: true, inlined_as_list: true}
+      attributes: {range: ViewAttributeMap, multivalued: true, inlined_as_list: true}
+
+  ViewAttributeMap:
+    description: >-
+      One attribute of a theory kind, read from one attribute of the source kind mapped onto it (no path), by
+      a reading from a closed list, never an expression.
+    attributes:
+      of: {required: true, pattern: "^[a-z][a-z0-9]*(_[a-z0-9]+)*$", description: The theory kind that declares the attribute.}
+      name: {required: true, pattern: "^[a-z][a-z0-9]*(_[a-z0-9]+)*$"}
+      populated_from: {required: true, pattern: "^[a-z][a-z0-9]*(_[a-z0-9]+)*$", description: "The source kind's unqualified Slot.name."}
+      reading:
+        pattern: "^(identity|days|yyyymmdd)$"
+        ifabsent: "string(identity)"
+        description: >-
+          identity: text to text, a whole number to a whole number. days: a date to the whole number of days
+          since 1970-01-01 in the proleptic Gregorian calendar (decision R18). yyyymmdd: a whole number written
+          YYYYMMDD to that same count; a value that is no calendar day is a blocking finding.
+
+  ViewKindMap:
+    description: One theory kind, with explicit alternative source branches, not list-valued populated_from.
+    attributes:
+      name: {required: true, pattern: "^[a-z][a-z0-9]*(_[a-z0-9]+)*$"}
+      union: {range: ViewKindBranch, multivalued: true, inlined_as_list: true, required: true, minimum_cardinality: 1}
+
+  ViewKindBranch:
+    attributes:
+      populated_from: {required: true, pattern: "^[a-z][a-z0-9]*(_[a-z0-9]+)*$"}
+
+  ViewArrowMap:
+    description: A theory arrow's unqualified slot component, with alternative source paths.
+    attributes:
+      name: {required: true, pattern: "^[a-z][a-z0-9]*(_[a-z0-9]+)*$"}
+      paths: {range: ViewPath, multivalued: true, inlined_as_list: true, required: true, minimum_cardinality: 1}
+      of: {pattern: "^[a-z][a-z0-9]*(_[a-z0-9]+)*$", description: "The theory kind that declares the arrow; needed when two kinds of the theory share the slot name."}
+      assume_functional: {range: boolean, ifabsent: "boolean(false)", description: "Declaration only: execution still refused; later lowering must generate a blocking check."}
+
+  ViewPath:
+    description: One oriented finite source path. Schema compatibility and endpoint identity are not yet checked.
+    attributes:
+      populated_from: {required: true, pattern: "^[a-z][a-z0-9]*(_[a-z0-9]+)*$"}
+      steps: {range: ViewStep, multivalued: true, inlined_as_list: true, required: true, minimum_cardinality: 1}
+
+  ViewStep:
+    description: One source Slot.name component, for example first; never Slot.table alpha__first or Alpha.first.
+    attributes:
+      slot: {required: true, pattern: "^[a-z][a-z0-9]*(_[a-z0-9]+)*$"}
+      inverse: {range: boolean, ifabsent: "boolean(false)"}
+
+  ChannelTable:
+    description: >-
+      channels.yaml: lists of signs, never a map, the bindings of map sheets, and the pack's house style.
+      Colour roles, glyphs and statuses belong to std-view, so no other section is allowed; a house style
+      only gives its own values for some of std-view's colour roles.
+    attributes:
+      kinds: {range: KindSign, multivalued: true, inlined_as_list: true}
+      arrows: {range: ArrowSign, multivalued: true, inlined_as_list: true}
+      relief: {range: ReliefSheet, inlined: true, description: "Landscape as relief, by element id (`<kind>.<slot>`); `height` optional."}
+      flows: {range: FlowSheet, multivalued: true, inlined_as_list: true, description: "Flow sheets, by element id (`<kind>.<slot>`) and relation name, checked by the compiler."}
+      matrices: {range: MatrixSheet, multivalued: true, inlined_as_list: true, description: "Matrix sheets, by element id (`<kind>.<slot>`) and relation name, checked by the compiler."}
+      timelines: {range: TimelineSheet, multivalued: true, inlined_as_list: true, description: "Timeline sheets, by element id (`<kind>.<slot>`), checked by the compiler."}
+      reports: {range: ReportSheet, multivalued: true, inlined_as_list: true, description: "Reports, by element id (`<kind>.<slot>`), checked by the compiler."}
+      images: {range: ImageBinding, multivalued: true, inlined_as_list: true, description: "The image slot per kind (decision B10), by element id, checked by the compiler."}
+      home: {range: HomeSheet, inlined: true, description: "The pack home's hero and claim (docs/gui.md, The hero of a pack home), by Flow id and relation name, checked by the compiler."}
+      house_style: {range: HouseStyle, inlined: true, description: "The pack's house style (docs/gui.md, House style): its values for colour roles of std-view, per display theme, checked by the compiler."}
+
+  SweepFile:
+    description: >-
+      sweeps.yaml: the fact cells a sweep moves over a grid (docs/interaction.md, section 1). Each names one
+      cell as a delta `set` does; the grid comes from the slot's `explore` annotation. v1 allows one sweep
+      per pack. The compiler checks that the kind, the slot and the record exist.
+    attributes:
+      sweeps: {range: Sweep, multivalued: true, inlined_as_list: true, required: true, maximum_cardinality: 1}
+
+  Sweep:
+    description: One fact cell to sweep.
+    attributes:
+      name: {required: true, pattern: "^[a-z][a-z0-9]*(_[a-z0-9]+)*$", description: "Lower snake case; part of the variant manifest ids."}
+      kind: {required: true, pattern: "^[a-z][a-z0-9]*(_[a-z0-9]+)*$", description: "The kind, as the section name in the fact file."}
+      key: {required: true, description: "The record's identifier as text; a whole number as decimal text."}
+      slot: {required: true, pattern: "^[a-z][a-z0-9]*(_[a-z0-9]+)*$", description: "A slot of whole numbers with `explore`; never the identifier."}
+
+  SweepPlan:
+    description: >-
+      ir/sweeps.json, written by the compiler when the pack has a sweep: each sweep with its grid,
+      min, min + step, ... up to max, count values in all (at most 64).
+    attributes:
+      format: {required: true, equals_string: rede.sweeps/1}
+      sweeps: {range: PlannedSweep, multivalued: true, inlined_as_list: true, required: true}
+
+  PlannedSweep:
+    description: A sweep and its grid.
+    is_a: Sweep
+    attributes:
+      min: {range: integer, required: true}
+      max: {range: integer, required: true}
+      step: {range: integer, required: true, minimum_value: 1}
+      count: {range: integer, required: true, minimum_value: 1, maximum_value: 64}

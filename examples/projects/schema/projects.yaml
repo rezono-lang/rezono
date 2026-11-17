@@ -1,0 +1,101 @@
+id: https://rede.example/projects
+name: projects
+description: >-
+  Een neutraal voorbeeld dat iedereen kent: projecten met taken, mijlpalen,
+  afhankelijkheden en een begroting.
+in_language: nl
+imports:
+  - linkml:types
+default_range: string
+annotations:
+  layer: facts
+
+types:
+  Cents:
+    typeof: integer
+    description: Een bedrag in hele centen.
+
+enums:
+  TaskStatus:
+    permissible_values:
+      open:
+      done:
+
+classes:
+  Project:
+    attributes:
+      id:
+        identifier: true
+      name:
+        required: true
+      budget:
+        range: Cents
+        required: true
+        minimum_value: 0
+    unique_keys:
+      project_name:
+        unique_key_slots: [name]
+
+  BudgetLine:
+    attributes:
+      id:
+        identifier: true
+      project:
+        range: Project
+        required: true
+      description:
+        required: true
+      amount:
+        range: Cents
+        required: true
+        minimum_value: 0
+
+  Milestone:
+    attributes:
+      id:
+        identifier: true
+      name:
+        required: true
+      project:
+        range: Project
+        required: true
+      due:
+        range: date
+
+  Task:
+    annotations:
+      path_equations:
+        - name: same_project
+          left: milestone.project
+          right: project
+    attributes:
+      id:
+        identifier: true
+      name:
+        required: true
+      project:
+        range: Project
+        required: true
+      milestone:
+        range: Milestone
+      status:
+        range: TaskStatus
+        required: true
+      estimate:
+        range: integer
+        minimum_value: 1
+        maximum_value: 200
+
+  Dependency:
+    attributes:
+      id:
+        identifier: true
+      task:
+        range: Task
+        required: true
+      prerequisite:
+        range: Task
+        required: true
+    unique_keys:
+      dependency_pair:
+        unique_key_slots: [task, prerequisite]

@@ -1,0 +1,8 @@
+[
+ {"key": ["a", "w1"], "values": {"w": {"value": "5", "state": "known"}}},
+ {"key": ["a", "w2"], "values": {"w": {"value": "7", "state": "known"}}},
+ {"key": ["b", "w3"], "values": {"w": {"state": "unknown"}}},
+ {"key": ["b", "w4"], "values": {"w": {"value": "2", "state": "known"}}},
+ {"key": ["c", "w5"], "values": {"w": {"state": "not_applicable"}}},
+ {"key": ["d", "w6"], "values": {"w": {"state": "invalid"}}}
+]

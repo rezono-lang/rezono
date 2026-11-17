@@ -1,0 +1,6 @@
+# A row without an end attribute: an end that is not known is a cell, never a missing binding.
+id: periods
+title_message: timeline.periods
+rows: period
+start: period__opens
+main_message: phase.open

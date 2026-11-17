@@ -1,0 +1,11 @@
+# The input hash is a SHA-256 in lowercase hex.
+format: rede.output-index/1
+pack: platform
+manifest: m-42
+render:
+  step: render_metallb
+  input_sha256: not-a-hash
+files:
+  - path: a.yaml
+    sha256: 5f01b7b2c916915632d60dd32a77276760056b82ef7fe7590881bbd612e8850e
+    fields: []

@@ -1,0 +1,7 @@
+# The evaluation date of every calculation of this pack: the award of the scheme it imports
+# (subsidy-scheme, calc/award.yaml) and the drift (calc/drift.yaml). The definition carries no date; the pack
+# that uses it states it (decision W10). It is the day of the evaluation_day row (facts/scheme.yaml).
+format: rede.calc/1
+pack: subsidy
+subject: application
+as_of: {valid_at: 2026-11-10, known_at: 2026-11-10}

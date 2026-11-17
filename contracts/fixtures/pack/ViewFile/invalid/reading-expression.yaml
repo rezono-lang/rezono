@@ -1,0 +1,9 @@
+format: rede.views/1
+views:
+  - theory: spans
+    kinds:
+      - name: span
+        union:
+          - populated_from: term
+    attributes:
+      - {of: span, name: first, populated_from: starts, reading: "days + 1"}

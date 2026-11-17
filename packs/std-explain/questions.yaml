@@ -1,0 +1,70 @@
+# The known questions (docs/gui.md, "Questions as data"): each a combination of the building blocks
+# trace and suppose. The term is the name in code; its label and sentence are in messages/<lang>.mf2.
+format: rede.questions/1
+questions:
+  # The route from a value back to its sources.
+  - term: grounds
+    start: present
+    applies_to: {derivation: conclusion}
+    steps:
+      - trace: {direction: back, depth: all}
+    answer: route
+    limit: 200
+  # What depends on a value, ring by ring.
+  - term: reach
+    start: present
+    steps:
+      - trace: {direction: forward, depth: 3}
+    answer: rings
+    limit: 200
+  # For an outcome that is absent: the first premise that fails, with candidate deltas.
+  - term: gap
+    start: absent
+    applies_to: {derivation: conclusion}
+    steps:
+      - trace: {direction: back, through: rules, depth: 4, fanout: 8}
+      - suppose: candidates
+    answer: gap
+    limit: 50
+  # What a published proposal or variant changes, in what the role reads.
+  - term: scenario
+    start: delta
+    steps:
+      - suppose: given
+    answer: overlay
+    limit: 200
+  # What those changes reach, ring by ring, in the proposal's or variant's proof.
+  - term: impact
+    start: delta
+    steps:
+      - suppose: given
+      - trace: {direction: forward, depth: 3}
+    answer: rings
+    limit: 200
+  # A sweep's grid: per value its status and how much changes. The request names the sweep (docs/gui.md).
+  - term: sweep
+    start: sweep
+    steps:
+      - suppose: given
+    answer: series
+    limit: 64
+  # For an outcome that is absent: what lacks support, and the rows that close it (`// @closes`, decision W14):
+  # each states for this key that no row holds, and its own grounds say why. Computed (contract rule 5).
+  - term: contrast
+    start: absent
+    applies_to: {derivation: conclusion}
+    steps:
+      - trace: {direction: back, through: rules, depth: 4, fanout: 8}
+    answer: gap
+    limit: 50
+  # What breaks without a recorded fact: the derived rows that the published variant withdrawing it removes (the
+  # fact's standing changes, no row is deleted), ring by ring.
+  # A dependant that still holds through another proof is not removed, so it is never called broken. Computed.
+  - term: consequence
+    start: present
+    applies_to: {derivation: fact}
+    steps:
+      - suppose: without
+      - trace: {direction: forward, depth: 3}
+    answer: rings
+    limit: 200

@@ -1,0 +1,4 @@
+tone: refused
+color_role: status.violated
+glyph: "✕"
+label_message: tone.negative

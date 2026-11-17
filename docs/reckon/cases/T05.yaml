@@ -1,0 +1,31 @@
+id: T05
+status: settled
+mode: evaluate
+declare: |
+  enum Flag = big | owned
+
+  extend Host
+    derived flags: Flag*
+      table collect
+        | memory_need | owner         | -> flags |
+        | 300 GiB..   | -             | big      |
+        | -           | team-platform | owned    |
+source: ask Host where flags.count() = 0
+data: appendix-b
+expect:
+  answer:
+    rows:
+    - host-b
+    undecided:
+    - binder: host-a
+      state: unknown
+      reason: not_assigned
+    - binder: host-d
+      state: unknown
+      reason: no_spec
+    not_applicable: 0
+note: 'collect: the outputs of the applying rows; an undecided row gives a member whose membership is undecided, so the count
+  is undecided; no row applies to host-b: the empty set.'
+sources:
+- docs/reckon/tables.md §3, §4 (RV-C24)
+- v0 §5c

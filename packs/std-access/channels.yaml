@@ -1,0 +1,3 @@
+# Signs of std-access: a shape per kind (contracts/view.yaml).
+kinds:
+  - {kind: role, shape: pill}

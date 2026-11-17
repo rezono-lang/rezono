@@ -1,0 +1,6 @@
+# A nest has a whole and its parts: at least two levels.
+id: ledger
+title_message: nest.ledger
+part_message: nest.part_of
+levels:
+  - {kind: ledger, flow: column}

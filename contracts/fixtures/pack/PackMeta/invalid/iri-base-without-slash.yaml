@@ -1,0 +1,6 @@
+# A base is a whole IRI ending in `/`.
+name: example-pack
+version: 0.1.0
+default_language: en
+iri:
+  base: "https://w3id.org/example-publisher/example-pack"

@@ -1,0 +1,4 @@
+[
+{"id":"R-1","cells":{"release__decision":{"value":"released","state":"known"}}},
+{"id":"R-2","cells":{"release__decision":{"state":"unknown"}}}
+]

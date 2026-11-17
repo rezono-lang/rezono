@@ -1,0 +1,11 @@
+format: rede.answer/1
+question: grounds
+manifest_id: m-1
+start: {relation: deg, key: '["a","1"]'}
+nodes:
+  - {relation: deg, key: '["a","1"]', distance: 0}
+steps:
+  - conclusion: {relation: deg, key: '["a","1"]'}
+    premise: {relation: e, key: '["a","b"]'}
+    how: counts
+    position: 0

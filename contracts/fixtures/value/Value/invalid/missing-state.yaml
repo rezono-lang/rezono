@@ -1,0 +1,2 @@
+# Invalid: every value carries its state.
+value: "42"

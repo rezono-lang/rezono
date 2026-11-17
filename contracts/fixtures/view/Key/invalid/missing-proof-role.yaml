@@ -1,0 +1,24 @@
+# Invalid: the proof colour role is required.
+palettes:
+  - theme: light
+    tokens:
+      - {role: ink, value: "#1a1a1a"}
+      - {role: paper, value: "#ffffff"}
+      - {role: proof, value: "#0050b3"}
+      - {role: status.valid, value: "#2e7d32"}
+      - {role: status.changed, value: "#b26a00"}
+      - {role: status.violated, value: "#c62828"}
+      - {role: status.unknown, value: "#6d6d6d"}
+statuses:
+  - {status: valid, color_role: status.valid, glyph: "✓", label_message: status-valid}
+  - {status: changed, color_role: status.changed, glyph: "Δ", label_message: status-changed}
+  - {status: violated, color_role: status.violated, glyph: "✗", label_message: status-violated}
+  - {status: unknown, color_role: status.unknown, glyph: "?", label_message: status-unknown, hatched: true}
+  - {status: not_applicable, color_role: ink, glyph: "–", label_message: status-not-applicable}
+kinds:
+  - {kind: node, shape: ellipse}
+arrows:
+  - {arrow: edge, dash: none}
+arrowhead: {length: 4, width: 3}
+fact_typography: upright
+conclusion_typography: italic

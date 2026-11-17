@@ -1,0 +1,29 @@
+# Profile `kubernetes` (docs/operations.md#profiles): the viewer and the access gate as Node containers, an OIDC
+# front that turns a login into a bearer token, and nothing else of our own. Storage (S3 API with conditional put),
+# the identity provider (Keycloak or another OIDC issuer), the secret store behind External Secrets and the Gateway
+# are the platform's. Plain Kubernetes only (decision X4): Deployments, Services, NetworkPolicies and a Gateway API
+# HTTPRoute; one CRD of an operator the platform runs, ExternalSecret, because no secret value lives in Git.
+#
+# An overlay chooses the images (by digest), the hostnames, the issuer and the store: overlays/example is one.
+# deploy/profiles/kubernetes/check.sh renders every overlay, validates it with kubeconform --strict and holds it
+# to the policies in policy/ (conftest).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: rede
+labels:
+  - pairs:
+      app.kubernetes.io/part-of: rede
+    includeSelectors: false
+resources:
+  - namespace.yaml
+  - network.yaml
+  - front.yaml
+  - viewer.yaml
+  - gate.yaml
+  - secrets.yaml
+  - route.yaml
+images:
+  # The OIDC front, oauth2-proxy v7.15.5 (MIT): the digest of its multi-architecture index.
+  - name: oauth2-proxy
+    newName: quay.io/oauth2-proxy/oauth2-proxy
+    digest: sha256:8498b0d0ef0a7b29686414000a08aee467f02d0299c9ed1e006a8f33fc017916

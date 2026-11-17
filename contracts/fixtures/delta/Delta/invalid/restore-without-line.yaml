@@ -1,0 +1,8 @@
+format: rede.delta/1
+pack: library
+changes:
+  - op: delete
+    file: facts/valid.yaml
+    kind: loan
+    key: l2
+    restore: {old: "", new: "  - {id: l2}\n"}

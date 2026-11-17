@@ -1,0 +1,11 @@
+// The type check of CI (RV-I05, docs/ci.md section 5): basedpyright over the compiler and the checker, in pyright's
+// standard mode, in the locked virtualenv. scripts/lint.sh runs it; it fails only on an error that
+// .basedpyright/baseline.json does not hold.
+// `canon` is on the path: its editable install is an import hook that basedpyright does not follow (D08).
+{
+  "include": ["compiler/rede_compiler", "checker/rede_checker"],
+  "typeCheckingMode": "standard",
+  "pythonVersion": "3.13",
+  "pythonPlatform": "Linux",
+  "extraPaths": ["canon"]
+}

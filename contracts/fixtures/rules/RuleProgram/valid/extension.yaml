@@ -1,0 +1,9 @@
+format: rede.rules/1
+pack: example
+relations:
+  - name: granted
+    role: derived
+    module: access
+    extend: true
+    key: [{name: subject, type: string}]
+rules: []

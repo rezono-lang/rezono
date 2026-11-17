@@ -1,0 +1,17 @@
+# Every rule has its body (MOD14).
+id: big
+stable_id: "big~0123456789ab"
+span: {file: rules/core.dl, line: "4", column: "3"}
+message: rule.big
+relation: big
+module: core
+variables:
+  - {name: "?a", type: string}
+  - {name: "?d", type: integer}
+  - {name: "?s", type: integer}
+head:
+  relation: big
+  terms:
+    - {kind: variable, value: "?a", type: string}
+    - {kind: variable, value: "?d", type: integer}
+origin: {file: rules/core.dl, line: "9"}

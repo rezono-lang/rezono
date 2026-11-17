@@ -1,0 +1,7 @@
+kind: git
+name: example/docs
+revision: "0123456789abcdef0123456789abcdef01234567"
+position: guide/manual.adoc#section-2
+ownership: third_party
+licence: LicenseRef-fixture
+attribution: Example author

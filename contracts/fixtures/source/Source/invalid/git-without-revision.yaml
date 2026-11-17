@@ -1,0 +1,3 @@
+kind: git
+name: example/model
+position: facts/nodes.yaml#/nodes/0

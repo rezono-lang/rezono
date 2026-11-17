@@ -1,0 +1,16 @@
+kinds:
+  - {kind: alpha, shape: rect}
+  - {kind: beta, shape: bar}
+arrows:
+  - {arrow: beta.alpha, dash: none}
+flows:
+  - id: chain
+    title_message: flow.chain
+    nodes:
+      - {kind: alpha}
+      - {kind: beta}
+    edges:
+      - {arrow: beta.alpha}
+home:
+  hero: {flow: chain}
+  claim: [sized]

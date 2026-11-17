@@ -1,0 +1,6 @@
+# The critical path is the outcome of the pack's rules, a relation; never a switch on the sheet.
+station: step
+plan: step__in_plan
+wave: step__in_wave
+depends: {arrow: step__after}
+critical: true

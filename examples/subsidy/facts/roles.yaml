@@ -1,0 +1,12 @@
+# The roles that read this pack (kind from std-access). What each may read is in rules/access.dl.
+# `propose` and `viewer` are the roles of the deployment that publishes this pack
+# (deploy/profiles/edge.yaml, access.roles). A deployment's role reads nothing unless the pack names it:
+# `viewer` reads what the policy adviser reads, `propose` what the case officer reads.
+# `public` is the role of a visitor who is not signed in (Y1.2): it reads the scheme and no case. No
+# profile publishes for it yet.
+role:
+  - {"id": "case_officer", "title": "Case officer"}
+  - {"id": "policy_adviser", "title": "Policy adviser"}
+  - {"id": "propose", "title": "Proposer (reads as the case officer)"}
+  - {"id": "public", "title": "The public (reads the scheme, no case)"}
+  - {"id": "viewer", "title": "Reader (reads as the policy adviser)"}

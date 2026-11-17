@@ -1,0 +1,7 @@
+kinds:
+  - {kind: alpha, shape: rect}
+house_style:
+  palettes:
+    - theme: light
+      tokens:
+        - {role: paper, value: Canvas}

@@ -1,0 +1,24 @@
+node_modules/
+target/
+.svelte-kit/
+build/
+dist/
+vendor/
+generated/
+!viewer/src/lib/contract/generated/
+.DS_Store
+.wrangler/
+test-results/
+playwright-report/
+__pycache__/
+*.egg-info/
+.venv/
+.pytest_cache/
+rendered-sentences/
+/compiled/
+# The live engine host's own settings and secrets (deploy/engine/engine.env.example).
+deploy/engine/engine.env
+
+# Local secrets of a Worker (wrangler dev) and of a shell: never in Git (RV-I05).
+.dev.vars
+.env

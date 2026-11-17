@@ -1,0 +1,4 @@
+reviewer: {subject: bob, role: reviewer}
+verdict: accepted
+at: "2026-11-06T10:00:00Z"
+content_sha256: "3b5a0f2c"

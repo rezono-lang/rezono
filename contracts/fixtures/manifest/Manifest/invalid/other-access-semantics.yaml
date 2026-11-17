@@ -1,0 +1,22 @@
+# An access semantics the gate does not know (decision O8): only 2 is valid.
+id: m-1
+epoch: 1
+knowledge_time: "2026-01-01T00:00:00Z"
+access_semantics: 3
+pack_sha256: "1111111111111111111111111111111111111111111111111111111111111111"
+definition_sha256: "8888888888888888888888888888888888888888888888888888888888888888"
+compiler_sha256: "2222222222222222222222222222222222222222222222222222222222222222"
+engine: {name: duckdb-batch, version: "1.1.0", sha256: "3333333333333333333333333333333333333333333333333333333333333333"}
+schema_version: "0.1.0"
+sources:
+  - {source_id: rules, position: "0000000000000000000000000000000000000000"}
+checks:
+  - {name: node__unique, status: green, violations: 0}
+counts:
+  - {relation: node, rows: 3}
+snapshots:
+  - {relation: node, role: checker, complete: true, full: true, uri: "s3://rede/toy/m-1/checker/relations/node.json", sha256: "4444444444444444444444444444444444444444444444444444444444444444", format: json}
+  - {relation: node, role: guest, complete: false, full: false, uri: "s3://rede/toy/m-1/guest/relations/node.json", sha256: "5555555555555555555555555555555555555555555555555555555555555555", format: json}
+witnesses:
+  - {role: checker, uri: "s3://rede/toy/m-1/checker/witnesses.json", sha256: "6666666666666666666666666666666666666666666666666666666666666666"}
+  - {role: guest, uri: "s3://rede/toy/m-1/guest/witnesses.json", sha256: "7777777777777777777777777777777777777777777777777777777777777777"}

@@ -1,0 +1,19 @@
+# Neutrale labels van std-identity. Een domein geeft zijn eigen woorden in zijn eigen labels en messages (view).
+referent: {text: referent, gender: common}
+referent.same_as: hetzelfde als
+referent.represented_by: vertegenwoordigd door
+equivalent: hetzelfde als
+has_equivalent: meer dan eens vastgelegd
+chosen: als vertegenwoordiger genoemd
+has_chosen: heeft een genoemde vertegenwoordiger
+disputed: twee vertegenwoordigers genoemd
+representatives_disagree: twee vertegenwoordigers voor één klasse
+representative_outside_class: vertegenwoordiger buiten de klasse
+representative: vertegenwoordiger
+representative_not_recorded: vertegenwoordiger niet vastgelegd
+stated_text: opgegeven waarde
+stated_number: opgegeven getal
+identity_conflict: leden die het oneens zijn
+class_text: waarde van de klasse
+class_number: getal van de klasse
+stated_same: gesteld hetzelfde te zijn

@@ -1,0 +1,6 @@
+# The reference date is the reader's, never a field of the binding.
+station: step
+plan: step__in_plan
+wave: step__in_wave
+depends: {arrow: step__after}
+today: "2026-11-10"

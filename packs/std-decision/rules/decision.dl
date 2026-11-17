@@ -1,0 +1,98 @@
+// Rules of std-decision (RV-C03), in the Datalog subset, so Soufflé is the oracle.
+// The base relations are the pack's tables: decision(d), decision__state(d, s), decision__supersedes(new, old),
+// decision__decider(d, who), decision__valid_from_day(d, n), decision__valid_until_day(d, n),
+// reference_date__day(r, n), and the two ends of a ground g: ground__decision(g, d) and ground__rests_on(g, d).
+// A day is a whole number YYYYMMDD until rules read dates (schema/decision.yaml).
+//
+// Time comes from the validity days and from supersedes, never from the state: the state is what the record
+// says today, and a reference date may lie before or after today. So a decision whose record says superseded
+// is in force on a reference date before its successor took effect.
+
+// replaces: the transitive closure of supersedes. a replaces b directly or through decisions in between.
+.decl replaces(a: symbol, b: symbol)
+replaces(a, b) :- decision__supersedes(a, b).
+replaces(a, c) :- replaces(a, b), decision__supersedes(b, c).
+
+// Axiom: supersedes has no cycle. No decision replaces itself.
+// @invariant
+.decl supersession_cycle(decision: symbol)
+supersession_cycle(a) :- replaces(a, a).
+
+// Axiom: a decision does not end on or before the day it starts.
+// @invariant
+.decl window_inverted(decision: symbol)
+window_inverted(d) :- decision__valid_from_day(d, f), decision__valid_until_day(d, u), u <= f.
+
+// took_effect: on reference date r, decision d has been taken and its first day f has come. The rule reads the
+// decision itself, decision(d), so a proof that rests on a decision ends in its record.
+.decl took_effect(decision: symbol, on: symbol)
+took_effect(d, r) :- decision(d), reference_date__day(r, n), decision__valid_from_day(d, f), f <= n,
+    !decision__state(d, "proposed").
+
+// ended: on reference date r, the last day of decision d has passed (valid_until u is the first day without it).
+.decl ended(decision: symbol, on: symbol)
+ended(d, r) :- reference_date__day(r, n), decision__valid_until_day(d, u), u <= n.
+
+// replaced: on reference date r, decision s, which supersedes d, has taken effect. It stays so when s itself
+// ends or is replaced later: a decision does not come back by itself.
+.decl replaced(decision: symbol, by: symbol, on: symbol)
+replaced(d, s, r) :- decision__supersedes(s, d), took_effect(s, r).
+
+.decl was_replaced(decision: symbol, on: symbol)
+was_replaced(d, r) :- replaced(d, _, r).
+
+// in_force_on: decision d is in force on reference date r. It has taken effect, its last day has not passed,
+// and no decision that supersedes it has taken effect.
+.decl in_force_on(decision: symbol, on: symbol)
+in_force_on(d, r) :- took_effect(d, r), !ended(d, r), !was_replaced(d, r).
+
+.decl has_start(decision: symbol)
+has_start(d) :- decision__valid_from_day(d, _).
+
+// has_successor: a decision that has been taken and names its first day supersedes d.
+.decl has_successor(decision: symbol)
+has_successor(d) :- decision__supersedes(s, d), has_start(s), !decision__state(s, "proposed").
+
+// Axiom: a superseded decision is not in force. From the day a successor takes effect that holds by the rule
+// above. What is left is a record that says superseded while no decision that has been taken supersedes it:
+// by the rules it is then in force on r, against its own record.
+// @invariant
+.decl superseded_in_force(decision: symbol, on: symbol)
+superseded_in_force(d, r) :- decision__state(d, "superseded"), in_force_on(d, r), !has_successor(d).
+
+.decl has_decider(decision: symbol)
+has_decider(d) :- decision__decider(d, _).
+
+// Finding: decision d is in force on r, and its record names nobody who took it. About the registration, not
+// the world (decider is open): somebody decided, the record does not say who.
+// @absence
+.decl in_force_without_decider(decision: symbol, on: symbol)
+in_force_without_decider(d, r) :- in_force_on(d, r), !has_decider(d).
+
+// Finding: the record of d says in force and names no first day, so d is in force on no reference date.
+.decl in_force_without_start(decision: symbol)
+in_force_without_start(d) :- decision__state(d, "in_force"), !has_start(d).
+
+// Finding: the record of d says withdrawn and names no first day. By its days d is in force on no reference
+// date, and no day says when it stopped. A decision may still rest on d, and a rule that asks whether a ground
+// still stands reads this relation, not the state.
+.decl withdrawn_without_start(decision: symbol)
+withdrawn_without_start(d) :- decision__state(d, "withdrawn"), !has_start(d).
+
+// proposal: the record of d says proposed, so d has not been taken. A proposal names grounds as a decision
+// does; a rule that reads grounds uses this relation to say which of the two it speaks of.
+.decl proposal(decision: symbol)
+proposal(d) :- decision__state(d, "proposed").
+
+// ground_chain: the transitive closure of the grounds. a rests on b because the record of a names b as a ground,
+// or through decisions in between. It is what the records name; whether any of them is in force is not in it.
+.decl ground_chain(decision: symbol, rests_on: symbol)
+ground_chain(a, b) :- ground__decision(g, a), ground__rests_on(g, b).
+ground_chain(a, c) :- ground__decision(g, a), ground__rests_on(g, b), ground_chain(b, c).
+
+// Axiom: the grounds have no cycle. No decision rests on itself.
+// @invariant
+.decl ground_cycle(decision: symbol)
+ground_cycle(a) :- ground_chain(a, a).
+
+.output replaces, supersession_cycle, window_inverted, took_effect, ended, replaced, in_force_on, superseded_in_force, in_force_without_decider, in_force_without_start, withdrawn_without_start, ground_cycle

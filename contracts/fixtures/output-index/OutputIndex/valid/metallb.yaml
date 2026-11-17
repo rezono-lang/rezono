@@ -1,0 +1,34 @@
+# One render of a MetalLB configuration (#356 P7.10e): an address pool from a published row, a protocol
+# default from the chart's values file, and an API version that is text of the template.
+format: rede.output-index/1
+pack: platform
+manifest: m-42
+render:
+  step: render_metallb
+  input_sha256: 4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945
+files:
+  - path: metallb-config/templates/ipaddresspool.yaml
+    sha256: 5f01b7b2c916915632d60dd32a77276760056b82ef7fe7590881bbd612e8850e
+    fields:
+      - line: 1
+        pointer: /apiVersion
+        origin: chart_constant
+        template: {file: templates/ipaddresspool.yaml, line: 1}
+      - line: 4
+        pointer: /metadata/name
+        origin: knowledge
+        witness: {relation: address_pool, key: '["pool-a"]'}
+      - line: 8
+        pointer: /spec/addresses/0
+        origin: knowledge
+        witness: {relation: address_pool__range, key: '["pool-a","10.0.0.10-10.0.0.20"]'}
+      - line: 9
+        pointer: /spec/autoAssign
+        origin: chart_default
+        default: {file: values.yaml, pointer: /pool/autoAssign}
+  - path: metallb-config/templates/l2advertisement.yaml
+    sha256: 3f22d0ca85009e43891ca5f73f45b1577041da335db34ac7e1f17799eac013b4
+    fields:
+      - pointer: /spec/ipAddressPools/0
+        origin: knowledge
+        witness: {relation: address_pool, key: '["pool-a"]'}

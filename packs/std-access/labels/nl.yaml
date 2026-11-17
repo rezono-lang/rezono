@@ -1,0 +1,11 @@
+# Labels van std-access. Het importerende pack mag ze vervangen.
+role: {text: rol, gender: common}
+role.title: naam
+role.capability: bevoegdheid
+capability: bevoegdheid
+capability.read: lezen
+capability.propose: voorstellen
+capability.review: beoordelen
+capability.administer: beheren
+capability.read_restricted: beperkte bronnen lezen
+capability.agent: agent

@@ -1,0 +1,18 @@
+id: E44
+status: settled
+mode: evaluate
+source: ask Host where owner = team-platform or memory_need > 300 GiB
+data: appendix-b
+role: viewer
+expect:
+  answer:
+    rows:
+    - host-a
+    - host-c
+    undecided:
+    - binder: host-d
+      state: unknown
+      reason: no_spec
+    not_applicable: 1
+sources:
+- '#350 P10.2a §11'

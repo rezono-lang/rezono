@@ -1,0 +1,44 @@
+@locale en
+---
+# Sentences of std-decision, neutral. A domain replaces them with a message of the same id (S14).
+arrow.total = {{Every {$kind} has exactly one {$arrow}.}}
+arrow.partial = {{Every {$kind} has at most one {$arrow}.}}
+attribute.total = {{Every {$kind} has exactly one {$attribute}.}}
+attribute.partial = {{Every {$kind} has at most one {$attribute}.}}
+arrow.many.partial = {{Every {$kind} can have more than one {$arrow}.}}
+attribute.many.partial = {{Every {$kind} can have more than one {$attribute}.}}
+is_a = {{Every {$kind} is a {$parent}.}}
+unique_key = {{{$key} belongs to at most one {$kind}.}}
+path_equation = {{For every {$kind}: {$equation}.}}
+# One sentence per rule (rules/decision.dl): rule.<rule-id>, with the rule's variables.
+rule.replaces_1 = {{{$a} supersedes {$b}.}}
+rule.replaces_2 = {{{$a} replaces {$b}, and {$b} supersedes {$c}, so {$a} replaces {$c}.}}
+rule.supersession_cycle = {{{$a} replaces itself: the chain of superseded decisions has a cycle.}}
+rule.window_inverted = {{{$d} stops applying on day {$u}, which is not after its first day {$f}.}}
+rule.took_effect = {{{$d} has been taken (its record does not say proposed) and applies from day {$f}, on or before {$r} (day {$n}).}}
+rule.ended = {{{$d} stopped applying on day {$u}, on or before {$r} (day {$n}).}}
+rule.replaced = {{{$s} supersedes {$d} and has taken effect on {$r}, so {$d} is replaced.}}
+rule.was_replaced = {{{$d} is replaced on {$r}.}}
+rule.in_force_on = {{{$d} is in force on {$r}: it has taken effect, its last day has not passed, and no decision that supersedes it has taken effect.}}
+rule.has_successor = {{{$s}, which has been taken and names its first day, supersedes {$d}.}}
+rule.superseded_in_force = {{The record of {$d} says superseded, yet {$d} is in force on {$r}: no decision that has been taken supersedes it.}}
+rule.has_decider = {{The record of {$d} names who took it.}}
+rule.in_force_without_decider = {{{$d} is in force on {$r}, and its record names nobody who took it.}}
+rule.has_start = {{The record of {$d} names its first day.}}
+rule.in_force_without_start = {{The record of {$d} says in force and names no first day, so it is in force on no reference date.}}
+rule.withdrawn_without_start = {{The record of {$d} says withdrawn and names no first day: by its days {$d} was in force on no reference date, and no day says when it stopped.}}
+rule.proposal = {{The record of {$d} says proposed: {$d} has not been taken yet.}}
+rule.ground_chain_1 = {{The record of {$a} names {$b} as a ground.}}
+rule.ground_chain_2 = {{The record of {$a} names {$b} as a ground, and {$b} rests on {$c}, so {$a} rests on {$c} too.}}
+rule.ground_cycle = {{{$a} rests on itself: the chain of grounds has a cycle.}}
+# Explanation questions: the generic grounds and reach, narrowed to decisions.
+explain.decided = Who decided
+explain.decided.question = {{Who decided {$element}, and when?}}
+explain.replaced = What it replaced
+explain.replaced.question = {{What did {$element} replace?}}
+explain.outside = Outside your view
+explain.more = More from here
+explain.empty = {{No answer for {$element}.}}
+# The standard Flow.
+flow.decisions = Decisions
+channel.decision_subject = One lane per subject; a line runs from a decision to the one it supersedes.

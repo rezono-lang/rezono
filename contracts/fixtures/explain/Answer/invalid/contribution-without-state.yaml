@@ -1,0 +1,12 @@
+format: rede.answer/1
+question: grounds
+manifest_id: m-1
+start: {relation: load, key: '["a","3"]'}
+nodes:
+  - {relation: load, key: '["a","3"]', distance: 0}
+steps:
+  - conclusion: {relation: load, key: '["a","3"]'}
+    premise: {relation: w, key: '["a","p","3"]'}
+    how: contributes
+    position: 0
+    value: "3"

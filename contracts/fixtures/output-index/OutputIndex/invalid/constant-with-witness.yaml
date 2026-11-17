@@ -1,0 +1,12 @@
+# A chart constant names no witness.
+format: rede.output-index/1
+pack: platform
+manifest: m-42
+render:
+  step: render_metallb
+  input_sha256: 4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945
+files:
+  - path: out.yaml
+    sha256: 5f01b7b2c916915632d60dd32a77276760056b82ef7fe7590881bbd612e8850e
+    fields:
+      - {line: 3, origin: chart_constant, template: {file: templates/a.yaml, line: 2}, witness: {relation: r, key: '["a"]'}}

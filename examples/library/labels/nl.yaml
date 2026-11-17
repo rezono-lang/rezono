@@ -1,0 +1,36 @@
+address: {text: adres, gender: neuter}
+address.street: straat en huisnummer
+address.city: plaats
+address.postcode: postcode
+branch: vestiging
+branch.name: naam
+branch.address: adres
+category: categorie
+category.name: naam
+category.parent: bovenliggende categorie
+category.name_within_parent: Elke combinatie van bovenliggende categorie en naam
+work: {text: werk, gender: neuter}
+work.title: titel
+work.category: categorie
+work.year: jaar van uitgave
+work.authors: auteur
+copy: {text: exemplaar, gender: neuter}
+copy.work: werk
+copy.branch: vestiging
+copy.reference_only: aanduiding "alleen ter inzage"
+person: persoon
+person.name: naam
+member: {text: lid, gender: neuter}
+member.membership: soort lidmaatschap
+member.home_branch: thuisvestiging
+staff: {text: personeelslid, gender: neuter}
+staff.branch: vestiging
+loan: uitlening
+loan.copy: exemplaar
+loan.member: lid
+loan.lent_by: uitlener
+loan.lent_on: datum
+loan.lent_at_home: de vestiging van het exemplaar is de vestiging van de uitlener
+membership_type: soort lidmaatschap
+membership_type.youth: jeugd
+membership_type.adult: volwassene

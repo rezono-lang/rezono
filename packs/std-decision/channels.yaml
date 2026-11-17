@@ -1,0 +1,23 @@
+# Signs of std-decision (contracts/view.yaml): a shape per kind, a line per arrow, and one standard Flow.
+kinds:
+  - {kind: decision, shape: rect}
+  - {kind: ground, shape: bar}
+  - {kind: subject, shape: bar}
+  - {kind: reference_date, shape: pill}
+  - {kind: purpose, shape: ellipse}
+  - {kind: principle, shape: diamond}
+  - {kind: alternative, shape: rect}
+  - {kind: exception, shape: bar}
+arrows:
+  - {arrow: decision.supersedes, dash: none}
+  - {arrow: decision.reassesses, dash: "2 4"}
+  - {arrow: ground.rests_on, dash: "6 4"}
+# Flow (docs/gui.md): one lane per subject, and supersedes as the lines, so a subject reads as its chain of decisions.
+flows:
+  - id: decisions
+    title_message: flow.decisions
+    direction: right
+    nodes:
+      - {kind: decision, lane: {channel: lane, slot: decision.subject, level: nominal, meaning_message: channel.decision_subject}}
+    edges:
+      - {arrow: decision.supersedes}

@@ -1,0 +1,10 @@
+# A step must say what its node is (fact, parameter, rule or the operator: op), so it can be named and linked.
+root: {relation: calc__hourly_cents, key: '["niveau1/scaleway","5280","known",""]'}
+manifest_id: manifest-epoch-7
+calc_witnesses:
+  - conclusion: {relation: calc__hourly_cents, key: '["niveau1/scaleway","5280","known",""]'}
+    rule: hourly_cents
+    state: known
+    reads: [calc__as_of, offer_hourly]
+    steps:
+      - {path: every_host_fits/value, value: "5280", state: known}

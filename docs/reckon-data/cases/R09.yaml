@@ -1,0 +1,19 @@
+id: R09
+class: invalid
+status: settled
+schema:
+  from: fixture.schema.json
+form: row
+input:
+  $kind: Host
+  $id: host-a
+  memory_need: 400 GiB
+  owner:
+    $unknown: not_assigned
+  tags:
+    $unknown: ''
+expect:
+  accept: false
+  error: tags allows only known
+sources:
+- '#369 L0 rev 2 §8'

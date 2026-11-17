@@ -1,0 +1,15 @@
+id: M05
+class: change
+status: settled
+schema:
+  from: fixture.schema.json
+successor:
+  merge:
+    kinds:
+      Team:
+        world: closed
+form: schema
+expect:
+  change_class: major
+sources:
+- '#369 L0 rev 2 §8'

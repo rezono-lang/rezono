@@ -1,0 +1,4 @@
+# 12.34 euro in cents.
+minor_units: 1234
+currency: EUR
+state: known

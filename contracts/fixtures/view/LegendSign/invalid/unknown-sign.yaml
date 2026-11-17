@@ -1,0 +1,5 @@
+# The legend is closed: a pack cannot add a sign of its own.
+sign: favourite
+form: glyph
+glyph: "★"
+label_message: sign.favourite

@@ -1,0 +1,8 @@
+# An expression node has exactly one member, which names its form.
+format: rede.reckon-module/1
+module:
+  pack: lab
+  use: []
+  decls:
+    - {param: quota, type: GiB, value: {lit: 512 GiB, path: [quota]}}
+spans: []

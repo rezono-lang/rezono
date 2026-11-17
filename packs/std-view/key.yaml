@@ -1,0 +1,89 @@
+# The channel table of std-view. A pack may override values, never the
+# meaning of a channel. Domain-specific shapes and line styles per kind and arrow
+# belong in that pack's channel table.
+statuses:
+  - {status: valid, tone: positive, color_role: status.valid, glyph: "✓", label_message: status.valid}
+  - {status: changed, tone: caution, color_role: status.changed, glyph: "◐", label_message: status.changed}
+  - {status: violated, tone: negative, color_role: status.violated, glyph: "✕", label_message: status.violated}
+  - {status: unknown, tone: unknown, color_role: status.unknown, glyph: "▨", label_message: status.unknown, hatched: true}
+  - {status: not_applicable, tone: neutral, color_role: status.not_applicable, glyph: "–", label_message: status.not_applicable}
+  # Checked and not there (a negative premise that holds). Neutral, like not applicable; its glyph and its
+  # word tell it apart from valid and from unknown, not its colour.
+  - {status: absent, tone: neutral, color_role: status.not_applicable, glyph: "⦸", label_message: status.absent}
+tones:
+  - {tone: positive, color_role: status.valid, glyph: "✓", label_message: tone.positive}
+  - {tone: neutral, color_role: status.not_applicable, glyph: "–", label_message: tone.neutral}
+  - {tone: caution, color_role: status.changed, glyph: "◐", label_message: tone.caution}
+  - {tone: negative, color_role: status.violated, glyph: "✕", label_message: tone.negative}
+  - {tone: unknown, color_role: status.unknown, glyph: "▨", label_message: tone.unknown}
+# V2 supplies nominal pigments; V1a accepts no unrendered pack colour bindings.
+hues: []
+# The legend of Rede: what is known about a value, the same in every pack and every theme
+# (contracts/view.yaml, SignName). A sheet draws a sign only where the bundle provides its fact.
+# No sign depends on colour: drift is two lines, a supposed value stands beside its struck one.
+signs:
+  - {sign: origin_decision, form: glyph, glyph: "◆", label_message: sign.origin_decision}
+  - {sign: origin_vendor, form: glyph, glyph: "▲", label_message: sign.origin_vendor}
+  - {sign: origin_design, form: glyph, glyph: "■", label_message: sign.origin_design}
+  - {sign: origin_observation, form: glyph, glyph: "●", label_message: sign.origin_observation}
+  - {sign: derived, form: glyph, glyph: "○", label_message: sign.derived}
+  - {sign: assumption, form: underline, dash: "4 3", label_message: sign.assumption}
+  - {sign: drift, form: double_line, tone: caution, dash: "6 3", label_message: sign.drift}
+  - {sign: screened, form: bar, label_message: sign.screened}
+  - {sign: proposal, form: frame, glyph: "✎", dash: "4 3", label_message: sign.proposal}
+  - {sign: sealed, form: stamp, label_message: sign.sealed}
+  - {sign: supposed, form: replaced, accent: true, label_message: sign.supposed}
+# A difference (RV-C02): what a proposal, a supposition or an older manifest adds, removes or changes, drawn
+# the same on every sheet that compares (`?compare=`). The sign says it, not only the colour.
+differences:
+  - {change: added, glyph: "+", tone: caution, label_message: impact.added}
+  - {change: removed, glyph: "−", tone: caution, label_message: impact.removed}
+  - {change: changed, glyph: "Δ", tone: caution, label_message: impact.changed}
+kinds:
+  - {kind: default, shape: rect}
+  - {kind: unknown, shape: rect}
+arrows:
+  - {arrow: default, dash: none}
+  - {arrow: unknown_end, dash: "5 4"}
+  - {arrow: screened, dash: "2 3"}
+  # A Timeline: the phase by which a period is extended. Longer dashes than a link with an unknown end.
+  - {arrow: extension, dash: "8 4"}
+proof_role: proof
+accent_role: proof
+fact_typography: upright
+conclusion_typography: italic
+strokes:
+  - {role: line, width: 1}
+  - {role: hairline, width: 1}
+  # The double rule under a total (number typography): two hairlines and the space between them.
+  - {role: total, width: 3}
+  - {role: proof, width: 3}
+  - {role: frame, width: 2}
+  - {role: selection, width: 2}
+  - {role: coast, width: 2}
+  - {role: contour, width: 1}
+  - {role: ring, width: 6}
+  - {role: rail, width: 4}
+  # A Track: the critical path, wider than the other rails.
+  - {role: rail.critical, width: 6}
+  # The lines of a legend sign: both lines of drift, the frame of a stamp.
+  - {role: sign, width: 2}
+hatch: {color_role: status.unknown, spacing: 6, angle: 45, width: 1}
+arrowhead: {length: 7, width: 7}
+typefaces:
+  - {role: text, family: "system-ui, sans-serif"}
+  - {role: figures, family: "ui-monospace, monospace"}
+# Free channels: the measurement levels each channel may carry (docs/gui.md). A pack binds
+# a meaning to a channel; a binding at any other level is rejected.
+channels:
+  - {channel: tone, levels: [ordered]}
+  - {channel: hue, levels: [nominal]}
+  - {channel: lane, levels: [nominal, ordered]}
+  - {channel: ink, levels: [ordered]}
+  - {channel: shape, levels: [nominal]}
+  - {channel: stroke_style, levels: [nominal]}
+  - {channel: size, levels: [ordered, quantitative]}
+  - {channel: elevation, levels: [quantitative]}
+  - {channel: badge, levels: [nominal]}
+  - {channel: weight, levels: [ordered]}
+  - {channel: presence, levels: [ordered]}

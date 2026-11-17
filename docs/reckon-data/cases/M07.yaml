@@ -1,0 +1,23 @@
+id: M07
+class: change
+status: settled
+schema:
+  from: fixture.schema.json
+  merge:
+    reasons:
+      not_assigned:
+        label:
+          en: not yet assigned
+        states:
+        - unknown
+successor:
+  merge:
+    reasons:
+      not_assigned:
+        label:
+          en: no owner assigned yet
+form: schema
+expect:
+  change_class: patch
+sources:
+- '#369 L0 rev 2 §8'

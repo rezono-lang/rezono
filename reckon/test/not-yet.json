@@ -1,0 +1,5 @@
+{
+	"not_yet": {},
+	"readings": { "E36": "expect", "E51": "expect", "P07": "expect" },
+	"pending": ["E53"]
+}

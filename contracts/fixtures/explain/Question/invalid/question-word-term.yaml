@@ -1,0 +1,6 @@
+term: Why
+start: present
+steps:
+  - trace: {direction: back, depth: all}
+answer: route
+limit: 200

@@ -1,0 +1,15 @@
+# A base, a module namespace and an override per kind and per reason code (pack.yaml `iri:`).
+name: example-pack
+version: 0.1.0
+default_language: en
+modules:
+  - {module: network, namespace: "https://w3id.org/example-publisher/network/"}
+  - module: platform
+    namespace: "https://w3id.org/example-publisher/platform/"
+    public: [{name: Host}]
+iri:
+  base: "https://w3id.org/example-publisher/example-pack/"
+  namespaces:
+    - iri: "https://w3id.org/example-publisher/lab/"
+      kinds: [Probe]
+      reasons: [not_measured]

@@ -1,0 +1,7 @@
+name: plan_route
+unit: route
+input_relation: route_demand
+solver: {name: minizinc+cp-sat, version: "2.9.3+9.12"}
+model: {path: offload/plan_route.mzn, sha256: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}
+time_limit_ms: 30000
+seed: "1"

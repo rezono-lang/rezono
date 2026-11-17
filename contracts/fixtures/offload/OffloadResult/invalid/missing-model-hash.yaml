@@ -1,0 +1,7 @@
+step: plan_route
+unit: route-17
+input_sha256: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+status: optimal
+objective: "1240"
+payload: '{"order":["a","b","c"]}'
+solver: {name: minizinc+cp-sat, version: "2.9.3+9.12"}

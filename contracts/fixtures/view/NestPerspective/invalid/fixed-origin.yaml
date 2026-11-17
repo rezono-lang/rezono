@@ -1,0 +1,7 @@
+# What is supposed is the reader's choice, never an element in the binding.
+id: failure
+label_message: nest.failure
+relation: failure_effect
+part: service
+state: {channel: tone, slot: effect, level: ordered, meaning_message: channel.effect}
+supposed: storage-cluster

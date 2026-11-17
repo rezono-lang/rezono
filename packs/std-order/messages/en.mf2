@@ -1,0 +1,29 @@
+@locale en
+---
+# Sentences of std-order, neutral. A domain replaces them with a message of the same id (S14).
+arrow.total = {{Every {$kind} has exactly one {$arrow}.}}
+arrow.partial = {{Every {$kind} has at most one {$arrow}.}}
+attribute.total = {{Every {$kind} has exactly one {$attribute}.}}
+attribute.partial = {{Every {$kind} has at most one {$attribute}.}}
+arrow.many.partial = {{Every {$kind} can have more than one {$arrow}.}}
+is_a = {{Every {$kind} is a {$parent}.}}
+unique_key = {{{$key} belongs to at most one {$kind}.}}
+path_equation = {{For every {$kind}: {$equation}.}}
+# One sentence per rule (rules/order.dl): rule.<rule-id>, with the rule's variables.
+rule.before_1 = {{{$a} directly precedes {$b}.}}
+rule.before_2 = {{{$a} comes before {$b}, and {$b} directly precedes {$c}, so {$a} comes before {$c}.}}
+rule.comparable_1 = {{{$a} and {$b} are comparable: {$a} comes before {$b}.}}
+rule.comparable_2 = {{{$a} and {$b} are comparable: {$b} comes before {$a}.}}
+rule.order_cycle = {{{$a} comes before itself: the order has a cycle.}}
+rule.rank_conflict = {{{$a} comes before {$b}, but the rank of {$a} ({$x}) is not lower than that of {$b} ({$y}).}}
+# Explanation questions: the generic grounds and reach, narrowed to the order.
+explain.order_grounds = Why earlier
+explain.order_grounds.question = {{Why does {$element} come earlier?}}
+explain.order_reach = What follows
+explain.order_reach.question = {{What comes after {$element}?}}
+explain.outside = Outside your view
+explain.more = More from here
+explain.empty = {{No answer for {$element}.}}
+# The standard Flow.
+flow.order = Order
+channel.ordered_scale = One lane per scale; the lines run from earlier to later.

@@ -1,0 +1,4 @@
+[
+{"id":"R-KM","cells":{"rate__amount":{"minor_units":"225","currency":"EUR","state":"known"}}},
+{"id":"R-STD","cells":{"rate__amount":{"minor_units":"120000","currency":"EUR","state":"known"}}}
+]

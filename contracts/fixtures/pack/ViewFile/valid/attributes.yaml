@@ -1,0 +1,24 @@
+format: rede.views/1
+views:
+  - theory: spans
+    kinds:
+      - name: span
+        union:
+          - populated_from: term
+      - name: line
+        union:
+          - populated_from: calendar
+      - name: mark
+        union:
+          - populated_from: reading
+    attributes:
+      - {of: span, name: first, populated_from: starts, reading: days}
+      - {of: span, name: label, populated_from: title}
+      - {of: mark, name: at, populated_from: day, reading: yyyymmdd}
+    arrows:
+      - name: "on"
+        of: span
+        paths:
+          - populated_from: term
+            steps:
+              - slot: calendar

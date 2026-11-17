@@ -1,0 +1,3 @@
+# State known: the value is present.
+value: "42"
+state: known

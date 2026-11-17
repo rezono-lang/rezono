@@ -1,0 +1,8 @@
+# An extension has a name: the key and the table twin need it.
+id: support
+title_message: timeline.support
+rows: release
+start: release__supported_from
+end: release__full_support_until
+extension: release__support_ends
+main_message: phase.full_support

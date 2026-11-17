@@ -1,0 +1,6 @@
+kinds:
+  - {kind: item, shape: rect}
+  - {kind: entry, shape: bar}
+  - {kind: setting, shape: diamond}
+arrows:
+  - {arrow: entry.item, dash: none}

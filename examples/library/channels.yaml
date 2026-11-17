@@ -1,0 +1,22 @@
+# Een vorm per soort en een lijnsoort per pijl (contracts/view.yaml). Kleuren komen uit std-view.
+kinds:
+  - {kind: address, shape: bar}
+  - {kind: branch, shape: rect}
+  - {kind: category, shape: diamond}
+  - {kind: work, shape: rect}
+  - {kind: copy, shape: pill}
+  - {kind: person, shape: ellipse}
+  - {kind: member, shape: ellipse}
+  - {kind: staff, shape: ellipse}
+  - {kind: loan, shape: pill}
+arrows:
+  - {arrow: branch.address, dash: none}
+  - {arrow: category.parent, dash: "4 3"}
+  - {arrow: work.category, dash: none}
+  - {arrow: copy.work, dash: none}
+  - {arrow: copy.branch, dash: none}
+  - {arrow: member.home_branch, dash: "4 3"}
+  - {arrow: staff.branch, dash: none}
+  - {arrow: loan.copy, dash: none}
+  - {arrow: loan.member, dash: none}
+  - {arrow: loan.lent_by, dash: "1 3"}

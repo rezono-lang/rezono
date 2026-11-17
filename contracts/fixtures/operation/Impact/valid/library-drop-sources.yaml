@@ -1,0 +1,26 @@
+# The drop of the worked example on a pack whose facts/valid.yaml has a source companion (B12): the
+# companion is written again and the sources of the rows the drop loses go with them.
+format: rede.impact/1
+pack: library
+operations:
+  - index: 4
+    op: drop
+    lossless: false
+    migration: 4-drop.yaml
+    tables:
+      - {before: item__reference_only, rows: 0}
+    loss:
+      - state: facts
+        table: item__reference_only
+        rows:
+          - {id: "1001", value: "false"}
+          - {id: "1002", value: "false"}
+          - {id: "1003", value: "true"}
+    elements:
+      - {before: item.reference_only}
+    sources:
+      companions: [facts/valid.sources.yaml]
+      lost:
+        - {relation: item__reference_only, key: '["1001",false]'}
+        - {relation: item__reference_only, key: '["1002",false]'}
+        - {relation: item__reference_only, key: '["1003",true]'}

@@ -1,0 +1,138 @@
+id: https://rede.example/library
+name: library
+description: >-
+  Een bibliotheek: vestigingen met een adres, een boom van categorieën, werken en
+  exemplaren, leden en personeel als personen, en uitleningen als waarnemingen.
+in_language: nl
+imports:
+  - linkml:types
+default_range: string
+annotations:
+  layer: facts
+
+enums:
+  MembershipType:
+    permissible_values:
+      youth: {}
+      adult: {}
+
+classes:
+  Address:
+    description: Heeft geen eigen identificatie; bestaat alleen ingebed in een vestiging.
+    attributes:
+      street:
+        required: true
+      city:
+        required: true
+      postcode:
+        pattern: "^[1-9][0-9]{3} ?[A-Z]{2}$"
+
+  Branch:
+    attributes:
+      code:
+        identifier: true
+      name:
+        required: true
+      address:
+        range: Address
+        inlined: true
+        required: true
+
+  Category:
+    attributes:
+      id:
+        identifier: true
+      name:
+        required: true
+      parent:
+        range: Category
+    unique_keys:
+      name_within_parent:
+        unique_key_slots: [parent, name]
+
+  Work:
+    attributes:
+      id:
+        identifier: true
+      title:
+        required: true
+      category:
+        range: Category
+        required: true
+      year:
+        range: integer
+        minimum_value: 1450
+      authors:
+        multivalued: true
+        minimum_cardinality: 1
+        maximum_cardinality: 3
+
+  Copy:
+    attributes:
+      barcode:
+        identifier: true
+        range: integer
+      work:
+        range: Work
+        required: true
+      branch:
+        range: Branch
+        required: true
+      reference_only:
+        range: boolean
+        required: true
+
+  Person:
+    abstract: true
+    attributes:
+      id:
+        identifier: true
+      name:
+        required: true
+
+  Member:
+    is_a: Person
+    attributes:
+      membership:
+        range: MembershipType
+        required: true
+      home_branch:
+        range: Branch
+    rules:
+      - description: Een volwassen lid heeft een thuisvestiging.
+        preconditions:
+          slot_conditions:
+            membership: {equals_string: adult}
+        postconditions:
+          slot_conditions:
+            home_branch: {required: true}
+
+  Staff:
+    is_a: Person
+    attributes:
+      branch:
+        range: Branch
+        required: true
+
+  Loan:
+    annotations:
+      layer: observation
+      path_equations:
+        - name: lent_at_home
+          left: copy.branch
+          right: lent_by.branch
+    attributes:
+      id:
+        identifier: true
+      copy:
+        range: Copy
+        required: true
+      member:
+        range: Member
+        required: true
+      lent_by:
+        range: Staff
+        required: true
+      lent_on:
+        range: date
+        required: true

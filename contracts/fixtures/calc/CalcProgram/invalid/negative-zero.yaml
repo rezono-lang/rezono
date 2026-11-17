@@ -1,0 +1,17 @@
+# "-0" is not canonical decimal text; zero is "0".
+format: rede.calc/1
+pack: fixture
+subject: purchase
+rules:
+  - id: correction@2026-v1
+    rule: correction
+    version: 2026-v1
+    output: correction.cents
+    unit: cents
+    valid_from: "2026-01-01"
+    valid_until: "2027-01-01"
+    known_from: "2025-12-01"
+    definitions:
+      - name: zero
+        when: {boolean: true}
+        value: {integer: "-0"}

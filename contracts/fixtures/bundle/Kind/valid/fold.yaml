@@ -1,0 +1,11 @@
+id: core_link
+stable_id: "CoreLink"
+span: {file: schema/core.yaml, line: "4", column: "3"}
+class: Link
+layer: facts
+abstract: false
+identifier: id
+id_type: text
+module: core
+table: core_link
+fold: true

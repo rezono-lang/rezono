@@ -1,0 +1,33 @@
+# A delimited release (O8) is reserved in the contract, but not supported yet: refused until it is built.
+format: rede.rules/1
+pack: fixture
+relations:
+- name: task
+  role: base
+  key:
+  - {name: id, type: string}
+  world: closed
+- name: open_task
+  role: derived
+  key:
+  - {name: task, type: string}
+  module: planning
+  explain: materialize
+  release:
+  - {role: member}
+rules:
+- id: open_task
+  module: planning
+  stratum: '1'
+  head:
+    relation: open_task
+    terms: ['?t']
+  body:
+  - relation: task
+    terms: ['?t']
+    polarity: positive
+    stratum: '0'
+  witness:
+    relation: open_task__witness
+    variables: ['?t']
+  origin: {file: rules/planning.dl, line: '1'}

@@ -1,0 +1,5 @@
+view: outage__target__cardinality
+check: cardinality
+kind: outage
+subject: target
+path: target

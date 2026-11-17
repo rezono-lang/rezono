@@ -1,0 +1,7 @@
+term: gap
+start: absent
+steps:
+  - trace: {direction: back, through: rules, depth: "4", fanout: 8}
+  - suppose: {delta: candidates}
+answer: gap
+limit: 50

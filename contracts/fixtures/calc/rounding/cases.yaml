@@ -1,0 +1,21 @@
+# The rounding operators of calc.yaml on exact rationals x = n / d, with negative halves.
+# Checked against Python's decimal module (ROUND_HALF_UP is half away from zero) in compiler/tests/test_rules_properties.py.
+cases:
+  - {op: round, n: "1", d: "2", want: "1"}
+  - {op: round, n: "-1", d: "2", want: "-1"}
+  - {op: round, n: "3", d: "2", want: "2"}
+  - {op: round, n: "-3", d: "2", want: "-2"}
+  - {op: round, n: "5", d: "2", want: "3"}
+  - {op: round, n: "-5", d: "2", want: "-3"}
+  - {op: round, n: "1", d: "3", want: "0"}
+  - {op: round, n: "-1", d: "3", want: "0"}
+  - {op: round, n: "-2", d: "3", want: "-1"}
+  - {op: round, n: "-149", d: "100", want: "-1"}
+  - {op: round, n: "-150", d: "100", want: "-2"}
+  - {op: round, n: "0", d: "7", want: "0"}
+  - {op: floor, n: "-1", d: "2", want: "-1"}
+  - {op: floor, n: "1", d: "2", want: "0"}
+  - {op: floor, n: "-4", d: "2", want: "-2"}
+  - {op: ceil, n: "-1", d: "2", want: "0"}
+  - {op: ceil, n: "1", d: "2", want: "1"}
+  - {op: ceil, n: "-5", d: "3", want: "-1"}

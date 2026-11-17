@@ -1,0 +1,6 @@
+port: lab-k8s
+kind: effect
+image: example.invalid/rede/lab@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+operation: lab-apply
+unit: cluster
+input_sha256: 085590024fc653c148621a395ac7e774b2d0bc33037e66a6f713618f01fafd24

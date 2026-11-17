@@ -1,0 +1,4 @@
+# A file of an imported pack, as a rule origin names it.
+file: "std-access:schema/access.yaml"
+line: "12"
+column: "5"

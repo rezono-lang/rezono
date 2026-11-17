@@ -1,0 +1,8 @@
+diagnostics:
+  - code: wrong_type
+    severity: error
+    where: Host[3].memory
+  - code: unknown_kind
+    severity: error
+    message: unknown kind 'Hots'
+    where: Hots

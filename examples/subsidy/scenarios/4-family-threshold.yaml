@@ -1,0 +1,12 @@
+# What if the income threshold followed the size of the household more closely: a lower base amount
+# (20,000 euros instead of 24,000) and more per person (4,000 euros instead of 2,000)? A household of
+# one gets a lower threshold, a household of two keeps its threshold, a larger one gets a higher one.
+# A supposition, not a decision: no council has taken it. Its record says so: the state is `proposed`,
+# and it names no decider and no day it was taken. It replaces the two parameter rows, so the whole
+# population is computed again and every award that changes shows why; and because a proposed decision
+# is not in force, the finding `undecided_parameter` names both rows.
+decision:
+  - {"id": "supposed", "title": "Supposed: an income threshold that follows household size", "valid_from": "2026-01-01", "valid_from_day": 20260101, "state": "proposed"}
+scheme_parameter:
+  - {"id": "par-01", "name": "income_threshold_base", "value": 2000000, "unit": "cents", "valid_from": "2026-01-01", "valid_until": "2027-01-01", "calendar": "civil", "article": "art-4", "decision": "supposed"}
+  - {"id": "par-02", "name": "income_threshold_per_person", "value": 400000, "unit": "cents", "valid_from": "2026-01-01", "valid_until": "2027-01-01", "calendar": "civil", "article": "art-4", "decision": "supposed"}

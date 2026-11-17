@@ -1,0 +1,23 @@
+format: rede.answer/1
+question: grounds
+manifest_id: m-1
+start: {relation: path, key: '["a","b"]'}
+nodes:
+  - {relation: path, key: '["a","b"]', distance: 0}
+  - relation: e
+    key: '["a","b"]'
+    distance: 1
+    sources:
+      - {kind: pack, name: facts/e.yaml, position: /e/0}
+      - {kind: git, name: example/net, revision: 0123abc, position: 'net.yaml#L12'}
+steps:
+  - conclusion: {relation: path, key: '["a","b"]'}
+    premise: {relation: e, key: '["a","b"]'}
+    how: positive
+    position: 0
+witnesses:
+  - conclusion: {relation: path, key: '["a","b"]'}
+    rule_id: path0
+    bindings: [{variable: "?x", value: a}, {variable: "?y", value: b}]
+    premises:
+      - {row: {relation: e, key: '["a","b"]'}, polarity: positive, stratum: 0}

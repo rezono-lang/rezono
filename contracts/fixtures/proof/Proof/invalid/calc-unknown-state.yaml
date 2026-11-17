@@ -1,0 +1,7 @@
+# A state is one of the four of value.yaml; "zero" is not one.
+root: {relation: calc__hourly_cents, key: '["niveau1/scaleway"]'}
+manifest_id: manifest-epoch-7
+calc_witnesses:
+  - conclusion: {relation: calc__hourly_cents, key: '["niveau1/scaleway"]'}
+    rule: hourly_cents
+    state: zero

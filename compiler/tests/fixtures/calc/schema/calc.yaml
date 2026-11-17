@@ -1,0 +1,34 @@
+# The pack the calculation tests run on: a subject kind with number and boolean attributes (required
+# and optional), a kind of input rows (subject, fact, value) and a kind of parameters. Neutral names
+# on purpose; it describes no domain.
+id: https://rede.example/calc
+name: calc
+in_language: nl
+imports:
+  - linkml:types
+default_range: string
+annotations:
+  layer: facts
+classes:
+  Item:
+    attributes:
+      id: {identifier: true}
+      amount: {range: integer, required: true}
+      extra: {range: integer}
+      flag: {range: boolean, required: true}
+      note: {range: boolean}
+  Entry:
+    attributes:
+      id: {identifier: true}
+      item: {range: Item, required: true}
+      name: {required: true}
+      number: {range: integer}
+      truth: {range: boolean}
+  Setting:
+    attributes:
+      id: {identifier: true}
+      value: {range: integer, required: true}
+      name: {}
+      valid_from: {range: date}
+      valid_until: {range: date}
+      known_from: {range: date}

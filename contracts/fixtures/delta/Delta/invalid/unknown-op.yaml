@@ -1,0 +1,4 @@
+format: rede.delta/1
+pack: library
+changes:
+  - {op: move, file: facts/valid.yaml, kind: loan, key: l2}

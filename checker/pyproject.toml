@@ -1,0 +1,23 @@
+[project]
+name = "rede-checker"
+version = "0.1.0"
+description = "Checks Rede proofs against a manifest, independent of the engine."
+requires-python = ">=3.11"
+dependencies = ["pyyaml>=6", "rede-canon"]  # install: scripts/install-python.sh (docs/ci.md §8)
+
+[project.optional-dependencies]
+test = ["pytest>=8", "hypothesis>=6.100"]
+contracts = ["linkml>=1.9"]
+
+[project.scripts]
+rede-checker = "rede_checker.__main__:main"
+
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["rede_checker"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

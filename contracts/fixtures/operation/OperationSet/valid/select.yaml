@@ -1,0 +1,10 @@
+format: rede.operations/1
+pack: example
+operations:
+  - op: select
+    keep:
+      - {kind: Core, slots: [label]}
+    omit:
+      - {kind: Helper, reason: Outside the selected model}
+      - {kind: Core, slot: citation, reason: Provenance moves separately}
+    accept_loss: true

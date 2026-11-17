@@ -1,0 +1,6 @@
+id: steun-eindigt
+title_message: reader.steun_eindigt
+about_message: reader.steun_eindigt.about
+relation: support_exposure
+columns:
+  - {column: s, message: reader.steun_eindigt.s}

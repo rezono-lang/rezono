@@ -1,0 +1,4 @@
+name: example-pack
+version: 0.1.0
+default_language: nl
+imports: []

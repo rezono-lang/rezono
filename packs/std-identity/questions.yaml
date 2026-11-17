@@ -1,0 +1,30 @@
+# The explanation questions of std-identity, built only from the generic building blocks of std-explain
+# (docs/gui.md, "Questions as data"). They narrow the generic grounds and reach to same-as and its classes: a
+# domain that imports std-explain keeps those too. The label and sentence are in messages/<lang>.mf2.
+format: rede.questions/1
+questions:
+  # Why is this the same as that? From an equivalent, representative, conflict or class value back to the chain
+  # of same_as claims, the named representative and the stated values it rests on.
+  - term: identity_grounds
+    start: present
+    applies_to:
+      derivation: conclusion
+      relations: [equivalent, representative, identity_conflict, class_text, class_number]
+    steps:
+      - trace:
+          direction: back
+          depth: all
+          keep:
+            relations: [stated_same, equivalent, has_equivalent, chosen, disputed, representative, identity_conflict,
+                        class_text, class_number, stated_text, stated_number]
+            kinds: [referent]
+    answer: route
+    limit: 200
+  # What is the same as this? The members of its class and the referent that stands for it.
+  - term: identity_reach
+    start: present
+    applies_to: {kinds: [referent]}
+    steps:
+      - trace: {direction: forward, depth: 1, keep: {relations: [equivalent, representative]}}
+    answer: rings
+    limit: 200

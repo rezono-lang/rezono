@@ -1,0 +1,5 @@
+# An action of the viewer, drawn as the filled button.
+verb: propose
+label_message: verb.propose
+key: p
+primary: true

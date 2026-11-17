@@ -1,0 +1,38 @@
+# A counter with an explicit bound (decision R16): the one arithmetic in a recursive rule. depth starts at 0
+# and its rule adds 1 while the depth it reads is below 3, so it fires three times at most on every input.
+format: rede.rules/1
+pack: fixture
+relations:
+  - name: depth
+    role: derived
+    key: [{name: node, type: string}, {name: n, type: integer}]
+    module: count
+    explain: on_demand
+  - name: seed
+    role: base
+    key: [{name: id, type: string}]
+  - name: seed__next
+    role: base
+    key: [{name: id, type: string}, {name: v, type: string}]
+rules:
+  - id: depth_next
+    module: count
+    stratum: "1"
+    head: {relation: depth, terms: ["?b", "?m"]}
+    body:
+      - {relation: depth, terms: ["?a", "?n"], polarity: positive, stratum: "1"}
+      - {relation: seed__next, terms: ["?a", "?b"], polarity: positive, stratum: "0"}
+    conditions:
+      - {op: lt, left: "?n", right: "3"}
+    assignments:
+      - {var: "?m", op: add, left: "?n", right: "1"}
+    witness: {relation: depth_next__witness, variables: ["?a", "?b", "?m", "?n"]}
+    origin: {file: rules/count.dl, line: "2"}
+  - id: depth_start
+    module: count
+    stratum: "1"
+    head: {relation: depth, terms: ["?a", "0"]}
+    body:
+      - {relation: seed, terms: ["?a"], polarity: positive, stratum: "0"}
+    witness: {relation: depth_start__witness, variables: ["?a"]}
+    origin: {file: rules/count.dl, line: "1"}

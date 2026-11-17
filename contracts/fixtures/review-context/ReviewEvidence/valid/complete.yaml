@@ -1,0 +1,18 @@
+context:
+  subject:
+    relation: change
+    key: '["change-3"]'
+  base_manifest: manifest-epoch-9
+  content_sha256: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+  support_sha256: bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+source_event:
+  journal: https://fixture.example/reviews
+  event_id: event-17
+  receipt_sha256: dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd
+authority_evidence_sha256: cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+reviewer:
+  issuer: https://fixture.example/identity
+  subject: bob
+  role: reviewer
+verdict: accepted
+at: '2031-02-01T09:00:00Z'

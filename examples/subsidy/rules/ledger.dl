@@ -1,0 +1,18 @@
+// What the payment ledger says per application. The ledger is a reference source (decision R13): these
+// rules only add up what it recorded. No rule of the scheme reads them; calc/drift.yaml compares the
+// total with the award. Only accepted payments count (the seal: ledger_payment__accepted); a payment a
+// close refuses is in ledger_payment__refused.
+
+// An accepted payment with its application and its amount.
+.decl ledger_line(application: symbol, payment: symbol, cents: number)
+ledger_line(a, p, c) :- ledger_payment__accepted(p), ledger_payment__application(p, a), ledger_payment__amount(p, c).
+
+// An application the ledger has paid something for.
+.decl paid(application: symbol)
+paid(a) :- ledger_line(a, _, _).
+
+// What the ledger paid for an application, over all its payments.
+.decl ledger_paid(application: symbol, cents: number)
+ledger_paid(a, t) :- paid(a), t = sum c : { ledger_line(a, _, c) }.
+
+.output ledger_paid

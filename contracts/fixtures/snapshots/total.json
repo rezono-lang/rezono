@@ -1,0 +1,6 @@
+[
+ {"key": ["a", "known:12"], "values": {}},
+ {"key": ["b", "unknown"], "values": {}},
+ {"key": ["c", "known:0"], "values": {}},
+ {"key": ["d", "invalid"], "values": {}}
+]

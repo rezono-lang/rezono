@@ -1,0 +1,33 @@
+format: rede.answer/1
+question: grounds
+manifest_id: m-1
+start: {relation: path, key: '["a","c"]'}
+nodes:
+  - {relation: path, key: '["a","c"]', distance: 0}
+  - {relation: e, key: '["b","c"]', distance: 1}
+  - {relation: path, key: '["a","b"]', distance: 1}
+steps:
+  - conclusion: {relation: path, key: '["a","c"]'}
+    premise: {relation: e, key: '["b","c"]'}
+    how: positive
+    position: 1
+  - conclusion: {relation: path, key: '["a","c"]'}
+    premise: {relation: path, key: '["a","b"]'}
+    how: positive
+    position: 0
+witnesses:
+  - conclusion: {relation: path, key: '["a","c"]'}
+    rule_id: path1
+    bindings: [{variable: "?x", value: a}, {variable: "?y", value: b}, {variable: "?z", value: c}]
+    premises:
+      - {row: {relation: path, key: '["a","b"]'}, polarity: positive, stratum: 0}
+      - {row: {relation: e, key: '["b","c"]'}, polarity: positive, stratum: 0}
+  - conclusion: {relation: path, key: '["a","b"]'}
+    rule_id: path0
+    bindings: [{variable: "?x", value: a}, {variable: "?y", value: b}]
+    premises:
+      - {row: {relation: e, key: '["a","b"]'}, polarity: positive, stratum: 0}
+next: '1,path,["a","b"]'
+more:
+  - {relation: e, key: '["b","c"]'}
+  - {relation: path, key: '["a","b"]'}

@@ -1,0 +1,9 @@
+kind: document
+name: Example manual
+url: https://docs.example.invalid/manual
+position: section-2
+fragment_sha256: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+licence: LicenseRef-fixture
+attribution: Example author
+revision: v2
+retrieved_at: "2026-11-08T12:34:56Z"

@@ -1,0 +1,425 @@
+id: https://rede.dev/contracts/explain
+name: rede_explain
+title: Explanation questions
+description: >-
+  Explanation as a question about the proof (decisions R8, R9, R10; docs/gui.md, "Explanation as questions
+  over the proof"). A question is data: a term, what it starts from, its steps (the building blocks trace and
+  suppose) and the shape of its answer. Packs write them in questions.yaml (rede.questions/1, checked by the
+  compiler: only names that exist in the pack); the standard pack std-explain gives the known ones. The
+  compiler puts them in the schema bundle in the form below, imports first, then the pack's own. The gate
+  answers a question page by page (Answer, rede.answer/1, from GET /<pack>/<manifest>/ask/<term>).
+prefixes:
+  linkml: https://w3id.org/linkml/
+  rede: https://rede.dev/contracts/
+default_prefix: rede
+default_range: string
+imports:
+  - linkml:types
+  - proof
+  - source
+
+enums:
+  DayReading:
+    description: How a whole number is read as a day (the vocabulary of contracts/pack.yaml, ViewColumn.reading).
+    permissible_values:
+      days: {description: "The number of days since 1970-01-01 in the proleptic Gregorian calendar (decision R18)."}
+      yyyymmdd: {description: "A whole number written YYYYMMDD."}
+  QuestionStart:
+    description: What a question starts from.
+    permissible_values:
+      present: {description: "A row that exists."}
+      absent: {description: "A row that does not exist, in a derived relation (gap)."}
+      delta: {description: "A published proposal or sweep variant (proposal= or variant=)."}
+      sweep: {description: "A sweep of the pack (sweep=): each of its variants."}
+  AnswerShape:
+    description: The shape of the answer, which std-view draws.
+    permissible_values:
+      route: {description: "The Route, with numbered steps from the root."}
+      rings: {description: "Nodes by distance, as rings (the Compass)."}
+      gap: {description: "The route down to the first failing premise, with candidates."}
+      overlay: {description: "The fold of current and proposed."}
+      series: {description: "A series of scenarios over a range (sweep)."}
+  Direction:
+    description: The direction of a walk through the proof.
+    permissible_values:
+      back: {description: "From a conclusion to its premises, to the sources."}
+      forward: {description: "From a premise to what it derives."}
+  Through:
+    description: What a walk goes through.
+    permissible_values:
+      proof: {description: "The role's proof graph (the relation step)."}
+      rules: {description: "The rules, with the premise test on the snapshot (gap); only back from an absent start."}
+  SupposeDelta:
+    description: Which delta a suppose step applies.
+    permissible_values:
+      given: {description: "The deltas the start names: a published proposal or variant, or each variant of a sweep."}
+      candidates: {description: "The candidate deltas the trace before it proposes."}
+      without: {description: "The published variant whose only change withdraws the start fact (consequence, RV-X24): with the pack's own means its standing changes (its state becomes withdrawn); no row is deleted (RV-A33). Its difference is what breaks without that fact. No such variant: the answer is not_computed."}
+  DeltaKind:
+    description: What a delta start names.
+    permissible_values:
+      proposal: {description: "A proposal by its id (the pull request); its manifest on the newest main."}
+      variant: {description: "A sweep variant by its manifest id."}
+      sweep: {description: "A sweep by its name."}
+      supposition: {description: "A delta given with the request and computed live (POST /<pack>/<manifest>/suppose); nothing is published. Its id is the sha256 of the delta's canonical text."}
+  DifferenceChange:
+    description: What a delta did to one row of a role's snapshot.
+    permissible_values:
+      added: {description: "In the target only."}
+      removed: {description: "In the base only."}
+      changed: {description: "A changed cell: the one row with this key prefix (all columns but the last) on each side, and they differ."}
+  NodeChange:
+    description: What a delta did to a node of an impact answer (the ripple, docs/interaction.md section 3), for the role. Always said, never left out.
+    permissible_values:
+      added: {description: "In the target only."}
+      removed: {description: "In the base only."}
+      changed: {description: "A changed cell; was names the row in the base."}
+      unchanged: {description: "The shore: reached by the walk and the same on both sides; the walk does not go past it."}
+      not_read_in_full: {description: "The role reads the row's relation in part, or not at all (an anonymous step): what changed there is not said."}
+  Incompleteness:
+    description: Why an impact answer is not complete.
+    permissible_values:
+      depth: {description: "The walk ended at its depth before every changed row the role reads had a ring."}
+      budget: {description: "The walk ended at the gate's limit of nodes."}
+      not_read_in_full: {description: "A relation of the difference is read in part, or a changed row is reached only through what the role does not read."}
+  SeriesStatus:
+    description: The state of one grid value of a sweep, for the role (as GET /<pack>/sweeps gives it).
+    permissible_values:
+      green: {}
+      warning: {}
+      red: {description: "Its checks failed: a diagnosis, no difference."}
+      not_computed: {description: "No variant published for it yet."}
+      unavailable: {description: "The role reads the swept cell but not every relation in full: no status."}
+  StepHow:
+    description: How a premise counts for its conclusion, on an edge of the proof graph (the relation step).
+    permissible_values:
+      positive: {description: "A premise that holds."}
+      negative: {description: "A premise that is absent."}
+      contributes: {description: "A row of an aggregated group."}
+  GapItem:
+    description: What an item of a rule's schedule is in the rule (rede_compiler.gap).
+    permissible_values:
+      positive: {description: "A positive literal of the body."}
+      negative: {description: "A negated literal of the body."}
+      condition: {description: "A comparison."}
+      assignment: {description: "Arithmetic into a variable."}
+      aggregate: {description: "An aggregate over one atom."}
+  Change:
+    description: What a candidate does to a base relation.
+    permissible_values:
+      insert: {description: "Add the row."}
+      delete: {description: "Remove the row."}
+  CandidateStatus:
+    description: Whether a candidate is shown to be enough on its own.
+    permissible_values:
+      sufficient: {description: "Fully bound, nothing on the path can undo it, and the rest of each rule on the path holds with it supposed."}
+      to_test: {description: "Offered as a proposal: its proposal manifest gives the answer (suppose)."}
+  QuestionDerivation:
+    description: Which values a question applies to.
+    permissible_values:
+      fact: {}
+      conclusion: {}
+
+  UndecidedState:
+    description: >-
+      The state of a binder row an ask ... where cannot decide (S1 §3.3, P10.2a §7a): the condition is unknown
+      or invalid there. A not_applicable condition is not undecided; the row is left out and counted.
+    permissible_values:
+      unknown: {description: "The condition depends on a value that is not known."}
+      invalid: {description: "The condition depends on a value or calculation that is invalid."}
+classes:
+  Question:
+    description: One explanation question, as the schema bundle carries it.
+    attributes:
+      term: {required: true, pattern: "^[a-z][a-z0-9]*(_[a-z0-9]+)*$", description: "The name in code; its label is the message explain.<term>, its sentence explain.<term>.question."}
+      start: {range: QuestionStart, required: true}
+      applies_to: {range: AppliesTo, inlined: true, description: "Absent means every value the start allows."}
+      steps: {range: Step, multivalued: true, inlined_as_list: true, required: true, description: "In order: the rows a step ends on are the start of the next."}
+      answer: {range: AnswerShape, required: true}
+      limit: {range: integer, minimum_value: 1, required: true, description: "Nodes per page; the profile caps it."}
+  ReaderQuestion:
+    description: >-
+      A reader question (RV-C04; docs/gui.md, "Reader questions"): a question in the reader's words whose answer
+      is the role's rows of one derived relation, each with a link to its proof. Written in questions.yaml
+      under `reader:`; the compiler checks every name and resolves the proof. The viewer and the REPL offer it
+      to a role that reads the relation in full or reads a row of it, and read the rows and the proof from the
+      gate's rows and ask routes.
+    attributes:
+      id: {required: true, pattern: "^[a-z][a-z0-9]*(-[a-z0-9]+)*$", description: "Kebab case: the page's address and the REPL name; once in the import closure."}
+      title_message: {required: true, description: "Message id of the question as the reader asks it."}
+      about_message: {required: true, description: "Message id of one sentence: what the answer holds."}
+      relation: {required: true, description: "A derived relation of the pack."}
+      proof: {required: true, pattern: "^[a-z][a-z0-9]*(_[a-z0-9]+)*$", description: "The term of the question that opens a row's proof: the one written, or the first a row of the relation offers in bundle order."}
+      columns: {range: ReaderColumn, multivalued: true, inlined_as_list: true, required: true, description: "The columns shown, in order."}
+      context: {range: ReaderContext, multivalued: true, inlined_as_list: true, description: "Shown above the answer, such as a reference date and a window. Absent: none."}
+  ReaderColumn:
+    description: A column of a reader question's relation, as it is shown.
+    attributes:
+      column: {required: true, description: "The relation's column."}
+      message: {required: true, description: "Message id of its heading."}
+      element: {description: "A kind: the column is text and holds an id of that kind, shown by its name. Absent: the value is never looked up."}
+      reading: {range: DayReading, description: "The column is a whole number that is no amount, read as a day, shown as a date; a value that is no calendar day is shown as the number. Until a column carries a date type (M3)."}
+  ReaderContext:
+    description: "The role's rows of a kind, with fields of its page, as a Cards part names them. The compiled form: questions.yaml writes `fields` as a list of `<kind>.<slot>`, as a Cards part does, with a map `readings` beside it from a field to its reading; the compiler writes each field with its reading here."
+    attributes:
+      kind: {required: true}
+      fields: {range: ReaderField, multivalued: true, inlined_as_list: true, required: true}
+  ReaderField:
+    description: A slot of the context kind's page, by element id.
+    attributes:
+      field: {required: true, description: "`<kind>.<slot>`; its label is the slot's label."}
+      reading: {range: DayReading, description: "As on a column: a whole number read as a day."}
+  AppliesTo:
+    description: The values a question is offered for.
+    attributes:
+      derivation: {range: QuestionDerivation}
+      kinds: {multivalued: true, description: "Kind ids."}
+      relations: {multivalued: true, description: "Relation names."}
+  Step:
+    description: One building block; exactly one of trace and suppose.
+    attributes:
+      trace: {range: Trace, inlined: true}
+      suppose: {range: Suppose, inlined: true}
+  Trace:
+    description: A walk through the proof, with a direction, a depth and filters.
+    attributes:
+      direction: {range: Direction, required: true}
+      depth: {required: true, pattern: "^(all|[1-9][0-9]*)$", description: "A whole number from 1 as decimal text, or all."}
+      through: {range: Through, description: "Absent: proof."}
+      keep: {range: Filter, inlined: true, description: "The nodes the answer shows; the walk goes on through the others."}
+      stop: {range: Filter, inlined: true, description: "Nodes the walk reaches but does not go past."}
+      fanout: {range: integer, minimum_value: 1, description: "With through: rules, the branches per literal."}
+  Filter:
+    description: Names that select nodes; a node matches if it matches any of them.
+    attributes:
+      kinds: {multivalued: true}
+      relations: {multivalued: true}
+      rules: {multivalued: true}
+      layers: {multivalued: true}
+  Suppose:
+    description: A counterfactual step; exactly one of delta and over.
+    attributes:
+      delta: {range: SupposeDelta}
+      over: {description: "A sweep of the pack (sweeps.yaml), each variant in turn."}
+  Answer:
+    description: >-
+      One page of the answer to a question (rede.answer/1), from GET /<pack>/<manifest>/ask/<term> for one role.
+      The nodes are in a fixed order, by distance, then by reference (relation, then key, both by their UTF-8
+      bytes), at most the limit of the question. A walk expands a level only while the levels before it are
+      within the limit; where it stops before its depth, the nodes of its last level are continuations (more).
+    attributes:
+      format: {required: true, pattern: "^rede\\.answer/1$"}
+      question: {required: true, pattern: "^[a-z][a-z0-9]*(_[a-z0-9]+)*$", description: "The term asked."}
+      manifest_id: {required: true}
+      start: {range: RowRef, inlined: true, description: "The row the question starts from; absent for a delta or a sweep (delta)."}
+      delta: {range: DeltaStart, inlined: true, description: "The delta or sweep the question starts from; absent for a row."}
+      nodes: {range: AnswerNode, multivalued: true, inlined_as_list: true, required: true, description: "The nodes on this page; the start, at distance 0, on the first."}
+      steps: {range: AnswerStep, multivalued: true, inlined_as_list: true, description: "The edges that reach a node on this page, from a node the answer shows (on this page or an earlier one); by conclusion, how, position and premise."}
+      witnesses: {range: Witness, multivalued: true, inlined_as_list: true, description: "The chosen witness of each conclusion on this page, in page order: the captions."}
+      calc_witnesses: {range: CalcWitness, multivalued: true, inlined_as_list: true, description: "The witness of each calculated row on this page, in page order (decision W12): its version, definition and steps, unchanged. Each premise is also an edge of the answer (positive, at its index in premises); absent when the page has none."}
+      next: {description: "The cursor of the next page, <distance>,<relation>,<key> (the query parameter after); absent on the last page."}
+      more: {range: RowRef, multivalued: true, inlined_as_list: true, description: "The nodes on this page where the walk stopped before its depth, to stay within the limit: each continues with the same question from that node."}
+      gap: {range: GapAnswer, inlined: true, description: "For a question through the rules (gap): the failing premises and the candidates."}
+      difference: {range: Difference, inlined: true, description: "For a question from a delta: the counts, and after suppose alone the page of changed rows (its nodes, at distance 0)."}
+      series: {range: SeriesCell, multivalued: true, inlined_as_list: true, description: "For a question from a sweep: one cell per grid value, in grid order."}
+      output_schema: {pattern: "^s-[0-9a-f]{64}$", description: "For an ask ... where: the id of its output schema (P10.2a §8a, Reckon Data L0 §7.1), the answer dataset's $schema, so a client gets types without guessing."}
+      counts: {range: AnswerCounts, inlined: true, description: "For an ask ... where: the counts of the whole answer, not of this page (P10.2a §7a rule 4)."}
+      complete: {range: boolean, description: "For impact: true when every changed row the role reads has a ring and no relation of the difference is read in part (docs/interaction.md section 3); it counts nothing the role does not read."}
+      incomplete: {range: Incompleteness, multivalued: true, description: "For impact, when not complete: why, in the order depth, budget, not_read_in_full."}
+      undecided: {range: UndecidedRow, multivalued: true, inlined_as_list: true, description: "For an ask ... where: the binder rows on this page whose condition is unknown or invalid, in canonical key order. An answer never drops them (S1 §3.3)."}
+      expression: {range: AnswerExpression, inlined: true, description: "For an ask ... where (POST /<pack>/<manifest>/ask, RV-S16): the question asked, which has no term of the bundle; question is then ask."}
+      diagnostics: {range: ReckonDiagnostic, multivalued: true, inlined_as_list: true, description: "For an ask ... where: the warnings of the check, in source order. A text with an error gets no answer (400, with its diagnostics)."}
+      dataset: {range: ReckonDataset, inlined: true, description: "For an ask ... where: this page as a Reckon Data dataset (P10.2a §8a; docs/reckon-data/l0.md): the members $schema, schema and rows, the Answer rows of the page and then its Undecided rows, as Row JSON. Its $schema equals output_schema."}
+      computed: {range: boolean, description: "True on a computed answer (contrast, consequence): derived by Rede, not quoted, and shown as computed (docs/explain/contract.md, rule 5). Absent on the others."}
+      not_computed: {pattern: "^[a-z][a-z0-9_]*$", description: "A computed answer that could not be computed, with its reason code (for consequence: no_variant, no published variant withdraws the start fact alone). The answer then holds its start alone; missing is never an empty answer."}
+    rules:
+      - description: An ask ... where answer carries its output schema id and its counts together.
+        preconditions: {slot_conditions: {output_schema: {value_presence: PRESENT}}}
+        postconditions: {slot_conditions: {counts: {required: true}}}
+      - preconditions: {slot_conditions: {counts: {value_presence: PRESENT}}}
+        postconditions: {slot_conditions: {output_schema: {required: true}}}
+      - description: Only a computed answer says that it could not be computed.
+        preconditions: {slot_conditions: {not_computed: {value_presence: PRESENT}}}
+        postconditions: {slot_conditions: {computed: {required: true}}}
+      - description: Undecided rows belong to an ask ... where answer, which says how many there are in all.
+        preconditions: {slot_conditions: {undecided: {value_presence: PRESENT}}}
+        postconditions: {slot_conditions: {counts: {required: true}}}
+  AnswerExpression:
+    description: The question of an ask ... where answer (P10.2a §9).
+    attributes:
+      hash: {required: true, pattern: "^[0-9a-f]{64}$", description: "The sha256 of the question's canonical JSON form."}
+      text: {required: true, description: "The question in its normal form, as the printer writes it."}
+  ReckonDiagnostic:
+    description: A diagnostic of the check of a Reckon text (docs/reckon/expressions.md §8b), by code; its sentence is in the message catalogue.
+    attributes:
+      code: {required: true}
+      span: {range: ReckonDocument, inlined: true, description: "Its place in the text: {text, start, end}."}
+      args: {multivalued: true, description: "The values its sentence needs."}
+      hint: {range: ReckonDocument, inlined: true, description: "What to write instead: a sentence by its id, with its values."}
+      suggest: {multivalued: true, description: "The names it may have meant, nearest first."}
+  ReckonDataset:
+    description: >-
+      A Reckon Data dataset (docs/reckon-data/l0.md): the members $schema (the id of its schema document),
+      schema (that document) and rows (Row JSON). Its shape is Reckon Data's, not this contract's.
+    class_uri: linkml:Any
+  ReckonDocument:
+    class_uri: linkml:Any
+  AnswerCounts:
+    description: >-
+      The counts of an ask ... where answer over all its pages (P10.2a §8a): rows where the condition is true,
+      undecided rows, and rows left out because the condition is not_applicable there. Missing is never zero:
+      each count is given.
+    attributes:
+      rows: {range: integer, minimum_value: 0, required: true}
+      undecided: {range: integer, minimum_value: 0, required: true}
+      not_applicable: {range: integer, minimum_value: 0, required: true}
+  UndecidedRow:
+    description: >-
+      A binder row whose condition the answer cannot decide (S1 §3.3, P10.2a §8a, cases E42, E43). In the answer
+      dataset it is an Undecided row; its cause there is cause_relation and cause_key, both "" where cause is
+      absent here.
+    attributes:
+      binder: {required: true, description: "The binder row's id, its key in the answer."}
+      state: {range: UndecidedState, required: true}
+      reason: {pattern: "^[a-z][a-z0-9_]*$", description: "A reason code (S1 §2.3: the least code, A.4); left out when there is none, never free text."}
+      cause: {range: RowRef, inlined: true, description: "The row that holds, or for a missing value would hold, the value the condition depends on; its key is canonical key text, as in the snapshots. Absent for a state written as a constant."}
+  DeltaStart:
+    description: The delta a question starts from.
+    attributes:
+      kind: {range: DeltaKind, required: true}
+      id: {required: true, description: "The proposal id, the variant's manifest id or the sweep's name, as asked; for a supposition, the sha256 of its delta."}
+      manifest: {description: "The target manifest (a proposal or variant); absent for a sweep and for a supposition, which has none."}
+  Difference:
+    description: >-
+      What a delta changed in what the role reads (rede.explain-index/1, docs/gui.md "suppose in profile edge"),
+      in its own order: by relation, then by key element by element. A page holds at most the limit of entries;
+      the cursor (next) is 0,<relation>,<key>.
+    attributes:
+      counts: {range: RelationCount, multivalued: true, inlined_as_list: true, required: true, description: "Per changed relation, by relation; none for a relation that did not change."}
+      entries: {range: DifferenceEntry, multivalued: true, inlined_as_list: true, description: "The changed rows on this page."}
+  RelationCount:
+    description: The changes of one relation.
+    attributes:
+      relation: {required: true}
+      added: {range: integer, minimum_value: 0, required: true}
+      removed: {range: integer, minimum_value: 0, required: true}
+      changed: {range: integer, minimum_value: 0, required: true}
+  DifferenceEntry:
+    description: One changed row; keys are canonical key text, as in the snapshots.
+    attributes:
+      relation: {required: true}
+      key: {required: true, description: "The row in the target (added, changed) or in the base (removed)."}
+      change: {range: DifferenceChange, required: true}
+      was: {description: "For changed: the row in the base."}
+  SeriesCell:
+    description: One grid value of a sweep, with the counts of its variant's difference where one was published.
+    attributes:
+      index: {range: integer, minimum_value: 0, required: true}
+      value: {required: true, description: "The value as decimal text."}
+      status: {range: SeriesStatus, required: true}
+      manifest: {description: "The variant's manifest, if it is green or warning."}
+      diagnosis: {description: "The variant's diagnosis, if it is red."}
+      counts: {range: RelationCount, multivalued: true, inlined_as_list: true, description: "The counts of its difference for the role; absent where none was published."}
+  BoundSweepList:
+    description: >-
+      The opt-in GET /<pack>/sweeps?m=<main> response for one verified role, bound to exactly
+      manifest_id. A stale main, missing grid or unreadable swept cell gives the same generic 404;
+      the gate never substitutes a newer main. The route without m keeps its legacy array.
+    attributes:
+      manifest_id: {required: true, description: "The exact selected main manifest, checked before grid or variant metadata is read."}
+      sweeps: {range: BoundSweep, required: true, multivalued: true, inlined_as_list: true, minimum_cardinality: 1, maximum_cardinality: 1, description: "The current pack contract allows one sweep; only a sweep whose cell the role reads appears."}
+  BoundSweep:
+    description: A published grid and its actual swept fact-cell identity, not a fabricated proof row.
+    attributes:
+      name: {required: true, pattern: "^[a-z][a-z0-9]*(_[a-z0-9]+)*$"}
+      cell: {range: SweepCellRef, required: true, inlined: true}
+      min: {required: true, pattern: "^(0|-?[1-9][0-9]*)$", description: "Exact whole-number decimal text, including values beyond JavaScript's safe integer range."}
+      max: {required: true, pattern: "^(0|-?[1-9][0-9]*)$"}
+      step: {required: true, pattern: "^[1-9][0-9]*$"}
+      cells: {range: BoundSweepCell, required: true, multivalued: true, inlined_as_list: true, minimum_cardinality: 1, maximum_cardinality: 64, description: "The complete fixed grid in index order; no interpolation or computed intermediate values."}
+  SweepCellRef:
+    description: >-
+      The fact cell named by the verified published grid: its kind, the element's identifier
+      and its slot. This identifier triple is not an engine RowRef with an invented value key.
+      It grants no access; the listing is filtered with the selected manifest and verified role.
+    attributes:
+      kind: {required: true}
+      id: {required: true}
+      slot: {required: true}
+  BoundSweepCell:
+    description: >-
+      One public grid sample. Only a green or warning sample may carry the already published,
+      role-checked variant manifest. Red has checks but no diagnosis reference here; unavailable
+      and not_computed carry no variant reference or counts. Missing information is never zero.
+    attributes:
+      index: {range: integer, minimum_value: 0, maximum_value: 63, required: true}
+      value: {required: true, pattern: "^(0|-?[1-9][0-9]*)$"}
+      status: {range: SeriesStatus, required: true}
+      checks: {range: SweepCheck, multivalued: true, inlined_as_list: true}
+      manifest: {description: "An already published variant manifest, only with green or warning status; never a guessed id."}
+    rules:
+      - preconditions: {slot_conditions: {status: {equals_string: green}}}
+        postconditions: {slot_conditions: {manifest: {required: true}}}
+      - preconditions: {slot_conditions: {status: {equals_string: warning}}}
+        postconditions: {slot_conditions: {manifest: {required: true}}}
+      - preconditions: {slot_conditions: {status: {equals_string: red}}}
+        postconditions: {slot_conditions: {manifest: {value_presence: ABSENT}}}
+      - preconditions: {slot_conditions: {status: {equals_string: unavailable}}}
+        postconditions: {slot_conditions: {manifest: {value_presence: ABSENT}}}
+      - preconditions: {slot_conditions: {status: {equals_string: not_computed}}}
+        postconditions: {slot_conditions: {manifest: {value_presence: ABSENT}}}
+  SweepCheck:
+    description: A public check's name and status; never a violation count or a private reader list.
+    attributes:
+      name: {required: true}
+      status: {required: true, pattern: "^(green|warning|red|unavailable)$"}
+  AnswerNode:
+    description: >-
+      One node of an answer, a row, with its distance from the start; or an anonymous node (outside), where the
+      question needs what the role may not read: no relation, no key, no address. For gap, a key's free
+      column is null.
+    attributes:
+      relation: {description: "Absent on an anonymous node."}
+      key: {description: "Canonical key text, as in the snapshots; absent on an anonymous node."}
+      distance: {range: integer, minimum_value: 0, required: true, description: "The number of steps from the start, which is 0."}
+      outside: {range: boolean, description: "An anonymous node."}
+      change: {range: NodeChange, description: "For impact: what the delta did to this row for the role; every node of an impact answer has one."}
+      was: {description: "For impact, a changed cell: its row in the base, as canonical key text."}
+      sources: {range: Source, multivalued: true, inlined_as_list: true, description: "A base row's sources (S25), from the role's own source set and by today's rights, as the publisher sorted them: where a walk back ends. Absent on a conclusion, and on every node of a manifest without source sets. A locator, not proof that the row is true."}
+  GapAnswer:
+    description: What is missing for an absent start (docs/gui.md, "gap"), in the walk's order.
+    attributes:
+      premises: {range: GapPremise, multivalued: true, inlined_as_list: true, required: true}
+      candidates: {range: GapCandidate, multivalued: true, inlined_as_list: true, description: "Changes to base rows that answer a failing premise."}
+      cut: {range: boolean, required: true, description: "Premises were left out to stay within the limit."}
+      closed_by: {range: RowRef, multivalued: true, inlined_as_list: true, description: "For contrast: the role's rows of every relation that closes the start's relation (DerivedRelation.closes, decision W14) whose key is a prefix of the start's key, by relation, then key. Each states that no row holds there, and its grounds say why. Absent: no closing row the role reads matches, and the answer says only what lacks support (open world); a role that does not read a closing relation gets no hint whether one exists."}
+  GapPremise:
+    description: The first item of a rule's schedule without a match, for one branch of the bindings.
+    attributes:
+      distance: {range: integer, minimum_value: 0, required: true, description: "The level of the start it fails for."}
+      node: {range: RowRef, required: true, inlined: true, description: "That start (a free column is null)."}
+      rule: {required: true}
+      item: {range: integer, minimum_value: 1, required: true, description: "The item's place in the rule's schedule."}
+      kind: {range: GapItem, required: true}
+      index: {range: integer, minimum_value: 0, required: true, description: "Its place among the rule's items of that kind (the body for a literal)."}
+      relation: {description: "The relation a literal or an aggregate reads."}
+      bindings: {range: Binding, multivalued: true, inlined_as_list: true, description: "The variables bound before it, by name."}
+      outside: {range: boolean, description: "Over a relation the role does not read in full: nothing more is said."}
+      more: {range: boolean, description: "A literal before it had more matches than the fanout; the others were not followed."}
+      overflow: {range: boolean, description: "An assignment or a sum whose operand or result lies outside BIGINT: every engine stops there, so no change makes it hold."}
+  GapCandidate:
+    description: A change to one base row that answers a failing premise.
+    attributes:
+      change: {range: Change, required: true}
+      relation: {required: true}
+      key: {required: true, description: "Canonical key text of the row's key columns; a column the user still chooses is null."}
+      status: {range: CandidateStatus, required: true}
+      premise: {range: integer, minimum_value: 0, required: true, description: "The premise it answers, by its place in premises."}
+  AnswerStep:
+    description: One edge of the role's proof graph (the relation step), between nodes of an answer.
+    attributes:
+      conclusion: {range: RowRef, required: true, inlined: true}
+      premise: {range: RowRef, required: true, inlined: true}
+      how: {range: StepHow, required: true}
+      position: {range: integer, minimum_value: 0, required: true, description: "The premise's place in the rule body, or for contributes the aggregate's place in the rule."}
+      value: {pattern: "^(known:.*|unknown|not_applicable|invalid)$", description: "On a contributes step of a sum, min or max: what the premise's row contributes, the canonical text of its value with its state, as the witness's contributors_sha256 is taken over it (RV-C09). Absent on every other step, and where the published proof pieces state none."}

@@ -1,0 +1,15 @@
+# A multivalued arrow: a link kind with at least one and at most three targets.
+id: outage.target
+stable_id: "Outage#target"
+span: {file: schema/core.yaml, line: "4", column: "3"}
+kind: outage
+name: target
+required: true
+table: outage__target
+multivalued: true
+minimum_cardinality: "1"
+maximum_cardinality: "3"
+target: infrastructure
+inlined: false
+sentence: {message: arrow.multivalued, args: {kind: outage, arrow: outage.target, range: infrastructure}, id: "sentence:Outage#target", span: {file: schema/core.yaml, line: "4", column: "3"}}
+semantic: {case: ref, base: string, range: infrastructure, target: infrastructure}

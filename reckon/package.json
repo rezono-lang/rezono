@@ -1,0 +1,18 @@
+{
+	"name": "rede-reckon",
+	"private": true,
+	"version": "0.1.0",
+	"description": "Reckon, the language of Rede's control plane: the question slice of v0 (docs/reckon/expressions.md) as a grammar, a printer, the JSON form and the conformance cases that run",
+	"type": "module",
+	"engines": { "node": ">=24" },
+	"scripts": {
+		"test": "node --test test/*.test.ts",
+		"form": "node src/write-form.ts"
+	},
+	"dependencies": {
+		"ohm-js": "17.5.0"
+	},
+	"devDependencies": {
+		"yaml": "2.9.1"
+	}
+}

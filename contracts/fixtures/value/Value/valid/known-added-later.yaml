@@ -1,0 +1,4 @@
+# A known value may carry the core code added_later, and no other reason.
+value: "42"
+state: known
+reason: added_later

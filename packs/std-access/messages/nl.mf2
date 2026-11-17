@@ -1,0 +1,8 @@
+@locale nl
+---
+# Zinnen van std-access, neutraal. Een domein vervangt ze door een bericht met dezelfde id (S14).
+attribute.many.partial =
+  .input {$kind_gender :string}
+  .match $kind_gender
+  neuter {{Elk {$kind} kan meer dan één {$attribute} hebben.}}
+  * {{Elke {$kind} kan meer dan één {$attribute} hebben.}}

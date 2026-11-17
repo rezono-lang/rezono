@@ -1,0 +1,6 @@
+format: rede.operations/1
+pack: example
+operations:
+  - op: select
+    keep: []
+    accept_loss: true

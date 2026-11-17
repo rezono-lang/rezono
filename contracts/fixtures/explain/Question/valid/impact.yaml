@@ -1,0 +1,7 @@
+term: impact
+start: delta
+steps:
+  - suppose: {delta: given}
+  - trace: {direction: forward, depth: "3", keep: {layers: [conclusions]}}
+answer: rings
+limit: 100

@@ -1,0 +1,29 @@
+lead: lead
+lead.part: part
+lead.same_part: same part
+lead.whole: whole
+level: level
+level.high: high
+level.low: low
+level.middle: middle
+link: link
+link.ends: ends
+link.from_part: from part
+link.level: level
+link.to_part: to part
+note: note
+note.text: text
+part: part
+part.begins: begins
+part.ends: ends
+thing: thing
+thing.code: code
+thing.level: level
+thing.price: price
+thing.title: title
+whole: whole
+whole.kind: kind
+whole.main: main
+whole.notes: notes
+whole.parts: parts
+whole.weight: weight

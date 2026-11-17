@@ -1,0 +1,4 @@
+# Invalid: a known value carries no reason except added_later.
+value: "42"
+state: known
+reason: not_assigned

@@ -1,0 +1,13 @@
+name: lab-probe-in
+version: 1.0.0
+kind: in
+runs_on: source
+writes: observation
+row_source: source
+runtime: in_process
+consumes: [lab_cluster]
+produces: [probe_result]
+freshness: {cadence: live, max_delay_seconds: 60}
+mapping_owner: platform-team
+losses: []
+footprint: {makes: [probe_pod, probe_namespace], plan_label: rede.dev/plan}

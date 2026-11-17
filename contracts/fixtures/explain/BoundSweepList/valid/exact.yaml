@@ -1,0 +1,8 @@
+manifest_id: m-1
+sweeps:
+  - name: value
+    cell: {kind: item, id: x, slot: value}
+    min: '9007199254740993'
+    max: '9007199254740993'
+    step: '1'
+    cells: [{index: 0, value: '9007199254740993', status: not_computed}]

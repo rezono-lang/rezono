@@ -1,0 +1,11 @@
+id: model/node-1/revision-1
+subject: node-1
+attribute: node.label
+value: {value: First node, state: known}
+event_time: "2026-11-06T10:15:00Z"
+source:
+  kind: git
+  name: example/model
+  revision: "0123456789abcdef0123456789abcdef01234567"
+  position: facts/nodes.yaml#/nodes/0
+expectation: {relation: node__label, key: '["node-1","First node"]'}

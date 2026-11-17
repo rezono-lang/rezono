@@ -1,0 +1,54 @@
+# ir/calc.json as the compiler writes it (decision W12): two rules, a template already filled in, one
+# fact per kind of reading, a parameter and an input concept.
+format: rede.calc-ir/1
+pack: offers
+subject: offer
+subject_table: offer
+as_of: calc__as_of
+parameters: setting__value
+inputs: {subject: entry__offer, fact: entry__name, integer: entry__number}
+facts:
+  - {id: fee, type: number, reads: input, table: "", index: 0}
+  - {id: offer.discount, type: number, reads: optional, table: offer__discount, index: 1}
+  - {id: offer.hours, type: number, reads: attribute, table: offer__hours, index: 1}
+  - {id: offer_complete, type: boolean, reads: presence, table: offer_complete, index: 0}
+  - {id: offer_hourly.price_e4, type: number, reads: column, table: offer_hourly, index: 1}
+rules:
+  - {rule: hourly, view: calc__hourly, type: number, versions: [hourly@1]}
+  - {rule: run, view: calc__run, type: number, versions: [run@0, run@1]}
+versions:
+  - id: hourly@1
+    rule: hourly
+    version: "1"
+    view: calc__hourly__1
+    valid_from: "2026-01-01"
+    valid_until: "2027-01-01"
+    known_from: "2026-01-01"
+    definitions:
+      - name: every
+        when: {fact: offer_complete}
+        value: {op: ratio, args: [{fact: offer_hourly.price_e4}, {integer: "1"}, {integer: "100"}]}
+  - id: run@0
+    rule: run
+    version: "0"
+    view: calc__run__0
+    valid_from: "2025-01-01"
+    valid_until: "2026-01-01"
+    known_from: "2025-01-01"
+    definitions:
+      - {name: old, when: {boolean: true}, value: {integer: "0"}}
+  - id: run@1
+    rule: run
+    version: "1"
+    view: calc__run__1
+    valid_from: "2026-01-01"
+    valid_until: "2027-01-01"
+    known_from: "2026-01-01"
+    definitions:
+      - name: standard
+        when: {boolean: true}
+        value: {op: add, args: [{op: round, args: [{op: ratio, args: [{rule: hourly}, {fact: offer.hours}, {integer: "1"}]}]}, {parameter: base_fee}, {fact: fee}]}
+      - name: discounted
+        when: {op: gte, args: [{fact: offer.discount}, {integer: "1"}]}
+        value: {op: sub, args: [{op: round, args: [{op: ratio, args: [{rule: hourly}, {fact: offer.hours}, {integer: "1"}]}]}, {fact: offer.discount}]}
+        before: [standard]

@@ -1,0 +1,10 @@
+# Neutral labels of std-order. A domain gives its own words in its own messages (view).
+ordered: ordered element
+ordered.precedes: precedes
+ordered.rank: rank
+ordered.on_scale: scale
+scale: scale
+before: before
+comparable: comparable
+order_cycle: cycle in the order
+rank_conflict: conflicting rank

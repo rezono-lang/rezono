@@ -1,0 +1,5 @@
+default: {kind: pack, name: facts/data.yaml, position: "2"}
+records: [{of: {kind: alpha, id: a, slot: size}, position: "3"}]
+rows:
+  - row: {relation: alpha__size, key: '["a","1"]'}
+    sources: [{kind: tool, name: checker, position: run-4}]

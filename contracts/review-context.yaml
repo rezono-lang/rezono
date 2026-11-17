@@ -1,0 +1,46 @@
+id: https://rede.dev/contracts/review-context
+name: rede_review_context
+title: Context for review evidence
+description: Shape of a review's subject and source receipt. Admission verifies the referenced evidence.
+prefixes:
+  linkml: https://w3id.org/linkml/
+  rede: https://rede.dev/contracts/
+default_prefix: rede
+default_range: string
+imports:
+  - linkml:types
+  - change
+  - proof
+classes:
+  ReviewContext:
+    description: The content and support a review covers, shared by all reviews over that same subject version.
+    attributes:
+      subject: {range: RowRef, required: true, inlined: true, description: The typed review subject.}
+      base_manifest: {required: true, pattern: '\S', description: The manifest on which the reviewed subject was based.}
+      content_sha256: {range: Sha256, required: true, description: Canonical Change content hash.}
+      support_sha256: {range: Sha256, required: true, description: Hash of the complete selected support.}
+  ReviewSourceEvent:
+    description: Stable locator of one recorded review event, scoped to its journal.
+    attributes:
+      journal: {range: uri, required: true, description: Identifier of the review event journal.}
+      event_id: {required: true, pattern: '\S', description: Immutable event identifier in that journal.}
+      receipt_sha256: {range: Sha256, required: true, description: Digest of the captured source event bytes.}
+  ReviewPrincipal:
+    is_a: Actor
+    description: The reviewer subject in its identity provider namespace.
+    attributes:
+      issuer: {range: uri, required: true, description: Namespace in which the subject is stable.}
+  ReviewEvidence:
+    tree_root: true
+    description: A review with references to its context, source event and historical authority evidence.
+    attributes:
+      context: {range: ReviewContext, required: true, inlined: true, description: What the review covers.}
+      source_event: {range: ReviewSourceEvent, required: true, inlined: true, description: Where the review was recorded.}
+      authority_evidence_sha256: {range: Sha256, required: true, description: Digest of historical authority and read evidence at the review time.}
+      reviewer: {range: ReviewPrincipal, required: true, inlined: true, description: The reviewer identity to verify against the source.}
+      verdict: {range: Verdict, required: true, description: The decision recorded by the source.}
+      reason: {pattern: '\S', description: Required when rejected.}
+      at: {range: datetime, required: true, description: The review time against which authority is assessed.}
+    rules:
+      - preconditions: {slot_conditions: {verdict: {equals_string: rejected}}}
+        postconditions: {slot_conditions: {reason: {required: true}}}

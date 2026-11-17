@@ -1,0 +1,5 @@
+view: tax_parameter__source_ref__pattern
+check: pattern
+kind: tax_parameter
+subject: source_ref
+path: source_ref

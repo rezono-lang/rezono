@@ -1,0 +1,8 @@
+{
+	"name": "rede-edge-tools",
+	"private": true,
+	"description": "The deploy tooling of profile edge, locked: installed with --ignore-scripts before any credential is exposed",
+	"devDependencies": {
+		"wrangler": "4.151.2"
+	}
+}

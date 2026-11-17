@@ -1,0 +1,21 @@
+id: R08
+class: invalid
+status: settled
+schema:
+  from: fixture.schema.json
+form: row
+input:
+  $kind: Host
+  $id: host-a
+  memory_need:
+    $na: ''
+  owner:
+    $unknown: not_assigned
+  tags:
+  - gpu
+  - lab
+expect:
+  accept: false
+  error: state not allowed
+sources:
+- '#369 L0 rev 2 §8'

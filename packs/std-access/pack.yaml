@@ -1,0 +1,7 @@
+# Standard pack std-access: roles, the generic capabilities, and the shared, explicitly extensible read-right
+# declaration.
+# A consumer supplies its grants; importing the declaration grants nothing (S28, O8).
+name: std-access
+version: 0.2.0
+default_language: nl
+imports: []

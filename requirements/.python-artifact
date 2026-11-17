@@ -1,0 +1,3 @@
+url=https://github.com/actions/python-versions/releases/download/3.13.18-40336726450/python-3.13.18-linux-24.04-x64.tar.gz
+sha256=683005a1465d94d40045f6a1a6eb316885b5f08d3360f7922b44ef58a14a9eed
+prefix=/opt/hostedtoolcache/Python/3.13.18/x64

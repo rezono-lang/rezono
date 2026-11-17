@@ -1,0 +1,19 @@
+# The impact of the last operation of the worked example, on the state facts/valid.yaml (docs/compiler.md).
+format: rede.impact/1
+pack: library
+operations:
+  - index: 4
+    op: drop
+    lossless: false
+    migration: 4-drop.yaml
+    tables:
+      - {before: item__reference_only, rows: 0}
+    loss:
+      - state: facts
+        table: item__reference_only
+        rows:
+          - {id: "1001", value: "false"}
+          - {id: "1002", value: "false"}
+          - {id: "1003", value: "true"}
+    elements:
+      - {before: item.reference_only}

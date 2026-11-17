@@ -1,0 +1,9 @@
+# Labels of std-access in English. The importing pack may replace them.
+role.capability: capability
+capability: capability
+capability.read: read
+capability.propose: propose
+capability.review: review
+capability.administer: administer
+capability.read_restricted: read restricted sources
+capability.agent: agent

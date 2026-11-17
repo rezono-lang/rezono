@@ -1,0 +1,3 @@
+diagnostics:
+  - code: the value is wrong
+    severity: error

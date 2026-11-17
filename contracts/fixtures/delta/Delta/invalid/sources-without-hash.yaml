@@ -1,0 +1,11 @@
+format: rede.delta/1
+pack: library
+changes:
+  - op: unset
+    file: facts/valid.yaml
+    kind: work
+    key: w1
+    slot: year
+sources:
+  - file: facts/valid.sources.yaml
+    text: "default: {kind: person, name: catalogue, position: card-index}\n"

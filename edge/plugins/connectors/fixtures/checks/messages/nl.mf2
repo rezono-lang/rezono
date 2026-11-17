@@ -1,0 +1,29 @@
+@locale nl
+---
+arrow.total = {{Elke {$kind} heeft precies één {$arrow}.}}
+arrow.partial = {{Elke {$kind} heeft hoogstens één {$arrow}.}}
+attribute.total = {{Elke {$kind} heeft precies één {$attribute}.}}
+attribute.partial = {{Elke {$kind} heeft hoogstens één {$attribute}.}}
+arrow.many.total =
+  .input {$kind_gender :string}
+  .match $kind_gender
+  neuter {{Elk {$kind} heeft minstens één {$arrow}.}}
+  * {{Elke {$kind} heeft minstens één {$arrow}.}}
+arrow.many.partial =
+  .input {$kind_gender :string}
+  .match $kind_gender
+  neuter {{Elk {$kind} kan meer dan één {$arrow} hebben.}}
+  * {{Elke {$kind} kan meer dan één {$arrow} hebben.}}
+attribute.many.total =
+  .input {$kind_gender :string}
+  .match $kind_gender
+  neuter {{Elk {$kind} heeft minstens één {$attribute}.}}
+  * {{Elke {$kind} heeft minstens één {$attribute}.}}
+attribute.many.partial =
+  .input {$kind_gender :string}
+  .match $kind_gender
+  neuter {{Elk {$kind} kan meer dan één {$attribute} hebben.}}
+  * {{Elke {$kind} kan meer dan één {$attribute} hebben.}}
+is_a = {{Elke {$kind} is een {$parent}.}}
+unique_key = {{{$key} hoort bij hoogstens één {$kind}.}}
+path_equation = {{Voor elke {$kind} geldt: {$equation}.}}

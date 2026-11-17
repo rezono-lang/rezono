@@ -1,0 +1,11 @@
+# Two rule modules above the limit: two parts, and one relation forwarded from the first to the second.
+format: rede.pipelines/1
+max_views: "3"
+pipelines:
+  - {name: integrity, sql: [engine/tables.sql, engine/integrity.sql], modules: [], views: [], tables: [alpha, beta__alpha], imports: [], exports: []}
+  - {name: rules-1, sql: [engine/rules-1.sql], modules: [a_first], views: [pair, sized], tables: [alpha, beta__alpha], imports: [], exports: [pair]}
+  - {name: rules-2, sql: [engine/rules-2.sql], modules: [b_second], views: [paired, lonely], tables: [alpha], imports: [pair], exports: []}
+forward:
+  - {relation: pair, producer: rules-1, consumers: [rules-2]}
+epoch_table: epoch__in
+export_view: export__out

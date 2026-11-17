@@ -1,0 +1,8 @@
+[
+ {"key": ["a", "a"], "values": {}},
+ {"key": ["a", "b"], "values": {}},
+ {"key": ["a", "c"], "values": {}},
+ {"key": ["b", "a"], "values": {}},
+ {"key": ["b", "b"], "values": {}},
+ {"key": ["b", "c"], "values": {}}
+]

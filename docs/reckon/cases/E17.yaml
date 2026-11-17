@@ -1,0 +1,13 @@
+id: E17
+status: settled
+mode: parse
+source: ask host where memory_need > 0 GiB
+expect:
+  diagnostics:
+  - code: R014
+    span:
+      text: host
+      start: 4
+      end: 8
+sources:
+- '#350 P10.2a §11'

@@ -1,0 +1,3 @@
+# Invalid with its reason: two versions overlap.
+state: invalid
+reason: versions_overlap

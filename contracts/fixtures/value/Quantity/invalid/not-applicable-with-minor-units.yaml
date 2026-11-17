@@ -1,0 +1,4 @@
+# Invalid: a quantity that does not apply has no minor units (K11).
+minor_units: 0
+unit: kg
+state: not_applicable

@@ -1,0 +1,10 @@
+# Epoch 8 has a violation; manifest-epoch-7 stays the current state.
+id: diagnosis-epoch-8
+epoch: 8
+knowledge_time: "2026-01-02T00:00:00Z"
+last_good_manifest: manifest-epoch-7
+checks:
+  - {name: integrity, status: red, violations: 1}
+  - {name: invariants, status: green, violations: 0}
+snapshots:
+  - {relation: blocked, role: reader, complete: false, uri: snapshots/blocked.json, sha256: "7aa6fdc02827d4b8930a50bee1cabfef5c84eda814c147643bdd37feecaa5bb9", format: json}

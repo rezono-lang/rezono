@@ -1,0 +1,3 @@
+diagnostics:
+  - severity: error
+    where: Host[3].memory

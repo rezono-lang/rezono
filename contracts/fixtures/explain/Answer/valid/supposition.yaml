@@ -1,0 +1,14 @@
+format: rede.answer/1
+question: suppose
+manifest_id: m-1
+delta: {kind: supposition, id: 5f2b1c0d9e8a7b6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e1f0a9b8c7d6e5f4a3b2c}
+nodes:
+  - {relation: a__size, key: '["a1","2"]', distance: 0}
+steps: []
+witnesses: []
+difference:
+  counts:
+    - {relation: a__size, added: 0, removed: 0, changed: 1}
+  entries:
+    - {relation: a__size, key: '["a1","2"]', change: changed, was: '["a1","1"]'}
+next: '0,a__size,["a1","2"]'

@@ -1,0 +1,14 @@
+# Value types are text, integer, boolean, date or enum; never a floating point type.
+id: posting.amount
+stable_id: "Posting#amount"
+span: {file: schema/core.yaml, line: "4", column: "3"}
+kind: posting
+name: amount
+required: true
+table: posting__amount
+multivalued: false
+type: float
+schema_type: float
+derivation: fact
+sentence: {message: attribute.total, args: {kind: posting, attribute: posting.amount}, id: "sentence:Posting#amount", span: {file: schema/core.yaml, line: "4", column: "3"}}
+semantic: {case: scalar, base: integer}

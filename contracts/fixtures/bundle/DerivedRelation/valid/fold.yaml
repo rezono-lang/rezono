@@ -1,0 +1,6 @@
+id: joined
+module: core
+explain: on_demand
+fold: true
+columns:
+  - {name: subject, type: string}

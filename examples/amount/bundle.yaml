@@ -1,0 +1,36 @@
+# Voorlopige schema bundle (fixture). M1 legt het definitieve formaat vast;
+# de viewer leest dit alleen via viewer/src/lib/contract/bundle.ts.
+pack: {id: example-amount, version: 0.1.0, default_language: nl, title_message: pack.title}
+# De uitlegvragen van std-explain (grondslag, bereik), zoals een pakket ze importeert.
+imports: [std-explain]
+kinds:
+  - {id: claim, label_message: kind.claim}
+  - {id: adjustment, label_message: kind.adjustment}
+  - {id: rate, label_message: kind.rate}
+arrows:
+  - {id: adjustment__of_claim, kind: adjustment, target: claim, label_message: arrow.adjustment__of_claim}
+attributes:
+  - {id: claim__distance_km, kind: claim, type: quantity, derivation: fact, label_message: attr.claim__distance_km}
+  - {id: claim__base, kind: claim, type: amount, derivation: conclusion, label_message: attr.claim__base}
+  - {id: claim__payout, kind: claim, type: amount, derivation: conclusion, outcome: true, label_message: attr.claim__payout}
+  - {id: adjustment__prior_paid, kind: adjustment, type: amount, derivation: fact, label_message: attr.adjustment__prior_paid}
+  - {id: adjustment__amount, kind: adjustment, type: amount, derivation: conclusion, label_message: attr.adjustment__amount}
+  - {id: rate__amount, kind: rate, type: amount, derivation: fact, label_message: attr.rate__amount}
+rules:
+  - {id: base_from_rate, message: rule.base_from_rate, variables: {rate: amount}}
+  - {id: distance_supplement, message: rule.distance_supplement, variables: {distance: quantity, per_km: amount}}
+  - {id: prior_deduction, message: rule.prior_deduction, variables: {paid: amount}}
+  - {id: payout_sum, message: rule.payout_sum, variables: {count: integer}}
+channels:
+  kinds:
+    - {kind: claim, shape: rect}
+    - {kind: adjustment, shape: pill}
+    - {kind: rate, shape: diamond}
+  arrows:
+    - {arrow: adjustment__of_claim, dash: none}
+# Volgorde van links naar rechts op de Map.
+order: [rate, adjustment, claim]
+pages:
+  - {kind: claim, fields: [claim__distance_km, claim__base, claim__payout], waterfall: claim__payout, map_radius: 1}
+  - {kind: adjustment, fields: [adjustment__prior_paid, adjustment__amount], map_radius: 1}
+  - {kind: rate, fields: [rate__amount], map_radius: 1}

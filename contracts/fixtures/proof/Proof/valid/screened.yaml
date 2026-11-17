@@ -1,0 +1,25 @@
+# open(a,a) with the steps for path(a,a) screened. The witnesses stay in the proof and are
+# checked; the explainer leaves them out for the viewer and shows a screened step instead.
+root: {relation: open, key: '["a","a"]'}
+manifest_id: manifest-epoch-7
+witnesses:
+  - conclusion: {relation: open, key: '["a","a"]'}
+    rule_id: open
+    bindings: [{variable: "?x", value: a}, {variable: "?y", value: a}]
+    premises:
+      - {row: {relation: path, key: '["a","a"]'}, polarity: positive, stratum: 1}
+      - {row: {relation: blocked, key: '["a"]'}, polarity: negative, stratum: 0}
+  - conclusion: {relation: path, key: '["a","a"]'}
+    rule_id: path_step
+    bindings: [{variable: "?x", value: a}, {variable: "?y", value: b}, {variable: "?z", value: a}]
+    premises:
+      - {row: {relation: edge, key: '["a","b"]'}, polarity: positive, stratum: 0}
+      - {row: {relation: path, key: '["b","a"]'}, polarity: positive, stratum: 1}
+  - conclusion: {relation: path, key: '["b","a"]'}
+    rule_id: path_base
+    bindings: [{variable: "?x", value: b}, {variable: "?y", value: a}]
+    premises:
+      - {row: {relation: edge, key: '["b","a"]'}, polarity: positive, stratum: 0}
+hidden:
+  - {relation: path, key: '["a","a"]'}
+  - {relation: path, key: '["b","a"]'}

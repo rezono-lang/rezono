@@ -1,0 +1,66 @@
+# Cases for alternative support (S11, B20): docs/semantics/witness-alternatives.md. Each expectation is
+# written by hand from that page. checker/tests/test_alternatives.py derives the same results with its own
+# small least fixpoint, and runs today's checker on the proofs they give.
+#
+# The program (the test writes it as rule IR, independent of the compiler):
+#   reach(x, y) :- edge(x, y).                  reach_edge
+#   reach(x, z) :- reach(x, y), edge(y, z).     reach_step
+#   near(a, b)  :- edge(a, b).                  near_out
+#   near(a, b)  :- edge(b, a).                  near_in
+#   p(x)        :- left(x).                     p_left
+#   p(x)        :- q(x).                        p_q
+#   q(x)        :- right(x).                    q_right
+#   q(x)        :- p(x).                        q_p
+# A row is written relation(values); an alternative <rule>(<binding values, variables in alphabetical order>).
+#
+# Each case has:
+#   id          a stable slug
+#   facts       the base rows
+#   reads       for a role: the base rows it may read (absent: every row, the complete epoch)
+#   rows        per derived row:
+#     height      its rank, the stage at which it enters the least fixpoint; absent: not supported
+#     chosen      its alternative of least height, then least (rule id, binding values); absent: none
+#     founded     its usable alternatives that are well-founded on their own (§2)
+#     cyclic      its usable alternatives whose row is not supported without its other alternatives
+cases:
+  - id: and-or-two-rules
+    about: "an OR over two rules for one row, each alternative an AND over its premises"
+    facts: ["edge(a,b)", "edge(b,a)"]
+    rows:
+      "near(a,b)": {height: 1, chosen: "near_in(a,b)", founded: ["near_in(a,b)", "near_out(a,b)"], cyclic: []}
+
+  - id: finite-alternatives-on-a-cycle
+    about: "one rule under several substitutions; the graph has a cycle, and every alternative but the self-loop has a finite proof"
+    facts: ["edge(a,a)", "edge(a,b)", "edge(b,a)"]
+    rows:
+      "reach(a,a)": {height: 1, chosen: "reach_edge(a,a)", founded: ["reach_edge(a,a)", "reach_step(a,b,a)"], cyclic: ["reach_step(a,a,a)"]}
+      "reach(a,b)": {height: 1, chosen: "reach_edge(a,b)", founded: ["reach_edge(a,b)", "reach_step(a,a,b)"], cyclic: []}
+
+  - id: alternative-through-its-own-row
+    about: "reach(a,b) <- reach(a,a), edge(a,b), where reach(a,a) holds only through reach(a,b): cyclic support"
+    facts: ["edge(a,b)", "edge(b,a)"]
+    rows:
+      "reach(a,a)": {height: 2, chosen: "reach_step(a,b,a)", founded: ["reach_step(a,b,a)"], cyclic: []}
+      "reach(a,b)": {height: 1, chosen: "reach_edge(a,b)", founded: ["reach_edge(a,b)"], cyclic: ["reach_step(a,a,b)"]}
+
+  - id: role-with-a-hidden-alternative
+    about: "the role reads only edge(b,a): near_out(a,b) is hidden and near_in(a,b) is its proof"
+    facts: ["edge(a,b)", "edge(b,a)"]
+    reads: ["edge(b,a)"]
+    rows:
+      "near(a,b)": {height: 1, chosen: "near_in(a,b)", founded: ["near_in(a,b)"], cyclic: []}
+
+  - id: mutual-support-in-the-epoch
+    about: "p(a) and q(a) each hold by a base row and through each other; all four alternatives are well-founded"
+    facts: ["left(a)", "right(a)"]
+    rows:
+      "p(a)": {height: 1, chosen: "p_left(a)", founded: ["p_left(a)", "p_q(a)"], cyclic: []}
+      "q(a)": {height: 1, chosen: "q_right(a)", founded: ["q_right(a)", "q_p(a)"], cyclic: []}
+
+  - id: role-left-with-only-mutual-support
+    about: "the role reads neither left(a) nor right(a): p_q(a) and q_p(a) are usable (no base premise), but they only support each other, so neither row is visible"
+    facts: ["left(a)", "right(a)"]
+    reads: []
+    rows:
+      "p(a)": {founded: [], cyclic: ["p_q(a)"]}
+      "q(a)": {founded: [], cyclic: ["q_p(a)"]}

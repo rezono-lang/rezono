@@ -1,0 +1,44 @@
+# Seven applications written by hand, one for each thing the rules can say. Synthetic: no real household.
+# The population of facts/population.yaml continues the numbering. One record per line, as JSON.
+#   A001  income above the threshold: the partial rate, plus the advice allowance (the worked example)
+#   A002  income exactly on the threshold: still the full rate
+#   A003  no income statement yet: the award is unknown, not zero
+#   A004  the full rate would give more than the maximum: the award is the maximum
+#   A005  income above the limit: no cost share, and so no allowance either
+#   A006  no quote yet: the costs are unknown, not zero
+#   A007  a second application of household H004, with a cost share that needs rounding
+household:
+  - {"id": "H001", "persons": 3}
+  - {"id": "H002", "persons": 2}
+  - {"id": "H003", "persons": 1}
+  - {"id": "H004", "persons": 4}
+  - {"id": "H005", "persons": 2}
+  - {"id": "H006", "persons": 5}
+application:
+  - {"id": "A001", "household": "H001", "claimed_costs": 1100000}
+  - {"id": "A002", "household": "H002", "claimed_costs": 415000}
+  - {"id": "A003", "household": "H003", "claimed_costs": 327550}
+  - {"id": "A004", "household": "H004", "claimed_costs": 1675000}
+  - {"id": "A005", "household": "H005", "claimed_costs": 590000}
+  - {"id": "A006", "household": "H006", "claimed_costs": 800000}
+  - {"id": "A007", "household": "H004", "claimed_costs": 319999}
+cost_line:
+  - {"id": "L0001", "application": "A001", "item": "heat-pump", "amount": 820000}
+  - {"id": "L0002", "application": "A001", "item": "roof-insulation", "amount": 240000}
+  - {"id": "L0003", "application": "A001", "item": "scaffolding", "amount": 40000}
+  - {"id": "L0004", "application": "A002", "item": "wall-insulation", "amount": 415000}
+  - {"id": "L0005", "application": "A003", "item": "insulating-glazing", "amount": 327550}
+  - {"id": "L0006", "application": "A004", "item": "heat-pump", "amount": 1380000}
+  - {"id": "L0007", "application": "A004", "item": "floor-insulation", "amount": 295000}
+  - {"id": "L0008", "application": "A005", "item": "roof-insulation", "amount": 590000}
+  - {"id": "L0009", "application": "A007", "item": "solar-boiler", "amount": 319999}
+income_statement:
+  - {"id": "S001", "household": "H001", "income": 3140000}
+  - {"id": "S002", "household": "H002", "income": 2800000}
+  - {"id": "S003", "household": "H004", "income": 2250000}
+  - {"id": "S004", "household": "H005", "income": 4500000}
+  - {"id": "S005", "household": "H006", "income": 3000000}
+advice_report:
+  - {"id": "R001", "household": "H001"}
+  - {"id": "R002", "household": "H004"}
+  - {"id": "R003", "household": "H005"}

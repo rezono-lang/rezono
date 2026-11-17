@@ -1,0 +1,63 @@
+id: https://rede.dev/contracts/view-build
+name: rede_view_build
+title: Published view build and captured inputs
+description: Static implementation identity in a build record and a private role's immutable layout inputs (C3).
+prefixes:
+  linkml: https://w3id.org/linkml/
+  rede: https://rede.dev/contracts/
+default_prefix: rede
+default_range: string
+imports:
+  - linkml:types
+
+classes:
+  ViewFile:
+    description: A relative source path or a sheet name and the hash of its bytes.
+    attributes:
+      path: {required: true}
+      sha256: {required: true, pattern: "^[0-9a-f]{64}$"}
+  RuntimeVersion:
+    attributes:
+      name: {required: true}
+      version: {required: true}
+  ViewRuntime:
+    description: The exact Node executable and the versions it reports, without a workstation path.
+    attributes:
+      executable_sha256: {required: true, pattern: "^[0-9a-f]{64}$"}
+      version: {required: true}
+      platform: {required: true}
+      architecture: {required: true}
+      versions: {range: RuntimeVersion, multivalued: true, inlined_as_list: true, required: true}
+  ViewBuild:
+    description: Optional views component of a build record; contains no role's data or layout hashes.
+    attributes:
+      format: {required: true, pattern: "^rede\\.view-build/1$"}
+      files: {range: ViewFile, multivalued: true, inlined_as_list: true, required: true}
+      node: {range: ViewRuntime, inlined: true, required: true}
+  PreviousView:
+    attributes:
+      manifest: {required: true, pattern: "^m-[0-9]+$"}
+      sha256: {required: true, pattern: "^[0-9a-f]{64}$"}
+  ViewCapture:
+    description: Private per-role inputs, committed by capture_sha256 in that role's index, never in a shared build.
+    attributes:
+      format: {required: true, pattern: "^rede\\.view-capture/1$"}
+      pack: {required: true}
+      manifest: {required: true, pattern: "^m-[0-9]+$"}
+      role: {required: true}
+      relayout: {range: boolean, required: true}
+      previous: {range: PreviousView, inlined: true}
+      layouts: {range: ViewFile, multivalued: true, inlined_as_list: true}
+  CapturedLayout:
+    description: Exact private layout bytes, base64-encoded without changing their text encoding.
+    attributes:
+      path: {required: true}
+      bytes: {required: true}
+  ViewInputCheckpoint:
+    description: Private conditional object, committed before main so a restart cannot recapture newer history.
+    attributes:
+      format: {required: true, pattern: "^rede\\.view-inputs/1$"}
+      build: {range: ViewBuild, inlined: true, required: true}
+      capture: {range: ViewCapture, inlined: true, required: true}
+      index: {required: true, description: "Base64 of the exact previous index bytes, empty when there was none."}
+      layouts: {range: CapturedLayout, multivalued: true, inlined_as_list: true}

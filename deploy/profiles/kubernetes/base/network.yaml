@@ -1,0 +1,100 @@
+# Network: nothing goes in or out unless a policy below says so (the first policy denies everything). The path
+# of a request: the Gateway -> front (OIDC login, port 4180) -> viewer (3000) -> gate (8080). Only the gate
+# reads the store; only the front talks to the identity provider. Egress to the outside is port 443 only (the
+# store, the issuer's keys, the Git host's API); an overlay narrows it to the platform's own address ranges.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny
+spec:
+  podSelector: {}
+  policyTypes: [Ingress, Egress]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: dns
+spec:
+  podSelector: {}
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - { protocol: UDP, port: 53 }
+        - { protocol: TCP, port: 53 }
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: front
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: front
+  policyTypes: [Ingress, Egress]
+  ingress:
+    # From the Gateway's namespace only; an overlay names it (patch the label value).
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: gateway
+      ports:
+        - { protocol: TCP, port: 4180 }
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: viewer
+      ports:
+        - { protocol: TCP, port: 3000 }
+    # The identity provider (discovery, token and keys).
+    - ports:
+        - { protocol: TCP, port: 443 }
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: viewer
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: viewer
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: front
+      ports:
+        - { protocol: TCP, port: 3000 }
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: gate
+      ports:
+        - { protocol: TCP, port: 8080 }
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: gate
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: gate
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: viewer
+      ports:
+        - { protocol: TCP, port: 8080 }
+  egress:
+    # The store (S3 API), the issuer's keys (JWKS) and the Git host's API for proposals.
+    - ports:
+        - { protocol: TCP, port: 443 }

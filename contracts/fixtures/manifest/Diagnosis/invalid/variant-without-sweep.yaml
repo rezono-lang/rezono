@@ -1,0 +1,9 @@
+# Without its sweep. The variant at grid position 4 is red; main (manifest-epoch-7) is not blocked.
+id: v-size_scale-04-8
+epoch: 8
+knowledge_time: "2026-01-02T00:00:00Z"
+last_good_manifest: manifest-epoch-7
+checks:
+  - {name: integrity, status: red, violations: 1}
+  - {name: invariants, status: green, violations: 0}
+variant: {index: 4, value: "40", readers: [checker, reader], status_readers: [checker]}

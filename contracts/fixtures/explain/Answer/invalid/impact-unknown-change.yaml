@@ -1,0 +1,7 @@
+format: rede.answer/1
+question: impact
+manifest_id: m-1
+delta: {kind: variant, id: v-price-01-2, manifest: v-price-01-2}
+nodes:
+  - {relation: placement, key: '["p2"]', distance: 0, change: moved}
+complete: true

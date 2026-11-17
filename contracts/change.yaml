@@ -1,0 +1,128 @@
+id: https://rede.dev/contracts/change
+name: rede_change
+title: Change and its life cycle
+description: >-
+  One change in Rede, from delta to effect (docs/lifecycle.md): an edit in the viewer, a commit by
+  hand, a batch from a journal, or the plan of a plugin with an effect. Every change follows the same
+  state machine. The state is derived from facts (the proposal on the host, reviews, the outcome of
+  the epoch, the result of a plugin), never set by hand. A review is a fact about exactly one content
+  hash; merging is not accepting, so merged is not a state.
+prefixes:
+  linkml: https://w3id.org/linkml/
+  rede: https://rede.dev/contracts/
+default_prefix: rede
+default_range: string
+imports:
+  - linkml:types
+
+types:
+  Sha256:
+    typeof: string
+    pattern: "^[0-9a-f]{64}$"
+  Name:
+    typeof: string
+    pattern: "^[a-z][a-z0-9]*([_-][a-z0-9]+)*$"
+
+enums:
+  ChangeState:
+    permissible_values:
+      draft: {description: "A delta computed against the base manifest, not yet submitted. Blocking errors are allowed."}
+      proposed: {description: Submitted with a fixed content hash; waiting for review. Recomputed when main moves.}
+      accepted: {description: A valid review accepted exactly this content hash.}
+      rejected: {description: "A review rejected it, with a reason. Final."}
+      withdrawn: {description: "Withdrawn, the pull request closed without merging, or reverted after integration (a published fix with the inverse delta). Final."}
+      stale: {description: "Once accepted, but the content, what it rests on, or (for a plan) the world changed. Recomputed into a new proposal."}
+      blocked: {description: "In the main pipeline, but the epoch has violations; the last good manifest stays visible. Ends published, withdrawn (reverted) or stale."}
+      published: {description: In a manifest. Final.}
+      applying: {description: apply runs with input_sha256.}
+      done: {description: "The effect is confirmed, with observations. Final."}
+      failed: {description: The effect failed. Final; recovery is a new plan.}
+      unknown: {description: "Unsure whether the effect happened; only status, or a person with four eyes, decides. Never retried silently."}
+  Effect:
+    permissible_values:
+      publish: {description: Knowledge that goes into a manifest.}
+      execute: {description: "An effect in the world, through a plugin with plan and apply."}
+  Channel:
+    description: Where the change enters, at the boundary.
+    permissible_values:
+      git: {description: "Schema, rules, parameters and written facts: a pull request through the Git-host plugin."}
+      journal: {description: Data that does not belong in Git; the source system holds the proposal and the review.}
+      plugin: {description: The plan of a plugin with an effect.}
+  Cause:
+    permissible_values:
+      edit: {description: Someone changed something.}
+      source: {description: A source system delivered new input.}
+      plan: {description: "The export of a published manifest, planned by a plugin."}
+      drift: {description: A drift row (expected is not observed); caused_by names the change that set the expectation.}
+      review_due: {description: "Something an accepted element rests on changed; a re-review, possibly without a delta."}
+  Verdict:
+    permissible_values:
+      accepted: {}
+      rejected: {}
+
+classes:
+  Change:
+    tree_root: true
+    description: One change and where it stands in its life cycle (docs/lifecycle.md).
+    attributes:
+      id: {identifier: true, required: true}
+      author: {range: Actor, required: true, inlined: true, description: "Who submitted it, from a verified identity."}
+      effect: {range: Effect, required: true}
+      channel: {range: Channel, required: true}
+      cause: {range: Cause, required: true}
+      caused_by: {description: The id of the change that gave rise to this one.}
+      base_manifest: {required: true, description: The manifest the change was computed against.}
+      content_sha256: {range: Sha256, required: true, description: "What a review is about: the canonical delta or the plan; for a re-review the element with what it rests on. The canonical hash of that value (docs/contracts.md#canonical-hash)."}
+      delta: {description: "Where the delta is: a path in the repository or a journal position. Absent for a re-review without a delta."}
+      proposal: {range: uri, description: The pull request on the host (contracts/proposal.yaml).}
+      plugin: {range: Name, description: "execute: the plugin that plans and applies."}
+      input_sha256: {range: Sha256, description: "execute: the idempotency key; never a second apply with the same hash."}
+      state: {range: ChangeState, required: true}
+      manifest: {description: "published: the manifest that contains the change."}
+      reviews: {range: Review, multivalued: true, inlined_as_list: true}
+    rules:
+      - description: An effect needs a plugin and an idempotency key.
+        preconditions: {slot_conditions: {effect: {equals_string: execute}}}
+        postconditions: {slot_conditions: {plugin: {required: true}, input_sha256: {required: true}}}
+      - description: A drift row or a re-review always names its cause.
+        preconditions: {slot_conditions: {cause: {equals_string: drift}}}
+        postconditions: {slot_conditions: {caused_by: {required: true}}}
+      - preconditions: {slot_conditions: {cause: {equals_string: review_due}}}
+        postconditions: {slot_conditions: {caused_by: {required: true}}}
+      - description: Accepted means there is a review.
+        preconditions: {slot_conditions: {state: {equals_string: accepted}}}
+        postconditions: {slot_conditions: {reviews: {required: true}}}
+      - description: Published names its manifest and is knowledge, not an effect.
+        preconditions: {slot_conditions: {state: {equals_string: published}}}
+        postconditions: {slot_conditions: {manifest: {required: true}, effect: {equals_string: publish}}}
+      - preconditions: {slot_conditions: {state: {equals_string: blocked}}}
+        postconditions: {slot_conditions: {effect: {equals_string: publish}}}
+      - description: Only an effect is applied.
+        preconditions: {slot_conditions: {state: {equals_string: applying}}}
+        postconditions: {slot_conditions: {effect: {equals_string: execute}}}
+      - preconditions: {slot_conditions: {state: {equals_string: done}}}
+        postconditions: {slot_conditions: {effect: {equals_string: execute}}}
+      - preconditions: {slot_conditions: {state: {equals_string: failed}}}
+        postconditions: {slot_conditions: {effect: {equals_string: execute}}}
+      - preconditions: {slot_conditions: {state: {equals_string: unknown}}}
+        postconditions: {slot_conditions: {effect: {equals_string: execute}}}
+
+  Actor:
+    description: A verified identity (the Git host or OIDC), never taken from the content of a file.
+    attributes:
+      subject: {required: true}
+      role: {required: true}
+
+  Review:
+    description: >-
+      A review is a fact (decision O1): who, in which role, which verdict with a reason, when, and about
+      which content hash. It counts only while that hash is the change's content_sha256.
+    attributes:
+      reviewer: {range: Actor, required: true, inlined: true}
+      verdict: {range: Verdict, required: true}
+      reason: {description: Required when rejected.}
+      at: {range: datetime, required: true, description: When; may_review is evaluated at this time.}
+      content_sha256: {range: Sha256, required: true}
+    rules:
+      - preconditions: {slot_conditions: {verdict: {equals_string: rejected}}}
+        postconditions: {slot_conditions: {reason: {required: true}}}

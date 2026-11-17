@@ -1,0 +1,3 @@
+view: invoice__vat__regex
+check: regex
+kind: invoice

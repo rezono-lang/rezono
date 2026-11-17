@@ -1,0 +1,52 @@
+id: https://rede.dev/contracts/effect
+name: rede_effect
+title: Effect plan and attempt state
+description: >-
+  A bounded effect plan and its journaled attempt. The plan hash identifies the exact planned input.
+  Shape validation does not verify an approval, a budget reservation, the dry run or a state transition.
+prefixes:
+  linkml: https://w3id.org/linkml/
+  rede: https://rede.dev/contracts/
+default_prefix: rede
+default_range: string
+imports:
+  - linkml:types
+  - proof
+
+types:
+  EffectDigest:
+    typeof: string
+    description: A SHA-256 digest in lowercase hexadecimal.
+    pattern: "^[0-9a-f]{64}(?![\\s\\S])"
+
+enums:
+  EffectState:
+    description: The journal state for a single plan hash.
+    permissible_values:
+      planned: {description: The exact plan is retained and the attempt is available to claim.}
+      applying: {description: The sole attempt is durably claimed before sending the request.}
+      unknown: {description: The attempt is consumed and its outcome is uncertain. Reconcile only.}
+      applied: {description: Matching effect evidence has been confirmed.}
+      failed: {description: The consumed attempt was definitively rejected. An uncertain response is not failure.}
+      cleaned: {description: Cleanup was confirmed. The original attempt remains consumed.}
+
+classes:
+  EffectPlan:
+    tree_root: true
+    description: A plan and its bounded spend and dry-run references.
+    attributes:
+      id: {identifier: true, required: true, description: The stable identifier of the plan record.}
+      plan_hash: {range: EffectDigest, required: true, description: The digest of the exact planned input.}
+      budget_cents: {range: integer, minimum_value: 0, required: true, description: The plan's explicit budget in cents.}
+      currency: {pattern: "^[A-Z]{3}(?![\\s\\S])", required: true, description: The currency whose cents the budget uses.}
+      dry_run_ref: {range: RowRef, inlined: true, required: true, description: The row that records the dry run for this plan.}
+
+  EffectApply:
+    description: The recorded state of an attempt for one exact plan.
+    attributes:
+      id: {identifier: true, required: true, description: The stable identifier of the attempt record.}
+      idempotency_key:
+        range: EffectDigest
+        required: true
+        description: The exact EffectPlan plan_hash. The journal verifies the binding across records.
+      state: {range: EffectState, required: true, description: The state stored by the effect journal.}

@@ -1,0 +1,6 @@
+# Signs of std-identity (contracts/view.yaml): a shape per kind and a line per arrow.
+kinds:
+  - {kind: referent, shape: rect}
+arrows:
+  - {arrow: referent.same_as, dash: none}
+  - {arrow: referent.represented_by, dash: "4 3"}

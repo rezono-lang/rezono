@@ -1,0 +1,14 @@
+id: manual/node-1/section-2
+subject: node-1
+attribute: node.label
+value: {value: First node, state: known}
+event_time: "2026-11-06T10:15:00Z"
+source:
+  kind: document
+  name: Example manual
+  url: https://docs.example.invalid/manual
+  position: section-2
+  fragment_sha256: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  licence: LicenseRef-fixture
+  attribution: Example author
+  retrieved_at: "2026-02-30T12:34:56Z"

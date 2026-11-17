@@ -1,0 +1,12 @@
+format: rede.answer/1
+question: grounds
+manifest_id: m-1
+start: {relation: e, key: '["a","b"]'}
+nodes:
+  - relation: e
+    key: '["a","b"]'
+    distance: 0
+    sources:
+      - {kind: pack, name: facts/e.yaml}
+steps: []
+witnesses: []

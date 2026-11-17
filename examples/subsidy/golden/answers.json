@@ -1,0 +1,574 @@
+{
+ "0-applications/eligible_costs/[\"A001\",\"1060000\"]": {
+  "format": "rede.answer/1",
+  "manifest_id": "0-applications",
+  "nodes": [
+   {
+    "distance": 0,
+    "key": "[\"A001\",\"1060000\"]",
+    "relation": "eligible_costs"
+   },
+   {
+    "distance": 1,
+    "key": "[\"A001\",\"L0001\",\"820000\"]",
+    "relation": "eligible_line"
+   },
+   {
+    "distance": 1,
+    "key": "[\"A001\",\"L0002\",\"240000\"]",
+    "relation": "eligible_line"
+   },
+   {
+    "distance": 1,
+    "key": "[\"A001\"]",
+    "relation": "has_quote"
+   }
+  ],
+  "question": "grounds",
+  "start": {
+   "key": "[\"A001\",\"1060000\"]",
+   "relation": "eligible_costs"
+  },
+  "steps": [
+   {
+    "conclusion": {
+     "key": "[\"A001\",\"1060000\"]",
+     "relation": "eligible_costs"
+    },
+    "how": "contributes",
+    "position": 0,
+    "premise": {
+     "key": "[\"A001\",\"L0001\",\"820000\"]",
+     "relation": "eligible_line"
+    },
+    "value": "known:820000"
+   },
+   {
+    "conclusion": {
+     "key": "[\"A001\",\"1060000\"]",
+     "relation": "eligible_costs"
+    },
+    "how": "contributes",
+    "position": 0,
+    "premise": {
+     "key": "[\"A001\",\"L0002\",\"240000\"]",
+     "relation": "eligible_line"
+    },
+    "value": "known:240000"
+   },
+   {
+    "conclusion": {
+     "key": "[\"A001\",\"1060000\"]",
+     "relation": "eligible_costs"
+    },
+    "how": "positive",
+    "position": 0,
+    "premise": {
+     "key": "[\"A001\"]",
+     "relation": "has_quote"
+    }
+   }
+  ],
+  "witnesses": [
+   {
+    "aggregates": [
+     {
+      "contributors_sha256": "a974eac49e9562f762577292c53c75ad1770b4049d727d8bab90fc425d266f54",
+      "count": 2,
+      "group_key": "[\"A001\"]",
+      "position": 0,
+      "relation": "eligible_line",
+      "result": "known:1060000"
+     }
+    ],
+    "bindings": [
+     {
+      "value": "A001",
+      "variable": "?a"
+     },
+     {
+      "value": "1060000",
+      "variable": "?t"
+     }
+    ],
+    "conclusion": {
+     "key": "[\"A001\",\"1060000\"]",
+     "relation": "eligible_costs"
+    },
+    "premises": [
+     {
+      "polarity": "positive",
+      "row": {
+       "key": "[\"A001\"]",
+       "relation": "has_quote"
+      },
+      "stratum": 1
+     }
+    ],
+    "rule_id": "eligible_costs"
+   },
+   {
+    "bindings": [
+     {
+      "value": "A001",
+      "variable": "?a"
+     },
+     {
+      "value": "820000",
+      "variable": "?c"
+     },
+     {
+      "value": "heat-pump",
+      "variable": "?i"
+     },
+     {
+      "value": "L0001",
+      "variable": "?l"
+     }
+    ],
+    "conclusion": {
+     "key": "[\"A001\",\"L0001\",\"820000\"]",
+     "relation": "eligible_line"
+    },
+    "premises": [
+     {
+      "polarity": "positive",
+      "row": {
+       "key": "[\"A001\",\"L0001\",\"heat-pump\",\"820000\"]",
+       "relation": "line"
+      },
+      "stratum": 1
+     },
+     {
+      "polarity": "positive",
+      "row": {
+       "key": "[\"heat-pump\",\"eligible\"]",
+       "relation": "cost_item__eligibility"
+      },
+      "stratum": 0
+     }
+    ],
+    "rule_id": "eligible_line"
+   },
+   {
+    "bindings": [
+     {
+      "value": "A001",
+      "variable": "?a"
+     },
+     {
+      "value": "L0001",
+      "variable": "?anon_1"
+     },
+     {
+      "value": "heat-pump",
+      "variable": "?anon_2"
+     },
+     {
+      "value": "820000",
+      "variable": "?anon_3"
+     }
+    ],
+    "conclusion": {
+     "key": "[\"A001\"]",
+     "relation": "has_quote"
+    },
+    "premises": [
+     {
+      "polarity": "positive",
+      "row": {
+       "key": "[\"A001\",\"L0001\",\"heat-pump\",\"820000\"]",
+       "relation": "line"
+      },
+      "stratum": 1
+     }
+    ],
+    "rule_id": "has_quote"
+   }
+  ]
+ },
+ "0-applications/ledger_paid/[\"A001\",\"269400\"]": {
+  "format": "rede.answer/1",
+  "manifest_id": "0-applications",
+  "nodes": [
+   {
+    "distance": 0,
+    "key": "[\"A001\",\"269400\"]",
+    "relation": "ledger_paid"
+   },
+   {
+    "distance": 1,
+    "key": "[\"A001\",\"P001\",\"269400\"]",
+    "relation": "ledger_line"
+   },
+   {
+    "distance": 1,
+    "key": "[\"A001\"]",
+    "relation": "paid"
+   }
+  ],
+  "question": "grounds",
+  "start": {
+   "key": "[\"A001\",\"269400\"]",
+   "relation": "ledger_paid"
+  },
+  "steps": [
+   {
+    "conclusion": {
+     "key": "[\"A001\",\"269400\"]",
+     "relation": "ledger_paid"
+    },
+    "how": "contributes",
+    "position": 0,
+    "premise": {
+     "key": "[\"A001\",\"P001\",\"269400\"]",
+     "relation": "ledger_line"
+    },
+    "value": "known:269400"
+   },
+   {
+    "conclusion": {
+     "key": "[\"A001\",\"269400\"]",
+     "relation": "ledger_paid"
+    },
+    "how": "positive",
+    "position": 0,
+    "premise": {
+     "key": "[\"A001\"]",
+     "relation": "paid"
+    }
+   }
+  ],
+  "witnesses": [
+   {
+    "aggregates": [
+     {
+      "contributors_sha256": "15647e14fdc7bf4d856ba4bc7a773aa79eae8d5c0435fc4f0207983072899b55",
+      "count": 1,
+      "group_key": "[\"A001\"]",
+      "position": 0,
+      "relation": "ledger_line",
+      "result": "known:269400"
+     }
+    ],
+    "bindings": [
+     {
+      "value": "A001",
+      "variable": "?a"
+     },
+     {
+      "value": "269400",
+      "variable": "?t"
+     }
+    ],
+    "conclusion": {
+     "key": "[\"A001\",\"269400\"]",
+     "relation": "ledger_paid"
+    },
+    "premises": [
+     {
+      "polarity": "positive",
+      "row": {
+       "key": "[\"A001\"]",
+       "relation": "paid"
+      },
+      "stratum": 1
+     }
+    ],
+    "rule_id": "ledger_paid"
+   },
+   {
+    "bindings": [
+     {
+      "value": "A001",
+      "variable": "?a"
+     },
+     {
+      "value": "269400",
+      "variable": "?c"
+     },
+     {
+      "value": "P001",
+      "variable": "?p"
+     }
+    ],
+    "conclusion": {
+     "key": "[\"A001\",\"P001\",\"269400\"]",
+     "relation": "ledger_line"
+    },
+    "premises": [
+     {
+      "polarity": "positive",
+      "row": {
+       "key": "[\"P001\"]",
+       "relation": "ledger_payment__accepted"
+      },
+      "stratum": 0
+     },
+     {
+      "polarity": "positive",
+      "row": {
+       "key": "[\"P001\",\"A001\"]",
+       "relation": "ledger_payment__application"
+      },
+      "stratum": 0
+     },
+     {
+      "polarity": "positive",
+      "row": {
+       "key": "[\"P001\",\"269400\"]",
+       "relation": "ledger_payment__amount"
+      },
+      "stratum": 0
+     }
+    ],
+    "rule_id": "ledger_line"
+   },
+   {
+    "bindings": [
+     {
+      "value": "A001",
+      "variable": "?a"
+     },
+     {
+      "value": "P001",
+      "variable": "?anon_1"
+     },
+     {
+      "value": "269400",
+      "variable": "?anon_2"
+     }
+    ],
+    "conclusion": {
+     "key": "[\"A001\"]",
+     "relation": "paid"
+    },
+    "premises": [
+     {
+      "polarity": "positive",
+      "row": {
+       "key": "[\"A001\",\"P001\",\"269400\"]",
+       "relation": "ledger_line"
+      },
+      "stratum": 1
+     }
+    ],
+    "rule_id": "paid"
+   }
+  ]
+ },
+ "0-applications/quoted_costs/[\"A001\",\"1100000\"]": {
+  "format": "rede.answer/1",
+  "manifest_id": "0-applications",
+  "nodes": [
+   {
+    "distance": 0,
+    "key": "[\"A001\",\"1100000\"]",
+    "relation": "quoted_costs"
+   },
+   {
+    "distance": 1,
+    "key": "[\"A001\"]",
+    "relation": "has_quote"
+   },
+   {
+    "distance": 1,
+    "key": "[\"A001\",\"L0001\",\"heat-pump\",\"820000\"]",
+    "relation": "line"
+   },
+   {
+    "distance": 1,
+    "key": "[\"A001\",\"L0002\",\"roof-insulation\",\"240000\"]",
+    "relation": "line"
+   },
+   {
+    "distance": 1,
+    "key": "[\"A001\",\"L0003\",\"scaffolding\",\"40000\"]",
+    "relation": "line"
+   }
+  ],
+  "question": "grounds",
+  "start": {
+   "key": "[\"A001\",\"1100000\"]",
+   "relation": "quoted_costs"
+  },
+  "steps": [
+   {
+    "conclusion": {
+     "key": "[\"A001\",\"1100000\"]",
+     "relation": "quoted_costs"
+    },
+    "how": "contributes",
+    "position": 0,
+    "premise": {
+     "key": "[\"A001\",\"L0001\",\"heat-pump\",\"820000\"]",
+     "relation": "line"
+    },
+    "value": "known:820000"
+   },
+   {
+    "conclusion": {
+     "key": "[\"A001\",\"1100000\"]",
+     "relation": "quoted_costs"
+    },
+    "how": "contributes",
+    "position": 0,
+    "premise": {
+     "key": "[\"A001\",\"L0002\",\"roof-insulation\",\"240000\"]",
+     "relation": "line"
+    },
+    "value": "known:240000"
+   },
+   {
+    "conclusion": {
+     "key": "[\"A001\",\"1100000\"]",
+     "relation": "quoted_costs"
+    },
+    "how": "contributes",
+    "position": 0,
+    "premise": {
+     "key": "[\"A001\",\"L0003\",\"scaffolding\",\"40000\"]",
+     "relation": "line"
+    },
+    "value": "known:40000"
+   },
+   {
+    "conclusion": {
+     "key": "[\"A001\",\"1100000\"]",
+     "relation": "quoted_costs"
+    },
+    "how": "positive",
+    "position": 0,
+    "premise": {
+     "key": "[\"A001\"]",
+     "relation": "has_quote"
+    }
+   }
+  ],
+  "witnesses": [
+   {
+    "aggregates": [
+     {
+      "contributors_sha256": "fc4c8247739bed2ac3586cf15a034c35437273c6ce760b5b0facec264f31e248",
+      "count": 3,
+      "group_key": "[\"A001\"]",
+      "position": 0,
+      "relation": "line",
+      "result": "known:1100000"
+     }
+    ],
+    "bindings": [
+     {
+      "value": "A001",
+      "variable": "?a"
+     },
+     {
+      "value": "1100000",
+      "variable": "?t"
+     }
+    ],
+    "conclusion": {
+     "key": "[\"A001\",\"1100000\"]",
+     "relation": "quoted_costs"
+    },
+    "premises": [
+     {
+      "polarity": "positive",
+      "row": {
+       "key": "[\"A001\"]",
+       "relation": "has_quote"
+      },
+      "stratum": 1
+     }
+    ],
+    "rule_id": "quoted_costs"
+   },
+   {
+    "bindings": [
+     {
+      "value": "A001",
+      "variable": "?a"
+     },
+     {
+      "value": "L0001",
+      "variable": "?anon_1"
+     },
+     {
+      "value": "heat-pump",
+      "variable": "?anon_2"
+     },
+     {
+      "value": "820000",
+      "variable": "?anon_3"
+     }
+    ],
+    "conclusion": {
+     "key": "[\"A001\"]",
+     "relation": "has_quote"
+    },
+    "premises": [
+     {
+      "polarity": "positive",
+      "row": {
+       "key": "[\"A001\",\"L0001\",\"heat-pump\",\"820000\"]",
+       "relation": "line"
+      },
+      "stratum": 1
+     }
+    ],
+    "rule_id": "has_quote"
+   },
+   {
+    "bindings": [
+     {
+      "value": "A001",
+      "variable": "?a"
+     },
+     {
+      "value": "820000",
+      "variable": "?c"
+     },
+     {
+      "value": "heat-pump",
+      "variable": "?i"
+     },
+     {
+      "value": "L0001",
+      "variable": "?l"
+     }
+    ],
+    "conclusion": {
+     "key": "[\"A001\",\"L0001\",\"heat-pump\",\"820000\"]",
+     "relation": "line"
+    },
+    "premises": [
+     {
+      "polarity": "positive",
+      "row": {
+       "key": "[\"L0001\",\"A001\"]",
+       "relation": "cost_line__application"
+      },
+      "stratum": 0
+     },
+     {
+      "polarity": "positive",
+      "row": {
+       "key": "[\"L0001\",\"heat-pump\"]",
+       "relation": "cost_line__item"
+      },
+      "stratum": 0
+     },
+     {
+      "polarity": "positive",
+      "row": {
+       "key": "[\"L0001\",\"820000\"]",
+       "relation": "cost_line__amount"
+      },
+      "stratum": 0
+     }
+    ],
+    "rule_id": "line"
+   }
+  ]
+ }
+}

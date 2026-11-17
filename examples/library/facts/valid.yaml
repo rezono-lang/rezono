@@ -1,0 +1,28 @@
+# Een kleine, geldige toestand: alle violation views zijn leeg.
+branch:
+  - code: centrum
+    name: Centrale bibliotheek
+    address: {street: Markt 1, city: Middelburg, postcode: 4331 LK}
+  - code: oost
+    name: Vestiging Oost
+    address: {street: Oostweg 5, city: Middelburg}
+category:
+  - {id: c1, name: Romans}
+  - {id: c2, name: Detectives, parent: c1}
+  - {id: c3, name: Natuur}
+work:
+  - {id: w1, title: De avonden, category: c1, year: 1947, authors: [Gerard Reve]}
+  - {id: w2, title: Moord in de leeszaal, category: c2, authors: [A. Schrijver, B. Schrijver]}
+copy:
+  - {barcode: 1001, work: w1, branch: centrum, reference_only: false}
+  - {barcode: 1002, work: w1, branch: oost, reference_only: false}
+  - {barcode: 1003, work: w2, branch: centrum, reference_only: true}
+member:
+  - {id: m1, name: An, membership: adult, home_branch: centrum}
+  - {id: m2, name: Bo, membership: youth}
+staff:
+  - {id: s1, name: Cas, branch: centrum}
+  - {id: s2, name: Dee, branch: oost}
+loan:
+  - {id: l1, copy: 1001, member: m1, lent_by: s1, lent_on: 2026-10-01}
+  - {id: l2, copy: 1002, member: m2, lent_by: s2, lent_on: 2026-10-03}

@@ -1,0 +1,6 @@
+id: total
+module: core
+explain: materialize
+columns:
+  - {name: subject, type: string}
+  - {name: amount, type: integer, currency: euro}

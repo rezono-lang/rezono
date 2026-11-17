@@ -1,0 +1,31 @@
+id: G03
+class: invalid
+status: settled
+schema:
+  from: fixture.schema.json
+  merge:
+    kinds:
+      ZoneRule:
+        world: closed
+        id:
+          type: Text
+        plane: control
+        owner: null
+        slots:
+          decision:
+            card: '1'
+            type: Text
+            states:
+            - known
+          allowed:
+            card: '1'
+            type: Bool
+            states:
+            - known
+form: schema
+expect:
+  accept: false
+  error: a control kind declares `owner`
+note: The test also runs the variant without a `decision` slot.
+sources:
+- l0.md §3.7 (O13, O14)

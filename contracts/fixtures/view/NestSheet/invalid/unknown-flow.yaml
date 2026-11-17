@@ -1,0 +1,7 @@
+# A container lays its parts out as a row or a column; nothing automatic.
+id: ledger
+title_message: nest.ledger
+part_message: nest.part_of
+levels:
+  - {kind: ledger, flow: packed}
+  - {kind: account, part_of: account__ledger}

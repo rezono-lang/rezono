@@ -1,0 +1,11 @@
+id: total
+stable_id: "total~0123456789ab"
+span: {file: rules/core.dl, line: "4", column: "3"}
+message: rule.total
+relation: total
+module: core
+aggregates:
+  - {position: 0, relation: line, function: average, over: amount}
+head: {relation: total, terms: [{kind: variable, value: "?a", type: string}]}
+body: [{kind: atom, position: 1, polarity: positive, relation: order, terms: [{kind: variable, value: "?a", type: string}]}]
+origin: {file: rules/core.dl, line: "4"}

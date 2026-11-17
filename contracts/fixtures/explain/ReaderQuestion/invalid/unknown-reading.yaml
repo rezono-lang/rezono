@@ -1,0 +1,7 @@
+id: steun-eindigt
+title_message: reader.steun_eindigt
+about_message: reader.steun_eindigt.about
+relation: support_exposure
+proof: grounds
+columns:
+  - {column: e, message: reader.steun_eindigt.e, reading: iso}

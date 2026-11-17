@@ -1,0 +1,17 @@
+id: E43
+status: settled
+mode: evaluate
+source: ask Host where not (owner = team-platform)
+data: appendix-b
+role: viewer
+expect:
+  print: ask Host where not owner = team-platform
+  answer:
+    rows: []
+    undecided:
+    - binder: host-a
+      state: unknown
+      reason: not_assigned
+    not_applicable: 2
+sources:
+- '#350 P10.2a §11'

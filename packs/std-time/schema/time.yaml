@@ -1,0 +1,175 @@
+id: https://rede.example/std-time/time
+name: std_time
+description: >-
+  Intervals of positions on an axis. A position is a whole number on a named axis: a day counted on a
+  calendar, or the rank of a stage. An interval is half-open: it covers start <= p < end. A bound is stated,
+  or stated to be absent, or not recorded; a bound nobody recorded is unknown, never a number and never "no
+  bound" (RV-C13), and so is a knowledge time nobody recorded (RV-C18). A reference is a position for which the intervals are read: a fact, never the clock. The axioms and the derived relations are in rules/time.dl. The mapping annotations
+  compare with OWL-Time (decision O12b); no rule reads them.
+in_language: en
+prefixes:
+  linkml: https://w3id.org/linkml/
+  time: http://www.w3.org/2006/time#
+imports:
+  - linkml:types
+default_range: string
+annotations:
+  layer: facts
+
+enums:
+  IntervalRelation:
+    description: >-
+      The thirteen relations of Allen between two intervals with both bounds stated. Exactly one holds for
+      any two such intervals; the rule allen derives it for two different intervals of one series.
+    permissible_values:
+      before: {description: "a ends before b starts", exact_mappings: ["time:intervalBefore"]}
+      meets: {description: "a ends where b starts", exact_mappings: ["time:intervalMeets"]}
+      overlaps: {description: "a starts first, b starts inside a, and a ends inside b", exact_mappings: ["time:intervalOverlaps"]}
+      starts: {description: "a and b start together, and a ends first", exact_mappings: ["time:intervalStarts"]}
+      during: {description: "a starts after b starts and ends before b ends", exact_mappings: ["time:intervalDuring"]}
+      finishes: {description: "a starts after b starts, and they end together", exact_mappings: ["time:intervalFinishes"]}
+      equals: {description: "a and b start together and end together", exact_mappings: ["time:intervalEquals"]}
+      after: {description: "a starts after b ends", exact_mappings: ["time:intervalAfter"]}
+      met_by: {description: "a starts where b ends", exact_mappings: ["time:intervalMetBy"]}
+      overlapped_by: {description: "b starts first, a starts inside b, and b ends inside a", exact_mappings: ["time:intervalOverlappedBy"]}
+      started_by: {description: "a and b start together, and b ends first", exact_mappings: ["time:intervalStartedBy"]}
+      contains: {description: "b starts after a starts and ends before a ends", exact_mappings: ["time:intervalContains"]}
+      finished_by: {description: "b starts after a starts, and they end together", exact_mappings: ["time:intervalFinishedBy"]}
+
+  JudgementValue:
+    description: >-
+      How an interval stands at a reference (ruling RV-C18). Exactly one holds for an interval and a reference
+      on the same axis. A domain binds it to a tone and gives its own words. positive, no_end and attention
+      with the reason end_within_horizon stand only where the interval holds at the reference.
+    permissible_values:
+      positive: {description: "the interval holds, and its end lies further ahead than the horizon of the reference"}
+      attention: {description: "the interval holds and its end lies within the horizon, or the end has come and the extension has not"}
+      negative: {description: "the end has come, and the extension too where one is stated"}
+      not_begun: {description: "a stated start lies ahead of the reference, and the end has not come"}
+      no_end: {description: "the interval holds, and is stated to have no end"}
+      unknown: {description: "nobody recorded the end, or the start, nor that there is none, so whether the interval holds is unknown"}
+
+  JudgementReason:
+    description: >-
+      Why an interval has its judgement. One reason per judgement; it tells apart two rows of one value. A
+      domain gives its own words per reason.
+    permissible_values:
+      end_beyond_horizon: {description: the end lies further ahead than the horizon}
+      end_within_horizon: {description: "the end lies ahead, within the horizon"}
+      in_extension: {description: "the end has come, and the extension runs"}
+      ended: {description: "the end has come, and no extension is stated"}
+      extension_ended: {description: "the end has come, and the extension has stopped"}
+      start_ahead: {description: "a stated start lies ahead of the reference: the interval has not begun"}
+      without_end: {description: "the interval holds, and is stated to have no end"}
+      end_not_recorded: {description: "nobody recorded an end, nor that there is none"}
+      start_not_recorded: {description: "the end lies ahead, and nobody recorded a start, nor that there is none"}
+
+  BoundSide:
+    description: A side of an interval that can be stated to have no bound.
+    permissible_values:
+      start: {description: "the interval has no first position: it has always been"}
+      end: {description: "the interval does not end"}
+
+classes:
+  Interval:
+    abstract: true
+    description: >-
+      Anything a domain reads as lasting from a position up to, and not including, a later one. A view
+      supplies its elements.
+    close_mappings: ["time:ProperInterval"]
+    attributes:
+      id:
+        identifier: true
+      on_axis:
+        range: Axis
+        required: true
+        description: The axis its positions are counted on. Positions on different axes are never compared.
+        close_mappings: ["time:hasTRS"]
+      start:
+        range: integer
+        description: >-
+          The first position it covers. Open world (W6): an interval without this row and without
+          unbounded start has a start nobody recorded, which is unknown.
+        close_mappings: ["time:hasBeginning"]
+        annotations:
+          world: open
+      end:
+        range: integer
+        description: >-
+          The first position it no longer covers. Open world (W6): an interval without this row and without
+          unbounded end has an end nobody recorded, which is unknown.
+        close_mappings: ["time:hasEnd"]
+        annotations:
+          world: open
+      unbounded:
+        range: BoundSide
+        multivalued: true
+        description: >-
+          The sides on which it is stated to have no bound: a claim with an origin of its own, such as a
+          decision without a term or a contract for an indefinite time. Never the default: a record that is
+          silent about a bound states nothing.
+      extension_end:
+        range: integer
+        description: >-
+          The first position an extension beyond the end no longer covers. Between end and extension_end the
+          interval is in its extension.
+      known_from:
+        range: integer
+        description: >-
+          The position from which the interval is known (knowledge time, apart from what it covers). Open
+          world (W6, ruling RV-C18): an interval without this row has a knowledge time nobody recorded, which
+          is unknown, never "known from the first position on".
+        annotations:
+          world: open
+      in_series:
+        range: Series
+        description: >-
+          The series it is read in, together with the other intervals of that series. The rule allen relates
+          two intervals of one series only.
+
+  Axis:
+    description: >-
+      A named axis of whole-number positions with one unit and one zero: a calendar counted in days, or the
+      order of a set of stages. In a proof it is the join between an interval and a reference, not a
+      reason, so its steps are folded.
+    close_mappings: ["time:TRS"]
+    annotations:
+      explain: fold
+    attributes:
+      id:
+        identifier: true
+
+  Series:
+    description: >-
+      Intervals that are read together: the successive states of one thing, or the divisions of one whole.
+      All intervals of a series lie on one axis.
+    attributes:
+      id:
+        identifier: true
+
+  ReferencePoint:
+    description: >-
+      A position for which the intervals are read: what holds at it, and how each interval stands at it. A
+      fact, never the clock, and itself a choice of the reader.
+    close_mappings: ["time:Instant"]
+    attributes:
+      id:
+        identifier: true
+      on_axis:
+        range: Axis
+        required: true
+        description: The axis its position is counted on.
+        close_mappings: ["time:hasTRS"]
+      position:
+        range: integer
+        required: true
+        description: The position on that axis.
+        broad_mappings: ["time:numericPosition"]
+      horizon:
+        range: integer
+        required: true
+        minimum_value: 0
+        description: >-
+          How far ahead of the position an end counts as near, in positions of the axis. Zero when nothing
+          counts as near.
+        broad_mappings: ["time:numericDuration"]

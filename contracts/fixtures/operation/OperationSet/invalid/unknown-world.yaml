@@ -1,0 +1,4 @@
+format: rede.operations/1
+pack: library
+operations:
+  - {op: move, kind: Member, slot: home_branch, to: AdultMember, world: maybe}

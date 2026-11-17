@@ -1,0 +1,24 @@
+# Dezelfde toestand met opzettelijke fouten. Elke fout hoort in precies één view;
+# zie expected/violations/errors.json.
+project:
+  - {id: p1, name: Website, budget: 1200000}
+  - {id: p1, name: Website, budget: 1200000}        # dubbel id -> project__identification
+  - {id: p2, name: Verhuizing, budget: 500000}
+  - {id: p3, name: Website, budget: 10000}          # zelfde naam -> project__project_name__unique
+budget_line:
+  - {id: b1, project: p1, description: Ontwerp, amount: 700000}
+  - {id: b2, project: p1, description: Bouw, amount: -500}  # negatief -> budget_line__amount__value_range
+milestone:
+  - {id: m1, project: p1, name: Ontwerp klaar, due: 2026-12-01}
+task:
+  - {id: t1, project: p1, milestone: m1, name: Schetsen, status: done, estimate: 16}
+  - {id: t2, project: p1, name: Huisstijl, status: open}
+  - {id: t5, name: Zonder project, status: open}    # ontbrekende pijl -> task__project__totality
+  - {id: t6, project: p1, name: Twee statussen, status: [open, done]}  # dubbele waarde -> task__status__functionality
+  - {id: t7, project: p2, milestone: m1, name: Verkeerde mijlpaal, status: open}  # -> task__same_project__path_equation
+  - {id: t8, project: p1, name: Onbekende status, status: bezig}  # buiten de enum -> task__status__value_range
+  - {id: t9, project: p1, name: Te groot, status: open, estimate: 500}  # boven het maximum -> task__estimate__value_range
+dependency:
+  - {id: d1, task: t2, prerequisite: t1}
+  - {id: d3, task: t1, prerequisite: t99}           # losse verwijzing -> dependency__prerequisite__reference
+  - {id: d4, task: t2, prerequisite: t1}            # zelfde paar als d1 -> dependency__dependency_pair__unique

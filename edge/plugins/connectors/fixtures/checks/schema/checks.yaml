@@ -1,0 +1,41 @@
+# A pack for the SHACL-SPARQL checks (test_shacl_sparql.py): kinds, an arrow, an enum, bounds and a
+# many-valued arrow, read by invariants. Neutral names on purpose; it describes no domain.
+id: https://rede.example/checks
+name: checks
+in_language: nl
+imports:
+  - linkml:types
+default_range: string
+annotations:
+  layer: facts
+types:
+  Count:
+    typeof: integer
+enums:
+  State:
+    permissible_values:
+      low: {}
+      high: {}
+classes:
+  Group:
+    attributes:
+      id:
+        identifier: true
+      title:
+        required: true
+      limit:
+        range: Count
+        minimum_value: 0
+  Item:
+    attributes:
+      id:
+        identifier: true
+      group:
+        range: Group
+      size:
+        range: Count
+      state:
+        range: State
+      next:
+        range: Item
+        multivalued: true

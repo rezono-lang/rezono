@@ -1,0 +1,17 @@
+id: P06
+status: settled
+mode: publish
+source: 'require platform_owned: host.owner = team-platform'
+data: appendix-b
+given:
+- + host-a.owner = team-platform
+expect:
+  publication:
+    outcome: publishes
+    violations: []
+    undecided: []
+    blocking: []
+note: n/a passes, also under `require`.
+sources:
+- '#350/6751612214 owner settlement, point 3'
+- '#350 v0 §5, §7b'

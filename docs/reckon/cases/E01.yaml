@@ -1,0 +1,8 @@
+id: E01
+status: settled
+mode: parse
+source: ask Host where memory_need>384 GiB
+expect:
+  print: ask Host where memory_need > 384 GiB
+sources:
+- '#350 P10.2a §11'

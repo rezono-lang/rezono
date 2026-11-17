@@ -1,0 +1,4 @@
+# Not applicable with its reason: an empty set has no minimum.
+unit: kg
+state: not_applicable
+reason: empty

@@ -1,0 +1,55 @@
+@locale en
+---
+# Sentences in ICU MessageFormat 2, one message per id. A message starts in the first column with
+# "id ="; continuation lines are indented. Every argument is an element id: the viewer fills {$x}
+# with the label or the name of x.
+
+# The schema read as sentences (the compiler uses these ids for every kind, arrow and attribute).
+arrow.total = {{Every {$kind} has exactly one {$arrow}.}}
+arrow.partial = {{Every {$kind} has at most one {$arrow}.}}
+arrow.many.partial = {{Every {$kind} can have more than one {$arrow}.}}
+attribute.total = {{Every {$kind} has exactly one {$attribute}.}}
+attribute.partial = {{Every {$kind} has at most one {$attribute}.}}
+is_a = {{Every {$kind} is a {$parent}.}}
+unique_key = {{{$key} belongs to at most one {$kind}.}}
+path_equation = {{For every {$kind}: {$equation}.}}
+
+# A sentence per rule clause: rule.<rule-id>, with the variables of the clause. Amounts are in cents.
+# rules/costs.dl
+rule.line = Quote line {$l} of application {$a} is for {$i} and costs {$c} cents.
+rule.has_quote = Application {$a} has a quote.
+rule.quoted_costs = The quotes of application {$a} add up to {$t} cents.
+rule.eligible_line = Quote line {$l} of application {$a} counts: {$c} cents for an eligible cost item.
+rule.eligible_costs = The eligible costs of application {$a} are {$t} cents.
+rule.costs_mismatch = Application {$a} claims {$x} cents, but its quotes add up to {$q} cents.
+
+# rules/assessment.dl
+rule.has_income_statement = An income statement has been received for household {$h}.
+rule.income_not_received = No income statement has been received for household {$h}, which filed application {$a}.
+rule.income_missing = Application {$a} waits for an income statement.
+rule.quote_missing = No quote has been received for application {$a}.
+rule.assessment_1 = Application {$a} cannot be assessed yet: the income of its household is unknown.
+rule.assessment_2 = Application {$a} cannot be assessed yet: its costs are unknown.
+rule.assessment_3 = Application {$a} can be assessed: its income statement and a quote are in.
+rule.assessed_income = The income that counts for application {$a} is {$c} cents, from income statement {$s} of household {$h}.
+rule.assessed_costs = The costs that count for application {$a} are {$c} cents.
+rule.household_size = The household behind application {$a}, {$h}, has {$n} persons.
+rule.advised = Household {$h}, which filed application {$a}, has a registered advice report.
+
+# rules/scheme.dl
+rule.decided_parameter = Scheme parameter {$p} was set by decision {$d}, which is in force on {$r}.
+rule.has_decision_in_force = Scheme parameter {$p} stands on a decision in force on {$r}.
+rule.undecided_parameter = Scheme parameter {$p} stands on no decision in force on {$r}.
+
+# rules/findings.dl
+rule.application_count = Household {$h} has {$n} applications.
+rule.repeat_application = Household {$h} has {$n} applications, which is more than one.
+rule.maximum_applied = The maximum of article 7 cut the award of {$a} from {$e} to {$w} cents.
+
+# Why an assessment is unknown: reason.<reason>, with the application as argument.
+reason.income_statement_not_received = {{No income statement has been received for the household of {$application}.}}
+reason.quote_not_received = {{No quote has been received for {$application}.}}
+
+# The Timeline of channels.yaml (RV-V31): its title and the name of its one phase.
+timeline.parameter_validity = Validity of the scheme parameters
+timeline.parameter_validity.valid = valid

@@ -1,0 +1,5 @@
+sweeps:
+  - name: size_scale
+    kind: alpha
+    key: a1
+    slot: size

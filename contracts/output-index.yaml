@@ -1,0 +1,118 @@
+id: https://rede.dev/contracts/output-index
+name: rede_output_index
+title: Output index
+description: >-
+  The index of one render (issue 356 section 2, P7.11; seam S12): for every field of every generated file, where it is
+  (a line, a JSON pointer or both) and where it came from. A field is `knowledge` (a published row, by the
+  RowRef of the conclusion whose witness grounds it), `chart_default` (a value the template took from the
+  chart's own values file) or `chart_constant` (text of a template). Generators, renderers, the Lens, the gate
+  route to a field's grounds and the controls all read this one index. It is bound to the manifest whose rows
+  were rendered and to the hash of the render's input, so an index never describes other output. Nothing
+  emits it yet (B21); the render step (P7.10) and publication with each generated pull request (P7.11b) do.
+prefixes:
+  linkml: https://w3id.org/linkml/
+  rede: https://rede.dev/contracts/
+default_prefix: rede
+default_range: string
+imports:
+  - linkml:types
+
+types:
+  Sha256:
+    typeof: string
+    pattern: "^[0-9a-f]{64}$"
+  Name:
+    typeof: string
+    pattern: "^[a-z][a-z0-9]*(_[a-z0-9]+)*$"
+  RelativePath:
+    typeof: string
+    description: A path relative to the output root (or to the chart), with forward slashes, no `.` or `..` segment.
+    pattern: "^(?!/)(?!.*(^|/)\\.{1,2}(/|$))[^\\\\:]+$"
+  JsonPointer:
+    typeof: string
+    description: An RFC 6901 JSON pointer into the file's parsed document; the empty pointer is the whole document.
+    pattern: "^(/([^~/]|~[01])*)*$"
+
+enums:
+  FieldOrigin:
+    description: Where a field of a generated file came from (issue 356, P7.10d).
+    permissible_values:
+      knowledge: {description: "A value of a published row: `witness` names the conclusion that grounds it."}
+      chart_default: {description: "A value the template took from the chart's values file: `default` names the file and the pointer of the default in it."}
+      chart_constant: {description: "Text of the template itself: `template` names its file and line."}
+
+classes:
+  OutputIndex:
+    description: The index of one render of one manifest.
+    attributes:
+      format: {required: true, equals_string: rede.output-index/1}
+      pack: {required: true, range: Name, description: The pack whose rows were rendered.}
+      manifest: {required: true, description: "The manifest id whose rows were rendered; the index belongs to it and to no other."}
+      render: {required: true, range: RenderStep, inlined: true}
+      files: {range: OutputFile, multivalued: true, inlined_as_list: true, required: true, description: "Every generated file, sorted by path; each path once."}
+
+  RenderStep:
+    description: The render step that made the files (an offload step, contracts/offload.yaml; P7.10).
+    attributes:
+      step: {required: true, range: Name, description: The step name.}
+      input_sha256: {required: true, range: Sha256, description: "The hash of the render's input (chart reference, values, tool versions): the same input gives the same files."}
+
+  OutputFile:
+    description: One generated file and the fields in it.
+    attributes:
+      path: {required: true, range: RelativePath, description: "The file, relative to the output root."}
+      sha256: {required: true, range: Sha256, description: The hash of the published bytes of the file.}
+      fields: {range: OutputField, multivalued: true, inlined_as_list: true, required: true, description: "Sorted by line, then pointer."}
+
+  OutputField:
+    description: >-
+      One field of a generated file: a scalar the renderer wrote. It is found by its line, its JSON pointer
+      or both. Its origin decides which one place it names: `knowledge` a witness, `chart_constant` a template
+      line, `chart_default` a pointer into the values file; the other two are absent.
+    attributes:
+      line: {range: integer, minimum_value: 1, description: The 1-based line of the field in the published bytes.}
+      pointer: {range: JsonPointer, description: The field in the parsed document (a YAML or JSON output file).}
+      origin: {required: true, range: FieldOrigin}
+      witness: {range: RowRef, inlined: true, description: "For `knowledge`: the conclusion row whose witness grounds the value (contracts/proof.yaml, RowRef)."}
+      template: {range: TemplateLine, inlined: true, description: "For `chart_constant`: the template file and line."}
+      default: {range: ValuesPointer, inlined: true, description: "For `chart_default`: the values file and the pointer of the default."}
+    any_of:
+      - slot_conditions: {line: {required: true}}
+      - slot_conditions: {pointer: {required: true}}
+    rules:  # one absent slot per rule: LinkML 1.12.1 renders two as `not: {required: [a, b]}`, "not both"
+      - description: A knowledge field names the conclusion that grounds it, and no template line.
+        preconditions: {slot_conditions: {origin: {equals_string: knowledge}}}
+        postconditions: {slot_conditions: {witness: {required: true}, template: {value_presence: ABSENT}}}
+      - description: A knowledge field names no values pointer.
+        preconditions: {slot_conditions: {origin: {equals_string: knowledge}}}
+        postconditions: {slot_conditions: {default: {value_presence: ABSENT}}}
+      - description: A chart constant names its template line, and no witness.
+        preconditions: {slot_conditions: {origin: {equals_string: chart_constant}}}
+        postconditions: {slot_conditions: {template: {required: true}, witness: {value_presence: ABSENT}}}
+      - description: A chart constant names no values pointer.
+        preconditions: {slot_conditions: {origin: {equals_string: chart_constant}}}
+        postconditions: {slot_conditions: {default: {value_presence: ABSENT}}}
+      - description: A chart default names its pointer in the values file, and no witness.
+        preconditions: {slot_conditions: {origin: {equals_string: chart_default}}}
+        postconditions: {slot_conditions: {default: {required: true}, witness: {value_presence: ABSENT}}}
+      - description: A chart default names no template line.
+        preconditions: {slot_conditions: {origin: {equals_string: chart_default}}}
+        postconditions: {slot_conditions: {template: {value_presence: ABSENT}}}
+
+  RowRef:
+    description: A reference to one row of one relation, as in contracts/proof.yaml.
+    attributes:
+      relation: {required: true, description: Relation name.}
+      key: {required: true, description: "Canonical key of the row: stable and deterministic."}
+
+  TemplateLine:
+    description: A line of a chart template, the place of a chart constant.
+    attributes:
+      file: {required: true, range: RelativePath, description: "The template, relative to the chart root (`templates/...`)."}
+      line: {required: true, range: integer, minimum_value: 1, description: The 1-based line in that file.}
+
+  ValuesPointer:
+    description: A default in the chart's values file, the place of a chart default.
+    attributes:
+      file: {required: true, range: RelativePath, description: "The values file, relative to the chart root (`values.yaml`)."}
+      pointer: {required: true, range: JsonPointer, description: The default in that file.}

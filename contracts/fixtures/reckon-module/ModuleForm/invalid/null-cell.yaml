@@ -1,0 +1,11 @@
+# A cell of a fact table is a value or a state literal (`n/a`, `unknown <reason>`, `invalid <reason>`), never null.
+format: rede.reckon-module/1
+module:
+  pack: lab
+  use: []
+  decls:
+    - fact: Host
+      columns: [id, owner]
+      rows:
+        - [{lit: host-a}, null]
+spans: []

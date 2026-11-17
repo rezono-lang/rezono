@@ -1,0 +1,29 @@
+# Invalid: pack_sha256 is required.
+id: manifest-epoch-7
+epoch: 7
+knowledge_time: "2026-01-01T00:00:00Z"
+base_manifest: manifest-epoch-6
+compiler_sha256: "2222222222222222222222222222222222222222222222222222222222222222"
+engine: {name: feldera, version: "0.0.0", sha256: "3333333333333333333333333333333333333333333333333333333333333333"}
+schema_version: "1"
+sources:
+  - {source_id: rules, position: "0000000000000000000000000000000000000000"}
+checks:
+  - {name: integrity, status: green, violations: 0}
+  - {name: invariants, status: green, violations: 0}
+counts:
+  - {relation: blocked, rows: 1}
+  - {relation: edge, rows: 3}
+  - {relation: node, rows: 4}
+  - {relation: open, rows: 4}
+  - {relation: path, rows: 6}
+  - {relation: total, rows: 4}
+  - {relation: weight, rows: 6}
+snapshots:
+  - {relation: blocked, role: checker, complete: true, uri: snapshots/blocked.json, sha256: "7aa6fdc02827d4b8930a50bee1cabfef5c84eda814c147643bdd37feecaa5bb9", format: json}
+  - {relation: edge, role: checker, complete: true, uri: snapshots/edge.json, sha256: "e0e835f7e20e499d71b1cdde7524a2445da748377336cf47946fef38a7672a9f", format: json}
+  - {relation: node, role: checker, complete: true, uri: snapshots/node.json, sha256: "72e9be344cfe6d20c9be13c4042950bf7f563da726c9e598b485f870315f57c9", format: json}
+  - {relation: open, role: checker, complete: true, uri: snapshots/open.json, sha256: "a26a1d63ee1c16a5fe24ea31a08f3c17d297b42d8703d66f7433567eecb47a54", format: json}
+  - {relation: path, role: checker, complete: true, uri: snapshots/path.json, sha256: "03eb0c0c56b5452d5a26a4046f3a394f65abf10ce7ed1b28e9c38f11641d1dc3", format: json}
+  - {relation: total, role: checker, complete: true, uri: snapshots/total.json, sha256: "860cf4baa78e187199410e25763fa8942ea43ad762f49c410a3889a00d5079dd", format: json}
+  - {relation: weight, role: checker, complete: true, uri: snapshots/weight.json, sha256: "bbc91d3bc9a3765aa022505502953cee4fc5f55d75641d5c987a2535f01b975f", format: json}

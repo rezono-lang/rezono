@@ -1,0 +1,6 @@
+# The key says what nesting means in this pack.
+id: ledger
+title_message: nest.ledger
+levels:
+  - {kind: ledger, flow: column}
+  - {kind: account, part_of: account__ledger}

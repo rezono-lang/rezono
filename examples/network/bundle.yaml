@@ -1,0 +1,49 @@
+# Voorlopige schema bundle (fixture). M1 legt het definitieve formaat vast;
+# de viewer leest dit alleen via viewer/src/lib/contract/bundle.ts.
+pack: {id: example-network, version: 0.1.0, default_language: nl, title_message: pack.title}
+# De uitlegvragen van std-explain (grondslag, bereik), zoals een pakket ze importeert.
+imports: [std-explain]
+kinds:
+  - {id: site, label_message: kind.site}
+  - {id: lot, label_message: kind.lot}
+  - {id: release, label_message: kind.release}
+  - {id: inspection, label_message: kind.inspection}
+arrows:
+  - {id: lot__from_site, kind: lot, target: site, label_message: arrow.lot__from_site}
+  - {id: lot__in_release, kind: lot, target: release, label_message: arrow.lot__in_release}
+  - {id: inspection__of_lot, kind: inspection, target: lot, label_message: arrow.inspection__of_lot}
+attributes:
+  - {id: site__name, kind: site, type: text, derivation: fact, label_message: attr.site__name}
+  - {id: inspection__result, kind: inspection, type: enum, derivation: fact, label_message: attr.inspection__result}
+  - {id: lot__cleared, kind: lot, type: enum, derivation: conclusion, label_message: attr.lot__cleared}
+  - {id: release__decision, kind: release, type: enum, derivation: conclusion, outcome: true, label_message: attr.release__decision}
+  - {id: release__held, kind: release, type: enum, derivation: conclusion, label_message: attr.release__held}
+rules:
+  - {id: lot_cleared, message: rule.lot_cleared, variables: {site: text}}
+  - {id: release_all_cleared, message: rule.release_all_cleared, variables: {count: integer}}
+channels:
+  kinds:
+    - {kind: site, shape: ellipse}
+    - {kind: lot, shape: rect}
+    - {kind: release, shape: pill}
+    - {kind: inspection, shape: diamond}
+  arrows:
+    - {arrow: lot__from_site, dash: none}
+    - {arrow: lot__in_release, dash: none}
+    - {arrow: inspection__of_lot, dash: "1 3"}
+  # Flow (docs/gui.md): een baan per soort, van locatie tot vrijgave; de lijnen zijn de pijlen.
+  flows:
+    - id: herkomst
+      title_message: flow.herkomst
+      nodes: [{kind: site}, {kind: inspection}, {kind: lot}, {kind: release}]
+      edges: [{arrow: lot__from_site}, {arrow: inspection__of_lot}, {arrow: lot__in_release}]
+  # De startpagina (docs/gui.md, Role home): de stroom als beeld onder de claim, vóór de kaarten.
+  home:
+    hero: {flow: herkomst}
+# Volgorde van links naar rechts op de Map: bronnen, tussenstappen, uitkomsten.
+order: [site, inspection, lot, release]
+pages:
+  - {kind: site, fields: [site__name], map_radius: 2}
+  - {kind: lot, fields: [lot__cleared], map_radius: 1}
+  - {kind: release, fields: [release__decision], map_radius: 2}
+  - {kind: inspection, fields: [inspection__result], map_radius: 1}

@@ -1,0 +1,5 @@
+kinds:
+  - {kind: alpha, shape: rect}
+  - {kind: beta, shape: bar}
+arrows:
+  - {arrow: beta.alpha, dash: none}

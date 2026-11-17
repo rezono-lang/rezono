@@ -1,0 +1,9 @@
+[
+{"key":["floor-insulation","eligible"]},
+{"key":["heat-pump","eligible"]},
+{"key":["insulating-glazing","eligible"]},
+{"key":["roof-insulation","eligible"]},
+{"key":["scaffolding","not_eligible"]},
+{"key":["solar-boiler","eligible"]},
+{"key":["wall-insulation","eligible"]}
+]

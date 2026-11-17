@@ -1,0 +1,27 @@
+@locale en
+---
+# Explanation questions of std-explain (R9): a label for the button and a sentence for the head of the answer.
+explain.grounds = Grounds
+explain.grounds.question = {{What does {$element} rest on?}}
+explain.reach = Reach
+explain.reach.question = {{What depends on {$element}?}}
+explain.gap = What is missing
+explain.gap.question = {{What is missing for {$element}?}}
+explain.contrast = What is not allowed
+explain.contrast.question = {{Why does {$element} not hold, and what closes it?}}
+explain.consequence = Without this
+explain.consequence.question = {{What breaks without {$element}?}}
+explain.scenario = Scenario
+explain.scenario.question = {{What changes with {$element}?}}
+explain.impact = Impact
+explain.impact.question = {{What does {$element} reach?}}
+explain.sweep = Sweep
+explain.sweep.question = {{What does {$element} do over the range?}}
+# For every question.
+explain.outside = Outside your view
+explain.more = More from here
+explain.empty = {{No answer for {$element}.}}
+explain.unpublished = {{Not published yet: propose {$element} to get the answer.}}
+# For a computed answer (contrast, consequence): it says that Rede derived it (docs/explain/contract.md, rule 5).
+explain.computed = Computed by Rede
+explain.not_computed.no_variant = {{Not computed: no published variant withdraws {$element}.}}

@@ -1,0 +1,13 @@
+name: metrics-in
+version: 1.0.0
+kind: in
+runs_on: source
+writes: observation
+row_source: source
+runtime: in_process
+consumes: [prometheus_query]
+produces: []
+freshness: {cadence: live, max_delay_seconds: 60}
+mapping_owner: platform-team
+losses: []
+secrets: [metrics_token]

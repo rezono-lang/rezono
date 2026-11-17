@@ -1,0 +1,45 @@
+# The DCAT entry of a published epoch (decision O12a; dcat.py), read by a catalogue that knows DCAT: what it
+# does not get. An entry points at the data and holds none, so nearly everything is behind a link; this list
+# says which part of the meaning a reader reaches only by following one. Plain DCAT 3 and Dublin Core terms:
+# no extension. test_dcat.py holds this list to the entry.
+connector: dcat-out
+standard: DCAT
+standard_version: "3"
+direction: out
+losses:
+  - subject: identity
+    what: >-
+      That the identifier is a pin a reader can check: a schema id, an epoch and the hash of the role's
+      rows. A catalogue sees one text and cannot tell which part names what.
+    fate: weakened
+    carried_by: ["dct:identifier"]
+  - subject: structure
+    what: >-
+      The kinds, slots and types of the view. The entry names the schema id's space and, per form, the
+      context, the shapes and the data contract a file holds to; it holds none of them.
+    fate: weakened
+    carried_by: ["dct:conformsTo"]
+  - subject: time
+    what: >-
+      When the epoch was sealed and which epoch came before it. The entry carries the manifest id as the
+      version and no date: a clock time is not in a schema document or a pin.
+    fate: weakened
+    carried_by: ["dcat:version"]
+  - subject: text
+    what: >-
+      A title, a description, a publisher and a licence. They are not in a schema document, so an
+      application profile that requires them (DCAT-AP) is not met by this entry alone.
+    fate: dropped
+  - subject: access
+    what: >-
+      Which role the view was made for, and who may read it. The hash pin in the identifier names one
+      role's dataset, not the role.
+    fate: dropped
+  - subject: proof
+    what: >-
+      That every value has a witness, and where the witnesses are. The dataset has the name of the
+      PROV-O bundle of its epoch; the entry does not say so.
+    fate: dropped
+  - subject: rule
+    what: The rules and the pack's own checks. A catalogue entry describes what was published, not why.
+    fate: dropped

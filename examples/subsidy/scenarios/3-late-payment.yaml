@@ -1,0 +1,5 @@
+# After the close, a payment booked on 30 October turns up in the ledger: a second payment for A001.
+# The close does not name it, so it is refused by name (ledger_payment__refused) and does not count:
+# the ledger's total for A001 and its difference with the award stay as they were.
+ledger_payment:
+  - {"id": "P085", "application": "A001", "booked_on": "2026-10-30", "amount": 15000}

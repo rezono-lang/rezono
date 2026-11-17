@@ -1,0 +1,27 @@
+# Aggregates beside a negation, and no positive literal: only a body of aggregates alone is accepted.
+format: rede.rules/1
+pack: fixture
+relations:
+  - name: hours
+    role: base
+    key: [{name: member, type: string}, {name: task, type: string}]
+    values: [{name: h, type: integer}]
+  - name: member
+    role: base
+    key: [{name: id, type: string}]
+  - name: entries
+    role: derived
+    key: [{name: n, type: integer}]
+    module: load
+    explain: materialize
+rules:
+  - id: entries
+    module: load
+    stratum: "1"
+    head: {relation: entries, terms: ["?n"]}
+    body:
+      - {relation: member, terms: ["ann"], polarity: negative, stratum: "0"}
+    aggregates:
+      - {relation: hours, terms: ["_", "_"], function: count, as: "?n", stratum: "0"}
+    witness: {relation: entries__witness, variables: ["?n"]}
+    origin: {file: rules/load.dl, line: "1"}

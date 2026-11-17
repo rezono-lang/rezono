@@ -1,0 +1,12 @@
+# A row of a decision table names one output: a row that gives no value is left out of the text, never written without one.
+format: rede.reckon-module/1
+module:
+  pack: lab
+  use: []
+  decls:
+    - extend: Host
+      derived:
+        - derived: band
+          type: Tier
+          table: {table: unique, inputs: [{path: [roomy]}], output: band, rows: [{tests: [[{lit: "true"}]]}]}
+spans: []

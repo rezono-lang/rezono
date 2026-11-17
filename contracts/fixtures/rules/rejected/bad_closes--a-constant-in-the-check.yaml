@@ -1,0 +1,132 @@
+# narrow closes wide, but its invariant reads wide at one constant only: it would miss every other row.
+format: rede.rules/1
+pack: fixture
+relations:
+- name: alpha__size
+  role: base
+  key:
+  - name: id
+    type: string
+  - name: v
+    type: integer
+  world: closed
+- name: beta__alpha
+  role: base
+  key:
+  - name: id
+    type: string
+  - name: v
+    type: string
+  world: closed
+- name: narrow
+  role: derived
+  module: core
+  key:
+  - name: a
+    type: string
+  closes: wide
+  explain: on_demand
+- name: narrow_closes_wide
+  role: derived
+  module: core
+  key:
+  - name: a
+    type: string
+  invariant: true
+  explain: on_demand
+- name: wide
+  role: derived
+  module: core
+  key:
+  - name: a
+    type: string
+  - name: b
+    type: string
+  explain: on_demand
+rules:
+- id: narrow
+  module: core
+  head:
+    relation: narrow
+    terms:
+    - ?a
+  body:
+  - relation: alpha__size
+    polarity: positive
+    terms:
+    - ?a
+    - ?s
+    stratum: '0'
+  origin:
+    file: rules/core.dl
+    line: '8'
+  conditions:
+  - op: lt
+    left: ?s
+    right: '5'
+  stratum: '1'
+  witness:
+    relation: narrow__witness
+    variables:
+    - ?a
+    - ?s
+- id: narrow_closes_wide
+  module: core
+  head:
+    relation: narrow_closes_wide
+    terms:
+    - ?a
+  body:
+  - relation: narrow
+    polarity: positive
+    terms:
+    - ?a
+    stratum: '1'
+  - relation: wide
+    polarity: positive
+    terms:
+    - ?a
+    - b1
+    stratum: '1'
+  origin:
+    file: rules/core.dl
+    line: '7'
+  stratum: '1'
+  witness:
+    relation: narrow_closes_wide__witness
+    variables:
+    - ?a
+- id: wide
+  module: core
+  head:
+    relation: wide
+    terms:
+    - ?a
+    - ?b
+  body:
+  - relation: beta__alpha
+    polarity: positive
+    terms:
+    - ?b
+    - ?a
+    stratum: '0'
+  - relation: alpha__size
+    polarity: positive
+    terms:
+    - ?a
+    - ?s
+    stratum: '0'
+  origin:
+    file: rules/core.dl
+    line: '3'
+  conditions:
+  - op: ge
+    left: ?s
+    right: '5'
+  stratum: '1'
+  witness:
+    relation: wide__witness
+    variables:
+    - ?a
+    - ?b
+    - ?s

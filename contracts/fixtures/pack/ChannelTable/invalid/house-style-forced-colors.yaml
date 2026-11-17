@@ -1,0 +1,7 @@
+kinds:
+  - {kind: alpha, shape: rect}
+house_style:
+  palettes:
+    - theme: forced_colors
+      tokens:
+        - {role: paper, value: "#f1eee6"}

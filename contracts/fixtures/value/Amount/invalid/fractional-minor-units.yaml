@@ -1,0 +1,4 @@
+# Invalid: minor units are integers.
+minor_units: 12.34
+currency: EUR
+state: known

@@ -1,0 +1,18 @@
+# Rows that both the compiler's loader and LinkML's validator read (test_linkml_schema.py).
+part:
+  - {id: 1, title: first, code: AB12, level: high, price: 150, begins: 2026-01-01, ends: 2026-06-30}
+  - {id: 2, title: second, level: low, price: 20}
+  - {id: 3, title: third, code: CD345, level: middle, price: 99}
+whole:
+  - id: 10
+    parts: [1, 2]
+    main: 1
+    kind: whole
+    weight: 7
+    notes:
+      - {text: one}
+      - {text: two}
+lead:
+  - {id: 20, whole: 10, part: 1}
+link:
+  - {id: l1, from_part: 1, to_part: 2, level: low}

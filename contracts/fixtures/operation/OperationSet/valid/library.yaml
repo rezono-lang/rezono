@@ -1,0 +1,15 @@
+# The worked example in docs/compiler.md#worked-example-the-library-pack.
+format: rede.operations/1
+pack: library
+operations:
+  - {op: rename, kind: Copy, to: Item}
+  - op: split_by
+    kind: Member
+    slot: membership
+    cases:
+      - {value: adult, kind: AdultMember}
+      - {value: youth, kind: YouthMember}
+    abstract: true
+  - {op: move, kind: Member, slot: home_branch, to: AdultMember}
+  - {op: combine, kind: Branch, absorb: Address, via: Branch.address}
+  - {op: drop, kind: Item, slot: reference_only, accept_loss: true}

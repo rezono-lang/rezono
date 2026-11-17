@@ -1,0 +1,85 @@
+# The store: one MinIO with the bucket `rede`, nothing kept. The publish job writes with the root keys through
+# the node port (it stands where CI stands, outside the cluster); the gate reads with keys of a user that may
+# only list the bucket and get its objects (kind.sh makes that user, policy below). Secret `store` is made by
+# kind.sh per run: root-user, root-password, reader-id, reader-secret.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: store
+  namespace: rede-platform
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: store
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: store
+    spec:
+      automountServiceAccountToken: false
+      containers:
+        - name: store
+          image: store
+          env:
+            - name: MINIO_DEFAULT_BUCKETS
+              value: rede
+            - name: MINIO_ROOT_USER
+              valueFrom:
+                secretKeyRef: { name: store, key: root-user }
+            - name: MINIO_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef: { name: store, key: root-password }
+            - name: READER_ID
+              valueFrom:
+                secretKeyRef: { name: store, key: reader-id }
+            - name: READER_SECRET
+              valueFrom:
+                secretKeyRef: { name: store, key: reader-secret }
+            - name: MC_CONFIG_DIR
+              value: /tmp/mc
+          ports:
+            - { name: s3, containerPort: 9000 }
+          readinessProbe:
+            httpGet: { path: /minio/health/ready, port: s3 }
+          resources:
+            requests: { cpu: 100m, memory: 256Mi }
+            limits: { memory: 1Gi }
+          volumeMounts:
+            - { name: data, mountPath: /bitnami/minio/data }
+            - { name: policy, mountPath: /etc/rede }
+      volumes:
+        - name: data
+          emptyDir: {}
+        - name: policy
+          configMap:
+            name: store-read
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: store
+  namespace: rede-platform
+spec:
+  type: NodePort
+  selector:
+    app.kubernetes.io/name: store
+  ports:
+    - { name: s3, port: 9000, targetPort: s3, nodePort: 30900 }
+---
+# What the gate's keys may do: list the bucket and read its objects. Nothing else, so a gate that tried to write
+# would be refused by the store.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: store-read
+  namespace: rede-platform
+data:
+  read.json: |
+    {
+      "Version": "2012-10-17",
+      "Statement": [
+        { "Effect": "Allow", "Action": ["s3:ListBucket"], "Resource": ["arn:aws:s3:::rede"] },
+        { "Effect": "Allow", "Action": ["s3:GetObject"], "Resource": ["arn:aws:s3:::rede/*"] }
+      ]
+    }

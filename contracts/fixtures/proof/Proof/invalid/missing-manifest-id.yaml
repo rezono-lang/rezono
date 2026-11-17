@@ -1,0 +1,3 @@
+# Invalid: manifest_id is required.
+root: {relation: open, key: '["a","b"]'}
+witnesses: []

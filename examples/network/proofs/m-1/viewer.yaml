@@ -1,0 +1,81 @@
+# Gekozen bewijzen per conclusie (contracts/proof.yaml), fictief.
+- root: {relation: lot__cleared, key: L-1}
+  manifest_id: m-1
+  witnesses:
+    - conclusion: {relation: lot__cleared, key: L-1}
+      rule_id: lot_cleared
+      bindings:
+        - {variable: site, value: "S-1"}
+      premises:
+        - {row: {relation: inspection__result, key: I-1}, polarity: positive, stratum: 0}
+        - {row: {relation: lot__from_site, key: L-1}, polarity: positive, stratum: 0}
+- root: {relation: lot__cleared, key: L-2}
+  manifest_id: m-1
+  witnesses:
+    - conclusion: {relation: lot__cleared, key: L-2}
+      rule_id: lot_cleared
+      bindings:
+        - {variable: site, value: "S-2"}
+      premises:
+        - {row: {relation: inspection__result, key: I-2}, polarity: positive, stratum: 0}
+        - {row: {relation: lot__from_site, key: L-2}, polarity: positive, stratum: 0}
+  hidden:
+    - {relation: inspection__result, key: I-2}
+- root: {relation: lot__cleared, key: L-3}
+  manifest_id: m-1
+  witnesses:
+    - conclusion: {relation: lot__cleared, key: L-3}
+      rule_id: lot_cleared
+      bindings:
+        - {variable: site, value: "unknown"}
+      premises:
+        - {row: {relation: inspection__result, key: I-3}, polarity: positive, stratum: 0}
+        - {row: {relation: lot__from_site, key: L-3}, polarity: positive, stratum: 0}
+- root: {relation: release__decision, key: R-1}
+  manifest_id: m-1
+  witnesses:
+    - conclusion: {relation: release__decision, key: R-1}
+      rule_id: release_all_cleared
+      bindings:
+        - {variable: count, value: "2"}
+      premises:
+        - {row: {relation: lot__cleared, key: L-1}, polarity: positive, stratum: 1}
+        - {row: {relation: lot__cleared, key: L-2}, polarity: positive, stratum: 1}
+        - {row: {relation: release__held, key: R-1}, polarity: negative, stratum: 1}
+      aggregates:
+        - {relation: lot__cleared, group_key: R-1, count: 2, contributors_sha256: 591014b789f5bb9a68db2e83463b9277b7e08638499d4205e165be62493d5d1b, result: "2 known"}
+    - conclusion: {relation: lot__cleared, key: L-1}
+      rule_id: lot_cleared
+      bindings:
+        - {variable: site, value: "S-1"}
+      premises:
+        - {row: {relation: inspection__result, key: I-1}, polarity: positive, stratum: 0}
+        - {row: {relation: lot__from_site, key: L-1}, polarity: positive, stratum: 0}
+    - conclusion: {relation: lot__cleared, key: L-2}
+      rule_id: lot_cleared
+      bindings:
+        - {variable: site, value: "S-2"}
+      premises:
+        - {row: {relation: inspection__result, key: I-2}, polarity: positive, stratum: 0}
+        - {row: {relation: lot__from_site, key: L-2}, polarity: positive, stratum: 0}
+  hidden:
+    - {relation: inspection__result, key: I-2}
+- root: {relation: release__decision, key: R-2}
+  manifest_id: m-1
+  witnesses:
+    - conclusion: {relation: release__decision, key: R-2}
+      rule_id: release_all_cleared
+      bindings:
+        - {variable: count, value: "1"}
+      premises:
+        - {row: {relation: lot__cleared, key: L-3}, polarity: positive, stratum: 1}
+        - {row: {relation: release__held, key: R-2}, polarity: negative, stratum: 1}
+      aggregates:
+        - {relation: lot__cleared, group_key: R-2, count: 1, contributors_sha256: 3394226d780c1034f76eb791e9ab397246bfc78fbd8829d2e5d967457660f0e9, result: unknown}
+    - conclusion: {relation: lot__cleared, key: L-3}
+      rule_id: lot_cleared
+      bindings:
+        - {variable: site, value: "unknown"}
+      premises:
+        - {row: {relation: inspection__result, key: I-3}, polarity: positive, stratum: 0}
+        - {row: {relation: lot__from_site, key: L-3}, polarity: positive, stratum: 0}

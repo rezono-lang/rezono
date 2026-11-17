@@ -1,0 +1,2 @@
+matrix: {sheet: grid}
+cards: {kind: k, fields: [k.v]}

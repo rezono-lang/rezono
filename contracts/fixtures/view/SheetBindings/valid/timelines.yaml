@@ -1,0 +1,4 @@
+# Two timelines in one channel table.
+timelines:
+  - {id: support, title_message: timeline.support, rows: release, start: release__supported_from, end: release__full_support_until, extension: release__support_ends, main_message: phase.full_support, extension_message: phase.maintenance}
+  - {id: periods, title_message: timeline.periods, rows: period, start: period__opens, end: period__closes, main_message: phase.open}

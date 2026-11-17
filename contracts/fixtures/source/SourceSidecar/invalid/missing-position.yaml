@@ -1,0 +1,3 @@
+rows:
+  - row: {relation: alpha, key: '["a"]'}
+    sources: [{kind: pack, name: facts/data.yaml}]

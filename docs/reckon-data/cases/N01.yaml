@@ -1,0 +1,20 @@
+id: N01
+class: invalid
+status: settled
+schema:
+  from: fixture.schema.json
+form: row
+input:
+  $kind: Host
+  $id: host-a
+  memory_need: 400 GiB
+  owner:
+    $unknown: not yet assigned
+  tags:
+  - gpu
+  - lab
+expect:
+  accept: false
+  error: not a reason code
+sources:
+- '#369 L0 rev 2 §8'

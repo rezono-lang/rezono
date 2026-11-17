@@ -1,0 +1,59 @@
+id: https://rede.example/linkml-fixture/whole
+name: linkml_fixture_whole
+description: Wholes made of parts, and the links between parts.
+in_language: en
+prefixes:
+  linkml: https://w3id.org/linkml/
+imports:
+  - linkml:types
+  - ../base
+default_range: string
+annotations:
+  layer: facts
+
+classes:
+  Whole:
+    annotations:
+      layer: plan
+      renamed_from: Assembly
+    attributes:
+      id: {identifier: true, range: integer}
+      parts:
+        range: Part
+        multivalued: true
+        exact_cardinality: 2
+      main: {range: Part, required: true}
+      notes:
+        range: Note
+        multivalued: true
+        inlined_as_list: true
+        maximum_cardinality: 3
+      kind:
+        equals_string: whole
+        annotations:
+          renamed_from: sort
+      weight: {range: integer, equals_number: 7}
+
+  Lead:
+    annotations:
+      path_equations:
+        - {name: same_part, left: whole.main, right: part}
+    attributes:
+      id: {identifier: true, range: integer}
+      whole: {range: Whole, required: true}
+      part: {range: Part, required: true}
+
+  Note:
+    attributes:
+      text: {required: true}
+
+  Link:
+    represents_relationship: true
+    attributes:
+      id: {identifier: true}
+      from_part: {range: Part, required: true}
+      to_part: {range: Part, required: true}
+      level: {range: Level}
+    unique_keys:
+      ends:
+        unique_key_slots: [from_part, to_part]

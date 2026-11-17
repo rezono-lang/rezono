@@ -1,0 +1,69 @@
+# Neutral labels of std-time. A domain gives its own words in its own labels and messages (view).
+interval: interval
+interval.on_axis: axis
+interval.start: start
+interval.end: end
+interval.unbounded: stated to have no bound at
+interval.extension_end: end of the extension
+interval.known_from: known from
+interval.in_series: series
+axis: axis
+series: series
+reference_point: reference
+reference_point.on_axis: axis
+reference_point.position: position
+reference_point.horizon: horizon
+interval_relation: relation between two intervals
+interval_relation.before: before
+interval_relation.meets: meets
+interval_relation.overlaps: overlaps
+interval_relation.starts: starts
+interval_relation.during: during
+interval_relation.finishes: finishes
+interval_relation.equals: equals
+interval_relation.after: after
+interval_relation.met_by: met by
+interval_relation.overlapped_by: overlapped by
+interval_relation.started_by: started by
+interval_relation.contains: contains
+interval_relation.finished_by: finished by
+judgement_value: judgement
+judgement_value.positive: positive
+judgement_value.attention: attention
+judgement_value.negative: negative
+judgement_value.not_begun: not begun
+judgement_value.no_end: stated to have no end
+judgement_value.unknown: unknown
+judgement_reason: reason of a judgement
+judgement_reason.end_beyond_horizon: the end lies beyond the horizon
+judgement_reason.end_within_horizon: the end lies within the horizon
+judgement_reason.in_extension: ended, in its extension
+judgement_reason.ended: ended, without an extension
+judgement_reason.extension_ended: ended, and the extension has stopped
+judgement_reason.start_ahead: the start lies ahead
+judgement_reason.without_end: stated to have no end
+judgement_reason.end_not_recorded: no end recorded
+judgement_reason.start_not_recorded: no start recorded
+bound_side: side of an interval
+bound_side.start: start
+bound_side.end: end
+start_stated: has a start
+end_stated: has an end
+extension_stated: has an extension
+start_not_recorded: start not recorded
+end_not_recorded: end not recorded
+known_from_not_recorded: first position of knowledge not recorded
+known_from_stated: has a first position of knowledge
+interval_inverted: end not after start
+bound_contradicted: a bound stated and stated to be absent
+extension_inverted: extension stops before the end
+extension_without_end: extension without an end
+series_across_axes: series on more than one axis
+begun_at: begun
+ended_at: ended
+holds_at: holds
+in_extension: in its extension
+known_at: known
+judgement: judgement
+span: span
+allen: relation between two intervals

@@ -1,0 +1,5 @@
+[
+{"id":"L-1","cells":{"lot__from_site":{"value":"S-1","state":"known"},"lot__in_release":{"value":"R-1","state":"known"},"lot__cleared":{"value":"cleared","state":"known"}}},
+{"id":"L-2","cells":{"lot__from_site":{"value":"S-2","state":"known"},"lot__in_release":{"value":"R-1","state":"known"},"lot__cleared":{"value":"cleared","state":"known"}}},
+{"id":"L-3","cells":{"lot__from_site":{"state":"unknown"},"lot__in_release":{"value":"R-2","state":"known"},"lot__cleared":{"state":"unknown"}}}
+]

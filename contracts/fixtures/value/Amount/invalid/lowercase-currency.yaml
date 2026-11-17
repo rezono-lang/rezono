@@ -1,0 +1,4 @@
+# Invalid: a currency is three capitals.
+minor_units: 1234
+currency: eur
+state: known

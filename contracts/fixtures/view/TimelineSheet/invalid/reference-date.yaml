@@ -1,0 +1,8 @@
+# The reference date is the reader's, never a field of the binding.
+id: support
+title_message: timeline.support
+rows: release
+start: release__supported_from
+end: release__full_support_until
+main_message: phase.full_support
+as_of: "2026-11-10"

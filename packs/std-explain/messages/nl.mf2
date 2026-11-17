@@ -1,0 +1,27 @@
+@locale nl
+---
+# Uitlegvragen van std-explain (R9): een label voor de knop en een zin voor de kop van het antwoord.
+explain.grounds = Grondslag
+explain.grounds.question = {{Waar rust {$element} op?}}
+explain.reach = Bereik
+explain.reach.question = {{Wat hangt af van {$element}?}}
+explain.gap = Wat ontbreekt
+explain.gap.question = {{Wat ontbreekt er voor {$element}?}}
+explain.contrast = Wat niet mag
+explain.contrast.question = {{Waarom geldt {$element} niet, en wat sluit het uit?}}
+explain.consequence = Zonder dit
+explain.consequence.question = {{Wat valt weg zonder {$element}?}}
+explain.scenario = Scenario
+explain.scenario.question = {{Wat verandert er met {$element}?}}
+explain.impact = Doorwerking
+explain.impact.question = {{Waar werkt {$element} in door?}}
+explain.sweep = Reeks
+explain.sweep.question = {{Wat doet {$element} over de reeks?}}
+# Voor elke vraag.
+explain.outside = Buiten je zicht
+explain.more = Verder vanaf hier
+explain.empty = {{Geen antwoord voor {$element}.}}
+explain.unpublished = {{Nog niet gepubliceerd: stel {$element} voor om het antwoord te krijgen.}}
+# For a computed answer (contrast, consequence): it says that Rede derived it (docs/explain/contract.md, rule 5).
+explain.computed = Berekend door Rede
+explain.not_computed.no_variant = {{Niet berekend: geen gepubliceerde variant trekt {$element} in.}}

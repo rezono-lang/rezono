@@ -1,0 +1,57 @@
+# The Energy-Saving Subsidy Regulation 2026 of a fictional municipality, written by hand: its articles,
+# the council decisions that set its amounts, the amounts themselves and the costs it names.
+# Synthetic: no real regulation, council or decision. One record per line, as JSON (which is YAML).
+article:
+  - {"id": "art-3", "title": "Article 3: eligible costs", "text": "The costs of the measures this article lists count towards the subsidy. Costs that only make the work possible, such as scaffolding, do not."}
+  - {"id": "art-4", "title": "Article 4: income threshold", "text": "The income threshold is a base amount plus an amount for each person in the household. The income limit is the threshold plus a margin."}
+  - {"id": "art-5", "title": "Article 5: cost share", "text": "A household with an income up to the threshold receives the full rate of its eligible costs. Above the threshold and up to the limit it receives the partial rate. Above the limit it receives no cost share."}
+  - {"id": "art-6", "title": "Article 6: advice allowance", "text": "A household with a registered energy-advice report receives a fixed allowance on top of a cost share above zero."}
+  - {"id": "art-7", "title": "Article 7: maximum award", "text": "The award for one application is at most the maximum amount."}
+# A decision is a row of std-decision's kind: who took it, when, from which day it applies and how its
+# record stands. The amendment changes one rate and replaces nothing, so it supersedes no decision: both
+# are in force. Rules cannot read a date yet, so each validity date has its day number beside it.
+decision:
+  - {"id": "2025-112", "title": "Adoption of the Energy-Saving Subsidy Regulation 2026", "decider": ["municipal council"], "decided_on": "2025-12-09", "valid_from": "2026-01-01", "valid_from_day": 20260101, "state": "in_force", "warrant": ["ability-to-pay"], "owner": ["housing department"], "review_on": "2027-01-01"}
+  - {"id": "2026-047", "title": "First amendment: a higher partial rate from 1 July 2026", "decider": ["municipal council"], "decided_on": "2026-06-16", "valid_from": "2026-07-01", "valid_from_day": 20260701, "state": "in_force", "warrant": ["ability-to-pay"], "owner": ["housing department"]}
+# Why the council decided so (std-decision, the justification layer): what each decision serves, the principle it
+# rests on, what was weighed and rejected, and what it leaves out. Synthetic, like the decisions. No rule reads
+# these rows: an explanation shows them beside the proof of an award.
+principle:
+  - {"id": "ability-to-pay", "title": "Support follows ability to pay: the lower the income, the larger the share of the costs.", "decision": "2025-112"}
+purpose:
+  - {"id": "pur-01", "decision": "2025-112", "title": "Lower energy use in owner-occupied homes", "served": ["home owners"]}
+  - {"id": "pur-02", "decision": "2026-047", "title": "More applications from households just above the income threshold", "served": ["households above the threshold"]}
+alternative:
+  - {"id": "alt-01", "decision": "2025-112", "title": "One flat rate for every household", "reason": "A flat rate pays most to households that can carry the costs themselves."}
+  - {"id": "alt-02", "decision": "2026-047", "title": "A higher income limit instead of a higher partial rate", "reason": "A higher limit reaches fewer households for the same budget."}
+exception:
+  - {"id": "exc-01", "decision": "2025-112", "title": "Costs that only make the work possible, such as scaffolding"}
+# The day for which "in force" is read: a choice of the pack, never the clock. It is the evaluation date
+# of the calculation (calc/award.yaml, as_of).
+# It is stated as the scheme's evaluation day, a ReferenceDate with the calendar its day is a day of and a
+# horizon: an amount that ends within ninety days of it is one to decide about now (a design choice of this
+# example). std-time reads it as its reference point (views.yaml); there is one day, not two.
+evaluation_day:
+  - {"id": "2026-11-10", "title": "10 November 2026", "day": 20261110, "calendar": "civil", "horizon": 90}
+# The calendar whose days the scheme counts (a design choice of this example: the civil calendar).
+calendar:
+  - {"id": "civil", "title": "Civil calendar, in days"}
+# A parameter is valid from valid_from until valid_until (exclusive), in days of its calendar. The partial rate has two rows: the
+# council raised it halfway through the year, so the evaluation date decides which one a calculation reads.
+scheme_parameter:
+  - {"id": "par-01", "name": "income_threshold_base", "value": 2400000, "unit": "cents", "valid_from": "2026-01-01", "valid_until": "2027-01-01", "calendar": "civil", "article": "art-4", "decision": "2025-112"}
+  - {"id": "par-02", "name": "income_threshold_per_person", "value": 200000, "unit": "cents", "valid_from": "2026-01-01", "valid_until": "2027-01-01", "calendar": "civil", "article": "art-4", "decision": "2025-112"}
+  - {"id": "par-03", "name": "income_margin", "value": 1200000, "unit": "cents", "valid_from": "2026-01-01", "valid_until": "2027-01-01", "calendar": "civil", "article": "art-4", "decision": "2025-112"}
+  - {"id": "par-04", "name": "full_rate", "value": 400000, "unit": "ppm", "valid_from": "2026-01-01", "valid_until": "2027-01-01", "calendar": "civil", "article": "art-5", "decision": "2025-112"}
+  - {"id": "par-05", "name": "partial_rate", "value": 200000, "unit": "ppm", "valid_from": "2026-01-01", "valid_until": "2026-07-01", "calendar": "civil", "article": "art-5", "decision": "2025-112"}
+  - {"id": "par-06", "name": "partial_rate", "value": 240000, "unit": "ppm", "valid_from": "2026-07-01", "valid_until": "2027-01-01", "calendar": "civil", "article": "art-5", "decision": "2026-047"}
+  - {"id": "par-07", "name": "advice_allowance", "value": 15000, "unit": "cents", "valid_from": "2026-01-01", "valid_until": "2027-01-01", "calendar": "civil", "article": "art-6", "decision": "2025-112"}
+  - {"id": "par-08", "name": "maximum_award", "value": 500000, "unit": "cents", "valid_from": "2026-01-01", "valid_until": "2027-01-01", "calendar": "civil", "article": "art-7", "decision": "2025-112"}
+cost_item:
+  - {"id": "heat-pump", "title": "Heat pump", "eligibility": "eligible", "article": "art-3"}
+  - {"id": "roof-insulation", "title": "Roof insulation", "eligibility": "eligible", "article": "art-3"}
+  - {"id": "wall-insulation", "title": "Wall insulation", "eligibility": "eligible", "article": "art-3"}
+  - {"id": "floor-insulation", "title": "Floor insulation", "eligibility": "eligible", "article": "art-3"}
+  - {"id": "insulating-glazing", "title": "Insulating glazing", "eligibility": "eligible", "article": "art-3"}
+  - {"id": "solar-boiler", "title": "Solar boiler", "eligibility": "eligible", "article": "art-3"}
+  - {"id": "scaffolding", "title": "Scaffolding", "eligibility": "not_eligible", "article": "art-3"}

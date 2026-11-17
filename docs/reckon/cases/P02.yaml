@@ -1,0 +1,19 @@
+id: P02
+status: settled
+mode: publish
+source: 'require memory_bound: host.memory_need <= 600 GiB'
+data: appendix-b
+expect:
+  publication:
+    outcome: blocked
+    violations: []
+    undecided:
+    - binder: host-d
+      state: unknown
+      reason: no_spec
+    blocking:
+    - host-d
+note: '`require` is fail-closed: unknown blocks.'
+sources:
+- '#350/6751612214 owner settlement, point 3'
+- '#350 v0 §5, §7b'

@@ -1,0 +1,21 @@
+# What a platform gives profile `kubernetes`, as fixtures for the run on kind (../README.md): an S3 store, an OIDC
+# issuer and a Gateway. Test fixtures, not part of the profile: they are not held to the profile's policies (the
+# issuer writes to its own file system), they keep nothing (emptyDir) and their credentials are made per run by
+# ../kind.sh as Secrets in this namespace. The images are pinned by digest all the same.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - namespace.yaml
+  - store.yaml
+  - issuer.yaml
+  - gateway.yaml
+images:
+  # MinIO 2025.7.23 with its client `mc` (the last image of the Bitnami catalogue, frozen): any S3 API with
+  # conditional put serves (docs/architecture.md, publication boundary).
+  - name: store
+    newName: docker.io/bitnamilegacy/minio
+    digest: sha256:8935e75fa5d11295c17171e4aa49efe390a1193cd7f12e4d21b92af9ffef09d7
+  # Keycloak 26.8.2, the issuer the profile's README names.
+  - name: issuer
+    newName: quay.io/keycloak/keycloak
+    digest: sha256:723b1d6e254c0fc96d5cffec860c7e0744d6a3277822b865bb538cf891575e41

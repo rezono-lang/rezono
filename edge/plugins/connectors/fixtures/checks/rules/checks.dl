@@ -1,0 +1,51 @@
+// Invariants over every construct the SHACL-SPARQL translation knows, and one it refuses.
+
+.decl item_size(item: symbol, group: symbol, size: number)
+item_size(i, g, s) :- item__group(i, g), item__size(i, s).
+
+.decl group_total(group: symbol, total: number)
+group_total(g, t) :- group(g), t = sum s : { item_size(_, g, s) }.
+
+// An aggregate, a join on a bound and a comparison.
+// @invariant
+.decl over_limit(group: symbol, total: number)
+over_limit(g, t) :- group_total(g, t), group__limit(g, l), t > l.
+
+// Negation.
+.decl grouped(item: symbol)
+grouped(i) :- item__group(i, g), group(g).
+// @invariant
+.decl ungrouped(item: symbol)
+ungrouped(i) :- item(i), !grouped(i).
+
+// A count over an empty group is 0.
+// @invariant
+.decl empty_group(group: symbol)
+empty_group(g) :- group(g), n = count : { item__group(_, g) }, n = 0.
+
+// Two rules, an enum constant, a division truncated toward zero and arithmetic.
+// @invariant
+.decl odd_half(item: symbol, half: number)
+odd_half(i, h) :- item__size(i, s), item__state(i, "high"), h = s / 3, h < 2.
+odd_half(i, h) :- item__size(i, s), s < 0, h = s * 2.
+
+// A maximum: an empty group gives no row.
+// @invariant
+.decl big(group: symbol, largest: number)
+big(g, m) :- group(g), m = max s : { item_size(_, g, s) }, m >= 5.
+
+// A constant in the head and a repeated variable.
+// @invariant
+.decl self_next(item: symbol, mark: symbol)
+self_next(i, "self") :- item__next(i, i).
+
+
+// Recursion: refused.
+.decl reach(a: symbol, b: symbol)
+reach(a, b) :- item__next(a, b).
+reach(a, c) :- reach(a, b), item__next(b, c).
+// @invariant
+.decl cycle(item: symbol)
+cycle(i) :- reach(i, i).
+
+.output over_limit, ungrouped, empty_group, odd_half, big, self_next, cycle

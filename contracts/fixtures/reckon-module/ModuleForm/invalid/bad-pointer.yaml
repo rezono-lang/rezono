@@ -1,0 +1,9 @@
+# `at` is a JSON pointer into `module`: it starts with a slash.
+format: rede.reckon-module/1
+module:
+  pack: lab
+  use: []
+  decls:
+    - {unit: GiB, is: 1024 MiB}
+spans:
+  - {at: decls/0, line: "2", start: "14", end: "17"}

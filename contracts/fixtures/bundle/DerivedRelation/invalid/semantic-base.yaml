@@ -1,0 +1,8 @@
+# A value is never a floating point number (B10).
+id: calc__hourly
+module: calc
+explain: materialize
+calc: hourly
+columns:
+  - {name: subject, type: string}
+semantic: {case: derived, base: float, derived: hourly}

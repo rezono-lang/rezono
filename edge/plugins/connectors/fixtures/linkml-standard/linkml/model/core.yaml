@@ -1,0 +1,39 @@
+id: https://example.org/registry/core
+name: core
+prefixes:
+  linkml: https://w3id.org/linkml/
+imports:
+  - linkml:types
+  - common
+default_range: string
+annotations:
+  layer: facts
+enums:
+  Status:
+    permissible_values:
+      draft: {description: Not settled yet.}
+      final: {}
+      retired: {}
+slots:
+  status:
+    range: Status
+  members:
+    range: Record
+    multivalued: true
+classes:
+  Record:
+    description: Something the registry holds.
+    comments: [Kept as documentation.]
+    see_also: [https://example.org/registry/docs]
+    slots: [id, label, size, status]
+    slot_usage:
+      label:
+        required: true
+      size:
+        maximum_value: 1000
+  Collection:
+    is_a: Record
+    slots: [members]
+    slot_usage:
+      members:
+        minimum_cardinality: 1

@@ -1,0 +1,69 @@
+# Neutrale labels van std-time. Een domein geeft zijn eigen woorden in zijn eigen labels en messages (view).
+interval: {text: interval, gender: neuter}
+interval.on_axis: as
+interval.start: begin
+interval.end: einde
+interval.unbounded: zonder grens aan
+interval.extension_end: einde van de verlenging
+interval.known_from: bekend vanaf
+interval.in_series: reeks
+axis: {text: as, gender: common}
+series: {text: reeks, gender: common}
+reference_point: {text: peilpunt, gender: neuter}
+reference_point.on_axis: as
+reference_point.position: positie
+reference_point.horizon: horizon
+interval_relation: verhouding tussen twee intervallen
+interval_relation.before: vóór
+interval_relation.meets: sluit aan op
+interval_relation.overlaps: overlapt
+interval_relation.starts: begint samen met
+interval_relation.during: valt binnen
+interval_relation.finishes: eindigt samen met
+interval_relation.equals: valt samen met
+interval_relation.after: na
+interval_relation.met_by: volgt aansluitend op
+interval_relation.overlapped_by: wordt overlapt door
+interval_relation.started_by: begint samen met en duurt langer dan
+interval_relation.contains: omvat
+interval_relation.finished_by: eindigt samen met en begon eerder dan
+judgement_value: oordeel
+judgement_value.positive: positief
+judgement_value.attention: aandacht
+judgement_value.negative: negatief
+judgement_value.not_begun: nog niet begonnen
+judgement_value.no_end: heeft volgens de opgave geen einde
+judgement_value.unknown: onbekend
+judgement_reason: reden van een oordeel
+judgement_reason.end_beyond_horizon: het einde ligt voorbij de horizon
+judgement_reason.end_within_horizon: het einde ligt binnen de horizon
+judgement_reason.in_extension: geëindigd, in de verlenging
+judgement_reason.ended: geëindigd, zonder verlenging
+judgement_reason.extension_ended: geëindigd, en de verlenging is gestopt
+judgement_reason.start_ahead: het begin ligt nog in de toekomst
+judgement_reason.without_end: heeft volgens de opgave geen einde
+judgement_reason.end_not_recorded: geen einde vastgelegd
+judgement_reason.start_not_recorded: geen begin vastgelegd
+bound_side: kant van een interval
+bound_side.start: begin
+bound_side.end: einde
+start_stated: heeft een begin
+end_stated: heeft een einde
+extension_stated: heeft een verlenging
+start_not_recorded: begin niet vastgelegd
+end_not_recorded: einde niet vastgelegd
+known_from_not_recorded: eerste positie van kennis niet vastgelegd
+known_from_stated: heeft een eerste positie van kennis
+interval_inverted: einde niet na begin
+bound_contradicted: een grens genoemd en ook afwezig verklaard
+extension_inverted: verlenging stopt vóór het einde
+extension_without_end: verlenging zonder einde
+series_across_axes: reeks op meer dan één as
+begun_at: begonnen
+ended_at: geëindigd
+holds_at: geldt
+in_extension: in de verlenging
+known_at: bekend
+judgement: oordeel
+span: spanne
+allen: verhouding tussen twee intervallen

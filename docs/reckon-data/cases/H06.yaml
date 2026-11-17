@@ -1,0 +1,41 @@
+id: H06
+class: hash
+status: settled
+schema:
+  from: fixture.schema.json
+form: collection
+input:
+  $schema: s-e60191303ae97ad776d3b3c7136793c24ef83be5862327865b412399f5c9ac72
+  $rows:
+  - $kind: Host
+    $id: host-a
+    memory_need: 400 GiB
+    owner:
+      $unknown: not_assigned
+    tags:
+    - gpu
+    - lab
+    $why:
+      memory_need: rede:w/91c2
+  - $kind: Host
+    $id: host-b
+    memory_need:
+      $unknown: ''
+    owner:
+      $na: ''
+    tags: []
+expect:
+  dataset_hash: d-12c77a7752f9b4e938a086e0d57d1c70d96d532e2d6e59ffc4ba6abb840ba052
+  side_tables:
+    $why: 6ec219f097cfdfa7bdb7b429454aea8f2dda3aef2958cb9f79530497f7ce1f3c
+    $src: 4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945
+  annotation_hash: 8810ad625ef8dc37d36516de26656bcd40d93d76b8dd2468a5573d6919210d7c
+  without_why:
+    dataset_hash: d-12c77a7752f9b4e938a086e0d57d1c70d96d532e2d6e59ffc4ba6abb840ba052
+    annotation_hash: 3052aa7cf38be7e97945a4f45e85ff5c13bf67cd7080201cbfba98503d818927
+note: >-
+  The `$why` hash row is {"$key":["Host","host-a","memory_need","","",""],"proof":"rede:w/91c2"} (l0.md §6.2
+  step 6). Computed with rede_canon; the dataset hash equals the worked vector of §6.2.
+sources:
+- '#369 L0 rev 2 §8'
+- '#417 review 6761310804'

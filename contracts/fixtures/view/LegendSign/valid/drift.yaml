@@ -1,0 +1,6 @@
+# Two lines, the second broken, in the caution tone.
+sign: drift
+form: double_line
+tone: caution
+dash: "6 3"
+label_message: sign.drift

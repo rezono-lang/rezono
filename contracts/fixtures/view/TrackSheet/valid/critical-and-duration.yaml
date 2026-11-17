@@ -1,0 +1,9 @@
+# A procedure in phases with its critical path, durations and finished steps; no declared lines.
+station: step
+plan: step__in_procedure
+wave: step__in_phase
+label: step__name
+depends: {via: waits, from: waits__step, to: waits__for}
+critical: {relation: critical_wait, from: step, to: waits_for, from_kinds: [step], to_kinds: [step]}
+duration: step__duration
+done: step__finished

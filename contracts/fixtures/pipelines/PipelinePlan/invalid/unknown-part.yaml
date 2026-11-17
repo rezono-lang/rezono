@@ -1,0 +1,7 @@
+# A part is main, integrity, rules-<n> or calc.
+format: rede.pipelines/1
+max_views: "64"
+pipelines:
+  - {name: part-a, sql: [engine/rules.sql]}
+epoch_table: epoch__in
+export_view: export__out

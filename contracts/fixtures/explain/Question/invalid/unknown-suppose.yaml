@@ -1,0 +1,7 @@
+term: consequence
+start: present
+steps:
+  - suppose: {delta: retract}
+  - trace: {direction: forward, depth: "3"}
+answer: rings
+limit: 200

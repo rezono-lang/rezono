@@ -1,0 +1,19 @@
+format: rede.answer/1
+question: impact
+manifest_id: m-1
+delta: {kind: variant, id: v-price-01-2, manifest: v-price-01-2}
+nodes:
+  - {relation: placement, key: '["p2"]', distance: 0, change: added}
+  - {relation: count, key: '["app","2"]', distance: 1, change: changed, was: '["app","1"]'}
+  - {relation: label, key: '["app"]', distance: 2, change: unchanged}
+  - {relation: step, key: '["app","w"]', distance: 2, change: removed}
+steps:
+  - {conclusion: {relation: count, key: '["app","2"]'}, premise: {relation: placement, key: '["p2"]'}, how: contributes, position: 0}
+witnesses: []
+difference:
+  counts:
+    - {relation: count, added: 0, removed: 0, changed: 1}
+    - {relation: placement, added: 1, removed: 0, changed: 0}
+    - {relation: step, added: 0, removed: 1, changed: 0}
+complete: false
+incomplete: [depth]

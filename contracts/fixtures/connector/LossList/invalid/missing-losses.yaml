@@ -1,0 +1,4 @@
+connector: dcat-out
+standard: DCAT
+standard_version: "3"
+direction: out

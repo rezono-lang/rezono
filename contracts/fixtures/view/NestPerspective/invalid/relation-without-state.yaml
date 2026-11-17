@@ -1,0 +1,4 @@
+# A perspective over a relation says which column holds the part and which state it binds.
+id: failure
+label_message: nest.failure
+relation: failure_effect

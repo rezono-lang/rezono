@@ -1,0 +1,8 @@
+# The probe ran but returned nothing: the value is unknown, never zero.
+id: prometheus/node-3/temp/1730887200
+subject: node-3
+attribute: node.temperature_c
+value: {state: unknown}
+event_time: "2026-11-06T10:00:00Z"
+source: {kind: query, name: prometheus, position: "1730887200"}
+expectation: {relation: node__max_temperature_c, key: '["node-3"]'}

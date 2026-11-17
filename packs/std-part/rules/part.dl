@@ -1,0 +1,24 @@
+// Rules of std-part (#314 §5.2, T3), in the Datalog subset, so Soufflé is the oracle.
+// The base relations are the theory's tables: constituent__part_of(part, whole) and
+// constituent__repeat(part, n). Two axioms are checks of the schema: a constituent has at most one direct
+// whole (part_of is single-valued), and repeat is at least 1.
+
+// within: the transitive closure of part_of. x is part of w, directly or through wholes in between.
+.decl within(part: symbol, whole: symbol)
+within(x, w) :- constituent__part_of(x, w).
+within(x, w) :- within(x, v), constituent__part_of(v, w).
+
+// has_whole: x is a part of some whole. Its absence is the ground of outermost: "w is a part of nothing".
+.decl has_whole(part: symbol)
+has_whole(x) :- constituent__part_of(x, w).
+
+// outermost: the whole x is within that is itself part of nothing. In a forest every part has exactly one.
+.decl outermost(part: symbol, whole: symbol)
+outermost(x, w) :- within(x, w), !has_whole(w).
+
+// Axiom: part_of is irreflexive and acyclic. Nothing is part of itself, directly or through others.
+// @invariant
+.decl part_cycle(part: symbol)
+part_cycle(x) :- within(x, x).
+
+.output within, has_whole, outermost, part_cycle

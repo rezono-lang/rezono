@@ -1,0 +1,4 @@
+diagnostics:
+  - code: wrong_type
+    severity: error
+    fix: something

@@ -1,0 +1,233 @@
+id: https://rede.dev/contracts/operation
+name: rede_operation
+title: Schema operations and their impact
+description: >-
+  A schema change as a list of operations from a fixed catalogue (decision S7;
+  docs/compiler.md#schema-operations), and the impact the compiler reports when it applies them
+  (`python -m rede_compiler operate <pack> <operations.yaml>`). Each operation moves the schema,
+  the facts, the rules, the labels and the channel table of one pack, and comes with a migration in
+  the format of linkml-map. Names are the names in the schema files: a class name for a kind, a
+  slot name, an enum name and a permissible value. A class or enum that more than one module
+  declares (decision S8) is written `<module>#<Name>`, with the module's path under schema/ without
+  .yaml, wherever it appears. The migration is linkml-map's TransformationSpecification with one
+  Rede extension that plain linkml-map refuses: `where` on a class derivation, for split_by.
+prefixes:
+  linkml: https://w3id.org/linkml/
+  rede: https://rede.dev/contracts/
+default_prefix: rede
+default_range: string
+imports:
+  - linkml:types
+
+enums:
+  OperationKind:
+    permissible_values:
+      rename:
+        description: >-
+          Give a kind, a slot, an enum or an enum value a new name. Delta along an isomorphism; always
+          lossless.
+      move:
+        description: >-
+          Move a slot to another kind: to an ancestor or a descendant (is_a), or across one
+          single-valued arrow (`via`). Delta down is_a and toward the source of an arrow; the other
+          direction is its inverse. Lossless when the check finds no value left behind.
+      drop:
+        description: >-
+          Remove a kind or a slot with its rows and the records that go with it (rows in ancestor
+          tables, owned inlined elements). Delta along an inclusion; always lossy, so it needs
+          `accept_loss`.
+      select:
+        description: >-
+          Keep an explicit submodel of local kinds and their declared slots, simultaneously. Every
+          excluded kind and slot has an omission reason. Delta along an inclusion, deliberately lossy
+          like drop, requiring accept_loss. Imported definitions remain with their owner.
+      split_by:
+        description: >-
+          Give a kind one new subkind per value of one of its single-valued attributes; the value
+          becomes the subkind and the attribute disappears. Delta plus selection; lossless when every
+          value in the facts has a case.
+      combine:
+        description: >-
+          Absorb a kind into another that is one-to-one with it, across a single-valued arrow between
+          them; the absorbed kind's slots become slots of the other. Delta along a path; lossless when
+          every absorbed element is reached and has a value, and its identifier is kept (`key`) or
+          derived.
+  World:
+    description: The world of a table (decision W6).
+    permissible_values:
+      open: {description: "A missing row is unknown."}
+      closed: {description: "A missing row is not true."}
+  StateKind:
+    permissible_values:
+      facts: {description: "The main state: all files in facts/."}
+      scenario: {description: "A cumulative scenario state: facts plus scenarios/ up to this file."}
+      diagnostic: {description: "One file in diagnostics/: a known wrong input."}
+
+classes:
+  OperationSet:
+    tree_root: true
+    description: The operations of one change, applied in order to one pack.
+    attributes:
+      format: {required: true, equals_string: rede.operations/1}
+      pack: {required: true, pattern: "^[a-z][a-z0-9]*(-[a-z0-9]+)*$", description: "The name in the pack's pack.yaml."}
+      operations: {range: Operation, multivalued: true, inlined_as_list: true, required: true, minimum_cardinality: 1}
+
+  Operation:
+    attributes:
+      op: {range: OperationKind, required: true}
+      keep: {range: SelectedKind, multivalued: true, inlined_as_list: true, minimum_cardinality: 1, description: "For select: the kept local kinds and, optionally, their declared slots."}
+      omit: {range: Omission, multivalued: true, inlined_as_list: true, description: "For select: every excluded local kind, or excluded slot of a kept kind, with its reason."}
+      kind: {pattern: "^([a-z0-9][a-z0-9_-]*(/[a-z0-9][a-z0-9_-]*)*#)?[^#./]+$", description: "The kind, by its class name. For rename, move, drop, split_by and combine."}
+      slot: {description: "A slot of `kind` (declared there, not inherited). For rename, move, drop and split_by."}
+      enum: {pattern: "^([a-z0-9][a-z0-9_-]*(/[a-z0-9][a-z0-9_-]*)*#)?[^#./]+$", description: "An enum, by its name. For rename only."}
+      value: {description: "A permissible value of `enum`. For rename only."}
+      to:
+        description: >-
+          For rename: the new name. For move: the kind that receives the slot.
+      via:
+        pattern: "^([a-z0-9][a-z0-9_-]*(/[a-z0-9][a-z0-9_-]*)*#)?[^#./]+\\.[^#./]+$"
+        description: >-
+          A single-valued arrow as `<Class>.<slot>`. For move across an arrow (either direction), and
+          for combine (the arrow between `kind` and `absorb`, either direction).
+      absorb: {description: "For combine: the kind that disappears into `kind`."}
+      key:
+        description: >-
+          For combine: the new slot of `kind` that keeps the identifier of the absorbed element. Not
+          needed when the absorbed kind has no identifier of its own (an inlined kind); without it,
+          the identifiers are lost and the operation needs `accept_loss`.
+      cases:
+        range: Case
+        multivalued: true
+        inlined_as_list: true
+        minimum_cardinality: 1
+        description: For split_by. Every value maps to one new subkind; two values cannot share one.
+      abstract:
+        range: boolean
+        description: >-
+          For split_by: the split kind becomes abstract, so every element must land in a case (an
+          element without one is a conflict, not a loss).
+      world:
+        range: World
+        description: >-
+          For move and combine: the world of the slots where they land, when it differs from the world
+          they had. Without it, a change of world is a conflict. The compiler writes it on the slot.
+      accept_access:
+        range: boolean
+        description: >-
+          For move across an arrow and combine: the author accepts that the roles the impact lists may
+          read rows they could not read before. Without it, widened access is a conflict.
+      accept_loss:
+        range: boolean
+        description: >-
+          The author accepts the loss the impact lists; only `true` means that. Required for drop; for
+          any other operation it is required only when the lossless check finds a loss in a fact state.
+          It never covers a conflict.
+    rules:
+      - preconditions: {slot_conditions: {op: {equals_string: select}}}
+        postconditions: {slot_conditions: {keep: {required: true}, accept_loss: {required: true}}}
+      - preconditions: {slot_conditions: {op: {equals_string: rename}}}
+        postconditions: {slot_conditions: {to: {required: true}}}
+      - preconditions: {slot_conditions: {op: {equals_string: move}}}
+        postconditions: {slot_conditions: {kind: {required: true}, slot: {required: true}, to: {required: true}}}
+      - preconditions: {slot_conditions: {op: {equals_string: drop}}}
+        postconditions: {slot_conditions: {kind: {required: true}, accept_loss: {required: true}}}
+      - preconditions: {slot_conditions: {op: {equals_string: split_by}}}
+        postconditions: {slot_conditions: {kind: {required: true}, slot: {required: true}, cases: {required: true}}}
+      - preconditions: {slot_conditions: {op: {equals_string: combine}}}
+        postconditions: {slot_conditions: {kind: {required: true}, absorb: {required: true}, via: {required: true}}}
+
+  SelectedKind:
+    description: A kept local kind; identifiers stay automatically, and inherited slots stay with their owner.
+    attributes:
+      kind: {required: true, pattern: "^([a-z0-9][a-z0-9_-]*(/[a-z0-9][a-z0-9_-]*)*#)?[^#./]+$"}
+      slots: {multivalued: true, description: "Declared, non-identifier slot names. Absent: all except explicit omissions; an empty list keeps none."}
+
+  Omission:
+    description: Why one local kind or one declared slot of a kept kind is excluded from the import.
+    attributes:
+      kind: {required: true, pattern: "^([a-z0-9][a-z0-9_-]*(/[a-z0-9][a-z0-9_-]*)*#)?[^#./]+$"}
+      slot: {description: "Absent: omit the kind and all its slots. Present: omit this slot of a kept kind."}
+      reason: {required: true, pattern: "\\S", description: A nonempty explanation of the deliberate omission.}
+
+  Case:
+    description: One value of a split_by and the subkind it becomes.
+    attributes:
+      value: {required: true, description: "The value as text; a whole number as decimal text (W3)."}
+      kind: {required: true, description: "The class name of the new subkind; it must not exist yet."}
+
+  Impact:
+    description: >-
+      What applying an operation set did, per operation: the tables it touched, the rows it lost, and
+      the rules, labels and channels it rewrote. The compiler writes it in a fixed order (AGENTS rule 3).
+    attributes:
+      format: {required: true, equals_string: rede.impact/1}
+      pack: {required: true}
+      operations: {range: OperationImpact, multivalued: true, inlined_as_list: true, required: true}
+
+  OperationImpact:
+    attributes:
+      index: {range: integer, required: true, minimum_value: 0, description: The position in the operation set.}
+      op: {range: OperationKind, required: true}
+      lossless: {range: boolean, required: true, description: "True when the round trip gives every fact state back exactly."}
+      omissions: {range: Omission, multivalued: true, inlined_as_list: true, description: "The explicit reasons for a select, sorted by kind and slot."}
+      migration: {required: true, description: "The migration file (linkml-map), relative to the output directory."}
+      inverse: {description: "The inverse migration file; present exactly when lossless is true."}
+      tables: {range: TableChange, multivalued: true, inlined_as_list: true, description: "Engine tables renamed, created or removed."}
+      loss: {range: Loss, multivalued: true, inlined_as_list: true, description: "Empty when lossless is true."}
+      rules: {range: RuleChange, multivalued: true, inlined_as_list: true}
+      access: {range: AccessChange, multivalued: true, inlined_as_list: true, description: "Rows a role may read after the operation but not before."}
+      elements: {range: ElementChange, multivalued: true, inlined_as_list: true, description: "Element ids in labels and the channel table that changed or went away."}
+      sources: {range: SourceTransport, description: "Present exactly when the pack has source companions (B12): the companions written and the sourced rows lost."}
+
+  SourceTransport:
+    description: >-
+      How the operation carried the exact origins of the main facts (docs/compiler.md, step 5b3). A row after
+      the operation has the origin of the rows its content came from; an operation that cannot do that for
+      every row refuses instead.
+    attributes:
+      companions: {multivalued: true, description: "The companions written, relative to the pack, sorted."}
+      lost: {range: SourceRow, multivalued: true, inlined_as_list: true, description: "Rows with an exact origin that no row after came from, sorted; their sources go with them."}
+
+  SourceRow:
+    attributes:
+      relation: {required: true, description: The engine table before the operation.}
+      key: {required: true, description: "The row's canonical JSON key, as in a source companion."}
+
+  TableChange:
+    attributes:
+      before: {description: "The engine table before (`k` or `k__a`); absent for a new table."}
+      after: {description: "The engine table after; absent for a removed table."}
+      rows: {range: integer, required: true, minimum_value: 0, description: Rows in the main state (facts) after the operation.}
+
+  Loss:
+    description: Rows of one table in one fact state that the round trip does not give back.
+    attributes:
+      state: {range: StateKind, required: true}
+      file: {description: "The scenario or diagnostic file, relative to the pack; absent for facts."}
+      table: {required: true, description: The engine table before the operation.}
+      rows: {range: Row, multivalued: true, inlined_as_list: true, required: true, description: "Ordered by id, then value."}
+
+  Row:
+    attributes:
+      id: {required: true}
+      value: {description: "The value for a slot table, as text; absent for a kind table."}
+
+  RuleChange:
+    attributes:
+      rule: {required: true, description: "The rule id, as in the rule IR."}
+      file: {required: true, description: "The rules file, relative to the pack."}
+      literals: {range: integer, required: true, minimum_value: 1, description: Literals replaced.}
+
+  AccessChange:
+    description: Rows of one table in one fact state that one role may read after the operation and could not read before.
+    attributes:
+      role: {required: true}
+      state: {range: StateKind, required: true}
+      file: {description: "The scenario or diagnostic file, relative to the pack; absent for facts."}
+      table: {required: true, description: The engine table after the operation.}
+      rows: {range: Row, multivalued: true, inlined_as_list: true, required: true, description: "Ordered by id, then value."}
+
+  ElementChange:
+    attributes:
+      before: {required: true}
+      after: {description: "Absent when the element went away (drop, split_by, combine)."}

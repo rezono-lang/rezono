@@ -1,0 +1,253 @@
+# Expected outcomes for the zorgtoeslag pack (zorgtoeslag.reckon, data in facts.reckon). #401 D28.
+#
+# Each case asks one thing of the pack and gives the expected result:
+#   value     a derived value of one subject: `subject.slot`; expect `value` (Reckon literal) or `state` + `reason`
+#   ask       a question in the P10.2a slice (docs/reckon/expressions.md); expect rows, undecided, not_applicable
+#   publish   evaluate the pack's checks at their decision points (Reckon v0 §7b); expect the publication outcome
+#   compile   the diagnostics the compiler reports for the pack as written: each code with the text at its span
+#             (`at`), in source order; an R015 spans its construct from its first keyword (expressions.md §1)
+#   form      which files have a JSON form, the form the compiler reads (contracts/reckon-module.yaml): the pack's
+#             own file first, then the others by name; a file with an error has none
+# `as_known` is the knowledge cut (v0 §5a rule 3); without it the cut is `knowledge` below.
+# `correction` is the correction row of a sealed month (v0 §5a): sealed value, current value, the version that
+# changed it. Its relation and form are v0 open point 4, so this field is provisional.
+# `uses` names the v0 constructs the case exercises (section numbers of the v0 reference on #350).
+# `evidence` says what kind of claim a case makes:
+#   current   the outcome for the pack as written today. Z20: the pack does not compile in v0 (one R015, the
+#             time selection; its two decision tables are read since RV-C31); and Z22: so only the file of
+#             facts has a JSON form.
+#   future    the outcome once the pack runs on a supported fixture. Not a conformance claim yet: `blocked_by`
+#             names the current case that prevents running it (Z20), and these cases stay design input until
+#             the reserved construct lands or the pack is rewritten without it.
+# Amounts, rates and article numbers are illustrative.
+
+version: 1
+pack: zorgtoeslag
+knowledge: 2026-06-01
+
+cases:
+  - id: Z01
+    title: a single claimant below the threshold income
+    evidence: future
+    blocked_by: [Z20]
+    value: ann-2026-01.allowance
+    as_known: 2026-02-01
+    expect: {value: "€ 135"}
+    note: (€ 2180.00 - 1.879 % * € 29600.00) / 12 = € 135.318, rounded down
+    uses: [§5a versions, §5c table, §5b ordered unless, §5f rounding]
+
+  - id: Z02
+    title: a retroactive change of the standard premium applies to an open month
+    evidence: future
+    blocked_by: [Z20]
+    value: ann-2026-03.allowance
+    as_known: 2026-03-10
+    expect: {value: "€ 136"}
+    note: version 3 (known 2026-03-02) replaces version 2 on the same dates by its later known date
+    uses: [§5a rule 4b later known, §5a retroactivity]
+
+  - id: Z03
+    title: a month sealed before the change keeps its value and gets a correction row
+    evidence: future
+    blocked_by: [Z20]
+    value: ann-2026-01.allowance
+    as_known: 2026-03-10
+    expect: {value: "€ 135"}
+    correction: {sealed: "€ 135", current: "€ 136", version: "standard_premium version 3"}
+    uses: [§5a sealed at, §5a correction rows (open point 4)]
+
+  - id: Z04
+    title: a month sealed after the change already has the new value
+    evidence: future
+    blocked_by: [Z20]
+    value: ann-2026-02.allowance
+    as_known: 2026-03-10
+    expect: {value: "€ 136"}
+    note: closed_on 2026-03-05 lies after version 3 became known (2026-03-02)
+    uses: [§5a sealed at]
+
+  - id: Z05
+    title: the previous year's parameters and income apply to a month in that year
+    evidence: future
+    blocked_by: [Z20]
+    value: ann-2025-12.allowance
+    expect: {value: "€ 131"}
+    note: (€ 2112.00 - 1.879 % * € 28406.00) / 12 = € 131.52; income version 2025 (€ 24000.00)
+    uses: [§5a versions, applies at, fact versions (rule 5)]
+
+  - id: Z06
+    title: partners pay a double standard premium and a higher norm percentage
+    evidence: future
+    blocked_by: [Z20]
+    value: bob-2026-02.allowance
+    as_known: 2026-02-10
+    expect: {value: "€ 105"}
+    note: (2 * € 2180.00 - (4.256 % * € 29600.00 + 13.7 % * € 13400.00)) / 12 = € 105.37
+    uses: [§5c table, aggregate over an inverse slot]
+
+  - id: Z07
+    title: the joint income adds the incomes of both partners for the month's year
+    evidence: future
+    blocked_by: [Z20]
+    value: bob-2026-02.joint_income
+    expect: {value: "€ 43000.00"}
+    uses: [aggregate, "time selection `income at first_day` (reserved, P10.2a §4)"]
+
+  - id: Z08
+    title: an 18th birthday on 29 February falls on 28 February in a common year
+    evidence: future
+    blocked_by: [Z20]
+    value: dex-2026-02.adult
+    expect: {value: "false"}
+    note: 2008-02-29 + 18 year = 2026-02-28 by `rounding date down`; 2026-02-28 <= 2026-02-01 is false
+    uses: [§5f date arithmetic, rounding date]
+
+  - id: Z09
+    title: adult and insured from March, so March is paid
+    evidence: future
+    blocked_by: [Z20]
+    value: dex-2026-03.allowance
+    as_known: 2026-03-10
+    expect: {value: "€ 136"}
+    uses: [§5f date arithmetic, "`is known`", "`is n/a`"]
+
+  - id: Z10
+    title: several grounds for refusal are collected, not a conflict
+    evidence: future
+    blocked_by: [Z20]
+    value: dex-2026-02.grounds
+    expect: {value: "[minor, uninsured]"}
+    note: with sibling `unless` lines the same two grounds would be `invalid exception_conflict` (v0 §5b rule 3)
+    uses: [§5c table collect]
+
+  - id: Z11
+    title: no insurance is not insured, not n/a
+    evidence: future
+    blocked_by: [Z20]
+    value: eve-2026-02.insured
+    expect: {value: "false"}
+    note: written `first_day >= insured_from` alone this would be n/a, and `unless not insured` would not apply (README F1)
+    uses: [§7b truth tables, "`is n/a`", "`when … then … else`"]
+
+  - id: Z12
+    title: which claimants are paid in February
+    evidence: future
+    blocked_by: [Z20]
+    ask: ask ClaimMonth where first_day = 2026-02-01 and allowance > € 0
+    expect:
+      rows: [ann-2026-02, bob-2026-02, gus-2026-02]
+      undecided: [{binder: hal-2026-02, state: unknown, reason: no_estimate}]
+      not_applicable: 0
+    uses: [P10.2a ask, undecided rows]
+
+  - id: Z13
+    title: an income above the limit gives nothing
+    evidence: future
+    blocked_by: [Z20]
+    value: fay-2026-02.allowance
+    expect: {value: "€ 0"}
+    uses: [§5b ordered unless]
+
+  - id: Z14
+    title: the first income estimate
+    evidence: future
+    blocked_by: [Z20]
+    value: gus-2026-01.allowance
+    as_known: 2026-02-01
+    expect: {value: "€ 135"}
+    uses: [fact versions]
+
+  - id: Z15
+    title: a corrected income estimate applies retroactively to an open month
+    evidence: future
+    blocked_by: [Z20]
+    value: gus-2026-04.allowance
+    as_known: 2026-05-01
+    expect: {value: "€ 85"}
+    note: income € 34000.00 (known 2026-04-15) and standard premium version 3
+    uses: [fact versions, §5a rule 4b later known]
+
+  - id: Z16
+    title: a sealed month keeps the first estimate and gets a correction row
+    evidence: future
+    blocked_by: [Z20]
+    value: gus-2026-01.allowance
+    as_known: 2026-05-01
+    expect: {value: "€ 135"}
+    correction: {sealed: "€ 135", current: "€ 85", version: "person gus income, known 2026-04-15"}
+    uses: [§5a sealed at, correction rows (open point 4)]
+
+  - id: Z17
+    title: no income estimate leaves the allowance unknown with its reason
+    evidence: future
+    blocked_by: [Z20]
+    value: hal-2026-02.allowance
+    expect: {state: unknown, reason: no_estimate}
+    note: the last `unless` block is unknown, so it cannot decide (v0 §5b rule 4)
+    uses: [§5b rule 4, reasons]
+
+  - id: Z18
+    title: a month before the first version has no parameters
+    evidence: future
+    blocked_by: [Z20]
+    value: ann-2024-12.allowance
+    expect: {state: unknown, reason: no_version_applies}
+    uses: [§5a rule 4 (no version applies)]
+
+  - id: Z19
+    title: an unknown allowance would publish an undecided violation and not block
+    evidence: future
+    blocked_by: [Z20]
+    publish: true
+    expect:
+      outcome: publishes
+      violations: []
+      undecided:
+        - {check: allowance_cap, subject: ann-2024-12, state: unknown, reason: no_version_applies}
+        - {check: allowance_cap, subject: hal-2026-02, state: unknown, reason: no_estimate}
+        - {check: allowance_cap, subject: ivy-2026-02, state: unknown, reason: no_cover_report}
+    uses: [§5 check, §7b decision points, v0 open point 3]
+
+  - id: Z20
+    title: what the compiler reports for the pack as written
+    evidence: current
+    compile: true
+    expect:
+      diagnostics:
+        - {code: W108, at: standard_premium, note: no version before 2025-01-01}
+        - {code: W108, at: threshold_income, note: no version before 2025-01-01}
+        - {code: W108, at: income_limit_single, note: no version before 2025-01-01}
+        - {code: W108, at: income_limit_partner, note: no version before 2025-01-01}
+        - {code: R015, at: at first_day, note: time selection on income is reserved until P10.5}
+    note: >-
+      the one R015 is why this pack cannot compile in v0 as implemented first, and why Z01-Z19 and Z21 cannot run
+      yet; README G2. Its two decision tables, `threshold_rate` (`unique`) and `grounds` (`collect`), are read
+      into the tree since RV-C31 and get no diagnostic from the reader (README G3, docs/reckon/tables.md); they
+      are checked and evaluated once the pack's kinds reach the check as a schema (RV-X46, RV-C36)
+    uses: [§10 diagnostics, §13 reserved, §5c table]
+
+  - id: Z21
+    title: an unknown insurance start gives an unknown allowance, not a decided zero
+    evidence: future
+    blocked_by: [Z20]
+    value: ivy-2026-02.allowance
+    expect: {state: unknown, reason: no_cover_report}
+    note: >-
+      `insured` is unknown, so `unless not insured` cannot decide and the allowance carries the reason. Written
+      `insured_from is known and …`, `insured` would be false and the allowance a decided € 0 (README F1)
+    uses: ["`is n/a`", "`when … then … else`", §5b unless, §7b truth tables]
+
+  - id: Z22
+    title: which files of the pack as written have a JSON form
+    evidence: current
+    form: true
+    expect:
+      forms:
+        - {file: zorgtoeslag.reckon, written: false, note: the R015 of Z20; a reserved construct has no form}
+        - {file: facts.reckon, written: true, note: "fact tables with `n/a` and `unknown no_cover_report`, fact versions with `valid` and `known`"}
+    note: >-
+      the JSON form is what the compiler reads of a module (contracts/reckon-module.yaml, RV-C32); a module with
+      an error has none, so nothing of `zorgtoeslag.reckon` reaches the compiler until its time selection is read
+      or the module is cut to what is (RV-X46). Its two decision tables no longer stand in the way: a table has
+      its form since RV-C31
+    uses: [§5 facts, §5a rule 5, §7b value states, §13 reserved]

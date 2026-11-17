@@ -1,0 +1,4 @@
+# The route plan has a new input hash; the old result is shown as last known, the value as unknown.
+value: {state: unknown}
+freshness: stale
+staleness: {reason: offload, step: plan_route, since_epoch: "8", input_sha256: "bbbb"}

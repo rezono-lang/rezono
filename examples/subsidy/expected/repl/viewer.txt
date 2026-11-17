@@ -1,0 +1,63 @@
+# rede-repl-session/0
+# pack subsidy
+# manifest m-1
+# role viewer
+# access -
+# bundle e9a867bb7b5c2db460530d6eb7d4911e688376580fc938882900f17d183ae900
+rede> :use subsidy m-1 as viewer
+using subsidy m-1 as viewer
+rede> :kinds
+kind                full  rows
+advice_report       yes   yes
+alternative         yes   yes
+application         yes   yes
+article             yes   yes
+axis                yes   none
+calendar            yes   yes
+cost_item           yes   yes
+cost_line           yes   yes
+credential          yes   yes
+credential_claim    yes   yes
+decision            yes   yes
+evaluation_day      yes   yes
+exception           yes   yes
+household           yes   yes
+identity_statement  yes   yes
+income_statement    yes   yes
+interval            yes   none
+principle           yes   yes
+purpose             yes   yes
+reference_date      yes   yes
+reference_point     yes   none
+role                yes   yes
+scheme_parameter    yes   yes
+series              yes   none
+status_lookup       yes   yes
+trust_entry         yes   yes
+rede> :schema application
+slot           type          world
+claimed_costs  amount EUR    closed
+household      -> household  closed
+outcomes:
+assessment
+rede> :row application A001
+application A001
+slot           value
+claimed_costs  11000.00 EUR
+household      H001
+assessment     known
+rede> :grounds assessment A001
+dist  relation        key                  via
+0     assessment      ["A001","known",""]  -
+1     application     ["A001"]             positive assessment_3
+1     income_missing  ["A001"]             negative assessment_3
+1     quote_missing   ["A001"]             negative assessment_3
+rede> :complete :row l
+rede> :row ledger_payment P001
+error: not found (or outside your view)
+rede> :schema ledger_payment
+error: not found (or outside your view)
+rede> :grounds ledger_paid A001
+error: not found (or outside your view)
+rede> :use subsidy latest as checker
+error: role checker not served here

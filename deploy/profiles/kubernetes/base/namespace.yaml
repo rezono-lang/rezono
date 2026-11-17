@@ -1,0 +1,11 @@
+# One namespace for Rede. Pod Security Admission enforces the `restricted` level: no root, no privilege
+# escalation, no host namespaces, every capability dropped, the runtime's seccomp profile.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: rede
+  labels:
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: latest
+    pod-security.kubernetes.io/warn: restricted
+    pod-security.kubernetes.io/audit: restricted

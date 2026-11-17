@@ -1,0 +1,15 @@
+id: G02
+class: invalid
+status: settled
+schema:
+  from: fixture.schema.json
+  merge:
+    kinds:
+      Team:
+        plane: data
+form: schema
+expect:
+  accept: false
+  error: omit the default
+sources:
+- l0.md §3.7 (O13, O14)

@@ -1,0 +1,10 @@
+# A kind's IRI is its namespace and its class name, not the namespace alone.
+id: probe
+class: Probe
+layer: facts
+abstract: false
+identifier: id
+id_type: text
+module: lab
+table: probe
+iri: https://w3id.org/example-publisher/lab/

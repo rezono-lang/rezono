@@ -1,0 +1,27 @@
+// Rules of std-order (#314 §5.2), in the Datalog subset, so Soufflé is the oracle.
+// The base relations are the theory's tables: ordered__precedes(a, b) and ordered__rank(a, n).
+
+// before: the transitive closure of precedes.
+.decl before(a: symbol, b: symbol)
+before(a, b) :- ordered__precedes(a, b).
+before(a, c) :- before(a, b), ordered__precedes(b, c).
+
+// comparable: two elements of which one comes before the other, in either direction.
+.decl comparable(a: symbol, b: symbol)
+comparable(a, b) :- before(a, b).
+comparable(a, b) :- before(b, a).
+
+// Axiom: precedes is a strict partial order. Irreflexive and acyclic together: nothing comes before itself.
+// @invariant
+.decl order_cycle(element: symbol)
+order_cycle(a) :- before(a, a).
+
+// Axiom: rank is consistent with the order. If a comes before b (directly or through others) and both
+// have a rank, rank(a) < rank(b). So a -> b -> c with rank(a) = 9, no rank for b and rank(c) = 2 is a
+// conflict. An element without a rank is not a conflict itself: the rank is optional.
+// @invariant
+// @explain on_demand
+.decl rank_conflict(a: symbol, b: symbol)
+rank_conflict(a, b) :- before(a, b), ordered__rank(a, x), ordered__rank(b, y), x >= y.
+
+.output before, comparable, order_cycle, rank_conflict

@@ -1,0 +1,3 @@
+# Invalid: an empty reason is written by leaving the member out.
+state: unknown
+reason: ""

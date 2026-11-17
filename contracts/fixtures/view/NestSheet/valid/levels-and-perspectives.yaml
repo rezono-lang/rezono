@@ -1,0 +1,17 @@
+# A site with cells, clusters and services, as it is and under a supposed failure.
+id: site
+title_message: nest.site
+part_message: nest.part_of
+levels:
+  - {kind: site, flow: row}
+  - {kind: cell, part_of: cell__site, flow: row, order_message: nest.order.cluster}
+  - {kind: cluster, part_of: cluster__cell, flow: column, order_message: nest.order.service}
+  - {kind: service, part_of: service__cluster, label: service__name}
+perspectives:
+  - {id: overview, label_message: nest.overview}
+  - id: failure
+    label_message: nest.failure
+    relation: failure_effect
+    origin: failed
+    part: service
+    state: {channel: tone, slot: effect, level: ordered, meaning_message: channel.effect}

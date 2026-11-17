@@ -1,0 +1,6 @@
+term: reach
+start: present
+steps:
+  - trace: {direction: forward, depth: "3"}
+answer: tree
+limit: 200

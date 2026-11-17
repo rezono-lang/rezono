@@ -1,0 +1,6 @@
+# The counts of an ask ... where answer come with its output schema id.
+format: rede.answer/1
+question: ask
+manifest_id: m-1
+nodes: []
+counts: {rows: 1, undecided: 0, not_applicable: 0}

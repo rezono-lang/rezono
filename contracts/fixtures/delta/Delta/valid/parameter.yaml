@@ -1,0 +1,6 @@
+# One value changed: the smallest proposal (M4).
+format: rede.delta/1
+pack: library
+base_manifest: m-1
+changes:
+  - {op: set, file: facts/valid.yaml, kind: work, key: w1, slot: year, value: "1948"}

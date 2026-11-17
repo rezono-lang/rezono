@@ -1,0 +1,6 @@
+# The income statement of household H003 arrives. Application A003 was unknown ("no income statement
+# has been received"), never zero; now it can be assessed. The income is above the threshold for one
+# person, so the partial rate applies, and the ledger, which paid A003 at the full rate before the
+# statement was in, shows a difference.
+income_statement:
+  - {"id": "S220", "household": "H003", "income": 2730000}

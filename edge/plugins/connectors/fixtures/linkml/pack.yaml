@@ -1,0 +1,7 @@
+# The round-trip fixture of the LinkML connector (linkml_schema.py, M02): the constructs of the supported subset
+# that no example pack uses, in two modules, one in a directory below the other. Neutral names on purpose; it
+# describes no domain. test_linkml_schema.py takes it out to LinkML and back.
+name: linkml-fixture
+version: 0.1.0
+default_language: en
+imports: []

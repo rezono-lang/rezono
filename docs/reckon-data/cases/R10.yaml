@@ -1,0 +1,18 @@
+id: R10
+class: invalid
+status: settled
+schema:
+  from: fixture.schema.json
+form: row
+input:
+  $kind: Host
+  $id: host-a
+  memory_need: 400 GiB
+  tags:
+  - gpu
+  - lab
+expect:
+  accept: false
+  error: every slot present
+sources:
+- '#369 L0 rev 2 §8'

@@ -1,0 +1,14 @@
+# Rows added and removed, a new slot, an unset slot and an inlined object (M5).
+format: rede.delta/1
+pack: library
+changes:
+  - op: insert
+    file: facts/valid.yaml
+    kind: branch
+    key: west
+    values: {name: Vestiging West, address: {city: Middelburg, street: Westweg 2}}
+  - {op: insert, file: facts/valid.yaml, kind: copy, key: "1004", values: {work: w2, branch: west, reference_only: false}}
+  - {op: delete, file: facts/valid.yaml, kind: loan, key: l2}
+  - {op: set, file: facts/valid.yaml, kind: member, key: m2, slot: home_branch, value: west}
+  - {op: unset, file: facts/valid.yaml, kind: work, key: w1, slot: year}
+  - {op: set, file: facts/valid.yaml, kind: loan, key: l1, slot: lent_on, value: "2026-10-02"}

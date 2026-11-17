@@ -1,0 +1,12 @@
+format: rede.answer/1
+question: gap
+manifest_id: m-1
+start: {relation: u, key: '["k"]'}
+nodes:
+  - {relation: u, key: '["k"]', distance: 0}
+gap:
+  premises:
+    - {distance: 0, node: {relation: u, key: '["k"]'}, rule: u, item: 2, kind: positive, index: 1, relation: f, bindings: [{variable: "?x", value: k}]}
+  candidates:
+    - {change: insert, relation: f, key: '["k"]', premise: 0}
+  cut: false

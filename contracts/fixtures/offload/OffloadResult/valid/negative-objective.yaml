@@ -1,0 +1,8 @@
+step: plan_route
+unit: route-18
+input_sha256: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+model_sha256: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+status: best-found
+objective: "-350"
+payload: '{"order":["c","a","b"]}'
+solver: {name: minizinc+cp-sat, version: "2.9.3+9.12"}

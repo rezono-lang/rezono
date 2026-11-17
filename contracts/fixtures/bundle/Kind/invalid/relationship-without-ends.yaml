@@ -1,0 +1,11 @@
+id: connection
+stable_id: "Connection"
+span: {file: schema/core.yaml, line: "4", column: "3"}
+class: Connection
+layer: facts
+abstract: false
+identifier: id
+id_type: text
+module: core
+table: connection
+relationship: true

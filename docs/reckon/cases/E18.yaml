@@ -1,0 +1,13 @@
+id: E18
+status: settled
+mode: parse
+source: ask Host where memory_need
+expect:
+  diagnostics:
+  - code: R017
+    span:
+      text: memory_need
+      start: 15
+      end: 26
+sources:
+- '#350 P10.2a §11'

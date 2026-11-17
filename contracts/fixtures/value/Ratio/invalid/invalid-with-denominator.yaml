@@ -1,0 +1,3 @@
+# Invalid: an invalid ratio has no denominator (K11).
+denominator: 1
+state: invalid

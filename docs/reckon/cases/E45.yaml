@@ -1,0 +1,21 @@
+id: E45
+status: settled
+mode: evaluate
+source: ask Host where owner = team-platform and memory_need > 300 GiB
+data: appendix-b
+role: viewer
+expect:
+  answer:
+    rows:
+    - host-c
+    undecided:
+    - binder: host-a
+      state: unknown
+      reason: not_assigned
+    - binder: host-d
+      state: unknown
+      reason: no_spec
+    not_applicable: 0
+note: For host-d, unknown outranks n/a.
+sources:
+- '#350 P10.2a §11'

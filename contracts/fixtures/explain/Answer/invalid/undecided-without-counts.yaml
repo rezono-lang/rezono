@@ -1,0 +1,8 @@
+# Undecided rows come with the counts of the whole answer.
+format: rede.answer/1
+question: ask
+manifest_id: m-1
+nodes: []
+output_schema: s-e60191303ae97ad776d3b3c7136793c24ef83be5862327865b412399f5c9ac72
+undecided:
+  - {binder: host-a, state: unknown, reason: not_assigned}

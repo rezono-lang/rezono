@@ -1,0 +1,8 @@
+// Derived relations the calculation rules read: how many entries an item has, and whether it has any.
+// A count, not a sum: the inputs go up to 2**63 to reach overflow in the calculation, and a sum in a
+// rule would overflow first.
+.decl entry_total(item: symbol, total: number)
+entry_total(i, t) :- item(i), t = count : { entry__item(_, i) }.
+
+.decl has_entry(item: symbol)
+has_entry(i) :- entry__item(_, i).

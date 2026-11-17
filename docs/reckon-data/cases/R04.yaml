@@ -1,0 +1,34 @@
+id: R04
+class: valid
+status: settled
+schema:
+  from: fixture.schema.json
+  merge:
+    types:
+      Count:
+        of: Integer
+        min: '1'
+        max: '1000'
+    kinds:
+      Host:
+        slots:
+          count:
+            card: '1'
+            type: Count
+            states:
+            - known
+form: row
+input:
+  $kind: Host
+  $id: host-a
+  memory_need: 400 GiB
+  owner:
+    $unknown: not_assigned
+  tags:
+  - gpu
+  - lab
+  count: 12
+expect:
+  accept: true
+sources:
+- '#369 L0 rev 2 §8'

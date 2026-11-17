@@ -1,0 +1,12 @@
+# A calculation's view (W12, B10): its value is a number derived by its rule, in the unit its versions agree on.
+id: calc__hourly
+module: calc
+explain: materialize
+world: closed
+calc: hourly
+columns:
+  - {name: subject, type: string}
+  - {name: value, type: string}
+  - {name: state, type: string}
+  - {name: reason, type: string}
+semantic: {case: derived, base: number, unit: cents, derived: hourly}

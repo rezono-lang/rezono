@@ -1,0 +1,6 @@
+# The pack the standard-style LinkML schema beside it is imported into (test_linkml_schema.py): no schema of its
+# own, only what a pack needs besides one.
+name: linkml-standard
+version: 0.1.0
+default_language: en
+imports: []

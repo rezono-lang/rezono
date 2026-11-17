@@ -1,0 +1,9 @@
+connector: prov-o-out
+standard: PROV-O
+standard_version: "2013-04-30"
+direction: out
+losses:
+  - subject: access
+    what: Which role the export was made for.
+    fate: dropped
+    carried_by: ["rd:role"]

@@ -1,0 +1,31 @@
+id: G01
+class: valid
+status: settled
+schema:
+  from: fixture.schema.json
+  merge:
+    kinds:
+      ZoneRule:
+        world: closed
+        id:
+          type: Text
+        plane: control
+        owner: network
+        slots:
+          decision:
+            card: '1'
+            type: Text
+            states:
+            - known
+          allowed:
+            card: '1'
+            type: Bool
+            states:
+            - known
+form: schema
+expect:
+  accept: true
+  schema_id_differs_without: plane
+note: A control kind; without `plane` (and `owner`) the same document has another id.
+sources:
+- l0.md §3.7 (O13, O14)

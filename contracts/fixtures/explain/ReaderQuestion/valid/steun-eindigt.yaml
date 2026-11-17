@@ -1,0 +1,13 @@
+id: steun-eindigt
+title_message: reader.steun_eindigt
+about_message: reader.steun_eindigt.about
+relation: support_exposure
+proof: grounds
+columns:
+  - {column: s, message: reader.steun_eindigt.s, element: service}
+  - {column: e, message: reader.steun_eindigt.e, reading: yyyymmdd}
+context:
+  - kind: support_check
+    fields:
+      - {field: support_check.day, reading: yyyymmdd}
+      - {field: support_check.horizon_years}

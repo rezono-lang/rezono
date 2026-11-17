@@ -1,0 +1,967 @@
+{
+ "0-applications/calc__advice_allowance/A001": {
+  "conclusion": {
+   "key": "[\"A001\",\"15000\",\"known\",\"\"]",
+   "relation": "calc__advice_allowance"
+  },
+  "definition": "allowance_or_nothing",
+  "known_at": "2026-11-10",
+  "premises": [
+   {
+    "key": "[\"A001\"]",
+    "relation": "advised"
+   },
+   {
+    "key": "[\"A001\",\"254400\",\"known\",\"\"]",
+    "relation": "calc__cost_share"
+   }
+  ],
+  "reads": [
+   "advised",
+   "calc__as_of",
+   "scheme_parameter__name",
+   "scheme_parameter__valid_from",
+   "scheme_parameter__valid_until",
+   "scheme_parameter__value"
+  ],
+  "reason": "",
+  "rule": "advice_allowance",
+  "state": "known",
+  "steps": [
+   {
+    "op": "if",
+    "path": "allowance_or_nothing/value",
+    "reason": "",
+    "state": "known",
+    "value": "15000"
+   },
+   {
+    "op": "and",
+    "path": "allowance_or_nothing/value/0",
+    "reason": "",
+    "state": "known",
+    "value": "true"
+   },
+   {
+    "op": "fact",
+    "path": "allowance_or_nothing/value/0/0",
+    "reason": "",
+    "ref": "advised",
+    "relation": "advised",
+    "state": "known",
+    "value": "true"
+   },
+   {
+    "op": "lt",
+    "path": "allowance_or_nothing/value/0/1",
+    "reason": "",
+    "state": "known",
+    "value": "true"
+   },
+   {
+    "op": "rule",
+    "path": "allowance_or_nothing/value/0/1/1",
+    "reason": "",
+    "ref": "cost_share",
+    "relation": "calc__cost_share",
+    "state": "known",
+    "value": "254400"
+   },
+   {
+    "element": "par-07",
+    "op": "parameter",
+    "path": "allowance_or_nothing/value/1",
+    "reason": "",
+    "ref": "advice_allowance",
+    "relation": "scheme_parameter__value",
+    "state": "known",
+    "value": "15000"
+   }
+  ],
+  "valid_at": "2026-11-10",
+  "value": "15000",
+  "version": "2026"
+ },
+ "0-applications/calc__advice_allowance/A014": {
+  "conclusion": {
+   "key": "[\"A014\",\"\",\"unknown\",\"fact assessed_income.cents is missing\"]",
+   "relation": "calc__advice_allowance"
+  },
+  "definition": "allowance_or_nothing",
+  "known_at": "2026-11-10",
+  "premises": [
+   {
+    "key": "[\"A014\"]",
+    "relation": "advised"
+   },
+   {
+    "key": "[\"A014\",\"\",\"unknown\",\"fact assessed_income.cents is missing\"]",
+    "relation": "calc__cost_share"
+   }
+  ],
+  "reads": [
+   "advised",
+   "calc__as_of",
+   "scheme_parameter__name",
+   "scheme_parameter__valid_from",
+   "scheme_parameter__valid_until",
+   "scheme_parameter__value"
+  ],
+  "reason": "fact assessed_income.cents is missing",
+  "rule": "advice_allowance",
+  "state": "unknown",
+  "steps": [
+   {
+    "op": "if",
+    "path": "allowance_or_nothing/value",
+    "reason": "fact assessed_income.cents is missing",
+    "state": "unknown",
+    "value": ""
+   },
+   {
+    "op": "and",
+    "path": "allowance_or_nothing/value/0",
+    "reason": "fact assessed_income.cents is missing",
+    "state": "unknown",
+    "value": ""
+   },
+   {
+    "op": "fact",
+    "path": "allowance_or_nothing/value/0/0",
+    "reason": "",
+    "ref": "advised",
+    "relation": "advised",
+    "state": "known",
+    "value": "true"
+   },
+   {
+    "op": "lt",
+    "path": "allowance_or_nothing/value/0/1",
+    "reason": "fact assessed_income.cents is missing",
+    "state": "unknown",
+    "value": ""
+   },
+   {
+    "op": "rule",
+    "path": "allowance_or_nothing/value/0/1/1",
+    "reason": "fact assessed_income.cents is missing",
+    "ref": "cost_share",
+    "relation": "calc__cost_share",
+    "state": "unknown",
+    "value": ""
+   }
+  ],
+  "valid_at": "2026-11-10",
+  "value": "",
+  "version": "2026"
+ },
+ "0-applications/calc__award/A001": {
+  "conclusion": {
+   "key": "[\"A001\",\"269400\",\"known\",\"\"]",
+   "relation": "calc__award"
+  },
+  "definition": "at_most_the_maximum",
+  "known_at": "2026-11-10",
+  "premises": [
+   {
+    "key": "[\"A001\",\"269400\",\"known\",\"\"]",
+    "relation": "calc__entitlement"
+   }
+  ],
+  "reads": [
+   "calc__as_of",
+   "scheme_parameter__name",
+   "scheme_parameter__valid_from",
+   "scheme_parameter__valid_until",
+   "scheme_parameter__value"
+  ],
+  "reason": "",
+  "rule": "award",
+  "state": "known",
+  "steps": [
+   {
+    "op": "min",
+    "path": "at_most_the_maximum/value",
+    "reason": "",
+    "state": "known",
+    "value": "269400"
+   },
+   {
+    "op": "rule",
+    "path": "at_most_the_maximum/value/0",
+    "reason": "",
+    "ref": "entitlement",
+    "relation": "calc__entitlement",
+    "state": "known",
+    "value": "269400"
+   },
+   {
+    "element": "par-08",
+    "op": "parameter",
+    "path": "at_most_the_maximum/value/1",
+    "reason": "",
+    "ref": "maximum_award",
+    "relation": "scheme_parameter__value",
+    "state": "known",
+    "value": "500000"
+   }
+  ],
+  "valid_at": "2026-11-10",
+  "value": "269400",
+  "version": "2026"
+ },
+ "0-applications/calc__award/A003": {
+  "conclusion": {
+   "key": "[\"A003\",\"\",\"unknown\",\"fact assessed_income.cents is missing\"]",
+   "relation": "calc__award"
+  },
+  "definition": "at_most_the_maximum",
+  "known_at": "2026-11-10",
+  "premises": [
+   {
+    "key": "[\"A003\",\"\",\"unknown\",\"fact assessed_income.cents is missing\"]",
+    "relation": "calc__entitlement"
+   }
+  ],
+  "reads": [
+   "calc__as_of",
+   "scheme_parameter__name",
+   "scheme_parameter__valid_from",
+   "scheme_parameter__valid_until",
+   "scheme_parameter__value"
+  ],
+  "reason": "fact assessed_income.cents is missing",
+  "rule": "award",
+  "state": "unknown",
+  "steps": [
+   {
+    "op": "min",
+    "path": "at_most_the_maximum/value",
+    "reason": "fact assessed_income.cents is missing",
+    "state": "unknown",
+    "value": ""
+   },
+   {
+    "op": "rule",
+    "path": "at_most_the_maximum/value/0",
+    "reason": "fact assessed_income.cents is missing",
+    "ref": "entitlement",
+    "relation": "calc__entitlement",
+    "state": "unknown",
+    "value": ""
+   },
+   {
+    "element": "par-08",
+    "op": "parameter",
+    "path": "at_most_the_maximum/value/1",
+    "reason": "",
+    "ref": "maximum_award",
+    "relation": "scheme_parameter__value",
+    "state": "known",
+    "value": "500000"
+   }
+  ],
+  "valid_at": "2026-11-10",
+  "value": "",
+  "version": "2026"
+ },
+ "0-applications/calc__cost_share/A001": {
+  "conclusion": {
+   "key": "[\"A001\",\"254400\",\"known\",\"\"]",
+   "relation": "calc__cost_share"
+  },
+  "definition": "partial_rate",
+  "known_at": "2026-11-10",
+  "premises": [
+   {
+    "key": "[\"A001\",\"1060000\"]",
+    "relation": "assessed_costs"
+   },
+   {
+    "key": "[\"A001\",\"3140000\"]",
+    "relation": "assessed_income"
+   },
+   {
+    "key": "[\"A001\",\"4200000\",\"known\",\"\"]",
+    "relation": "calc__income_limit"
+   },
+   {
+    "key": "[\"A001\",\"3000000\",\"known\",\"\"]",
+    "relation": "calc__income_threshold"
+   }
+  ],
+  "reads": [
+   "assessed_costs",
+   "assessed_income",
+   "calc__as_of",
+   "scheme_parameter__name",
+   "scheme_parameter__valid_from",
+   "scheme_parameter__valid_until",
+   "scheme_parameter__value"
+  ],
+  "reason": "",
+  "rule": "cost_share",
+  "state": "known",
+  "steps": [
+   {
+    "op": "lte",
+    "path": "full_rate/when",
+    "reason": "",
+    "state": "known",
+    "value": "false"
+   },
+   {
+    "op": "fact",
+    "path": "full_rate/when/0",
+    "reason": "",
+    "ref": "assessed_income.cents",
+    "relation": "assessed_income",
+    "state": "known",
+    "value": "3140000"
+   },
+   {
+    "op": "rule",
+    "path": "full_rate/when/1",
+    "reason": "",
+    "ref": "income_threshold",
+    "relation": "calc__income_threshold",
+    "state": "known",
+    "value": "3000000"
+   },
+   {
+    "op": "and",
+    "path": "partial_rate/when",
+    "reason": "",
+    "state": "known",
+    "value": "true"
+   },
+   {
+    "op": "lt",
+    "path": "partial_rate/when/0",
+    "reason": "",
+    "state": "known",
+    "value": "true"
+   },
+   {
+    "op": "rule",
+    "path": "partial_rate/when/0/0",
+    "reason": "",
+    "ref": "income_threshold",
+    "relation": "calc__income_threshold",
+    "state": "known",
+    "value": "3000000"
+   },
+   {
+    "op": "fact",
+    "path": "partial_rate/when/0/1",
+    "reason": "",
+    "ref": "assessed_income.cents",
+    "relation": "assessed_income",
+    "state": "known",
+    "value": "3140000"
+   },
+   {
+    "op": "lte",
+    "path": "partial_rate/when/1",
+    "reason": "",
+    "state": "known",
+    "value": "true"
+   },
+   {
+    "op": "fact",
+    "path": "partial_rate/when/1/0",
+    "reason": "",
+    "ref": "assessed_income.cents",
+    "relation": "assessed_income",
+    "state": "known",
+    "value": "3140000"
+   },
+   {
+    "op": "rule",
+    "path": "partial_rate/when/1/1",
+    "reason": "",
+    "ref": "income_limit",
+    "relation": "calc__income_limit",
+    "state": "known",
+    "value": "4200000"
+   },
+   {
+    "op": "lt",
+    "path": "above_the_limit/when",
+    "reason": "",
+    "state": "known",
+    "value": "false"
+   },
+   {
+    "op": "rule",
+    "path": "above_the_limit/when/0",
+    "reason": "",
+    "ref": "income_limit",
+    "relation": "calc__income_limit",
+    "state": "known",
+    "value": "4200000"
+   },
+   {
+    "op": "fact",
+    "path": "above_the_limit/when/1",
+    "reason": "",
+    "ref": "assessed_income.cents",
+    "relation": "assessed_income",
+    "state": "known",
+    "value": "3140000"
+   },
+   {
+    "op": "round",
+    "path": "partial_rate/value",
+    "reason": "",
+    "state": "known",
+    "value": "254400"
+   },
+   {
+    "op": "ratio",
+    "path": "partial_rate/value/0",
+    "reason": "",
+    "state": "known",
+    "value": "254400"
+   },
+   {
+    "op": "fact",
+    "path": "partial_rate/value/0/0",
+    "reason": "",
+    "ref": "assessed_costs.cents",
+    "relation": "assessed_costs",
+    "state": "known",
+    "value": "1060000"
+   },
+   {
+    "element": "par-06",
+    "op": "parameter",
+    "path": "partial_rate/value/0/1",
+    "reason": "",
+    "ref": "partial_rate",
+    "relation": "scheme_parameter__value",
+    "state": "known",
+    "value": "240000"
+   }
+  ],
+  "valid_at": "2026-11-10",
+  "value": "254400",
+  "version": "2026"
+ },
+ "0-applications/calc__cost_share/A003": {
+  "conclusion": {
+   "key": "[\"A003\",\"\",\"unknown\",\"fact assessed_income.cents is missing\"]",
+   "relation": "calc__cost_share"
+  },
+  "definition": "",
+  "known_at": "2026-11-10",
+  "premises": [
+   {
+    "key": "[\"A003\",\"3800000\",\"known\",\"\"]",
+    "relation": "calc__income_limit"
+   },
+   {
+    "key": "[\"A003\",\"2600000\",\"known\",\"\"]",
+    "relation": "calc__income_threshold"
+   }
+  ],
+  "reads": [
+   "assessed_costs",
+   "assessed_income",
+   "calc__as_of",
+   "scheme_parameter__name",
+   "scheme_parameter__valid_from",
+   "scheme_parameter__valid_until",
+   "scheme_parameter__value"
+  ],
+  "reason": "fact assessed_income.cents is missing",
+  "rule": "cost_share",
+  "state": "unknown",
+  "steps": [
+   {
+    "op": "lte",
+    "path": "full_rate/when",
+    "reason": "fact assessed_income.cents is missing",
+    "state": "unknown",
+    "value": ""
+   },
+   {
+    "op": "fact",
+    "path": "full_rate/when/0",
+    "reason": "fact assessed_income.cents is missing",
+    "ref": "assessed_income.cents",
+    "relation": "assessed_income",
+    "state": "unknown",
+    "value": ""
+   },
+   {
+    "op": "rule",
+    "path": "full_rate/when/1",
+    "reason": "",
+    "ref": "income_threshold",
+    "relation": "calc__income_threshold",
+    "state": "known",
+    "value": "2600000"
+   },
+   {
+    "op": "and",
+    "path": "partial_rate/when",
+    "reason": "fact assessed_income.cents is missing",
+    "state": "unknown",
+    "value": ""
+   },
+   {
+    "op": "lt",
+    "path": "partial_rate/when/0",
+    "reason": "fact assessed_income.cents is missing",
+    "state": "unknown",
+    "value": ""
+   },
+   {
+    "op": "rule",
+    "path": "partial_rate/when/0/0",
+    "reason": "",
+    "ref": "income_threshold",
+    "relation": "calc__income_threshold",
+    "state": "known",
+    "value": "2600000"
+   },
+   {
+    "op": "fact",
+    "path": "partial_rate/when/0/1",
+    "reason": "fact assessed_income.cents is missing",
+    "ref": "assessed_income.cents",
+    "relation": "assessed_income",
+    "state": "unknown",
+    "value": ""
+   },
+   {
+    "op": "lte",
+    "path": "partial_rate/when/1",
+    "reason": "fact assessed_income.cents is missing",
+    "state": "unknown",
+    "value": ""
+   },
+   {
+    "op": "fact",
+    "path": "partial_rate/when/1/0",
+    "reason": "fact assessed_income.cents is missing",
+    "ref": "assessed_income.cents",
+    "relation": "assessed_income",
+    "state": "unknown",
+    "value": ""
+   },
+   {
+    "op": "rule",
+    "path": "partial_rate/when/1/1",
+    "reason": "",
+    "ref": "income_limit",
+    "relation": "calc__income_limit",
+    "state": "known",
+    "value": "3800000"
+   },
+   {
+    "op": "lt",
+    "path": "above_the_limit/when",
+    "reason": "fact assessed_income.cents is missing",
+    "state": "unknown",
+    "value": ""
+   },
+   {
+    "op": "rule",
+    "path": "above_the_limit/when/0",
+    "reason": "",
+    "ref": "income_limit",
+    "relation": "calc__income_limit",
+    "state": "known",
+    "value": "3800000"
+   },
+   {
+    "op": "fact",
+    "path": "above_the_limit/when/1",
+    "reason": "fact assessed_income.cents is missing",
+    "ref": "assessed_income.cents",
+    "relation": "assessed_income",
+    "state": "unknown",
+    "value": ""
+   }
+  ],
+  "valid_at": "2026-11-10",
+  "value": "",
+  "version": "2026"
+ },
+ "0-applications/calc__entitlement/A001": {
+  "conclusion": {
+   "key": "[\"A001\",\"269400\",\"known\",\"\"]",
+   "relation": "calc__entitlement"
+  },
+  "definition": "share_plus_allowance",
+  "known_at": "2026-11-10",
+  "premises": [
+   {
+    "key": "[\"A001\",\"15000\",\"known\",\"\"]",
+    "relation": "calc__advice_allowance"
+   },
+   {
+    "key": "[\"A001\",\"254400\",\"known\",\"\"]",
+    "relation": "calc__cost_share"
+   }
+  ],
+  "reads": [
+   "calc__as_of"
+  ],
+  "reason": "",
+  "rule": "entitlement",
+  "state": "known",
+  "steps": [
+   {
+    "op": "add",
+    "path": "share_plus_allowance/value",
+    "reason": "",
+    "state": "known",
+    "value": "269400"
+   },
+   {
+    "op": "rule",
+    "path": "share_plus_allowance/value/0",
+    "reason": "",
+    "ref": "cost_share",
+    "relation": "calc__cost_share",
+    "state": "known",
+    "value": "254400"
+   },
+   {
+    "op": "rule",
+    "path": "share_plus_allowance/value/1",
+    "reason": "",
+    "ref": "advice_allowance",
+    "relation": "calc__advice_allowance",
+    "state": "known",
+    "value": "15000"
+   }
+  ],
+  "valid_at": "2026-11-10",
+  "value": "269400",
+  "version": "2026"
+ },
+ "0-applications/calc__entitlement/A003": {
+  "conclusion": {
+   "key": "[\"A003\",\"\",\"unknown\",\"fact assessed_income.cents is missing\"]",
+   "relation": "calc__entitlement"
+  },
+  "definition": "share_plus_allowance",
+  "known_at": "2026-11-10",
+  "premises": [
+   {
+    "key": "[\"A003\",\"0\",\"known\",\"\"]",
+    "relation": "calc__advice_allowance"
+   },
+   {
+    "key": "[\"A003\",\"\",\"unknown\",\"fact assessed_income.cents is missing\"]",
+    "relation": "calc__cost_share"
+   }
+  ],
+  "reads": [
+   "calc__as_of"
+  ],
+  "reason": "fact assessed_income.cents is missing",
+  "rule": "entitlement",
+  "state": "unknown",
+  "steps": [
+   {
+    "op": "add",
+    "path": "share_plus_allowance/value",
+    "reason": "fact assessed_income.cents is missing",
+    "state": "unknown",
+    "value": ""
+   },
+   {
+    "op": "rule",
+    "path": "share_plus_allowance/value/0",
+    "reason": "fact assessed_income.cents is missing",
+    "ref": "cost_share",
+    "relation": "calc__cost_share",
+    "state": "unknown",
+    "value": ""
+   },
+   {
+    "op": "rule",
+    "path": "share_plus_allowance/value/1",
+    "reason": "",
+    "ref": "advice_allowance",
+    "relation": "calc__advice_allowance",
+    "state": "known",
+    "value": "0"
+   }
+  ],
+  "valid_at": "2026-11-10",
+  "value": "",
+  "version": "2026"
+ },
+ "0-applications/calc__income_limit/A001": {
+  "conclusion": {
+   "key": "[\"A001\",\"4200000\",\"known\",\"\"]",
+   "relation": "calc__income_limit"
+  },
+  "definition": "threshold_plus_margin",
+  "known_at": "2026-11-10",
+  "premises": [
+   {
+    "key": "[\"A001\",\"3000000\",\"known\",\"\"]",
+    "relation": "calc__income_threshold"
+   }
+  ],
+  "reads": [
+   "calc__as_of",
+   "scheme_parameter__name",
+   "scheme_parameter__valid_from",
+   "scheme_parameter__valid_until",
+   "scheme_parameter__value"
+  ],
+  "reason": "",
+  "rule": "income_limit",
+  "state": "known",
+  "steps": [
+   {
+    "op": "add",
+    "path": "threshold_plus_margin/value",
+    "reason": "",
+    "state": "known",
+    "value": "4200000"
+   },
+   {
+    "op": "rule",
+    "path": "threshold_plus_margin/value/0",
+    "reason": "",
+    "ref": "income_threshold",
+    "relation": "calc__income_threshold",
+    "state": "known",
+    "value": "3000000"
+   },
+   {
+    "element": "par-03",
+    "op": "parameter",
+    "path": "threshold_plus_margin/value/1",
+    "reason": "",
+    "ref": "income_margin",
+    "relation": "scheme_parameter__value",
+    "state": "known",
+    "value": "1200000"
+   }
+  ],
+  "valid_at": "2026-11-10",
+  "value": "4200000",
+  "version": "2026"
+ },
+ "0-applications/calc__income_threshold/A001": {
+  "conclusion": {
+   "key": "[\"A001\",\"3000000\",\"known\",\"\"]",
+   "relation": "calc__income_threshold"
+  },
+  "definition": "base_plus_persons",
+  "known_at": "2026-11-10",
+  "premises": [
+   {
+    "key": "[\"A001\",\"3\"]",
+    "relation": "household_size"
+   }
+  ],
+  "reads": [
+   "calc__as_of",
+   "household_size",
+   "scheme_parameter__name",
+   "scheme_parameter__valid_from",
+   "scheme_parameter__valid_until",
+   "scheme_parameter__value"
+  ],
+  "reason": "",
+  "rule": "income_threshold",
+  "state": "known",
+  "steps": [
+   {
+    "op": "add",
+    "path": "base_plus_persons/value",
+    "reason": "",
+    "state": "known",
+    "value": "3000000"
+   },
+   {
+    "element": "par-01",
+    "op": "parameter",
+    "path": "base_plus_persons/value/0",
+    "reason": "",
+    "ref": "income_threshold_base",
+    "relation": "scheme_parameter__value",
+    "state": "known",
+    "value": "2400000"
+   },
+   {
+    "op": "ratio",
+    "path": "base_plus_persons/value/1",
+    "reason": "",
+    "state": "known",
+    "value": "600000"
+   },
+   {
+    "op": "fact",
+    "path": "base_plus_persons/value/1/0",
+    "reason": "",
+    "ref": "household_size.persons",
+    "relation": "household_size",
+    "state": "known",
+    "value": "3"
+   },
+   {
+    "element": "par-02",
+    "op": "parameter",
+    "path": "base_plus_persons/value/1/1",
+    "reason": "",
+    "ref": "income_threshold_per_person",
+    "relation": "scheme_parameter__value",
+    "state": "known",
+    "value": "200000"
+   }
+  ],
+  "valid_at": "2026-11-10",
+  "value": "3000000",
+  "version": "2026"
+ },
+ "0-applications/calc__payment_difference/A001": {
+  "conclusion": {
+   "key": "[\"A001\",\"0\",\"known\",\"\"]",
+   "relation": "calc__payment_difference"
+  },
+  "definition": "paid_minus_award",
+  "known_at": "2026-11-10",
+  "premises": [
+   {
+    "key": "[\"A001\",\"269400\",\"known\",\"\"]",
+    "relation": "calc__award"
+   },
+   {
+    "key": "[\"A001\",\"269400\"]",
+    "relation": "ledger_paid"
+   },
+   {
+    "key": "[\"A001\"]",
+    "relation": "paid"
+   }
+  ],
+  "reads": [
+   "calc__as_of",
+   "ledger_paid",
+   "paid"
+  ],
+  "reason": "",
+  "rule": "payment_difference",
+  "state": "known",
+  "steps": [
+   {
+    "op": "fact",
+    "path": "paid_minus_award/when",
+    "reason": "",
+    "ref": "paid",
+    "relation": "paid",
+    "state": "known",
+    "value": "true"
+   },
+   {
+    "op": "sub",
+    "path": "paid_minus_award/value",
+    "reason": "",
+    "state": "known",
+    "value": "0"
+   },
+   {
+    "op": "fact",
+    "path": "paid_minus_award/value/0",
+    "reason": "",
+    "ref": "ledger_paid.cents",
+    "relation": "ledger_paid",
+    "state": "known",
+    "value": "269400"
+   },
+   {
+    "op": "rule",
+    "path": "paid_minus_award/value/1",
+    "reason": "",
+    "ref": "award",
+    "relation": "calc__award",
+    "state": "known",
+    "value": "269400"
+   }
+  ],
+  "valid_at": "2026-11-10",
+  "value": "0",
+  "version": "2026"
+ },
+ "0-applications/calc__payment_difference/A003": {
+  "conclusion": {
+   "key": "[\"A003\",\"\",\"unknown\",\"fact assessed_income.cents is missing\"]",
+   "relation": "calc__payment_difference"
+  },
+  "definition": "paid_minus_award",
+  "known_at": "2026-11-10",
+  "premises": [
+   {
+    "key": "[\"A003\",\"\",\"unknown\",\"fact assessed_income.cents is missing\"]",
+    "relation": "calc__award"
+   },
+   {
+    "key": "[\"A003\",\"131020\"]",
+    "relation": "ledger_paid"
+   },
+   {
+    "key": "[\"A003\"]",
+    "relation": "paid"
+   }
+  ],
+  "reads": [
+   "calc__as_of",
+   "ledger_paid",
+   "paid"
+  ],
+  "reason": "fact assessed_income.cents is missing",
+  "rule": "payment_difference",
+  "state": "unknown",
+  "steps": [
+   {
+    "op": "fact",
+    "path": "paid_minus_award/when",
+    "reason": "",
+    "ref": "paid",
+    "relation": "paid",
+    "state": "known",
+    "value": "true"
+   },
+   {
+    "op": "sub",
+    "path": "paid_minus_award/value",
+    "reason": "fact assessed_income.cents is missing",
+    "state": "unknown",
+    "value": ""
+   },
+   {
+    "op": "fact",
+    "path": "paid_minus_award/value/0",
+    "reason": "",
+    "ref": "ledger_paid.cents",
+    "relation": "ledger_paid",
+    "state": "known",
+    "value": "131020"
+   },
+   {
+    "op": "rule",
+    "path": "paid_minus_award/value/1",
+    "reason": "fact assessed_income.cents is missing",
+    "ref": "award",
+    "relation": "calc__award",
+    "state": "unknown",
+    "value": ""
+   }
+  ],
+  "valid_at": "2026-11-10",
+  "value": "",
+  "version": "2026"
+ }
+}

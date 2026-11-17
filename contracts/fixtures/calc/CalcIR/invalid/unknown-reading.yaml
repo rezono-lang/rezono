@@ -1,0 +1,8 @@
+# A fact is read in one of five ways; "guess" is none of them (W11: the compiler guesses nothing).
+format: rede.calc-ir/1
+pack: offers
+subject: offer
+subject_table: offer
+as_of: calc__as_of
+facts:
+  - {id: offer.hours, type: number, reads: guess, table: offer__hours, index: 1}

@@ -1,0 +1,29 @@
+# An integer variable compared with a constant that is not an integer.
+format: rede.rules/1
+pack: fixture
+relations:
+  - name: member
+    role: base
+    key: [{name: id, type: string}]
+  - name: hours
+    role: base
+    key: [{name: member, type: string}, {name: task, type: string}]
+    values: [{name: h, type: integer}]
+  - name: busy_member
+    role: derived
+    key: [{name: member, type: string}]
+    module: load
+    explain: materialize
+rules:
+  - id: busy_member
+    module: load
+    stratum: "1"
+    head: {relation: busy_member, terms: ["?m"]}
+    body:
+      - {relation: member, terms: ["?m"], polarity: positive, stratum: "0"}
+    aggregates:
+      - {relation: hours, terms: ["?m", "_"], function: count, as: "?n", stratum: "0"}
+    conditions:
+      - {op: lt, left: "?n", right: "oops"}
+    witness: {relation: busy_member__witness, variables: ["?m", "?n"]}
+    origin: {file: rules/load.dl, line: "1"}

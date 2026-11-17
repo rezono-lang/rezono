@@ -1,0 +1,123 @@
+# A variable is '?' and snake_case.
+format: rede.rules/1
+pack: fixture
+relations:
+- name: blocked
+  role: derived
+  key:
+  - {name: task, type: string}
+  module: planning
+  explain: materialize
+- name: depends_on
+  role: derived
+  key:
+  - {name: task, type: string}
+  - {name: prerequisite, type: string}
+  module: planning
+  explain: on_demand
+- name: dependency__prerequisite
+  role: base
+  key:
+  - {name: id, type: string}
+  - {name: v, type: string}
+- name: dependency__task
+  role: base
+  key:
+  - {name: id, type: string}
+  - {name: v, type: string}
+- name: ready
+  role: derived
+  key:
+  - {name: task, type: string}
+  module: planning
+  explain: materialize
+- name: task
+  role: base
+  key:
+  - {name: id, type: string}
+- name: task__status
+  role: base
+  key:
+  - {name: id, type: string}
+  - {name: v, type: string}
+rules:
+- id: blocked_open_prerequisite
+  module: planning
+  stratum: '1'
+  head:
+    relation: blocked
+    terms: ['?t']
+  body:
+  - relation: depends_on
+    terms: ['?t', '?p']
+    polarity: positive
+    stratum: '1'
+  - relation: task__status
+    terms: ['?p', open]
+    polarity: positive
+    stratum: '0'
+  witness:
+    relation: blocked_open_prerequisite__witness
+    variables: ['?p', '?t']
+  origin: {file: rules/planning.dl, line: '9'}
+- id: depends_on_direct
+  module: planning
+  stratum: '1'
+  head:
+    relation: depends_on
+    terms: ['?T', '?p']
+  body:
+  - relation: dependency__task
+    terms: ['?d', '?t']
+    polarity: positive
+    stratum: '0'
+  - relation: dependency__prerequisite
+    terms: ['?d', '?p']
+    polarity: positive
+    stratum: '0'
+  witness:
+    relation: depends_on_direct__witness
+    variables: ['?d', '?p', '?t']
+  origin: {file: rules/planning.dl, line: '1'}
+- id: depends_on_step
+  module: planning
+  stratum: '1'
+  head:
+    relation: depends_on
+    terms: ['?t', '?q']
+  body:
+  - relation: depends_on
+    terms: ['?t', '?p']
+    polarity: positive
+    stratum: '1'
+  - relation: dependency__task
+    terms: ['?d', '?p']
+    polarity: positive
+    stratum: '0'
+  - relation: dependency__prerequisite
+    terms: ['?d', '?q']
+    polarity: positive
+    stratum: '0'
+  witness:
+    relation: depends_on_step__witness
+    variables: ['?d', '?p', '?q', '?t']
+  origin: {file: rules/planning.dl, line: '4'}
+- id: ready_not_blocked
+  module: planning
+  stratum: '2'
+  head:
+    relation: ready
+    terms: ['?t']
+  body:
+  - relation: task
+    terms: ['?t']
+    polarity: positive
+    stratum: '0'
+  - relation: blocked
+    terms: ['?t']
+    polarity: negative
+    stratum: '1'
+  witness:
+    relation: ready_not_blocked__witness
+    variables: ['?t']
+  origin: {file: rules/planning.dl, line: '12'}

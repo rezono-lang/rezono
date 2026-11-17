@@ -1,0 +1,96 @@
+# Labels as facts: label(element_id, en, text). One per kind, slot, enum value and derived relation,
+# so nothing a reader sees is an identifier. The scheme's labels are in the pack that defines it
+# (examples/subsidy-scheme); these are the ledger's, the roles' and those of this pack's own rules.
+ledger_payment: ledger payment
+ledger_payment.application: application
+ledger_payment.booked_on: booked on
+ledger_payment.amount: amount
+period_close: close of the ledger
+period_close.closed_until: closed until
+period_close.covers: closed payments
+closed_payment: closed payment
+closed_payment.element: payment
+closed_payment.sha256: row hash
+role: role
+role.title: title
+trust_entry: trust entry
+trust_entry.title: title
+trust_entry.issuer: issuer
+trust_entry.attribute: attribute
+trust_entry.node: node
+trust_entry.valid_from: valid from
+trust_entry.valid_from_day: valid from (day)
+trust_entry.valid_until: valid until
+trust_entry.valid_until_day: valid until (day)
+credential: credential
+credential.title: title
+credential.issuer: issuer
+credential.subject: person
+credential.issued_on: issued on
+credential.issued_on_day: issued on (day)
+credential_claim: claim
+credential_claim.credential: credential
+credential_claim.attribute: attribute
+credential_claim.value: value
+identity_statement: identity statement
+identity_statement.title: title
+identity_statement.issuer: issuer
+identity_statement.issued_on: issued on
+identity_statement.issued_on_day: issued on (day)
+identity_statement.first_node: first node
+identity_statement.first_identifier: first identifier
+identity_statement.second_node: second node
+identity_statement.second_identifier: second identifier
+status_lookup: status lookup
+status_lookup.credential: credential
+status_lookup.statement: identity statement
+status_lookup.status: status
+status_lookup.looked_up_on: looked up on
+status_lookup.looked_up_on_day: looked up on (day)
+status_value: status
+status_value.valid: valid
+status_value.revoked: revoked
+status_value.suspended: suspended
+# Derived relations (rules/*.dl).
+ledger_line: accepted ledger payment
+paid: application with a payment
+ledger_paid: paid according to the ledger
+issuer_authorised: issuer authorised for the claim
+authorised: claim of an authorised issuer
+status_withdrawn: credential revoked or suspended
+in_good_standing: credential in good standing
+disclosed: disclosed claim
+not_disclosed: claim not disclosed
+claim_assessment: assessment of a claim
+attested: attested
+stated: identifiers an identity statement names
+statement_scope: node a trust entry lets the statement's issuer name
+statement_covered: trust entry that covers the statement on a lookup day
+statement_authorised: issuer authorised for the identity statement
+authoritative: identity statement of an authorised issuer
+scoped: identity statement whose issuer may name both nodes
+statement_seen: identity statement looked up
+statement_withdrawn: identity statement revoked or suspended
+statement_in_good_standing: identity statement in good standing
+same_subject: one person at two nodes
+names_here: identity statement that names a credential's subject here
+named_here: credential whose subject a statement names here
+identified: the municipality's identifier for a credential's subject
+is_identified: credential whose subject the municipality knows
+subject_identification: identification of a credential's subject
+attested_here: attested of a person the municipality knows
+looked_up: status lookup of a credential or a statement
+status_lookup_not_of_one: status lookup not of exactly one credential or statement
+may_read: may read
+# The view of std-time (views.yaml): what the compiler makes from the scheme's own facts.
+std_time_axis: calendar read as a time axis
+std_time_interval: scheme parameter read as a period of validity
+std_time_interval_start: first day of validity, counted
+std_time_interval_end: first day no longer valid, counted
+std_time_interval_on_axis: calendar of a period of validity
+std_time_reference_point: evaluation day read as a reference
+std_time_reference_point_position: evaluation day, counted
+std_time_reference_point_position_no_day: evaluation day that is no calendar day
+std_time_reference_point_horizon: horizon of an evaluation day
+std_time_reference_point_horizon_out_of_range: evaluation day with a horizon below zero
+std_time_reference_point_on_axis: calendar of an evaluation day

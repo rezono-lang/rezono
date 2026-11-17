@@ -1,0 +1,11 @@
+# The cluster of run/kind.sh: one node of plain Kubernetes. kind's own network plugin enforces NetworkPolicies.
+# The registry setting lets the node pull the images the run built from the run's registry over plain HTTP
+# (kind.sh writes the hosts.toml for it); nothing else differs from a default kind cluster.
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+nodes:
+  - role: control-plane
+containerdConfigPatches:
+  - |-
+    [plugins."io.containerd.grpc.v1.cri".registry]
+      config_path = "/etc/containerd/certs.d"

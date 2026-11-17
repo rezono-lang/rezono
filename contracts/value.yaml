@@ -1,0 +1,102 @@
+id: https://rede.dev/contracts/value
+name: rede_value
+title: Values with an explicit state
+description: >-
+  Every derived value carries its state and, when one is given, its reason. Unknown is never
+  zero. Amounts and quantities are integer minor units with a unit or currency; ratios are exact
+  fractions. A value that is not known has no payload member at all (not an empty one), and a
+  writer omits an empty reason, so one meaning has one spelling (docs/semantics/values.md §2.3,
+  §7 K1, K2, K11).
+prefixes:
+  linkml: https://w3id.org/linkml/
+  rede: https://rede.dev/contracts/
+default_prefix: rede
+default_range: string
+imports:
+  - linkml:types
+
+slots:
+  reason:
+    range: string
+    pattern: "^[a-z][a-z0-9_]*$"
+    description: >-
+      Why the value has its state: a reason code, never free text. Core codes need no declaration
+      (no_version_applies, versions_overlap, exception_conflict, no_row_applies, ambiguous_date,
+      empty, added_later); a pack declares its own. Absent when no reason is given: a writer omits
+      an empty reason. A known value carries none, except added_later (docs/semantics/values.md §2.3).
+
+enums:
+  ValueState:
+    description: >-
+      The four states of a value. Their codes 0 known, 1 not_applicable, 2 unknown, 3 invalid are
+      also the precedence order: a result derived from several states takes the highest
+      (Reckon v0 §7b; docs/semantics/values.md §3).
+    permissible_values:
+      known: {description: "Code 0. The value is present and valid."}
+      unknown: {description: "Code 2. The value should exist but is missing. Never treated as zero."}
+      not_applicable: {description: "Code 1. The value does not apply here. Does not count."}
+      invalid: {description: "Code 3. The input contradicts the schema (for example overflow or a type error). Whether it blocks is decided at its decision point."}
+
+classes:
+  Value:
+    description: A scalar with its state.
+    slots: [reason]
+    attributes:
+      value: {range: string, description: Canonical text form; absent unless state is known.}
+      state: {range: ValueState, required: true, description: State of the value.}
+    rules:
+      - description: A value that is not known has no payload.
+        preconditions: {slot_conditions: {state: {none_of: [{equals_string: known}]}}}
+        postconditions: {slot_conditions: {value: {value_presence: ABSENT}}}
+      - description: A known value has no reason, except the core code added_later.
+        preconditions: {slot_conditions: {reason: {value_presence: PRESENT, none_of: [{equals_string: added_later}]}}}
+        postconditions: {slot_conditions: {state: {none_of: [{equals_string: known}]}}}
+
+  Amount:
+    description: Money as integer minor units with an ISO 4217 currency.
+    slots: [reason]
+    attributes:
+      minor_units: {range: integer, description: Integer minor units; absent unless state is known.}
+      currency: {range: string, required: true, pattern: "^[A-Z]{3}$", description: ISO 4217 currency code.}
+      state: {range: ValueState, required: true, description: State of the amount.}
+    rules:
+      - description: A value that is not known has no payload.
+        preconditions: {slot_conditions: {state: {none_of: [{equals_string: known}]}}}
+        postconditions: {slot_conditions: {minor_units: {value_presence: ABSENT}}}
+      - description: A known value has no reason, except the core code added_later.
+        preconditions: {slot_conditions: {reason: {value_presence: PRESENT, none_of: [{equals_string: added_later}]}}}
+        postconditions: {slot_conditions: {state: {none_of: [{equals_string: known}]}}}
+
+  Quantity:
+    description: A measured quantity as integer minor units with a UCUM unit.
+    slots: [reason]
+    attributes:
+      minor_units: {range: integer, description: Integer minor units; absent unless state is known.}
+      scale: {range: integer, description: "Number of decimals in minor_units: kg with scale 0, g with scale 3."}
+      unit: {range: string, required: true, description: UCUM unit.}
+      state: {range: ValueState, required: true, description: State of the quantity.}
+    rules:
+      - description: A value that is not known has no payload.
+        preconditions: {slot_conditions: {state: {none_of: [{equals_string: known}]}}}
+        postconditions: {slot_conditions: {minor_units: {value_presence: ABSENT}}}
+      - description: A known value has no reason, except the core code added_later.
+        preconditions: {slot_conditions: {reason: {value_presence: PRESENT, none_of: [{equals_string: added_later}]}}}
+        postconditions: {slot_conditions: {state: {none_of: [{equals_string: known}]}}}
+
+  Ratio:
+    description: An exact fraction in canonical form (positive denominator, gcd 1).
+    slots: [reason]
+    attributes:
+      numerator: {range: integer, description: Numerator; absent unless state is known.}
+      denominator: {range: integer, minimum_value: 1, description: "Denominator of at least 1; absent unless state is known."}
+      state: {range: ValueState, required: true, description: State of the ratio.}
+    rules:
+      - description: A value that is not known has no payload.
+        preconditions: {slot_conditions: {state: {none_of: [{equals_string: known}]}}}
+        postconditions: {slot_conditions: {numerator: {value_presence: ABSENT}}}
+      - description: A value that is not known has no denominator either.
+        preconditions: {slot_conditions: {state: {none_of: [{equals_string: known}]}}}
+        postconditions: {slot_conditions: {denominator: {value_presence: ABSENT}}}
+      - description: A known value has no reason, except the core code added_later.
+        preconditions: {slot_conditions: {reason: {value_presence: PRESENT, none_of: [{equals_string: added_later}]}}}
+        postconditions: {slot_conditions: {state: {none_of: [{equals_string: known}]}}}

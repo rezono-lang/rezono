@@ -1,0 +1,28 @@
+@locale en
+---
+# Sentences of std-part, neutral. A domain replaces them with a message of the same id (S14).
+arrow.total = {{Every {$kind} has exactly one {$arrow}.}}
+arrow.partial = {{Every {$kind} has at most one {$arrow}.}}
+attribute.total = {{Every {$kind} has exactly one {$attribute}.}}
+attribute.partial = {{Every {$kind} has at most one {$attribute}.}}
+arrow.many.partial = {{Every {$kind} can have more than one {$arrow}.}}
+attribute.many.partial = {{Every {$kind} can have more than one {$attribute}.}}
+is_a = {{Every {$kind} is a {$parent}.}}
+unique_key = {{{$key} belongs to at most one {$kind}.}}
+path_equation = {{For every {$kind}: {$equation}.}}
+# One sentence per rule (rules/part.dl): rule.<rule-id>, with the rule's variables.
+rule.within_1 = {{{$x} is a part of {$w}.}}
+rule.within_2 = {{{$x} is within {$v}, and {$v} is a part of {$w}, so {$x} is within {$w}.}}
+rule.has_whole = {{{$x} is a part of {$w}.}}
+rule.outermost = {{{$x} is within {$w}, and {$w} is a part of nothing.}}
+rule.part_cycle = {{{$x} is within itself: the parts form a cycle.}}
+# Explanation questions: the generic grounds and reach, narrowed to part and whole.
+explain.part_grounds = What it is part of
+explain.part_grounds.question = {{What is {$element} a part of?}}
+explain.part_reach = What it consists of
+explain.part_reach.question = {{What does {$element} consist of?}}
+explain.outside = Outside your view
+explain.more = More from here
+explain.empty = {{No answer for {$element}.}}
+# The standard Flow.
+flow.parts = Parts and wholes

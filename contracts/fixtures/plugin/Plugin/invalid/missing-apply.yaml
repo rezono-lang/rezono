@@ -1,0 +1,7 @@
+name: example-plugin
+version: 1.0.0
+image: example.invalid/rede/plugin@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+direction: [out]
+effect:
+  plan: preview
+  status: read-status

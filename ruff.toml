@@ -1,0 +1,12 @@
+# Ruff, the Python linter of CI (RV-I05, docs/ci.md section 5). scripts/lint.sh runs the F rules (pyflakes:
+# an unused import or variable, an undefined or redefined name) over every Python file and fails on any; it
+# reports a wider set as warnings only.
+target-version = "py313"
+# The types contracts/gen-types.sh generates from contracts/*.yaml: their imports are the generator's.
+extend-exclude = ["contracts/python/rede_contracts"]
+
+[lint.per-file-ignores]
+# pytest passes a fixture imported from another test module by its name as an argument, which F811 reads as a
+# redefinition. The import itself is marked where it stands (`# noqa: F401`, a fixture).
+"**/test_*.py" = ["F811"]
+"**/tests/**" = ["F811"]

@@ -1,0 +1,8 @@
+kind: query
+name: example-api/items/7
+url: https://api.example.invalid/v2/items/7
+revision: v2
+position: resource-version-42
+ownership: third_party
+licence: LicenseRef-fixture
+attribution: Example operator

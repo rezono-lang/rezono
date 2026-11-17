@@ -1,0 +1,38 @@
+# A calculated value (decision W12): run_min_cents = round(ratio(hourly_cents, hours_min, 1)) for one
+# offer, with the witness of hourly_cents as its premise. Constants have no step.
+root: {relation: calc__run_min_cents, key: '["niveau1/scaleway","158","known",""]'}
+manifest_id: manifest-epoch-7
+calc_witnesses:
+  - conclusion: {relation: calc__run_min_cents, key: '["niveau1/scaleway","158","known",""]'}
+    rule: run_min_cents
+    version: "1"
+    valid_at: "2026-10-26"
+    known_at: "2026-11-06"
+    definition: shortest_run
+    value: "158"
+    state: known
+    premises:
+      - {relation: calc__hourly_cents, key: '["niveau1/scaleway","264/5","known",""]'}
+      - {relation: offer_hours, key: '["niveau1/scaleway","3","7"]'}
+    reads: [calc__as_of, offer_hours]
+    steps:
+      - {path: shortest_run/value, op: round, value: "158", state: known}
+      - {path: shortest_run/value/0, op: ratio, value: "792/5", state: known}
+      - {path: shortest_run/value/0/0, op: rule, ref: hourly_cents, relation: calc__hourly_cents, value: "264/5", state: known}
+      - {path: shortest_run/value/0/1, op: fact, ref: offer_hours.hours_min, relation: offer_hours, value: "3", state: known}
+  - conclusion: {relation: calc__hourly_cents, key: '["niveau1/scaleway","264/5","known",""]'}
+    rule: hourly_cents
+    version: "1"
+    valid_at: "2026-10-26"
+    known_at: "2026-11-06"
+    definition: every_host_fits
+    value: "264/5"
+    state: known
+    premises:
+      - {relation: offer_complete, key: '["niveau1/scaleway"]'}
+      - {relation: offer_hourly, key: '["niveau1/scaleway","5280"]'}
+    reads: [calc__as_of, offer_complete, offer_hourly]
+    steps:
+      - {path: every_host_fits/when, op: fact, ref: offer_complete, relation: offer_complete, value: "true", state: known}
+      - {path: every_host_fits/value, op: ratio, value: "264/5", state: known}
+      - {path: every_host_fits/value/0, op: fact, ref: offer_hourly.price_e4, relation: offer_hourly, value: "5280", state: known}

@@ -1,0 +1,6 @@
+rows:
+  - row: {relation: alpha__size, key: '["a","1"]'}
+    sources: [{kind: pack, name: facts/data.yaml, position: "2"}]
+    reason: exception.one
+  - row: {relation: alpha__size, key: '["a","2"]'}
+    sources: [{kind: person, name: register, position: row-2}]

@@ -1,0 +1,4 @@
+@locale en
+---
+# Sentences of std-access, neutral. A domain replaces them with a message of the same id (S14).
+attribute.many.partial = {{Every {$kind} can have more than one {$attribute}.}}

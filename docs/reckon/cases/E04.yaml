@@ -1,0 +1,8 @@
+id: E04
+status: settled
+mode: parse
+source: ask Host where clusters.sum(count * spec.nodes) >= 6
+expect:
+  print: ask Host where clusters.sum(count * spec.nodes) >= 6
+sources:
+- '#350 P10.2a §11'

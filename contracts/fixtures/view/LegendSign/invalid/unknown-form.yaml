@@ -1,0 +1,4 @@
+# A sign is drawn in one of the forms the viewer knows; colour alone is no form.
+sign: drift
+form: colour
+label_message: sign.drift

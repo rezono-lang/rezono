@@ -1,0 +1,29 @@
+@locale nl
+---
+# Zinnen van std-order, neutraal. Een domein vervangt ze met een bericht met dezelfde id (S14).
+arrow.total = {{Elk {$kind} heeft precies één {$arrow}.}}
+arrow.partial = {{Elk {$kind} heeft hoogstens één {$arrow}.}}
+attribute.total = {{Elk {$kind} heeft precies één {$attribute}.}}
+attribute.partial = {{Elk {$kind} heeft hoogstens één {$attribute}.}}
+arrow.many.partial = {{Elk {$kind} kan meer dan één {$arrow} hebben.}}
+is_a = {{Elk {$kind} is een {$parent}.}}
+unique_key = {{{$key} hoort bij hoogstens één {$kind}.}}
+path_equation = {{Voor elk {$kind} geldt: {$equation}.}}
+# Een zin per regel (rules/order.dl): rule.<regel-id>, met de variabelen van de regel.
+rule.before_1 = {{{$a} komt direct vóór {$b}.}}
+rule.before_2 = {{{$a} komt vóór {$b}, en {$b} komt direct vóór {$c}, dus {$a} komt vóór {$c}.}}
+rule.comparable_1 = {{{$a} en {$b} zijn vergelijkbaar: {$a} komt vóór {$b}.}}
+rule.comparable_2 = {{{$a} en {$b} zijn vergelijkbaar: {$b} komt vóór {$a}.}}
+rule.order_cycle = {{{$a} komt vóór zichzelf: de ordening heeft een kring.}}
+rule.rank_conflict = {{{$a} komt vóór {$b}, maar de rang van {$a} ({$x}) is niet kleiner dan die van {$b} ({$y}).}}
+# Uitlegvragen: de algemene grondslag en het bereik, toegespitst op de ordening.
+explain.order_grounds = Waarom eerder
+explain.order_grounds.question = {{Waarom komt {$element} eerder?}}
+explain.order_reach = Wat volgt
+explain.order_reach.question = {{Wat komt er na {$element}?}}
+explain.outside = Buiten je zicht
+explain.more = Verder vanaf hier
+explain.empty = {{Geen antwoord voor {$element}.}}
+# De standaard-Flow.
+flow.order = Ordening
+channel.ordered_scale = Baan per schaal; de lijnen lopen van eerder naar later.

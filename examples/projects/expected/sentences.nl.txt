@@ -1,0 +1,23 @@
+begrotingsregel
+  Elke begrotingsregel heeft precies één project.
+  Elke begrotingsregel heeft precies één bedrag.
+  Elke begrotingsregel heeft precies één omschrijving.
+afhankelijkheid
+  Elke afhankelijkheid heeft precies één voorwaarde.
+  Elke afhankelijkheid heeft precies één taak.
+  Elke combinatie van taak en voorwaarde hoort bij hoogstens één afhankelijkheid.
+mijlpaal
+  Elke mijlpaal heeft precies één project.
+  Elke mijlpaal heeft hoogstens één deadline.
+  Elke mijlpaal heeft precies één naam.
+project
+  Elk project heeft precies één budget.
+  Elk project heeft precies één naam.
+  Elke naam hoort bij hoogstens één project.
+taak
+  Elke taak heeft hoogstens één mijlpaal.
+  Elke taak heeft precies één project.
+  Elke taak heeft hoogstens één schatting in uren.
+  Elke taak heeft precies één naam.
+  Elke taak heeft precies één status.
+  Voor elke taak geldt: het project van de mijlpaal is het project van de taak.

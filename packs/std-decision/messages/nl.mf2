@@ -1,0 +1,44 @@
+@locale nl
+---
+# Zinnen van std-decision, neutraal. Een domein vervangt ze door een bericht met dezelfde id (S14).
+arrow.total = {{Elk {$kind} heeft precies één {$arrow}.}}
+arrow.partial = {{Elk {$kind} heeft hoogstens één {$arrow}.}}
+attribute.total = {{Elk {$kind} heeft precies één {$attribute}.}}
+attribute.partial = {{Elk {$kind} heeft hoogstens één {$attribute}.}}
+arrow.many.partial = {{Elk {$kind} kan meer dan één {$arrow} hebben.}}
+attribute.many.partial = {{Elk {$kind} kan meer dan één {$attribute} hebben.}}
+is_a = {{Elk {$kind} is een {$parent}.}}
+unique_key = {{{$key} hoort bij hoogstens één {$kind}.}}
+path_equation = {{Voor elk {$kind} geldt: {$equation}.}}
+# Een zin per regel (rules/decision.dl): rule.<regel-id>, met de variabelen van de regel.
+rule.replaces_1 = {{{$a} vervangt {$b} rechtstreeks.}}
+rule.replaces_2 = {{{$a} vervangt {$b}, en {$b} vervangt {$c} rechtstreeks, dus {$a} vervangt {$c}.}}
+rule.supersession_cycle = {{{$a} vervangt zichzelf: de keten van vervangen besluiten heeft een kring.}}
+rule.window_inverted = {{{$d} eindigt op dag {$u}, en dat is niet na zijn eerste dag {$f}.}}
+rule.took_effect = {{{$d} is genomen (het record zegt niet voorgesteld) en geldt vanaf dag {$f}, op of vóór {$r} (dag {$n}).}}
+rule.ended = {{{$d} geldt niet meer vanaf dag {$u}, op of vóór {$r} (dag {$n}).}}
+rule.replaced = {{{$s} vervangt {$d} en is op {$r} ingegaan, dus {$d} is vervangen.}}
+rule.was_replaced = {{{$d} is op {$r} vervangen.}}
+rule.in_force_on = {{{$d} is van kracht op {$r}: het is ingegaan, de laatste dag is niet voorbij, en geen besluit dat het vervangt is ingegaan.}}
+rule.has_successor = {{{$s}, dat genomen is en zijn eerste dag noemt, vervangt {$d}.}}
+rule.superseded_in_force = {{Het record van {$d} zegt vervangen, maar {$d} is van kracht op {$r}: geen genomen besluit vervangt het.}}
+rule.has_decider = {{Het record van {$d} noemt wie het nam.}}
+rule.in_force_without_decider = {{{$d} is van kracht op {$r}, en het record noemt niemand die het nam.}}
+rule.has_start = {{Het record van {$d} noemt de eerste dag.}}
+rule.in_force_without_start = {{Het record van {$d} zegt van kracht en noemt geen eerste dag, dus het is op geen peildatum van kracht.}}
+rule.withdrawn_without_start = {{Het record van {$d} zegt ingetrokken en noemt geen eerste dag: volgens de dagen was {$d} op geen peildatum van kracht, en geen dag zegt wanneer het ophield.}}
+rule.proposal = {{Het record van {$d} zegt voorgesteld: {$d} is nog niet genomen.}}
+rule.ground_chain_1 = {{Het record van {$a} noemt {$b} als grond.}}
+rule.ground_chain_2 = {{Het record van {$a} noemt {$b} als grond, en {$b} rust op {$c}, dus {$a} rust ook op {$c}.}}
+rule.ground_cycle = {{{$a} rust op zichzelf: de keten van gronden heeft een kring.}}
+# Uitlegvragen: de algemene grondslag en het bereik, toegespitst op besluiten.
+explain.decided = Wie besloot
+explain.decided.question = {{Wie besloot {$element}, en wanneer?}}
+explain.replaced = Wat het verving
+explain.replaced.question = {{Wat verving {$element}?}}
+explain.outside = Buiten je zicht
+explain.more = Verder vanaf hier
+explain.empty = {{Geen antwoord voor {$element}.}}
+# De standaard-Flow.
+flow.decisions = Besluiten
+channel.decision_subject = Eén baan per onderwerp; een lijn loopt van een besluit naar het besluit dat het vervangt.

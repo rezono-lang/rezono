@@ -1,0 +1,22 @@
+@locale nl
+---
+# Fictief voorbeeld: een netwerk van bronnen via partijen naar vrijgaven.
+pack.title = Voorbeeld: netwerk
+kind.site = Locatie
+kind.lot = Partij
+kind.release = Vrijgave
+kind.inspection = Inspectie
+arrow.lot__from_site = komt van
+arrow.lot__in_release = valt onder
+arrow.inspection__of_lot = keurt
+attr.site__name = Naam
+attr.inspection__result = Uitslag
+attr.lot__cleared = Goedgekeurd
+attr.release__decision = Besluit
+attr.release__held = Tegengehouden
+enum.pass = voldoet
+enum.cleared = goedgekeurd
+enum.released = vrijgegeven
+rule.lot_cleared = {{Een partij is goedgekeurd als de inspectie voldoet en de herkomst ({$site}) bekend is.}}
+rule.release_all_cleared = {{Een vrijgave volgt als alle {$count} partijen goedgekeurd zijn en geen partij is tegengehouden.}}
+flow.herkomst = Herkomst van partijen

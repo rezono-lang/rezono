@@ -1,0 +1,8 @@
+connector: prov-o-out
+standard: PROV-O
+standard_version: "2013-04-30"
+direction: out
+losses:
+  - subject: proof
+    what: A negative premise.
+    fate: extension

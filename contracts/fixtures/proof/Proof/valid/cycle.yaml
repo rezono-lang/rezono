@@ -1,0 +1,17 @@
+# Valid against the schema, rejected by the checker: path(a,a) and path(b,a) prove each other.
+# Each witness holds on its own; together they are not well-founded.
+root: {relation: path, key: '["a","a"]'}
+manifest_id: manifest-epoch-7
+witnesses:
+  - conclusion: {relation: path, key: '["a","a"]'}
+    rule_id: path_step
+    bindings: [{variable: "?x", value: a}, {variable: "?y", value: b}, {variable: "?z", value: a}]
+    premises:
+      - {row: {relation: edge, key: '["a","b"]'}, polarity: positive, stratum: 0}
+      - {row: {relation: path, key: '["b","a"]'}, polarity: positive, stratum: 1}
+  - conclusion: {relation: path, key: '["b","a"]'}
+    rule_id: path_step
+    bindings: [{variable: "?x", value: b}, {variable: "?y", value: a}, {variable: "?z", value: a}]
+    premises:
+      - {row: {relation: edge, key: '["b","a"]'}, polarity: positive, stratum: 0}
+      - {row: {relation: path, key: '["a","a"]'}, polarity: positive, stratum: 1}

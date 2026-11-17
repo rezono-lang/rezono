@@ -1,0 +1,38 @@
+@locale en
+---
+# Sentences of std-identity, neutral. A domain replaces them with a message of the same id (S14).
+arrow.total = {{Every {$kind} has exactly one {$arrow}.}}
+arrow.partial = {{Every {$kind} has at most one {$arrow}.}}
+attribute.total = {{Every {$kind} has exactly one {$attribute}.}}
+attribute.partial = {{Every {$kind} has at most one {$attribute}.}}
+arrow.many.partial = {{Every {$kind} can have more than one {$arrow}.}}
+attribute.many.partial = {{Every {$kind} can have more than one {$attribute}.}}
+is_a = {{Every {$kind} is a {$parent}.}}
+unique_key = {{{$key} belongs to at most one {$kind}.}}
+path_equation = {{For every {$kind}: {$equation}.}}
+# One sentence per rule (rules/identity.dl): rule.<rule-id>, with the rule's variables.
+rule.stated_same_1 = {{A source states that {$a} is the same as {$b}.}}
+rule.stated_same_2 = {{A source states that {$a} is the same as {$b}.}}
+rule.equivalent_1 = {{{$a} is the same as itself.}}
+rule.equivalent_2 = {{{$a} is the same as {$b}, and a source states that {$b} and {$c} are the same.}}
+rule.has_equivalent = {{{$a} is the same as {$b}, another referent.}}
+rule.chosen = {{{$a} is the same as {$x}, and a source names {$r} to stand for it.}}
+rule.has_chosen = {{{$r} is named to stand for {$a}.}}
+rule.disputed = {{Both {$r} and {$s} are named to stand for {$a}.}}
+rule.representatives_disagree = {{Both {$r} and {$s} are named to stand for {$a}: one thing has two representatives.}}
+rule.representative_outside_class = {{{$r} is named to stand for {$x}, and nothing states that they are the same.}}
+rule.representative_1 = {{{$r} is named to stand for {$a}, is the same as it, and no other is named.}}
+rule.representative_2 = {{{$a} is the same as no other referent, so it stands for itself.}}
+rule.representative_not_recorded = {{{$a} is recorded more than once, and nobody named which one stands for it.}}
+rule.identity_conflict_1 = {{{$a} and {$b} are the same, yet {$a} states {$v} for {$s} and {$b} states {$w}.}}
+rule.identity_conflict_2 = {{{$a} and {$b} are the same, yet {$a} states {$v} for {$s} and {$b} states {$w}.}}
+rule.class_text = {{{$a} states {$v} for {$s}, and {$r} stands for it.}}
+rule.class_number = {{{$a} states {$v} for {$s}, and {$r} stands for it.}}
+# Explanation questions: the generic grounds and reach, narrowed to same-as and its classes.
+explain.identity_grounds = Why it is the same
+explain.identity_grounds.question = {{Why is {$element} the same as this?}}
+explain.identity_reach = What is the same
+explain.identity_reach.question = {{What is the same as {$element}?}}
+explain.outside = Outside your view
+explain.more = More from here
+explain.empty = {{No answer for {$element}.}}

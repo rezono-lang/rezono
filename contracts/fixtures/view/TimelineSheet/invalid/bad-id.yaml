@@ -1,0 +1,7 @@
+# The id names the sheet's address.
+id: Support-Phases
+title_message: timeline.support
+rows: release
+start: release__supported_from
+end: release__full_support_until
+main_message: phase.full_support

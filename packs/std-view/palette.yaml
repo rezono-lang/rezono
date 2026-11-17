@@ -1,0 +1,58 @@
+# Colour values per role and theme. Status uses evaluation (tone); nominal hue
+# values follow in V2. `proof` is the compatibility name of the focus accent.
+palettes:
+  - theme: light
+    tokens:
+      - {role: paper, value: "#faf8f3"}
+      - {role: ink, value: "#1c1b19"}
+      - {role: ink.muted, value: "#5c5a55"}
+      - {role: rule, value: "#8a877f"}
+      - {role: proof, value: "#0b4fb3"}
+      - {role: status.valid, value: "#2d6a30"}
+      - {role: status.changed, value: "#9a5a00"}
+      - {role: status.warning, value: "#9a5a00"}
+      - {role: status.violated, value: "#b3261e"}
+      - {role: status.unknown, value: "#5c5a55"}
+      # Text in this colour reads at 4.5:1 or more on the paper (WCAG 1.4.3; RV-U16): 4.86:1.
+      - {role: status.not_applicable, value: "#706d66"}
+  - theme: dark
+    tokens:
+      - {role: paper, value: "#17181b"}
+      - {role: ink, value: "#ebe8e1"}
+      - {role: ink.muted, value: "#b0ada6"}
+      - {role: rule, value: "#7d7a74"}
+      - {role: proof, value: "#7fb0ff"}
+      - {role: status.valid, value: "#7cc47f"}
+      - {role: status.changed, value: "#e8a640"}
+      - {role: status.warning, value: "#e8a640"}
+      - {role: status.violated, value: "#ff8a80"}
+      - {role: status.unknown, value: "#b0ada6"}
+      # 4.96:1 on the dark paper (WCAG 1.4.3; RV-U16).
+      - {role: status.not_applicable, value: "#8a8781"}
+  - theme: print
+    tokens:
+      - {role: paper, value: "#ffffff"}
+      - {role: ink, value: "#000000"}
+      - {role: ink.muted, value: "#404040"}
+      - {role: rule, value: "#606060"}
+      - {role: proof, value: "#003a8c"}
+      - {role: status.valid, value: "#1e4d21"}
+      - {role: status.changed, value: "#6e4000"}
+      - {role: status.warning, value: "#6e4000"}
+      - {role: status.violated, value: "#8c1a14"}
+      - {role: status.unknown, value: "#404040"}
+      - {role: status.not_applicable, value: "#606060"}
+  # System colours: in forced-colors, the glyph and label convey status.
+  - theme: forced_colors
+    tokens:
+      - {role: paper, value: Canvas}
+      - {role: ink, value: CanvasText}
+      - {role: ink.muted, value: GrayText}
+      - {role: rule, value: CanvasText}
+      - {role: proof, value: Highlight}
+      - {role: status.valid, value: CanvasText}
+      - {role: status.changed, value: CanvasText}
+      - {role: status.warning, value: CanvasText}
+      - {role: status.violated, value: CanvasText}
+      - {role: status.unknown, value: GrayText}
+      - {role: status.not_applicable, value: GrayText}

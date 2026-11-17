@@ -1,0 +1,12 @@
+id: Y03
+class: answer
+status: pending
+schema:
+  from: fixture.schema.json
+form: answer
+input: P10.2a E49 and E50, two worlds each
+expect:
+  same_dataset_hash_in_both_worlds: true
+note: Runs with the ask endpoint (D22).
+sources:
+- '#369 L0 rev 2 §8'

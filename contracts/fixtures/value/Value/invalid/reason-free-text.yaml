@@ -1,0 +1,3 @@
+# Invalid: a reason is a code, never free text.
+state: unknown
+reason: owner not assigned yet

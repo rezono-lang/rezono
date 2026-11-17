@@ -1,0 +1,28 @@
+id: E59
+status: settled
+mode: evaluate
+source: ask Host where (Host where it.memory_need > 300 GiB).any(it.owner is n/a)
+data: appendix-b
+role: viewer
+expect:
+  answer:
+    rows: []
+    undecided:
+    - binder: host-a
+      state: unknown
+      reason: no_spec
+    - binder: host-b
+      state: unknown
+      reason: no_spec
+    - binder: host-c
+      state: unknown
+      reason: no_spec
+    - binder: host-d
+      state: unknown
+      reason: no_spec
+    not_applicable: 0
+note: '`any(p)` folds `or` over "in and p". host-a and host-c are in and have an owner or an unknown one, so false;
+  host-d has no owner, and whether it is in is unknown: "in and true" is unknown, and so is the whole.'
+sources:
+- expressions.md §7 (sets and absence), formerly §13 point 14
+- arbiter, 11-11-2026, on #696

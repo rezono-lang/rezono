@@ -1,0 +1,978 @@
+{
+  "format": "rede.pipelines/1",
+  "max_views": "64",
+  "pipelines": [
+    {
+      "name": "integrity",
+      "sql": [
+        "engine/tables.sql",
+        "engine/integrity.sql",
+        "engine/integrity-export.sql"
+      ],
+      "modules": [],
+      "views": [],
+      "tables": [
+        "advice_report",
+        "advice_report__household",
+        "alternative",
+        "alternative__decision",
+        "alternative__reason",
+        "alternative__title",
+        "application",
+        "application__claimed_costs",
+        "application__household",
+        "article",
+        "article__text",
+        "article__title",
+        "axis",
+        "bound_side",
+        "calendar",
+        "calendar__title",
+        "capability",
+        "closed_payment",
+        "closed_payment__element",
+        "closed_payment__sha256",
+        "cost_item",
+        "cost_item__article",
+        "cost_item__eligibility",
+        "cost_item__title",
+        "cost_line",
+        "cost_line__amount",
+        "cost_line__application",
+        "cost_line__item",
+        "credential",
+        "credential__issued_on",
+        "credential__issued_on_day",
+        "credential__issuer",
+        "credential__subject",
+        "credential__title",
+        "credential_claim",
+        "credential_claim__attribute",
+        "credential_claim__credential",
+        "credential_claim__value",
+        "decision",
+        "decision__decided_on",
+        "decision__decider",
+        "decision__owner",
+        "decision__rationale",
+        "decision__reassesses",
+        "decision__review_on",
+        "decision__state",
+        "decision__subject",
+        "decision__supersedes",
+        "decision__title",
+        "decision__valid_from",
+        "decision__valid_from_day",
+        "decision__valid_until",
+        "decision__valid_until_day",
+        "decision__warrant",
+        "decision_state",
+        "eligibility",
+        "evaluation_day",
+        "evaluation_day__calendar",
+        "evaluation_day__horizon",
+        "exception",
+        "exception__decision",
+        "exception__title",
+        "ground",
+        "ground__decision",
+        "ground__rests_on",
+        "household",
+        "household__persons",
+        "identity_statement",
+        "identity_statement__first_identifier",
+        "identity_statement__first_node",
+        "identity_statement__issued_on",
+        "identity_statement__issued_on_day",
+        "identity_statement__issuer",
+        "identity_statement__second_identifier",
+        "identity_statement__second_node",
+        "identity_statement__title",
+        "income_statement",
+        "income_statement__household",
+        "income_statement__income",
+        "interval",
+        "interval__end",
+        "interval__extension_end",
+        "interval__in_series",
+        "interval__known_from",
+        "interval__on_axis",
+        "interval__start",
+        "interval__unbounded",
+        "interval_relation",
+        "judgement_reason",
+        "judgement_value",
+        "ledger_payment",
+        "ledger_payment__amount",
+        "ledger_payment__application",
+        "ledger_payment__booked_on",
+        "ledger_payment__row_sha256",
+        "parameter_unit",
+        "period_close",
+        "period_close__closed_until",
+        "period_close__covers",
+        "principle",
+        "principle__decision",
+        "principle__title",
+        "purpose",
+        "purpose__decision",
+        "purpose__served",
+        "purpose__title",
+        "rede__arrow",
+        "rede__constant",
+        "rede__enum",
+        "rede__is_a",
+        "rede__maximum",
+        "rede__maximum_cardinality",
+        "rede__minimum",
+        "rede__minimum_cardinality",
+        "rede__required",
+        "rede__single",
+        "reference_date",
+        "reference_date__day",
+        "reference_date__title",
+        "reference_point",
+        "reference_point__horizon",
+        "reference_point__on_axis",
+        "reference_point__position",
+        "role",
+        "role__capability",
+        "role__title",
+        "scheme_parameter",
+        "scheme_parameter__article",
+        "scheme_parameter__calendar",
+        "scheme_parameter__decision",
+        "scheme_parameter__name",
+        "scheme_parameter__unit",
+        "scheme_parameter__valid_from",
+        "scheme_parameter__valid_until",
+        "scheme_parameter__value",
+        "series",
+        "status_lookup",
+        "status_lookup__credential",
+        "status_lookup__looked_up_on",
+        "status_lookup__looked_up_on_day",
+        "status_lookup__statement",
+        "status_lookup__status",
+        "status_value",
+        "subject",
+        "subject__title",
+        "trust_entry",
+        "trust_entry__attribute",
+        "trust_entry__issuer",
+        "trust_entry__node",
+        "trust_entry__title",
+        "trust_entry__valid_from",
+        "trust_entry__valid_from_day",
+        "trust_entry__valid_until",
+        "trust_entry__valid_until_day"
+      ],
+      "imports": [],
+      "exports": [
+        "ledger_payment__accepted"
+      ]
+    },
+    {
+      "name": "rules-1",
+      "sql": [
+        "engine/rules-1.sql"
+      ],
+      "modules": [
+        "view_std_time",
+        "import_std_time_time",
+        "import_subsidy_scheme_findings",
+        "credentials",
+        "import_subsidy_scheme_costs",
+        "import_subsidy_scheme_assessment",
+        "import_std_decision_decision",
+        "ledger"
+      ],
+      "views": [
+        "advised",
+        "std_time_interval_end",
+        "std_time_interval_start",
+        "span",
+        "allen",
+        "application_count",
+        "issuer_authorised",
+        "authorised",
+        "statement_scope",
+        "statement_covered",
+        "statement_authorised",
+        "authoritative",
+        "std_time_interval_on_axis",
+        "std_time_reference_point_on_axis",
+        "std_time_reference_point_position",
+        "begun_at",
+        "bound_contradicted",
+        "disclosed",
+        "line",
+        "eligible_line",
+        "end_stated",
+        "ended",
+        "ended_at",
+        "extension_inverted",
+        "extension_stated",
+        "ground_chain",
+        "ground_cycle",
+        "has_decider",
+        "has_income_statement",
+        "has_quote",
+        "has_start",
+        "has_successor",
+        "holds_at",
+        "household_size",
+        "in_extension",
+        "interval_inverted",
+        "known_at",
+        "known_from_stated",
+        "ledger_line",
+        "looked_up",
+        "stated",
+        "names_here",
+        "named_here",
+        "paid",
+        "proposal",
+        "repeat_application",
+        "took_effect",
+        "replaced",
+        "replaces",
+        "scoped"
+      ],
+      "tables": [
+        "advice_report__household",
+        "application__household",
+        "calendar",
+        "cost_item__eligibility",
+        "cost_line__amount",
+        "cost_line__application",
+        "cost_line__item",
+        "credential__issued_on_day",
+        "credential__issuer",
+        "credential__subject",
+        "credential_claim__attribute",
+        "credential_claim__credential",
+        "credential_claim__value",
+        "decision",
+        "decision__decider",
+        "decision__state",
+        "decision__supersedes",
+        "decision__valid_from_day",
+        "decision__valid_until_day",
+        "evaluation_day",
+        "evaluation_day__calendar",
+        "ground__decision",
+        "ground__rests_on",
+        "household",
+        "household__persons",
+        "identity_statement__first_identifier",
+        "identity_statement__first_node",
+        "identity_statement__issued_on_day",
+        "identity_statement__issuer",
+        "identity_statement__second_identifier",
+        "identity_statement__second_node",
+        "income_statement__household",
+        "interval__end",
+        "interval__extension_end",
+        "interval__in_series",
+        "interval__known_from",
+        "interval__on_axis",
+        "interval__start",
+        "interval__unbounded",
+        "ledger_payment__amount",
+        "ledger_payment__application",
+        "reference_date__day",
+        "reference_point__on_axis",
+        "reference_point__position",
+        "scheme_parameter",
+        "scheme_parameter__calendar",
+        "scheme_parameter__valid_from",
+        "scheme_parameter__valid_until",
+        "status_lookup__credential",
+        "status_lookup__looked_up_on_day",
+        "status_lookup__statement",
+        "trust_entry__attribute",
+        "trust_entry__issuer",
+        "trust_entry__node",
+        "trust_entry__valid_from_day",
+        "trust_entry__valid_until_day"
+      ],
+      "imports": [
+        "ledger_payment__accepted"
+      ],
+      "exports": [
+        "advised",
+        "authorised",
+        "authoritative",
+        "begun_at",
+        "disclosed",
+        "eligible_line",
+        "end_stated",
+        "ended",
+        "ended_at",
+        "extension_stated",
+        "has_decider",
+        "has_income_statement",
+        "has_quote",
+        "has_start",
+        "has_successor",
+        "holds_at",
+        "household_size",
+        "in_extension",
+        "known_from_stated",
+        "ledger_line",
+        "line",
+        "looked_up",
+        "named_here",
+        "names_here",
+        "paid",
+        "replaced",
+        "replaces",
+        "scoped",
+        "stated",
+        "statement_authorised",
+        "std_time_interval_end",
+        "std_time_interval_on_axis",
+        "std_time_interval_start",
+        "std_time_reference_point_on_axis",
+        "std_time_reference_point_position",
+        "took_effect"
+      ]
+    },
+    {
+      "name": "rules-2",
+      "sql": [
+        "engine/rules-2.sql"
+      ],
+      "modules": [
+        "import_std_time_time",
+        "import_std_access_access"
+      ],
+      "views": [
+        "may_read",
+        "series_across_axes",
+        "start_stated"
+      ],
+      "tables": [
+        "advice_report",
+        "alternative",
+        "application",
+        "article",
+        "axis",
+        "calendar",
+        "closed_payment",
+        "cost_item",
+        "cost_line",
+        "credential",
+        "credential_claim",
+        "decision",
+        "exception",
+        "household",
+        "identity_statement",
+        "income_statement",
+        "interval",
+        "interval__in_series",
+        "ledger_payment",
+        "period_close",
+        "principle",
+        "purpose",
+        "reference_date",
+        "reference_point",
+        "role",
+        "scheme_parameter",
+        "series",
+        "status_lookup",
+        "trust_entry"
+      ],
+      "imports": [
+        "std_time_interval_on_axis",
+        "std_time_interval_start"
+      ],
+      "exports": [
+        "start_stated"
+      ]
+    },
+    {
+      "name": "rules-3",
+      "sql": [
+        "engine/rules-3.sql"
+      ],
+      "modules": [
+        "view_std_time",
+        "credentials",
+        "import_std_decision_decision"
+      ],
+      "views": [
+        "statement_seen",
+        "statement_withdrawn",
+        "status_withdrawn",
+        "std_time_axis",
+        "std_time_interval",
+        "std_time_reference_point",
+        "std_time_reference_point_horizon",
+        "std_time_reference_point_horizon_out_of_range",
+        "std_time_reference_point_position_no_day",
+        "window_inverted",
+        "statement_in_good_standing",
+        "in_good_standing"
+      ],
+      "tables": [
+        "axis",
+        "calendar",
+        "decision__valid_from_day",
+        "decision__valid_until_day",
+        "evaluation_day",
+        "evaluation_day__horizon",
+        "interval",
+        "reference_date__day",
+        "reference_point",
+        "reference_point__horizon",
+        "scheme_parameter",
+        "status_lookup__credential",
+        "status_lookup__statement",
+        "status_lookup__status"
+      ],
+      "imports": [],
+      "exports": [
+        "in_good_standing",
+        "statement_in_good_standing",
+        "statement_seen",
+        "std_time_reference_point_horizon"
+      ]
+    },
+    {
+      "name": "rules-4",
+      "sql": [
+        "engine/rules-4.sql"
+      ],
+      "modules": [
+        "import_std_time_time",
+        "credentials",
+        "import_subsidy_scheme_costs",
+        "import_subsidy_scheme_assessment",
+        "import_std_decision_decision",
+        "ledger",
+        "import_subsidy_scheme_scheme"
+      ],
+      "views": [
+        "supersession_cycle",
+        "was_replaced",
+        "quoted_costs",
+        "costs_mismatch",
+        "in_force_on",
+        "decided_parameter",
+        "eligible_costs",
+        "end_not_recorded",
+        "extension_without_end",
+        "has_decision_in_force",
+        "same_subject",
+        "identified",
+        "in_force_without_decider",
+        "in_force_without_start",
+        "income_not_received",
+        "income_missing",
+        "is_identified",
+        "known_from_not_recorded",
+        "ledger_paid",
+        "not_disclosed",
+        "quote_missing",
+        "status_lookup_not_of_one",
+        "superseded_in_force",
+        "withdrawn_without_start",
+        "assessment",
+        "assessed_costs",
+        "assessed_income",
+        "claim_assessment",
+        "attested",
+        "subject_identification",
+        "attested_here",
+        "undecided_parameter"
+      ],
+      "tables": [
+        "application",
+        "application__claimed_costs",
+        "application__household",
+        "credential",
+        "credential__issuer",
+        "credential__subject",
+        "credential_claim",
+        "credential_claim__attribute",
+        "credential_claim__credential",
+        "credential_claim__value",
+        "decision__state",
+        "income_statement__household",
+        "income_statement__income",
+        "interval__extension_end",
+        "interval__unbounded",
+        "reference_date",
+        "scheme_parameter",
+        "scheme_parameter__decision",
+        "status_lookup",
+        "status_lookup__credential",
+        "status_lookup__statement"
+      ],
+      "imports": [
+        "authorised",
+        "authoritative",
+        "disclosed",
+        "eligible_line",
+        "end_stated",
+        "ended",
+        "has_decider",
+        "has_income_statement",
+        "has_quote",
+        "has_start",
+        "has_successor",
+        "in_good_standing",
+        "known_from_stated",
+        "ledger_line",
+        "line",
+        "looked_up",
+        "named_here",
+        "names_here",
+        "paid",
+        "replaced",
+        "replaces",
+        "scoped",
+        "stated",
+        "statement_authorised",
+        "statement_in_good_standing",
+        "statement_seen",
+        "std_time_interval_on_axis",
+        "took_effect"
+      ],
+      "exports": [
+        "assessed_costs",
+        "assessed_income",
+        "end_not_recorded",
+        "ledger_paid"
+      ]
+    },
+    {
+      "name": "rules-5",
+      "sql": [
+        "engine/rules-5.sql"
+      ],
+      "modules": [
+        "import_std_time_time"
+      ],
+      "views": [
+        "start_not_recorded",
+        "judgement"
+      ],
+      "tables": [
+        "interval__extension_end",
+        "interval__unbounded"
+      ],
+      "imports": [
+        "begun_at",
+        "end_not_recorded",
+        "ended_at",
+        "extension_stated",
+        "holds_at",
+        "in_extension",
+        "start_stated",
+        "std_time_interval_end",
+        "std_time_interval_on_axis",
+        "std_time_interval_start",
+        "std_time_reference_point_horizon",
+        "std_time_reference_point_on_axis",
+        "std_time_reference_point_position"
+      ],
+      "exports": []
+    },
+    {
+      "name": "calc",
+      "sql": [
+        "engine/tables.sql",
+        "engine/calc-imports.sql",
+        "engine/calc.sql",
+        "engine/calc-export.sql"
+      ],
+      "modules": [],
+      "views": [],
+      "tables": [
+        "application",
+        "calc__as_of",
+        "scheme_parameter__name",
+        "scheme_parameter__valid_from",
+        "scheme_parameter__valid_until",
+        "scheme_parameter__value"
+      ],
+      "imports": [
+        "advised",
+        "assessed_costs",
+        "assessed_income",
+        "household_size",
+        "ledger_paid",
+        "paid"
+      ],
+      "exports": [
+        "calc__award",
+        "calc__entitlement"
+      ]
+    },
+    {
+      "name": "rules-6",
+      "sql": [
+        "engine/rules-6.sql"
+      ],
+      "modules": [
+        "import_subsidy_scheme_findings"
+      ],
+      "views": [
+        "maximum_applied"
+      ],
+      "tables": [],
+      "imports": [
+        "calc__award",
+        "calc__entitlement"
+      ],
+      "exports": []
+    }
+  ],
+  "forward": [
+    {
+      "relation": "advised",
+      "producer": "rules-1",
+      "consumers": [
+        "calc"
+      ]
+    },
+    {
+      "relation": "assessed_costs",
+      "producer": "rules-4",
+      "consumers": [
+        "calc"
+      ]
+    },
+    {
+      "relation": "assessed_income",
+      "producer": "rules-4",
+      "consumers": [
+        "calc"
+      ]
+    },
+    {
+      "relation": "authorised",
+      "producer": "rules-1",
+      "consumers": [
+        "rules-4"
+      ]
+    },
+    {
+      "relation": "authoritative",
+      "producer": "rules-1",
+      "consumers": [
+        "rules-4"
+      ]
+    },
+    {
+      "relation": "begun_at",
+      "producer": "rules-1",
+      "consumers": [
+        "rules-5"
+      ]
+    },
+    {
+      "relation": "calc__award",
+      "producer": "calc",
+      "consumers": [
+        "rules-6"
+      ]
+    },
+    {
+      "relation": "calc__entitlement",
+      "producer": "calc",
+      "consumers": [
+        "rules-6"
+      ]
+    },
+    {
+      "relation": "disclosed",
+      "producer": "rules-1",
+      "consumers": [
+        "rules-4"
+      ]
+    },
+    {
+      "relation": "eligible_line",
+      "producer": "rules-1",
+      "consumers": [
+        "rules-4"
+      ]
+    },
+    {
+      "relation": "end_not_recorded",
+      "producer": "rules-4",
+      "consumers": [
+        "rules-5"
+      ]
+    },
+    {
+      "relation": "end_stated",
+      "producer": "rules-1",
+      "consumers": [
+        "rules-4"
+      ]
+    },
+    {
+      "relation": "ended",
+      "producer": "rules-1",
+      "consumers": [
+        "rules-4"
+      ]
+    },
+    {
+      "relation": "ended_at",
+      "producer": "rules-1",
+      "consumers": [
+        "rules-5"
+      ]
+    },
+    {
+      "relation": "extension_stated",
+      "producer": "rules-1",
+      "consumers": [
+        "rules-5"
+      ]
+    },
+    {
+      "relation": "has_decider",
+      "producer": "rules-1",
+      "consumers": [
+        "rules-4"
+      ]
+    },
+    {
+      "relation": "has_income_statement",
+      "producer": "rules-1",
+      "consumers": [
+        "rules-4"
+      ]
+    },
+    {
+      "relation": "has_quote",
+      "producer": "rules-1",
+      "consumers": [
+        "rules-4"
+      ]
+    },
+    {
+      "relation": "has_start",
+      "producer": "rules-1",
+      "consumers": [
+        "rules-4"
+      ]
+    },
+    {
+      "relation": "has_successor",
+      "producer": "rules-1",
+      "consumers": [
+        "rules-4"
+      ]
+    },
+    {
+      "relation": "holds_at",
+      "producer": "rules-1",
+      "consumers": [
+        "rules-5"
+      ]
+    },
+    {
+      "relation": "household_size",
+      "producer": "rules-1",
+      "consumers": [
+        "calc"
+      ]
+    },
+    {
+      "relation": "in_extension",
+      "producer": "rules-1",
+      "consumers": [
+        "rules-5"
+      ]
+    },
+    {
+      "relation": "in_good_standing",
+      "producer": "rules-3",
+      "consumers": [
+        "rules-4"
+      ]
+    },
+    {
+      "relation": "known_from_stated",
+      "producer": "rules-1",
+      "consumers": [
+        "rules-4"
+      ]
+    },
+    {
+      "relation": "ledger_line",
+      "producer": "rules-1",
+      "consumers": [
+        "rules-4"
+      ]
+    },
+    {
+      "relation": "ledger_paid",
+      "producer": "rules-4",
+      "consumers": [
+        "calc"
+      ]
+    },
+    {
+      "relation": "ledger_payment__accepted",
+      "producer": "integrity",
+      "consumers": [
+        "rules-1"
+      ]
+    },
+    {
+      "relation": "line",
+      "producer": "rules-1",
+      "consumers": [
+        "rules-4"
+      ]
+    },
+    {
+      "relation": "looked_up",
+      "producer": "rules-1",
+      "consumers": [
+        "rules-4"
+      ]
+    },
+    {
+      "relation": "named_here",
+      "producer": "rules-1",
+      "consumers": [
+        "rules-4"
+      ]
+    },
+    {
+      "relation": "names_here",
+      "producer": "rules-1",
+      "consumers": [
+        "rules-4"
+      ]
+    },
+    {
+      "relation": "paid",
+      "producer": "rules-1",
+      "consumers": [
+        "calc",
+        "rules-4"
+      ]
+    },
+    {
+      "relation": "replaced",
+      "producer": "rules-1",
+      "consumers": [
+        "rules-4"
+      ]
+    },
+    {
+      "relation": "replaces",
+      "producer": "rules-1",
+      "consumers": [
+        "rules-4"
+      ]
+    },
+    {
+      "relation": "scoped",
+      "producer": "rules-1",
+      "consumers": [
+        "rules-4"
+      ]
+    },
+    {
+      "relation": "start_stated",
+      "producer": "rules-2",
+      "consumers": [
+        "rules-5"
+      ]
+    },
+    {
+      "relation": "stated",
+      "producer": "rules-1",
+      "consumers": [
+        "rules-4"
+      ]
+    },
+    {
+      "relation": "statement_authorised",
+      "producer": "rules-1",
+      "consumers": [
+        "rules-4"
+      ]
+    },
+    {
+      "relation": "statement_in_good_standing",
+      "producer": "rules-3",
+      "consumers": [
+        "rules-4"
+      ]
+    },
+    {
+      "relation": "statement_seen",
+      "producer": "rules-3",
+      "consumers": [
+        "rules-4"
+      ]
+    },
+    {
+      "relation": "std_time_interval_end",
+      "producer": "rules-1",
+      "consumers": [
+        "rules-5"
+      ]
+    },
+    {
+      "relation": "std_time_interval_on_axis",
+      "producer": "rules-1",
+      "consumers": [
+        "rules-2",
+        "rules-4",
+        "rules-5"
+      ]
+    },
+    {
+      "relation": "std_time_interval_start",
+      "producer": "rules-1",
+      "consumers": [
+        "rules-2",
+        "rules-5"
+      ]
+    },
+    {
+      "relation": "std_time_reference_point_horizon",
+      "producer": "rules-3",
+      "consumers": [
+        "rules-5"
+      ]
+    },
+    {
+      "relation": "std_time_reference_point_on_axis",
+      "producer": "rules-1",
+      "consumers": [
+        "rules-5"
+      ]
+    },
+    {
+      "relation": "std_time_reference_point_position",
+      "producer": "rules-1",
+      "consumers": [
+        "rules-5"
+      ]
+    },
+    {
+      "relation": "took_effect",
+      "producer": "rules-1",
+      "consumers": [
+        "rules-4"
+      ]
+    }
+  ],
+  "epoch_table": "epoch__in",
+  "export_view": "export__out"
+}

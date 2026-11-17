@@ -1,0 +1,15 @@
+# Het deel van de verklaring van tekens dat bij dit pack hoort: een vorm per soort en een
+# lijnsoort per pijl (contracts/view.yaml). Kleuren en statussen komen uit std-view.
+kinds:
+  - {kind: project, shape: rect}
+  - {kind: budget_line, shape: bar}
+  - {kind: milestone, shape: diamond}
+  - {kind: task, shape: pill}
+  - {kind: dependency, shape: ellipse}
+arrows:
+  - {arrow: budget_line.project, dash: none}
+  - {arrow: milestone.project, dash: none}
+  - {arrow: task.project, dash: none}
+  - {arrow: task.milestone, dash: "4 3"}
+  - {arrow: dependency.task, dash: none}
+  - {arrow: dependency.prerequisite, dash: "1 3"}

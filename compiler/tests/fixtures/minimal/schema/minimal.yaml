@@ -1,0 +1,38 @@
+# The smallest pack that exercises the compiler: two kinds, an arrow, an enum, a derived type
+# and bounds. Neutral names on purpose; it describes no domain.
+id: https://rede.example/minimal
+name: minimal
+in_language: nl
+imports:
+  - linkml:types
+default_range: string
+annotations:
+  layer: facts
+types:
+  Count:
+    typeof: integer
+enums:
+  State:
+    permissible_values:
+      low: {}
+      high: {}
+classes:
+  Alpha:
+    attributes:
+      id:
+        identifier: true
+      title:
+        required: true
+      size:
+        range: Count
+        minimum_value: 0
+        maximum_value: 9
+  Beta:
+    attributes:
+      id:
+        identifier: true
+      alpha:
+        range: Alpha
+        required: true
+      state:
+        range: State

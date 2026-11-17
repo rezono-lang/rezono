@@ -1,0 +1,185 @@
+@locale en
+---
+# Sentences in ICU MessageFormat 2, one message per id. A message starts in the first column with
+# "id ="; continuation lines are indented. Every argument is an element id: the viewer fills {$x}
+# with the label or the name of x. The sentences of the schema, of the scheme's rules and of its reasons
+# are in the pack that defines the scheme (examples/subsidy-scheme); these are this pack's own.
+
+# A sentence per rule clause: rule.<rule-id>, with the variables of the clause. Amounts are in cents.
+# rules/ledger.dl
+rule.ledger_line = The ledger holds payment {$p} of {$c} cents for application {$a}.
+rule.paid = The ledger holds a payment for application {$a}.
+rule.ledger_paid = The ledger paid {$t} cents for application {$a} in all.
+
+# rules/access.dl
+rule.may_read_1 = Role {$r} may read article {$x}.
+rule.may_read_2 = Role {$r} may read decision {$x}.
+rule.may_read_3 = Role {$r} may read scheme parameter {$x}.
+rule.may_read_4 = Role {$r} may read cost item {$x}.
+rule.may_read_5 = Role {$r} may read reference date {$x}.
+rule.may_read_6 = Role {$r} may read role {$x}.
+rule.may_read_7 = Role {$r} may read calendar {$x}.
+rule.may_read_8 = Role {$r} may read period of validity {$x}, stated apart from a scheme parameter.
+rule.may_read_9 = Role {$r} may read axis {$x}, stated apart from a calendar.
+rule.may_read_10 = Role {$r} may read reference point {$x}, stated apart from an evaluation day.
+rule.may_read_11 = Role {$r} may read series {$x} of periods of validity.
+rule.may_read_12 = The case officer may read household {$x}.
+rule.may_read_13 = The case officer may read application {$x}.
+rule.may_read_14 = The case officer may read quote line {$x}.
+rule.may_read_15 = The case officer may read income statement {$x}.
+rule.may_read_16 = The case officer may read advice report {$x}.
+rule.may_read_17 = The policy adviser may read household {$x}.
+rule.may_read_18 = The policy adviser may read application {$x}.
+rule.may_read_19 = The policy adviser may read quote line {$x}.
+rule.may_read_20 = The policy adviser may read income statement {$x}.
+rule.may_read_21 = The policy adviser may read advice report {$x}.
+rule.may_read_22 = The case officer may read ledger payment {$x}.
+rule.may_read_23 = The case officer may read close {$x} of the ledger.
+rule.may_read_24 = The case officer may read closed payment {$x}.
+rule.may_read_25 = The reader may read household {$x}.
+rule.may_read_26 = The reader may read application {$x}.
+rule.may_read_27 = The reader may read quote line {$x}.
+rule.may_read_28 = The reader may read income statement {$x}.
+rule.may_read_29 = The reader may read advice report {$x}.
+rule.may_read_30 = The proposer may read household {$x}.
+rule.may_read_31 = The proposer may read application {$x}.
+rule.may_read_32 = The proposer may read quote line {$x}.
+rule.may_read_33 = The proposer may read income statement {$x}.
+rule.may_read_34 = The proposer may read advice report {$x}.
+rule.may_read_35 = The proposer may read ledger payment {$x}.
+rule.may_read_36 = The proposer may read close {$x} of the ledger.
+rule.may_read_37 = The proposer may read closed payment {$x}.
+
+# std-time, read through views.yaml: the scheme's own words for the theory's rules that apply here (each
+# replaces the theory's neutral sentence with the same id), and for the rules the compiler makes from the view.
+# A day the theory compares is a count of days since 1970-01-01; the proof shows the date it was counted from.
+rule.begun_at_1 = Scheme parameter {$i} took effect on or before {$r}.
+rule.ended_at = The validity of scheme parameter {$i} ended on or before {$r}.
+rule.holds_at_1 = Scheme parameter {$i} is valid on {$r}: it took effect on or before that day and stays valid after it.
+rule.interval_inverted = Scheme parameter {$i} is valid until a day that is not after the day it is valid from.
+rule.known_from_not_recorded = The scheme does not record from which day scheme parameter {$i} is known.
+rule.judgement_1 = Scheme parameter {$i} is no longer valid on {$r}: its validity ended on or before that day.
+rule.judgement_4 = Scheme parameter {$i} is not yet valid on {$r}: it takes effect after that day.
+rule.judgement_12 = Scheme parameter {$i} is valid on {$r}, but its validity ends within {$h} days of that day: an amount to decide on now.
+rule.judgement_13 = Scheme parameter {$i} is valid on {$r} and stays valid for more than {$h} days after it.
+rule.std_time_axis_1 = Axis {$v0} is a named axis of whole-number positions, as the time theory itself records it.
+rule.std_time_axis_2 = Calendar {$v0} is the axis on which the scheme compares days.
+rule.std_time_interval_1 = Interval {$v0} lasts from a position up to, and not including, a later one, as the time theory itself records it.
+rule.std_time_interval_2 = Scheme parameter {$v0} is read as a period of validity.
+rule.std_time_interval_start_1 = Interval {$v0} covers from position {$v1}, its first position, as the time theory itself records it.
+rule.std_time_interval_start_2 = Scheme parameter {$v0} is valid from {$v1}, day {$v2} counted from 1 January 1970.
+rule.std_time_interval_end_1 = Interval {$v0} no longer covers position {$v1}, its first position after the end, as the time theory itself records it.
+rule.std_time_interval_end_2 = Scheme parameter {$v0} is valid until {$v1}, not including that day, day {$v2} counted from 1 January 1970.
+rule.std_time_interval_on_axis_1 = The positions of interval {$v0} are counted on axis {$v1}, as the time theory itself records it.
+rule.std_time_interval_on_axis_2 = The dates of scheme parameter {$v0} are days of calendar {$v1}.
+rule.std_time_reference_point_1 = Reference point {$v0} is a position for which the intervals are read, as the time theory itself records it.
+rule.std_time_reference_point_2 = Evaluation day {$v0} is the day the scheme is read on.
+rule.std_time_reference_point_position_1 = Reference point {$v0} is at position {$v1} on its axis, as the time theory itself records it.
+rule.std_time_reference_point_position_2 = Evaluation day {$v0} is written as {$v1}, day {$v2} counted from 1 January 1970.
+rule.std_time_reference_point_horizon_1 = From reference point {$v0}, an end within {$v1} positions counts as near, as the time theory itself records it.
+rule.std_time_reference_point_horizon_2 = From evaluation day {$v0}, an end within {$v1} days counts as near.
+rule.std_time_reference_point_horizon_out_of_range = Evaluation day {$v0} has a horizon of {$v1} days, below zero.
+rule.std_time_reference_point_on_axis_1 = The position of reference point {$v0} is counted on axis {$v1}, as the time theory itself records it.
+rule.std_time_reference_point_on_axis_2 = Evaluation day {$v0} is a day of calendar {$v1}.
+rule.std_time_reference_point_position_no_day_1 = Evaluation day {$v0} is written as {$v1}, which is no day of the calendar.
+rule.std_time_reference_point_position_no_day_2 = Evaluation day {$v0} is written as {$v1}, which is no day of the calendar.
+rule.std_time_reference_point_position_no_day_3 = Evaluation day {$v0} is written as {$v1}, which is no day of the calendar.
+rule.std_time_reference_point_position_no_day_4 = Evaluation day {$v0} is written as {$v1}, which is no day of the calendar.
+rule.std_time_reference_point_position_no_day_5 = Evaluation day {$v0} is written as {$v1}, which is no day of the calendar.
+rule.std_time_reference_point_position_no_day_6 = Evaluation day {$v0} is written as {$v1}, which is no day of the calendar.
+rule.std_time_reference_point_position_no_day_7 = Evaluation day {$v0} is written as {$v1}, which is no day of the calendar.
+rule.std_time_reference_point_position_no_day_8 = Evaluation day {$v0} is written as {$v1}, which is no day of the calendar.
+rule.std_time_reference_point_position_no_day_9 = Evaluation day {$v0} is written as {$v1}, which is no day of the calendar.
+rule.std_time_reference_point_position_no_day_10 = Evaluation day {$v0} is written as {$v1}, which is no day of the calendar.
+rule.std_time_reference_point_position_no_day_11 = Evaluation day {$v0} is written as {$v1}, which is no day of the calendar.
+rule.std_time_reference_point_position_no_day_12 = Evaluation day {$v0} is written as {$v1}, which is no day of the calendar.
+rule.std_time_reference_point_position_no_day_13 = Evaluation day {$v0} is written as {$v1}, which is no day of the calendar.
+rule.may_read_38 = The case officer may read trust entry {$x}.
+rule.may_read_39 = The case officer may read credential {$x}.
+rule.may_read_40 = The case officer may read claim {$x}.
+rule.may_read_41 = The case officer may read status lookup {$x}.
+rule.may_read_42 = The policy adviser may read trust entry {$x}.
+rule.may_read_43 = The policy adviser may read credential {$x}.
+rule.may_read_44 = The policy adviser may read claim {$x}.
+rule.may_read_45 = The policy adviser may read status lookup {$x}.
+rule.may_read_46 = The reader may read trust entry {$x}.
+rule.may_read_47 = The reader may read credential {$x}.
+rule.may_read_48 = The reader may read claim {$x}.
+rule.may_read_49 = The reader may read status lookup {$x}.
+rule.may_read_50 = The proposer may read trust entry {$x}.
+rule.may_read_51 = The proposer may read credential {$x}.
+rule.may_read_52 = The proposer may read claim {$x}.
+rule.may_read_53 = The proposer may read status lookup {$x}.
+rule.may_read_54 = The case officer may read identity statement {$x}.
+rule.may_read_55 = The policy adviser may read identity statement {$x}.
+rule.may_read_56 = The reader may read identity statement {$x}.
+rule.may_read_57 = The proposer may read identity statement {$x}.
+
+# rules/credentials.dl. Days are written as numbers, 20260302 for 2 March 2026.
+rule.issuer_authorised = Trust entry {$e} lets {$i} state {$a} from day {$f} until day {$u}, and {$i} issued credential {$c}, which holds claim {$k}, on day {$t}.
+rule.authorised = The issuer of claim {$k} was authorised to state it on the day it issued the credential.
+rule.status_withdrawn_1 = Status lookup {$s} found credential {$c} revoked.
+rule.status_withdrawn_2 = Status lookup {$s} found credential {$c} suspended.
+rule.in_good_standing = Status lookup {$s} found credential {$c} valid, and no lookup found it revoked or suspended.
+rule.disclosed = The holder disclosed claim {$k}.
+rule.not_disclosed = The holder did not disclose claim {$k}.
+rule.claim_assessment_1 = Claim {$k} is unknown: the holder did not disclose it.
+rule.claim_assessment_2 = Claim {$k} is unknown: its issuer was not authorised to state it on the day it issued the credential.
+rule.claim_assessment_3 = Claim {$k} is unknown: no status lookup found credential {$c} valid, or one found it revoked or suspended.
+rule.claim_assessment_4 = Claim {$k} holds: the holder disclosed it, its issuer was authorised to state it, and credential {$c} is in good standing.
+rule.attested = Person {$p} of {$n} has {$a} {$v}: claim {$k} of credential {$c} states it, and it holds.
+rule.stated_1 = Identity statement {$s} names {$x} of {$n} and {$y} of {$m}.
+rule.stated_2 = Identity statement {$s} names {$y} of {$m} and {$x} of {$n}.
+rule.statement_scope = Trust entry {$e} lets {$i} name identifiers of {$n} (same_subject) from day {$f} until day {$u}, and {$i} issued identity statement {$s} on day {$t}.
+rule.statement_covered = Trust entry {$e} covers identity statement {$s} at {$n}: it was issued on day {$t}, the municipality looked it up on day {$d} (status lookup {$l}), and the entry holds until day {$u}.
+rule.statement_authorised = On the day of status lookup {$l}, trust entry {$e} covers identity statement {$s} at {$n} and trust entry {$g} covers it at {$m}.
+rule.authoritative = The issuer of identity statement {$s} was authorised to name both identifiers, on the day it issued it and on a day the municipality looked it up.
+rule.scoped = On the day it issued identity statement {$s}, a trust entry of its issuer names {$n} and one names {$m}.
+rule.statement_seen = The municipality looked up the status of identity statement {$s}.
+rule.statement_withdrawn_1 = Status lookup {$l} found identity statement {$s} revoked.
+rule.statement_withdrawn_2 = Status lookup {$l} found identity statement {$s} suspended.
+rule.statement_in_good_standing = Status lookup {$l} found identity statement {$s} valid, and no lookup found it revoked or suspended.
+rule.same_subject = {$x} of {$n} and {$y} of {$m} are one person: identity statement {$s} says so, its issuer was authorised to say it, and it is in good standing.
+rule.names_here = Identity statement {$s} names {$x} of {$n}, the subject of credential {$c}, beside {$p} of the municipality.
+rule.named_here = An identity statement names the subject of credential {$c} beside an identifier of the municipality.
+rule.identified = The subject of credential {$c}, {$x} of {$n}, is the municipality's {$p}.
+rule.is_identified = The municipality knows the subject of credential {$c} by its own identifier.
+rule.subject_identification_1 = The subject of credential {$c} is unknown to the municipality: no identity statement names it beside an identifier of the municipality.
+rule.subject_identification_2 = The subject of credential {$c} is unknown to the municipality: the issuer of identity statement {$s} had no trust entry for each node it names on the day it issued it.
+rule.subject_identification_3 = The subject of credential {$c} is unknown to the municipality: the trust entries of the issuer of identity statement {$s} did not hold on any day the municipality looked it up.
+rule.subject_identification_4 = The subject of credential {$c} is unknown to the municipality: no status lookup found identity statement {$s} valid, or one found it revoked or suspended.
+rule.subject_identification_5 = The municipality knows the subject of credential {$c} by its own identifier.
+rule.attested_here = The municipality's {$p} has {$a} {$v}: it is {$x} of {$n}, by credential {$c}, and {$n} attests it.
+rule.looked_up_1 = Status lookup {$l} is of a credential.
+rule.looked_up_2 = Status lookup {$l} is of an identity statement.
+rule.status_lookup_not_of_one_1 = Status lookup {$l} is of no credential and no identity statement.
+rule.status_lookup_not_of_one_2 = Status lookup {$l} is of a credential and of an identity statement at once.
+
+# Why a claim is unknown, with the claim as argument.
+reason.not_disclosed = {{The holder did not disclose {$claim}.}}
+reason.issuer_not_authorised = {{The issuer of {$claim} was not authorised to state it on the day it issued the credential.}}
+reason.status_not_valid = {{No status lookup found the credential of {$claim} valid, or one found it revoked or suspended.}}
+# Why the municipality does not know the subject of a credential, with the credential as argument.
+reason.no_identity_statement = {{No identity statement names the subject of {$credential} beside an identifier of the municipality; an equal identifier joins nothing.}}
+reason.statement_issuer_not_authorised = {{An identity statement names the subject of {$credential}, but its issuer was not authorised to name the identifiers of both nodes.}}
+reason.statement_issuance_not_established = {{An identity statement names the subject of {$credential}, but its issuer's authority had ended before the municipality first looked it up; a new statement of the present authority is needed.}}
+reason.statement_status_not_valid = {{An identity statement names the subject of {$credential}, but no status lookup found it valid, or one found it revoked or suspended.}}
+
+# The explanation questions of std-explain, which has no English messages of its own yet:
+# a label for the button and a sentence for the head of the answer.
+explain.grounds = Grounds
+explain.grounds.question = {{What does {$element} rest on?}}
+explain.reach = Reach
+explain.reach.question = {{What depends on {$element}?}}
+explain.gap = What is missing
+explain.gap.question = {{What is missing for {$element}?}}
+explain.scenario = Scenario
+explain.scenario.question = {{What changes with {$element}?}}
+explain.impact = Impact
+explain.impact.question = {{What does {$element} reach?}}
+explain.sweep = Sweep
+explain.sweep.question = {{What does {$element} do over the range?}}
+explain.outside = Outside your view
+explain.more = More from here
+explain.empty = {{No answer for {$element}.}}
+explain.unpublished = {{Not published yet: propose {$element} to get the answer.}}

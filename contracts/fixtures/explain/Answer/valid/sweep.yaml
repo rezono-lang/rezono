@@ -1,0 +1,9 @@
+format: rede.answer/1
+question: sweep
+manifest_id: m-1
+delta: {kind: sweep, id: size_scale}
+nodes: []
+series:
+  - {index: 0, value: '0', status: green, manifest: v-size_scale-00-2, counts: [{relation: a__size, added: 0, removed: 0, changed: 1}]}
+  - {index: 1, value: '3', status: red, diagnosis: v-size_scale-01-2}
+  - {index: 2, value: '6', status: not_computed}

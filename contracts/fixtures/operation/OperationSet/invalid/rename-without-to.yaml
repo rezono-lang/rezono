@@ -1,0 +1,4 @@
+format: rede.operations/1
+pack: library
+operations:
+  - {op: rename, kind: Copy}

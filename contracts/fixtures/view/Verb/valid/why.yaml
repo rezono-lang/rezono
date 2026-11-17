@@ -1,0 +1,5 @@
+# A verb that a question of the bundle answers.
+verb: why
+label_message: verb.why
+key: w
+question: grounds

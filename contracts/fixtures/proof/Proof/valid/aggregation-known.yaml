@@ -1,0 +1,15 @@
+# total(a) = 5 + 7: a complete group with known values.
+root: {relation: total, key: '["a","known:12"]'}
+manifest_id: manifest-epoch-7
+witnesses:
+  - conclusion: {relation: total, key: '["a","known:12"]'}
+    rule_id: total
+    bindings: [{variable: "?x", value: a}, {variable: "?s", value: "known:12"}]
+    premises:
+      - {row: {relation: node, key: '["a"]'}, polarity: positive, stratum: 0}
+    aggregates:
+      - relation: weight
+        group_key: '["a"]'
+        count: 2
+        contributors_sha256: "c37daf9c60c8deeb75e8537864a58eb4b5f56fe0f0eb2440e6426f8f5708f278"
+        result: "known:12"

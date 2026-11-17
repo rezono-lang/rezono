@@ -1,0 +1,7 @@
+# The output schema id is s- and 64 hex digits.
+format: rede.answer/1
+question: ask
+manifest_id: m-1
+nodes: []
+output_schema: s-e601
+counts: {rows: 1, undecided: 0, not_applicable: 0}

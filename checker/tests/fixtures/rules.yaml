@@ -1,0 +1,26 @@
+# Rule definitions for the proofs in contracts/fixtures/proof, in the checker's interim format (see rede_checker/rules.py).
+rules:
+  - id: path_base
+    stratum: 1
+    head: {relation: path, terms: ["?x", "?y"]}
+    body:
+      - {relation: edge, terms: ["?x", "?y"], polarity: positive, stratum: 0}
+  - id: path_step
+    stratum: 1
+    head: {relation: path, terms: ["?x", "?z"]}
+    body:
+      - {relation: edge, terms: ["?x", "?y"], polarity: positive, stratum: 0}
+      - {relation: path, terms: ["?y", "?z"], polarity: positive, stratum: 1}
+  - id: open
+    stratum: 2
+    head: {relation: open, terms: ["?x", "?y"]}
+    body:
+      - {relation: path, terms: ["?x", "?y"], polarity: positive, stratum: 1}
+      - {relation: blocked, terms: ["?y"], polarity: negative, stratum: 0}
+  - id: total
+    stratum: 1
+    head: {relation: total, terms: ["?x", "?s"]}
+    body:
+      - {relation: node, terms: ["?x"], polarity: positive, stratum: 0}
+    aggregates:
+      - {relation: weight, terms: ["?x", "_"], function: sum, over: w, as: "?s", stratum: 0}

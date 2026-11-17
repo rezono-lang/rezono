@@ -1,0 +1,10 @@
+# Neutrale labels van std-order. Een domein geeft zijn eigen woorden in zijn eigen messages (view).
+ordered: {text: geordend element, gender: neuter}
+ordered.precedes: gaat vooraf aan
+ordered.rank: rang
+ordered.on_scale: schaal
+scale: {text: schaal, gender: common}
+before: eerder dan
+comparable: vergelijkbaar
+order_cycle: kringloop in de ordening
+rank_conflict: strijdige rang

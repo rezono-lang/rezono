@@ -1,0 +1,9 @@
+@locale nl
+---
+arrow.total = {{Elke {$kind} heeft precies één {$arrow}.}}
+arrow.partial = {{Elke {$kind} heeft hoogstens één {$arrow}.}}
+attribute.total = {{Elke {$kind} heeft precies één {$attribute}.}}
+attribute.partial = {{Elke {$kind} heeft hoogstens één {$attribute}.}}
+is_a = {{Elke {$kind} is een {$parent}.}}
+unique_key = {{{$key} hoort bij hoogstens één {$kind}.}}
+path_equation = {{Voor elke {$kind} geldt: {$equation}.}}

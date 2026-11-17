@@ -1,0 +1,18 @@
+@locale nl
+---
+# Fictief voorbeeld: een bedrag opgebouwd uit een basis plus correcties.
+pack.title = Voorbeeld: bedrag
+kind.claim = Aanvraag
+kind.adjustment = Correctie
+kind.rate = Tarief
+arrow.adjustment__of_claim = hoort bij aanvraag
+attr.claim__distance_km = Afstand
+attr.claim__base = Basisbedrag
+attr.claim__payout = Uitkering
+attr.adjustment__prior_paid = Eerder betaald
+attr.adjustment__amount = Correctiebedrag
+attr.rate__amount = Tarief
+rule.base_from_rate = {{Het basisbedrag is het standaardtarief van {$rate}.}}
+rule.distance_supplement = {{De toeslag is {$distance} maal {$per_km}.}}
+rule.prior_deduction = {{Eerder betaald ({$paid}) gaat eraf.}}
+rule.payout_sum = {{De uitkering is het basisbedrag plus {$count} correcties.}}

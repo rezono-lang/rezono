@@ -1,0 +1,173 @@
+id: https://rede.dev/contracts/manifest
+name: rede_manifest
+title: Snapshot manifest
+description: >-
+  The publication boundary. Only what a manifest lists is visible to the explainer,
+  the viewer and exports. Written only after an epoch whose checks are green. After a red epoch
+  the publisher writes a Diagnosis instead: diagnostic output, not a publication.
+prefixes:
+  linkml: https://w3id.org/linkml/
+  rede: https://rede.dev/contracts/
+default_prefix: rede
+default_range: string
+imports:
+  - linkml:types
+  - source
+
+enums:
+  CheckStatus:
+    description: Outcome of a check; red blocks publication.
+    permissible_values:
+      green: {}
+      warning: {}
+      red: {}
+      unavailable:
+        description: >-
+          Only in what the access gate serves to a role, never written by the publisher: the status
+          of a variant's check is derived from rows this role cannot read (Variant.status_readers).
+  SnapshotFormat:
+    description: File format of a snapshot.
+    permissible_values:
+      parquet: {}
+      json: {}
+
+classes:
+  Manifest:
+    description: The publication boundary for one epoch.
+    attributes:
+      id: {identifier: true, description: Stable identifier of this manifest.}
+      epoch: {range: integer, required: true, description: "The epoch this manifest closes: the number of commits of the source commit when CI publishes the pack, the offset of the last entry of the pack's input log when the pack has one (docs/live-service.md#the-epoch-loop); a pack with a log never goes back to the commit count, and its first entry starts above the last manifest's epoch. Numbers grow but need not follow each other without a gap: an unchanged pack or a red epoch closes no manifest."}
+      knowledge_time: {range: datetime, required: true, description: Knowledge time at which the epoch closed.}
+      base_manifest: {description: Previous manifest id; empty for the first.}
+      proposal: {description: "Proposal id when the proposal pipeline wrote this manifest (a what-if against base_manifest); empty on main."}
+      access_semantics: {range: integer, minimum_value: 2, maximum_value: 2, description: "Decision O8: what a role's files mean. 2: a role gets only rows derivable from what it may read, each with a proof chosen among those, and each snapshot says whether the role reads the relation in full. Absent: an older publisher; the access gate refuses such a manifest, also when it is the newest."}
+      pack_sha256: {required: true, description: "Hash of the pack that was compiled, its facts included. For the server side only: the access gate never passes it to a role, since a dictionary over it would find a hidden value."}
+      definition_sha256: {pattern: "^[0-9a-f]{64}$", description: "Hash of the pack's definition without facts or scenarios (pack.yaml, channels.yaml, schema/, rules/, labels/, messages/, icons/): the fingerprint a role may see, and the folder of the archived bundle (decision O8)."}
+      compiler_sha256: {required: true, description: "Hash of the compiler that compiled the pack: its source, rede-canon, the contracts it reads and the exact version of every library they use; part of the build record (docs/ci.md#8-pinned-versions)."}
+      engine: {range: Component, required: true, inlined: true, description: The engine that computed the snapshot.}
+      udf_sha256: {description: "Hash of the UDF build, if any."}
+      schema_version: {required: true, description: Version of the pack schema.}
+      sources: {multivalued: true, range: SourcePosition, inlined_as_list: true, description: Source positions at the end of the epoch.}
+      checks: {multivalued: true, range: CheckResult, inlined_as_list: true, description: Results of all checks for the epoch.}
+      counts: {multivalued: true, range: RelationCount, inlined_as_list: true, description: Row counts per relation.}
+      snapshots: {multivalued: true, range: Snapshot, inlined_as_list: true, description: Snapshot files per relation and role.}
+      witnesses: {multivalued: true, range: WitnessSet, inlined_as_list: true, description: "The witnesses each role may see, redacted on the server; the access gate builds Why and Uses from them."}
+      assets: {multivalued: true, range: AssetSet, inlined_as_list: true, description: "Per role the index of the images its image cells name (decision B10); absent when the pack binds no image."}
+      fact_sources: {multivalued: true, range: SourceSet, inlined_as_list: true, description: "Per role the file of SourceEntry (contracts/source.yaml) of exactly the base rows in its snapshots (S25), checked by `rede:sources`; not `sources`, which says where each source stood. Absent: a publisher before S25 or an epoch without source entries."}
+      compiled: {multivalued: true, range: ArchivedFile, inlined_as_list: true, description: "What was compiled for this epoch, archived with its hash: the schema bundle, and the rule IR if the pack has rules. With these and the inputs a publication can be made again and compared byte for byte."}
+      build: {range: ArchivedFile, inlined: true, description: "The build record (build.json): the compiler, the publisher's source, every library with its exact version, Python, platform, the hashes of the locks and the effective profile. Its hash names the build; the same build and inputs give the same bytes (docs/ci.md#8-pinned-versions)."}
+      pending: {multivalued: true, range: PendingInput, inlined_as_list: true, description: "Input that waits since this epoch, per source and per offloaded step (contracts/freshness.yaml). Read at publication; the cartouche shows it."}
+      variant: {range: Variant, inlined: true, description: "Set on a variant manifest (id v-<sweep>-<index>-<epoch>): base_manifest is the main manifest it varies. Never the current state of main."}
+
+  Diagnosis:
+    description: >-
+      What the publisher writes after a red epoch instead of a manifest (decision B7). Diagnostic
+      output, not a publication: nothing reads it as the current state, it is never a base_manifest,
+      and exports ignore it. The viewer shows it as a notice on the last good manifest, clickable to
+      the violations and their proofs.
+    attributes:
+      id: {identifier: true, required: true}
+      epoch: {range: integer, required: true, description: The red epoch.}
+      knowledge_time: {range: datetime, required: true}
+      last_good_manifest: {required: true, description: The manifest that stays the current state.}
+      checks: {multivalued: true, range: CheckResult, inlined_as_list: true, required: true, description: "The results of all checks; at least one is red."}
+      snapshots: {multivalued: true, range: Snapshot, inlined_as_list: true, description: "Only the violation views and what their proofs need, filtered per role."}
+      variant: {range: Variant, inlined: true, description: "Set on the diagnosis of a red variant (same id as its manifest would have); last_good_manifest is the main manifest it varies. A red variant never blocks main."}
+
+  Variant:
+    description: >-
+      The grid value of a sweep (docs/interaction.md, section 1) at which this epoch was computed:
+      main's facts with one fact cell set to `value`. The two role lists are for the access gate,
+      which removes them before it serves the variant. A role outside `readers` may not read the
+      swept cell and does not get the sweep. A role in `readers` but not in `status_readers` sees
+      every check of the variant as `unavailable`: its status is derived from rows the role cannot
+      read, as a derived row would be (decision O7).
+    attributes:
+      sweep: {required: true, pattern: "^[a-z][a-z0-9]*(_[a-z0-9]+)*$", description: "The sweep's name in sweeps.yaml."}
+      index: {range: integer, required: true, minimum_value: 0, maximum_value: 63, description: "The grid position, from 0 (min)."}
+      value: {required: true, pattern: "^(0|-?[1-9][0-9]*)$", description: "The cell's value as decimal text: a whole number, maybe beyond 2^53."}
+      readers: {multivalued: true, description: "Roles that may read the swept cell."}
+      status_readers: {multivalued: true, description: "Roles in readers that read every row the checks touch."}
+
+  PendingInput:
+    description: Input that arrived after the epoch, or work in progress, as known when the manifest was read.
+    attributes:
+      source_id: {required: true, description: "A source id from `sources`, or an offloaded step."}
+      since_position: {required: true, description: The position of the manifest in that source; the pending input comes after it.}
+      rows: {required: true, pattern: "^(0|[1-9][0-9]*)$", description: "Number of pending rows or units, as decimal text."}
+
+  Component:
+    description: A pinned software component with its version and hash.
+    attributes:
+      name: {required: true, description: For example feldera or duckdb-batch.}
+      version: {required: true, description: Version string of the component.}
+      sha256: {required: true, description: Hash of the component build.}
+
+  SourcePosition:
+    description: Where each source stood when the epoch closed (a Git commit, a journal offset).
+    attributes:
+      source_id: {required: true, description: Identifier of the source.}
+      position: {required: true, description: Position in the source (commit or offset).}
+
+  CheckResult:
+    description: The outcome of one named check at the end of the epoch.
+    attributes:
+      name: {required: true, description: Name of the check.}
+      status: {range: CheckStatus, required: true, description: Outcome of the check.}
+      violations: {range: integer, required: true, description: Number of violation rows.}
+
+  RelationCount:
+    description: The number of rows in one relation at the end of the epoch.
+    attributes:
+      relation: {required: true, description: Relation name.}
+      rows: {range: integer, required: true, description: Number of rows.}
+
+  Snapshot:
+    description: >-
+      One relation, written either complete or filtered for one role on the server.
+      The checker reads only complete snapshots, so negation and aggregates see the whole relation.
+    attributes:
+      relation: {required: true, description: Relation name.}
+      role: {required: true, description: Role that may read the snapshot.}
+      complete: {range: boolean, required: true, description: "True if the snapshot holds every row of the relation."}
+      full: {range: boolean, description: "True if the role reads every row of the relation by the shape of its read rules, whatever the data (decision O8); always true for a complete role. Negation and aggregates in the role's proofs range only over such relations. Absent: false."}
+      uri: {required: true, description: S3 URI; resolved through the storage port.}
+      sha256: {required: true, description: SHA-256 of the snapshot file bytes (docs/contracts.md#canonical-hash).}
+      format: {range: SnapshotFormat, required: true, description: File format of the snapshot.}
+
+  WitnessSet:
+    description: >-
+      The witnesses (contracts/proof.yaml) chosen for one role, one per derived row it may read: a proof
+      among those whose premises the role reads and whose negations and aggregates range over relations it
+      reads in full (decision O8). From access_semantics 2 on there are no screened steps (`hidden` is empty).
+    attributes:
+      role: {required: true, description: Role that may read the file.}
+      uri: {required: true, description: S3 URI; resolved through the storage port.}
+      sha256: {required: true, description: Hash of the file bytes.}
+
+  AssetSet:
+    description: >-
+      The images one role gets (decision B10, docs/gui.md#icons-and-images): a file listing, as AssetEntry in file
+      order, exactly the files the image cells of that role's snapshots name. The checker checks it (`rede:assets`);
+      the gate serves an image only to a role whose rows of that manifest, as it reads them today, name it.
+    attributes:
+      role: {required: true, description: Role that may read the file.}
+      uri: {required: true, description: S3 URI; resolved through the storage port.}
+      sha256: {required: true, description: Hash of the file bytes.}
+
+  AssetEntry:
+    description: One image of a role's asset index, written once under its hash (`<pack>/assets/<sha256>`).
+    attributes:
+      file: {required: true, description: "The path under the pack's assets/ that an image cell names."}
+      sha256: {required: true, pattern: "^[0-9a-f]{64}$", description: SHA-256 of the image's bytes.}
+      media_type: {required: true, description: "image/svg+xml or image/png."}
+      source: {required: true, description: "Where the image comes from, pinned."}
+      licence: {required: true, description: An SPDX id or a licence file in the pack.}
+      uri: {required: true, description: S3 URI of the image; resolved through the storage port.}
+
+  ArchivedFile:
+    description: One file archived next to the publication (compiled output or the build record).
+    attributes:
+      file: {required: true, description: "The compiler's name for the file, such as bundle/schema-bundle.json or ir/rules.json."}
+      uri: {required: true, description: S3 URI; resolved through the storage port.}
+      sha256: {required: true, description: SHA-256 of the file bytes (docs/contracts.md#canonical-hash).}

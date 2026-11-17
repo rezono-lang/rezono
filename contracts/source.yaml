@@ -1,0 +1,125 @@
+id: https://rede.dev/contracts/source
+name: rede_source
+title: Sources of facts
+description: >-
+  Where a base row comes from, separate from the proof that derives a conclusion (S25).
+  A source is a locator, not content; the same shape serves pack facts and observations.
+prefixes:
+  linkml: https://w3id.org/linkml/
+  rede: https://rede.dev/contracts/
+default_prefix: rede
+default_range: string
+imports:
+  - linkml:types
+  - proof
+
+types:
+  UTCInstant:
+    typeof: datetime
+    pattern: "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]{1,6})?Z$"
+    description: A real UTC calendar instant, written as ISO text with Z, without a local offset.
+
+enums:
+  SourceKind:
+    description: The kind of source in which a fact was recorded.
+    permissible_values:
+      git: {description: A repository at a pinned commit and a position in a file.}
+      pack: {description: A fact file written in the pack itself.}
+      scenario: {description: A scenario file that supplies or replaces a record.}
+      proposal: {description: A proposal and the delta step that supplies a row.}
+      query: {description: "A query on a system, such as a metric, an API or a database."}
+      tool: {description: A tool that reports a status or a measurement.}
+      person: {description: A recorded fact or observation by a person.}
+      document: {description: "A document outside Git, with an anchored fragment, its hash, a version or retrieval instant, and its licence and attribution."}
+  SourceOwnership:
+    description: Declared by the ingester; ownership is not inferred from a hostname or source kind.
+    permissible_values:
+      first_party: {description: Content owned by the pack's author.}
+      third_party: {description: Content from another party; licence and attribution are required.}
+
+classes:
+  SourceSidecar:
+    tree_root: true
+    description: >-
+      A facts/<file>.sources.yaml companion. Exact rows take precedence over a cell, record or file default.
+      The canonical writer emits rows only; record selectors remain compatible with ingested sidecars.
+    attributes:
+      default: {range: Source, inlined: true, description: The fallback source for every record in the fact file.}
+      records: {range: SourceRecord, multivalued: true, inlined_as_list: true}
+      rows: {range: SourceEntry, multivalued: true, inlined_as_list: true, description: "Exact RowRefs with complete sources; keys must be canonical and actually occur in the companion fact file."}
+
+  SourceSelector:
+    description: A record, or one cell of it, using the fact file's typed kind and identifier.
+    attributes:
+      kind: {required: true, pattern: "^[a-z][a-z0-9]*(_[a-z0-9]+)*$"}
+      id:
+        required: true
+        any_of: [{range: string}, {range: integer}]
+        description: The identifier in the root kind's SQL type; a boolean is never an integer identifier.
+      slot: {pattern: "^[a-z][a-z0-9]*(_[a-z0-9]+)*$", description: "When present, a slot of this kind, including inherited slots."}
+
+  SourceRecord:
+    description: >-
+      One compatible record/cell override. Missing source fields inherit the file default; the merged
+      source must satisfy Source, including its kind's required revision. Duplicate selectors union sources.
+    attributes:
+      of: {range: SourceSelector, required: true, inlined: true}
+      kind: {range: SourceKind}
+      name: {}
+      revision: {}
+      position: {}
+      url: {range: uri, pattern: "^https?://[^\\s/?#]+([/?#][^\\s]*)?$", description: "Absolute HTTP(S) document or API/resource URL; a locator, never fetched by contract validation."}
+      retrieved_at: {range: UTCInstant, description: "When the document bytes were retrieved; required for a document without a version. This is not an observation's event_time."}
+      fragment_sha256: {pattern: "^[0-9a-f]{64}$", description: SHA-256 of the exact UTF-8 bytes of the cited short fragment; no fragment text is stored in this contract.}
+      ownership: {range: SourceOwnership}
+      licence: {pattern: "^\\S(.*\\S)?$", description: "The declared SPDX id, LicenseRef or licence file in the pack, verified by the importer; validation makes no claim about legal permission."}
+      attribution: {pattern: "^\\S(.*\\S)?$", description: The required name/credit for the third-party source.}
+      reason: {description: Message key explaining why this row remains a fact instead of being derived.}
+
+  Source:
+    description: A repository, file, proposal, query, tool or register and a location within it.
+    attributes:
+      kind: {range: SourceKind, required: true}
+      name: {required: true, description: "The repository, file, proposal, query, tool or register."}
+      revision: {description: "The pinned revision: required for a Git commit or a proposal manifest; a document version or a query's API/schema version when supplied."}
+      position: {required: true, description: "Where in the source: Git path#section or path#L12-L24, a document section/paragraph anchor, a query's resource version or date, a JSON pointer, line, row and column, offset or delta step. Existing locators stay valid."}
+      url: {range: uri, pattern: "^https?://[^\\s/?#]+([/?#][^\\s]*)?$", description: "Absolute HTTP(S) document or API/resource URL; a locator, never fetched by contract validation."}
+      retrieved_at: {range: UTCInstant, description: "When the document bytes were retrieved; required for a document without a version. This is not an observation's event_time."}
+      fragment_sha256: {pattern: "^[0-9a-f]{64}$", description: SHA-256 of the exact UTF-8 bytes of the cited short fragment; no fragment text is stored in this contract.}
+      ownership: {range: SourceOwnership}
+      licence: {pattern: "^\\S(.*\\S)?$", description: "The declared SPDX id, LicenseRef or licence file in the pack, verified by the importer; validation makes no claim about legal permission."}
+      attribution: {pattern: "^\\S(.*\\S)?$", description: The required name/credit for the third-party source.}
+    rules:
+      - preconditions: {slot_conditions: {kind: {equals_string: git}}}
+        postconditions: {slot_conditions: {revision: {required: true}}}
+      - preconditions: {slot_conditions: {kind: {equals_string: proposal}}}
+        postconditions: {slot_conditions: {revision: {required: true}}}
+      - preconditions: {slot_conditions: {kind: {equals_string: document}}}
+        postconditions:
+          slot_conditions:
+            position: {pattern: "^\\S(.*\\S)?$"}
+            url: {required: true}
+            fragment_sha256: {required: true}
+            licence: {required: true}
+            attribution: {required: true}
+          any_of:
+            - slot_conditions: {revision: {required: true, pattern: "^\\S(.*\\S)?$"}}
+            - slot_conditions: {retrieved_at: {required: true}}
+      - preconditions: {slot_conditions: {kind: {equals_string: document}, revision: {value_presence: PRESENT}}}
+        postconditions: {slot_conditions: {revision: {pattern: "^\\S(.*\\S)?$"}}}
+      - preconditions: {slot_conditions: {ownership: {equals_string: third_party}}}
+        postconditions: {slot_conditions: {licence: {required: true}, attribution: {required: true}}}
+
+  SourceEntry:
+    description: The sources of one base row, using the row identity shared with proofs.
+    attributes:
+      row: {range: RowRef, required: true, inlined: true}
+      sources: {range: Source, required: true, multivalued: true, inlined_as_list: true, minimum_cardinality: 1, description: "Every source of the row; a writer sorts and deduplicates them."}
+      reason: {description: "Message key explaining why this row remains a fact instead of being derived (S29)."}
+
+  SourceSet:
+    description: The manifest's reference to a role's file of source entries.
+    attributes:
+      role: {required: true, description: The role whose base rows the entries describe.}
+      uri: {required: true, description: The location of the source-entry file.}
+      sha256: {required: true, pattern: "^[0-9a-f]{64}$", description: SHA-256 of the source-entry file bytes.}

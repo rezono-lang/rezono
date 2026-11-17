@@ -1,0 +1,8 @@
+connector: dcat-out
+standard: DCAT
+standard_version: "3"
+direction: out
+losses:
+  - subject: colour
+    what: The colour of a kind.
+    fate: dropped

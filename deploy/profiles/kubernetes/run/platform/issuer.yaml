@@ -1,0 +1,56 @@
+# The issuer: one Keycloak in development mode with the realm `rede` imported at start (Secret `issuer-realm`,
+# made by kind.sh per run from ../realm.json with that run's client secret and passwords). It serves plain HTTP
+# under one fixed name, the Service's, which the pods use and the run's curl reaches through the node port, so
+# the issuer in every token is the one the front and the gate were given. A real installation's issuer is https.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: issuer
+  namespace: rede-platform
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: issuer
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: issuer
+    spec:
+      automountServiceAccountToken: false
+      containers:
+        - name: issuer
+          image: issuer
+          args: [start-dev, --import-realm]
+          env:
+            - name: KC_HOSTNAME
+              value: http://issuer.rede-platform.svc.cluster.local:8080
+            - name: KC_HTTP_ENABLED
+              value: "true"
+          ports:
+            - { name: http, containerPort: 8080 }
+          readinessProbe:
+            httpGet: { path: /realms/rede/.well-known/openid-configuration, port: http }
+            periodSeconds: 5
+            failureThreshold: 60
+          resources:
+            requests: { cpu: 250m, memory: 768Mi }
+            limits: { memory: 1536Mi }
+          volumeMounts:
+            - { name: realm, mountPath: /opt/keycloak/data/import, readOnly: true }
+      volumes:
+        - name: realm
+          secret:
+            secretName: issuer-realm
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: issuer
+  namespace: rede-platform
+spec:
+  type: NodePort
+  selector:
+    app.kubernetes.io/name: issuer
+  ports:
+    - { name: http, port: 8080, targetPort: http, nodePort: 30808 }

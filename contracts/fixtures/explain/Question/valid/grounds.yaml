@@ -1,0 +1,7 @@
+term: grounds
+start: present
+applies_to: {derivation: conclusion}
+steps:
+  - trace: {direction: back, depth: all}
+answer: route
+limit: 200

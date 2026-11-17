@@ -1,0 +1,347 @@
+{
+ "description": "Test vectors for the canonical JSON form and hash (docs/contracts.md#canonical-hash). Typed leaves: {\"$int\": text}, {\"$float\": text}, {\"$date\": text}, {\"$datetime\": text}, {\"$null\": \"\"}. 'only' limits a vector to one language. Python (canon/) and TypeScript (viewer/src/lib/canon.ts) must give these bytes.",
+ "valid": [
+  {
+   "name": "empty_object",
+   "input": {},
+   "canonical": "{}",
+   "sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+  },
+  {
+   "name": "empty_array",
+   "input": [],
+   "canonical": "[]",
+   "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+  },
+  {
+   "name": "empty_string",
+   "input": "",
+   "canonical": "\"\"",
+   "sha256": "12ae32cb1ec02d01eda3581b127c1fee3b0dc53572ed6baf239721a03d82e126"
+  },
+  {
+   "name": "nested_empty",
+   "note": "Empty objects and arrays stay, also nested.",
+   "input": {
+    "a": {},
+    "b": [],
+    "c": [
+     {},
+     []
+    ]
+   },
+   "canonical": "{\"a\":{},\"b\":[],\"c\":[{},[]]}",
+   "sha256": "010b96c1533bb5ba7bcc83f5e2688860025e4c0e555490a9a1a1a7a18a32fb42"
+  },
+  {
+   "name": "key_order",
+   "note": "Keys sorted, uppercase before lowercase, a prefix first.",
+   "input": {
+    "b": "2",
+    "aa": "3",
+    "a": "1",
+    "B": "0"
+   },
+   "canonical": "{\"B\":\"0\",\"a\":\"1\",\"aa\":\"3\",\"b\":\"2\"}",
+   "sha256": "3c3d157751d5b97a6564cc64ebb5f4d4c033a7b5b0e147484eb668c61912e3f0"
+  },
+  {
+   "name": "key_order_utf16",
+   "note": "Keys sorted by UTF-16 code units (RFC 8785): U+1F600 (D83D DE00) before U+FF61.",
+   "input": {
+    "\uff61": "x",
+    "\ud83d\ude00": "y",
+    "\u00e9": "z"
+   },
+   "canonical": "{\"\u00e9\":\"z\",\"\ud83d\ude00\":\"y\",\"\uff61\":\"x\"}",
+   "sha256": "2683a3e1b83fefe303ca944c4d3e6920e7c72f4a19840b0db143c96a544fe804"
+  },
+  {
+   "name": "array_order",
+   "note": "Arrays keep their order.",
+   "input": [
+    "b",
+    "a",
+    "c"
+   ],
+   "canonical": "[\"b\",\"a\",\"c\"]",
+   "sha256": "f1d7b7b353ca5d84a3aff99495488a4625a5e948e877e04a3c1d5dc81a86f8f0"
+  },
+  {
+   "name": "unicode",
+   "note": "Unicode as raw UTF-8, never as \\u escapes.",
+   "input": {
+    "text": "\u00e9\u00e9n \u2014 \u65e5\u672c \ud83d\ude00"
+   },
+   "canonical": "{\"text\":\"\u00e9\u00e9n \u2014 \u65e5\u672c \ud83d\ude00\"}",
+   "sha256": "0d6262f2ee3e69b18a34f9014d485c202d854245c35dc57bd1de06978e37c740"
+  },
+  {
+   "name": "unicode_composed",
+   "note": "No normalization: composed and decomposed give different hashes.",
+   "input": "\u00e9",
+   "canonical": "\"\u00e9\"",
+   "sha256": "f2886017e9c7abacf804b54d64787dce2b611c9544ba21f3affdd126a6e50086"
+  },
+  {
+   "name": "unicode_decomposed",
+   "note": "No normalization: composed and decomposed give different hashes.",
+   "input": "e\u0301",
+   "canonical": "\"e\u0301\"",
+   "sha256": "3d68ce21f2899a475713cdbe7562ba9bdb6b1dfde8af1f221bdff4a0935b53b2"
+  },
+  {
+   "name": "escapes",
+   "note": "Only quote, backslash and control characters are escaped; short forms where JSON has them; DEL, '/' and U+2028 stay raw.",
+   "input": "\"\\\b\f\n\r\t\u0000\u001f\u007f/\u2028",
+   "canonical": "\"\\\"\\\\\\b\\f\\n\\r\\t\\u0000\\u001f\u007f/\u2028\"",
+   "sha256": "e819a8aecff8196c2c14c90973465b3ccdec85be853797d27ae8a9ecbace67e7"
+  },
+  {
+   "name": "integer",
+   "note": "An integer is decimal text.",
+   "input": {
+    "$int": "42"
+   },
+   "canonical": "\"42\"",
+   "sha256": "8334c554c7276f59674810b92fff5197cd46bf6ccbe872742f9b04ca31dfe3d1"
+  },
+  {
+   "name": "integer_equals_text",
+   "note": "So the integer 42 and the text \"42\" are the same value.",
+   "input": "42",
+   "canonical": "\"42\"",
+   "sha256": "8334c554c7276f59674810b92fff5197cd46bf6ccbe872742f9b04ca31dfe3d1"
+  },
+  {
+   "name": "integer_zero",
+   "input": {
+    "$int": "0"
+   },
+   "canonical": "\"0\"",
+   "sha256": "98089e6d36f78e9766c9ea34d5acb3611f3a92cd81c5eb102095d924ffc7d08b"
+  },
+  {
+   "name": "integer_negative",
+   "input": {
+    "$int": "-7"
+   },
+   "canonical": "\"-7\"",
+   "sha256": "b784af9867e609a4241d51672557e7e89e5ba7e37d1f8258c7478d10da8005f7"
+  },
+  {
+   "name": "integer_above_2_53",
+   "note": "2^53 + 1: exact, beyond a JavaScript number.",
+   "input": {
+    "$int": "9007199254740993"
+   },
+   "canonical": "\"9007199254740993\"",
+   "sha256": "dacffa2a18f34cc82e20f351e91f6b2116373fd0310870dacb062ddef9128684"
+  },
+  {
+   "name": "integer_above_2_64",
+   "note": "2^64 + 1.",
+   "input": {
+    "$int": "18446744073709551617"
+   },
+   "canonical": "\"18446744073709551617\"",
+   "sha256": "bf0b347517d8ade7fe51f4e24b2cf4ed5fcca01eaf2f36d752c829d7c73c8199"
+  },
+  {
+   "name": "booleans",
+   "input": [
+    true,
+    false
+   ],
+   "canonical": "[true,false]",
+   "sha256": "153c9dbcc7025ecd7e50ce6d83f1995233dfc636bc869098e3a8d84288fd938a"
+  },
+  {
+   "name": "date",
+   "note": "A date is ISO text YYYY-MM-DD.",
+   "input": {
+    "$date": "2026-11-06"
+   },
+   "canonical": "\"2026-11-06\"",
+   "sha256": "ef377f09672f97eabd3eae1845ca914d09ce06c3700a844e9eaa63779780fe96"
+  },
+  {
+   "name": "datetime_utc",
+   "note": "A datetime is ISO text in UTC with Z.",
+   "input": {
+    "$datetime": "2026-11-06T09:30:00Z"
+   },
+   "canonical": "\"2026-11-06T09:30:00Z\"",
+   "sha256": "bcf6dd213435392925d670b4a472f26a0eb310560387825496e771aa59327ca8"
+  },
+  {
+   "name": "datetime_offset",
+   "note": "An offset is converted to UTC.",
+   "input": {
+    "$datetime": "2026-11-06T10:30:00+01:00"
+   },
+   "canonical": "\"2026-11-06T09:30:00Z\"",
+   "sha256": "bcf6dd213435392925d670b4a472f26a0eb310560387825496e771aa59327ca8"
+  },
+  {
+   "name": "datetime_fraction",
+   "note": "A fraction of a second without trailing zeros.",
+   "input": {
+    "$datetime": "2026-11-06T09:30:00.120Z"
+   },
+   "canonical": "\"2026-11-06T09:30:00.12Z\"",
+   "sha256": "650e72fd6de398d76d51656f31569e87f194e22d24df49a17252badbc016d5c7"
+  },
+  {
+   "name": "datetime_microseconds",
+   "note": "Python only: JavaScript has milliseconds.",
+   "only": "python",
+   "input": {
+    "$datetime": "2026-11-06T09:30:00.000001Z"
+   },
+   "canonical": "\"2026-11-06T09:30:00.000001Z\"",
+   "sha256": "5887ec6f7f3684fa9c9a19c650b4432f2f07d42e07b00557ae9f81bc4a210031"
+  },
+  {
+   "name": "input_hash",
+   "note": "An InputHash of an offloaded step (contracts/offload.yaml).",
+   "input": {
+    "model_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+    "solver": {
+     "name": "minizinc+cp-sat",
+     "version": "9.12.0"
+    },
+    "time_limit_ms": {
+     "$int": "30000"
+    },
+    "seed": {
+     "$int": "1"
+    },
+    "parameters_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "payload_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+   },
+   "canonical": "{\"model_sha256\":\"0000000000000000000000000000000000000000000000000000000000000000\",\"parameters_sha256\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"payload_sha256\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"seed\":\"1\",\"solver\":{\"name\":\"minizinc+cp-sat\",\"version\":\"9.12.0\"},\"time_limit_ms\":\"30000\"}",
+   "sha256": "fb6c02dcef3dc20bf9fabe9e8408104fce7f98ece2cbf9aaf89bc57d71e71b04"
+  },
+  {
+   "name": "value_unknown",
+   "note": "A value with an explicit state (contracts/value.yaml): unknown is a state, never null.",
+   "input": {
+    "state": "unknown"
+   },
+   "canonical": "{\"state\":\"unknown\"}",
+   "sha256": "f541413ebb09af03bdff97175eb38a6287051010326377c031b16ff6ed29a999"
+  },
+  {
+   "name": "value_known_amount",
+   "note": "A known amount: minor units as integer, so decimal text.",
+   "input": {
+    "state": "known",
+    "minor_units": {
+     "$int": "-12345"
+    },
+    "currency": "XTS"
+   },
+   "canonical": "{\"currency\":\"XTS\",\"minor_units\":\"-12345\",\"state\":\"known\"}",
+   "sha256": "1788a7c12feba4395b6cb25ff75ea5c9ae2fa1bce86e89e3b70e42f81b728fb9"
+  },
+  {
+   "name": "value_known_ratio",
+   "note": "A known ratio as an exact fraction in decimal text.",
+   "input": {
+    "state": "known",
+    "numerator": "1",
+    "denominator": "3"
+   },
+   "canonical": "{\"denominator\":\"3\",\"numerator\":\"1\",\"state\":\"known\"}",
+   "sha256": "672b633cb46d037c178efb9c1327dafeff0b07a5c9674f8e9c1b3c87509b7b24"
+  },
+  {
+   "name": "value_not_applicable",
+   "input": {
+    "state": "not_applicable"
+   },
+   "canonical": "{\"state\":\"not_applicable\"}",
+   "sha256": "adf67de033c34093688ac19edbab7e38a663b3e5caabcafa50921bd57a554b1f"
+  },
+  {
+   "name": "contributors",
+   "note": "The contributors hash of an aggregate (checker): pairs of row key and value text.",
+   "input": [
+    [
+     "[\"n1\"]",
+     "known:3"
+    ],
+    [
+     "[\"n2\"]",
+     "unknown"
+    ]
+   ],
+   "canonical": "[[\"[\\\"n1\\\"]\",\"known:3\"],[\"[\\\"n2\\\"]\",\"unknown\"]]",
+   "sha256": "a941159fd4099fa3f3a1ac00cacfb26e2e0b9ed17a8ba513ef6dc903c6db288f"
+  }
+ ],
+ "invalid": [
+  {
+   "name": "float",
+   "note": "No floating point: money and ratios are integers or exact fractions.",
+   "input": {
+    "$float": "1.5"
+   },
+   "error": "float"
+  },
+  {
+   "name": "float_whole",
+   "note": "Also not a whole float (Python): it is not an integer.",
+   "only": "python",
+   "input": {
+    "$float": "1.0"
+   },
+   "error": "float"
+  },
+  {
+   "name": "null",
+   "note": "No null: absent is a missing key, unknown is a state.",
+   "input": {
+    "a": {
+     "$null": ""
+    }
+   },
+   "error": "null"
+  },
+  {
+   "name": "null_value",
+   "note": "Not as a value with a state either: the state says unknown.",
+   "input": {
+    "state": "unknown",
+    "value": {
+     "$null": ""
+    }
+   },
+   "error": "null"
+  },
+  {
+   "name": "lone_surrogate",
+   "note": "Strings are valid Unicode.",
+   "input": "\ud800",
+   "error": "lone_surrogate"
+  },
+  {
+   "name": "lone_surrogate_key",
+   "note": "Keys too.",
+   "input": {
+    "\udc00": "x"
+   },
+   "error": "lone_surrogate"
+  },
+  {
+   "name": "naive_datetime",
+   "note": "A datetime has a timezone (Python; a JavaScript Date always has one).",
+   "only": "python",
+   "input": {
+    "$datetime": "2026-11-06T09:30:00"
+   },
+   "error": "naive_datetime"
+  }
+ ]
+}

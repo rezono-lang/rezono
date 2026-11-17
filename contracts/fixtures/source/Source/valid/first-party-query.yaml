@@ -1,0 +1,4 @@
+kind: query
+name: example-query
+position: row-7
+ownership: first_party

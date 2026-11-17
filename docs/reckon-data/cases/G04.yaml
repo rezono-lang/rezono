@@ -1,0 +1,52 @@
+id: G04
+class: hash
+status: settled
+schema:
+  from: fixture.schema.json
+  merge:
+    kinds:
+      ZoneRule:
+        world: closed
+        id:
+          type: Text
+        plane: control
+        owner: network
+        slots:
+          decision:
+            card: '1'
+            type: Text
+            states:
+            - known
+          allowed:
+            card: '1'
+            type: Bool
+            states:
+            - known
+form: datasets
+input:
+- - &id001
+    $kind: ZoneRule
+    $id: dmz-to-core
+    decision: prop-412
+    allowed: false
+  - $kind: Host
+    $id: host-a
+    memory_need: 400 GiB
+    owner: &id002
+      $unknown: not_assigned
+    tags:
+    - gpu
+    - lab
+- - *id001
+  - $kind: Host
+    $id: host-a
+    memory_need: 400 GiB
+    owner: *id002
+    tags:
+    - gpu
+expect:
+  same_definition_hash: true
+  same_dataset_hash: false
+note: 'The definition hash covers only the control kind ZoneRule: a changed Host row leaves it.'
+sources:
+- l0.md §3.7 (O13, O14)

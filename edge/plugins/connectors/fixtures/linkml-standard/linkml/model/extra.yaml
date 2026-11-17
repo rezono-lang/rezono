@@ -1,0 +1,18 @@
+id: https://example.org/registry/extra
+name: extra
+prefixes:
+  linkml: https://w3id.org/linkml/
+  schema: http://schema.org/
+imports:
+  - linkml:types
+  - core
+default_range: string
+annotations:
+  layer: facts
+classes:
+  Review:
+    attributes:
+      id: {identifier: true}
+      record: {range: Record, required: true}
+      held_on: {range: date, slot_uri: schema:startDate, required: true}
+      note: {}

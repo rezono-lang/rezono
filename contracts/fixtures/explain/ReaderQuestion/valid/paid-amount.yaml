@@ -1,0 +1,8 @@
+id: paid-amount
+title_message: reader.paid_amount
+about_message: reader.paid_amount.about
+relation: ledger_paid
+proof: grounds
+columns:
+  - {column: application, message: reader.paid_amount.application, element: application}
+  - {column: cents, message: reader.paid_amount.cents}

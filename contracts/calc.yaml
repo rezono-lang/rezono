@@ -1,0 +1,234 @@
+id: https://rede.dev/contracts/calc
+name: rede_calc
+title: Calculation rules
+description: >-
+  Calculation rules as data, the part of the IR that M3 translates: versioned rules whose definitions
+  have a condition and a value as an expression tree over 16 exact operators. Arithmetic is over exact
+  rationals; the only inexact steps are the explicit rounding operators. Every integer is decimal text.
+  A value carries its state (contracts/value.yaml); the semantics of the states per operator is in
+  docs/archive/m2-pipelines-and-rule-ir.md. One evaluation is one witness: rule@version#definition with the
+  values of its leaves as bindings (contracts/proof.yaml).
+prefixes:
+  linkml: https://w3id.org/linkml/
+  rede: https://rede.dev/contracts/
+default_prefix: rede
+default_range: string
+imports:
+  - linkml:types
+
+types:
+  DecimalText:
+    typeof: string
+    description: A signed integer as canonical decimal text (no leading zeros, no "-0").
+    pattern: "^(0|-?[1-9][0-9]*)$"
+
+enums:
+  Operator:
+    permissible_values:
+      add: {description: "Sum of two or more arguments."}
+      sub: {description: "First argument minus the second."}
+      ratio: {description: "ratio(x, n, d) = x * n / d, exact; d = 0 gives invalid."}
+      min: {description: "Smallest of two or more arguments."}
+      max: {description: "Largest of two or more arguments."}
+      floor: {description: "Largest integer not above the argument; floor(-1/2) = -1."}
+      ceil: {description: "Smallest integer not below the argument; ceil(-1/2) = 0."}
+      round: {description: "Half away from zero, as rounding in docs/formal.md section 6: sign(x) * floor(|x| + 1/2); round(1/2) = 1, round(-1/2) = -1. Another mode is another operator, never a flag."}
+      pow: {description: "pow(b, e) with e a natural number; any other exponent gives invalid."}
+      if: {description: "if(c, a, b): a when c holds, else b; only the chosen branch is evaluated."}
+      and: {description: "Two or more booleans."}
+      or: {description: "Two or more booleans."}
+      eq: {}
+      lt: {}
+      lte: {}
+      gte: {}
+
+  ValueType:
+    permissible_values:
+      number: {description: An exact fraction.}
+      boolean: {}
+  FactReading:
+    description: How a fact leaf is read for a subject (decision W11).
+    permissible_values:
+      attribute: {description: "A required attribute of the subject kind, a table (id, v); missing is unknown."}
+      optional: {description: "An optional attribute of the subject kind; missing is not_applicable."}
+      column: {description: "A column of a derived relation whose first column is the subject; missing is unknown."}
+      presence: {description: "Whether a derived relation has a row for the subject: true or false, always known."}
+      input: {description: "A row of the input kind (subject, fact, value); missing is unknown."}
+
+classes:
+  CalcProgram:
+    tree_root: true
+    attributes:
+      format: {required: true, pattern: "^rede\\.calc/1$"}
+      pack: {required: true}
+      subject: {required: true, description: "The kind whose elements the rules are evaluated for: every rule has one value per element of it."}
+      parameters: {description: "Element id <kind>.<attribute> of the integer attribute that holds the parameters. A parameter leaf names an element of that kind by its id, unless parameter_choice is given."}
+      parameter_choice: {range: ParameterChoice, inlined: true, description: "With it a parameter leaf names a parameter by its name, and the row is chosen by validity and knowledge date (docs/compiler.md, calculation rules)."}
+      inputs: {range: InputBinding, inlined: true, description: "Where a fact that is not an attribute of the subject kind is read: one row per subject and fact."}
+      as_of: {range: AsOf, inlined: true, description: "The evaluation date that picks a version. It is loaded as a fact row, so a What-if changes it without compiling."}
+      rules: {range: CalcRule, multivalued: true, inlined_as_list: true}
+      templates: {range: Template, multivalued: true, inlined_as_list: true}
+
+  ParameterChoice:
+    description: >-
+      The semantic-name slot of the parameter kind (not necessarily its display name). With only name,
+      validity and optional knowledge time come from the kind's S26 slot roles; the explicit four-slot
+      form stays supported. A leaf `parameter: <name>` reads, of the rows with
+      that name that are valid on valid_at and known by known_at, the one with the latest known_from,
+      then the latest valid_from (as a version is chosen, W10). Without a knowledge role all rows are
+      known from the start. The compiler requires the two validity roles in the short form.
+    attributes:
+      name: {required: true, description: A text attribute; the name a leaf gives.}
+      valid_from: {description: "A date attribute; give all three temporal slots explicitly, or omit all three to use S26 roles."}
+      valid_until: {description: "A date attribute, exclusive; all three temporal slots or S26 roles."}
+      known_from: {description: "A date attribute; all three temporal slots or S26 roles."}
+    rules:
+      - preconditions: {slot_conditions: {valid_from: {value_presence: PRESENT}}}
+        postconditions: {slot_conditions: {valid_until: {required: true}, known_from: {required: true}}}
+      - preconditions: {slot_conditions: {valid_until: {value_presence: PRESENT}}}
+        postconditions: {slot_conditions: {valid_from: {required: true}, known_from: {required: true}}}
+      - preconditions: {slot_conditions: {known_from: {value_presence: PRESENT}}}
+        postconditions: {slot_conditions: {valid_from: {required: true}, valid_until: {required: true}}}
+
+  CalcRule:
+    description: One version of a rule. Which version applies follows from validity and knowledge date (lex posterior over known_from).
+    attributes:
+      id: {identifier: true, required: true, description: "<rule>@<version>"}
+      rule: {required: true}
+      version: {required: true}
+      output: {required: true, description: The relation (and value column) the rule fills.}
+      unit: {required: true, description: "The unit of the value. When it names a unit the pack declares (P10.3), every definition's value is checked to have it; any other text, such as cents, is not checked."}
+      valid_from: {range: date, required: true}
+      valid_until: {range: date, required: true, description: Exclusive.}
+      known_from: {range: date, required: true}
+      definitions: {range: Definition, multivalued: true, inlined_as_list: true}
+      template: {range: TemplateUse, inlined: true, description: "Instead of definitions, an application of a shared template."}
+
+  Definition:
+    description: >-
+      Applies when `when` holds and no definition that overrides it applies (default logic). Two
+      applicable definitions that do not override each other are a violation.
+    attributes:
+      name: {required: true}
+      when: {range: Expression, required: true, inlined: true}
+      value: {range: Expression, required: true, inlined: true}
+      overrides: {range: Override, multivalued: true, inlined_as_list: true}
+
+  Override:
+    attributes:
+      definition: {required: true, description: "The id <rule>@<version>#<name> of the definition this one goes before."}
+      reason: {required: true}
+
+  Expression:
+    description: >-
+      Exactly one of: an operator with arguments, or a leaf (rule, fact, parameter, integer, boolean,
+      or a template argument). The compiler checks that, and the arity per operator.
+    attributes:
+      op: {range: Operator}
+      args: {range: Expression, multivalued: true, inlined_as_list: true}
+      rule: {description: "The value of another rule, <rule> (version by validity) or <rule>@<version>."}
+      fact: {description: An input attribute (element id).}
+      parameter: {description: "A parameter fact, <parameter>@<version>."}
+      integer: {range: DecimalText}
+      unit: {description: "With integer only: the unit of the constant, a unit the pack declares (P10.3, docs/compiler/pack.md#units-and-dimensions), as Reckon writes 384 GiB. The compiler checks dimensions with it and converts nothing, so the bound program (CalcIR) does not carry it."}
+      boolean: {range: boolean}
+      arg: {description: The name of a template argument; only inside a template.}
+
+  InputBinding:
+    description: >-
+      Facts as rows of a kind of the pack (subject, fact, value), for input concepts that are no
+      attribute of the subject kind. Each value names a slot of `kind`.
+    attributes:
+      kind: {required: true}
+      subject: {required: true, description: Its arrow to the subject kind.}
+      fact: {required: true, description: Its text slot with the fact id.}
+      integer: {description: "Its integer slot: read where the fact is a number."}
+      boolean: {description: "Its boolean slot: read where the fact is a boolean."}
+
+  AsOf:
+    attributes:
+      valid_at: {range: date, required: true, description: The date a version must be valid on.}
+      known_at: {range: date, required: true, description: "The knowledge date: a version known later does not count."}
+
+  Template:
+    attributes:
+      id: {identifier: true, required: true}
+      arguments: {multivalued: true, required: true}
+      definitions: {range: Definition, multivalued: true, inlined_as_list: true, required: true}
+
+  TemplateUse:
+    attributes:
+      template: {required: true}
+      bindings: {range: TemplateBinding, multivalued: true, inlined_as_list: true, required: true}
+
+  TemplateBinding:
+    attributes:
+      arg: {required: true}
+      value: {range: Expression, required: true, inlined: true}
+
+  CalcIR:
+    description: >-
+      ir/calc.json: the program as the compiler bound it (decision W12): templates filled in, every fact
+      bound to where it is read, the view of every rule and version. The publisher and the checker read
+      it instead of calc/*.yaml; the checker evaluates it on its own.
+    attributes:
+      format: {required: true, pattern: "^rede\\.calc-ir/1$"}
+      pack: {required: true}
+      subject: {required: true, description: The kind whose elements the rules are evaluated for.}
+      subject_table: {required: true, description: Its table; every element has one value per rule.}
+      as_of: {required: true, description: "The table of the evaluation date (id, valid_at, known_at)."}
+      parameters: {description: "The table (id, v) of the parameter attribute; empty without parameters."}
+      parameter_choice: {range: ParameterChoiceTables, inlined: true, description: "The tables (id, v) of the ParameterChoice slots; absent when a leaf names an element by its id."}
+      inputs: {range: InputTables, inlined: true, description: The tables of the input kind's slots.}
+      facts: {range: FactBinding, multivalued: true, inlined_as_list: true}
+      rules: {range: CalcIRRule, multivalued: true, inlined_as_list: true}
+      versions: {range: CalcIRVersion, multivalued: true, inlined_as_list: true}
+
+  ParameterChoiceTables:
+    description: "The resolved name and validity tables; known_from is absent only when the kind has no knowledge role (S26)."
+    attributes:
+      name: {required: true}
+      valid_from: {required: true}
+      valid_until: {required: true}
+      known_from: {}
+
+  InputTables:
+    description: "The tables (id, v) of the input kind's slots: its arrow to the subject, its fact id, its value."
+    attributes:
+      subject: {required: true}
+      fact: {required: true}
+      integer: {}
+      boolean: {}
+
+  FactBinding:
+    attributes:
+      id: {required: true}
+      type: {range: ValueType, required: true}
+      reads: {range: FactReading, required: true}
+      table: {description: "The table or derived relation it is read from; empty for an input concept."}
+      index: {range: integer, description: "The position of the value in a row of the table; the subject is at 0."}
+
+  CalcIRRule:
+    attributes:
+      rule: {required: true}
+      view: {required: true, description: The view with its chosen value per subject.}
+      type: {range: ValueType, required: true}
+      versions: {multivalued: true, required: true, description: Its version ids.}
+
+  CalcIRVersion:
+    attributes:
+      id: {required: true, description: "<rule>@<version>"}
+      rule: {required: true}
+      version: {required: true}
+      view: {required: true}
+      valid_from: {range: date, required: true}
+      valid_until: {range: date, required: true, description: Exclusive.}
+      known_from: {range: date, required: true}
+      definitions: {range: CalcIRDefinition, multivalued: true, inlined_as_list: true, required: true}
+
+  CalcIRDefinition:
+    attributes:
+      name: {required: true}
+      when: {range: Expression, required: true, inlined: true}
+      value: {range: Expression, required: true, inlined: true}
+      before: {multivalued: true, description: The names of the definitions of the same version this one goes before.}

@@ -1,0 +1,21 @@
+# The explanation questions of std-order, built only from the generic building blocks of std-explain
+# (docs/gui.md, "Questions as data"). They are the generic grounds and reach, narrowed to the order: a
+# domain that imports std-explain keeps those too. The label and sentence are in messages/<lang>.mf2.
+format: rede.questions/1
+questions:
+  # Why does this come earlier? The chain of precedes steps behind a before conclusion.
+  - term: order_grounds
+    start: present
+    applies_to: {derivation: conclusion, relations: [before]}
+    steps:
+      - trace: {direction: back, depth: all, keep: {relations: [before], kinds: [ordered]}}
+    answer: route
+    limit: 200
+  # What comes after this? The elements that this element comes before, ring by ring.
+  - term: order_reach
+    start: present
+    applies_to: {kinds: [ordered]}
+    steps:
+      - trace: {direction: forward, depth: 3, keep: {relations: [before]}}
+    answer: rings
+    limit: 200

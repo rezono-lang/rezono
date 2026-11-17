@@ -1,0 +1,5 @@
+kind: query
+name: example-api
+position: resource-version-42
+ownership: third_party
+attribution: Example author

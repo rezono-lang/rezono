@@ -1,0 +1,23 @@
+# A constant outside BIGINT (2^63): refused, since SQL casts it to BIGINT and no engine has it as a value.
+format: rede.rules/1
+pack: fixture
+relations:
+  - name: size
+    role: base
+    key: [{name: a, type: string}, {name: n, type: integer}]
+  - name: share
+    role: derived
+    key: [{name: a, type: string}, {name: q, type: integer}]
+    module: count
+    explain: on_demand
+rules:
+  - id: share
+    module: count
+    stratum: "1"
+    head: {relation: share, terms: ["?a", "?q"]}
+    body:
+      - {relation: size, terms: ["?a", "?n"], polarity: positive, stratum: "0"}
+    assignments:
+      - {var: "?q", op: sub, left: "9223372036854775808", right: "1"}
+    witness: {relation: share__witness, variables: ["?a", "?n", "?q"]}
+    origin: {file: rules/count.dl, line: "1"}

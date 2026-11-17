@@ -1,0 +1,11 @@
+id: core_consumer
+stable_id: "CoreConsumer"
+span: {file: schema/core.yaml, line: "4", column: "3"}
+class: Consumer
+layer: facts
+abstract: true
+identifier: id
+id_type: text
+identifier_patterns: ["^k-[0-9a-f]{24}$"]
+module: core
+table: core_consumer

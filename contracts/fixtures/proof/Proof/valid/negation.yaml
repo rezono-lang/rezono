@@ -1,0 +1,15 @@
+# open(a,b): path(a,b) holds and blocked(b) is absent from stratum 0.
+root: {relation: open, key: '["a","b"]'}
+manifest_id: manifest-epoch-7
+witnesses:
+  - conclusion: {relation: open, key: '["a","b"]'}
+    rule_id: open
+    bindings: [{variable: "?x", value: a}, {variable: "?y", value: b}]
+    premises:
+      - {row: {relation: path, key: '["a","b"]'}, polarity: positive, stratum: 1}
+      - {row: {relation: blocked, key: '["b"]'}, polarity: negative, stratum: 0}
+  - conclusion: {relation: path, key: '["a","b"]'}
+    rule_id: path_base
+    bindings: [{variable: "?x", value: a}, {variable: "?y", value: b}]
+    premises:
+      - {row: {relation: edge, key: '["a","b"]'}, polarity: positive, stratum: 0}
