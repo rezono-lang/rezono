@@ -115,7 +115,7 @@ jobs:
           mkdir -p "$packages"
           if [[ "$CACHE_HIT" == true ]]; then
             (cd "$packages" && sha256sum --check SHA256SUMS)
-            if sudo apt-get install -y --no-download "$packages"/*.deb; then
+            if sudo dpkg --install "$packages"/*.deb; then
               souffle --version
               exit 0
             fi
