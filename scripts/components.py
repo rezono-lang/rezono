@@ -246,10 +246,19 @@ def run_shard(folder: str, shard: int, total: int, report_dir: Path) -> int:
     with tempfile.TemporaryDirectory() as state, ThreadPoolExecutor(max_workers=workers) as pool:
         statuses = list(pool.map(lambda worker: execute(worker, state), range(workers)))
         if not any(statuses) and folder in PARALLEL:
-            manifests = [(Path(state) / f"collection-{worker}").read_bytes() for worker in range(workers)]
+            manifests = [
+                (Path(state) / f"collection-{worker}").read_text(encoding="ascii")
+                for worker in range(workers)
+            ]
             if len(set(manifests)) != 1:
                 print("Workers collected different tests", file=sys.stderr)
                 return 1
+            if workers > 1 and folder != "examples":
+                count = int(manifests[0].split()[0])
+                claimed = sum(1 for _ in (Path(state) / "claims").iterdir())
+                if claimed != count:
+                    print(f"Assigned {claimed} of {count} collected tests", file=sys.stderr)
+                    return 1
     # A failed worker always wins over an empty collection.
     return next((code for code in statuses if code not in (0, 5)), 5 if 5 in statuses else 0)
 
@@ -275,7 +284,7 @@ def pytest_worker(folder: str, shard: int, total: int, worker: int, workers: int
             assigned = set(sorted(set(files) | collected)[shard::total])
             local = [item for item in items if item.path.relative_to(ROOT).as_posix() in assigned]
             digest = hashlib.sha256(json.dumps([item.nodeid for item in local]).encode()).hexdigest()
-            (state / f"collection-{worker}").write_text(digest, encoding="ascii")
+            (state / f"collection-{worker}").write_text(f"{len(local)} {digest}", encoding="ascii")
             if folder != "examples":
                 items[:] = local
                 return
