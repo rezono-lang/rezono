@@ -6,8 +6,10 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import shutil
 import subprocess
 import sys
+import tempfile
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
@@ -192,19 +194,43 @@ def test_files(folder: str) -> list[str]:
     })
 
 
+def runner_cores() -> int:
+    available = len(os.sched_getaffinity(0)) if hasattr(os, "sched_getaffinity") else os.cpu_count()
+    return min(4, available or 1)
+
+
+def check_contracts() -> int:
+    # The checker discovers fixtures relative to its own location. Each copy
+    # runs the original checker with all schemas and a disjoint fixture set.
+    source = ROOT / "contracts"
+    fixtures = sorted((source / "fixtures").glob("*/*/*/*.yaml"))
+    workers = runner_cores()
+
+    def check(worker: int) -> int:
+        with tempfile.TemporaryDirectory() as tmp:
+            copy = Path(tmp) / "contracts"
+            excluded = set(fixtures) - set(fixtures[worker::workers])
+
+            def ignore(directory: str, names: list[str]) -> list[str]:
+                return [name for name in names if Path(directory) / name in excluded]
+
+            shutil.copytree(source, copy, ignore=ignore)
+            return subprocess.run(["bash", str(copy / "check.sh")], check=False).returncode
+
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        return max(pool.map(check, range(workers)))
+
+
 def run_shard(folder: str, shard: int, total: int, report_dir: Path) -> int:
     files = test_files(folder)
-    assigned = files[shard::total]
-    print(f"{folder} shard {shard + 1}/{total}: {json.dumps(assigned)}", flush=True)
-    ignores = [f"--ignore={path}" for path in files if path not in assigned]
-    cores = min(4, len(os.sched_getaffinity(0))) if hasattr(os, "sched_getaffinity") else 1
-    workers = cores if folder in PARALLEL else 1
+    print(f"{folder} shard {shard + 1}/{total}: {json.dumps(files[shard::total])}", flush=True)
+    workers = runner_cores() if folder in PARALLEL else 1
     report_dir.mkdir(parents=True, exist_ok=True)
 
     def execute(worker: int) -> int:
         args = [
             sys.executable, str(Path(__file__).resolve()), "pytest-worker", folder,
-            str(worker), str(workers), str(report_dir), *ignores,
+            str(shard), str(total), str(worker), str(workers), str(report_dir),
         ]
         return subprocess.run(args, cwd=ROOT, check=False).returncode
 
@@ -219,8 +245,13 @@ def run_shard(folder: str, shard: int, total: int, report_dir: Path) -> int:
     return next((code for code in statuses if code), 0)
 
 
-def pytest_worker(folder: str, worker: int, workers: int, reports: str, ignores: list[str]) -> int:
+def pytest_worker(folder: str, shard: int, total: int, worker: int, workers: int, reports: Path) -> int:
     import pytest
+
+    # Match python -m pytest's import path while registering the partition
+    # after normal collection, including conftest exclusions and plug-ins.
+    sys.path.insert(0, str(ROOT))
+    files = test_files(folder)
 
     class Partition:
         had_items = False
@@ -228,11 +259,24 @@ def pytest_worker(folder: str, worker: int, workers: int, reports: str, ignores:
         @pytest.hookimpl(trylast=True)
         def pytest_collection_modifyitems(self, items):
             self.had_items = bool(items)
-            items[:] = items[worker::workers]
+            collected = {item.path.relative_to(ROOT).as_posix() for item in items}
+            assigned = set(sorted(set(files) | collected)[shard::total])
+            local = [item for item in items if item.path.relative_to(ROOT).as_posix() in assigned]
+            items[:] = local[worker::workers]
+
+        @pytest.hookimpl(wrapper=True)
+        def pytest_make_collect_report(self, collector):
+            report = yield
+            # Module-level skips happen at collection, before items are split.
+            # Report each on exactly one runner.
+            if report.skipped and (shard or worker):
+                report.outcome = "passed"
+                report.result = []
+            return report
 
     partition = Partition()
-    report = Path(reports) / f"pytest-{worker}.xml"
-    args = ["-q", "--durations=5", f"--junitxml={report}", *ignores, folder]
+    report = reports / f"pytest-{worker}.xml"
+    args = ["-q", "--durations=5", f"--junitxml={report}", folder]
     status = pytest.main(args, plugins=[partition])
     if status == pytest.ExitCode.NO_TESTS_COLLECTED and partition.had_items:
         return 0
@@ -241,12 +285,13 @@ def pytest_worker(folder: str, worker: int, workers: int, reports: str, ignores:
 
 def main() -> int:
     if sys.argv[1:2] == ["pytest-worker"]:
-        folder, worker, workers, reports, *ignores = sys.argv[2:]
-        return pytest_worker(folder, int(worker), int(workers), reports, ignores)
+        folder, shard, total, worker, workers, reports = sys.argv[2:]
+        return pytest_worker(folder, int(shard), int(total), int(worker), int(workers), Path(reports))
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest="cmd", required=True)
     sub.add_parser("list", help="List discovered component folders and kinds.")
     sub.add_parser("python-packages", help="Print editable Python package directories.")
+    sub.add_parser("check-contracts", help="Validate all contract fixtures across runner cores.")
     shard_p = sub.add_parser("run-shard", help="Run the selected pytest file partition.")
     shard_p.add_argument("folder")
     shard_p.add_argument("shard", type=int)
@@ -257,6 +302,8 @@ def main() -> int:
     matrix_p.add_argument("--before", default=os.environ.get("GITHUB_EVENT_BEFORE", ""))
 
     args = parser.parse_args()
+    if args.cmd == "check-contracts":
+        return check_contracts()
     if args.cmd == "run-shard":
         return run_shard(args.folder, args.shard, args.total, args.reports)
     if args.cmd == "list":

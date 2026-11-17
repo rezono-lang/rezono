@@ -57,10 +57,10 @@ jobs:
           cache-dependency-path: requirements/dev.txt
       - name: Cache locked Python environment
         id: environment
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830  # v4.3.0
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830  # v4.3.0
         with:
           path: .venv
-          key: python-env-v1-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('requirements/.python-version', 'requirements/dev.txt') }}
+          key: python-env-v2-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('requirements/.python-version', 'requirements/dev.txt') }}
       - name: Install from lockfile
         env:
           CACHE_HIT: ${{ steps.environment.outputs.cache-hit }}
@@ -70,6 +70,15 @@ jobs:
             python -m venv .venv
             .venv/bin/python -m pip install -q --no-deps --require-hashes -r requirements/dev.txt
           fi
+      - name: Save locked environment before installing local packages
+        if: steps.environment.outputs.cache-hit != 'true' && strategy.job-index == 0
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830  # v4.3.0
+        with:
+          path: .venv
+          key: ${{ steps.environment.outputs.cache-primary-key }}
+      - name: Install repository packages
+        run: |
+          set -euo pipefail
           export PATH="$PWD/.venv/bin:$PATH"
           echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
           python -m pip install -q --no-deps --no-build-isolation ${{ needs.discover.outputs.python_editable }}
@@ -88,7 +97,7 @@ jobs:
           set -euo pipefail
           folder="$COMPONENT"
           if [[ "$KIND" == contracts ]]; then
-            contracts/check.sh
+            python scripts/components.py check-contracts
             folder="$COMPONENT/python"
           fi
           python scripts/components.py run-shard "$folder" "$SHARD" "$TOTAL" "$RUNNER_TEMP/reports"
