@@ -44,17 +44,30 @@ def scan():
     return result
 
 
+def read_budget(data):
+    budget = json.loads(data)
+    if not isinstance(budget, dict):
+        raise ValueError("Expected an object of per-file exception counts")
+    kinds = {"email", *PATTERNS}
+    for entry in budget.values():
+        if not isinstance(entry, dict) or not entry or not entry.keys() <= kinds:
+            raise ValueError("Invalid exception categories")
+        if any(type(number) is not int or number <= 0 for number in entry.values()):
+            raise ValueError("Exception counts must be positive integers")
+    return budget
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--base")
     args = parser.parse_args()
     actual = scan()
-    budget = json.loads(Path(BUDGET).read_bytes())
+    budget = read_budget(Path(BUDGET).read_bytes())
     previous = budget
     if args.base:
         tree = subprocess.check_output(["git", "ls-tree", args.base, "--", BUDGET])
         if tree:
-            previous = json.loads(subprocess.check_output(["git", "show", f"{args.base}:{BUDGET}"]))
+            previous = read_budget(subprocess.check_output(["git", "show", f"{args.base}:{BUDGET}"]))
     failed = False
     totals = Counter()
     for path in sorted(set(actual) | set(budget)):
