@@ -89,8 +89,8 @@ from . import store as stores
 from . import timing
 
 ROOT = Path(__file__).resolve().parents[3]
-if str(ROOT) not in sys.path:
-    sys.path.append(str(ROOT))  # rezono_publication lives at the repository root, beside the publisher
+if str(ROOT / "publication") not in sys.path:
+    sys.path.append(str(ROOT / "publication"))
 
 from rezono_publication import arrow  # noqa: E402
 from rezono_publication import hash as rhash  # noqa: E402
@@ -143,7 +143,7 @@ def component() -> dict:
     """What the forms are made with, for the build record: the library's source, and the exporters' source and
     loss lists. Another library or exporter is another build, so a pack is published again (`--skip-unchanged`
     compares builds)."""
-    return {"format": FORMAT, "rezono_publication": _sources((ROOT / "rezono_publication", "*.py")),
+    return {"format": FORMAT, "rezono_publication": _sources((ROOT / "publication" / "rezono_publication", "*.py")),
             "connectors": _sources((CONNECTORS, "*.py"), (CONNECTORS, "*.losses.yaml"))}
 
 
@@ -326,7 +326,7 @@ def verified_tables(data: dict[str, bytes], form: dict, h: dict) -> dict[str, by
     by `arrow.file_name`. Each form's files are read back from their bytes alone, as a reader reads them, and the
     rows they give must have exactly the form's hashes (`hashes.json`); otherwise Blocked, and nothing is written.
     That they are the same bytes when written again, whatever the order of the rows, is the Arrow writer's own
-    test (rezono_publication/tests/test_arrow.py), not checked here: it repeated a pure function on the same rows."""
+    test (publication/tests/test_arrow.py), not checked here: it repeated a pure function on the same rows."""
     pin = {"dataset": h["dataset"], "manifest": form["manifest"]["id"]}
     schema = json.loads(data["schema.json"])
     try:

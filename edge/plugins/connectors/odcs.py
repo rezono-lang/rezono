@@ -35,7 +35,7 @@ from fractions import Fraction
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
-sys.path.insert(0, str(ROOT))  # rezono_publication lives at the repository root
+sys.path.insert(0, str(ROOT / "publication"))
 
 import pyarrow as pa  # noqa: E402
 import yaml  # noqa: E402

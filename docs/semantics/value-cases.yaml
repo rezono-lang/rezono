@@ -556,7 +556,7 @@ cases:
     input: {ask: "ask Host where owner = team-platform", role: viewer, worlds: ["host__owner row of host-a hidden from viewer", "that row absent"], read_rules: "viewer does not read host__owner in full"}
     expect: {both_worlds: "byte-identical; rows host-c; undecided host-a (unknown, not_read_in_full); not applicable 2; not_assigned appears in neither"}
     sources: ["values.md §4 (effective world)", "the arbiter on #736, 12-11-2026, point 6 (RV-C19)", "P10.2a §7a rule 1, E50", "#351 P1.8"]
-    agree: ["rezono/src/evaluate.ts:353", "rezono_publication/publication.py:178", "edge/gate/src/expr.ts:247"]
+    agree: ["rezono/src/evaluate.ts:353", "publication/rezono_publication/publication.py:178", "edge/gate/src/expr.ts:247"]
     status: settled
 
   - id: withheld-outcome
