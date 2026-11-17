@@ -120,11 +120,13 @@ jobs:
               exit 0
             fi
           fi
-          # Retain the packages apt authenticates while the pinned installer runs.
-          printf 'Dir::Cache::archives "%s";\nAPT::Keep-Downloaded-Packages "true";\n' "$packages" |
+          # The apt download user can traverse /var/tmp on hosted runners.
+          archives=$(mktemp -d /var/tmp/rezono-oracle.XXXXXX)
+          chmod 0755 "$archives"
+          printf 'Dir::Cache::archives "%s";\nAPT::Keep-Downloaded-Packages "true";\n' "$archives" |
             sudo tee /etc/apt/apt.conf.d/99-rezono-oracle-cache > /dev/null
           bash scripts/install-souffle.sh
-          cp "$RUNNER_TEMP"/*souffle*.deb "$packages/"
+          cp "$archives"/*.deb "$RUNNER_TEMP"/*souffle*.deb "$packages/"
           (cd "$packages" && sha256sum ./*.deb > SHA256SUMS)
       - name: Generate contract types
         if: steps.types.outputs.cache-hit != 'true'
