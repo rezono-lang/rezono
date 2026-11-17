@@ -1,12 +1,12 @@
 id: https://rezono.org/contracts/pack
-name: rede_pack
+name: rezono_pack
 title: Pack files
 description: >-
   The files of a pack that are not LinkML: pack.yaml (name, version, language) and
   channels.yaml (the pack's part of the key: a shape and an optional icon per kind, a dash per arrow), icons/ (the icons, listed in icons/sources.yaml), and sweeps.yaml
   (the fact cell of a sweep) with the grid the compiler makes of it, ir/sweeps.json.
   views.yaml has a closed structural profile; loading it does not enable view execution.
-  Labels and messages are checked by the compiler (`python -m rede_compiler check`),
+  Labels and messages are checked by the compiler (`python -m rezono_compiler check`),
   because their element ids come from the schema.
 prefixes:
   linkml: https://w3id.org/linkml/
@@ -65,7 +65,7 @@ classes:
   PackImport:
     description: >-
       One pack import. A schema of this pack names a module of the imported pack as `<name>:<path>`.
-      `sha256` is the hash of the imported pack's files (`python -m rede_compiler hash <pack>`); a
+      `sha256` is the hash of the imported pack's files (`python -m rezono_compiler hash <pack>`); a
       different hash is an error, so an import never changes unnoticed.
     attributes:
       name: {required: true, pattern: "^[a-z][a-z0-9]*(-[a-z0-9]+)*$", description: The name in the imported pack.yaml.}

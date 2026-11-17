@@ -14,7 +14,7 @@ import json
 import random
 import sys
 
-from rede_compiler.rules import with_strata
+from rezono_compiler.rules import with_strata
 
 SHAPES = ("join", "filter", "constant", "union", "negation", "recursion", "count", "sum", "minmax",
           "threshold", "arithmetic")

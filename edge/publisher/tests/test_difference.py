@@ -10,9 +10,9 @@ from pathlib import Path
 import pytest
 import yaml
 
-from rede_checker.difference import changes, check_difference
-from rede_publisher import proof
-from rede_publisher.difference import entries
+from rezono_checker.difference import changes, check_difference
+from rezono_publisher import proof
+from rezono_publisher.difference import entries
 
 LIMIT, FANOUT = 700, 3  # small, so a tree has several levels; a page still holds two children
 
@@ -95,7 +95,7 @@ def test_the_checker_refuses_what_is_not_the_change(spoil):
 def test_a_proof_tree_is_named_at_the_base_only_when_the_base_has_that_very_tree():
     """RV-M24: the hash decides, and the place is the one the publisher works out itself: the same path under
     the base's views for the same role. Anything else in the base's index keeps the variant's copy."""
-    from rede_publisher.difference import shared
+    from rezono_publisher.difference import shared
 
     class Store(dict):
         def uri(self, key):
@@ -131,7 +131,7 @@ def test_a_proof_tree_is_named_at_the_base_only_when_the_base_has_that_very_tree
 def test_a_delta_that_may_change_a_right_gets_no_difference_decided_without_data():
     """`may_read` is derived from facts. Whether a delta may change it is decided from the rules and the delta
     alone, so it never depends on an element a role does not see (P1 review of #168)."""
-    from rede_publisher.difference import withheld
+    from rezono_publisher.difference import withheld
 
     def atom(rel, *terms, polarity="positive"):
         return {"relation": rel, "terms": list(terms), "polarity": polarity}
@@ -175,7 +175,7 @@ SET_STATE = {"op": "set", "file": "facts/a.yaml", "kind": "beta", "key": "b1", "
 def sealed_pack(d: Path, rules: str) -> Path:
     """The neutral pack with Alpha sealed on `period`, Beta a part of it (docs/compiler.md#parts) and a kind
     Gamma outside the seal, with one covered Alpha and its part as facts."""
-    from rede_compiler import facts, pack
+    from rezono_compiler import facts, pack
 
     shutil.copytree(FIXTURES / "minimal", d)
     schema = yaml.safe_load((d / "schema" / "minimal.yaml").read_text())
@@ -201,7 +201,7 @@ def sealed_pack(d: Path, rules: str) -> Path:
 
 
 def compiled(d: Path):
-    from rede_compiler import emit, pack
+    from rezono_compiler import emit, pack
 
     files = emit.compile_pack(pack.read(d))
     return json.loads(files["ir/rules.json"]), json.loads(files["bundle/schema-bundle.json"])
@@ -209,8 +209,8 @@ def compiled(d: Path):
 
 def test_a_right_on_a_seal_withholds_a_change_to_anything_the_seal_reads(tmp_path):
     """`alpha__refused` follows from Alpha, its parts and the closes: an edited part refuses its element."""
-    pytest.importorskip("rede_compiler")
-    from rede_publisher.difference import withheld
+    pytest.importorskip("rezono_compiler")
+    from rezono_publisher.difference import withheld
 
     rules, bundle = compiled(sealed_pack(tmp_path / "on", ON_REFUSAL))
     held = lambda r, **change: withheld(r, bundle, {"changes": [change]})  # noqa: E731
@@ -237,7 +237,7 @@ def test_a_proposal_that_edits_a_part_gets_no_difference(tmp_path):
     """End to end: the viewer reads Beta, and Alpha only once it is refused. Its proposal on a Beta it reads
     refuses a1, so the proposal's snapshots hold a1 for the viewer; no difference may show them."""
     pytest.importorskip("duckdb")
-    from rede_publisher import batch, proposal, publish, store
+    from rezono_publisher import batch, proposal, publish, store
     from test_proposal import PACK, ROLES, sh
 
     repo = tmp_path / "repo"
@@ -259,9 +259,9 @@ def test_a_proposal_that_edits_a_part_gets_no_difference(tmp_path):
 def test_a_right_cannot_rest_on_a_calculated_value(tmp_path):
     """Refuted for calculations: no compiled pack has `may_read` downstream of a selection, directly or through
     a derived relation, so no delta to a calculation input changes a right. An IR that had it is withheld."""
-    pytest.importorskip("rede_compiler")
-    from rede_compiler import emit, pack
-    from rede_publisher.difference import withheld
+    pytest.importorskip("rezono_compiler")
+    from rezono_compiler import emit, pack
+    from rezono_publisher.difference import withheld
 
     big = '.decl big(item: symbol)\nbig(x) :- calc__total(x, c, "known", ""), c > 10.\n'
     for name, rules in (("direct", READ + 'may_read("viewer", "item", x) :- calc__total(x, c, "known", ""), c > 10.\n'),

@@ -1,5 +1,5 @@
 id: https://rezono.org/contracts/port
-name: rede_port
+name: rezono_port
 title: Port declarations
 description: >-
   One contract for every boundary port (decision O12a, PC1), with three kinds. `in`: what arrives is an

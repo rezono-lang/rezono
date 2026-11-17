@@ -1,4 +1,4 @@
-"""A Matrix sheet (`matrix.<id>`) is checked like any sheet (rede_checker.views, check_view), plus its binding in
+"""A Matrix sheet (`matrix.<id>`) is checked like any sheet (rezono_checker.views, check_view), plus its binding in
 the compiled bundle: every node is a head named by its axis and the element it shows (`rows/<of>`,
 `columns/<of>`), which the role must read at its most specific kind and which is of its axis's kind; every cell
 runs from a row's head to a column's head, is of the binding's sign and, for a relation, names exactly its `from`
@@ -8,7 +8,7 @@ Negative cases first."""
 import copy
 import json
 
-from rede_checker.views import check_view
+from rezono_checker.views import check_view
 
 MATRIX = {"id": "zones", "title_message": "m", "rows": {"kind": "zone"}, "columns": {"kind": "zone"},
           "cells": {"relation": "zone_crossing", "from": "za", "to": "zb", "from_kinds": ["zone"], "to_kinds": ["zone"]}}

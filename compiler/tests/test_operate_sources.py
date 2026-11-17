@@ -16,9 +16,9 @@ import yaml
 from hypothesis import HealthCheck, assume, given, settings, strategies as st
 
 import genpack
-from rede_canon import canonical_json
-from rede_compiler import operate, sources, writer
-from rede_compiler import pack as packs
+from rezono_canon import canonical_json
+from rezono_compiler import operate, sources, writer
+from rezono_compiler import pack as packs
 from support import REPO
 from test_operate import COMBINE, DROPS, LIBRARY, MOVES, RENAMES, SPLIT, checkout, combine_ops, files, move_ops, run, \
     split_ops

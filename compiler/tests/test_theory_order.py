@@ -12,8 +12,8 @@ from pathlib import Path
 import pytest
 from hypothesis import given, settings, strategies as st
 
-from rede_compiler import emit, pack
-from rede_compiler import rules as ir
+from rezono_compiler import emit, pack
+from rezono_compiler import rules as ir
 
 THEORY = Path(__file__).resolve().parents[2] / "packs" / "std-order"
 pytest.importorskip("duckdb")
@@ -45,7 +45,7 @@ def program():
 
 
 def batch_eval(prog, precedes, rank):
-    from rede_compiler import batch
+    from rezono_compiler import batch
     con = batch.connect(prog, {"ordered__precedes": sorted(precedes), "ordered__rank": sorted(rank)})
     batch.compute(con, prog)
     return batch.read(con, prog)
@@ -150,7 +150,7 @@ def test_a_domain_kind_that_is_ordered_gets_the_theory_through_the_ordinary_comp
     of its own is Ordered (is_a). Its elements are in the theory's tables, so the rules and axioms hold for
     them through the ordinary compiler. A view with other names waits for the lowering."""
     import yaml
-    from rede_compiler import batch, modules, scenarios
+    from rezono_compiler import batch, modules, scenarios
 
     domain = tmp_path / "bound"
     for folder in ("schema", "labels", "facts"):

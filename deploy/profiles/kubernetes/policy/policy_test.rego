@@ -131,7 +131,7 @@ test_data_from_makes_any_key if {
 
 test_a_secret_in_a_config_map_is_refused if refused(render([namespace, deny_all, external_secret, deployment(pod_spec), {"apiVersion": "v1", "kind": "ConfigMap", "metadata": {"name": "m"}, "data": {"API_TOKEN": "x"}}]), "looks like a secret")
 
-test_a_literal_secret_is_refused if refused(with_container(object.union(container, {"env": [{"name": "REDE_LIVE_TOKEN", "value": "x"}]})), "literal value")
+test_a_literal_secret_is_refused if refused(with_container(object.union(container, {"env": [{"name": "REZONO_LIVE_TOKEN", "value": "x"}]})), "literal value")
 
 test_no_default_deny_is_refused if refused(render([namespace, external_secret, deployment(pod_spec)]), "denies all ingress and egress")
 

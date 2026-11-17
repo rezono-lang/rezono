@@ -1,5 +1,5 @@
 id: https://rezono.org/contracts/calc
-name: rede_calc
+name: rezono_calc
 title: Calculation rules
 description: >-
   Calculation rules as data, the part of the IR that M3 translates: versioned rules whose definitions

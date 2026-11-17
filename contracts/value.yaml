@@ -1,5 +1,5 @@
 id: https://rezono.org/contracts/value
-name: rede_value
+name: rezono_value
 title: Values with an explicit state
 description: >-
   Every derived value carries its state and, when one is given, its reason. Unknown is never

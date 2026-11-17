@@ -17,8 +17,8 @@ import pytest
 import souffle
 from support import FIXTURE, compile_dir
 from test_reckon_module import add, module
-from rede_compiler import emit, pack, reckon_table, rules_sql
-from rede_compiler import rules as ir
+from rezono_compiler import emit, pack, reckon_table, rules_sql
+from rezono_compiler import rules as ir
 
 LEVEL = {"enum": "Level", "world": "closed", "values": ["valid", "revoked", "suspended"]}
 TONE = {"enum": "Tone", "world": "closed", "values": ["up", "down"]}

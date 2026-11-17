@@ -9,9 +9,9 @@ from pathlib import Path
 import pytest
 
 pytest.importorskip("duckdb")
-pytest.importorskip("rede_compiler")
+pytest.importorskip("rezono_compiler")
 
-from rede_publisher import batch, proof, proposal, publish, store  # noqa: E402
+from rezono_publisher import batch, proof, proposal, publish, store  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[3]
 PACK = "packs/p"
@@ -191,7 +191,7 @@ def test_a_symbolic_link_in_the_pack_is_refused(repo, tmp_path):
     n, time = proposal.base_of(repo, linked)
     e = batch.epoch(repo / PACK, epoch=n, knowledge_time=time, sources=[("rules", linked)])
     publish.publish(e, st, ROLES)
-    from rede_compiler import writer
+    from rezono_compiler import writer
 
     with pytest.raises((ValueError, writer.WriteError)):
         proposal.publish_proposal(repo, PACK, "7", linked, SET_A1, st, ROLES)
@@ -224,7 +224,7 @@ def test_a_proposal_has_its_difference_per_role_the_gate_serves(repo, tmp_path):
 
 
 def test_a_difference_shows_the_changed_cell(repo, tmp_path):
-    from rede_publisher import difference
+    from rezono_publisher import difference
 
     st = store.FileStore(tmp_path / "store")
     base, _ = publish_main(repo, st)
@@ -251,7 +251,7 @@ STATED = {"kind": "person", "name": "user-123", "position": AT}
 
 
 def test_a_proposal_states_its_proposer_as_the_source_of_what_it_writes(repo, tmp_path):
-    from rede_compiler import writer
+    from rezono_compiler import writer
 
     (repo / PACK / "facts" / "a.sources.yaml").write_text("default: " + json.dumps(GIT) + "\n")  # as an ingest leaves it
     sh("git", "add", ".", cwd=repo)
@@ -262,7 +262,7 @@ def test_a_proposal_states_its_proposer_as_the_source_of_what_it_writes(repo, tm
     with pytest.raises(writer.WriteError, match="need their real origin"):  # no proposer: refused, nothing published
         proposal.publish_proposal(repo, PACK, "7", base, SET_A1, st, ROLES)
     assert st.get("minimal/manifests/p-7-4.json") is None
-    assert proposal.stated_by(WHO, AT) == {"sources": [STATED]}  # the same origin as rede_githost.propose builds
+    assert proposal.stated_by(WHO, AT) == {"sources": [STATED]}  # the same origin as rezono_githost.propose builds
     mid = proposal.publish_proposal(repo, PACK, "7", base, SET_A1, st, ROLES, proposal.stated_by(WHO, AT))
     assert mid == "p-7-4" and size(st, mid, "a1") == "2"
     sources = {(e["row"]["relation"], e["row"]["key"]): e["sources"]

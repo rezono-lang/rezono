@@ -47,11 +47,11 @@ import sys
 from pathlib import Path, PurePosixPath
 
 import yaml
-from rede_compiler.schemaview import SchemaView
+from rezono_compiler.schemaview import SchemaView
 from linkml_runtime.dumpers import json_dumper
 from linkml_runtime.linkml_model import meta
 
-from rede_compiler import modules, pack
+from rezono_compiler import modules, pack
 
 STANDARD = "LinkML"
 STANDARD_VERSION = "1.12"

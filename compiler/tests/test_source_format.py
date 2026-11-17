@@ -10,12 +10,12 @@ from pathlib import Path
 
 import pytest
 
-from rede_compiler import source_format, writer
+from rezono_compiler import source_format, writer
 
 REPO = Path(__file__).resolve().parents[2]
 PACKS = sorted(p.parent for p in (REPO / "examples").rglob("pack.yaml") if "expected" not in p.parts)
 FMT = source_format.YAML_DATALOG
-operate_model = importlib.import_module("rede_compiler.operate.model")  # the package names a function `model`
+operate_model = importlib.import_module("rezono_compiler.operate.model")  # the package names a function `model`
 
 
 def test_every_format_implements_the_whole_interface():

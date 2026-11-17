@@ -1,11 +1,11 @@
-"""Heads of main manifests (rede_publisher.pointers): the newest sorts first, the backfill is idempotent."""
+"""Heads of main manifests (rezono_publisher.pointers): the newest sorts first, the backfill is idempotent."""
 
 import hashlib
 import json
 
 import pytest
 
-from rede_publisher import pointers, store
+from rezono_publisher import pointers, store
 
 
 def manifest(st, pack, body):

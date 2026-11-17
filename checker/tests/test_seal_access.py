@@ -5,7 +5,7 @@ says `not_readable`; and they do not count as read in full."""
 
 import json
 
-from rede_checker.access import check_role
+from rezono_checker.access import check_role
 
 SEAL = {"kind": "run", "period": "run__month", "row_sha256": "run__row_sha256", "tables": ["run__month"],
         "closed_until": "period_close__closed_until", "covers": "period_close__covers",

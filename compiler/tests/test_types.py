@@ -9,7 +9,7 @@ from hypothesis import given, settings
 from hypothesis import strategies as st
 
 import genpack
-from rede_compiler import calc, pack, types
+from rezono_compiler import calc, pack, types
 
 ROOT = Path(__file__).resolve().parents[2]
 # The tables the compiler kept before B09, one per consumer: the reference these projections must equal.
@@ -132,7 +132,7 @@ GOLDEN = Path("expected/compiled/bundle/schema-bundle.json")
 def test_every_published_slot_carries_its_semantic_type(pack_dir):
     # B10: the bundle of every example names, per slot, the type the compiler holds; per calc view its result.
     import json
-    from rede_compiler import emit
+    from rezono_compiler import emit
     published = json.loads((pack_dir / GOLDEN).read_text())
     p = pack.read(pack_dir)
     want = {s.element: s.type.semantic for k in p.kinds.values() for s in k.slots.values()}

@@ -2,7 +2,7 @@
 # Profile `kubernetes`, run: on a plain local cluster (kind), from this checkout, in one command (README.md).
 #
 #   deploy/profiles/kubernetes/run/kind.sh        bring it up, read it through its front door, take it down
-#   deploy/profiles/kubernetes/run/kind.sh down   take down what a run left (REDE_RUN_KEEP=1, or a failed run)
+#   deploy/profiles/kubernetes/run/kind.sh down   take down what a run left (REZONO_RUN_KEEP=1, or a failed run)
 #
 #   1. a kind cluster of one node, and a registry beside it for the images of this checkout;
 #   2. what a platform gives, as fixtures: External Secrets with a ClusterSecretStore `rede` of test values made
@@ -17,7 +17,7 @@
 # Needs docker, kind, kubectl, openssl, curl and a Git checkout (the publish job reads the commit). KIND and
 # KUBECTL name other binaries. Nothing leaves this machine but the downloads of pinned images and manifests; no
 # value of the run is printed, and its work directory (certificates, test credentials) is removed at the end.
-# REDE_RUN_KEEP=1 leaves the cluster up after the reading, for a look; `kind.sh down` removes it.
+# REZONO_RUN_KEEP=1 leaves the cluster up after the reading, for a look; `kind.sh down` removes it.
 set -euo pipefail
 shopt -s inherit_errexit
 umask 077
@@ -26,7 +26,7 @@ here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 profile_dir=$(cd "$here/.." && pwd)
 root=$(cd "$here/../../../.." && pwd)
 
-CLUSTER=${REDE_RUN_CLUSTER:-rede-run}
+CLUSTER=${REZONO_RUN_CLUSTER:-rezono-run}
 # Kubernetes 1.34, the minor version ../check.sh validates against; the digest kind v0.33.0 publishes for it.
 NODE_IMAGE=kindest/node:v1.34.11@sha256:44e222ee2132dab25ff87301682f89eb82c7880ea3a1bf543bfe9708fd08d67d
 REGISTRY_IMAGE=registry:3.0.0@sha256:6c5666b861f3505b116bb9aa9b25175e71210414bd010d92035ff64018f9457e
@@ -35,7 +35,7 @@ ESO_SHA256=34cf25e951da2aeefe465e6767036272a1db1f713b9be6a1b7bc811ae9a739c2
 GATEWAY_URL=https://github.com/envoyproxy/gateway/releases/download/v1.10.0/install.yaml
 GATEWAY_SHA256=f87f4d59b983aa760da52a2a0002c612028106fe69beefdf3d30cfb03905944e
 HOST=rezono.example.test
-ISSUER=issuer.rede-platform.svc.cluster.local
+ISSUER=issuer.rezono-platform.svc.cluster.local
 
 kind=${KIND:-kind}
 kubectl=${KUBECTL:-kubectl}
@@ -72,7 +72,7 @@ done
 git -C "$root" rev-parse HEAD >/dev/null 2>&1 || fail "needs a Git checkout: the publish job reads the commit, its count and its time"
 if "$kind" get clusters 2>/dev/null | grep -qx "$CLUSTER"; then fail "a cluster $CLUSTER exists; kind.sh down removes it"; fi
 
-work=$(mktemp -d "${TMPDIR:-/tmp}/rede-run.XXXXXX")
+work=$(mktemp -d "${TMPDIR:-/tmp}/rezono-run.XXXXXX")
 finish() {
 	local status=$?
 	if [ $status -ne 0 ]; then
@@ -85,8 +85,8 @@ finish() {
 		done
 	fi
 	rm -rf "$work"
-	if [ "${REDE_RUN_KEEP:-0}" = 1 ]; then
-		echo "kind.sh: cluster $CLUSTER is left up (REDE_RUN_KEEP=1); kind.sh down removes it"
+	if [ "${REZONO_RUN_KEEP:-0}" = 1 ]; then
+		echo "kind.sh: cluster $CLUSTER is left up (REZONO_RUN_KEEP=1); kind.sh down removes it"
 	else
 		down
 	fi
@@ -143,13 +143,13 @@ k apply --server-side -f "$work/external-secrets.yaml" >/dev/null
 k apply --server-side -f "$work/gateway.yaml" >/dev/null
 
 k apply -f "$here/platform/namespace.yaml" >/dev/null
-k -n rede-platform create secret generic store \
+k -n rezono-platform create secret generic store \
 	--from-file=root-user="$work/values/root-user" --from-file=root-password="$work/values/root-password" \
 	--from-file=reader-id="$work/values/reader-id" --from-file=reader-secret="$work/values/reader-secret" >/dev/null
 sed -e "s/@CLIENT_SECRET@/$(v client-secret)/" -e "s/@READER_PASSWORD@/$(v reader-password)/" \
-	-e "s/@STRANGER_PASSWORD@/$(v stranger-password)/" "$here/realm.json" > "$work/rede-realm.json"
-k -n rede-platform create secret generic issuer-realm --from-file="$work/rede-realm.json" >/dev/null
-k -n gateway create secret tls rede-tls --cert="$work/tls.crt" --key="$work/tls.key" >/dev/null
+	-e "s/@STRANGER_PASSWORD@/$(v stranger-password)/" "$here/realm.json" > "$work/rezono-realm.json"
+k -n rezono-platform create secret generic issuer-realm --from-file="$work/rezono-realm.json" >/dev/null
+k -n gateway create secret tls rezono-tls --cert="$work/tls.crt" --key="$work/tls.key" >/dev/null
 k apply -k "$here/platform" >/dev/null
 
 # External Secrets' release manifest installs into the namespace `default`.
@@ -175,15 +175,15 @@ spec:
 EOF
 retry 24 k apply -f "$work/secret-store.yaml" >/dev/null 2>&1 || fail "External Secrets does not take the ClusterSecretStore"
 
-k -n rede-platform wait --for=condition=Available deployment/store --timeout=300s >/dev/null
+k -n rezono-platform wait --for=condition=Available deployment/store --timeout=300s >/dev/null
 # The gate's keys: a user of the store that may list the bucket and get its objects (platform/store.yaml).
 # shellcheck disable=SC2016  # the variables are the pod's
-retry 12 k -n rede-platform exec deploy/store -- sh -c '
+retry 12 k -n rezono-platform exec deploy/store -- sh -c '
 	mc alias set run http://127.0.0.1:9000 "$MINIO_ROOT_USER" "$MINIO_ROOT_PASSWORD" >/dev/null &&
-	mc admin policy create run rede-read /etc/rede/read.json >/dev/null &&
+	mc admin policy create run rezono-read /etc/rede/read.json >/dev/null &&
 	mc admin user add run "$READER_ID" "$READER_SECRET" >/dev/null &&
-	mc admin policy attach run rede-read --user "$READER_ID" >/dev/null' || fail "the store does not take the reader's keys"
-k -n rede-platform wait --for=condition=Available deployment/issuer --timeout=600s >/dev/null
+	mc admin policy attach run rezono-read --user "$READER_ID" >/dev/null' || fail "the store does not take the reader's keys"
+k -n rezono-platform wait --for=condition=Available deployment/issuer --timeout=600s >/dev/null
 echo "platform ready"
 
 # --- 3. the images of this checkout ----------------------------------------------------------------------------------
@@ -203,7 +203,7 @@ step "4. publish: the packs of deploy/profiles/kubernetes.yaml into the store"
 docker build -q -f "$here/toolchain.Containerfile" -t "$CLUSTER-toolchain" "$here" >/dev/null
 AWS_ACCESS_KEY_ID=$(v root-user) AWS_SECRET_ACCESS_KEY=$(v root-password) docker run --rm --network kind \
 	-v "$root:/src:ro" -v "$CLUSTER-cache:/cache" \
-	-e AWS_ACCESS_KEY_ID -e AWS_SECRET_ACCESS_KEY -e REDE_S3_ENDPOINT="http://$node:30900" \
+	-e AWS_ACCESS_KEY_ID -e AWS_SECRET_ACCESS_KEY -e REZONO_S3_ENDPOINT="http://$node:30900" \
 	"$CLUSTER-toolchain" /src/deploy/profiles/kubernetes/run/publish.sh
 
 # --- 5. the profile: checked as a live installation, then that render applied -----------------------------------
@@ -222,7 +222,7 @@ images:
     newName: $registry:5000/rede/viewer
     digest: ${digest[viewer]}
 EOF
-REDE_K8S_RENDERS="$work/renders" "$profile_dir/check.sh" --live "$work/kind"
+REZONO_K8S_RENDERS="$work/renders" "$profile_dir/check.sh" --live "$work/kind"
 k apply -f "$work/renders/kind.yaml" >/dev/null
 k -n rede wait --for=condition=Ready externalsecret --all --timeout=180s >/dev/null
 k -n rede wait --for=condition=Available deployment --all --timeout=600s >/dev/null
@@ -265,10 +265,10 @@ echo "no login: 302 to the issuer"
 
 login reader
 web -b "$work/reader.jar" -o "$work/home.html" "https://$HOST/"
-# The packs the gate in the cluster was told to serve: REDE_PACKS of the ConfigMap its Deployment names.
+# The packs the gate in the cluster was told to serve: REZONO_PACKS of the ConfigMap its Deployment names.
 settings=$(k -n rede get deployment gate -o jsonpath='{.spec.template.spec.containers[?(@.name=="gate")].envFrom[0].configMapRef.name}')
-packs=$(k -n rede get configmap "$settings" -o jsonpath='{.data.REDE_PACKS}')
-[ -n "$packs" ] || fail "no REDE_PACKS in the cluster"
+packs=$(k -n rede get configmap "$settings" -o jsonpath='{.data.REZONO_PACKS}')
+[ -n "$packs" ] || fail "no REZONO_PACKS in the cluster"
 for pack in ${packs//,/ }; do
 	grep -q "href=\"/$pack\"" "$work/home.html" || fail "the home page does not list $pack"
 	status=$(code -b "$work/reader.jar" "https://$HOST/$pack")
@@ -285,7 +285,7 @@ status=$(code -b "$work/stranger.jar" "https://$HOST/")
 echo "stranger (no group): 403"
 
 # The network: only the gate reaches the store. One request from each, with the same code.
-probe='fetch("http://store.rede-platform.svc.cluster.local:9000/minio/health/live", { signal: AbortSignal.timeout(8000) }).then((r) => console.log("reached", r.status), (e) => console.log("no way", e.name))'
+probe='fetch("http://store.rezono-platform.svc.cluster.local:9000/minio/health/live", { signal: AbortSignal.timeout(8000) }).then((r) => console.log("reached", r.status), (e) => console.log("no way", e.name))'
 [ "$(k -n rede exec deploy/gate -- node -e "$probe")" = "reached 200" ] || fail "the gate does not reach the store"
 [ "$(k -n rede exec deploy/viewer -- node -e "$probe")" = "no way TimeoutError" ] || fail "the viewer reaches the store"
 echo "network: the gate reaches the store, the viewer does not"

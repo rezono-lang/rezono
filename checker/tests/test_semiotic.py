@@ -7,8 +7,8 @@ import json
 
 import pytest
 
-from rede_checker.semiotic import Outside, containment
-from rede_checker.views import Role
+from rezono_checker.semiotic import Outside, containment
+from rezono_checker.views import Role
 
 
 def encoded(value):

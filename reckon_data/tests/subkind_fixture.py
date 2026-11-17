@@ -5,7 +5,7 @@ Item (`parent`), a Spare is a Part, and a Tool is an Item beside them. An item h
 another item; a part may have a size; a holder keeps items. In Rede an element of a subkind is a row of every
 kind above it too (docs/compiler.md, Tables), so `p1` is a row of `item` and of `part`.
 
-Two roles, each as the publisher's filter gives them (rede_publisher.access): `WIDE` reads every element and
+Two roles, each as the publisher's filter gives them (rezono_publisher.access): `WIDE` reads every element and
 every relation in full; `NARROW` is granted the kind `part` and nothing above it, so it reads `p1`, `p2` and `s1`
 as parts, their sizes, and no row of `item`, of an item's slots or of any other kind.
 """

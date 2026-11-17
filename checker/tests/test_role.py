@@ -1,4 +1,4 @@
-"""RV-K04: what one filtered role may read (rede_checker/access.py, decision O8), on a filter that got it wrong.
+"""RV-K04: what one filtered role may read (rezono_checker/access.py, decision O8), on a filter that got it wrong.
 
 One small world, written by hand: nothing here comes from the compiler or the publisher. The role `guest` reads
 every person, the documents it was granted, and what follows from those. `world()` is what a correct filter
@@ -12,8 +12,8 @@ from pathlib import Path
 
 import pytest
 
-from rede_checker import access
-from rede_checker.canon import encode_key
+from rezono_checker import access
+from rezono_checker.canon import encode_key
 
 KINDS = {"doc", "person"}
 COLUMNS = {"doc": ("doc",), "person": ("person",), "doc__author": ("doc", "person"), "role": (None,),

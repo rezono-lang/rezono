@@ -21,7 +21,7 @@ import re
 from fractions import Fraction
 from math import gcd
 
-from rede_canon import CanonError, canonical_json, canonical_sha256
+from rezono_canon import CanonError, canonical_json, canonical_sha256
 
 __all__ = [
     "L0Error",
@@ -104,7 +104,7 @@ _DEC38 = 10**38 - 1
 # A sign shared by several currencies (`$`, `¥`, `kr`) is not a literal of any of them.
 _CURRENCY_SIGN = {"EUR": "€", "GBP": "£", "INR": "₹", "KRW": "₩", "ILS": "₪", "NGN": "₦", "PHP": "₱",
                   "RUB": "₽", "TRY": "₺", "UAH": "₴", "VND": "₫", "KZT": "₸", "GEL": "₾", "AZN": "₼"}
-# contracts/source.yaml `Source`, restated (as checker/rede_checker/sources.py does) so the reader imports no
+# contracts/source.yaml `Source`, restated (as checker/rezono_checker/sources.py does) so the reader imports no
 # contract code (§1).
 _SOURCE_KINDS = {"git", "pack", "scenario", "proposal", "query", "tool", "person", "document"}
 _SOURCE_FIELDS = {"kind", "name", "revision", "position", "url", "retrieved_at", "fragment_sha256", "ownership",

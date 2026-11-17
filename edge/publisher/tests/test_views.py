@@ -1,4 +1,4 @@
-"""The published views of a manifest (rede_publisher.views), over every example pack.
+"""The published views of a manifest (rezono_publisher.views), over every example pack.
 
 Generic: no pack is named. Per filtered role: a view index that names the manifest and exactly the role's
 snapshots, pieces that the checker accepts, the same bytes when made again, and positions that stay from
@@ -13,9 +13,9 @@ from pathlib import Path
 import pytest
 
 pytest.importorskip("duckdb")
-pytest.importorskip("rede_compiler")
+pytest.importorskip("rezono_compiler")
 
-from rede_publisher import batch, publish, store, views  # noqa: E402
+from rezono_publisher import batch, publish, store, views  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[3]
 PACKS = sorted(p.parent for p in (ROOT / "examples").rglob("pack.yaml")
@@ -162,8 +162,8 @@ def test_order_metric_measures_actual_compiler_snapshot_flow_enum_order(tmp_path
     """Actual producers and raw cells: independently measured compiled enum order."""
     from dataclasses import replace
     import yaml
-    from rede_checker.semiotic_order import lane_order
-    from rede_checker.views import Role
+    from rezono_checker.semiotic_order import lane_order
+    from rezono_checker.views import Role
 
     target = tmp_path / "minimal"
     shutil.copytree(ROOT / "compiler/tests/fixtures/minimal", target)

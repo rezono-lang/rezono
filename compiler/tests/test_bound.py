@@ -14,8 +14,8 @@ from hypothesis import strategies as st
 
 import souffle
 from support import FIXTURE
-from rede_compiler import batch, pack
-from rede_compiler import rules as ir
+from rezono_compiler import batch, pack
+from rezono_compiler import rules as ir
 
 SOUFFLE = pytest.mark.skipif(shutil.which("souffle") is None, reason="needs souffle (the oracle)")
 LAST = 2  # the counter is read while it is at most this: `n < 3`
@@ -122,10 +122,10 @@ def test_the_check_view_on_feldera_holds_the_rows_past_the_bound(prog):
     two rows past the bound, and none once the count ends at it."""
     from feldera import URL, deploy, processed, push, query, stop
 
-    from rede_compiler import rules_sql
+    from rezono_compiler import rules_sql
     if not URL:
         pytest.skip("set FELDERA_URL to a running Feldera")
-    name = "rede-rules-bound"
+    name = "rezono-rules-bound"
     deploy(name, rules_sql.feldera(prog), profile="unoptimized", workers=2)
     columns = {n: [c.name for c in r.key + r.values] for n, r in prog.relations.items() if r.role == "base"}
 

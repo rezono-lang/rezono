@@ -12,8 +12,8 @@ import pytest
 import yaml
 
 from calcsupport import run_both
-from rede_compiler import calc, calc_sql, emit, modules, pack, scenarios
-from rede_compiler.pack import CompileError
+from rezono_compiler import calc, calc_sql, emit, modules, pack, scenarios
+from rezono_compiler.pack import CompileError
 from support import FIXTURE, REPO
 
 THEORY = "shared-calc"
@@ -189,8 +189,8 @@ def test_a_rule_reads_the_selection_of_the_calculation_its_pack_brings(tmp_path)
     The rule IR is that of the same files in one pack, but for the module and the file it names; on the
     batch backend the rule reads the selection after the calculation (`batch.phases`), and given the rows
     of the selection it reads them as an input like a table."""
-    from rede_compiler import batch
-    from rede_compiler import rules as rule_ir
+    from rezono_compiler import batch
+    from rezono_compiler import rules as rule_ir
 
     theory = with_findings(definition_pack(tmp_path / "theory", THEORY, {"rules": DEFINITION}, theory=True))
     date, parameters = CONSUMERS["two"]
@@ -218,8 +218,8 @@ def test_the_rules_after_the_calculation_equal_souffle_with_the_selection_rows_a
     """Bounded: one importing pack, two subjects. Soufflé reads the rule files as written over the import
     closure, with the rows of the selection as an input, and gives as a set what the phases give."""
     import souffle
-    from rede_compiler import batch
-    from rede_compiler import rules as rule_ir
+    from rezono_compiler import batch
+    from rezono_compiler import rules as rule_ir
 
     theory = with_findings(definition_pack(tmp_path / "theory", THEORY, {"rules": DEFINITION}, theory=True))
     date, parameters = CONSUMERS["one"]
@@ -240,7 +240,7 @@ def test_a_rule_of_an_imported_pack_on_the_importing_pack_s_selection_is_refused
     """The importing pack's own calculation rule is no selection the imported pack sees: refused, with the
     pack that gives it. And should the rules let it through, the calculation check still holds that the
     rule reads in its pack alone what it reads in the union."""
-    from rede_compiler import rules_dl
+    from rezono_compiler import rules_dl
 
     theory = with_findings(definition_pack(tmp_path / "theory", THEORY, {"rules": DEFINITION}, theory=True),
                            '.decl high(item: symbol)\nhigh(x) :- calc__twice(x, v, "known", ""), v > 5.\n')

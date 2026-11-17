@@ -19,10 +19,10 @@ from hypothesis import HealthCheck, given, settings
 
 import calcgen
 from calcsupport import connect, results, run, run_both
-from rede_compiler import calc, calc_sql, emit, facts, pack
-from rede_compiler import rules as rule_ir, rules_dl, rules_split, rules_sql
-from rede_compiler.__main__ import main
-from rede_compiler.pack import CompileError
+from rezono_compiler import calc, calc_sql, emit, facts, pack
+from rezono_compiler import rules as rule_ir, rules_dl, rules_split, rules_sql
+from rezono_compiler.__main__ import main
+from rezono_compiler.pack import CompileError
 from support import REPO, run_split, typed
 
 FIXTURE = Path(__file__).resolve().parent / "fixtures" / "calc"
@@ -286,13 +286,13 @@ def as_lines(value) -> str:
 def test_the_checkers_frozen_example_is_what_the_compiler_gives():
     """The planted-fault tests of the calculation check run with the checker, on this example frozen as data
     (checker/tests/test_calc.py, RV-K04): they do not import the compiler. Here the example is compiled again
-    and held against those files, so they cannot go stale unseen. `REDE_WRITE_CHECKER_FIXTURE=1` writes them."""
+    and held against those files, so they cannot go stale unseen. `REZONO_WRITE_CHECKER_FIXTURE=1` writes them."""
     for name, want in frozen().items():
-        if os.environ.get("REDE_WRITE_CHECKER_FIXTURE"):
+        if os.environ.get("REZONO_WRITE_CHECKER_FIXTURE"):
             (CHECKER_FIXTURE / name).write_text(as_lines(want), encoding="utf-8", newline="\n")
         assert json.loads((CHECKER_FIXTURE / name).read_text(encoding="utf-8")) == json.loads(json.dumps(want)), (
             f"checker/tests/fixtures/calc/{name} is not what the compiler gives: write it again with "
-            "REDE_WRITE_CHECKER_FIXTURE=1 and review the difference")
+            "REZONO_WRITE_CHECKER_FIXTURE=1 and review the difference")
 
 
 def test_the_evaluation_date_is_a_fact():
@@ -312,7 +312,7 @@ def test_the_evaluation_date_is_a_fact():
 def test_the_bundle_names_the_calculation_views_a_publication_holds():
     """Every rule's view and every version named as rule@version is a derived relation of the bundle (W12),
     so the viewer explains its rows; exactly the views the checker counts as published."""
-    from rede_checker.calc import published_views
+    from rezono_checker.calc import published_views
 
     doc = program(rule("base", d("a", i(1))), rule("pinned", d("a", {"rule": "base@v1"})))
     prog = calc.build(PACK, doc)
@@ -497,10 +497,10 @@ def test_rule_phases_keep_the_calc_dependencies_before_its_consumers():
 def test_rule_reads_the_known_integer_of_a_calc_selection(tmp_path):
     import hashlib
 
-    from rede_checker.check import check_epoch
-    from rede_checker.rules import derived_relations, load_rules
-    from rede_compiler import batch, checks, explain, operate, scenarios, seal
-    from rede_publisher import publish
+    from rezono_checker.check import check_epoch
+    from rezono_checker.rules import derived_relations, load_rules
+    from rezono_compiler import batch, checks, explain, operate, scenarios, seal
+    from rezono_publisher import publish
 
     directory = tmp_path / "calc"
     shutil.copytree(FIXTURE, directory)
@@ -599,7 +599,7 @@ def test_rule_reads_the_known_integer_of_a_calc_selection(tmp_path):
 
 
 def test_compile_writes_the_calculation(tmp_path):
-    """`rede_compiler compile` writes the calculation next to the tables and the rules, and the batch
+    """`rezono_compiler compile` writes the calculation next to the tables and the rules, and the batch
     script it writes gives what the reference gives."""
     assert main(["compile", str(FIXTURE), str(tmp_path)]) == 0
     files = {str(p.relative_to(tmp_path)): p.read_text() for p in tmp_path.rglob("*") if p.is_file()}
@@ -620,8 +620,8 @@ def test_above_the_budget_the_calculation_gets_the_last_pipeline():
     from the parts and gets the tables it reads, and on what the parts export it gives what it gives in one
     pipeline."""
     import duckdb
-    from rede_compiler import rules as ir
-    from rede_compiler import rules_sql
+    from rezono_compiler import rules as ir
+    from rezono_compiler import rules_sql
     rules = ir.load(PACK.rules)
     files = emit.compile_pack(PACK, max_views=max(rules_sql.views(rules, n) for n in rules.derived()))
     plan = json.loads(files["engine/pipelines.json"])
@@ -717,7 +717,7 @@ def test_feldera_gives_what_duckdb_gives(case):
         pytest.skip("set FELDERA_URL to a running Feldera")
     doc, rows = (full_program(), item_rows()) if case == "full" else choice_case()
     prog = calc.build(PACK, doc)
-    name = f"rede-calc-{case}"
+    name = f"rezono-calc-{case}"
     udf = REPO / "udf"
     compiled = emit.compile_pack(PACK)
     deploy(name, compiled["engine/tables.sql"] + compiled["engine/rules.sql"] + calc_sql.feldera(prog),

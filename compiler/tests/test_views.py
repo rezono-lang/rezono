@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from rede_compiler import emit, modules, pack, views
+from rezono_compiler import emit, modules, pack, views
 
 FIXTURES = Path(__file__).parent / "fixtures"
 STRUCTURAL = FIXTURES / "views" / "structural.yaml"
@@ -167,7 +167,7 @@ def test_pack_and_source_publication_refuse_valid_unlowered_views(tmp_path, monk
     with pytest.raises(pack.CompileError, match=r"views.yaml: .*view execution is not supported (for|here)"):
         pack.read(target)
     import duckdb
-    from rede_publisher.batch import epoch
+    from rezono_publisher.batch import epoch
     monkeypatch.setattr(duckdb, "connect", forbidden)
     with pytest.raises(pack.CompileError, match=r"views.yaml: .*view execution is not supported (for|here)"):
         epoch(target, epoch=1, knowledge_time="2026-01-01T00:00:00Z", sources=[])
@@ -181,7 +181,7 @@ def test_metadata_boundary_also_refuses_the_main_view_file(tmp_path):
 
 def test_view_bytes_change_definition_and_import_pins(tmp_path):
     target = Path(shutil.copytree(FIXTURES / "minimal", tmp_path / "main"))
-    from rede_publisher.batch import definition_sha256
+    from rezono_publisher.batch import definition_sha256
     old = modules.pack_hash(target), definition_sha256(target)
     path = write(target / "views.yaml", fixture())
     new = modules.pack_hash(target), definition_sha256(target)

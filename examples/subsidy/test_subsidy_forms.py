@@ -1,4 +1,4 @@
-"""The subsidy pack's Reckon Data forms, as the publisher writes them (RV-K16; rede_publisher.forms).
+"""The subsidy pack's Reckon Data forms, as the publisher writes them (RV-K16; rezono_publisher.forms).
 
 Subsidy is the first published pack whose roles read differently: the case officer reads the payment ledger,
 the policy adviser does not. The acceptance of RV-K16 on it:
@@ -26,12 +26,12 @@ from pathlib import Path
 import pytest
 
 pytest.importorskip("duckdb")
-pytest.importorskip("rede_compiler")
-pytest.importorskip("rede_publisher")
+pytest.importorskip("rezono_compiler")
+pytest.importorskip("rezono_publisher")
 
-from rede_publisher import batch, forms, publish, store  # noqa: E402
+from rezono_publisher import batch, forms, publish, store  # noqa: E402
 
-from reckon_data import arrow, l0  # noqa: E402  (the repository root is on the path through rede_publisher.forms)
+from reckon_data import arrow, l0  # noqa: E402  (the repository root is on the path through rezono_publisher.forms)
 from reckon_data.hash import hashes  # noqa: E402
 from reckon_data import statement  # noqa: E402
 
@@ -172,7 +172,7 @@ def test_each_role_s_standards_exports_pass_their_readers(world):
     """RV-K20: the exports and their loss lists, as the role fetches them, each against its independent reader."""
     pytest.importorskip("pyshacl")
     pytest.importorskip("open_data_contract_standard")
-    spec = importlib.util.spec_from_file_location("rede_accept", HERE.parents[1] / "edge" / "plugins" / "connectors"
+    spec = importlib.util.spec_from_file_location("rezono_accept", HERE.parents[1] / "edge" / "plugins" / "connectors"
                                                   / "accept.py")
     accept = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(accept)

@@ -1,6 +1,6 @@
 """A role's form of a published Rede epoch as Reckon Data (docs/reckon-data/l0.md): schema, rows and hashes.
 
-The publisher writes one form per role beside the role's own files (rede_publisher.forms, RV-K16); the RD probes
+The publisher writes one form per role beside the role's own files (rezono_publisher.forms, RV-K16); the RD probes
 read it (probes/reckon-data-thin). Input is what one role's part of a publication holds, never more:
 
 - the role-neutral definition (the epoch's archived schema bundle);
@@ -34,7 +34,7 @@ from __future__ import annotations
 
 import json
 
-from rede_canon import canonical_json, canonical_sha256
+from rezono_canon import canonical_json, canonical_sha256
 
 from . import l0
 from .hash import hashes

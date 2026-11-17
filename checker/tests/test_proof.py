@@ -1,4 +1,4 @@
-"""The check of a role's proof pieces (rede_checker.proof, decision R10): the relation `step` rebuilt from
+"""The check of a role's proof pieces (rezono_checker.proof, decision R10): the relation `step` rebuilt from
 the rules and the snapshots, and trees that must hold exactly it. Generic: a neutral, hand-made program."""
 
 import copy
@@ -7,8 +7,8 @@ import json
 
 import pytest
 
-from rede_checker.canon import encode_key
-from rede_checker.proof import FORMAT, calc_steps, check_proof, expected, steps
+from rezono_checker.canon import encode_key
+from rezono_checker.proof import FORMAT, calc_steps, check_proof, expected, steps
 
 
 def k(*parts):
@@ -63,7 +63,7 @@ SNAPSHOTS = {"e": snapshot(("a", "b"), ("b", "c")), "v": snapshot(("a",), ("b",)
 
 
 def rows():
-    from rede_checker.snapshots import read_rows
+    from rezono_checker.snapshots import read_rows
     return {rel: read_rows(b, "json") for rel, b in SNAPSHOTS.items()}
 
 
@@ -257,7 +257,7 @@ WEIGHED_WITNESSES = [
 
 
 def weighed_rows():
-    from rede_checker.snapshots import read_rows
+    from rezono_checker.snapshots import read_rows
     return {rel: read_rows(b, "json") for rel, b in WEIGHED_SNAPSHOTS.items()}
 
 
@@ -288,9 +288,9 @@ def test_a_contributes_edge_of_a_sum_or_a_min_carries_the_cell_the_aggregate_rea
 def test_the_valued_edges_of_an_aggregate_are_the_contributors_the_proof_check_hashes():
     """The checker recounts the aggregate from exactly the rows the edges name: per aggregate, the sorted
     [key, value] of its edges is the list `recompute` hashes, as many as it counts, and they fold to its result."""
-    from rede_checker.canon import sha256_json
-    from rede_checker.check import recompute
-    from rede_checker.rules import load_rules
+    from rezono_checker.canon import sha256_json
+    from rezono_checker.check import recompute
+    from rezono_checker.rules import load_rules
 
     rules, rs = load_rules(WEIGHED), weighed_rows()
     got = steps(WEIGHED, WEIGHED_WITNESSES, rs)

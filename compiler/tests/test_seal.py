@@ -12,11 +12,11 @@ import pytest
 import yaml
 from hypothesis import given, settings
 from hypothesis import strategies as st
-from rede_canon import canonical_sha256
+from rezono_canon import canonical_sha256
 
 from support import FIXTURE, run_split, violations
-from rede_compiler import batch, emit, facts, pack, scenarios, seal
-from rede_compiler import rules as ir
+from rezono_compiler import batch, emit, facts, pack, scenarios, seal
+from rezono_compiler import rules as ir
 
 DAY = datetime.date(2026, 10, 1)
 OTHER = "0" * 64  # a hash no row has: the row was edited after the close
@@ -405,8 +405,8 @@ def closed(model, now: dict, then: dict, until: int, covered) -> dict:
 
 def check_seal(model, rows) -> list:
     """What the independent checker finds, from the rows as snapshots give them (all text)."""
-    from rede_checker.check import _check_seal
-    from rede_checker.rules import load_seals
+    from rezono_checker.check import _check_seal
+    from rezono_checker.rules import load_seals
 
     [doc] = load_seals({"seals": json.loads(emit.compile_pack(model)["ir/rules.json"])["seals"]})
     findings = []

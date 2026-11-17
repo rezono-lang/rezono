@@ -1,9 +1,9 @@
 id: https://rezono.org/contracts/delta
-name: rede_delta
+name: rezono_delta
 title: Delta on fact files
 description: >-
   A change to the facts of a pack, as the viewer makes it and the canonical writer applies it
-  (`python -m rede_compiler.writer apply <pack> <delta.json>`; docs/compiler.md#the-canonical-writer). Each change names
+  (`python -m rezono_compiler.writer apply <pack> <delta.json>`; docs/compiler.md#the-canonical-writer). Each change names
   one record by its kind and identifier, in one fact file. Values are JSON as the compiler reads
   them: a whole number may be decimal text (decision W3), a date is ISO text (W5), an inlined
   object is an object, and more than one value is a list (a functionality violation, but a fact).

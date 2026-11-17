@@ -4,8 +4,8 @@
 # a pyproject.toml; needs uv. run.txt is resolved within dev.txt, so both agree on every version.
 set -euo pipefail
 cd "$(dirname "$0")/.."
-own=(--no-emit-package rede-admission --no-emit-package rede-canon --no-emit-package rede-compiler --no-emit-package rede-checker
-     --no-emit-package rede-publisher --no-emit-package rede-githost)
+own=(--no-emit-package rezono-admission --no-emit-package rezono-canon --no-emit-package rezono-compiler --no-emit-package rezono-checker
+     --no-emit-package rezono-publisher --no-emit-package rezono-githost)
 opts=(--python-version 3.13 --python-platform x86_64-manylinux_2_28 --generate-hashes "${own[@]}")
 uv pip compile requirements/dev.in -o requirements/dev.txt "${opts[@]}"
 uv pip compile requirements/run.in -o requirements/run.txt -c requirements/dev.txt "${opts[@]}"

@@ -2,7 +2,7 @@
 
 The fixture is neutral and hand-made (`subkind_fixture`): no compiler and no engine. Each form is read by the
 library's reader, hashed, and held against the role's own rows, as the publisher does before it writes one
-(rede_publisher.forms.verify).
+(rezono_publisher.forms.verify).
 """
 
 import copy

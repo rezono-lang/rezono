@@ -1,7 +1,7 @@
 apiVersion: v1
 kind: Namespace
 metadata:
-  name: rede-platform
+  name: rezono-platform
 ---
 # The namespace of the platform's Gateway, as the base's HTTPRoute names it (base/route.yaml).
 apiVersion: v1

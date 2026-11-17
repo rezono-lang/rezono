@@ -20,8 +20,8 @@ from pathlib import Path
 import pytest
 from hypothesis import given, settings, strategies as st
 
-from rede_compiler import emit, pack
-from rede_compiler import rules as ir
+from rezono_compiler import emit, pack
+from rezono_compiler import rules as ir
 
 THEORY = Path(__file__).resolve().parents[2] / "packs" / "std-time"
 pytest.importorskip("duckdb")
@@ -190,7 +190,7 @@ def program():
 
 
 def batch_eval(prog, data):
-    from rede_compiler import batch
+    from rezono_compiler import batch
     con = batch.connect(prog, data)
     batch.compute(con, prog)
     return batch.read(con, prog)
@@ -527,7 +527,7 @@ def test_what_a_reading_of_positions_must_preserve(intervals, references, shift,
 def bound_domain(tmp_path):
     """A domain that pins the theory and has a kind of its own that is an Interval, with five stretches."""
     import yaml
-    from rede_compiler import modules
+    from rezono_compiler import modules
 
     domain = tmp_path / "bound"
     for folder in ("schema", "labels", "facts"):
@@ -557,7 +557,7 @@ def test_a_domain_kind_that_is_an_interval_gets_the_theory_through_the_ordinary_
     Interval (is_a). Its elements are in the theory's tables, so the theory's rules, axioms and questions hold
     for them through the ordinary compiler. This is the inclusion view; a view with other names waits for
     the lowering (docs/compiler.md, theories and views)."""
-    from rede_compiler import batch, scenarios
+    from rezono_compiler import batch, scenarios
 
     domain = bound_domain(tmp_path)
     model = pack.read(domain)

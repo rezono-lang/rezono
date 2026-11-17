@@ -1,6 +1,6 @@
-"""The proof graph of a role as key-range pieces (rede_publisher.proof, decision R10).
+"""The proof graph of a role as key-range pieces (rezono_publisher.proof, decision R10).
 
-Each tree the publisher makes is checked by the independent checker (rede_checker.proof): a neutral,
+Each tree the publisher makes is checked by the independent checker (rezono_checker.proof): a neutral,
 hand-made graph cut into small pieces so that trees get several levels, and every example pack as published
 (that part needs DuckDB). Generic: no pack is named."""
 
@@ -9,12 +9,12 @@ from pathlib import Path
 
 import pytest
 
-from rede_canon import canonical_json
-from rede_checker.proof import check_indexes, check_proof, check_rows, check_sources
-from rede_compiler import gap, rules_dl
-from rede_compiler import rules as ir
-from rede_compiler.explain import key_text
-from rede_publisher import proof
+from rezono_canon import canonical_json
+from rezono_checker.proof import check_indexes, check_proof, check_rows, check_sources
+from rezono_compiler import gap, rules_dl
+from rezono_compiler import rules as ir
+from rezono_compiler.explain import key_text
+from rezono_publisher import proof
 
 ROOT = Path(__file__).resolve().parents[3]
 
@@ -144,7 +144,7 @@ PACKS = sorted(p.parent for p in (ROOT / "examples").rglob("pack.yaml")
 @pytest.mark.parametrize("pack_dir", PACKS, ids=lambda p: p.relative_to(ROOT / "examples").as_posix())
 def test_the_proof_pieces_of_every_example_pass(pack_dir, tmp_path):
     pytest.importorskip("duckdb")
-    from rede_publisher import batch, publish, store, views
+    from rezono_publisher import batch, publish, store, views
 
     st = store.FileStore(tmp_path / "store")
     e = batch.epoch(pack_dir, epoch=1, knowledge_time="2026-01-01T00:00:00Z", sources=[("rules", "test")])
@@ -207,7 +207,7 @@ def test_row_trees_of_every_size_pass_the_independent_check(limit, fanout):
 
 
 def source_entries():
-    """A role's source entries (rede_publisher.sources): one per edge, and texts ordered by their UTF-8 bytes."""
+    """A role's source entries (rezono_publisher.sources): one per edge, and texts ordered by their UTF-8 bytes."""
     out = [{"row": {"relation": "e", "key": canonical_json([a, b])},
             "sources": [{"kind": "pack", "name": "facts/e.yaml", "position": str(i)}]} for i, (a, b) in enumerate(EDGES)]
     for key in [["😀"], ["￿"], ["a b"], ["a", "b"], ["a"]]:

@@ -10,7 +10,7 @@ edge/githost/tests/test_workflows.py, which holds that job's `timeout-minutes` a
 
 `compare` writes one line to the log and to the step summary (`$GITHUB_STEP_SUMMARY`, if set). Over the budget
 the line is a warning that names the slowest pack and that pack's largest phase, read from TIMES: the
-`time <pack> <phase> <seconds>s <share>` lines of rede_publisher.timing. It never fails on time: the
+`time <pack> <phase> <seconds>s <share>` lines of rezono_publisher.timing. It never fails on time: the
 publication is true whatever it took. A run with skipped packs that is over the budget is over it a fortiori.
 """
 
@@ -34,7 +34,7 @@ def minutes(profile: dict) -> int | None:
 
 
 def phases(lines: list[str]) -> dict[str, dict[str, float]]:
-    """Seconds per phase per pack, from rede_publisher.timing's log lines; other lines and totals are left out."""
+    """Seconds per phase per pack, from rezono_publisher.timing's log lines; other lines and totals are left out."""
     out: dict[str, dict[str, float]] = {}
     for line in lines:
         parts = line.split()

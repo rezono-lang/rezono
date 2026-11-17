@@ -18,9 +18,9 @@ from pathlib import Path
 import pytest
 import yaml
 
-from rede_checker.canon import encode_key
-from rede_checker.check import check
-from rede_checker.rules import load_rules
+from rezono_checker.canon import encode_key
+from rezono_checker.check import check
+from rezono_checker.rules import load_rules
 
 CASES = yaml.safe_load((Path(__file__).resolve().parents[2] / "docs/semantics/witness-alternatives-cases.yaml")
                        .read_text("utf-8"))["cases"]

@@ -42,7 +42,7 @@ import pyshacl  # noqa: E402
 import yaml  # noqa: E402
 from rdflib import Graph, Literal  # noqa: E402
 from rdflib.namespace import PROV, RDF, SH  # noqa: E402
-from rede_compiler import rules as ir  # noqa: E402
+from rezono_compiler import rules as ir  # noqa: E402
 
 import dcat  # noqa: E402
 import odcs  # noqa: E402

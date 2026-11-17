@@ -1,5 +1,5 @@
 id: https://rezono.org/contracts/freshness
-name: rede_freshness
+name: rezono_freshness
 title: Freshness of a value
 description: >-
   How current a value is, separate from its Status (exact, optimal, best-found, ...) and from its

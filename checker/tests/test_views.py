@@ -1,12 +1,12 @@
 """A published view shows only rows its role reads: nodes, their names, the cells they show, statuses, lines and counts,
-every one recomputed from the role's snapshots, at every level (rede_checker.views). Negative cases first."""
+every one recomputed from the role's snapshots, at every level (rezono_checker.views). Negative cases first."""
 
 import copy
 import hashlib
 import json
 import pytest
 
-from rede_checker.views import check_islands, check_page, check_view, island_plan, islands, z_index
+from rezono_checker.views import check_islands, check_page, check_view, island_plan, islands, z_index
 
 SNAPSHOTS = {
     "node": json.dumps([{"key": ["a"]}, {"key": ["b/c"]}]).encode(),
@@ -41,7 +41,7 @@ def bytes_of(value) -> bytes:
 
 
 def view(boxes=BOXES, payload=PAYLOAD, lines=LINES, counts=None, shown=None, guides=None):
-    """A layout, its leaves by centre and a root of clusters, as rede_publisher.views writes them. `counts`
+    """A layout, its leaves by centre and a root of clusters, as rezono_publisher.views writes them. `counts`
     overrides the root's clusters; `shown` the lines the tiles show; `guides` the first cluster's guide words."""
     shown = lines if shown is None else shown
     leaves = {}

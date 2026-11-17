@@ -90,7 +90,7 @@ cases:
     input: {slot: "Host.provider (Provider, required)", rows: "no host__provider row for host-a"}
     expect: {state: unknown, reason: ""}
     sources: [W1, W9, "compiler.md 'Missing and the four states'", "Reckon v0 §5 cardinality"]
-    agree: ["contracts/calc.yaml:52", "contracts/delta.yaml:30", "compiler/rede_compiler/calc_sql.py:225", "checker/rede_checker/calc.py:211"]
+    agree: ["contracts/calc.yaml:52", "contracts/delta.yaml:30", "compiler/rezono_compiler/calc_sql.py:225", "checker/rezono_checker/calc.py:211"]
     status: settled
 
   - id: missing-optional
@@ -98,7 +98,7 @@ cases:
     input: {slot: "Host.owner (Team?, optional)", rows: "no host__owner row for host-b"}
     expect: {state: not_applicable, reason: ""}
     sources: [W9, "compiler.md 'Missing and the four states'", "JSON-LS L0 §3.3"]
-    agree: ["contracts/calc.yaml:52", "contracts/delta.yaml:30", "compiler/rede_compiler/calc_sql.py:225", "checker/rede_checker/calc.py:211"]
+    agree: ["contracts/calc.yaml:52", "contracts/delta.yaml:30", "compiler/rezono_compiler/calc_sql.py:225", "checker/rezono_checker/calc.py:211"]
     status: settled
 
   - id: viewer-missing-optional
@@ -118,7 +118,7 @@ cases:
     input: {slot: "Plan.memory (single-valued)", rows: "plan__memory has 256 GiB and 512 GiB for one plan"}
     expect: {state: invalid, reason: ""}
     sources: [W9, W13]
-    agree: ["compiler/rede_compiler/calc_sql.py:254", "checker/rede_checker/calc.py:211"]
+    agree: ["compiler/rezono_compiler/calc_sql.py:254", "checker/rezono_checker/calc.py:211"]
     note: "No core reason code names this; it is not needed while the violation view names the cause."
     status: settled
 
@@ -127,10 +127,10 @@ cases:
     input: {expr: "sum of two integers whose total exceeds 2^63 - 1"}
     proposed: {state: invalid, reason: overflow}
     sources: [W8, W9, "values.md §2.3 (gap: core code overflow)"]
-    agree: ["compiler/rede_compiler/calc_sql.py:277", "checker/rede_checker/calc.py:111"]
+    agree: ["compiler/rezono_compiler/calc_sql.py:277", "checker/rezono_checker/calc.py:111"]
     note: "The state invalid is settled (W8, W9) and both places give it; the reason code is the gap."
     current:
-      - {at: "compiler/rede_compiler/calc_sql.py:277", gives: "invalid without a core reason code"}
+      - {at: "compiler/rezono_compiler/calc_sql.py:277", gives: "invalid without a core reason code"}
     status: gap
 
   - id: unknown-not-zero
@@ -138,7 +138,7 @@ cases:
     input: {expr: "host-d.memory_need + 10 GiB", data: "memory_need unknown no_spec"}
     expect: {state: unknown, reason: no_spec}
     sources: [W1, "P10.2a A.3", "AGENTS.md rule 4"]
-    agree: ["compiler/rede_compiler/calc_sql.py:277", "checker/rede_checker/calc.py:105", "contracts/fixtures/proof/Proof/valid/aggregation-unknown.yaml:15"]
+    agree: ["compiler/rezono_compiler/calc_sql.py:277", "checker/rezono_checker/calc.py:105", "contracts/fixtures/proof/Proof/valid/aggregation-unknown.yaml:15"]
     status: settled
 
   - id: refused-float
@@ -146,7 +146,7 @@ cases:
     input: {fact: "Plan.memory: 1.0"}
     expect: {refused: "load error; never a value or a state"}
     sources: [W3, "compiler.md fact sets", "JSON-LS L0 §3.2"]
-    agree: ["canon/rede_canon/__init__.py:77"]
+    agree: ["canon/rezono_canon/__init__.py:77"]
     status: settled
 
   - id: value-invalid-blocks
@@ -165,7 +165,7 @@ cases:
     sources: ["JSON-LS L0 §3.3", "#394 report A §13 point 2"]
     current:
       - {at: "contracts/value.yaml:28", gives: "Value has no reason member"}
-      - {at: "checker/rede_checker/snapshots.py:40", gives: "extra members refused, so a reason cannot travel"}
+      - {at: "checker/rezono_checker/snapshots.py:40", gives: "extra members refused, so a reason cannot travel"}
       - {at: "viewer/src/lib/contract/types.ts:18", gives: "Cell has no reason"}
     status: gap
 
@@ -176,7 +176,7 @@ cases:
     input: {slot: "Host.clusters (HostCluster*, closed)", rows: "no HostCluster with host = host-x"}
     expect: {state: known, reason: "", value: "[]", count: "0"}
     sources: [W6, "JSON-LS L0 §3.3"]
-    agree: ["contracts/rules.yaml:64", "compiler/rede_compiler/rules_sql.py:119"]
+    agree: ["contracts/rules.yaml:64", "compiler/rezono_compiler/rules_sql.py:119"]
     note: "admission (rows.py:131, the compiler's loader) gives no rows both for an empty list and for an omitted slot; on a closed slot both mean []."
     status: settled
 
@@ -185,7 +185,7 @@ cases:
     input: {slot: "a many-valued slot of an open relation", rows: "no rows for the owner"}
     expect: {completeness: "not known complete", count: "refused at compile time (R004, W6)", any: F, membership: "F only for members known absent: none"}
     sources: [W6, "Reckon Data L0 §3.3 and §4.1"]
-    agree: ["compiler/rede_compiler/rules.py:598", "compiler/rede_compiler/calc.py:547"]
+    agree: ["compiler/rezono_compiler/rules.py:598", "compiler/rezono_compiler/calc.py:547"]
     status: settled
 
   - id: set-state-whole
@@ -203,7 +203,7 @@ cases:
     input: {expr: "sum over an empty known set"}
     expect: {state: known, reason: "", value: "0"}
     sources: ["P10.2a A.3"]
-    agree: ["contracts/rules.yaml:65", "compiler/rede_compiler/rules_sql.py:119", "checker/rede_checker/check.py:457"]
+    agree: ["contracts/rules.yaml:65", "compiler/rezono_compiler/rules_sql.py:119", "checker/rezono_checker/check.py:457"]
     status: settled
 
   - id: agg-min-empty
@@ -213,9 +213,9 @@ cases:
     sources: ["P10.2a A.3", "Reckon v0 §7b"]
     current:
       - {at: "contracts/rules.yaml:66", gives: "no conclusion"}
-      - {at: "compiler/rede_compiler/rules_sql.py:127", gives: "no row (inner join)"}
-      - {at: "compiler/rede_compiler/explain.py:78", gives: "NoProof"}
-      - {at: "checker/rede_checker/check.py:459", gives: "not_applicable without reason"}
+      - {at: "compiler/rezono_compiler/rules_sql.py:127", gives: "no row (inner join)"}
+      - {at: "compiler/rezono_compiler/explain.py:78", gives: "NoProof"}
+      - {at: "checker/rezono_checker/check.py:459", gives: "not_applicable without reason"}
     status: open
 
   - id: agg-any-all-empty
@@ -230,7 +230,7 @@ cases:
     input: {expr: "Host.sum(memory_need)", data: "Appendix B (host-d unknown no_spec)"}
     expect: {state: unknown, reason: no_spec}
     sources: ["P10.2a A.3"]
-    agree: ["checker/rede_checker/check.py:438", "contracts/fixtures/proof/Proof/valid/aggregation-unknown.yaml:15"]
+    agree: ["checker/rezono_checker/check.py:438", "contracts/fixtures/proof/Proof/valid/aggregation-unknown.yaml:15"]
     status: settled
 
   - id: agg-na-member
@@ -240,7 +240,7 @@ cases:
     sources: ["P10.2a A.3: aggregates are strict in their members"]
     note: "Open within the spec too: A.3 makes sum strict, while value.yaml says n/a 'does not count'. Decide one."
     current:
-      - {at: "checker/rede_checker/check.py:444", gives: "n/a contributors are skipped: known 7"}
+      - {at: "checker/rezono_checker/check.py:444", gives: "n/a contributors are skipped: known 7"}
       - {at: "viewer/src/lib/layout/waterfall.ts:89", gives: "n/a parts leave the running total unchanged"}
     status: open
 
@@ -251,7 +251,7 @@ cases:
     input: {schema: "a kind without a world annotation", rows: "a missing row"}
     proposed: {world: closed, missing: "not true"}
     sources: [W6]
-    agree: ["compiler/rede_compiler/pack.py:290", "contracts/bundle.yaml:129"]
+    agree: ["compiler/rezono_compiler/pack.py:290", "contracts/bundle.yaml:129"]
     conflicts:
       - {at: "Reckon v0 §5 (#350)", gives: "default world open"}
     status: open
@@ -277,7 +277,7 @@ cases:
     input: {rule: "not over an open relation outside @absence"}
     expect: {refused: "compile error (W6; Reckon R004)"}
     sources: [W6, "Reckon v0 §7 rule 6"]
-    agree: ["compiler/rede_compiler/rules.py:598", "compiler/rede_compiler/calc.py:547"]
+    agree: ["compiler/rezono_compiler/rules.py:598", "compiler/rezono_compiler/calc.py:547"]
     status: settled
 
   - id: derived-world-aggregate
@@ -285,7 +285,7 @@ cases:
     input: {rule: "a derived relation that aggregates over an open relation, without @absence"}
     proposed: {refused: "compile error; with @absence the relation is closed"}
     sources: [W6]
-    agree: ["compiler/rede_compiler/rules.py:586", "compiler/rede_compiler/rules.py:598"]
+    agree: ["compiler/rezono_compiler/rules.py:586", "compiler/rezono_compiler/rules.py:598"]
     current:
       - {at: "contracts/rules.yaml:149", gives: "the derived relation becomes open"}
     status: open
@@ -298,8 +298,8 @@ cases:
     proposed: {truth: F}
     sources: ["P10.2a A.1 (OCL 2.4)"]
     current:
-      - {at: "compiler/rede_compiler/calc_sql.py:388", gives: "I (invalid first)"}
-      - {at: "checker/rede_checker/calc.py:97", gives: "I (invalid first)"}
+      - {at: "compiler/rezono_compiler/calc_sql.py:388", gives: "I (invalid first)"}
+      - {at: "checker/rezono_checker/calc.py:97", gives: "I (invalid first)"}
       - {at: "docs/compiler.md 'States (W9)'", gives: "invalid still comes first"}
     status: open
 
@@ -309,8 +309,8 @@ cases:
     proposed: {truth: T}
     sources: ["P10.2a A.1"]
     current:
-      - {at: "compiler/rede_compiler/calc_sql.py:388", gives: "I"}
-      - {at: "checker/rede_checker/calc.py:97", gives: "I"}
+      - {at: "compiler/rezono_compiler/calc_sql.py:388", gives: "I"}
+      - {at: "checker/rezono_checker/calc.py:97", gives: "I"}
     status: open
 
   - id: tt-and-na-unknown
@@ -318,7 +318,7 @@ cases:
     input: {expr: "N and U"}
     expect: {truth: U}
     sources: ["P10.2a A.1"]
-    agree: ["compiler/rede_compiler/calc_sql.py:388", "checker/rede_checker/calc.py:97"]
+    agree: ["compiler/rezono_compiler/calc_sql.py:388", "checker/rezono_checker/calc.py:97"]
     status: settled
 
   - id: tt-and-false-unknown
@@ -326,7 +326,7 @@ cases:
     input: {expr: "F and U"}
     expect: {truth: F}
     sources: ["P10.2a A.1", W9]
-    agree: ["compiler/rede_compiler/calc_sql.py:388", "checker/rede_checker/calc.py:97"]
+    agree: ["compiler/rezono_compiler/calc_sql.py:388", "checker/rezono_checker/calc.py:97"]
     status: settled
 
   - id: tt-not-na
@@ -334,7 +334,7 @@ cases:
     input: {expr: "not N"}
     expect: {truth: N}
     sources: ["P10.2a A.2"]
-    agree: ["compiler/rede_compiler/calc_sql.py:402"]
+    agree: ["compiler/rezono_compiler/calc_sql.py:402"]
     note: "calc_sql.py:402 is internal; authors cannot write not in a calculation yet (contracts/calc.yaml:26)."
     status: settled
 
@@ -343,7 +343,7 @@ cases:
     input: {expr: "host-b.owner = host-d.owner", data: "both n/a"}
     expect: {truth: N}
     sources: ["P10.2a A.3"]
-    agree: ["compiler/rede_compiler/calc_sql.py:277", "checker/rede_checker/calc.py:111"]
+    agree: ["compiler/rezono_compiler/calc_sql.py:277", "checker/rezono_checker/calc.py:111"]
     status: settled
 
   - id: tt-is-na
@@ -359,7 +359,7 @@ cases:
     input: {expr: "when host-a.owner = team-platform then 1 else 2"}
     expect: {state: unknown, reason: not_assigned}
     sources: ["P10.2a A.2"]
-    agree: ["compiler/rede_compiler/calc_sql.py:358"]
+    agree: ["compiler/rezono_compiler/calc_sql.py:358"]
     status: settled
 
   # --- §3.3 decision points (evaluation cases of P10.2a) --------------------------------------
@@ -450,8 +450,8 @@ cases:
     proposed: {state: unknown, reason: aa_early}
     sources: ["P10.2a A.4", "Reckon v0 §7b"]
     current:
-      - {at: "compiler/rede_compiler/calc_sql.py:287", gives: "zz_late (first operand in the highest state)"}
-      - {at: "checker/rede_checker/calc.py:108", gives: "zz_late"}
+      - {at: "compiler/rezono_compiler/calc_sql.py:287", gives: "zz_late (first operand in the highest state)"}
+      - {at: "checker/rezono_checker/calc.py:108", gives: "zz_late"}
       - {at: "docs/decisions.md W9", gives: "the reason of the first argument"}
     status: open
 
@@ -467,7 +467,7 @@ cases:
     input: {row_json: '"owner": {"$unknown": "not yet assigned"}'}
     expect: {refused: "not a reason code (JSON-LS N01)"}
     sources: ["JSON-LS L0 §2.3"]
-    agree: ["compiler/rede_compiler/rules.py:408"]
+    agree: ["compiler/rezono_compiler/rules.py:408"]
     status: settled
 
   - id: reason-calc-prose
@@ -475,10 +475,10 @@ cases:
     input: {calc: "a calculation leaf over a missing required fact"}
     proposed: {state: unknown, reason: "a code; the text comes from the message catalogue"}
     sources: ["JSON-LS L0 §2.3", W7]
-    agree: ["compiler/rede_compiler/rules.py:408", "viewer/src/lib/outcome.ts:39"]
+    agree: ["compiler/rezono_compiler/rules.py:408", "viewer/src/lib/outcome.ts:39"]
     current:
-      - {at: "compiler/rede_compiler/calc_sql.py:225", gives: "prose: 'fact … is missing'"}
-      - {at: "checker/rede_checker/calc.py:211", gives: "verifies the same prose"}
+      - {at: "compiler/rezono_compiler/calc_sql.py:225", gives: "prose: 'fact … is missing'"}
+      - {at: "checker/rezono_checker/calc.py:211", gives: "verifies the same prose"}
       - {at: "viewer/src/lib/layout/route.ts:125", gives: "prints the prose as-is"}
       - {at: "contracts/fixtures/proof/Proof/valid/calculation-unknown.yaml:12", gives: "prose reason in the fixture"}
     status: open
@@ -488,7 +488,7 @@ cases:
     input: {value: "host-c.owner"}
     expect: {state: known, reason: ""}
     sources: ["JSON-LS L0 §3.3", W7]
-    agree: ["compiler/rede_compiler/rules.py:408", "checker/rede_checker/calc.py:67"]
+    agree: ["compiler/rezono_compiler/rules.py:408", "checker/rezono_checker/calc.py:67"]
     status: settled
 
   # --- §2.4 versions and parameters -----------------------------------------------------------
@@ -499,8 +499,8 @@ cases:
     proposed: {state: unknown, reason: no_version_applies}
     sources: ["Reckon v0 §5a, §8", W13]
     current:
-      - {at: "compiler/rede_compiler/calc_sql.py:537", gives: "not_applicable"}
-      - {at: "checker/rede_checker/calc.py:250", gives: "not_applicable"}
+      - {at: "compiler/rezono_compiler/calc_sql.py:537", gives: "not_applicable"}
+      - {at: "checker/rezono_checker/calc.py:250", gives: "not_applicable"}
       - {at: "docs/decisions.md W10", gives: "no valid version: not_applicable"}
     status: open
 
@@ -509,7 +509,7 @@ cases:
     input: {calc: "a version valid on valid_at whose known date is after known_at"}
     expect: {state: unknown, reason: ""}
     sources: [W10]
-    agree: ["compiler/rede_compiler/calc_sql.py:537", "checker/rede_checker/calc.py:277"]
+    agree: ["compiler/rezono_compiler/calc_sql.py:537", "checker/rezono_checker/calc.py:277"]
     status: settled
 
   - id: version-overlap
@@ -519,7 +519,7 @@ cases:
     sources: ["Reckon v0 §5a", "Reckon v0 §14 point 16"]
     current:
       - {at: "docs/decisions.md W10", gives: "latest knowledge date, then latest valid-from, then the version text: one wins"}
-      - {at: "compiler/rede_compiler/calc_sql.py:537", gives: "one version by that order"}
+      - {at: "compiler/rezono_compiler/calc_sql.py:537", gives: "one version by that order"}
     status: open
 
   - id: parameter-none
@@ -527,10 +527,10 @@ cases:
     input: {parameter: "host_reserve with no row valid on valid_at"}
     expect: {state: unknown, reason: no_version_applies}
     sources: [W13, "Reckon v0 §5a"]
-    agree: ["compiler/rede_compiler/calc_sql.py:559", "checker/rede_checker/calc.py:240"]
+    agree: ["compiler/rezono_compiler/calc_sql.py:559", "checker/rezono_checker/calc.py:240"]
     note: "Both places give the state unknown; their reason is still prose (case reason-calc-prose)."
     current:
-      - {at: "compiler/rede_compiler/calc_sql.py:559", gives: "unknown with a prose reason"}
+      - {at: "compiler/rezono_compiler/calc_sql.py:559", gives: "unknown with a prose reason"}
     status: settled
 
   - id: parameter-two
@@ -538,7 +538,7 @@ cases:
     input: {parameter: "two values left after the bitemporal choice"}
     expect: {state: invalid, reason: versions_overlap}
     sources: [W13]
-    agree: ["compiler/rede_compiler/calc_sql.py:559", "checker/rede_checker/calc.py:240"]
+    agree: ["compiler/rezono_compiler/calc_sql.py:559", "checker/rezono_checker/calc.py:240"]
     status: settled
 
   # --- §4 withheld ----------------------------------------------------------------------------
@@ -548,7 +548,7 @@ cases:
     input: {ask: "ask Host where memory_need > 300 GiB", role: viewer, page: "limit 1", worlds: ["Appendix B", "Appendix B plus host-e (600 GiB) that viewer cannot read and no readable row depends on"]}
     expect: {both_worlds: "byte-identical pages, cursors, counts and dataset hash; rows host-a, host-c; undecided host-d"}
     sources: ["P10.2a E49", "JSON-LS Y03"]
-    agree: ["edge/gate/src/gate.ts:2", "edge/publisher/rede_publisher/access.py:118", "checker/rede_checker/access.py:253"]
+    agree: ["edge/gate/src/gate.ts:2", "edge/publisher/rezono_publisher/access.py:118", "checker/rezono_checker/access.py:253"]
     status: settled
 
   - id: withheld-optional
@@ -575,7 +575,7 @@ cases:
     proposed: {state: unknown, reason: not_read_in_full}
     sources: ["#351 P1.8", "values.md §4 (gap)"]
     current:
-      - {at: "edge/publisher/rede_publisher/access.py:172", gives: "an aggregate needs a full read, so the total is withheld: the role sees nothing, not unknown with a reason"}
+      - {at: "edge/publisher/rezono_publisher/access.py:172", gives: "an aggregate needs a full read, so the total is withheld: the role sees nothing, not unknown with a reason"}
     status: gap
 
   - id: withheld-derived-negation
@@ -583,7 +583,7 @@ cases:
     input: {rule: "a derived row whose proof negates a relation the role reads only partly"}
     expect: {role_view: "the derived row and its proof are withheld"}
     sources: ["compiler.md 'Access (O8)'"]
-    agree: ["edge/publisher/rede_publisher/access.py:154", "checker/rede_checker/access.py:279", "edge/gate/src/gate.ts:410"]
+    agree: ["edge/publisher/rezono_publisher/access.py:154", "checker/rezono_checker/access.py:279", "edge/gate/src/gate.ts:410"]
     status: settled
 
   - id: withheld-screened
@@ -591,7 +591,7 @@ cases:
     input: {proof: "a proof with a premise the role cannot read"}
     proposed: {role_view: "no placeholder; the hidden list is empty; the proof is withheld or another readable proof is chosen"}
     sources: ["P10.2a §7a", "contracts/manifest.yaml:142 (access semantics 2)"]
-    agree: ["edge/publisher/rede_publisher/access.py:231", "edge/gate/src/gate.ts:457"]
+    agree: ["edge/publisher/rezono_publisher/access.py:231", "edge/gate/src/gate.ts:457"]
     current:
       - {at: "contracts/proof.yaml:103", gives: "hidden conclusions allowed"}
       - {at: "contracts/fixtures/proof/Proof/valid/screened.yaml:1", gives: "a valid fixture with screened placeholders"}
@@ -657,7 +657,7 @@ cases:
     agree: ["contracts/calc.yaml:22", "contracts/fixtures/calc/CalcProgram/invalid/negative-zero.yaml:17", "viewer/src/lib/contract/values.ts:91"]
     current:
       - {at: "contracts/bundle.yaml:24", gives: "pattern accepts -0"}
-      - {at: "checker/rede_checker/canon.py:8", gives: "accepts -0"}
+      - {at: "checker/rezono_checker/canon.py:8", gives: "accepts -0"}
     status: open
 
   - id: hash-bool-key
@@ -665,11 +665,11 @@ cases:
     input: {key: "a key part that is the boolean true"}
     proposed: {text: "true"}
     sources: ["JSON-LS L0 Q9"]
-    agree: ["edge/publisher/rede_publisher/batch.py:61", "edge/publisher/rede_publisher/sources.py:27", "compiler/rede_compiler/calc_sql.py:845"]
+    agree: ["edge/publisher/rezono_publisher/batch.py:61", "edge/publisher/rezono_publisher/sources.py:27", "compiler/rezono_compiler/calc_sql.py:845"]
     current:
-      - {at: "compiler/rede_compiler/batch.py:52", gives: "str(True): True"}
-      - {at: "compiler/rede_compiler/explain.py:29", gives: "str() over key parts"}
-      - {at: "edge/publisher/rede_publisher/access.py:47", gives: "str() over key parts"}
+      - {at: "compiler/rezono_compiler/batch.py:52", gives: "str(True): True"}
+      - {at: "compiler/rezono_compiler/explain.py:29", gives: "str() over key parts"}
+      - {at: "edge/publisher/rezono_publisher/access.py:47", gives: "str() over key parts"}
     status: open
 
   - id: hash-empty-table
@@ -686,7 +686,7 @@ cases:
     sources: ["JSON-LS L0 §3.3", "values.md §6 rule 7"]
     agree: ["viewer/src/lib/contract/values.ts:100"]
     current:
-      - {at: "checker/rede_checker/snapshots.py:53", gives: "accepted"}
+      - {at: "checker/rezono_checker/snapshots.py:53", gives: "accepted"}
     status: open
 
   - id: bare-state-text

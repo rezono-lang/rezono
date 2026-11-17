@@ -17,7 +17,7 @@ ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT))  # reckon_data is a directory of the repository, not an installed package
 
 pytest.importorskip("rdflib")
-pytest.importorskip("rede_canon")
+pytest.importorskip("rezono_canon")
 pytest.importorskip("linkml")
 
 from linkml.validator import validate  # noqa: E402

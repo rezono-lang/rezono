@@ -8,8 +8,8 @@ import subprocess
 
 import pytest
 
-from rede_canon import canonical_sha256, sha256_hex
-from rede_publisher import batch, kept, kept_views, private_view_archive as candidates, publish
+from rezono_canon import canonical_sha256, sha256_hex
+from rezono_publisher import batch, kept, kept_views, private_view_archive as candidates, publish
 from test_kept_view_archive import inputs as view_inputs  # noqa: F401 (a pytest fixture)
 
 

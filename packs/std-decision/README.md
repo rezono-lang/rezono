@@ -139,7 +139,7 @@ One finding: `in_force_without_decider(summer-2026, 2026-08-01)`, because that r
 
 ## Using it in a domain
 
-1. Import it in `pack.yaml`, pinned on its hash (`python -m rede_compiler hash packs/std-decision`).
+1. Import it in `pack.yaml`, pinned on its hash (`python -m rezono_compiler hash packs/std-decision`).
 2. Write decisions as rows of `decision`. Where the record gives only a date, `valid_from` is that date. Keep each `*_day` number equal to its date; an ingest writes both from one value.
 3. Point each domain kind that a decision sets to its decision with an arrow of range `Decision`.
 4. Add at least one `reference_date` row. It is a choice of the domain, not the clock.

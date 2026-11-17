@@ -1,5 +1,5 @@
 id: https://rezono.org/contracts/proof
-name: rede_proof
+name: rezono_proof
 title: Witnesses and proofs
 description: >-
   What the engine produces and the checker verifies. A conclusion is separate from its

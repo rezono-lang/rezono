@@ -1,6 +1,6 @@
 """The logical hash of Reckon Data (docs/reckon-data/l0.md §6.2), on Rede's one canonical hash.
 
-Every hash here is `rede_canon.canonical_sha256`: SHA-256 over the canonical JSON of a value
+Every hash here is `rezono_canon.canonical_sha256`: SHA-256 over the canonical JSON of a value
 (docs/contracts.md#canonical-hash). This module only decides *which* value is hashed: the hash
 rows of each table, their order, and the objects that combine table hashes into the dataset and
 annotation hashes. It never hashes bytes of its own and never replaces `Snapshot.sha256`.
@@ -13,7 +13,7 @@ stored integer for `Quantity` and `Money`, no `null`, and no two hash rows with 
 import re
 from fractions import Fraction
 
-from rede_canon import CanonError, canonical_json, canonical_sha256
+from rezono_canon import CanonError, canonical_json, canonical_sha256
 
 __all__ = [
     "HashError",

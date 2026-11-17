@@ -1,6 +1,6 @@
 {
     "files": {
-        "./checker/rede_checker/calc.py": [
+        "./checker/rezono_checker/calc.py": [
             {
                 "code": "reportGeneralTypeIssues",
                 "range": {
@@ -98,7 +98,7 @@
                 }
             }
         ],
-        "./checker/rede_checker/check.py": [
+        "./checker/rezono_checker/check.py": [
             {
                 "code": "reportArgumentType",
                 "range": {
@@ -116,7 +116,7 @@
                 }
             }
         ],
-        "./checker/rede_checker/closure.py": [
+        "./checker/rezono_checker/closure.py": [
             {
                 "code": "reportIndexIssue",
                 "range": {
@@ -142,7 +142,7 @@
                 }
             }
         ],
-        "./checker/rede_checker/evaluate.py": [
+        "./checker/rezono_checker/evaluate.py": [
             {
                 "code": "reportArgumentType",
                 "range": {
@@ -152,7 +152,7 @@
                 }
             }
         ],
-        "./checker/rede_checker/proof.py": [
+        "./checker/rezono_checker/proof.py": [
             {
                 "code": "reportOptionalMemberAccess",
                 "range": {
@@ -170,7 +170,7 @@
                 }
             }
         ],
-        "./checker/rede_checker/semiotic.py": [
+        "./checker/rezono_checker/semiotic.py": [
             {
                 "code": "reportArgumentType",
                 "range": {
@@ -180,7 +180,7 @@
                 }
             }
         ],
-        "./checker/rede_checker/views.py": [
+        "./checker/rezono_checker/views.py": [
             {
                 "code": "reportAssignmentType",
                 "range": {
@@ -310,7 +310,7 @@
                 }
             }
         ],
-        "./compiler/rede_compiler/batch.py": [
+        "./compiler/rezono_compiler/batch.py": [
             {
                 "code": "reportRedeclaration",
                 "range": {
@@ -336,7 +336,7 @@
                 }
             }
         ],
-        "./compiler/rede_compiler/calc.py": [
+        "./compiler/rezono_compiler/calc.py": [
             {
                 "code": "reportGeneralTypeIssues",
                 "range": {
@@ -570,7 +570,7 @@
                 }
             }
         ],
-        "./compiler/rede_compiler/calc_sql.py": [
+        "./compiler/rezono_compiler/calc_sql.py": [
             {
                 "code": "reportArgumentType",
                 "range": {
@@ -852,7 +852,7 @@
                 }
             }
         ],
-        "./compiler/rede_compiler/emit.py": [
+        "./compiler/rezono_compiler/emit.py": [
             {
                 "code": "reportOptionalOperand",
                 "range": {
@@ -1006,7 +1006,7 @@
                 }
             }
         ],
-        "./compiler/rede_compiler/explain.py": [
+        "./compiler/rezono_compiler/explain.py": [
             {
                 "code": "reportOptionalMemberAccess",
                 "range": {
@@ -1048,7 +1048,7 @@
                 }
             }
         ],
-        "./compiler/rede_compiler/facts.py": [
+        "./compiler/rezono_compiler/facts.py": [
             {
                 "code": "reportMissingImports",
                 "range": {
@@ -1074,7 +1074,7 @@
                 }
             }
         ],
-        "./compiler/rede_compiler/identity.py": [
+        "./compiler/rezono_compiler/identity.py": [
             {
                 "code": "reportReturnType",
                 "range": {
@@ -1084,7 +1084,7 @@
                 }
             }
         ],
-        "./compiler/rede_compiler/modules.py": [
+        "./compiler/rezono_compiler/modules.py": [
             {
                 "code": "reportOptionalMemberAccess",
                 "range": {
@@ -1094,7 +1094,7 @@
                 }
             }
         ],
-        "./compiler/rede_compiler/operate/combine.py": [
+        "./compiler/rezono_compiler/operate/combine.py": [
             {
                 "code": "reportOptionalMemberAccess",
                 "range": {
@@ -1200,7 +1200,7 @@
                 }
             }
         ],
-        "./compiler/rede_compiler/operate/datalog.py": [
+        "./compiler/rezono_compiler/operate/datalog.py": [
             {
                 "code": "reportArgumentType",
                 "range": {
@@ -1250,7 +1250,7 @@
                 }
             }
         ],
-        "./compiler/rede_compiler/operate/drop.py": [
+        "./compiler/rezono_compiler/operate/drop.py": [
             {
                 "code": "reportOptionalMemberAccess",
                 "range": {
@@ -1260,7 +1260,7 @@
                 }
             }
         ],
-        "./compiler/rede_compiler/operate/execution.py": [
+        "./compiler/rezono_compiler/operate/execution.py": [
             {
                 "code": "reportOptionalSubscript",
                 "range": {
@@ -1406,7 +1406,7 @@
                 }
             }
         ],
-        "./compiler/rede_compiler/operate/labels.py": [
+        "./compiler/rezono_compiler/operate/labels.py": [
             {
                 "code": "reportArgumentType",
                 "range": {
@@ -1424,7 +1424,7 @@
                 }
             }
         ],
-        "./compiler/rede_compiler/operate/maps.py": [
+        "./compiler/rezono_compiler/operate/maps.py": [
             {
                 "code": "reportArgumentType",
                 "range": {
@@ -1434,7 +1434,7 @@
                 }
             }
         ],
-        "./compiler/rede_compiler/operate/migration.py": [
+        "./compiler/rezono_compiler/operate/migration.py": [
             {
                 "code": "reportOptionalSubscript",
                 "range": {
@@ -1460,7 +1460,7 @@
                 }
             }
         ],
-        "./compiler/rede_compiler/operate/model.py": [
+        "./compiler/rezono_compiler/operate/model.py": [
             {
                 "code": "reportArgumentType",
                 "range": {
@@ -1478,7 +1478,7 @@
                 }
             }
         ],
-        "./compiler/rede_compiler/operate/move.py": [
+        "./compiler/rezono_compiler/operate/move.py": [
             {
                 "code": "reportOptionalSubscript",
                 "range": {
@@ -1552,7 +1552,7 @@
                 }
             }
         ],
-        "./compiler/rede_compiler/operate/rename.py": [
+        "./compiler/rezono_compiler/operate/rename.py": [
             {
                 "code": "reportArgumentType",
                 "range": {
@@ -1626,7 +1626,7 @@
                 }
             }
         ],
-        "./compiler/rede_compiler/operate/split_by.py": [
+        "./compiler/rezono_compiler/operate/split_by.py": [
             {
                 "code": "reportOptionalMemberAccess",
                 "range": {
@@ -1668,7 +1668,7 @@
                 }
             }
         ],
-        "./compiler/rede_compiler/operate/text.py": [
+        "./compiler/rezono_compiler/operate/text.py": [
             {
                 "code": "reportOptionalMemberAccess",
                 "range": {
@@ -1734,7 +1734,7 @@
                 }
             }
         ],
-        "./compiler/rede_compiler/pack.py": [
+        "./compiler/rezono_compiler/pack.py": [
             {
                 "code": "reportAssignmentType",
                 "range": {
@@ -2512,7 +2512,7 @@
                 }
             }
         ],
-        "./compiler/rede_compiler/plan.py": [
+        "./compiler/rezono_compiler/plan.py": [
             {
                 "code": "reportAttributeAccessIssue",
                 "range": {
@@ -2570,7 +2570,7 @@
                 }
             }
         ],
-        "./compiler/rede_compiler/rules_dl.py": [
+        "./compiler/rezono_compiler/rules_dl.py": [
             {
                 "code": "reportAssignmentType",
                 "range": {
@@ -2596,7 +2596,7 @@
                 }
             }
         ],
-        "./compiler/rede_compiler/rules_split.py": [
+        "./compiler/rezono_compiler/rules_split.py": [
             {
                 "code": "reportCallIssue",
                 "range": {
@@ -2662,7 +2662,7 @@
                 }
             }
         ],
-        "./compiler/rede_compiler/source_writer.py": [
+        "./compiler/rezono_compiler/source_writer.py": [
             {
                 "code": "reportArgumentType",
                 "range": {
@@ -2688,7 +2688,7 @@
                 }
             }
         ],
-        "./compiler/rede_compiler/view_rules.py": [
+        "./compiler/rezono_compiler/view_rules.py": [
             {
                 "code": "reportArgumentType",
                 "range": {
@@ -2810,7 +2810,7 @@
                 }
             }
         ],
-        "./compiler/rede_compiler/view_typing.py": [
+        "./compiler/rezono_compiler/view_typing.py": [
             {
                 "code": "reportArgumentType",
                 "range": {
@@ -2836,7 +2836,7 @@
                 }
             }
         ],
-        "./compiler/rede_compiler/views.py": [
+        "./compiler/rezono_compiler/views.py": [
             {
                 "code": "reportPossiblyUnboundVariable",
                 "range": {
@@ -2870,7 +2870,7 @@
                 }
             }
         ],
-        "./compiler/rede_compiler/writer.py": [
+        "./compiler/rezono_compiler/writer.py": [
             {
                 "code": "reportOptionalMemberAccess",
                 "range": {

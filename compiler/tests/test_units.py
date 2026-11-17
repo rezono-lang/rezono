@@ -14,8 +14,8 @@ from pathlib import Path
 import pytest
 import yaml
 
-from rede_compiler import calc, emit, pack, types
-from rede_compiler.pack import CompileError
+from rezono_compiler import calc, emit, pack, types
+from rezono_compiler.pack import CompileError
 
 FIXTURE = Path(__file__).resolve().parent / "fixtures" / "calc"
 # Units as a pack declares them: neutral names, no domain. The schema states them; the compiler knows none.

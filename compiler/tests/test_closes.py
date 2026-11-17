@@ -11,8 +11,8 @@ from pathlib import Path
 import pytest
 
 from support import FIXTURE
-from rede_compiler import emit, pack
-from rede_compiler import rules as ir
+from rezono_compiler import emit, pack
+from rezono_compiler import rules as ir
 
 # Neutral: `wide` holds for a pair whose alpha is large, `narrow` says that an alpha has no such pair. The two
 # sizes overlap at 4, so a key can be in both: that is what the generated invariant is for.
@@ -161,9 +161,9 @@ def test_a_key_in_both_relations_is_a_row_of_the_invariant_for_the_engine_and_th
     """The good case is empty and the epoch checks; with the sizes overlapping, a2 is in both relations: the
     invariant holds that key, with a proof like any conclusion, and the independent checker refuses the epoch."""
     pytest.importorskip("duckdb")
-    from rede_checker.check import check_epoch
-    from rede_checker.rules import derived_relations, load_rules
-    from rede_compiler import batch, explain
+    from rezono_checker.check import check_epoch
+    from rezono_checker.rules import derived_relations, load_rules
+    from rezono_compiler import batch, explain
 
     def epoch(text):
         model = pack.read(with_rules(fixture, text))
@@ -201,7 +201,7 @@ def test_the_generated_invariant_equals_the_written_rule_on_souffle(fixture, see
     import random
 
     import souffle
-    from rede_compiler import batch
+    from rezono_compiler import batch
 
     prog = ir.load(pack.read(with_rules(fixture, OVERLAP)).rules)
     rnd = random.Random(seed)

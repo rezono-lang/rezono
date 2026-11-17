@@ -9,7 +9,7 @@ import pytest
 import yaml
 
 from support import FIXTURE, REPO
-from rede_compiler import emit, modules, pack
+from rezono_compiler import emit, modules, pack
 
 STD = REPO / "packs" / "std-explain"
 RULES = """

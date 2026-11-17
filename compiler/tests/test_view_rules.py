@@ -8,9 +8,9 @@ import shutil
 import pytest
 import yaml
 
-from rede_checker.check import check
-from rede_checker.rules import load_rules
-from rede_compiler import batch, explain, modules, pack, rules as ir, view_rules, view_typing, views
+from rezono_checker.check import check
+from rezono_checker.rules import load_rules
+from rezono_compiler import batch, explain, modules, pack, rules as ir, view_rules, view_typing, views
 from support import typed
 import souffle
 

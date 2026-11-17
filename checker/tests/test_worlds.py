@@ -6,7 +6,7 @@ import copy
 
 import pytest
 
-from rede_checker.rules import check_worlds, load_rules
+from rezono_checker.rules import check_worlds, load_rules
 
 
 def relation(name, role, *columns, **flags):

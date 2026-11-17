@@ -5,7 +5,7 @@ from hashlib import sha256
 import pytest
 
 from pilot import asked, check_local_sweeps, check_statuses, check_sweeps, checked_local_grid, reads_all_in_full
-from rede_publisher import pointers, publish, store
+from rezono_publisher import pointers, publish, store
 
 
 @pytest.fixture

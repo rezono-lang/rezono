@@ -1,5 +1,5 @@
 {
-	"name": "rede-reckon",
+	"name": "rezono",
 	"private": true,
 	"version": "0.1.0",
 	"description": "Reckon, the language of Rede's control plane: the question slice of v0 (docs/reckon/expressions.md) as a grammar, a printer, the JSON form and the conformance cases that run",

@@ -1,5 +1,5 @@
 id: https://rezono.org/contracts/rules
-name: rede_rules
+name: rezono_rules
 title: Rule IR
 description: >-
   The derivation rules of a pack after parsing and checking: what the compiler hands to the

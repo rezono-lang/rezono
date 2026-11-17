@@ -13,8 +13,8 @@ import tempfile
 from itertools import accumulate
 from pathlib import Path
 
-from rede_compiler.gap import days_text
-from rede_compiler.rules import const_type, is_var
+from rezono_compiler.gap import days_text
+from rezono_compiler.rules import const_type, is_var
 
 TYPE = {"string": "symbol", "integer": "number"}
 INPUT = ("base", "calc")  # what the rules read: a table, and a calculation selection with the rows given
@@ -212,7 +212,7 @@ def closure(pack_dir, prog=None):
     the schemas, as the tables in `source` do; what a rule says comes from its text.
     With `prog`, the compiled program, the texts read the relations of a view where the compiler bound them
     (`view_bound`), and the rules of the view follow (`lowered`)."""
-    from rede_compiler import modules, pack, reckon_table
+    from rezono_compiler import modules, pack, reckon_table
 
     pack_dir = Path(pack_dir)
     meta, errors = pack.read_meta(pack_dir), []

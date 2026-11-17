@@ -51,7 +51,7 @@ import sys
 import tempfile
 from pathlib import Path
 
-from rede_canon import CanonError, canonical_bytes
+from rezono_canon import CanonError, canonical_bytes
 
 from . import l0
 try:
@@ -373,7 +373,7 @@ def verify_sealed(oras: seal.Oras, ref: str, index: bytes | None = None, trust=N
             continue
         said = seal.NOT_CHECKED
         if trust is not None:
-            with tempfile.TemporaryDirectory(prefix="rede-statement-") as d:
+            with tempfile.TemporaryDirectory(prefix="rezono-statement-") as d:
                 (Path(d) / NAME).write_bytes(got[NAME])
                 (Path(d) / SIGNATURE).write_bytes(got[SIGNATURE])
                 try:

@@ -9,7 +9,7 @@ and the addresses the publisher gives its files, and it says four things:
 - **under which schema:** `dct:conformsTo` the schema id's own space, `<base>s-<hex>/` (§5);
 - **in which forms:** a `dcat:Distribution` per form the publisher wrote (§7), with its address and media type; an
   address is absolute, or relative to the entry's own address, as the publisher writes it beside a role's form
-  (`rede_publisher.forms`), so a reader resolves it against wherever it fetched the entry;
+  (`rezono_publisher.forms`), so a reader resolves it against wherever it fetched the entry;
 - **what each form holds to:** `dct:conformsTo` the profile of row JSON, the JSON-LD context, the SHACL shapes
   (shacl.py) and the ODCS contract (odcs.py), each beside the schema id (`descriptors`).
 

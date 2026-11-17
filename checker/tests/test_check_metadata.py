@@ -2,7 +2,7 @@
 
 import pytest
 
-from rede_checker import check_epoch, metadata
+from rezono_checker import check_epoch, metadata
 
 BUNDLE = {
     "format": "rede.schema-bundle/1", "checks": [],
@@ -17,16 +17,16 @@ BUNDLE = {
     ],
 }
 LOADED = {
-    "rede__is_a": [("gamma", "beta")],
-    "rede__required": [("alpha", "title"), ("beta", "alpha")],
-    "rede__single": [("alpha", "size"), ("alpha", "title"), ("beta", "alpha")],
-    "rede__arrow": [("beta", "alpha", "alpha")],
-    "rede__enum": [("beta", "state", "state")],
-    "rede__minimum": [("alpha", "size", "0")],
-    "rede__maximum": [("alpha", "size", "9")],
-    "rede__constant": [("alpha", "size", "4"), ("alpha", "title", "t")],
-    "rede__minimum_cardinality": [("beta", "state", "1")],
-    "rede__maximum_cardinality": [("beta", "state", "2")],
+    "rezono__is_a": [("gamma", "beta")],
+    "rezono__required": [("alpha", "title"), ("beta", "alpha")],
+    "rezono__single": [("alpha", "size"), ("alpha", "title"), ("beta", "alpha")],
+    "rezono__arrow": [("beta", "alpha", "alpha")],
+    "rezono__enum": [("beta", "state", "state")],
+    "rezono__minimum": [("alpha", "size", "0")],
+    "rezono__maximum": [("alpha", "size", "9")],
+    "rezono__constant": [("alpha", "size", "4"), ("alpha", "title", "t")],
+    "rezono__minimum_cardinality": [("beta", "state", "1")],
+    "rezono__maximum_cardinality": [("beta", "state", "2")],
 }
 
 
@@ -41,25 +41,25 @@ def test_the_bundle_gives_every_facet():
 
 
 @pytest.mark.parametrize("table, rows", [
-    ("rede__required", [("alpha", "title")]),                                   # a required slot switched off
-    ("rede__required", LOADED["rede__required"] + [("beta", "state")]),         # one switched on
-    ("rede__single", LOADED["rede__single"] + [("alpha", "size")]),             # a row twice
-    ("rede__maximum", [("alpha", "size", "99")]),                               # another bound
-    ("rede__arrow", [("beta", "alpha", "gamma")]),                              # another target
-    ("rede__is_a", []),
+    ("rezono__required", [("alpha", "title")]),                                   # a required slot switched off
+    ("rezono__required", LOADED["rezono__required"] + [("beta", "state")]),         # one switched on
+    ("rezono__single", LOADED["rezono__single"] + [("alpha", "size")]),             # a row twice
+    ("rezono__maximum", [("alpha", "size", "99")]),                               # another bound
+    ("rezono__arrow", [("beta", "alpha", "gamma")]),                              # another target
+    ("rezono__is_a", []),
 ])
 def test_a_difference_blocks(table, rows):
     assert reasons(LOADED | {table: rows}) == [("check_metadata_mismatch", table)]
 
 
 def test_a_missing_or_unknown_table_blocks():
-    assert reasons({t: rs for t, rs in LOADED.items() if t != "rede__enum"}) == [("check_metadata_mismatch", "rede__enum")]
-    assert reasons(LOADED | {"rede__other": []}) == [("malformed_check_metadata", "rede__other")]
+    assert reasons({t: rs for t, rs in LOADED.items() if t != "rezono__enum"}) == [("check_metadata_mismatch", "rezono__enum")]
+    assert reasons(LOADED | {"rezono__other": []}) == [("malformed_check_metadata", "rezono__other")]
 
 
 def test_a_malformed_row_or_table_is_refused_not_a_crash():
-    assert reasons(LOADED | {"rede__required": [None]}) == [("malformed_check_metadata", "rede__required")]
-    assert reasons(LOADED | {"rede__required": [("alpha",)]}) == [("malformed_check_metadata", "rede__required")]
+    assert reasons(LOADED | {"rezono__required": [None]}) == [("malformed_check_metadata", "rezono__required")]
+    assert reasons(LOADED | {"rezono__required": [("alpha",)]}) == [("malformed_check_metadata", "rezono__required")]
     assert reasons(LOADED | {1: []}) == [("malformed_check_metadata", "1")]
     assert reasons(LOADED, dict(BUNDLE, arrows=[{"kind": "delta", "name": "x"}])) == [("malformed_check_metadata", "")]
 
@@ -76,7 +76,7 @@ def test_check_epoch_blocks_on_it():
     ok = check_epoch([], manifest, {}, lambda uri: b"", derived=set(), bundle=BUNDLE, check_metadata=LOADED)
     assert ok["valid"], ok["findings"]
     bad = check_epoch([], manifest, {}, lambda uri: b"", derived=set(), bundle=BUNDLE,
-                      check_metadata=LOADED | {"rede__required": []})
+                      check_metadata=LOADED | {"rezono__required": []})
     assert not bad["valid"] and [f["reason"] for f in bad["findings"]] == ["check_metadata_mismatch"]
     alone = check_epoch([], manifest, {}, lambda uri: b"", derived=set(), check_metadata=LOADED)
     assert not alone["valid"]  # metadata without the bundle to compare with is refused

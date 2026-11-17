@@ -1,5 +1,5 @@
 id: https://rezono.org/contracts/output-index
-name: rede_output_index
+name: rezono_output_index
 title: Output index
 description: >-
   The index of one render (issue 356 section 2, P7.11; seam S12): for every field of every generated file, where it is

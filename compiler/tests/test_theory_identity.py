@@ -14,8 +14,8 @@ import pytest
 import yaml
 from hypothesis import given, settings, strategies as st
 
-from rede_compiler import batch, emit, modules, pack
-from rede_compiler import rules as ir
+from rezono_compiler import batch, emit, modules, pack
+from rezono_compiler import rules as ir
 from support import typed
 import souffle
 

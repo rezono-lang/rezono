@@ -11,7 +11,7 @@ from hypothesis import strategies as st
 
 import genpack
 from support import compile_dir, row_text, text, violations
-from rede_compiler import facts, pack
+from rezono_compiler import facts, pack
 
 
 def run(data, error):

@@ -9,7 +9,7 @@ import pytest
 import yaml
 
 from support import FIXTURE, compile_dir
-from rede_compiler import modules, pack
+from rezono_compiler import modules, pack
 
 SWEEP = {"name": "size_scale", "kind": "alpha", "key": "a1", "slot": "size"}
 

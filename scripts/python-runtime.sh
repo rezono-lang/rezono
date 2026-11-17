@@ -9,10 +9,10 @@
 # found through LD_LIBRARY_PATH. In CI the runtime goes first on PATH for the next steps (GITHUB_PATH
 # and GITHUB_ENV, also on Forgejo Actions). Linux x86_64, like the locks.
 #
-# REDE_PYTHON_CACHE, a directory, keeps the artifact as python-<sha256>.tar.gz between jobs (CI restores it
+# REZONO_PYTHON_CACHE, a directory, keeps the artifact as python-<sha256>.tar.gz between jobs (CI restores it
 # with actions/cache, keyed on the SHA-256). A kept artifact goes through the same SHA-256 and digest
 # checks as a download, so its source does not matter; one that does not match is dropped and downloaded
-# again. Only an artifact that passed the SHA-256 check is kept. REDE_RUNTIME_TOKEN, if set, goes only to
+# again. Only an artifact that passed the SHA-256 check is kept. REZONO_RUNTIME_TOKEN, if set, goes only to
 # github.com as a bearer token (curl does not pass it on through a redirect): GitHub serves release
 # assets to anonymous clients less reliably.
 set -euo pipefail
@@ -27,7 +27,7 @@ tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 sha256_of() { if command -v sha256sum >/dev/null; then sha256sum "$1"; else shasum -a 256 "$1"; fi | cut -d' ' -f1; }
 tarball=$tmp/python.tar.gz
-cache=${REDE_PYTHON_CACHE:-}
+cache=${REZONO_PYTHON_CACHE:-}
 kept=${cache:+$cache/python-$sha.tar.gz}
 # The copy is checked, not the kept file: a job beside this one on the same host may be writing the kept file
 # (four runners shared one HOME on 11-11-2026, and a cache restore tore it between the check and the copy).
@@ -44,8 +44,8 @@ if [ ! -f "$tarball" ]; then
   auth=()
   case "$url" in
     https://github.com/*)
-      if [ -n "${REDE_RUNTIME_TOKEN:-}" ]; then
-        (umask 077; printf 'Authorization: Bearer %s\n' "$REDE_RUNTIME_TOKEN" > "$tmp/auth")
+      if [ -n "${REZONO_RUNTIME_TOKEN:-}" ]; then
+        (umask 077; printf 'Authorization: Bearer %s\n' "$REZONO_RUNTIME_TOKEN" > "$tmp/auth")
         auth=(-H "@$tmp/auth")
       fi ;;
   esac

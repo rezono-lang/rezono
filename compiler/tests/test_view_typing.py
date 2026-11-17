@@ -12,8 +12,8 @@ import shutil
 import pytest
 import yaml
 
-from rede_compiler import identity, modules, pack, views, view_typing as typing
-from rede_compiler import rules as ir
+from rezono_compiler import identity, modules, pack, views, view_typing as typing
+from rezono_compiler import rules as ir
 
 FIXTURE = Path(__file__).parent / 'fixtures' / 'minimal'
 
@@ -315,7 +315,7 @@ def test_a_refusal_is_a_diagnostic_with_code_place_span_and_hint(tmp_path):
                            'where': 'views[static-theory].arrows[next]',
                            'span': {'file': 'separate-views.yaml', 'line': str(arrow), 'column': '5'},
                            'hint': 'add assume_functional: true to the arrow map, which becomes a pending obligation'}
-    contract = pytest.importorskip('rede_contracts.diagnostic')
+    contract = pytest.importorskip('rezono_contracts.diagnostic')
     contract.DiagnosticList.model_validate({'diagnostics': [found.doc()]})
 
 

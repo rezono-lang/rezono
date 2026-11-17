@@ -1,4 +1,4 @@
-"""A sheet with lanes and lines of relations (a Flow) is checked like any sheet (rede_checker.views, check_view):
+"""A sheet with lanes and lines of relations (a Flow) is checked like any sheet (rezono_checker.views, check_view):
 a line is rows the role reads of its sign, a lane or a group is a cell of a row the role reads (or an unknown
 lane), and every node lies inside its lane and its group. No binding is needed. Negative cases first."""
 
@@ -6,7 +6,7 @@ import copy
 import hashlib
 import json
 
-from rede_checker.views import _edge, check_view
+from rezono_checker.views import _edge, check_view
 
 # As the compiled bundle names them: kind relations and slot tables.
 BUNDLE = {

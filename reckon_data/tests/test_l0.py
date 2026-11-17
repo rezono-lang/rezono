@@ -12,7 +12,7 @@ import jsonschema
 import pytest
 import yaml
 
-from rede_canon import canonical_json, canonical_sha256
+from rezono_canon import canonical_json, canonical_sha256
 
 from reckon_data import l0
 from reckon_data.hash import hash_rows, hashes

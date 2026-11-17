@@ -171,9 +171,9 @@ A role sees a conclusion only with a proof from rows it reads (O8). The adviser'
 ## Running it
 
 ```bash
-python -m rede_compiler check examples/subsidy               # read the pack and load the facts
-python -m rede_compiler compile examples/subsidy generated/subsidy
-python -m rede_compiler explain examples/subsidy generated/subsidy-explained
+python -m rezono_compiler check examples/subsidy               # read the pack and load the facts
+python -m rezono_compiler compile examples/subsidy generated/subsidy
+python -m rezono_compiler explain examples/subsidy generated/subsidy-explained
 python examples/subsidy/reference.py                         # the independent reference, per state
 python examples/subsidy/generate.py                          # the population again: the same bytes
 python edge/plugins/credential-in/credential_in.py observe examples/subsidy/credentials/inputs.yaml \

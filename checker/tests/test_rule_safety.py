@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from rede_checker.rules import derived_relations, load_rules
+from rezono_checker.rules import derived_relations, load_rules
 
 RULES = Path(__file__).resolve().parents[2] / "contracts" / "fixtures" / "rules"
 

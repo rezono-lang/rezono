@@ -2,7 +2,7 @@
   "realm": "rede",
   "enabled": true,
   "sslRequired": "none",
-  "groups": [{ "name": "rede-readers" }],
+  "groups": [{ "name": "rezono-readers" }],
   "users": [
     {
       "username": "reader",
@@ -12,7 +12,7 @@
       "firstName": "A",
       "lastName": "Reader",
       "credentials": [{ "type": "password", "value": "@READER_PASSWORD@", "temporary": false }],
-      "groups": ["/rede-readers"]
+      "groups": ["/rezono-readers"]
     },
     {
       "username": "stranger",

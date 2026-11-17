@@ -10,7 +10,7 @@ import json
 import pytest
 import yaml
 
-from rede_publisher import pointers, publish, store
+from rezono_publisher import pointers, publish, store
 from test_publish import ROLES, epoch
 
 BUILD = {"format": "rede.build/3", "publisher": "5" * 64}
@@ -84,16 +84,16 @@ def test_what_cannot_be_compared_counts_as_a_change(tmp_path):
 # Through the command line, on a real pack.
 
 pytest.importorskip("duckdb")
-pytest.importorskip("rede_compiler")
+pytest.importorskip("rezono_compiler")
 
-from rede_publisher import __main__ as cli, batch, sweep  # noqa: E402
+from rezono_publisher import __main__ as cli, batch, sweep  # noqa: E402
 from test_sweep import FACTS, IDS, PACK, commit, publish_main, repo, sh, tree  # noqa: E402, F401
 
 PROFILE = {"checker": "complete", "viewer": "may_read"}
 
 
 def run(repo, st, monkeypatch, *extra) -> int:
-    """`python -m rede_publisher` for the pack at HEAD, as publish.sh calls it (without the views: no Node here)."""
+    """`python -m rezono_publisher` for the pack at HEAD, as publish.sh calls it (without the views: no Node here)."""
     monkeypatch.setattr(cli.store, "open_store", lambda *a: st)
     base = sh("git", "rev-parse", "HEAD", cwd=repo)
     n, time = sweep.base_of(repo, base)
@@ -153,7 +153,7 @@ def test_a_pack_the_compiler_would_refuse_is_never_skipped(repo, tmp_path, monke
     st = store.FileStore(tmp_path / "store")
     assert run(repo, st, monkeypatch) == 0
     assert cli.published(str(repo / PACK), st, PROFILE, False)["id"] == "m-2"
-    from rede_compiler import modules
+    from rezono_compiler import modules
 
     def refuse(pack_dir):
         raise ValueError("import std-x is not the pinned one")

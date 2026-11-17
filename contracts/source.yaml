@@ -1,5 +1,5 @@
 id: https://rezono.org/contracts/source
-name: rede_source
+name: rezono_source
 title: Sources of facts
 description: >-
   Where a base row comes from, separate from the proof that derives a conclusion (S25).

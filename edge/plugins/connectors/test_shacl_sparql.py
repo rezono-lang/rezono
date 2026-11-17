@@ -2,7 +2,7 @@
 
 pySHACL is the oracle: it knows SHACL and SPARQL and nothing of Rede. It validates the RDF view of a dataset
 through the constraints made from the rule IR, and per invariant it must report exactly the rows that Rede's
-batch engine (`rede_compiler.batch`, DuckDB) derives from the same facts. A difference is a defect in one of the
+batch engine (`rezono_compiler.batch`, DuckDB) derives from the same facts. A difference is a defect in one of the
 two, and fails the test. The pack is `fixtures/checks`: neutral names, an invariant per construct the
 translation knows (an aggregate over an empty group, negation, a division, two rules, a constant in the head, a
 repeated variable) and a recursive one it refuses.
@@ -25,8 +25,8 @@ pytest.importorskip("pyshacl")
 import pyshacl  # noqa: E402
 from rdflib import Graph, Literal  # noqa: E402
 from rdflib.namespace import RDF, SH  # noqa: E402
-from rede_compiler import batch, emit, facts, pack  # noqa: E402
-from rede_compiler import rules as ir  # noqa: E402
+from rezono_compiler import batch, emit, facts, pack  # noqa: E402
+from rezono_compiler import rules as ir  # noqa: E402
 
 from reckon_data import publication, rdf  # noqa: E402
 
@@ -62,7 +62,7 @@ def compare(records: dict) -> dict:
     return accept.checks(BUNDLE, RULES, doc, rows, derived)
 
 
-def test_every_invariant_agrees_with_rede_and_each_has_rows():
+def test_every_invariant_agrees_with_rezono_and_each_has_rows():
     result = compare(CRAFTED)
     assert {n for n, r in result.items() if r["state"] == "carried"} == set(CARRIED)
     assert all(result[n]["rows"] for n in CARRIED), result  # each invariant is broken, so the test means something
@@ -115,7 +115,7 @@ def test_a_dataset_that_breaks_no_invariant_conforms():
     assert conforms, text
 
 
-def test_rede_writes_the_report_a_validator_writes():
+def test_rezono_writes_the_report_a_validator_writes():
     """Rede's violations as a SHACL validation report (`report`) hold the results pySHACL reports through the
     constraints: the same focus node, value, shape, constraint, component and severity per result."""
     data = facts.rows_of(PACK, CRAFTED)
@@ -137,7 +137,7 @@ def test_rede_writes_the_report_a_validator_writes():
     assert set(ours.objects(None, SH.conforms)) == set(theirs.objects(None, SH.conforms)) == {Literal(False)}
 
 
-def test_a_difference_with_rede_is_not_accepted():
+def test_a_difference_with_rezono_is_not_accepted():
     """The comparison is not vacuous: a row Rede did not derive, or one it did that SHACL misses, fails."""
     doc, plan = publication.schema_document(BUNDLE)
     data = facts.rows_of(PACK, CRAFTED)

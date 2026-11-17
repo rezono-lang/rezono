@@ -1,5 +1,5 @@
 id: https://rezono.org/contracts/view-build
-name: rede_view_build
+name: rezono_view_build
 title: Published view build and captured inputs
 description: Static implementation identity in a build record and a private role's immutable layout inputs (C3).
 prefixes:

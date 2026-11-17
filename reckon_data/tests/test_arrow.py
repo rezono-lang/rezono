@@ -7,7 +7,7 @@ import duckdb
 import pyarrow as pa
 import pyarrow.parquet as pq
 import pytest
-from rede_canon import canonical_json
+from rezono_canon import canonical_json
 from test_l0 import FILES, FIXTURE, R01, THING, TREE, TREE_ROWS, TYPES, merge, schema_of
 
 from reckon_data import arrow, l0

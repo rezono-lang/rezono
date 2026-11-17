@@ -3,7 +3,7 @@
 from hypothesis import given
 from hypothesis import strategies as st
 
-from rede_compiler import rank
+from rezono_compiler import rank
 
 
 def test_depth_not_steps():

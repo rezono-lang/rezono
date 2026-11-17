@@ -14,16 +14,16 @@ printf 'alpha:\n  - {id: a1, title: t, size: 1}\n' > "$green/facts/a.yaml"
 printf 'alpha:\n  - {id: a1, title: t, size: 1}\n  - {id: a1, title: u, size: 2}\n' > "$red/facts/a.yaml"  # a duplicate id
 free_port() { python -c 'import socket; s = socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1])'; }
 s3_port=$(free_port) gate_port=$(free_port)
-export AWS_ACCESS_KEY_ID=smoke AWS_SECRET_ACCESS_KEY=smoke-secret REDE_S3_ENDPOINT=http://127.0.0.1:$s3_port
+export AWS_ACCESS_KEY_ID=smoke AWS_SECRET_ACCESS_KEY=smoke-secret REZONO_S3_ENDPOINT=http://127.0.0.1:$s3_port
 moto_server -H 127.0.0.1 -p "$s3_port" > "$work/s3.log" 2>&1 &
 s3=$!
-# The gate serves the one pack this test publishes, by name (REDE_PACKS), as a deployment names its packs.
+# The gate serves the one pack this test publishes, by name (REZONO_PACKS), as a deployment names its packs.
 name=$(python -c 'import sys, yaml; print(yaml.safe_load(open(sys.argv[1]))["name"])' "$green/pack.yaml")
-REDE_STORE=s3://rede REDE_PACKS=$name REDE_AUTH=fixed REDE_ROLE=viewer REDE_LISTEN_HOST=127.0.0.1 PORT=$gate_port node "$root/edge/gate/src/node.ts" > "$work/gate.log" 2>&1 &
+REZONO_STORE=s3://rede REZONO_PACKS=$name REZONO_AUTH=fixed REZONO_ROLE=viewer REZONO_LISTEN_HOST=127.0.0.1 PORT=$gate_port node "$root/edge/gate/src/node.ts" > "$work/gate.log" 2>&1 &
 gate=$!
 trap 'kill $s3 $gate 2>/dev/null; tail -20 "$work/gate.log"' EXIT
-for i in $(seq 30); do curl -s -o /dev/null "$REDE_S3_ENDPOINT" && break; sleep 1; done
-curl -sf -X PUT "$REDE_S3_ENDPOINT/rede" >/dev/null
+for i in $(seq 30); do curl -s -o /dev/null "$REZONO_S3_ENDPOINT" && break; sleep 1; done
+curl -sf -X PUT "$REZONO_S3_ENDPOINT/rede" >/dev/null
 
 "$root/deploy/profiles/edge/publish.sh" "$green"
 status=0; "$root/deploy/profiles/edge/publish.sh" "$red" || status=$?

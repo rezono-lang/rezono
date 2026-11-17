@@ -4,9 +4,9 @@
 import hashlib
 import json
 
-from rede_checker.canon import encode_key
-from rede_checker.check import check_epoch
-from rede_checker.rules import load_rules
+from rezono_checker.canon import encode_key
+from rezono_checker.check import check_epoch
+from rezono_checker.rules import load_rules
 
 DATE = "2026-11-01"
 REASON = "division by zero in ratio"

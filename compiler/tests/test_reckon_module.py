@@ -14,7 +14,7 @@ import pytest
 import yaml
 
 from support import FIXTURE, compile_dir, text, violations
-from rede_compiler import facts, modules, pack, writer
+from rezono_compiler import facts, modules, pack, writer
 
 HERE = Path(__file__).resolve().parent / "fixtures" / "reckon"
 SHARED = FIXTURE.parent / "shared"

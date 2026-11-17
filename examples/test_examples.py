@@ -10,7 +10,7 @@ import pytest
 
 from calcsupport import run_both
 from golden import differences, golden
-from rede_compiler import calc, calc_sql, pack, scenarios
+from rezono_compiler import calc, calc_sql, pack, scenarios
 from support import REPO, compile_dir, expected, load, violations
 
 ROOT = Path(__file__).parent

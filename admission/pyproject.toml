@@ -1,9 +1,9 @@
 [project]
-name = "rede-admission"
+name = "rezono-admission"
 version = "0.1.0"
 description = "Rede admission: the rows of a fact document judged against a pack's schema bundle, with every refusal as a code (LS0)."
 requires-python = ">=3.11"
-dependencies = ["rede-canon"]  # never the compiler: a fact never needs it
+dependencies = ["rezono-canon"]  # never the compiler: a fact never needs it
 
 [project.optional-dependencies]
 test = ["pytest>=8", "pyyaml>=6"]
@@ -13,7 +13,7 @@ requires = ["setuptools>=69"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
-packages = ["rede_admission"]
+packages = ["rezono_admission"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

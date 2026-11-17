@@ -12,7 +12,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from rede_compiler import emit, facts, pack
+from rezono_compiler import emit, facts, pack
 
 from support import FIXTURE
 

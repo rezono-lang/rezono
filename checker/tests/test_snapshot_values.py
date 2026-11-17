@@ -4,7 +4,7 @@ import json
 
 import pytest
 
-from rede_checker.snapshots import read_rows
+from rezono_checker.snapshots import read_rows
 
 STATES = [
     {"state": "known", "value": "5"},

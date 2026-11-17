@@ -1,5 +1,5 @@
 id: https://rezono.org/contracts/offload
-name: rede_offload
+name: rezono_offload
 title: Offloaded steps
 description: >-
   A step that the engine hands to a worker (a solver or planner as a job) and whose result comes

@@ -13,9 +13,9 @@ written by hand; no role of any domain.
 import json
 
 import pytest
-from rede_checker import access as checker_access
-from rede_publisher import access
-from rede_publisher.publish import snapshot
+from rezono_checker import access as checker_access
+from rezono_publisher import access
+from rezono_publisher.publish import snapshot
 
 KINDS = {"node", "role"}
 COLUMNS = {"node": ("node",), "role": ("role",), "role__capability": ("role", None)}

@@ -14,11 +14,11 @@ import pytest
 import yaml
 
 pytest.importorskip("duckdb")
-pytest.importorskip("rede_compiler")
+pytest.importorskip("rezono_compiler")
 
-from rede_canon import canonical_json, sha256_hex  # noqa: E402
-from rede_publisher import batch, publish, store, views  # noqa: E402
-from rede_publisher import sources as fact_sources  # noqa: E402
+from rezono_canon import canonical_json, sha256_hex  # noqa: E402
+from rezono_publisher import batch, publish, store, views  # noqa: E402
+from rezono_publisher import sources as fact_sources  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[3]
 MINIMAL = ROOT / "compiler" / "tests" / "fixtures" / "minimal"

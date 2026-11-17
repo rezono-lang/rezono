@@ -17,7 +17,7 @@ import pytest
 import yaml
 from hypothesis import given, settings, strategies as st
 
-from rede_compiler import facts, modules, writer
+from rezono_compiler import facts, modules, writer
 
 REPO = Path(__file__).resolve().parents[2]
 PACKS = sorted(p.parent for p in (REPO / "examples").rglob("pack.yaml") if "expected" not in p.parts)
@@ -441,13 +441,13 @@ def delete_first(pack_dir: Path, path: Path, tmp_path: Path) -> Path:
 
 
 def test_the_writer_writes_only_in_a_work_dir(tmp_path):
-    """Not in the repository, not in any other directory: only in a rede-work-* dir under the temp dir."""
+    """Not in the repository, not in any other directory: only in a rezono-work-* dir under the temp dir."""
     pack_dir, path = FILES[0]
     delta = delete_first(pack_dir, path, tmp_path)
     before = path.read_bytes()
     assert writer.main(["apply", str(pack_dir), str(delta)]) == 1
     assert path.read_bytes() == before
-    elsewhere = modules.copy_closure(pack_dir, tmp_path / "rede-work-not-under-the-temp-dir" / "pack")
+    elsewhere = modules.copy_closure(pack_dir, tmp_path / "rezono-work-not-under-the-temp-dir" / "pack")
     assert writer.main(["apply", str(elsewhere), str(delta)]) == 1
 
 

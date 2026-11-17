@@ -25,6 +25,6 @@ deploy/engine/engine.env
 /compiled/
 .hypothesis/
 .fast-check.log
-contracts/python/rede_contracts/*.py
-!contracts/python/rede_contracts/__init__.py
-contracts/python/rede_contracts/*.schema.json
+contracts/python/rezono_contracts/*.py
+!contracts/python/rezono_contracts/__init__.py
+contracts/python/rezono_contracts/*.schema.json

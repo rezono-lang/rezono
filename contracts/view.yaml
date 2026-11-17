@@ -1,5 +1,5 @@
 id: https://rezono.org/contracts/view
-name: rede_view
+name: rezono_view
 title: Key (visual language)
 description: >-
   The visual language as data, used by std-view. The viewer only interprets this.

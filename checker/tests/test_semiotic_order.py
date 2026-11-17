@@ -6,8 +6,8 @@ import json
 
 import pytest
 
-from rede_checker.semiotic_order import lane_order
-from rede_checker.views import Role
+from rezono_checker.semiotic_order import lane_order
+from rezono_checker.views import Role
 
 
 SHEET = "flow.synthetic"

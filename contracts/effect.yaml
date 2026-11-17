@@ -1,5 +1,5 @@
 id: https://rezono.org/contracts/effect
-name: rede_effect
+name: rezono_effect
 title: Effect plan and attempt state
 description: >-
   A bounded effect plan and its journaled attempt. The plan hash identifies the exact planned input.

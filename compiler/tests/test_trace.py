@@ -11,9 +11,9 @@ from hypothesis import given, settings
 from hypothesis import strategies as st
 
 import souffle
-from rede_compiler import batch, explain, rules_dl, trace
-from rede_compiler import rules as ir
-from rede_compiler.explain import key_text
+from rezono_compiler import batch, explain, rules_dl, trace
+from rezono_compiler import rules as ir
+from rezono_compiler.explain import key_text
 
 SOUFFLE = pytest.mark.skipif(shutil.which("souffle") is None, reason="needs souffle (the oracle)")
 ORACLE = settings(max_examples=min(settings().max_examples, 150))
@@ -194,7 +194,7 @@ def test_a_contributes_edge_of_a_sum_or_a_min_carries_what_its_row_gives():
 def test_the_valued_edges_of_an_aggregate_are_its_contributors_and_hash_to_the_witness():
     """What the reader gets is what the hash proves: per aggregate, the sorted [key, value] of its edges
     (only [key] for a count) is the list `contributors_sha256` is taken over, and the sum is its result."""
-    from rede_canon import canonical_sha256
+    from rezono_canon import canonical_sha256
 
     prog, witnesses, rows = weighed()
     edges = defaultdict(list)

@@ -6,8 +6,8 @@ from threading import Lock
 
 import pytest
 
-from rede_publisher import store
-from rede_publisher.cache import SweepStore
+from rezono_publisher import store
+from rezono_publisher.cache import SweepStore
 
 
 class CountingStore:
@@ -70,7 +70,7 @@ def test_heads_lists_missing_objects_and_other_namespaces_stay_fresh():
 
 
 def test_what_the_base_lacks_is_asked_once_a_sweep_and_no_other_miss_is_remembered():
-    """RV-M24: every variant asks for its role's view index of the base (rede_publisher.difference.shared). The
+    """RV-M24: every variant asks for its role's view index of the base (rezono_publisher.difference.shared). The
     base is published before its sweep and the sweep writes nothing under it, so a miss there stands for the
     whole sweep. A miss anywhere else may be an object that is about to be written."""
     st = CountingStore()
@@ -132,7 +132,7 @@ def test_snapshots_are_read_side_by_side_in_the_order_asked():
     A read waits on the store, so several are in flight at once; what comes back is in the order asked."""
     from threading import Barrier
 
-    from rede_publisher import views
+    from rezono_publisher import views
 
     together = Barrier(2, timeout=30)  # passes only when two reads are in flight at the same time
 
@@ -157,7 +157,7 @@ def test_snapshots_are_read_side_by_side_in_the_order_asked():
 
 
 def test_a_snapshot_read_side_by_side_is_still_the_object_its_manifest_names():
-    from rede_publisher import views
+    from rezono_publisher import views
 
     st = CountingStore()
     st.put_new("p/m-1/viewer/relations/a.json", b"[]")

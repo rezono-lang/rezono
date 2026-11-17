@@ -31,7 +31,7 @@ classes:
   PeriodClose:
     description: >-
       The close of the ledger up to a date. Origin: a decision of the finance department. It names
-      every payment it closes with the hash of its row, as `rede_compiler close` writes it.
+      every payment it closes with the hash of its row, as `rezono_compiler close` writes it.
     attributes:
       id: {identifier: true}
       closed_until: {range: date, required: true, description: Every payment booked before this date is closed.}

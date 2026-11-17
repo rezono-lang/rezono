@@ -1,5 +1,5 @@
 id: https://rezono.org/contracts/change
-name: rede_change
+name: rezono_change
 title: Change and its life cycle
 description: >-
   One change in Rede, from delta to effect (docs/lifecycle.md): an edit in the viewer, a commit by

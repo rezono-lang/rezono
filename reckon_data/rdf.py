@@ -29,7 +29,7 @@ from rdflib.namespace import PROV, RDF, RDFS, XSD, split_uri
 from rdflib.plugins.serializers.turtle import TurtleSerializer
 from rdflib.term import _is_valid_uri
 
-from rede_canon import canonical_json, canonical_sha256
+from rezono_canon import canonical_json, canonical_sha256
 
 from . import l0
 

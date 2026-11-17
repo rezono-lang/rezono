@@ -1,4 +1,4 @@
-"""A Nest sheet (`nest.<id>`, one per binding) is checked like any sheet (rede_checker.views, check_view), plus its
+"""A Nest sheet (`nest.<id>`, one per binding) is checked like any sheet (rezono_checker.views, check_view), plus its
 binding in the compiled bundle (`channels.nests`): its nodes are exactly the parts the role's rows give (every element
 of the first level the role reads, every element whose container is a part, and every element whose container is
 unknown, apart with its own parts; an element known to have no container is on no sheet); a part's container is the
@@ -8,7 +8,7 @@ and without a row "none" or unknown, whichever holds. Negative cases first."""
 import copy
 import json
 
-from rede_checker.views import Role, check_view
+from rezono_checker.views import Role, check_view
 
 STATE = {"channel": "tone", "slot": "state", "level": "ordered", "meaning_message": "s"}
 # A binding as the compiler writes it into the bundle: an arrow by its element id, a column by its name.

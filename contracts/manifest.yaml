@@ -1,5 +1,5 @@
 id: https://rezono.org/contracts/manifest
-name: rede_manifest
+name: rezono_manifest
 title: Snapshot manifest
 description: >-
   The publication boundary. Only what a manifest lists is visible to the explainer,
@@ -43,7 +43,7 @@ classes:
       access_semantics: {range: integer, minimum_value: 2, maximum_value: 2, description: "Decision O8: what a role's files mean. 2: a role gets only rows derivable from what it may read, each with a proof chosen among those, and each snapshot says whether the role reads the relation in full. Absent: an older publisher; the access gate refuses such a manifest, also when it is the newest."}
       pack_sha256: {required: true, description: "Hash of the pack that was compiled, its facts included. For the server side only: the access gate never passes it to a role, since a dictionary over it would find a hidden value."}
       definition_sha256: {pattern: "^[0-9a-f]{64}$", description: "Hash of the pack's definition without facts or scenarios (pack.yaml, channels.yaml, schema/, rules/, labels/, messages/, icons/): the fingerprint a role may see, and the folder of the archived bundle (decision O8)."}
-      compiler_sha256: {required: true, description: "Hash of the compiler that compiled the pack: its source, rede-canon, the contracts it reads and the exact version of every library they use; part of the build record (docs/ci.md#8-pinned-versions)."}
+      compiler_sha256: {required: true, description: "Hash of the compiler that compiled the pack: its source, rezono-canon, the contracts it reads and the exact version of every library they use; part of the build record (docs/ci.md#8-pinned-versions)."}
       engine: {range: Component, required: true, inlined: true, description: The engine that computed the snapshot.}
       udf_sha256: {description: "Hash of the UDF build, if any."}
       schema_version: {required: true, description: Version of the pack schema.}

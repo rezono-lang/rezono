@@ -1,5 +1,5 @@
 # The platform's Gateway (Gateway API), implemented by Envoy Gateway: TLS ends here, with a certificate of the
-# run's own authority (Secret `rede-tls`, made by kind.sh per run), and the profile's HTTPRoute attaches to it
+# run's own authority (Secret `rezono-tls`, made by kind.sh per run), and the profile's HTTPRoute attaches to it
 # from the namespace `rede`. Envoy Gateway runs its proxies in its own namespace, `envoy-gateway-system`, which is
 # the namespace the overlay's NetworkPolicy `front` lets in.
 apiVersion: gateway.networking.k8s.io/v1
@@ -24,7 +24,7 @@ spec:
       tls:
         mode: Terminate
         certificateRefs:
-          - name: rede-tls
+          - name: rezono-tls
       allowedRoutes:
         namespaces:
           from: All

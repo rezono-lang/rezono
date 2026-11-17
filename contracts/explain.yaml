@@ -1,5 +1,5 @@
 id: https://rezono.org/contracts/explain
-name: rede_explain
+name: rezono_explain
 title: Explanation questions
 description: >-
   Explanation as a question about the proof (decisions R8, R9, R10; docs/gui.md, "Explanation as questions
@@ -97,7 +97,7 @@ enums:
       negative: {description: "A premise that is absent."}
       contributes: {description: "A row of an aggregated group."}
   GapItem:
-    description: What an item of a rule's schedule is in the rule (rede_compiler.gap).
+    description: What an item of a rule's schedule is in the rule (rezono_compiler.gap).
     permissible_values:
       positive: {description: "A positive literal of the body."}
       negative: {description: "A negated literal of the body."}

@@ -35,7 +35,7 @@ expect:
     annotation_hash: 99281b4c708d3865d51a57074c6211211641d73d47f508796d3a9eb00e792f7e
 note: >-
   The `$why` hash row is {"$key":["Host","host-a","memory_need","","",""],"proof":"rede:w/91c2"} (l0.md §6.2
-  step 6). Computed with rede_canon; the dataset hash equals the worked vector of §6.2.
+  step 6). Computed with rezono_canon; the dataset hash equals the worked vector of §6.2.
 sources:
 - '#369 L0 rev 2 §8'
 - '#417 review 6761310804'

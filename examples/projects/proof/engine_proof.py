@@ -192,7 +192,7 @@ def run(weight, target, tables, profile):
     projects = max(1, round(target / (3 + TASKS * 4 + 3 * 23)))
     rows = facts(projects)
     n_rows = sum(len(r) for r in rows.values())
-    name = f"rede-proof-{weight}-{profile}"
+    name = f"rezono-proof-{weight}-{profile}"
     compiled = deploy(name, feldera_program(tables, weight), profile)
     print(f"\n{weight}, {profile}, {n_rows} input rows ({projects} projects): Feldera compile {compiled:.0f} s",
           flush=True)

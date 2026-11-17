@@ -7,8 +7,8 @@ import json
 
 import pytest
 
-from rede_checker.semiotic_coverage import flow_element_coverage
-from rede_checker.views import Role, check_view
+from rezono_checker.semiotic_coverage import flow_element_coverage
+from rezono_checker.views import Role, check_view
 
 
 def encoded(value):

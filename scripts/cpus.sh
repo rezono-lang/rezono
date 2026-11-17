@@ -7,7 +7,7 @@
 #   2. else, in a Kubernetes pod, its CPU request: what it gets when the node is busy, which the kubelet writes as
 #      cpu.weight (cgroup v2) or cpu.shares (v1, 1024 per CPU);
 #   3. else the CPUs it may run on (nproc).
-# REDE_CPUS overrides all three: a workstation that other work shares (scripts/preflight.sh sets it); CI never does.
+# REZONO_CPUS overrides all three: a workstation that other work shares (scripts/preflight.sh sets it); CI never does.
 # Never more than nproc. Plain POSIX sh: the same on GitHub's runners, ARC pods, Forgejo runners and a laptop.
 #
 #   scripts/cpus.sh           print the count
@@ -44,8 +44,8 @@ if [ "$quota" != max ]; then
 elif [ -n "$shares" ]; then
 	basis=request cpus=$(( (shares + 1023) / 1024 ))
 fi
-if [ -n "${REDE_CPUS:-}" ]; then
-	basis=REDE_CPUS cpus=$REDE_CPUS
+if [ -n "${REZONO_CPUS:-}" ]; then
+	basis=REZONO_CPUS cpus=$REZONO_CPUS
 fi
 if [ "$cpus" -gt "$n" ]; then cpus=$n; fi
 if [ "$cpus" -lt 1 ]; then cpus=1; fi

@@ -20,7 +20,7 @@ another):
   the shapes are made (the IR compares texts by equality only, so the spelling changes no answer);
 - **a derived relation** is the `UNION` of its rules, `DISTINCT`; a negative literal is `FILTER NOT EXISTS` on
   the variables it shares (all of them, as the IR requires); an aggregate is a grouped subquery joined on its
-  group, as `rede_compiler.rules_sql` does: `count` and `sum` over the rows and a zero for every group of the
+  group, as `rezono_compiler.rules_sql` does: `count` and `sum` over the rows and a zero for every group of the
   body, so an empty group is 0, and `min` and `max` by an inner join, so an empty group gives nothing; `div`
   truncates toward zero; a condition is a `FILTER`. No `MINUS`, `VALUES` or `SERVICE`: SHACL §5.3.1 forbids them
   in a constraint.
@@ -53,8 +53,8 @@ sys.path.insert(0, str(ROOT))  # reckon_data lives at the repository root
 
 from rdflib import Graph, Literal, Namespace, URIRef  # noqa: E402
 from rdflib.namespace import RDF, RDFS, SH, XSD  # noqa: E402
-from rede_canon import canonical_sha256  # noqa: E402
-from rede_compiler import rules as ir  # noqa: E402
+from rezono_canon import canonical_sha256  # noqa: E402
+from rezono_compiler import rules as ir  # noqa: E402
 
 from reckon_data import publication, rdf  # noqa: E402
 

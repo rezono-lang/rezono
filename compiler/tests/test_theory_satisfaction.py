@@ -22,8 +22,8 @@ import satisfaction
 import yaml
 from hypothesis import given, settings
 from hypothesis import strategies as st
-from rede_compiler import modules, pack
-from rede_compiler import rules as ir
+from rezono_compiler import modules, pack
+from rezono_compiler import rules as ir
 from test_theory_order import reference as order_reference
 
 pytest.importorskip("duckdb")

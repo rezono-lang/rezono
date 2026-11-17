@@ -18,9 +18,9 @@ examples/test_theory_views.py (the test domains' own facts).
 from functools import cache
 from pathlib import Path
 
-from rede_compiler import batch, pack
-from rede_compiler import rules as ir
-from rede_compiler.view_rules import table_relation
+from rezono_compiler import batch, pack
+from rezono_compiler import rules as ir
+from rezono_compiler.view_rules import table_relation
 from support import typed
 
 

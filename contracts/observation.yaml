@@ -1,5 +1,5 @@
 id: https://rezono.org/contracts/observation
-name: rede_observation
+name: rezono_observation
 title: Observations and drift
 description: >-
   A fact in the layer Observation: a measurement or the status that a reconciler reports, with its

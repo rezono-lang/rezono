@@ -3,7 +3,7 @@
 # reports a wider set as warnings only.
 target-version = "py313"
 # The types contracts/gen-types.sh generates from contracts/*.yaml: their imports are the generator's.
-extend-exclude = ["contracts/python/rede_contracts"]
+extend-exclude = ["contracts/python/rezono_contracts"]
 
 [lint.per-file-ignores]
 # pytest passes a fixture imported from another test module by its name as an argument, which F811 reads as a

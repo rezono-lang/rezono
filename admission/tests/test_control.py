@@ -3,7 +3,7 @@ small bundle of admission's own: no compiler."""
 
 from __future__ import annotations
 
-from rede_admission import Admission, Schema, rows
+from rezono_admission import Admission, Schema, rows
 
 BUNDLE = {
     "format": "rede.schema-bundle/1",

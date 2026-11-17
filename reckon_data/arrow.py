@@ -25,7 +25,7 @@ from pathlib import Path
 
 import pyarrow as pa
 import pyarrow.parquet as pq
-from rede_canon import canonical_json
+from rezono_canon import canonical_json
 
 from reckon_data import l0
 

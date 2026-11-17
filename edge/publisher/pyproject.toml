@@ -1,9 +1,9 @@
 [project]
-name = "rede-publisher"
+name = "rezono-publisher"
 version = "0.1.0"
 description = "Rede publisher: after a green epoch, snapshots per role and a manifest in S3-compatible storage"
 requires-python = ">=3.11"
-dependencies = ["pyyaml>=6", "rede-canon", "rede-checker", "rede-compiler"]  # install: scripts/install-python.sh (docs/ci.md §8)
+dependencies = ["pyyaml>=6", "rezono-canon", "rezono-checker", "rezono-compiler"]  # install: scripts/install-python.sh (docs/ci.md §8)
 
 [project.optional-dependencies]
 # The batch epoch: the compiler with DuckDB (install compiler[batch] next to it).
@@ -11,10 +11,10 @@ s3 = ["boto3>=1.35.10"]
 test = ["pytest>=8"]
 
 [project.scripts]
-rede-publish = "rede_publisher.__main__:main"
+rezono-publish = "rezono_publisher.__main__:main"
 
 [tool.setuptools]
-packages = ["rede_publisher"]
+packages = ["rezono_publisher"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

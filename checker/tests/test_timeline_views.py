@@ -1,4 +1,4 @@
-"""A Timeline sheet (`timeline.<id>`) is checked like any sheet (rede_checker.views, check_view), plus its binding
+"""A Timeline sheet (`timeline.<id>`) is checked like any sheet (rezono_checker.views, check_view), plus its binding
 in the compiled bundle (`channels.timelines`): its nodes are exactly the elements of the row kind that the role
 reads, each with its dates as a list in the binding's order: `known` with the value of the role's one row of
 that attribute; without a row the start and the end `unknown`, the extension and a mark `unknown` or, where the
@@ -8,7 +8,7 @@ but its judgement. Negative cases first."""
 import copy
 import json
 
-from rede_checker.views import Role, check_view
+from rezono_checker.views import Role, check_view
 
 # A binding as the compiler writes it into the bundle: an attribute by its element id (`<kind>.<slot>`).
 TIMELINE = {"id": "validity", "title_message": "t", "rows": "parameter", "start": "parameter.valid_from",

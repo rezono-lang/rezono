@@ -12,7 +12,7 @@ import pytest
 import yaml
 
 from support import FIXTURE, compile_dir, row_text, text, violations
-from rede_compiler import facts, modules, pack, regex
+from rezono_compiler import facts, modules, pack, regex
 
 SHARED = FIXTURE.parent / "shared"
 SCHEMA = {"id": "https://rezono.example/x", "name": "x", "in_language": "nl", "imports": ["linkml:types"],
@@ -166,7 +166,7 @@ def test_a_multivalued_slot_is_a_link_kind_without_functionality(fixture, tmp_pa
     files = compile_dir(fixture, tmp_path / "out")
     assert "beta__state__functionality" not in files["engine/integrity.sql"]
     params = json.loads(files["engine/parameters.json"])
-    assert params["rede__maximum_cardinality"] == [{"kind": "beta", "slot": "state", "v": 2}]
+    assert params["rezono__maximum_cardinality"] == [{"kind": "beta", "slot": "state", "v": 2}]
     assert "beta__state__maximum_cardinality" not in params  # no rule reads it (E11)
     got = run(fixture, tmp_path, "alpha: [{id: a, title: t}]\nbeta:\n  - {id: ok, alpha: a, state: [low, high]}\n"
                                  "  - {id: none, alpha: a}\n  - {id: same, alpha: a, state: [low, low]}\n")
@@ -298,7 +298,7 @@ def test_constants_are_parameters_checked_as_a_value_range(fixture, tmp_path):
     edit(fixture, change)
     files = compile_dir(fixture, tmp_path / "out")
     params = json.loads(files["engine/parameters.json"])
-    assert params["rede__constant"] == [{"kind": "alpha", "slot": "size", "v": "4"},
+    assert params["rezono__constant"] == [{"kind": "alpha", "slot": "size", "v": "4"},
                                         {"kind": "beta", "slot": "state", "v": "low"}]
     got = run(fixture, tmp_path, "alpha: [{id: a, title: t, size: 5}]\nbeta: [{id: b, alpha: a, state: high}]\n")
     assert got == text({"alpha__size__value_range": {("a", 5)}, "beta__state__value_range": {("b", "high")}})
@@ -371,7 +371,7 @@ def test_an_unknown_annotation_on_an_identifier_warns(fixture):
 
 
 def test_linkml_any_is_an_open_value_also_without_the_prefix():
-    from rede_compiler.pack import open_value
+    from rezono_compiler.pack import open_value
 
     class View:  # a schema that declares no linkml prefix: expanding gives the CURIE back unchanged
         def get_class(self, name):
@@ -481,8 +481,8 @@ def test_an_accepted_pattern_means_the_same_in_python_and_duckdb(pattern, text, 
     """Both engines search; shorthand classes are ASCII (Feldera's Rust regex follows the written-out form)."""
     import re
     import duckdb
-    from rede_compiler import emit
-    from rede_compiler.regex import portable
+    from rezono_compiler import emit
+    from rezono_compiler.regex import portable
     p = portable(pattern)
     db = duckdb.connect()
     db.execute(emit.DUCKDB_FUNCTIONS)

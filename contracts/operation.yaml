@@ -1,10 +1,10 @@
 id: https://rezono.org/contracts/operation
-name: rede_operation
+name: rezono_operation
 title: Schema operations and their impact
 description: >-
   A schema change as a list of operations from a fixed catalogue (decision S7;
   docs/compiler.md#schema-operations), and the impact the compiler reports when it applies them
-  (`python -m rede_compiler operate <pack> <operations.yaml>`). Each operation moves the schema,
+  (`python -m rezono_compiler operate <pack> <operations.yaml>`). Each operation moves the schema,
   the facts, the rules, the labels and the channel table of one pack, and comes with a migration in
   the format of linkml-map. Names are the names in the schema files: a class name for a kind, a
   slot name, an enum name and a permissible value. A class or enum that more than one module

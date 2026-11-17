@@ -6,9 +6,9 @@ import json
 import shutil
 
 import pytest
-from rede_canon import canonical_bytes
+from rezono_canon import canonical_bytes
 
-from rede_publisher import store, view_build, views
+from rezono_publisher import store, view_build, views
 
 
 class History:
@@ -244,7 +244,7 @@ def test_legacy_views_without_build_identity_keep_the_existing_path(monkeypatch)
     [False, pytest.param(True, marks=pytest.mark.xfail(strict=True, reason="viewer/src/lib is not in the standalone repository"))],
 )
 def test_cli_build_identity_is_final_before_manifest_and_viewless_needs_no_node(identity, monkeypatch, with_views):
-    from rede_publisher import __main__ as cli, batch
+    from rezono_publisher import __main__ as cli, batch
     from test_publish import epoch
 
     st, called = History(), []
@@ -347,7 +347,7 @@ def test_concurrent_preparer_uses_first_committed_capture(identity, monkeypatch)
 @pytest.mark.xfail(strict=True, reason="viewer/src/lib is not in the standalone repository")
 @pytest.mark.parametrize("failure", ["check", "index", "manifest", "head"])
 def test_cli_restart_recovers_frozen_checkpoint(identity, monkeypatch, failure):
-    from rede_publisher import __main__ as cli, batch, pointers, publish
+    from rezono_publisher import __main__ as cli, batch, pointers, publish
     from test_publish import epoch
 
     st, calls = History(), []
@@ -410,8 +410,8 @@ def test_cli_restart_recovers_frozen_checkpoint(identity, monkeypatch, failure):
                     reason="needs Node and the viewer's locked dependencies")
 def test_real_node_and_checker_remove_a_revoked_node_while_using_captured_previous_layout(monkeypatch):
     """Three authored nodes, then two: exercise views.ts and every real view checker, without an engine."""
-    from rede_compiler import emit, pack
-    from rede_publisher.publish import snapshot
+    from rezono_compiler import emit, pack
+    from rezono_publisher.publish import snapshot
 
     model = pack.read(view_build.ROOT / "compiler/tests/fixtures/minimal")
     bundle = emit.compile_pack(model)["bundle/schema-bundle.json"].encode()

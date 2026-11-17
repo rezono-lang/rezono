@@ -1,5 +1,5 @@
 id: https://rezono.org/contracts/reckon-module
-name: rede_reckon_module
+name: rezono_reckon_module
 title: Reckon module form
 description: >-
   The JSON form of one module written in Reckon: what `reckon/` writes and the compiler reads beside `schema/`

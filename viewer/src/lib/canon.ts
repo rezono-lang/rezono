@@ -1,5 +1,5 @@
 // The one canonical JSON form and hash of Rede (docs/contracts.md#canonical-hash), the twin of
-// canon/rede_canon in Python. Both must give the bytes in contracts/fixtures/canon/vectors.json.
+// canon/rezono_canon in Python. Both must give the bytes in contracts/fixtures/canon/vectors.json.
 // RFC 8785 (JCS) over a JSON value without numbers: an integer becomes decimal text, a Date ISO text.
 
 // No parameter properties: the publisher runs this module with plain Node, which only strips types.

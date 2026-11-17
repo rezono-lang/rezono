@@ -6,10 +6,10 @@ from pathlib import Path
 
 import pytest
 import yaml
-from rede_canon import canonical_json
+from rezono_canon import canonical_json
 
-from rede_checker import sources
-from rede_checker.sources import check_role_sources, check_source_sets
+from rezono_checker import sources
+from rezono_checker.sources import check_role_sources, check_source_sets
 
 ROOT = Path(__file__).resolve().parents[2]
 BUNDLE = {"kinds": [{"id": "alpha", "table": "alpha"}, {"id": "beta", "table": "beta"}],

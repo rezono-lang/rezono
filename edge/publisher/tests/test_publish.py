@@ -8,11 +8,11 @@ from pathlib import Path
 
 import pytest
 
-from rede_canon import canonical_json, canonical_sha256
-from rede_checker import access as checker_access
-from rede_checker import metadata
-from rede_publisher import access, pointers, publish, retained_calculation, store
-from rede_publisher.publish import Epoch
+from rezono_canon import canonical_json, canonical_sha256
+from rezono_checker import access as checker_access
+from rezono_checker import metadata
+from rezono_publisher import access, pointers, publish, retained_calculation, store
+from rezono_publisher.publish import Epoch
 
 SECRET = "zz-secret"  # an element the guest may not read; its id must not reach any guest file
 
@@ -752,7 +752,7 @@ def test_a_view_the_program_does_not_account_for_is_not_full():
 
 
 def test_a_batch_publication_checks_a_rule_reading_a_calculation(tmp_path):
-    from rede_publisher import batch
+    from rezono_publisher import batch
 
     fixture = Path(__file__).resolve().parents[3] / "compiler" / "tests" / "fixtures" / "calc"
     pack = tmp_path / "calc"
@@ -1394,7 +1394,7 @@ def test_a_diagnosis_needs_the_bundles_check_metadata(tmp_path):
     """Decision E11: a red variant read with switched-off checks would under-report; it is refused too."""
     e = dataclasses.replace(epoch(), variant={"sweep": "s", "index": 1}, base_manifest="m-1",
                             checks=[{"name": "node__unique", "status": "red", "violations": 1}])
-    meta = {t: rs for t, rs in e.check_metadata.items() if t != "rede__required"}
+    meta = {t: rs for t, rs in e.check_metadata.items() if t != "rezono__required"}
     s = store.FileStore(tmp_path)
     with pytest.raises(publish.Blocked, match="check_metadata"):
         publish.diagnose(dataclasses.replace(e, check_metadata=meta), s)
@@ -1430,8 +1430,8 @@ def test_batch_refuses_theory_before_compilation_or_engine_work(tmp_path, monkey
     from pathlib import Path
     import duckdb
     import yaml
-    from rede_compiler import emit
-    from rede_publisher import batch
+    from rezono_compiler import emit
+    from rezono_publisher import batch
 
     source = Path(__file__).resolve().parents[3] / "compiler/tests/fixtures/minimal"
     target = Path(shutil.copytree(source, tmp_path / "theory"))

@@ -14,9 +14,9 @@ import pytest
 import yaml
 
 import souffle
-from rede_compiler import batch, pack
-from rede_compiler import rules as ir
-from rede_compiler.rules_dl import parse_file, remap_statement
+from rezono_compiler import batch, pack
+from rezono_compiler import rules as ir
+from rezono_compiler.rules_dl import parse_file, remap_statement
 from test_rule_imports import imported, pin, program, write_rules  # noqa: F401 (imported is a fixture)
 
 REGISTERED = "registered(x) :- party(x)."  # the rule of the imported pack (the fixture `imported`)

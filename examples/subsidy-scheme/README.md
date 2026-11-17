@@ -16,6 +16,6 @@ It imports [`std-decision`](../../packs/std-decision/README.md), whose `Decision
 
 ## Using it
 
-A pack imports it in `pack.yaml` with `{name: subsidy-scheme, path: <path to this directory>, sha256: <hash>}`, where the hash is what `python -m rede_compiler hash examples/subsidy-scheme` prints; another value is refused. The importing pack states the evaluation date in a calc file of its own and holds the facts. `python -m rede_compiler check examples/subsidy-scheme` checks the definition on its own; a theory publishes no instance.
+A pack imports it in `pack.yaml` with `{name: subsidy-scheme, path: <path to this directory>, sha256: <hash>}`, where the hash is what `python -m rezono_compiler hash examples/subsidy-scheme` prints; another value is refused. The importing pack states the evaluation date in a calc file of its own and holds the facts. `python -m rezono_compiler check examples/subsidy-scheme` checks the definition on its own; a theory publishes no instance.
 
 The model, kind by kind, the five questions it answers and the worked example are in the README of [`subsidy`](../subsidy/README.md), which also has the tests and the independent reference (`reference.py`).

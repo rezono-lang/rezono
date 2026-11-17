@@ -1,5 +1,5 @@
 id: https://rezono.org/contracts/proposal
-name: rede_proposal
+name: rezono_proposal
 title: Proposal on a Git host
 description: >-
   What the Git-host plugin gives back, the same for every host (docs/architecture.md#the-git-host-plugin):

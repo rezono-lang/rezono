@@ -1,5 +1,5 @@
 id: https://rezono.org/contracts/review-context
-name: rede_review_context
+name: rezono_review_context
 title: Context for review evidence
 description: Shape of a review's subject and source receipt. Admission verifies the referenced evidence.
 prefixes:

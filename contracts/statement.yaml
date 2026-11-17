@@ -1,5 +1,5 @@
 id: https://rezono.org/contracts/statement
-name: rede_statement
+name: rezono_statement
 title: Epoch statement per role
 description: >-
   The one document per published epoch and filtered role that a signature covers (RV-X41; docs/ring2/signing.md,

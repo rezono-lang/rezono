@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 
 from support import FIXTURE
-from rede_compiler import emit, pack
+from rezono_compiler import emit, pack
 
 RULES = """.decl pair(a: symbol, b: symbol)
 pair(a, b) :- beta__alpha(b, a).

@@ -5,7 +5,7 @@ its own kinds onto it with a view (RV-C27, docs/compiler.md, "Views that execute
 The lowering binds every rule that read a theory table to one relation that holds both the table and the view's
 rows, the `@invariant`s included (`view_rules.bind`).
 A row in an invariant relation is a red check and blocks publication, as the publisher counts it
-(edge/publisher/rede_publisher/batch.py); `red` below is that count.
+(edge/publisher/rezono_publisher/batch.py); `red` below is that count.
 
 Per axiom: a violation through the view gives the invariant's rows and blocks; the same rows in the theory's own
 tables give the same rows; a control on the same view gives no row, while the view demonstrably supplied rows.
@@ -19,7 +19,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from rede_compiler import batch, modules, pack, rules as ir
+from rezono_compiler import batch, modules, pack, rules as ir
 from support import typed
 
 pytest.importorskip("duckdb")

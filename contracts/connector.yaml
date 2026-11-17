@@ -1,5 +1,5 @@
 id: https://rezono.org/contracts/connector
-name: rede_connector
+name: rezono_connector
 title: Connector loss lists
 description: >-
   What a mapping between Rede and an external standard does not carry (decision N7, M01). A connector
