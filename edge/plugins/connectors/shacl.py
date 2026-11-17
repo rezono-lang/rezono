@@ -28,7 +28,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
-sys.path.insert(0, str(ROOT))  # rezono_publication lives at the repository root
+sys.path.insert(0, str(ROOT / "publication"))
 
 from rdflib import BNode, Graph, Literal, Namespace, URIRef  # noqa: E402
 from rdflib.collection import Collection  # noqa: E402

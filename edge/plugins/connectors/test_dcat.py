@@ -16,14 +16,14 @@ import pytest
 import yaml
 
 ROOT = Path(__file__).resolve().parents[3]
-sys.path.insert(0, str(ROOT))  # rezono_publication is a directory of the repository, not an installed package
+sys.path.insert(0, str(ROOT))  # Shared publication test fixtures.
 
 from linkml.validator import validate as linkml_validate  # noqa: E402
 from rdflib import BNode, Graph, Literal, URIRef  # noqa: E402
 from rdflib.namespace import DCTERMS, RDF  # noqa: E402
 
 from rezono_publication import l0, rdf  # noqa: E402
-from rezono_publication.tests.test_l0 import FIXTURE, TYPES, merge  # noqa: E402
+from publication.tests.test_l0 import FIXTURE, TYPES, merge  # noqa: E402
 
 import dcat  # noqa: E402  (this directory)
 import shacl  # noqa: E402

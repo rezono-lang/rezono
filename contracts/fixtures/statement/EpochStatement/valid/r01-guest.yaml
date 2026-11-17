@@ -1,5 +1,5 @@
 # The statement of role guest over the form of l0.md section 3.1, as `make` writes it
-# (rezono_publication/tests/test_statement.py holds this file to it).
+# (publication/tests/test_statement.py holds this file to it).
 _type: https://in-toto.io/Statement/v1
 predicate:
   annotation: 03d2c1cfcc17ed2b25088eb6b527dbb8cc3b9de5becadf58acaf0dc5a9f0b8b2
