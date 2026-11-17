@@ -14,7 +14,7 @@ def main():
         ("changed test expectation", "tests/test_count.py", function, function.replace(b"== 2", b"== 3"), False),
         ("changed recorded outcome", "examples/demo/expected/rows.json", b"[2]", b"[3]", False),
         ("removed policy workflow", ".github/workflows/red-policy.yml", b"policy", None, False),
-        ("changed status publisher", "scripts/red_status.py", b"report", b"other", False),
+        ("changed policy implementation", "scripts/red_guard.py", b"review", b"other", False),
         ("changed shared fixture", "contracts/fixtures/data.json", b"{}", b"[]", False),
         ("changed test helper", "tests/support.py", b"value = 2\n", b"value = 3\n", False),
         ("changed test setup", "demo/conftest.py", b"value = 2\n", b"value = 3\n", False),
