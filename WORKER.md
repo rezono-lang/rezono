@@ -8,7 +8,7 @@ Make exactly one red test green: `<test id>`.
 
 - Run it with: `python scripts/fast_check.py "<test id>"`.
 - Read this card, the root `AGENTS.md`, and the `AGENTS.md` of the folder you work in.
-- You may write in the component reported by `python scripts/red_list.py --json` and in the source or fixtures the expectation explicitly requires.
+- You may write in the component reported by `python scripts/red_list.py --json` and in the implementation source the expectation explicitly requires. Test helpers, conftest.py, fixtures, recorded outcomes and policy files require planner review. Pick work that can be completed by changing implementation code and removing the assigned mark. Report a dependency on new evidence to the planner.
 
 Use the exact id from `python scripts/red_list.py` wherever this card says `<test id>`. Configure this checkout with `git config user.name vdo89` and `git config user.email 222310762+vdo89@users.noreply.github.com`. Run commands from the repository root. The quick check adds the discovered source packages to the Python path automatically. If the test dependencies are available, start directly with the quick check on any platform. The command examples below use Bash. For a fresh environment on Ubuntu with the Python version in requirements/.python-version, prepare a virtual environment once:
 

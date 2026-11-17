@@ -315,7 +315,22 @@ def main() -> int:
     )
     parser.add_argument("--skips", nargs="+", metavar="JUNIT_XML",
                         help="Count actual skipped tests per reason from pytest reports.")
+    parser.add_argument("--all-tests-blocked", metavar="COMPONENT",
+                        help="Validate the sole exception to pytest exit code five.")
     args = parser.parse_args()
+    if args.all_tests_blocked:
+        directory = (ROOT / args.all_tests_blocked).resolve()
+        if not directory.is_dir() or not directory.is_relative_to(ROOT):
+            return 1
+        files = {path.relative_to(ROOT).as_posix() for path in
+                 iter_python_test_files(directory, include_blocked=True)}
+        blocked = {target for target, _ in read_blocked()}
+        missing = sorted(files - blocked)
+        if not files or missing:
+            print("ERROR no discoverable test files or missing blocked entries:", missing)
+            return 1
+        print(f"All {len(files)} test files have individual blocked entries.")
+        return 0
     if args.skips:
         counts: Counter[str] = Counter()
         oracle_cases = []

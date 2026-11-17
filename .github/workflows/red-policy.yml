@@ -1,0 +1,68 @@
+name: Review test evidence
+run-name: policy ${{ github.event_name }} ${{ github.event.pull_request.number || 0 }} ${{ github.event.pull_request.head.sha || github.event.merge_group.head_sha }} ${{ contains(github.event.pull_request.labels.*.name, 'planner') }}
+on:
+  pull_request_target:
+    branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review, labeled, unlabeled]
+  merge_group:
+    types: [checks_requested]
+permissions:
+  contents: read
+  pull-requests: read
+concurrency:
+  group: review-test-evidence-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  review:
+    name: Inspect test evidence
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify policy examples
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -I scripts/test_red_guard.py
+      - name: Identify the proposed Git objects
+        id: identify
+        shell: bash
+        env:
+          BASE: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
+          HEAD: ${{ github.event.pull_request.head.sha || github.event.merge_group.head_sha }}
+          PR: ${{ github.event.pull_request.number }}
+          GROUP_REF: ${{ github.event.merge_group.head_ref }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if [[ -n "$PR" ]]; then
+            git fetch --no-tags origin "refs/pull/$PR/head"
+            [[ "$(git rev-parse FETCH_HEAD)" == "$HEAD" ]]
+          else
+            [[ "$GROUP_REF" =~ ^refs/heads/gh-readonly-queue/main/pr-([0-9]+)- ]]
+            PR=${BASH_REMATCH[1]}
+            git fetch --no-tags origin "$GROUP_REF"
+            [[ "$(git rev-parse FETCH_HEAD)" == "$HEAD" ]]
+          fi
+          labels=$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR" --jq '.labels[].name')
+          if grep -Fxq planner <<< "$labels"; then
+            echo 'planner=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'planner=false' >> "$GITHUB_OUTPUT"
+          fi
+      - name: Planner authorization
+        if: steps.identify.outputs.planner == 'true'
+        run: echo "Planner review authorizes protected changes."
+      - name: Verify ordinary changes
+        if: steps.identify.outputs.planner == 'false'
+        shell: bash
+        env:
+          BASE: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
+          HEAD: ${{ github.event.pull_request.head.sha || github.event.merge_group.head_sha }}
+        run: |
+          set -euo pipefail
+          python -I scripts/red_guard.py "$(git merge-base "$BASE" "$HEAD")" "$HEAD"

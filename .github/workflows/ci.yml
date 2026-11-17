@@ -34,23 +34,8 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           fetch-depth: 0
-      - name: Protect red test expectations
-        if: github.event_name == 'pull_request' && !contains(github.event.pull_request.labels.*.name, 'planner')
-        env:
-          BASE: ${{ github.event.pull_request.base.sha }}
-          HEAD: ${{ github.event.pull_request.head.sha }}
-        run: |
-          set -euo pipefail
-          base=$(git merge-base "$BASE" "$HEAD")
-          if git cat-file -e "$base:scripts/red_guard.py" 2>/dev/null; then
-            mkdir -p "$RUNNER_TEMP/red-guard"
-            for script in red_guard red_list components; do
-              git show "$base:scripts/$script.py" > "$RUNNER_TEMP/red-guard/$script.py"
-            done
-            python -E -s "$RUNNER_TEMP/red-guard/red_guard.py" "$base" "$HEAD"
-          else
-            python scripts/red_guard.py "$base" "$HEAD"
-          fi
+      - name: Run policy regression examples
+        run: python -I scripts/test_red_guard.py
       - id: matrix
         env:
           GITHUB_BASE_REF: ${{ github.base_ref }}
@@ -95,7 +80,13 @@ jobs:
             contracts/check.sh
             python -m pytest -q --junitxml="$RUNNER_TEMP/pytest.xml" contracts/python
           else
-            python -m pytest -q --junitxml="$RUNNER_TEMP/pytest.xml" "${{ matrix.component.folder }}"
+            rc=0
+            python -m pytest -q --junitxml="$RUNNER_TEMP/pytest.xml" "${{ matrix.component.folder }}" || rc=$?
+            if [[ "$rc" == 5 ]]; then
+              python scripts/red_list.py --all-tests-blocked "${{ matrix.component.folder }}"
+            else
+              exit "$rc"
+            fi
           fi
 
       - name: Report actual skips
