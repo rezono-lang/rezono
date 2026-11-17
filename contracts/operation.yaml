@@ -2,13 +2,12 @@ id: https://rezono.org/contracts/operation
 name: rezono_operation
 title: Schema operations and their impact
 description: >-
-  A schema change as a list of operations from a fixed catalogue (decision S7;
-  docs/compiler.md#schema-operations), and the impact the compiler reports when it applies them
+  A schema change as a list of operations from a fixed catalogue (docs/compiler.md#schema-operations), and the impact the compiler reports when it applies them
   (`python -m rezono_compiler operate <pack> <operations.yaml>`). Each operation moves the schema,
   the facts, the rules, the labels and the channel table of one pack, and comes with a migration in
   the format of linkml-map. Names are the names in the schema files: a class name for a kind, a
   slot name, an enum name and a permissible value. A class or enum that more than one module
-  declares (decision S8) is written `<module>#<Name>`, with the module's path under schema/ without
+  declares is written `<module>#<Name>`, with the module's path under schema/ without
   .yaml, wherever it appears. The migration is linkml-map's TransformationSpecification with one
   Rezono extension that plain linkml-map refuses: `where` on a class derivation, for split_by.
 prefixes:
@@ -53,7 +52,7 @@ enums:
           every absorbed element is reached and has a value, and its identifier is kept (`key`) or
           derived.
   World:
-    description: The world of a table (decision W6).
+    description: The world of a table.
     permissible_values:
       open: {description: "A missing row is unknown."}
       closed: {description: "A missing row is not true."}

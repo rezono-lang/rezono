@@ -1,4 +1,4 @@
-// Who may read what (std-access, decisions O7 and O8). An element is typed: (kind, id). A role without a
+// Who may read what (std-access). An element is typed: (kind, id). A role without a
 // row here reads nothing, and a role sees a conclusion only with a proof from rows it reads.
 //
 // Every role reads the scheme, the public too: one rule over every role per kind says so (Y1.2). So

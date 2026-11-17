@@ -1,6 +1,6 @@
 # Standard pack std-explain: the explanation questions every pack can ask of its proofs (R8, R9, R10).
 # A pack imports it, pinned on SHA-256 (S9), and may add its own questions in a questions.yaml of its own.
 name: std-explain
-version: 0.1.0
+version: 0.1.1
 default_language: nl
 imports: []

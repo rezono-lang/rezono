@@ -76,7 +76,7 @@ classes:
 
   CalcWitness:
     description: >-
-      One evaluation of a calculation rule for one subject (decision W12): the chosen version, the
+      One evaluation of a calculation rule for one subject: the chosen version, the
       definition that applies, the result, and the steps along the path taken. The checker recomputes
       every step from its arguments and every leaf from the snapshots.
     attributes:
@@ -90,7 +90,7 @@ classes:
       state: {range: ValueState, required: true, description: State of the result.}
       reason: {description: Why the result is not known; empty when it is.}
       premises: {multivalued: true, range: RowRef, inlined_as_list: true, description: "The other conclusions it read: rows of derived relations and the results of other calculation rules."}
-      reads: {multivalued: true, required: true, description: "Every relation the evaluation reads, sorted: absences decide states there (a missing fact is unknown or not_applicable, two values invalid), so a role sees the result only while it reads each in full (decision O8)."}
+      reads: {multivalued: true, required: true, description: "Every relation the evaluation reads, sorted: absences decide states there (a missing fact is unknown or not_applicable, two values invalid), so a role sees the result only while it reads each in full."}
       steps: {multivalued: true, range: CalcStep, inlined_as_list: true, description: "The evaluated nodes, in evaluation order: the conditions of all definitions in program order, then the value of the definition that applies; a node before its arguments."}
 
   Proof:
@@ -99,5 +99,5 @@ classes:
       root: {range: RowRef, required: true, inlined: true, description: The conclusion this proof explains.}
       manifest_id: {required: true, description: The manifest this proof is checked against.}
       witnesses: {multivalued: true, range: Witness, inlined_as_list: true, description: The witnesses of the proof graph.}
-      calc_witnesses: {multivalued: true, range: CalcWitness, inlined_as_list: true, description: "The calculation witnesses of the proof graph (decision W12)."}
+      calc_witnesses: {multivalued: true, range: CalcWitness, inlined_as_list: true, description: "The calculation witnesses of the proof graph."}
       hidden: {multivalued: true, range: RowRef, inlined_as_list: true, description: "Conclusions whose witnesses the viewer may not see. The witnesses stay in the proof and are checked; the explainer redacts them afterwards."}

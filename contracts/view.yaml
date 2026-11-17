@@ -51,7 +51,7 @@ enums:
       origin_observation: {description: "A base fact whose origin is an observation."}
       derived: {description: "A conclusion of a rule, not a base fact; its text takes conclusion_typography."}
       assumption: {description: "A value taken as given until its source answers."}
-      drift: {description: "What Rezono derives beside what a reference source says (decision R13); always two lines, never one."}
+      drift: {description: "What Rezono derives beside what a reference source says; always two lines, never one."}
       screened: {description: "Present, and not visible for the reader's role: no content and no size."}
       proposal: {description: "A proposed value: the other side of the fold."}
       sealed: {description: "Closed by a seal: it no longer changes."}
@@ -217,7 +217,7 @@ classes:
     attributes:
       kind: {required: true, description: Kind id from a schema.}
       shape: {range: Shape, required: true, description: Shape of the node.}
-      icon: {description: "Icon of the kind, beside its shape (decision B10). In channels.yaml an .svg file under the pack's icons/, listed in icons/sources.yaml; in the schema bundle the sha256 of that file, which names an entry of Channels.icons."}
+      icon: {description: "Icon of the kind, beside its shape. In channels.yaml an .svg file under the pack's icons/, listed in icons/sources.yaml; in the schema bundle the sha256 of that file, which names an entry of Channels.icons."}
 
   ArrowSign:
     description: How one arrow is drawn.
@@ -366,7 +366,7 @@ classes:
 
   ImageBinding:
     description: >-
-      An image per element (decision B10, docs/gui.md#icons-and-images): a single-valued text slot of the kind,
+      An image per element (docs/gui.md#icons-and-images): a single-valued text slot of the kind,
       or of a kind above it, whose value names a file in the pack's assets/. The binding makes the slot an image,
       one per kind; a subkind's own binding wins for its elements. Its meaning is the pack's.
     attributes:
@@ -581,7 +581,7 @@ classes:
   ComparisonPart:
     description: >-
       A Report part (docs/gui.md, Comparison; RV-U19): one derived relation that compares the pack with a
-      reference source (decision R13), counted in three classes by the verdict column of its rows, each count a
+      reference source, counted in three classes by the verdict column of its rows, each count a
       link to the rows of that class with their proofs. The mapping of verdicts to classes is pack data; the
       compiler stops a pack whose rules can give a verdict that no class names (unknown is explicit).
     attributes:
@@ -589,7 +589,7 @@ classes:
       verdict: {required: true, pattern: "^[a-z][a-z0-9_]*$", description: The column of the relation that holds its verdict.}
       equal: {multivalued: true, description: The verdicts that count as equal.}
       different: {multivalued: true, description: The verdicts that count as different.}
-      not_compared: {multivalued: true, description: "The verdicts that count as not compared (a row whose two sides have one source, decision Q11, among them)."}
+      not_compared: {multivalued: true, description: "The verdicts that count as not compared (a row whose two sides have one source, among them)."}
 
   ReportPart:
     description: One part of a Report, in composition order; exactly one of cards, a Waterfall, a Matrix or a comparison.
@@ -606,7 +606,7 @@ classes:
 
   ReportSheet:
     description: >-
-      Report: a fixed composition of parts from one published manifest (docs/gui.md, Report; decision B5).
+      Report: a fixed composition of parts from one published manifest (docs/gui.md, Report).
       One sheet per binding, at `/<pack>/reports/<id>`.
     attributes:
       id: {required: true, pattern: "^[a-z][a-z0-9_]*$"}

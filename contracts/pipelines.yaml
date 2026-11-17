@@ -2,8 +2,7 @@ id: https://rezono.org/contracts/pipelines
 name: rezono_pipelines
 title: Pipeline partition
 description: >-
-  engine/pipelines.json: how the compiler cuts a pack's engine program into Feldera pipelines (decision
-  E6). Up to the budget from the deploy profile (a build memory with a cost per kind of view, or
+  engine/pipelines.json: how the compiler cuts a pack's engine program into Feldera pipelines. Up to the budget from the deploy profile (a build memory with a cost per kind of view, or
   `max_views` rule views) there is one pipeline, `main`.
   Above it, `integrity` keeps the tables and violation views, and each `rules-<n>` holds whole recursive
   cores, reading only earlier parts. `integrity` also computes a seal's refused and accepted rows and
@@ -33,7 +32,7 @@ classes:
     attributes:
       format: {required: true, pattern: "^rezono\\.pipelines/1$"}
       max_views: {range: DecimalText, description: "The view budget the partition used, when it counted views."}
-      build_memory_mb: {range: DecimalText, description: "The build memory per pipeline the partition used, when it weighed views by kind (decision E6)."}
+      build_memory_mb: {range: DecimalText, description: "The build memory per pipeline the partition used, when it weighed views by kind."}
       profile: {description: "The deploy profile the budget came from (deploy/profiles/<profile>.yaml), if any."}
       pipelines: {range: Pipeline, multivalued: true, inlined_as_list: true, required: true}
       forward: {range: Forward, multivalued: true, inlined_as_list: true}

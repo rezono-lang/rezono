@@ -126,7 +126,7 @@ classes:
         ifabsent: "string(identity)"
         description: >-
           identity: text to text, a whole number to a whole number. days: a date to the whole number of days
-          since 1970-01-01 in the proleptic Gregorian calendar (decision R18). yyyymmdd: a whole number written
+          since 1970-01-01 in the proleptic Gregorian calendar. yyyymmdd: a whole number written
           YYYYMMDD to that same count; a value that is no calendar day is a blocking finding.
 
   ViewKindMap:
@@ -172,7 +172,7 @@ classes:
       matrices: {range: MatrixSheet, multivalued: true, inlined_as_list: true, description: "Matrix sheets, by element id (`<kind>.<slot>`) and relation name, checked by the compiler."}
       timelines: {range: TimelineSheet, multivalued: true, inlined_as_list: true, description: "Timeline sheets, by element id (`<kind>.<slot>`), checked by the compiler."}
       reports: {range: ReportSheet, multivalued: true, inlined_as_list: true, description: "Reports, by element id (`<kind>.<slot>`), checked by the compiler."}
-      images: {range: ImageBinding, multivalued: true, inlined_as_list: true, description: "The image slot per kind (decision B10), by element id, checked by the compiler."}
+      images: {range: ImageBinding, multivalued: true, inlined_as_list: true, description: "The image slot per kind, by element id, checked by the compiler."}
       home: {range: HomeSheet, inlined: true, description: "The pack home's hero and claim (docs/gui.md, The hero of a pack home), by Flow id and relation name, checked by the compiler."}
       house_style: {range: HouseStyle, inlined: true, description: "The pack's house style (docs/gui.md, House style): its values for colour roles of std-view, per display theme, checked by the compiler."}
 

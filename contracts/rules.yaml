@@ -42,7 +42,7 @@ types:
 
 enums:
   World:
-    description: Decision W6.
+    description: Meaning of a missing row.
     permissible_values:
       closed: {description: A missing row is not true.}
       open: {description: A row that is there is true; a missing row is unknown.}
@@ -75,7 +75,7 @@ enums:
       ge: {}
   ArithmeticOperator:
     description: >-
-      Bounded integer arithmetic. In a recursive rule only as a counter with an explicit bound (decision R16):
+      Bounded integer arithmetic. In a recursive rule only as a counter with an explicit bound:
       the rule adds a positive constant to a key column it reads from its own relation, under a constant
       upper bound, and every other rule of the relation starts that column at a constant.
     permissible_values:
@@ -83,7 +83,7 @@ enums:
       sub: {}
       mul: {}
       div: {description: "Integer division as in Feldera: the quotient truncated toward zero, operands of either sign. The divisor (right) is a non-zero integer constant, so no engine divides by zero."}
-      days: {description: "A view's reading of a date (decision R18, RV-C27), never written in a rule file: the whole number of days from the ISO date `right` (the constant 1970-01-01) to the ISO date `left` (a text variable that a positive literal binds to a date cell), in the proleptic Gregorian calendar."}
+      days: {description: "A view's reading of a date (RV-C27), never written in a rule file: the whole number of days from the ISO date `right` (the constant 1970-01-01) to the ISO date `left` (a text variable that a positive literal binds to a date cell), in the proleptic Gregorian calendar."}
   ExplainMode:
     permissible_values:
       materialize: {description: The engine keeps the witness relations of the rules of this relation.}
@@ -97,11 +97,11 @@ classes:
       pack: {required: true}
       relations: {range: Relation, multivalued: true, inlined_as_list: true, required: true}
       rules: {range: Rule, multivalued: true, inlined_as_list: true}
-      seals: {range: Seal, multivalued: true, inlined_as_list: true, description: "The sealed kind (decision E3), so the checker can recompute row hashes and refused and accepted input from the snapshots."}
+      seals: {range: Seal, multivalued: true, inlined_as_list: true, description: "The sealed kind, so the checker can recompute row hashes and refused and accepted input from the snapshots."}
 
   Seal:
     description: >-
-      A sealed kind (decision E3, docs/compiler.md#design-m3-the-seal), by the tables the checker reads. A
+      A sealed kind (docs/compiler.md#design-m3-the-seal), by the tables the checker reads. A
       close applies to an element when the element's period lies before the close's closed_until or the close
       covers it, and refuses it unless that close covers it with its current row hash; each close on its own.
       The row hash is the canonical JSON (C1) of {table: sorted values as canonical text} over `tables`,
@@ -150,10 +150,10 @@ classes:
       explain: {range: ExplainMode, description: Derived relations only.}
       extend: {range: boolean, description: "Derived relations only. The owning pack permits consuming packs to add rules (S28, // @extend); without rules the relation is empty."}
       invariant: {range: boolean, description: "Derived relations only. True: the relation must be empty at the end of an epoch, or the epoch is not published (`// @invariant` above the .decl)."}
-      world: {range: World, description: "What a missing row means (decision W6). A base relation has the world of its schema (`world: open`); a derived relation is open if a rule reads an open relation positively or aggregates over one. Left out: closed."}
+      world: {range: World, description: "What a missing row means. A base relation has the world of its schema (`world: open`); a derived relation is open if a rule reads an open relation positively or aggregates over one. Left out: closed."}
       absence: {range: boolean, description: "Derived relations only. True: the relation says what is not recorded (`// @absence` above the .decl), so it is closed and may negate an open relation."}
-      outcome: {range: RelationName, description: "Derived relations only. A named outcome (decision W7, `// @outcome <kind>`): the kind whose every element has exactly one state; the columns are the element, `state` (known, unknown, not_applicable) and `reason`."}
-      closes: {range: RelationName, description: "Derived relations only, and not on an invariant or an outcome. Another derived relation (decision W14, `// @closes <relation>` above the .decl): a row of this relation states, for its key, that no row of that relation holds there. Its key columns are, by position and type, a prefix of that relation's. The program then holds the invariant `<this>_closes_<relation>` with one rule: a row of this relation and a row of that one at the same key."}
+      outcome: {range: RelationName, description: "Derived relations only. A named outcome (`// @outcome <kind>`): the kind whose every element has exactly one state; the columns are the element, `state` (known, unknown, not_applicable) and `reason`."}
+      closes: {range: RelationName, description: "Derived relations only, and not on an invariant or an outcome. Another derived relation (`// @closes <relation>` above the .decl): a row of this relation states, for its key, that no row of that relation holds there. Its key columns are, by position and type, a prefix of that relation's. The program then holds the invariant `<this>_closes_<relation>` with one rule: a row of this relation and a row of that one at the same key."}
       release: {range: Release, multivalued: true, inlined_as_list: true, description: "Reserved, not supported yet: the compiler, the publisher and the checker refuse it. Derived relations only. A delimited release under O8 (`// @release <role>`): the role may read this relation's rows even where they negate or aggregate over relations it does not read in full (docs/architecture.md, access and privacy)."}
 
   Release:

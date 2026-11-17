@@ -48,7 +48,7 @@ questions:
       - suppose: given
     answer: series
     limit: 64
-  # For an outcome that is absent: what lacks support, and the rows that close it (`// @closes`, decision W14):
+  # For an outcome that is absent: what lacks support, and the rows that close it (`// @closes`):
   # each states for this key that no row holds, and its own grounds say why. Computed (contract rule 5).
   - term: contrast
     start: absent

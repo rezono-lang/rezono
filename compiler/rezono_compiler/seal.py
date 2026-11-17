@@ -104,7 +104,7 @@ def views(pack: Pack) -> list[tuple[str, str]]:
 def sql(pack: Pack) -> str:
     if not pack.seals:
         return ""
-    return ("\n-- Seal (decision E3): refused and accepted input of the sealed kind; rules read the accepted rows.\n"
+    return ("\n-- Seal: refused and accepted input of the sealed kind; rules read the accepted rows.\n"
             + "".join(f"CREATE MATERIALIZED VIEW {q(n)} AS\n{body};\n\n" for n, body in views(pack)))
 
 

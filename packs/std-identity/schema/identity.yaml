@@ -5,7 +5,7 @@ description: >-
   reflexive, symmetric and transitive closure of those statements divides the referents into classes. A
   source also names the referent that stands for its class (represented_by). Two members of one class that
   state different values for one slot are a conflict. The axioms and the derived relations are in
-  rules/identity.dl. The mapping annotations compare with OWL (decision O12b); no rule reads them.
+  rules/identity.dl. The mapping annotations compare with OWL; no rule reads them.
 in_language: en
 prefixes:
   linkml: https://w3id.org/linkml/

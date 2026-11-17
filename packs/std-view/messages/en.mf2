@@ -149,7 +149,7 @@ gap.sufficient = enough
 gap.to_test = to test as a proposal
 route.screened = screened step
 route.negative = {{no {$relation}}}
-# A calculated value (decision W12): rule@version#definition and the outcome, then the steps from the witness.
+# A calculated value: rule@version#definition and the outcome, then the steps from the witness.
 route.calc = {{Calculated by {$rule}@{$version}#{$definition}: {$value}}}
 route.calc.none = {{Calculated by {$rule}: {$value}}}
 route.calc.path = Path
@@ -162,7 +162,7 @@ route.calc.value = Value
 route.calc.state = State
 route.calc.reason = Reason
 route.calc.element = {{(element {$element})}}
-# A named outcome (decision W7): known; when unknown, the reason stands there as a sentence (the pack's reason.<reason>).
+# A named outcome: known; when unknown, the reason stands there as a sentence (the pack's reason.<reason>).
 outcome.known = known
 outcome.absent = not derived
 
@@ -372,7 +372,7 @@ edit.error.changed = The draft has changed since you reviewed it. Review the new
 
 report.unavailable = Not available.
 
-# Search (docs/gui.md, Search; decision B6): by id and name, only in what the role reads.
+# Search (docs/gui.md, Search): by id and name, only in what the role reads.
 search.title = Search
 search.label = Search by id or name
 search.submit = Search

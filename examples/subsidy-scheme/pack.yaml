@@ -1,9 +1,9 @@
 # The Energy-Saving Subsidy Regulation 2026 as a definition (RV-X35): what several municipalities could share.
 # The kinds, the rules of assessment and award, the calculation, the labels and the messages. No facts: the
 # decided amounts and rates, the cases, the roles and what they read, and the payment ledger are the importing
-# pack's (examples/subsidy), and so is the date a calculation is evaluated on (decision W10).
+# pack's (examples/subsidy), and so is the date a calculation is evaluated on.
 name: subsidy-scheme
-version: 0.1.0
+version: 0.1.1
 default_language: en
 theory: true
 imports:

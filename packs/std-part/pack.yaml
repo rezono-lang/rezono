@@ -2,7 +2,7 @@
 # facts. A domain maps its own kinds and arrows onto it with a view (docs/compiler.md, theories and views),
 # or lets a kind of its own be a Constituent.
 name: std-part
-version: 0.1.0
+version: 0.1.1
 default_language: en
 theory: true
 imports: []
