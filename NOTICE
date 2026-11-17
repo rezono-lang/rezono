@@ -21,7 +21,7 @@ Licence by path:
   - pyrightconfig.json
   - requirements/
   - rezono/
-  - rezono_publication/
+  - publication/
   - ruff.toml
   - scripts/
   - udf/

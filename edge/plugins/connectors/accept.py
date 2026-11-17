@@ -32,7 +32,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
 HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(ROOT))  # rezono_publication lives at the repository root
+sys.path.insert(0, str(ROOT / "publication"))
 sys.path.insert(0, str(HERE))  # the other connectors
 
 import duckdb  # noqa: E402

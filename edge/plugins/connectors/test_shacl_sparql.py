@@ -17,7 +17,7 @@ import pytest
 import yaml
 
 ROOT = Path(__file__).resolve().parents[3]
-sys.path.insert(0, str(ROOT))  # rezono_publication is a directory of the repository, not an installed package
+sys.path.insert(0, str(ROOT))  # Shared publication test fixtures.
 
 pytest.importorskip("duckdb")
 pytest.importorskip("pyshacl")
