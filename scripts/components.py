@@ -234,10 +234,6 @@ def run_shard(folder: str, shard: int, total: int, report_dir: Path) -> int:
             str(shard), str(total), str(worker), str(workers), str(report_dir), state,
         ]
         env = {**os.environ, "PYTHONHASHSEED": os.environ.get("PYTHONHASHSEED", "0")}
-        if workers > 1:
-            # Each pytest process owns one share of the runner. Avoid nested
-            # native thread pools competing with the other pytest processes.
-            env.update(OMP_NUM_THREADS="1", OPENBLAS_NUM_THREADS="1", MKL_NUM_THREADS="1")
         return subprocess.run(args, cwd=ROOT, env=env, check=False).returncode
 
     with tempfile.TemporaryDirectory() as state, ThreadPoolExecutor(max_workers=workers) as pool:
@@ -263,6 +259,34 @@ def pytest_worker(folder: str, shard: int, total: int, worker: int, workers: int
 
     class Partition:
         had_items = False
+
+        @pytest.hookimpl(wrapper=True)
+        def pytest_runtest_protocol(self, item, nextitem):
+            if item.path.name != "test_subsidy_forms.py":
+                return (yield)
+            import resource
+            import signal
+            import time
+            from collections import Counter
+
+            samples = Counter()
+            def sample(_, frame):
+                samples[(Path(frame.f_code.co_filename).name, frame.f_code.co_name)] += 1
+
+            start = resource.getrusage(resource.RUSAGE_SELF)
+            clock = time.monotonic()
+            previous = signal.signal(signal.SIGPROF, sample)
+            signal.setitimer(signal.ITIMER_PROF, 0.05, 0.05)
+            try:
+                return (yield)
+            finally:
+                signal.setitimer(signal.ITIMER_PROF, 0)
+                signal.signal(signal.SIGPROF, previous)
+                end = resource.getrusage(resource.RUSAGE_SELF)
+                print(f"PROFILE {item.name}: wall={time.monotonic()-clock:.2f} "
+                      f"user={end.ru_utime-start.ru_utime:.2f} sys={end.ru_stime-start.ru_stime:.2f} "
+                      f"read_blocks={end.ru_inblock-start.ru_inblock} write_blocks={end.ru_oublock-start.ru_oublock} "
+                      f"major_faults={end.ru_majflt-start.ru_majflt} top={samples.most_common(5)}", flush=True)
 
         @pytest.hookimpl(trylast=True)
         def pytest_collection_modifyitems(self, items):
