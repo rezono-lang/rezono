@@ -3,7 +3,7 @@
 `accept(schema, rows, pin)` runs every out-connector on a role's view and checks each against its independent
 reader, the same oracles as the tests, now on a real dataset instead of a fixture:
 
-- **rdf:** the RDF view out and back (`publication.rdf`) gives the rows in normal form;
+- **rdf:** the RDF view out and back (`rezono_publication.rdf`) gives the rows in normal form;
 - **shacl:** pySHACL validates that view against the shapes (`shacl.py`), and it conforms;
 - **odcs:** the contract (`odcs.py`) is valid against the official ODCS JSON Schema, and DuckDB counts no row
   against any of its quality rules on the library's own Arrow tables of the rows;
@@ -32,7 +32,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
 HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(ROOT))  # publication lives at the repository root
+sys.path.insert(0, str(ROOT))  # rezono_publication lives at the repository root
 sys.path.insert(0, str(HERE))  # the other connectors
 
 import duckdb  # noqa: E402
@@ -48,7 +48,7 @@ import dcat  # noqa: E402
 import odcs  # noqa: E402
 import shacl  # noqa: E402
 import shacl_sparql  # noqa: E402
-from publication import arrow, l0, publication, rdf  # noqa: E402
+from rezono_publication import arrow, l0, publication, rdf  # noqa: E402
 
 OPEN = ("Q13", "Q20")  # the open questions a connector may refuse a schema for (docs/standards.md)
 _OFFICIAL = json.loads((Path(open_data_contract_standard.__file__).parent / "schema.json").read_text(encoding="utf-8"))

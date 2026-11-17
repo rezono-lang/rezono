@@ -9,9 +9,9 @@ import copy
 
 import pytest
 
-from publication import l0, publication
-from publication.hash import hashes
-from publication.tests.subkind_fixture import BUNDLE, NARROW, SOURCE_A, SOURCE_B, WIDE
+from rezono_publication import l0, publication
+from rezono_publication.hash import hashes
+from rezono_publication.tests.subkind_fixture import BUNDLE, NARROW, SOURCE_A, SOURCE_B, WIDE
 
 UNREAD = {"$unknown": publication.NOT_READ_IN_FULL}
 

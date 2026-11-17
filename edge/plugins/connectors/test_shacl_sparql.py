@@ -17,7 +17,7 @@ import pytest
 import yaml
 
 ROOT = Path(__file__).resolve().parents[3]
-sys.path.insert(0, str(ROOT))  # publication is a directory of the repository, not an installed package
+sys.path.insert(0, str(ROOT))  # rezono_publication is a directory of the repository, not an installed package
 
 pytest.importorskip("duckdb")
 pytest.importorskip("pyshacl")
@@ -28,7 +28,7 @@ from rdflib.namespace import RDF, SH  # noqa: E402
 from rezono_compiler import batch, emit, facts, pack  # noqa: E402
 from rezono_compiler import rules as ir  # noqa: E402
 
-from publication import publication, rdf  # noqa: E402
+from rezono_publication import publication, rdf  # noqa: E402
 
 import accept  # noqa: E402  (this directory)
 import shacl_sparql  # noqa: E402

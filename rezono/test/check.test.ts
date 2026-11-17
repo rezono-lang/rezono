@@ -265,7 +265,7 @@ test('the output schema is a publication schema document (§8a)', async () => {
 	const again = (await outputSchema(priced.tree as Ask, priced, fixture))!;
 	assert.equal(again.kinds.Answer.slots.c1.type, 'p.Eur');
 	assert.equal(again.kinds.Answer.slots.c2.type, 'p.GiB');
-	// The id of the fixture's document is the one publication computes for it (`l0.check_schema`, 11-11-2026).
+	// The id of the fixture's document is the one rezono_publication computes for it (`l0.check_schema`, 11-11-2026).
 	assert.equal(await schemaId(dataSchema(fixture)), 's-97acfa0f1e65866b9a32532da7f1328f6886f9541e707c215d40db58b7efa756');
 	// A dimension the pack has no type for gets a type of its own, in the storage units of its parts.
 	const novel = check('ask Plan where true show memory * 730 h', fixture);
