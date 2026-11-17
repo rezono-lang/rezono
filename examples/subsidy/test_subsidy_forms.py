@@ -31,9 +31,9 @@ pytest.importorskip("rezono_publisher")
 
 from rezono_publisher import batch, forms, publish, store  # noqa: E402
 
-from publication import arrow, l0  # noqa: E402  (the repository root is on the path through rezono_publisher.forms)
-from publication.hash import hashes  # noqa: E402
-from publication import statement  # noqa: E402
+from rezono_publication import arrow, l0  # noqa: E402  (the repository root is on the path through rezono_publisher.forms)
+from rezono_publication.hash import hashes  # noqa: E402
+from rezono_publication import statement  # noqa: E402
 
 HERE = Path(__file__).parent
 PACK = "subsidy"
@@ -159,7 +159,7 @@ def test_each_role_s_form_marks_the_scheme_parameters_as_decided_values(world):
 def test_each_role_s_form_carries_the_base_the_pack_declares(world):
     # RV-X30: pack.yaml `iri:` gives the schema document its base, and every element its IRI under it.
     s, _ = world
-    rdf = pytest.importorskip("publication.rdf")
+    rdf = pytest.importorskip("rezono_publication.rdf")
     for role in FILTERED:
         schema = json.loads(objects(s, role)["schema.json"])
         assert schema["base"] == "https://rezono.org/example/subsidy/"

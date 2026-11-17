@@ -18,10 +18,10 @@ Licence by path:
   - deploy/
   - edge/
   - examples/**/*.py
-  - publication/
   - pyrightconfig.json
   - requirements/
   - rezono/
+  - rezono_publication/
   - ruff.toml
   - scripts/
   - udf/

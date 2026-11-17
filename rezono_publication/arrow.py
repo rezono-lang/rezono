@@ -12,7 +12,7 @@
 - `normal_rows(schema, rows)`: rows in the order and form every writer here produces (hash order, members in hash
   order), so a round trip is byte-equal in canonical JSON (T01).
 
-The logical hash is `publication.hash` on the rows; this module never hashes bytes. Exact values only: Arrow
+The logical hash is `rezono_publication.hash` on the rows; this module never hashes bytes. Exact values only: Arrow
 decimals carry `decimal.Decimal`, never a float. Money literals are written with the ISO 4217 code
 (`"EUR 12.30"`): the schema document does not name a currency symbol, so a symbol cannot be restored (l0.md Q18).
 """
@@ -27,7 +27,7 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 from rezono_canon import canonical_json
 
-from publication import l0
+from rezono_publication import l0
 
 __all__ = ["ColumnarError", "arrow_type", "to_arrow", "from_arrow", "normal_rows", "write_parquet",
            "read_parquet"]

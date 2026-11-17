@@ -5,6 +5,6 @@
 -e ./edge/publisher[s3]
 -e ./edge/githost
 # The standards exports of a role's form (rezono_publisher.forms, RV-K20): the ODCS contract takes its columns from
-# the library's Arrow writer (publication.arrow), as the columnar form will (RV-K19).
+# the library's Arrow writer (rezono_publication.arrow), as the columnar form will (RV-K19).
 pyarrow==26.0.1
 setuptools
