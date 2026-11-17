@@ -1,0 +1,5 @@
+# Rezono
+
+Rezono is a domain-neutral reasoning layer. Contributors select one expected failure from `python scripts/red_list.py` and follow [the worker card](WORKER.md). Each component has its own working instructions.
+
+Pull requests require the `check` status. The merge queue runs every discovered component against the combined changes. The compiler and example suites require the pinned Soufflé 2.5 oracle in CI. Job summaries report actual skips by reason, including Feldera comparisons that need an endpoint. Run `python scripts/red_list.py --skips report.xml` on a pytest JUnit report to reproduce a summary. Inactive task claims without an open pull request expire after four hours.

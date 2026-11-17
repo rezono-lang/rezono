@@ -3,6 +3,9 @@
 
 from __future__ import annotations
 
+from collections import Counter
+import xml.etree.ElementTree as ET
+
 import argparse
 import ast
 import json
@@ -136,7 +139,7 @@ def read_blocked(root: Path = ROOT) -> list[tuple[str, str]]:
     if not blocked_dir.is_dir():
         return []
     items: list[tuple[str, str]] = []
-    for entry in sorted(blocked_dir.iterdir(), key=lambda p: p.name):
+    for entry in sorted(blocked_dir.glob("*.txt"), key=lambda p: p.name):
         if not entry.is_file():
             continue
         line = entry.read_text(encoding="utf-8").splitlines()[0].strip()
@@ -154,7 +157,9 @@ def read_to_port(root: Path = ROOT) -> list[tuple[str, str]]:
     if not tp_dir.is_dir():
         return []
     items: list[tuple[str, str]] = []
-    for entry in sorted(tp_dir.iterdir(), key=lambda p: p.name):
+    for entry in sorted(tp_dir.glob("*.md"), key=lambda p: p.name):
+        if entry.name == "AGENTS.md":
+            continue
         if not entry.is_file():
             continue
         folder = ""
@@ -308,7 +313,22 @@ def main() -> int:
         action="store_true",
         help="Emit machine-readable JSON.",
     )
+    parser.add_argument("--skips", nargs="+", metavar="JUNIT_XML",
+                        help="Count actual skipped tests per reason from pytest reports.")
     args = parser.parse_args()
+    if args.skips:
+        counts: Counter[str] = Counter()
+        for report in args.skips:
+            for skip in ET.parse(report).iter("skipped"):
+                if skip.get("type") != "pytest.xfail":
+                    counts[skip.get("message", "unspecified")] += 1
+        if args.json:
+            print(json.dumps(dict(sorted(counts.items()))))
+        else:
+            for reason, count in sorted(counts.items()):
+                print(f"{count} skipped: {reason}")
+            print(f"Total skipped: {sum(counts.values())}")
+        return 0
 
     if args.counts:
         rows = compute_counts()
