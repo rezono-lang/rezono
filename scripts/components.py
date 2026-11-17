@@ -243,7 +243,8 @@ def run_shard(folder: str, shard: int, total: int, report_dir: Path) -> int:
             if len(set(manifests)) != 1:
                 print("Workers collected different tests", file=sys.stderr)
                 return 1
-    return next((code for code in statuses if code), 0)
+    # A failed worker always wins over an empty collection.
+    return next((code for code in statuses if code not in (0, 5)), 5 if 5 in statuses else 0)
 
 
 def pytest_worker(folder: str, shard: int, total: int, worker: int, workers: int, reports: Path, state: Path) -> int:
@@ -260,34 +261,6 @@ def pytest_worker(folder: str, shard: int, total: int, worker: int, workers: int
     class Partition:
         had_items = False
 
-        @pytest.hookimpl(wrapper=True)
-        def pytest_runtest_protocol(self, item, nextitem):
-            if item.path.name != "test_subsidy_forms.py":
-                return (yield)
-            import resource
-            import signal
-            import time
-            from collections import Counter
-
-            samples = Counter()
-            def sample(_, frame):
-                samples[(Path(frame.f_code.co_filename).name, frame.f_code.co_name)] += 1
-
-            start = resource.getrusage(resource.RUSAGE_SELF)
-            clock = time.monotonic()
-            previous = signal.signal(signal.SIGPROF, sample)
-            signal.setitimer(signal.ITIMER_PROF, 0.05, 0.05)
-            try:
-                return (yield)
-            finally:
-                signal.setitimer(signal.ITIMER_PROF, 0)
-                signal.signal(signal.SIGPROF, previous)
-                end = resource.getrusage(resource.RUSAGE_SELF)
-                print(f"PROFILE {item.name}: wall={time.monotonic()-clock:.2f} "
-                      f"user={end.ru_utime-start.ru_utime:.2f} sys={end.ru_stime-start.ru_stime:.2f} "
-                      f"read_blocks={end.ru_inblock-start.ru_inblock} write_blocks={end.ru_oublock-start.ru_oublock} "
-                      f"major_faults={end.ru_majflt-start.ru_majflt} top={samples.most_common(5)}", flush=True)
-
         @pytest.hookimpl(trylast=True)
         def pytest_collection_modifyitems(self, items):
             self.had_items = bool(items)
@@ -296,14 +269,26 @@ def pytest_worker(folder: str, shard: int, total: int, worker: int, workers: int
             local = [item for item in items if item.path.relative_to(ROOT).as_posix() in assigned]
             digest = hashlib.sha256(json.dumps([item.nodeid for item in local]).encode()).hexdigest()
             (state / f"collection-{worker}").write_text(digest, encoding="ascii")
-            if folder == "examples":
-                # Examples share per-file coverage counters and cached pack
-                # states. Keep their module fixtures and collection order.
-                by_file = sorted({item.path for item in local})
-                worker_files = set(by_file[worker::workers])
-                items[:] = [item for item in local if item.path in worker_files]
-            else:
+            if folder != "examples":
                 items[:] = local
+                return
+            # Preserve file-scoped state, including coverage accumulated across
+            # parametrized examples. Form-reader tests use an immutable store,
+            # and can run in two processes with their own module fixture.
+            forms = ROOT / "examples/subsidy/test_subsidy_forms.py"
+            form_items = sorted((item for item in local if item.path == forms), key=lambda item: item.nodeid)
+            if workers > 2 and form_items:
+                if worker < 2:
+                    chosen = set(form_items[worker::2])
+                    items[:] = [item for item in local if item in chosen]
+                    return
+                local = [item for item in local if item.path != forms]
+                index, slots = worker - 2, workers - 2
+            else:
+                index, slots = worker, workers
+            by_file = sorted({item.path for item in local})
+            worker_files = set(by_file[index::slots])
+            items[:] = [item for item in local if item.path in worker_files]
 
         @pytest.hookimpl(tryfirst=True)
         def pytest_runtestloop(self, session):
