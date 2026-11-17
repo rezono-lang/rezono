@@ -195,7 +195,7 @@ def test_a_writer_writes_only_valid_rows():
 
 def test_metadata_of_another_schema_is_rejected():
     tables = arrow.to_arrow(FIXTURE, R01)
-    other = merge(FIXTURE, {"base": "https://rede.example/other/"})
+    other = merge(FIXTURE, {"base": "https://rezono.example/other/"})
     with pytest.raises(l0.L0Error, match="`schema` is not the id"):
         arrow.from_arrow(other, tables)
 

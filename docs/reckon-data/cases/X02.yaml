@@ -8,7 +8,7 @@ input:
   '@context':
   - <base>s-<schema id>/context.jsonld
   - Host:
-      '@id': https://rede.example/fixture/Host
+      '@id': https://rezono.example/fixture/Host
       '@context':
         owner:
           '@id': https://other.example/owner

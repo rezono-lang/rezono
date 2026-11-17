@@ -15,7 +15,7 @@ from support import FIXTURE, compile_dir, row_text, text, violations
 from rede_compiler import facts, modules, pack, regex
 
 SHARED = FIXTURE.parent / "shared"
-SCHEMA = {"id": "https://rede.example/x", "name": "x", "in_language": "nl", "imports": ["linkml:types"],
+SCHEMA = {"id": "https://rezono.example/x", "name": "x", "in_language": "nl", "imports": ["linkml:types"],
           "default_range": "string", "annotations": {"layer": "facts"}}
 
 
@@ -32,7 +32,7 @@ def edit(d: Path, change, name="minimal") -> None:
 
 
 def module(d: Path, name: str, classes: dict, imports=()) -> None:
-    body = dict(SCHEMA, id=f"https://rede.example/{name}", name=name.replace("/", "_"),
+    body = dict(SCHEMA, id=f"https://rezono.example/{name}", name=name.replace("/", "_"),
                 imports=["linkml:types", *imports], classes=classes)
     (d / "schema" / f"{name}.yaml").parent.mkdir(parents=True, exist_ok=True)
     (d / "schema" / f"{name}.yaml").write_text(yaml.safe_dump(body, sort_keys=False))
@@ -109,7 +109,7 @@ def test_an_imported_pack_adds_its_modules_labels_and_signs(tmp_path):
     b = bundle(d, tmp_path)
     assert b["imports"] == [{"name": "shared-terms", "version": "0.1.0", "sha256": modules.pack_hash(SHARED)}]
     assert {"module": "shared-terms:terms", "pack": "shared-terms", "file": "schema/terms.yaml",
-            "name": "shared_terms", "id": "https://rede.example/shared-terms"} in b["schemas"]
+            "name": "shared_terms", "id": "https://rezono.example/shared-terms"} in b["schemas"]
     assert {"element": "party.grade", "lang": "nl", "text": "klasse"} in b["labels"]
     assert {"kind": "party", "shape": "ellipse"} in b["channels"]["kinds"]
     got = run(d, tmp_path, "alpha: [{id: a, title: t}]\nparty: [{id: p, grade: odd}]\n"

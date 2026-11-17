@@ -28,7 +28,7 @@ def models(tmp_path, domain_change=None, theory_change=None):
     meta = yaml.safe_load((theory / 'pack.yaml').read_text())
     write(theory / 'pack.yaml', meta | {'name': 'static-theory', 'theory': True})
     schema = yaml.safe_load((theory / 'schema/minimal.yaml').read_text())
-    schema.update(id='https://rede.example/static-theory', name='static_theory', classes={
+    schema.update(id='https://rezono.example/static-theory', name='static_theory', classes={
         'Node': {'attributes': {'id': {'identifier': True}, 'next': {'range': 'Node', 'multivalued': True}, 'note': {'range': 'string'}}}})
     schema.pop('enums', None)  # The theory does not import the minimal fixture's unrelated State enum.
     if theory_change:

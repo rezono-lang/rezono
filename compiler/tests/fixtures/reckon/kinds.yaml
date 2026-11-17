@@ -1,6 +1,6 @@
 # kinds.reckon written in LinkML: the schema module its lowering is (docs/reckon/publication.md §5.1, §5.2), with
 # the name and id the compiler gives a module written in Reckon. Neutral names on purpose; it describes no domain.
-id: https://rede.dev/reckon/minimal/kinds
+id: https://rezono.org/reckon/minimal/kinds
 name: kinds
 imports:
   - linkml:types

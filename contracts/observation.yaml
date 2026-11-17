@@ -1,4 +1,4 @@
-id: https://rede.dev/contracts/observation
+id: https://rezono.org/contracts/observation
 name: rede_observation
 title: Observations and drift
 description: >-
@@ -9,7 +9,7 @@ description: >-
   the clock of the ingester.
 prefixes:
   linkml: https://w3id.org/linkml/
-  rede: https://rede.dev/contracts/
+  rede: https://rezono.org/contracts/
 default_prefix: rede
 default_range: string
 imports:

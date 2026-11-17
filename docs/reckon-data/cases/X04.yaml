@@ -6,7 +6,7 @@ schema:
   merge:
     kinds:
       Team:
-        iri: https://rede.example/people/Team
+        iri: https://rezono.example/people/Team
 form: collection
 input:
   $rows:
@@ -24,10 +24,10 @@ expect:
   iris:
   - kind: Host
     id: host-a
-    iri: https://rede.example/fixture/Host/host-a
+    iri: https://rezono.example/fixture/Host/host-a
   - kind: Team
     id: team-platform
-    iri: https://rede.example/people/Team/team-platform
+    iri: https://rezono.example/people/Team/team-platform
 note: A kind's `iri` carries its namespace, and an element's IRI is built from it (§3.4). `Host` keeps the default `<base>Host`; `Team` lives in another namespace, and the `owner` of `host-a` points there.
 sources:
 - RV-X21 (arbiter, 11-11-2026)

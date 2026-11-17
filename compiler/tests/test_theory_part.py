@@ -131,7 +131,7 @@ def bound(tmp_path, constituents):
         "name": "bound", "version": "0.1.0", "default_language": "en",
         "imports": [{"name": "std-part", "path": str(THEORY), "sha256": modules.pack_hash(THEORY)}]}), "utf-8")
     (domain / "schema" / "bound.yaml").write_text(yaml.safe_dump({
-        "id": "https://rede.example/bound", "name": "bound", "prefixes": {"linkml": "https://w3id.org/linkml/"},
+        "id": "https://rezono.example/bound", "name": "bound", "prefixes": {"linkml": "https://w3id.org/linkml/"},
         "imports": ["linkml:types", "std-part:part"], "default_range": "string", "annotations": {"layer": "facts"},
         "classes": {"Piece": {"is_a": "Constituent", "attributes": {"title": {}}}}}), "utf-8")
     (domain / "labels" / "en.yaml").write_text("piece: piece\npiece.title: title\n", "utf-8")

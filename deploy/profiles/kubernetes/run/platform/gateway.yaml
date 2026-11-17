@@ -20,7 +20,7 @@ spec:
     - name: https
       protocol: HTTPS
       port: 443
-      hostname: rede.example.test
+      hostname: rezono.example.test
       tls:
         mode: Terminate
         certificateRefs:

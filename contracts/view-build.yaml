@@ -1,10 +1,10 @@
-id: https://rede.dev/contracts/view-build
+id: https://rezono.org/contracts/view-build
 name: rede_view_build
 title: Published view build and captured inputs
 description: Static implementation identity in a build record and a private role's immutable layout inputs (C3).
 prefixes:
   linkml: https://w3id.org/linkml/
-  rede: https://rede.dev/contracts/
+  rede: https://rezono.org/contracts/
 default_prefix: rede
 default_range: string
 imports:

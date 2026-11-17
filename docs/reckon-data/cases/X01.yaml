@@ -40,8 +40,8 @@ input:
 expect:
   accept: true
   expanded:
-    Host.owner: https://rede.example/fixture/Host#owner
-    Plan.owner: https://rede.example/fixture/Plan#owner
+    Host.owner: https://rezono.example/fixture/Host#owner
+    Plan.owner: https://rezono.example/fixture/Plan#owner
 note: JSON-LD 1.1 expansion with the published kind-scoped context (§5).
 sources:
 - '#369 L0 rev 2 §8'

@@ -5,7 +5,7 @@ schema:
   from: fixture.schema.json
 form: collection
 input:
-  $schema: s-e60191303ae97ad776d3b3c7136793c24ef83be5862327865b412399f5c9ac72
+  $schema: s-798f5e24bb70ca6a97620222f5e357a960652bc57c9cb762536f23a027c9d8da
   $rows:
   - $kind: Host
     $id: host-a
@@ -25,14 +25,14 @@ input:
       $na: ''
     tags: []
 expect:
-  dataset_hash: d-12c77a7752f9b4e938a086e0d57d1c70d96d532e2d6e59ffc4ba6abb840ba052
+  dataset_hash: d-25b682230808ec1686d53ff86a527112165de8249014a5b099b1b5f6b234a082
   side_tables:
     $why: 6ec219f097cfdfa7bdb7b429454aea8f2dda3aef2958cb9f79530497f7ce1f3c
     $src: 4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945
-  annotation_hash: 8810ad625ef8dc37d36516de26656bcd40d93d76b8dd2468a5573d6919210d7c
+  annotation_hash: 238396836f9f61afedb89e30178af6284ec3b246412d3b6fcf732e0903d88005
   without_why:
-    dataset_hash: d-12c77a7752f9b4e938a086e0d57d1c70d96d532e2d6e59ffc4ba6abb840ba052
-    annotation_hash: 3052aa7cf38be7e97945a4f45e85ff5c13bf67cd7080201cbfba98503d818927
+    dataset_hash: d-25b682230808ec1686d53ff86a527112165de8249014a5b099b1b5f6b234a082
+    annotation_hash: 99281b4c708d3865d51a57074c6211211641d73d47f508796d3a9eb00e792f7e
 note: >-
   The `$why` hash row is {"$key":["Host","host-a","memory_need","","",""],"proof":"rede:w/91c2"} (l0.md §6.2
   step 6). Computed with rede_canon; the dataset hash equals the worked vector of §6.2.

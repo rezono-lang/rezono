@@ -1,4 +1,4 @@
-id: https://rede.dev/contracts/value
+id: https://rezono.org/contracts/value
 name: rede_value
 title: Values with an explicit state
 description: >-
@@ -9,7 +9,7 @@ description: >-
   §7 K1, K2, K11).
 prefixes:
   linkml: https://w3id.org/linkml/
-  rede: https://rede.dev/contracts/
+  rede: https://rezono.org/contracts/
 default_prefix: rede
 default_range: string
 imports:

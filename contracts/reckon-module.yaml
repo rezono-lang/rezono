@@ -1,4 +1,4 @@
-id: https://rede.dev/contracts/reckon-module
+id: https://rezono.org/contracts/reckon-module
 name: rede_reckon_module
 title: Reckon module form
 description: >-
@@ -23,7 +23,7 @@ description: >-
   its span.
 prefixes:
   linkml: https://w3id.org/linkml/
-  rede: https://rede.dev/contracts/
+  rede: https://rezono.org/contracts/
 default_prefix: rede
 default_range: string
 imports:

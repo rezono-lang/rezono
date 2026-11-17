@@ -1,4 +1,4 @@
-id: https://rede.dev/contracts/statement
+id: https://rezono.org/contracts/statement
 name: rede_statement
 title: Epoch statement per role
 description: >-
@@ -13,7 +13,7 @@ description: >-
   RV-X42.
 prefixes:
   linkml: https://w3id.org/linkml/
-  rede: https://rede.dev/contracts/
+  rede: https://rezono.org/contracts/
 default_prefix: rede
 default_range: string
 imports:
@@ -61,7 +61,7 @@ classes:
         inlined_as_list: true
         required: true
         description: Every object the role's form index names except the statement itself, sorted by name.
-      predicateType: {required: true, equals_string: "https://rede.dev/epoch-statement/v1"}
+      predicateType: {required: true, equals_string: "https://rezono.org/epoch-statement/v1"}
       predicate: {required: true, range: EpochPredicate, inlined: true}
 
   Subject:

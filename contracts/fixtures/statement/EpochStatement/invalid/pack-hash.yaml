@@ -1,8 +1,8 @@
 # pack_sha256 hashes rows the role may not read (O8): never in a statement.
 _type: https://in-toto.io/Statement/v1
 predicate:
-  annotation: 8810ad625ef8dc37d36516de26656bcd40d93d76b8dd2468a5573d6919210d7c
-  dataset: d-12c77a7752f9b4e938a086e0d57d1c70d96d532e2d6e59ffc4ba6abb840ba052
+  annotation: 238396836f9f61afedb89e30178af6284ec3b246412d3b6fcf732e0903d88005
+  dataset: d-25b682230808ec1686d53ff86a527112165de8249014a5b099b1b5f6b234a082
   definition: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
   epoch: '3'
   format: rede.epoch-statement/1
@@ -19,13 +19,13 @@ predicate:
     Host__tags: e7c5e1635f321a96e2502bae1734c1d3a905233570bb7314c890021f6ad90e2f
     Team: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
   pack_sha256: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
-  schema: s-e60191303ae97ad776d3b3c7136793c24ef83be5862327865b412399f5c9ac72
+  schema: s-798f5e24bb70ca6a97620222f5e357a960652bc57c9cb762536f23a027c9d8da
   snapshots:
   - relation: host
     sha256: cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
   - relation: host__tags
     sha256: eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee
-predicateType: https://rede.dev/epoch-statement/v1
+predicateType: https://rezono.org/epoch-statement/v1
 subject:
 - digest:
     sha256: b0ed9654a698296bca17304d11987248353224587f7612a8f34d399460dde1e7
@@ -34,5 +34,5 @@ subject:
     sha256: f8b185af98e16d6e718f9b95284699779a81fe6e6cd5c86b5cc4da2003ec83c4
   name: rows.json
 - digest:
-    sha256: e60191303ae97ad776d3b3c7136793c24ef83be5862327865b412399f5c9ac72
+    sha256: 798f5e24bb70ca6a97620222f5e357a960652bc57c9cb762536f23a027c9d8da
   name: schema.json

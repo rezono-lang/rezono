@@ -37,7 +37,7 @@ def test_h01_worked_vector():
         "Host__tags": "3f22d0ca85009e43891ca5f73f45b1577041da335db34ac7e1f17799eac013b4",
         "Team": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
     }
-    assert h["dataset"] == "d-12c77a7752f9b4e938a086e0d57d1c70d96d532e2d6e59ffc4ba6abb840ba052"
+    assert h["dataset"] == "d-25b682230808ec1686d53ff86a527112165de8249014a5b099b1b5f6b234a082"
 
 
 def test_h02_order_is_not_significant():

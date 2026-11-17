@@ -61,8 +61,9 @@ except ImportError:
 from .hash import H, CJ, HashError, hash_rows, hashes
 
 STATEMENT_TYPE = "https://in-toto.io/Statement/v1"
-PREDICATE_TYPE = "https://rede.dev/epoch-statement/v1"
+PREDICATE_TYPE = "https://rezono.org/epoch-statement/v1"
 FORMAT = "rede.epoch-statement/1"
+LEGACY_STATEMENT_TYPES = (("https://rede.dev/epoch-statement/v1", "rede.epoch-statement/1"),)
 NAME = "statement.json"  # its name under the role's prefix, beside the form's objects
 SIGNATURE = "statement.sigstore.json"  # cosign's Sigstore bundle over the statement's bytes, beside it (RV-X42)
 ARTIFACT = "application/vnd.rede.epoch-statement.v1"  # the two as a referrer of the role's seal (RV-X43)
@@ -216,13 +217,14 @@ def verify(statement_bytes: bytes, index: dict, objects: dict[str, bytes], absen
             problems.append("the statement is not in canonical form")
     except (ValueError, CanonError) as err:
         return [f"the statement is not canonical JSON: {err}"]
-    if not isinstance(st, dict) or st.get("_type") != STATEMENT_TYPE or st.get("predicateType") != PREDICATE_TYPE:
-        return ["not an epoch statement (in-toto Statement v1 with Rede's predicate type)"]
+    accepted_types = {PREDICATE_TYPE, *(t for t, _ in LEGACY_STATEMENT_TYPES)}
+    if not isinstance(st, dict) or st.get("_type") != STATEMENT_TYPE or st.get("predicateType") not in accepted_types:
+        return ["not an epoch statement (in-toto Statement v1 with Rezono's predicate type)"]
     shape = _shape(st)
     if shape:
         return problems + shape
     p = st["predicate"]
-    if p["format"] != FORMAT:
+    if (st["predicateType"], p["format"]) not in {(PREDICATE_TYPE, FORMAT), *LEGACY_STATEMENT_TYPES}:
         return [f"predicate format is not {FORMAT}"]
 
     listed = {o["name"]: o["sha256"] for o in index.get("objects", [])}

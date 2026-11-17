@@ -33,8 +33,8 @@ def test_the_context_is_protected_and_kind_scoped():
     assert ctx["$id"] == "@id" and ctx["$kind"] == "@type" and ctx["$rows"] == "@graph"
     assert ctx["$why"] is None and ctx["$src"] is None and ctx["$schema"] is None
     host = ctx["Host"]
-    assert host["@id"] == "https://rede.example/fixture/Host"
-    assert host["@context"]["owner"] == {"@id": "https://rede.example/fixture/Host#owner", "@type": "@id"}
+    assert host["@id"] == "https://rezono.example/fixture/Host"
+    assert host["@context"]["owner"] == {"@id": "https://rezono.example/fixture/Host#owner", "@type": "@id"}
     assert host["@context"]["memory_need"]["@type"] == rdf.schema_iri(FIXTURE) + "types/GiB"
     assert host["@context"]["tags"]["@type"] == "http://www.w3.org/2001/XMLSchema#string"
     assert "owner" not in ctx  # no slot at the top level
@@ -48,8 +48,8 @@ def test_x01_one_slot_name_on_two_kinds_expands_to_two_iris():
     case = FILES["X01"]
     schema = schema_of(case)
     g = rdf.expand(schema, document(schema, case["input"]["$rows"]))
-    host = URIRef("https://rede.example/fixture/Host")
-    plan = URIRef("https://rede.example/fixture/Plan")
+    host = URIRef("https://rezono.example/fixture/Host")
+    plan = URIRef("https://rezono.example/fixture/Plan")
     for kind, iri in ((host, case["expect"]["expanded"]["Host.owner"]), (plan, case["expect"]["expanded"]["Plan.owner"])):
         (s,) = g.subjects(RDF.type, kind)
         assert {str(p) for p in g.predicates(s) if str(p).endswith("#owner")} == {iri}
@@ -92,7 +92,7 @@ def test_t03_r01_round_trips_through_the_converter():
 def test_t03_the_empty_set_is_rd_empty_set():
     g = rdf.to_graph(FIXTURE, R01)
     b = URIRef(rdf.element_iri(FIXTURE, "Host", "host-b"))
-    assert list(g.objects(b, URIRef("https://rede.example/fixture/Host#tags"))) == [rdf.RD.emptySet]
+    assert list(g.objects(b, URIRef("https://rezono.example/fixture/Host#tags"))) == [rdf.RD.emptySet]
     back = {r["$id"]: r for r in rdf.from_graph(FIXTURE, g)}
     assert back["host-b"]["tags"] == []
 
@@ -100,26 +100,26 @@ def test_t03_the_empty_set_is_rd_empty_set():
 def test_a_state_is_a_blank_node_with_its_reason():
     g = rdf.to_graph(FIXTURE, R01)
     a = URIRef(rdf.element_iri(FIXTURE, "Host", "host-a"))
-    (node,) = g.objects(a, URIRef("https://rede.example/fixture/Host#owner"))
+    (node,) = g.objects(a, URIRef("https://rezono.example/fixture/Host#owner"))
     assert isinstance(node, BNode)
     assert list(g.predicate_objects(node)) == [(rdf.RD.unknown, Literal("not_assigned"))]
 
 
 def test_a_closed_kind_says_so():
     g = rdf.to_graph(FIXTURE, R01)
-    assert (URIRef("https://rede.example/fixture/Host"), rdf.RD.world, rdf.RD.closed) in g
-    assert not list(g.objects(URIRef("https://rede.example/fixture/Team"), rdf.RD.world))  # Team is open
+    assert (URIRef("https://rezono.example/fixture/Host"), rdf.RD.world, rdf.RD.closed) in g
+    assert not list(g.objects(URIRef("https://rezono.example/fixture/Team"), rdf.RD.world))  # Team is open
 
 
 def test_a_known_value_is_a_typed_literal_of_its_row_json_text():
     g = rdf.to_graph(FIXTURE, R01)
     a = URIRef(rdf.element_iri(FIXTURE, "Host", "host-a"))
-    (v,) = g.objects(a, URIRef("https://rede.example/fixture/Host#memory_need"))
+    (v,) = g.objects(a, URIRef("https://rezono.example/fixture/Host#memory_need"))
     assert v == Literal("400 GiB", datatype=URIRef(rdf.schema_iri(FIXTURE) + "types/GiB"))
 
 
 def test_an_element_iri_spells_its_id():
-    assert rdf.element_iri(FIXTURE, "Host", "a/b c") == "https://rede.example/fixture/Host/a~2Fb~20c"
+    assert rdf.element_iri(FIXTURE, "Host", "a/b c") == "https://rezono.example/fixture/Host/a~2Fb~20c"
     rows = [dict(R01[1], **{"$id": "a/b c"})]
     assert canon(rdf.from_turtle(FIXTURE, rdf.to_turtle(FIXTURE, rows))) == canon(rows)
 
@@ -131,8 +131,8 @@ def test_x04_an_element_lives_in_the_namespace_of_its_kind():
         assert rdf.element_iri(schema, e["kind"], e["id"]) == e["iri"]
     g = rdf.to_graph(schema, rows)
     host, team = (URIRef(e["iri"]) for e in case["expect"]["iris"])
-    assert (team, RDF.type, URIRef("https://rede.example/people/Team")) in g
-    assert list(g.objects(host, URIRef("https://rede.example/fixture/Host#owner"))) == [team]
+    assert (team, RDF.type, URIRef("https://rezono.example/people/Team")) in g
+    assert list(g.objects(host, URIRef("https://rezono.example/fixture/Host#owner"))) == [team]
     for back in (rdf.from_graph(schema, g), rdf.from_jsonld(schema, rdf.to_jsonld(schema, rows))):
         assert canon(back) == canon(rows)
 
@@ -169,7 +169,7 @@ def test_a_segment_that_is_not_the_spelling_of_its_id_is_refused(segment):
     with pytest.raises(l0.L0Error, match="§3.4"):
         rdf.unspell(segment)
     g = Graph()
-    g.add((URIRef("https://rede.example/fixture/Team/" + segment), RDF.type, URIRef("https://rede.example/fixture/Team")))
+    g.add((URIRef("https://rezono.example/fixture/Team/" + segment), RDF.type, URIRef("https://rezono.example/fixture/Team")))
     with pytest.raises(l0.L0Error):
         rdf.from_graph(FIXTURE, g)
 
@@ -183,8 +183,8 @@ def test_a_row_iri_spells_its_relation_and_key():
         rdf._row_ref("rede:r/host_fits/%5B%22host-a%22%5D")
 
 
-@pytest.mark.parametrize("iri", ["https://rede.example/people/Team#x", "https://rede.example/people/Team?x",
-                                 "https://rede.example/people/Team/"])
+@pytest.mark.parametrize("iri", ["https://rezono.example/people/Team#x", "https://rezono.example/people/Team?x",
+                                 "https://rezono.example/people/Team/"])
 def test_a_kind_iri_ends_in_no_fragment_query_or_slash(iri):
     schema = merge(FIXTURE, {"kinds": {"Team": {"iri": iri}}})
     with pytest.raises(l0.L0Error, match="`iri` has no `#`"):
@@ -231,12 +231,12 @@ def test_the_converter_refuses_what_it_cannot_write():
 def test_from_graph_refuses_a_graph_that_is_no_dataset():
     g = rdf.to_graph(FIXTURE, R01)
     a = URIRef(rdf.element_iri(FIXTURE, "Host", "host-a"))
-    g.add((a, URIRef("https://rede.example/fixture/Host#memory_need"), Literal("2 GiB")))
+    g.add((a, URIRef("https://rezono.example/fixture/Host#memory_need"), Literal("2 GiB")))
     with pytest.raises(l0.L0Error, match="one object"):
         rdf.from_graph(FIXTURE, g)
     g = rdf.to_graph(FIXTURE, R01)
     b = URIRef(rdf.element_iri(FIXTURE, "Host", "host-b"))
-    g.add((b, URIRef("https://rede.example/fixture/Host#tags"), Literal("gpu")))
+    g.add((b, URIRef("https://rezono.example/fixture/Host#tags"), Literal("gpu")))
     with pytest.raises(l0.L0Error, match="rd:emptySet alone"):
         rdf.from_graph(FIXTURE, g)
 
@@ -317,7 +317,7 @@ kinds = {k: {"world": "closed", "id": {"type": "Text"},
              "slots": {"tags": {"type": "Text", "card": "*", "states": ["known"]},
                        "note": {"type": "Text", "card": "?", "states": ["known", "not_applicable"]}}}
          for k in ("Delta", "Alpha", "Gamma", "Beta")}
-schema = {"reckon": "1.0", "pack": "seeded", "base": "https://rede.example/seeded/", "kinds": kinds}
+schema = {"reckon": "1.0", "pack": "seeded", "base": "https://rezono.example/seeded/", "kinds": kinds}
 rows = [{"$kind": k, "$id": f"{k}-{i}", "tags": ["a", "b"], "note": {"$na": ""},
          "$why": {"tags": {"a": "rede:w/" + format(i, "064x")}}} for k in kinds for i in range(3)]
 witnesses = [{"conclusion": {"relation": "r", "key": json.dumps([str(i)])}, "rule_id": "rule",

@@ -94,7 +94,7 @@ def domain(tmp_path, view=None):
     else:
         item = {"is_a": "Referent", "attributes": {"label": {}, "size": {"range": "integer"}}}
         imports = ["linkml:types", "std-identity:identity"]
-    write(d / "schema" / "domain.yaml", {"id": "https://rede.example/domain", "name": "domain",
+    write(d / "schema" / "domain.yaml", {"id": "https://rezono.example/domain", "name": "domain",
           "prefixes": {"linkml": "https://w3id.org/linkml/"}, "imports": imports, "default_range": "string",
           "annotations": {"layer": "facts"}, "classes": {"Item": item}})
     write(d / "labels" / "en.yaml", {"item": "item", "item.label": "label", "item.size": "size"}

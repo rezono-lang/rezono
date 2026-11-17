@@ -1,4 +1,4 @@
-id: https://rede.dev/contracts/manifest
+id: https://rezono.org/contracts/manifest
 name: rede_manifest
 title: Snapshot manifest
 description: >-
@@ -7,7 +7,7 @@ description: >-
   the publisher writes a Diagnosis instead: diagnostic output, not a publication.
 prefixes:
   linkml: https://w3id.org/linkml/
-  rede: https://rede.dev/contracts/
+  rede: https://rezono.org/contracts/
 default_prefix: rede
 default_range: string
 imports:

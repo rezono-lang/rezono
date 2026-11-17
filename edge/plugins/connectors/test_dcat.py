@@ -35,14 +35,14 @@ AT = "https://data.example/fixture/m-12/reader/"
 FILES = {"row-json": AT + "rows.json", "json-ld": AT + "rows.jsonld", "turtle": AT + "rows.ttl",
          "parquet": AT + "parquet/"}
 SID = l0.schema_id(FIXTURE)
-SPACE = f"https://rede.example/fixture/{SID}/"
+SPACE = f"https://rezono.example/fixture/{SID}/"
 EPOCH = URIRef(f"rede:m/m-12@{PIN['dataset']}")
 IANA = "https://www.iana.org/assignments/media-types/"
 
 
 def test_the_entry_of_an_epoch_is_these_triples_and_no_other():
     d, c = dcat.DCAT, DCTERMS.conformsTo
-    profile = URIRef("https://rede.dev/reckon-data/1.0")
+    profile = URIRef("https://rezono.org/reckon-data/1.0")
     context, shapes, contract = (URIRef(SPACE + name) for name in ("context.jsonld", "shapes.ttl", "contract.odcs.yaml"))
     row, ld, ttl, parquet = (URIRef(f"{EPOCH}#{form}") for form in ("row-json", "json-ld", "turtle", "parquet"))
     expected = {

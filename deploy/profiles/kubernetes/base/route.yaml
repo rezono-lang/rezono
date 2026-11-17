@@ -9,7 +9,7 @@ spec:
     - name: gateway
       namespace: gateway
   hostnames:
-    - rede.example.org
+    - rezono.example.org
   rules:
     - backendRefs:
         - name: front

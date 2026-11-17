@@ -1,4 +1,4 @@
-id: https://rede.example/std-time/time
+id: https://rezono.example/std-time/time
 name: std_time
 description: >-
   Intervals of positions on an axis. A position is a whole number on a named axis: a day counted on a

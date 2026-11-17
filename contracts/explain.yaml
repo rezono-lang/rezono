@@ -1,4 +1,4 @@
-id: https://rede.dev/contracts/explain
+id: https://rezono.org/contracts/explain
 name: rede_explain
 title: Explanation questions
 description: >-
@@ -10,7 +10,7 @@ description: >-
   answers a question page by page (Answer, rede.answer/1, from GET /<pack>/<manifest>/ask/<term>).
 prefixes:
   linkml: https://w3id.org/linkml/
-  rede: https://rede.dev/contracts/
+  rede: https://rezono.org/contracts/
 default_prefix: rede
 default_range: string
 imports:

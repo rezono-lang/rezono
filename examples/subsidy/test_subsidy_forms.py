@@ -162,10 +162,10 @@ def test_each_role_s_form_carries_the_base_the_pack_declares(world):
     rdf = pytest.importorskip("reckon_data.rdf")
     for role in FILTERED:
         schema = json.loads(objects(s, role)["schema.json"])
-        assert schema["base"] == "https://w3id.org/rede/example/subsidy/"
+        assert schema["base"] == "https://rezono.org/example/subsidy/"
         assert not [k for k, v in schema["kinds"].items() if "iri" in v]  # every kind lives under the base
         iri = rdf.element_iri(schema, "Application", "A001")
-        assert iri == "https://w3id.org/rede/example/subsidy/Application/A001"
+        assert iri == "https://rezono.org/example/subsidy/Application/A001"
 
 
 def test_each_role_s_standards_exports_pass_their_readers(world):

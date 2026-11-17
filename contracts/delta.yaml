@@ -1,4 +1,4 @@
-id: https://rede.dev/contracts/delta
+id: https://rezono.org/contracts/delta
 name: rede_delta
 title: Delta on fact files
 description: >-
@@ -10,7 +10,7 @@ description: >-
   Applying a delta also gives the delta that undoes it, in this same form.
 prefixes:
   linkml: https://w3id.org/linkml/
-  rede: https://rede.dev/contracts/
+  rede: https://rezono.org/contracts/
 default_prefix: rede
 default_range: string
 imports:

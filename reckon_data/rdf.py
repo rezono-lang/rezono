@@ -34,7 +34,7 @@ from rede_canon import canonical_json, canonical_sha256
 from . import l0
 
 # `<ns>/reckon-data/1.0#` (§7); `<ns>` is still open (Q1). A profile URI is an identifier, not a fetch target.
-RD = Namespace("https://rede.dev/reckon-data/1.0#")
+RD = Namespace("https://rezono.org/reckon-data/1.0#")
 REDE = "rede:"  # Rede's own names: `rede:w/<hash>` a witness, `rede:r/<relation>/<key>` a row, `rede:m/…` an epoch
 _STATE_TERMS = {"unknown": RD.unknown, "not_applicable": RD.notApplicable, "invalid": RD.invalid}
 _STATE_KEY = {"unknown": "$unknown", "not_applicable": "$na", "invalid": "$invalid"}

@@ -135,7 +135,7 @@ def test_a_module_of_an_imported_pack_is_read_as_its_schema_is(tmp_path):
     (d / "pack.yaml").write_bytes(yaml.safe_dump(meta, sort_keys=False).encode("utf-8"))
     b = json.loads(compile_dir(d, tmp_path / "out")["bundle/schema-bundle.json"])
     assert {"module": "lib:holder", "file": "reckon/holder.reckon", "pack": "lib", "name": "holder",
-            "id": "https://rede.dev/reckon/lib/holder"} in b["schemas"]
+            "id": "https://rezono.org/reckon/lib/holder"} in b["schemas"]
     assert {k["id"]: k["module"] for k in b["kinds"]}["holder"] == "lib:holder"
     assert {a["id"]: (a["target"], a["required"]) for a in b["arrows"]}["holder.party"] == ("party", True)
 

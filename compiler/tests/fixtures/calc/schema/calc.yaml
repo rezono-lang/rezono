@@ -1,7 +1,7 @@
 # The pack the calculation tests run on: a subject kind with number and boolean attributes (required
 # and optional), a kind of input rows (subject, fact, value) and a kind of parameters. Neutral names
 # on purpose; it describes no domain.
-id: https://rede.example/calc
+id: https://rezono.example/calc
 name: calc
 in_language: nl
 imports:

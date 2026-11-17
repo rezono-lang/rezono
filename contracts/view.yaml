@@ -1,4 +1,4 @@
-id: https://rede.dev/contracts/view
+id: https://rezono.org/contracts/view
 name: rede_view
 title: Key (visual language)
 description: >-
@@ -6,7 +6,7 @@ description: >-
   A pack may override values (a house style) but never the meaning of a channel.
 prefixes:
   linkml: https://w3id.org/linkml/
-  rede: https://rede.dev/contracts/
+  rede: https://rezono.org/contracts/
 default_prefix: rede
 default_range: string
 imports:

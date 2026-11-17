@@ -1,4 +1,4 @@
-id: https://rede.dev/contracts/diagnostic
+id: https://rezono.org/contracts/diagnostic
 name: rede_diagnostic
 title: Diagnostics
 description: >-
@@ -10,7 +10,7 @@ description: >-
   and `message` is the component's own English sentence.
 prefixes:
   linkml: https://w3id.org/linkml/
-  rede: https://rede.dev/contracts/
+  rede: https://rezono.org/contracts/
 default_prefix: rede
 default_range: string
 imports:

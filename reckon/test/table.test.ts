@@ -20,7 +20,7 @@ const KNOWN: StateName[] = ['known'];
 const lab: Schema = {
 	reckon: '1.0',
 	pack: 'lab',
-	base: 'https://rede.example/lab/',
+	base: 'https://rezono.example/lab/',
 	types: { Count: { of: 'Integer' }, Level: { of: 'Enum' }, Mood: { of: 'Enum' }, Eur: { of: 'Money', currency: 'EUR', scale: '2' } },
 	enums: { Level: ['high', 'low', 'rest'], Mood: { world: 'open', values: ['up', 'down'] } },
 	kinds: {

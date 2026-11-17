@@ -1,4 +1,4 @@
-id: https://rede.dev/contracts/rules
+id: https://rezono.org/contracts/rules
 name: rede_rules
 title: Rule IR
 description: >-
@@ -11,7 +11,7 @@ description: >-
   are in docs/archive/m2-pipelines-and-rule-ir.md.
 prefixes:
   linkml: https://w3id.org/linkml/
-  rede: https://rede.dev/contracts/
+  rede: https://rezono.org/contracts/
 default_prefix: rede
 default_range: string
 imports:

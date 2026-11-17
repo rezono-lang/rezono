@@ -1,4 +1,4 @@
-id: https://rede.dev/contracts/connector
+id: https://rezono.org/contracts/connector
 name: rede_connector
 title: Connector loss lists
 description: >-
@@ -10,7 +10,7 @@ description: >-
   round-trip fixture); this contract fixes the format of a loss entry and of the published list.
 prefixes:
   linkml: https://w3id.org/linkml/
-  rede: https://rede.dev/contracts/
+  rede: https://rezono.org/contracts/
 default_prefix: rede
 default_range: string
 imports:

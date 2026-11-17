@@ -363,7 +363,7 @@ def test_change_classes_beyond_the_files():
     assert l0.classify(a, merge(a, {"map": {"Host": "https://schema.org/Thing"}}))[0] == "patch"
     assert l0.classify(a, merge(a, {"kinds": {"Zone": {"world": "open", "id": {"type": "Text"},
                                                        "slots": {}}}}))[0] == "minor"
-    assert l0.classify(a, merge(a, {"base": "https://rede.example/other/"}))[0] == "major"
+    assert l0.classify(a, merge(a, {"base": "https://rezono.example/other/"}))[0] == "major"
     assert l0.classify(a, merge(a, {"kinds": {"Host": {"slots": {"owner": {"card": "1"}}}}}))[0] == "major"
     control = schema_of(FILES["G01"])
     assert l0.classify(control, merge(control, {"kinds": {"ZoneRule": {"owner": "platform"}}}))[0] == "patch"

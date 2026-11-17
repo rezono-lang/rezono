@@ -1,4 +1,4 @@
-id: https://rede.dev/contracts/source
+id: https://rezono.org/contracts/source
 name: rede_source
 title: Sources of facts
 description: >-
@@ -6,7 +6,7 @@ description: >-
   A source is a locator, not content; the same shape serves pack facts and observations.
 prefixes:
   linkml: https://w3id.org/linkml/
-  rede: https://rede.dev/contracts/
+  rede: https://rezono.org/contracts/
 default_prefix: rede
 default_range: string
 imports:

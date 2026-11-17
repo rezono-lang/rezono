@@ -1,4 +1,4 @@
-id: https://rede.dev/contracts/plugin
+id: https://rezono.org/contracts/plugin
 name: rede_plugin
 title: Plugin declarations
 description: >-
@@ -6,7 +6,7 @@ description: >-
   identified by its input hash.
 prefixes:
   linkml: https://w3id.org/linkml/
-  rede: https://rede.dev/contracts/
+  rede: https://rezono.org/contracts/
 default_prefix: rede
 default_range: string
 imports:

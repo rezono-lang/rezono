@@ -25,7 +25,7 @@ def write(path, value):
 def model(tmp_path, *, path='span', domain_change=None, theory_change=None, view_change=None):
     domain = Path(shutil.copytree(FIXTURE, tmp_path / 'domain'))
     theory = Path(shutil.copytree(FIXTURE, tmp_path / 'theory'))
-    schema = {'id': 'https://rede.example/relations', 'name': 'relations', 'imports': ['linkml:types'],
+    schema = {'id': 'https://rezono.example/relations', 'name': 'relations', 'imports': ['linkml:types'],
               'default_range': 'string', 'annotations': {'layer': 'facts'}, 'classes': {
         'Node': {'attributes': {'id': {'identifier': True}, 'next': {'range': 'Node', 'multivalued': True}}}}}
     if theory_change:
@@ -34,7 +34,7 @@ def model(tmp_path, *, path='span', domain_change=None, theory_change=None, view
     write(theory / 'pack.yaml', {'name': 'relations', 'version': '0', 'default_language': 'nl', 'theory': True})
     write(theory / 'channels.yaml', {'kinds': [{'kind': 'node', 'shape': 'rect'}], 'arrows': [{'arrow': 'node.next', 'dash': 'none'}]})
     write(theory / 'labels/nl.yaml', {'node': 'Node', 'node.next': 'Next'})
-    schema = {'id': 'https://rede.example/domain', 'name': 'domain', 'imports': ['linkml:types'],
+    schema = {'id': 'https://rezono.example/domain', 'name': 'domain', 'imports': ['linkml:types'],
               'default_range': 'string', 'annotations': {'layer': 'facts'}, 'classes': {
         'Parent': {'attributes': {'id': {'identifier': True}, 'next': {'range': 'Parent', 'multivalued': True}, 'child': {'range': 'Child'}}},
         'Child': {'is_a': 'Parent'},

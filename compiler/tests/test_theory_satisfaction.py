@@ -114,7 +114,7 @@ def domain_pack(root, case, view=None):
     through the view of `case`, or `view`."""
     theory = Path(shutil.copytree(REPO / 'packs' / case.theory, root / case.theory))
     domain = Path(shutil.copytree(FIXTURE, root / 'domain'))
-    write(domain / 'schema/minimal.yaml', {'id': f'https://rede.example/m3-{case.theory}', 'name': 'domain',
+    write(domain / 'schema/minimal.yaml', {'id': f'https://rezono.example/m3-{case.theory}', 'name': 'domain',
           'imports': ['linkml:types'], 'default_range': 'string', 'annotations': {'layer': 'facts'},
           'classes': case.classes})
     write(domain / 'pack.yaml', {'name': 'domain', 'version': '0', 'default_language': 'nl',

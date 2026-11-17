@@ -1,4 +1,4 @@
-id: https://rede.dev/contracts/port
+id: https://rezono.org/contracts/port
 name: rede_port
 title: Port declarations
 description: >-
@@ -12,7 +12,7 @@ description: >-
   checklist and the loss-list format.
 prefixes:
   linkml: https://w3id.org/linkml/
-  rede: https://rede.dev/contracts/
+  rede: https://rezono.org/contracts/
 default_prefix: rede
 default_range: string
 imports:

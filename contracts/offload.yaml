@@ -1,4 +1,4 @@
-id: https://rede.dev/contracts/offload
+id: https://rezono.org/contracts/offload
 name: rede_offload
 title: Offloaded steps
 description: >-
@@ -10,7 +10,7 @@ description: >-
   Every integer is decimal text.
 prefixes:
   linkml: https://w3id.org/linkml/
-  rede: https://rede.dev/contracts/
+  rede: https://rezono.org/contracts/
 default_prefix: rede
 default_range: string
 imports:

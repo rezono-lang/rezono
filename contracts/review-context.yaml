@@ -1,10 +1,10 @@
-id: https://rede.dev/contracts/review-context
+id: https://rezono.org/contracts/review-context
 name: rede_review_context
 title: Context for review evidence
 description: Shape of a review's subject and source receipt. Admission verifies the referenced evidence.
 prefixes:
   linkml: https://w3id.org/linkml/
-  rede: https://rede.dev/contracts/
+  rede: https://rezono.org/contracts/
 default_prefix: rede
 default_range: string
 imports:

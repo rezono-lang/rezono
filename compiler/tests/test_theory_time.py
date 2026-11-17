@@ -536,7 +536,7 @@ def bound_domain(tmp_path):
         "name": "bound", "version": "0.1.0", "default_language": "en",
         "imports": [{"name": "std-time", "path": str(THEORY), "sha256": modules.pack_hash(THEORY)}]}), "utf-8")
     (domain / "schema" / "bound.yaml").write_text(yaml.safe_dump({
-        "id": "https://rede.example/bound", "name": "bound", "prefixes": {"linkml": "https://w3id.org/linkml/"},
+        "id": "https://rezono.example/bound", "name": "bound", "prefixes": {"linkml": "https://w3id.org/linkml/"},
         "imports": ["linkml:types", "std-time:time"], "default_range": "string", "annotations": {"layer": "facts"},
         "classes": {"Stretch": {"is_a": "Interval", "attributes": {"title": {}}}}}), "utf-8")
     (domain / "labels" / "en.yaml").write_text("stretch: stretch\nstretch.title: title\n", "utf-8")

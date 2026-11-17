@@ -159,7 +159,7 @@ def test_a_domain_kind_that_is_ordered_gets_the_theory_through_the_ordinary_comp
         "name": "bound", "version": "0.1.0", "default_language": "en",
         "imports": [{"name": "std-order", "path": str(THEORY), "sha256": modules.pack_hash(THEORY)}]}), "utf-8")
     (domain / "schema" / "bound.yaml").write_text(yaml.safe_dump({
-        "id": "https://rede.example/bound", "name": "bound", "prefixes": {"linkml": "https://w3id.org/linkml/"},
+        "id": "https://rezono.example/bound", "name": "bound", "prefixes": {"linkml": "https://w3id.org/linkml/"},
         "imports": ["linkml:types", "std-order:order"], "default_range": "string", "annotations": {"layer": "facts"},
         "classes": {"Step": {"is_a": "Ordered", "attributes": {"title": {}}}}}), "utf-8")
     (domain / "labels" / "en.yaml").write_text("step: step\nstep.title: title\n", "utf-8")

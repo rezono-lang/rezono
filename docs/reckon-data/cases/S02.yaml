@@ -15,10 +15,10 @@ input: "{\n   \"types\": {\n      \"GiB\": {\n         \"dimension\": \"informat
   \            \"card\": \"*\",\n               \"states\": [\n                  \"known\"\n               ],\n          \
   \     \"type\": \"Text\"\n            }\n         },\n         \"world\": \"closed\"\n      },\n      \"Team\": {\n    \
   \     \"id\": {\n            \"type\": \"Text\"\n         },\n         \"slots\": {},\n         \"world\": \"open\"\n  \
-  \    }\n   },\n   \"base\": \"https://rede.example/fixture/\"\n}"
+  \    }\n   },\n   \"base\": \"https://rezono.example/fixture/\"\n}"
 expect:
   accept: true
-  schema_id: s-e60191303ae97ad776d3b3c7136793c24ef83be5862327865b412399f5c9ac72
+  schema_id: s-798f5e24bb70ca6a97620222f5e357a960652bc57c9cb762536f23a027c9d8da
 note: 'The fixture with members reordered and whitespace added: the same id.'
 sources:
 - '#369 L0 rev 2 §8'

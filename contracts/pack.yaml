@@ -1,4 +1,4 @@
-id: https://rede.dev/contracts/pack
+id: https://rezono.org/contracts/pack
 name: rede_pack
 title: Pack files
 description: >-
@@ -10,7 +10,7 @@ description: >-
   because their element ids come from the schema.
 prefixes:
   linkml: https://w3id.org/linkml/
-  rede: https://rede.dev/contracts/
+  rede: https://rezono.org/contracts/
 default_prefix: rede
 default_range: string
 imports:

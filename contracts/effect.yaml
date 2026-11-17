@@ -1,4 +1,4 @@
-id: https://rede.dev/contracts/effect
+id: https://rezono.org/contracts/effect
 name: rede_effect
 title: Effect plan and attempt state
 description: >-
@@ -6,7 +6,7 @@ description: >-
   Shape validation does not verify an approval, a budget reservation, the dry run or a state transition.
 prefixes:
   linkml: https://w3id.org/linkml/
-  rede: https://rede.dev/contracts/
+  rede: https://rezono.org/contracts/
 default_prefix: rede
 default_range: string
 imports:

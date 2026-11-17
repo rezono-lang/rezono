@@ -34,7 +34,7 @@ ESO_URL=https://github.com/external-secrets/external-secrets/releases/download/v
 ESO_SHA256=34cf25e951da2aeefe465e6767036272a1db1f713b9be6a1b7bc811ae9a739c2
 GATEWAY_URL=https://github.com/envoyproxy/gateway/releases/download/v1.10.0/install.yaml
 GATEWAY_SHA256=f87f4d59b983aa760da52a2a0002c612028106fe69beefdf3d30cfb03905944e
-HOST=rede.example.test
+HOST=rezono.example.test
 ISSUER=issuer.rede-platform.svc.cluster.local
 
 kind=${KIND:-kind}

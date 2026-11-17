@@ -45,7 +45,7 @@ def test_a_pack_reached_twice_brings_its_rules_once(imported, tmp_path):
     (middle / "schema").mkdir(parents=True)
     (middle / "pack.yaml").write_text("name: middle\nversion: 0.1.0\ndefault_language: nl\n")
     (middle / "schema" / "empty.yaml").write_text(
-        "id: https://rede.example/empty\nname: empty\nimports: [linkml:types]\n")
+        "id: https://rezono.example/empty\nname: empty\nimports: [linkml:types]\n")
     write_rules(middle, ".decl known(x: symbol)\nknown(x) :- registered(x).\n")
     pin(middle, owner)
     pin(consumer, middle, owner)

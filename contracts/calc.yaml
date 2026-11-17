@@ -1,4 +1,4 @@
-id: https://rede.dev/contracts/calc
+id: https://rezono.org/contracts/calc
 name: rede_calc
 title: Calculation rules
 description: >-
@@ -10,7 +10,7 @@ description: >-
   values of its leaves as bindings (contracts/proof.yaml).
 prefixes:
   linkml: https://w3id.org/linkml/
-  rede: https://rede.dev/contracts/
+  rede: https://rezono.org/contracts/
 default_prefix: rede
 default_range: string
 imports:

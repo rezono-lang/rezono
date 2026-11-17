@@ -197,7 +197,7 @@ def test_names_that_become_engine_names_are_validated(fixture, change, message):
 def test_an_enum_defined_in_two_schema_files_is_qualified_by_its_module(fixture):
     """Two modules that do not import each other may use one name; each keeps its own (docs/compiler.md)."""
     (fixture / "schema" / "second.yaml").write_text(yaml.safe_dump({
-        "id": "https://rede.example/second", "name": "second", "in_language": "nl",
+        "id": "https://rezono.example/second", "name": "second", "in_language": "nl",
         "imports": ["linkml:types"], "default_range": "string", "annotations": {"layer": "facts"},
         "enums": {"State": {"permissible_values": {"low": {}}}}}))
     (fixture / "labels" / "nl.yaml").write_text("alpha: alfa\n")

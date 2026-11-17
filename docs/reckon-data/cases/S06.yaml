@@ -6,7 +6,7 @@ schema:
   merge:
     kinds:
       Team:
-        iri: https://rede.example/fixture/Host
+        iri: https://rezono.example/fixture/Host
 form: schema
 expect:
   accept: false

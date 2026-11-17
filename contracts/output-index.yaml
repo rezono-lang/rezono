@@ -1,4 +1,4 @@
-id: https://rede.dev/contracts/output-index
+id: https://rezono.org/contracts/output-index
 name: rede_output_index
 title: Output index
 description: >-
@@ -11,7 +11,7 @@ description: >-
   emits it yet (B21); the render step (P7.10) and publication with each generated pull request (P7.11b) do.
 prefixes:
   linkml: https://w3id.org/linkml/
-  rede: https://rede.dev/contracts/
+  rede: https://rezono.org/contracts/
 default_prefix: rede
 default_range: string
 imports:

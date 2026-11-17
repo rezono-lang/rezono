@@ -1,4 +1,4 @@
-id: https://rede.dev/contracts/proof
+id: https://rezono.org/contracts/proof
 name: rede_proof
 title: Witnesses and proofs
 description: >-
@@ -6,7 +6,7 @@ description: >-
   witnesses. A proof is an acyclic graph of witnesses, checked against one manifest.
 prefixes:
   linkml: https://w3id.org/linkml/
-  rede: https://rede.dev/contracts/
+  rede: https://rezono.org/contracts/
 default_prefix: rede
 default_range: string
 imports:

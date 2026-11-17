@@ -33,7 +33,7 @@
       "secret": "@CLIENT_SECRET@",
       "standardFlowEnabled": true,
       "directAccessGrantsEnabled": false,
-      "redirectUris": ["https://rede.example.test/oauth2/callback"],
+      "redirectUris": ["https://rezono.example.test/oauth2/callback"],
       "protocolMappers": [
         {
           "name": "groups",

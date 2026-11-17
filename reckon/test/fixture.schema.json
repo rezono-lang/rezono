@@ -1,7 +1,7 @@
 {
 	"reckon": "1.0",
 	"pack": "fixture",
-	"base": "https://rede.example/fixture/",
+	"base": "https://rezono.example/fixture/",
 	"types": {
 		"B": { "of": "Quantity", "dimension": "data", "unit": "B", "storage_unit": "B", "factor": "1" },
 		"GiB": { "of": "Quantity", "dimension": "data", "unit": "GiB", "storage_unit": "B", "factor": "1073741824" },

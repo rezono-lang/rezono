@@ -245,7 +245,7 @@ test('the output schema is a Reckon Data schema document (§8a)', async () => {
 	const checked = check(text, fixture);
 	const doc = (await outputSchema(checked.tree as Ask, checked, fixture))!;
 	assert.deepEqual(doc.imports, { p: { pack: 'fixture', schema: await schemaId(dataSchema(fixture)) } });
-	assert.match(doc.base, /^https:\/\/rede\.example\/fixture\/ask\/[0-9a-f]{64}\/$/);
+	assert.match(doc.base, /^https:\/\/rezono\.example\/fixture\/ask\/[0-9a-f]{64}\/$/);
 	assert.deepEqual(doc.kinds.Answer, {
 		world: 'closed',
 		id: { type: 'Text' },
@@ -266,7 +266,7 @@ test('the output schema is a Reckon Data schema document (§8a)', async () => {
 	assert.equal(again.kinds.Answer.slots.c1.type, 'p.Eur');
 	assert.equal(again.kinds.Answer.slots.c2.type, 'p.GiB');
 	// The id of the fixture's document is the one reckon_data computes for it (`l0.check_schema`, 11-11-2026).
-	assert.equal(await schemaId(dataSchema(fixture)), 's-7b019828f60dbdf81434303f92b6f2ac87a11aeb982facb0d0f36c752c31f713');
+	assert.equal(await schemaId(dataSchema(fixture)), 's-e8c8bb778d351da6dbf3559099807c7bd072f1819e82a2c9c761b6582ec080b7');
 	// A dimension the pack has no type for gets a type of its own, in the storage units of its parts.
 	const novel = check('ask Plan where true show memory * 730 h', fixture);
 	const own = (await outputSchema(novel.tree as Ask, novel, fixture))!;

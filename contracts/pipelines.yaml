@@ -1,4 +1,4 @@
-id: https://rede.dev/contracts/pipelines
+id: https://rezono.org/contracts/pipelines
 name: rede_pipelines
 title: Pipeline partition
 description: >-
@@ -13,7 +13,7 @@ description: >-
   goes from which part to which parts. The relay of the engine reads this file. Integers are decimal text.
 prefixes:
   linkml: https://w3id.org/linkml/
-  rede: https://rede.dev/contracts/
+  rede: https://rezono.org/contracts/
 default_prefix: rede
 default_range: string
 imports:

@@ -277,7 +277,7 @@ def lower(pack_dir: Path, d: Declared, form: dict, pack: str, owners: dict[str, 
                 refuse(at, "a fact row is not lowered (no ticket yet)")
         else:
             refuse(at, *next((REFUSED[k] for k in REFUSED if k in decl), ("not a declaration this compiler reads",)))
-    schema = {"id": f"https://rede.dev/reckon/{pack}/{d.id}", "name": d.id.replace("/", "_"),
+    schema = {"id": f"https://rezono.org/reckon/{pack}/{d.id}", "name": d.id.replace("/", "_"),
               "imports": ["linkml:types"], "default_range": "string", "annotations": {"layer": d.layer},
               "enums": enums, "classes": classes}
     return Lowered(d, schema, sorted(uses))

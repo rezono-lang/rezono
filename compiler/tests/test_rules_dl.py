@@ -1158,7 +1158,7 @@ def viewed(tmp: Path, view: bool = True, **files: str) -> Path:
         path.write_text(yaml.safe_dump(value, sort_keys=False), encoding="utf-8", newline="\n")
 
     def schema(name, classes):
-        return {"id": f"https://rede.example/{name}", "name": name, "imports": ["linkml:types"],
+        return {"id": f"https://rezono.example/{name}", "name": name, "imports": ["linkml:types"],
                 "default_range": "string", "annotations": {"layer": "facts"}, "classes": classes}
 
     theory, domain = (Path(shutil.copytree(FIXTURE, tmp / n)) for n in ("theory", "domain"))

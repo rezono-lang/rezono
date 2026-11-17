@@ -119,7 +119,7 @@ def test_diamond_imports_keep_one_copy_of_the_rules(imported, tmp_path):
     (middle / "schema").mkdir(parents=True)
     (middle / "pack.yaml").write_text("name: middle\nversion: 0.1.0\ndefault_language: nl\n")
     (middle / "schema" / "empty.yaml").write_text(
-        "id: https://rede.example/empty\nname: empty\nimports: [linkml:types]\n")
+        "id: https://rezono.example/empty\nname: empty\nimports: [linkml:types]\n")
     pin(middle, owner)
     pin(consumer, middle, owner)
     assert list(program(consumer).rules) == ["registered"]

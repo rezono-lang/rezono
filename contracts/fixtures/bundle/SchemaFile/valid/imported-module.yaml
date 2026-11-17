@@ -1,6 +1,6 @@
 # A module of an imported pack: its path within that pack, qualified by the pack name.
 name: shared_terms
-id: https://rede.example/shared-terms
+id: https://rezono.example/shared-terms
 file: schema/terms.yaml
 module: "shared-terms:terms"
 pack: shared-terms

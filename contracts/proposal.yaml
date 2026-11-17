@@ -1,4 +1,4 @@
-id: https://rede.dev/contracts/proposal
+id: https://rezono.org/contracts/proposal
 name: rede_proposal
 title: Proposal on a Git host
 description: >-
@@ -9,7 +9,7 @@ description: >-
   (ProposerReceipt, defect F5), so that four eyes can still be checked after the gate-to-Git boundary.
 prefixes:
   linkml: https://w3id.org/linkml/
-  rede: https://rede.dev/contracts/
+  rede: https://rezono.org/contracts/
 default_prefix: rede
 default_range: string
 imports:

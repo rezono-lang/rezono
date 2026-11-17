@@ -58,7 +58,7 @@ def packs(tmp_path, view=VIEW, change=None, theory_change=None):
         'Mark': {'attributes': {'id': {'identifier': True}, 'on': {'range': 'Line'}, 'at': {'range': 'integer'}}}}
     if theory_change:
         theory_change(classes)
-    write(theory / 'schema/minimal.yaml', {'id': 'https://rede.example/spans', 'name': 'spans',
+    write(theory / 'schema/minimal.yaml', {'id': 'https://rezono.example/spans', 'name': 'spans',
           'imports': ['linkml:types'], 'default_range': 'string', 'annotations': {'layer': 'facts'}, 'classes': classes})
     write(theory / 'pack.yaml', {'name': 'spans', 'version': '0', 'default_language': 'nl', 'theory': True})
     write(theory / 'channels.yaml', {'kinds': [{'kind': k, 'shape': 'rect'} for k in ('span', 'line', 'mark')],
@@ -66,7 +66,7 @@ def packs(tmp_path, view=VIEW, change=None, theory_change=None):
     write(theory / 'labels/nl.yaml', {})
     (theory / 'rules').mkdir()
     (theory / 'rules/spans.dl').write_text(RULES, encoding='utf-8', newline='\n')
-    write(domain / 'schema/minimal.yaml', {'id': 'https://rede.example/domain', 'name': 'domain',
+    write(domain / 'schema/minimal.yaml', {'id': 'https://rezono.example/domain', 'name': 'domain',
           'imports': ['linkml:types'], 'default_range': 'string', 'annotations': {'layer': 'facts'}, 'classes': {
         'Term': {'attributes': {'id': {'identifier': True}, 'starts': {'range': 'date'}, 'ends': {'range': 'date'},
                                 'calendar': {'range': 'Calendar'}}},
