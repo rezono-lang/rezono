@@ -243,12 +243,6 @@ def run_shard(folder: str, shard: int, total: int, report_dir: Path) -> int:
             if len(set(manifests)) != 1:
                 print("Workers collected different tests", file=sys.stderr)
                 return 1
-    if all(code == 5 for code in statuses):
-        blocked = {
-            entry.read_text(encoding="utf-8").split(":", 1)[0].strip()
-            for entry in (ROOT / "blocked").glob("*.txt")
-        }
-        return 0 if files and set(files) <= blocked else 5
     return next((code for code in statuses if code), 0)
 
 

@@ -4,7 +4,9 @@ on:
   push:
     branches: [main]
   pull_request:
-    types: [opened, synchronize, reopened, ready_for_review]
+    types: [opened, synchronize, reopened, ready_for_review, labeled, unlabeled]
+  merge_group:
+    types: [checks_requested]
   workflow_dispatch:
 
 concurrency:
@@ -31,7 +33,9 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
-          fetch-depth: 2
+          fetch-depth: 0
+      - name: Run policy regression examples
+        run: python -I scripts/test_red_guard.py
       - id: matrix
         env:
           GITHUB_BASE_REF: ${{ github.base_ref }}
@@ -92,6 +96,9 @@ jobs:
             contracts/python/rezono_contracts/*.schema.json
             viewer/src/lib/contract/generated
           key: contract-types-v1-${{ runner.os }}-${{ hashFiles('requirements/.python-version', 'requirements/dev.txt', 'contracts/*.yaml', 'contracts/gen-types.sh', 'contracts/python/rezono_contracts/**', 'viewer/package.json', 'viewer/src/lib/contract/generated/**') }}
+      - name: Install the pinned Souffle oracle
+        if: matrix.component.folder == 'compiler' || matrix.component.folder == 'examples'
+        run: bash scripts/install-souffle.sh
       - name: Generate contract types
         if: steps.types.outputs.cache-hit != 'true'
         run: contracts/gen-types.sh
@@ -110,7 +117,35 @@ jobs:
             python scripts/components.py check-contracts
             folder="$COMPONENT/python"
           fi
-          python scripts/components.py run-shard "$folder" "$SHARD" "$TOTAL" "$RUNNER_TEMP/reports"
+          rc=0
+          python scripts/components.py run-shard "$folder" "$SHARD" "$TOTAL" "$RUNNER_TEMP/reports" || rc=$?
+          if [[ "$rc" == 5 && "$KIND" != contracts ]]; then
+            python scripts/red_list.py --all-tests-blocked "$COMPONENT"
+          else
+            exit "$rc"
+          fi
+      - name: Report actual skips
+        if: always() && hashFiles('scripts/red_list.py') != ''
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          for report in "$RUNNER_TEMP"/reports/*.xml; do
+            python scripts/red_list.py --skips "$report" | tee -a "$GITHUB_STEP_SUMMARY"
+          done
+      - name: Measure the worker check
+        if: startsWith(github.head_ref, 'task/') && matrix.component.shard == 0
+        env:
+          BRANCH: ${{ github.head_ref }}
+          COMPONENT: ${{ matrix.component.folder }}
+        run: |
+          set -euo pipefail
+          task=${BRANCH#task/}
+          if [[ "$task" == "$COMPONENT/"* ]]; then
+            git fetch --no-tags origin main:refs/remotes/origin/main
+            start=$SECONDS
+            python scripts/fast_check.py "$task" | tee "$RUNNER_TEMP/fast.txt"
+            echo "Fast check took $((SECONDS-start)) seconds and printed $(wc -l < "$RUNNER_TEMP/fast.txt") lines" | tee -a "$GITHUB_STEP_SUMMARY"
+          fi
 
   node:
     needs: discover

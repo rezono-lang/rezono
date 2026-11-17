@@ -1,0 +1,29 @@
+name: Publish test evidence status
+on:
+  workflow_run:
+    workflows: [Review test evidence]
+    types: [in_progress, completed]
+permissions:
+  actions: read
+  contents: read
+  pull-requests: read
+  statuses: write
+concurrency:
+  group: publish-evidence-${{ github.event.workflow_run.id }}
+  cancel-in-progress: false
+jobs:
+  report:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Report the trusted result on the reviewed commit
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python -I scripts/red_status.py

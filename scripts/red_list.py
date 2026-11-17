@@ -3,6 +3,9 @@
 
 from __future__ import annotations
 
+from collections import Counter
+import xml.etree.ElementTree as ET
+
 import argparse
 import ast
 import json
@@ -136,7 +139,7 @@ def read_blocked(root: Path = ROOT) -> list[tuple[str, str]]:
     if not blocked_dir.is_dir():
         return []
     items: list[tuple[str, str]] = []
-    for entry in sorted(blocked_dir.iterdir(), key=lambda p: p.name):
+    for entry in sorted(blocked_dir.glob("*.txt"), key=lambda p: p.name):
         if not entry.is_file():
             continue
         line = entry.read_text(encoding="utf-8").splitlines()[0].strip()
@@ -154,7 +157,9 @@ def read_to_port(root: Path = ROOT) -> list[tuple[str, str]]:
     if not tp_dir.is_dir():
         return []
     items: list[tuple[str, str]] = []
-    for entry in sorted(tp_dir.iterdir(), key=lambda p: p.name):
+    for entry in sorted(tp_dir.glob("*.md"), key=lambda p: p.name):
+        if entry.name == "AGENTS.md":
+            continue
         if not entry.is_file():
             continue
         folder = ""
@@ -308,7 +313,48 @@ def main() -> int:
         action="store_true",
         help="Emit machine-readable JSON.",
     )
+    parser.add_argument("--skips", nargs="+", metavar="JUNIT_XML",
+                        help="Count actual skipped tests per reason from pytest reports.")
+    parser.add_argument("--all-tests-blocked", metavar="COMPONENT",
+                        help="Validate the sole exception to pytest exit code five.")
     args = parser.parse_args()
+    if args.all_tests_blocked:
+        directory = (ROOT / args.all_tests_blocked).resolve()
+        if not directory.is_dir() or not directory.is_relative_to(ROOT):
+            return 1
+        files = {path.relative_to(ROOT).as_posix() for path in
+                 iter_python_test_files(directory, include_blocked=True)}
+        blocked = {target for target, _ in read_blocked()}
+        missing = sorted(files - blocked)
+        if not files or missing:
+            print("ERROR no discoverable test files or missing blocked entries:", missing)
+            return 1
+        print(f"All {len(files)} test files have individual blocked entries.")
+        return 0
+    if args.skips:
+        counts: Counter[str] = Counter()
+        oracle_cases = []
+        for report in args.skips:
+            suite = ET.parse(report)
+            for case in suite.iter("testcase"):
+                name = case.get("name", "")
+                if "souffle" in name.lower() and not any(
+                    case.find(tag) is not None for tag in ("skipped", "failure", "error")
+                ):
+                    oracle_cases.append(name)
+            for skip in suite.iter("skipped"):
+                if skip.get("type") != "pytest.xfail":
+                    counts[skip.get("message", "unspecified")] += 1
+        if args.json:
+            print(json.dumps(dict(sorted(counts.items()))))
+        else:
+            for reason, count in sorted(counts.items()):
+                print(f"{count} skipped: {reason}")
+            print(f"Total skipped: {sum(counts.values())}")
+            if oracle_cases:
+                print(f"Passed tests naming the Souffle oracle: {len(oracle_cases)}")
+                print(f"Example: {sorted(oracle_cases)[0]}")
+        return 0
 
     if args.counts:
         rows = compute_counts()

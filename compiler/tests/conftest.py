@@ -1,8 +1,12 @@
 import os
+import shutil
 import sys
 from pathlib import Path
 
 from hypothesis import HealthCheck, settings
+
+if os.environ.get("GITHUB_ACTIONS") == "true" and shutil.which("souffle") is None:
+    raise RuntimeError("The CI oracle requires Souffle; check the pinned installer.")
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
