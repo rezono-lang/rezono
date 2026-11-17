@@ -239,7 +239,7 @@ def _item_text(prog, rule, kind, index, types):
         return f"{_term(a.var, 'integer')} = {fn} : {{ {_atom_text(prog, a.atom, a.over)} }}"
     if kind == "assignment":
         s = rule.assignments[index]
-        if s.op == "days":   # a view's reading of a date (RV-C27)
+        if s.op == "days":   # a view's reading of a date
             return f"{_term(s.var, 'integer')} = {days_text(_term(s.left, 'string'))} - {days_text(_term(s.right, 'string'))}"
         return f"{_term(s.var, 'integer')} = {_term(s.left, 'integer')} {OPS[s.op]} {_term(s.right, 'integer')}"
     c = rule.conditions[index]
@@ -369,7 +369,7 @@ def _extend(prog, rule, kind, index, theta, rows, types):
         return [theta] if _compare(c.op, val(c.left, t), val(c.right, t)) else []
     if kind == "assignment":
         s = rule.assignments[index]
-        if s.op == "days":   # a view's reading of a date (RV-C27); a text that is no day derives nothing
+        if s.op == "days":   # a view's reading of a date; a text that is no day derives nothing
             v = days(val(s.left, "string"), s.right)
         else:
             v = _calc(s.op, val(s.left, "integer"), val(s.right, "integer"))

@@ -33,7 +33,7 @@ classes:
 
   PackIri:
     description: >-
-      The block `iri:` (arbiter, 12-11-2026, ruling 2). `base` is where the names of one publication hang: the
+      The block `iri:`. `base` is where the names of one publication hang: the
       definition pin and the epochs. A kind takes the namespace of an entry of `namespaces` that names it, else
       the `namespace` of its module (`modules:`), else `base`; its IRI is that namespace and its class name. A
       reason code takes the namespace of an entry that names it, else `base`; its IRI is `<namespace>reason/<code>`.

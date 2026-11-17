@@ -118,7 +118,7 @@ def test_rules_without_questions_warn(tmp_path):
 
 
 def test_the_computed_questions_contrast_and_consequence(fixture):
-    """X5 (RV-X24): contrast walks back through the rules from an absent conclusion, without candidates (its
+    """X5: contrast walks back through the rules from an absent conclusion, without candidates (its
     closing rows come from `closes` in the bundle); consequence supposes the start row away (the published
     variant that deletes it) and walks forward. Both are in every pack that imports std-explain, in each language."""
     own(fixture, OWN)

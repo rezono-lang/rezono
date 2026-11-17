@@ -46,7 +46,7 @@ FORMS = {
 }
 _IRI = re.compile(r"[a-z][a-z0-9+.-]*://\S+")
 # A relative reference to a file beside the entry (the publisher's form index names each by its file name): no
-# scheme, no host, no dot segment, so the same entry is the same bytes whatever site serves it (RV-K20).
+# scheme, no host, no dot segment, so the same entry is the same bytes whatever site serves it.
 _RELATIVE = re.compile(r"(?!\.\.?(/|$))[A-Za-z0-9_~-][A-Za-z0-9._~%-]*(/(?!\.\.?(/|$))[A-Za-z0-9._~%-]+)*")
 
 

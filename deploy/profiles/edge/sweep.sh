@@ -1,10 +1,10 @@
 #!/bin/sh
 # After publish.sh: the variants of each pack's sweep against its newest main manifest (docs/interaction.md,
-# section 1): the one of HEAD, or an earlier one when publish.sh found the pack unchanged since (RV-M15).
+# section 1): the one of HEAD, or an earlier one when publish.sh found the pack unchanged.
 # Packs: the arguments, else publish.packs in the profile; a pack without sweeps.yaml is skipped.
 # A variant that is there already is kept, so a run that stopped is completed by the next one. Exit 0: every
 # variant is there. Exit 1: an error (not a red variant: that is a diagnosis, never a failure).
-# Two variants are computed at a time (REZONO_SWEEP_WORKERS; RV-M24): a variant of the lab is 13 s of
+# Two variants are computed at a time (REZONO_SWEEP_WORKERS): a variant of the lab is 13 s of
 # computation and as long again waiting on the store, so two processes halve the time one runner is held,
 # for the same work. What is written does not depend on the number.
 # Needs: what publish.sh needs.

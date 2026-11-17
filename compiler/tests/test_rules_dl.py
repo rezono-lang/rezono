@@ -390,7 +390,7 @@ def test_a_rule_belongs_in_the_module_of_its_relation(fixture):
 
 def test_mutual_recursion_is_refused_by_the_batch_backend_only(fixture, capsys):
     """E10: Feldera takes mutual recursion, DuckDB does not. The refusal is the batch script's alone, and the
-    compiler warns of it with a stable code (RV-M07): nobody has to run the script to learn it will fail."""
+    compiler warns of it with a stable code: nobody has to run the script to learn it will fail."""
     model = pack.read(with_rules(fixture, core="""
 .decl a(x: symbol)
 .decl b(x: symbol)
@@ -783,7 +783,7 @@ def test_the_outcome_checks_find_a_missing_row_and_two_states(fixture):
     assert run(head + small + known + ghost) == {"sizing__total": ["ghost"], "sizing__state": []}
 
 
-# A body of aggregates only (RV-M23): a count, a sum, a minimum or a maximum over a whole relation. No literal,
+# A body of aggregates only: a count, a sum, a minimum or a maximum over a whole relation. No literal,
 # so no group key, and each relation has one row at most.
 WHOLE = """
 .decl sizes(n: number, t: number)
@@ -1023,7 +1023,7 @@ def test_arithmetic_in_recursion_is_refused_unless_it_is_a_bounded_counter(fixtu
         pack.read(with_rules(fixture, core=text))
 
 
-# Fold marks (RV-C29): display only, and only on a helper.
+# Fold marks: display only, and only on a helper.
 MARK = "// @explain fold\n"
 FOLDED = """
 // ends: the join between an alpha and a state; `opposite` alone reads it.
@@ -1136,7 +1136,7 @@ def test_a_relation_that_a_channel_names_is_no_helper(fixture):
     assert len(errors) == 1 and "and ends is none" in errors[0]
 
 
-# A folded kind read through a view (RV-C49): the relation the view makes to hold the kind's table is the kind
+# A folded kind read through a view: the relation the view makes to hold the kind's table is the kind
 # under another name, and only the clause the compiler lowered for it is that.
 THEORY_RULES = """
 // joined: the two points a link joins; the link itself is the join between them.

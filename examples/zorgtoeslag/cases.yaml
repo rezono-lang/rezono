@@ -14,7 +14,7 @@
 # `uses` names the v0 constructs the case exercises (section numbers of the v0 reference on #350).
 # `evidence` says what kind of claim a case makes:
 #   current   the outcome for the pack as written today. Z20: the pack does not compile in v0 (one R015, the
-#             time selection; its two decision tables are read since RV-C31); and Z22: so only the file of
+#             time selection; its two decision tables are read); and Z22: so only the file of
 #             facts has a JSON form.
 #   future    the outcome once the pack runs on a supported fixture. Not a conformance claim yet: `blocked_by`
 #             names the current case that prevents running it (Z20), and these cases stay design input until
@@ -222,8 +222,8 @@ cases:
     note: >-
       the one R015 is why this pack cannot compile in v0 as implemented first, and why Z01-Z19 and Z21 cannot run
       yet; README G2. Its two decision tables, `threshold_rate` (`unique`) and `grounds` (`collect`), are read
-      into the tree since RV-C31 and get no diagnostic from the reader (README G3, docs/rezono/tables.md); they
-      are checked and evaluated once the pack's kinds reach the check as a schema (RV-X46, RV-C36)
+      into the tree and get no diagnostic from the reader (README G3, docs/rezono/tables.md); they
+      are checked and evaluated once the pack's kinds reach the check as a schema
     uses: [§10 diagnostics, §13 reserved, §5c table]
 
   - id: Z21
@@ -246,8 +246,7 @@ cases:
         - {file: zorgtoeslag.rezono, written: false, note: the R015 of Z20; a reserved construct has no form}
         - {file: facts.rezono, written: true, note: "fact tables with `n/a` and `unknown no_cover_report`, fact versions with `valid` and `known`"}
     note: >-
-      the JSON form is what the compiler reads of a module (contracts/rezono-module.yaml, RV-C32); a module with
+      the JSON form is what the compiler reads of a module (contracts/rezono-module.yaml); a module with
       an error has none, so nothing of `zorgtoeslag.rezono` reaches the compiler until its time selection is read
-      or the module is cut to what is (RV-X46). Its two decision tables no longer stand in the way: a table has
-      its form since RV-C31
+      or the module is limited to supported constructs. Both decision tables already have a JSON form
     uses: [§5 facts, §5a rule 5, §7b value states, §13 reserved]

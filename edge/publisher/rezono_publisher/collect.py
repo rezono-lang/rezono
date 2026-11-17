@@ -1,4 +1,4 @@
-"""The collector (RV-Z01): delete from a pack's store what no retained manifest needs, by reachability.
+"""The collector: delete from a pack's store what no retained manifest needs, by reachability.
 
   python -m rezono_publisher.collect PACK (--profile p | --store url) [--keep-main N] [--keep ID ...]
       [--open-proposals FILE] [--grace-seconds S] [--delete]

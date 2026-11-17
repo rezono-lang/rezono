@@ -13,4 +13,3 @@ expect:
   error: two kinds share one `iri`
 note: An element's IRI is `<kind iri>/<spelled id>` (§3.4), so it names one kind. `Team` declares the IRI that `Host` has by default.
 sources:
-- RV-X21 (arbiter, 11-11-2026)

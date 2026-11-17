@@ -1,4 +1,4 @@
-"""RV-K04: what one filtered role may read (rezono_checker/access.py), on a filter that got it wrong.
+"""What one filtered role may read (rezono_checker/access.py), on a filter that got it wrong.
 
 One small world, written by hand: nothing here comes from the compiler or the publisher. The role `guest` reads
 every person, the documents it was granted, and what follows from those. `world()` is what a correct filter
@@ -244,7 +244,7 @@ def test_the_checker_finds_what_the_filter_got_wrong(change, calc, findings, exa
 
 
 def test_a_role_the_pack_does_not_name_reads_nothing_in_full():
-    """RV-S10: `may_read(r, "person", x) :- role(r), person(x).` derives no row for a role without its own
+    """`may_read(r, "person", x) :- role(r), person(x).` derives no row for a role without its own
     `role` row, so it gives that role no person and nothing in full. What it was granted by name stays."""
     w = world()
     unnamed(w)
@@ -271,7 +271,7 @@ def per_person(table: str) -> dict:
 
 
 def test_a_calculation_view_is_full_only_when_every_relation_it_reads_is():
-    """RV-S26: full means a missing row is "none". The subject kind is full for the guest both times. Where
+    """Full means a missing row is "none". The subject kind is full for the guest both times. Where
     the calculation reads a relation the guest reads in part, the guest has no row of the view and the view is not
     full; a filter that still claims it is red. Where every source is full, so is the view, with every row."""
     w = per_person("doc__author")

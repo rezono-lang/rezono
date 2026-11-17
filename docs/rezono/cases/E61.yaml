@@ -41,4 +41,3 @@ note: '`count` is strict in its members as `sum`, `min` and `max` are (A.3): a v
   value.'
 sources:
 - expressions.md Appendix A.3
-- arbiter, 11-11-2026, on #696

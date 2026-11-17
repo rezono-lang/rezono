@@ -1,4 +1,4 @@
-"""G6 on `subsidy` (RV-S18): the path of a proposal, per role, up to the checked difference that role reads.
+"""G6 on `subsidy`: the path of a proposal, per role, up to the checked difference that role reads.
 
 Three proposals on one published main, each through `rezono_publisher.proposal` as propose.yml runs it (the
 delta on the pack at the base commit, the proposal manifest, then the difference per role):
@@ -37,7 +37,7 @@ from rezono_publisher import batch, difference, proposal, publish, store  # noqa
 HERE = Path(__file__).parent
 ROOT = HERE.parents[1]
 PACK, NAME = "examples/subsidy", "subsidy"
-SCHEME = "examples/subsidy-scheme"  # the definition the pack imports by path (RV-X35)
+SCHEME = "examples/subsidy-scheme"  # the definition the pack imports by path
 # The roles of the profile that publishes the pack, as the deployment has them.
 ROLES = yaml.safe_load((ROOT / "deploy" / "profiles" / "edge.yaml").read_text(encoding="utf-8"))["access"]["roles"]
 SIZE = {"format": "rezono.delta/1", "changes": [{"op": "set", "kind": "household", "key": "H001", "slot": "persons", "value": 5}]}

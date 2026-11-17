@@ -1,4 +1,4 @@
-"""A neutral definition with a kind tree, as one role's part of a publication holds it (RV-K26).
+"""A neutral definition with a kind tree, as one role's part of a publication holds it.
 
 A schema bundle with only the members `rezono_publication.publication` reads (contracts/bundle.yaml): a Part is an
 Item (`parent`), a Spare is a Part, and a Tool is an Item beside them. An item has a label and may sit inside

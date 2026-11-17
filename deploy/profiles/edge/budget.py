@@ -1,4 +1,4 @@
-"""The time budget of the published profile (RV-Z11; docs/ci.md, section 6).
+"""The time budget of the published profile (docs/ci.md, section 6).
 
 `publish.budget_minutes` of the profile is the time deploy/profiles/edge/publish.sh may take over every pack of
 `publish.packs`, none skipped, in promote's job `publish`. It has three readers and no other copy: publish.sh

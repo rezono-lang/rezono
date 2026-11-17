@@ -19,7 +19,7 @@ FUNCTIONS = ("count", "sum", "min", "max")
 COMPARISONS = ("eq", "ne", "lt", "le", "gt", "ge")
 ARITHMETIC = ("add", "sub", "mul", "div")
 # `days`: the whole number of days from the ISO date `right` (a constant) to the ISO date `left` (a text
-# variable), in the proleptic Gregorian calendar. Only a view's reading makes it (RV-C27): no rule file can
+# variable), in the proleptic Gregorian calendar. Only a view's reading makes it: no rule file can
 # write it, so hand-written rules still read text and whole numbers (R4).
 DAYS = "days"
 TYPES = ("string", "integer")
@@ -542,7 +542,7 @@ def _check_rule(rule, relations):
                 bind(t, c)
     positive = set(types)   # safety: negation and aggregate keys may only use these
     bound = set(positive)   # plus aggregate results and assignments, for conditions, assignments and the head
-    # A body of aggregates only is a rule (RV-M23): a count or a sum over a whole relation has no group key,
+    # A body of aggregates only is a rule: a count or a sum over a whole relation has no group key,
     # so nothing has to bind one. An empty body, and a body of negations only, has nothing to range over.
     if not (rule.aggregates if not rule.body else any(b.polarity == "positive" for b in rule.body)):
         raise IRError("no_positive_literal", f"{rule.id}: a body has a positive literal, or only aggregates")

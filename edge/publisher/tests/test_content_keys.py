@@ -1,4 +1,4 @@
-"""Content-addressed objects (RV-Z01 part 2): a role's snapshots, witness set, asset index and source set are keyed by
+"""Content-addressed objects: a role's snapshots, witness set, asset index and source set are keyed by
 the hash of their bytes, so an unchanged pack writes a manifest and its head only, a changed fact writes only the
 objects that changed, two roles with the same bytes share one object, and the collector then deletes what no retained
 manifest names while every retained manifest stays complete."""

@@ -50,6 +50,6 @@ rule.maximum_applied = The maximum of article 7 cut the award of {$a} from {$e} 
 reason.income_statement_not_received = {{No income statement has been received for the household of {$application}.}}
 reason.quote_not_received = {{No quote has been received for {$application}.}}
 
-# The Timeline of channels.yaml (RV-V31): its title and the name of its one phase.
+# The Timeline of channels.yaml: its title and the name of its one phase.
 timeline.parameter_validity = Validity of the scheme parameters
 timeline.parameter_validity.valid = valid

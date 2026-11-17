@@ -112,7 +112,7 @@ def test_a_known_date_drawn_as_unknown_is_found():
 
 
 def test_an_extension_and_a_mark_without_a_row_show_none_or_unknown_and_never_the_other():
-    """Three answers, each exact both ways (the arbiter, 11-11-2026): known, the role's row; none, where the
+    """Three answers, each exact both ways: known, the role's row; none, where the
     attribute is optional, its relation closed and read in full; unknown in every other case without a row."""
     for relation in (EXTENSION, MARK):
         # Known: the role's row is never left out and never unknown.

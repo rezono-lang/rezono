@@ -1,4 +1,4 @@
-"""Decision tables of modules written in Rezono, lowered to rules (docs/rezono/publication.md §9.1, RV-C36).
+"""Decision tables of modules written in Rezono, lowered to rules (docs/rezono/publication.md §9.1).
 
 A derived value with `table unique` under `extend K` lowers to the rules a rule file could state: a named outcome
 of K with one state for every element, the relation of its value, and an invariant that two rows

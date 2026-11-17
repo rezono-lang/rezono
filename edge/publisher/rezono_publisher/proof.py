@@ -9,7 +9,7 @@ three trees per relation:
     proof/forward/<p_relation>   rows: [p_key, c_relation, c_key, how, position]
 
 A `contributes` row of a `sum`, `min` or `max` has one element more, last in both trees: what its row gives
-the aggregate, the value text the witness's `contributors_sha256` is taken over (RV-C09; trace.steps, `valued`).
+the aggregate, the value text the witness's `contributors_sha256` is taken over (trace.steps, `valued`).
 
 The same tree carries the role's snapshots, one per relation, for a row or a key prefix (O(page), step 3):
 
@@ -46,8 +46,8 @@ from rezono_compiler import rules as ir
 from rezono_compiler import trace
 
 FORMAT = "rezono.proof/1"
-# 2: the calculation witnesses are in the trees too. 3: a `contributes` row may carry its value last
-# (RV-C09): such a row is longer than a page cursor on it, so a reader of format 2 must not read these trees.
+# 2: the calculation witnesses are in the trees too. 3: a `contributes` row may carry its value last:
+# such a row is longer than a page cursor on it, so a reader of format 2 must not read these trees.
 INDEX = "rezono.proof-index/3"
 PIECE = 64 * 1024  # bytes per piece, at most
 FANOUT = 128  # children per page, at most

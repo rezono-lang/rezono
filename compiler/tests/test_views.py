@@ -1,4 +1,4 @@
-"""Closed view definitions are readable/hashable; outside the profile that executes (RV-C27) they are refused."""
+"""Closed view definitions are readable/hashable; outside the profile that executes they are refused."""
 
 import copy
 import json

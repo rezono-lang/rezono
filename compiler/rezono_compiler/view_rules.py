@@ -177,7 +177,7 @@ def lower(view: TypedView, domain: Pack, theory: Pack, program: ir.Program,
     return ir.load(ir.with_strata(doc))
 
 
-# --- A view that executes (RV-C27) ----------------------------------------------------------------------------------
+# --- A view that executes ----------------------------------------------------------------------------------
 #
 # bind() lowers a view inside the profile of views.admit to ordinary rules and binds every rule of the program to
 # them. For each theory table the view maps (a kind, an attribute, an arrow) there is one derived relation; it holds

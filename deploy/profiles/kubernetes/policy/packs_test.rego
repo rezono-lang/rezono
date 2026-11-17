@@ -102,7 +102,7 @@ test_live_packs_other_than_the_engines_are_refused if refused(with_settings(put(
 
 test_a_live_pack_that_is_not_served_is_refused if refused(inputs([gate([]), config(put(settings, "REZONO_LIVE_PACKS", "pack-three")), other], ["examples/one", "examples/deep/two"], ["examples/three"]), "REZONO_LIVE_PACKS names pack-three, which REZONO_PACKS does not")
 
-# The roles (RV-S21): the gate's REZONO_ROLES against the profile's reader roles.
+# The roles: the gate's REZONO_ROLES against the profile's reader roles.
 roles_against(access) := array.concat(
 	[{"path": "/work/example.yaml", "contents": obj} | some obj in [gate([]), config(settings), other]],
 	array.concat([profile_with_roles(["examples/one", "examples/deep/two"], ["examples/one"], access)], packs),

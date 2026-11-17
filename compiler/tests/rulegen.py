@@ -250,7 +250,7 @@ if __name__ == "__main__":
 
 
 def days_program():
-    """One rule with the reading `days`, as a view makes it (RV-C27): f(x, n) :- e(x), p(x, d), n = days(d).
+    """One rule with the reading `days`, as a view makes it: f(x, n) :- e(x), p(x, d), n = days(d).
     No rule file can write the operator, so the document is written here."""
     def atom(relation, *terms):
         return {"relation": relation, "terms": list(terms)}

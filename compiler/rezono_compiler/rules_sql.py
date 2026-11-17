@@ -83,7 +83,7 @@ class RuleSQL:
         for i, a in enumerate(rule.aggregates):
             self._aggregate(i, a)
         for s in rule.assignments:
-            if s.op == "days":  # a view's reading (RV-C27): the engine's own date arithmetic, right to left
+            if s.op == "days":  # a view's reading: the engine's own date arithmetic, right to left
                 left, right = f"CAST({self.term(s.left, 'string')} AS DATE)", f"DATE {lit_sql(s.right, 'string')}"
                 diff = f"date_diff('day', {right}, {left})" if dialect == "duckdb" else f"TIMESTAMPDIFF(DAY, {right}, {left})"
                 self.env[s.var], self.types[s.var] = f"CAST({diff} AS BIGINT)", "integer"

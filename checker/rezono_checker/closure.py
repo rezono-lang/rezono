@@ -17,7 +17,7 @@ result a binding can carry, each assignment computes, each condition holds.
 
 Set at a time: a rule is one pipeline of sort-merge joins. Each relation is sorted by key once, and each atom reads
 it in one sequential pass; nothing looks a row up by key. A later version can therefore run the same pipeline over
-only the key-range pieces that changed (RV-Z03).
+only the key-range pieces that changed.
 """
 
 from dataclasses import replace
@@ -78,8 +78,8 @@ def check(rules, rows, read=()) -> list:
 
 
 def exhausted(rules, rows) -> list:
-    """One `bound_reached` for each counter that reached its bound on the complete snapshots
-    (RV-K18): the relation was cut off where its count stopped, which is an error and never a meaning.
+    """One `bound_reached` for each counter that reached its bound on the complete snapshots:
+    the relation was cut off where its count stopped, which is an error and never a meaning.
 
     The counter is found here from the rule's shape (`counter`), not taken from the compiler. The rows the rule
     would add beyond its bound are its instances with the conditions that bound the counter replaced by

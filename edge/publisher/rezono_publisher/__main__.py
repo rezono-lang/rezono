@@ -5,7 +5,7 @@
 
 With --views, check and write the views (rezono_publisher.views) before the manifest and its head.
 A view that shows more than its role reads exits 2 without exposing the new manifest.
-With --forms, each filtered role's publication form (rezono_publisher.forms, RV-K16), the same way: a form that is
+With --forms, each filtered role's publication form (rezono_publisher.forms), the same way: a form that is
 not what its role's files say exits 2 without exposing the new manifest. With --forms-after the manifest is
 published without them and its build names the forms library all the same, so a new library publishes the pack
 again; the forms follow (`python -m rezono_publisher.forms --newest`, job `forms` of promote.yml).
@@ -14,7 +14,7 @@ same pack and the same build (publish.unchanged): that manifest stays the newest
 
 Exit 0: published, or unchanged (prints the manifest id). Exit 2: a red check, no new manifest. Exit 1: an error.
 A filtered role of the profile that the pack's read rules give nothing is published with nothing to read, and
-named in a note on stderr (RV-S10): the profile and the pack disagree about the roles.
+named in a note on stderr: the profile and the pack disagree about the roles.
 The knowledge time comes from the caller (the time of the source commit), never from the clock.
 Seconds per phase go to stderr and the CI step summary (timing.py), never into the store.
 """

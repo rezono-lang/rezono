@@ -1,4 +1,4 @@
-"""Decision tables of modules written in Rezono (docs/rezono/publication.md §9.1, RV-C36): a derived value with
+"""Decision tables of modules written in Rezono (docs/rezono/publication.md §9.1): a derived value with
 `table unique` lowers to a named outcome, the relation of its value and an invariant, as rules a rule file could
 state. The rules are run on DuckDB for each state of an input; what this slice does not lower is refused at its
 line. The modules are written as `rezono/` writes their form, with places laid out by hand (test_rezono_module).
@@ -170,12 +170,12 @@ alpha_size_band(x, "unknown", "no_row_applies") :- alpha(x), !alpha_size_band_ap
 REFUSALS = {
     "first": ([LEVEL, TONE, STANDING, ETA, {"extend": "Eta", "derived": [table(["level"], ([lit("valid")], "good"),
                                                                          policy="first")]}],
-              55, "a table `first` is not lowered yet (the second part of RV-C36)"),
+              55, "a table `first` is not lowered yet"),
     "total": ([LEVEL, TONE, STANDING, ETA, {"extend": "Eta", "derived": [STANDING_TABLE | {"totality": "total"}]}],
               55, "`total` on a table is not lowered"),
     "a value without a table": ([{"extend": "Alpha", "derived": [{"derived": "ok", "type": "Bool",
                                                                    "value": lit("true")}]}],
-                                15, "a derived value is not lowered yet (the second part of RV-C33)"),
+                                15, "a derived value is not lowered yet"),
     "a kind the pack lacks": ([STANDING, {"extend": "Omega", "derived": [table(["x"], ([lit("1")], "good"))]}],
                               20, "Omega is not a kind of this pack"),
     "a path": ([STANDING, {"extend": "Beta", "derived": [{"derived": "standing", "type": "Standing", "table": {

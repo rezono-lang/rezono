@@ -12,8 +12,8 @@ Everything comes from Git and the inputs, never from the clock or the branch:
 - the facts are the canonical writer's output for the delta on the pack at the base commit, in a private
   work dir (git worktree), so no code or file of the proposal branch is read. The job runs main's code;
 - the origin of a value the delta writes in a fact file with a source companion is the verified proposer at
-  the instant the gate took the proposal (`--co-author`, `--proposed-at`; RV-M17). A proposal is of whoever
-  wrote it first (RV-M21), so the job passes the two the proposal's commit records, as `rezono_githost.propose`
+  the instant the gate took the proposal (`--co-author`, `--proposed-at`). A proposal is of whoever
+  wrote it first, so the job passes the two the proposal's commit records, as `rezono_githost.propose`
   read them from the head of the proposal branch (its `--stated-out` file), not those of the dispatch that
   happens to run: the manifest's facts and sources are the bytes of the branch, also for a repeat by someone
   else. This command reads no branch itself. Without both it refuses before it reads anything.

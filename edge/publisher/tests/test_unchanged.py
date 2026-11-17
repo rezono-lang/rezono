@@ -1,4 +1,4 @@
-"""RV-M15: a pack whose newest main manifest was made from the same pack and build is not published again.
+"""A pack whose newest main manifest was made from the same pack and build is not published again.
 
 First on synthetic epochs (what counts as the same input), then through the command line on the compiler's
 neutral test pack in a temp Git repository (needs the compiler and DuckDB): nothing is computed or written

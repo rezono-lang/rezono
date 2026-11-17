@@ -25,4 +25,3 @@ note: host-c's owner is not among the teams listed, and Team is open, so `in` is
   unknown by its own row; host-b and host-d have no owner.
 sources:
 - expressions.md §7 (sets and absence), formerly §13 point 13
-- arbiter, 11-11-2026, on #691 and #696

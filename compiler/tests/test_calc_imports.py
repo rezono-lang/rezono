@@ -185,7 +185,7 @@ def with_findings(at: Path, text: str = FINDINGS) -> Path:
 
 
 def test_a_rule_reads_the_selection_of_the_calculation_its_pack_brings(tmp_path):
-    """RV-C51: a finding of the pack that holds the calculation, beside it, when another pack imports both.
+    """A finding of the pack that holds the calculation, beside it, when another pack imports both.
     The rule IR is that of the same files in one pack, but for the module and the file it names; on the
     batch backend the rule reads the selection after the calculation (`batch.phases`), and given the rows
     of the selection it reads them as an input like a table."""

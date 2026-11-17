@@ -1,4 +1,4 @@
-"""Reader questions (RV-C04; docs/gui.md, "Reader questions"): `reader:` in questions.yaml, every name checked
+"""Reader questions (docs/gui.md, "Reader questions"): `reader:` in questions.yaml, every name checked
 against the pack, the proof resolved, the messages required in every language, and the list in the bundle. The
 minimal fixture with std-explain imported."""
 

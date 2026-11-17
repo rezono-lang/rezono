@@ -1,4 +1,4 @@
-"""RV-K03: the filter and the check on it share no code.
+"""The filter and the check on it share no code.
 
 The publisher's filter decides what a role gets (rezono_publisher.access); the checker derives the same on its
 own and compares (rezono_checker.access). That is a check only while the two do not read the question through the
@@ -80,7 +80,7 @@ def test_both_readings_agree_on_a_calculation_program(path):
     assert calc_scope.published_views(ir) == checker_calc.published_views(ir)
     for version in [None, *(v["id"] for v in ir.get("versions", ()))]:
         assert calc_scope.reads(ir, version) == checker_calc.reads(ir, version), version
-    # What each view rests on (RV-S26): the same sources, and each view accounted for by the same reading.
+    # What each view rests on: the same sources, and each view accounted for by the same reading.
     assert calc_scope.view_sources(ir) == checker_calc.sources(ir)
     # A witness of each kind of view: of a rule with a chosen version, of a rule without one, of a version itself.
     witnesses = [{"conclusion": {"relation": r["view"]}, "rule": r["rule"], "version": v.partition("@")[2]}

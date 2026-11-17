@@ -34,13 +34,13 @@ PATH = re.compile(r"^rezono/[a-z][a-z0-9_]*(/[a-z][a-z0-9_]*)*\.(rezono|json)$")
 TYPES = {"Date": "date", "Text": "string"}
 # Declarations this slice does not lower, by the member that names them: what, and where the page says so.
 REFUSED = {
-    "unit": ("a unit is not lowered yet (RV-C38)", "§6"),
-    "rounding": ("a rounding is not lowered yet (RV-C38)", "§6"),
-    "param": ("a parameter is not lowered yet (RV-C37)", "§6"),
+    "unit": ("a unit is not lowered yet", "§6"),
+    "rounding": ("a rounding is not lowered yet", "§6"),
+    "param": ("a parameter is not lowered yet", "§6"),
     "reason": ("a reason declaration is not lowered (no ticket yet)", "§6"),
-    "check": ("a check statement is not lowered yet (RV-C40)", "§6"),
+    "check": ("a check statement is not lowered yet", "§6"),
 }
-DERIVED = ("a derived value is not lowered yet (the second part of RV-C33)", "§5.4")
+DERIVED = ("a derived value is not lowered yet", "§5.4")
 EXTEND = {"extend", "derived"}
 KIND = {"kind", "world", "applies", "sealed", "slots", "derived"}
 SLOT = {"slot", "type", "card"}
@@ -272,7 +272,7 @@ def lower(pack_dir: Path, d: Declared, form: dict, pack: str, owners: dict[str, 
             extend(decl, at, imported, refuse)
         elif "fact" in decl:
             if "columns" in decl:
-                refuse(at, "a fact table is not lowered yet (the second part of RV-C33)", "§5.3")
+                refuse(at, "a fact table is not lowered yet", "§5.3")
             else:
                 refuse(at, "a fact row is not lowered (no ticket yet)")
         else:
@@ -293,10 +293,10 @@ def kind(decl: dict, at: str, own: dict, owners: dict[str, list[str]], uses: set
         refuse(at, "an open kind is refused: a kind says `world closed`", "§5.1")
         ok = False
     if "applies" in decl:
-        refuse(f"{at}/applies", "`applies` is not lowered yet (RV-C37)")
+        refuse(f"{at}/applies", "`applies` is not lowered yet")
         ok = False
     if "sealed" in decl:
-        refuse(at, "`sealed at` is not lowered yet (RV-C41)")
+        refuse(at, "`sealed at` is not lowered yet")
         ok = False
     for k, _ in enumerate(decl.get("derived") or []):
         refuse(f"{at}/derived/{k}", *DERIVED)
@@ -347,7 +347,7 @@ def extend(decl: dict, at: str, imported: bool, refuse) -> None:
         if not isinstance(t, dict):
             refuse(here, *DERIVED)
         elif t.get("table") != "unique":
-            refuse(here, f"a table `{t.get('table')}` is not lowered yet (the second part of RV-C36)", "§9.1")
+            refuse(here, f"a table `{t.get('table')}` is not lowered yet", "§9.1")
         elif "totality" in dv:
             refuse(here, "`total` on a table is not lowered: its proof is the check of `rezono/` (tables.md §7, "
                          "point 3)", "§9.1")
