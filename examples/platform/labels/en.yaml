@@ -1,0 +1,66 @@
+zone: zone
+cluster_class: cluster class
+platform_role: platform role
+platform_role.zone: zone
+platform_role.cluster_class: cluster class
+platform_role.runs_images: runs images
+function: function
+function.recovery_allowed: recovery allowed
+function.open_by_design: open by design
+product: product
+offer: offer
+offer.product: product
+offer.function: function
+offer.port: port
+demand: demand
+demand.product: product
+demand.function: function
+service: service
+service.product: product
+service.role: role
+service.step: step
+release: release
+release.product: product
+release.released_on_day: released on day
+release.stable: stable
+pin: pin
+pin.service: service
+pin.release: release
+choice: choice
+choice.service: service
+choice.function: function
+choice.provider: provider
+artifact: artifact
+artifact.for_service: for service
+artifact.built_by: built by
+artifact.signed: signed
+provides: provides
+provider: provider
+asks: asks
+chosen: chosen
+providers: providers
+needs: needs
+ambiguous_provider: ambiguous provider
+unmet_need: unmet need
+zone_of: zone of
+on_cluster: on cluster
+must_separate: must separate
+flow: flow
+crossing: crossing
+firewall_rule: firewall rule
+in_zone_policy: in zone policy
+flow_from_step: flow from step
+stable_release: stable release
+has_stable: has stable
+newest_day: newest day
+pinned: pinned
+runs: runs
+behind_newest: behind newest
+outside_reaches_inside: outside reaches inside
+recovery_reached: recovery reached
+recovery_reaches_out: recovery reaches out
+authenticates: authenticates
+unauthenticated_target: unauthenticated target
+verified: verified
+unverified_supply: unverified supply
+build_reaches_tenant: build reaches tenant
