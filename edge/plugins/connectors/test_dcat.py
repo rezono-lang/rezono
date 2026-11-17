@@ -101,7 +101,7 @@ def test_the_documents_a_form_holds_to_are_beside_the_schema_id():
     assert all(held[d].startswith(rdf.schema_iri(FIXTURE)) for d in ("context", "shapes", "contract"))
 
 
-@pytest.mark.xfail(strict=True, reason="docs/publication/l0.md is not in the standalone repository yet")
+@pytest.mark.xfail(strict=True, reason="Restore section 7 of docs/publication/l0.md from the publication specification. The test needs its media-type table as an independent reference for the DCAT connector.")
 def test_the_media_types_are_those_of_the_specification():
     """§7 of docs/publication/l0.md is the one place that names them."""
     text = (ROOT / "docs" / "publication" / "l0.md").read_text(encoding="utf-8")
