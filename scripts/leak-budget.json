@@ -1,0 +1,14 @@
+{
+  "edge/publisher/rezono_publisher/kept.py": {
+    "old_name": 2
+  },
+  "publication/rezono_publication/l0.py": {
+    "old_name": 2
+  },
+  "publication/rezono_publication/statement.py": {
+    "old_name": 3
+  },
+  "publication/tests/test_statement.py": {
+    "old_name": 4
+  }
+}
