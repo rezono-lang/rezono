@@ -13,7 +13,7 @@ the rule IR, and shares no code with the publisher's filter (edge/publisher/test
   readable (`not_readable`); which calculated rows a role sees is the calculation check's.
 - A kind is full for the role if a read rule grants it without a condition: with the role as a constant
   and only `K(x)`, or `may_read(r, "K", x) :- role(r), K(x).` for a role the complete `role` rows hold (for
-  any other role that rule derives nothing, so nothing in full either; RV-S10), or
+  any other role that rule derives nothing, so nothing in full either), or
   `may_read(r, "K", x) :- role__capability(r, "c"), K(x).` for a role the complete `role__capability` rows map
   to capability `c` (roles in two layers, B19). Subkinds follow. Each such grant is evidence: the rule and the
   row it rests on (`grants`). The evidence must be the one the publisher hands over (`evidence_mismatch`), so
@@ -21,7 +21,7 @@ the rule IR, and shares no code with the publisher's filter (edge/publisher/test
   Every element of a full kind must be readable (`full_not_readable`). A base relation is full if each of
   its kind columns is; a derived relation if every base relation it reaches through the rules is. A
   calculation view is full if its subject kind is, every relation that a version of its rule reads is, and
-  every calculation view a version takes as a premise is (RV-S26); never when the program does not account
+  every calculation view a version takes as a premise is; never when the program does not account
   for it or a rule reads it. The set must be the one the publisher marks (`full_mismatch`), and the role's
   proofs are checked against it.
 - A derived row is the role's if it is derivable from what the role reads: among all witness instances of
@@ -136,7 +136,7 @@ def full_relations(doc: dict, columns: dict, kinds_full: set, relations: set, wi
     one reaches through its rules (positive, negative, aggregated) that is not derived must be a base
     relation whose kind columns are all full, and not withheld. `calc` gives per calculation view what it
     rests on (`calc.sources`): such a view is no base relation. It is full if its subject kind is and each
-    of its sources is, a premise view by this same rule; without known sources it is not (RV-S26)."""
+    of its sources is, a premise view by this same rule; without known sources it is not."""
     calc = calc or {}
     derived = {r["name"] for r in doc.get("relations", ()) if r.get("role") == "derived"}
     calc_inputs = {r["name"] for r in doc.get("relations", ()) if r.get("role") == "calc"}

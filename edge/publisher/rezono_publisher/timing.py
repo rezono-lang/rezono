@@ -72,7 +72,7 @@ def report(label: str, out=sys.stderr, summary: str | None = None) -> dict[str, 
     lines = [f"time {label} {p} {s:.3f}s {share(s)}" for p, s in times.items()] + [f"time {label} total {total:.3f}s"]
     print("\n".join(lines), file=out)
     # The same lines for deploy/profiles/edge/publish.sh, which names the slowest pack's largest phase when the
-    # profile is over its time budget (RV-Z11; deploy/profiles/edge/budget.py). A log, never the store.
+    # profile is over its time budget (deploy/profiles/edge/budget.py). A log, never the store.
     if os.environ.get("REZONO_TIMES_FILE"):
         with open(os.environ["REZONO_TIMES_FILE"], "a", encoding="utf-8") as f:
             f.write("\n".join(lines) + "\n")

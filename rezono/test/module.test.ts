@@ -175,7 +175,7 @@ test('a line under a line that has no block of its own is an R000 where it stand
 
 test('a decision table is read whole or refused: a second table, and a header that does not end in its output', () => {
 	const table = (...lines: string[]) => codes(['pack p', 'extend K', '  derived a: T', ...lines, ''].join('\n'));
-	// A table is read since RV-C31 (docs/rezono/tables.md): it is no longer R015.
+	// A table is read (docs/rezono/tables.md): it is no longer R015.
 	assert.deepEqual(table('    table first', '      | b | -> a |', '      | - | c |'), []);
 	// A second table would replace the first one unseen.
 	assert.deepEqual(table('    table first', '      | b | -> a |', '      | - | c |', '    table collect', '      | d | -> a |'), ['R000 table']);

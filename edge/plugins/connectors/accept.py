@@ -14,7 +14,7 @@ reader, the same oracles as the tests, now on a real dataset instead of a fixtur
 A connector that refuses the schema with an open question (Q13, Q20) is reported as `refused`, with the reason:
 that is the checklist's "refuses, and never guesses", not a failure. Anything else that goes wrong is `failed`.
 
-`published(objects, at)` does the same on what the publisher wrote beside a role's form (RV-K20): the bytes the
+`published(objects, at)` does the same on what the publisher wrote beside a role's form: the bytes the
 role fetched through its index, each export against its reader, the DCAT entry's addresses against the index. It
 runs in a pack's tests on a published store (examples/subsidy/test_subsidy_forms.py), never in the publish step.
 
@@ -204,7 +204,7 @@ def _prov_witnesses(g: Graph) -> dict:
 
 
 def published(objects: dict, at: str) -> dict:
-    """The standards exports of one role's published form (RV-K20), each checked by its independent reader on the
+    """The standards exports of one role's published form, each checked by its independent reader on the
     bytes the role fetched: `objects` maps every name the role's index lists to its bytes, `at` is the address the
     role fetched them under (the index's own directory). Per export `{"state", "detail"}`, as `accept`."""
     index = json.loads(objects["index.json"])

@@ -12,7 +12,7 @@ Store layout, per pack:
   <pack>/manifests/<manifest>.json
   <pack>/heads/<10^19-1-epoch>.json   per main manifest, after it: the newest sorts first (pointers.py)
   <pack>/epochs/<epoch>/…, <pack>/bases/<base>/…   pointers to variants, diagnoses and proposals (pointers.py)
-  <pack>/objects/<sha256>.json   an object keyed by the SHA-256 of its bytes (RV-Z01), shared by roles and
+  <pack>/objects/<sha256>.json   an object keyed by the SHA-256 of its bytes, shared by roles and
                                  epochs: a role's snapshot of a relation ([{"key": [...]}, ...] sorted by key), the
                                  proofs chosen for a role (one per derived row it reads), a role's asset index (the
                                  images its image cells name, with hash, source and licence) or its source set (the
@@ -354,7 +354,7 @@ def named(*manifests: dict | None) -> set[str]:
 
 
 def object_key(pack: str, data: bytes) -> str:
-    """Where an object of a publication is stored: under the SHA-256 of its bytes (RV-Z01)."""
+    """Where an object of a publication is stored: under the SHA-256 of its bytes."""
     return f"{pack}/objects/{sha256(data)}.json"
 
 
@@ -365,7 +365,7 @@ ROLE_FILES = (("snapshots", "relations/{relation}.json"), ("witnesses", "witness
 def role_objects(store, pack: str, manifest: str, role: str) -> dict[str, str]:
     """The store keys of one role's objects in a published manifest, by what each is: `relations/<relation>.json`,
     `witnesses.json`, `assets.json`, `sources.json`. Found as every reader finds them, through the manifest's
-    entries and their uris (RV-Z01): a key says nothing of its role or its manifest. Empty without the manifest."""
+    entries and their uris: a key says nothing of its role or its manifest. Empty without the manifest."""
     data = store.get(f"{pack}/manifests/{manifest}.json")
     if data is None:
         return {}
@@ -564,8 +564,8 @@ def newest_main(store, pack: str) -> dict | None:
 
 
 def unchanged(head: dict | None, *, pack_sha256: str, engine: dict, build: dict, roles: dict[str, str]) -> bool:
-    """True when the main manifest `head` was made from exactly what a new epoch would be made from now
-    (RV-M15): the same pack, every file of it, facts included (its imports are pinned in its pack.yaml); the
+    """True when the main manifest `head` was made from exactly what a new epoch would be made from now:
+    the same pack, every file of it, facts included (its imports are pinned in its pack.yaml); the
     same engine; and the same build record (the compiler, the checker, the publisher, every library, the
     runtime, the lock, the views' code and the profile's roles). The same input gives the same bytes (AGENTS.md
     rule 3), so the new epoch would give every role the rows, proofs and views it has; only the epoch, the

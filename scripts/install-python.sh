@@ -14,7 +14,7 @@
 # With --only NAME just the one stanza NAME of the lock goes in, with the lock's hashes, as a wheel only
 # (--only-binary :all:, so nothing is built and no build requirement comes from the index), without this
 # repository's packages and without a cached virtualenv:
-#   scripts/install-python.sh --only pyyaml requirements/run.txt   (the promotion gates, RV-S08)
+#   scripts/install-python.sh --only pyyaml requirements/run.txt   (the promotion gates)
 set -euo pipefail
 only=
 if [ "${1:-}" = --only ]; then only=$2; shift 2; fi

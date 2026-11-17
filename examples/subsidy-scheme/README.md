@@ -1,6 +1,6 @@
 # Example pack `subsidy-scheme`: the scheme as a definition
 
-The Energy-Saving Subsidy Regulation 2026 of a fictional municipality, as a fact-free pack (`theory: true`): what several municipalities could share. It is the definition that [`subsidy`](../subsidy/README.md) imports by path and hash (RV-X35, [shared definitions](../../docs/ring2/shared-definitions.md)). Everything here is synthetic.
+The Energy-Saving Subsidy Regulation 2026 of a fictional municipality, as a fact-free pack (`theory: true`): what several municipalities could share. It is the definition that [`subsidy`](../subsidy/README.md) imports by path and hash ([shared definitions](../../docs/ring2/shared-definitions.md)). Everything here is synthetic.
 
 ## What is in it, and what is not
 

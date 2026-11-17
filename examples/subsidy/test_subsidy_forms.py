@@ -1,17 +1,17 @@
-"""The subsidy pack's publication forms, as the publisher writes them (RV-K16; rezono_publisher.forms).
+"""The subsidy pack's publication forms, as the publisher writes them (rezono_publisher.forms).
 
 Subsidy is the first published pack whose roles read differently: the case officer reads the payment ledger,
-the policy adviser does not. The acceptance of RV-K16 on it:
+the policy adviser does not. The publication form checks:
 
 - each role's form verifies from its own files alone: the objects its index names, nothing else;
 - non-interference (R6, the two-world test of #666): two packs that differ only in a ledger payment, which the
   policy adviser does not read, give the policy adviser the same bytes and the case officer other bytes;
 - the complete form is written nowhere: no `publication/` object outside the filtered roles' own prefixes.
 
-And of RV-K20: each filtered role fetches its standards exports and their loss lists through its index, and
+Each filtered role fetches its standards exports and their loss lists through its index, and
 each passes its independent reader (`edge/plugins/connectors/accept.py`, `published`) on those bytes.
 
-And of RV-K19: each filtered role fetches its tables, one object per table and form, and the library recomputes the
+Each filtered role fetches its tables, one object per table and form, and the library recomputes the
 dataset hash from the tables of one form alone; DuckDB, an independent reader, reads each Parquet table with the
 same number of rows. The two-world test above covers the tables too: they are among the objects compared.
 
@@ -95,7 +95,7 @@ def test_each_role_s_form_verifies_from_its_own_files_alone(world):
 
 
 def test_each_role_s_epoch_statement_says_what_its_files_say(world):
-    """RV-X41: per filtered role one statement, read back from the bytes the role fetches through its index alone;
+    """Per filtered role one statement, read back from the bytes the role fetches through its index alone;
     the two roles read differently, so their statements differ, and neither names the pack hash."""
     s, m = world
     made = {}
@@ -132,7 +132,7 @@ def test_a_ledger_payment_does_not_change_the_policy_adviser_s_form(world, tmp_p
     other, _ = published(d, tmp_path / "store")
     assert objects(other, "policy_adviser") == objects(s, "policy_adviser")
     assert objects(other, "case_officer")["rows.json"] != objects(s, "case_officer")["rows.json"]
-    # RV-X41: the epoch statement too: the policy adviser's is the same bytes, the case officer's is not.
+    # The epoch statement too: the policy adviser's is the same bytes, the case officer's is not.
     assert objects(other, "policy_adviser")[statement.NAME] == objects(s, "policy_adviser")[statement.NAME]
     assert objects(other, "case_officer")[statement.NAME] != objects(s, "case_officer")[statement.NAME]
 
@@ -157,7 +157,7 @@ def test_each_role_s_form_marks_the_scheme_parameters_as_decided_values(world):
 
 
 def test_each_role_s_form_carries_the_base_the_pack_declares(world):
-    # RV-X30: pack.yaml `iri:` gives the schema document its base, and every element its IRI under it.
+    # Pack.yaml `iri:` gives the schema document its base, and every element its IRI under it.
     s, _ = world
     rdf = pytest.importorskip("rezono_publication.rdf")
     for role in FILTERED:
@@ -169,7 +169,7 @@ def test_each_role_s_form_carries_the_base_the_pack_declares(world):
 
 
 def test_each_role_s_standards_exports_pass_their_readers(world):
-    """RV-K20: the exports and their loss lists, as the role fetches them, each against its independent reader."""
+    """The exports and their loss lists, as the role fetches them, each against its independent reader."""
     pytest.importorskip("pyshacl")
     pytest.importorskip("open_data_contract_standard")
     spec = importlib.util.spec_from_file_location("rezono_accept", HERE.parents[1] / "edge" / "plugins" / "connectors"
@@ -188,7 +188,7 @@ def test_each_role_s_standards_exports_pass_their_readers(world):
 
 
 def test_each_role_s_tables_give_its_dataset_hash_alone(world, tmp_path):
-    """RV-K19: the Arrow and the Parquet tables, as the role fetches them, each form by itself."""
+    """The Arrow and the Parquet tables, as the role fetches them, each form by itself."""
     import duckdb
 
     s, _ = world

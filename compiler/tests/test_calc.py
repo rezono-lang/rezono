@@ -133,7 +133,7 @@ def test_semantics_on_hand_written_cases():
     assert v["lazy"]["i0"] == ("known", "1") and v["lazy"]["i1"] == ("invalid", "division by zero in ratio")
     assert v["short"]["i0"] == ("not_applicable", "fact item.note does not apply")
     assert v["short"]["i1"] == ("known", "false")  # a known false decides an and
-    # W8 (RV-K12): a step beyond the bound has a value Rezono cannot hold: unknown, naming the bound and the
+    # W8: a step beyond the bound has a value Rezono cannot hold: unknown, naming the bound and the
     # operator; a division by zero stays invalid (lazy). What rests on such a step is unknown too, and no
     # definition is chosen on a condition that went beyond the bound.
     assert v["overflow"]["i0"] == ("unknown", "beyond the bound of W8 in add")
@@ -285,7 +285,7 @@ def as_lines(value) -> str:
 
 def test_the_checkers_frozen_example_is_what_the_compiler_gives():
     """The planted-fault tests of the calculation check run with the checker, on this example frozen as data
-    (checker/tests/test_calc.py, RV-K04): they do not import the compiler. Here the example is compiled again
+    (checker/tests/test_calc.py): they do not import the compiler. Here the example is compiled again
     and held against those files, so they cannot go stale unseen. `REZONO_WRITE_CHECKER_FIXTURE=1` writes them."""
     for name, want in frozen().items():
         if os.environ.get("REZONO_WRITE_CHECKER_FIXTURE"):

@@ -40,7 +40,7 @@ POW_BITS = 6  # exponents below 2**6 are multiplied out; a larger one overflows 
 
 
 def beyond(op: str) -> str:
-    """W8 (arbiter, 11-11-2026): the reason of a step beyond the bound, naming the bound and the operator."""
+    """W8: the reason of a step beyond the bound, naming the bound and the operator."""
     return f"beyond the bound of W8 in {op}"
 
 

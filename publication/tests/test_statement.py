@@ -1,4 +1,4 @@
-"""The epoch statement of one role (RV-X41; rezono_publication.statement; docs/ring2/signing.md).
+"""The epoch statement of one role (rezono_publication.statement; docs/ring2/signing.md).
 
 On the collection of l0.md §3.1 (case R01 with the fixture schema): the row tree against the RFC 9162 test
 vectors (the oracle of signing.md, "How it is checked"), the statement's bytes, and the reader's check: a changed

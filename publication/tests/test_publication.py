@@ -1,4 +1,4 @@
-"""A role's form of a definition with a kind tree (RV-K26; docs/publication/l0.md §2.1 `parent`, §3.1).
+"""A role's form of a definition with a kind tree (docs/publication/l0.md §2.1 `parent`, §3.1).
 
 The fixture is neutral and hand-made (`subkind_fixture`): no compiler and no engine. Each form is read by the
 library's reader, hashed, and held against the role's own rows, as the publisher does before it writes one

@@ -56,5 +56,4 @@ expect:
     iri: https://rezono.example/fixture/Team/~C3~A9~E2~82~AC
 note: The spelling of an id in an IRI (§3.4). Each IRI reads back to its id, and to no other.
 sources:
-- RV-X21 (arbiter, 11-11-2026)
 - docs/ring2/iris.md §4.1

@@ -1,4 +1,4 @@
-# Ruff, the Python linter of CI (RV-I05, docs/ci.md section 5). scripts/lint.sh runs the F rules (pyflakes:
+# Ruff, the Python linter of CI (docs/ci.md section 5). scripts/lint.sh runs the F rules (pyflakes:
 # an unused import or variable, an undefined or redefined name) over every Python file and fails on any; it
 # reports a wider set as warnings only.
 target-version = "py313"

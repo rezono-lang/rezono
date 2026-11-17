@@ -1,4 +1,4 @@
-"""docs/tutorial.md runs as written (RV-D05): its commands, on a copy of the pack, give what the page says.
+"""docs/tutorial.md runs as written: its commands, on a copy of the pack, give what the page says.
 
 The test reads the page itself. Every `python` command in a bash block runs in order; the scenario the
 reader is asked to write is taken from the page and saved where the page says; and every line the page
@@ -19,7 +19,7 @@ pytest.importorskip("rezono_compiler")
 
 HERE = Path(__file__).parent
 ROOT = HERE.parents[1]
-SCHEME = HERE.parent / "subsidy-scheme"  # the definition the pack imports (RV-X35)
+SCHEME = HERE.parent / "subsidy-scheme"  # the definition the pack imports
 PAGE = (ROOT / "docs" / "tutorial.md").read_text(encoding="utf-8")
 SCENARIO = "examples/subsidy/scenarios/5-higher-allowance.yaml"
 COMMANDS = ["python -m rezono_compiler check examples/subsidy",

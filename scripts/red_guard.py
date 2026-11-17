@@ -10,8 +10,8 @@ import tokenize
 
 
 POLICY = {
-    ".github/workflows/red-policy.yml", ".github/workflows/red-status.yml",
-    "scripts/red_guard.py", "scripts/red_status.py", "scripts/test_red_guard.py",
+    ".github/workflows/red-policy.yml",
+    "scripts/red_guard.py", "scripts/test_red_guard.py",
 }
 EVIDENCE_DIRS = {
     "test", "tests", "__tests__", "__snapshots__", "fixture", "fixtures",

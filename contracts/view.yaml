@@ -137,7 +137,7 @@ classes:
       tones: {multivalued: true, range: ToneSign, inlined_as_list: true, description: "Evaluation signs. Legacy keys without these keep their status colour roles."}
       hues: {multivalued: true, range: HueRole, inlined_as_list: true, description: "Nominal palette places, not ranks or pack bindings. More than eight warns, never truncates."}
       signs: {multivalued: true, range: LegendSign, inlined_as_list: true, description: "The epistemic legend: at most one entry per reserved sign. A key without it draws none of them."}
-      differences: {multivalued: true, range: DifferenceSign, inlined_as_list: true, description: "One sign per difference, the same on every sheet that draws one (RV-C02). A key without them draws no difference."}
+      differences: {multivalued: true, range: DifferenceSign, inlined_as_list: true, description: "One sign per difference, the same on every sheet that draws one. A key without them draws no difference."}
       fact_typography: {range: Typography, required: true, description: Type style for facts.}
       conclusion_typography: {range: Typography, required: true, description: Type style for conclusions.}
       strokes: {multivalued: true, range: StrokeToken, inlined_as_list: true, description: "Line widths per role: line, proof, hairline, frame, selection."}
@@ -580,7 +580,7 @@ classes:
 
   ComparisonPart:
     description: >-
-      A Report part (docs/gui.md, Comparison; RV-U19): one derived relation that compares the pack with a
+      A Report part (docs/gui.md, Comparison): one derived relation that compares the pack with a
       reference source, counted in three classes by the verdict column of its rows, each count a
       link to the rows of that class with their proofs. The mapping of verdicts to classes is pack data; the
       compiler stops a pack whose rules can give a verdict that no class names (unknown is explicit).

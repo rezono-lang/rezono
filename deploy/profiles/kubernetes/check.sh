@@ -128,7 +128,7 @@ for overlay in "${overlays[@]}"; do
 	flags=(--no-color --combine --policy "$here/policy")
 	[ $live -eq 1 ] && flags+=(--fail-on-warn)
 	"$conftest" test "${flags[@]}" "$work/$overlay.yaml" || failed=1
-	# The gate of this render serves the packs the profile publishes (policy/packs.rego, RV-S15).
+	# The gate of this render serves the packs the profile publishes (policy/packs.rego).
 	"$conftest" test --no-color --combine --namespace packs --policy "$here/policy" 		"$work/$overlay.yaml" "$root/deploy/profiles/kubernetes.yaml" "${pack_files[@]}" || failed=1
 done
 

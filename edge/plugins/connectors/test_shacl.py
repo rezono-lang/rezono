@@ -312,7 +312,7 @@ def test_what_the_list_calls_dropped_is_not_in_the_shapes():
     assert "Not assigned" not in shacl.to_turtle(REASONS)
 
 
-# RV-K26 (§2.1 `parent`): a kind tree
+# (§2.1 `parent`): a kind tree
 def test_a_dataset_with_a_subkind_conforms_also_closed_under_subclass():
     """The view says `rdfs:subClassOf`, so a validator holds an element of the subkind to its parent's shape too:
     the slots it restates are the same properties, and the parent's closed shape lets the subkind's own pass."""

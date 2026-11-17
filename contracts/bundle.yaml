@@ -111,7 +111,7 @@ classes:
       channels: {range: Channels, required: true, inlined: true}
       jurisdictions: {multivalued: true, description: Reserved for std-jurisdiction; empty in M1.}
       questions: {range: Question, multivalued: true, inlined_as_list: true, description: "The explanation questions (contracts/explain.yaml): imported ones first, then the pack's own. Absent when there are none."}
-      reader_questions: {range: ReaderQuestion, multivalued: true, inlined_as_list: true, description: "The reader questions (contracts/explain.yaml, RV-C04): imported ones first, then the pack's own. Absent when there are none."}
+      reader_questions: {range: ReaderQuestion, multivalued: true, inlined_as_list: true, description: "The reader questions (contracts/explain.yaml): imported ones first, then the pack's own. Absent when there are none."}
       reasons: {range: ReasonIri, multivalued: true, inlined_as_list: true, description: "The IRI of every reason code of the pack's named outcomes, by code (docs/ring2/iris.md section 4). Only when pack.yaml declares `iri:` (contracts/pack.yaml, PackIri); absent otherwise."}
 
   PackInfo:

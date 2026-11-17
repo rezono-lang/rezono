@@ -8,7 +8,7 @@ matches the fixed positions of the aggregate atom under the witness's bindings),
 hold exactly those rows, in order, in pieces within the limits, each named by the sha256 of its bytes, with
 no piece left over.
 
-A `contributes` edge of a `sum`, `min` or `max` carries what its row gives the aggregate (RV-C09): the cell
+A `contributes` edge of a `sum`, `min` or `max` carries what its row gives the aggregate: the cell
 the aggregate reads, as the value text the witness's `contributors_sha256` is taken over. It is read here from
 the role's snapshot, as the proof check reads it (evaluate.cells), so the edges of an aggregate are exactly
 the contributors that check hashes and folds: a published contribution that differs, is missing, or stands on
@@ -233,7 +233,7 @@ def check_rows(snapshots: dict, pieces: dict, roots: dict, limit: int, fanout: i
     walk = _Walk(pieces, limit, fanout, problems)
     parsed: dict = {}
 
-    def table(rel):  # each snapshot is parsed once (RV-K08)
+    def table(rel):  # each snapshot is parsed once
         if rel not in parsed:
             parsed[rel] = json.loads(snapshots[rel])
         return parsed[rel]

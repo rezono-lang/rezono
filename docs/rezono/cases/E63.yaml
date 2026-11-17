@@ -15,4 +15,3 @@ note: '`memory_need` is known wherever the condition is true, so the warning is 
   the warning away.'
 sources:
 - expressions.md §8a (a shown amount its type cannot hold)
-- arbiter, 11-11-2026, on #696

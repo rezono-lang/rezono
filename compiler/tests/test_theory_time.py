@@ -1,4 +1,4 @@
-"""Theory std-time (#314 §5.2, T4; lane G, G03; rulings RV-C13 and RV-C18): its axioms and rules against independent oracles.
+"""Theory std-time (#314 §5.2, T4; lane G, G03): its axioms and rules against independent oracles.
 
 Three evaluations must agree as sets: an exact Python reference written from the definitions (bounds per
 interval and a decision tree for Allen's relations, not the thirteen rules), the DuckDB batch backend on the
@@ -6,10 +6,10 @@ compiled IR, and Soufflé on rules/time.dl as written (when present, as in CI). 
 each axiom fires. No domain: intervals are letters, positions are whole numbers; the validity cases of Rezono
 §5a are read as positions by this test, not by the theory.
 
-A bound has three states (RV-C13): stated, stated to be absent, or not recorded. What nobody recorded is
+A bound has three states: stated, stated to be absent, or not recorded. What nobody recorded is
 unknown: the judgement says so with a reason, and no row says the interval holds, has begun or has ended.
 The judgement reads how the interval stands, and a tone that reassures stands exactly where it holds; a
-knowledge time nobody recorded is unknown too (RV-C18).
+knowledge time nobody recorded is unknown too.
 """
 
 import shutil
@@ -167,7 +167,7 @@ def reference(intervals, references):
 
 
 def ordered(v, p, h):
-    """RV-C18 point 1 as a decision tree, for an interval no bound of which is contradicted: the first case that
+    """A decision tree, for an interval no bound of which is contradicted: the first case that
     applies decides, so there is exactly one answer."""
     s, e, x = v.start, v.end, v.extension_end
     if e is not None and e <= p:                                         # 1. the end has come
@@ -263,7 +263,7 @@ def test_a_bound_that_is_stated_to_be_absent_bounds_nothing_and_is_never_a_numbe
     assert got["end_stated"] == {("no_start",)} and got["start_stated"] == {("no_end",)}
     assert not got["start_not_recorded"] and not got["end_not_recorded"]
     # No end: while it holds the judgement says so; it is neither positive nor negative. Before its start it
-    # has not begun (RV-C18).
+    # has not begun.
     assert {(i, r, v, why) for i, r, v, why in got["judgement"] if i != "no_start"} == {
         ("no_end", "early", "not_begun", "start_ahead"), ("no_end", "late", "no_end", "without_end"),
         ("unbounded", "early", "no_end", "without_end"), ("unbounded", "late", "no_end", "without_end")}
@@ -271,7 +271,7 @@ def test_a_bound_that_is_stated_to_be_absent_bounds_nothing_and_is_never_a_numbe
 
 
 def test_an_end_nobody_recorded_is_unknown_never_positive(tmp_path):
-    """RV-C13, on the README's reading A: a version's support window. The end of support of `silent` is not
+    """The README's reading A illustrates a version's support window. The end of support of `silent` is not
     published, and nobody said that support never ends. At every reference the judgement is unknown with the
     reason, and no row says that support holds or that it has ended. `perpetual` is the contrast: the vendor
     states that support does not end."""
@@ -281,7 +281,7 @@ def test_an_end_nobody_recorded_is_unknown_never_positive(tmp_path):
     got = evaluate(world, refs, tmp_path)
     assert got["end_not_recorded"] == {("silent",)}
     assert {(r, v, why) for i, r, v, why in got["judgement"] if i == "silent"} == {
-        ("before", "not_begun", "start_ahead"),                  # its stated start lies ahead (RV-C18)
+        ("before", "not_begun", "start_ahead"),                  # its stated start lies ahead
         ("soon", "unknown", "end_not_recorded"), ("late", "unknown", "end_not_recorded")}
     assert not {r for i, r in got["holds_at"] | got["ended_at"] if i == "silent"}
     assert {r for i, r in got["begun_at"] if i == "silent"} == {"soon", "late"}        # the start is stated
@@ -295,14 +295,14 @@ def test_a_start_nobody_recorded_is_unknown_too(tmp_path):
     assert got["start_not_recorded"] == {("a",), ("b",)} and got["end_not_recorded"] == {("b",)}
     assert not got["begun_at"] and not got["holds_at"]           # nothing says it has begun, so nothing says it holds
     assert got["ended_at"] == {("a", "out")}                     # a stated end that has come has come
-    # RV-C18: the end of a lies ahead at `in`, yet nobody recorded its start, so it is not positive.
+    # The end of a lies ahead at `in`, yet nobody recorded its start, so it is not positive.
     assert got["judgement"] == {
         ("a", "in", "unknown", "start_not_recorded"), ("a", "out", "negative", "ended"),
         ("b", "in", "unknown", "end_not_recorded"), ("b", "out", "unknown", "end_not_recorded")}
 
 
 def test_a_start_ahead_has_not_begun_whatever_the_end(tmp_path):
-    """RV-C18: an interval whose stated start lies ahead of the reference has not begun. That is known, so the
+    """An interval whose stated start lies ahead of the reference has not begun. That is known, so the
     value is not_begun, never positive and never unknown, whatever is or is not recorded of its end."""
     world = {"dated": Interval("days", 50, 500), "open": Interval("days", 50, no_end=True),
              "silent": Interval("days", 50), "near": Interval("days", 50, 60)}
@@ -312,7 +312,7 @@ def test_a_start_ahead_has_not_begun_whatever_the_end(tmp_path):
 
 
 def test_reading_a_a_version_whose_release_nobody_recorded_is_unknown(tmp_path):
-    """RV-C18 on the README's reading A, a version's support window. `unreleased` is announced for day 300 and
+    """The README's reading A illustrates a version's support window. `unreleased` is announced for day 300 and
     has not begun at day 100; `unrecorded` has an end of support far ahead and nobody recorded its release,
     so whether it is supported is unknown; `supported` is the contrast."""
     world = {"unreleased": Interval("days", 300, 900), "unrecorded": Interval("days", end=900),
@@ -358,7 +358,7 @@ def test_knowledge_is_apart_from_what_the_interval_covers(tmp_path):
 
 
 def test_a_knowledge_time_nobody_recorded_is_unknown_never_always_known(tmp_path):
-    """RV-C18 point 2: an interval without known_from has no known_at row at any reference, however late, and
+    """An interval without known_from has no known_at row at any reference, however late, and
     the absence relation names it. It still holds where its bounds say so: knowledge is apart from that."""
     world = {"silent": Interval("days", 100, 200), "stated": Interval("days", 100, 200, known_from=90)}
     refs = {"early": ("days", -1000, 0), "valid": ("days", 150, 0), "late": ("days", 10**6, 0)}
@@ -465,8 +465,8 @@ REFERENCES = st.dictionaries(st.sampled_from(["r", "s", "t"]),
 def test_axioms_and_rules_agree_with_the_reference_on_any_world(intervals, references, tmp_path_factory):
     """Property (Hypothesis): on any finite world every engine equals the reference, and the laws hold. The
     strategy draws starts ahead of a reference and missing knowledge times. Where no bound is contradicted: one
-    judgement per interval and reference on one line, the one the decision tree of RV-C18 gives; a tone that
-    reassures exactly where holds_at has a row (RV-C18); and an interval that holds has begun_at and has not
+    judgement per interval and reference on one line, the one the decision tree gives; a tone that
+    reassures exactly where holds_at has a row; and an interval that holds has begun_at and has not
     ended_at. An interval without known_from has no known_at row and is named by the absence. An interval
     whose end nobody recorded is unknown, or has not begun before a stated start, and has no holds_at or
     ended_at row; one whose start nobody recorded has no begun_at or holds_at row. Allen's
@@ -488,7 +488,7 @@ def test_axioms_and_rules_agree_with_the_reference_on_any_world(intervals, refer
     assert got["in_extension"] <= got["ended_at"]
     no_end = {i for i, in got["end_not_recorded"]}
     no_start = {i for i, in got["start_not_recorded"]}
-    assert {v for i, _, v, _ in got["judgement"] if i in no_end} <= {"unknown", "not_begun"}   # RV-C18: before a stated start
+    assert {v for i, _, v, _ in got["judgement"] if i in no_end} <= {"unknown", "not_begun"}   # Before a stated start
     assert not {i for i, _ in got["holds_at"] | got["ended_at"]} & no_end
     assert not {i for i, _ in got["holds_at"] | got["begun_at"]} & no_start
     related = {(a, b) for a, b, _ in got["allen"]}
@@ -575,7 +575,7 @@ def test_a_domain_kind_that_is_an_interval_gets_the_theory_through_the_ordinary_
 
 
 def test_must_fail_a_domain_rule_that_negates_holds_at_is_refused(tmp_path):
-    """REVIEW (18)'s P2 on #654, with RV-C18: holds_at is open, because it reads a bound that may not be
+    """holds_at is open, because it reads a bound that may not be
     recorded. A domain rule that concludes "does not hold" from a missing holds_at row would read an unknown
     as a no, so the ordinary compiler refuses it. The same rule as an @absence relation is allowed: it
     then speaks about what is recorded, and is closed."""

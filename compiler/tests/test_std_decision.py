@@ -1,4 +1,4 @@
-"""Standard pack std-decision (RV-C03): its rules and axioms against independent oracles.
+"""Standard pack std-decision: its rules and axioms against independent oracles.
 
 Three evaluations must agree as sets: an exact Python reference written from the definitions, the DuckDB
 batch backend on the compiled IR, and Soufflé on rules/decision.dl as written (when present, as in CI). The
@@ -221,7 +221,7 @@ def test_must_fail_a_cycle_of_superseded_decisions(tmp_path):
 
 
 def test_must_fail_a_cycle_of_grounds(tmp_path):
-    """RV-A31: the grounds have no cycle, whatever the state of the decisions; a chain is no cycle."""
+    """The grounds have no cycle, whatever the state of the decisions; a chain is no cycle."""
     two = records(("a", "in_force", 20240301, None, [], ["p"]), ("b", "proposed", None, None, [], []),
                   ("c", "in_force", 20240301, None, [], ["p"]), ("d", "in_force", 20240301, None, [], ["p"]),
                   grounds=[("a", "b"), ("b", "a"), ("c", "a"), ("d", "c")])
@@ -237,7 +237,7 @@ def test_must_fail_a_cycle_of_grounds(tmp_path):
 
 
 def test_a_withdrawn_record_without_a_first_day_is_a_finding_and_one_with_days_is_read_by_its_days(tmp_path):
-    """RV-A31: time comes from the days. A withdrawn record that names its days is in force until its last day;
+    """Time comes from the days. A withdrawn record that names its days is in force until its last day;
     one that names none is in force on no reference date, and the finding says so. A proposal is neither."""
     got = evaluate(records(("a", "withdrawn", None, None, [], ["p"]),
                            ("b", "withdrawn", 20240301, 20270101, [], ["p"]),

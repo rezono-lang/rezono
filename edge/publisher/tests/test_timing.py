@@ -61,7 +61,7 @@ def test_without_a_summary_only_the_log(clock, monkeypatch):
 
 
 def test_publish_sh_reads_the_same_lines_for_its_budget(clock, monkeypatch, tmp_path):
-    # RV-Z11: deploy/profiles/edge/publish.sh names the slowest pack's largest phase from these lines.
+    # Deploy/profiles/edge/publish.sh names the slowest pack's largest phase from these lines.
     times = tmp_path / "times"
     monkeypatch.setenv("REZONO_TIMES_FILE", str(times))
     for pack in ("a", "b"):
