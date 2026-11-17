@@ -333,6 +333,7 @@ def test_the_archived_publisher_runs_without_the_environment_site_hooks_or_plant
     assert list(markers.iterdir()) == [], "a site hook ran"
 
 
+@pytest.mark.xfail(strict=True, reason="scripts/regen-goldens.sh is not in the standalone repository")
 def test_regen_goldens_never_replaces_a_kept_publication(tmp_path):
     """scripts/regen-goldens.sh in a sandbox with stand-ins for Python and npx: a pack with a kept
     publication is checked with `kept --make`, which never replaces one, and its kept files stay as

@@ -101,6 +101,7 @@ def test_the_documents_a_form_holds_to_are_beside_the_schema_id():
     assert all(held[d].startswith(rdf.schema_iri(FIXTURE)) for d in ("context", "shapes", "contract"))
 
 
+@pytest.mark.xfail(strict=True, reason="docs/reckon-data/l0.md is not in the standalone repository yet")
 def test_the_media_types_are_those_of_the_specification():
     """§7 of docs/reckon-data/l0.md is the one place that names them."""
     text = (ROOT / "docs" / "reckon-data" / "l0.md").read_text(encoding="utf-8")

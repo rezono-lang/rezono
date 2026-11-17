@@ -1071,6 +1071,7 @@ def test_a_fold_mark_goes_into_the_bundle_and_nowhere_else(fixture):
     assert after == before
 
 
+@pytest.mark.xfail(strict=True, reason="tools/explain-lint/explain_lint.py is not in the standalone repository yet")
 def test_the_explanation_lint_and_the_compiler_fold_the_same(fixture, tmp_path):
     """What the lint's class B asks to fold is what the compiler lets a pack fold, and with those marks both
     read the same folded set: the lint from the sources, the compiler in its bundle."""

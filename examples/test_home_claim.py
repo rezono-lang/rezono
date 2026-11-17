@@ -20,6 +20,7 @@ def claim(table: Path) -> list[str]:
 PACKS = sorted(p.parent for p in EXAMPLES.rglob("channels.yaml") if claim(p))
 
 
+@pytest.mark.xfail(strict=True, reason="no standalone example pack declares a home claim yet")
 def test_an_example_pack_declares_a_claim():
     assert PACKS
 

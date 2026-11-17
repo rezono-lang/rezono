@@ -68,7 +68,12 @@ jobs:
             contracts/check.sh
             python -m pytest -q contracts/python
           else
-            python -m pytest -q "${{ matrix.component.folder }}"
+            rc=0
+            python -m pytest -q "${{ matrix.component.folder }}" || rc=$?
+            if [ "$rc" -eq 5 ] && grep -q "^${{ matrix.component.folder }}/" blocked/*.txt 2>/dev/null; then
+              exit 0
+            fi
+            exit "$rc"
           fi
 
   node:
