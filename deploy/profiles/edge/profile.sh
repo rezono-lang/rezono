@@ -19,7 +19,9 @@ out=${REZONO_PROFILE_OUT:-$PWD/profile-out}
 work=$(mktemp -d)
 mkdir -p "$out"
 [ "$#" -gt 0 ] || set -- /
-export AWS_ACCESS_KEY_ID=profile AWS_SECRET_ACCESS_KEY=profile-secret REZONO_S3_ENDPOINT=http://127.0.0.1:9000
+AWS_ACCESS_KEY_ID=$(python -c 'import secrets; print(secrets.token_hex(10))')
+AWS_SECRET_ACCESS_KEY=$(python -c 'import secrets; print(secrets.token_hex(20))')
+export AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY REZONO_S3_ENDPOINT=http://127.0.0.1:9000
 moto_server -H 127.0.0.1 -p 9000 > "$work/s3.log" 2>&1 &
 s3=$!
 trap 'kill $s3 2>/dev/null' EXIT
