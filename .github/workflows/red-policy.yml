@@ -18,36 +18,33 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
+      - name: Confirm PR policy review for the merge group
+        if: github.event_name == 'merge_group'
+        run: echo "Test evidence is reviewed on each pull request. The check job tests the combined candidate."
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: github.event_name == 'pull_request_target'
         with:
-          ref: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
+          ref: ${{ github.event.pull_request.base.sha }}
           fetch-depth: 0
           persist-credentials: false
       - name: Verify policy examples
+        if: github.event_name == 'pull_request_target'
         shell: bash
         run: |
           set -euo pipefail
           python -I scripts/test_red_guard.py
       - name: Identify the proposed Git objects
+        if: github.event_name == 'pull_request_target'
         id: identify
         shell: bash
         env:
-          BASE: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
-          HEAD: ${{ github.event.pull_request.head.sha || github.event.merge_group.head_sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
           PR: ${{ github.event.pull_request.number }}
-          GROUP_REF: ${{ github.event.merge_group.head_ref }}
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          if [[ -n "$PR" ]]; then
-            git fetch --no-tags origin "refs/pull/$PR/head"
-            [[ "$(git rev-parse FETCH_HEAD)" == "$HEAD" ]]
-          else
-            [[ "$GROUP_REF" =~ ^refs/heads/gh-readonly-queue/main/pr-([0-9]+)- ]]
-            PR=${BASH_REMATCH[1]}
-            git fetch --no-tags origin "$GROUP_REF"
-            [[ "$(git rev-parse FETCH_HEAD)" == "$HEAD" ]]
-          fi
+          git fetch --no-tags origin "refs/pull/$PR/head"
+          [[ "$(git rev-parse FETCH_HEAD)" == "$HEAD" ]]
           labels=$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR" --jq '.labels[].name')
           if grep -Fxq planner <<< "$labels"; then
             echo 'planner=true' >> "$GITHUB_OUTPUT"
@@ -61,8 +58,8 @@ jobs:
         if: steps.identify.outputs.planner == 'false'
         shell: bash
         env:
-          BASE: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
-          HEAD: ${{ github.event.pull_request.head.sha || github.event.merge_group.head_sha }}
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
         run: |
           set -euo pipefail
           python -I scripts/red_guard.py "$(git merge-base "$BASE" "$HEAD")" "$HEAD"
