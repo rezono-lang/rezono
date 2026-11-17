@@ -182,7 +182,7 @@ def _base_tables(prog, names=None):
 
 
 def outcome_checks(prog, name):
-    """The checks of a named outcome (decision W7), as (view, SELECT): every element of its kind has a row and
+    """The checks of a named outcome, as (view, SELECT): every element of its kind has a row and
     every row is an element of the kind (`<outcome>__total`), and one state per element (`<outcome>__state`).
     A row in either is a red check."""
     rel = prog.relations[name]

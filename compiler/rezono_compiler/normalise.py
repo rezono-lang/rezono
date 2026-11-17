@@ -194,7 +194,7 @@ def rule_doc(rule: ir.Rule) -> dict:
 
 
 def rule_sha256(rule: ir.Rule) -> str:
-    """The semantic hash of a rule: the canonical hash (decision C1) of its normal form."""
+    """The semantic hash of a rule: the canonical hash of its normal form."""
     return canonical_sha256(rule_doc(rule))
 
 

@@ -1,4 +1,4 @@
-# What the publisher writes: snapshots per role, and per role the witnesses it may see (decision O8).
+# What the publisher writes: snapshots per role, and per role the witnesses it may see.
 id: m-1
 epoch: 1
 knowledge_time: "2026-01-01T00:00:00Z"

@@ -115,7 +115,7 @@ classes:
 
   Review:
     description: >-
-      A review is a fact (decision O1): who, in which role, which verdict with a reason, when, and about
+      A review is a fact: who, in which role, which verdict with a reason, when, and about
       which content hash. It counts only while that hash is the change's content_sha256.
     attributes:
       reviewer: {range: Actor, required: true, inlined: true}

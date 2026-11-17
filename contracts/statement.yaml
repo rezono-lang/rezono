@@ -3,12 +3,12 @@ name: rezono_statement
 title: Epoch statement per role
 description: >-
   The one document per published epoch and filtered role that a signature covers (RV-X41; docs/ring2/signing.md,
-  "What is signed"; decisions Y2.7 and Y2.8): an in-toto Statement (v1) whose subjects are the objects of the
+  "What is signed"): an in-toto Statement (v1) whose subjects are the objects of the
   role's publication form by their sha256, and whose predicate binds the role's manifest as its form carries it,
   the role's own snapshots, the schema id, the dataset and annotation hashes (publication L0 section 6.2), and the
   row tree: per table the RFC 9162 Merkle root over its hash rows, and the inclusion hash over those roots. Every
   value is text, so Rezono's canonical bytes are RFC 8785's. Nothing in it depends on a row the role may not read,
-  and it never names `pack_sha256` (O8). The publisher writes it beside the form's objects as `statement.json` and
+  and it never names `pack_sha256`. The publisher writes it beside the form's objects as `statement.json` and
   names it in the form's index; `rezono_publication.statement.verify` reads it back from the bytes alone. Unsigned until
   RV-X42.
 prefixes:

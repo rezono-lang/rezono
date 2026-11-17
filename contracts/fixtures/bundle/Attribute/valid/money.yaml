@@ -1,4 +1,4 @@
-# Money (B10): whole minor units of a currency, with its semantic type.
+# Money: whole minor units of a currency, with its semantic type.
 id: posting.amount
 stable_id: "Posting#amount"
 span: {file: schema/core.yaml, line: "4", column: "3"}

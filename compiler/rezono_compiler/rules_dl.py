@@ -23,7 +23,7 @@ see it.
 A comment line `// @invariant` above a `.decl` makes it an invariant: it must be empty at the end of an
 epoch, or the epoch is not published (correctness blocks). `// @release <role>` is reserved for a
 delimited release under O8 and refused until it is built. `// @closes <relation>` above a `.decl` says that a
-row of this relation states, for its key, that no row of that relation holds there (decision W14): the
+row of this relation states, for its key, that no row of that relation holds there: the
 compiler adds the invariant `<this>_closes_<relation>`, the keys at which both hold.
 """
 
@@ -224,7 +224,7 @@ def parse_file(text: str, where: str, columns: list | None = None):
                     if re.match(r"^//\s*@extend\b", c.strip()) and not EXTEND.match(c.strip()):
                         p.fail(f"{name}: @extend takes no argument", t)
                     if RELEASE.match(c.strip()):
-                        p.fail(f"{name}: @release is not supported yet: a role reads a negation or an aggregate only over relations it reads in full (decision O8; docs/architecture.md, delimited release)", t)
+                        p.fail(f"{name}: @release is not supported yet: a role reads a negation or an aggregate only over relations it reads in full (docs/architecture.md, delimited release)", t)
                     m = EXPLAIN.match(c.strip())
                     if m and m.group(1) == FOLD:
                         fold = True
@@ -286,7 +286,7 @@ def base_tables(pack) -> dict[str, list[tuple[str, str | None]]]:
                     out[f"{s.table}__{b}"] = [("v", "integer")]
             if s.constant is not None:
                 out[f"{s.table}__constant"] = [("v", SQL.get(s.sql_type))]
-    for seal in pack.seals:  # decision E3: refused and accepted input, made by the compiler
+    for seal in pack.seals:  # refused and accepted input, made by the compiler
         idt = SQL.get(pack.kinds[seal.kind].id_type)
         out[seal.refused] = [("id", idt), ("period_close", SQL.get(pack.kinds[pack.root("period_close")].id_type))]
         out[seal.accepted] = [("id", idt)]
@@ -296,7 +296,7 @@ def base_tables(pack) -> dict[str, list[tuple[str, str | None]]]:
 
 
 def seal_docs(pack) -> list[dict]:
-    """The seals of the rule IR (decision E3): the tables the checker recomputes refused and accepted input from.
+    """The seals of the rule IR: the tables the checker recomputes refused and accepted input from.
     Written also for a pack without rules (emit), so the check never falls away. `parts` only when the seal
     has parts (`sealed_with`), so a seal without them reads as before."""
     def doc(s):
@@ -312,7 +312,7 @@ def seal_docs(pack) -> list[dict]:
 
 
 def base_worlds(pack) -> dict[str, str]:
-    """What a missing row means per table (decision W6): the kind's world for k(id), the slot's for k__a.
+    """What a missing row means per table: the kind's world for k(id), the slot's for k__a.
     Parameter tables are closed."""
     out = {}
     for k, kind in pack.kinds.items():
@@ -506,7 +506,7 @@ def read(pack, pack_dir: Path, imports=None, renames=None, *, calc_inputs=None, 
             else:
                 rules_src.append((module, where, s[1], s[2], s[3], source, starts.pop(0)))
     for name, (closed, where, line, source) in closing.items():
-        # Decision W14: the invariant the marker stands for, as the rule a pack would write for it, so it is
+        # The invariant the marker stands for, as the rule a pack would write for it, so it is
         # read, typed, compiled and proved as any rule. The IR holds its shape (rules.load); here only what
         # the rule needs: a target, and a name that is free.
         check = ir.closes_check(name, closed)

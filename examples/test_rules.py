@@ -55,7 +55,7 @@ def reference(example, labels) -> dict[str, dict[str, set]]:
 @pytest.mark.parametrize("example", RULED, ids=name)
 def test_same_as_the_pack_reference(example):
     """expected/rules, written by the pack's own reference, names the outcomes it checks, and the refused and
-    accepted input of a seal (decision E3), which the reference computes itself."""
+    accepted input of a seal, which the reference computes itself."""
     _, _, run = states(example)
     wanted = reference(example, [s.label for s in run])
     for s in run:
@@ -70,7 +70,7 @@ def test_same_as_the_pack_reference(example):
 @pytest.mark.xfail(strict=True, reason="generated expected/rules goldens are not stored in git")
 @pytest.mark.parametrize("example", RULED, ids=name)
 def test_every_named_outcome_is_checked_by_the_reference_and_holds(example):
-    """Decision W7: the pack's reference computes every named outcome itself (state and reason), and in
+    """The pack's reference computes every named outcome itself (state and reason), and in
     every fact state each element of the kind has exactly one state (the views <outcome>__total and
     <outcome>__state are empty)."""
     _, prog, run = states(example)
@@ -98,7 +98,7 @@ def test_same_as_souffle(example, tmp_path):
 def test_the_pack_source_as_written_on_souffle(example, tmp_path):
     """Soufflé runs rules/*.dl as written (not the IR the parser made of them), with the tables bound: the
     pack's own files and those of every pack it imports, since the program is the union over the import
-    closure (decision S28)."""
+    closure."""
     _, prog, run = states(example)
     text = souffle.pack_source(prog, example)
     for s in run:
@@ -143,7 +143,7 @@ def test_every_proof_is_valid_and_acyclic(example):
     rules = load_rules(model.rules)
     for s in run:
         manifest, read = s.manifest()
-        if s.calc_witnesses:  # only the epoch check recomputes a calculation witness (W12): all proofs at once
+        if s.calc_witnesses:  # only the epoch check recomputes a calculation witness: all proofs at once
             report = check_epoch(s.explainer.chosen(), manifest, rules, read, derived=derived_relations(model.rules, rules),
                                  calc_witnesses=s.calc_witnesses, calc_ir=s.calc_ir)
             assert report["valid"] and not report["findings"], (s.label, report["findings"][:5])

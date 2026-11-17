@@ -1,4 +1,4 @@
-"""DuckDB as the batch backend (decision E1): load rows, compute the derived relations, read sets.
+"""DuckDB as the batch backend: load rows, compute the derived relations, read sets.
 
 Used for publishing, CI and tests. It runs the same rule IR as Feldera, through the same translator
 (rules_sql), so incremental and batch can be compared. DuckDB is an optional dependency (`[batch]`).
@@ -89,7 +89,7 @@ def phases(con, prog, calculation=None, step=None, compute=compute):
 def calculate(con, calculation, db, rows=None):
     """Compute `calculation` (calc.Program) on `con`, which holds the relations of the rules: the tables it
     reads that `con` does not hold come from `db` (`database`), then the macros, the evaluation date and the
-    calculation's relations. Returns the calculation witnesses (decision W12), one per row of every view a
+    calculation's relations. Returns the calculation witnesses, one per row of every view a
     publication holds (emit.calc_relations). With `rows`, the evaluation date and each of those views go into
     it as their snapshots hold them, (subject, value, state, reason) in canonical text. The one copy: the
     publisher, `explain` and the example tests call it."""

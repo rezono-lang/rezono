@@ -1,7 +1,7 @@
 """Rules on a running Feldera (FELDERA_URL; opt-in), per example pack with rules/: the compiled program
 (tables, integrity views and rule views in one pipeline) gets each fact state as a delta on the previous
 one, and after the processing barrier every derived view equals the batch backend and the checks of
-every named outcome (W7) are empty."""
+every named outcome are empty."""
 
 import json
 
@@ -46,7 +46,7 @@ def test_incremental_on_feldera_equals_batch(example, tmp_path):
             got = {tuple(str(r[c.name]) for c in prog.relations[rel].key)
                    for r in query(pipeline, f'SELECT * FROM "{rel}"')}
             assert got == s.derived[rel], (label, rel)
-        for rel, want in sorted(seal.rows(model, rows).items()):  # E3: refused and accepted input, as in batch
+        for rel, want in sorted(seal.rows(model, rows).items()):  # refused and accepted input, as in batch
             got = {tuple(str(v) for v in r.values()) for r in query(pipeline, f'SELECT * FROM "{rel}"')}
             assert got == {tuple(str(v) for v in r) for r in want}, (label, rel)
         for rel in sorted(prog.relations):  # every check of the rules is empty: W7 outcomes, R16 bounds (RV-K18)

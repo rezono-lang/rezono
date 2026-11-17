@@ -1,4 +1,4 @@
-# A value is never a floating point number (B10).
+# A value is never a floating point number.
 id: calc__hourly
 module: calc
 explain: materialize

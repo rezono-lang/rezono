@@ -91,7 +91,7 @@ test('R004: a missing row is read as false only over a closed relation', () => {
 	clean('ask Host where not Plan.any(memory > 1 GiB) and clusters.all(count > 1) and Team.any(true)');
 });
 
-test('R004: an aggregate over an open relation (decision W6)', () => {
+test('R004: an aggregate over an open relation', () => {
 	// `Team.count() = 0` is `Team.none(true)` in other words: a set that is not known complete cannot be counted.
 	assert.deepEqual(found('ask Host where Team.count() = 0'), ['R004 at Team.count()']);
 	assert.deepEqual(found('ask Host where Team.count() < 1'), ['R004 at Team.count()']);

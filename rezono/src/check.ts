@@ -7,7 +7,7 @@
 //   R003  two types that do not go together: dimensions that differ, and every other pair the operator
 //         cannot combine (v0 §10 has one code for a failed type check of an operator)
 //   R004  `not`, `none(…)`, `all(…)`, the left side of `=>` or an aggregate (`count`, `sum`, `min`, `max`)
-//         over an open relation (decision W6)
+//         over an open relation
 //   R005  a set where one value is needed
 //   R011  a name that is both an element slot and a name outside it
 //   R012  a literal token that its expected type does not read; R013 one with no expected type
@@ -466,7 +466,7 @@ export function typing(text: string, schema: Schema, spans: WeakMap<object, Span
 				if (name === 'sum' && over.ty.t !== 'num' && over.ty.t !== 'err' && over.ty.t !== 'state') return report('R003', spanOf(arg ?? e), [name, describe(over.ty)]);
 				if (name === 'min' || name === 'max') v.states.add('not_applicable');
 				// A count, a sum, the least and the greatest speak of every member: over a set that is not known
-				// complete they would read a missing row as "not there" (decision W6).
+				// complete they would read a missing row as "not there".
 				closed(v, e);
 				v.sure = new Set();
 				return v;

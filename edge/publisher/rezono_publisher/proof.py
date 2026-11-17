@@ -1,4 +1,4 @@
-"""The proof graph of a role as key-range pieces (decision R10; docs/gui.md, "The proof graph as relations").
+"""The proof graph of a role as key-range pieces (docs/gui.md, "The proof graph as relations").
 
 Per main manifest and filtered role, made with the views (rezono_publisher.views) and listed in the same view
 index. The role's chosen witnesses become the relation `step` (rezono_compiler.trace.steps), published as
@@ -17,7 +17,7 @@ The same tree carries the role's snapshots, one per relation, for a row or a key
     inverse/<relation>           the same, by the key reversed: of a relation with two columns only (an
                                  arrow `k__a(id, target)`: the rows that point to a target)
 
-And the role's source entries (S25), for the base rows on a page of an answer (rezono_publisher.sources):
+And the role's source entries, for the base rows on a page of an answer (rezono_publisher.sources):
 
     sources/<relation>           rows: {"key", "sources"[, "reason"]}, by key: the entry without its row
                                  reference (sources_plan)
@@ -46,7 +46,7 @@ from rezono_compiler import rules as ir
 from rezono_compiler import trace
 
 FORMAT = "rezono.proof/1"
-# 2: the calculation witnesses are in the trees too (W12). 3: a `contributes` row may carry its value last
+# 2: the calculation witnesses are in the trees too. 3: a `contributes` row may carry its value last
 # (RV-C09): such a row is longer than a page cursor on it, so a reader of format 2 must not read these trees.
 INDEX = "rezono.proof-index/3"
 PIECE = 64 * 1024  # bytes per piece, at most
@@ -153,7 +153,7 @@ def tree(tree_name: str, relation: str, rs: list, at, limit: int = PIECE, fanout
 
 
 def calc_steps(calc_witnesses: list[dict]) -> list[tuple]:
-    """The `step` rows of calculation witnesses (W12): one per premise, `positive`, at its place in the
+    """The `step` rows of calculation witnesses: one per premise, `positive`, at its place in the
     witness's `premises`. Its `reads` are relations, not rows: no step."""
     return [(w["conclusion"]["relation"], w["conclusion"]["key"], p["relation"], p["key"], "positive", i)
             for w in calc_witnesses for i, p in enumerate(w.get("premises", ()))]
@@ -250,7 +250,7 @@ def entry_row(entry: dict) -> dict:
 
 
 def sources_plan(entries: list[dict], base: str, limit: int = PIECE, fanout: int = FANOUT):
-    """The role's source entries as key-range trees, one per relation it has entries of (S25): the sources of
+    """The role's source entries as key-range trees, one per relation it has entries of: the sources of
     the base rows on one page of an answer are then read with one lookup per row, never the whole set.
 
         sources/<relation>           rows: {"key", "sources"[, "reason"]}, by key

@@ -12,7 +12,7 @@ another):
 
 - **a base relation** is read from the view: `k(id)` as the elements of the kind, `k__a(id, v)` as the known
   values of the slot (a state is a blank node and `rd:emptySet` is no member, so neither is a row); an enum and
-  a bound of a slot as their values (a union of `BIND`s); the seal's accepted and refused rows (decision E3) as
+  a bound of a slot as their values (a union of `BIND`s); the seal's accepted and refused rows as
   below;
 - **a value** is in one canonical form, so that a join is an equality of terms: an integer as an `xsd:integer`,
   a text as an element IRI spells an id (`rdf.spell`, §3.4), which for an element or a reference is the local
@@ -32,7 +32,7 @@ constraint of the same shape reports that the check cannot be decided from the v
 that the data conforms when they cannot know.
 
 **What is not translated** (and why) is a shape with `sh:deactivated true` and the reason as its `sh:message`:
-a recursive relation (SPARQL has no fixpoint), an outcome (W7), a calculation input
+a recursive relation (SPARQL has no fixpoint), an outcome, a calculation input
 and a base relation the view does not carry. `shacl-sparql.losses.yaml` lists these losses.
 
 A result names the invariant's relation in the view as its focus node (`<base><Relation>`, as the publication
@@ -154,11 +154,11 @@ class _Translator:
         if rel.role == "base":
             return self.base_columns(name, cols)
         if rel.outcome:
-            raise Refused(f"reads {name}, an outcome (W7), whose states are not rows of the view")
+            raise Refused(f"reads {name}, an outcome, whose states are not rows of the view")
         if self.prog.recursive(name) or name in self.prog.bounds:
             raise Refused(f"reads {name}, a recursive relation: SPARQL has no fixpoint")
         rules = self.prog.rules_for(name)
-        if not rules:  # S28: a relation nobody extends is the empty set
+        if not rules:  # a relation nobody extends is the empty set
             return "FILTER(false)"
         return "\nUNION\n".join("{\n" + self.rule(r, cols) + "\n}" for r in sorted(rules, key=lambda r: r.id))
 

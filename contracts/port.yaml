@@ -2,7 +2,7 @@ id: https://rezono.org/contracts/port
 name: rezono_port
 title: Port declarations
 description: >-
-  One contract for every boundary port (decision O12a, PC1), with three kinds. `in`: what arrives is an
+  One contract for every boundary port, with three kinds. `in`: what arrives is an
   observation, never a curated fact; it becomes one only through a proposal (lifting, I29). `out`: runs
   only on a published epoch the checker accepted, and writes a projection of it per role with its own
   loss list. `effect`: changes the world exactly once per approved plan hash through the effect journal
@@ -41,7 +41,7 @@ types:
 
 enums:
   PortKind:
-    description: What a port does at the boundary (O12a).
+    description: What a port does at the boundary.
     permissible_values:
       in: {description: "Reads a source; what arrives is an observation. A stream arrives as deltas (RD6)."}
       out: {description: "Writes a projection of a checked, published epoch per role, with its loss list."}

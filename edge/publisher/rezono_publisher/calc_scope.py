@@ -1,4 +1,4 @@
-"""The calculation program as the publisher reads it (ir/calc.json; decisions W12 and O8).
+"""The calculation program as the publisher reads it (ir/calc.json).
 
 The filter decides which calculated rows and witnesses a role gets (access.calc_visible). The checker checks
 that decision with its own reading of the same program (rezono_checker.calc, rezono_checker.access). The two
@@ -53,7 +53,7 @@ def version_of(ir: dict, witness: dict) -> str | None:
 
 def reads(ir: dict, version: str | None) -> set[str]:
     """Every relation the evaluation of a version reads, also where it reads an absence: a role sees the result
-    only if it reads each of them in full (O8). Without a version, only the evaluation date."""
+    only if it reads each of them in full. Without a version, only the evaluation date."""
     tables = {ir["as_of"]}
     if version is None:
         return tables

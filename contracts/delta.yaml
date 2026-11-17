@@ -5,7 +5,7 @@ description: >-
   A change to the facts of a pack, as the viewer makes it and the canonical writer applies it
   (`python -m rezono_compiler.writer apply <pack> <delta.json>`; docs/compiler.md#the-canonical-writer). Each change names
   one record by its kind and identifier, in one fact file. Values are JSON as the compiler reads
-  them: a whole number may be decimal text (decision W3), a date is ISO text (W5), an inlined
+  them: a whole number may be decimal text, a date is ISO text, an inlined
   object is an object, and more than one value is a list (a functionality violation, but a fact).
   Applying a delta also gives the delta that undoes it, in this same form.
 prefixes:
@@ -43,8 +43,7 @@ classes:
         multivalued: true
         inlined_as_list: true
         description: >-
-          Set by the writer on an undo delta, one entry per source companion (facts/<file>.sources.yaml,
-          decision S25) the undone delta changed. Never in a delta from the viewer: a delta cannot supply the
+          Set by the writer on an undo delta, one entry per source companion (facts/<file>.sources.yaml) the undone delta changed. Never in a delta from the viewer: a delta cannot supply the
           origin of a fact, so the writer honours it only when its caller says the delta is the writer's own
           undo, and the gate refuses it.
 

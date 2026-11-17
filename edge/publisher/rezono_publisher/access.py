@@ -1,10 +1,10 @@
-"""Access per role, on the server (docs/architecture.md, access and privacy; decisions O4, O7 and O8).
+"""Access per role, on the server (docs/architecture.md, access and privacy).
 
 `may_read(role, kind, id)` is a relation of the pack, derived by its rules like any other (std-access).
 An element is typed: (kind, id). Equal ids in two kinds are two elements. A right on a kind also holds
-for its subkinds, along the parent chain of the schema (is_a, O7). A role without rows reads nothing.
+for its subkinds, along the parent chain of the schema (is_a). A role without rows reads nothing.
 
-Non-interference (O8): what a role gets depends only on what it may read, never on a row it may not.
+Non-interference: what a role gets depends only on what it may read, never on a row it may not.
 - A base row is readable if every column that holds an element (`columns`: the kind per column, from the
   schema) holds one the role may read. A column without a kind (an attribute value) decides nothing.
 - A role reads a relation in full by the shape of its read rules, not by the rows of the relation: kind K
@@ -126,7 +126,7 @@ class Scope:
         self.calc_inputs = {r["name"] for r in rules.get("relations", ()) if r.get("role") == "calc"}
         for r in rules.get("relations", ()):
             if "release" in r:
-                raise ValueError(f"relation {r['name']}: release is not supported yet (O8: negation and aggregates "
+                raise ValueError(f"relation {r['name']}: release is not supported yet (negation and aggregates "
                                  "only over relations the role reads in full)")
         for rel in sorted(set(rows) - self.derived - set(columns)):
             raise ValueError(f"relation {rel}: no kind per column, so no right can be read from it")
@@ -156,7 +156,7 @@ class Scope:
         """The relations of a seal with parts (docs/compiler.md#parts) for a role that does not read every part
         kind in full. Whether an element is refused or accepted, and so whether each of its parts counts, depends
         on all its parts: a part the role may not read could decide it. So the role gets none of them, decided
-        from the read rules alone (O8), and nothing that rests on them."""
+        from the read rules alone, and nothing that rests on them."""
         out = set()
         for s in rules.get("seals", ()):
             parts = s.get("parts", ())
@@ -230,7 +230,7 @@ class Scope:
     def closes(self, rel: str, w: dict) -> bool:
         """May instance `w` rely on the absence of rows of `rel`, or on its whole group, for this role?
 
-        Today only when the role reads `rel` in full (O8). A delimited release would add the instances whose
+        Today only when the role reads `rel` in full. A delimited release would add the instances whose
         conclusion a pack releases to this role, per relation; that, and its obligations for the checker,
         are designed but refused (docs/architecture.md, access and privacy)."""
         return rel in self.full
@@ -262,7 +262,7 @@ class Columns(dict):
 
 
 def with_calc(columns: dict, calc_ir: dict | None) -> dict:
-    """The kind per column, with the relations of the calculation rules (W12): a calculated row names its
+    """The kind per column, with the relations of the calculation rules: a calculated row names its
     subject; the evaluation date names no element. With them goes what each calculation view rests on
     (`calc_scope.view_sources`), which decides whether a role reads the view in full (RV-S26). The one place
     every scope over an epoch gets them, so a publication and a sweep judge the same relations (no relation
@@ -309,7 +309,7 @@ def for_role(rows: dict, kinds, parents: dict, columns: dict, rules: dict, witne
 
 
 def calc_visible(scope: Scope, ir: dict, witnesses, derived_rows: set) -> dict[tuple[str, str], dict]:
-    """The calculation witnesses a role may see (decisions O8, W12): the subject is an element it reads,
+    """The calculation witnesses a role may see: the subject is an element it reads,
     it reads in full every relation the evaluation reads (an absence decides a state there), and every
     premise is visible to it: a derived row with a chosen proof, or a calculated row seen the same way.
     Least fixpoint, so a hidden row never makes another one visible."""

@@ -123,7 +123,7 @@ def named(st, mid: str, m: dict) -> set[str]:
     """The keys of every object a manifest names by uri, and of every image its asset indexes name."""
     entries = [e for s in SECTIONS for e in m.get(s, [])] + ([m["build"]] if m.get("build") else [])
     keys = {key_of(e["uri"]) for e in entries}
-    for e in m.get("assets", []):  # the images an asset index names (decision B10)
+    for e in m.get("assets", []):  # the images an asset index names
         index = st.get(key_of(e["uri"]))
         if index is None or hashlib.sha256(index).hexdigest() != e["sha256"]:
             raise ValueError(f"{mid}: the asset index {e['uri']} is missing or not the bytes its hash names")

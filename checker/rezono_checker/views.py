@@ -119,7 +119,7 @@ def chain(bundle: dict, kind: str) -> list[str]:
 
 
 def most_specific(found: set[tuple[str, str]], bundle: dict) -> set[tuple[str, str]]:
-    """Each element once, at its most specific kind (decision S2), as the viewer draws and counts it
+    """Each element once, at its most specific kind, as the viewer draws and counts it
     (layout/elements.ts): an element of a subkind is in its supertypes' tables too, so drop a (kind, id) when
     the same id is found at a kind below it."""
     kinds: dict[str, list[str]] = {}
@@ -133,7 +133,7 @@ class Role:
     """What one role reads, derived once from its snapshots and the bundle: its rows by relation, its elements,
     each at its most specific kind, and its island plan. Every check of the role's views uses the same one,
     made by the checker from the snapshots alone, never from what the publisher made. `full` is the relations
-    the role reads in full: the `full` flag of its snapshots in the manifest (decision O8), which the access
+    the role reads in full: the `full` flag of its snapshots in the manifest, which the access
     check has verified before any view is made (rezono_checker.access). Without it no relation counts as read in
     full, so a missing row is never read as "none" (`lacking`)."""
 
@@ -514,7 +514,7 @@ def matrix_cells(sheet: str, bundle: dict) -> dict | None:
 
 
 def lacking(relation: str, declared: dict, optional: bool, full: frozenset) -> str:
-    """What a missing row of `relation` says to a role (decision W6): `none` where a row may be missing (an
+    """What a missing row of `relation` says to a role: `none` where a row may be missing (an
     optional slot, or a derived relation), the relation is closed and the role reads it in full: missing is
     not true. `unknown` in every other case: a required slot without its row, an open relation, or a relation
     the role does not read in full. `declared` is the slot or the relation as the bundle has it (`world`, left

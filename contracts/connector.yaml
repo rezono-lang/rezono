@@ -2,11 +2,10 @@ id: https://rezono.org/contracts/connector
 name: rezono_connector
 title: Connector loss lists
 description: >-
-  What a mapping between Rezono and an external standard does not carry (decision N7, M01). A connector
+  What a mapping between Rezono and an external standard does not carry. A connector
   states it as a loss list: one entry for every part of the meaning that a reader on the other side
   does not get, with what happens to it. The list is published beside what the connector writes and is
-  tested: an export gives back the input except for the listed losses. The port contract (decision
-  O12a, PC1) declares the connector itself (the standard, its version, the mapping owner, the
+  tested: an export gives back the input except for the listed losses. The port contract (PC1) declares the connector itself (the standard, its version, the mapping owner, the
   round-trip fixture); this contract fixes the format of a loss entry and of the published list.
 prefixes:
   linkml: https://w3id.org/linkml/

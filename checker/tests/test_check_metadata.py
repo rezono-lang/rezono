@@ -1,4 +1,4 @@
-"""Decision E11: the check metadata the engine loaded is exactly what the schema bundle gives."""
+"""The check metadata the engine loaded is exactly what the schema bundle gives."""
 
 import pytest
 

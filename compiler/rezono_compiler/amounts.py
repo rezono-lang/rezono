@@ -1,4 +1,4 @@
-"""The currency and the unit of a rule's columns (decision R17, P10.3): derived from the rules, never declared a second
+"""The currency and the unit of a rule's columns: derived from the rules, never declared a second
 time.
 
 A column of a table has the unit of its attribute: money in whole minor units of an ISO 4217 currency (annotation

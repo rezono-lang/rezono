@@ -170,7 +170,7 @@ paired(a) :- pair(a, b).
 
 
 def test_above_the_budget_the_compiler_cuts_by_recursive_core(fixture):
-    """Decision E6: modules do not bind the cut; few parts in a row, then few relations between parts."""
+    """Modules do not bind the cut; few parts in a row, then few relations between parts."""
     files = emit.compile_pack(pack.read(with_rules(fixture, **SPLIT)), max_views=4)
     plan = json.loads(files["engine/pipelines.json"])
     assert [p["name"] for p in plan["pipelines"]] == ["integrity", "rules-1", "rules-2"]
@@ -192,7 +192,7 @@ def test_the_previous_cut_is_kept(fixture):
 
 
 def test_a_recursive_core_above_the_budget_blocks(fixture):
-    """Only a recursive core that is on its own too big for the profile stops the compile (decision E6);
+    """Only a recursive core that is on its own too big for the profile stops the compile;
     one relation that reads itself is such a core."""
     with_rules(fixture, core="""
 // @explain materialize
@@ -223,7 +223,7 @@ other(a) :- beta(a).
 
 
 def test_a_relation_above_the_budget_that_is_not_recursive_gets_a_part_of_its_own(fixture, capsys):
-    """Decision E6: exceeding the budget is a warning. `wide` costs 4 views (itself and a witness per
+    """Exceeding the budget is a warning. `wide` costs 4 views (itself and a witness per
     rule) against a budget of 2: no other relation shares its part, and the compile says so."""
     model = pack.read(with_rules(fixture, core=WIDE))
     capsys.readouterr()
@@ -285,7 +285,7 @@ def memory(build_mb, **cost):
 
 
 def test_a_build_memory_weighs_every_kind_of_view(fixture, capsys):
-    """Decision E6: weighed in build memory, main also holds the integrity checks; the plan records the
+    """Weighed in build memory, main also holds the integrity checks; the plan records the
     estimate per pipeline, and every rule part stays within the memory."""
     model = pack.read(with_rules(fixture, **SPLIT))
     rules = sum(rules_sql.views(ir.load(model.rules), n) for n in ir.load(model.rules).derived())
@@ -299,7 +299,7 @@ def test_a_build_memory_weighs_every_kind_of_view(fixture, capsys):
     plan = json.loads(emit.compile_pack(model, budget)["engine/pipelines.json"])
     assert plan["pipelines"][0]["name"] == "integrity" and len(plan["pipelines"]) >= 2
     integrity = emit.compile_pack(model)["engine/integrity.sql"]
-    # one view per check kind, the union and the local relations they read (decision E11)
+    # one view per check kind, the union and the local relations they read
     checks = integrity.count("CREATE MATERIALIZED VIEW") + integrity.count("CREATE LOCAL VIEW")
     assert plan["pipelines"][0]["build_mb"] == str(100 + checks)
     for p in plan["pipelines"][1:]:
@@ -307,7 +307,7 @@ def test_a_build_memory_weighs_every_kind_of_view(fixture, capsys):
         assert int(p["build_mb"]) == 100 + 10 * sum(rules_sql.views(ir.load(model.rules), n) for n in p["views"]) \
             + (5 if p["exports"] else 0)
     # a part holds 10 MB here: a relation with a witness (20 MB) is above it and none is recursive, so
-    # each gets a part of its own with a warning (decision E6)
+    # each gets a part of its own with a warning
     capsys.readouterr()
     tight = json.loads(emit.compile_pack(model, memory(100, base=90, relation=10, witness=10))["engine/pipelines.json"])
     warned = capsys.readouterr().err
@@ -531,7 +531,7 @@ def test_a_part_keeps_its_name_when_an_earlier_part_empties(fixture):
     assert emit.previous_parts(second) == [["a"], [], ["c"]]
 
 
-# ---- decision W6: what a missing row means, per relation ----
+# ---- what a missing row means, per relation ----
 
 
 WORLDS = """
@@ -686,7 +686,7 @@ def test_a_declared_world_must_agree_with_the_rules(fixture):
         ir.load(doc)
 
 
-# ---- decision W7: a named outcome, with a state and a reason per element ----
+# ---- a named outcome, with a state and a reason per element ----
 
 OUTCOME = WORLDS + """
 // @absence

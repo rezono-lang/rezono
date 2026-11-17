@@ -1,4 +1,4 @@
-# Merging is not accepting (decision O2): merged is not a state of a change.
+# Merging is not accepting: merged is not a state of a change.
 id: change-1
 author: {subject: alice, role: editor}
 effect: publish

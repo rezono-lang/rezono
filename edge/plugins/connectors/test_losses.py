@@ -1,4 +1,4 @@
-"""Every loss list here is in the contract's form and says what the export does (M01, decision N7).
+"""Every loss list here is in the contract's form and says what the export does (M01).
 
 A loss list is a claim about a mapping, so it is tested against the mapping: the terms outside the standard that
 an export writes are exactly the terms its `extension` entries name, and an export writes nothing else that the

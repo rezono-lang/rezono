@@ -1,4 +1,4 @@
-// The normal form of a question and the question hash taken from it (src/normal.ts, decision Q21): two ways of
+// The normal form of a question and the question hash taken from it (src/normal.ts): two ways of
 // writing one question hash equal, two questions hash apart, the normal form is a question that checks and is
 // its own normal form, and the output schema of an answer is named by the hash. The written variants are
 // generated with a fixed seed from the questions of the conformance cases and a few more, each checked and
@@ -53,7 +53,7 @@ test('where the canonical name is a slot of a kind in scope, the binder takes th
 	assert.equal(normal('ask h: Host where owner = host'), 'ask host_2: Host where host = host_2.owner');
 });
 
-test('one question asked by two roles has one hash: the binder avoids the names of the pack, not of the role (O10)', async () => {
+test('one question asked by two roles has one hash: the binder avoids the names of the pack, not of the role', async () => {
 	// A role that does not read the relation of `HostCluster.host` and `Host.clusters`: its schema names neither.
 	const role = structuredClone(fixture);
 	delete role.kinds.HostCluster.slots.host;

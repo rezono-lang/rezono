@@ -107,15 +107,15 @@ def rule_edits(m: Model, mp: Maps, ids: dict[str, int], changed_ids: dict, edits
     provably is what changed: a renamed enum value in the value column of a literal over a slot table of that
     enum, or a kind in the `kind` column of an access relation (`may_read(role, kind, id)`, O7). Any other
     constant equal to a changed name, value or id blocks, in access rules too: a constant has no type, so
-    "placement" in the role column may be a role as well as a kind, and rewriting it could widen access (O4).
+    "placement" in the role column may be a role as well as a kind, and rewriting it could widen access.
     A head that carries an id the operation changes blocks as well. The author changes the rule first.
 
     A literal over a table the plan's backward queries (`back`) define is replaced by its definition over the
     new tables: atoms with fresh variables, or the atom of the case its constant selects. Under a negation or
     in an aggregate, or when no one case is selected, it reads a helper relation `was_<k>_<a>` with that
     definition instead; reloading the pack checks strata and worlds again. With access rules (may_read), a
-    definition across an arrow blocks: what a role sees of the conclusion would then depend on another kind
-    (O8). A split's definitions stay within the kind's own subkinds, which its rights cover. `keep`: parameter
+    definition across an arrow blocks: what a role sees of the conclusion would then depend on another kind.
+    A split's definitions stay within the kind's own subkinds, which its rights cover. `keep`: parameter
     predicates of tables in `gone` that stay, renamed (an absorbed slot's minimum)."""
     p = m.pack
     gone_preds = ({t for t in gone} | {f"{t}__{b}" for t in gone for b in PARAMETERS}) - set(keep)
@@ -141,7 +141,7 @@ def rule_edits(m: Model, mp: Maps, ids: dict[str, int], changed_ids: dict, edits
     kind_col = access_kind_columns(m)
     kinds_change = bool(mp.kinds) or bool(new_kinds) or bool(set(gone) & set(p.kinds))
     if kinds_change:
-        errors += [f"rules: {r} is declared without the O7 signature (role, kind, id); an operation that changes "
+        errors += [f"rules: {r} is declared without the access relation signature (role, kind, id); an operation that changes "
                    f"kind names cannot tell its kind column, so it blocks" for r, c in sorted(kind_col.items()) if c is None]
     fresh_names = set(mp.elements.values()) | set(mp.kinds.values()) | set(new_kinds)
     fresh_names |= {v for vm in mp.values.values() for v in vm.values()} | {text_of(v) for v in changed_ids.values()}

@@ -1,4 +1,4 @@
-"""`gap` (R10): the schedule, the adornments, the effects, and the failing premises of an absent start.
+"""`gap`: the schedule, the adornments, the effects, and the failing premises of an absent start.
 
 The failing premises come from `gap.failures` (plain Python, the reference the gate is held to) and from the
 prefix program (`gap.prefix_program`) run by Soufflé, the oracle: equal as sets, on generated programs and

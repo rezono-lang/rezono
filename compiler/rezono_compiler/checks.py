@@ -1,4 +1,4 @@
-"""Integrity checks as data (decision E11, docs/compiler.md#design-checks-as-data-e11).
+"""Integrity checks as data (docs/compiler.md#design-checks-as-data-e11).
 
 One materialised view per check kind instead of one per slot. Which slot has which check is a row of a
 metadata table `rezono__<facet>` (in engine/parameters.json, loaded like the parameters), and the generic views
@@ -44,7 +44,7 @@ def names(pack: Pack) -> list[str]:
 
 def tables() -> str:
     """The metadata tables. They always exist, also without rows, so the first required slot is a row too."""
-    out = ["\n-- Check metadata (decision E11): which slot has which check, as rows (engine/parameters.json).\n"]
+    out = ["\n-- Check metadata: which slot has which check, as rows (engine/parameters.json).\n"]
     for facet, cols in META:
         types = ", ".join(f"{c} {'BIGINT' if c == 'v' and facet in BIGINT else 'VARCHAR'} NOT NULL" for c in cols)
         out.append(f"CREATE TABLE {q(P + facet)} ({types});\n")

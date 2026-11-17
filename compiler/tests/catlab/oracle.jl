@@ -1,4 +1,4 @@
-# The independent oracle for schema operations (docs/compiler.md#the-oracle-catlab, decision R3). Tests only.
+# The independent oracle for schema operations (docs/compiler.md#the-oracle-catlab). Tests only.
 #
 #   julia --project=compiler/tests/catlab compiler/tests/catlab/oracle.jl cases.json results.json
 #
@@ -6,7 +6,7 @@
 # operation as the author wrote it, with its names resolved. From the operation alone the oracle builds the new
 # schema and the functor between the two, and migrates every state with Catlab's Δ (`migrate!`), and back with
 # the inverse functor. It shares no code with the compiler: it derives the engine names, which the embedded ids
-# are made of, from the declared names alone (decision S8), before and after the operation.
+# are made of, from the declared names alone, before and after the operation.
 #
 # One case is no operation: `glue` (B10). It gives the parts of a pack and the modules they share, and the oracle
 # builds the one pack as their colimit, the schema and every fact state, without ever seeing that pack.
@@ -101,7 +101,7 @@ function delta(X, from::Vector{Table}, to::Vector{Table}, source::Vector{Int})
   migrate!(acset_type(St)(), X, FOb, FHom; homtype=:hom)
 end
 
-# --- Engine names (S8), from the declared classes and enums --------------------------------------------------
+# --- Engine names, from the declared classes and enums --------------------------------------------------
 
 snake(n::AbstractString) = lowercase(replace(n, r"(?<=[a-z0-9])(?=[A-Z])" => "_"))
 
@@ -748,7 +748,7 @@ declared overlaps alone: the colimit of the parts' tables (an overlap is the tab
 whole in each of its parts), and for every fact state the colimit of the parts' rows, each moved by Σ along
 its part's inclusion. Without an identification Σ puts a part's rows in the colimit's tables; only a derived
 id changes, because it holds the engine element of its slot, and that name comes from the names declared in
-all parts together (S8). Rows of one table are one fact where two parts hold the same row: their overlap is
+all parts together. Rows of one table are one fact where two parts hold the same row: their overlap is
 Catlab's pullback over the rows, and the table's rows are the colimit over those overlaps."""
 function glue_case(case)
   parts = case["parts"]

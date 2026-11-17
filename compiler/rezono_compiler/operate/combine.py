@@ -168,7 +168,7 @@ def plan_combine(m: Model, op: dict) -> Combine:
 
 def landed_world(p: packs.Pack, d: dict, s: packs.Slot, to: str, want: str | None, what: str) -> dict:
     """A slot definition as it lands on kind `to`, with the world annotation when the operation states a world
-    the slot would not have by itself (W6); a change of world without `world` is a conflict."""
+    the slot would not have by itself; a change of world without `world` is a conflict."""
     notes = dict(d.get("annotations") or {})
     own = notes.get("world")
     own = own.get("value") if isinstance(own, dict) else own
@@ -180,7 +180,7 @@ def landed_world(p: packs.Pack, d: dict, s: packs.Slot, to: str, want: str | Non
         notes["world"] = "open"
     elif want == "closed" and after == "open":
         if p.kinds[to].world == "open":
-            raise OperationError(f"{what}: {to} is open (W6), so a slot there cannot be closed")
+            raise OperationError(f"{what}: {to} is open, so a slot there cannot be closed")
         notes.pop("world", None)
     if notes:
         d["annotations"] = notes

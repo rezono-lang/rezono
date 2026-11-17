@@ -3,7 +3,7 @@
 // referent__represented_by(x, r). The values a domain compares come from its own rules, in the two relations it
 // extends: stated_text(x, slot, value) and stated_number(x, slot, value).
 //
-// same_as is a claim with a source of its own (S25): a merge is never inferred from a shared value or name. A
+// same_as is a claim with a source of its own: a merge is never inferred from a shared value or name. A
 // pair without a same_as row is not stated to be one; no rule concludes from that that it is two.
 
 // stated_same: a source states that a and b are the same, read either way (symmetry).

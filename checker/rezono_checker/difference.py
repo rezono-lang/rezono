@@ -1,4 +1,4 @@
-"""Check the difference of a proposal or variant against its base, for one role (decision R10, step 7).
+"""Check the difference of a proposal or variant against its base, for one role (step 7).
 
 The publisher compares the role's two snapshots and writes the changes as key-range trees
 (rezono_publisher.difference). This module trusts none of it: it compares the snapshots itself and requires

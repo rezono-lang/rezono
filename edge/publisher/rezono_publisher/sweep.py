@@ -25,7 +25,7 @@ main, also when it found the pack unchanged and published nothing for HEAD (RV-M
 - Each variant writes only what differs from m-N (publish.plan with `base`): every other snapshot, witness set
   and compiled file of a variant is m-N's own object for the same role, with the same bytes. So a variant
   costs the objects the swept cell changes, not a whole publication (measured on the lab: 30 of 516).
-- Roles (decision O7): `readers` may read the swept cell; only they get the variant. `status_readers` also
+- Roles: `readers` may read the swept cell; only they get the variant. `status_readers` also
   read every row, so a variant's status tells them nothing they cannot see; the others see `unavailable`.
   The gate removes both lists before it serves a variant.
 
@@ -64,7 +64,7 @@ def roles_of(e: publish.Epoch, roles: dict[str, str], kind: str, key: str) -> tu
     it may not read. Every other reader sees `unavailable` (the gate does that).
     """
     doc = json.loads(e.rules)
-    columns = access.with_calc(e.columns, publish.calc_ir(e))  # as a publication sees them (W12)
+    columns = access.with_calc(e.columns, publish.calc_ir(e))  # as a publication sees them
     readers, status_readers = [], []
     for role, mode in sorted(roles.items()):
         if mode == access.COMPLETE:

@@ -2,7 +2,7 @@ id: https://rezono.org/contracts/explain
 name: rezono_explain
 title: Explanation questions
 description: >-
-  Explanation as a question about the proof (decisions R8, R9, R10; docs/gui.md, "Explanation as questions
+  Explanation as a question about the proof (docs/gui.md, "Explanation as questions
   over the proof"). A question is data: a term, what it starts from, its steps (the building blocks trace and
   suppose) and the shape of its answer. Packs write them in questions.yaml (rezono.questions/1, checked by the
   compiler: only names that exist in the pack); the standard pack std-explain gives the known ones. The
@@ -22,7 +22,7 @@ enums:
   DayReading:
     description: How a whole number is read as a day (the vocabulary of contracts/pack.yaml, ViewColumn.reading).
     permissible_values:
-      days: {description: "The number of days since 1970-01-01 in the proleptic Gregorian calendar (decision R18)."}
+      days: {description: "The number of days since 1970-01-01 in the proleptic Gregorian calendar."}
       yyyymmdd: {description: "A whole number written YYYYMMDD."}
   QuestionStart:
     description: What a question starts from.
@@ -216,7 +216,7 @@ classes:
       nodes: {range: AnswerNode, multivalued: true, inlined_as_list: true, required: true, description: "The nodes on this page; the start, at distance 0, on the first."}
       steps: {range: AnswerStep, multivalued: true, inlined_as_list: true, description: "The edges that reach a node on this page, from a node the answer shows (on this page or an earlier one); by conclusion, how, position and premise."}
       witnesses: {range: Witness, multivalued: true, inlined_as_list: true, description: "The chosen witness of each conclusion on this page, in page order: the captions."}
-      calc_witnesses: {range: CalcWitness, multivalued: true, inlined_as_list: true, description: "The witness of each calculated row on this page, in page order (decision W12): its version, definition and steps, unchanged. Each premise is also an edge of the answer (positive, at its index in premises); absent when the page has none."}
+      calc_witnesses: {range: CalcWitness, multivalued: true, inlined_as_list: true, description: "The witness of each calculated row on this page, in page order: its version, definition and steps, unchanged. Each premise is also an edge of the answer (positive, at its index in premises); absent when the page has none."}
       next: {description: "The cursor of the next page, <distance>,<relation>,<key> (the query parameter after); absent on the last page."}
       more: {range: RowRef, multivalued: true, inlined_as_list: true, description: "The nodes on this page where the walk stopped before its depth, to stay within the limit: each continues with the same question from that node."}
       gap: {range: GapAnswer, inlined: true, description: "For a question through the rules (gap): the failing premises and the candidates."}
@@ -385,14 +385,14 @@ classes:
       outside: {range: boolean, description: "An anonymous node."}
       change: {range: NodeChange, description: "For impact: what the delta did to this row for the role; every node of an impact answer has one."}
       was: {description: "For impact, a changed cell: its row in the base, as canonical key text."}
-      sources: {range: Source, multivalued: true, inlined_as_list: true, description: "A base row's sources (S25), from the role's own source set and by today's rights, as the publisher sorted them: where a walk back ends. Absent on a conclusion, and on every node of a manifest without source sets. A locator, not proof that the row is true."}
+      sources: {range: Source, multivalued: true, inlined_as_list: true, description: "A base row's sources, from the role's own source set and by today's rights, as the publisher sorted them: where a walk back ends. Absent on a conclusion, and on every node of a manifest without source sets. A locator, not proof that the row is true."}
   GapAnswer:
     description: What is missing for an absent start (docs/gui.md, "gap"), in the walk's order.
     attributes:
       premises: {range: GapPremise, multivalued: true, inlined_as_list: true, required: true}
       candidates: {range: GapCandidate, multivalued: true, inlined_as_list: true, description: "Changes to base rows that answer a failing premise."}
       cut: {range: boolean, required: true, description: "Premises were left out to stay within the limit."}
-      closed_by: {range: RowRef, multivalued: true, inlined_as_list: true, description: "For contrast: the role's rows of every relation that closes the start's relation (DerivedRelation.closes, decision W14) whose key is a prefix of the start's key, by relation, then key. Each states that no row holds there, and its grounds say why. Absent: no closing row the role reads matches, and the answer says only what lacks support (open world); a role that does not read a closing relation gets no hint whether one exists."}
+      closed_by: {range: RowRef, multivalued: true, inlined_as_list: true, description: "For contrast: the role's rows of every relation that closes the start's relation (DerivedRelation.closes) whose key is a prefix of the start's key, by relation, then key. Each states that no row holds there, and its grounds say why. Absent: no closing row the role reads matches, and the answer says only what lacks support (open world); a role that does not read a closing relation gets no hint whether one exists."}
   GapPremise:
     description: The first item of a rule's schedule without a match, for one branch of the bindings.
     attributes:

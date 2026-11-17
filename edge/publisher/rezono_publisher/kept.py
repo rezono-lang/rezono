@@ -170,7 +170,7 @@ def allowed(name: str, v1: bool = False) -> bool:
 def archived_pack(root: Path) -> tuple[Path | None, list[str]]:
     """The pack an unpacked archive was made for, under its pack/ directory `root`, checked with the current
     code before anything runs: the one pack.yaml that no other pack there imports, every pack it imports
-    inside `root` with the hash its importer pins (S9), and no file under `root` outside that closure."""
+    inside `root` with the hash its importer pins, and no file under `root` outside that closure."""
     from rezono_compiler import modules
 
     root = root.resolve()

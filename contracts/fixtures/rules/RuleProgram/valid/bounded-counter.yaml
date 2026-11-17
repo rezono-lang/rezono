@@ -1,4 +1,4 @@
-# A counter with an explicit bound (decision R16): the one arithmetic in a recursive rule. depth starts at 0
+# A counter with an explicit bound: the one arithmetic in a recursive rule. depth starts at 0
 # and its rule adds 1 while the depth it reads is below 3, so it fires three times at most on every input.
 format: rezono.rules/1
 pack: fixture

@@ -24,7 +24,7 @@ ARITHMETIC = ("add", "sub", "mul", "div")
 DAYS = "days"
 TYPES = ("string", "integer")
 WORLDS = ("closed", "open")
-# The states of a named outcome (decision W7); invalid comes from the violation views.
+# The states of a named outcome; invalid comes from the violation views.
 STATES = ("known", "unknown", "not_applicable")
 REL_NAME = re.compile(r"^[a-z][a-z0-9]*((_|__)[a-z0-9]+)*$")  # base relations may be M1 tables `kind__slot`
 VAR = re.compile(r"^\?[a-z][a-z0-9_]*$")
@@ -52,7 +52,7 @@ def is_var(t):
 
 
 def closes_check(closing, closed):
-    """The name of the invariant the compiler generates for `// @closes` (decision W14): the keys that hold
+    """The name of the invariant the compiler generates for `// @closes`: the keys that hold
     in the closing relation and in the relation it closes."""
     return f"{closing}_closes_{closed}"
 
@@ -94,11 +94,11 @@ class Relation:
     module: str | None = None
     explain: str | None = None
     invariant: bool = False  # must be empty at the end of an epoch
-    world: str = "closed"  # decision W6: a missing row is not true (closed) or unknown (open)
+    world: str = "closed"  # a missing row is not true (closed) or unknown (open)
     absence: bool = False  # @absence: about what is recorded, so closed; may negate an open relation
-    outcome: str | None = None  # @outcome <kind>: one state and reason per element of that kind (W7)
-    extend: bool = False  # S28: consumers may add rules; without any, this relation is the empty set
-    closes: str | None = None  # @closes <relation>: a row says that no row of that relation holds at its key (W14)
+    outcome: str | None = None  # @outcome <kind>: one state and reason per element of that kind
+    extend: bool = False  # consumers may add rules; without any, this relation is the empty set
+    closes: str | None = None  # @closes <relation>: a row says that no row of that relation holds at its key
 
 
 @dataclass(frozen=True)
@@ -192,7 +192,7 @@ class Program:
     relations: dict
     rules: dict
     strata: dict = field(default_factory=dict)
-    seals: list = field(default_factory=list)  # decision E3: the sealed kinds and the tables of the seal
+    seals: list = field(default_factory=list)  # the sealed kinds and the tables of the seal
     bounds: dict = field(default_factory=dict)  # relation -> Bound: a counter the translator unrolls (P6.2)
 
     def rules_for(self, relation):
@@ -220,7 +220,7 @@ class Program:
         out = set()
         for r in self.rules_for(relation):
             out |= {b.atom.relation for b in r.body} | {a.atom.relation for a in r.aggregates}
-        if self.relations[relation].outcome:  # its checks read every element of the kind (W7)
+        if self.relations[relation].outcome:  # its checks read every element of the kind
             out.add(self.relations[relation].outcome)
         return out
 
@@ -384,7 +384,7 @@ def load(doc, require_witness=True):
         if absence not in (True, False) or (absence and r["role"] != "derived"):
             raise IRError("bad_absence", f"{name}: absence is true or false, on a derived relation")
         if "release" in r:
-            raise IRError("release_unsupported", f"{name}: release is not supported yet: a role reads a negation or an aggregate only over relations it reads in full (decision O8; docs/architecture.md, delimited release)")
+            raise IRError("release_unsupported", f"{name}: release is not supported yet: a role reads a negation or an aggregate only over relations it reads in full (docs/architecture.md, delimited release)")
         if r.get("world", "closed") not in WORLDS:
             raise IRError("bad_world", f"{name}: world is one of {WORLDS}")
         outcome = r.get("outcome")
@@ -452,7 +452,7 @@ def load(doc, require_witness=True):
 
 
 def _check_closes(prog):
-    """Decision W14: a relation that closes another has its generated invariant, `closes_check`, with exactly
+    """A relation that closes another has its generated invariant, `closes_check`, with exactly
     one rule: the closing row and a row of the closed relation at the same key, its other columns free. So a
     program that says `closes` cannot leave out the check that the two never hold together, or weaken it."""
     for name, rel in sorted(prog.relations.items()):
@@ -476,7 +476,7 @@ def _check_closes(prog):
 
 
 def _check_outcomes(prog):
-    """Decision W7: an outcome reads its kind's elements, states are constants, a known row has the reason
+    """An outcome reads its kind's elements, states are constants, a known row has the reason
     "", and the outcome is closed (its totality is checked, so it cannot leave anything unknown by omission)."""
     for name, rel in sorted(prog.relations.items()):
         if rel.outcome is None:
@@ -718,7 +718,7 @@ def _bound(prog, r):
 
 
 def _worlds(prog, declared):
-    """Decision W6. A base relation has the world the schema gives it. A derived relation is open if a rule
+    """A base relation has the world the schema gives it. A derived relation is open if a rule
     reads an open relation positively; an @absence relation is closed. Negation over an open relation, and an
     aggregate over one (a count of what is recorded), is an error, except in an @absence relation; a rule of an
     @absence relation must negate an open relation, aggregate over one, or read another @absence relation.
