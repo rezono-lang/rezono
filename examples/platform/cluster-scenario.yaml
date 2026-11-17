@@ -1,0 +1,50 @@
+clusters:
+  hub: hub
+  base: base
+  management: management
+  virtualization: virtualization
+  production: application
+  development: application
+  storage: storage
+  build: build
+  edge: edge
+  recovery: recovery
+zones:
+  hub: management
+  base: platform
+  management: management
+  virtualization: infrastructure
+  application: tenant
+  storage: storage
+  build: build
+  edge: entry
+  recovery: recovery
+service_clusters:
+  user: edge
+  lb: edge
+  idp: base
+  db-idp: base
+  db-git: base
+  dns: base
+  time: base
+  reg: base
+  vault: base
+  cp: management
+  gitops: hub
+  git: base
+  store: storage
+  sign: build
+  build: build
+  shop: production
+  lab: development
+  restore: recovery
+  restore-bad: recovery
+storage_uses:
+  production: [vm-disk, persistent-volume]
+  development: [vm-disk, persistent-volume]
+transports:
+  control-plane: 6443
+  fleet-registration: 443
+  fleet-apply: 6443
+  vm-disk: 7001
+  persistent-volume: 7002

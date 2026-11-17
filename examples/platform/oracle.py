@@ -13,6 +13,8 @@ from pathlib import Path
 
 import yaml
 
+from cluster_oracle import cluster_relations
+
 HERE = Path(__file__).parent
 FACTS = yaml.safe_load((HERE / "facts" / "core.yaml").read_text())
 
@@ -162,6 +164,12 @@ RELATIONS = {
     "unverified_supply": {(s,) for s in unverified_supply},
     "build_reaches_tenant": build_reaches_tenant,
 }
+
+
+RELATIONS.update(cluster_relations(
+    yaml.safe_load((HERE / "cluster-scenario.yaml").read_text()),
+    ids("service"), flow, zone_of,
+))
 
 
 def rows(relation):
