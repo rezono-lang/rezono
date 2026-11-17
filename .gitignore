@@ -22,3 +22,9 @@ deploy/engine/engine.env
 # Local secrets of a Worker (wrangler dev) and of a shell: never in Git (RV-I05).
 .dev.vars
 .env
+/compiled/
+.hypothesis/
+.fast-check.log
+contracts/python/rede_contracts/*.py
+!contracts/python/rede_contracts/__init__.py
+contracts/python/rede_contracts/*.schema.json
