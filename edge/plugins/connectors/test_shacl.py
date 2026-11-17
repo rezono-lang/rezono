@@ -19,8 +19,8 @@ import pyshacl  # noqa: E402
 from rdflib import BNode, Graph, Literal, URIRef  # noqa: E402
 from rdflib.namespace import RDF, RDFS, SH, XSD  # noqa: E402
 
-from publication import l0, rdf  # noqa: E402
-from publication.tests.test_l0 import (  # noqa: E402
+from rezono_publication import l0, rdf  # noqa: E402
+from rezono_publication.tests.test_l0 import (  # noqa: E402
     FILES, FIXTURE, R01, THING, TREE, TREE_ROWS, TYPES, merge, rows_of, schema_of)
 
 import shacl  # noqa: E402  (this directory)

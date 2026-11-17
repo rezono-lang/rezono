@@ -2,7 +2,7 @@
 
 A loss list is a claim about a mapping, so it is tested against the mapping: the terms outside the standard that
 an export writes are exactly the terms its `extension` entries name, and an export writes nothing else that the
-list does not account for. The exports are the library's (publication/rdf.py); nothing is converted here.
+list does not account for. The exports are the library's (rezono_publication/rdf.py); nothing is converted here.
 """
 
 import json
@@ -24,7 +24,7 @@ from linkml.validator import validate  # noqa: E402
 from rdflib import Literal  # noqa: E402
 from rdflib.namespace import PROV, RDF  # noqa: E402
 
-from publication import rdf  # noqa: E402
+from rezono_publication import rdf  # noqa: E402
 
 HERE = Path(__file__).parent
 CONTRACT = ROOT / "contracts" / "connector.yaml"

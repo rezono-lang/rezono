@@ -18,7 +18,7 @@ Licence by path:
   - deploy/
   - edge/
   - examples/**/*.py
-  - publication/
+  - rezono_publication/
   - pyrightconfig.json
   - requirements/
   - rezono/

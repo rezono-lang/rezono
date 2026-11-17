@@ -1,7 +1,7 @@
 """SHACL shapes of a publication schema (docs/publication/l0.md §5; lane M, M08): `<base>s-<hex>/shapes.ttl`.
 
 The shapes are made from the schema document alone and validate the RDF view of a dataset under that schema
-(`publication.rdf.to_graph`): what a SHACL validator accepts is what the library's reader accepts, as far as a
+(`rezono_publication.rdf.to_graph`): what a SHACL validator accepts is what the library's reader accepts, as far as a
 shape can say it. What a shape cannot say is in `shacl.losses.yaml`.
 
 Per kind a node shape, closed, with one property shape per slot:
@@ -34,7 +34,7 @@ from rdflib import BNode, Graph, Literal, Namespace, URIRef  # noqa: E402
 from rdflib.collection import Collection  # noqa: E402
 from rdflib.namespace import RDF, SH, XSD  # noqa: E402
 
-from publication import l0, rdf  # noqa: E402
+from rezono_publication import l0, rdf  # noqa: E402
 
 REASON_CODE = "^([a-z][a-z0-9_]*)?$"  # §2.3: empty, or a reason code
 

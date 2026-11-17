@@ -10,9 +10,9 @@ from rdflib.namespace import PROV, RDF, RDFS, XSD
 
 from rezono_canon import canonical_json
 
-from publication import l0, rdf
-from publication.hash import hashes
-from publication.tests.test_l0 import FILES, FIXTURE, R01, TREE, TREE_ROWS, merge, schema_of
+from rezono_publication import l0, rdf
+from rezono_publication.hash import hashes
+from rezono_publication.tests.test_l0 import FILES, FIXTURE, R01, TREE, TREE_ROWS, merge, schema_of
 
 
 def canon(rows):
@@ -206,7 +206,7 @@ def test_why_and_src_are_statement_annotations_and_round_trip():
 
 
 def test_every_type_and_state_round_trips():
-    from publication.tests.test_l0 import THING, TYPES
+    from rezono_publication.tests.test_l0 import THING, TYPES
     rows = [dict(THING, hosts=[{"$ref": "host-a"}]), *R01]
     assert canon(rdf.from_turtle(TYPES, rdf.to_turtle(TYPES, rows))) == canon(rows)
 
@@ -312,7 +312,7 @@ def test_no_json_number_or_float_reaches_a_literal():
 _SEEDED = r'''
 import hashlib, json, sys
 from rdflib import Graph
-from publication import rdf
+from rezono_publication import rdf
 kinds = {k: {"world": "closed", "id": {"type": "Text"},
              "slots": {"tags": {"type": "Text", "card": "*", "states": ["known"]},
                        "note": {"type": "Text", "card": "?", "states": ["known", "not_applicable"]}}}

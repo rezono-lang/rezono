@@ -28,7 +28,7 @@ from rdflib.namespace import RDF, SH  # noqa: E402
 from rezono_compiler import batch, emit, facts, pack  # noqa: E402
 from rezono_compiler import rules as ir  # noqa: E402
 
-from publication import publication, rdf  # noqa: E402
+from rezono_publication import publication, rdf  # noqa: E402
 
 import accept  # noqa: E402  (this directory)
 import shacl_sparql  # noqa: E402

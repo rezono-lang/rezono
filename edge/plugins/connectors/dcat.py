@@ -4,7 +4,7 @@ A catalogue entry points at the data; it holds none. It is made from the schema 
 and the addresses the publisher gives its files, and it says four things:
 
 - **which dataset:** its IRI is the epoch's own name, `rezono:m/m-<epoch>@d-<64 hex>`, the same resource the PROV-O
-  export calls a bundle (`publication.rdf.witness_to_prov`); `dct:identifier` is the full pin in the order of
+  export calls a bundle (`rezono_publication.rdf.witness_to_prov`); `dct:identifier` is the full pin in the order of
   docs/publication/l0.md §6.4, `<pack>@s-…@m-…@d-…`, and `dcat:version` is the manifest id;
 - **under which schema:** `dct:conformsTo` the schema id's own space, `<base>s-<hex>/` (§5);
 - **in which forms:** a `dcat:Distribution` per form the publisher wrote (§7), with its address and media type; an
@@ -32,7 +32,7 @@ sys.path.insert(0, str(ROOT))  # publication lives at the repository root
 from rdflib import Graph, Literal, Namespace, URIRef  # noqa: E402
 from rdflib.namespace import DCTERMS, RDF  # noqa: E402
 
-from publication import l0, rdf  # noqa: E402
+from rezono_publication import l0, rdf  # noqa: E402
 
 DCAT = Namespace("http://www.w3.org/ns/dcat#")  # rdflib's own is closed on DCAT 2: it has no `version`
 MEDIA = "https://www.iana.org/assignments/media-types/"

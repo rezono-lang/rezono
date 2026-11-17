@@ -1,5 +1,5 @@
 """Each role's publication form of a main manifest, after its publication (RV-K16, revised 16-11-2026;
-docs/publication/l0.md, `publication.publication`).
+docs/publication/l0.md, `rezono_publication.publication`).
 
   python -m rezono_publisher.forms PACK MANIFEST [--profile p | --store url]
   python -m rezono_publisher.forms --newest --profile p [--results FILE] [PACK_DIR ...]
@@ -31,7 +31,7 @@ manifest names under the role), the role-neutral schema bundle, and which relati
   <pack>/<manifest>/<role>/publication/table.<t>.arrow  each table of the columnar form (§4), one Arrow IPC file and
   <pack>/<manifest>/<role>/publication/table.<t>.parquet  one Parquet file per table, `$` written `_` (l0.md §4.6;
                                                 RV-K19)
-  <pack>/<manifest>/<role>/publication/statement.json  the role's epoch statement (RV-X41, `publication.statement`):
+  <pack>/<manifest>/<role>/publication/statement.json  the role's epoch statement (RV-X41, `rezono_publication.statement`):
                                                 every object above by its sha256, the role's manifest and
                                                 snapshots, the dataset and annotation hash, and the row-tree
                                                 roots with their inclusion hash; unsigned
@@ -55,7 +55,7 @@ form and its exports are the same bytes when made again). The standards' own rea
 on a published store (`edge/plugins/connectors/accept.py`), never here. The tables (RV-K19) are read back from their
 own bytes, in each form: the rows they give hash to the form's hashes, and written again from those rows they are
 the same bytes. The statement is made last, from the form and every object above (the tables among them), and
-read back by the reader's own check (`publication.statement.verify`) from the bytes alone before anything is
+read back by the reader's own check (`rezono_publication.statement.verify`) from the bytes alone before anything is
 written: a statement that does not say what its files say blocks every role, as a red form does.
 
 A role's index names at most `FORM_OBJECTS` objects (the statement among them), each by a name the gate serves; the
@@ -92,12 +92,12 @@ ROOT = Path(__file__).resolve().parents[3]
 if str(ROOT) not in sys.path:
     sys.path.append(str(ROOT))  # publication lives at the repository root, beside the publisher
 
-from publication import arrow  # noqa: E402
-from publication import hash as rhash  # noqa: E402
-from publication import l0  # noqa: E402
-from publication import publication as rd  # noqa: E402
-from publication import statement as statements  # noqa: E402
-from publication import rdf  # noqa: E402
+from rezono_publication import arrow  # noqa: E402
+from rezono_publication import hash as rhash  # noqa: E402
+from rezono_publication import l0  # noqa: E402
+from rezono_publication import publication as rd  # noqa: E402
+from rezono_publication import statement as statements  # noqa: E402
+from rezono_publication import rdf  # noqa: E402
 
 FORMAT = "rezono.publication-form/1"
 MAIN = re.compile(r"^m-(\d+)$")
@@ -143,7 +143,7 @@ def component() -> dict:
     """What the forms are made with, for the build record: the library's source, and the exporters' source and
     loss lists. Another library or exporter is another build, so a pack is published again (`--skip-unchanged`
     compares builds)."""
-    return {"format": FORMAT, "publication": _sources((ROOT / "publication", "*.py")),
+    return {"format": FORMAT, "publication": _sources((ROOT / "rezono_publication", "*.py")),
             "connectors": _sources((CONNECTORS, "*.py"), (CONNECTORS, "*.losses.yaml"))}
 
 
@@ -288,7 +288,7 @@ def verify(data: dict[str, bytes], form: dict, given: dict, bundle: dict, full) 
     """A form read back from its bytes alone, as a reader of the role's prefix would, and held against the role's
     own rows. Returns its hashes and what was read back (`schema`, `rows`: what the exports are made from); raises
     Blocked with what differs. The hashes were computed from the form's
-    schema and rows (`publication.hash`, deterministic); the bytes must read back to exactly those, so the hashes
+    schema and rows (`rezono_publication.hash`, deterministic); the bytes must read back to exactly those, so the hashes
     follow from the bytes too without computing them a second time."""
     schema = json.loads(data["schema.json"])
     want = json.loads(data["hashes.json"])
@@ -326,7 +326,7 @@ def verified_tables(data: dict[str, bytes], form: dict, h: dict) -> dict[str, by
     by `arrow.file_name`. Each form's files are read back from their bytes alone, as a reader reads them, and the
     rows they give must have exactly the form's hashes (`hashes.json`); otherwise Blocked, and nothing is written.
     That they are the same bytes when written again, whatever the order of the rows, is the Arrow writer's own
-    test (publication/tests/test_arrow.py), not checked here: it repeated a pure function on the same rows."""
+    test (rezono_publication/tests/test_arrow.py), not checked here: it repeated a pure function on the same rows."""
     pin = {"dataset": h["dataset"], "manifest": form["manifest"]["id"]}
     schema = json.loads(data["schema.json"])
     try:
@@ -355,7 +355,7 @@ def listable(names: list[str]) -> None:
 
 def epoch_statement(pack: str, role: str, form: dict, h: dict, sources: list[dict], objects: dict[str, bytes]) -> bytes:
     """The role's epoch statement (RV-X41) over its form's objects, made from the verified form and held to the
-    reader's check of `publication.statement` from the bytes alone. Raises Blocked with what differs."""
+    reader's check of `rezono_publication.statement` from the bytes alone. Raises Blocked with what differs."""
     index = {"pack": pack, "role": role, "manifest": form["manifest"], "schema": h["schema"], "dataset": h["dataset"],
              "sources": sources, "objects": [{"name": n, "sha256": sha256(b)} for n, b in objects.items()]}
     try:

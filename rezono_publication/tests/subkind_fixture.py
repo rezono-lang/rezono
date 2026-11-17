@@ -1,6 +1,6 @@
 """A neutral definition with a kind tree, as one role's part of a publication holds it (RV-K26).
 
-A schema bundle with only the members `publication.publication` reads (contracts/bundle.yaml): a Part is an
+A schema bundle with only the members `rezono_publication.publication` reads (contracts/bundle.yaml): a Part is an
 Item (`parent`), a Spare is a Part, and a Tool is an Item beside them. An item has a label and may sit inside
 another item; a part may have a size; a holder keeps items. In Rezono an element of a subkind is a row of every
 kind above it too (docs/compiler.md, Tables), so `p1` is a row of `item` and of `part`.
