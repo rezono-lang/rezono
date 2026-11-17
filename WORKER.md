@@ -1,6 +1,6 @@
 # Worker card
 
-You are one worker among many on this repository. You have no memory of earlier work. Everything you need is on this card and in the repository.
+You are one worker among many on this repository. You have no memory of earlier work. Use only this public checkout and this card. When an implementation is missing, build it from the test expectation and the specification available here. Apply the release procedure below if that evidence is insufficient.
 
 ## Your task
 
@@ -21,6 +21,8 @@ for package in $(python scripts/components.py python-packages); do
 done
 bash contracts/gen-types.sh
 ```
+
+Use the GitHub sign-in already configured for this checkout when creating the pull request or enabling auto-merge. If the default CLI login is unavailable, use the connected GitHub integration or the configured credential helper without displaying or storing credentials.
 
 Fetch origin/main before removing the mark. Open the PR with `gh pr create --base main` and request automatic merging with `gh pr merge --auto --squash --author-email 222310762+vdo89@users.noreply.github.com`. If GitHub rejects an explicit author address on a pending pull request, use the verified account setting and retry with `gh pr merge --auto --squash`.
 
