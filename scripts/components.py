@@ -180,7 +180,7 @@ def affected_components(
 
 # Files are assigned to jobs round-robin. Within a job pytest items share the
 # runner's cores, so one large parametrized file can use more than one core.
-SHARDS = {"compiler": 3, "examples": 2}
+SHARDS = {"compiler": 3, "examples": 3}
 PARALLEL = {"compiler", "examples", "edge/publisher"}
 
 
@@ -218,7 +218,7 @@ def check_contracts() -> int:
             return subprocess.run(["bash", str(copy / "check.sh")], check=False).returncode
 
     with ThreadPoolExecutor(max_workers=workers) as pool:
-        return max(pool.map(check, range(workers)))
+        return next((code for code in pool.map(check, range(workers)) if code), 0)
 
 
 def run_shard(folder: str, shard: int, total: int, report_dir: Path) -> int:
@@ -232,7 +232,8 @@ def run_shard(folder: str, shard: int, total: int, report_dir: Path) -> int:
             sys.executable, str(Path(__file__).resolve()), "pytest-worker", folder,
             str(shard), str(total), str(worker), str(workers), str(report_dir),
         ]
-        return subprocess.run(args, cwd=ROOT, check=False).returncode
+        env = {**os.environ, "PYTHONHASHSEED": os.environ.get("PYTHONHASHSEED", "0")}
+        return subprocess.run(args, cwd=ROOT, env=env, check=False).returncode
 
     with ThreadPoolExecutor(max_workers=workers) as pool:
         statuses = list(pool.map(execute, range(workers)))
@@ -262,7 +263,14 @@ def pytest_worker(folder: str, shard: int, total: int, worker: int, workers: int
             collected = {item.path.relative_to(ROOT).as_posix() for item in items}
             assigned = set(sorted(set(files) | collected)[shard::total])
             local = [item for item in items if item.path.relative_to(ROOT).as_posix() in assigned]
-            items[:] = local[worker::workers]
+            if folder == "examples":
+                # Examples share per-file coverage counters and cached pack
+                # states. Keep their module fixtures and collection order.
+                by_file = sorted({item.path for item in local})
+                worker_files = set(by_file[worker::workers])
+                items[:] = [item for item in local if item.path in worker_files]
+            else:
+                items[:] = local[worker::workers]
 
         @pytest.hookimpl(wrapper=True)
         def pytest_make_collect_report(self, collector):
