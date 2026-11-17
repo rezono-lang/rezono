@@ -8,9 +8,14 @@ cd "$(dirname "$0")"
 SCHEMAS="bundle proof explain plugin port proposal output-index diagnostic"
 ts=../viewer/src/lib/contract/generated
 py=python/rede_contracts
-mkdir -p "$ts" "$py"
+mkdir -p "$py"
+if [ -f ../viewer/package.json ]; then
+  mkdir -p "$ts"
+fi
 for s in $SCHEMAS; do
-  gen-typescript "$s.yaml" > "$ts/$s.ts"
+  if [ -f ../viewer/package.json ]; then
+    gen-typescript "$s.yaml" > "$ts/$s.ts"
+  fi
   gen-pydantic "$s.yaml" > "$py/${s//-/_}.py"  # a Python module name has no hyphen
 done
 # A contract that code holds at run time also gets its JSON Schema, the schema LinkML's own validator checks
