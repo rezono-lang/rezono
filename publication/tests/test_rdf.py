@@ -12,7 +12,7 @@ from rezono_canon import canonical_json
 
 from rezono_publication import l0, rdf
 from rezono_publication.hash import hashes
-from rezono_publication.tests.test_l0 import FILES, FIXTURE, R01, TREE, TREE_ROWS, merge, schema_of
+from publication.tests.test_l0 import FILES, FIXTURE, R01, TREE, TREE_ROWS, merge, schema_of
 
 
 def canon(rows):
@@ -206,7 +206,7 @@ def test_why_and_src_are_statement_annotations_and_round_trip():
 
 
 def test_every_type_and_state_round_trips():
-    from rezono_publication.tests.test_l0 import THING, TYPES
+    from publication.tests.test_l0 import THING, TYPES
     rows = [dict(THING, hosts=[{"$ref": "host-a"}]), *R01]
     assert canon(rdf.from_turtle(TYPES, rdf.to_turtle(TYPES, rows))) == canon(rows)
 
