@@ -118,7 +118,14 @@ jobs:
             folder="$COMPONENT/python"
           fi
           rc=0
-          python scripts/components.py run-shard "$folder" "$SHARD" "$TOTAL" "$RUNNER_TEMP/reports" || rc=$?
+          if [[ "$COMPONENT" == examples ]]; then
+            echo "Available cores: $(nproc)"
+            cat /proc/pressure/cpu
+          fi
+          /usr/bin/time -f 'Runner wall=%e s user=%U s system=%S s CPU=%P peak RSS=%M KiB' python scripts/components.py run-shard "$folder" "$SHARD" "$TOTAL" "$RUNNER_TEMP/reports" || rc=$?
+          if [[ "$COMPONENT" == examples ]]; then
+            cat /proc/pressure/cpu
+          fi
           if [[ "$rc" == 5 && "$KIND" != contracts ]]; then
             python scripts/red_list.py --all-tests-blocked "$COMPONENT"
           else

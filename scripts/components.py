@@ -234,6 +234,10 @@ def run_shard(folder: str, shard: int, total: int, report_dir: Path) -> int:
             str(shard), str(total), str(worker), str(workers), str(report_dir), state,
         ]
         env = {**os.environ, "PYTHONHASHSEED": os.environ.get("PYTHONHASHSEED", "0")}
+        if workers > 1:
+            # Each pytest process owns one share of the runner. Avoid nested
+            # native thread pools competing with the other pytest processes.
+            env.update(OMP_NUM_THREADS="1", OPENBLAS_NUM_THREADS="1", MKL_NUM_THREADS="1")
         return subprocess.run(args, cwd=ROOT, env=env, check=False).returncode
 
     with tempfile.TemporaryDirectory() as state, ThreadPoolExecutor(max_workers=workers) as pool:
