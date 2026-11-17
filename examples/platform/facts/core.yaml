@@ -1,0 +1,133 @@
+zone:
+  - {id: external}
+  - {id: entry}
+  - {id: platform}
+  - {id: tenant}
+  - {id: management}
+  - {id: storage}
+  - {id: recovery}
+cluster_class:
+  - {id: none}
+  - {id: edge}
+  - {id: base}
+  - {id: control}
+  - {id: app-prod}
+  - {id: app-dev}
+  - {id: storage}
+  - {id: recovery}
+  - {id: build}
+platform_role:
+  - {id: outside, zone: external, cluster_class: none, runs_images: "no"}
+  - {id: entry, zone: entry, cluster_class: edge, runs_images: "no"}
+  - {id: shared, zone: platform, cluster_class: base, runs_images: "no"}
+  - {id: control, zone: platform, cluster_class: control, runs_images: "no"}
+  - {id: build, zone: platform, cluster_class: build, runs_images: "no"}
+  - {id: workload-prod, zone: tenant, cluster_class: app-prod, runs_images: "yes"}
+  - {id: workload-dev, zone: tenant, cluster_class: app-dev, runs_images: "yes"}
+  - {id: storage, zone: storage, cluster_class: storage, runs_images: "no"}
+  - {id: recovery, zone: recovery, cluster_class: recovery, runs_images: "yes"}
+function:
+  - {id: ingress, recovery_allowed: "no", open_by_design: "yes"}
+  - {id: identity, recovery_allowed: "no", open_by_design: "no"}
+  - {id: database, recovery_allowed: "no", open_by_design: "no"}
+  - {id: dns, recovery_allowed: "yes", open_by_design: "yes"}
+  - {id: time, recovery_allowed: "yes", open_by_design: "yes"}
+  - {id: registry, recovery_allowed: "yes", open_by_design: "no"}
+  - {id: secrets, recovery_allowed: "yes", open_by_design: "no"}
+  - {id: control-plane, recovery_allowed: "yes", open_by_design: "no"}
+  - {id: gitops, recovery_allowed: "no", open_by_design: "no"}
+  - {id: git, recovery_allowed: "no", open_by_design: "no"}
+  - {id: object-storage, recovery_allowed: "yes", open_by_design: "no"}
+  - {id: signing, recovery_allowed: "no", open_by_design: "no"}
+product:
+  - {id: client}
+  - {id: loadbalancer}
+  - {id: keycloak}
+  - {id: postgresql}
+  - {id: coredns}
+  - {id: chrony}
+  - {id: registry}
+  - {id: openbao}
+  - {id: kube-control}
+  - {id: argocd}
+  - {id: forgejo}
+  - {id: ceph}
+  - {id: app}
+  - {id: builder}
+  - {id: signer}
+  - {id: recovery-env}
+offer:
+  - {id: o-lb, product: loadbalancer, function: ingress, port: 443}
+  - {id: o-idp, product: keycloak, function: identity, port: 8443}
+  - {id: o-db, product: postgresql, function: database, port: 5432}
+  - {id: o-dns, product: coredns, function: dns, port: 53}
+  - {id: o-time, product: chrony, function: time, port: 123}
+  - {id: o-reg, product: registry, function: registry, port: 443}
+  - {id: o-vault, product: openbao, function: secrets, port: 8200}
+  - {id: o-cp, product: kube-control, function: control-plane, port: 6443}
+  - {id: o-gitops, product: argocd, function: gitops, port: 443}
+  - {id: o-git-https, product: forgejo, function: git, port: 443}
+  - {id: o-git-ssh, product: forgejo, function: git, port: 22}
+  - {id: o-s3, product: ceph, function: object-storage, port: 443}
+  - {id: o-sign, product: signer, function: signing, port: 443}
+demand:
+  - {id: d-client-ingress, product: client, function: ingress}
+  - {id: d-idp-db, product: keycloak, function: database}
+  - {id: d-idp-dns, product: keycloak, function: dns}
+  - {id: d-reg-s3, product: registry, function: object-storage}
+  - {id: d-reg-id, product: registry, function: identity}
+  - {id: d-vault-id, product: openbao, function: identity}
+  - {id: d-cp-id, product: kube-control, function: identity}
+  - {id: d-ceph-id, product: ceph, function: identity}
+  - {id: d-ceph-time, product: ceph, function: time}
+  - {id: d-argo-git, product: argocd, function: git}
+  - {id: d-argo-cp, product: argocd, function: control-plane}
+  - {id: d-argo-id, product: argocd, function: identity}
+  - {id: d-forgejo-db, product: forgejo, function: database}
+  - {id: d-forgejo-id, product: forgejo, function: identity}
+  - {id: d-app-id, product: app, function: identity}
+  - {id: d-app-dns, product: app, function: dns}
+  - {id: d-app-time, product: app, function: time}
+  - {id: d-app-reg, product: app, function: registry}
+  - {id: d-build-git, product: builder, function: git}
+  - {id: d-build-reg, product: builder, function: registry}
+  - {id: d-build-sign, product: builder, function: signing}
+  - {id: d-rec-cp, product: recovery-env, function: control-plane}
+  - {id: d-rec-reg, product: recovery-env, function: registry}
+  - {id: d-rec-secrets, product: recovery-env, function: secrets}
+  - {id: d-rec-dns, product: recovery-env, function: dns}
+  - {id: d-rec-s3, product: recovery-env, function: object-storage}
+service:
+  - {id: user, product: client, role: outside, step: 1}
+  - {id: lb, product: loadbalancer, role: entry, step: 1}
+  - {id: idp, product: keycloak, role: shared, step: 1}
+  - {id: db-idp, product: postgresql, role: shared, step: 1}
+  - {id: db-git, product: postgresql, role: shared, step: 1}
+  - {id: dns, product: coredns, role: shared, step: 1}
+  - {id: time, product: chrony, role: shared, step: 1}
+  - {id: reg, product: registry, role: shared, step: 1}
+  - {id: vault, product: openbao, role: shared, step: 1}
+  - {id: cp, product: kube-control, role: control, step: 1}
+  - {id: gitops, product: argocd, role: shared, step: 1}
+  - {id: git, product: forgejo, role: shared, step: 1}
+  - {id: store, product: ceph, role: storage, step: 1}
+  - {id: sign, product: signer, role: shared, step: 1}
+  - {id: build, product: builder, role: build, step: 1}
+  - {id: shop, product: app, role: workload-prod, step: 1}
+  - {id: lab, product: app, role: workload-dev, step: 2}
+  - {id: restore, product: recovery-env, role: recovery, step: 2}
+  - {id: restore-bad, product: app, role: recovery, step: 2}
+release:
+  - {id: keycloak-25, product: keycloak, released_on_day: 100, stable: "yes"}
+  - {id: keycloak-26, product: keycloak, released_on_day: 200, stable: "yes"}
+  - {id: keycloak-27rc, product: keycloak, released_on_day: 250, stable: "no"}
+  - {id: postgresql-16, product: postgresql, released_on_day: 50, stable: "yes"}
+  - {id: postgresql-17, product: postgresql, released_on_day: 150, stable: "yes"}
+pin:
+  - {id: pin-db-git, service: db-git, release: postgresql-16}
+choice:
+  - {id: c-idp-db, service: idp, function: database, provider: db-idp}
+  - {id: c-git-db, service: git, function: database, provider: db-git}
+artifact:
+  - {id: a-shop, for_service: shop, built_by: build, signed: "yes"}
+  - {id: a-lab, for_service: lab, built_by: build, signed: "no"}

@@ -86,6 +86,7 @@ jobs:
       - name: Generate contract types
         run: contracts/gen-types.sh
       - name: Check ${{ matrix.component.folder }}
+        shell: bash
         env:
           REZONO_HYPOTHESIS_PROFILE: ci
         run: |
@@ -94,12 +95,7 @@ jobs:
             contracts/check.sh
             python -m pytest -q --junitxml="$RUNNER_TEMP/pytest.xml" contracts/python
           else
-            rc=0
-            python -m pytest -q --junitxml="$RUNNER_TEMP/pytest.xml" "${{ matrix.component.folder }}" || rc=$?
-            if [ "$rc" -eq 5 ] && grep -q "^${{ matrix.component.folder }}/" blocked/*.txt 2>/dev/null; then
-              exit 0
-            fi
-            exit "$rc"
+            python -m pytest -q --junitxml="$RUNNER_TEMP/pytest.xml" "${{ matrix.component.folder }}"
           fi
 
       - name: Report actual skips

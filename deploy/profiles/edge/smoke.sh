@@ -14,7 +14,9 @@ printf 'alpha:\n  - {id: a1, title: t, size: 1}\n' > "$green/facts/a.yaml"
 printf 'alpha:\n  - {id: a1, title: t, size: 1}\n  - {id: a1, title: u, size: 2}\n' > "$red/facts/a.yaml"  # a duplicate id
 free_port() { python -c 'import socket; s = socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1])'; }
 s3_port=$(free_port) gate_port=$(free_port)
-export AWS_ACCESS_KEY_ID=smoke AWS_SECRET_ACCESS_KEY=smoke-secret REZONO_S3_ENDPOINT=http://127.0.0.1:$s3_port
+AWS_ACCESS_KEY_ID=$(python -c 'import secrets; print(secrets.token_hex(10))')
+AWS_SECRET_ACCESS_KEY=$(python -c 'import secrets; print(secrets.token_hex(20))')
+export AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY REZONO_S3_ENDPOINT=http://127.0.0.1:$s3_port
 moto_server -H 127.0.0.1 -p "$s3_port" > "$work/s3.log" 2>&1 &
 s3=$!
 # The gate serves the one pack this test publishes, by name (REZONO_PACKS), as a deployment names its packs.
