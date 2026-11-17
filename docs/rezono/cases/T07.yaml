@@ -20,5 +20,5 @@ expect:
 note: Rows that do not cover the input (below 300 GiB) are W112 at the table, with an example input; R024 if the value is
   `total`.
 sources:
-- docs/rezono/tables.md §3, §4 (RV-C24)
+- docs/rezono/tables.md §3, §4
 - v0 §5c

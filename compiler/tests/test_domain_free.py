@@ -3,7 +3,7 @@
 Names that only an example can give, such as a use case, a pack name with a hyphen, a compound kind name, or a
 compound id of a role the example's facts name (a domain role, which the core reaches only through the generic
 capabilities of std-access; roles in two layers, B19), must not appear in the code of the compiler, the checker, the viewer, the publisher or the gate, nor in
-the compiler's own tests: a test that fixes one example's names lives with that example (RV-M08). Single words
+the compiler's own tests: a test that fixes one example's names lives with that example. Single words
 such as `plan` or `rule` are also ordinary programming words, so they are not checked.
 """
 

@@ -78,7 +78,7 @@ def test_out_and_back_through_turtle_gives_the_input(schema, forms):
 
 
 def test_a_relative_address_is_read_against_the_entry_s_own_address():
-    """As the publisher writes it beside a role's form (RV-K20): no host in the bytes, the reader's site resolves."""
+    """As the publisher writes it beside a role's form: no host in the bytes, the reader's site resolves."""
     files = {"row-json": "rows.json", "turtle": "view.ttl"}
     text = dcat.to_turtle(FIXTURE, PIN, files)
     assert "https://data.example" not in text and "<rows.json>" in text

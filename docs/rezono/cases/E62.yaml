@@ -22,4 +22,3 @@ note: ClusterSpec is open and `small` has no row. Nothing is known of that eleme
   whatever its cardinality; the cause is the row that would hold the value.
 sources:
 - expressions.md §7 (sets and absence)
-- arbiter, 11-11-2026, on #696

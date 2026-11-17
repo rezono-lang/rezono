@@ -19,7 +19,7 @@ BOUND = 2**63 - 1  # W8: every numerator and denominator, in lowest terms
 
 
 def beyond(op: str) -> "Val":
-    """W8 (arbiter, 11-11-2026): a step whose exact result exceeds the bound has a value Rezono cannot hold,
+    """W8: a step whose exact result exceeds the bound has a value Rezono cannot hold,
     so it is unknown, with a reason that names the bound and the operator; invalid is for a result that
     cannot exist."""
     return Val("unknown", None, f"beyond the bound of W8 in {op}")
@@ -200,7 +200,7 @@ class Program:
         self.rules = {r["rule"]: r for r in ir.get("rules", [])}
         self.views = {r["view"]: ("rule", r["rule"]) for r in self.rules.values()}
         self.views.update({v["view"]: ("version", v["id"]) for v in self.versions.values()})
-        # RV-K08: each table is read once, into an index by its first column and one by the rest of the key, and
+        # Each table is read once, into an index by its first column and one by the rest of the key, and
         # a parameter or a rule's version is chosen once; a witness then costs what it reads, not a whole table.
         self._first: dict[str, dict] = {}
         self._rest: dict[str, dict] = {}
@@ -371,7 +371,7 @@ def published_views(ir: dict) -> set[str]:
 
 
 def sources(ir: dict) -> dict[str, set[str] | None]:
-    """Per published view, what it rests on besides its subject kind (O8, RV-S26): the relations the versions
+    """Per published view, what it rests on besides its subject kind (O8): the relations the versions
     behind it read (`reads`, absences included) and the views those versions name as a premise. Behind a rule's
     view are all versions of the rule, behind a version's view that version. None: the program does not hold
     what the view names (the rule's versions, a version, a premise), so the view is not accounted for."""

@@ -1,5 +1,5 @@
 """The storage port (S3 API): get, put with conditional put, list (docs/contracts.md, Poorten), and delete for the
-collector alone (collect.py, RV-Z01).
+collector alone (collect.py).
 
 Every object is written once. `put_new` writes only if the key is free; if the key is taken, the bytes
 must be the same (publishing an epoch again is a no-op), otherwise it is a conflict. That is S3's

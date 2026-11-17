@@ -1,4 +1,4 @@
-"""Fold marks: which relations and kinds a pack may fold in an explanation (RV-C29).
+"""Fold marks: which relations and kinds a pack may fold in an explanation.
 
 A pack marks mechanics with `// @explain fold` on the line right above a `.decl` and with
 `annotations: {explain: fold}` on a class (docs/explain/contract.md). The mark is display only: it goes into
@@ -16,7 +16,7 @@ Only a helper may be folded. The definition is the one of the explanation lint's
 The rules are those of the whole program except the access rules: an imported pack's marks are judged with
 the rules that come with it. A kind a view maps is read through the relation that view_rules.bind makes to hold
 its table: that relation is the kind under another name, so its pass-through clause is no step an id reaches a
-head by, and a rule that reads the relation reads the kind (RV-C49).
+head by, and a rule that reads the relation reads the kind.
 """
 
 from __future__ import annotations
@@ -45,7 +45,7 @@ def passes_through(r, pack) -> str | None:
     """The kind whose table clause `r` holds, when `bind` lowered it for a kind a view maps: its origin is the
     view source, which no rule file carries, its one body atom is the kind's table, and the head is the relation
     bind made for that table with the same terms. It concludes nothing. The same clause written
-    in a rule file is an author's rule and is judged as one (ruling RV-C49, 13-11-2026)."""
+    in a rule file is an author's rule and is judged as one."""
     from . import view_rules  # view_rules imports pack, which imports this module, so it is imported here
     body = r["body"]
     if (r.get("origin") or {}).get("file") != view_rules.SOURCE or len(body) != 1 \

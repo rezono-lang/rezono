@@ -3,10 +3,10 @@ version: 0.1.1
 default_language: en
 imports:
   - {name: std-access, path: ../../packs/std-access, sha256: 5388680db00ac3d9c10baae0d48fe67ceeec8e9b6e0c7e7b0dcc0a105b1e890a}
-  - {name: std-decision, path: ../../packs/std-decision, sha256: dd354d43d743883376e1a97f371220aa7d80dd11a017028c493de4489b95ea17}
-  - {name: std-time, path: ../../packs/std-time, sha256: 919f415d68d1c7d93e6ef30b85ef4d6736bf51f93776ee138418e32b156db482}
+  - {name: std-decision, path: ../../packs/std-decision, sha256: 2fd4cc60cc4f1c7dca42da2f5368a08a992de39df7cd7db205b9118dd1b8fe5a}
+  - {name: std-time, path: ../../packs/std-time, sha256: e8e9a988dc4fb43b60d2f6e91299dd130b372d12032f3500ef9cf7d6fc4a6236}
   - {name: std-explain, path: ../../packs/std-explain, sha256: 72e2897cd9baaa4962cf2235f83a332262b4da1e6d34e82d5f64d8335e27be0b}
-  # The scheme's definition, fact-free (RV-X35): its kinds, rules, calculation, labels and messages.
-  - {name: subsidy-scheme, path: ../subsidy-scheme, sha256: 5239234dec70ec484ff1ecbd0fb76b03e6a7330cb4dddd5727110de793aa068a}
+  # The scheme's definition, fact-free: its kinds, rules, calculation, labels and messages.
+  - {name: subsidy-scheme, path: ../subsidy-scheme, sha256: 1befdec55e46bee0ecd1f3fd142eed66320acd3cf73db13217401cda7cbe3a04}
 iri:
   base: https://rezono.org/example/subsidy/  # a synthetic example of the Rezono project (docs/ring2/iris.md section 3)

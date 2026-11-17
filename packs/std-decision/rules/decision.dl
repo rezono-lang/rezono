@@ -1,4 +1,4 @@
-// Rules of std-decision (RV-C03), in the Datalog subset, so Soufflé is the oracle.
+// Rules of std-decision, in the Datalog subset, so Soufflé is the oracle.
 // The base relations are the pack's tables: decision(d), decision__state(d, s), decision__supersedes(new, old),
 // decision__decider(d, who), decision__valid_from_day(d, n), decision__valid_until_day(d, n),
 // reference_date__day(r, n), and the two ends of a ground g: ground__decision(g, d) and ground__rests_on(g, d).

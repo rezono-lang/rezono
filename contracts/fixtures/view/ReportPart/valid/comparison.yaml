@@ -1,2 +1,2 @@
-# A comparison (RV-U19): a derived relation counted in three classes by its verdict column.
+# A comparison: a derived relation counted in three classes by its verdict column.
 comparison: {relation: alike, verdict: verdict, equal: [same], different: [other], not_compared: [taken]}

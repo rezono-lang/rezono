@@ -194,7 +194,7 @@ def test_cardinalities_are_validated(fixture, facet, message):
 @pytest.mark.parametrize("beside", [{}, {"minimum_cardinality": 1}, {"maximum_cardinality": 3},
                                     {"minimum_cardinality": 2, "maximum_cardinality": 2}])
 def test_an_exact_cardinality_holds_beside_limits_it_meets(fixture, beside):
-    """Every cardinality given holds (RV-M05): an exact count within the minimum and maximum is that count; one
+    """Every cardinality given holds: an exact count within the minimum and maximum is that count; one
     outside them is refused above, never an override."""
     edit(fixture, lambda s: s["classes"]["Beta"]["attributes"]["state"].update(
         multivalued=True, exact_cardinality=2, **beside))
@@ -355,7 +355,7 @@ def test_an_identifier_is_checked_like_any_slot(fixture, facet, message):
 
 @pytest.mark.parametrize("name", ["a__b", "Id", "is_a"])
 def test_an_identifier_has_a_valid_slot_name(fixture, name):
-    """RV-M05: the name of an identifier is held to the rule for every slot name."""
+    """The name of an identifier is held to the rule for every slot name."""
     def change(s):
         attributes = s["classes"]["Alpha"]["attributes"]
         s["classes"]["Alpha"]["attributes"] = {name if k == "id" else k: v for k, v in attributes.items()}
@@ -364,7 +364,7 @@ def test_an_identifier_has_a_valid_slot_name(fixture, name):
 
 
 def test_an_unknown_annotation_on_an_identifier_warns(fixture):
-    """RV-M05: an annotation the compiler does not read warns on an identifier as on any slot."""
+    """An annotation the compiler does not read warns on an identifier as on any slot."""
     before = pack.read(fixture).warnings
     edit(fixture, lambda s: s["classes"]["Alpha"]["attributes"]["id"].update(annotations={"colour": "red"}))
     assert [w for w in pack.read(fixture).warnings if w not in before] == ["Alpha.id: unknown annotation 'colour'"]
@@ -609,7 +609,7 @@ def test_an_imported_packs_interface_holds_for_the_pack_that_imports_it(tmp_path
     assert "beta" in pack.read(d).kinds
 
 
-# ---- pack.yaml `iri:` (RV-X30; docs/ring2/iris.md section 4) ----
+# ---- pack.yaml `iri:` (docs/ring2/iris.md section 4) ----
 
 NS = "https://w3id.org/example-publisher/"
 

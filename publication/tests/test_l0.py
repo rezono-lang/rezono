@@ -599,7 +599,7 @@ def test_columnar_checks_are_exact():
     l0.check_table_metadata(FIXTURE, dict(base, manifest="m-12", table_hash="b" * 64))
 
 
-# RV-K26, a kind tree (§2.1 `parent`): a Server is a Host. It restates Host's slots and adds one of its own; a
+# A kind tree (§2.1 `parent`): a Server is a Host. It restates Host's slots and adds one of its own; a
 # Team points at the hosts it runs, and a server is one of them.
 SERVER = {"world": "closed", "id": {"type": "Text"}, "parent": "Host",
           "slots": {**FIXTURE["kinds"]["Host"]["slots"], "rack": {"card": "1", "type": "Text", "states": ["known"]}}}

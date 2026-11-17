@@ -44,4 +44,3 @@ note: '`Host.clusters` is `HostCluster.host` read the other way. The cluster x9 
   is known. Asked from the other end, `ask HostCluster where host = host-b` is undecided for x9 too.'
 sources:
 - expressions.md §7 (sets and absence); publication §3.4
-- arbiter, 11-11-2026, on #696

@@ -12,13 +12,13 @@ Non-interference: what a role gets depends only on what it may read, never on a 
   and only `K(x)` in the body, that is the configured role of that name. With
   `may_read(r, "K", x) :- role(r), K(x).` it is every role the pack's facts name, as the rule says: for a
   configured role without its own `role` row the rule derives nothing, so it gives that role nothing in
-  full either (RV-S10). No other `role` row counts: which other roles exist changes nothing for a role.
+  full either. No other `role` row counts: which other roles exist changes nothing for a role.
   Roles in two layers (B19): with `may_read(r, "K", x) :- role__capability(r, "c"), K(x).` it is every role
   the pack maps to capability `c` (std-access), so a configured role with the row (role, c) of that mapping.
   Each grant has its evidence (`Full.evidence`): the rule and the one row it rests on, if any (`role` or
   `role__capability`), which the checker derives again on its own and compares. Subkinds follow. Then every element of K must be readable in the data, or the publication is red. A base
   relation is full if each of its kind columns is; a derived relation if every base relation it depends on is.
-  A calculation view has sources too (RV-S26): its subject kind, every relation that any version of its rule
+  A calculation view has sources too: its subject kind, every relation that any version of its rule
   reads (absences included) and every calculation view a version takes as a premise. It is full only if all
   of them are, so only for a role that sees every row of it; a view the program does not account for, and a
   calculation that a rule reads, are never full. No row decides it.
@@ -212,7 +212,7 @@ class Scope:
             seen.add(rel)
             return all(full(d, seen) for d in sorted(deps[rel]))
 
-        # A calculation view (RV-S26): its subject kind (`whole`), every relation a version of its rule reads
+        # A calculation view: its subject kind (`whole`), every relation a version of its rule reads
         # and every view a version takes as a premise. Least fixpoint over the views, so a view that rests on
         # itself, or on a view the program does not account for, is not full.
         views: set[str] = set()
@@ -264,7 +264,7 @@ class Columns(dict):
 def with_calc(columns: dict, calc_ir: dict | None) -> dict:
     """The kind per column, with the relations of the calculation rules: a calculated row names its
     subject; the evaluation date names no element. With them goes what each calculation view rests on
-    (`calc_scope.view_sources`), which decides whether a role reads the view in full (RV-S26). The one place
+    (`calc_scope.view_sources`), which decides whether a role reads the view in full. The one place
     every scope over an epoch gets them, so a publication and a sweep judge the same relations (no relation
     is let through by name)."""
     if calc_ir is None:

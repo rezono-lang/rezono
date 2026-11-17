@@ -284,7 +284,7 @@ def test_a_missing_file_is_refused():
 
 
 def test_a_subkind_is_a_table_of_its_own_with_the_columns_it_restates(tmp_path):
-    """RV-K26 (§4.1): an element of a subkind is one row of the subkind's table; a reference to the parent kind
+    """(§4.1): an element of a subkind is one row of the subkind's table; a reference to the parent kind
     holds its id as any other, so the tables read back to the same rows and hashes."""
     tables = arrow.to_arrow(TREE, TREE_ROWS)
     assert list(tables) == ["$src", "$why", "Host", "Host__tags", "Server", "Server__tags", "Team", "Team__runs"]

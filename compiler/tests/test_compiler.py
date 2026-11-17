@@ -41,7 +41,7 @@ def test_two_compiles_give_identical_bytes(tmp_path):
 
 
 def test_every_sql_writer_quotes_and_escapes_through_one_definition():
-    """RV-M01: one `q` and one `literal`; the rule translator's own `q` left a `"` in a name unescaped."""
+    """One `q` and one `literal`; the rule translator's own `q` left a `"` in a name unescaped."""
     from rezono_compiler import batch, calc_sql, checks, rules_split, rules_sql, seal, sqltext
     assert {m.q for m in (batch, calc_sql, checks, emit, rules_split, rules_sql, seal)} == {sqltext.q}
     assert {m.literal for m in (calc_sql, checks, emit, rules_sql)} == {sqltext.literal}
@@ -93,7 +93,7 @@ def second_language(d: Path) -> None:
     ("messages/en.mf2", "{$parent}", "{$kind}", "messages/en.mf2: 'is_a' names kind; in language 'nl' it names kind, parent"),
 ])
 def test_a_pack_carries_a_language_whole(fixture, file, old, new, message):
-    """RV-A25: a pack with two languages has the same labels and the same messages in both, and a message names
+    """A pack with two languages has the same labels and the same messages in both, and a message names
     the same variables in both; a `_gender` companion is not compared. A planted difference stops the compile
     and names the file, the key and the language that has it."""
     second_language(fixture)
@@ -771,7 +771,7 @@ def test_a_wrong_report_waterfall_is_refused(fixture, part, message):
     refused(fixture, message)
 
 
-# A comparison (RV-U19): `alike` ends in a verdict per alpha; `echo` writes a variable where a verdict would stand.
+# A comparison: `alike` ends in a verdict per alpha; `echo` writes a variable where a verdict would stand.
 COMPARISON_RULES = (
     ".decl alike(a: symbol, verdict: symbol)\n"
     "alike(a, \"same\") :- alpha(a), beta__alpha(_, a).\n"
@@ -837,7 +837,7 @@ def test_report_matrix_refuses_selectors_and_unknown_sheet(fixture, part, messag
     refused(fixture, message)
 
 
-# A Timeline and a Nest (RV-C15) on the fixture: alpha gets dates and a state, beta is a part of its alpha.
+# A Timeline and a Nest on the fixture: alpha gets dates and a state, beta is a part of its alpha.
 TIMELINE = (
     "timelines:\n"
     "  - id: validity\n"
@@ -1010,7 +1010,7 @@ def test_a_part_of_arrow_to_many_is_no_tree(fixture):
 
 
 def test_an_installed_compiler_reads_the_contracts_it_carries(tmp_path):
-    """RV-M12: a non-editable install of the compiler, built from a copy of compiler/ and contracts/ and run from a
+    """A non-editable install of the compiler, built from a copy of compiler/ and contracts/ and run from a
     directory outside any checkout, carries contracts/*.yaml byte for byte as package data, reads them from there,
     and compiles a pack given by path to the same bytes as the compiler of this checkout."""
     import os

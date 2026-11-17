@@ -32,7 +32,7 @@ class SweepStore:
         return False
 
     def _base_objects(self) -> set[str]:
-        """The keys of the objects the base's manifest names (RV-Z01: shared, so not under the base's prefix)."""
+        """The keys of the objects the base's manifest names (shared, so outside the base's prefix)."""
         data = self._cache.get(f"{self.pack}/manifests/{self.base}.json")
         if not data:
             return set()

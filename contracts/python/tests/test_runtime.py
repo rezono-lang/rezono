@@ -78,7 +78,7 @@ VARIANT = {"sweep": "rate", "index": 3, "value": "0.04", "readers": ["viewer"], 
     ({"proposal": "p-7", "variant": VARIANT}, "it is the manifest of proposal 'p-7'; it is variant 3 of sweep 'rate'"),
 ])
 def test_a_what_if_with_green_checks_is_refused_as_a_what_if(more, why):
-    """A port reads the state of main only (arbiter, 12-11-2026): the manifest of a proposal or of a variant is
+    """A port reads the state of main only: the manifest of a proposal or of a variant is
     checked, and it is not a published epoch. The refusal says so, and does not call it unchecked; it names the
     grid position of a variant and not its role lists, which are the access gate's."""
     manifest = {**checks("green", "green"), **more}

@@ -222,7 +222,7 @@ def test_the_install_requires_hashes(tmp_path):
 
 
 def test_only_installs_one_locked_wheel_and_builds_nothing(tmp_path):
-    """--only NAME (the promotion gates, RV-S08): of a lock with a wheel and an sdist, only the stanza NAME
+    """--only NAME (the promotion gates): of a lock with a wheel and an sdist, only the stanza NAME
     goes in, with its hash; an sdist is never built, also when its stanza is the one named; a name the lock
     does not pin, or this repository's packages beside it, are refused."""
     lock = _wheelhouse(tmp_path)

@@ -10,7 +10,7 @@ least 4) become as many of sha256(id, c), else `-x<c>` is appended. Every new id
 taken (few digits, many copies) is drawn again, and when 16 draws are taken `-x<c>` is appended instead.
 Records of a kept kind (for example roles the deployment names) are not copied.
 Text that is not an id stays as it is. No domain knowledge: only the facts' own ids. Used by the profile's
-scaling check (profile.sh) and by the scale ladder (probes/scale, RV-Z06).
+scaling check (profile.sh) and by the scale ladder (probes/scale).
 """
 
 from __future__ import annotations

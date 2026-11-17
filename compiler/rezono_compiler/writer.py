@@ -752,7 +752,7 @@ def apply_delta(pack_dir: str | Path, delta: dict, lay: Layout | None = None, *,
     companion's new text is among the texts, and the undo carries what puts it back byte for byte (`sources`).
     A change that writes rows there needs their real origin from the caller, never from the delta: `origins`
     maps its step to `{sources, reason?}`, and `stated` is the one origin of every written row that `origins`
-    does not name: who states the delta's values (`source_writer.stated`, RV-M17). `undo` says the delta is an undo this writer made, so its `sources`
+    does not name: who states the delta's values (`source_writer.stated`). `undo` says the delta is an undo this writer made, so its `sources`
     may put the companions back. Without companions nothing changes (docs/compiler.md#provenance-per-fact-s25).
     """
     changes = check_delta(delta)

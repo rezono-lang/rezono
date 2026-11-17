@@ -1,4 +1,4 @@
-"""Closed structural views.yaml reader, and the bounded profile that executes (RV-C27).
+"""Closed structural views.yaml reader, and the bounded profile that executes.
 
 This is a definition boundary, not a query evaluator, wire-ID constructor or
 schema/type checker. Keep migrations' multiplicities and ordinary proofs intact.
@@ -254,7 +254,7 @@ def refuse(pack_dir: str | Path) -> None:
 
 
 def admit(pack_dir: str | Path) -> ViewFile | None:
-    """The views of the pack that is compiled, when they lie inside the profile that executes (RV-C27): one
+    """The views of the pack that is compiled, when they lie inside the profile that executes: one
     view per theory (the reader's rule), every kind map with one branch, every arrow map with one path and no
     assumption. What needs the schemas (types, readings, names) is checked by view_typing.resolve and
     view_rules.bind. None without a views.yaml; outside the profile a ViewError, before a schema is read."""

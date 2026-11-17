@@ -526,7 +526,7 @@ def test_broken_complete_snapshot_is_a_finding(spec, fault, data):
     assert errors(realize(spec), mutate=mutate) == {"malformed_snapshot"}
 
 
-# Closure (RV-K01): an engine that never derives one row leaves snapshots in which every proof is valid.
+# Closure: an engine that never derives one row leaves snapshots in which every proof is valid.
 
 NODES = ["c0", "c1", "c2", "c3"]
 LITERAL = lambda relation, terms, polarity="positive", stratum=0: {

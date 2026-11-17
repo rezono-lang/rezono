@@ -70,7 +70,7 @@ def test_heads_lists_missing_objects_and_other_namespaces_stay_fresh():
 
 
 def test_what_the_base_lacks_is_asked_once_a_sweep_and_no_other_miss_is_remembered():
-    """RV-M24: every variant asks for its role's view index of the base (rezono_publisher.difference.shared). The
+    """Every variant asks for its role's view index of the base (rezono_publisher.difference.shared). The
     base is published before its sweep and the sweep writes nothing under it, so a miss there stands for the
     whole sweep. A miss anywhere else may be an object that is about to be written."""
     st = CountingStore()
@@ -128,7 +128,7 @@ def test_concurrent_publication_writes_still_reach_the_store():
 
 
 def test_snapshots_are_read_side_by_side_in_the_order_asked():
-    """RV-M24: the first variant of the lab's sweep read 658 snapshots one after another, 70 s of round trips.
+    """The first variant of the lab's sweep read 658 snapshots one after another, 70 s of round trips.
     A read waits on the store, so several are in flight at once; what comes back is in the order asked."""
     from threading import Barrier
 
@@ -172,7 +172,7 @@ def test_a_snapshot_read_side_by_side_is_still_the_object_its_manifest_names():
 
 
 def test_the_base_objects_survive_the_next_variant_and_a_variant_objects_do_not():
-    """RV-Z01: objects are keyed by their bytes, not by manifest: the base manifest says which are the base's."""
+    """Objects are keyed by their bytes, not by manifest: the base manifest says which are the base's."""
     st = CountingStore()
     cache = SweepStore(st, "p", "m-1")
     cache.begin("v-x-00-2")

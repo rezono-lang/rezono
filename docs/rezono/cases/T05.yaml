@@ -27,5 +27,5 @@ expect:
 note: 'collect: the outputs of the applying rows; an undecided row gives a member whose membership is undecided, so the count
   is undecided; no row applies to host-b: the empty set.'
 sources:
-- docs/rezono/tables.md §3, §4 (RV-C24)
+- docs/rezono/tables.md §3, §4
 - v0 §5c

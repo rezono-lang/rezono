@@ -22,7 +22,7 @@ arrows:
   - {arrow: cost_line.item, dash: none}
   - {arrow: income_statement.household, dash: none}
   - {arrow: advice_report.household, dash: none}
-# Timeline (RV-V31): a scheme parameter is valid from `valid_from` up to, not on, `valid_until` (the schema's
+# Timeline: a scheme parameter is valid from `valid_from` up to, not on, `valid_until` (the schema's
 # "exclusive", the sheet's half-open phase). A new value is a new row, so the versions of one name stand in a row.
 timelines:
   - id: parameter_validity

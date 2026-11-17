@@ -224,7 +224,7 @@ def test_a_fact_file_with_a_companion_is_never_written_without_it(fixture, tmp_p
 
 
 def test_a_fact_file_without_a_sidecar_is_written_as_in_a_pack_without_sidecars(fixture, monkeypatch):
-    """RV-M16: the refusal is per fact file. A sidecar names only rows of its own fact file, so a change in
+    """The refusal is per fact file. A sidecar names only rows of its own fact file, so a change in
     another file cannot lose or stale one of its sources."""
     (fixture / "facts/other.yaml").write_text("alpha:\n  - {id: o, title: Other}\n", encoding="utf-8")
     delta = {"format": writer.FORMAT, "changes": [

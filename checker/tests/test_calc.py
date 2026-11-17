@@ -1,4 +1,4 @@
-"""RV-K04: the calculation check (rezono_checker/calc.py) on planted faults, without the compiler.
+"""The calculation check (rezono_checker/calc.py) on planted faults, without the compiler.
 
 The example is one compiled calculation program, frozen as data in tests/fixtures/calc: `calc.json` (ir/calc.json),
 `snapshots.json` (every table as its rows; a calculation view as subject, value, state, reason) and
@@ -6,7 +6,7 @@ The example is one compiled calculation program, frozen as data in tests/fixture
 these files (compiler/tests/test_calc.py), so the checker is tested here on what the compiler really gives, and
 this file imports nothing of it. Each case changes the witnesses as a wrong engine would, and names the reason.
 
-RV-K09: the rows themselves are held too (calc.total). A wrong engine that leaves out a row and its witness leaves
+The rows themselves are held too (calc.total). A wrong engine that leaves out a row and its witness leaves
 nothing wrong behind; only the count of rows per subject refuses it.
 """
 
@@ -79,7 +79,7 @@ def zero(by):  # x0 is missing for i1, and was taken as 0: 0 + 1
     w.update(value="1", state="known", reason="")
 
 
-def wrapped(by):  # 2^63 - 1 + 1 beyond W8's bound, given as the value a 64-bit sum wraps to (RV-K12)
+def wrapped(by):  # 2^63 - 1 + 1 beyond W8's bound, given as the value a 64-bit sum wraps to
     w = by["calc__overflow", "i0"]
     step(w, "base/value").update(value="-9223372036854775808", state="known", reason="")
     w.update(value="-9223372036854775808", state="known", reason="")
@@ -149,7 +149,7 @@ def stranger(witnesses, snapshots):  # a row and a witness for a subject that is
     snapshots["calc__negative_half"].append(["i9", *snapshots["calc__negative_half"][0][1:]])
 
 
-# Rows a wrong engine could leave out or add, every witness it kept still right (RV-K09).
+# Rows a wrong engine could leave out or add, every witness it kept still right.
 
 def absent(witnesses, snapshots):  # i1 has no amount: its half is unknown, which is a row, never no row
     snapshots["calc__half"] = [r for r in snapshots["calc__half"] if r[0] != "i1"]
@@ -241,7 +241,7 @@ def test_no_test_of_the_checker_imports_the_compiler():
     assert [t.name for t in tests if re.search(r"^\s*(from|import)\s+rezono_compiler", t.read_text(encoding="utf-8"), re.M)] == []
 
 
-# --- RV-K08: the cost follows the witnesses, not the snapshots ------------------------------------------------
+# --- The cost follows the witnesses, not the snapshots ------------------------------------------------
 
 SUBJECT = re.compile(r"(?<![\w-])([ie][0-9])(?![\w-])")  # the example's items i0..i2 and entries e0, e1
 

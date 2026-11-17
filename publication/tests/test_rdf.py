@@ -307,7 +307,7 @@ def test_no_json_number_or_float_reaches_a_literal():
     assert json.loads(rdf.to_jsonld(FIXTURE, R01))
 
 
-# The same rows give the same Turtle bytes in every process (rule 3; the publisher writes the view, RV-K20).
+# The same rows give the same Turtle bytes in every process (rule 3; the publisher writes the view).
 
 _SEEDED = r'''
 import hashlib, json, sys
@@ -346,7 +346,7 @@ def test_the_view_and_prov_are_the_same_bytes_under_every_hash_seed():
     assert len(out) == 1, out
 
 
-# RV-K26 (§2.1 `parent`, §3.4, §5): a subkind in the RDF view
+# (§2.1 `parent`, §3.4, §5): a subkind in the RDF view
 def test_an_element_of_a_subkind_has_one_iri_in_the_space_of_its_root_kind():
     base = TREE["base"]
     g = rdf.to_graph(TREE, TREE_ROWS)

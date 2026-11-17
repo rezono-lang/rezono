@@ -10,7 +10,7 @@ status.absent = afwezig, gecontroleerd
 # The value states a calculation step names (contracts/value.yaml) that are no status of their own.
 status.known = bekend
 status.invalid = ongeldig
-# Shown in place of a text the pack does not give: never a message id (RV-U01).
+# Shown in place of a text the pack does not give: never a message id.
 text.missing = (tekst ontbreekt)
 tone.positive = positief
 tone.neutral = neutraal
@@ -31,14 +31,14 @@ sign.sealed = verzegeld
 sign.supposed = verondersteld
 
 lens.questions = Vragen
-# The row page (RV-U05): what Rezono concludes first, then the facts, then the relations to other elements.
+# The row page: what Rezono concludes first, then the facts, then the relations to other elements.
 row.conclusions = Wat Rezono concludeert
 row.conclusions_more = {{Er zijn er meer bij: {$relations}.}}
 row.calculations = Berekend
 calc.stop = ← hier stopt de berekening
 row.facts = Feiten
 row.relations = Relaties
-# The lead of a row page (RV-U05): the conclusion, why it holds here, under which conditions, what the reader can do next.
+# The lead of a row page: the conclusion, why it holds here, under which conditions, what the reader can do next.
 lead.title = De conclusie in het kort
 lead.conclusion = Geconcludeerd
 lead.grounds = Waarom het hier geldt
@@ -167,7 +167,7 @@ outcome.known = bekend
 outcome.absent = niet afgeleid
 
 waterfall.not_closed = De som sluit niet.
-# De bijdragen van een aggregaat in een antwoord (RV-V30): wat elke rij geeft, en de brug van een som.
+# De bijdragen van een aggregaat in een antwoord: wat elke rij geeft, en de brug van een som.
 waterfall.steps = {{Bijdragen van {$relation}}}
 waterfall.sum = {{Som van {$relation}}}
 waterfall.rest = .input {$count :number} .match $count one {{De rest ({$count} rij)}} * {{De rest ({$count} rijen)}}
@@ -311,7 +311,7 @@ islands.lines = Lijnen naar andere groepen
 islands.line = {{{$from} → {$to} ({$arrow}): {$count}}}
 islands.line_label = {{{$arrow} {$count}}}
 app.name = Rezono
-# Navigation (RV-U03): the trail to a page, and the pack's declared views.
+# Navigation: the trail to a page, and the pack's declared views.
 nav.trail = Pad
 nav.views = Weergaven
 nav.schema = Schema en elementen
@@ -478,7 +478,7 @@ verb.suppose = Wat als
 verb.compare = Vergelijk
 verb.propose = Stel voor
 
-# De startpagina van een pack (RV-U04 op de kaart en de zes zones): de claim is één zin uit de aandachtskaarten.
+# De startpagina van een pack (de kaart en haar zes zones): de claim is één zin uit de aandachtskaarten.
 home.eyebrow = {{Startpagina · {$pack}}}
 home.claim = .input {$count :number} .match $count one {{Eén ding vraagt je aandacht: {$asks}.}} * {{{$count} dingen vragen je aandacht: {$asks}.}}
 home.ask.red = .input {$count :number} .match $count one {{{$count} controle niet gehaald}} * {{{$count} controles niet gehaald}}
@@ -495,7 +495,7 @@ row.twin.name = Kenmerk
 row.twin.value = Waarde
 row.twin.state = Toestand
 
-# Your own publication form on the home of a pack (RV-V50): the schema id and the dataset hash in full, and each file.
+# Your own publication form on the home of a pack: the schema id and the dataset hash in full, and each file.
 home.form.title = Je gegevens in publicatievorm
 home.form.schema = schema-id
 home.form.dataset = datasethash

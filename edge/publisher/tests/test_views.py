@@ -205,7 +205,7 @@ def test_order_metric_measures_actual_compiler_snapshot_flow_enum_order(tmp_path
     prefix = "minimal/m-1/viewer/views/"
     root_key, layout_key = (views.key_of(sheet[k]["uri"]) for k in ("root", "layout"))
     tiles = {k.removeprefix(prefix): st.get(k) for k in st.list(prefix + "flow.enum_order/") if k != layout_key}
-    # A sheet with lanes has a level above its nodes, also when it fits one tile (RV-U08; docs/gui.md, "Overview
+    # A sheet with lanes has a level above its nodes, also when it fits one tile (docs/gui.md, "Overview
     # by lane"): the root tile holds the overview by lane, and the nodes are on the last level.
     root = json.loads(st.get(root_key))
     assert sheet["levels"] == 2 and "nodes" not in root

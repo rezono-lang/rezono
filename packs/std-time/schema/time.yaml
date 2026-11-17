@@ -4,7 +4,7 @@ description: >-
   Intervals of positions on an axis. A position is a whole number on a named axis: a day counted on a
   calendar, or the rank of a stage. An interval is half-open: it covers start <= p < end. A bound is stated,
   or stated to be absent, or not recorded; a bound nobody recorded is unknown, never a number and never "no
-  bound" (RV-C13), and so is a knowledge time nobody recorded (RV-C18). A reference is a position for which the intervals are read: a fact, never the clock. The axioms and the derived relations are in rules/time.dl. The mapping annotations
+  bound", and so is a knowledge time nobody recorded. A reference is a position for which the intervals are read: a fact, never the clock. The axioms and the derived relations are in rules/time.dl. The mapping annotations
   compare with OWL-Time; no rule reads them.
 in_language: en
 prefixes:
@@ -38,7 +38,7 @@ enums:
 
   JudgementValue:
     description: >-
-      How an interval stands at a reference (ruling RV-C18). Exactly one holds for an interval and a reference
+      How an interval stands at a reference. Exactly one holds for an interval and a reference
       on the same axis. A domain binds it to a tone and gives its own words. positive, no_end and attention
       with the reason end_within_horizon stand only where the interval holds at the reference.
     permissible_values:
@@ -117,7 +117,7 @@ classes:
         range: integer
         description: >-
           The position from which the interval is known (knowledge time, apart from what it covers). Open
-          world (W6, ruling RV-C18): an interval without this row has a knowledge time nobody recorded, which
+          world (W6): an interval without this row has a knowledge time nobody recorded, which
           is unknown, never "known from the first position on".
         annotations:
           world: open

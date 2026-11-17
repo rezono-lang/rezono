@@ -1,4 +1,4 @@
-"""RV-K03: the checker stands on its own. It imports the standard library, PyYAML and rezono_canon, and nothing of
+"""The checker stands on its own. It imports the standard library, PyYAML and rezono_canon, and nothing of
 the compiler, the publisher or the engine: what it checks, it cannot have asked them.
 (The other side of the boundary, that the publisher's filter does not read through the checker, is held in
 edge/publisher/tests/test_checker_boundary.py.)"""

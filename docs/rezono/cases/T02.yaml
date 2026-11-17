@@ -26,5 +26,5 @@ expect:
     not_applicable: 0
 note: 'No row applies to 200 GiB: `unknown no_row_applies` (the compiler also warns, T07).'
 sources:
-- docs/rezono/tables.md §3, §4 (RV-C24)
+- docs/rezono/tables.md §3, §4
 - v0 §5c
