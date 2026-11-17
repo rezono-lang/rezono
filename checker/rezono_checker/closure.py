@@ -112,7 +112,7 @@ def exhausted(rules, rows) -> list:
 
 
 def counter(rule, rules):
-    """(the counter variable, the last value it is read at) of a counter with an explicit bound (R16), else None.
+    """(the counter variable, the last value it is read at) of a counter with an explicit bound, else None.
     The shape: the rule reads its own relation once, positively; an assignment adds a positive integer constant
     to the variable at one column of that premise and puts the sum at the same column of the head; a condition
     bounds that variable above by an integer constant (the least such bound is the last value); and every other

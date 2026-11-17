@@ -5,7 +5,7 @@
 // `public` sees each amount and rate with the council decision it stands on, and that the decision is in
 // force on the reference date. It reads no household, no application and no register, and therefore sees
 // no award: a conclusion that rests on a row a role may not read is not shown to it, not even as
-// "unknown" (O8).
+// "unknown".
 //
 // The case officer and the policy adviser read the cases with everything an award rests on, so both see
 // every award with its proof. Only the case officer reads the payment ledger and its closes: the policy
@@ -42,7 +42,7 @@ may_read(r, "series", x) :- role(r), series(x).
 // The cases: households, applications, quotes and the two registers. Each role that reads them is named
 // in a rule of its own, with the kind and nothing else in its body. A rule over every role would give
 // the public every case; and a role gets a sum, an absence or an award over a kind only if a rule gives
-// it that kind without a further condition (O8).
+// it that kind without a further condition.
 may_read("case_officer", "household", x) :- household(x).
 may_read("case_officer", "application", x) :- application(x).
 may_read("case_officer", "cost_line", x) :- cost_line(x).

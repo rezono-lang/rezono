@@ -96,9 +96,9 @@ class Relation:
     invariant: bool = False  # must be empty at the end of an epoch
     world: str = "closed"  # a missing row is not true (closed) or unknown (open)
     absence: bool = False  # @absence: about what is recorded, so closed; may negate an open relation
-    outcome: str | None = None  # @outcome <kind>: one state and reason per element of that kind (W7)
-    extend: bool = False  # S28: consumers may add rules; without any, this relation is the empty set
-    closes: str | None = None  # @closes <relation>: a row says that no row of that relation holds at its key (W14)
+    outcome: str | None = None  # @outcome <kind>: one state and reason per element of that kind
+    extend: bool = False  # consumers may add rules; without any, this relation is the empty set
+    closes: str | None = None  # @closes <relation>: a row says that no row of that relation holds at its key
 
 
 @dataclass(frozen=True)
@@ -220,7 +220,7 @@ class Program:
         out = set()
         for r in self.rules_for(relation):
             out |= {b.atom.relation for b in r.body} | {a.atom.relation for a in r.aggregates}
-        if self.relations[relation].outcome:  # its checks read every element of the kind (W7)
+        if self.relations[relation].outcome:  # its checks read every element of the kind
             out.add(self.relations[relation].outcome)
         return out
 

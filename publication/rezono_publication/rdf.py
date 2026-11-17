@@ -9,7 +9,7 @@
   (T03): element IRIs (§3.4), states as blank nodes, `rd:emptySet` for `[]`, `rd:world rd:closed` on a closed
   kind, `$why` and `$src` as statement annotations. `to_turtle`/`from_turtle` and `to_jsonld`/`from_jsonld` are
   the same converter through text.
-- `witness_to_prov(witness, manifest, dataset)` and `prov_to_witness(graph)`: a witness as PROV-O (O12c): the
+- `witness_to_prov(witness, manifest, dataset)` and `prov_to_witness(graph)`: a witness as PROV-O: the
   conclusion a `prov:Entity`, the rule application a `prov:Activity`, the premises `prov:used`, the epoch a
   `prov:Bundle`. What PROV-O has no term for travels as `rd:` terms; `PROV_LOSS` lists it.
 
@@ -542,7 +542,7 @@ def from_jsonld(schema: dict, text: str) -> list:
 
 
 # ---------------------------------------------------------------------------------------------------------------
-# O12c: a witness as PROV-O
+# a witness as PROV-O
 
 
 def row_iri(ref: dict) -> URIRef:
@@ -564,7 +564,7 @@ def witness_iri(witness: dict) -> URIRef:
 
 
 def witness_to_prov(witness: dict, manifest: str, dataset: str, sources=None) -> Graph:
-    """One witness as PROV-O (O12c), in a graph named by its epoch, a `prov:Bundle`.
+    """One witness as PROV-O, in a graph named by its epoch, a `prov:Bundle`.
 
     `manifest` and `dataset` pin the epoch (`m-<epoch>` with its hash pin `d-…`, §6.4). `sources` maps a base
     row's `(relation, key)` to its Source objects: they become `prov:wasDerivedFrom`.

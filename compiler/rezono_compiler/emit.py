@@ -613,7 +613,7 @@ def rule_bundle(pack: Pack, prog) -> tuple[list, list]:
     """Rules and derived relations as the viewer needs them; message ids only, never words. A rule says what
     each of its aggregates folds, once: a witness names an aggregate by its position, and a reader
     never guesses the function from the numbers. A rule gives its head and its body in source order (MOD14), for
-    every role (O10). A column says its currency where the rules determine it. The relations the pack folds
+    every role. A column says its currency where the rules determine it. The relations the pack folds
     (`pack.folds`, fold.py) and the source order of a body (`pack.rule_bodies`) are the two things here that are
     not in the IR."""
     if not prog:
@@ -655,7 +655,7 @@ CALC_COLUMNS = [{"name": c, "type": "string"} for c in ("subject", "value", "sta
 
 
 def calc_relations(calc_prog) -> list[dict]:
-    """The calculation views a publication holds (W12), as derived relations the viewer can explain: every
+    """The calculation views a publication holds, as derived relations the viewer can explain: every
     rule's view, and the view of every version another rule names as `rule@version`. A row is (subject,
     value, state, reason), its CalcWitness the explanation; `calc` names the rule (or rule@version)."""
     if not calc_prog:
@@ -679,7 +679,7 @@ def calc_relations(calc_prog) -> list[dict]:
 
 
 def calc_semantic(calc_prog, name: str) -> dict:
-    """The semantic type of a calculation view's value (B10): a number or a boolean, derived by its rule, with
+    """The semantic type of a calculation view's value: a number or a boolean, derived by its rule, with
     the unit its versions agree on. A pinned version (`rule@version`) carries its own unit."""
     rule, _, version = name.partition("@")
     if not version:

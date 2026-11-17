@@ -40,7 +40,7 @@ ENTRY = ROOT / "viewer" / "scripts" / "views.ts"
 FORMAT = "rezono.views/1"
 ROWS = "rezono.rows-index/1"
 GAP = "rezono.gap-index/1"
-SOURCES = "rezono.sources-index/1"  # the role's source entries by row (S25), for a page of an answer
+SOURCES = "rezono.sources-index/1"  # the role's source entries by row, for a page of an answer
 MAIN = re.compile(r"^m-(\d+)$")
 
 

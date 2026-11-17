@@ -143,7 +143,7 @@ def test_every_proof_is_valid_and_acyclic(example):
     rules = load_rules(model.rules)
     for s in run:
         manifest, read = s.manifest()
-        if s.calc_witnesses:  # only the epoch check recomputes a calculation witness (W12): all proofs at once
+        if s.calc_witnesses:  # only the epoch check recomputes a calculation witness: all proofs at once
             report = check_epoch(s.explainer.chosen(), manifest, rules, read, derived=derived_relations(model.rules, rules),
                                  calc_witnesses=s.calc_witnesses, calc_ir=s.calc_ir)
             assert report["valid"] and not report["findings"], (s.label, report["findings"][:5])

@@ -1,7 +1,7 @@
 """A relation in a home's claim has exactly one row (docs/gui.md, The hero of a pack home; RV-V25, ruling 1,
 condition 2): on the main state and in every scenario the pack ships, read from its explained goldens. The
 compiler cannot see the number of rows, and the home never picks one of several, so a second row would take the
-sentence off the home without a failure anywhere else. A role reads a part of these rows (O8), so at most that
+sentence off the home without a failure anywhere else. A role reads a part of these rows, so at most that
 one. Generic: every example pack that declares a claim; none is named here."""
 
 import json

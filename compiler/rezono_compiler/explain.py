@@ -108,7 +108,7 @@ class Explainer:
         self._inst, self._chosen = inst, chosen
 
     def chosen(self) -> list[dict]:
-        """The chosen witness of every derived row, sorted by conclusion: the whole proof graph (R10)."""
+        """The chosen witness of every derived row, sorted by conclusion: the whole proof graph."""
         if self._chosen is None:
             self._choose()
         out = [self.instance(self._inst[i][1], self._inst[i][2]) for _, i in self._chosen.values()]

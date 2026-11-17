@@ -45,7 +45,7 @@ classes:
       sql: {multivalued: true, required: true, description: "The compiled files of its program, in order (engine/…)."}
       modules: {multivalued: true, description: "The rule modules it computes."}
       views: {range: EngineName, multivalued: true, description: "Its derived relations, in evaluation order."}
-      tables: {range: EngineName, multivalued: true, description: "The tables it reads, so facts are sent to it: kinds, slots, parameters and, where the checks are, the check metadata `rezono__*` (E11)."}
+      tables: {range: EngineName, multivalued: true, description: "The tables it reads, so facts are sent to it: kinds, slots, parameters and, where the checks are, the check metadata `rezono__*`."}
       imports: {range: EngineName, multivalued: true, description: "Relations it reads from an earlier pipeline: derived relations, or a seal's relations from integrity."}
       exports: {range: EngineName, multivalued: true, description: "Relations later pipelines read from it."}
       build_mb: {range: DecimalText, description: "Its estimated build memory, when the budget is a build memory."}

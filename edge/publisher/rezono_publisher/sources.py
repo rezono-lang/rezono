@@ -3,8 +3,8 @@
 Input is the compiler's entries for the epoch's facts (`rezono_compiler.sources.read`, the content of
 `generated/sources.json`): one `SourceEntry` per base row, its key the canonical JSON of the typed parts.
 Per role the publisher keeps exactly the entries of the rows in that role's snapshots, keyed as the
-snapshot and the proofs key the row (text parts), sorted on relation and key (C1) with their sources
-sorted and without duplicates. Access follows the fact (O8): a role gets a row's sources only with the row.
+snapshot and the proofs key the row (text parts), sorted on relation and key with their sources
+sorted and without duplicates. Access follows the fact: a role gets a row's sources only with the row.
 
 These entries are not the manifest's `sources` (where each source stood when the epoch closed); they say
 where a row came from. A source is a locator: not content, not proof that the row is true, and not proof

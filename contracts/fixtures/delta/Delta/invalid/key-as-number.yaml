@@ -1,4 +1,4 @@
-# A key is text: in canonical JSON a whole number is decimal text (W3).
+# A key is text: in canonical JSON a whole number is decimal text.
 format: rezono.delta/1
 pack: library
 changes:

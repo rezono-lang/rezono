@@ -53,7 +53,7 @@ test('where the canonical name is a slot of a kind in scope, the binder takes th
 	assert.equal(normal('ask h: Host where owner = host'), 'ask host_2: Host where host = host_2.owner');
 });
 
-test('one question asked by two roles has one hash: the binder avoids the names of the pack, not of the role (O10)', async () => {
+test('one question asked by two roles has one hash: the binder avoids the names of the pack, not of the role', async () => {
 	// A role that does not read the relation of `HostCluster.host` and `Host.clusters`: its schema names neither.
 	const role = structuredClone(fixture);
 	delete role.kinds.HostCluster.slots.host;

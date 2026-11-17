@@ -79,14 +79,14 @@ class Epoch:
     base_manifest: str = ""
     bundle: str = ""  # the compiled schema bundle (bundle/schema-bundle.json): schema and labels, no rows
     rules: str = ""  # the compiled rule IR (ir/rules.json), if the pack has rules
-    parents: dict = field(default_factory=dict)  # kind -> its parent kind (is_a), for rights on subkinds (O7)
+    parents: dict = field(default_factory=dict)  # kind -> its parent kind (is_a), for rights on subkinds
     build: dict = field(default_factory=dict)  # what the epoch was made with (batch.build_record)
     definition_sha256: str = ""  # the pack without facts and scenarios (batch.definition_sha256)
-    columns: dict = field(default_factory=dict)  # base relation -> the kind of each column, or None (O8)
+    columns: dict = field(default_factory=dict)  # base relation -> the kind of each column, or None
     sweeps: str = ""  # the compiled sweep grid (ir/sweeps.json), if the pack has a sweep: the gate's whole grid
     variant: dict = field(default_factory=dict)  # a sweep's grid value (contracts/manifest.yaml, Variant)
     seals: tuple = ()  # the sealed kinds of the pack: the rule IR must carry each, or nothing is checked
-    calc: str = ""  # the compiled calculation program (ir/calc.json), if the pack has calculation rules (W12)
+    calc: str = ""  # the compiled calculation program (ir/calc.json), if the pack has calculation rules
     calc_witnesses: list = field(default_factory=list)  # one CalcWitness per published calculation row
     # The pack's assets/, by file: {sha256, media_type, source, licence, bytes}. Data, like facts:
     # a role gets only the files its image cells name.
@@ -95,7 +95,7 @@ class Epoch:
     # The check metadata the engine loaded (rezono__*: table -> rows of canonical text). Schema, not
     # data: never a snapshot; the checker holds it against the bundle. None when the engine gave none.
     check_metadata: dict | None = None
-    # S25: the compiler's source entries of the facts (rezono_compiler.sources.read), one per base row; a
+    # the compiler's source entries of the facts (rezono_compiler.sources.read), one per base row; a
     # role gets those of its own rows. Not `sources`, which says where each source stood. None: the caller
     # supplies none (an older caller), and the manifest lists no source sets.
     fact_sources: list | None = None
@@ -105,7 +105,7 @@ PROOFS = "rezono:proofs"  # the check of the witnesses by the checker; not a rel
 ACCESS_CHECK = "rezono:access"  # the read rules give a kind in full, and the data agrees
 ACCESS_SEMANTICS = 2  # the gate refuses a manifest without it
 ASSETS = "rezono:assets"  # the images each role gets: exactly those its image cells name
-SOURCES = fact_sources.SOURCES  # the sources each role gets: exactly those of the base rows it reads (S25)
+SOURCES = fact_sources.SOURCES  # the sources each role gets: exactly those of the base rows it reads
 
 
 def image_tables(bundle: str) -> list[str]:
@@ -409,7 +409,7 @@ def plan(e: Epoch, store, roles: dict[str, str], base: dict | None = None,
     calc_doc = calc_ir(e)
     calcs = json.loads(json.dumps(e.calc_witnesses))
     # Every relation is accounted for by a definition: a table of the schema, a relation the rule IR derives,
-    # or a calculation the calculation program publishes. Anything else would go out unchecked (W12).
+    # or a calculation the calculation program publishes. Anything else would go out unchecked.
     known = set(e.columns) | set(derived)
     if calc_doc is not None:
         known |= published_views(calc_doc) | {calc_doc["as_of"]}
@@ -466,7 +466,7 @@ def plan(e: Epoch, store, roles: dict[str, str], base: dict | None = None,
         body = canonical(sees)
         uri = put(object_key(e.pack, body), body)
         witness_sets.append({"role": role, "uri": uri, "sha256": sha256(body)})
-        if images:  # only the images this role's own rows name (O8)
+        if images:  # only the images this role's own rows name
             pictures: list = []
             index = assets_of(e, store, role, rows if mode == access.COMPLETE else readable, data, images, pictures,
                               set())
@@ -477,7 +477,7 @@ def plan(e: Epoch, store, roles: dict[str, str], base: dict | None = None,
                     put(k, b)
             uri = put(key, body)
             asset_sets.append({"role": role, "uri": uri, "sha256": sha256(body)})
-        if entries is not None:  # S25: the sources of the rows this role reads, checked before anything is written
+        if entries is not None:  # the sources of the rows this role reads, checked before anything is written
             body = sources_of(e, entries, role, rows if mode == access.COMPLETE else readable, data)
             uri = put(object_key(e.pack, body), body)
             source_objects[uri] = body

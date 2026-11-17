@@ -427,7 +427,7 @@ class Operation:
     def check_args(self, mp: Maps) -> dict: return {}
 
     def ids(self, emb: set, mp: Maps) -> tuple[dict, dict]:
-        """(the id map, the ids that change for the rules): derived ids follow the element names (S8)."""
+        """(the id map, the ids that change for the rules): derived ids follow the element names."""
         ids = id_map(emb, mp.elements)
         return ids, ids
 
@@ -456,7 +456,7 @@ class Operation:
         self.schema(edits)
         write_all(m, edits, originals)
         mp = self.maps(*engine_names(m.dir))
-        ids, changed = self.ids(embedded(m, before), mp)  # S8: a class no longer ambiguous loses its prefix
+        ids, changed = self.ids(embedded(m, before), mp)  # a class no longer ambiguous loses its prefix
         plan = self.plan(mp)
         edits = Edits()
         fact_edits(m, mp, {text_of(a): text_of(b) for a, b in ids.items()}, edits)

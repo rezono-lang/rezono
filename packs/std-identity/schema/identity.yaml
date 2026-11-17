@@ -31,7 +31,7 @@ classes:
         multivalued: true
         description: >-
           Another referent that a source states to be the same thing. Each row is a claim with a source of its
-          own (S25), so every merge has one. The direction carries no meaning: the rules read it both ways.
+          own, so every merge has one. The direction carries no meaning: the rules read it both ways.
           A pair without a row is not stated to be one, which never makes it two.
         close_mappings: ["owl:sameAs"]
         broad_mappings: ["skos:exactMatch"]

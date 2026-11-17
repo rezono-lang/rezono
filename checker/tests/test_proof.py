@@ -185,7 +185,7 @@ def test_a_piece_carries_exactly_its_contract():
     assert any("a child is not exactly" in p for p in check(pieces, roots))
 
 
-# Calculation witnesses (W12): a calculation over a rule's row, one over that calculation, one without premises.
+# Calculation witnesses: a calculation over a rule's row, one over that calculation, one without premises.
 CALC = [
     {"conclusion": {"relation": "c__deg", "key": k("a", "1", "known", "")}, "rule": "c_deg", "state": "known",
      "premises": [{"relation": "deg", "key": k("a", "1")}], "reads": ["deg"], "steps": []},

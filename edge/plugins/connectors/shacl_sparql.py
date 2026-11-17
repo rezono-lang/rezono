@@ -32,7 +32,7 @@ constraint of the same shape reports that the check cannot be decided from the v
 that the data conforms when they cannot know.
 
 **What is not translated** (and why) is a shape with `sh:deactivated true` and the reason as its `sh:message`:
-a recursive relation (SPARQL has no fixpoint), an outcome (W7), a calculation input
+a recursive relation (SPARQL has no fixpoint), an outcome, a calculation input
 and a base relation the view does not carry. `shacl-sparql.losses.yaml` lists these losses.
 
 A result names the invariant's relation in the view as its focus node (`<base><Relation>`, as the publication
@@ -154,11 +154,11 @@ class _Translator:
         if rel.role == "base":
             return self.base_columns(name, cols)
         if rel.outcome:
-            raise Refused(f"reads {name}, an outcome (W7), whose states are not rows of the view")
+            raise Refused(f"reads {name}, an outcome, whose states are not rows of the view")
         if self.prog.recursive(name) or name in self.prog.bounds:
             raise Refused(f"reads {name}, a recursive relation: SPARQL has no fixpoint")
         rules = self.prog.rules_for(name)
-        if not rules:  # S28: a relation nobody extends is the empty set
+        if not rules:  # a relation nobody extends is the empty set
             return "FILTER(false)"
         return "\nUNION\n".join("{\n" + self.rule(r, cols) + "\n}" for r in sorted(rules, key=lambda r: r.id))
 

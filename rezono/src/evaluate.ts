@@ -740,7 +740,7 @@ function toJson(v: V, slot: SlotDef, doc: AnswerSchema, schema: Schema): unknown
  * Answers a checked `ask` over the rows a role reads. Undefined when the text is not an `ask` or the check
  * found an error: a question that does not check is never evaluated. With `budget.steps` the evaluation
  * stops when it passes that many steps (`OverBudget`): no row and no count, never a part as the whole. `pack`
- * is the pack's whole schema, which the question hash of the output schema's `base` is taken against (O10).
+ * is the pack's whole schema, which the question hash of the output schema's `base` is taken against.
  */
 export async function answer(checked: Checked, schema: Schema, data: Data, budget: { steps?: number } = {}, pack: Schema = schema): Promise<Answer | undefined> {
 	const { tree, answer: shape } = checked;

@@ -113,7 +113,7 @@ def test_an_invariant_the_engine_left_empty_does_not_pass():
 
 
 def test_an_outcome_cannot_hide_a_second_state():
-    """known and unknown for one element block (W7). Without the unknown row the outcome looks total and single."""
+    """known and unknown for one element block. Without the unknown row the outcome looks total and single."""
     doc = program([relation("host", "base", "id"), relation("ok", "base", "id"),
                    relation("state", "derived", "id", "state", "reason", outcome="host")],
                   rule("known", 0, ("state", "?x", "known", ""), ("host", "?x"), ("ok", "?x")),
@@ -142,7 +142,7 @@ def test_what_the_calculation_reads_is_covered():
 
 
 def test_a_role_is_not_held_to_closure():
-    """A role's snapshots are filtered (O8): what it reads in full is checked against the complete epoch."""
+    """A role's snapshots are filtered: what it reads in full is checked against the complete epoch."""
     rows = {"flag": [["a"]], "request": [["a"]], "blocked": [], "allowed": [["a"]]}
     assert epoch(GATE, rows, [witness(GATE, "allowed", x="a")], full=set(rows))["valid"]
 

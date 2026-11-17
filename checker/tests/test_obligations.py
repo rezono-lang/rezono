@@ -1,5 +1,5 @@
 """AUD-C3: the checker holds an epoch's own obligations against the complete snapshots, not on the compiler's or
-the publisher's word: an invariant relation is empty, and an outcome (W7) gives every element of its kind exactly
+the publisher's word: an invariant relation is empty, and an outcome gives every element of its kind exactly
 one state. Each witness below is a correct proof, so only the obligation itself can refuse the epoch."""
 
 import hashlib

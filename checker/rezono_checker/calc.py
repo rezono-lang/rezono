@@ -324,7 +324,7 @@ class Program:
 
 def reads(ir: dict, vid: str | None) -> set[str]:
     """Every relation an evaluation of a version reads, absences included (a missing fact is unknown, a
-    missing row of `fact: <relation>` is false): a role must read each in full to see its result (O8).
+    missing row of `fact: <relation>` is false): a role must read each in full to see its result.
     Without a version, only the evaluation date."""
     out = {ir["as_of"]}
     versions = {v["id"]: v for v in ir.get("versions", [])}
@@ -461,7 +461,7 @@ def total(ir: dict, rows) -> list[dict]:
     """Every published calculation view gives every element of the subject kind exactly one row with a
     state, in the complete snapshots (`rows` as in Program). No such row is `calc_row_missing`: there is no
     witness to refuse then, and the value would be absent without a word. A second one is
-    `calc_row_duplicate`. Not for a role: it may read a subject and not see its calculated row (O8)."""
+    `calc_row_duplicate`. Not for a role: it may read a subject and not see its calculated row."""
     views = sorted(published_views(ir))
     subjects = sorted({parts[0] for parts, _ in rows(ir["subject_table"]).values()}) if views else []
     findings = []

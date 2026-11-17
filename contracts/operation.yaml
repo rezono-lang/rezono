@@ -151,7 +151,7 @@ classes:
   Case:
     description: One value of a split_by and the subkind it becomes.
     attributes:
-      value: {required: true, description: "The value as text; a whole number as decimal text (W3)."}
+      value: {required: true, description: "The value as text; a whole number as decimal text."}
       kind: {required: true, description: "The class name of the new subkind; it must not exist yet."}
 
   Impact:
@@ -176,7 +176,7 @@ classes:
       rules: {range: RuleChange, multivalued: true, inlined_as_list: true}
       access: {range: AccessChange, multivalued: true, inlined_as_list: true, description: "Rows a role may read after the operation but not before."}
       elements: {range: ElementChange, multivalued: true, inlined_as_list: true, description: "Element ids in labels and the channel table that changed or went away."}
-      sources: {range: SourceTransport, description: "Present exactly when the pack has source companions (B12): the companions written and the sourced rows lost."}
+      sources: {range: SourceTransport, description: "Present exactly when the pack has source companions: the companions written and the sourced rows lost."}
 
   SourceTransport:
     description: >-

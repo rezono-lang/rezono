@@ -10,7 +10,7 @@ read it (probes/publication-thin). Input is what one role's part of a publicatio
 
 Out come a schema document (§2), the rows in row JSON (§3) with every absent value as its state (§3.3), `$why`
 per derived row and `$src` per base row, and every hash of §6.2. Rows are never filtered here: what a role may
-read is the publisher's decision, made once (O8). Where the role does not read a relation in full, an absence in
+read is the publisher's decision, made once. Where the role does not read a relation in full, an absence in
 its files proves nothing, so the form does not close the world over it: the kind or the many-valued slot is
 `world: open`, and a single-valued slot also takes `unknown`, written `{"$unknown": "not_read_in_full"}` for every
 element without a readable value, withheld or none (its files cannot tell the two apart). `full` follows from the
@@ -23,7 +23,7 @@ Exact values only: an integer is `Integer` with Rezono's BIGINT bounds; nothing 
 A subkind (`is_a`) is a kind with a `parent` that restates its parent's slots (§2.1). In Rezono an element of a
 subkind is also a row of every kind above it; the form writes it once, at its most specific kind
 (§3.1), with every slot. A role that reads an element as the subkind only gets the slots of the kinds above as
-any slot it does not read in full (O8).
+any slot it does not read in full.
 
 `relations` maps a form back onto Rezono relations, so a reader can check that a form says exactly what the
 role's files say: no element and no value more or less. That an element of a subkind is an element of the kinds
@@ -72,7 +72,7 @@ def schema_document(bundle: dict, full=None) -> tuple[dict, dict]:
     """The publication schema document (§2) of a bundle, and the plan of how each Rezono table maps onto it.
 
     `full` is the set of Rezono tables the role reads in full (None: all, the complete role). A kind, slot or derived
-    relation over any other table is open, and a single-valued slot over one also takes `unknown` (O8)."""
+    relation over any other table is open, and a single-valued slot over one also takes `unknown`."""
     def partial(table: str) -> bool:
         return full is not None and table not in full
 
@@ -130,7 +130,7 @@ def schema_document(bundle: dict, full=None) -> tuple[dict, dict]:
         # A missing value is a state (§3.3): unknown for a required slot, not_applicable for an optional one.
         slot["states"] = ["known"] if a["multivalued"] else ["known", "unknown" if a["required"] else "not_applicable"]
         world = a["world"]
-        if partial(a["table"]):  # what the role cannot read in full is never closed over (O8)
+        if partial(a["table"]):  # what the role cannot read in full is never closed over
             plan["partial"].add(a["table"])
             world = "open"
             if not a["multivalued"] and "unknown" not in slot["states"]:

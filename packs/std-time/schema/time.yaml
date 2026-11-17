@@ -88,7 +88,7 @@ classes:
       start:
         range: integer
         description: >-
-          The first position it covers. Open world (W6): an interval without this row and without
+          The first position it covers. Open world: an interval without this row and without
           unbounded start has a start nobody recorded, which is unknown.
         close_mappings: ["time:hasBeginning"]
         annotations:
@@ -96,7 +96,7 @@ classes:
       end:
         range: integer
         description: >-
-          The first position it no longer covers. Open world (W6): an interval without this row and without
+          The first position it no longer covers. Open world: an interval without this row and without
           unbounded end has an end nobody recorded, which is unknown.
         close_mappings: ["time:hasEnd"]
         annotations:

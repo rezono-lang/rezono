@@ -64,7 +64,7 @@ def roles_of(e: publish.Epoch, roles: dict[str, str], kind: str, key: str) -> tu
     it may not read. Every other reader sees `unavailable` (the gate does that).
     """
     doc = json.loads(e.rules)
-    columns = access.with_calc(e.columns, publish.calc_ir(e))  # as a publication sees them (W12)
+    columns = access.with_calc(e.columns, publish.calc_ir(e))  # as a publication sees them
     readers, status_readers = [], []
     for role, mode in sorted(roles.items()):
         if mode == access.COMPLETE:

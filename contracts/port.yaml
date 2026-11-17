@@ -41,7 +41,7 @@ types:
 
 enums:
   PortKind:
-    description: What a port does at the boundary (O12a).
+    description: What a port does at the boundary.
     permissible_values:
       in: {description: "Reads a source; what arrives is an observation. A stream arrives as deltas (RD6)."}
       out: {description: "Writes a projection of a checked, published epoch per role, with its loss list."}

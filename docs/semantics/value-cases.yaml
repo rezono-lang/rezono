@@ -565,7 +565,7 @@ cases:
     proposed: {state: unknown, reason: not_read_in_full}
     sources: ["values.md §4 (gap)", "#351 P1.8", "#394 report C rank 6"]
     current:
-      - {at: "docs/compiler.md 'Named outcomes (W7)', Access", gives: "no state for that element at all, not unknown"}
+      - {at: "docs/compiler.md 'Named outcomes', Access", gives: "no state for that element at all, not unknown"}
       - {at: "viewer/src/lib/outcome.ts:66", gives: "an absent outcome displays as n/a"}
     status: gap
 
@@ -582,7 +582,7 @@ cases:
     topic: "§4 rule 3"
     input: {rule: "a derived row whose proof negates a relation the role reads only partly"}
     expect: {role_view: "the derived row and its proof are withheld"}
-    sources: ["compiler.md 'Access (O8)'"]
+    sources: ["compiler.md 'Access'"]
     agree: ["edge/publisher/rezono_publisher/access.py:154", "checker/rezono_checker/access.py:279", "edge/gate/src/gate.ts:410"]
     status: settled
 

@@ -124,7 +124,7 @@ deny contains msg if {
 	some pod in pods
 	some v in object.get(pod.spec, "volumes", [])
 	startswith(v.csi.driver, "secrets-store.")
-	msg := sprintf("%s: CSI volume %s mounts secrets through %s; make them with an ExternalSecret (X8)", [id(pod.owner), v.name, v.csi.driver])
+	msg := sprintf("%s: CSI volume %s mounts secrets through %s; make them with an ExternalSecret", [id(pod.owner), v.name, v.csi.driver])
 }
 
 # An ExternalSecret's template is Git too: a key that looks like a secret takes its value from the store (a template

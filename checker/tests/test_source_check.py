@@ -1,4 +1,4 @@
-"""The check `rezono:sources` (S25) on small synthetic snapshots: the rows, the fields, hidden rows, the files."""
+"""The check `rezono:sources` on small synthetic snapshots: the rows, the fields, hidden rows, the files."""
 import hashlib
 import inspect
 import json

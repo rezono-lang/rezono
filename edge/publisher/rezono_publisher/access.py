@@ -262,7 +262,7 @@ class Columns(dict):
 
 
 def with_calc(columns: dict, calc_ir: dict | None) -> dict:
-    """The kind per column, with the relations of the calculation rules (W12): a calculated row names its
+    """The kind per column, with the relations of the calculation rules: a calculated row names its
     subject; the evaluation date names no element. With them goes what each calculation view rests on
     (`calc_scope.view_sources`), which decides whether a role reads the view in full (RV-S26). The one place
     every scope over an epoch gets them, so a publication and a sweep judge the same relations (no relation

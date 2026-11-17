@@ -217,7 +217,7 @@ def read_doc(pack_dir: str | Path, source: str | None = None) -> dict | None:
 def read_closure(pack: Pack, pack_dir: str | Path, imports: dict, renames: dict) -> tuple[dict | None, dict[str, dict]]:
     """The program of the pinned import closure, and each imported pack's part of it: the
     calc files of the imported packs (`imports`, in dependency order, each pack once), then the pack's own,
-    as one document under this pack's names (S8). An imported file states no evaluation date; this pack
+    as one document under this pack's names. An imported file states no evaluation date; this pack
     states it, for the whole program. A pack that imports no calculation gets its own
     document, as written."""
     own, parts = read_doc(pack_dir), {}
@@ -252,7 +252,7 @@ def union(docs: list[tuple[str, dict]]) -> dict:
 
 
 def under(pack: Pack, doc: dict, names: dict[str, str]) -> dict:
-    """An imported program under the importing pack's names (S8): the kinds its bindings name, and the kind
+    """An imported program under the importing pack's names: the kinds its bindings name, and the kind
     of every fact leaf that reads an attribute. Any other fact leaf names a derived relation or an input
     concept, which keeps its name."""
     def leaves(e):
@@ -432,7 +432,7 @@ def build(pack: Pack, doc: dict, derived: dict | None = None, files: list[tuple[
 
 
 def date_text(v, where: str) -> str:
-    """A date, never a timestamp: a datetime is also a date in Python, so it is refused first (W5)."""
+    """A date, never a timestamp: a datetime is also a date in Python, so it is refused first."""
     if isinstance(v, datetime.datetime):
         raise CompileError(f"calc.date: {where}: '{v}' is a timestamp, not a date (YYYY-MM-DD)")
     if isinstance(v, datetime.date):
@@ -680,7 +680,7 @@ def derived_fact(pack: Pack, subject: str, derived: dict, fid: str) -> Fact | st
     if not column:
         if len(key) != 1:
             return f"relation {name} has more columns than the subject; name one: {name}.<column>"
-        if derived[name].get("world") == "open":  # W6: a missing row is unknown, not false
+        if derived[name].get("world") == "open":  # a missing row is unknown, not false
             return f"relation {name} is open, so whether it holds is unknown when it has no row; test a closed relation"
         return Fact(fid, BOOLEAN, name, key=key[0]["name"], column="", presence=True, derived=True)
     cols = {c["name"]: c for c in key[1:]}

@@ -310,7 +310,7 @@ def test_the_evaluation_date_is_a_fact():
 
 
 def test_the_bundle_names_the_calculation_views_a_publication_holds():
-    """Every rule's view and every version named as rule@version is a derived relation of the bundle (W12),
+    """Every rule's view and every version named as rule@version is a derived relation of the bundle,
     so the viewer explains its rows; exactly the views the checker counts as published."""
     from rezono_checker.calc import published_views
 
@@ -548,7 +548,7 @@ def test_rule_reads_the_known_integer_of_a_calc_selection(tmp_path):
     assert [p["name"] for p in split_plan["pipelines"]] == ["integrity", "rules-1", "rules-3", "calc", "rules-4"]
 
     # `explain` runs the calculation in its phase (batch.phases): the proof of the consuming rule has the
-    # selection as its premise and the calculation witness of that row (W12), and the selection is a snapshot
+    # selection as its premise and the calculation witness of that row, and the selection is a snapshot
     # as a publication holds it (batch.calculate).
     (directory / "facts").mkdir()
     (directory / "facts" / "state.yaml").write_text(

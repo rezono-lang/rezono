@@ -55,7 +55,7 @@ def graph():
 
 
 def calc(relation, subject, value, premises=()):
-    """A calculation witness (W12) as the trees carry it: unchanged, its premises in order."""
+    """A calculation witness as the trees carry it: unchanged, its premises in order."""
     return {"conclusion": {"relation": relation, "key": k(subject, value, "known", "")}, "rule": relation.removeprefix("c__"),
             "version": "1", "definition": "d", "value": value, "state": "known", "reason": "", "reads": ["e"],
             "premises": list(premises), "steps": [{"path": "d/value", "value": value, "state": "known", "reason": ""}]}

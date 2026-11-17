@@ -90,7 +90,7 @@ sheet.kind = {{{$kind} {$id}}}
 name.separator = {{ · }}
 value.separator = {{, }}
 value.reason = {{{$value} ({$reason})}}
-# MOD18: a slot with no row in a closed world (W6); unknown stays `status.unknown`.
+# MOD18: a slot with no row in a closed world; unknown stays `status.unknown`.
 value.none = no value
 # Number typography (docs/gui.md, Number typography): the real minus sign, the sign for rounded (exact has no sign) and the fraction.
 number.minus = −

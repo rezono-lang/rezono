@@ -14,7 +14,7 @@ browser ──> Gateway (the platform's; TLS) ──HTTPRoute──> front :4180
 |---|---|
 | [`base/`](base/kustomization.yaml) | the namespace (Pod Security `restricted`), the front, the viewer, the gate, their Services, the NetworkPolicies (deny all, then each hop), the ExternalSecrets and the HTTPRoute |
 | [`components/propose/`](components/propose/kustomization.yaml) | proposals: the gate's dispatch token (it may only start workflows and read pull requests) |
-| [`components/live/`](components/live/kustomization.yaml) | live `suppose` (E12): the engine of [`deploy/engine`](../../engine/README.md) as a second container in the gate's pod, on loopback only, with its deploy key and read-only store keys |
+| [`components/live/`](components/live/kustomization.yaml) | live `suppose`: the engine of [`deploy/engine`](../../engine/README.md) as a second container in the gate's pod, on loopback only, with its deploy key and read-only store keys |
 | [`overlays/example/`](overlays/example/kustomization.yaml) | one installation with placeholder values under `example.org` and placeholder image digests |
 | [`overlays/kind/`](overlays/kind/kustomization.yaml) | the installation the run brings up on a local cluster: the base without components, every egress rule narrowed to where it goes |
 | [`run/`](run/README.md) | the run: `run/kind.sh` brings the profile up on a plain local cluster (kind), publishes the profile's packs and reads them through the front door |
@@ -22,7 +22,7 @@ browser ──> Gateway (the platform's; TLS) ──HTTPRoute──> front :4180
 | [`check.sh`](check.sh) | render, validate, hold to the policies; in CI as the workflow `kubernetes` |
 | [`deploy/gate`](../../gate/Containerfile), [`deploy/viewer`](../../viewer/Containerfile), [`deploy/engine`](../../engine/Containerfile) | the images' recipes, each with the `.dockerignore` that lets in only what the image is made of |
 
-**Why these choices.** An overlay composes the base with the components it wants, and an overlay without a component is the base (the empty overlay is the identity, AGENTS.md rule 4). The engine sits beside the gate because it holds the complete facts and must be reached by its own gate only: on loopback no other pod can reach it and no certificate is needed (the gate accepts loopback, or https with a token). The front is oauth2-proxy, an existing component (rule 7): it turns the platform's login into the bearer token the gate already verifies, so the gate stays the only place that decides a role. Every secret is an ExternalSecret against the platform's store (X8); no value is in Git.
+**Why these choices.** An overlay composes the base with the components it wants, and an overlay without a component is the base (the empty overlay is the identity, AGENTS.md rule 4). The engine sits beside the gate because it holds the complete facts and must be reached by its own gate only: on loopback no other pod can reach it and no certificate is needed (the gate accepts loopback, or https with a token). The front is oauth2-proxy, an existing component (rule 7): it turns the platform's login into the bearer token the gate already verifies, so the gate stays the only place that decides a role. Every secret is an ExternalSecret against the platform's store; no value is in Git.
 
 ## The check
 

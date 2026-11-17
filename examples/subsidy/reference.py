@@ -49,7 +49,7 @@ def load(path, t):
 def states():
     """The fact states in order: the facts together, named after the first fact file, then each scenario."""
     t = {}
-    # A sidecar (<file>.sources.yaml) says where a fact file's records come from (S25); it holds no facts.
+    # A sidecar (<file>.sources.yaml) says where a fact file's records come from; it holds no facts.
     files = sorted(f for f in (HERE / "facts").glob("*.yaml") if not f.name.endswith(".sources.yaml"))
     for f in files:
         load(f, t)
@@ -62,7 +62,7 @@ def states():
 # --- The seal of the ledger ----------------------------------------------------------
 
 def row_hash(payment):
-    """The canonical hash of a ledger payment's row (C1): per table ledger_payment__<slot> its values as
+    """The canonical hash of a ledger payment's row: per table ledger_payment__<slot> its values as
     text, sorted; canonical JSON has sorted keys and no whitespace."""
     row = {f"ledger_payment__{s}": [str(payment[s])] for s in ("application", "booked_on", "amount")}
     return hashlib.sha256(json.dumps(row, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()).hexdigest()

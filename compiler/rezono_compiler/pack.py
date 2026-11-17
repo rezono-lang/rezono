@@ -99,7 +99,7 @@ class Slot:
     maximum_cardinality: int | None = None
     patterns: list[str] = field(default_factory=list)  # portable regular expressions (regex.portable)
     constant: object = None  # equals_string or equals_number
-    world: str = "closed"  # W6: open if the slot or its kind is open
+    world: str = "closed"  # open if the slot or its kind is open
     explore: tuple[int, int, int] | None = None  # (min, max, step) of a sweep on this slot
     names: bool = False  # slot_uri rdfs:label: its value names an element of the kind (NAME_URI)
     currency: str | None = None  # ISO 4217: an amount in whole minor units of this currency
@@ -138,7 +138,7 @@ class Kind:
     module: str = ""
     id_patterns: list[str] = field(default_factory=list)  # on the identifier of a root kind
     rules: list[ClassRule] = field(default_factory=list)
-    world: str = "closed"  # W6: open if the class or an ancestor says world: open
+    world: str = "closed"  # open if the class or an ancestor says world: open
     seal: object = None  # the annotation `seal` as written: the name of the period slot
     sealed_with: object = None  # the annotation `sealed_with` as written: the arrow to the element it is part of
     relationship: bool = False  # LinkML represents_relationship (S27), inherited unless explicitly overridden
@@ -150,7 +150,7 @@ class Kind:
     spans: dict = field(default_factory=dict)  # MOD2: where its unique keys (`key:<name>`) and path equations (`eq:<name>`) are
 
 
-ACCESS = ("may_read", "may_propose", "may_review", "may_publish")  # std-access (O4); their `kind` column names kinds
+ACCESS = ("may_read", "may_propose", "may_review", "may_publish")  # std-access; their `kind` column names kinds
 CLOSE = "period_close"  # the kind of the closing fact of a seal, with these slots
 CLOSED_UNTIL, COVERS, ELEMENT, SHA256 = "closed_until", "covers", "element", "sha256"
 
@@ -229,7 +229,7 @@ class Pack:
     # The calculation rules as written (contracts/calc.yaml), if the pack or a pack it imports has calc/.
     calc: dict | None = None
     sweeps: list[dict] = field(default_factory=list)  # from sweeps.yaml: one fact cell each, with its grid
-    questions: list[dict] = field(default_factory=list)  # explanation questions (R10): imports first, then own
+    questions: list[dict] = field(default_factory=list)  # explanation questions: imports first, then own
     reader_questions: list[dict] = field(default_factory=list)  # reader questions (RV-C04): imports first, then own
     seals: list[Seal] = field(default_factory=list)  # the sealed kind, if any
     iri: dict = field(default_factory=dict)  # pack.yaml `iri:` resolved (`iris`): base, kind -> IRI, reason IRIs
@@ -587,7 +587,7 @@ def read(pack_dir: str | Path) -> Pack:
             enums[e] = sorted(sv.get_enum(ename).permissible_values or {})
     declared = units(mods, placed, errors)
 
-    for k, kind in kinds.items():  # W6: the root kind has the world; a subkind shares its tables, so its world too
+    for k, kind in kinds.items():  # the root kind has the world; a subkind shares its tables, so its world too
         if kind.parent and "world" in tags(owner[k].sv.get_class(kind.cls)):
             errors.append(f"class {kind.cls}: world goes on the root kind; a subkind has the world of {kind.parent}")
         root, seen = kind, {k}
@@ -870,7 +870,7 @@ def patterns(sv: SchemaView, s, rng: str, where: str, errors: list[str]) -> list
 
 def currency(sv: SchemaView, s, rng: str, where: str, errors: list[str]) -> str | None:
     """The annotation `currency` of a slot, else of its type or a type it derives from: an ISO 4217 code.
-    The values are then whole minor units of that currency (cents for EUR), never a fraction (W3)."""
+    The values are then whole minor units of that currency (cents for EUR), never a fraction."""
     found = ann(s, "currency")
     t = sv.get_type(rng)
     while found is None and t is not None:
@@ -898,7 +898,7 @@ def units(mods, placed, errors: list[str]) -> dict[str, types.Unit]:
     - `dimension: data` makes the type the base unit of the dimension `data` (`unit B = integer`);
     - `unit: 2^30 B` makes it an exact multiple of a declared unit (`unit GiB = 2^30 B`), also `per` a unit;
     - `currency: EUR` makes it the minor unit of a currency (`unit Cents = money minor EUR`), dimension `money EUR`.
-    A unit is a type of whole numbers (W3). The units are the pack's data: the compiler knows none of its own."""
+    A unit is a type of whole numbers. The units are the pack's data: the compiler knows none of its own."""
     found: dict[str, tuple] = {}  # name -> (tag, value, where)
     for m in mods:
         for tname in sorted(m.sv.all_types(imports=False)):

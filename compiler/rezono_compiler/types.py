@@ -30,7 +30,7 @@ from fractions import Fraction
 # denominator in the engine), never a stored slot type.
 STRING, INTEGER, BOOLEAN, DATE, NUMBER = "string", "integer", "boolean", "date", "number"
 SCALARS = (STRING, INTEGER, BOOLEAN, DATE)
-# LinkML roots that are never a Rezono type: money and quantities are whole numbers of a unit (W3).
+# LinkML roots that are never a Rezono type: money and quantities are whole numbers of a unit.
 FLOATING = frozenset({"float", "double", "decimal"})
 
 _SQL = {STRING: "VARCHAR", INTEGER: "BIGINT", BOOLEAN: "BOOLEAN", DATE: "DATE"}
@@ -126,7 +126,7 @@ def linkml(root: str) -> str | None:
 
 
 def money(currency: str, range: str | None = None) -> Type:
-    """An amount in whole minor units of `currency` (cents for EUR): never a fraction (W3)."""
+    """An amount in whole minor units of `currency` (cents for EUR): never a fraction."""
     return Type(INTEGER, range, currency=currency)
 
 

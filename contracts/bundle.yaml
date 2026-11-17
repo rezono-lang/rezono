@@ -202,7 +202,7 @@ classes:
     attributes:
       name: {description: "rdfs:label: the text that names an element."}
       description: {description: "schema:description: the element's description, as text."}
-      image: {description: "schema:image: the attribute naming a file in assets/ (B10)."}
+      image: {description: "schema:image: the attribute naming a file in assets/."}
       order: {description: "schema:position: a whole-number ordering value."}
       valid_from: {description: "schema:validFrom: the start of validity."}
       valid_until: {description: "schema:validThrough: the end of validity."}
@@ -297,7 +297,7 @@ classes:
       variables: {range: RuleVariable, multivalued: true, inlined_as_list: true}
       aggregates: {range: RuleAggregate, multivalued: true, inlined_as_list: true, description: "The aggregates of the rule, in the order of the rule IR (contracts/rules.yaml), which the checker reads: what each folds. Left out for a rule without aggregates. A witness names its aggregate by `position` (contracts/proof.yaml), so a reader never guesses the function from the numbers."}
       head: {range: RuleAtom, required: true, inlined: true, description: "The head of the rule (MOD14): its relation and terms, each typed by its column."}
-      body: {range: RuleLiteral, multivalued: true, inlined_as_list: true, required: true, description: "Every literal of the body in source order (MOD14), from the rule IR: atoms, comparisons, assignments and aggregates. A rule a view generates has no order as written; its body is its atoms, then its aggregates, assignments and comparisons, each in the order of the rule IR. Published for every role (O10)."}
+      body: {range: RuleLiteral, multivalued: true, inlined_as_list: true, required: true, description: "Every literal of the body in source order (MOD14), from the rule IR: atoms, comparisons, assignments and aggregates. A rule a view generates has no order as written; its body is its atoms, then its aggregates, assignments and comparisons, each in the order of the rule IR. Published for every role."}
       origin: {range: RuleOrigin, inlined: true}
 
   RuleAtom:
@@ -360,14 +360,14 @@ classes:
 
   DerivedRelation:
     attributes:
-      extend: {range: boolean, description: "True: the owning pack explicitly permits consumers to add rules (S28). Without rules the relation is empty."}
+      extend: {range: boolean, description: "True: the owning pack explicitly permits consumers to add rules. Without rules the relation is empty."}
       id: {required: true, description: The relation name; also the element id of its label.}
       module: {required: true}
       explain: {required: true, range: ExplainMode}
       columns: {range: RuleColumn, multivalued: true, inlined_as_list: true, required: true}
       world: {range: World, description: "What a missing row means: closed, not true; open, unknown. Left out: closed."}
       absence: {range: boolean, description: "True: the relation says what is not recorded (`// @absence`); closed, and it may negate an open relation."}
-      semantic: {range: SemanticType, inlined: true, description: "For a calculation's view (`calc`): the type of its value column, derived by the rule it names, with its unit (B10). Left out: not a calculation."}
+      semantic: {range: SemanticType, inlined: true, description: "For a calculation's view (`calc`): the type of its value column, derived by the rule it names, with its unit. Left out: not a calculation."}
       outcome: {description: "A named outcome: the kind whose every element has one state (column `state`) and a reason (column `reason`, message `reason.<reason>`)."}
       closes: {description: "The derived relation this one closes (`// @closes <relation>`): a row states, for its key, that no row of that relation holds there, and its proof says why. The key is a prefix of that relation's columns. The invariant `<id>_closes_<relation>` holds the two apart."}
       checks: {multivalued: true, description: "The engine views that check a named outcome (`<relation>__total`, `<relation>__state`); a row in one is a red check."}
@@ -386,7 +386,7 @@ classes:
       all logical checks of one kind in one view (`relation`), and which slot has which check is a metadata row.
     attributes:
       view: {required: true, description: "The name of the logical check, `<kind>__<subject>__<check>` or `<kind>__<check>`: `validation_result.info` and the manifest's check name. Until E11 is built, also the engine view."}
-      relation: {description: "The engine view that holds this check's rows, `rezono__<check>` (E11). Absent until E11 step 2; then required."}
+      relation: {description: "The engine view that holds this check's rows, `rezono__<check>`. Required once the engine publishes check metadata."}
       check: {range: Check, required: true}
       kind: {required: true}
       subject: {}

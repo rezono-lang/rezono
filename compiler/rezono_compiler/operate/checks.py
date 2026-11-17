@@ -68,8 +68,8 @@ def new_violations(p: packs.Pack, before: Counter, after: Counter, mp: Maps, ids
 
 
 def guarded(p: packs.Pack, rows: dict[str, list[tuple]]) -> set[tuple[str, tuple]]:
-    """What the pack's rules give on one state that must not grow: the rows of every access relation (O4), of
-    every invariant, and of every outcome check (W7), as (relation, row of canonical text), on DuckDB."""
+    """What the pack's rules give on one state that must not grow: the rows of every access relation, of
+    every invariant, and of every outcome check, as (relation, row of canonical text), on DuckDB."""
     if not p.rules:
         return set()
     from .. import batch, rules as ir, rules_sql
@@ -91,7 +91,7 @@ def guarded(p: packs.Pack, rows: dict[str, list[tuple]]) -> set[tuple[str, tuple
 
 def grown(before: set, after: set, mp: Maps, access: dict[str, int | None]) -> tuple[list, list]:
     """(access rows, invariant and outcome rows) after that are not the image of a row before. Only the kind
-    column of an access relation maps (O7): rule_edits blocks every other constant and every head that carries
+    column of an access relation maps: rule_edits blocks every other constant and every head that carries
     an id the operation changes, so nothing else in these rows can change name."""
     image = set()
     for n, r in before:

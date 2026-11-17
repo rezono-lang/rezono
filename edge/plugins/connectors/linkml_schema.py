@@ -57,7 +57,7 @@ STANDARD = "LinkML"
 STANDARD_VERSION = "1.12"
 TYPES = "linkml:types"
 
-# Documentation that LinkML gives every element: carried as written both ways, read by no rule (O12b).
+# Documentation that LinkML gives every element: carried as written both ways, read by no rule.
 DOCUMENTATION = frozenset(f.name for f in dataclasses.fields(meta.CommonMetadata)) - {
     "in_subset", "from_schema", "imported_from"}
 # What a schema reader fills in itself; never written.

@@ -710,7 +710,7 @@ def calculated(role, publisher_sources=None, checker_sources=None):
 
 
 def test_a_calculation_view_is_full_only_for_a_role_that_reads_all_its_sources():
-    """RV-S26 (O8): full means a missing row is "none". The guest reads the subject kind in full and not the
+    """RV-S26: full means a missing row is "none". The guest reads the subject kind in full and not the
     relation the calculation reads: it gets no calculated row, so the view is not full for it, and neither is
     the view that takes it as a premise. A role that reads every source has both in full, row for row."""
     views = {"calc__amount", "calc__twice"}
@@ -1031,7 +1031,7 @@ def test_untyped_may_read_and_untyped_relations_are_refused(tmp_path):
         guest(epoch(rows={**epoch().rows, "may_read": [("guest", "a")]}))
     with pytest.raises(ValueError, match="no kind per column"):
         guest(epoch(rows={**epoch().rows, "extra": [("a",)]}))
-    # A relation that no table, rule or calculation accounts for is never published, for no role (W12).
+    # A relation that no table, rule or calculation accounts for is never published, for no role.
     with pytest.raises(publish.Blocked, match="no definition accounts for: extra"):
         publish.publish(epoch(rows={**epoch().rows, "extra": [("a",)]}), store.FileStore(tmp_path / "x"), ROLES)
 
@@ -1245,7 +1245,7 @@ def test_without_an_image_binding_the_manifest_has_no_assets(tmp_path):
 
 
 def test_non_interference_hidden_images_change_no_byte_of_the_guest(tmp_path):
-    """The paired fixture: more hidden nodes with images give the guest the same bytes (O8)."""
+    """The paired fixture: more hidden nodes with images give the guest the same bytes."""
     a, ma = published(with_images(epoch(), {"a": "images/a.svg"}), tmp_path / "a")
     b, mb = published(with_images(epoch_with_hidden(), {"a": "images/a.svg", HIDDEN: "images/hidden.svg"}), tmp_path / "b")
     guest = role_keys(a)

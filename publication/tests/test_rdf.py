@@ -241,7 +241,7 @@ def test_from_graph_refuses_a_graph_that_is_no_dataset():
         rdf.from_graph(FIXTURE, g)
 
 
-# O12c: a witness as PROV-O
+# a witness as PROV-O
 WITNESS = {
     "conclusion": {"relation": "host_fits", "key": '["host-a","zone 1"]'},
     "rule_id": "rule.fits",

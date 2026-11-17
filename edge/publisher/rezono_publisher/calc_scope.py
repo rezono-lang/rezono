@@ -53,7 +53,7 @@ def version_of(ir: dict, witness: dict) -> str | None:
 
 def reads(ir: dict, version: str | None) -> set[str]:
     """Every relation the evaluation of a version reads, also where it reads an absence: a role sees the result
-    only if it reads each of them in full (O8). Without a version, only the evaluation date."""
+    only if it reads each of them in full. Without a version, only the evaluation date."""
     tables = {ir["as_of"]}
     if version is None:
         return tables

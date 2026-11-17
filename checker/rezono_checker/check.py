@@ -126,7 +126,7 @@ def check_epoch(witnesses: list, manifest: dict, rules: dict, read_bytes, *, der
     return _report(proof, None, set(), findings)
 
 
-OUTCOME_STATES = ("known", "unknown", "not_applicable")  # W7: `invalid` comes from the violation views
+OUTCOME_STATES = ("known", "unknown", "not_applicable")  # `invalid` comes from the violation views
 REASON = re.compile(r"[a-z][a-z0-9_]*")  # a reason is a code, never free text
 
 
@@ -192,14 +192,14 @@ def _check_calc(witnesses, ir, rows, concluded, derived, full, findings):
         for key in sorted(rows(relation, None)):
             if (relation, key) not in proven:
                 findings.append({"reason": "unproven_row", "relation": relation, "key": key})
-    if full is None:  # a role's snapshots are filtered: it may read a subject and not see its row (O8)
+    if full is None:  # a role's snapshots are filtered: it may read a subject and not see its row
         findings.extend(calc.total(ir, lambda relation: rows(relation, None)))
     return good
 
 
 def _check_seal(seal: dict, rows, findings) -> None:
     """The row hashes and the refused and accepted input of the sealed kind, recomputed from the
-    snapshots. A row hash is the canonical JSON (C1) of {table: sorted values} over the seal's tables; a
+    snapshots. A row hash is the canonical JSON of {table: sorted values} over the seal's tables; a
     subkind's table has no values, so membership is the empty list. A close applies to an element when the
     element's period lies before its boundary or the close covers it, and refuses it unless it covers it with
     its recomputed hash; each close on its own. A row too many or too few is `seal_mismatch`; a date that is not

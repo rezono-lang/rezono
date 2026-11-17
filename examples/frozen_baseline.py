@@ -209,7 +209,7 @@ def differences(want: States, have: States) -> list[tuple]:
     (state, "may_read[<role>]", ..., (kind, id)). Empty when the replacement is accepted.
 
     Every state the replacement derives must be one the adapter maps, and `may_read` is compared wherever
-    either side has it, so a grant in an unmapped state or an unexpected `may_read` is never ignored (O8).
+    either side has it, so a grant in an unmapped state or an unexpected `may_read` is never ignored.
     Other relations the replacement adds are its own and are not compared."""
     out: list[tuple] = []
     for state in sorted(set(want) | set(have)):

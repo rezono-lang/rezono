@@ -104,7 +104,7 @@ classes:
       A sealed kind (docs/compiler.md#design-m3-the-seal), by the tables the checker reads. A
       close applies to an element when the element's period lies before the close's closed_until or the close
       covers it, and refuses it unless that close covers it with its current row hash; each close on its own.
-      The row hash is the canonical JSON (C1) of {table: sorted values as canonical text} over `tables`,
+      The row hash is the canonical JSON of {table: sorted values as canonical text} over `tables`,
       leaving out tables without a row; a subkind's table gives the empty list. Refused holds (element,
       close); accepted holds every other element.
     attributes:

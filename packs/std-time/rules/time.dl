@@ -9,7 +9,7 @@
 //
 // A bound has three states (RV-C13). It is stated: a row in start or end. It is stated to be absent: a row in
 // unbounded ("start" or "end"), a claim with an origin of its own. Or nobody recorded it: neither row, and
-// then it is unknown. start and end are open (W6), so a rule says something about a bound only from a row
+// then it is unknown. start and end are open, so a rule says something about a bound only from a row
 // that is there; no rule reads a missing row as "it has no bound", and no rule puts a number in its place.
 
 .decl start_stated(interval: symbol)

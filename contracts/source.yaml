@@ -2,7 +2,7 @@ id: https://rezono.org/contracts/source
 name: rezono_source
 title: Sources of facts
 description: >-
-  Where a base row comes from, separate from the proof that derives a conclusion (S25).
+  Where a base row comes from, separate from the proof that derives a conclusion.
   A source is a locator, not content; the same shape serves pack facts and observations.
 prefixes:
   linkml: https://w3id.org/linkml/

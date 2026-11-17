@@ -1,4 +1,4 @@
-# The drop of the worked example on a pack whose facts/valid.yaml has a source companion (B12): the
+# The drop of the worked example on a pack whose facts/valid.yaml has a source companion: the
 # companion is written again and the sources of the rows the drop loses go with them.
 format: rezono.impact/1
 pack: library

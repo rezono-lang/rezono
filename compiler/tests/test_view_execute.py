@@ -268,7 +268,7 @@ may_read("half", "calendar", x) :- calendar(x).
 def test_a_read_rule_names_the_elements_of_the_theory_kind_so_a_role_reads_it_in_full(tmp_path):
     """An access rule names elements, and the view retypes none: `span(x)` under a head that grants x as a span
     stays the kind's own table, while the theory's rules read the view's relation. So the kind is read in full by
-    the shape of the rule (O8), and the role may read what rests on the absence of a row; a role without that
+    the shape of the rule, and the role may read what rests on the absence of a row; a role without that
     grant gets no row from the absence, though it reads every term."""
     from rezono_publisher import access
     from rezono_publisher.batch import columns

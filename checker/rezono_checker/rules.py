@@ -87,14 +87,14 @@ class Rule:
 
 class Rules(dict):
     """The rules by id, with the epoch's obligations the rule IR declares (empty in the minimal form):
-    `invariants`, the relations that must be empty, and `outcomes`, each outcome relation with its kind (W7)."""
+    `invariants`, the relations that must be empty, and `outcomes`, each outcome relation with its kind."""
     invariants: frozenset = frozenset()
     outcomes: dict = {}
 
 
 def _obligations(doc: dict) -> tuple[frozenset, dict]:
     """The invariant and outcome relations of a rule IR, each on a derived relation. An outcome's kind is a
-    declared base relation with one key column, of the type of the outcome's element (W7): any other target,
+    declared base relation with one key column, of the type of the outcome's element: any other target,
     such as an empty derived relation, would let the totality check pass vacuously. Raises ValueError."""
     invariants, outcomes = set(), {}
     declared = {r.get("name"): r for r in doc.get("relations", [])}
@@ -107,12 +107,12 @@ def _obligations(doc: dict) -> tuple[frozenset, dict]:
         if "outcome" in r:
             if not (derived and isinstance(r["outcome"], str) and len(r.get("key", [])) == 3
                     and [c.get("name") for c in r["key"][1:]] == ["state", "reason"]):
-                raise ValueError(f"{r['name']}: an outcome is derived, with the element, state and reason (W7)")
+                raise ValueError(f"{r['name']}: an outcome is derived, with the element, state and reason")
             kind = declared.get(r["outcome"], {})
             if not (kind.get("role") == "base" and len(kind.get("key", [])) == 1
                     and kind["key"][0].get("type") == r["key"][0].get("type")):
                 raise ValueError(f"{r['name']}: {r['outcome']} is not a kind: a base relation with one key column "
-                                 f"of the element's type (W7)")
+                                 f"of the element's type")
             outcomes[r["name"]] = r["outcome"]
     return frozenset(invariants), outcomes
 
@@ -140,7 +140,7 @@ def _closes(doc: dict, invariants: frozenset) -> None:
                   and body[name] == head and body[closed][:n] == head)
         if not ok:
             raise ValueError(f"{name}: closes {closed} needs the invariant {check} with one rule, a row of each "
-                             f"at the same key (W14)")
+                             f"at the same key")
 
 
 def _atom(doc) -> Atom:
@@ -204,7 +204,7 @@ def load_rules(doc: dict) -> dict:
     for r in doc.get("relations", []) if ir else ():
         if r.get("role") == "derived" and r.get("values"):  # a witness proves a key; nothing would prove a value
             raise ValueError(f"{r['name']}: a derived relation is a set, without value columns")
-        if "release" in r:  # O8: a release has proof obligations this checker does not verify yet
+        if "release" in r:  # a release has proof obligations this checker does not verify yet
             raise ValueError(f"{r['name']}: release is not supported yet: a role reads a negation or an aggregate only over relations it reads in full (docs/architecture.md, delimited release)")
     rules = Rules()
     if ir:
@@ -360,22 +360,22 @@ def check_worlds(doc: dict, rules: dict) -> dict:
                     or any(b.polarity == "positive" and b.atom.relation != rule.head.relation
                            and absence(b.atom.relation) for b in rule.body)):
                 raise ValueError(f"{rule.id}: a rule of an absence relation negates an open relation, aggregates "
-                                 "over one, or reads another absence relation (W6)")
+                                 "over one, or reads another absence relation")
             continue
         for b in rule.body:
             if b.polarity == "negative" and b.atom.relation in opened:
                 raise ValueError(f"{rule.id}: {b.atom.relation} is open, so a missing row is unknown, not false; "
-                                 "negate it only in a relation marked absence (W6)")
+                                 "negate it only in a relation marked absence")
         for a in rule.aggregates:
             if a.atom.relation in opened:
                 raise ValueError(f"{rule.id}: {a.atom.relation} is open, so an aggregate over it counts only what is "
-                                 "recorded; aggregate over it only in a relation marked absence (W6)")
+                                 "recorded; aggregate over it only in a relation marked absence")
     worlds = {n: "open" if n in opened else "closed" for n in declared.keys() | {r.head.relation for r in rules.values()}}
     for name, r in sorted(declared.items()):
         if r.get("role") == "derived" and r.get("world", worlds[name]) != worlds[name]:
-            raise ValueError(f"{name}: declared {r['world']}, but its rules make it {worlds[name]} (W6)")
+            raise ValueError(f"{name}: declared {r['world']}, but its rules make it {worlds[name]}")
         if r.get("outcome") and worlds[name] != "closed":
-            raise ValueError(f"{name}: an outcome is closed, but a rule reads an open relation positively (W7)")
+            raise ValueError(f"{name}: an outcome is closed, but a rule reads an open relation positively")
     return worlds
 
 

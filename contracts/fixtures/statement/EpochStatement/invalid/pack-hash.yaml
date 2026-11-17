@@ -1,4 +1,4 @@
-# pack_sha256 hashes rows the role may not read (O8): never in a statement.
+# pack_sha256 hashes rows the role may not read: never in a statement.
 _type: https://in-toto.io/Statement/v1
 predicate:
   annotation: 03d2c1cfcc17ed2b25088eb6b527dbb8cc3b9de5becadf58acaf0dc5a9f0b8b2

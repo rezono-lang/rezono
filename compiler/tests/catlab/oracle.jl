@@ -101,7 +101,7 @@ function delta(X, from::Vector{Table}, to::Vector{Table}, source::Vector{Int})
   migrate!(acset_type(St)(), X, FOb, FHom; homtype=:hom)
 end
 
-# --- Engine names (S8), from the declared classes and enums --------------------------------------------------
+# --- Engine names, from the declared classes and enums --------------------------------------------------
 
 snake(n::AbstractString) = lowercase(replace(n, r"(?<=[a-z0-9])(?=[A-Z])" => "_"))
 
@@ -748,7 +748,7 @@ declared overlaps alone: the colimit of the parts' tables (an overlap is the tab
 whole in each of its parts), and for every fact state the colimit of the parts' rows, each moved by Σ along
 its part's inclusion. Without an identification Σ puts a part's rows in the colimit's tables; only a derived
 id changes, because it holds the engine element of its slot, and that name comes from the names declared in
-all parts together (S8). Rows of one table are one fact where two parts hold the same row: their overlap is
+all parts together. Rows of one table are one fact where two parts hold the same row: their overlap is
 Catlab's pullback over the rows, and the table's rows are the colimit over those overlaps."""
 function glue_case(case)
   parts = case["parts"]

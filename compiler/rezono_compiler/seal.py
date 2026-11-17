@@ -157,7 +157,7 @@ def close(pack: Pack, data: dict[str, list[tuple]], close_id: str, until: dateti
          "values": {CLOSED_UNTIL: until.isoformat(), COVERS: covers}}]}
 
 
-READ = "may_read"  # std-access (O7): who sees an element
+READ = "may_read"  # std-access: who sees an element
 
 
 def check_rules(pack: Pack, doc: dict, errors: list[str]) -> None:

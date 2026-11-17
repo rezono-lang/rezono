@@ -468,7 +468,7 @@ classes:
     description: >-
       Matrix: the elements of one kind as rows, of another (or the same) as columns, and a cell per pair that
       an edge source gives (docs/gui.md, Matrix). A cell is the rows behind its pair, each with its proof; an
-      empty cell is blank where the source is closed and unknown (hatched) where it is open (W6). One sheet per
+      empty cell is blank where the source is closed and unknown (hatched) where it is open. One sheet per
       binding, at `/<pack>/matrix/<id>`.
     attributes:
       id: {required: true, pattern: "^[a-z][a-z0-9_]*$"}

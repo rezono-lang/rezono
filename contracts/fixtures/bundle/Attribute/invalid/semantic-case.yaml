@@ -1,4 +1,4 @@
-# The semantic case is one of the seven S3 cases (B10).
+# The semantic case is one of the seven S3 cases.
 id: posting.amount
 stable_id: "Posting#amount"
 span: {file: schema/core.yaml, line: "4", column: "3"}

@@ -81,7 +81,7 @@ def steps(rules_doc: dict, witnesses: list[dict], rows: dict) -> set[tuple]:
 
 
 def calc_steps(calc_witnesses: list[dict]) -> set[tuple]:
-    """The step rows of calculation witnesses (W12): each premise, `positive`, at its index in `premises`.
+    """The step rows of calculation witnesses: each premise, `positive`, at its index in `premises`.
     Their `reads` name relations, not rows: no step."""
     out = set()
     for w in calc_witnesses:
@@ -326,7 +326,7 @@ def check_indexes(plan: dict, snapshots: dict, pieces: dict, entries: list, limi
 
 
 def check_sources(entries: list, pieces: dict, roots: dict, limit: int, fanout: int) -> list[str]:
-    """Problems with one role's source trees (S25); empty when they hold exactly the role's source entries.
+    """Problems with one role's source trees; empty when they hold exactly the role's source entries.
 
     `entries` is the role's source-entry file (its own correctness is rezono_checker.sources'), `pieces` the
     bytes per path and `roots` {relation: {"file", "sha256", "levels"}}: per relation the role has entries of,

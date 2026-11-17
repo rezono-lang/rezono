@@ -102,7 +102,7 @@ function rebuild(e: Expr, levels: Levels, kindOf: (e: Expr) => string | undefine
 
 /**
  * The normal form of a checked question. `pack` is the pack's whole schema, whose names the binder
- * avoids (O10); the question itself is checked against the role's. Where the role's schema names every slot and
+ * avoids; the question itself is checked against the role's. Where the role's schema names every slot and
  * parameter of the pack, as the gate's does (`roleSchema` maps every kind and slot of the bundle), it is that one.
  */
 export function normalQuestion(checked: Checked, pack: Schema): Question {
@@ -177,7 +177,7 @@ export function normalQuestion(checked: Checked, pack: Schema): Question {
 /**
  * The question hash: the SHA-256, in hex, of the canonical JSON (RFC 8785) of the normal form with its version,
  * `{"normal": NORMAL_QUESTION, "question": …}`. The text of a question and its JSON form have one tree, so one
- * hash (E52); two ways of writing one question have one normal form, so one hash (Q21); and one question asked by
- * two roles has one hash, since `pack` is the pack's schema (O10).
+ * hash (E52); two ways of writing one question have one normal form, so one hash; and one question asked by
+ * two roles has one hash, since `pack` is the pack's schema.
  */
 export const questionHash = (checked: Checked, pack: Schema): Promise<string> => canonicalSha256({ normal: NORMAL_QUESTION, question: normalQuestion(checked, pack) });

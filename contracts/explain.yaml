@@ -385,7 +385,7 @@ classes:
       outside: {range: boolean, description: "An anonymous node."}
       change: {range: NodeChange, description: "For impact: what the delta did to this row for the role; every node of an impact answer has one."}
       was: {description: "For impact, a changed cell: its row in the base, as canonical key text."}
-      sources: {range: Source, multivalued: true, inlined_as_list: true, description: "A base row's sources (S25), from the role's own source set and by today's rights, as the publisher sorted them: where a walk back ends. Absent on a conclusion, and on every node of a manifest without source sets. A locator, not proof that the row is true."}
+      sources: {range: Source, multivalued: true, inlined_as_list: true, description: "A base row's sources, from the role's own source set and by today's rights, as the publisher sorted them: where a walk back ends. Absent on a conclusion, and on every node of a manifest without source sets. A locator, not proof that the row is true."}
   GapAnswer:
     description: What is missing for an absent start (docs/gui.md, "gap"), in the walk's order.
     attributes:

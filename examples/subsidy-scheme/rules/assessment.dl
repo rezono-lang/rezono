@@ -7,7 +7,7 @@
 has_income_statement(h) :- income_statement__household(_, h).
 
 // What is not registered. An @absence relation speaks about the registration, never about the world:
-// "no income statement has been received for this household" is simply true or not on a snapshot (W6).
+// "no income statement has been received for this household" is simply true or not on a snapshot.
 // @absence
 .decl income_not_received(application: symbol, household: symbol)
 income_not_received(a, h) :- application__household(a, h), !has_income_statement(h).

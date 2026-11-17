@@ -8,7 +8,7 @@ description: >-
   the role's own snapshots, the schema id, the dataset and annotation hashes (publication L0 section 6.2), and the
   row tree: per table the RFC 9162 Merkle root over its hash rows, and the inclusion hash over those roots. Every
   value is text, so Rezono's canonical bytes are RFC 8785's. Nothing in it depends on a row the role may not read,
-  and it never names `pack_sha256` (O8). The publisher writes it beside the form's objects as `statement.json` and
+  and it never names `pack_sha256`. The publisher writes it beside the form's objects as `statement.json` and
   names it in the form's index; `rezono_publication.statement.verify` reads it back from the bytes alone. Unsigned until
   RV-X42.
 prefixes:

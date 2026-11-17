@@ -136,7 +136,7 @@ def slot_definition(m: Model, k: str, name: str) -> dict:
 
 def moved_definition(m: Model, mv: Move, op: dict, what: str) -> dict:
     """The slot as it lands: its own constraints, `required` only where it still holds by construction, and the
-    world annotation when the operation states a world the slot would not have by itself (W6)."""
+    world annotation when the operation states a world the slot would not have by itself."""
     p = m.pack
     d = slot_definition(m, mv.kind, mv.slot.name)
     if mv.mode == "target" or (mv.mode == "source" and not mv.via.required):
@@ -153,7 +153,7 @@ def moved_definition(m: Model, mv: Move, op: dict, what: str) -> dict:
         notes["world"] = "open"
     elif want == "closed" and after == "open":
         if p.kinds[mv.to].world == "open":
-            raise OperationError(f"{what}: {mv.to} is open (W6), so a slot there cannot be closed")
+            raise OperationError(f"{what}: {mv.to} is open, so a slot there cannot be closed")
         notes.pop("world", None)
     if notes:
         d["annotations"] = notes
@@ -302,14 +302,14 @@ def move_plan(mv: Move) -> Plan:
 
 def grants(m: Model, rows: dict[str, list[tuple]]) -> dict | None:
     """Per element as granted, (kind, id), the roles that may read it in this state: the rows of
-    `may_read(role, kind, id)` (O7). None when the rules declare no may_read. A may_read without the O7 signature
+    `may_read(role, kind, id)`. None when the rules declare no may_read. A may_read without the access relation signature
     blocks: who reads what cannot be told, so the check fails closed."""
     p = m.pack
     cols = access_kind_columns(m)
     if "may_read" not in cols:
         return None
     if cols["may_read"] is None:
-        raise OperationError("rules: may_read is declared without the O7 signature (role, kind, id), so who reads a "
+        raise OperationError("rules: may_read is declared without the access relation signature (role, kind, id), so who reads a "
                              "moved value cannot be told; the move blocks (declare may_read(role: symbol, kind: "
                              "symbol, id: symbol))")
     from .. import batch

@@ -257,7 +257,7 @@ def test_a_calculation_cannot_take_a_sealed_kind_as_input(tmp_path):
 
 
 def test_a_calculation_cannot_take_its_parameters_from_a_sealed_kind(tmp_path):
-    # Audit 07-11 (E3): a refused row of the parameter kind would set a parameter; refused like the inputs.
+    # Audit 07-11: a refused row of the parameter kind would set a parameter; refused like the inputs.
     d = Path(shutil.copytree(FIXTURE.parent / "calc", tmp_path / "calc"))
     path = d / "schema" / "calc.yaml"
     schema = yaml.safe_load(path.read_text())

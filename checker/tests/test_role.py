@@ -271,7 +271,7 @@ def per_person(table: str) -> dict:
 
 
 def test_a_calculation_view_is_full_only_when_every_relation_it_reads_is():
-    """RV-S26 (O8): full means a missing row is "none". The subject kind is full for the guest both times. Where
+    """RV-S26: full means a missing row is "none". The subject kind is full for the guest both times. Where
     the calculation reads a relation the guest reads in part, the guest has no row of the view and the view is not
     full; a filter that still claims it is red. Where every source is full, so is the view, with every row."""
     w = per_person("doc__author")

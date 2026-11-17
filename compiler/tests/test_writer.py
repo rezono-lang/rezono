@@ -87,7 +87,7 @@ def scalar_values(lay: writer.Layout, slot) -> st.SearchStrategy:
     sql_type = p.kinds[p.root(slot.range)].id_type if slot.arrow else slot.sql_type
     if sql_type == "BIGINT":
         n = st.integers(-(2**63), 2**63 - 1)
-        return st.one_of(n, n.map(str))  # decimal text is the canonical JSON form (W3)
+        return st.one_of(n, n.map(str))  # decimal text is the canonical JSON form
     if sql_type == "BOOLEAN":
         return st.booleans()
     if sql_type == "DATE":
@@ -571,7 +571,7 @@ def test_a_change_without_a_file_goes_to_the_one_file_that_holds_its_record():
 
 def test_a_pack_that_imports_is_checked_out_with_its_imports(work):
     """An import is a path relative to the pack: a work dir holds the imported packs at their places, each
-    checked against its pin (S9), so the copy compiles and the writer writes in it."""
+    checked against its pin, so the copy compiles and the writer writes in it."""
     found = [(d, f) for d, f in FILES if (yaml.safe_load((d / "pack.yaml").read_text("utf-8")) or {}).get("imports")]
     if not found:
         pytest.skip("no example pack imports another")

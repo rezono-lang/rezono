@@ -319,7 +319,7 @@ def epoch(pack_dir, *, epoch: int, knowledge_time: str, sources, proposal: str =
         rules=files.get("ir/rules.json") or EMPTY_RULES,  # never empty: see publish.verify
         sweeps=files.get("ir/sweeps.json", ""), seals=tuple(s.kind for s in model.seals),
         calc=files.get("ir/calc.json", ""), calc_witnesses=calc_witnesses, assets=asset_files(pack_dir),
-        fact_sources=provenance.read(model, pack_dir))  # S25: where each base row comes from, never the engine's
+        fact_sources=provenance.read(model, pack_dir))  # where each base row comes from, never the engine's
 
 
 def calculate(prog, db, con, rows: dict) -> list[dict]:

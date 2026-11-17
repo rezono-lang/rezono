@@ -51,7 +51,7 @@ Loader = getattr(yaml, "CSafeLoader", yaml.SafeLoader)
 FORMAT = "rezono.delta/1"
 OPS = ("insert", "delete", "set", "unset")
 FACT_FILE = re.compile(r"^facts/[a-z0-9][a-z0-9_-]*\.yaml$")
-SOURCES_FILE = re.compile(r"^facts/[a-z0-9][a-z0-9_-]*\.sources\.yaml$")  # a fact file's source companion (S25)
+SOURCES_FILE = re.compile(r"^facts/[a-z0-9][a-z0-9_-]*\.sources\.yaml$")  # a fact file's source companion
 INTEGER = re.compile(r"^-?(0|[1-9][0-9]*)$")
 PREFIX = re.compile(r"^ *- +$")
 NULL = "tag:yaml.org,2002:null"
@@ -124,7 +124,7 @@ def layout(pack_dir: str | Path) -> Layout:
 # --- Values: from the delta's JSON into typed facts, and back -------------------------------------
 
 def scalar(sql_type: str, v, where: str):
-    """A value in its fact type. In JSON a whole number may be decimal text, a date ISO text (W5)."""
+    """A value in its fact type. In JSON a whole number may be decimal text, a date ISO text."""
     if sql_type == "BIGINT":
         if isinstance(v, int) and not isinstance(v, bool):
             return v
