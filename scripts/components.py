@@ -207,7 +207,7 @@ def check_contracts() -> int:
     fixtures = sorted((source / "fixtures").glob("*/*/*/*.yaml"))
     workers = runner_cores()
 
-    def check(worker: int) -> int:
+    def check(worker: int) -> subprocess.CompletedProcess[str]:
         with tempfile.TemporaryDirectory() as tmp:
             copy = Path(tmp) / "contracts"
             excluded = set(fixtures) - set(fixtures[worker::workers])
@@ -216,10 +216,17 @@ def check_contracts() -> int:
                 return [name for name in names if Path(directory) / name in excluded]
 
             shutil.copytree(source, copy, ignore=ignore)
-            return subprocess.run(["bash", str(copy / "check.sh")], check=False).returncode
+            return subprocess.run(
+                ["bash", str(copy / "check.sh")], stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT, text=True, check=False,
+            )
 
     with ThreadPoolExecutor(max_workers=workers) as pool:
-        return next((code for code in pool.map(check, range(workers)) if code), 0)
+        status = 0
+        for result in pool.map(check, range(workers)):
+            print(result.stdout, end="", flush=True)
+            status = status or result.returncode
+        return status
 
 
 def run_shard(folder: str, shard: int, total: int, report_dir: Path) -> int:
