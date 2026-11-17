@@ -2,8 +2,8 @@
 
 Every invariant of the pack's rule IR (`ir/rules.json`, contracts/rules.yaml; `// @invariant`, a relation that
 must be empty at the end of an epoch) becomes one node shape with a `sh:sparql` constraint. The constraint
-recomputes the invariant from the base facts of the RDF view of a role (`publication.rdf.to_graph` on the publication
-form of `publication.publication`), never from the derived rows the view also carries: so a validator that
+recomputes the invariant from the base facts of the RDF view of a role (`rezono_publication.rdf.to_graph` on the publication
+form of `rezono_publication.publication`), never from the derived rows the view also carries: so a validator that
 knows SHACL and nothing of Rezono repeats the check, and a difference with Rezono's own result is a defect in one of
 the two. The shapes are generated from the rule IR alone; none is written by hand.
 
@@ -49,14 +49,14 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
-sys.path.insert(0, str(ROOT))  # publication lives at the repository root
+sys.path.insert(0, str(ROOT))  # rezono_publication lives at the repository root
 
 from rdflib import Graph, Literal, Namespace, URIRef  # noqa: E402
 from rdflib.namespace import RDF, RDFS, SH, XSD  # noqa: E402
 from rezono_canon import canonical_sha256  # noqa: E402
 from rezono_compiler import rules as ir  # noqa: E402
 
-from publication import publication, rdf  # noqa: E402
+from rezono_publication import publication, rdf  # noqa: E402
 
 INTEGER = f"<{XSD.integer}>"
 COMPARE = {"eq": "=", "ne": "!=", "lt": "<", "le": "<=", "gt": ">", "ge": ">="}

@@ -10,8 +10,8 @@ import pytest
 from rezono_canon import canonical_json
 from test_l0 import FILES, FIXTURE, R01, THING, TREE, TREE_ROWS, TYPES, merge, schema_of
 
-from publication import arrow, l0
-from publication.hash import hashes
+from rezono_publication import arrow, l0
+from rezono_publication.hash import hashes
 
 
 def round_trip(schema, rows, tmp_path, **parquet):

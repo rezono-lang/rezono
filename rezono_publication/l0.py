@@ -75,7 +75,7 @@ _KIND_MEMBERS = {"world", "id", "slots", "iri", "parent", "versioned", "applies"
 _SLOT_MEMBERS = {"type", "ref", "card", "states", "world", "derived", "inverse", "min", "max", "backfill",
                  "versions", "expr"}
 _TOP_MEMBERS = {"rezono", "pack", "base", "kinds", "types", "enums", "imports", "map", "reasons", "follows"}
-LEGACY_SCHEMA_KEY = "reckon"  # pre-rename sealed publications (publication.statement)
+LEGACY_SCHEMA_KEY = "reckon"  # pre-rename sealed publications (rezono_publication.statement)
 _ROW_MEMBERS = {"$kind", "$id", "$schema", "$why", "$src", "$valid", "$known"}
 _NORMALIZE = ("uppercase", "lowercase", "strip spaces", "trim")
 
