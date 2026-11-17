@@ -1,4 +1,4 @@
-format: rede.view-build/1
+format: rezono.view-build/1
 files:
   - {path: viewer/scripts/views.ts, sha256: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa}
 node:

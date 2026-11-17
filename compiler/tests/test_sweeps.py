@@ -56,7 +56,7 @@ def test_a_sweep_gets_its_grid_from_the_slot(fixture, tmp_path):
     assert pack.read(fixture).sweeps == [{**SWEEP, "min": 0, "max": 9, "step": 1, "count": 10}]
     files = compile_dir(fixture, tmp_path / "out")
     assert json.loads(files["ir/sweeps.json"]) == {
-        "format": "rede.sweeps/1", "sweeps": [{**SWEEP, "min": 0, "max": 9, "step": 1, "count": 10}]}
+        "format": "rezono.sweeps/1", "sweeps": [{**SWEEP, "min": 0, "max": 9, "step": 1, "count": 10}]}
 
 
 def test_explore_may_narrow_the_range_and_the_grid_stops_at_max(fixture):

@@ -32,7 +32,7 @@ def fixture(tmp_path) -> Path:
 
 
 def own(d: Path, *questions, messages=("sources",)) -> None:
-    (d / "questions.yaml").write_text(yaml.safe_dump({"format": "rede.questions/1", "questions": list(questions)},
+    (d / "questions.yaml").write_text(yaml.safe_dump({"format": "rezono.questions/1", "questions": list(questions)},
                                                      sort_keys=False))
     mf2 = d / "messages" / "nl.mf2"
     mf2.write_text(mf2.read_text() + "".join(f"explain.{t} = {t}\nexplain.{t}.question = {{{{{t} {{$element}}}}}}\n"

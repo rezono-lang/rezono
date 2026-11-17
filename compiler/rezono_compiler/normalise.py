@@ -32,8 +32,8 @@ from rezono_canon import canonical_sha256
 
 from . import rules as ir
 
-VERSION = "rede.normal-rule/1"
-PROGRAM = "rede.normal-program/1"
+VERSION = "rezono.normal-rule/1"
+PROGRAM = "rezono.normal-program/1"
 CONVERSE = {"gt": "lt", "ge": "le"}
 SYMMETRIC = ("eq", "ne")
 COMMUTATIVE = ("add", "mul")

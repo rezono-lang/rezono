@@ -1,7 +1,7 @@
-"""A pack's invariants as SHACL-SPARQL against Rede's own result (M08 second half; shacl_sparql.py).
+"""A pack's invariants as SHACL-SPARQL against Rezono's own result (M08 second half; shacl_sparql.py).
 
-pySHACL is the oracle: it knows SHACL and SPARQL and nothing of Rede. It validates the RDF view of a dataset
-through the constraints made from the rule IR, and per invariant it must report exactly the rows that Rede's
+pySHACL is the oracle: it knows SHACL and SPARQL and nothing of Rezono. It validates the RDF view of a dataset
+through the constraints made from the rule IR, and per invariant it must report exactly the rows that Rezono's
 batch engine (`rezono_compiler.batch`, DuckDB) derives from the same facts. A difference is a defect in one of the
 two, and fails the test. The pack is `fixtures/checks`: neutral names, an invariant per construct the
 translation knows (an aggregate over an empty group, negation, a division, two rules, a constant in the head, a
@@ -17,7 +17,7 @@ import pytest
 import yaml
 
 ROOT = Path(__file__).resolve().parents[3]
-sys.path.insert(0, str(ROOT))  # reckon_data is a directory of the repository, not an installed package
+sys.path.insert(0, str(ROOT))  # publication is a directory of the repository, not an installed package
 
 pytest.importorskip("duckdb")
 pytest.importorskip("pyshacl")
@@ -28,7 +28,7 @@ from rdflib.namespace import RDF, SH  # noqa: E402
 from rezono_compiler import batch, emit, facts, pack  # noqa: E402
 from rezono_compiler import rules as ir  # noqa: E402
 
-from reckon_data import publication, rdf  # noqa: E402
+from publication import publication, rdf  # noqa: E402
 
 import accept  # noqa: E402  (this directory)
 import shacl_sparql  # noqa: E402
@@ -51,7 +51,7 @@ CRAFTED = {
 
 
 def compare(records: dict) -> dict:
-    """Rede's invariants and pySHACL's results on the same facts; accept.checks raises on a difference."""
+    """Rezono's invariants and pySHACL's results on the same facts; accept.checks raises on a difference."""
     data = facts.rows_of(PACK, records)
     con = batch.connect(PROG, data)
     batch.compute(con, PROG)
@@ -116,7 +116,7 @@ def test_a_dataset_that_breaks_no_invariant_conforms():
 
 
 def test_rezono_writes_the_report_a_validator_writes():
-    """Rede's violations as a SHACL validation report (`report`) hold the results pySHACL reports through the
+    """Rezono's violations as a SHACL validation report (`report`) hold the results pySHACL reports through the
     constraints: the same focus node, value, shape, constraint, component and severity per result."""
     data = facts.rows_of(PACK, CRAFTED)
     con = batch.connect(PROG, data)
@@ -138,7 +138,7 @@ def test_rezono_writes_the_report_a_validator_writes():
 
 
 def test_a_difference_with_rezono_is_not_accepted():
-    """The comparison is not vacuous: a row Rede did not derive, or one it did that SHACL misses, fails."""
+    """The comparison is not vacuous: a row Rezono did not derive, or one it did that SHACL misses, fails."""
     doc, plan = publication.schema_document(BUNDLE)
     data = facts.rows_of(PACK, CRAFTED)
     stored = {t: [tuple(str(v) for v in r) for r in rs] for t, rs in data.items()}

@@ -1,6 +1,6 @@
 # A sum over a key column the aggregate ranges over: per entry the sum of its line amounts, also when
 # two lines have the same amount (the line is in the key, so both rows count).
-format: rede.rules/1
+format: rezono.rules/1
 pack: example
 relations:
 - name: entry

@@ -49,7 +49,7 @@ def view(boxes=BOXES, payload=PAYLOAD, lines=LINES, counts=None, shown=None, gui
         leaves.setdefault((int((x + w / 2) // TILE), int((y + h / 2) // TILE)), []).append(i)
     pieces, clusters = {}, []
     for (lx, ly), ids in sorted(leaves.items()):
-        t = {"format": "rede.tile/1", "sheet": "map", "level": 1, "x": lx, "y": ly, "box": [lx * TILE, ly * TILE, TILE, TILE],
+        t = {"format": "rezono.tile/1", "sheet": "map", "level": 1, "x": lx, "y": ly, "box": [lx * TILE, ly * TILE, TILE, TILE],
              "nodes": [{"id": i, "x": boxes[i][0], "y": boxes[i][1], "width": boxes[i][2], "height": boxes[i][3], **payload[i]} for i in ids],
              "edges": [{"id": k, **e} for k, e in sorted(shown.items()) if e["source"] in ids]}
         data = bytes_of(t)
@@ -68,7 +68,7 @@ def view(boxes=BOXES, payload=PAYLOAD, lines=LINES, counts=None, shown=None, gui
             c["count"], c["statuses"] = n, statuses
     if guides:
         clusters[0].update(guides)
-    pieces["map/0/0_0.json"] = bytes_of({"format": "rede.tile/1", "sheet": "map", "level": 0, "x": 0, "y": 0, "box": [0, 0, 128, 128], "clusters": clusters})
+    pieces["map/0/0_0.json"] = bytes_of({"format": "rezono.tile/1", "sheet": "map", "level": 0, "x": 0, "y": 0, "box": [0, 0, 128, 128], "clusters": clusters})
     layout = {"nodes": boxes, "edges": {k: {"source": e["source"], "target": e["target"], "points": e["points"]} for k, e in lines.items()}}
     return bytes_of(layout), pieces
 
@@ -297,7 +297,7 @@ def test_a_row_is_read_through_its_kind_or_one_of_its_slots():
 
 
 def page(kinds):
-    return json.dumps({"format": "rede.page/2", "title": "t", "kinds": kinds, "sheets": ["map"]}).encode()
+    return json.dumps({"format": "rezono.page/2", "title": "t", "kinds": kinds, "sheets": ["map"]}).encode()
 
 
 ALPHA = [{"relation": "node__label", "id": "a", "value": "Alpha"}]

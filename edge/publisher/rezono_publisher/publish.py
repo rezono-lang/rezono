@@ -4,7 +4,7 @@ Correctness blocks: one red check and nothing is written. The epoch gives every 
 engine; a proof is chosen per role among the instances that role can read (access.py, decision O8). Before
 anything is written, the independent checker (checker/) checks every chosen witness of every role against
 that role's snapshots, the same bytes, and that every derived row in them has exactly one witness (R7).
-One error is a red check `rede:proofs`. The manifest is written last, so a reader
+One error is a red check `rezono:proofs`. The manifest is written last, so a reader
 never sees a manifest whose files are missing; only what a manifest lists is published. Every object is
 written once (conditional put): publishing the same epoch again gives the same bytes and is a no-op.
 
@@ -18,7 +18,7 @@ Store layout, per pack:
                                  images its image cells name, with hash, source and licence) or its source set (the
                                  sources of exactly the base rows it reads, S25, sources.py). Only the manifest says
                                  which object is what, and for which role: a reader follows its uris, never a path.
-  <pack>/<manifest>/<role>/…   a role's views and Reckon Data form with their indexes, before the manifest
+  <pack>/<manifest>/<role>/…   a role's views and publication form with their indexes, before the manifest
                                (views.py, forms.py): the gate holds them to that prefix
   <pack>/assets/<sha256>   an image (decision B10), written once, shared by roles and epochs; the gate serves it
                            only to a role whose rows name it
@@ -101,10 +101,10 @@ class Epoch:
     fact_sources: list | None = None
 
 
-PROOFS = "rede:proofs"  # the check of the witnesses by the checker; not a relation name (no colon there)
-ACCESS_CHECK = "rede:access"  # the read rules give a kind in full, and the data agrees
+PROOFS = "rezono:proofs"  # the check of the witnesses by the checker; not a relation name (no colon there)
+ACCESS_CHECK = "rezono:access"  # the read rules give a kind in full, and the data agrees
 ACCESS_SEMANTICS = 2  # decision O8; the gate refuses a manifest without it
-ASSETS = "rede:assets"  # the images each role gets: exactly those its image cells name (decision B10)
+ASSETS = "rezono:assets"  # the images each role gets: exactly those its image cells name (decision B10)
 SOURCES = fact_sources.SOURCES  # the sources each role gets: exactly those of the base rows it reads (S25)
 
 
@@ -226,8 +226,8 @@ def calc_ir(e: Epoch) -> dict | None:
         doc = json.loads(e.calc)
     except (TypeError, ValueError) as err:
         raise Blocked(f"{PROOFS}: ir/calc.json is not JSON: {err}") from err
-    if not isinstance(doc, dict) or doc.get("format") != "rede.calc-ir/1":
-        raise Blocked(f"{PROOFS}: the calculation program is not ir/calc.json (format rede.calc-ir/1)")
+    if not isinstance(doc, dict) or doc.get("format") != "rezono.calc-ir/1":
+        raise Blocked(f"{PROOFS}: the calculation program is not ir/calc.json (format rezono.calc-ir/1)")
     return doc
 
 
@@ -243,9 +243,9 @@ def rule_ir(e: Epoch):
         doc = json.loads(e.rules)
     except (TypeError, ValueError) as err:
         raise Blocked(f"{PROOFS}: the rule definitions are not JSON: {err}") from err
-    if not isinstance(doc, dict) or doc.get("format") != "rede.rules/1":
+    if not isinstance(doc, dict) or doc.get("format") != "rezono.rules/1":
         # Only the compiler's rule IR has a relation catalogue; the checker's older minimal form has none.
-        raise Blocked(f"{PROOFS}: the rule definitions are not the rule IR (format rede.rules/1)")
+        raise Blocked(f"{PROOFS}: the rule definitions are not the rule IR (format rezono.rules/1)")
     try:
         rules = load_rules(doc)
         derived = derived_relations(doc, rules)
@@ -584,7 +584,7 @@ def publish(e: Epoch, store, roles: dict[str, str], base: dict | None = None, *,
     `base` (the published base manifest) or `reuse` (a retained manifest, the newest main), only what neither
     names already is written (plan).
     With prepared main views, write their checked indexes before exposing the manifest; with `forms`, each
-    filtered role's Reckon Data form too (forms.py), verified before anything of it is written."""
+    filtered role's publication form too (forms.py), verified before anything of it is written."""
     files, manifest = plan(e, store, roles, base, reuse)
     data = canonical(manifest)  # fixed before the first write
     timing.switch("upload")
@@ -593,8 +593,8 @@ def publish(e: Epoch, store, roles: dict[str, str], base: dict | None = None, *,
         from . import views
         views.publish(store, e.pack, manifest["id"], prepared=prepared_views, manifest_bytes=data)
     if forms:
-        from . import forms as reckon_forms
-        reckon_forms.publish(store, e.pack, manifest["id"], manifest_bytes=data)
+        from . import forms as publication_forms
+        publication_forms.publish(store, e.pack, manifest["id"], manifest_bytes=data)
     timing.switch("manifest")
     store.put_new(f"{e.pack}/manifests/{manifest['id']}.json", data)
     # Its head (main) or pointer (variant, proposal), right after it: the gate finds it by key (pointers.py).

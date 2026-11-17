@@ -89,7 +89,7 @@ def lane_order(sheet: str, kind: str, role: Role, layout: bytes, tiles: dict[str
 
 def _binding(bundle: dict, sheet: str, kind: str):
     """Resolve compiled slot IDs exactly as bundleFromCompiler normalises them."""
-    if bundle.get("format") != "rede.schema-bundle/1":
+    if bundle.get("format") != "rezono.schema-bundle/1":
         return None
     flows = [f for f in bundle.get("channels", {}).get("flows", []) if sheet == f"flow.{f.get('id')}"]
     if len(flows) != 1 or flows[0].get("direction", "right") not in ("down", "right"):

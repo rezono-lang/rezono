@@ -1,6 +1,0 @@
-name: example-pack
-version: 0.1.0
-default_language: en
-reckon:
-  - {module: reckon/advice.rezono, form: reckon/advice.json, layer: facts}
-  - {module: reckon/parts/terms.rezono, form: reckon/parts/terms.json, layer: source}

@@ -17,9 +17,9 @@ date. The date is never compared with a clock, so the same pack always gives the
 without an interface keeps everything public. The module itself, and only it, uses its private elements.
 An entry may also, or only, name the `namespace` of the module's kinds; `pack.iris` reads and checks it.
 
-A module written in Reckon (`reckon/**/*.rezono`, named in pack.yaml with its JSON form) is a module of its pack
-too, named by its path under `reckon/`: `reckon_module` lowers it to the schema a LinkML file would hold, and it
-imports the modules of its pack whose kinds and enums it names (docs/reckon/publication.md §2, §3).
+A module written in Rezono (`rezono/**/*.rezono`, named in pack.yaml with its JSON form) is a module of its pack
+too, named by its path under `rezono/`: `rezono_module` lowers it to the schema a LinkML file would hold, and it
+imports the modules of its pack whose kinds and enums it names (docs/rezono/publication.md §2, §3).
 """
 
 from __future__ import annotations
@@ -34,12 +34,12 @@ import yaml
 from .schemaview import SchemaView
 from rezono_canon import canonical_sha256, sha256_hex
 
-from . import reckon_module
+from . import rezono_module
 
 # The files that define a pack: everything the compiler reads but facts, scenarios and diagnostics (data)
 # and expected output. Its hash covers exactly these: the import pin and the publication's
 # definition_sha256 (decisions C1, C3, O8). A new kind of definition file is added here, and only here.
-DEFINITION = ("pack.yaml", "channels.yaml", "schema/**/*.yaml", "reckon/**/*.rezono", "reckon/**/*.json",
+DEFINITION = ("pack.yaml", "channels.yaml", "schema/**/*.yaml", "rezono/**/*.rezono", "rezono/**/*.json",
               "labels/*.yaml", "messages/*.mf2", "rules/*.dl", "calc/*.yaml", "sweeps.yaml", "questions.yaml",
               "views.yaml", "icons/*.svg", "icons/sources.yaml")
 PACK_NAME = re.compile(r"^[a-z][a-z0-9]*(-[a-z0-9]+)*$")
@@ -56,7 +56,7 @@ class Module:
     imports: list[str] = field(default_factory=list)  # module ids, resolved
     # The public kinds and enums, LinkML name -> deprecation date or None; None: no interface, all public.
     interface: dict[str, str | None] | None = None
-    form: Path | None = None  # the JSON form of a module written in Reckon; `file` is then the module's text
+    form: Path | None = None  # the JSON form of a module written in Rezono; `file` is then the module's text
 
     @property
     def rel(self) -> str:
@@ -225,7 +225,7 @@ def load(pack_dir: Path, meta: dict, errors: list[str]) -> tuple[list[Module], d
                               "a mapping is written `tag: {value: {...}}`")
                 continue
             here[f.relative_to(d / "schema")] = Module(module_id(name, rel), name or meta["name"], d, f, sv)
-        here |= reckon_modules(d, own_meta, name, name or meta["name"], here, importmap, errors)
+        here |= rezono_modules(d, own_meta, name, name or meta["name"], here, importmap, errors)
         modules |= {m.id: m for _, m in sorted(here.items())}
         for rel, interface in interfaces(own_meta, d, errors).items():
             mid = module_id(name, rel)
@@ -234,7 +234,7 @@ def load(pack_dir: Path, meta: dict, errors: list[str]) -> tuple[list[Module], d
             else:
                 errors.append(f"{d.name}/pack.yaml: modules: '{rel}' is not a module (a path under schema/ without .yaml)")
     for m in modules.values():
-        if m.form is not None:  # a module written in Reckon: its imports are the modules whose names it uses
+        if m.form is not None:  # a module written in Rezono: its imports are the modules whose names it uses
             continue
         own = None if m.pack == meta["name"] else m.pack
         allowed = packs[own].imports if own else [p for p in packs if p in direct(meta)]
@@ -263,17 +263,17 @@ def load(pack_dir: Path, meta: dict, errors: list[str]) -> tuple[list[Module], d
     return list(modules.values()), packs
 
 
-def reckon_modules(d: Path, meta: dict, name: str | None, pack: str, schemas: dict[Path, Module], importmap: dict,
+def rezono_modules(d: Path, meta: dict, name: str | None, pack: str, schemas: dict[Path, Module], importmap: dict,
                    errors: list[str]) -> dict[Path, Module]:
-    """The modules written in Reckon of one pack, lowered (`reckon_module`), each with the path a schema file of
+    """The modules written in Rezono of one pack, lowered (`rezono_module`), each with the path a schema file of
     it would have, so that it takes its place among the pack's schema modules as that file would. A lowered
     module imports the modules of its pack whose names it uses: a schema file by `<pack>:<path>`, another
     module by its schema, which LinkML reads from the import map."""
     local = {m.id.partition(":")[2] if name else m.id: m for m in schemas.values()}
     declared_by = {mid: set(m.sv.all_classes(imports=False)) | set(m.sv.all_enums(imports=False))
                    for mid, m in local.items()}
-    lowered = reckon_module.lower_pack(d, meta, pack, declared_by, errors, imported=name is not None)
-    key = {x: f"{pack}:{x}" for x in local} | {low.declared.id: f"{pack}:{reckon_module.DIR}/{low.declared.id}.rezono"
+    lowered = rezono_module.lower_pack(d, meta, pack, declared_by, errors, imported=name is not None)
+    key = {x: f"{pack}:{x}" for x in local} | {low.declared.id: f"{pack}:{rezono_module.DIR}/{low.declared.id}.rezono"
                                                  for low in lowered}
     for low in lowered:
         low.schema["imports"] += [key[x] for x in low.uses]
@@ -282,7 +282,7 @@ def reckon_modules(d: Path, meta: dict, name: str | None, pack: str, schemas: di
     for low in lowered:
         mid = low.declared.id
         try:
-            sv = reckon_module.view(low.schema, importmap)
+            sv = rezono_module.view(low.schema, importmap)
             sv.all_classes()  # LinkML reads the imports on first use; that is where it fails
         except (TypeError, ValueError, OSError) as e:
             errors.append(f"{d.name}/{low.declared.module}: LinkML cannot read its lowered schema ({e})")

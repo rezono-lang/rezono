@@ -41,7 +41,7 @@ def problems(nodes=NODES, edges=EDGES, rows=ROWS, of=None, sheet=SHEET, bundle=B
     layout = {"nodes": {n["id"]: [n["x"], n["y"], n["width"], n["height"]] for n in nodes},
               "edges": {e["id"]: {"source": e["source"], "target": e["target"], "points": e["points"]} for e in edges},
               "of": of if of is not None else {n["id"]: n["of"] for n in nodes if "of" in n}}
-    tile = {"format": "rede.tile/1", "sheet": sheet, "level": 0, "x": 0, "y": 0, "box": [0, 0, TILE, TILE],
+    tile = {"format": "rezono.tile/1", "sheet": sheet, "level": 0, "x": 0, "y": 0, "box": [0, 0, TILE, TILE],
             "nodes": nodes, "edges": edges}
     path = f"{sheet}/0/0_0.json"
     return check_view(sheet, snapshots, json.dumps(layout).encode(), {path: json.dumps(tile).encode()}, path, TILE, 4, 1, bundle,

@@ -57,7 +57,7 @@ def literal(relation, *terms, polarity="positive", stratum="0"):
     return {"relation": relation, "terms": list(terms), "polarity": polarity, "stratum": stratum}
 
 
-BASE = {"format": "rede.rules/1", "pack": "example", "relations": [
+BASE = {"format": "rezono.rules/1", "pack": "example", "relations": [
     {"name": "request", "role": "base", "key": [column("id")]},
     {"name": "pair", "role": "base", "key": [column("a"), column("b")]},
     {"name": "size", "role": "base", "key": [column("id"), column("n", "integer")]},

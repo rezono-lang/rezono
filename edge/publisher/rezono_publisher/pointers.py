@@ -5,7 +5,7 @@
 Every object is written once, so the newest manifest cannot be one object that changes. Instead each main
 manifest gets a *head*, written once right after it:
 
-  <pack>/heads/<10^19 - 1 - epoch, 19 digits>.json   {"format": "rede.head/1", "manifest", "epoch", "sha256"}
+  <pack>/heads/<10^19 - 1 - epoch, 19 digits>.json   {"format": "rezono.head/1", "manifest", "epoch", "sha256"}
 
 A store lists keys in order, so the first key under `<pack>/heads/` is the newest main manifest: one list of
 one key. The gate reads it, then the manifest by its key, and checks the sha256 the head names. A pack without
@@ -17,7 +17,7 @@ needs:
   <pack>/epochs/<epoch>/manifests/<id>.json   a sweep's variant, by its epoch (the gate reads now + 1)
   <pack>/epochs/<epoch>/diagnoses/<id>.json   a red variant's diagnosis, likewise
   <pack>/bases/<base manifest>/<id>.json      a proposal manifest, by the manifest it is against
-                                              each {"format": "rede.pointer/1", "id", "sha256"}
+                                              each {"format": "rezono.pointer/1", "id", "sha256"}
 
 `backfill` writes every head and pointer of the objects already in the store that has none: the same bytes the
 publisher writes, made from each object's own bytes, so it is idempotent and deterministic, and one that is
@@ -34,8 +34,8 @@ import sys
 
 from . import store as stores
 
-HEAD = "rede.head/1"
-POINTER = "rede.pointer/1"
+HEAD = "rezono.head/1"
+POINTER = "rezono.pointer/1"
 TOP = 10**19 - 1
 MAIN = re.compile(r"^m-(\d+)$")
 

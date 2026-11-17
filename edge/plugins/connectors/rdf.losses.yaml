@@ -1,5 +1,5 @@
-# The RDF view of Reckon Data (docs/reckon-data/l0.md §5; reckon_data/rdf.py: Turtle and JSON-LD), read by a
-# reader that knows RDF and not the `rd:` terms. A Reckon Data reader loses nothing: the converter gives the rows
+# The RDF view of the publication (docs/publication/l0.md §5; publication/rdf.py: Turtle and JSON-LD), read by a
+# reader that knows RDF and not the `rd:` terms. A publication reader loses nothing: the converter gives the rows
 # back (case T03). test_losses.py holds this list to what the converter writes.
 connector: rdf-out
 standard: RDF

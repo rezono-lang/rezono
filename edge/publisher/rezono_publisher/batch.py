@@ -25,7 +25,7 @@ from rezono_canon import canonical_sha256, sha256_hex
 from . import timing
 from .publish import Blocked, Epoch
 
-EMPTY_RULES = '{"format":"rede.rules/1","relations":[],"rules":[]}\n'  # the rule IR of a pack without rules
+EMPTY_RULES = '{"format":"rezono.rules/1","relations":[],"rules":[]}\n'  # the rule IR of a pack without rules
 SKIP = {"expected", "__pycache__"}
 INSTALL = ("admission/pyproject.toml", "canon/pyproject.toml", "checker/pyproject.toml", "compiler/pyproject.toml", "edge/publisher/pyproject.toml")
 
@@ -42,16 +42,16 @@ def asset_files(pack_dir: Path) -> dict[str, dict]:
     out = {}
     for e in yaml.safe_load(path.read_text(encoding="utf-8")) or []:
         if not isinstance(e, dict) or set(e) != ASSET_ENTRY:
-            raise Blocked(f"rede:assets: assets/sources.yaml: entry {e} needs exactly {sorted(ASSET_ENTRY)}")
+            raise Blocked(f"rezono:assets: assets/sources.yaml: entry {e} needs exactly {sorted(ASSET_ENTRY)}")
         file = str(e["file"])
         target = (pack_dir / "assets" / file).resolve()
         if ".." in Path(file).parts or not target.is_relative_to((pack_dir / "assets").resolve()) or not target.is_file():
-            raise Blocked(f"rede:assets: assets/{file} is not a file under assets/")
+            raise Blocked(f"rezono:assets: assets/{file} is not a file under assets/")
         data = target.read_bytes()
         if hashlib.sha256(data).hexdigest() != str(e["sha256"]):
-            raise Blocked(f"rede:assets: assets/{file} does not have the sha256 assets/sources.yaml lists")
+            raise Blocked(f"rezono:assets: assets/{file} does not have the sha256 assets/sources.yaml lists")
         if file in out:
-            raise Blocked(f"rede:assets: assets/sources.yaml lists {file} twice")
+            raise Blocked(f"rezono:assets: assets/sources.yaml lists {file} twice")
         out[file] = {k: str(e[k]) for k in ("sha256", "media_type", "source", "licence")} | {"bytes": data}
     return out
 
@@ -174,7 +174,7 @@ def build_record() -> dict:
     return {
         # v3: names the checker too, which the publisher runs before the manifest (R7); v2 named
         # pyproject.toml (`install`; rezono_publisher.kept)
-        "format": "rede.build/3",
+        "format": "rezono.build/3",
         "compiler_sha256": canonical_sha256(compiler_parts()),
         "compiler": compiler_parts(),
         "publisher": tree_sha256(Path(__file__).parent, {".py"}),

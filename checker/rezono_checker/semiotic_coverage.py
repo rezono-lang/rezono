@@ -67,7 +67,7 @@ def flow_element_coverage(sheet: str, role: Role, layout: bytes, tiles: dict[str
 
 def _node_kinds(bundle: dict, sheet: str) -> set[str] | None:
     """Only today's compiled, unfiltered Flow-node population has defined semantics."""
-    if bundle.get("format") != "rede.schema-bundle/1":
+    if bundle.get("format") != "rezono.schema-bundle/1":
         return None
     flows = [f for f in bundle.get("channels", {}).get("flows", []) if sheet == f"flow.{f.get('id')}"]
     if len(flows) != 1:

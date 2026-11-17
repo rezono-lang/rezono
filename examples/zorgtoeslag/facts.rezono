@@ -1,4 +1,4 @@
-reckon 0
+rezono 0
 pack zorgtoeslag
 use std.money
 
@@ -27,7 +27,7 @@ fact Person
   | hal | 2000-06-06 | 2019-01-01              | n/a           | h-hal     |
   | ivy | 1995-09-09 | unknown no_cover_report | n/a           | h-ivy     |
 
--- Income per calendar year: a fact version per year (Reckon v0 §5a rule 5).
+-- Income per calendar year: a fact version per year (Rezono v0 §5a rule 5).
 fact person ann, valid 2025-01-01..<2026-01-01, known 2025-01-10
   income = € 24000.00
 fact person ann, valid 2026-01-01..<2027-01-01, known 2025-12-01

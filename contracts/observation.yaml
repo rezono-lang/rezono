@@ -9,8 +9,8 @@ description: >-
   the clock of the ingester.
 prefixes:
   linkml: https://w3id.org/linkml/
-  rede: https://rezono.org/contracts/
-default_prefix: rede
+  rezono: https://rezono.org/contracts/
+default_prefix: rezono
 default_range: string
 imports:
   - linkml:types

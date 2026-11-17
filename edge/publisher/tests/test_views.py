@@ -65,7 +65,7 @@ def test_views_of_two_manifests(pack_dir, tmp_path):
         assert views.sha256(st.get(views.key_of(n["uri"]))) == n["sha256"]
     if "root" in index["islands"]:
         root = json.loads(st.get(views.key_of(index["islands"]["root"]["uri"])))
-        assert root["format"] == "rede.islands/1" and bool(root["islands"]) == reads
+        assert root["format"] == "rezono.islands/1" and bool(root["islands"]) == reads
     # Made again: the same bytes (put_new refuses other bytes under a written key).
     assert views.publish(st, pack, first) == keys
 
@@ -152,7 +152,7 @@ def test_the_page_index_lists_what_the_role_reads(pack_dir, tmp_path):
     [key] = views.publish(st, pack, first)
     index = json.loads(st.get(key))
     page = json.loads(st.get(views.key_of(index["page"]["uri"])))
-    assert page["format"] == "rede.page/2" and page["title"] and page["sheets"] == sorted(["map", *(k for k in index["sheets"] if k.startswith(("flow.", "matrix.")))])
+    assert page["format"] == "rezono.page/2" and page["title"] and page["sheets"] == sorted(["map", *(k for k in index["sheets"] if k.startswith(("flow.", "matrix.")))])
     for k in page["kinds"]:
         ids = [r["id"] for r in k["first"]]
         assert ids == sorted(ids) and len(ids) <= min(k["count"], 25)

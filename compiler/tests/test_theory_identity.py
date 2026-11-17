@@ -102,7 +102,7 @@ def domain(tmp_path, view=None):
     write(d / "channels.yaml", {"kinds": [{"kind": "item", "shape": "rect"}]})
     (d / "rules" / "values.dl").write_text(VALUES, encoding="utf-8", newline="\n")
     if view:
-        write(d / "views.yaml", {"format": "rede.views/1", "views": [view]})
+        write(d / "views.yaml", {"format": "rezono.views/1", "views": [view]})
     return d
 
 

@@ -1,5 +1,5 @@
 # A new value from the viewer, which knows the record but not its file: the writer finds the one file.
-format: rede.delta/1
+format: rezono.delta/1
 pack: library
 base_manifest: m-1
 changes:

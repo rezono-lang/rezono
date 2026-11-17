@@ -1,9 +1,0 @@
-# The label of a reason is a text literal on one line: the reader refuses a line end inside a text, so no form holds one.
-format: rede.reckon-module/1
-module:
-  pack: lab
-  use: []
-  decls:
-    - reason: late
-      text: "\"too late,\n    try again\""
-spans: []

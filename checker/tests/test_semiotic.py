@@ -32,7 +32,7 @@ def fixture(*, second_x=20, group_width=64, group=True, lane=True, tiled=False, 
     bands = [{"key": "kind:node", "axis": "x", "from": 0, "to": group_width}] if lane else []
     groups = [{"id": "group/g", "x": 0, "y": 0, "width": group_width, "height": 64}] if group else []
     root = "flow.synthetic/0/0_0.json"
-    base = {"format": "rede.tile/1", "sheet": "flow.synthetic", "y": 0, "edges": [], "bands": bands, "groups": groups}
+    base = {"format": "rezono.tile/1", "sheet": "flow.synthetic", "y": 0, "edges": [], "bands": bands, "groups": groups}
     if not tiled:
         tiles = {root: encoded(base | {"level": 0, "x": 0, "box": [0, 0, 64, 64], "nodes": nodes})}
     else:
@@ -45,7 +45,7 @@ def fixture(*, second_x=20, group_width=64, group=True, lane=True, tiled=False, 
                              "count": 1, "statuses": [{"status": "valid", "count": 1}],
                              "first": {"id": n["id"]}, "last": {"id": n["id"]},
                              "sha256": hashlib.sha256(tiles[path]).hexdigest()})
-        tiles[root] = encoded({"format": "rede.tile/1", "sheet": "flow.synthetic", "level": 0,
+        tiles[root] = encoded({"format": "rezono.tile/1", "sheet": "flow.synthetic", "level": 0,
                                "x": 0, "y": 0, "box": [0, 0, 256, 256], "clusters": clusters})
     return dict(sheet="flow.synthetic", role=Role(snapshots, bundle), layout=layout,
                 tiles=tiles, root=root, tile=64, fanout=4, levels=2 if tiled else 1)

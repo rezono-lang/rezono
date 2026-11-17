@@ -24,7 +24,7 @@ moto_server -H 127.0.0.1 -p 9000 > "$work/s3.log" 2>&1 &
 s3=$!
 trap 'kill $s3 2>/dev/null' EXIT
 for i in $(seq 30); do curl -s -o /dev/null http://127.0.0.1:9000 && break; sleep 1; done
-curl -sf -X PUT http://127.0.0.1:9000/rede >/dev/null
+curl -sf -X PUT http://127.0.0.1:9000/rezono >/dev/null
 packs=$(python -c 'import sys, yaml; print(" ".join(yaml.safe_load(open(sys.argv[1]))["publish"]["packs"]))' "${REZONO_PROFILE_FILE:-$root/deploy/profiles/edge.yaml}")
 copy=""
 if [ -n "${REZONO_SCALE:-}" ]; then
@@ -33,12 +33,12 @@ if [ -n "${REZONO_SCALE:-}" ]; then
   trap 'kill $s3 2>/dev/null; rm -rf "$copy"' EXIT
 fi
 # shellcheck disable=SC2086
-REZONO_STORE=s3://rede "$root/deploy/profiles/edge/publish.sh" $packs ${copy:+"$copy"}
+REZONO_STORE=s3://rezono "$root/deploy/profiles/edge/publish.sh" $packs ${copy:+"$copy"}
 
 # The gate as a Node service on the local store (as smoke.sh): the viewer's binding GATE answers from it.
 # The store is this run's own (the profile's packs, and the multiplied copy), so the gate serves every pack in it.
 : > "$work/store.log"
-REZONO_STORE=s3://rede REZONO_PACKS='*' REZONO_AUTH=fixed REZONO_ROLE=viewer REZONO_LISTEN_HOST=127.0.0.1 REZONO_GATE_BASE=/gate PORT=8788 REZONO_STORE_LOG="$work/store.log" \
+REZONO_STORE=s3://rezono REZONO_PACKS='*' REZONO_AUTH=fixed REZONO_ROLE=viewer REZONO_LISTEN_HOST=127.0.0.1 REZONO_GATE_BASE=/gate PORT=8788 REZONO_STORE_LOG="$work/store.log" \
   node "$root/edge/gate/src/node.ts" > "$work/gate.log" 2>&1 &
 gate=$!
 for i in $(seq 30); do curl -sf -o /dev/null http://127.0.0.1:8788/gate/whoami && break; sleep 1; done

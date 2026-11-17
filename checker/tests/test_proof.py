@@ -16,7 +16,7 @@ def k(*parts):
 
 
 RULES = {
-    "format": "rede.rules/1",
+    "format": "rezono.rules/1",
     "relations": [
         {"name": "e", "role": "base", "key": [{"name": "x", "type": "string"}, {"name": "y", "type": "string"}]},
         {"name": "v", "role": "base", "key": [{"name": "x", "type": "string"}]},
@@ -221,7 +221,7 @@ def test_trees_with_calculations_pass_and_a_missing_calculation_is_found():
 
 # RV-C09: a sum over a key column, a min over a value column (with an unknown cell) and a count, each per x.
 WEIGHED = {
-    "format": "rede.rules/1",
+    "format": "rezono.rules/1",
     "relations": [
         {"name": "v", "role": "base", "key": [{"name": "x", "type": "string"}]},
         {"name": "w", "role": "base", "key": [{"name": "x", "type": "string"}, {"name": "y", "type": "string"},

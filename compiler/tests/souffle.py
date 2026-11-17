@@ -207,12 +207,12 @@ def closure(pack_dir, prog=None):
     """The rule texts of a pack's import closure (decision S28: an imported pack brings its rules, and the
     program is the union over the closure): rules/*.dl of every imported pack, each pack after the packs it
     imports and under the importing pack's names (`bound`), then the pack's own, then the rules of the pack's
-    decision tables (reckon_table, docs/reckon/publication.md §9.1): a table is a rule file of its pack whose
+    decision tables (rezono_table, docs/rezono/publication.md §9.1): a table is a rule file of its pack whose
     text the compiler makes, so the oracle runs that text too. The names come from the compiler's binding of
     the schemas, as the tables in `source` do; what a rule says comes from its text.
     With `prog`, the compiled program, the texts read the relations of a view where the compiler bound them
     (`view_bound`), and the rules of the view follow (`lowered`)."""
-    from rezono_compiler import modules, pack, reckon_table
+    from rezono_compiler import modules, pack, rezono_table
 
     pack_dir = Path(pack_dir)
     meta, errors = pack.read_meta(pack_dir), []
@@ -226,7 +226,7 @@ def closure(pack_dir, prog=None):
                   for f in sorted((imported[name].dir / "rules").glob("*.dl"))]
     texts += [(f"rules/{f.name}", f.read_text(encoding="utf-8")) for f in sorted((pack_dir / "rules").glob("*.dl"))]
     # A table reads the tables of its kind, never a view, so its text is not bound to one (`view_bound`).
-    tables = [g.text for g in reckon_table.lower_pack(pack.read(pack_dir), meta, pack_dir, errors)] if meta.get("reckon") else []
+    tables = [g.text for g in rezono_table.lower_pack(pack.read(pack_dir), meta, pack_dir, errors)] if meta.get("rezono") else []
     assert not errors, errors
     if prog is None:
         return [text for _, text in texts] + tables

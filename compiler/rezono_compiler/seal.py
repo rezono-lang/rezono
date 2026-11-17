@@ -143,7 +143,7 @@ def rows(pack: Pack, data: dict[str, list[tuple]]) -> dict[str, list[tuple]]:
 
 
 def close(pack: Pack, data: dict[str, list[tuple]], close_id: str, until: datetime.date, file: str) -> dict:
-    """The delta (rede.delta/1) that inserts a close: every period before `until` is closed, and every
+    """The delta (rezono.delta/1) that inserts a close: every period before `until` is closed, and every
     accepted element with such a period is covered with its current hash. A refused element stays refused."""
     if not pack.seals:
         raise CompileError("close: the pack has no seal")
@@ -152,7 +152,7 @@ def close(pack: Pack, data: dict[str, list[tuple]], close_id: str, until: dateti
     hashes = dict(data.get(s.row_sha256, []))
     covers = [{ELEMENT: text(i), SHA256: hashes[i]}
               for i, p in sorted(data.get(s.period.table, []), key=lambda r: text(r[0])) if p < until and i in accepted]
-    return {"format": "rede.delta/1", "changes": [
+    return {"format": "rezono.delta/1", "changes": [
         {"op": "insert", "file": file, "kind": CLOSE, "key": close_id,
          "values": {CLOSED_UNTIL: until.isoformat(), COVERS: covers}}]}
 

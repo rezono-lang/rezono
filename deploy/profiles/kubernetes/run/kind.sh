@@ -5,7 +5,7 @@
 #   deploy/profiles/kubernetes/run/kind.sh down   take down what a run left (REZONO_RUN_KEEP=1, or a failed run)
 #
 #   1. a kind cluster of one node, and a registry beside it for the images of this checkout;
-#   2. what a platform gives, as fixtures: External Secrets with a ClusterSecretStore `rede` of test values made
+#   2. what a platform gives, as fixtures: External Secrets with a ClusterSecretStore `rezono` of test values made
 #      for this run, Envoy Gateway with a Gateway that ends TLS, a store (S3 API) and an issuer (OIDC);
 #   3. the gate's and the viewer's images, built from deploy/gate and deploy/viewer and pushed to that registry;
 #   4. the publish job: the packs of publish.packs in deploy/profiles/kubernetes.yaml into the store, as the job
@@ -79,9 +79,9 @@ finish() {
 		echo
 		echo "== the run failed; what the cluster says"
 		k get pods -A -o wide 2>/dev/null | grep -v ' Running \| Completed ' || true
-		k -n rede get events --sort-by=.lastTimestamp 2>/dev/null | tail -15 || true
+		k -n rezono get events --sort-by=.lastTimestamp 2>/dev/null | tail -15 || true
 		for d in front viewer gate; do
-			echo "-- $d"; k -n rede logs "deploy/$d" --tail=15 2>/dev/null || true
+			echo "-- $d"; k -n rezono logs "deploy/$d" --tail=15 2>/dev/null || true
 		done
 	fi
 	rm -rf "$work"
@@ -111,7 +111,7 @@ value reader-password "$(hex 16)"
 value stranger-password "$(hex 16)"
 v() { cat "$work/values/$1"; }
 
-openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 -nodes -days 2 -subj "/CN=rede run authority" \
+openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 -nodes -days 2 -subj "/CN=rezono run authority" \
 	-keyout "$work/ca.key" -out "$work/ca.crt" 2>/dev/null
 openssl req -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 -nodes -subj "/CN=$HOST" \
 	-keyout "$work/tls.key" -out "$work/tls.csr" 2>/dev/null
@@ -161,16 +161,16 @@ cat > "$work/secret-store.yaml" <<EOF
 apiVersion: external-secrets.io/v1
 kind: ClusterSecretStore
 metadata:
-  name: rede
+  name: rezono
 spec:
   provider:
     fake:
       data:
-        - key: rede/front
-          value: '{"client-id":"rede","client-secret":"$(v client-secret)","cookie-secret":"$(v cookie-secret)"}'
-        - key: rede/viewer
+        - key: rezono/front
+          value: '{"client-id":"rezono","client-secret":"$(v client-secret)","cookie-secret":"$(v cookie-secret)"}'
+        - key: rezono/viewer
           value: '{"draft-key":"$(v draft-key)"}'
-        - key: rede/gate
+        - key: rezono/gate
           value: '{"store-key-id":"$(v reader-id)","store-secret":"$(v reader-secret)"}'
 EOF
 retry 24 k apply -f "$work/secret-store.yaml" >/dev/null 2>&1 || fail "External Secrets does not take the ClusterSecretStore"
@@ -180,7 +180,7 @@ k -n rezono-platform wait --for=condition=Available deployment/store --timeout=3
 # shellcheck disable=SC2016  # the variables are the pod's
 retry 12 k -n rezono-platform exec deploy/store -- sh -c '
 	mc alias set run http://127.0.0.1:9000 "$MINIO_ROOT_USER" "$MINIO_ROOT_PASSWORD" >/dev/null &&
-	mc admin policy create run rezono-read /etc/rede/read.json >/dev/null &&
+	mc admin policy create run rezono-read /etc/rezono/read.json >/dev/null &&
 	mc admin user add run "$READER_ID" "$READER_SECRET" >/dev/null &&
 	mc admin policy attach run rezono-read --user "$READER_ID" >/dev/null' || fail "the store does not take the reader's keys"
 k -n rezono-platform wait --for=condition=Available deployment/issuer --timeout=600s >/dev/null
@@ -190,10 +190,10 @@ echo "platform ready"
 step "3. images: gate, viewer"
 declare -A digest
 for name in gate viewer; do
-	docker build -q -f "$root/deploy/$name/Containerfile" -t "localhost:$push_port/rede/$name:run" "$root" >/dev/null
-	docker push -q "localhost:$push_port/rede/$name:run" >/dev/null
+	docker build -q -f "$root/deploy/$name/Containerfile" -t "localhost:$push_port/rezono/$name:run" "$root" >/dev/null
+	docker push -q "localhost:$push_port/rezono/$name:run" >/dev/null
 	digest[$name]=$(curl -fsSI -H 'Accept: application/vnd.oci.image.index.v1+json, application/vnd.oci.image.manifest.v1+json, application/vnd.docker.distribution.manifest.list.v2+json, application/vnd.docker.distribution.manifest.v2+json' \
-		"http://localhost:$push_port/v2/rede/$name/manifests/run" | tr -d '\r' | sed -n 's/^[Dd]ocker-[Cc]ontent-[Dd]igest: //p')
+		"http://localhost:$push_port/v2/rezono/$name/manifests/run" | tr -d '\r' | sed -n 's/^[Dd]ocker-[Cc]ontent-[Dd]igest: //p')
 	[[ ${digest[$name]} =~ ^sha256:[0-9a-f]{64}$ ]] || fail "no digest for the image of $name"
 	echo "$name ${digest[$name]}"
 done
@@ -215,18 +215,18 @@ kind: Kustomization
 resources:
   - $(realpath --relative-to="$work/kind" "$profile_dir/overlays/kind")
 images:
-  - name: registry.example.test/rede/gate
-    newName: $registry:5000/rede/gate
+  - name: registry.example.test/rezono/gate
+    newName: $registry:5000/rezono/gate
     digest: ${digest[gate]}
-  - name: registry.example.test/rede/viewer
-    newName: $registry:5000/rede/viewer
+  - name: registry.example.test/rezono/viewer
+    newName: $registry:5000/rezono/viewer
     digest: ${digest[viewer]}
 EOF
 REZONO_K8S_RENDERS="$work/renders" "$profile_dir/check.sh" --live "$work/kind"
 k apply -f "$work/renders/kind.yaml" >/dev/null
-k -n rede wait --for=condition=Ready externalsecret --all --timeout=180s >/dev/null
-k -n rede wait --for=condition=Available deployment --all --timeout=600s >/dev/null
-k -n rede get deployments,externalsecrets,httproutes -o wide | cut -c1-150
+k -n rezono wait --for=condition=Ready externalsecret --all --timeout=180s >/dev/null
+k -n rezono wait --for=condition=Available deployment --all --timeout=600s >/dev/null
+k -n rezono get deployments,externalsecrets,httproutes -o wide | cut -c1-150
 
 # --- 6. the reading, through the front door -------------------------------------------------------------------------
 step "6. reading through https://$HOST"
@@ -248,7 +248,7 @@ login() {
 	local user=$1 jar=$work/$1.jar h=$work/$1.headers to cookies action back
 	web -c "$jar" -b "$jar" -D "$h.1" -o /dev/null "https://$HOST/"
 	to=$(location "$h.1")
-	case $to in "http://$ISSUER:8080/realms/rede/protocol/openid-connect/auth?"*) ;; *) fail "the front did not send $user to the issuer" ;; esac
+	case $to in "http://$ISSUER:8080/realms/rezono/protocol/openid-connect/auth?"*) ;; *) fail "the front did not send $user to the issuer" ;; esac
 	web -D "$h.2" -o "$h.html" "$to"
 	cookies=$(tr -d '\r' < "$h.2" | sed -n 's/^[Ss]et-[Cc]ookie: \([^;]*\).*/\1/p' | paste -sd ';' -)
 	action=$(grep -o 'action="[^"]*"' "$h.html" | head -1 | sed 's/^action="//; s/"$//; s/&amp;/\&/g')
@@ -266,8 +266,8 @@ echo "no login: 302 to the issuer"
 login reader
 web -b "$work/reader.jar" -o "$work/home.html" "https://$HOST/"
 # The packs the gate in the cluster was told to serve: REZONO_PACKS of the ConfigMap its Deployment names.
-settings=$(k -n rede get deployment gate -o jsonpath='{.spec.template.spec.containers[?(@.name=="gate")].envFrom[0].configMapRef.name}')
-packs=$(k -n rede get configmap "$settings" -o jsonpath='{.data.REZONO_PACKS}')
+settings=$(k -n rezono get deployment gate -o jsonpath='{.spec.template.spec.containers[?(@.name=="gate")].envFrom[0].configMapRef.name}')
+packs=$(k -n rezono get configmap "$settings" -o jsonpath='{.data.REZONO_PACKS}')
 [ -n "$packs" ] || fail "no REZONO_PACKS in the cluster"
 for pack in ${packs//,/ }; do
 	grep -q "href=\"/$pack\"" "$work/home.html" || fail "the home page does not list $pack"
@@ -286,8 +286,8 @@ echo "stranger (no group): 403"
 
 # The network: only the gate reaches the store. One request from each, with the same code.
 probe='fetch("http://store.rezono-platform.svc.cluster.local:9000/minio/health/live", { signal: AbortSignal.timeout(8000) }).then((r) => console.log("reached", r.status), (e) => console.log("no way", e.name))'
-[ "$(k -n rede exec deploy/gate -- node -e "$probe")" = "reached 200" ] || fail "the gate does not reach the store"
-[ "$(k -n rede exec deploy/viewer -- node -e "$probe")" = "no way TimeoutError" ] || fail "the viewer reaches the store"
+[ "$(k -n rezono exec deploy/gate -- node -e "$probe")" = "reached 200" ] || fail "the gate does not reach the store"
+[ "$(k -n rezono exec deploy/viewer -- node -e "$probe")" = "no way TimeoutError" ] || fail "the viewer reaches the store"
 echo "network: the gate reaches the store, the viewer does not"
 
 step "done: profile kubernetes runs on $CLUSTER and serves ${packs}"

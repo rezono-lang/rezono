@@ -13,7 +13,7 @@ from rezono_admission import Admission, Schema, rows
 
 HERE = Path(__file__).resolve().parents[1]
 BUNDLE = {
-    "format": "rede.schema-bundle/1",
+    "format": "rezono.schema-bundle/1",
     "pack": {"id": "t", "version": "1", "default_language": "en"},
     "kinds": [{"id": "thing", "identifier": "id", "id_type": "text"},
               {"id": "part", "id_type": "text"},

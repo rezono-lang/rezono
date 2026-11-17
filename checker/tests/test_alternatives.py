@@ -50,7 +50,7 @@ def _columns(k):
     return [{"name": f"c{i}", "type": "string"} for i in range(k)]
 
 
-IR = {"format": "rede.rules/1", "pack": "alternatives",
+IR = {"format": "rezono.rules/1", "pack": "alternatives",
       "relations": [{"name": n, "role": "base", "key": _columns(k)} for n, k in BASE.items()]
                    + [{"name": n, "role": "derived", "module": "m", "explain": "materialize", "key": _columns(k)}
                       for n, k in DERIVED.items()],

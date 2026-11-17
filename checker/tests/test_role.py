@@ -33,7 +33,7 @@ def derived(name, *columns):
 
 
 # Every role reads every person; a document only when granted. So `person` is read in full and `doc` is not.
-DOC = {"format": "rede.rules/1", "pack": "example",
+DOC = {"format": "rezono.rules/1", "pack": "example",
        "relations": [derived("may_read", "role", "kind", "id"), derived("authored", "person", "doc"),
                      derived("busy", "person"), derived("idle", "person")],
        "rules": [
@@ -44,7 +44,7 @@ DOC = {"format": "rede.rules/1", "pack": "example",
            rule("idle", "2", ("idle", "?p"), atom("person", "?p"), atom("busy", "?p", polarity="negative", stratum="1")),
        ]}
 # A calculation per document. It reads `person`, which the guest reads in full, or `doc__author`, which it does not.
-CALC = {"format": "rede.calc-ir/1", "subject": "doc", "as_of": "calc__as_of", "rules": [{"view": "calc__size"}],
+CALC = {"format": "rezono.calc-ir/1", "subject": "doc", "as_of": "calc__as_of", "rules": [{"view": "calc__size"}],
         "facts": [{"id": "people", "reads": "presence", "table": "person"}],
         "versions": [{"id": "size@v", "view": "calc__size__v",
                       "definitions": [{"when": {"boolean": True}, "value": {"fact": "people"}}]}]}

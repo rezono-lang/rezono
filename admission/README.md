@@ -15,7 +15,7 @@ result = step.admit(data, source="feed", event="e-17")
 
 | Part | What | Replaced later by |
 |---|---|---|
-| (a) `rows.py` | the rows of a fact document against a schema: kinds, identifiers, slots, types, inlined elements and LinkML's dictionary form, as the compiler's loader reads them | Reckon Data's L0 reader, behind the same interface; the parity test then runs against both once |
+| (a) `rows.py` | the rows of a fact document against a schema: kinds, identifiers, slots, types, inlined elements and LinkML's dictionary form, as the compiler's loader reads them | the publication's L0 reader, behind the same interface; the parity test then runs against both once |
 | (b) `step.py` | the step around it: a batch needs a source; a delivery is keyed by its event id (or by its rows) and admitted once; a batch with a record of a control kind needs the reviewed proposal it comes from (`reviewed=`, DV1); a batch is all or nothing | stays |
 
 **The schema is a parameter, addressed by its hash.** `Schema(bundle)` reads the bundle as the gate reads it (C3), never the pack's sources; `schema.sha256` is the bundle's canonical hash, and every refusal names it.

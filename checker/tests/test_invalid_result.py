@@ -10,7 +10,7 @@ from rezono_checker.rules import load_rules
 
 DATE = "2026-11-01"
 REASON = "division by zero in ratio"
-RULES = {"format": "rede.rules/1", "relations": [], "rules": []}
+RULES = {"format": "rezono.rules/1", "relations": [], "rules": []}
 CALC = {
     "subject": "Entry", "subject_table": "entry", "as_of": "calc__as_of",
     "facts": [{"id": "total", "type": "number", "reads": "column", "table": "entry_total", "index": 1}],

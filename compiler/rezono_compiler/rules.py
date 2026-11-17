@@ -14,7 +14,7 @@ from dataclasses import dataclass, field, replace
 
 from .names import ISO_DATE, NAME
 
-FORMAT = "rede.rules/1"
+FORMAT = "rezono.rules/1"
 FUNCTIONS = ("count", "sum", "min", "max")
 COMPARISONS = ("eq", "ne", "lt", "le", "gt", "ge")
 ARITHMETIC = ("add", "sub", "mul", "div")

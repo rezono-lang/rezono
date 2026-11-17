@@ -36,7 +36,7 @@ class ViewTypingError(ViewError, Diagnosed):
 
 class PathTypingError(ValueError):
     """A directed path that does not type: the position of the step it fails at, a code, a reason and a hint.
-    A caller places it in its own text (a view key, a Reckon span)."""
+    A caller places it in its own text (a view key, a Rezono span)."""
     def __init__(self, step: int, code: str, reason: str, hint: str = ''):
         self.step, self.code, self.reason, self.hint = step, code, reason, hint
         super().__init__(reason)
@@ -150,7 +150,7 @@ def directed_path(model: Pack, start: str, steps: Iterable[tuple[str, bool]]
                   ) -> tuple[str, tuple[Step, ...], tuple[Membership, ...]]:
     """Type a directed path from kind `start` over `steps`, each an arrow slot by its name and whether it is
     walked backwards: its end kind, its typed steps and the kind each position must be a member of. This is the
-    one path resolver (D15, #394 A6) for views and the Reckon resolver; what a view adds (its source unions,
+    one path resolver (D15, #394 A6) for views and the Rezono resolver; what a view adds (its source unions,
     targets and obligations) stays in `resolve`. Narrowing is never implicit: a step leaves from the current
     kind or an ancestor of it, and an inverse step needs exactly one type-compatible incoming arrow."""
     incoming, current = _arrows(model), start

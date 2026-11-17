@@ -12,7 +12,7 @@ from rezono_checker.check import check
 from rezono_checker.rules import load_rules
 
 IR = {
-    "format": "rede.rules/1", "pack": "example",
+    "format": "rezono.rules/1", "pack": "example",
     "relations": [
         {"name": "entry", "role": "base", "key": [{"name": "id", "type": "string"}]},
         {"name": "line", "role": "base", "key": [{"name": "entry", "type": "string"}, {"name": "line", "type": "string"},
@@ -78,7 +78,7 @@ def test_a_wrong_assignment_is_refused():
 
 MIN = str(-2**63)
 OVERFLOW = {
-    "format": "rede.rules/1", "pack": "example",
+    "format": "rezono.rules/1", "pack": "example",
     "relations": [
         {"name": "size", "role": "base", "key": [{"name": "id", "type": "string"}, {"name": "n", "type": "integer"}]},
         {"name": "half", "role": "derived", "module": "m", "explain": "materialize",
@@ -508,7 +508,7 @@ def test_epoch_recomputes_a_seal():
     from rezono_checker.check import check_epoch
     from rezono_checker.rules import load_seals
 
-    seals = load_seals({"format": "rede.rules/1", "pack": "example", "relations": [], "rules": [], "seals": [SEAL]})
+    seals = load_seals({"format": "rezono.rules/1", "pack": "example", "relations": [], "rules": [], "seals": [SEAL]})
     h, rows = sealed()
 
     def reasons(changed):
@@ -538,7 +538,7 @@ def test_a_forged_seal_is_found():
     h, rows = sealed()
 
     def reasons(changed, seal=SEAL):
-        seals = load_seals({"format": "rede.rules/1", "pack": "example", "relations": [], "rules": [], "seals": [seal]})
+        seals = load_seals({"format": "rezono.rules/1", "pack": "example", "relations": [], "rules": [], "seals": [seal]})
         m, r = world({**rows, **changed})
         return sorted((f["reason"], f.get("relation")) for f in check_epoch([], m, {}, r, derived=set(), seals=seals)["findings"])
 

@@ -1,5 +1,5 @@
 {
-  "realm": "rede",
+  "realm": "rezono",
   "enabled": true,
   "sslRequired": "none",
   "groups": [{ "name": "rezono-readers" }],
@@ -26,7 +26,7 @@
   ],
   "clients": [
     {
-      "clientId": "rede",
+      "clientId": "rezono",
       "enabled": true,
       "protocol": "openid-connect",
       "publicClient": false,

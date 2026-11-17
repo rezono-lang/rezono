@@ -13,7 +13,7 @@ import yaml
 from rezono_publisher import pointers, publish, store
 from test_publish import ROLES, epoch
 
-BUILD = {"format": "rede.build/3", "publisher": "5" * 64}
+BUILD = {"format": "rezono.build/3", "publisher": "5" * 64}
 
 
 def inputs(e, roles=ROLES) -> dict:
@@ -54,14 +54,14 @@ def test_a_manifest_made_from_the_same_pack_engine_build_and_roles_is_unchanged(
     # The record compared is the one published: what the manifest names is these bytes.
     record = publish.build_bytes(e.build, ROLES)
     assert m["build"]["sha256"] == publish.sha256(record)
-    assert s.get(m["build"]["uri"].removeprefix("s3://rede/")) == record
+    assert s.get(m["build"]["uri"].removeprefix("s3://rezono/")) == record
 
 
 @pytest.mark.parametrize("change", [
     {"pack_sha256": "9" * 64},
     {"engine": {"name": "test", "version": "1", "sha256": "3" * 64}},
     {"build": BUILD | {"publisher": "6" * 64}},
-    {"build": BUILD | {"views": {"format": "rede.view-build/1"}}},
+    {"build": BUILD | {"views": {"format": "rezono.view-build/1"}}},
     {"roles": ROLES | {"auditor": "may_read"}},
     {"roles": {"checker": "complete", "guest": "complete"}},
 ])

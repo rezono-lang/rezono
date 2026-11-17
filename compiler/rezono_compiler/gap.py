@@ -23,7 +23,7 @@ from __future__ import annotations
 
 from .rules import Atom, const_type, days, is_var
 
-FORMAT = "rede.gap/1"
+FORMAT = "rezono.gap/1"
 KINDS = ("positive", "negative", "condition", "assignment", "aggregate")
 OPS = {"eq": "=", "ne": "!=", "lt": "<", "le": "<=", "gt": ">", "ge": ">=", "add": "+", "sub": "-", "mul": "*", "div": "/"}
 TYPE = {"string": "symbol", "integer": "number"}
@@ -132,7 +132,7 @@ def is_prefix(bound) -> bool:
 
 
 def plan(prog) -> dict:
-    """The gap plan of a program (rede.gap/1): every start pattern a walk can reach, from a whole key of each
+    """The gap plan of a program (rezono.gap/1): every start pattern a walk can reach, from a whole key of each
     derived relation down through failing positive literals on derived relations; per relation the bound
     patterns that are not a prefix of its key (each needs an index with those columns first); and the
     effects. Sorted throughout, so the same program gives the same bytes."""

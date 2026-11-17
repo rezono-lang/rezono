@@ -1183,7 +1183,7 @@ def viewed(tmp: Path, view: bool = True, **files: str) -> Path:
     if files:
         with_rules(domain, **files)
     if view:
-        write(domain / "views.yaml", {"format": "rede.views/1", "views": [VIEWED]})
+        write(domain / "views.yaml", {"format": "rezono.views/1", "views": [VIEWED]})
     return domain
 
 

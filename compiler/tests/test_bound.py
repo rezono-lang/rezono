@@ -3,7 +3,7 @@
 The shape is a depth from seeds along steps, on the domain-free fixture pack. The batch backend is compared
 with a plain fixpoint of the rules as written (always) and with Soufflé on the rule text as written (the
 oracle, as a set; skipped without `souffle`). Where the count reaches its bound the two differ on purpose:
-Soufflé stops there and keeps what it has, Rede raises. What is accepted and refused is in test_rules_dl.py."""
+Soufflé stops there and keeps what it has, Rezono raises. What is accepted and refused is in test_rules_dl.py."""
 
 import shutil
 from pathlib import Path

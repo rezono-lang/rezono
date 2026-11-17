@@ -95,7 +95,7 @@ def test_duplicate_declarations_do_not_pick_a_branch(tmp_path, key):
 
 def test_duplicate_yaml_field_is_not_silently_overridden(tmp_path):
     path = tmp_path / "views.yaml"
-    path.write_text("format: rede.views/1\nformat: ignored\nviews: []\n", encoding="utf-8")
+    path.write_text("format: rezono.views/1\nformat: ignored\nviews: []\n", encoding="utf-8")
     with pytest.raises(views.ViewError, match="duplicate field 'format'"):
         views.read(path)
 
@@ -138,7 +138,7 @@ def test_expr_is_not_executed_or_accepted_as_structural_data(tmp_path):
     assert not marker.exists()
 
 
-@pytest.mark.parametrize("body", ["", "[]", "format: wrong\nviews: []", "format: [rede.views/1]\nviews: []", "format: rede.views/1\nviews: ["])
+@pytest.mark.parametrize("body", ["", "[]", "format: wrong\nviews: []", "format: [rezono.views/1]\nviews: []", "format: rezono.views/1\nviews: ["])
 def test_invalid_document_is_not_an_absent_view(tmp_path, body):
     path = tmp_path / "views.yaml"; path.write_text(body, encoding="utf-8")
     with pytest.raises(views.ViewError, match="views.yaml:"):

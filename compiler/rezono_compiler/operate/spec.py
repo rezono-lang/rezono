@@ -8,8 +8,8 @@ from pathlib import Path
 import yaml
 
 
-FORMAT = "rede.operations/1"
-IMPACT = "rede.impact/1"
+FORMAT = "rezono.operations/1"
+IMPACT = "rezono.impact/1"
 OPS = ("rename", "move", "drop", "split_by", "combine", "select")
 BUILT = OPS
 FIELDS = ("op", "kind", "slot", "enum", "value", "to", "via", "absorb", "key", "cases", "abstract", "world",

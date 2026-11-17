@@ -154,7 +154,7 @@ def to_doc(prog: Program) -> dict:
     inputs = {role: prog.inputs[role].table for role in ("subject", "fact", "integer", "boolean")
               if prog.inputs and prog.inputs[role] is not None}
     return {
-        "format": "rede.calc-ir/1", "pack": prog.pack, "subject": prog.subject, "subject_table": prog.subject_table,
+        "format": "rezono.calc-ir/1", "pack": prog.pack, "subject": prog.subject, "subject_table": prog.subject_table,
         "as_of": f"{PREFIX}__as_of", "parameters": prog.parameters.table if prog.parameters else "",
         **({"parameter_choice": {role: s.table for role, s in prog.choice.items()}} if prog.choice else {}),
         **({"inputs": inputs} if inputs else {}),  # a program without input concepts has no input tables
@@ -335,8 +335,8 @@ def build(pack: Pack, doc: dict, derived: dict | None = None, files: list[tuple[
     the pack's (`check_imports`). `files` are the calc files the program was read from, each with its name as a
     span names it, so that a unit error says where it is written (`files_of`)."""
     errors: list[str] = []
-    if doc.get("format") != "rede.calc/1":
-        raise CompileError("calc.program: format must be rede.calc/1")
+    if doc.get("format") != "rezono.calc/1":
+        raise CompileError("calc.program: format must be rezono.calc/1")
     for key in ("pack", "subject"):
         if not doc.get(key):
             raise CompileError(f"calc.program: '{key}' is required")
@@ -532,7 +532,7 @@ def parse(e, where: str, in_template: bool = False) -> Node:
         raise CompileError(f"calc.expression: {where}: an expression is a mapping, not {e!r}")
     keys = [k for k in e if e[k] is not None]
     unit = e.get("unit")
-    if unit is not None:  # P10.3: a constant with its unit, as Reckon writes `384 GiB`
+    if unit is not None:  # P10.3: a constant with its unit, as Rezono writes `384 GiB`
         if set(keys) != {"integer", "unit"}:
             raise CompileError(f"calc.unit: {where}: a unit goes with an integer constant, not with {', '.join(sorted(set(keys) - {'unit'}))}")
         if not isinstance(unit, str) or not unit:
@@ -876,7 +876,7 @@ KEEPS_UNIT = {"floor", "ceil", "round"}
 
 @dataclass(frozen=True)
 class UnitProblem:
-    """One unit error of a calculation, in the form of a diagnostic (D15): a code (Reckon's R003 for dimensions
+    """One unit error of a calculation, in the form of a diagnostic (D15): a code (Rezono's R003 for dimensions
     that differ, R001 for an unknown unit), the version and the place in it (`path`: the definition's index, `when`
     or `value`, then one argument index per level), the sentence and what to write instead."""
     code: str
@@ -940,7 +940,7 @@ def fact_unit(pack: Pack, fact: Fact) -> types.Unit | None:
 
 
 def check_units(pack: Pack, versions: dict[str, Version], rules: dict, facts: dict[str, Fact]) -> list[UnitProblem]:
-    """The dimension checks of P10.3 (Reckon v0 §7.3, R003): the arguments of `add`, `sub`, `min`, `max`, a
+    """The dimension checks of P10.3 (Rezono v0 §7.3, R003): the arguments of `add`, `sub`, `min`, `max`, a
     comparison and the branches of `if` have one unit; `ratio` multiplies and divides units; `pow` raises one by a
     constant; a rounding keeps it; a definition's value has the unit its rule states. A constant without a unit is
     a plain number, except 0, which is zero in every unit. Units of one dimension that differ by a factor are an

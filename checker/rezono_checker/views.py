@@ -971,7 +971,7 @@ def check_view(sheet: str, snapshots: dict[str, bytes], layout: bytes, tiles: di
     return problems
 
 
-ISLANDS = "rede.islands/1"
+ISLANDS = "rezono.islands/1"
 
 
 class IslandPlan(NamedTuple):

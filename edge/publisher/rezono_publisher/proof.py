@@ -45,10 +45,10 @@ from collections import defaultdict
 from rezono_compiler import rules as ir
 from rezono_compiler import trace
 
-FORMAT = "rede.proof/1"
+FORMAT = "rezono.proof/1"
 # 2: the calculation witnesses are in the trees too (W12). 3: a `contributes` row may carry its value last
 # (RV-C09): such a row is longer than a page cursor on it, so a reader of format 2 must not read these trees.
-INDEX = "rede.proof-index/3"
+INDEX = "rezono.proof-index/3"
 PIECE = 64 * 1024  # bytes per piece, at most
 FANOUT = 128  # children per page, at most
 TREES = ("witness", "back", "forward")

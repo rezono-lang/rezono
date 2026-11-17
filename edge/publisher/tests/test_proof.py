@@ -163,7 +163,7 @@ def test_the_proof_pieces_of_every_example_pass(pack_dir, tmp_path):
     sees = json.loads(st.get(views.key_of(w["uri"])))
     concluded = {x["conclusion"]["relation"] for x in sees["witnesses"] + sees.get("calc_witnesses", [])}
     assert set(part["trees"]["witness"]) == concluded
-    assert part["format"] == "rede.proof-index/3"
+    assert part["format"] == "rezono.proof-index/3"
     for by in part["trees"].values():
         for named in by.values():
             assert proof.sha256(st.get(views.key_of(named["uri"])) or dict(made)[views.key_of(named["uri"])]) == named["sha256"]
@@ -329,7 +329,7 @@ def test_a_contributes_row_of_a_sum_carries_its_value_and_a_changed_one_is_refus
 def test_a_snapshot_cell_that_is_missing_or_not_known_is_none_for_the_engine_rows():
     """A relation with a value column (none in a compiled pack today): a known cell is its text, a record
     without the column or with another state gives None, which `trace.steps` refuses to state as a value."""
-    prog = ir.load({"format": "rede.rules/1", "rules": [], "relations": [
+    prog = ir.load({"format": "rezono.rules/1", "rules": [], "relations": [
         {"name": "m", "role": "base", "key": [{"name": "x", "type": "string"}], "values": [{"name": "amount", "type": "integer"}]}]})
     records = [{"key": ["a"], "values": {"amount": {"state": "known", "value": "7"}}},
                {"key": ["b"], "values": {"amount": {"state": "unknown"}}}, {"key": ["c"]}]

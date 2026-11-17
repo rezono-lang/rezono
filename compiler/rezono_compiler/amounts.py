@@ -10,7 +10,7 @@ nothing. A column of a derived relation holds what its head terms stand for, ove
 One unit and nothing plain beside it is the unit of the column; anything else has none. Two units in one variable
 or one column is an error: a sum or a comparison across them means nothing. So is a comparison of two variables
 that stand for different units, and of a variable that stands for a unit with a constant other than 0, which has
-no unit (P10.3, Reckon R003: `> 384` against GiB). The rules convert nothing between units.
+no unit (P10.3, Rezono R003: `> 384` against GiB). The rules convert nothing between units.
 """
 
 from __future__ import annotations

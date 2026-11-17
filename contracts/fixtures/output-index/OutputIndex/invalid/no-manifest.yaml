@@ -1,5 +1,5 @@
 # The index is bound to a manifest.
-format: rede.output-index/1
+format: rezono.output-index/1
 pack: platform
 render:
   step: render_metallb

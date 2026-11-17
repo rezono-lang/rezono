@@ -8,7 +8,7 @@
 # publishes every pack whatever the store holds.
 # After each manifest, its views (rezono_publisher.views: the layout per role, made once here, never per
 # request; docs/gui.md, Work per request). A view that shows more than its role reads exits 2 too.
-# The Reckon Data forms (rezono_publisher.forms, RV-K16) follow the publication, in job `forms` of promote.yml: here
+# The publication forms (rezono_publisher.forms, RV-K16) follow the publication, in job `forms` of promote.yml: here
 # a manifest only names the forms library in its build (--forms-after), so a new library publishes the pack again;
 # a pack the profile's forms.packs switches off gets none (RV-K16 revised, docs/decisions.md).
 # Each main manifest's head is written with it. The publish path runs no backfill of heads (RV-M10): it read

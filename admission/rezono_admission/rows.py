@@ -6,7 +6,7 @@ refusal, not only the first. A refusal is a code in L0's form (`^[a-z][a-z0-9_]*
 hash of the schema it was judged against. A record with a refusal gives no rows; the records beside it are
 still judged, so one pass names everything that is wrong.
 
-This is what Reckon Data's L0 reader replaces later, behind the same interface; the step around it (step.py)
+This is what the publication's L0 reader replaces later, behind the same interface; the step around it (step.py)
 stays.
 """
 
@@ -129,7 +129,7 @@ def _add(schema: Schema, kind: str, record, derived_id: str | None, rows: dict, 
     if eid is None:
         raise _Refused("kind_without_identifier", where)
     eid = _typed(schema.kinds[schema.root(kind)].id_type, eid, f"{where}.{ident}")
-    # A decided value names the decision that set it (DV1; Reckon Data L0 §3.7): without one it is no value.
+    # A decided value names the decision that set it (DV1; publication L0 §3.7): without one it is no value.
     if schema.control(kind):
         given = record.get("decision")
         given = given if isinstance(given, list) else [given]

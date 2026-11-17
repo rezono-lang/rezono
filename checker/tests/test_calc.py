@@ -212,7 +212,7 @@ def epoch(forge=None, full=None) -> set[str]:
     manifest = {"id": "m-1", "snapshots": [
         {"relation": name, "role": "all", "complete": True, "uri": name, "format": "json",
          "sha256": hashlib.sha256(data).hexdigest()} for name, data in files.items()]}
-    rules = load_rules({"format": "rede.rules/1", "relations": [], "rules": []})
+    rules = load_rules({"format": "rezono.rules/1", "relations": [], "rules": []})
     report = check_epoch([], manifest, rules, files.__getitem__, derived=set(), full=full,
                          calc_witnesses=witnesses, calc_ir=IR)
     return {f["reason"] for f in report["findings"]}

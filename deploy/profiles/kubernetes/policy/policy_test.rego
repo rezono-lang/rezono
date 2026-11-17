@@ -184,7 +184,7 @@ test_a_secrets_store_csi_volume_is_refused if refused(with_pod(put(pod_spec, "vo
 templated(entries) := object.union(external_secret, {"spec": object.union(external_secret.spec, {"target": {"name": "s", "template": {"data": entries}}})})
 
 test_a_template_from_the_store_passes if {
-	msgs := deny with input as render([namespace, deny_all, templated({"DB_PASSWORD": "{{ .password }}", "url": "postgres://db:5432/rede"}), deployment(pod_spec)])
+	msgs := deny with input as render([namespace, deny_all, templated({"DB_PASSWORD": "{{ .password }}", "url": "postgres://db:5432/rezono"}), deployment(pod_spec)])
 	count(msgs) == 0
 }
 

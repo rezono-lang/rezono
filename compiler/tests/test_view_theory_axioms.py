@@ -78,7 +78,7 @@ def domain_pack(root, case):
     write(domain / 'channels.yaml', {'kinds': [{'kind': k, 'shape': 'rect'} for k in case['kinds']],
           'arrows': [{'arrow': a, 'dash': 'none'} for a in case['arrows']]})
     write(domain / 'labels/nl.yaml', {})
-    write(domain / 'views.yaml', {'format': 'rede.views/1', 'views': [json.loads(json.dumps(case['view']))]})
+    write(domain / 'views.yaml', {'format': 'rezono.views/1', 'views': [json.loads(json.dumps(case['view']))]})
     return domain
 
 

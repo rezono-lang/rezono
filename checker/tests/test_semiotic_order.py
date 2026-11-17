@@ -25,7 +25,7 @@ def fixture(*, centres=(10, 30, 20), direction="right", tiled=False, repeated=Fa
     flow = {"id": "synthetic", "direction": direction, "title_message": "flow.title",
             "nodes": [{"kind": "node", "lane": {"channel": "lane", "slot": "node.rank", "level": "ordered", "meaning_message": "rank"}}],
             "edges": [{"arrow": "node.next"}]}
-    bundle = {"format": "rede.schema-bundle/1", "kinds": [{"id": "node"}], "attributes": [attr],
+    bundle = {"format": "rezono.schema-bundle/1", "kinds": [{"id": "node"}], "attributes": [attr],
               "arrows": [{"id": "node.next", "kind": "node", "table": "node__next", "target": "node"}],
               "enums": [{"id": "Rank", "values": [f"Rank.{v}" for v in values]}], "channels": {"flows": [flow]}}
     rows = [("z", values[0]), ("a", values[1]), ("m", values[2]), ("n", values[2]), ("u", None)]
@@ -44,7 +44,7 @@ def fixture(*, centres=(10, 30, 20), direction="right", tiled=False, repeated=Fa
                       "lane": {"relation": "node__rank", "value": value} if value is not None else {"unknown": True}})
     layout = encoded({"nodes": {n["id"]: [n[k] for k in ("x", "y", "width", "height")] for n in nodes}, "edges": {}})
     root = f"{SHEET}/0/0_0.json"
-    base = {"format": "rede.tile/1", "sheet": SHEET, "edges": [], "bands": bands}
+    base = {"format": "rezono.tile/1", "sheet": SHEET, "edges": [], "bands": bands}
     if not tiled:
         tiles = {root: encoded(base | {"level": 0, "x": 0, "y": 0, "box": [0, 0, 64, 64], "nodes": nodes})}
     else:
@@ -57,7 +57,7 @@ def fixture(*, centres=(10, 30, 20), direction="right", tiled=False, repeated=Fa
             clusters.append({"x": x, "y": y, "box": [node[k] for k in ("x", "y", "width", "height")],
                              "count": 1, "statuses": [{"status": "valid", "count": 1}],
                              "first": {"id": node["id"]}, "last": {"id": node["id"]}, "sha256": hashlib.sha256(tiles[path]).hexdigest()})
-        tiles[root] = encoded({"format": "rede.tile/1", "sheet": SHEET, "level": 0, "x": 0, "y": 0,
+        tiles[root] = encoded({"format": "rezono.tile/1", "sheet": SHEET, "level": 0, "x": 0, "y": 0,
                                "box": [0, 0, 512, 512], "clusters": clusters})
     return dict(sheet=SHEET, kind="node", role=Role(snapshots, bundle), layout=layout, tiles=tiles,
                 root=root, tile=64, fanout=8, levels=2 if tiled else 1)

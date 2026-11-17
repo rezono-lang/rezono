@@ -11,7 +11,7 @@ from pathlib import Path
 import yaml
 from .schemaview import SchemaView
 
-from . import amounts, diagnostics, fold, icons as icon_files, modules, reckon_module, rules_dl, spans, types, views
+from . import amounts, diagnostics, fold, icons as icon_files, modules, rezono_module, rules_dl, spans, types, views
 from .diagnostics import Diagnosed
 from .names import NAME
 from .regex import PatternError, portable
@@ -59,7 +59,7 @@ LEGACY_ORDER = "lane_order"
 # LinkML slot facets outside the supported subset (docs/compiler.md); each is an error, never ignored.
 UNSUPPORTED = ("equals_expression", "equals_string_in", "any_of", "exactly_one_of", "all_of", "none_of", "array",
                "ifabsent")
-# LinkML's open value: a slot with a class of this class_uri as range takes any value, which Rede cannot type.
+# LinkML's open value: a slot with a class of this class_uri as range takes any value, which Rezono cannot type.
 ANY_URI = "https://w3id.org/linkml/Any"
 ENTRY = re.compile(r"^([a-z][a-z0-9_.]*)\s*=\s*", re.M)
 VARIABLE = re.compile(r"\$([A-Za-z_][A-Za-z0-9_]*)")
@@ -405,7 +405,7 @@ def namespace(value, where: str, errors: list[str]) -> str | None:
 
 def module_path(m: modules.Module) -> str:
     """A module's name in its pack's `modules:`: its path under schema/ without .yaml, or, for a module written in
-    Reckon, its path under reckon/ without .rezono (the path a schema file of it would have)."""
+    Rezono, its path under rezono/ without .rezono (the path a schema file of it would have)."""
     return m.id.split(":", 1)[-1]
 
 
@@ -507,8 +507,8 @@ def read(pack_dir: str | Path) -> Pack:
     typed: dict[str, tuple[diagnostics.Diagnostic, ...]] = {}  # D15: the diagnostics of an error that has its own
     warnings: list[str] = []
     meta = read_meta(pack_dir)
-    if not list((pack_dir / "schema").rglob("*.yaml")) and not meta.get("reckon"):
-        raise CompileError(f"{pack_dir}/schema: no schema files, and pack.yaml names no module written in Reckon")
+    if not list((pack_dir / "schema").rglob("*.yaml")) and not meta.get("rezono"):
+        raise CompileError(f"{pack_dir}/schema: no schema files, and pack.yaml names no module written in Rezono")
     is_theory = theory_meta(meta, pack_dir, errors)
     if errors:
         raise CompileError("\n".join(errors))
@@ -519,10 +519,10 @@ def read(pack_dir: str | Path) -> Pack:
     found: dict = {}
 
     def placed(m, *paths):
-        """The span of the first of `paths` in module `m`'s file (MOD2); a module written in Reckon is placed by its
+        """The span of the first of `paths` in module `m`'s file (MOD2); a module written in Rezono is placed by its
         form, since its text is not YAML."""
         if m.file not in found:
-            found[m.file] = reckon_module.marks(m.file, m.form) if m.form else spans.marks(m.file)
+            found[m.file] = rezono_module.marks(m.file, m.form) if m.form else spans.marks(m.file)
         return spans.first(found[m.file], spans.where(m.pack, meta["name"], m.rel), *paths)
     for p in packs.values():
         theory_meta(p.meta, p.dir, errors)
@@ -635,7 +635,7 @@ def read(pack_dir: str | Path) -> Pack:
             if rng in sv.all_classes():
                 slot.arrow, slot.range, slot.inlined = True, names.resolve(m.id, rng), bool(s.inlined or s.inlined_as_list)
                 if open_value(sv, rng):
-                    errors.append(f"{where}: range {rng} is linkml:Any, an open value; Rede types every value")
+                    errors.append(f"{where}: range {rng} is linkml:Any, an open value; Rezono types every value")
                 if s.pattern:
                     errors.append(f"{where}: a pattern applies to text and enums, not to an arrow")
                 if "explore" in tags(s):
@@ -720,8 +720,8 @@ def read(pack_dir: str | Path) -> Pack:
             errors.append(str(e))
     generated = []
     if not errors:
-        from . import reckon_table  # it reads the pack's model, so it runs once the model is read
-        generated = reckon_table.lower_pack(pack, meta, Path(pack_dir), errors)
+        from . import rezono_table  # it reads the pack's model, so it runs once the model is read
+        generated = rezono_table.lower_pack(pack, meta, Path(pack_dir), errors)
     if not errors:
         try:
             pack.rules, rule_warnings = rules_dl.read(pack, pack_dir, ordered, renames, calc_inputs=calc_inputs,
@@ -893,8 +893,8 @@ def located(span) -> str:
 
 
 def units(mods, placed, errors: list[str]) -> dict[str, types.Unit]:
-    """The units of measure the modules declare (P10.3), by the name of their LinkML type, as Reckon's `unit`
-    (docs/reckon/v0.md §5) says it in the current syntax:
+    """The units of measure the modules declare (P10.3), by the name of their LinkML type, as Rezono's `unit`
+    (docs/rezono/v0.md §5) says it in the current syntax:
     - `dimension: data` makes the type the base unit of the dimension `data` (`unit B = integer`);
     - `unit: 2^30 B` makes it an exact multiple of a declared unit (`unit GiB = 2^30 B`), also `per` a unit;
     - `currency: EUR` makes it the minor unit of a currency (`unit Cents = money minor EUR`), dimension `money EUR`.
@@ -1092,7 +1092,7 @@ def bounds(slot: Slot, where: str, errors: list[str]) -> None:
 
 
 def planes(pack: Pack, errors: list[str]) -> None:
-    """A kind of decided values (DV1; O13; Reckon Data L0 §3.7): `plane: control` on a class, with `owner`, the role
+    """A kind of decided values (DV1; O13; publication L0 §3.7): `plane: control` on a class, with `owner`, the role
     or team that reviews a change to it. Its rows are values a reviewed proposal set, so each names its decision:
     the kind has a required, single-valued slot `decision`, text or an arrow (to the kind that records decisions).
     A data-plane kind says nothing: `plane: data` is not written, so every pack without a control kind keeps its
@@ -1643,7 +1643,7 @@ def claim_messages(pack: Pack) -> list[str]:
 def image_bindings(pack: Pack, raw, names: dict, where: str, errors: list[str]) -> list[dict]:
     """Image bindings (`ImageBinding` in contracts/view.yaml, decision B10): per kind one single-valued text slot
     that the kind has, own or inherited, by element id. The binding makes the slot an image; what it means is
-    the pack's. Whether each cell names a listed file is checked at publication (`rede:assets`), as it is data."""
+    the pack's. Whether each cell names a listed file is checked at publication (`rezono:assets`), as it is data."""
     out = []
     for b in raw if isinstance(raw, list) else [raw]:
         if not isinstance(b, dict) or set(b) != {"kind", "slot"}:
@@ -2265,10 +2265,10 @@ def questions(pack: Pack, pack_dir: Path, packs: dict, errors: list[str]) -> lis
         if not path.exists():
             continue
         doc = yaml.safe_load(path.read_text("utf-8"))
-        if not isinstance(doc, dict) or doc.get("format") != "rede.questions/1" \
+        if not isinstance(doc, dict) or doc.get("format") != "rezono.questions/1" \
                 or not {"format"} < set(doc) <= {"format", "questions", "reader"} \
                 or not all(isinstance(doc.get(k, []), list) for k in ("questions", "reader")):
-            errors.append(f"{where}: must be a mapping with format rede.questions/1 and questions or reader, each a list")
+            errors.append(f"{where}: must be a mapping with format rezono.questions/1 and questions or reader, each a list")
             continue
         readers += [(r, f"{where}: reader question {n}") for n, r in enumerate(doc.get("reader", []))]
         for n, q in enumerate(doc.get("questions", [])):

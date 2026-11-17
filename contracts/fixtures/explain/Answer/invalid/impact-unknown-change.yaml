@@ -1,4 +1,4 @@
-format: rede.answer/1
+format: rezono.answer/1
 question: impact
 manifest_id: m-1
 delta: {kind: variant, id: v-price-01-2, manifest: v-price-01-2}

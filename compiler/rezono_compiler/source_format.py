@@ -1,9 +1,9 @@
 """The source-format edit boundary (B13, #394 A9): every edit of a fact, rule or calc file goes through one
-interface, so the switch of the source text from YAML and Datalog to Reckon (D12) is a migration, not a rewrite.
+interface, so the switch of the source text from YAML and Datalog to Rezono (D12) is a migration, not a rewrite.
 
 A `SourceFormat` is what an edit needs to know of the text a pack is written in, per kind of file:
 
-- facts: which files hold them, the records a file states, and one change of `rede.delta/1` (`insert`,
+- facts: which files hold them, the records a file states, and one change of `rezono.delta/1` (`insert`,
   `delete`, `set`, `unset`) applied to a file's text with the change that undoes it;
 - rules: which files hold them, and the tokens a schema operation rewrites;
 - calc: which calculation inputs a pack has. No format edits them yet, so a caller that would have to change
@@ -14,9 +14,9 @@ Datalog tokenizer (`rules_dl.tokens`) behind the interface, unchanged. `of` give
 and refuses a path no registered format owns. The canonical writer (`writer.apply_delta`), the source writer
 (`source_writer`) and the schema operations (`operate`) find their files and edit them through it.
 
-`ReckonStub` shows that a second format fits the interface: it edits the value of one cell of a Reckon fact
-table (docs/reckon/publication.md §5.3) and refuses everything else, explicitly. It is not registered, so no
-pack is written through it; the Reckon writer of D12 replaces it. It does not parse Reckon: that is `reckon/`.
+`RezonoStub` shows that a second format fits the interface: it edits the value of one cell of a Rezono fact
+table (docs/rezono/publication.md §5.3) and refuses everything else, explicitly. It is not registered, so no
+pack is written through it; the Rezono writer of D12 replaces it. It does not parse Rezono: that is `rezono/`.
 
 What the boundary does not cover yet: the schema operations still rewrite the YAML of fact files at the nodes
 the YAML composer finds, and the labels, channels and schema files are YAML in every format.
@@ -52,7 +52,7 @@ class SourceFormat(ABC):
 
     @abstractmethod
     def edit_fact(self, lay: writer.Layout, text: str, change: dict) -> tuple[str, dict]:
-        """One change of `rede.delta/1` applied to the text of a fact file: the new text and the change that
+        """One change of `rezono.delta/1` applied to the text of a fact file: the new text and the change that
         undoes it. Only what the change concerns may differ; a change it cannot make raises `writer.WriteError`."""
 
     @abstractmethod
@@ -97,7 +97,7 @@ class YamlDatalog(SourceFormat):
 
 
 YAML_DATALOG = YamlDatalog()
-FORMATS: tuple[SourceFormat, ...] = (YAML_DATALOG,)  # the formats packs are written in; D12 adds Reckon
+FORMATS: tuple[SourceFormat, ...] = (YAML_DATALOG,)  # the formats packs are written in; D12 adds Rezono
 
 
 def of(rel: str) -> SourceFormat:
@@ -108,16 +108,16 @@ def of(rel: str) -> SourceFormat:
     raise writer.WriteError(f"{rel!r}: no source format writes this file as a fact file")
 
 
-# --- A stub of Reckon facts ----------------------------------------------------------------------------------
+# --- A stub of Rezono facts ----------------------------------------------------------------------------------
 
-RECKON_FILE = re.compile(r"^reckon/[a-z][a-z0-9_]*(/[a-z][a-z0-9_]*)*\.rezono$")
+REZONO_FILE = re.compile(r"^rezono/[a-z][a-z0-9_]*(/[a-z][a-z0-9_]*)*\.rezono$")
 FACT_HEAD = re.compile(r"^fact +([A-Za-z][A-Za-z0-9_]*) *$")
 TABLE_ROW = re.compile(r"^ +\|.*\| *$")
-NOT_BUILT = "the Reckon source format is a stub (B13): {what} waits for the Reckon writer (D12)"
+NOT_BUILT = "the Rezono source format is a stub (B13): {what} waits for the Rezono writer (D12)"
 
 
-class ReckonStub(SourceFormat):
-    """Fact tables of Reckon modules (`reckon/**/*.rezono`): only `set` of a cell that has a value is built.
+class RezonoStub(SourceFormat):
+    """Fact tables of Rezono modules (`rezono/**/*.rezono`): only `set` of a cell that has a value is built.
 
     A table is `fact <Kind>`, then a header row of column names, the first `id`, then one row per record, each
     `| cell | cell |`. A `set` replaces the text of one cell within the cell's width, so every other byte stays;
@@ -125,16 +125,16 @@ class ReckonStub(SourceFormat):
     plain text without `|` or a line break. A wider value, every other change, rules and calculations are
     refused."""
 
-    name = "reckon-stub"
+    name = "rezono-stub"
 
     def fact_file(self, rel: str) -> bool:
-        return bool(RECKON_FILE.match(rel))
+        return bool(REZONO_FILE.match(rel))
 
     def fact_files(self, pack_dir: str | Path, dirs: tuple[str, ...] = ("facts",)) -> Files:
         if "facts" not in dirs:  # the fact tables of a module are main state
             return []
         root = Path(pack_dir)
-        found = ((f.relative_to(root).as_posix(), f) for f in sorted((root / "reckon").rglob("*.rezono")))
+        found = ((f.relative_to(root).as_posix(), f) for f in sorted((root / "rezono").rglob("*.rezono")))
         return [(rel, f) for rel, f in found if self.fact_file(rel)]
 
     def tables(self, text: str) -> dict[str, tuple[list[str], list[tuple[int, list[str]]]]]:
@@ -195,10 +195,10 @@ class ReckonStub(SourceFormat):
         return []
 
     def rule_tokens(self, text: str, where: str) -> list:
-        raise writer.WriteError(NOT_BUILT.format(what=f"{where}: a rule written in Reckon"))
+        raise writer.WriteError(NOT_BUILT.format(what=f"{where}: a rule written in Rezono"))
 
     def calc_files(self, pack_dir: str | Path) -> list[str]:
         return []
 
 
-RECKON_STUB = ReckonStub()
+REZONO_STUB = RezonoStub()

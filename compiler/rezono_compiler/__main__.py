@@ -34,12 +34,12 @@ def main(argv=None) -> int:
     h.add_argument("--rules", action="store_true", help="print instead the semantic hash of the pack's rule program "
                                                         "(normalise.py): equal when only variable names, body order "
                                                         "or where a rule is written differ")
-    o = sub.add_parser("operate", help="apply schema operations (rede.operations/1) to a pack in a rezono-work-* "
+    o = sub.add_parser("operate", help="apply schema operations (rezono.operations/1) to a pack in a rezono-work-* "
                                        "directory; write the migrations and impact.json to <out>")
     o.add_argument("pack")
     o.add_argument("operations")
     o.add_argument("out")
-    s = sub.add_parser("close", help="print the delta (rede.delta/1) of a seal's close: every period before --until is "
+    s = sub.add_parser("close", help="print the delta (rezono.delta/1) of a seal's close: every period before --until is "
                                      "closed, every accepted row of it covered with its hash; the writer applies it")
     s.add_argument("pack")
     s.add_argument("--close", required=True, help="the identifier of the new PeriodClose")

@@ -97,7 +97,7 @@ def commit_archive(root: Path, pack_dir: Path, target: dict[str, bytes], manifes
     if checked.extension is None:
         raise ValueError("private candidate requires a checked view extension")
     payloads = {archive_name: data, digest_name: pin}
-    receipt = canonical_bytes({"format": "rede.private-view-archive/1", "manifest_key": manifest_key,
+    receipt = canonical_bytes({"format": "rezono.private-view-archive/1", "manifest_key": manifest_key,
         "manifest_sha256": sha256_hex(frozen[manifest_key]), "build_sha256": build,
         "target_sha256": canonical_sha256({k: sha256_hex(v) for k, v in frozen.items()}),
         "captures": {k: {"checkpoint_sha256": sha256_hex(v),
@@ -155,7 +155,7 @@ def read_candidate(pack_dir: Path, old, manifest_key: str, candidate: Path) -> "
     build = json.loads(manifest)["build"]["sha256"]
     target = canonical_sha256({k: sha256_hex(v) for k, v in kept.files(old).items()})
     names = {f"{build}.tar.gz", f"{build}.sha256"}
-    if (receipt.get("format") != "rede.private-view-archive/1" or receipt.get("manifest_key") != manifest_key
+    if (receipt.get("format") != "rezono.private-view-archive/1" or receipt.get("manifest_key") != manifest_key
             or receipt.get("manifest_sha256") != sha256_hex(manifest) or receipt.get("build_sha256") != build
             or receipt.get("target_sha256") != target or set(receipt.get("files") or {}) != names):
         raise ValueError("private candidate receipt belongs to another kept target, manifest or build")

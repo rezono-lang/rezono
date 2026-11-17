@@ -1,4 +1,4 @@
-"""The check `rede:sources` (S25, docs/compiler.md#provenance-per-fact-s25): the sources one role gets.
+"""The check `rezono:sources` (S25, docs/compiler.md#provenance-per-fact-s25): the sources one role gets.
 
 Input is plain data: the bytes of the role's source-entry file (a list of `SourceEntry`, contracts/source.yaml),
 the schema bundle and the bytes of the role's published snapshots, by relation. Independent of the publisher:

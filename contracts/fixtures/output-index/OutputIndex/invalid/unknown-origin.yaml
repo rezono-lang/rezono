@@ -1,5 +1,5 @@
 # The origin is one of knowledge, chart_default and chart_constant.
-format: rede.output-index/1
+format: rezono.output-index/1
 pack: platform
 manifest: m-42
 render:

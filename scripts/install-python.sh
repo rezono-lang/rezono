@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Install Rede's Python packages exactly as locked, into a fresh virtualenv (docs/ci.md#8-pinned-versions).
+# Install Rezono's Python packages exactly as locked, into a fresh virtualenv (docs/ci.md#8-pinned-versions).
 #   scripts/install-python.sh requirements/run.txt admission canon compiler edge/publisher
 # Every distribution is checked against its SHA-256 in the lock; this repository's own packages are
 # installed from source without dependencies, so nothing outside the lock gets in. Then pip check and

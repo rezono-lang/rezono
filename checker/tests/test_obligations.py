@@ -23,7 +23,7 @@ def rule(rid, head, terms, body):
 
 def epoch(relations, rules, rows):
     """Every row of every derived relation with its correct witness, checked as one complete epoch."""
-    doc = {"format": "rede.rules/1", "relations": relations, "rules": rules}
+    doc = {"format": "rezono.rules/1", "relations": relations, "rules": rules}
     loaded = load_rules(doc)
     snaps = {r: json.dumps([{"key": k} for k in rs]).encode() for r, rs in rows.items()}
     manifest = {"id": "m-1", "snapshots": [{"relation": r, "role": "all", "complete": True, "uri": r, "format": "json",

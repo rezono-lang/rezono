@@ -49,8 +49,8 @@ class Schema:
     """A schema bundle as admission reads it. `sha256` is the bundle's canonical hash: every refusal names it."""
 
     def __init__(self, bundle: dict):
-        if bundle.get("format") != "rede.schema-bundle/1":
-            raise ValueError("not a schema bundle (format rede.schema-bundle/1)")
+        if bundle.get("format") != "rezono.schema-bundle/1":
+            raise ValueError("not a schema bundle (format rezono.schema-bundle/1)")
         self.sha256 = canonical_sha256(bundle)
         self.pack = bundle["pack"]["id"]
         self.kinds = {k["id"]: Kind(k["id"], k.get("parent"), bool(k.get("abstract")), k.get("identifier"),

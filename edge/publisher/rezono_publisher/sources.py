@@ -17,7 +17,7 @@ import json
 
 from rezono_canon import canonical_json
 
-SOURCES = "rede:sources"  # the check of every role's source entries by the checker; not a relation name
+SOURCES = "rezono:sources"  # the check of every role's source entries by the checker; not a relation name
 
 
 class Stale(ValueError):

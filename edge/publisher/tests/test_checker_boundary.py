@@ -64,7 +64,7 @@ PROGRAMS = sorted(p for base in ("examples", "contracts/fixtures", "checker/test
 
 def program(path: Path) -> dict | None:
     doc = json.loads(path.read_text(encoding="utf-8"))
-    return doc if isinstance(doc, dict) and doc.get("format") == "rede.calc-ir/1" else None
+    return doc if isinstance(doc, dict) and doc.get("format") == "rezono.calc-ir/1" else None
 
 
 @pytest.mark.xfail(strict=True, reason="generated expected/compiled calc.json goldens are not stored in git")

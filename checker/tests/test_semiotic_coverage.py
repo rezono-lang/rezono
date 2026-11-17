@@ -16,14 +16,14 @@ def encoded(value):
 
 
 def fixture(*, drawn=("node/a", "node/b"), kinds=None, snapshots=None, bound=("node",), tiled=False):
-    bundle = {"format": "rede.schema-bundle/1", "kinds": kinds or [{"id": "node"}, {"id": "other"}],
+    bundle = {"format": "rezono.schema-bundle/1", "kinds": kinds or [{"id": "node"}, {"id": "other"}],
               "attributes": [], "arrows": [], "channels": {"flows": [{"id": "synthetic",
               "title_message": "flow.synthetic", "nodes": [{"kind": k} for k in bound], "edges": []}]}}
     snapshots = snapshots if snapshots is not None else {"node": encoded([{"key": ["a"]}, {"key": ["b"]}])}
     nodes = [{"id": i, "x": j * (70 if tiled else 20), "y": 0, "width": 10, "height": 10,
               "status": "valid"} for j, i in enumerate(drawn)]
     root = "flow.synthetic/0/0_0.json"
-    base = {"format": "rede.tile/1", "sheet": "flow.synthetic", "y": 0, "edges": []}
+    base = {"format": "rezono.tile/1", "sheet": "flow.synthetic", "y": 0, "edges": []}
     if tiled:
         tiles, clusters = {}, []
         for j, node in enumerate(nodes):

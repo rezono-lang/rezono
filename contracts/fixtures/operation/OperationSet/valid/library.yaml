@@ -1,5 +1,5 @@
 # The worked example in docs/compiler.md#worked-example-the-library-pack.
-format: rede.operations/1
+format: rezono.operations/1
 pack: library
 operations:
   - {op: rename, kind: Copy, to: Item}

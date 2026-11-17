@@ -5,7 +5,7 @@ runs_on: checked_epoch
 writes: projection
 row_source: output_index
 runtime: job
-image: example.invalid/rede/dcat@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+image: example.invalid/rezono/dcat@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 connector: {standard: DCAT, standard_version: "3"}
 consumes: [published-manifest]
 produces: [dcat-catalog]

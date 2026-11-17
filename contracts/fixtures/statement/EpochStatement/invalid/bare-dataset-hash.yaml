@@ -1,11 +1,11 @@
 # A dataset hash is written as a pin, d- and 64 hex.
 _type: https://in-toto.io/Statement/v1
 predicate:
-  annotation: 238396836f9f61afedb89e30178af6284ec3b246412d3b6fcf732e0903d88005
+  annotation: 03d2c1cfcc17ed2b25088eb6b527dbb8cc3b9de5becadf58acaf0dc5a9f0b8b2
   dataset: 25b682230808ec1686d53ff86a527112165de8249014a5b099b1b5f6b234a082
   definition: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
   epoch: '3'
-  format: rede.epoch-statement/1
+  format: rezono.epoch-statement/1
   inclusion: 812a4f0bcde1169f26b81c2c2a95a5e104baee662a626b60d9b45218121ea534
   knowledge_time: '2026-01-01T01:00:00+01:00'
   manifest: m-3
@@ -18,7 +18,7 @@ predicate:
     Host: 7cff8c69051d8644c90619cb0b6ab6c7075a1f2464ffb54a862e359cf47aea53
     Host__tags: e7c5e1635f321a96e2502bae1734c1d3a905233570bb7314c890021f6ad90e2f
     Team: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
-  schema: s-798f5e24bb70ca6a97620222f5e357a960652bc57c9cb762536f23a027c9d8da
+  schema: s-27edc0ea5ccdaa8c2c73c5a51b3e2ed44d5399b2199d6993c03a031b07a7562a
   snapshots:
   - relation: host
     sha256: cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
@@ -33,5 +33,5 @@ subject:
     sha256: f8b185af98e16d6e718f9b95284699779a81fe6e6cd5c86b5cc4da2003ec83c4
   name: rows.json
 - digest:
-    sha256: 798f5e24bb70ca6a97620222f5e357a960652bc57c9cb762536f23a027c9d8da
+    sha256: 27edc0ea5ccdaa8c2c73c5a51b3e2ed44d5399b2199d6993c03a031b07a7562a
   name: schema.json

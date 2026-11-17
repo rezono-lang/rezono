@@ -11,7 +11,7 @@ filtered role: `complete: false`) that both manifests have, this step writes und
                             {"key", "change": "changed", "was"} for a changed cell (see `entries`)
     proof/<tree>/<relation> the target's proof graph for the role, as the views of a main manifest have it;
                             for a variant only the trees that are not the base's own (`shared`)
-    index.json              rede.explain-index/1: the hashes of both sides' snapshots, a count per relation
+    index.json              rezono.explain-index/1: the hashes of both sides' snapshots, a count per relation
                             and the roots; written last. A variant's proof root is the base's, under
                             `<pack>/<base>/<role>/views/proof/`, where the base has the same tree
 
@@ -38,7 +38,7 @@ from . import proof, timing, views
 from .access import ACCESS
 from . import store as stores
 
-INDEX = "rede.explain-index/1"
+INDEX = "rezono.explain-index/1"
 Blocked = views.Blocked  # a check failed: nothing of that manifest's difference is written
 TREE = "difference"
 TARGET = re.compile(r"^(p|v)-.+-(\d+)$")

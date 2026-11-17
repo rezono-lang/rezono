@@ -1,5 +1,5 @@
-"""Each role's Reckon Data form of a main manifest, after its publication (RV-K16, revised 16-11-2026;
-docs/reckon-data/l0.md, `reckon_data.publication`).
+"""Each role's publication form of a main manifest, after its publication (RV-K16, revised 16-11-2026;
+docs/publication/l0.md, `publication.publication`).
 
   python -m rezono_publisher.forms PACK MANIFEST [--profile p | --store url]
   python -m rezono_publisher.forms --newest --profile p [--results FILE] [PACK_DIR ...]
@@ -15,27 +15,27 @@ checker, the compiler, a library, the runtime, a lock, the forms library: every 
 `forms`) is another build's: it is passed over (`foreign`), since the run that published it makes its forms, and a
 form is made only by the build its manifest names. A manifest whose build names no forms library (the profile's
 `forms.packs` switched the pack off when it was published) is refused. Until a role's index is written the gate
-answers "no Reckon Data form yet" for it; a red run undoes no publication.
+answers "no publication form yet" for it; a red run undoes no publication.
 
 Per filtered role of the manifest (a role whose snapshots are not complete), the role's form made only from that
 role's own published files (its snapshots, witnesses and fact sources, each read by the uri and sha256 the
 manifest names under the role), the role-neutral schema bundle, and which relations the role reads in full
 (`Snapshot.full`). Under the role's prefix:
 
-  <pack>/<manifest>/<role>/reckon/schema.json   the schema document (§2), canonical JSON
-  <pack>/<manifest>/<role>/reckon/rows.json     the rows as one collection {"$schema", "$rows"} (§3.1)
-  <pack>/<manifest>/<role>/reckon/hashes.json   every hash of §6.2, the dataset hash `d-…` among them
-  <pack>/<manifest>/<role>/reckon/<export>      the standards exports made from that form (RV-K20): view.ttl,
+  <pack>/<manifest>/<role>/publication/schema.json   the schema document (§2), canonical JSON
+  <pack>/<manifest>/<role>/publication/rows.json     the rows as one collection {"$schema", "$rows"} (§3.1)
+  <pack>/<manifest>/<role>/publication/hashes.json   every hash of §6.2, the dataset hash `d-…` among them
+  <pack>/<manifest>/<role>/publication/<export>      the standards exports made from that form (RV-K20): view.ttl,
                                                 context.jsonld, prov.ttl, shapes.ttl, contract.odcs.yaml,
                                                 dcat.ttl, and the loss list of each (*.losses.yaml)
-  <pack>/<manifest>/<role>/reckon/table.<t>.arrow  each table of the columnar form (§4), one Arrow IPC file and
-  <pack>/<manifest>/<role>/reckon/table.<t>.parquet  one Parquet file per table, `$` written `_` (l0.md §4.6;
+  <pack>/<manifest>/<role>/publication/table.<t>.arrow  each table of the columnar form (§4), one Arrow IPC file and
+  <pack>/<manifest>/<role>/publication/table.<t>.parquet  one Parquet file per table, `$` written `_` (l0.md §4.6;
                                                 RV-K19)
-  <pack>/<manifest>/<role>/reckon/statement.json  the role's epoch statement (RV-X41, `reckon_data.statement`):
+  <pack>/<manifest>/<role>/publication/statement.json  the role's epoch statement (RV-X41, `publication.statement`):
                                                 every object above by its sha256, the role's manifest and
                                                 snapshots, the dataset and annotation hash, and the row-tree
                                                 roots with their inclusion hash; unsigned
-  <pack>/<manifest>/<role>/reckon/index.json    names each object with its sha256 and size (an export also with
+  <pack>/<manifest>/<role>/publication/index.json    names each object with its sha256 and size (an export also with
                                                 its loss list), the dataset and schema id and the manifest's
                                                 names; written last
 
@@ -55,7 +55,7 @@ form and its exports are the same bytes when made again). The standards' own rea
 on a published store (`edge/plugins/connectors/accept.py`), never here. The tables (RV-K19) are read back from their
 own bytes, in each form: the rows they give hash to the form's hashes, and written again from those rows they are
 the same bytes. The statement is made last, from the form and every object above (the tables among them), and
-read back by the reader's own check (`reckon_data.statement.verify`) from the bytes alone before anything is
+read back by the reader's own check (`publication.statement.verify`) from the bytes alone before anything is
 written: a statement that does not say what its files say blocks every role, as a red form does.
 
 A role's index names at most `FORM_OBJECTS` objects (the statement among them), each by a name the gate serves; the
@@ -63,7 +63,7 @@ publisher blocks above it and names the count, because the gate refuses a larger
 its whole form.
 
 A definition that L0 cannot express yet (a type the writer does not know, say) gets no form for any role:
-a note on stderr, and the manifest is published as without `--forms`. That is a gap in what Reckon Data can say,
+a note on stderr, and the manifest is published as without `--forms`. That is a gap in what the publication can say,
 not a wrong form; the gate then answers that the pack has no forms.
 
 Exit 0: written (or already there, the same bytes). Exit 2: a form is not what its role's files say, nothing
@@ -90,16 +90,16 @@ from . import timing
 
 ROOT = Path(__file__).resolve().parents[3]
 if str(ROOT) not in sys.path:
-    sys.path.append(str(ROOT))  # reckon_data lives at the repository root, beside the publisher
+    sys.path.append(str(ROOT))  # publication lives at the repository root, beside the publisher
 
-from reckon_data import arrow  # noqa: E402
-from reckon_data import hash as rhash  # noqa: E402
-from reckon_data import l0  # noqa: E402
-from reckon_data import publication as rd  # noqa: E402
-from reckon_data import statement as statements  # noqa: E402
-from reckon_data import rdf  # noqa: E402
+from publication import arrow  # noqa: E402
+from publication import hash as rhash  # noqa: E402
+from publication import l0  # noqa: E402
+from publication import publication as rd  # noqa: E402
+from publication import statement as statements  # noqa: E402
+from publication import rdf  # noqa: E402
 
-FORMAT = "rede.reckon-form/1"
+FORMAT = "rezono.publication-form/1"
 MAIN = re.compile(r"^m-(\d+)$")
 OBJECTS = ("schema.json", "rows.json", "hashes.json")
 CONNECTORS = ROOT / "edge" / "plugins" / "connectors"  # the standards exporters (docs/standards.md)
@@ -119,7 +119,7 @@ EXPORTS = {
 DISTRIBUTIONS = {"row-json": "rows.json", "turtle": "view.ttl"}
 OPEN = ("Q13", "Q20")  # the open questions a connector may refuse a schema for (docs/standards.md)
 # The most objects a role's index may name: the bound of the listing format, written once in its description
-# (edge/gate/README.md, "Reckon Data forms"); the gate holds the same number (`FORM_OBJECTS` in edge/gate/src/forms.ts)
+# (edge/gate/README.md, "publication forms"); the gate holds the same number (`FORM_OBJECTS` in edge/gate/src/forms.ts)
 # and each side's test reads it from there. Past half of it the design question is a listing in parts, not a higher
 # number (ARBITER, 12-11-2026, 09:58 UTC).
 FORM_OBJECTS = 1024
@@ -143,7 +143,7 @@ def component() -> dict:
     """What the forms are made with, for the build record: the library's source, and the exporters' source and
     loss lists. Another library or exporter is another build, so a pack is published again (`--skip-unchanged`
     compares builds)."""
-    return {"format": FORMAT, "reckon_data": _sources((ROOT / "reckon_data", "*.py")),
+    return {"format": FORMAT, "publication": _sources((ROOT / "publication", "*.py")),
             "connectors": _sources((CONNECTORS, "*.py"), (CONNECTORS, "*.losses.yaml"))}
 
 
@@ -182,7 +182,7 @@ def exports(schema: dict, rows: list[dict], dataset: str, manifest: str, witness
     named = _why_ids(rows)
     if named - set(by_id):
         raise rd.FormError(f"{len(named - set(by_id))} witness(es) named in $why are not in the role's files")
-    bundle = URIRef(f"{rdf.REDE}m/{manifest}@{dataset}")
+    bundle = URIRef(f"{rdf.REZONO}m/{manifest}@{dataset}")
 
     def prov() -> str:
         g = Graph()
@@ -231,7 +231,7 @@ def key_of(uri: str) -> str:
 
 
 def prefix(pack: str, manifest: str, role: str) -> str:
-    return f"{pack}/{manifest}/{role}/reckon/"
+    return f"{pack}/{manifest}/{role}/publication/"
 
 
 def index_key(pack: str, manifest: str, role: str) -> str:
@@ -288,7 +288,7 @@ def verify(data: dict[str, bytes], form: dict, given: dict, bundle: dict, full) 
     """A form read back from its bytes alone, as a reader of the role's prefix would, and held against the role's
     own rows. Returns its hashes and what was read back (`schema`, `rows`: what the exports are made from); raises
     Blocked with what differs. The hashes were computed from the form's
-    schema and rows (`reckon_data.hash`, deterministic); the bytes must read back to exactly those, so the hashes
+    schema and rows (`publication.hash`, deterministic); the bytes must read back to exactly those, so the hashes
     follow from the bytes too without computing them a second time."""
     schema = json.loads(data["schema.json"])
     want = json.loads(data["hashes.json"])
@@ -296,7 +296,7 @@ def verify(data: dict[str, bytes], form: dict, given: dict, bundle: dict, full) 
         sid = l0.check_schema(schema)
         rows = l0.read_collection(schema, json.loads(data["rows.json"]))
     except l0.L0Error as err:
-        raise Blocked(f"not Reckon Data: {err}") from err
+        raise Blocked(f"not a publication: {err}") from err
     if schema != form["schema"] or rows != form["rows"]:
         raise Blocked("the bytes do not read back to the form")
     if sid != want["schema"] or want != form["hashes"]:
@@ -326,7 +326,7 @@ def verified_tables(data: dict[str, bytes], form: dict, h: dict) -> dict[str, by
     by `arrow.file_name`. Each form's files are read back from their bytes alone, as a reader reads them, and the
     rows they give must have exactly the form's hashes (`hashes.json`); otherwise Blocked, and nothing is written.
     That they are the same bytes when written again, whatever the order of the rows, is the Arrow writer's own
-    test (reckon_data/tests/test_arrow.py), not checked here: it repeated a pure function on the same rows."""
+    test (publication/tests/test_arrow.py), not checked here: it repeated a pure function on the same rows."""
     pin = {"dataset": h["dataset"], "manifest": form["manifest"]["id"]}
     schema = json.loads(data["schema.json"])
     try:
@@ -355,7 +355,7 @@ def listable(names: list[str]) -> None:
 
 def epoch_statement(pack: str, role: str, form: dict, h: dict, sources: list[dict], objects: dict[str, bytes]) -> bytes:
     """The role's epoch statement (RV-X41) over its form's objects, made from the verified form and held to the
-    reader's check of `reckon_data.statement` from the bytes alone. Raises Blocked with what differs."""
+    reader's check of `publication.statement` from the bytes alone. Raises Blocked with what differs."""
     index = {"pack": pack, "role": role, "manifest": form["manifest"], "schema": h["schema"], "dataset": h["dataset"],
              "sources": sources, "objects": [{"name": n, "sha256": sha256(b)} for n, b in objects.items()]}
     try:
@@ -390,7 +390,7 @@ def load(st, pack: str, manifest: str, *, manifest_bytes: bytes | None = None) -
     except rd.FormError as err:
         # Not a wrong form but none: the definition has what L0 does not express yet (a type, say). The
         # outcome is published without forms, and the log says why; a form that is made is always verified.
-        print(f"note: {pack} {manifest}: no Reckon Data form: {err}", file=sys.stderr)
+        print(f"note: {pack} {manifest}: no publication form: {err}", file=sys.stderr)
         return None
     return m, bundle
 
@@ -480,7 +480,7 @@ def plan(st, pack: str, manifest: str, *, manifest_bytes: bytes | None = None) -
         try:
             out[role] = role_files(st, pack, m, bundle, role)
         except (Blocked, rd.FormError) as err:
-            failed.append(f"role {role}: reckon form: {err}")
+            failed.append(f"role {role}: publication form: {err}")
     if failed:
         raise Blocked("; ".join(failed))
     return out
@@ -555,7 +555,7 @@ def make(st, pack: str, m: dict, bundle: bytes) -> tuple[list[str], list[str]]:
         try:
             files = role_files(st, pack, m, bundle, role)
         except (Blocked, rd.FormError) as err:
-            failed.append(f"role {role}: reckon form: {err}")
+            failed.append(f"role {role}: publication form: {err}")
             continue
         timing.switch(f"{role} upload")
         stores.put_all(st, files[:-1])

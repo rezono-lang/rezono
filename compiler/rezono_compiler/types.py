@@ -30,7 +30,7 @@ from fractions import Fraction
 # denominator in the engine), never a stored slot type.
 STRING, INTEGER, BOOLEAN, DATE, NUMBER = "string", "integer", "boolean", "date", "number"
 SCALARS = (STRING, INTEGER, BOOLEAN, DATE)
-# LinkML roots that are never a Rede type: money and quantities are whole numbers of a unit (W3).
+# LinkML roots that are never a Rezono type: money and quantities are whole numbers of a unit (W3).
 FLOATING = frozenset({"float", "double", "decimal"})
 
 _SQL = {STRING: "VARCHAR", INTEGER: "BIGINT", BOOLEAN: "BOOLEAN", DATE: "DATE"}
@@ -121,7 +121,7 @@ def of_sql(sql: str, range: str | None = None) -> Type:
 
 
 def linkml(root: str) -> str | None:
-    """The base of a LinkML root type (after following `typeof`), or None when Rede has no such type."""
+    """The base of a LinkML root type (after following `typeof`), or None when Rezono has no such type."""
     return root if root in _SQL else None
 
 
@@ -176,7 +176,7 @@ def rule_type(sql: str) -> str | None:
 # Units (P10.3). A pack declares them on LinkML types (pack.units); here is only what a declaration means.
 DIMENSION = re.compile(r"^[a-z][a-z0-9_]*$")  # the name of a base dimension, such as data or time
 # The definition of a unit by another: an optional exact factor (`1024`, `1/1000`, `2^30`), a declared unit, and
-# optionally `per` a declared unit, as Reckon writes `unit GiB = 2^30 B` and `unit EurPerHour = money EUR per hour`.
+# optionally `per` a declared unit, as Rezono writes `unit GiB = 2^30 B` and `unit EurPerHour = money EUR per hour`.
 DEFINITION = re.compile(r"^(?:(?P<n>[1-9][0-9]*)(?:\^(?P<e>[0-9]+)|/(?P<d>[1-9][0-9]*))?\s+)?"
                         r"(?P<unit>[A-Za-z][A-Za-z0-9_]*)(?:\s+per\s+(?P<per>[A-Za-z][A-Za-z0-9_]*))?$")
 
@@ -236,7 +236,7 @@ PLAIN = Unit("a number without a unit")
 
 
 def base_unit(name: str, dimension: str) -> Unit:
-    """The base unit of a dimension: Reckon's `unit B = integer`, base of data."""
+    """The base unit of a dimension: Rezono's `unit B = integer`, base of data."""
     return Unit(name, Fraction(1), ((dimension, 1),))
 
 

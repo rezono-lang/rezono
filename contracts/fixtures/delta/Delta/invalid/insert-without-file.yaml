@@ -1,5 +1,5 @@
 # A new record has no file yet that holds it: insert names the file.
-format: rede.delta/1
+format: rezono.delta/1
 pack: library
 changes:
   - {op: insert, kind: work, key: w9, values: {title: Nieuw}}

@@ -49,7 +49,7 @@ def model(tmp_path, *, path='span', domain_change=None, theory_change=None, view
     write(domain / 'labels/nl.yaml', {})
     d, t = pack.read(domain), pack.read(theory)
     steps = [{'slot': 'left', 'inverse': True}, {'slot': 'right'}] if path == 'span' else [{'slot': path}]
-    value = {'format': 'rede.views/1', 'views': [{'theory': 'relations', 'kinds': [{'name': 'node', 'union': [{'populated_from': 'parent'}]}],
+    value = {'format': 'rezono.views/1', 'views': [{'theory': 'relations', 'kinds': [{'name': 'node', 'union': [{'populated_from': 'parent'}]}],
              'arrows': [{'name': 'next', 'paths': [{'populated_from': 'parent', 'steps': steps}]}]}]}
     if view_change:
         view_change(value['views'][0])

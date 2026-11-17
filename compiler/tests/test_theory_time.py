@@ -3,7 +3,7 @@
 Three evaluations must agree as sets: an exact Python reference written from the definitions (bounds per
 interval and a decision tree for Allen's relations, not the thirteen rules), the DuckDB batch backend on the
 compiled IR, and Soufflé on rules/time.dl as written (when present, as in CI). The must-fail cases show that
-each axiom fires. No domain: intervals are letters, positions are whole numbers; the validity cases of Reckon
+each axiom fires. No domain: intervals are letters, positions are whole numbers; the validity cases of Rezono
 §5a are read as positions by this test, not by the theory.
 
 A bound has three states (RV-C13): stated, stated to be absent, or not recorded. What nobody recorded is
@@ -417,8 +417,8 @@ def day(text):
     return date.fromisoformat(text).toordinal()
 
 
-def test_the_validity_cases_of_reckon_5a_hold_as_cases(tmp_path):
-    """docs/reckon/v0.md §5a: a version's context is a half-open range per axis and a knowledge date. Exactly
+def test_the_validity_cases_of_rezono_5a_hold_as_cases(tmp_path):
+    """docs/rezono/v0.md §5a: a version's context is a half-open range per axis and a knowledge date. Exactly
     the versions whose context holds at the subject's date and that are known at the cut take part."""
     # param standard_premium: version 1, valid 2025-01-01..<2026-01-01; version 2, valid 2026-01-01.. (no end).
     premium = {"v1": Interval("days", day("2025-01-01"), day("2026-01-01"), known_from=day("2024-09-17"), series="premium"),

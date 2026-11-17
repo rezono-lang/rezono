@@ -1,5 +1,5 @@
 # A body of negations only: nothing to range over.
-format: rede.rules/1
+format: rezono.rules/1
 pack: fixture
 relations:
   - name: member

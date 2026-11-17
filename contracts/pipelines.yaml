@@ -13,8 +13,8 @@ description: >-
   goes from which part to which parts. The relay of the engine reads this file. Integers are decimal text.
 prefixes:
   linkml: https://w3id.org/linkml/
-  rede: https://rezono.org/contracts/
-default_prefix: rede
+  rezono: https://rezono.org/contracts/
+default_prefix: rezono
 default_range: string
 imports:
   - linkml:types
@@ -31,7 +31,7 @@ classes:
   PipelinePlan:
     tree_root: true
     attributes:
-      format: {required: true, pattern: "^rede\\.pipelines/1$"}
+      format: {required: true, pattern: "^rezono\\.pipelines/1$"}
       max_views: {range: DecimalText, description: "The view budget the partition used, when it counted views."}
       build_memory_mb: {range: DecimalText, description: "The build memory per pipeline the partition used, when it weighed views by kind (decision E6)."}
       profile: {description: "The deploy profile the budget came from (deploy/profiles/<profile>.yaml), if any."}

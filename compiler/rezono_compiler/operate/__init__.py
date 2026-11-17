@@ -1,10 +1,10 @@
 """Schema operations (docs/compiler.md#schema-operations, decision S13).
 
-`operate` applies an operation set (contracts/operation.yaml, rede.operations/1) to a pack in a work dir. Each
+`operate` applies an operation set (contracts/operation.yaml, rezono.operations/1) to a pack in a work dir. Each
 operation edits the text of the schema, fact, label, channel and rule files (only the lines it concerns), then
 checks that the new files load to exactly M(X) for every fact state X, and that the inverse gives X back. It
 writes per operation a migration in the format of linkml-map, its inverse when lossless, and one impact
-(rede.impact/1). Any error restores every file it touched: a blocking check leaves the pack as it was.
+(rezono.impact/1). Any error restores every file it touched: a blocking check leaves the pack as it was.
 
 Built: rename (a kind, a slot or identifier, an enum, an enum value), drop (a kind or a slot), move (a slot up
 or down is_a, or across a single-valued arrow), split_by (one subkind per value), combine (a kind absorbs

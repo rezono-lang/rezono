@@ -1,0 +1,63 @@
+{
+	"rezono": "1.0",
+	"pack": "fixture",
+	"base": "https://rezono.example/fixture/",
+	"types": {
+		"B": { "of": "Quantity", "dimension": "data", "unit": "B", "storage_unit": "B", "factor": "1" },
+		"GiB": { "of": "Quantity", "dimension": "data", "unit": "GiB", "storage_unit": "B", "factor": "1073741824" },
+		"TiB": { "of": "Quantity", "dimension": "data", "unit": "TiB", "storage_unit": "B", "factor": "1099511627776" },
+		"Second": { "of": "Quantity", "dimension": "time", "unit": "s", "storage_unit": "s", "factor": "1" },
+		"Hour": { "of": "Quantity", "dimension": "time", "unit": "h", "storage_unit": "s", "factor": "3600" },
+		"Count": { "of": "Integer" },
+		"EurPerHour": { "of": "Money", "currency": "EUR", "per": "h", "scale": "4" },
+		"Eur": { "of": "Money", "currency": "EUR", "scale": "2" }
+	},
+	"kinds": {
+		"Provider": { "world": "closed", "id": { "type": "Text" }, "slots": {} },
+		"Host": {
+			"world": "closed",
+			"id": { "type": "Text" },
+			"slots": {
+				"provider": { "ref": "Provider", "card": "1", "states": ["known", "unknown"] },
+				"clusters": { "ref": "HostCluster", "card": "*", "states": ["known"], "inverse": "host" },
+				"owner": { "ref": "Team", "card": "?", "states": ["known", "not_applicable", "unknown"] },
+				"memory_need": { "type": "GiB", "card": "1", "states": ["known", "unknown", "invalid"], "derived": true }
+			}
+		},
+		"HostCluster": {
+			"world": "closed",
+			"id": { "type": "Text" },
+			"slots": {
+				"host": { "ref": "Host", "card": "1", "states": ["known", "unknown"] },
+				"spec": { "ref": "ClusterSpec", "card": "1", "states": ["known", "unknown"] },
+				"count": { "type": "Count", "card": "1", "states": ["known", "unknown"], "min": "1" }
+			}
+		},
+		"ClusterSpec": {
+			"world": "open",
+			"id": { "type": "Text" },
+			"slots": {
+				"nodes": { "type": "Count", "card": "1", "states": ["known", "unknown"] },
+				"memory_per_node": { "type": "GiB", "card": "1", "states": ["known", "unknown"] }
+			}
+		},
+		"Plan": {
+			"world": "closed",
+			"id": { "type": "Text" },
+			"slots": {
+				"provider": { "ref": "Provider", "card": "1", "states": ["known", "unknown"] },
+				"memory": { "type": "GiB", "card": "1", "states": ["known", "unknown"] },
+				"hourly_price": { "type": "EurPerHour", "card": "1", "states": ["known", "unknown"] },
+				"monthly_price": { "type": "Eur", "card": "1", "states": ["known", "unknown"] }
+			}
+		},
+		"Team": { "world": "open", "id": { "type": "Text" }, "slots": {} }
+	},
+	"rules": {
+		"fits": { "binders": [{ "name": "h", "ref": "Host" }, { "name": "p", "ref": "Plan" }], "world": "closed" }
+	},
+	"params": {
+		"host_reserve": { "type": "GiB", "states": ["known", "unknown"] }
+	},
+	"symbols": { "€": "EUR" }
+}

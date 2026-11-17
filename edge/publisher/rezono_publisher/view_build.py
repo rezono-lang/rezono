@@ -17,9 +17,9 @@ import subprocess
 from rezono_canon import canonical_bytes, sha256_hex
 
 ROOT = Path(__file__).resolve().parents[3]
-FORMAT = "rede.view-build/1"
-CAPTURE = "rede.view-capture/1"
-CHECKPOINT = "rede.view-inputs/1"
+FORMAT = "rezono.view-build/1"
+CAPTURE = "rezono.view-capture/1"
+CHECKPOINT = "rezono.view-inputs/1"
 
 
 def node_env() -> dict[str, str]:

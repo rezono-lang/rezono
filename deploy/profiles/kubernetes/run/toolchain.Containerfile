@@ -1,6 +1,6 @@
 # The publish job's tools for the run on kind (README.md): the operating system the pinned Python runtime is
 # built for (requirements/.python-artifact, the base of deploy/engine) and Node 24 as deploy/gate and deploy/viewer
-# pin it. Nothing of Rede is in the image: publish.sh installs the locked packages from the checkout it is given,
+# pin it. Nothing of Rezono is in the image: publish.sh installs the locked packages from the checkout it is given,
 # as the job `publish` of .github/workflows/promote.yml does.
 FROM node:24.22.3-trixie-slim@sha256:af02d57b57719b9657a45199a79264a9437940cd55b3c7b3fc99615654f124a0 AS node
 

@@ -9,8 +9,8 @@ description: >-
   (ProposerReceipt, defect F5), so that four eyes can still be checked after the gate-to-Git boundary.
 prefixes:
   linkml: https://w3id.org/linkml/
-  rede: https://rezono.org/contracts/
-default_prefix: rede
+  rezono: https://rezono.org/contracts/
+default_prefix: rezono
 default_range: string
 imports:
   - linkml:types
@@ -78,14 +78,14 @@ classes:
     attributes:
       issuer: {range: uri, required: true, description: "The namespace in which the subject is stable: the token's issuer (OIDC iss)."}
       subject: {required: true, pattern: '^\S(.*\S)?$', description: "The stable subject in that issuer (OIDC sub), not an e-mail address or a display name."}
-      role: {required: true, pattern: "^[a-z][a-z0-9]*([_-][a-z0-9]+)*$", description: "The Rede role the gate served this request in; proposing needs it."}
+      role: {required: true, pattern: "^[a-z][a-z0-9]*([_-][a-z0-9]+)*$", description: "The Rezono role the gate served this request in; proposing needs it."}
       verified_at: {range: datetime, required: true, description: "When the gate verified the token, with a time zone."}
 
   GateSignature:
     description: >-
       The gate's signature over the canonical JSON (docs/contracts.md#canonical-hash) of the receipt
       without its member signature. A verifier trusts only the gate keys pinned in the target
-      repository, in the file .rede/gate-keys.json (a GateKeySet), as it is on the base commit of the
+      repository, in the file .rezono/gate-keys.json (a GateKeySet), as it is on the base commit of the
       receipt: never a key that comes with the receipt, the pull request or the request. It refuses a
       key_id that the set does not list, and an algorithm that is not the alg of that key.
     attributes:
@@ -129,7 +129,7 @@ classes:
     tree_root: true
     description: >-
       The gate keys a repository trusts for proposer receipts, pinned in the repository as
-      .rede/gate-keys.json. Rotating a key is a reviewed commit to this file; a receipt verifies against
+      .rezono/gate-keys.json. Rotating a key is a reviewed commit to this file; a receipt verifies against
       the set on its own base commit.
     attributes:
       keys: {range: GateKey, required: true, multivalued: true, inlined_as_list: true}

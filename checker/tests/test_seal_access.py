@@ -24,7 +24,7 @@ def grant(rid, who, kind, body):
     return {"id": rid, "head": {"relation": "may_read", "terms": [who, kind, "?x"]}, "body": body}
 
 
-DOC = {"format": "rede.rules/1", "pack": "toy", "seals": [SEAL],
+DOC = {"format": "rezono.rules/1", "pack": "toy", "seals": [SEAL],
        "relations": [{"name": "may_read", "role": "derived", "key": []}],
        "rules": [grant("r-run", "?r", "run", [atom("role", "?r"), atom("run", "?x")]),
                  grant("r-role", "?r", "role", [atom("role", "?r"), atom("role", "?x")]),

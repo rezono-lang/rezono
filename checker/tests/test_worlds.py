@@ -24,7 +24,7 @@ BASE = [relation("host", "base", "id"), relation("owner", "base", "id", world="o
 
 
 def doc(*rules, derived=()):
-    return {"format": "rede.rules/1", "relations": BASE + list(derived), "rules": list(rules)}
+    return {"format": "rezono.rules/1", "relations": BASE + list(derived), "rules": list(rules)}
 
 
 ORPHAN = rule("orphan", "orphan", [("host", "positive", "0"), ("owner", "negative", "0")], stratum="1")

@@ -1,0 +1,34 @@
+id: A03
+class: invalid
+status: settled
+schema:
+  from: fixture.schema.json
+  merge:
+    types:
+      Price:
+        of: Money
+        currency: EUR
+        scale: '2'
+    kinds:
+      Host:
+        slots:
+          price:
+            card: '1'
+            type: Price
+            states:
+            - known
+form: arrow-field
+input:
+  name: price
+  storage: decimal128(38,4)
+  extension:
+    name: rezono.money
+    metadata:
+      type: Price
+      currency: EUR
+      scale: '4'
+expect:
+  accept: false
+  error: storage scale 4 differs from the schema's scale 2
+sources:
+- '#369 L0 rev 2 §8'

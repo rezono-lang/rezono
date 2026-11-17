@@ -1,7 +1,7 @@
 [project]
 name = "rezono-contracts"
 version = "0.1.0"
-description = "Python types generated from the Rede contracts (rezono_contracts, by contracts/gen-types.sh; never edited by hand), and port declarations held to the port contract at run time (rezono_ports, written by hand)."
+description = "Python types generated from the Rezono contracts (rezono_contracts, by contracts/gen-types.sh; never edited by hand), and port declarations held to the port contract at run time (rezono_ports, written by hand)."
 requires-python = ">=3.11"
 dependencies = ["pydantic>=2.7", "jsonschema>=4.20", "pyyaml>=6"]
 

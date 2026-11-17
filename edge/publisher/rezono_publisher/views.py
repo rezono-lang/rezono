@@ -37,10 +37,10 @@ from . import store as stores
 
 ROOT = Path(__file__).resolve().parents[3]
 ENTRY = ROOT / "viewer" / "scripts" / "views.ts"
-FORMAT = "rede.views/1"
-ROWS = "rede.rows-index/1"
-GAP = "rede.gap-index/1"
-SOURCES = "rede.sources-index/1"  # the role's source entries by row (S25), for a page of an answer
+FORMAT = "rezono.views/1"
+ROWS = "rezono.rows-index/1"
+GAP = "rezono.gap-index/1"
+SOURCES = "rezono.sources-index/1"  # the role's source entries by row (S25), for a page of an answer
 MAIN = re.compile(r"^m-(\d+)$")
 
 
@@ -454,7 +454,7 @@ def _sources(st, pack, manifest, m, role):
 
 
 def _gap(st, pack, manifest, m, role, snapshots):
-    """What `gap` reads for one role (docs/gui.md, "gap"): the compiler's plan (rezono_compiler.gap, rede.gap/1)
+    """What `gap` reads for one role (docs/gui.md, "gap"): the compiler's plan (rezono_compiler.gap, rezono.gap/1)
     as one file, and the indexes its premise tests need (rezono_publisher.proof.index_plan), checked by
     rezono_checker.proof.check_indexes: (pieces, the `gap` part of the view index, or None without rules)."""
     rules = next((c for c in m.get("compiled", []) if c.get("file") == "ir/rules.json"), None)

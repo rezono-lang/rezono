@@ -43,12 +43,12 @@ spec:
           # Loopback only: a probe from the kubelet cannot reach it, so the probe runs inside the container.
           readinessProbe:
             exec:
-              command: ["/opt/rede/venv/bin/python", "-c", "import socket; socket.create_connection(('127.0.0.1', 8091), 2)"]
+              command: ["/opt/rezono/venv/bin/python", "-c", "import socket; socket.create_connection(('127.0.0.1', 8091), 2)"]
             periodSeconds: 20
             timeoutSeconds: 5
           livenessProbe:
             exec:
-              command: ["/opt/rede/venv/bin/python", "-c", "import socket; socket.create_connection(('127.0.0.1', 8091), 2)"]
+              command: ["/opt/rezono/venv/bin/python", "-c", "import socket; socket.create_connection(('127.0.0.1', 8091), 2)"]
             periodSeconds: 60
             timeoutSeconds: 5
           resources:

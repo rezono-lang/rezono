@@ -82,7 +82,7 @@ def packs(tmp_path, view=VIEW, change=None, theory_change=None):
         view = json.loads(json.dumps(view))
         if change:
             change(view)
-        write(domain / 'views.yaml', {'format': 'rede.views/1', 'views': [view]})
+        write(domain / 'views.yaml', {'format': 'rezono.views/1', 'views': [view]})
     return domain, theory
 
 
@@ -302,7 +302,7 @@ def test_the_same_input_gives_the_same_bytes(tmp_path):
 
 # What VIEW says, in another order and layout, so that no entry stands where its index would put it.
 LINED = '''# line 1: a comment
-format: rede.views/1
+format: rezono.views/1
 views:
   - kinds:
       - name: span
@@ -389,7 +389,7 @@ def test_a_constraint_the_view_does_not_hold_is_refused(tmp_path, theory_change)
 
 def test_a_view_in_an_imported_pack_is_refused(tmp_path):
     domain, theory = packs(tmp_path, view=None)
-    write(theory / 'views.yaml', {'format': 'rede.views/1', 'views': [VIEW]})
+    write(theory / 'views.yaml', {'format': 'rezono.views/1', 'views': [VIEW]})
     write(domain / 'pack.yaml', {'name': 'domain', 'version': '0', 'default_language': 'nl',
           'imports': [{'name': 'spans', 'path': '../theory', 'sha256': modules.pack_hash(theory)}]})
     with pytest.raises(pack.CompileError, match='view execution is not supported here'):

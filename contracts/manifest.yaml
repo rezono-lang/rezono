@@ -7,8 +7,8 @@ description: >-
   the publisher writes a Diagnosis instead: diagnostic output, not a publication.
 prefixes:
   linkml: https://w3id.org/linkml/
-  rede: https://rezono.org/contracts/
-default_prefix: rede
+  rezono: https://rezono.org/contracts/
+default_prefix: rezono
 default_range: string
 imports:
   - linkml:types
@@ -53,7 +53,7 @@ classes:
       snapshots: {multivalued: true, range: Snapshot, inlined_as_list: true, description: Snapshot files per relation and role.}
       witnesses: {multivalued: true, range: WitnessSet, inlined_as_list: true, description: "The witnesses each role may see, redacted on the server; the access gate builds Why and Uses from them."}
       assets: {multivalued: true, range: AssetSet, inlined_as_list: true, description: "Per role the index of the images its image cells name (decision B10); absent when the pack binds no image."}
-      fact_sources: {multivalued: true, range: SourceSet, inlined_as_list: true, description: "Per role the file of SourceEntry (contracts/source.yaml) of exactly the base rows in its snapshots (S25), checked by `rede:sources`; not `sources`, which says where each source stood. Absent: a publisher before S25 or an epoch without source entries."}
+      fact_sources: {multivalued: true, range: SourceSet, inlined_as_list: true, description: "Per role the file of SourceEntry (contracts/source.yaml) of exactly the base rows in its snapshots (S25), checked by `rezono:sources`; not `sources`, which says where each source stood. Absent: a publisher before S25 or an epoch without source entries."}
       compiled: {multivalued: true, range: ArchivedFile, inlined_as_list: true, description: "What was compiled for this epoch, archived with its hash: the schema bundle, and the rule IR if the pack has rules. With these and the inputs a publication can be made again and compared byte for byte."}
       build: {range: ArchivedFile, inlined: true, description: "The build record (build.json): the compiler, the publisher's source, every library with its exact version, Python, platform, the hashes of the locks and the effective profile. Its hash names the build; the same build and inputs give the same bytes (docs/ci.md#8-pinned-versions)."}
       pending: {multivalued: true, range: PendingInput, inlined_as_list: true, description: "Input that waits since this epoch, per source and per offloaded step (contracts/freshness.yaml). Read at publication; the cartouche shows it."}
@@ -148,7 +148,7 @@ classes:
   AssetSet:
     description: >-
       The images one role gets (decision B10, docs/gui.md#icons-and-images): a file listing, as AssetEntry in file
-      order, exactly the files the image cells of that role's snapshots name. The checker checks it (`rede:assets`);
+      order, exactly the files the image cells of that role's snapshots name. The checker checks it (`rezono:assets`);
       the gate serves an image only to a role whose rows of that manifest, as it reads them today, name it.
     attributes:
       role: {required: true, description: Role that may read the file.}

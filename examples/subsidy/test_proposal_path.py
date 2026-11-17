@@ -40,8 +40,8 @@ PACK, NAME = "examples/subsidy", "subsidy"
 SCHEME = "examples/subsidy-scheme"  # the definition the pack imports by path (RV-X35)
 # The roles of the profile that publishes the pack, as the deployment has them.
 ROLES = yaml.safe_load((ROOT / "deploy" / "profiles" / "edge.yaml").read_text(encoding="utf-8"))["access"]["roles"]
-SIZE = {"format": "rede.delta/1", "changes": [{"op": "set", "kind": "household", "key": "H001", "slot": "persons", "value": 5}]}
-ROLE = {"format": "rede.delta/1", "changes": [{"op": "insert", "file": "facts/roles.yaml", "kind": "role", "key": "auditor",
+SIZE = {"format": "rezono.delta/1", "changes": [{"op": "set", "kind": "household", "key": "H001", "slot": "persons", "value": 5}]}
+ROLE = {"format": "rezono.delta/1", "changes": [{"op": "insert", "file": "facts/roles.yaml", "kind": "role", "key": "auditor",
                                                "values": {"title": "Auditor"}}]}
 LEDGER = ("ledger_payment", "calc__payment_difference")  # what only the case officer, so `propose`, reads
 

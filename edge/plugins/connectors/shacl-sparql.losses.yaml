@@ -1,6 +1,6 @@
 # A pack's invariants as SHACL-SPARQL constraints (shacl_sparql.py; M08, second half), read by a SHACL validator
-# with SPARQL-based constraints: what it does not get of Rede's checks. The constraints are plain SHACL and
-# SPARQL 1.1: no extension. test_shacl_sparql.py holds the translation to Rede's own result on a fixture pack.
+# with SPARQL-based constraints: what it does not get of Rezono's checks. The constraints are plain SHACL and
+# SPARQL 1.1: no extension. test_shacl_sparql.py holds the translation to Rezono's own result on a fixture pack.
 connector: shacl-sparql-out
 standard: SHACL
 standard_version: "2017-07-20"

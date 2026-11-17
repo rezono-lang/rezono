@@ -144,7 +144,7 @@ The awards add up to € 498,007.14; the 17 unknown applications are not in that
 | A240 | + € 4,550.00 | paid twice |
 | A003 | unknown, then + € 524.08 | paid before the income statement was in |
 
-A difference is drift: a finding with a proof, shown to the reader. It is not an error of Rede and it never changes an award.
+A difference is drift: a finding with a proof, shown to the reader. It is not an error of Rezono and it never changes an award.
 
 ## How a parameter stands on the evaluation day (std-time)
 

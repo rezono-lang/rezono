@@ -2,9 +2,9 @@
 
 Every invariant of the pack's rule IR (`ir/rules.json`, contracts/rules.yaml; `// @invariant`, a relation that
 must be empty at the end of an epoch) becomes one node shape with a `sh:sparql` constraint. The constraint
-recomputes the invariant from the base facts of the RDF view of a role (`reckon_data.rdf.to_graph` on the Reckon
-Data form of `reckon_data.publication`), never from the derived rows the view also carries: so a validator that
-knows SHACL and nothing of Rede repeats the check, and a difference with Rede's own result is a defect in one of
+recomputes the invariant from the base facts of the RDF view of a role (`publication.rdf.to_graph` on the publication
+form of `publication.publication`), never from the derived rows the view also carries: so a validator that
+knows SHACL and nothing of Rezono repeats the check, and a difference with Rezono's own result is a defect in one of
 the two. The shapes are generated from the rule IR alone; none is written by hand.
 
 The translation, one relation at a time (each call a subquery, so the variables of one rule never meet those of
@@ -37,7 +37,7 @@ and a base relation the view does not carry. `shacl-sparql.losses.yaml` lists th
 
 A result names the invariant's relation in the view as its focus node (`<base><Relation>`, as the publication
 names a derived relation) and the violating row as its value: its columns in the canonical form, joined by `/`
-(which the encoding never leaves in a text). `report` writes Rede's own rows of the invariants as the SHACL
+(which the encoding never leaves in a text). `report` writes Rezono's own rows of the invariants as the SHACL
 validation report a validator writes through these constraints. pySHACL is the oracle in the tests and in
 `accept.py`, never a dependency of this module.
 
@@ -49,14 +49,14 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
-sys.path.insert(0, str(ROOT))  # reckon_data lives at the repository root
+sys.path.insert(0, str(ROOT))  # publication lives at the repository root
 
 from rdflib import Graph, Literal, Namespace, URIRef  # noqa: E402
 from rdflib.namespace import RDF, RDFS, SH, XSD  # noqa: E402
 from rezono_canon import canonical_sha256  # noqa: E402
 from rezono_compiler import rules as ir  # noqa: E402
 
-from reckon_data import publication, rdf  # noqa: E402
+from publication import publication, rdf  # noqa: E402
 
 INTEGER = f"<{XSD.integer}>"
 COMPARE = {"eq": "=", "ne": "!=", "lt": "<", "le": "<=", "gt": ">", "ge": ">="}
@@ -363,9 +363,9 @@ def _seal_guard(g: Graph, ns: Namespace, t: _Translator, name: str):
 
 
 def report(bundle: dict, rules_doc: dict, derived: dict) -> Graph:
-    """Rede's own result as a SHACL validation report: one result per row of an invariant (`derived`: {relation:
+    """Rezono's own result as a SHACL validation report: one result per row of an invariant (`derived`: {relation:
     [row, ...]}, as the engine or the store holds them), named as a validator names it through `checks`, so the
-    two reports hold the same results. A row of a deactivated invariant is reported too: Rede checks it, a
+    two reports hold the same results. A row of a deactivated invariant is reported too: Rezono checks it, a
     validator cannot."""
     ns = Namespace(document_iri(bundle, rules_doc) + "#")
     doc, _ = publication.schema_document(bundle)

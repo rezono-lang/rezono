@@ -239,7 +239,7 @@ def split_label_edits(m: Model, sp: Split, names: dict[str, str], edits: Edits):
 
 def split_migration(m: Model, new: Model, sp: Split, names: dict, name: str) -> dict:
     """The whole functor, with one class derivation per subkind `where` the attribute has its value (the one
-    Rede extension; plain linkml-map refuses it); without `abstract` the kind keeps the elements without a case."""
+    Rezono extension; plain linkml-map refuses it); without `abstract` the kind keeps the elements without a case."""
     doc = migration(m, new, Rename(), name, False)
     cls = class_label(m, sp.kind)
     d = sp.slot.name

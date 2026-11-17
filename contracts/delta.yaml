@@ -10,8 +10,8 @@ description: >-
   Applying a delta also gives the delta that undoes it, in this same form.
 prefixes:
   linkml: https://w3id.org/linkml/
-  rede: https://rezono.org/contracts/
-default_prefix: rede
+  rezono: https://rezono.org/contracts/
+default_prefix: rezono
 default_range: string
 imports:
   - linkml:types
@@ -34,7 +34,7 @@ classes:
   Delta:
     tree_root: true
     attributes:
-      format: {required: true, equals_string: rede.delta/1}
+      format: {required: true, equals_string: rezono.delta/1}
       pack: {required: true, pattern: "^[a-z][a-z0-9]*(-[a-z0-9]+)*$", description: "The name in the pack's pack.yaml."}
       base_manifest: {description: "The manifest the change was computed against (V1); absent outside the viewer."}
       changes: {range: Change, multivalued: true, inlined_as_list: true, required: true, description: Applied in order.}

@@ -73,7 +73,7 @@ def problems(nodes=NODES, edges=EDGES, bands=BANDS, rows=ROWS, groups=GROUPS, wa
     snapshots = {r: json.dumps([{"key": k} for k in keys]).encode() for r, keys in rows.items()}
     layout = {"nodes": {n["id"]: [n["x"], n["y"], n["width"], n["height"]] for n in nodes},
               "edges": {e["id"]: {"source": e["source"], "target": e["target"], "points": e["points"]} for e in edges}}
-    tile = {"format": "rede.tile/1", "sheet": SHEET, "level": 0, "x": 0, "y": 0, "box": [0, 0, TILE, TILE],
+    tile = {"format": "rezono.tile/1", "sheet": SHEET, "level": 0, "x": 0, "y": 0, "box": [0, 0, TILE, TILE],
             "nodes": nodes, "edges": edges, "bands": bands, "groups": groups}
     path = f"{SHEET}/0/0_0.json"
     return check_view(SHEET, snapshots, json.dumps(layout).encode(), {path: json.dumps(tile).encode()}, path, TILE, 4, 1, bundle,
@@ -137,9 +137,9 @@ def test_a_node_above_the_last_level_is_found():
     snapshots = {r: json.dumps([{"key": k} for k in keys]).encode() for r, keys in ROWS.items()}
     layout = {"nodes": {n["id"]: [n["x"], n["y"], n["width"], n["height"]] for n in bad},
               "edges": {e["id"]: {"source": e["source"], "target": e["target"], "points": e["points"]} for e in EDGES}}
-    root = {"format": "rede.tile/1", "sheet": SHEET, "level": 0, "x": 0, "y": 0, "box": [0, 0, TILE * 4, TILE * 4],
+    root = {"format": "rezono.tile/1", "sheet": SHEET, "level": 0, "x": 0, "y": 0, "box": [0, 0, TILE * 4, TILE * 4],
             "nodes": bad, "edges": EDGES, "clusters": []}
-    leaf = {"format": "rede.tile/1", "sheet": SHEET, "level": 1, "x": 0, "y": 0, "box": [0, 0, TILE, TILE],
+    leaf = {"format": "rezono.tile/1", "sheet": SHEET, "level": 1, "x": 0, "y": 0, "box": [0, 0, TILE, TILE],
             "nodes": NODES, "edges": EDGES, "bands": BANDS, "groups": GROUPS}
     data = json.dumps(leaf).encode()
     root["clusters"] = [{"x": 0, "y": 0, "count": 5, "statuses": [{"status": "valid", "count": 5}],

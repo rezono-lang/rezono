@@ -73,7 +73,7 @@ def test_each_grid_value_is_a_manifest_or_a_diagnosis_against_main(repo, tmp_pat
     main_before = st.get("minimal/manifests/m-2.json")
     # The grid is archived with main, so the gate knows every value, also one not computed yet.
     archived = {f["file"]: f for f in json.loads(main_before)["compiled"]}
-    grid = json.loads(st.get(archived["ir/sweeps.json"]["uri"].removeprefix("s3://rede/")))
+    grid = json.loads(st.get(archived["ir/sweeps.json"]["uri"].removeprefix("s3://rezono/")))
     assert grid["sweeps"][0]["count"] == 4
     done = sweep.run(repo, PACK, base, st, ROLES)
     assert done == [(IDS[0], "manifest"), (IDS[1], "manifest"), (IDS[2], "diagnosis"), (IDS[3], "diagnosis")]
@@ -118,7 +118,7 @@ def test_a_variant_writes_only_what_the_swept_cell_changes(repo, tmp_path):
             key = s["uri"].removeprefix(st.uri(""))
             assert (s["uri"] == old["uri"]) is same
             assert (key not in new) is same
-            assert publish.sha256(st.get(s["uri"].removeprefix("s3://rede/"))) == s["sha256"]
+            assert publish.sha256(st.get(s["uri"].removeprefix("s3://rezono/"))) == s["sha256"]
         assert own and all(x["role"] == "checker" for x in m["snapshots"] + m["witnesses"]
                            if x["uri"].removeprefix(st.uri("")) in own)
         assert publish.role_objects(st, "minimal", vid, "checker")["relations/alpha__size.json"] in own
@@ -239,7 +239,7 @@ REACH = ('.decl sized(x: symbol, s: number)\nsized(x, s) :- alpha__size(x, s).\n
 def rows_of(files: dict, root: dict) -> list:
     """The rows of one proof tree as a reader gets them: from the root an index names, every piece by the
     sha256 that names it, a page's children under the root's own prefix."""
-    key = root["uri"].removeprefix("s3://rede/")
+    key = root["uri"].removeprefix("s3://rezono/")
     home = key[:key.index("/proof/")]
 
     def walk(path, digest):

@@ -19,7 +19,7 @@ BOUND = 2**63 - 1  # W8: every numerator and denominator, in lowest terms
 
 
 def beyond(op: str) -> "Val":
-    """W8 (arbiter, 11-11-2026): a step whose exact result exceeds the bound has a value Rede cannot hold,
+    """W8 (arbiter, 11-11-2026): a step whose exact result exceeds the bound has a value Rezono cannot hold,
     so it is unknown, with a reason that names the bound and the operator; invalid is for a result that
     cannot exist."""
     return Val("unknown", None, f"beyond the bound of W8 in {op}")

@@ -5,7 +5,7 @@
 
 With --views, check and write the views (rezono_publisher.views) before the manifest and its head.
 A view that shows more than its role reads exits 2 without exposing the new manifest.
-With --forms, each filtered role's Reckon Data form (rezono_publisher.forms, RV-K16), the same way: a form that is
+With --forms, each filtered role's publication form (rezono_publisher.forms, RV-K16), the same way: a form that is
 not what its role's files say exits 2 without exposing the new manifest. With --forms-after the manifest is
 published without them and its build names the forms library all the same, so a new library publishes the pack
 again; the forms follow (`python -m rezono_publisher.forms --newest`, job `forms` of promote.yml).
@@ -85,7 +85,7 @@ def main(argv=None) -> int:
     p.add_argument("--base-manifest", default="")
     p.add_argument("--views", action="store_true", help="check and write views before publishing the manifest (main manifests only)")
     p.add_argument("--forms", action="store_true",
-                   help="write each filtered role's verified Reckon Data form before the manifest (main only)")
+                   help="write each filtered role's verified publication form before the manifest (main only)")
     p.add_argument("--forms-after", action="store_true",
                    help="name the forms library in the build and write no form: they follow the publication")
     p.add_argument("--skip-unchanged", action="store_true",

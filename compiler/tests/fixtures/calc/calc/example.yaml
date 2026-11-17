@@ -1,6 +1,6 @@
 # A small program for the compile path (pack.read, emit, the command line): an attribute, a sum
 # from a derived relation, whether a relation holds, a parameter and the evaluation date.
-format: rede.calc/1
+format: rezono.calc/1
 pack: calc
 subject: item
 parameters: setting.value

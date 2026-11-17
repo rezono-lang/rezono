@@ -1,6 +1,6 @@
 """Adapter for rule definitions. The only module that knows their format.
 
-It reads the rule IR of the compiler (contracts/rules.yaml, `format: rede.rules/1`): relations with
+It reads the rule IR of the compiler (contracts/rules.yaml, `format: rezono.rules/1`): relations with
 their key and value columns, and rules with conditions and assignments. In that form a binding is the
 bare value of a key column (an integer as decimal text), an aggregate may range over a key column (its
 term is '_'), and the checker evaluates the conditions and assignments of each witness.
@@ -197,7 +197,7 @@ def load_seals(doc: dict) -> list[dict]:
 def load_rules(doc: dict) -> dict:
     """Read rule definitions and check their stratification. Raises ValueError on bad input."""
     ir = doc.get("format") is not None
-    if ir and doc["format"] != "rede.rules/1":
+    if ir and doc["format"] != "rezono.rules/1":
         raise ValueError(f"unknown rule format {doc['format']}")
     keys = {r["name"]: [c["name"] for c in r.get("key", [])] for r in doc.get("relations", [])} if ir else {}
     calc_relations = {r["name"] for r in doc.get("relations", ()) if ir and r.get("role") == "calc"}

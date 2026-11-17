@@ -26,7 +26,7 @@ ISO_DATE = re.compile(r"^[0-9]{4}-[0-9]{2}-[0-9]{2}$")
 PLACE = re.compile(r"([^.\[\]]+)|\[([0-9]+)\]")  # admission's place: names, and positions from 1 in brackets
 PYTHON_TYPES = {"VARCHAR": str, "BIGINT": int, "BOOLEAN": bool, "DATE": datetime.date}
 SQL_TYPES = {"text": "VARCHAR", "enum": "VARCHAR", "integer": "BIGINT", "boolean": "BOOLEAN", "date": "DATE"}
-FORMAT = "rede.schema-bundle/1"
+FORMAT = "rezono.schema-bundle/1"
 # A schema without kinds: what admission refuses of a document against it, beside its unknown kinds, is the
 # document's own shape (sections).
 SHAPE = Schema({"format": FORMAT, "pack": {"id": ""}, "kinds": []})

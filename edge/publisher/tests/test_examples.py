@@ -70,14 +70,14 @@ def test_publish(pack_dir, tmp_path):
     complete = {x["relation"]: x for x in m["snapshots"] if x["role"] == "checker"}
     assert set(complete) == set(e.rows)
     rows = {rel: {json.dumps(r["key"], separators=(",", ":"))
-                  for r in json.loads(s.get(x["uri"].removeprefix("s3://rede/")))}
+                  for r in json.loads(s.get(x["uri"].removeprefix("s3://rezono/")))}
             for rel, x in complete.items()}
     for w in json.loads(s.get(publish.role_objects(s, e.pack, "m-1", "checker")["witnesses.json"]))["witnesses"]:
         assert w["conclusion"]["key"] in rows[w["conclusion"]["relation"]]
     # A filtered role that the pack's own access rules name reads rows (an empty snapshot set means the rules miss it).
     named = {r[0] for r in e.rows.get("may_read", ())}
     for role in sorted(r for r, mode in ROLES.items() if mode == "may_read" and r in named):
-        assert any(json.loads(s.get(x["uri"].removeprefix("s3://rede/")))
+        assert any(json.loads(s.get(x["uri"].removeprefix("s3://rezono/")))
                    for x in m["snapshots"] if x["role"] == role), f"{role} reads nothing"
     _, again, _, _ = run(pack_dir, tmp_path / "b")
     assert again.list("") == s.list("")
@@ -613,7 +613,7 @@ def test_the_command_line_names_a_role_the_read_rules_give_nothing(tmp_path, cap
 
 
 # Calculation rules (decision W12) on the neutral pack: half the size of an alpha, rounded half away from zero.
-HALF = """format: rede.calc/1
+HALF = """format: rezono.calc/1
 pack: minimal
 subject: alpha
 as_of: {valid_at: "2026-06-01", known_at: "2026-06-01"}
@@ -704,7 +704,7 @@ def test_a_wrong_calculation_witness_blocks(tmp_path, monkeypatch, forgery):
 
     monkeypatch.setattr(batch, "epoch", forged)
     d = calc_pack(tmp_path, ALL, ("a1", "open", 3), ("a2", "x", 5))
-    with pytest.raises(publish.Blocked, match="rede:proofs"):
+    with pytest.raises(publish.Blocked, match="rezono:proofs"):
         publish_pack(d, tmp_path)
     assert not (tmp_path / "store").exists() or store.FileStore(tmp_path / "store").list("") == []
 

@@ -1,4 +1,4 @@
-# The DuckDB extensions the lake loads (reckon_data.iceberg.Lake), for the DuckDB of requirements/run.txt and
+# The DuckDB extensions the lake loads (publication.iceberg.Lake), for the DuckDB of requirements/run.txt and
 # dev.txt, on the runners' platform (docs/ci.md#8-pinned-versions). scripts/duckdb-extensions.sh downloads each
 # from extensions.duckdb.org/<version>/<platform>/<name>.duckdb_extension.gz before the lake runs, checks its
 # SHA-256 before it is unpacked, and the lake then loads only these, with nothing fetched while it runs. iceberg

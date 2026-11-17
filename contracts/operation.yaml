@@ -10,11 +10,11 @@ description: >-
   slot name, an enum name and a permissible value. A class or enum that more than one module
   declares (decision S8) is written `<module>#<Name>`, with the module's path under schema/ without
   .yaml, wherever it appears. The migration is linkml-map's TransformationSpecification with one
-  Rede extension that plain linkml-map refuses: `where` on a class derivation, for split_by.
+  Rezono extension that plain linkml-map refuses: `where` on a class derivation, for split_by.
 prefixes:
   linkml: https://w3id.org/linkml/
-  rede: https://rezono.org/contracts/
-default_prefix: rede
+  rezono: https://rezono.org/contracts/
+default_prefix: rezono
 default_range: string
 imports:
   - linkml:types
@@ -68,7 +68,7 @@ classes:
     tree_root: true
     description: The operations of one change, applied in order to one pack.
     attributes:
-      format: {required: true, equals_string: rede.operations/1}
+      format: {required: true, equals_string: rezono.operations/1}
       pack: {required: true, pattern: "^[a-z][a-z0-9]*(-[a-z0-9]+)*$", description: "The name in the pack's pack.yaml."}
       operations: {range: Operation, multivalued: true, inlined_as_list: true, required: true, minimum_cardinality: 1}
 
@@ -160,7 +160,7 @@ classes:
       What applying an operation set did, per operation: the tables it touched, the rows it lost, and
       the rules, labels and channels it rewrote. The compiler writes it in a fixed order (AGENTS rule 3).
     attributes:
-      format: {required: true, equals_string: rede.impact/1}
+      format: {required: true, equals_string: rezono.impact/1}
       pack: {required: true}
       operations: {range: OperationImpact, multivalued: true, inlined_as_list: true, required: true}
 

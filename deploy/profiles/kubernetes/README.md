@@ -29,7 +29,7 @@ browser ──> Gateway (the platform's; TLS) ──HTTPRoute──> front :4180
 ```sh
 deploy/profiles/kubernetes/check.sh            # every overlay; warnings (placeholder digests) do not fail
 deploy/profiles/kubernetes/check.sh --live my  # one overlay of a real installation: a warning fails too
-deploy/profiles/kubernetes/check.sh --live ../platform/rede  # an overlay outside overlays/, by its directory
+deploy/profiles/kubernetes/check.sh --live ../platform/rezono  # an overlay outside overlays/, by its directory
 ```
 
 1. **Render twice** with Kustomize and require the same bytes (non-negotiable 6).
@@ -65,7 +65,7 @@ The namespace's Pod Security admission enforces the pod rules again in the clust
 Nothing here is applied by CI or by a session; Argo CD (or another GitOps controller) reconciles what is merged. To run it:
 
 1. **A cluster** with a Gateway API implementation, the External Secrets Operator, and a NetworkPolicy-enforcing CNI.
-2. **A registry and the images.** Rede's three images (gate, viewer, live engine) built and pushed, and their digests written into the overlay's `images:`. The recipes: [`deploy/gate`](../../gate/Containerfile) (Node 24, the gate's sources run as they are), [`deploy/viewer`](../../viewer/Containerfile) (built for `kubernetes-gate`, so it holds no example data) and [`deploy/engine`](../../engine/Containerfile); build each from the repository root, `docker build -f deploy/<name>/Containerfile .`. The gate's and the viewer's are built and run by [`run/kind.sh`](run/README.md) on a machine with Docker; no runner pool has a container builder yet, so no CI job builds them or writes their digests.
-3. **The secret store.** A `ClusterSecretStore` named `rede` and, in it, the keys the ExternalSecrets name: `rede/front` (`client-id`, `client-secret`, `cookie-secret`), `rede/viewer` (`draft-key`, at least 32 bytes), `rede/gate` (`store-key-id`, `store-secret`: read-only), `rede/propose` (`dispatch-token`), `rede/engine` (`live-token`, `store-key-id`, `store-secret`, `git-key`, `known-hosts`).
+2. **A registry and the images.** Rezono's three images (gate, viewer, live engine) built and pushed, and their digests written into the overlay's `images:`. The recipes: [`deploy/gate`](../../gate/Containerfile) (Node 24, the gate's sources run as they are), [`deploy/viewer`](../../viewer/Containerfile) (built for `kubernetes-gate`, so it holds no example data) and [`deploy/engine`](../../engine/Containerfile); build each from the repository root, `docker build -f deploy/<name>/Containerfile .`. The gate's and the viewer's are built and run by [`run/kind.sh`](run/README.md) on a machine with Docker; no runner pool has a container builder yet, so no CI job builds them or writes their digests.
+3. **The secret store.** A `ClusterSecretStore` named `rezono` and, in it, the keys the ExternalSecrets name: `rezono/front` (`client-id`, `client-secret`, `cookie-secret`), `rezono/viewer` (`draft-key`, at least 32 bytes), `rezono/gate` (`store-key-id`, `store-secret`: read-only), `rezono/propose` (`dispatch-token`), `rezono/engine` (`live-token`, `store-key-id`, `store-secret`, `git-key`, `known-hosts`).
 4. **An OIDC client** at the identity provider (Keycloak or another) for the front, with the redirect `https://<host>/oauth2/callback`, an audience the gate expects (`REZONO_OIDC_AUDIENCE`) and the role claim (`REZONO_OIDC_ROLE_CLAIM`, for example `groups`).
 5. **An overlay of the installation's own**, copied from `overlays/example`, with its hostnames, issuer, store and digests, and `REZONO_PACKS` naming the packs its profile publishes; `check.sh --live <overlay>` passes; then point Argo CD at it.

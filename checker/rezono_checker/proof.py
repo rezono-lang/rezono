@@ -37,7 +37,7 @@ from .evaluate import cells
 from .rules import load_rules
 from .snapshots import read_rows, rows_of
 
-FORMAT = "rede.proof/1"
+FORMAT = "rezono.proof/1"
 TREES = ("witness", "back", "forward")
 # A piece carries exactly its contract, nothing else: no extra field can hide data in a checked piece.
 LEAF = {"format", "tree", "relation", "level", "rows"}
@@ -279,7 +279,7 @@ def _prefix(bound) -> bool:
 def check_indexes(plan: dict, snapshots: dict, pieces: dict, entries: list, limit: int, fanout: int) -> list[str]:
     """Problems with one role's `gap` indexes; empty when they are exactly what the plan needs.
 
-    `plan` is the compiler's gap plan (rede.gap/1), `snapshots` the role's snapshot bytes per relation,
+    `plan` is the compiler's gap plan (rezono.gap/1), `snapshots` the role's snapshot bytes per relation,
     `pieces` the index pieces by path and `entries` the view index's list: per pattern {"relation", "bound"}
     with {"file", "sha256", "levels"}, or {"tree": "inverse"} for a relation of two columns with [1] bound
     (that tree is check_rows's). The plan itself is the compiler's, held to Soufflé in its tests; here only

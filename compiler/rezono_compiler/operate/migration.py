@@ -68,7 +68,7 @@ def migration(m_old: Model, m_new: Model, r: Rename, name: str, inverse: bool) -
             pvs[v] = {"populated_from": value[1] if renamed else v}
         out_enums[label(target, (mid, ename), target.enums)] = {
             "populated_from": label(source, origin, source.enums), "permissible_value_derivations": pvs}
-    doc = {"id": f"rede:{m_old.meta['name']}/{name}", "source_schema": {"name": m_old.meta["name"]},
+    doc = {"id": f"rezono:{m_old.meta['name']}/{name}", "source_schema": {"name": m_old.meta["name"]},
            "target_schema": {"name": m_old.meta["name"]}, "class_derivations": out_classes}
     if out_enums:
         doc["enum_derivations"] = out_enums

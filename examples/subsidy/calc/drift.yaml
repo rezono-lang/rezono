@@ -2,7 +2,7 @@
 # per application. Zero means the two agree. Without a payment the comparison does not apply; while the
 # award is unknown the difference is unknown too, never a difference against zero.
 # The ledger is a reference source: this file reads the award, the award never reads this file.
-format: rede.calc/1
+format: rezono.calc/1
 pack: subsidy
 subject: application
 rules:

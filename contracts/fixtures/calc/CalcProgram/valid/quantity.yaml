@@ -1,5 +1,5 @@
 # A constant with its unit (P10.3): a unit the pack declares on a type of its schema (fictitious names).
-format: rede.calc/1
+format: rezono.calc/1
 pack: fixture
 subject: host
 rules:

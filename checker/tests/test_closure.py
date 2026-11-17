@@ -39,7 +39,7 @@ def program(relations, *rules):
     for r in rules:
         for part in (*r["body"], *r.get("aggregates", ())):
             part["stratum"] = strata.get(part["relation"], "0")
-    return {"format": "rede.rules/1", "pack": "example", "relations": list(relations), "rules": list(rules)}
+    return {"format": "rezono.rules/1", "pack": "example", "relations": list(relations), "rules": list(rules)}
 
 
 def missing(doc, rows, read=(), values=None):
@@ -134,7 +134,7 @@ def test_what_the_calculation_reads_is_covered():
     """A calculation reads a missing row as false or unknown (calc.reads), so its relations are covered."""
     doc = program([FLAG, relation("as_of", "base", "id"), relation("seen", "derived", "id")],
                   rule("seen", 0, ("seen", "?x"), ("flag", "?x")))
-    calc_ir = {"format": "rede.calc-ir/1", "as_of": "as_of", "facts": [{"id": "f", "reads": "presence", "table": "seen"}],
+    calc_ir = {"format": "rezono.calc-ir/1", "as_of": "as_of", "facts": [{"id": "f", "reads": "presence", "table": "seen"}],
                "rules": [], "versions": [{"id": "v@1", "view": "v__1", "definitions": [
                    {"when": {"fact": "f"}, "value": {"fact": "f"}}]}]}
     report = epoch(doc, {"flag": [["a"]], "as_of": [], "seen": []}, [], calc_ir=calc_ir)

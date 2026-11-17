@@ -16,7 +16,7 @@ import yaml
 
 from .names import NAME
 
-FORMAT = "rede.views/1"
+FORMAT = "rezono.views/1"
 THEORY = re.compile(r"^[a-z][a-z0-9]*(-[a-z0-9]+)*$")
 # How an attribute map reads its source value: a name from this closed list, never an expression.
 # days: a date to the whole number of days since EPOCH in the proleptic Gregorian calendar (what Arrow's

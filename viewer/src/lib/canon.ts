@@ -1,4 +1,4 @@
-// The one canonical JSON form and hash of Rede (docs/contracts.md#canonical-hash), the twin of
+// The one canonical JSON form and hash of Rezono (docs/contracts.md#canonical-hash), the twin of
 // canon/rezono_canon in Python. Both must give the bytes in contracts/fixtures/canon/vectors.json.
 // RFC 8785 (JCS) over a JSON value without numbers: an integer becomes decimal text, a Date ISO text.
 
@@ -81,7 +81,7 @@ export async function sha256Hex(data: Uint8Array | string): Promise<string> {
 	return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 
-/** SHA-256 of the canonical JSON of `value`: the hash of a value everywhere in Rede. */
+/** SHA-256 of the canonical JSON of `value`: the hash of a value everywhere in Rezono. */
 export function canonicalSha256(value: unknown): Promise<string> {
 	return sha256Hex(canonicalJson(value));
 }

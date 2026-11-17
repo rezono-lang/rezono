@@ -1,5 +1,5 @@
 # One value changed: the smallest proposal (M4).
-format: rede.delta/1
+format: rezono.delta/1
 pack: library
 base_manifest: m-1
 changes:

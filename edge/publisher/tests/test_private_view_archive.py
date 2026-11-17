@@ -112,7 +112,7 @@ def test_both_existing_verifications_finish_before_any_candidate_output(inputs, 
         digest = sha256_hex(body)
         key = f"p/builds/{digest}.json"
         inputs["target"][key] = body
-        manifest["build"] = {"uri": f"s3://rede/{key}", "sha256": digest}
+        manifest["build"] = {"uri": f"s3://rezono/{key}", "sha256": digest}
         inputs["target"][inputs["manifest_key"]] = publish.canonical(manifest)
     with pytest.raises(kept_views.ArchiveError):
         candidates.commit_archive(**inputs)

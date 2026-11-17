@@ -11,8 +11,8 @@ description: >-
   are in docs/archive/m2-pipelines-and-rule-ir.md.
 prefixes:
   linkml: https://w3id.org/linkml/
-  rede: https://rezono.org/contracts/
-default_prefix: rede
+  rezono: https://rezono.org/contracts/
+default_prefix: rezono
 default_range: string
 imports:
   - linkml:types
@@ -93,7 +93,7 @@ classes:
   RuleProgram:
     tree_root: true
     attributes:
-      format: {required: true, pattern: "^rede\\.rules/1$"}
+      format: {required: true, pattern: "^rezono\\.rules/1$"}
       pack: {required: true}
       relations: {range: Relation, multivalued: true, inlined_as_list: true, required: true}
       rules: {range: Rule, multivalued: true, inlined_as_list: true}

@@ -48,7 +48,7 @@ def models(tmp_path, domain_change=None, theory_change=None):
 
 
 def doc(start='beta', steps=None, targets=None):
-    return {'format': 'rede.views/1', 'views': [{'theory': 'static-theory',
+    return {'format': 'rezono.views/1', 'views': [{'theory': 'static-theory',
         'kinds': [{'name': 'node', 'union': [{'populated_from': k} for k in (targets or [start, 'alpha'])]}],
         'arrows': [{'name': 'next', 'paths': [{'populated_from': start, 'steps': steps or [{'slot': 'alpha'}]}]}]}]}
 
@@ -105,7 +105,7 @@ def test_each_union_has_a_typed_identity_and_each_path_its_roots(tmp_path):
     # A subkind keeps its root's identity: a union of beta and its child left is one root, the id alone.
     view = resolve(tmp_path, domain, theory, doc('left', targets=['left', 'beta', 'alpha'])).views[0]
     assert view.arrows[0].paths[0].roots == ('beta', 'alpha')
-    one = resolve(tmp_path, domain, theory, {'format': 'rede.views/1', 'views': [{'theory': 'static-theory',
+    one = resolve(tmp_path, domain, theory, {'format': 'rezono.views/1', 'views': [{'theory': 'static-theory',
         'kinds': [{'name': 'node', 'union': [{'populated_from': 'left'}, {'populated_from': 'beta'}]}], 'arrows': []}]})
     assert one.views[0].kinds[0].identity == identity.Union(('beta',), 'VARCHAR')
 
@@ -352,7 +352,7 @@ def test_a_view_given_as_data_has_no_span(tmp_path):
 
 def test_a_pack_that_does_not_compile_keeps_the_view_typing_diagnostic(tmp_path):
     domain, theory, directory, _ = models(tmp_path)
-    write(directory / 'views.yaml', {'format': 'rede.views/1', 'views': [{'theory': 'static-theory',
+    write(directory / 'views.yaml', {'format': 'rezono.views/1', 'views': [{'theory': 'static-theory',
         'kinds': [{'name': 'node', 'union': [{'populated_from': 'beta'}]}],
         'arrows': [{'name': 'next', 'paths': [{'populated_from': 'beta', 'steps': [{'slot': 'state'}]}]}]}]})
     with pytest.raises(pack.CompileError) as error:

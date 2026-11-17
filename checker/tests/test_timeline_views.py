@@ -48,7 +48,7 @@ def problems(nodes=NODES, edges=(), rows=ROWS, sheet=SHEET, bundle=BUNDLE, full=
     snapshots = {r: json.dumps([{"key": k} for k in keys]).encode() for r, keys in rows.items()}
     layout = {"nodes": {n["id"]: [n["x"], n["y"], n["width"], n["height"]] for n in nodes},
               "edges": {e["id"]: {"source": e["source"], "target": e["target"], "points": e["points"]} for e in edges}}
-    tile = {"format": "rede.tile/1", "sheet": sheet, "level": 0, "x": 0, "y": 0, "box": [0, 0, TILE, TILE],
+    tile = {"format": "rezono.tile/1", "sheet": sheet, "level": 0, "x": 0, "y": 0, "box": [0, 0, TILE, TILE],
             "nodes": nodes, "edges": list(edges)}
     path = f"{sheet}/0/0_0.json"
     return check_view(sheet, snapshots, json.dumps(layout).encode(), {path: json.dumps(tile).encode()}, path, TILE, 4, 1, bundle,

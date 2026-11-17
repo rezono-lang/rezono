@@ -41,14 +41,14 @@ from pathlib import Path
 
 import yaml
 
-from . import modules, reckon_module
+from . import modules, rezono_module
 from . import pack as packs
 from . import source_format
 from .names import ISO_DATE
 
 Loader = getattr(yaml, "CSafeLoader", yaml.SafeLoader)
 
-FORMAT = "rede.delta/1"
+FORMAT = "rezono.delta/1"
 OPS = ("insert", "delete", "set", "unset")
 FACT_FILE = re.compile(r"^facts/[a-z0-9][a-z0-9_-]*\.yaml$")
 SOURCES_FILE = re.compile(r"^facts/[a-z0-9][a-z0-9_-]*\.sources\.yaml$")  # a fact file's source companion (S25)
@@ -109,8 +109,8 @@ def layout(pack_dir: str | Path) -> Layout:
     kinds, declared = [], {}
     for s in model.schemas:
         d = pack_dir if s["pack"] == model.meta["name"] else dirs[s["pack"]]
-        if s["file"].endswith(".rezono"):  # a module written in Reckon: its classes as it lowers them
-            doc = {"classes": reckon_module.schema_classes(d, s["file"])}
+        if s["file"].endswith(".rezono"):  # a module written in Rezono: its classes as it lowers them
+            doc = {"classes": rezono_module.schema_classes(d, s["file"])}
         else:
             doc = yaml.safe_load((d / s["file"]).read_text("utf-8")) or {}
         for cname, c in (doc.get("classes") or {}).items():

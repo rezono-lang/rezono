@@ -177,7 +177,7 @@ def test_the_base_objects_survive_the_next_variant_and_a_variant_objects_do_not(
     cache = SweepStore(st, "p", "m-1")
     cache.begin("v-x-00-2")
     mine, theirs = "p/objects/" + "a" * 64 + ".json", "p/objects/" + "b" * 64 + ".json"
-    manifest = {"id": "m-1", "snapshots": [{"relation": "a", "role": "viewer", "uri": f"s3://rede/{mine}"}]}
+    manifest = {"id": "m-1", "snapshots": [{"relation": "a", "role": "viewer", "uri": f"s3://rezono/{mine}"}]}
     cache.put_new("p/manifests/m-1.json", json.dumps(manifest).encode())
     cache.put_new(mine, b"[]")
     cache.put_new(theirs, b"[1]")

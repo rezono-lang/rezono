@@ -27,7 +27,7 @@ from support import REPO, run_split, typed
 
 FIXTURE = Path(__file__).resolve().parent / "fixtures" / "calc"
 PACK = pack.read(FIXTURE)
-BINDINGS = {"format": "rede.calc/1", "pack": "calc", "subject": "item", "parameters": "setting.value",
+BINDINGS = {"format": "rezono.calc/1", "pack": "calc", "subject": "item", "parameters": "setting.value",
             "inputs": {"kind": "entry", "subject": "item", "fact": "name", "integer": "number", "boolean": "truth"}}
 
 
@@ -133,7 +133,7 @@ def test_semantics_on_hand_written_cases():
     assert v["lazy"]["i0"] == ("known", "1") and v["lazy"]["i1"] == ("invalid", "division by zero in ratio")
     assert v["short"]["i0"] == ("not_applicable", "fact item.note does not apply")
     assert v["short"]["i1"] == ("known", "false")  # a known false decides an and
-    # W8 (RV-K12): a step beyond the bound has a value Rede cannot hold: unknown, naming the bound and the
+    # W8 (RV-K12): a step beyond the bound has a value Rezono cannot hold: unknown, naming the bound and the
     # operator; a division by zero stays invalid (lazy). What rests on such a step is unknown too, and no
     # definition is chosen on a condition that went beyond the bound.
     assert v["overflow"]["i0"] == ("unknown", "beyond the bound of W8 in add")

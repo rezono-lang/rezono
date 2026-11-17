@@ -77,7 +77,7 @@ SKIP = {"expected", "__pycache__"}
 # The runtime pins: an archive holds them so a replay can tell it needs the same runtime.
 PINS = (".python-artifact", ".python-digest", ".python-version")
 
-# Build records come in three versions (docs/ci.md section 8). v3 ("format": "rede.build/3") names the
+# Build records come in three versions (docs/ci.md section 8). v3 ("format": "rezono.build/3") names the
 # hash of everything that can change what is installed or run, pyproject.toml and the checker included,
 # so its archive is checked against the record alone. v2 named no checker: its archive holds none (one
 # that does is refused, as nothing binds it), and since the publisher needs the checker (R7, #56) it
@@ -88,8 +88,9 @@ PINS = (".python-artifact", ".python-digest", ".python-version")
 V1_SOURCE = {
     "8ccc5b826087bf64a2098a502bd3747c2549fe3745d8cce967f34a8382c88611": "3931b35b7816e1602e1d63d447cfaf30415865ad",
 }
-FORMAT = "rede.build/3"
+FORMAT = "rezono.build/3"
 V2 = "rede.build/2"
+LEGACY_FORMATS = ("rede.build/3", V2)
 
 
 def unsupported_views(record: dict, where: str) -> str | None:
@@ -338,7 +339,7 @@ def inspect_archive(pack_dir: Path, old, k: str, data: bytes, pin_text: str) -> 
         if not m["compiler_sha256"] == record["compiler_sha256"] == canonical_sha256(record["compiler"]):
             raise ValueError("compiler_sha256 does not match the build record's compiler")
         v1 = "format" not in record
-        if not v1 and record["format"] not in (FORMAT, V2):
+        if not v1 and record["format"] not in (FORMAT, *LEGACY_FORMATS):
             raise ValueError("build record format is not known")
         extra = set()
         if "views" in record:

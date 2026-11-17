@@ -249,7 +249,7 @@ def test_cli_build_identity_is_final_before_manifest_and_viewless_needs_no_node(
 
     st, called = History(), []
     manifest = "p/manifests/m-2.json"
-    monkeypatch.setattr(batch, "epoch", lambda *a, **k: epoch(pack="p", epoch=2, build={"format": "rede.build/3"}))
+    monkeypatch.setattr(batch, "epoch", lambda *a, **k: epoch(pack="p", epoch=2, build={"format": "rezono.build/3"}))
     monkeypatch.setattr(cli.store, "open_store", lambda *a: st)
     write = st.put_new
 
@@ -359,7 +359,7 @@ def test_cli_restart_recovers_frozen_checkpoint(identity, monkeypatch, failure):
     head = pointers.head_key("p", 2)
     target = {"index": index, "manifest": manifest, "head": head}.get(failure)
     stopped = True
-    monkeypatch.setattr(batch, "epoch", lambda *a, **k: epoch(pack="p", epoch=2, build={"format": "rede.build/3"}))
+    monkeypatch.setattr(batch, "epoch", lambda *a, **k: epoch(pack="p", epoch=2, build={"format": "rezono.build/3"}))
     monkeypatch.setattr(cli.store, "open_store", lambda *a: st)
 
     def layout(st, pack, mid, raw, bundle, role, mine, snapshots, layouts, node):

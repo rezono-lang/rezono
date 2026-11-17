@@ -402,8 +402,8 @@ def read(pack, pack_dir: Path, imports=None, renames=None, *, calc_inputs=None, 
     kind of each body literal in source order (LITERAL): the IR splits them over four lists, and the bundle
     publishes the body as written (MOD14). `spans` receives, per rule id, its (file, line, column): of its head,
     or for a rule `@closes` generates, of the `.decl` that has the mark (MOD2). `generated` is the rule text of the
-    decision tables of the pack's modules written in Reckon (reckon_table.Generated): each is read as a rule file
-    of the pack is, its module the module's id, its file and lines the module's (docs/reckon/publication.md §9.1)."""
+    decision tables of the pack's modules written in Rezono (rezono_table.Generated): each is read as a rule file
+    of the pack is, its module the module's id, its file and lines the module's (docs/rezono/publication.md §9.1)."""
     from .calc import selection_name  # calc reads this module, so it is imported here
 
     imports, renames = imports or {}, renames or {}

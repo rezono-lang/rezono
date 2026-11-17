@@ -26,7 +26,7 @@ deny contains msg if {
 deny contains msg if {
 	some pod in pods
 	not pod.spec.automountServiceAccountToken == false
-	msg := sprintf("%s: automountServiceAccountToken must be false (no pod of Rede talks to the Kubernetes API)", [id(pod.owner)])
+	msg := sprintf("%s: automountServiceAccountToken must be false (no pod of Rezono talks to the Kubernetes API)", [id(pod.owner)])
 }
 
 deny contains msg if {

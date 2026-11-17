@@ -31,14 +31,14 @@ spec: docs/semantics/values.md
 commit: f67c5559
 
 states:
-  # name, code (precedence), Reckon spelling, row JSON form, hash state name
-  - {name: known, code: 0, reckon: "", row: "<value>", hash: "<payload>"}
-  - {name: not_applicable, code: 1, reckon: "n/a", row: '{"$na": r}', hash: '{"$state": "not_applicable", "$reason": r}'}
-  - {name: unknown, code: 2, reckon: "unknown", row: '{"$unknown": r}', hash: '{"$state": "unknown", "$reason": r}'}
-  - {name: invalid, code: 3, reckon: "invalid", row: '{"$invalid": r}', hash: '{"$state": "invalid", "$reason": r}'}
+  # name, code (precedence), Rezono spelling, row JSON form, hash state name
+  - {name: known, code: 0, rezono: "", row: "<value>", hash: "<payload>"}
+  - {name: not_applicable, code: 1, rezono: "n/a", row: '{"$na": r}', hash: '{"$state": "not_applicable", "$reason": r}'}
+  - {name: unknown, code: 2, rezono: "unknown", row: '{"$unknown": r}', hash: '{"$state": "unknown", "$reason": r}'}
+  - {name: invalid, code: 3, rezono: "invalid", row: '{"$invalid": r}', hash: '{"$state": "invalid", "$reason": r}'}
 
 core_reasons:
-  # code: states it may label (JSON-LS L0 §2.3; Reckon v0 §5)
+  # code: states it may label (JSON-LS L0 §2.3; Rezono v0 §5)
   no_version_applies: [unknown]
   versions_overlap: [invalid]
   exception_conflict: [invalid]
@@ -89,7 +89,7 @@ cases:
     topic: "§2.1"
     input: {slot: "Host.provider (Provider, required)", rows: "no host__provider row for host-a"}
     expect: {state: unknown, reason: ""}
-    sources: [W1, W9, "compiler.md 'Missing and the four states'", "Reckon v0 §5 cardinality"]
+    sources: [W1, W9, "compiler.md 'Missing and the four states'", "Rezono v0 §5 cardinality"]
     agree: ["contracts/calc.yaml:52", "contracts/delta.yaml:30", "compiler/rezono_compiler/calc_sql.py:225", "checker/rezono_checker/calc.py:211"]
     status: settled
 
@@ -153,7 +153,7 @@ cases:
     topic: "§2, §3.3"
     input: {ask: "ask Host where memory_need > 300 GiB", data: "host-x memory_need invalid"}
     proposed: {answer: "host-x is an undecided row (invalid); publication is not blocked by the answer"}
-    sources: ["Reckon v0 §7b", "P10.2a §7"]
+    sources: ["Rezono v0 §7b", "P10.2a §7"]
     current:
       - {at: "contracts/value.yaml:19", gives: "invalid: 'Blocks.'"}
     status: open
@@ -184,7 +184,7 @@ cases:
     topic: "§2.2, K7"
     input: {slot: "a many-valued slot of an open relation", rows: "no rows for the owner"}
     expect: {completeness: "not known complete", count: "refused at compile time (R004, W6)", any: F, membership: "F only for members known absent: none"}
-    sources: [W6, "Reckon Data L0 §3.3 and §4.1"]
+    sources: [W6, "publication L0 §3.3 and §4.1"]
     agree: ["compiler/rezono_compiler/rules.py:598", "compiler/rezono_compiler/calc.py:547"]
     status: settled
 
@@ -210,7 +210,7 @@ cases:
     topic: "§2.2, K12"
     input: {expr: "min over an empty known set"}
     proposed: {state: not_applicable, reason: empty}
-    sources: ["P10.2a A.3", "Reckon v0 §7b"]
+    sources: ["P10.2a A.3", "Rezono v0 §7b"]
     current:
       - {at: "contracts/rules.yaml:66", gives: "no conclusion"}
       - {at: "compiler/rezono_compiler/rules_sql.py:127", gives: "no row (inner join)"}
@@ -253,7 +253,7 @@ cases:
     sources: [W6]
     agree: ["compiler/rezono_compiler/pack.py:290", "contracts/bundle.yaml:129"]
     conflicts:
-      - {at: "Reckon v0 §5 (#350)", gives: "default world open"}
+      - {at: "Rezono v0 §5 (#350)", gives: "default world open"}
     status: open
 
   - id: world-closed-absent
@@ -275,8 +275,8 @@ cases:
   - id: negation-open
     topic: "§2.1"
     input: {rule: "not over an open relation outside @absence"}
-    expect: {refused: "compile error (W6; Reckon R004)"}
-    sources: [W6, "Reckon v0 §7 rule 6"]
+    expect: {refused: "compile error (W6; Rezono R004)"}
+    sources: [W6, "Rezono v0 §7 rule 6"]
     agree: ["compiler/rezono_compiler/rules.py:598", "compiler/rezono_compiler/calc.py:547"]
     status: settled
 
@@ -370,7 +370,7 @@ cases:
     proposed: {rows: [host-c], undecided: [{binder: host-a, state: unknown, reason: not_assigned, cause: ["host__owner", ["host-a"]]}], not_applicable: 2}
     sources: ["P10.2a E42"]
     current:
-      - {at: "contracts/explain.yaml", gives: "rede.answer/1 has undecided rows and counts (K3); no emitter fills them yet"}
+      - {at: "contracts/explain.yaml", gives: "rezono.answer/1 has undecided rows and counts (K3); no emitter fills them yet"}
       - {at: "edge/gate/src/ask.ts:308", gives: "proof walk only; no state classification"}
     status: open
 
@@ -381,7 +381,7 @@ cases:
     sources: ["P10.2a E43"]
     note: "n/a is not false: host-b and host-d are in neither answer."
     current:
-      - {at: "contracts/explain.yaml", gives: "rede.answer/1 has undecided rows and counts (K3); no emitter fills them yet"}
+      - {at: "contracts/explain.yaml", gives: "rezono.answer/1 has undecided rows and counts (K3); no emitter fills them yet"}
       - {at: "edge/gate/src/ask.ts:308", gives: "proof walk only; no state classification"}
     status: open
 
@@ -391,7 +391,7 @@ cases:
     proposed: {rows: [host-c], undecided: [{binder: host-a, reason: not_assigned}, {binder: host-d, reason: no_spec}], not_applicable: 0}
     sources: ["P10.2a E45"]
     current:
-      - {at: "contracts/explain.yaml", gives: "rede.answer/1 has undecided rows and counts (K3); no emitter fills them yet"}
+      - {at: "contracts/explain.yaml", gives: "rezono.answer/1 has undecided rows and counts (K3); no emitter fills them yet"}
       - {at: "edge/gate/src/ask.ts:308", gives: "proof walk only; no state classification"}
     status: open
 
@@ -399,7 +399,7 @@ cases:
     topic: "§3.3"
     input: {rule: "rule fits(h, p) when p.memory >= h.memory_need", data: "host-d memory_need unknown no_spec"}
     proposed: {fits_host_d: "an outcome row unknown no_spec for each plan"}
-    sources: ["Reckon v0 §7b"]
+    sources: ["Rezono v0 §7b"]
     current:
       - {at: "docs/compiler.md 'Missing and the four states'", gives: "derived relations are sets: a missing premise drops the row; only @outcome relations carry a state"}
     status: open
@@ -408,8 +408,8 @@ cases:
     topic: "§3.3"
     input: {check: "check Host: owner = team-platform", data: "Appendix B"}
     expect: {violations: [], undecided: [{binder: host-a, state: unknown, reason: not_assigned}], counted: "per role, in the manifest summary and on the attention strip", publication: "not blocked"}
-    sources: ["owner decision on Reckon v0 open point 3 (#350 comment 6751612214)", "Reckon v0 §7b"]
-    note: "host-b and host-d are n/a: the check does not apply to them. A check over total inputs is never undecided (Reckon v0 §5d)."
+    sources: ["owner decision on Rezono v0 open point 3 (#350 comment 6751612214)", "Rezono v0 §7b"]
+    note: "host-b and host-d are n/a: the check does not apply to them. A check over total inputs is never undecided (Rezono v0 §5d)."
     current:
       - {at: "docs/compiler.md:112", gives: "a check is a violation view: a row is a violation (invalid), no row passes; there is no undecided violation"}
     status: settled
@@ -418,7 +418,7 @@ cases:
     topic: "§3.3"
     input: {require: "require Host: owner = team-platform", data: "Appendix B"}
     expect: {undecided: [{binder: host-a, state: unknown, reason: not_assigned}], publication: "blocked (fail-closed)"}
-    sources: ["owner decision on Reckon v0 open point 3 (#350 comment 6751612214)"]
+    sources: ["owner decision on Rezono v0 open point 3 (#350 comment 6751612214)"]
     current:
       - {at: "docs/compiler.md:112", gives: "no require; a violation view has no undecided result"}
     status: settled
@@ -427,7 +427,7 @@ cases:
     topic: "§3.3"
     input: {check: "a check whose condition reads a rule value with two versions valid on valid_at, known on the same date"}
     expect: {state: invalid, reason: versions_overlap, publication: "blocked"}
-    sources: ["owner decision on Reckon v0 open point 3 (#350 comment 6751612214)", "Reckon v0 §5a"]
+    sources: ["owner decision on Rezono v0 open point 3 (#350 comment 6751612214)", "Rezono v0 §5a"]
     note: "Whether two versions give invalid versions_overlap is itself still open (case version-overlap); given that value, the check blocks."
     current:
       - {at: "docs/decisions.md W10", gives: "one version wins by order, so the check sees a known value"}
@@ -437,7 +437,7 @@ cases:
     topic: "§3.3"
     input: {warn: "warn Host: owner = team-platform", data: "Appendix B, and host-x owner invalid"}
     expect: {publication: "never blocked, for false, unknown or invalid"}
-    sources: ["owner decision on Reckon v0 open point 3 (#350 comment 6751612214)"]
+    sources: ["owner decision on Rezono v0 open point 3 (#350 comment 6751612214)"]
     current:
       - {at: "docs/compiler.md:112", gives: "no warn or norm; every violation row is invalid"}
     status: settled
@@ -448,7 +448,7 @@ cases:
     topic: "§2.3, K10"
     input: {expr: "a + b", data: "a unknown zz_late, b unknown aa_early (a is the first operand)"}
     proposed: {state: unknown, reason: aa_early}
-    sources: ["P10.2a A.4", "Reckon v0 §7b"]
+    sources: ["P10.2a A.4", "Rezono v0 §7b"]
     current:
       - {at: "compiler/rezono_compiler/calc_sql.py:287", gives: "zz_late (first operand in the highest state)"}
       - {at: "checker/rezono_checker/calc.py:108", gives: "zz_late"}
@@ -497,7 +497,7 @@ cases:
     topic: "§2.4, K10"
     input: {calc: "a rule with versions valid from 2026-01-01", context: "valid_at 2025-12-31"}
     proposed: {state: unknown, reason: no_version_applies}
-    sources: ["Reckon v0 §5a, §8", W13]
+    sources: ["Rezono v0 §5a, §8", W13]
     current:
       - {at: "compiler/rezono_compiler/calc_sql.py:537", gives: "not_applicable"}
       - {at: "checker/rezono_checker/calc.py:250", gives: "not_applicable"}
@@ -516,7 +516,7 @@ cases:
     topic: "§2.4"
     input: {calc: "two versions valid on valid_at, known on the same date"}
     proposed: {state: invalid, reason: versions_overlap}
-    sources: ["Reckon v0 §5a", "Reckon v0 §14 point 16"]
+    sources: ["Rezono v0 §5a", "Rezono v0 §14 point 16"]
     current:
       - {at: "docs/decisions.md W10", gives: "latest knowledge date, then latest valid-from, then the version text: one wins"}
       - {at: "compiler/rezono_compiler/calc_sql.py:537", gives: "one version by that order"}
@@ -526,7 +526,7 @@ cases:
     topic: "§2.4"
     input: {parameter: "host_reserve with no row valid on valid_at"}
     expect: {state: unknown, reason: no_version_applies}
-    sources: [W13, "Reckon v0 §5a"]
+    sources: [W13, "Rezono v0 §5a"]
     agree: ["compiler/rezono_compiler/calc_sql.py:559", "checker/rezono_checker/calc.py:240"]
     note: "Both places give the state unknown; their reason is still prose (case reason-calc-prose)."
     current:
@@ -556,7 +556,7 @@ cases:
     input: {ask: "ask Host where owner = team-platform", role: viewer, worlds: ["host__owner row of host-a hidden from viewer", "that row absent"], read_rules: "viewer does not read host__owner in full"}
     expect: {both_worlds: "byte-identical; rows host-c; undecided host-a (unknown, not_read_in_full); not applicable 2; not_assigned appears in neither"}
     sources: ["values.md §4 (effective world)", "the arbiter on #736, 12-11-2026, point 6 (RV-C19)", "P10.2a §7a rule 1, E50", "#351 P1.8"]
-    agree: ["reckon/src/evaluate.ts:353", "reckon_data/publication.py:178", "edge/gate/src/expr.ts:247"]
+    agree: ["rezono/src/evaluate.ts:353", "publication/publication.py:178", "edge/gate/src/expr.ts:247"]
     status: settled
 
   - id: withheld-outcome
@@ -611,7 +611,7 @@ cases:
     topic: "§5, K8"
     input: {row_json: "a Host row in a full-schema dataset without the member owner"}
     expect: {refused: "an omitted member is never valid; not selected is expressed by the schema"}
-    sources: ["values.md §5", "Reckon Data L0 §3.3 (a writer MUST write states explicitly) and Q7"]
+    sources: ["values.md §5", "publication L0 §3.3 (a writer MUST write states explicitly) and Q7"]
     current:
       - {at: "viewer/src/lib/data/gate.ts:287", gives: "the viewer has no omitted-member rule; a missing cell becomes unknown"}
     status: settled
@@ -630,7 +630,7 @@ cases:
   - id: hash-state-object
     topic: "§6 rule 1"
     input: {value: "host-a.owner unknown not_assigned"}
-    expect: {hash: '{"$reason":"not_assigned","$state":"unknown"}', row_json: '{"$unknown": "not_assigned"}', columnar: "owner$state 2, owner$reason not_assigned", reckon: "unknown not_assigned"}
+    expect: {hash: '{"$reason":"not_assigned","$state":"unknown"}', row_json: '{"$unknown": "not_assigned"}', columnar: "owner$state 2, owner$reason not_assigned", rezono: "unknown not_assigned"}
     sources: ["JSON-LS L0 §3.3, §4.3, §6.2 worked vector"]
     agree: ["contracts/fixtures/canon/vectors.json:280"]
     status: settled
@@ -700,7 +700,7 @@ cases:
 
   - id: print-literal-scale
     topic: "§6"
-    input: {reckon: "ask Plan where hourly_price <= € 0.20/h"}
+    input: {rezono: "ask Plan where hourly_price <= € 0.20/h"}
     expect: {print: "€ 0.20/h (written scale kept); a computed value prints in its type's scale"}
     sources: ["P10.2a §9", "P10.2a E12"]
     status: settled

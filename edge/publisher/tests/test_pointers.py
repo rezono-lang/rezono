@@ -25,11 +25,11 @@ def test_heads_sort_newest_first_and_the_backfill_writes_each_once(tmp_path):
     assert written == sorted([pointers.head_key("p", 9), pointers.head_key("p", 10), "p/bases/m-10/p-x-11.json",
                               "p/epochs/11/manifests/v-price-00-11.json", "p/epochs/11/diagnoses/v-price-01-11.json"])
     ref = json.loads(st.get("p/bases/m-10/p-x-11.json"))
-    assert ref == {"format": "rede.pointer/1", "id": "p-x-11", "sha256": hashlib.sha256(st.get("p/manifests/p-x-11.json")).hexdigest()}
+    assert ref == {"format": "rezono.pointer/1", "id": "p-x-11", "sha256": hashlib.sha256(st.get("p/manifests/p-x-11.json")).hexdigest()}
     first = sorted(st.list("p/heads/"))[0]
     assert json.loads(st.get(first))["manifest"] == "m-10", "the newest epoch sorts first, not m-10 < m-9 as text"
     h = json.loads(st.get(pointers.head_key("p", 9)))
-    assert h == {"format": "rede.head/1", "manifest": "m-9", "epoch": 9, "sha256": hashlib.sha256(nine).hexdigest()}
+    assert h == {"format": "rezono.head/1", "manifest": "m-9", "epoch": 9, "sha256": hashlib.sha256(nine).hexdigest()}
     assert pointers.backfill(st, "p") == [], "idempotent"
     assert pointers.head("p", nine) == (pointers.head_key("p", 9), st.get(pointers.head_key("p", 9))), "the publisher's bytes"
 

@@ -5,7 +5,7 @@ import pytest
 from rezono_checker import check_epoch, metadata
 
 BUNDLE = {
-    "format": "rede.schema-bundle/1", "checks": [],
+    "format": "rezono.schema-bundle/1", "checks": [],
     "kinds": [{"id": "alpha", "table": "alpha"}, {"id": "beta", "table": "beta"},
               {"id": "gamma", "table": "gamma", "parent": "beta"}],
     "arrows": [{"kind": "beta", "name": "alpha", "required": True, "multivalued": False, "target": "alpha"}],

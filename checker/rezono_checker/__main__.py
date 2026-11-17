@@ -15,7 +15,7 @@ from .snapshots import resolve
 
 
 def main(argv=None) -> int:
-    ap = argparse.ArgumentParser(prog="rezono-checker", description="Check a Rede proof against a manifest.")
+    ap = argparse.ArgumentParser(prog="rezono-checker", description="Check a Rezono proof against a manifest.")
     ap.add_argument("--proof", required=True, type=Path)
     ap.add_argument("--manifest", required=True, type=Path)
     ap.add_argument("--rules", required=True, type=Path)

@@ -11,8 +11,8 @@ description: >-
   emits it yet (B21); the render step (P7.10) and publication with each generated pull request (P7.11b) do.
 prefixes:
   linkml: https://w3id.org/linkml/
-  rede: https://rezono.org/contracts/
-default_prefix: rede
+  rezono: https://rezono.org/contracts/
+default_prefix: rezono
 default_range: string
 imports:
   - linkml:types
@@ -45,7 +45,7 @@ classes:
   OutputIndex:
     description: The index of one render of one manifest.
     attributes:
-      format: {required: true, equals_string: rede.output-index/1}
+      format: {required: true, equals_string: rezono.output-index/1}
       pack: {required: true, range: Name, description: The pack whose rows were rendered.}
       manifest: {required: true, description: "The manifest id whose rows were rendered; the index belongs to it and to no other."}
       render: {required: true, range: RenderStep, inlined: true}

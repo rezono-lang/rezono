@@ -99,12 +99,12 @@ def test_a_proof_tree_is_named_at_the_base_only_when_the_base_has_that_very_tree
 
     class Store(dict):
         def uri(self, key):
-            return f"s3://rede/{key}"
+            return f"s3://rezono/{key}"
 
     at, there = "p/v-s-00-2/r/explain", "p/m-2/r/views"
 
     def root(prefix, rel="q", sha="a" * 64, levels=2):
-        return {"uri": f"s3://rede/{prefix}/proof/witness/{rel}/{levels - 1}/0.json", "sha256": sha, "levels": levels}
+        return {"uri": f"s3://rezono/{prefix}/proof/witness/{rel}/{levels - 1}/0.json", "sha256": sha, "levels": levels}
 
     layout = {"format": proof.INDEX, "piece": proof.PIECE, "fanout": proof.FANOUT}
     q = [(f"{at}/proof/witness/q/0/0.json", b"leaf"), (f"{at}/proof/witness/q/1/0.json", b"page")]
@@ -122,9 +122,9 @@ def test_a_proof_tree_is_named_at_the_base_only_when_the_base_has_that_very_tree
     assert pieces == made[2:] and named == part | {"trees": part["trees"] | {"witness": witness}}
     kept = (made, part)
     assert over(None) == kept and over({}) == kept  # no view index of the base, or one without a proof graph
-    assert over(theirs | {"piece": proof.PIECE // 2}) == kept and over(theirs | {"format": "rede.proof-index/2"}) == kept
+    assert over(theirs | {"piece": proof.PIECE // 2}) == kept and over(theirs | {"format": "rezono.proof-index/2"}) == kept
     for other in (root(there, sha="c" * 64), root(there, levels=3), root("p/m-1/r/views"), root("p/m-2/other/views"),
-                  root(there) | {"uri": f"s3://rede/{there}/proof/witness/q/../q/1/0.json"}):
+                  root(there) | {"uri": f"s3://rezono/{there}/proof/witness/q/../q/1/0.json"}):
         assert over(theirs | {"trees": {"witness": {"q": other}}}) == kept, other
 
 
@@ -249,7 +249,7 @@ def test_a_proposal_that_edits_a_part_gets_no_difference(tmp_path):
     base = sh("git", "rev-parse", "HEAD", cwd=repo)
     n, time = proposal.base_of(repo, base)
     main = publish.publish(batch.epoch(repo / PACK, epoch=n, knowledge_time=time, sources=[("rules", base)]), st, ROLES)
-    delta = json.dumps({"format": "rede.delta/1", "changes": [SET_STATE]})
+    delta = json.dumps({"format": "rezono.delta/1", "changes": [SET_STATE]})
     mid = proposal.publish_proposal(repo, PACK, "7", base, delta, st, ROLES)
     title = lambda m: json.loads(st.get(publish.role_objects(st, "minimal", m, "viewer")["relations/alpha__title.json"]))  # noqa: E731
     assert title(main["id"]) == [] and [r["key"] for r in title(mid)] == [["a1", "t"]]  # the right did change

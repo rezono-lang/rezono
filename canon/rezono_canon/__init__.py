@@ -1,4 +1,4 @@
-"""The one canonical JSON form and hash of Rede (docs/contracts.md#canonical-hash).
+"""The one canonical JSON form and hash of Rezono (docs/contracts.md#canonical-hash).
 
 RFC 8785 (JCS) over a JSON value without numbers: an integer becomes decimal text, a date or a
 timezone-aware datetime becomes ISO text. Anything that has no single canonical form is refused
@@ -100,5 +100,5 @@ def sha256_hex(data: bytes) -> str:
 
 
 def canonical_sha256(value) -> str:
-    """SHA-256 of the canonical JSON bytes of `value`: the hash of a value everywhere in Rede."""
+    """SHA-256 of the canonical JSON bytes of `value`: the hash of a value everywhere in Rezono."""
     return sha256_hex(canonical_bytes(value))

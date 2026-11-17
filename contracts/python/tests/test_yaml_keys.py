@@ -33,7 +33,7 @@ def test_text_cut_at_a_comma_is_refused():
 def test_quoted_text_names_and_block_values_pass():
     assert yaml_keys.findings(
         "a: {description: \"Children per page, at most.\", range: integer}\n"
-        "b:\n  description: Children per page, at most.\n  rede.kind-index: {pattern: '^a, b$'}\n"
+        "b:\n  description: Children per page, at most.\n  rezono.kind-index: {pattern: '^a, b$'}\n"
         "c: [x, y, z]\nd:\n") == []
 
 

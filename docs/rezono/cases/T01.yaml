@@ -1,0 +1,28 @@
+id: T01
+status: settled
+mode: evaluate
+declare: |
+  enum Size = small | medium | large
+
+  extend Host
+    derived size: Size
+      table unique
+        | memory_need       | -> size |
+        | ..<300 GiB        | small   |
+        | 300 GiB..<500 GiB | medium  |
+        | 500 GiB..         | large   |
+source: ask Host where size = medium
+data: appendix-b
+expect:
+  answer:
+    rows:
+    - host-a
+    undecided:
+    - binder: host-d
+      state: unknown
+      reason: no_spec
+    not_applicable: 0
+note: 'unique: one row applies per known input; an unknown input leaves every row undecided, so the value takes its state.'
+sources:
+- docs/rezono/tables.md §3, §4 (RV-C24)
+- v0 §5c

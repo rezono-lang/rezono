@@ -4,14 +4,14 @@ title: Explanation questions
 description: >-
   Explanation as a question about the proof (decisions R8, R9, R10; docs/gui.md, "Explanation as questions
   over the proof"). A question is data: a term, what it starts from, its steps (the building blocks trace and
-  suppose) and the shape of its answer. Packs write them in questions.yaml (rede.questions/1, checked by the
+  suppose) and the shape of its answer. Packs write them in questions.yaml (rezono.questions/1, checked by the
   compiler: only names that exist in the pack); the standard pack std-explain gives the known ones. The
   compiler puts them in the schema bundle in the form below, imports first, then the pack's own. The gate
-  answers a question page by page (Answer, rede.answer/1, from GET /<pack>/<manifest>/ask/<term>).
+  answers a question page by page (Answer, rezono.answer/1, from GET /<pack>/<manifest>/ask/<term>).
 prefixes:
   linkml: https://w3id.org/linkml/
-  rede: https://rezono.org/contracts/
-default_prefix: rede
+  rezono: https://rezono.org/contracts/
+default_prefix: rezono
 default_range: string
 imports:
   - linkml:types
@@ -203,12 +203,12 @@ classes:
       over: {description: "A sweep of the pack (sweeps.yaml), each variant in turn."}
   Answer:
     description: >-
-      One page of the answer to a question (rede.answer/1), from GET /<pack>/<manifest>/ask/<term> for one role.
+      One page of the answer to a question (rezono.answer/1), from GET /<pack>/<manifest>/ask/<term> for one role.
       The nodes are in a fixed order, by distance, then by reference (relation, then key, both by their UTF-8
       bytes), at most the limit of the question. A walk expands a level only while the levels before it are
       within the limit; where it stops before its depth, the nodes of its last level are continuations (more).
     attributes:
-      format: {required: true, pattern: "^rede\\.answer/1$"}
+      format: {required: true, pattern: "^rezono\\.answer/1$"}
       question: {required: true, pattern: "^[a-z][a-z0-9]*(_[a-z0-9]+)*$", description: "The term asked."}
       manifest_id: {required: true}
       start: {range: RowRef, inlined: true, description: "The row the question starts from; absent for a delta or a sweep (delta)."}
@@ -222,15 +222,15 @@ classes:
       gap: {range: GapAnswer, inlined: true, description: "For a question through the rules (gap): the failing premises and the candidates."}
       difference: {range: Difference, inlined: true, description: "For a question from a delta: the counts, and after suppose alone the page of changed rows (its nodes, at distance 0)."}
       series: {range: SeriesCell, multivalued: true, inlined_as_list: true, description: "For a question from a sweep: one cell per grid value, in grid order."}
-      output_schema: {pattern: "^s-[0-9a-f]{64}$", description: "For an ask ... where: the id of its output schema (P10.2a §8a, Reckon Data L0 §7.1), the answer dataset's $schema, so a client gets types without guessing."}
+      output_schema: {pattern: "^s-[0-9a-f]{64}$", description: "For an ask ... where: the id of its output schema (P10.2a §8a, publication L0 §7.1), the answer dataset's $schema, so a client gets types without guessing."}
       counts: {range: AnswerCounts, inlined: true, description: "For an ask ... where: the counts of the whole answer, not of this page (P10.2a §7a rule 4)."}
       complete: {range: boolean, description: "For impact: true when every changed row the role reads has a ring and no relation of the difference is read in part (docs/interaction.md section 3); it counts nothing the role does not read."}
       incomplete: {range: Incompleteness, multivalued: true, description: "For impact, when not complete: why, in the order depth, budget, not_read_in_full."}
       undecided: {range: UndecidedRow, multivalued: true, inlined_as_list: true, description: "For an ask ... where: the binder rows on this page whose condition is unknown or invalid, in canonical key order. An answer never drops them (S1 §3.3)."}
       expression: {range: AnswerExpression, inlined: true, description: "For an ask ... where (POST /<pack>/<manifest>/ask, RV-S16): the question asked, which has no term of the bundle; question is then ask."}
-      diagnostics: {range: ReckonDiagnostic, multivalued: true, inlined_as_list: true, description: "For an ask ... where: the warnings of the check, in source order. A text with an error gets no answer (400, with its diagnostics)."}
-      dataset: {range: ReckonDataset, inlined: true, description: "For an ask ... where: this page as a Reckon Data dataset (P10.2a §8a; docs/reckon-data/l0.md): the members $schema, schema and rows, the Answer rows of the page and then its Undecided rows, as Row JSON. Its $schema equals output_schema."}
-      computed: {range: boolean, description: "True on a computed answer (contrast, consequence): derived by Rede, not quoted, and shown as computed (docs/explain/contract.md, rule 5). Absent on the others."}
+      diagnostics: {range: RezonoDiagnostic, multivalued: true, inlined_as_list: true, description: "For an ask ... where: the warnings of the check, in source order. A text with an error gets no answer (400, with its diagnostics)."}
+      dataset: {range: PublicationDataset, inlined: true, description: "For an ask ... where: this page as a publication dataset (P10.2a §8a; docs/publication/l0.md): the members $schema, schema and rows, the Answer rows of the page and then its Undecided rows, as Row JSON. Its $schema equals output_schema."}
+      computed: {range: boolean, description: "True on a computed answer (contrast, consequence): derived by Rezono, not quoted, and shown as computed (docs/explain/contract.md, rule 5). Absent on the others."}
       not_computed: {pattern: "^[a-z][a-z0-9_]*$", description: "A computed answer that could not be computed, with its reason code (for consequence: no_variant, no published variant withdraws the start fact alone). The answer then holds its start alone; missing is never an empty answer."}
     rules:
       - description: An ask ... where answer carries its output schema id and its counts together.
@@ -249,20 +249,20 @@ classes:
     attributes:
       hash: {required: true, pattern: "^[0-9a-f]{64}$", description: "The sha256 of the question's canonical JSON form."}
       text: {required: true, description: "The question in its normal form, as the printer writes it."}
-  ReckonDiagnostic:
-    description: A diagnostic of the check of a Reckon text (docs/reckon/expressions.md §8b), by code; its sentence is in the message catalogue.
+  RezonoDiagnostic:
+    description: A diagnostic of the check of a Rezono text (docs/rezono/expressions.md §8b), by code; its sentence is in the message catalogue.
     attributes:
       code: {required: true}
-      span: {range: ReckonDocument, inlined: true, description: "Its place in the text: {text, start, end}."}
+      span: {range: RezonoDocument, inlined: true, description: "Its place in the text: {text, start, end}."}
       args: {multivalued: true, description: "The values its sentence needs."}
-      hint: {range: ReckonDocument, inlined: true, description: "What to write instead: a sentence by its id, with its values."}
+      hint: {range: RezonoDocument, inlined: true, description: "What to write instead: a sentence by its id, with its values."}
       suggest: {multivalued: true, description: "The names it may have meant, nearest first."}
-  ReckonDataset:
+  PublicationDataset:
     description: >-
-      A Reckon Data dataset (docs/reckon-data/l0.md): the members $schema (the id of its schema document),
-      schema (that document) and rows (Row JSON). Its shape is Reckon Data's, not this contract's.
+      A publication dataset (docs/publication/l0.md): the members $schema (the id of its schema document),
+      schema (that document) and rows (Row JSON). Its shape is the publication's, not this contract's.
     class_uri: linkml:Any
-  ReckonDocument:
+  RezonoDocument:
     class_uri: linkml:Any
   AnswerCounts:
     description: >-
@@ -291,7 +291,7 @@ classes:
       manifest: {description: "The target manifest (a proposal or variant); absent for a sweep and for a supposition, which has none."}
   Difference:
     description: >-
-      What a delta changed in what the role reads (rede.explain-index/1, docs/gui.md "suppose in profile edge"),
+      What a delta changed in what the role reads (rezono.explain-index/1, docs/gui.md "suppose in profile edge"),
       in its own order: by relation, then by key element by element. A page holds at most the limit of entries;
       the cursor (next) is 0,<relation>,<key>.
     attributes:

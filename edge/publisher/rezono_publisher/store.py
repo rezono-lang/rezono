@@ -54,7 +54,7 @@ class Conflict(Exception):
 class FileStore:
     """A directory as a bucket: for tests, CI and a single VM without object storage."""
 
-    def __init__(self, root: str | Path, bucket: str = "rede"):
+    def __init__(self, root: str | Path, bucket: str = "rezono"):
         self.root = Path(root)
         self.bucket = bucket
 
@@ -157,7 +157,7 @@ def open_store(url: str, endpoint: str | None = None):
     """`file:///path?bucket=name` or `s3://bucket`."""
     u = urlparse(url)
     if u.scheme == "file":
-        bucket = dict(p.split("=", 1) for p in u.query.split("&") if "=" in p).get("bucket", "rede")
+        bucket = dict(p.split("=", 1) for p in u.query.split("&") if "=" in p).get("bucket", "rezono")
         return FileStore(u.path, bucket)
     if u.scheme == "s3":
         return S3Store(u.netloc, endpoint)

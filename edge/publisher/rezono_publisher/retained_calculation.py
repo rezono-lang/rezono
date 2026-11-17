@@ -116,7 +116,7 @@ def _resolve(st: StoreReader, pin: PinnedSelection, *,
         if (rule_entry["sha256"], calc_entry["sha256"]) != (definition.rules_sha256, definition.calc_sha256):
             raise ValueError("unreviewed native cost definition")
     rule_doc, calc_doc = json.loads(verified_bytes(rule_entry)), json.loads(verified_bytes(calc_entry))
-    if (rule_doc.get("format") != "rede.rules/1" or calc_doc.get("format") != "rede.calc-ir/1"
+    if (rule_doc.get("format") != "rezono.rules/1" or calc_doc.get("format") != "rezono.calc-ir/1"
             or rule_doc.get("pack") != pin.pack or calc_doc.get("pack") != pin.pack):
         raise ValueError("retained IR does not match the pinned pack")
     if not any(r["view"] == pin.relation for r in calc_doc["rules"]):
