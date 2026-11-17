@@ -22,7 +22,7 @@ done
 bash contracts/gen-types.sh
 ```
 
-Fetch origin/main before removing the mark. Open the PR with `gh pr create --base main` and request automatic merging with `gh pr merge --auto --squash --author-email 222310762+vdo89@users.noreply.github.com`. If GitHub rejects an explicit author address on a pending pull request, use the repository account?s verified private-email setting and retry with `gh pr merge --auto --squash`.
+Fetch origin/main before removing the mark. Open the PR with `gh pr create --base main` and request automatic merging with `gh pr merge --auto --squash --author-email 222310762+vdo89@users.noreply.github.com`. If GitHub rejects an explicit author address on a pending pull request, use the verified account setting and retry with `gh pr merge --auto --squash`.
 
 ## Steps
 
