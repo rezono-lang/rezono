@@ -3,7 +3,7 @@
 A batch of facts enters only with a source, and the same delivery is admitted once. The rows themselves are
 judged by part (a) (rows.py; later the publication's L0 reader behind the same interface). A batch with records of a
 control kind (`plane: control`, DV1) enters only from a reviewed proposal: decided values change by review, never
-by a direct delta (O13). Each of their records names its decision; part (a) holds that, so the batch path holds it
+by a direct delta. Each of their records names its decision; part (a) holds that, so the batch path holds it
 too.
 """
 

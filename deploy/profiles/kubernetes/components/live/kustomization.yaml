@@ -1,4 +1,4 @@
-# Live `suppose` (decision E12) on profile `kubernetes`: the engine of deploy/engine runs as a second container in
+# Live `suppose` on profile `kubernetes`: the engine of deploy/engine runs as a second container in
 # the gate's pod and listens on loopback only, so nothing but its own gate reaches it and no certificate is needed
 # (the gate accepts a loopback address, or https with a token; edge/gate/src/live.ts). The site does not depend
 # on it: without this component the gate answers "live supposing is not available".

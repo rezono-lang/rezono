@@ -3,8 +3,7 @@ name: std_part
 description: >-
   Part and whole. A constituent is part of at most one direct whole, and may occur in it more than once. The
   axioms make the parts a forest: nothing is part of itself, directly or through others. The derived
-  relations are in rules/part.dl. The mapping annotations compare with SKOS and Dublin Core (decision
-  O12b); no rule reads them.
+  relations are in rules/part.dl. The mapping annotations compare with SKOS and Dublin Core; no rule reads them.
 in_language: en
 prefixes:
   linkml: https://w3id.org/linkml/

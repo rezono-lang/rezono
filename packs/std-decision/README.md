@@ -38,7 +38,7 @@ There is no free-text field that stands for structure: who, when, from when, unt
 
 ## The justification layer
 
-An explanation that says why needs more than the decision: what it serves, which principle makes it right, what was rejected, what is excepted, who answers for it and when it is looked at again ([explanation contract](../../docs/explain/contract.md#the-second-level-why), EX9). These are recorded facts with their own source (S25), and they point to the decision they belong to.
+An explanation that says why needs more than the decision: what it serves, which principle makes it right, what was rejected, what is excepted, who answers for it and when it is looked at again ([explanation contract](../../docs/explain/contract.md#the-second-level-why), EX9). These are recorded facts with their own source, and they point to the decision they belong to.
 
 | Part of an explanation | Where it is |
 |---|---|
@@ -102,7 +102,7 @@ They ask for attention and do not block ([concepts](../../docs/concepts.md#infer
 
 | Term | Asks | Answer |
 |---|---|---|
-| `decided` | Who decided this, and when? | from a conclusion back to each `in_force_on` it rests on, and on to that decision itself: `took_effect` reads `decision(d)`, so the walk ends in the record. Who and when are fields of that record, and its sources (S25) end the walk |
+| `decided` | Who decided this, and when? | from a conclusion back to each `in_force_on` it rests on, and on to that decision itself: `took_effect` reads `decision(d)`, so the walk ends in the record. Who and when are fields of that record, and its sources end the walk |
 | `replaced` | What did this decision replace? | the decisions it supersedes, directly and through others (`replaces`), and those it has replaced on a reference date (`replaced`), ring by ring |
 
 ## Worked example
@@ -175,4 +175,4 @@ The paused branch `claude/ex9-justification` drafts a pack `std-justification` (
 | `supersedes` | "superseded by", read the other way | `dcterms:replaces` |
 | `rationale` | context and decision drivers | `skos:scopeNote` |
 
-The alignment is a comparison table and mapping annotations (O12b), not an export.
+The alignment is a comparison table and mapping annotations, not an export.

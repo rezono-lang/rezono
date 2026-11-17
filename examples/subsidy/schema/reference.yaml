@@ -1,7 +1,7 @@
 id: https://rezono.example/subsidy/reference
 name: subsidy_reference
 description: >-
-  The payment ledger of the finance department, as a reference source (decision R13): what another
+  The payment ledger of the finance department, as a reference source: what another
   system recorded, kept apart from the scheme. No award reads it. A calculation rule compares it with
   the awards the rules derive, and the difference is drift, shown to readers with its proof.
 in_language: en

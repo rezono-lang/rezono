@@ -3,7 +3,7 @@
 What a valid fact is lives in one place, admission (rezono_admission, ruling 2 of 11-11-2026): the rows of a fact
 document, every refusal, and the observer that tells the sources where each row comes from. Here are what the
 compiler adds around it: the schema it judges against, built from the pack as the schema bundle states it; the
-refusals as one LoadError; the row hashes of sealed kinds (decision E3), which the bundle does not state yet; and
+refusals as one LoadError; the row hashes of sealed kinds, which the bundle does not state yet; and
 the files and their source sidecars.
 """
 
@@ -116,7 +116,7 @@ def rows_of(pack: Pack, data: dict) -> dict[str, list[tuple]]:
     rows, refused = admit(judged, data)
     if refused:
         raise refusal(judged, data, refused)
-    rows |= seal.row_sha256(pack, rows)  # decision E3: the row hash of each sealed element, as a fact
+    rows |= seal.row_sha256(pack, rows)  # the row hash of each sealed element, as a fact
     return {t: sorted(r, key=repr) for t, r in sorted(rows.items())}
 
 

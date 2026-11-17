@@ -26,14 +26,14 @@ types:
 
 enums:
   World:
-    description: Decision W6.
+    description: Meaning of a missing row.
     permissible_values:
       closed: {description: A missing row is not true.}
       open: {description: A row that is there is true; a missing row is unknown.}
   Layer:
     permissible_values: {source: {}, facts: {}, conclusions: {}, plan: {}, output: {}, observation: {}}
   Plane:
-    description: "Decision O13 and DV1: the plane of a kind. Only control is ever written; a data-plane kind leaves `plane` out."
+    description: "The plane of a kind. Only control is ever written; a data-plane kind leaves `plane` out."
     permissible_values:
       control: {description: "Decided values: rows a reviewed proposal sets, each naming its decision. Admission refuses a direct delta on them."}
   ValueType:
@@ -178,7 +178,7 @@ classes:
       identifier_patterns: {multivalued: true, description: "Regular expressions every id must match (pattern on the identifier or its type)."}
       module: {required: true, description: The schema module that declares the class.}
       table: {required: true}
-      world: {range: World, description: "What a missing row means (decision W6): closed, not true; open, unknown. Left out: closed."}
+      world: {range: World, description: "What a missing row means: closed, not true; open, unknown. Left out: closed."}
       sentence: {range: Sentence, inlined: true}
       name_attribute: {description: "The attribute whose value names an element of this kind: its slot with `slot_uri: rdfs:label`, declared here or inherited. Left out: the kind has none."}
       name_arrows: {multivalued: true, description: "For a kind without a name attribute that is identified by its ends (a unique key of single-valued arrows only, the first one): those arrows, in the key's order, if one of their ends has a name. An element is named by the names of its ends. Left out: it is named by its id."}
@@ -202,7 +202,7 @@ classes:
     attributes:
       name: {description: "rdfs:label: the text that names an element."}
       description: {description: "schema:description: the element's description, as text."}
-      image: {description: "schema:image: the attribute naming a file in assets/ (B10)."}
+      image: {description: "schema:image: the attribute naming a file in assets/."}
       order: {description: "schema:position: a whole-number ordering value."}
       valid_from: {description: "schema:validFrom: the start of validity."}
       valid_until: {description: "schema:validThrough: the end of validity."}
@@ -222,7 +222,7 @@ classes:
       multivalued: {range: boolean, required: true, description: "A multivalued slot is a link kind: any number of rows per element, without a functionality check."}
       minimum_cardinality: {range: DecimalInteger, description: Least number of distinct values; only on a multivalued slot.}
       maximum_cardinality: {range: DecimalInteger, description: Most number of distinct values; only on a multivalued slot.}
-      world: {range: World, description: "What a missing row means (decision W6): closed, not true; open, unknown. Left out: closed."}
+      world: {range: World, description: "What a missing row means: closed, not true; open, unknown. Left out: closed."}
       semantic: {range: SemanticType, required: true, inlined: true, description: "What the slot's value means (B10, S3b), so a consumer reads it instead of guessing. Cardinality and world stay on the slot."}
       sentence: {range: Sentence, required: true, inlined: true}
 
@@ -297,7 +297,7 @@ classes:
       variables: {range: RuleVariable, multivalued: true, inlined_as_list: true}
       aggregates: {range: RuleAggregate, multivalued: true, inlined_as_list: true, description: "The aggregates of the rule, in the order of the rule IR (contracts/rules.yaml), which the checker reads: what each folds. Left out for a rule without aggregates. A witness names its aggregate by `position` (contracts/proof.yaml), so a reader never guesses the function from the numbers."}
       head: {range: RuleAtom, required: true, inlined: true, description: "The head of the rule (MOD14): its relation and terms, each typed by its column."}
-      body: {range: RuleLiteral, multivalued: true, inlined_as_list: true, required: true, description: "Every literal of the body in source order (MOD14), from the rule IR: atoms, comparisons, assignments and aggregates. A rule a view generates has no order as written; its body is its atoms, then its aggregates, assignments and comparisons, each in the order of the rule IR. Published for every role (O10)."}
+      body: {range: RuleLiteral, multivalued: true, inlined_as_list: true, required: true, description: "Every literal of the body in source order (MOD14), from the rule IR: atoms, comparisons, assignments and aggregates. A rule a view generates has no order as written; its body is its atoms, then its aggregates, assignments and comparisons, each in the order of the rule IR. Published for every role."}
       origin: {range: RuleOrigin, inlined: true}
 
   RuleAtom:
@@ -360,19 +360,19 @@ classes:
 
   DerivedRelation:
     attributes:
-      extend: {range: boolean, description: "True: the owning pack explicitly permits consumers to add rules (S28). Without rules the relation is empty."}
+      extend: {range: boolean, description: "True: the owning pack explicitly permits consumers to add rules. Without rules the relation is empty."}
       id: {required: true, description: The relation name; also the element id of its label.}
       module: {required: true}
       explain: {required: true, range: ExplainMode}
       columns: {range: RuleColumn, multivalued: true, inlined_as_list: true, required: true}
-      world: {range: World, description: "What a missing row means (decision W6): closed, not true; open, unknown. Left out: closed."}
+      world: {range: World, description: "What a missing row means: closed, not true; open, unknown. Left out: closed."}
       absence: {range: boolean, description: "True: the relation says what is not recorded (`// @absence`); closed, and it may negate an open relation."}
-      semantic: {range: SemanticType, inlined: true, description: "For a calculation's view (`calc`): the type of its value column, derived by the rule it names, with its unit (B10). Left out: not a calculation."}
-      outcome: {description: "A named outcome (decision W7): the kind whose every element has one state (column `state`) and a reason (column `reason`, message `reason.<reason>`)."}
-      closes: {description: "The derived relation this one closes (decision W14, `// @closes <relation>`): a row states, for its key, that no row of that relation holds there, and its proof says why. The key is a prefix of that relation's columns. The invariant `<id>_closes_<relation>` holds the two apart."}
+      semantic: {range: SemanticType, inlined: true, description: "For a calculation's view (`calc`): the type of its value column, derived by the rule it names, with its unit. Left out: not a calculation."}
+      outcome: {description: "A named outcome: the kind whose every element has one state (column `state`) and a reason (column `reason`, message `reason.<reason>`)."}
+      closes: {description: "The derived relation this one closes (`// @closes <relation>`): a row states, for its key, that no row of that relation holds there, and its proof says why. The key is a prefix of that relation's columns. The invariant `<id>_closes_<relation>` holds the two apart."}
       checks: {multivalued: true, description: "The engine views that check a named outcome (`<relation>__total`, `<relation>__state`); a row in one is a red check."}
       fold: {range: boolean, description: "Present as true for a helper relation the pack folds (`// @explain fold`): an explanation shows the premises of its step in its place and no step named after it. Display only, and apart from `explain`, which says how its witnesses are kept; the rule IR does not carry it. Left out: not folded."}
-      calc: {description: "A calculation's view (decision W12): the rule, or rule@version for a version another rule names. Its rows are (subject, value, state, reason), each explained by a CalcWitness; module calc."}
+      calc: {description: "A calculation's view: the rule, or rule@version for a version another rule names. Its rows are (subject, value, state, reason), each explained by a CalcWitness; module calc."}
 
   RuleColumn:
     attributes:
@@ -382,11 +382,11 @@ classes:
 
   CheckView:
     description: >-
-      One logical check: a check kind on one slot, key or rule. With decision E11 the engine holds the rows of
+      One logical check: a check kind on one slot, key or rule. The engine holds the rows of
       all logical checks of one kind in one view (`relation`), and which slot has which check is a metadata row.
     attributes:
       view: {required: true, description: "The name of the logical check, `<kind>__<subject>__<check>` or `<kind>__<check>`: `validation_result.info` and the manifest's check name. Until E11 is built, also the engine view."}
-      relation: {description: "The engine view that holds this check's rows, `rezono__<check>` (E11). Absent until E11 step 2; then required."}
+      relation: {description: "The engine view that holds this check's rows, `rezono__<check>`. Required once the engine publishes check metadata."}
       check: {range: Check, required: true}
       kind: {required: true}
       subject: {}
@@ -426,7 +426,7 @@ classes:
       reports: {range: ReportSheet, multivalued: true, inlined_as_list: true, description: "Reports, by element id (`<kind>.<slot>`), checked by the compiler."}
       home: {range: HomeSheet, inlined: true, description: "The pack home's hero and claim, from the pack's own channel table or one import's (one home per pack), checked by the compiler."}
       house_style: {range: HouseStyle, inlined: true, description: "The pack's house style, from the pack's own channel table or one import's (one house style per pack), checked by the compiler: palettes in the order light, dark, print, and in each the roles sorted by name."}
-      images: {range: ImageBinding, multivalued: true, inlined_as_list: true, description: "The image slot per kind, by element id, sorted by kind (decision B10)."}
+      images: {range: ImageBinding, multivalued: true, inlined_as_list: true, description: "The image slot per kind, by element id, sorted by kind."}
       icons: {range: Icon, multivalued: true, inlined_as_list: true, description: "The icons the kind signs name, by sha256, checked by the compiler against the safe list (docs/gui.md#icons-and-images)."}
       sources: {range: ChannelSource, multivalued: true, inlined_as_list: true, description: "MOD2: where each binding above is written, sorted by id. Left out when the pack binds nothing."}
 
@@ -437,7 +437,7 @@ classes:
 
   Icon:
     description: >-
-      An icon of a kind (decision B10): an SVG of the pack, as a tree of safe elements, never as text. The viewer
+      An icon of a kind: an SVG of the pack, as a tree of safe elements, never as text. The viewer
       draws it in ink (currentColor) at icon.size; every paint in it is none or currentColor.
     attributes:
       sha256: {identifier: true, pattern: "^[0-9a-f]{64}$", description: SHA-256 of the file's bytes.}

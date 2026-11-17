@@ -71,7 +71,7 @@ def test_the_form_maps_back_onto_every_table_of_the_chain():
 
 def test_a_role_that_reads_the_subkind_only_gets_the_slots_above_as_not_read_in_full():
     """O7: a right on `part` holds for `spare`, not for `item`. The role's files hold `p1` as a part and nothing
-    of `item`; the form writes the part with the item's slots as any slot the role does not read in full (O8),
+    of `item`; the form writes the part with the item's slots as any slot the role does not read in full,
     and names no element and no value the role's files do not hold."""
     doc, plan, rows = form_of(NARROW)
     kinds = doc["kinds"]

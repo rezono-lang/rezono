@@ -1,4 +1,4 @@
-"""The check `rezono:assets` (decision B10, docs/gui.md#icons-and-images): the images one role gets.
+"""The check `rezono:assets` (docs/gui.md#icons-and-images): the images one role gets.
 
 Input is plain data: the role's asset index (a list of `{file, sha256, media_type, source, licence, uri}`),
 the schema bundle, the bytes of the role's published snapshots by relation, and a function that returns an

@@ -50,7 +50,7 @@ def relation(name, role, arity):
 
 
 # The toy's rule IR (contracts/rules.yaml). The guest's rights come from `grant`; with FULL, every role
-# reads every node, by the shape of rule a2 (decision O8).
+# reads every node, by the shape of rule a2.
 BASE = [("node", 1), ("role", 1), ("edge", 2), ("salary", 2), ("grant", 2)]
 DERIVED = [("may_read", 3), ("path", 2), ("reach", 1), ("touched", 1), ("isolated", 1), ("degree", 2), ("hub", 1),
            ("wage", 1), ("total", 1)]
@@ -177,7 +177,7 @@ def epoch(full=False, function=FUNCTION, nodes=NODES, edges=EDGES, salaries=SALA
 
 
 def loaded(bundle_text: str) -> dict | None:
-    """The check metadata an engine would load for this bundle (decision E11): what the checker expects."""
+    """The check metadata an engine would load for this bundle: what the checker expects."""
     return metadata.expected(json.loads(bundle_text)) if bundle_text else None
 
 
@@ -710,7 +710,7 @@ def calculated(role, publisher_sources=None, checker_sources=None):
 
 
 def test_a_calculation_view_is_full_only_for_a_role_that_reads_all_its_sources():
-    """RV-S26 (O8): full means a missing row is "none". The guest reads the subject kind in full and not the
+    """RV-S26: full means a missing row is "none". The guest reads the subject kind in full and not the
     relation the calculation reads: it gets no calculated row, so the view is not full for it, and neither is
     the view that takes it as a premise. A role that reads every source has both in full, row for row."""
     views = {"calc__amount", "calc__twice"}
@@ -1031,7 +1031,7 @@ def test_untyped_may_read_and_untyped_relations_are_refused(tmp_path):
         guest(epoch(rows={**epoch().rows, "may_read": [("guest", "a")]}))
     with pytest.raises(ValueError, match="no kind per column"):
         guest(epoch(rows={**epoch().rows, "extra": [("a",)]}))
-    # A relation that no table, rule or calculation accounts for is never published, for no role (W12).
+    # A relation that no table, rule or calculation accounts for is never published, for no role.
     with pytest.raises(publish.Blocked, match="no definition accounts for: extra"):
         publish.publish(epoch(rows={**epoch().rows, "extra": [("a",)]}), store.FileStore(tmp_path / "x"), ROLES)
 
@@ -1205,7 +1205,7 @@ def test_unknown_access_mode_is_refused(tmp_path):
         publish.publish(epoch(), store.FileStore(tmp_path), {"guest": "everything"})
 
 
-# Images (decision B10): the bundle binds node.image (table node__image) as the node's image.
+# Images: the bundle binds node.image (table node__image) as the node's image.
 def svg(name):
     return f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1 1"><title>{name}</title></svg>'.encode()
 
@@ -1245,7 +1245,7 @@ def test_without_an_image_binding_the_manifest_has_no_assets(tmp_path):
 
 
 def test_non_interference_hidden_images_change_no_byte_of_the_guest(tmp_path):
-    """The paired fixture: more hidden nodes with images give the guest the same bytes (O8)."""
+    """The paired fixture: more hidden nodes with images give the guest the same bytes."""
     a, ma = published(with_images(epoch(), {"a": "images/a.svg"}), tmp_path / "a")
     b, mb = published(with_images(epoch_with_hidden(), {"a": "images/a.svg", HIDDEN: "images/hidden.svg"}), tmp_path / "b")
     guest = role_keys(a)
@@ -1391,7 +1391,7 @@ def test_the_base_must_be_the_epochs_base_manifest(tmp_path):
 
 
 def test_a_diagnosis_needs_the_bundles_check_metadata(tmp_path):
-    """Decision E11: a red variant read with switched-off checks would under-report; it is refused too."""
+    """A red variant read with switched-off checks would under-report; it is refused too."""
     e = dataclasses.replace(epoch(), variant={"sweep": "s", "index": 1}, base_manifest="m-1",
                             checks=[{"name": "node__unique", "status": "red", "violations": 1}])
     meta = {t: rs for t, rs in e.check_metadata.items() if t != "rezono__required"}

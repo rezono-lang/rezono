@@ -84,7 +84,7 @@ losses:
     what: >-
       The layer of a kind, the seal and the parts sealed with it, the grid of a sweep, a helper kind folded in
       an explanation, a named outcome and the invariants a kind names, and the semantic type of each slot as
-      the schema bundle has it (B10).
+      the schema bundle has it.
     fate: extension
     carried_by: ["annotations.layer", "annotations.seal", "annotations.sealed_with", "annotations.explore",
                  "annotations.explain", "annotations.outcome", "annotations.invariants", "annotations.semantic"]

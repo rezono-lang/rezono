@@ -1,4 +1,4 @@
-"""The epoch statement of one role (RV-X41; docs/ring2/signing.md, "What is signed"; decisions Y2.7, Y2.8).
+"""The epoch statement of one role (RV-X41; docs/ring2/signing.md, "What is signed").
 
   python -m rezono_publication.statement verify DIR [--policy profile.yaml | --key seal.pub]
 
@@ -17,7 +17,7 @@ predicate binds what the role reads and nothing more:
 Every value is text, so the canonical bytes of Rezono's canon (which writes an integer as text) are RFC 8785's
 bytes too, and a verifier of another implementation reads the same document. Nothing in it is computed from a row
 the role may not read, and `pack_sha256` (which hashes hidden facts) is never in it: two worlds that differ only
-in such rows give the role the same statement (O8). The statement of the complete role is never made.
+in such rows give the role the same statement. The statement of the complete role is never made.
 
 The predicate type carries its version (`/v1`); its names are exactly `PREDICATE_KEYS`, with no empty place for
 what a later version adds (`previous` with the deltas, `compiler` and `source` with the sealed artifact; `checks`

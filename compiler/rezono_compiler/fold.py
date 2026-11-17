@@ -44,7 +44,7 @@ def var(t) -> str | None:
 def passes_through(r, pack) -> str | None:
     """The kind whose table clause `r` holds, when `bind` lowered it for a kind a view maps: its origin is the
     view source, which no rule file carries, its one body atom is the kind's table, and the head is the relation
-    bind made for that table with the same terms. It concludes nothing (decision Q11). The same clause written
+    bind made for that table with the same terms. It concludes nothing. The same clause written
     in a rule file is an author's rule and is judged as one (ruling RV-C49, 13-11-2026)."""
     from . import view_rules  # view_rules imports pack, which imports this module, so it is imported here
     body = r["body"]

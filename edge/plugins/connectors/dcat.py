@@ -1,4 +1,4 @@
-"""The DCAT entry of a published epoch (decision O12a; lane M, M10): one `dcat:Dataset` per epoch and role.
+"""The DCAT entry of a published epoch (lane M, M10): one `dcat:Dataset` per epoch and role.
 
 A catalogue entry points at the data; it holds none. It is made from the schema document, the pins of the epoch
 and the addresses the publisher gives its files, and it says four things:

@@ -44,7 +44,7 @@ def test_views_of_two_manifests(pack_dir, tmp_path):
     mine = sorted((s for s in m["snapshots"] if s["role"] == "viewer"), key=lambda s: s["relation"])
     assert index["sources"] == [{"relation": s["relation"], "sha256": s["sha256"]} for s in mine]
     assert (index["manifest"], index["role"], index["relayout"], "previous" in index) == (first, "viewer", False, False)
-    # The role's source entries by row (S25), for the set the manifest names; none before S25.
+    # The role's source entries by row, for the set the manifest names; none in manifests without source-set support.
     sets = [x["sha256"] for x in m.get("fact_sources", []) if x["role"] == "viewer"]
     assert [index["fact_sources"]["set"]] == sets if sets else "fact_sources" not in index
     # The overview by meaning: island levels from level 0, and a Map per island, each named by sha256. Level 0

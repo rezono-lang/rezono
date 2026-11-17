@@ -23,7 +23,7 @@ def connect(pack: Pack, prog: Program, rows: dict[str, list[tuple]]):
     for table, rs in sorted((params | rows).items()):
         if rs:
             db.executemany(f"INSERT INTO {emit.q(table)} VALUES ({', '.join('?' * len(rs[0]))})", rs)
-    for name, body in seal.views(pack):  # refused and accepted input (E3): the rules read `<kind>__accepted`
+    for name, body in seal.views(pack):  # refused and accepted input: the rules read `<kind>__accepted`
         db.execute(f"CREATE VIEW {emit.q(name)} AS {body}")
     rules = ir.load(pack.rules) if pack.rules else None
     selections = rules.calc_inputs() if rules else []
@@ -73,7 +73,7 @@ def run_both(pack: Pack, prog: Program, doc: dict, rows: dict[str, list[tuple]])
 
     db = connect(pack, prog, rows)
     oracle = Oracle(pack, doc, rows | derived_rows(db, pack), concept_types(prog))
-    assert witness_results(db, prog) == oracle.witnesses()  # the steps of every evaluation (W12)
+    assert witness_results(db, prog) == oracle.witnesses()  # the steps of every evaluation
     assert checked(db, prog) == []  # and the checker recomputes each of them on its own
     return results(db, prog), oracle.results()
 

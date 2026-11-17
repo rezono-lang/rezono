@@ -1,4 +1,4 @@
-"""The check metadata against the schema (decision E11, docs/compiler.md#design-checks-as-data-e11).
+"""The check metadata against the schema (docs/compiler.md#design-checks-as-data-e11).
 
 The engine reads which slot has which integrity check from the tables `rezono__*`. Those rows come only from the
 compiled definition; a fact, scenario or delta can never write them, so a change of data can never switch a

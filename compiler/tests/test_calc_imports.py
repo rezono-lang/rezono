@@ -1,5 +1,5 @@
-"""A pack import brings its calculation definitions (decision S28), and the evaluation date is the importing
-pack's (decision W10): a theory with one calculation, two importing packs with their own dates and parameter
+"""A pack import brings its calculation definitions, and the evaluation date is the importing
+pack's: a theory with one calculation, two importing packs with their own dates and parameter
 facts, and the same definition written in one pack. Neutral names; it describes no domain."""
 
 from __future__ import annotations
@@ -308,7 +308,7 @@ def test_a_consumer_does_not_come_between_an_imported_calculation_and_what_it_re
 
 def test_an_imported_calculation_is_bound_to_the_names_of_the_importing_pack(tmp_path, theory):
     """The importing pack declares a kind with the name of the theory's subject, so both get their module as
-    prefix (S8). The imported program follows: it reads the theory's kind under its name there."""
+    prefix. The imported program follows: it reads the theory's kind under its name there."""
     date, parameters = CONSUMERS["two"]
     importing = consumer(tmp_path / "two", theory, date)
     schema = importing / "schema" / "minimal.yaml"

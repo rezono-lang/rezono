@@ -186,7 +186,7 @@ def lower(view: TypedView, domain: Pack, theory: Pack, program: ir.Program,
 # relation instead: the theory's rules are not copied or edited, only their relation names are bound, as S8 binds
 # kind names. A table the view does not map stays the base table it was.
 #
-# World (W6): a relation is open when a rule reads an open relation positively, so the pass-through keeps an open
+# World: a relation is open when a rule reads an open relation positively, so the pass-through keeps an open
 # theory table open whatever its source is, and an open source opens the relation; a theory rule that negates it is
 # then refused by the ordinary check. A source value that is missing gives no row.
 
@@ -251,7 +251,7 @@ def _held(view, theory: Pack, source: str) -> None:
 def bind(doc: dict | None, view: TypedView, domain: Pack, theory: Pack, names: Mapping[str, str], *,
          source: str = 'views.yaml') -> dict:
     """The rule IR document of the domain with the view lowered into it. `doc` is the IR of the pinned rule closure
-    (rules_dl.read), `names` the theory's kind names under the domain's (S8). Raises ViewRuleError before anything
+    (rules_dl.read), `names` the theory's kind names under the domain's. Raises ViewRuleError before anything
     is added when the view lies outside the profile or a generated name collides. A rule made here has the origin
     `source` at the line of the entry of the view it comes from (a kind, an attribute or an arrow map); the
     pass-through of a theory table comes from no entry and has the line of the view's `theory` key."""
@@ -375,7 +375,7 @@ def bind(doc: dict | None, view: TypedView, domain: Pack, theory: Pack, names: M
             # An access rule (std-access) names elements, and an element is typed (kind, id): a view supplies rows
             # to the theory's relations and retypes no element. So `K(?x)` under a head that grants `?x` as kind K
             # stays the kind's own table. The rule then still grants every element of K by its shape, which is
-            # how a role reads K in full and may rely on an absence in a theory table the view leaves alone (O8).
+            # how a role reads K in full and may rely on an absence in a theory table the view leaves alone.
             if head['relation'] in ACCESS and atom is not head and atom['relation'] in head['terms'] \
                     and len(atom['terms']) == 1 and atom['terms'][0].startswith('?') and atom['terms'][0] in head['terms']:
                 continue

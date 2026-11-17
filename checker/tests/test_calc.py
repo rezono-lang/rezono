@@ -1,4 +1,4 @@
-"""RV-K04: the calculation check (rezono_checker/calc.py, decision W12) on planted faults, without the compiler.
+"""RV-K04: the calculation check (rezono_checker/calc.py) on planted faults, without the compiler.
 
 The example is one compiled calculation program, frozen as data in tests/fixtures/calc: `calc.json` (ir/calc.json),
 `snapshots.json` (every table as its rows; a calculation view as subject, value, state, reason) and
@@ -219,8 +219,8 @@ def epoch(forge=None, full=None) -> set[str]:
 
 
 def test_a_missing_calculated_row_refuses_the_complete_epoch_and_no_role():
-    """The complete epoch owes every subject its row. A role may read a subject and not see its calculated row
-    (decision O8), so its filtered snapshots get no such check. The example's own `invalid` results never
+    """The complete epoch owes every subject its row. A role may read a subject and not see its calculated row,
+    so its filtered snapshots get no such check. The example's own `invalid` results never
     publish (`calc_invalid`); that is all an epoch of it is refused for."""
     everything = set(frozen("snapshots.json"))
     assert epoch() == epoch(full=everything) == {"calc_invalid"}

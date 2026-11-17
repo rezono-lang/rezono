@@ -504,7 +504,7 @@ def sealed():
 
 
 def test_epoch_recomputes_a_seal():
-    """check_epoch with seals (decision E3): row hashes, refused and accepted input are what the snapshots give."""
+    """check_epoch with seals: row hashes, refused and accepted input are what the snapshots give."""
     from rezono_checker.check import check_epoch
     from rezono_checker.rules import load_seals
 

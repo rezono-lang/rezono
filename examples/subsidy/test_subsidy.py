@@ -5,7 +5,7 @@
 - The evaluation date decides which partial rate counts: before 1 July 2026 an award at the partial
   rate is lower, to the cent as reference.py computes it.
 - The supposition of the last scenario moves the awards the README names: who gains, who loses, who stays.
-- Through the publisher (O8): the policy adviser gets every award but nothing of the ledger; and a claim
+- Through the publisher: the policy adviser gets every award but nothing of the ledger; and a claim
   that differs from the quotes by one cent (the invariant costs_mismatch) stops the publication.
 - std-time through views.yaml (T1): the policy adviser reads how each scheme parameter stands on the
   evaluation day, with a proof down to the parameter's own valid_until; a role without grants reads none of it.
@@ -266,7 +266,7 @@ def own(s, m, role: str) -> dict[str, bytes]:
 def test_the_public_reads_the_scheme_and_no_case(tmp_path):
     """`public` is a role like any other (Y1.2): it reads the scheme, and so it sees that every amount and
     rate stands on a council decision in force, with the proof. It reads no case, so it has no award, no
-    assessment and no count over them (O8): not zero rows of a relation it half reads, no relation at all."""
+    assessment and no count over them: not zero rows of a relation it half reads, no relation at all."""
     s, m = published(HERE, tmp_path)
     relations = sorted(name.rsplit("/", 1)[1][:-len(".json")] for name in publish.role_objects(s, PACK, "m-1", "checker")
                        if name.startswith("relations/"))

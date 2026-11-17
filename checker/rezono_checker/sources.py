@@ -7,7 +7,7 @@ gets, never from what the publisher selected. Every finding blocks.
 
 - The entries name exactly the base rows of the role's snapshots, by their typed RowRef (relation and
   canonical key), in (relation, key) order (C1, by UTF-16 code units), each once: no entry for a row the
-  role does not read (O8), none missing.
+  role does not read, none missing.
 - Each has at least one source, in canonical order without duplicates, and each source has its kind's fields.
 
 A source's metadata is the declared unit that belongs to its row: it follows the readable row as a whole,

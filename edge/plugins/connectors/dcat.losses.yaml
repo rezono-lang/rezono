@@ -1,4 +1,4 @@
-# The DCAT entry of a published epoch (decision O12a; dcat.py), read by a catalogue that knows DCAT: what it
+# The DCAT entry of a published epoch (dcat.py), read by a catalogue that knows DCAT: what it
 # does not get. An entry points at the data and holds none, so nearly everything is behind a link; this list
 # says which part of the meaning a reader reaches only by following one. Plain DCAT 3 and Dublin Core terms:
 # no extension. test_dcat.py holds this list to the entry.

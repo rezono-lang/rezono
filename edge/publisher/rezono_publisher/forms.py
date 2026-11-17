@@ -104,7 +104,7 @@ MAIN = re.compile(r"^m-(\d+)$")
 OBJECTS = ("schema.json", "rows.json", "hashes.json")
 CONNECTORS = ROOT / "edge" / "plugins" / "connectors"  # the standards exporters (docs/standards.md)
 # The standards exports of a role's form (RV-K20), in the order they are made, each with its loss list
-# (contracts/connector.yaml): the RDF view and its JSON-LD context (§5), the role's witnesses as PROV-O (O12c),
+# (contracts/connector.yaml): the RDF view and its JSON-LD context (§5), the role's witnesses as PROV-O,
 # the SHACL shapes, the ODCS contract and the DCAT entry, which names the others by addresses relative to the
 # index. Each loss list is written under the same prefix, by its own name.
 EXPORTS = {
@@ -447,7 +447,7 @@ def role_files(st, pack: str, m: dict, bundle: bytes, role: str) -> list[tuple[s
     listable([*names, statements.NAME])
     data |= made | losses(made) | tables
     base = prefix(pack, manifest, role)
-    # The statement's subjects are every object of the role's form (Y2.7), the tables among them: made last.
+    # The statement's subjects are every object of the role's form, the tables among them: made last.
     sources = sources_of(m, role)
     timing.switch(f"{role} statement")
     try:

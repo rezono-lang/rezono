@@ -132,7 +132,7 @@ def test_a_ledger_payment_does_not_change_the_policy_adviser_s_form(world, tmp_p
     other, _ = published(d, tmp_path / "store")
     assert objects(other, "policy_adviser") == objects(s, "policy_adviser")
     assert objects(other, "case_officer")["rows.json"] != objects(s, "case_officer")["rows.json"]
-    # RV-X41: the epoch statement too (O8): the policy adviser's is the same bytes, the case officer's is not.
+    # RV-X41: the epoch statement too: the policy adviser's is the same bytes, the case officer's is not.
     assert objects(other, "policy_adviser")[statement.NAME] == objects(s, "policy_adviser")[statement.NAME]
     assert objects(other, "case_officer")[statement.NAME] != objects(s, "case_officer")[statement.NAME]
 

@@ -1,4 +1,4 @@
-"""Checks as data (decision E11): one view per check kind, metadata as rows from the definition only."""
+"""Checks as data: one view per check kind, metadata as rows from the definition only."""
 
 from __future__ import annotations
 
@@ -75,7 +75,7 @@ CHANGES = {
 
 @pytest.mark.parametrize("change", sorted(CHANGES))
 def test_a_schema_change_of_a_check_is_a_change_of_rows(fixture, tmp_path, change):
-    """Decision E11: the engine program stays the same bytes, so Feldera does not build; the metadata rows
+    """The engine program stays the same bytes, so Feldera does not build; the metadata rows
     and the bundle change. A per-slot parameter table exists only when a rule reads it."""
     def base(s):  # both versions have the kinds and enums the change points to
         s["enums"]["Level"] = {"permissible_values": {"one": {}, "two": {}}}
@@ -114,7 +114,7 @@ def test_rezono_is_reserved_for_the_engine(fixture, name):
 
 
 def test_check_metadata_never_comes_from_facts_scenarios_or_a_delta(fixture, tmp_path):
-    """Decision E11: rezono__* rows come only from the compiled definition. A fact file, a scenario and a
+    """Rezono__* rows come only from the compiled definition. A fact file, a scenario and a
     delta that name them are refused, so a change of data can never switch a check off."""
     from rezono_compiler import scenarios
     model = pack.read(fixture)

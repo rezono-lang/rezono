@@ -90,7 +90,7 @@ sheet.kind = {{{$kind} {$id}}}
 name.separator = {{ · }}
 value.separator = {{, }}
 value.reason = {{{$value} ({$reason})}}
-# MOD18: een slot zonder rij in een gesloten wereld (W6); onbekend blijft `status.unknown`.
+# MOD18: een slot zonder rij in een gesloten wereld; onbekend blijft `status.unknown`.
 value.none = geen waarde
 # Getaltypografie (docs/gui.md, Number typography): het echte minteken, het teken voor afgerond (exact heeft geen teken) en de breuk.
 number.minus = −

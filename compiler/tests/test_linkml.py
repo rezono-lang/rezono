@@ -167,7 +167,7 @@ def test_a_multivalued_slot_is_a_link_kind_without_functionality(fixture, tmp_pa
     assert "beta__state__functionality" not in files["engine/integrity.sql"]
     params = json.loads(files["engine/parameters.json"])
     assert params["rezono__maximum_cardinality"] == [{"kind": "beta", "slot": "state", "v": 2}]
-    assert "beta__state__maximum_cardinality" not in params  # no rule reads it (E11)
+    assert "beta__state__maximum_cardinality" not in params  # no rule reads it
     got = run(fixture, tmp_path, "alpha: [{id: a, title: t}]\nbeta:\n  - {id: ok, alpha: a, state: [low, high]}\n"
                                  "  - {id: none, alpha: a}\n  - {id: same, alpha: a, state: [low, low]}\n")
     assert got == text({"beta__state__cardinality": {("none", 0)}})

@@ -5,7 +5,7 @@
 format: rezono.questions/1
 questions:
   # Who decided this, and when? From a conclusion back to each decision in force it rests on, and on to that
-  # decision itself. Who and when are fields of its record, and its sources (S25) end the walk.
+  # decision itself. Who and when are fields of its record, and its sources end the walk.
   - term: decided
     start: present
     applies_to: {derivation: conclusion}

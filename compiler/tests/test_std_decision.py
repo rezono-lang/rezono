@@ -286,7 +286,7 @@ def test_must_fail_the_schema_rules(tmp_path):
 
 def test_a_ground_is_a_link_between_two_decisions_and_a_reassessment_an_arrow(tmp_path):
     """S27: Ground is a relation kind named by its ends, the decision and the one it rests on, and a second row
-    for the same pair breaks its key. What a decision looked at again is an arrow on it, and open (W6): no
+    for the same pair breaks its key. What a decision looked at again is an arrow on it, and open: no
     record of a reassessment leaves unknown whether there was one. The pack follows the grounds and holds them to
     one axiom (ground_cycle); no rule of the pack reads a reassessment (README, "What a decision rests on")."""
     model = pack.read(STD)

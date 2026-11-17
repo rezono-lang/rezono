@@ -15,7 +15,7 @@ repeat_application(h, n) :- application_count(h, n), n >= 2.
 // and `award` (the entitlement, at most the parameter `maximum_award` of article 7, whose row the award's proof
 // names). Only a known value is a fact for a rule, so an application whose award is unknown is not in it
 // (docs/compiler/rules.md, "Calculation values in rules"). Worth a look before deciding: the household asked
-// for more than the scheme pays (Q11).
+// for more than the scheme pays.
 .decl maximum_applied(application: symbol, entitlement: number, award: number)
 maximum_applied(a, e, w) :- calc__entitlement(a, e, "known", ""), calc__award(a, w, "known", ""), w < e.
 

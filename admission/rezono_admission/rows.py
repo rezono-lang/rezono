@@ -65,8 +65,8 @@ class _Refused(Exception):
 def rows(schema: Schema, data, *, on_record=None, on_row=None, context=None
          ) -> tuple[dict[str, list[tuple]], list[Refusal]]:
     """Records per kind as rows per engine table, sorted as the compiler sorts them, and every refusal. With a
-    refusal of the document itself there are no rows. The generated tables of sealed kinds (decision E3,
-    `<kind>__row_sha256`) are not made here: the bundle does not say yet which kinds are sealed.
+    refusal of the document itself there are no rows. The generated tables of sealed kinds
+    (`<kind>__row_sha256`) are not made here: the bundle does not say yet which kinds are sealed.
 
     An observer, for a caller that needs to know where each row comes from (the compiler's sources): `on_record(
     kind, id, context)` is called for every record, inlined ones too, and returns the context of its rows and of

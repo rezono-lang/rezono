@@ -1,4 +1,4 @@
-"""DV1: a pack says which kinds hold decided values (`plane: control`, decision O13; publication L0 §3.7). The
+"""DV1: a pack says which kinds hold decided values (`plane: control`; publication L0 §3.7). The
 compiler reads the marker and its owner, refuses a control kind that cannot name its decision, writes both into
 the schema bundle, and its loader refuses a decided value without its decision. A kind that says nothing is a
 data-plane kind and its bundle entry is unchanged."""

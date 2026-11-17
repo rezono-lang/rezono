@@ -255,7 +255,7 @@ def with_icon(fixture, svg, sources=None):
 
 
 def test_an_icon_reaches_the_bundle_as_a_tree_of_safe_elements(fixture):
-    """Decision B10: the kind sign names the icon by hash; the bundle carries it as elements, never SVG text."""
+    """The kind sign names the icon by hash; the bundle carries it as elements, never SVG text."""
     with_icon(fixture, ICON)
     bundle = json.loads(emit.compile_pack(pack.read(fixture))["bundle/schema-bundle.json"])
     digest = hashlib.sha256(ICON).hexdigest()
@@ -283,7 +283,7 @@ def test_an_icon_off_the_safe_list_or_without_source_blocks(fixture, svg, source
     refused(fixture, message)
 
 def test_an_image_binding_reaches_the_bundle_by_element_id(fixture):
-    """Decision B10: a text slot becomes an image by the channel table's binding; its meaning is the pack's."""
+    """A text slot becomes an image by the channel table's binding; its meaning is the pack's."""
     with (fixture / "channels.yaml").open("a") as f:
         f.write("images:\n  - {kind: alpha, slot: alpha.title}\n")
     bundle = json.loads(emit.compile_pack(pack.read(fixture))["bundle/schema-bundle.json"])
@@ -502,8 +502,8 @@ ORDERED = FLOW.replace("slot: beta.state, level: nominal", "slot: beta.alpha, le
 
 
 def test_a_flow_without_a_lane_order_is_refused(fixture):
-    """A lane bound as ordered says that the place of a lane means something, so its order is declared (decision
-    B12): there is no alphabetical fallback. The target kind of the lane's arrow has no order here."""
+    """A lane bound as ordered says that the place of a lane means something, so its order is declared:
+    there is no alphabetical fallback. The target kind of the lane's arrow has no order here."""
     with (fixture / "channels.yaml").open("a") as f:
         f.write(ORDERED)
     refused(fixture, "flow chain: lane 'beta.alpha' of beta is bound as ordered, but alpha has no order: "
@@ -1052,7 +1052,7 @@ def test_missing_contracts_are_an_error_that_names_where_it_looked(tmp_path, mon
 
 
 def test_the_golden_form_keeps_the_bundle_in_full():
-    """Decision A8: a compiled file above the bound is in the golden by its hash, except a file named in FULL
+    """A compiled file above the bound is in the golden by its hash, except a file named in FULL
     (the schema bundle), which other tools read back from the golden."""
     import golden
 
@@ -1090,7 +1090,7 @@ def test_a_failed_golden_explains_itself_in_a_few_lines():
 @pytest.mark.xfail(strict=True, reason="generated expected/compiled goldens are not stored in git")
 def test_no_committed_manifest_hashes_an_always_full_file():
     """A committed large-files.json never lists a file of FULL: such a file is read back from the golden, so a
-    regeneration under an older golden.py must not leave it as a hash (decision A8). Reads the goldens only."""
+    regeneration under an older golden.py must not leave it as a hash. Reads the goldens only."""
     import golden
 
     examples = REPO / "examples"

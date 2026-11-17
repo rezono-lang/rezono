@@ -1,4 +1,4 @@
-"""The issues of job `forms` of promote.yml (RV-K16 revised; decision A11): per pack one issue while its forms are
+"""The issues of job `forms` of promote.yml (RV-K16 revised): per pack one issue while its forms are
 red, refused, in error or stopped (a timeout), and one for a run that failed before it named any pack.
 
   python deploy/profiles/edge/forms_issue.py

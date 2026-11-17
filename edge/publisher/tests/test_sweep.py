@@ -351,7 +351,7 @@ def test_a_pack_without_a_sweep_has_no_variants(repo, tmp_path):
 
 def test_who_gets_a_variant_and_who_sees_its_status_follow_the_access_of_a_publication():
     # The toy of test_publish: the guest is granted some nodes; with `full` its read rules give every kind in
-    # full by their shape (O8), so its status is derived only from rows it reads.
+    # full by their shape, so its status is derived only from rows it reads.
     from test_publish import SECRET, epoch
 
     roles = {"checker": "complete", "guest": "may_read"}

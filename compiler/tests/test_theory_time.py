@@ -577,7 +577,7 @@ def test_a_domain_kind_that_is_an_interval_gets_the_theory_through_the_ordinary_
 def test_must_fail_a_domain_rule_that_negates_holds_at_is_refused(tmp_path):
     """REVIEW (18)'s P2 on #654, with RV-C18: holds_at is open, because it reads a bound that may not be
     recorded. A domain rule that concludes "does not hold" from a missing holds_at row would read an unknown
-    as a no, so the ordinary compiler refuses it (W6). The same rule as an @absence relation is allowed: it
+    as a no, so the ordinary compiler refuses it. The same rule as an @absence relation is allowed: it
     then speaks about what is recorded, and is closed."""
     domain = bound_domain(tmp_path)
     (domain / "rules").mkdir()

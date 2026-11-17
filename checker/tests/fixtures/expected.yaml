@@ -5,6 +5,6 @@ aggregation-known: []
 aggregation-unknown: []
 screened: []
 cycle: [cycle]
-# Calculation witnesses (W12) are not read by the checker yet (design step 4): the root has no rule witness.
+# Calculation witnesses are not read by the checker yet (design step 4): the root has no rule witness.
 calculation: [root_not_derived]
 calculation-unknown: [root_not_derived]

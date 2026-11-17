@@ -1,4 +1,4 @@
-# An access semantics the gate does not know (decision O8): only 2 is valid.
+# An access semantics the gate does not know: only 2 is valid.
 id: m-1
 epoch: 1
 knowledge_time: "2026-01-01T00:00:00Z"

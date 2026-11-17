@@ -1,4 +1,4 @@
-# A delimited release (O8) is reserved in the contract, but not supported yet: refused until it is built.
+# A delimited release is reserved in the contract, but not supported yet: refused until it is built.
 format: rezono.rules/1
 pack: fixture
 relations:

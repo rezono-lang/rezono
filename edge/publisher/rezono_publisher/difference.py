@@ -1,4 +1,4 @@
-"""What a proposal or variant changes, per role (decision R10, step 7; docs/gui.md, "suppose in profile edge").
+"""What a proposal or variant changes, per role (step 7; docs/gui.md, "suppose in profile edge").
 
   python -m rezono_publisher.difference PACK MANIFEST [--profile p | --store url]
 
@@ -182,7 +182,7 @@ def withheld(rules_doc: dict | None, bundle: dict | None, delta: dict | None) ->
     the delta, or without its rules or bundle, it is withheld (fail closed).
 
     A base relation of the rules is a schema table, except two kinds the compiler makes from other tables:
-    - A seal's relations (`k__refused`, `k__accepted`, `k__row_sha256`, each `p__accepted`; decision E3) follow
+    - A seal's relations (`k__refused`, `k__accepted`, `k__row_sha256`, each `p__accepted`) follow
       from the sealed kind, every part and the closes. With one of them in the closure, a change to any table
       the seal reads is withheld, whatever its op: an edited part refuses its element, which can grant a right.
     - A calculation selection (`calc__…`, role `calc`) follows from whatever the calculation reads. The

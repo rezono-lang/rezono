@@ -1,4 +1,4 @@
-"""Decision E11: the bundled checks (one view per check kind) on every example pack and fact state.
+"""The bundled checks (one view per check kind) on every example pack and fact state.
 
 For every example pack and every fact state (the facts, each scenario, each diagnostic), and for each state
 again with planted violations of every generic check made from the IR, the compiled `engine/integrity.sql`

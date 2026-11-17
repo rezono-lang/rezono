@@ -5,7 +5,7 @@ description: >-
   calendar, or the rank of a stage. An interval is half-open: it covers start <= p < end. A bound is stated,
   or stated to be absent, or not recorded; a bound nobody recorded is unknown, never a number and never "no
   bound" (RV-C13), and so is a knowledge time nobody recorded (RV-C18). A reference is a position for which the intervals are read: a fact, never the clock. The axioms and the derived relations are in rules/time.dl. The mapping annotations
-  compare with OWL-Time (decision O12b); no rule reads them.
+  compare with OWL-Time; no rule reads them.
 in_language: en
 prefixes:
   linkml: https://w3id.org/linkml/
@@ -88,7 +88,7 @@ classes:
       start:
         range: integer
         description: >-
-          The first position it covers. Open world (W6): an interval without this row and without
+          The first position it covers. Open world: an interval without this row and without
           unbounded start has a start nobody recorded, which is unknown.
         close_mappings: ["time:hasBeginning"]
         annotations:
@@ -96,7 +96,7 @@ classes:
       end:
         range: integer
         description: >-
-          The first position it no longer covers. Open world (W6): an interval without this row and without
+          The first position it no longer covers. Open world: an interval without this row and without
           unbounded end has an end nobody recorded, which is unknown.
         close_mappings: ["time:hasEnd"]
         annotations:

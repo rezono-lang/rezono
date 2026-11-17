@@ -1,7 +1,7 @@
 """Decision tables of modules written in Rezono, lowered to rules (docs/rezono/publication.md §9.1, RV-C36).
 
 A derived value with `table unique` under `extend K` lowers to the rules a rule file could state: a named outcome
-of K (decision W7) with one state for every element, the relation of its value, and an invariant that two rows
+of K with one state for every element, the relation of its value, and an invariant that two rows
 never apply to one element. The rules are written as the text of a rule file and `rules_dl.read` reads them as it
 reads `rules/*.dl`, so every check, engine, proof and oracle holds for them unchanged; each rule's origin is the
 module's file and the line of the part of the table it comes from. Nothing is evaluated here, and nothing is
@@ -84,7 +84,7 @@ def lower(pack, pack_dir: Path, d, form: dict, gen: Generated, errors: list[str]
             continue
         kind = pack.kinds[k]
         if kind.world != "closed":
-            refuse(at, f"{decl['extend']} is open: a table reads closed relations only (decision W7)")
+            refuse(at, f"{decl['extend']} is open: a table reads closed relations only")
             continue
         if kind.seal is not None or kind.sealed_with is not None:
             refuse(at, f"{decl['extend']} is sealed: a table on a sealed kind is not lowered yet")

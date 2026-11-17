@@ -47,7 +47,7 @@ enums:
       number: {description: An exact fraction.}
       boolean: {}
   FactReading:
-    description: How a fact leaf is read for a subject (decision W11).
+    description: How a fact leaf is read for a subject.
     permissible_values:
       attribute: {description: "A required attribute of the subject kind, a table (id, v); missing is unknown."}
       optional: {description: "An optional attribute of the subject kind; missing is not_applicable."}
@@ -168,7 +168,7 @@ classes:
 
   CalcIR:
     description: >-
-      ir/calc.json: the program as the compiler bound it (decision W12): templates filled in, every fact
+      ir/calc.json: the program as the compiler bound it: templates filled in, every fact
       bound to where it is read, the view of every rule and version. The publisher and the checker read
       it instead of calc/*.yaml; the checker evaluates it on its own.
     attributes:
