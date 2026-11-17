@@ -318,8 +318,16 @@ def main() -> int:
     args = parser.parse_args()
     if args.skips:
         counts: Counter[str] = Counter()
+        oracle_cases = []
         for report in args.skips:
-            for skip in ET.parse(report).iter("skipped"):
+            suite = ET.parse(report)
+            for case in suite.iter("testcase"):
+                name = case.get("name", "")
+                if "souffle" in name.lower() and not any(
+                    case.find(tag) is not None for tag in ("skipped", "failure", "error")
+                ):
+                    oracle_cases.append(name)
+            for skip in suite.iter("skipped"):
                 if skip.get("type") != "pytest.xfail":
                     counts[skip.get("message", "unspecified")] += 1
         if args.json:
@@ -328,6 +336,9 @@ def main() -> int:
             for reason, count in sorted(counts.items()):
                 print(f"{count} skipped: {reason}")
             print(f"Total skipped: {sum(counts.values())}")
+            if oracle_cases:
+                print(f"Passed tests naming the Souffle oracle: {len(oracle_cases)}")
+                print(f"Example: {sorted(oracle_cases)[0]}")
         return 0
 
     if args.counts:
