@@ -1,4 +1,4 @@
-"""The epoch statement of one role (RV-X41; publication.statement; docs/ring2/signing.md).
+"""The epoch statement of one role (RV-X41; rezono_publication.statement; docs/ring2/signing.md).
 
 On the collection of l0.md §3.1 (case R01 with the fixture schema): the row tree against the RFC 9162 test
 vectors (the oracle of signing.md, "How it is checked"), the statement's bytes, and the reader's check: a changed
@@ -13,9 +13,9 @@ from pathlib import Path
 import pytest
 import yaml
 
-from publication import l0
-from publication import statement as st
-from publication.hash import EMPTY, hashes
+from rezono_publication import l0
+from rezono_publication import statement as st
+from rezono_publication.hash import EMPTY, hashes
 
 CASES = Path(__file__).resolve().parents[2] / "docs" / "publication" / "cases"
 SCHEMA = json.loads((CASES / "fixture.schema.json").read_text("utf-8"))

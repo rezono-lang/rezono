@@ -1,12 +1,12 @@
 """The epoch statement of one role (RV-X41; docs/ring2/signing.md, "What is signed"; decisions Y2.7, Y2.8).
 
-  python -m publication.statement verify DIR [--policy profile.yaml | --key seal.pub]
+  python -m rezono_publication.statement verify DIR [--policy profile.yaml | --key seal.pub]
 
 One small document per published epoch and filtered role, the one thing a signature covers (RV-X42): an
 in-toto Statement (v1) whose subjects are the objects of the role's publication form by their sha256, and whose
 predicate binds what the role reads and nothing more:
 
-- the role's manifest as its form carries it (`publication.publication.role_manifest`: id, epoch, knowledge time,
+- the role's manifest as its form carries it (`rezono_publication.publication.role_manifest`: id, epoch, knowledge time,
   definition hash and compiled files), by its canonical hash, with the names a reader looks for spelled out;
 - the role's own snapshots, by relation and sha256 (the files the form was made from);
 - the schema id, the dataset hash `d-…` and the annotation hash of §6.2, unchanged;
@@ -31,7 +31,7 @@ and its dataset pin, roots and inclusion hash are recomputed from the subjects' 
 read back with the L0 reader). A difference is named; an empty list is a statement that says what its files say.
 
 `verify_signature` is the reader's check of the signature (RV-X42): `statement.sigstore.json`, the Sigstore bundle
-cosign writes over the statement's bytes, beside it. It is RV-K23's one verification (`publication.seal`: its
+cosign writes over the statement's bytes, beside it. It is RV-K23's one verification (`rezono_publication.seal`: its
 trust policy, its cosign, its key and its loop, `seal.Cosign.accepted`), on a file instead of a registry digest:
 one verifier of the policy that accepts is enough, and it reads only the statement, the signature and the public
 key. Without a policy the CLI says "signature not checked", never "verified". The signing itself is an effect
@@ -122,7 +122,7 @@ def _text(value) -> str:
 
 def make(index: dict, objects: dict[str, bytes], schema: dict, rows: list) -> dict:
     """The statement of the role whose form index and objects these are. `objects` are every object the index
-    names except the statement; `schema` and `rows` are the form's own, as `publication.publication.form` made
+    names except the statement; `schema` and `rows` are the form's own, as `rezono_publication.publication.form` made
     them (or as the L0 reader reads them back from those objects)."""
     m = index["manifest"]
     h = hashes(schema, rows)
@@ -410,7 +410,7 @@ def trust_of(policy: str | Path | None = None, key: str | Path | None = None):
 
 
 def main(argv=None) -> int:
-    p = argparse.ArgumentParser(prog="publication.statement")
+    p = argparse.ArgumentParser(prog="rezono_publication.statement")
     p.add_argument("command", choices=["verify"])
     p.add_argument("folder", type=Path, help="a role's form: index.json and the objects it names, side by side, "
                                              f"and {SIGNATURE} when a signature is checked")

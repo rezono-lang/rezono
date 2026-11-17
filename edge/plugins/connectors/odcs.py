@@ -1,7 +1,7 @@
 """The ODCS data contract of a publication schema (docs/publication/l0.md §2.5; lane M, M09).
 
 The contract describes the columnar form of a view (§4): what a reader of the Parquet files may rely on. It is
-made from the schema document alone, through the library's own writer (`publication.arrow.to_arrow` on no rows),
+made from the schema document alone, through the library's own writer (`rezono_publication.arrow.to_arrow` on no rows),
 so a table, a column, its storage and whether it may be null are never restated here. What ODCS cannot say is in
 `odcs.losses.yaml`.
 
@@ -35,12 +35,12 @@ from fractions import Fraction
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
-sys.path.insert(0, str(ROOT))  # publication lives at the repository root
+sys.path.insert(0, str(ROOT))  # rezono_publication lives at the repository root
 
 import pyarrow as pa  # noqa: E402
 import yaml  # noqa: E402
 
-from publication import arrow, l0  # noqa: E402
+from rezono_publication import arrow, l0  # noqa: E402
 
 ODCS_VERSION = "v3.2.0"  # Q12: the one place that names it
 REASON_CODE = "^([a-z][a-z0-9_]*)?$"  # §2.3: empty, or a reason code

@@ -14,8 +14,8 @@ import yaml
 
 from rezono_canon import canonical_json, canonical_sha256
 
-from publication import l0
-from publication.hash import hash_rows, hashes
+from rezono_publication import l0
+from rezono_publication.hash import hash_rows, hashes
 
 ROOT = Path(__file__).resolve().parents[2]
 CASES = ROOT / "docs" / "publication" / "cases"

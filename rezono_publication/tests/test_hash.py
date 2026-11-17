@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from publication.hash import EMPTY, H, HashError, hash_rows, hashes, schema_id
+from rezono_publication.hash import EMPTY, H, HashError, hash_rows, hashes, schema_id
 
 ROOT = Path(__file__).resolve().parents[2]
 CASES = ROOT / "docs" / "publication" / "cases"
@@ -223,7 +223,7 @@ def test_a_subkind_is_a_kind_table_of_its_own_and_the_hash_rule_is_the_same():
     """RV-K26 (§2.1 `parent`, §4.1): an element of a subkind is one hash row, in the subkind's table, with every
     slot; its sets are the subkind's relation tables. `parent` is in the schema id and nowhere else: a verifier
     that does not know the member gets the same table hashes."""
-    from publication.tests.test_l0 import TREE, TREE_ROWS
+    from rezono_publication.tests.test_l0 import TREE, TREE_ROWS
 
     rows = hash_rows(TREE, TREE_ROWS)
     assert rows["Host"] == [{"$key": ["host-a"], "memory_need": "429496729600", "owner": "ops"}]
