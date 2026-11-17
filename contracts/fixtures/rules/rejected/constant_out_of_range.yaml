@@ -1,5 +1,5 @@
 # A constant outside BIGINT (2^63): refused, since SQL casts it to BIGINT and no engine has it as a value.
-format: rede.rules/1
+format: rezono.rules/1
 pack: fixture
 relations:
   - name: size

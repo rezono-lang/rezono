@@ -1,0 +1,12 @@
+# A time selection on a value is reserved (expressions.md §1): its text is an R015 and has no form.
+format: rezono.module/1
+module:
+  pack: lab
+  use: []
+  decls:
+    - extend: Host
+      derived:
+        - derived: before
+          type: GiB
+          value: {timesel: [{path: [memory]}, {at: {path: [since]}}]}
+spans: []

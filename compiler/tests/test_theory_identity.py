@@ -14,8 +14,8 @@ import pytest
 import yaml
 from hypothesis import given, settings, strategies as st
 
-from rede_compiler import batch, emit, modules, pack
-from rede_compiler import rules as ir
+from rezono_compiler import batch, emit, modules, pack
+from rezono_compiler import rules as ir
 from support import typed
 import souffle
 
@@ -94,7 +94,7 @@ def domain(tmp_path, view=None):
     else:
         item = {"is_a": "Referent", "attributes": {"label": {}, "size": {"range": "integer"}}}
         imports = ["linkml:types", "std-identity:identity"]
-    write(d / "schema" / "domain.yaml", {"id": "https://rede.example/domain", "name": "domain",
+    write(d / "schema" / "domain.yaml", {"id": "https://rezono.example/domain", "name": "domain",
           "prefixes": {"linkml": "https://w3id.org/linkml/"}, "imports": imports, "default_range": "string",
           "annotations": {"layer": "facts"}, "classes": {"Item": item}})
     write(d / "labels" / "en.yaml", {"item": "item", "item.label": "label", "item.size": "size"}
@@ -102,7 +102,7 @@ def domain(tmp_path, view=None):
     write(d / "channels.yaml", {"kinds": [{"kind": "item", "shape": "rect"}]})
     (d / "rules" / "values.dl").write_text(VALUES, encoding="utf-8", newline="\n")
     if view:
-        write(d / "views.yaml", {"format": "rede.views/1", "views": [view]})
+        write(d / "views.yaml", {"format": "rezono.views/1", "views": [view]})
     return d
 
 

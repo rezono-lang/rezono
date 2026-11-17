@@ -1,5 +1,5 @@
-# The SHACL shapes of a Reckon Data schema (docs/reckon-data/l0.md §5; shacl.py), read by a SHACL validator:
-# what it does not check that Rede's own reader does, and what the shapes do not say. The shapes are plain
+# The SHACL shapes of a publication schema (docs/publication/l0.md §5; shacl.py), read by a SHACL validator:
+# what it does not check that Rezono's own reader does, and what the shapes do not say. The shapes are plain
 # SHACL Core: no extension. test_shacl.py holds this list to the shapes.
 connector: shacl-out
 standard: SHACL

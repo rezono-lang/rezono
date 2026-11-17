@@ -1,6 +1,6 @@
-# The access gate as a Node service (edge/gate/src/node.ts, port 8080). REDE_AUTH=oidc: it verifies the bearer
+# The access gate as a Node service (edge/gate/src/node.ts, port 8080). REZONO_AUTH=oidc: it verifies the bearer
 # token itself against the issuer's keys and takes the role from a claim (the overlay's ConfigMap `gate`). It
-# reads the store with keys that may only read (rede-gate) and writes nothing of its own. Proposals and live
+# reads the store with keys that may only read (rezono-gate) and writes nothing of its own. Proposals and live
 # `suppose` are components an overlay adds (components/propose, components/live).
 apiVersion: apps/v1
 kind: Deployment
@@ -23,21 +23,21 @@ spec:
           type: RuntimeDefault
       containers:
         - name: gate
-          image: rede-gate
+          image: rezono-gate
           envFrom:
             - configMapRef:
                 name: gate
           env:
             - name: PORT
               value: "8080"
-            - name: REDE_AUTH
+            - name: REZONO_AUTH
               value: oidc
             - name: AWS_ACCESS_KEY_ID
               valueFrom:
-                secretKeyRef: { name: rede-gate, key: store-key-id }
+                secretKeyRef: { name: rezono-gate, key: store-key-id }
             - name: AWS_SECRET_ACCESS_KEY
               valueFrom:
-                secretKeyRef: { name: rede-gate, key: store-secret }
+                secretKeyRef: { name: rezono-gate, key: store-secret }
           ports:
             - { name: http, containerPort: 8080 }
           readinessProbe:

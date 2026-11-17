@@ -1,5 +1,5 @@
 # An integer is decimal text in JSON, never a JSON number.
-format: rede.pipelines/1
+format: rezono.pipelines/1
 max_views: 64
 pipelines:
   - {name: main, sql: [engine/tables.sql, engine/integrity.sql, engine/rules.sql]}

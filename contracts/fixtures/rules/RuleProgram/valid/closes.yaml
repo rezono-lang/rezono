@@ -1,6 +1,6 @@
 # narrow closes wide (decision W14, `// @closes wide`): a row of narrow says that no row of wide holds at its
 # key. The program holds the invariant narrow_closes_wide, with the one rule that finds a key in both.
-format: rede.rules/1
+format: rezono.rules/1
 pack: fixture
 relations:
 - name: alpha__size

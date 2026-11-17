@@ -15,16 +15,16 @@ from pathlib import Path
 import pytest
 
 pytest.importorskip("duckdb")
-pytest.importorskip("rede_compiler")
+pytest.importorskip("rezono_compiler")
 
 HERE = Path(__file__).parent
 ROOT = HERE.parents[1]
 SCHEME = HERE.parent / "subsidy-scheme"  # the definition the pack imports (RV-X35)
 PAGE = (ROOT / "docs" / "tutorial.md").read_text(encoding="utf-8")
 SCENARIO = "examples/subsidy/scenarios/5-higher-allowance.yaml"
-COMMANDS = ["python -m rede_compiler check examples/subsidy",
-            "python -m rede_compiler compile examples/subsidy generated/subsidy",
-            "python -m rede_compiler explain examples/subsidy generated/subsidy-explained",
+COMMANDS = ["python -m rezono_compiler check examples/subsidy",
+            "python -m rezono_compiler compile examples/subsidy generated/subsidy",
+            "python -m rezono_compiler explain examples/subsidy generated/subsidy-explained",
             "python examples/subsidy/reference.py --summary",
             "python examples/subsidy/reference.py --summary"]
 

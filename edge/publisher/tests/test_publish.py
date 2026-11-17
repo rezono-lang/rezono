@@ -8,11 +8,11 @@ from pathlib import Path
 
 import pytest
 
-from rede_canon import canonical_json, canonical_sha256
-from rede_checker import access as checker_access
-from rede_checker import metadata
-from rede_publisher import access, pointers, publish, retained_calculation, store
-from rede_publisher.publish import Epoch
+from rezono_canon import canonical_json, canonical_sha256
+from rezono_checker import access as checker_access
+from rezono_checker import metadata
+from rezono_publisher import access, pointers, publish, retained_calculation, store
+from rezono_publisher.publish import Epoch
 
 SECRET = "zz-secret"  # an element the guest may not read; its id must not reach any guest file
 
@@ -59,7 +59,7 @@ FUNCTION = "count"  # the aggregate of rule r9
 
 def rules(full=False, function=FUNCTION, role_rule=True):
     return {
-        "format": "rede.rules/1",
+        "format": "rezono.rules/1",
         "relations": [relation(n, "base", a) for n, a in BASE] + [relation(n, "derived", a) for n, a in DERIVED],
         "rules": [
             rule("a1", ("may_read", "?r", "node", "?x"), [lit("grant", "?r", "?x")]),
@@ -154,7 +154,7 @@ QUESTIONS = [
 def bundle(kinds, parents=None) -> str:
     """A schema bundle with the kinds and the questions: what the gate reads of it (fail closed without kinds).
     Plain sorted JSON, as the compiler writes it: a limit is a number there (canonical JSON writes text)."""
-    return json.dumps({"format": "rede.schema-bundle/1", "questions": QUESTIONS, "checks": [], "kinds": [
+    return json.dumps({"format": "rezono.schema-bundle/1", "questions": QUESTIONS, "checks": [], "kinds": [
         {"id": k, **({"parent": (parents or {})[k]} if k in (parents or {}) else {})} for k in sorted(kinds)]},
         sort_keys=True, separators=(",", ":")) + "\n"
 
@@ -283,13 +283,13 @@ def test_no_rule_definitions_never_give_green(tmp_path, witnesses):
 
 @pytest.mark.parametrize("ir", [json.dumps({**rules(), "format": None}),
                                 json.dumps({k: v for k, v in rules().items() if k != "format"}),
-                                json.dumps({**rules(), "format": "rede.rules/0"}), json.dumps(["not", "a", "dict"]),
+                                json.dumps({**rules(), "format": "rezono.rules/0"}), json.dumps(["not", "a", "dict"]),
                                 "{not json"],
                          ids=["format-null", "no-format", "other-format", "not-a-dict", "not-json"])
 def test_rules_must_be_the_rule_ir(tmp_path, ir):
     """The minimal form has no relation catalogue, so coverage could not be checked: refused."""
     s = store.FileStore(tmp_path)
-    with pytest.raises(publish.Blocked, match="rede.rules/1|not JSON"):
+    with pytest.raises(publish.Blocked, match="rezono.rules/1|not JSON"):
         publish.publish(epoch(rules=ir), s, ROLES)
     assert s.list("") == []
 
@@ -354,16 +354,16 @@ def test_manifest_lists_every_file_with_its_hash(tmp_path):
     assert json.loads(s.get("toy/manifests/m-1.json")) == m
     listed = m["snapshots"] + m["witnesses"]
     for f in listed:
-        key = f["uri"].removeprefix("s3://rede/")
+        key = f["uri"].removeprefix("s3://rezono/")
         assert hashlib.sha256(s.get(key)).hexdigest() == f["sha256"]
-    assert sorted({f["uri"].removeprefix("s3://rede/") for f in listed}) == [
+    assert sorted({f["uri"].removeprefix("s3://rezono/") for f in listed}) == [
         k for k in s.list("toy/") if not k.startswith(("toy/manifests/", "toy/bundles/", "toy/heads/", "toy/epochs/", "toy/bases/"))]
     assert {c["relation"]: c["rows"] for c in m["counts"]}["node"] == 4
 
 
 def test_the_manifest_names_its_access_semantics_and_a_definition_hash(tmp_path):
     """O8: the gate serves only manifests with access_semantics 2; the bundle path never names the facts."""
-    s, m = published(epoch(bundle='{"format":"rede.schema-bundle/1"}\n'), tmp_path)
+    s, m = published(epoch(bundle='{"format":"rezono.schema-bundle/1"}\n'), tmp_path)
     assert m["access_semantics"] == publish.ACCESS_SEMANTICS == 2
     assert m["definition_sha256"] == "4" * 64
     for c in m["compiled"]:
@@ -375,16 +375,16 @@ def test_the_manifest_names_its_access_semantics_and_a_definition_hash(tmp_path)
 
 def test_bundle_is_shared_by_definition_and_compiler(tmp_path):
     s = store.FileStore(tmp_path)
-    publish.publish(epoch(bundle='{"format":"rede.schema-bundle/1"}\n'), s, ROLES)
-    publish.publish(epoch(epoch=2, bundle='{"format":"rede.schema-bundle/1"}\n'), s, ROLES)
+    publish.publish(epoch(bundle='{"format":"rezono.schema-bundle/1"}\n'), s, ROLES)
+    publish.publish(epoch(epoch=2, bundle='{"format":"rezono.schema-bundle/1"}\n'), s, ROLES)
     assert s.list("toy/bundles/") == [f"toy/bundles/{'4' * 64}/{'2' * 64}.json", f"toy/bundles/{'4' * 64}/{'2' * 64}.rules.json"]
 
 
 def test_bundle_and_rule_ir_are_archived_with_their_hash(tmp_path):
-    s, m = published(epoch(bundle='{"format":"rede.schema-bundle/1"}\n'), tmp_path)
+    s, m = published(epoch(bundle='{"format":"rezono.schema-bundle/1"}\n'), tmp_path)
     assert [c["file"] for c in m["compiled"]] == ["bundle/schema-bundle.json", "ir/rules.json"]
     for c in m["compiled"]:
-        assert hashlib.sha256(s.get(c["uri"].removeprefix("s3://rede/"))).hexdigest() == c["sha256"]
+        assert hashlib.sha256(s.get(c["uri"].removeprefix("s3://rezono/"))).hexdigest() == c["sha256"]
     # The rule IR the proofs were checked against is always archived; the bundle only when there is one.
     assert [c["file"] for c in publish.publish(epoch(epoch=2, bundle=""), s, ROLES)["compiled"]] == ["ir/rules.json"]
 
@@ -393,7 +393,7 @@ def test_the_build_record_holds_the_profile_and_names_the_build(tmp_path):
     s = store.FileStore(tmp_path)
     build = {"compiler_sha256": "2" * 64, "python": {"implementation": "cpython", "version": "3.13.18"}}
     m = publish.publish(epoch(build=build), s, ROLES)
-    record = s.get(m["build"]["uri"].removeprefix("s3://rede/"))
+    record = s.get(m["build"]["uri"].removeprefix("s3://rezono/"))
     assert hashlib.sha256(record).hexdigest() == m["build"]["sha256"]
     assert json.loads(record) == build | {"profile": {"roles": dict(sorted(ROLES.items()))}}
     other = publish.publish(epoch(epoch=2, build=build), s, {"checker": "complete"})
@@ -498,7 +498,7 @@ def test_role_rows_the_guest_cannot_read_change_no_byte(tmp_path, named, worlds)
 def test_a_configured_role_the_pack_does_not_name_reads_nothing(tmp_path):
     """RV-S10: a2 and a3 are rules over every role, and derive rows only for a role the pack's facts name. A
     role of the profile that the pack does not name gets an empty projection and no witness, nothing in full.
-    Read by its shape alone, a2 gave such a role node in full, and the publication went red on `rede:access`."""
+    Read by its shape alone, a2 gave such a role node in full, and the publication went red on `rezono:access`."""
     s, m = published(epoch(full=True), tmp_path / "a", ROLES | {"stranger": "may_read"})
     mine = [x for x in m["snapshots"] if x["role"] == "stranger"]
     assert {x["relation"] for x in mine} == {x["relation"] for x in m["snapshots"] if x["role"] == "checker"}
@@ -513,7 +513,7 @@ def test_a_configured_role_the_pack_does_not_name_reads_nothing(tmp_path):
 
 def test_a_full_kind_with_an_unreadable_element_is_refused():
     """The read rules give node in full, but may_read misses an element: the data disagrees (a red check
-    `rede:access` in a publication)."""
+    `rezono:access` in a publication)."""
     e = epoch(full=True)
     rows = {**e.rows, "may_read": [r for r in e.rows["may_read"] if r[2] != SECRET]}
     with pytest.raises(access.Uncovered, match="kind node in full"):
@@ -752,7 +752,7 @@ def test_a_view_the_program_does_not_account_for_is_not_full():
 
 
 def test_a_batch_publication_checks_a_rule_reading_a_calculation(tmp_path):
-    from rede_publisher import batch
+    from rezono_publisher import batch
 
     fixture = Path(__file__).resolve().parents[3] / "compiler" / "tests" / "fixtures" / "calc"
     pack = tmp_path / "calc"
@@ -807,12 +807,12 @@ def retained_publication(pack, calc_rule, extra_rows):
     date = "2026-11-01"
     row = ref(name, "i0", "0", "known", "")
     early = witness("early", ["i0", "0"], "copy", [("x", "i0"), ("v", "0")], [("amount", ["i0", "0"])])
-    rules_doc = {"format": "rede.rules/1", "pack": pack,
+    rules_doc = {"format": "rezono.rules/1", "pack": pack,
                  "relations": [relation("amount", "base", 2), relation("early", "derived", 2),
                                *(relation(extra, "base", 2) for extra in extra_rows)],
                  "rules": [rule("copy", ("early", "?x", "?v"), [lit("amount", "?x", "?v")])]}
     calculation = {
-        "format": "rede.calc-ir/1", "pack": pack, "subject": "item", "subject_table": "item", "as_of": "calc__as_of",
+        "format": "rezono.calc-ir/1", "pack": pack, "subject": "item", "subject_table": "item", "as_of": "calc__as_of",
         "facts": [{"id": "input", "type": "number", "reads": "column", "table": "early", "index": 1}],
         "rules": [{"rule": calc_rule, "view": name, "type": "number", "versions": [f"{calc_rule}@1"]}],
         "versions": [{"id": f"{calc_rule}@1", "rule": calc_rule, "version": "1", "view": f"{name}__1",
@@ -1051,7 +1051,7 @@ def guest(e):
     return access.for_role(rows, e.kinds, e.parents, e.columns, json.loads(e.rules), instances, "guest")
 
 
-TREE = {"format": "rede.rules/1", "relations": [relation(n, "base", 1) for n in ("top", "mid", "leaf", "role")]
+TREE = {"format": "rezono.rules/1", "relations": [relation(n, "base", 1) for n in ("top", "mid", "leaf", "role")]
         + [relation("may_read", "base", 3)], "rules": []}
 
 
@@ -1297,7 +1297,7 @@ def test_a_role_that_reads_a_part_not_in_full_gets_no_seal_status():
             "parts": [{"kind": "step", "arrow": "step__run", "owner": "run", "tables": ["step__run"],
                        "accepted": "step__accepted"}]}
     full = lambda kind: rule(f"r-{kind}", ("may_read", "?r", kind, "?x"), [lit("role", "?r"), lit(kind, "?x")])
-    doc = {"format": "rede.rules/1", "pack": "toy", "seals": [seal],
+    doc = {"format": "rezono.rules/1", "pack": "toy", "seals": [seal],
            "relations": [relation(n, "base", a) for n, a in (("run", 1), ("step", 1), ("role", 1), ("run__month", 2),
                                                                ("step__run", 2), ("step__label", 2), ("run__row_sha256", 2),
                                                                ("run__refused", 2), ("run__accepted", 1),
@@ -1338,7 +1338,7 @@ def resolved(s, m):
     for what, xs in (("relations", m["snapshots"]), ("witnesses", m["witnesses"]), ("assets", m.get("assets", [])),
                      ("compiled", m.get("compiled", [])), ("build", [m["build"]] if "build" in m else [])):
         for x in xs:
-            data = s.get(x["uri"].removeprefix("s3://rede/"))
+            data = s.get(x["uri"].removeprefix("s3://rezono/"))
             assert publish.sha256(data) == x["sha256"], x["uri"]
             out[(what, x.get("role"), x.get("relation") or x.get("file"))] = data
     return out
@@ -1394,7 +1394,7 @@ def test_a_diagnosis_needs_the_bundles_check_metadata(tmp_path):
     """Decision E11: a red variant read with switched-off checks would under-report; it is refused too."""
     e = dataclasses.replace(epoch(), variant={"sweep": "s", "index": 1}, base_manifest="m-1",
                             checks=[{"name": "node__unique", "status": "red", "violations": 1}])
-    meta = {t: rs for t, rs in e.check_metadata.items() if t != "rede__required"}
+    meta = {t: rs for t, rs in e.check_metadata.items() if t != "rezono__required"}
     s = store.FileStore(tmp_path)
     with pytest.raises(publish.Blocked, match="check_metadata"):
         publish.diagnose(dataclasses.replace(e, check_metadata=meta), s)
@@ -1430,8 +1430,8 @@ def test_batch_refuses_theory_before_compilation_or_engine_work(tmp_path, monkey
     from pathlib import Path
     import duckdb
     import yaml
-    from rede_compiler import emit
-    from rede_publisher import batch
+    from rezono_compiler import emit
+    from rezono_publisher import batch
 
     source = Path(__file__).resolve().parents[3] / "compiler/tests/fixtures/minimal"
     target = Path(shutil.copytree(source, tmp_path / "theory"))

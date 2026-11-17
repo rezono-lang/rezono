@@ -8,8 +8,8 @@ from pathlib import Path
 
 import duckdb
 
-from rede_compiler import batch, emit, facts, pack, rules_split
-from rede_compiler import rules as ir
+from rezono_compiler import batch, emit, facts, pack, rules_split
+from rezono_compiler import rules as ir
 
 REPO = Path(__file__).resolve().parents[2]
 FIXTURE = Path(__file__).resolve().parent / "fixtures" / "minimal"

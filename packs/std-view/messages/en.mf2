@@ -17,7 +17,7 @@ tone.neutral = neutral
 tone.caution = caution
 tone.negative = negative
 tone.unknown = unknown
-# The legend of Rede: what is known about a value, the same sign in every pack and every theme.
+# The legend of Rezono: what is known about a value, the same sign in every pack and every theme.
 sign.origin_decision = origin: decision
 sign.origin_vendor = origin: vendor or law
 sign.origin_design = origin: design
@@ -31,8 +31,8 @@ sign.sealed = sealed
 sign.supposed = supposed
 
 lens.questions = Questions
-# The row page (RV-U05): what Rede concludes first, then the facts, then the relations to other elements.
-row.conclusions = What Rede concludes
+# The row page (RV-U05): what Rezono concludes first, then the facts, then the relations to other elements.
+row.conclusions = What Rezono concludes
 row.conclusions_more = {{There are more: {$relations}.}}
 row.calculations = Calculated
 calc.stop = ← the calculation stops here
@@ -310,7 +310,7 @@ islands.count = Elements
 islands.lines = Lines to other groups
 islands.line = {{{$from} → {$to} ({$arrow}): {$count}}}
 islands.line_label = {{{$arrow} {$count}}}
-app.name = Rede
+app.name = Rezono
 # Navigation (RV-U03): the trail to a page, and the pack's declared views.
 nav.trail = Trail
 nav.views = Views
@@ -395,7 +395,7 @@ search.absent = No search index has been published for this role yet.
 
 # The specimen (docs/gui.md, The specimen): every sign of std-view in use, on fixed, invented data.
 specimen.title = Specimen of the visual language
-specimen.intro = Every sign, every state, every line, every number and every letter Rede uses, shown in use. This sheet is made from std-view; the examples are invented.
+specimen.intro = Every sign, every state, every line, every number and every letter Rezono uses, shown in use. This sheet is made from std-view; the examples are invented.
 specimen.end = A sign on a sheet that is not on this sheet is a defect.
 specimen.column.sign = Sign
 specimen.column.meaning = Meaning
@@ -403,7 +403,7 @@ specimen.column.use = In use
 specimen.column.token = In std-view
 specimen.column.case = Case
 specimen.column.shown = Shown as
-specimen.legend = The legend of Rede
+specimen.legend = The legend of Rezono
 specimen.legend.note = These signs mean the same in every pack and every theme. What we know comes before the domain.
 specimen.states = States
 specimen.states.note = Every state is three things at once: a tone, a sign and a word. If one drops away, the state stays readable.
@@ -495,8 +495,8 @@ row.twin.name = Attribute
 row.twin.value = Value
 row.twin.state = State
 
-# Your own Reckon Data form on the home of a pack (RV-V50): the schema id and the dataset hash in full, and each file.
-home.form.title = Your data as a Reckon Data form
+# Your own publication form on the home of a pack (RV-V50): the schema id and the dataset hash in full, and each file.
+home.form.title = Your data in publication form
 home.form.schema = schema id
 home.form.dataset = dataset hash
 home.form.files = files

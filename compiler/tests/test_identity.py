@@ -9,7 +9,7 @@ import yaml
 
 import souffle
 from support import FIXTURE, typed
-from rede_compiler import batch, identity, pack, rules as ir
+from rezono_compiler import batch, identity, pack, rules as ir
 
 
 def edited(tmp_path, change=None) -> pack.Pack:

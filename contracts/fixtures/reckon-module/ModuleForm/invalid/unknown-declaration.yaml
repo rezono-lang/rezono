@@ -1,8 +1,0 @@
-# A declaration the reader does not read yet (`rule`): its text is an R000, so no form holds it.
-format: rede.reckon-module/1
-module:
-  pack: lab
-  use: []
-  decls:
-    - {rule: reachable}
-spans: []

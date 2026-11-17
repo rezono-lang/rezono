@@ -1,4 +1,0 @@
-# `decls` left out: a module without a declaration has the empty list.
-format: rede.reckon-module/1
-module: {pack: lab, use: []}
-spans: []

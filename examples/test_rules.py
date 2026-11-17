@@ -14,8 +14,8 @@ import pytest
 
 import souffle
 from golden import differences
-from rede_compiler import batch, emit, explain, rules_sql
-from rede_compiler.__main__ import explained
+from rezono_compiler import batch, emit, explain, rules_sql
+from rezono_compiler.__main__ import explained
 from rules_support import RULED, name, states
 
 pytestmark = pytest.mark.skipif(not RULED, reason="no example pack with rules")
@@ -26,7 +26,7 @@ def each_snapshot_parsed_once(monkeypatch):
     """`check` reads every snapshot of the manifest again for each proof, and a test here checks one proof
     per derived row: quadratic in the size of a pack. A state's snapshots are the same bytes for every
     proof, so within one test each is parsed once. The checker itself is unchanged, and so is what it checks."""
-    module = importlib.import_module("rede_checker.check")
+    module = importlib.import_module("rezono_checker.check")
     monkeypatch.setattr(module, "read_rows", lru_cache(maxsize=None)(module.read_rows))
 
 
@@ -136,8 +136,8 @@ def test_incremental_equals_batch(example):
 
 @pytest.mark.parametrize("example", RULED, ids=name)
 def test_every_proof_is_valid_and_acyclic(example):
-    from rede_checker.check import check, check_epoch
-    from rede_checker.rules import derived_relations, load_rules
+    from rezono_checker.check import check, check_epoch
+    from rezono_checker.rules import derived_relations, load_rules
 
     model, prog, run = states(example)
     rules = load_rules(model.rules)
@@ -160,8 +160,8 @@ def test_every_proof_is_valid_and_acyclic(example):
 @pytest.mark.parametrize("example", RULED, ids=name)
 def test_a_changed_proof_is_refused(example):
     """The checker is not a rubber stamp: a proof whose conclusion or binding is changed is refused."""
-    from rede_checker.check import check
-    from rede_checker.rules import load_rules
+    from rezono_checker.check import check
+    from rezono_checker.rules import load_rules
 
     model, prog, run = states(example)
     rules = load_rules(model.rules)

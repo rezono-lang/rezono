@@ -7,9 +7,9 @@ import json
 
 import pytest
 
-from rede_checker.canon import encode_key
-from rede_checker.check import check_epoch
-from rede_checker.rules import derived_relations, load_rules
+from rezono_checker.canon import encode_key
+from rezono_checker.check import check_epoch
+from rezono_checker.rules import derived_relations, load_rules
 
 
 def relation(name, role, *columns, **flags):
@@ -23,7 +23,7 @@ def rule(rid, head, terms, body):
 
 def epoch(relations, rules, rows):
     """Every row of every derived relation with its correct witness, checked as one complete epoch."""
-    doc = {"format": "rede.rules/1", "relations": relations, "rules": rules}
+    doc = {"format": "rezono.rules/1", "relations": relations, "rules": rules}
     loaded = load_rules(doc)
     snaps = {r: json.dumps([{"key": k} for k in rs]).encode() for r, rs in rows.items()}
     manifest = {"id": "m-1", "snapshots": [{"relation": r, "role": "all", "complete": True, "uri": r, "format": "json",

@@ -1,0 +1,16 @@
+id: S06
+class: invalid
+status: settled
+schema:
+  from: fixture.schema.json
+  merge:
+    kinds:
+      Team:
+        iri: https://rezono.example/fixture/Host
+form: schema
+expect:
+  accept: false
+  error: two kinds share one `iri`
+note: An element's IRI is `<kind iri>/<spelled id>` (§3.4), so it names one kind. `Team` declares the IRI that `Host` has by default.
+sources:
+- RV-X21 (arbiter, 11-11-2026)

@@ -10,4 +10,4 @@ produces: [probe_result]
 freshness: {cadence: live, max_delay_seconds: 60}
 mapping_owner: platform-team
 losses: []
-footprint: {makes: [], plan_label: rede.dev/plan}
+footprint: {makes: [], plan_label: rezono.org/plan}

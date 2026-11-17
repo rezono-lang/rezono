@@ -1,5 +1,5 @@
 # The engine beside the gate, in one pod. The engine holds the complete facts and trusts its caller for the role,
-# so it binds 127.0.0.1 and asks its own token (REDE_LIVE_TOKEN) on every request, as on its own host
+# so it binds 127.0.0.1 and asks its own token (REZONO_LIVE_TOKEN) on every request, as on its own host
 # (deploy/engine/README.md#what-reaches-the-engine). Its Git credential is a deploy key that may only read this
 # repository, mounted into the engine's container only; the start script copies it to a private file and removes it
 # from the engine's environment before the engine starts. The clone and the checkouts live in an emptyDir.
@@ -13,42 +13,42 @@ spec:
       containers:
         - name: gate
           env:
-            - name: REDE_LIVE_URL
+            - name: REZONO_LIVE_URL
               value: http://127.0.0.1:8091
-            - name: REDE_LIVE_TOKEN
+            - name: REZONO_LIVE_TOKEN
               valueFrom:
-                secretKeyRef: { name: rede-engine, key: live-token }
+                secretKeyRef: { name: rezono-engine, key: live-token }
         - name: engine
-          image: rede-live
+          image: rezono-live
           # The profile the engine reads its packs (live.packs) and roles from, a path in the repository at the
           # manifest's commit: the installation's own (ConfigMap `engine`), never the edge profile it defaults to.
-          args: ["--host", "127.0.0.1", "--port", "8091", "--profile", "$(REDE_LIVE_PROFILE)"]
+          args: ["--host", "127.0.0.1", "--port", "8091", "--profile", "$(REZONO_LIVE_PROFILE)"]
           envFrom:
             - configMapRef:
                 name: engine
           env:
-            - name: REDE_GIT_SSH_KEY
-              value: /var/run/rede-git/key
-            - name: REDE_GIT_KNOWN_HOSTS
-              value: /var/run/rede-git/known_hosts
-            - name: REDE_LIVE_TOKEN
+            - name: REZONO_GIT_SSH_KEY
+              value: /var/run/rezono-git/key
+            - name: REZONO_GIT_KNOWN_HOSTS
+              value: /var/run/rezono-git/known_hosts
+            - name: REZONO_LIVE_TOKEN
               valueFrom:
-                secretKeyRef: { name: rede-engine, key: live-token }
+                secretKeyRef: { name: rezono-engine, key: live-token }
             - name: AWS_ACCESS_KEY_ID
               valueFrom:
-                secretKeyRef: { name: rede-engine, key: store-key-id }
+                secretKeyRef: { name: rezono-engine, key: store-key-id }
             - name: AWS_SECRET_ACCESS_KEY
               valueFrom:
-                secretKeyRef: { name: rede-engine, key: store-secret }
+                secretKeyRef: { name: rezono-engine, key: store-secret }
           # Loopback only: a probe from the kubelet cannot reach it, so the probe runs inside the container.
           readinessProbe:
             exec:
-              command: ["/opt/rede/venv/bin/python", "-c", "import socket; socket.create_connection(('127.0.0.1', 8091), 2)"]
+              command: ["/opt/rezono/venv/bin/python", "-c", "import socket; socket.create_connection(('127.0.0.1', 8091), 2)"]
             periodSeconds: 20
             timeoutSeconds: 5
           livenessProbe:
             exec:
-              command: ["/opt/rede/venv/bin/python", "-c", "import socket; socket.create_connection(('127.0.0.1', 8091), 2)"]
+              command: ["/opt/rezono/venv/bin/python", "-c", "import socket; socket.create_connection(('127.0.0.1', 8091), 2)"]
             periodSeconds: 60
             timeoutSeconds: 5
           resources:
@@ -60,9 +60,9 @@ spec:
             capabilities:
               drop: [ALL]
           volumeMounts:
-            - { name: live-work, mountPath: /var/lib/rede-live }
+            - { name: live-work, mountPath: /var/lib/rezono-live }
             - { name: live-tmp, mountPath: /tmp }
-            - { name: live-git, mountPath: /var/run/rede-git, readOnly: true }
+            - { name: live-git, mountPath: /var/run/rezono-git, readOnly: true }
       volumes:
         - name: live-work
           emptyDir: { sizeLimit: 8Gi }
@@ -70,7 +70,7 @@ spec:
           emptyDir: { sizeLimit: 256Mi }
         - name: live-git
           secret:
-            secretName: rede-engine
+            secretName: rezono-engine
             # Readable by the engine's user (no fsGroup, which OpenShift's restricted-v2 would refuse); the volume is
             # mounted into the engine's container only, and the start script copies the key to a 0600 file of its own.
             defaultMode: 0444

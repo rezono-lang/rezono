@@ -9,15 +9,15 @@ from pathlib import Path
 import pytest
 
 pytest.importorskip("duckdb")
-pytest.importorskip("rede_compiler")
+pytest.importorskip("rezono_compiler")
 
-from rede_publisher import batch, proof, proposal, publish, store  # noqa: E402
+from rezono_publisher import batch, proof, proposal, publish, store  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[3]
 PACK = "packs/p"
 ROLES = {"checker": "complete", "viewer": "may_read"}
 FACTS = "alpha:\n  - {id: a1, title: t, size: 1}\n  - {id: a2, title: u, size: 1}\n"
-SET_A1 = json.dumps({"format": "rede.delta/1", "changes": [
+SET_A1 = json.dumps({"format": "rezono.delta/1", "changes": [
     {"op": "set", "file": "facts/a.yaml", "kind": "alpha", "key": "a1", "slot": "size", "value": 2}]})
 
 
@@ -104,7 +104,7 @@ def test_an_unpublished_base_is_refused(repo, tmp_path):
 def test_a_red_proposal_writes_nothing(repo, tmp_path):
     st = store.FileStore(tmp_path / "store")
     base, _ = publish_main(repo, st)
-    too_big = json.dumps({"format": "rede.delta/1", "changes": [  # size has maximum 9: a violation, red
+    too_big = json.dumps({"format": "rezono.delta/1", "changes": [  # size has maximum 9: a violation, red
         {"op": "set", "file": "facts/a.yaml", "kind": "alpha", "key": "a1", "slot": "size", "value": 12}]})
     before = st.list("")
     with pytest.raises(publish.Blocked):
@@ -135,7 +135,7 @@ def test_a_corrupted_witness_writes_nothing(repo, tmp_path, monkeypatch):
 
     monkeypatch.setattr(batch, "epoch", corrupted)
     before = {k: st.get(k) for k in st.list("")}
-    with pytest.raises(publish.Blocked, match="rede:proofs"):
+    with pytest.raises(publish.Blocked, match="rezono:proofs"):
         proposal.publish_proposal(repo, PACK, "7", base, SET_A1, st, ROLES)
     assert {k: st.get(k) for k in st.list("")} == before
 
@@ -191,7 +191,7 @@ def test_a_symbolic_link_in_the_pack_is_refused(repo, tmp_path):
     n, time = proposal.base_of(repo, linked)
     e = batch.epoch(repo / PACK, epoch=n, knowledge_time=time, sources=[("rules", linked)])
     publish.publish(e, st, ROLES)
-    from rede_compiler import writer
+    from rezono_compiler import writer
 
     with pytest.raises((ValueError, writer.WriteError)):
         proposal.publish_proposal(repo, PACK, "7", linked, SET_A1, st, ROLES)
@@ -202,7 +202,7 @@ def test_yaml_syntax_in_a_value_stays_text(repo, tmp_path, value):
     """A tag, alias, anchor or flow mapping in a value is written as text, never interpreted."""
     st = store.FileStore(tmp_path / "store")
     base, _ = publish_main(repo, st)
-    delta = json.dumps({"format": "rede.delta/1", "changes": [
+    delta = json.dumps({"format": "rezono.delta/1", "changes": [
         {"op": "set", "file": "facts/a.yaml", "kind": "alpha", "key": "a1", "slot": "title", "value": value}]})
     mid = proposal.publish_proposal(repo, PACK, "7", base, delta, st, ROLES)
     rows = json.loads(object_bytes(st, "checker", "relations/alpha__title.json", mid))
@@ -218,13 +218,13 @@ def test_a_proposal_has_its_difference_per_role_the_gate_serves(repo, tmp_path):
     assert st.get("minimal/p-7-3/checker/explain/index.json") is None
     index = json.loads(st.get("minimal/p-7-3/viewer/explain/index.json"))
     assert (index["format"], index["manifest"], index["base_manifest"], index["role"]) == (
-        "rede.explain-index/1", "p-7-3", "m-2", "viewer")
+        "rezono.explain-index/1", "p-7-3", "m-2", "viewer")
     assert index["difference"]["counts"] == {} and index["difference"]["trees"] == {}
     assert set(index["proof"]["trees"]) == set(proof.TREES)
 
 
 def test_a_difference_shows_the_changed_cell(repo, tmp_path):
-    from rede_publisher import difference
+    from rezono_publisher import difference
 
     st = store.FileStore(tmp_path / "store")
     base, _ = publish_main(repo, st)
@@ -251,7 +251,7 @@ STATED = {"kind": "person", "name": "user-123", "position": AT}
 
 
 def test_a_proposal_states_its_proposer_as_the_source_of_what_it_writes(repo, tmp_path):
-    from rede_compiler import writer
+    from rezono_compiler import writer
 
     (repo / PACK / "facts" / "a.sources.yaml").write_text("default: " + json.dumps(GIT) + "\n")  # as an ingest leaves it
     sh("git", "add", ".", cwd=repo)
@@ -262,7 +262,7 @@ def test_a_proposal_states_its_proposer_as_the_source_of_what_it_writes(repo, tm
     with pytest.raises(writer.WriteError, match="need their real origin"):  # no proposer: refused, nothing published
         proposal.publish_proposal(repo, PACK, "7", base, SET_A1, st, ROLES)
     assert st.get("minimal/manifests/p-7-4.json") is None
-    assert proposal.stated_by(WHO, AT) == {"sources": [STATED]}  # the same origin as rede_githost.propose builds
+    assert proposal.stated_by(WHO, AT) == {"sources": [STATED]}  # the same origin as rezono_githost.propose builds
     mid = proposal.publish_proposal(repo, PACK, "7", base, SET_A1, st, ROLES, proposal.stated_by(WHO, AT))
     assert mid == "p-7-4" and size(st, mid, "a1") == "2"
     sources = {(e["row"]["relation"], e["row"]["key"]): e["sources"]

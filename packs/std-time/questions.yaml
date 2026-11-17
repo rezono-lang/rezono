@@ -1,7 +1,7 @@
 # The explanation questions of std-time, built only from the generic building blocks of std-explain
 # (docs/gui.md, "Questions as data"). They narrow the generic grounds and reach to intervals and references:
 # a domain that imports std-explain keeps those too. The label and sentence are in messages/<lang>.mf2.
-format: rede.questions/1
+format: rezono.questions/1
 questions:
   # Why does this stand so at the reference? From a judgement, a holds_at or a known_at conclusion back to
   # what it rests on: begun_at, ended_at, the extension, the bounds that are stated, and a bound or a knowledge

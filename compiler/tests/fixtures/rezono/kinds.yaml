@@ -1,0 +1,30 @@
+# kinds.rezono written in LinkML: the schema module its lowering is (docs/rezono/publication.md §5.1, §5.2), with
+# the name and id the compiler gives a module written in Rezono. Neutral names on purpose; it describes no domain.
+id: https://rezono.org/rezono/minimal/kinds
+name: kinds
+imports:
+  - linkml:types
+  - minimal
+default_range: string
+annotations:
+  layer: facts
+enums:
+  Grade:
+    permissible_values:
+      first: {}
+      second: {}
+      third: {}
+classes:
+  Gamma:
+    attributes:
+      id: {identifier: true}
+      since: {range: date}
+      note: {range: string, required: true}
+      grade: {range: Grade}
+  Delta:
+    attributes:
+      id: {identifier: true}
+      gamma: {range: Gamma, required: true}
+      alpha: {range: Alpha, required: true}
+      state: {range: State}
+      grade: {range: Grade, required: true}

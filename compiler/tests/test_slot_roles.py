@@ -6,7 +6,7 @@ import shutil
 import pytest
 import yaml
 
-from rede_compiler import emit, pack
+from rezono_compiler import emit, pack
 from support import FIXTURE
 
 

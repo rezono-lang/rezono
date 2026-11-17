@@ -1,13 +1,13 @@
-id: https://rede.dev/contracts/effect
-name: rede_effect
+id: https://rezono.org/contracts/effect
+name: rezono_effect
 title: Effect plan and attempt state
 description: >-
   A bounded effect plan and its journaled attempt. The plan hash identifies the exact planned input.
   Shape validation does not verify an approval, a budget reservation, the dry run or a state transition.
 prefixes:
   linkml: https://w3id.org/linkml/
-  rede: https://rede.dev/contracts/
-default_prefix: rede
+  rezono: https://rezono.org/contracts/
+default_prefix: rezono
 default_range: string
 imports:
   - linkml:types

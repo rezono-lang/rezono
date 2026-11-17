@@ -1,14 +1,14 @@
 """A pack's schema as LinkML, and a LinkML schema as a pack's schema modules (lane M, M02; P10.7).
 
-A pack's schema is already written in LinkML, but in Rede's form: modules that import each other by Rede's
-names (`lab`, `../shared`, `std-decision:decision`), meaning in annotations only Rede reads, and types that only
+A pack's schema is already written in LinkML, but in Rezono's form: modules that import each other by Rezono's
+names (`lab`, `../shared`, `std-decision:decision`), meaning in annotations only Rezono reads, and types that only
 the compiler resolves. This connector maps that form onto plain LinkML and back. The compiler stays the one
 reader of the subset ([pack](../../../docs/compiler/pack.md#schemas-the-supported-linkml)): the export starts
 from a pack it read and checked, the import ends with the compiler reading what it wrote.
 
 **Out** (`export`): one LinkML schema per module, laid out as `<pack>/<module>.yaml`, and a root schema
 `<pack>.yaml` that imports them all. Every import is a path relative to the importing file, so LinkML's own
-`SchemaView` reads the whole pack without Rede: the modules of an imported pack are written beside it, under its
+`SchemaView` reads the whole pack without Rezono: the modules of an imported pack are written beside it, under its
 own name. Per module, as LinkML reads it:
 
 - the module's header (id, name, description, language, prefixes, annotations) and its types and enums as
@@ -19,17 +19,17 @@ own name. Per module, as LinkML reads it:
   `semantic` on every attribute: its type as the schema bundle says it (B10, `contracts/bundle.yaml`
   `SemanticType`), written by the same function.
 
-A module written in Reckon is refused for now: its LinkML is the compiler's lowering, and the import could only
+A module written in Rezono is refused for now: its LinkML is the compiler's lowering, and the import could only
 write it back as a LinkML module.
 
 What a reader that knows only LinkML does not get is in `linkml.losses.yaml`: rules, value states, reasons,
-proofs, sources, access, labels and the pack's other files are not schema; Rede's annotations are extensions.
+proofs, sources, access, labels and the pack's other files are not schema; Rezono's annotations are extensions.
 
 **In** (`import_schema`, `write`): a LinkML schema and the schemas it imports, by relative paths only, each
 becoming a module of the pack. A file `<pack>/<path>.yaml` under the root's directory is module `<path>` of
 that pack: of the pack being written, or of a pack it imports, which is not written (the pack takes it by its
 pin). Any other file is a module of the pack at its own path. Each module is written in the form above, with
-Rede's import names, without `semantic` (the compiler derives it again). What has no meaning in Rede is refused
+Rezono's import names, without `semantic` (the compiler derives it again). What has no meaning in Rezono is refused
 with its place, never dropped: a construct the compiler does not read and a module outside the root's directory
 or behind a URL. What the import leaves out on purpose is in `linkml.in.losses.yaml`. `write` puts the modules in
 a pack's `schema/` and has the compiler read the pack; what it refuses is the import's refusal.
@@ -47,11 +47,11 @@ import sys
 from pathlib import Path, PurePosixPath
 
 import yaml
-from rede_compiler.schemaview import SchemaView
+from rezono_compiler.schemaview import SchemaView
 from linkml_runtime.dumpers import json_dumper
 from linkml_runtime.linkml_model import meta
 
-from rede_compiler import modules, pack
+from rezono_compiler import modules, pack
 
 STANDARD = "LinkML"
 STANDARD_VERSION = "1.12"
@@ -63,7 +63,7 @@ DOCUMENTATION = frozenset(f.name for f in dataclasses.fields(meta.CommonMetadata
 # What a schema reader fills in itself; never written.
 INFERRED = frozenset({"@type", "from_schema", "imported_from", "owner", "domain_of", "is_usage_slot",
                       "usage_slot_name", "definition_uri"})
-# Per element, the members with a meaning in Rede: what the compiler reads, and what it refuses with its own
+# Per element, the members with a meaning in Rezono: what the compiler reads, and what it refuses with its own
 # message (kept, so that the compiler names it). Anything else beside DOCUMENTATION is refused by the import.
 SLOT = frozenset({"identifier", "key", "required", "range", "inlined", "inlined_as_list", "multivalued",
                   "minimum_value", "maximum_value", "minimum_cardinality", "maximum_cardinality",
@@ -151,7 +151,7 @@ def normal(sv: SchemaView) -> tuple[dict, dict, dict]:
         usage = set(c.slot_usage or {})
         if usage & inherited:
             raise LinkMLError(f"class {cname}: slot_usage on {', '.join(sorted(usage & inherited))}, which it "
-                              f"inherits; Rede does not let a subkind change an inherited slot")
+                              f"inherits; Rezono does not let a subkind change an inherited slot")
         attributes = {}
         for x in sv.class_induced_slots(cname):
             if x.name in inherited:
@@ -219,8 +219,8 @@ def export(pack_dir: str | Path) -> dict[str, str]:
     out: dict[str, str] = {}
     for m in mods:
         if m.form is not None:
-            raise LinkMLError(f"{m.rel}: a module written in Reckon is not exported yet; its LinkML form is the "
-                              f"compiler's lowering, which the import could not write back as Reckon")
+            raise LinkMLError(f"{m.rel}: a module written in Rezono is not exported yet; its LinkML form is the "
+                              f"compiler's lowering, which the import could not write back as Rezono")
         types, enums, classes = normal(m.sv)
         for cname, c in classes.items():
             kind = kinds[(m.id, cname)]
@@ -235,7 +235,7 @@ def export(pack_dir: str | Path) -> dict[str, str]:
                          dump(m.sv.schema).get("annotations", {}), types, enums, classes)
         out[f"{where[m.id]}.yaml"] = text(doc)
     name = model.meta["name"]
-    root = {"id": f"urn:rede:pack:{name}", "name": name.replace("-", "_"), "version": model.meta["version"],
+    root = {"id": f"urn:rezono:pack:{name}", "name": name.replace("-", "_"), "version": model.meta["version"],
             "prefixes": {"linkml": "https://w3id.org/linkml/"}, "default_range": "string",
             "imports": [TYPES] + [where[m.id] for m in mods]}
     if packs:
@@ -282,7 +282,7 @@ def _closure(root: Path) -> dict[Path, list[tuple[str, Path | None]]]:
 def _refuse(kind: str, where: str, element: dict, allowed: frozenset) -> None:
     bad = sorted(set(element) - allowed - DOCUMENTATION)
     if bad:
-        raise LinkMLError(f"{kind} {where}: {', '.join(bad)} has no meaning in Rede yet; refused rather than dropped")
+        raise LinkMLError(f"{kind} {where}: {', '.join(bad)} has no meaning in Rezono yet; refused rather than dropped")
 
 
 def _check(types: dict, enums: dict, classes: dict, rel: str) -> None:
@@ -334,7 +334,7 @@ def import_schema(root: str | Path, pack_name: str, imported: frozenset[str] = f
     written = {f for f, (_, *elements) in normals.items() if any(elements)}
 
     def names(f: Path, spliced: list[Path], seen: frozenset = frozenset()) -> list[str]:
-        """The modules `f` imports, in Rede's names. A file that declares nothing a module holds (an index, or
+        """The modules `f` imports, in Rezono's names. A file that declares nothing a module holds (an index, or
         top-level slots that are now attributes) is not written: its own imports stand in its place, and it is
         added to `spliced`."""
         out = []

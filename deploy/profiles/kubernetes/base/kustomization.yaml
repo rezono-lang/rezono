@@ -9,10 +9,10 @@
 # to the policies in policy/ (conftest).
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
-namespace: rede
+namespace: rezono
 labels:
   - pairs:
-      app.kubernetes.io/part-of: rede
+      app.kubernetes.io/part-of: rezono
     includeSelectors: false
 resources:
   - namespace.yaml

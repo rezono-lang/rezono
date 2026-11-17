@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from rede_compiler import modules
+from rezono_compiler import modules
 
 
 def pack(d: Path, name: str, imports=()) -> Path:

@@ -109,7 +109,7 @@ def program(draw) -> dict:
             docs.append(doc)
             versions.append(version)
         rules.append((name, typ, versions))
-    out = {"format": "rede.calc/1", "pack": "calc", "subject": "item", "parameters": "setting.value",
+    out = {"format": "rezono.calc/1", "pack": "calc", "subject": "item", "parameters": "setting.value",
            "inputs": {"kind": "entry", "subject": "item", "fact": "name", "integer": "number", "boolean": "truth"},
            "templates": [TEMPLATE], "rules": docs}
     if draw(st.booleans()):  # a parameter by its name, the row chosen by validity and knowledge date

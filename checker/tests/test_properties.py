@@ -16,8 +16,8 @@ import pytest
 from hypothesis import assume, given
 from hypothesis import strategies as st
 
-from rede_checker import check, render
-from rede_checker.rules import load_rules
+from rezono_checker import check, render
+from rezono_checker.rules import load_rules
 
 PRESENT = ["c0", "c1", "c2"]  # may occur in the negated relation
 ABSENT = ["c3", "c4", "c5"]  # never occur in it
@@ -593,7 +593,7 @@ def engine(flag, link, request, skip=None):
 
 
 def epoch_report(flag, link, request, model):
-    from rede_checker.check import check_epoch
+    from rezono_checker.check import check_epoch
     tables = {"flag": flag, "link": link, "request": request, **{name: set(rows) for name, rows in model.items()}}
     files = {name: json.dumps([{"key": list(r)} for r in sorted(rows)]).encode() for name, rows in tables.items()}
     manifest = {"id": "m", "snapshots": [{"relation": name, "role": "all", "complete": True, "uri": name, "format": "json",

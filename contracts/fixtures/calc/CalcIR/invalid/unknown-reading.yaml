@@ -1,5 +1,5 @@
 # A fact is read in one of five ways; "guess" is none of them (W11: the compiler guesses nothing).
-format: rede.calc-ir/1
+format: rezono.calc-ir/1
 pack: offers
 subject: offer
 subject_table: offer

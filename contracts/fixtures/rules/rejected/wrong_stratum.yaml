@@ -1,5 +1,5 @@
 # ready negates blocked (stratum 1), so it is in stratum 2, not 1.
-format: rede.rules/1
+format: rezono.rules/1
 pack: fixture
 relations:
 - name: blocked

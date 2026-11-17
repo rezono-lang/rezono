@@ -7,4 +7,4 @@ version: 0.1.0
 default_language: en
 theory: true
 imports:
-  - {name: std-decision, path: ../../packs/std-decision, sha256: f4502d3b09ef4da50f93bf26cac9e9d7a64d8b3c821f813b7b0abc790bb00c56}
+  - {name: std-decision, path: ../../packs/std-decision, sha256: 9b39d4c1ad83b419830b0bf78e40132443d0d6e99167e86c3ed74ee5ecb9aece}

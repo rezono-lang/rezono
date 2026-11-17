@@ -1,4 +1,4 @@
-# Rule definitions for the proofs in contracts/fixtures/proof, in the checker's interim format (see rede_checker/rules.py).
+# Rule definitions for the proofs in contracts/fixtures/proof, in the checker's interim format (see rezono_checker/rules.py).
 rules:
   - id: path_base
     stratum: 1

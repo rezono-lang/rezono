@@ -3,10 +3,10 @@ small bundle of admission's own: no compiler."""
 
 from __future__ import annotations
 
-from rede_admission import Admission, Schema, rows
+from rezono_admission import Admission, Schema, rows
 
 BUNDLE = {
-    "format": "rede.schema-bundle/1",
+    "format": "rezono.schema-bundle/1",
     "pack": {"id": "t", "version": "1", "default_language": "en"},
     "kinds": [{"id": "rate", "identifier": "id", "id_type": "text", "plane": "control", "owner": "board"},
               {"id": "special_rate", "parent": "rate", "id_type": "text"},

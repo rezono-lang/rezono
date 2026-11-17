@@ -17,7 +17,7 @@ tone.neutral = neutraal
 tone.caution = let op
 tone.negative = negatief
 tone.unknown = onbekend
-# De legenda van Rede: wat er over een waarde bekend is, in elk pack en elk thema hetzelfde teken.
+# De legenda van Rezono: wat er over een waarde bekend is, in elk pack en elk thema hetzelfde teken.
 sign.origin_decision = herkomst: besluit
 sign.origin_vendor = herkomst: leverancier of wet
 sign.origin_design = herkomst: ontwerp
@@ -31,8 +31,8 @@ sign.sealed = verzegeld
 sign.supposed = verondersteld
 
 lens.questions = Vragen
-# The row page (RV-U05): what Rede concludes first, then the facts, then the relations to other elements.
-row.conclusions = Wat Rede concludeert
+# The row page (RV-U05): what Rezono concludes first, then the facts, then the relations to other elements.
+row.conclusions = Wat Rezono concludeert
 row.conclusions_more = {{Er zijn er meer bij: {$relations}.}}
 row.calculations = Berekend
 calc.stop = ← hier stopt de berekening
@@ -310,7 +310,7 @@ islands.count = Elementen
 islands.lines = Lijnen naar andere groepen
 islands.line = {{{$from} → {$to} ({$arrow}): {$count}}}
 islands.line_label = {{{$arrow} {$count}}}
-app.name = Rede
+app.name = Rezono
 # Navigation (RV-U03): the trail to a page, and the pack's declared views.
 nav.trail = Pad
 nav.views = Weergaven
@@ -395,7 +395,7 @@ search.absent = Voor deze rol is nog geen zoekindex gepubliceerd.
 
 # Het specimen (docs/gui.md, The specimen): elk teken van std-view in gebruik, op vaste, verzonnen gegevens.
 specimen.title = Specimen van de beeldtaal
-specimen.intro = Elk teken, elke toestand, elke lijn, elk getal en elke letter die Rede gebruikt, in gebruik getoond. Dit blad is gemaakt uit std-view; de voorbeelden zijn verzonnen.
+specimen.intro = Elk teken, elke toestand, elke lijn, elk getal en elke letter die Rezono gebruikt, in gebruik getoond. Dit blad is gemaakt uit std-view; de voorbeelden zijn verzonnen.
 specimen.end = Een teken op een blad dat niet op dit blad staat, is een fout.
 specimen.column.sign = Teken
 specimen.column.meaning = Betekenis
@@ -403,7 +403,7 @@ specimen.column.use = In gebruik
 specimen.column.token = In std-view
 specimen.column.case = Geval
 specimen.column.shown = Getoond als
-specimen.legend = De legenda van Rede
+specimen.legend = De legenda van Rezono
 specimen.legend.note = Deze tekens betekenen in elk pack en elk thema hetzelfde. Wat we weten gaat voor het domein.
 specimen.states = Toestanden
 specimen.states.note = Elke toestand is drie dingen tegelijk: een toon, een teken en een woord. Valt er één weg, dan blijft de toestand leesbaar.
@@ -495,8 +495,8 @@ row.twin.name = Kenmerk
 row.twin.value = Waarde
 row.twin.state = Toestand
 
-# Your own Reckon Data form on the home of a pack (RV-V50): the schema id and the dataset hash in full, and each file.
-home.form.title = Je gegevens in Reckon Data-vorm
+# Your own publication form on the home of a pack (RV-V50): the schema id and the dataset hash in full, and each file.
+home.form.title = Je gegevens in publicatievorm
 home.form.schema = schema-id
 home.form.dataset = datasethash
 home.form.files = bestanden

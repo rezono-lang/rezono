@@ -1,0 +1,73 @@
+rezono 0
+pack lab
+use std.units
+use std.money as m
+
+--- A module made up for the tests: every member the JSON form of a module carries, at least once
+--- (contracts/rezono-module.yaml). Its form is contracts/fixtures/rezono-module/ModuleForm/valid/every-member.yaml.
+--- Offsets count code points, so this line holds a character outside the basic plane: 😀
+
+rounding money half_even
+rounding date down
+unit GiB = 1024 MiB
+unit Credit = money EUR
+reason not_measured = "not measured yet"
+enum Tier world open = low | high
+
+kind Team world open
+  name: Text
+
+kind Host world closed
+  applies at: since
+  sealed at: closed_on
+  owner: Team?
+  memory: GiB
+  since: Date
+  closed_on: DateTime?
+  tags: Text* inverse host world open
+  derived roomy: Bool = memory > 384 GiB
+  derived label: Text = when owner is n/a then "free" else "taken"
+    unless memory is unknown then "?"      @ lab#1
+    unless
+      when not roomy then "small"          @ lab#2
+      when owner in Team then "ours"
+
+param quota: GiB per Host = 512 GiB
+param rate: Ratio
+  version 1, valid 2025-01-01..<2026-01-01, known 2024-12-01  = 10 %  @ lab#3
+  version 2, valid 2026-01-01..                               = 12 %
+
+extend Host
+  derived spare: GiB =
+      -(memory - quota)
+  derived third: GiB = round(memory / 3, half_up)
+  derived crowded: Bool = tags.count() > 2 and roomy
+      or Host.any(memory > quota)
+  derived fits: Bool = roomy => memory in 1 GiB..<600 GiB
+  derived peers: Int = (Host where roomy).owner.count()
+  derived share: Ratio
+    version 1 = rate * 2
+  derived band: Tier
+    table first
+      | memory | owner | -> band |
+      | ..<64 GiB, 128 GiB..256 GiB | - | low |
+      | 512 GiB.. | platform | high |
+      | 64 GiB..< | - | low |
+  total derived busy: Tier*
+    table collect
+      | roomy | -> busy |
+      | true | high |
+
+require memory_bound: host.memory <= 600 GiB
+warn host.owner is known
+
+fact Host
+  | id     | owner    | memory               | since      | closed_on            |
+  | host-a | platform | 256 GiB              | 2025-03-01 | n/a                  |
+  | host-b | n/a      | unknown not_measured | 2025-04-01 | 2026-01-05T00:00:00Z |
+  | host-c | platform | invalid out_of_range | 2025-05-01 | n/a                  |
+
+fact host host-a, valid 2026-01-01..<2027-01-01, known 2025-12-01
+  memory = 384 GiB  @ lab#4
+fact host host-b, known 2026-02-01
+  memory = unknown "not measured yet"

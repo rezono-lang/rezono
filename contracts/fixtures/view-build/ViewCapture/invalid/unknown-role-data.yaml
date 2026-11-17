@@ -1,4 +1,4 @@
-format: rede.view-capture/1
+format: rezono.view-capture/1
 pack: p
 manifest: m-2
 role: viewer

@@ -1,5 +1,5 @@
-id: https://rede.dev/contracts/observation
-name: rede_observation
+id: https://rezono.org/contracts/observation
+name: rezono_observation
 title: Observations and drift
 description: >-
   A fact in the layer Observation: a measurement or the status that a reconciler reports, with its
@@ -9,8 +9,8 @@ description: >-
   the clock of the ingester.
 prefixes:
   linkml: https://w3id.org/linkml/
-  rede: https://rede.dev/contracts/
-default_prefix: rede
+  rezono: https://rezono.org/contracts/
+default_prefix: rezono
 default_range: string
 imports:
   - linkml:types

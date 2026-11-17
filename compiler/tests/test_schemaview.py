@@ -18,8 +18,8 @@ from linkml_runtime import SchemaView as LinkMLView
 from linkml_runtime.linkml_model import ClassDefinition
 
 import memory_report
-from rede_compiler import pack
-from rede_compiler.schemaview import _MEMOIZED, SchemaView
+from rezono_compiler import pack
+from rezono_compiler.schemaview import _MEMOIZED, SchemaView
 from support import FIXTURE
 
 SCHEMA = FIXTURE / "schema" / "minimal.yaml"
@@ -87,7 +87,7 @@ def test_memory_report_stops_a_process_over_the_limit_and_names_the_test(tmp_pat
         "    m._watch.limit = m.resident() + 64 * m.MIB\n"
         "    held = bytearray(128 * m.MIB)\n"
         "    time.sleep(5)\n")
-    env = {**os.environ, "REDE_MEMORY_LIMIT_GIB": "1000",
+    env = {**os.environ, "REZONO_MEMORY_LIMIT_GIB": "1000",
            "PYTHONPATH": os.pathsep.join([str(Path(memory_report.__file__).parent), os.environ.get("PYTHONPATH", "")])}
     done = subprocess.run([sys.executable, "-m", "pytest", "-p", "memory_report", "-p", "no:cacheprovider", "-q",
                            "test_grow.py"], cwd=tmp_path, env=env, capture_output=True, text=True, timeout=120)

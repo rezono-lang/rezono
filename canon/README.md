@@ -1,9 +1,9 @@
-# rede-canon
+# rezono-canon
 
-The canonical JSON form and hash of Rede, for Python (compiler, checker and edge). The rule is in [docs/contracts.md](../docs/contracts.md#canonical-hash); its TypeScript twin is [viewer/src/lib/canon.ts](../viewer/src/lib/canon.ts).
+The canonical JSON form and hash of Rezono, for Python (compiler, checker and edge). The rule is in [docs/contracts.md](../docs/contracts.md#canonical-hash); its TypeScript twin is [viewer/src/lib/canon.ts](../viewer/src/lib/canon.ts).
 
 ```python
-from rede_canon import canonical_json, canonical_sha256, sha256_hex
+from rezono_canon import canonical_json, canonical_sha256, sha256_hex
 
 canonical_json({"b": 2**64, "a": "één"})  # '{"a":"één","b":"18446744073709551616"}'
 canonical_sha256({"seed": 1})             # the hash of a value

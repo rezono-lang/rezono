@@ -7,8 +7,8 @@ import pytest
 import yaml
 
 from support import FIXTURE
-from rede_compiler import facts, operate, selection
-from rede_compiler.plan import evaluate
+from rezono_compiler import facts, operate, selection
+from rezono_compiler.plan import evaluate
 
 
 @pytest.fixture

@@ -1,5 +1,5 @@
 # Rows added and removed, a new slot, an unset slot and an inlined object (M5).
-format: rede.delta/1
+format: rezono.delta/1
 pack: library
 changes:
   - op: insert

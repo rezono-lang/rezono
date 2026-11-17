@@ -8,7 +8,7 @@
 # scheme parameter what it says of any interval without them: its validity ends without an extension, and
 # nobody recorded from which day it is known. A role reads those two from an absence, so it must read
 # std-time's own kinds in full (rules/access.dl).
-format: rede.views/1
+format: rezono.views/1
 views:
   - theory: std-time
     kinds:

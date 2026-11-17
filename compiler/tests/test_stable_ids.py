@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 
 from support import FIXTURE
-from rede_compiler import emit, pack
+from rezono_compiler import emit, pack
 
 RULES = """.decl pair(a: symbol, b: symbol)
 pair(a, b) :- beta__alpha(b, a).
@@ -129,7 +129,7 @@ def test_a_renamed_kind_beside_a_new_kind_of_its_first_name_is_refused(fixture):
 
 def item_module(d: Path, name: str):
     (d / "schema" / f"{name}.yaml").write_text(
-        f"id: https://rede.example/{name}\nname: {name}\nin_language: nl\nimports:\n  - linkml:types\n"
+        f"id: https://rezono.example/{name}\nname: {name}\nin_language: nl\nimports:\n  - linkml:types\n"
         "default_range: string\nannotations:\n  layer: facts\n"
         "classes:\n  Item:\n    attributes:\n      id:\n        identifier: true\n      note: {}\n", "utf-8")
 

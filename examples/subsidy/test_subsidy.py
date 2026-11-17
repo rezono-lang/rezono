@@ -1,7 +1,7 @@
 """The subsidy pack's own tests: what the generic example tests (examples/test_*.py) cannot know.
 
 - The population, the ledger and the close of October are exactly what generate.py writes, and the close
-  is exactly what `rede_compiler close` writes.
+  is exactly what `rezono_compiler close` writes.
 - The evaluation date decides which partial rate counts: before 1 July 2026 an award at the partial
   rate is lower, to the cent as reference.py computes it.
 - The supposition of the last scenario moves the awards the README names: who gains, who loses, who stays.
@@ -27,12 +27,12 @@ import pytest
 import yaml
 
 pytest.importorskip("duckdb")
-pytest.importorskip("rede_compiler")
-pytest.importorskip("rede_publisher")
+pytest.importorskip("rezono_compiler")
+pytest.importorskip("rezono_publisher")
 
 from calcsupport import run_both  # noqa: E402  (compiler/tests, on the path through examples/conftest.py)
-from rede_compiler import calc, calc_sql, pack, scenarios  # noqa: E402
-from rede_publisher import batch, publish, store  # noqa: E402
+from rezono_compiler import calc, calc_sql, pack, scenarios  # noqa: E402
+from rezono_publisher import batch, publish, store  # noqa: E402
 
 HERE = Path(__file__).parent
 PACK = "subsidy"
@@ -106,7 +106,7 @@ def test_the_generator_writes_the_same_bytes_again(tmp_path):
 def test_the_close_is_what_the_compiler_writes():
     """generate.py writes the close of October with the reference's own row hash; the compiler's close
     command gives the same close, so two implementations agree on what a closed row is."""
-    out = subprocess.run([sys.executable, "-m", "rede_compiler", "close", str(HERE), "--close", "october-2026",
+    out = subprocess.run([sys.executable, "-m", "rezono_compiler", "close", str(HERE), "--close", "october-2026",
                           "--until", "2026-11-01", "--file", "facts/ledger.yaml"], check=True, capture_output=True, text=True)
     change, = json.loads(out.stdout)["changes"]
     mine = reference().load(HERE / "scenarios" / "2-close-october.yaml", {})["period_close"]["october-2026"]

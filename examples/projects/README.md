@@ -1,6 +1,6 @@
 # Example: projects and tasks
 
-A familiar domain, chosen so every Rede construct has a place in the coming milestones.
+A familiar domain, chosen so every Rezono construct has a place in the coming milestones.
 
 | Construct | Where | Milestone |
 |---|---|---|

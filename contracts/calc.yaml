@@ -1,5 +1,5 @@
-id: https://rede.dev/contracts/calc
-name: rede_calc
+id: https://rezono.org/contracts/calc
+name: rezono_calc
 title: Calculation rules
 description: >-
   Calculation rules as data, the part of the IR that M3 translates: versioned rules whose definitions
@@ -10,8 +10,8 @@ description: >-
   values of its leaves as bindings (contracts/proof.yaml).
 prefixes:
   linkml: https://w3id.org/linkml/
-  rede: https://rede.dev/contracts/
-default_prefix: rede
+  rezono: https://rezono.org/contracts/
+default_prefix: rezono
 default_range: string
 imports:
   - linkml:types
@@ -59,7 +59,7 @@ classes:
   CalcProgram:
     tree_root: true
     attributes:
-      format: {required: true, pattern: "^rede\\.calc/1$"}
+      format: {required: true, pattern: "^rezono\\.calc/1$"}
       pack: {required: true}
       subject: {required: true, description: "The kind whose elements the rules are evaluated for: every rule has one value per element of it."}
       parameters: {description: "Element id <kind>.<attribute> of the integer attribute that holds the parameters. A parameter leaf names an element of that kind by its id, unless parameter_choice is given."}
@@ -130,7 +130,7 @@ classes:
       fact: {description: An input attribute (element id).}
       parameter: {description: "A parameter fact, <parameter>@<version>."}
       integer: {range: DecimalText}
-      unit: {description: "With integer only: the unit of the constant, a unit the pack declares (P10.3, docs/compiler/pack.md#units-and-dimensions), as Reckon writes 384 GiB. The compiler checks dimensions with it and converts nothing, so the bound program (CalcIR) does not carry it."}
+      unit: {description: "With integer only: the unit of the constant, a unit the pack declares (P10.3, docs/compiler/pack.md#units-and-dimensions), as Rezono writes 384 GiB. The compiler checks dimensions with it and converts nothing, so the bound program (CalcIR) does not carry it."}
       boolean: {range: boolean}
       arg: {description: The name of a template argument; only inside a template.}
 
@@ -172,7 +172,7 @@ classes:
       bound to where it is read, the view of every rule and version. The publisher and the checker read
       it instead of calc/*.yaml; the checker evaluates it on its own.
     attributes:
-      format: {required: true, pattern: "^rede\\.calc-ir/1$"}
+      format: {required: true, pattern: "^rezono\\.calc-ir/1$"}
       pack: {required: true}
       subject: {required: true, description: The kind whose elements the rules are evaluated for.}
       subject_table: {required: true, description: Its table; every element has one value per rule.}

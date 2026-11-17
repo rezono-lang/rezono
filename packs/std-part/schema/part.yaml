@@ -1,4 +1,4 @@
-id: https://rede.example/std-part/part
+id: https://rezono.example/std-part/part
 name: std_part
 description: >-
   Part and whole. A constituent is part of at most one direct whole, and may occur in it more than once. The

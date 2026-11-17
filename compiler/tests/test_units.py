@@ -14,8 +14,8 @@ from pathlib import Path
 import pytest
 import yaml
 
-from rede_compiler import calc, emit, pack, types
-from rede_compiler.pack import CompileError
+from rezono_compiler import calc, emit, pack, types
+from rezono_compiler.pack import CompileError
 
 FIXTURE = Path(__file__).resolve().parent / "fixtures" / "calc"
 # Units as a pack declares them: neutral names, no domain. The schema states them; the compiler knows none.
@@ -46,7 +46,7 @@ def unit_pack(tmp_path: Path, rules: list[dict] | None = None, dl: str | None = 
     f.write_text(yaml.safe_dump(s, sort_keys=False), encoding="utf-8", newline="\n")
     if rules is not None:
         (d / "calc" / "units.yaml").write_text(yaml.safe_dump(
-            {"format": "rede.calc/1", "pack": "calc", "subject": "item", "rules": rules}, sort_keys=False),
+            {"format": "rezono.calc/1", "pack": "calc", "subject": "item", "rules": rules}, sort_keys=False),
             encoding="utf-8", newline="\n")
     if dl is not None:
         (d / "rules" / "units.dl").write_text(dl, encoding="utf-8", newline="\n")

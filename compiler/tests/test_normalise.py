@@ -18,10 +18,10 @@ from hypothesis import strategies as st
 
 import rulegen as gen
 from support import FIXTURE, REPO
-from rede_compiler import __main__ as cli
-from rede_compiler import batch as duck
-from rede_compiler import emit, modules, normalise, pack
-from rede_compiler import rules as ir
+from rezono_compiler import __main__ as cli
+from rezono_compiler import batch as duck
+from rezono_compiler import emit, modules, normalise, pack
+from rezono_compiler import rules as ir
 
 # Small rules over few relations and variables, so that ties and symmetries are common.
 VARS = ["?a", "?b", "?c", "?d", "?e"]

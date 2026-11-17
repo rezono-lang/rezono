@@ -1,0 +1,8 @@
+diagnostics:
+  - code: R016
+    severity: error
+    span: {file: "lab:questions/fit.rezono", line: "3", column: "11", end_line: "3", end_column: "20"}
+    hint: write a < b and b < c
+  - code: W106
+    severity: warning
+    span: {file: rules/hosts.rezono, line: "1", column: "1"}

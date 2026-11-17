@@ -8,9 +8,9 @@ import pytest
 import yaml
 
 from calcsupport import checked, connect, run_both
-from rede_compiler import calc, calc_sql
-from rede_compiler import pack
-from rede_compiler.pack import CompileError, Kind, Slot
+from rezono_compiler import calc, calc_sql
+from rezono_compiler import pack
+from rezono_compiler.pack import CompileError, Kind, Slot
 from test_calc import CHOICE, FIXTURE, PACK, choice_case
 
 

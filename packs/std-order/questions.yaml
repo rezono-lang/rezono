@@ -1,7 +1,7 @@
 # The explanation questions of std-order, built only from the generic building blocks of std-explain
 # (docs/gui.md, "Questions as data"). They are the generic grounds and reach, narrowed to the order: a
 # domain that imports std-explain keeps those too. The label and sentence are in messages/<lang>.mf2.
-format: rede.questions/1
+format: rezono.questions/1
 questions:
   # Why does this come earlier? The chain of precedes steps behind a before conclusion.
   - term: order_grounds

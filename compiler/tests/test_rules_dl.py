@@ -9,8 +9,8 @@ import pytest
 import yaml
 
 from support import FIXTURE
-from rede_compiler import emit, fold, modules, pack, rules_sql, view_rules
-from rede_compiler import rules as ir
+from rezono_compiler import emit, fold, modules, pack, rules_sql, view_rules
+from rezono_compiler import rules as ir
 
 PROGRAM = """
 // A neutral program over the fixture's tables: alpha(id), alpha__size(id, v), beta__alpha(id, v).
@@ -451,7 +451,7 @@ late(a) :- third(a), beta(a).
 def test_the_source_as_written_equals_the_batch_backend_on_souffle(fixture, tmp_path):
     """Soufflé runs the .dl text itself, not the IR the parser made of it: a parser error shows here."""
     import souffle
-    from rede_compiler import batch
+    from rezono_compiler import batch
 
     prog = ir.load(pack.read(with_rules(fixture, core=PROGRAM)).rules)
     data = {"alpha": [("a1",), ("a2",), ("a3",)], "alpha__size": [("a1", 7), ("a2", 3), ("a3", 7)],
@@ -471,13 +471,13 @@ part(a, d, q) :- alpha__size(a, s), d = s - 30, q = d / -7.
 def test_division_truncates_toward_zero_on_every_engine(fixture, tmp_path):
     """`div` is Feldera's `/` on BIGINT: truncation toward zero, also with negative operands. Floor division
     would give -1 for 1 / -7 and -5 for 29 / -7. Feldera's SQL divides with `/`, DuckDB's with the macro
-    rede_quotient; Soufflé, where present, reads the text as written."""
+    rezono_quotient; Soufflé, where present, reads the text as written."""
     pytest.importorskip("duckdb")
-    from rede_compiler import batch
+    from rezono_compiler import batch
 
     files = emit.compile_pack(pack.read(with_rules(fixture, core=DIVISION)))
-    assert "/ CAST(-7 AS BIGINT)" in files["engine/rules.sql"] and "rede_quotient" not in files["engine/rules.sql"]
-    assert files["batch/rules.sql"].count("rede_quotient(") == 2  # the macro and the rule (s is projected: on demand)
+    assert "/ CAST(-7 AS BIGINT)" in files["engine/rules.sql"] and "rezono_quotient" not in files["engine/rules.sql"]
+    assert files["batch/rules.sql"].count("rezono_quotient(") == 2  # the macro and the rule (s is projected: on demand)
     prog = ir.load(pack.read(fixture).rules)
     assert "/ CAST(-7 AS BIGINT)" in rules_sql.witness_select(prog, prog.rules["part"])   # the witness query is engine SQL
     sizes = [0, 23, 29, 30, 31, 37, 59]
@@ -489,8 +489,8 @@ def test_division_truncates_toward_zero_on_every_engine(fixture, tmp_path):
     assert batch.read(con, prog)["part"] == want
     assert len(batch.witnesses(con, prog)["part"]) == len(sizes)
     # At the edge of BIGINT: abs(-2^63) fits only because the macro works on 128 bits.
-    edge = "SELECT rede_quotient(CAST(-9223372036854775808 AS BIGINT), CAST(60 AS BIGINT)), " \
-           "rede_quotient(CAST(9223372036854775807 AS BIGINT), CAST(-60 AS BIGINT))"
+    edge = "SELECT rezono_quotient(CAST(-9223372036854775808 AS BIGINT), CAST(60 AS BIGINT)), " \
+           "rezono_quotient(CAST(9223372036854775807 AS BIGINT), CAST(-60 AS BIGINT))"
     assert con.execute(edge).fetchone() == (-153722867280912930, -153722867280912930)
     if shutil.which("souffle"):
         import souffle
@@ -760,7 +760,7 @@ def test_outcome_refusals(fixture, case):
 
 def test_the_outcome_checks_find_a_missing_row_and_two_states(fixture):
     pytest.importorskip("duckdb")
-    from rede_compiler import batch
+    from rezono_compiler import batch
 
     with_reason(fixture, "small")
 
@@ -879,9 +879,9 @@ def test_a_body_of_aggregates_only_on_the_batch_backend_the_checker_and_souffle(
     pytest.importorskip("duckdb")
     import hashlib
 
-    from rede_checker.check import check, check_epoch
-    from rede_checker.rules import derived_relations, load_rules
-    from rede_compiler import batch, explain
+    from rezono_checker.check import check, check_epoch
+    from rezono_checker.rules import derived_relations, load_rules
+    from rezono_compiler import batch, explain
 
     data, want = WHOLE_WANT[case]
     model = pack.read(with_rules(fixture, core=WHOLE))
@@ -949,7 +949,7 @@ def test_generated_bodies_of_aggregates_only_equal_souffle_as_sets(seed, tmp_pat
     pytest.importorskip("duckdb")
     import rulegen
     import souffle
-    from rede_compiler import batch
+    from rezono_compiler import batch
 
     doc = rulegen.program(seed, 6, shapes=("total", "count", "sum", "negation", "union"))
     prog = ir.load(doc)
@@ -1158,7 +1158,7 @@ def viewed(tmp: Path, view: bool = True, **files: str) -> Path:
         path.write_text(yaml.safe_dump(value, sort_keys=False), encoding="utf-8", newline="\n")
 
     def schema(name, classes):
-        return {"id": f"https://rede.example/{name}", "name": name, "imports": ["linkml:types"],
+        return {"id": f"https://rezono.example/{name}", "name": name, "imports": ["linkml:types"],
                 "default_range": "string", "annotations": {"layer": "facts"}, "classes": classes}
 
     theory, domain = (Path(shutil.copytree(FIXTURE, tmp / n)) for n in ("theory", "domain"))
@@ -1183,7 +1183,7 @@ def viewed(tmp: Path, view: bool = True, **files: str) -> Path:
     if files:
         with_rules(domain, **files)
     if view:
-        write(domain / "views.yaml", {"format": "rede.views/1", "views": [VIEWED]})
+        write(domain / "views.yaml", {"format": "rezono.views/1", "views": [VIEWED]})
     return domain
 
 

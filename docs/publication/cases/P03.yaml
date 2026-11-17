@@ -1,0 +1,18 @@
+id: P03
+class: invalid
+status: settled
+schema:
+  from: fixture.schema.json
+form: parquet-metadata
+input:
+  rezono:
+    rezono: '1.0'
+    schema: s-<fixture id>
+    table: Host
+    role: kind
+    manifest: m-12
+expect:
+  accept: false
+  error: '`manifest` without `dataset`'
+sources:
+- '#369 L0 rev 2 §8'

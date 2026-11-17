@@ -19,9 +19,9 @@ import pytest
 import yaml
 
 pytest.importorskip("duckdb")
-pytest.importorskip("rede_compiler")
+pytest.importorskip("rezono_compiler")
 
-from rede_publisher import batch, kept, publish, store  # noqa: E402
+from rezono_publisher import batch, kept, publish, store  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[3]
 PACKS = sorted(p.parent for p in (ROOT / "examples").rglob("pack.yaml")
@@ -70,14 +70,14 @@ def test_publish(pack_dir, tmp_path):
     complete = {x["relation"]: x for x in m["snapshots"] if x["role"] == "checker"}
     assert set(complete) == set(e.rows)
     rows = {rel: {json.dumps(r["key"], separators=(",", ":"))
-                  for r in json.loads(s.get(x["uri"].removeprefix("s3://rede/")))}
+                  for r in json.loads(s.get(x["uri"].removeprefix("s3://rezono/")))}
             for rel, x in complete.items()}
     for w in json.loads(s.get(publish.role_objects(s, e.pack, "m-1", "checker")["witnesses.json"]))["witnesses"]:
         assert w["conclusion"]["key"] in rows[w["conclusion"]["relation"]]
     # A filtered role that the pack's own access rules name reads rows (an empty snapshot set means the rules miss it).
     named = {r[0] for r in e.rows.get("may_read", ())}
     for role in sorted(r for r, mode in ROLES.items() if mode == "may_read" and r in named):
-        assert any(json.loads(s.get(x["uri"].removeprefix("s3://rede/")))
+        assert any(json.loads(s.get(x["uri"].removeprefix("s3://rezono/")))
                    for x in m["snapshots"] if x["role"] == role), f"{role} reads nothing"
     _, again, _, _ = run(pack_dir, tmp_path / "b")
     assert again.list("") == s.list("")
@@ -94,7 +94,7 @@ def test_a_publication_is_made_again_byte_for_byte(pack_dir, tmp_path):
         return
     env = os.environ | {"PYTHONHASHSEED": "4242", "TZ": "Pacific/Kiritimati", "LC_ALL": "C", "LANG": "C"}
     roles = [a for r, mode in sorted(ROLES.items()) for a in ("--role", f"{r}={mode}")]
-    subprocess.run([sys.executable, "-m", "rede_publisher", str(pack_dir), "--store", f"file://{tmp_path / 'new'}",
+    subprocess.run([sys.executable, "-m", "rezono_publisher", str(pack_dir), "--store", f"file://{tmp_path / 'new'}",
                     *roles, "--epoch", "1", "--knowledge-time", "2026-01-01T00:00:00Z", "--source", "rules=test"],
                    check=True, env=env, cwd=tmp_path, capture_output=True)
     new = store.FileStore(tmp_path / "new")
@@ -210,7 +210,7 @@ def test_a_counter_at_its_bound_blocks_with_its_check_and_one_within_it_publishe
     assert {"name": "depth__exhausted", "status": "red", "violations": 1} in e.checks
 
 
-# A kept publication (rede_publisher.kept): made in CI once, kept in Git, made again from its manifest.
+# A kept publication (rezono_publisher.kept): made in CI once, kept in Git, made again from its manifest.
 PUBLISHED = [p for p in PACKS if kept.kept_dir(p).is_dir()]
 # Those that hold one now (a pack that joins has none until regen-goldens makes it).
 KEPT = [p for p in PUBLISHED if kept.manifests(store.FileStore(kept.kept_dir(p)))]
@@ -226,7 +226,7 @@ def test_a_kept_publication_is_made_again_byte_for_byte(pack_dir):
 def kept_anew(tmp, source):
     """A kept publication of `source` made now, with this code (a v2 build record), from a copy of the pack
     with every pack it imports, laid out as in the repository so the imports resolve (modules.copy_closure)."""
-    from rede_compiler import modules
+    from rezono_compiler import modules
 
     pack = modules.copy_closure(source, tmp / "src")
     kept.kept_dir(pack).mkdir(parents=True)
@@ -240,7 +240,7 @@ def imports(p):
 
 @pytest.fixture(scope="module")
 def v2_source(tmp_path_factory):
-    """A kept publication made now, with this code: a v2 build record (rede_publisher.kept)."""
+    """A kept publication made now, with this code: a v2 build record (rezono_publisher.kept)."""
     if not KEPT:
         pytest.skip("no kept publication to take a pack from")
     return kept_anew(tmp_path_factory.mktemp("v2"), KEPT[0])
@@ -307,7 +307,7 @@ def _forged_fingerprint(source):
     def forge(d):
         assert old.encode() in d, "the archived batch.py computes the publisher hash"
         return d.replace(old.encode(), repr(claimed).encode()) + b"\nFORGED = True\n"
-    return _edit(lambda n: n == "edge/publisher/rede_publisher/batch.py", forge)
+    return _edit(lambda n: n == "edge/publisher/rezono_publisher/batch.py", forge)
 
 
 # name: (change of the archive, archive digest updated too, what a v1 refusal names, what a v2 one names)
@@ -324,11 +324,11 @@ FORGERIES = {
     "a forged fingerprint": (_forged_fingerprint, True, "is not the file", "archived publisher"),
     # pyproject.toml decides what is installed: here the publisher from a module beside the locks.
     "an installation redirect": (lambda s: _edit(lambda n: n == "edge/publisher/pyproject.toml",
-                                                 lambda d: d + b'\n[tool.setuptools.package-dir]\nrede_publisher = "../../requirements"\n'),
+                                                 lambda d: d + b'\n[tool.setuptools.package-dir]\nrezono_publisher = "../../requirements"\n'),
                                  True, "is not the file", "archived install"),
-    "a module beside the locks": (lambda s: _extra("requirements/rede_publisher.py"), True, "is not the file", "not allowed"),
+    "a module beside the locks": (lambda s: _extra("requirements/rezono_publisher.py"), True, "is not the file", "not allowed"),
     "a module outside the allowed set": (lambda s: _extra("sitecustomize.py"), True, "not allowed", "not allowed"),
-    "a file the code hashes skip": (lambda s: _extra("edge/publisher/rede_publisher/_speedups.so"), True, "not allowed", "not allowed"),
+    "a file the code hashes skip": (lambda s: _extra("edge/publisher/rezono_publisher/_speedups.so"), True, "not allowed", "not allowed"),
     "a link": (lambda s: _extra("pack/facts/link.yaml", link=True), True, "not allowed", "not allowed"),
     "a path out of the tree": (lambda s: _extra("pack/../../escape.py"), True, "not allowed", "not allowed"),
 }
@@ -391,7 +391,7 @@ def _members(source):
 
 def test_an_archive_carries_the_packs_its_pack_imports(v2_imports):
     """Each imported pack's definition files, at their place relative to the pack (decision S9 pins them)."""
-    from rede_compiler import modules
+    from rezono_compiler import modules
 
     names = _members(v2_imports)
     base, found = modules.closure(v2_imports)
@@ -414,7 +414,7 @@ IMPORT_FORGERIES = {
 
 @pytest.mark.parametrize("forgery", list(IMPORT_FORGERIES))
 def test_a_forged_import_is_refused_before_anything_runs(tmp_path, monkeypatch, v2_imports, forgery):
-    from rede_compiler import modules
+    from rezono_compiler import modules
 
     base, found = modules.closure(v2_imports)
     imported = {f"pack/{d.relative_to(base).as_posix()}/" for _, d in found}
@@ -599,7 +599,7 @@ def test_a_role_that_reads_everything_in_full_gets_what_the_checker_gets(tmp_pat
 def test_the_command_line_names_a_role_the_read_rules_give_nothing(tmp_path, capsys, monkeypatch):
     """RV-S10: a role of the profile that the pack's read rules give no row (`propose` here) is published
     with nothing to read, and the publisher says so in a note; a role with rights is not named."""
-    from rede_publisher import __main__ as cli
+    from rezono_publisher import __main__ as cli
 
     d = read_pack(tmp_path, ALL, ("a1", "open", 3), ("a2", "x", 5))
     roles = [a for r, mode in sorted(ROLES.items()) for a in ("--role", f"{r}={mode}")]
@@ -613,7 +613,7 @@ def test_the_command_line_names_a_role_the_read_rules_give_nothing(tmp_path, cap
 
 
 # Calculation rules (decision W12) on the neutral pack: half the size of an alpha, rounded half away from zero.
-HALF = """format: rede.calc/1
+HALF = """format: rezono.calc/1
 pack: minimal
 subject: alpha
 as_of: {valid_at: "2026-06-01", known_at: "2026-06-01"}
@@ -668,7 +668,7 @@ def test_a_calculation_over_a_relation_read_in_part_is_not_the_roles(tmp_path):
 def test_a_filter_that_drops_visible_calculated_rows_is_red(tmp_path, monkeypatch):
     """Review of #196 (O8, W12): the viewer reads alpha in full, so both calculated rows are its. A filter
     that drops them and their witnesses is red: the checker derives what the role may see itself."""
-    from rede_publisher import access
+    from rezono_publisher import access
 
     real = access.for_role
 
@@ -704,7 +704,7 @@ def test_a_wrong_calculation_witness_blocks(tmp_path, monkeypatch, forgery):
 
     monkeypatch.setattr(batch, "epoch", forged)
     d = calc_pack(tmp_path, ALL, ("a1", "open", 3), ("a2", "x", 5))
-    with pytest.raises(publish.Blocked, match="rede:proofs"):
+    with pytest.raises(publish.Blocked, match="rezono:proofs"):
         publish_pack(d, tmp_path)
     assert not (tmp_path / "store").exists() or store.FileStore(tmp_path / "store").list("") == []
 
@@ -721,16 +721,16 @@ def test_an_invalid_result_refuses_the_epoch_and_names_its_reason(tmp_path):
     assert "calc_invalid" in refused and "division by zero" in refused, refused
 
 
-# --- Decision E11: the check metadata (rede__*) comes from the definition only ----------------------------
+# --- Decision E11: the check metadata (rezono__*) comes from the definition only ----------------------------
 
 def test_the_loaded_check_metadata_is_the_bundles_and_never_a_snapshot(tmp_path):
-    from rede_checker import metadata
+    from rezono_checker import metadata
     d = pack_with(tmp_path, {"a.yaml": alpha(("a1", 1))})
     e, m = publish_pack(d, tmp_path)
     loaded = {t: sorted(rs) for t, rs in e.check_metadata.items()}
-    assert loaded == metadata.expected(json.loads(e.bundle)) and loaded["rede__required"]
-    assert not any(r.startswith("rede__") for r in e.rows)
-    assert not any(s["relation"].startswith("rede__") for s in m["snapshots"])
+    assert loaded == metadata.expected(json.loads(e.bundle)) and loaded["rezono__required"]
+    assert not any(r.startswith("rezono__") for r in e.rows)
+    assert not any(s["relation"].startswith("rezono__") for s in m["snapshots"])
 
 
 @pytest.mark.parametrize("change", ["a row dropped", "a row added", "a row twice", "a table missing", "none loaded"])
@@ -739,11 +739,11 @@ def test_check_metadata_that_differs_from_the_bundle_blocks(tmp_path, change):
     d = pack_with(tmp_path, {"a.yaml": alpha(("a1", 1))})
     e = batch.epoch(d, epoch=1, knowledge_time="2026-01-01T00:00:00Z", sources=[("rules", "test")])
     meta = dict(e.check_metadata)
-    required = meta["rede__required"]
-    meta = {"a row dropped": meta | {"rede__required": required[1:]},
-            "a row added": meta | {"rede__required": required + [("alpha", "size")]},
-            "a row twice": meta | {"rede__required": required + required[:1]},
-            "a table missing": {t: rs for t, rs in meta.items() if t != "rede__single"},
+    required = meta["rezono__required"]
+    meta = {"a row dropped": meta | {"rezono__required": required[1:]},
+            "a row added": meta | {"rezono__required": required + [("alpha", "size")]},
+            "a row twice": meta | {"rezono__required": required + required[:1]},
+            "a table missing": {t: rs for t, rs in meta.items() if t != "rezono__single"},
             "none loaded": None}[change]
     s = store.FileStore(tmp_path / "store")
     with pytest.raises(publish.Blocked, match="check_metadata"):
@@ -754,10 +754,10 @@ def test_check_metadata_that_differs_from_the_bundle_blocks(tmp_path, change):
 @pytest.mark.parametrize("pack_dir", PACKS, ids=[str(p.relative_to(ROOT / "examples")) for p in PACKS])
 def test_the_checker_reads_the_compilers_metadata_from_the_bundle(pack_dir):
     """Two readings of one schema agree: the compiler's rows and the checker's, from the bundle alone."""
-    from rede_checker import metadata
-    from rede_compiler import emit, pack
+    from rezono_checker import metadata
+    from rezono_compiler import emit, pack
     model = pack.read(pack_dir)
     files = emit.compile_pack(model)
     rows = {t: [tuple(batch.text(v) for v in r.values()) for r in rs]
-            for t, rs in json.loads(files["engine/parameters.json"]).items() if t.startswith("rede__")}
+            for t, rs in json.loads(files["engine/parameters.json"]).items() if t.startswith("rezono__")}
     assert metadata.expected(json.loads(files["bundle/schema-bundle.json"])) == {t: sorted(r) for t, r in rows.items()}

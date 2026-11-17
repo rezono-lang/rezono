@@ -18,9 +18,9 @@ from pathlib import Path
 import pytest
 import yaml
 
-from rede_checker.canon import encode_key
-from rede_checker.check import check
-from rede_checker.rules import load_rules
+from rezono_checker.canon import encode_key
+from rezono_checker.check import check
+from rezono_checker.rules import load_rules
 
 CASES = yaml.safe_load((Path(__file__).resolve().parents[2] / "docs/semantics/witness-alternatives-cases.yaml")
                        .read_text("utf-8"))["cases"]
@@ -50,7 +50,7 @@ def _columns(k):
     return [{"name": f"c{i}", "type": "string"} for i in range(k)]
 
 
-IR = {"format": "rede.rules/1", "pack": "alternatives",
+IR = {"format": "rezono.rules/1", "pack": "alternatives",
       "relations": [{"name": n, "role": "base", "key": _columns(k)} for n, k in BASE.items()]
                    + [{"name": n, "role": "derived", "module": "m", "explain": "materialize", "key": _columns(k)}
                       for n, k in DERIVED.items()],

@@ -3,7 +3,7 @@
 Three evaluations must agree as sets: an exact Python reference written from the definitions (bounds per
 interval and a decision tree for Allen's relations, not the thirteen rules), the DuckDB batch backend on the
 compiled IR, and Soufflé on rules/time.dl as written (when present, as in CI). The must-fail cases show that
-each axiom fires. No domain: intervals are letters, positions are whole numbers; the validity cases of Reckon
+each axiom fires. No domain: intervals are letters, positions are whole numbers; the validity cases of Rezono
 §5a are read as positions by this test, not by the theory.
 
 A bound has three states (RV-C13): stated, stated to be absent, or not recorded. What nobody recorded is
@@ -20,8 +20,8 @@ from pathlib import Path
 import pytest
 from hypothesis import given, settings, strategies as st
 
-from rede_compiler import emit, pack
-from rede_compiler import rules as ir
+from rezono_compiler import emit, pack
+from rezono_compiler import rules as ir
 
 THEORY = Path(__file__).resolve().parents[2] / "packs" / "std-time"
 pytest.importorskip("duckdb")
@@ -190,7 +190,7 @@ def program():
 
 
 def batch_eval(prog, data):
-    from rede_compiler import batch
+    from rezono_compiler import batch
     con = batch.connect(prog, data)
     batch.compute(con, prog)
     return batch.read(con, prog)
@@ -417,8 +417,8 @@ def day(text):
     return date.fromisoformat(text).toordinal()
 
 
-def test_the_validity_cases_of_reckon_5a_hold_as_cases(tmp_path):
-    """docs/reckon/v0.md §5a: a version's context is a half-open range per axis and a knowledge date. Exactly
+def test_the_validity_cases_of_rezono_5a_hold_as_cases(tmp_path):
+    """docs/rezono/v0.md §5a: a version's context is a half-open range per axis and a knowledge date. Exactly
     the versions whose context holds at the subject's date and that are known at the cut take part."""
     # param standard_premium: version 1, valid 2025-01-01..<2026-01-01; version 2, valid 2026-01-01.. (no end).
     premium = {"v1": Interval("days", day("2025-01-01"), day("2026-01-01"), known_from=day("2024-09-17"), series="premium"),
@@ -527,7 +527,7 @@ def test_what_a_reading_of_positions_must_preserve(intervals, references, shift,
 def bound_domain(tmp_path):
     """A domain that pins the theory and has a kind of its own that is an Interval, with five stretches."""
     import yaml
-    from rede_compiler import modules
+    from rezono_compiler import modules
 
     domain = tmp_path / "bound"
     for folder in ("schema", "labels", "facts"):
@@ -536,7 +536,7 @@ def bound_domain(tmp_path):
         "name": "bound", "version": "0.1.0", "default_language": "en",
         "imports": [{"name": "std-time", "path": str(THEORY), "sha256": modules.pack_hash(THEORY)}]}), "utf-8")
     (domain / "schema" / "bound.yaml").write_text(yaml.safe_dump({
-        "id": "https://rede.example/bound", "name": "bound", "prefixes": {"linkml": "https://w3id.org/linkml/"},
+        "id": "https://rezono.example/bound", "name": "bound", "prefixes": {"linkml": "https://w3id.org/linkml/"},
         "imports": ["linkml:types", "std-time:time"], "default_range": "string", "annotations": {"layer": "facts"},
         "classes": {"Stretch": {"is_a": "Interval", "attributes": {"title": {}}}}}), "utf-8")
     (domain / "labels" / "en.yaml").write_text("stretch: stretch\nstretch.title: title\n", "utf-8")
@@ -557,7 +557,7 @@ def test_a_domain_kind_that_is_an_interval_gets_the_theory_through_the_ordinary_
     Interval (is_a). Its elements are in the theory's tables, so the theory's rules, axioms and questions hold
     for them through the ordinary compiler. This is the inclusion view; a view with other names waits for
     the lowering (docs/compiler.md, theories and views)."""
-    from rede_compiler import batch, scenarios
+    from rezono_compiler import batch, scenarios
 
     domain = bound_domain(tmp_path)
     model = pack.read(domain)

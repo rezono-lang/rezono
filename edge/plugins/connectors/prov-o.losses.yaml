@@ -1,5 +1,5 @@
-# A witness as PROV-O (decision O12c; docs/reckon-data/l0.md §5; reckon_data/rdf.py: witness_to_prov), read by
-# a reader that knows PROV-O and not the `rd:` terms. A Reckon Data reader loses nothing: prov_to_witness gives
+# A witness as PROV-O (decision O12c; docs/publication/l0.md §5; publication/rdf.py: witness_to_prov), read by
+# a reader that knows PROV-O and not the `rd:` terms. A publication reader loses nothing: prov_to_witness gives
 # the witness back. test_losses.py holds this list to what the export writes and to `rdf.PROV_LOSS`.
 connector: prov-o-out
 standard: PROV-O

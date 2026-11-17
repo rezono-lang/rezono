@@ -10,8 +10,8 @@ from hashlib import sha256
 import pytest
 import yaml
 
-from rede_canon import canonical_json
-from rede_compiler import pack, source_writer as sw, sources, writer
+from rezono_canon import canonical_json
+from rezono_compiler import pack, source_writer as sw, sources, writer
 from test_sources import DEFAULT, fixture  # noqa: F401 (a pytest fixture)
 
 DATA, COMPANION = "facts/data.yaml", "facts/data.sources.yaml"

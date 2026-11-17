@@ -1,5 +1,5 @@
 # The impact of the last operation of the worked example, on the state facts/valid.yaml (docs/compiler.md).
-format: rede.impact/1
+format: rezono.impact/1
 pack: library
 operations:
   - index: 4

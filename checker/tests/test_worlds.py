@@ -6,7 +6,7 @@ import copy
 
 import pytest
 
-from rede_checker.rules import check_worlds, load_rules
+from rezono_checker.rules import check_worlds, load_rules
 
 
 def relation(name, role, *columns, **flags):
@@ -24,7 +24,7 @@ BASE = [relation("host", "base", "id"), relation("owner", "base", "id", world="o
 
 
 def doc(*rules, derived=()):
-    return {"format": "rede.rules/1", "relations": BASE + list(derived), "rules": list(rules)}
+    return {"format": "rezono.rules/1", "relations": BASE + list(derived), "rules": list(rules)}
 
 
 ORPHAN = rule("orphan", "orphan", [("host", "positive", "0"), ("owner", "negative", "0")], stratum="1")

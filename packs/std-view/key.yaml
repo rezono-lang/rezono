@@ -18,7 +18,7 @@ tones:
   - {tone: unknown, color_role: status.unknown, glyph: "▨", label_message: tone.unknown}
 # V2 supplies nominal pigments; V1a accepts no unrendered pack colour bindings.
 hues: []
-# The legend of Rede: what is known about a value, the same in every pack and every theme
+# The legend of Rezono: what is known about a value, the same in every pack and every theme
 # (contracts/view.yaml, SignName). A sheet draws a sign only where the bundle provides its fact.
 # No sign depends on colour: drift is two lines, a supposed value stands beside its struck one.
 signs:

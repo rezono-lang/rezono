@@ -1,15 +1,15 @@
-"""Acceptance of the connectors on one role's Reckon Data form (docs/standards.md, state "accepted"; lane M).
+"""Acceptance of the connectors on one role's publication form (docs/standards.md, state "accepted"; lane M).
 
 `accept(schema, rows, pin)` runs every out-connector on a role's view and checks each against its independent
 reader, the same oracles as the tests, now on a real dataset instead of a fixture:
 
-- **rdf:** the RDF view out and back (`reckon_data.rdf`) gives the rows in normal form;
+- **rdf:** the RDF view out and back (`publication.rdf`) gives the rows in normal form;
 - **shacl:** pySHACL validates that view against the shapes (`shacl.py`), and it conforms;
 - **odcs:** the contract (`odcs.py`) is valid against the official ODCS JSON Schema, and DuckDB counts no row
   against any of its quality rules on the library's own Arrow tables of the rows;
 - **dcat:** the catalogue entry (`dcat.py`) reads back as written;
 - **checks** (when the manifest carries the rule IR): pySHACL validates the view through the pack's invariants as
-  SHACL-SPARQL (`shacl_sparql.py`), and reports per invariant exactly the rows Rede holds for it.
+  SHACL-SPARQL (`shacl_sparql.py`), and reports per invariant exactly the rows Rezono holds for it.
 
 A connector that refuses the schema with an open question (Q13, Q20) is reported as `refused`, with the reason:
 that is the checklist's "refuses, and never guesses", not a failure. Anything else that goes wrong is `failed`.
@@ -18,7 +18,7 @@ that is the checklist's "refuses, and never guesses", not a failure. Anything el
 role fetched through its index, each export against its reader, the DCAT entry's addresses against the index. It
 runs in a pack's tests on a published store (examples/subsidy/test_subsidy_forms.py), never in the publish step.
 
-The command takes a published store, as the probe of RD1 exports it (`probes/reckon-data-thin/export.py`), and
+The command takes a published store, as the probe of RD1 exports it (`probes/publication-thin/export.py`), and
 prints one JSON report per role; it exits 1 when a connector failed for any role.
 
     python edge/plugins/connectors/accept.py <store dir> <pack> <manifest> [<role> ...]
@@ -32,7 +32,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
 HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(ROOT))  # reckon_data lives at the repository root
+sys.path.insert(0, str(ROOT))  # publication lives at the repository root
 sys.path.insert(0, str(HERE))  # the other connectors
 
 import duckdb  # noqa: E402
@@ -42,13 +42,13 @@ import pyshacl  # noqa: E402
 import yaml  # noqa: E402
 from rdflib import Graph, Literal  # noqa: E402
 from rdflib.namespace import PROV, RDF, SH  # noqa: E402
-from rede_compiler import rules as ir  # noqa: E402
+from rezono_compiler import rules as ir  # noqa: E402
 
 import dcat  # noqa: E402
 import odcs  # noqa: E402
 import shacl  # noqa: E402
 import shacl_sparql  # noqa: E402
-from reckon_data import arrow, l0, publication, rdf  # noqa: E402
+from publication import arrow, l0, publication, rdf  # noqa: E402
 
 OPEN = ("Q13", "Q20")  # the open questions a connector may refuse a schema for (docs/standards.md)
 _OFFICIAL = json.loads((Path(open_data_contract_standard.__file__).parent / "schema.json").read_text(encoding="utf-8"))
@@ -124,13 +124,13 @@ def _checks(bundle, rules_doc, derived):
             raise l0.L0Error(f"Q-seal: not decided from the view, a close of the seal is in it: {undecided}")
         carried = {n: len(r["rows"]) for n, r in result.items() if r["state"] == "carried"}
         off = {n: r["reason"] for n, r in result.items() if r["state"] == "deactivated"}
-        return f"{len(carried)} invariants carried, Rede and pySHACL agree on every row {carried}; deactivated: {off}"
+        return f"{len(carried)} invariants carried, Rezono and pySHACL agree on every row {carried}; deactivated: {off}"
     return run
 
 
 def accept(schema: dict, rows: list, pin: dict, rules=None) -> dict:
     """Per connector `{"state": "accepted" | "refused" | "failed", "detail": …, "seconds": …}`. With `rules`, the
-    schema bundle, the rule IR and Rede's derived rows, the pack's checks as SHACL-SPARQL too (`checks`)."""
+    schema bundle, the rule IR and Rezono's derived rows, the pack's checks as SHACL-SPARQL too (`checks`)."""
     l0.check_schema(schema)
     l0.read_rows(schema, rows)
     report = {}
@@ -148,8 +148,8 @@ def accept(schema: dict, rows: list, pin: dict, rules=None) -> dict:
 
 
 def checks(bundle: dict, rules_doc: dict, schema: dict, rows: list, derived: dict) -> dict:
-    """The pack's invariants as SHACL-SPARQL (`shacl_sparql.py`) against Rede's own result: pySHACL validates the
-    view `rows` through the constraints, and per invariant the rows it reports must be the rows Rede derived
+    """The pack's invariants as SHACL-SPARQL (`shacl_sparql.py`) against Rezono's own result: pySHACL validates the
+    view `rows` through the constraints, and per invariant the rows it reports must be the rows Rezono derived
     (`derived`: {relation: [row, ...]}, as the engine or the store holds them). Raises NotAccepted on a
     difference. Returns, per invariant, `carried` with its rows, `deactivated` with the reason, or `undecided`
     (a close of the seal is in the view)."""
@@ -179,7 +179,7 @@ def checks(bundle: dict, rules_doc: dict, schema: dict, rows: list, derived: dic
         want = {shacl_sparql.row_key(r, [c.type for c in rel.key]) for r in derived.get(name, [])}
         got = found.get(pascal, set())
         if want != got:
-            differ.append(f"{name}: Rede {sorted(want)[:5]}, SHACL {sorted(got)[:5]}")
+            differ.append(f"{name}: Rezono {sorted(want)[:5]}, SHACL {sorted(got)[:5]}")
         out[name] = {"state": "carried", "rows": sorted(want)}
     if differ:
         raise NotAccepted("; ".join(differ))
@@ -286,7 +286,7 @@ def published(objects: dict, at: str) -> dict:
 
 
 def _probe():
-    spec = importlib.util.spec_from_file_location("rd_export", ROOT / "probes" / "reckon-data-thin" / "export.py")
+    spec = importlib.util.spec_from_file_location("rd_export", ROOT / "probes" / "publication-thin" / "export.py")
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module

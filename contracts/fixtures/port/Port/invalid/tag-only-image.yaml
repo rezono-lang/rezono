@@ -5,7 +5,7 @@ runs_on: checked_epoch
 writes: projection
 row_source: output_index
 runtime: job
-image: example.invalid/rede/dcat:latest
+image: example.invalid/rezono/dcat:latest
 connector: {standard: DCAT, standard_version: "3", round_trip: contracts/fixtures/port/round-trip/dcat.yaml}
 consumes: [published-manifest]
 produces: [dcat-catalog]

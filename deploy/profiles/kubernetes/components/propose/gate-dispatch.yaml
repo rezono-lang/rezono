@@ -8,6 +8,6 @@ spec:
       containers:
         - name: gate
           env:
-            - name: REDE_DISPATCH_TOKEN
+            - name: REZONO_DISPATCH_TOKEN
               valueFrom:
-                secretKeyRef: { name: rede-propose, key: dispatch-token }
+                secretKeyRef: { name: rezono-propose, key: dispatch-token }

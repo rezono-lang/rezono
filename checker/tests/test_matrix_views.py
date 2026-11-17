@@ -1,4 +1,4 @@
-"""A Matrix sheet (`matrix.<id>`) is checked like any sheet (rede_checker.views, check_view), plus its binding in
+"""A Matrix sheet (`matrix.<id>`) is checked like any sheet (rezono_checker.views, check_view), plus its binding in
 the compiled bundle: every node is a head named by its axis and the element it shows (`rows/<of>`,
 `columns/<of>`), which the role must read at its most specific kind and which is of its axis's kind; every cell
 runs from a row's head to a column's head, is of the binding's sign and, for a relation, names exactly its `from`
@@ -8,7 +8,7 @@ Negative cases first."""
 import copy
 import json
 
-from rede_checker.views import check_view
+from rezono_checker.views import check_view
 
 MATRIX = {"id": "zones", "title_message": "m", "rows": {"kind": "zone"}, "columns": {"kind": "zone"},
           "cells": {"relation": "zone_crossing", "from": "za", "to": "zb", "from_kinds": ["zone"], "to_kinds": ["zone"]}}
@@ -41,7 +41,7 @@ def problems(nodes=NODES, edges=EDGES, rows=ROWS, of=None, sheet=SHEET, bundle=B
     layout = {"nodes": {n["id"]: [n["x"], n["y"], n["width"], n["height"]] for n in nodes},
               "edges": {e["id"]: {"source": e["source"], "target": e["target"], "points": e["points"]} for e in edges},
               "of": of if of is not None else {n["id"]: n["of"] for n in nodes if "of" in n}}
-    tile = {"format": "rede.tile/1", "sheet": sheet, "level": 0, "x": 0, "y": 0, "box": [0, 0, TILE, TILE],
+    tile = {"format": "rezono.tile/1", "sheet": sheet, "level": 0, "x": 0, "y": 0, "box": [0, 0, TILE, TILE],
             "nodes": nodes, "edges": edges}
     path = f"{sheet}/0/0_0.json"
     return check_view(sheet, snapshots, json.dumps(layout).encode(), {path: json.dumps(tile).encode()}, path, TILE, 4, 1, bundle,

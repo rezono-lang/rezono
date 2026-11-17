@@ -1,4 +1,4 @@
-format: rede.view-build/1
+format: rezono.view-build/1
 files: [{path: viewer/package-lock.json}]
 node:
   executable_sha256: bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb

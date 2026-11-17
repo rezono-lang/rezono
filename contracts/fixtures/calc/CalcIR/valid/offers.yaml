@@ -1,6 +1,6 @@
 # ir/calc.json as the compiler writes it (decision W12): two rules, a template already filled in, one
 # fact per kind of reading, a parameter and an input concept.
-format: rede.calc-ir/1
+format: rezono.calc-ir/1
 pack: offers
 subject: offer
 subject_table: offer

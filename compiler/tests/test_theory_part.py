@@ -13,8 +13,8 @@ from pathlib import Path
 import pytest
 from hypothesis import given, settings, strategies as st
 
-from rede_compiler import emit, pack
-from rede_compiler import rules as ir
+from rezono_compiler import emit, pack
+from rezono_compiler import rules as ir
 
 THEORY = Path(__file__).resolve().parents[2] / "packs" / "std-part"
 pytest.importorskip("duckdb")
@@ -49,7 +49,7 @@ def program():
 
 
 def batch_eval(prog, data):
-    from rede_compiler import batch
+    from rezono_compiler import batch
     con = batch.connect(prog, data)
     batch.compute(con, prog)
     return batch.read(con, prog)
@@ -88,8 +88,8 @@ def test_two_axioms_are_checks_of_the_schema():
     theory = pack.read(THEORY)
     bundle = json.loads(emit.compile_pack(theory)["bundle/schema-bundle.json"])
     checks = {c["view"]: c["relation"] for c in bundle["checks"]}
-    assert checks["constituent__part_of__functionality"] == "rede__functionality"
-    assert checks["constituent__repeat__value_range"] == "rede__value_range"
+    assert checks["constituent__part_of__functionality"] == "rezono__functionality"
+    assert checks["constituent__repeat__value_range"] == "rezono__value_range"
     slots = theory.kinds["constituent"].slots
     assert not slots["part_of"].multivalued and int(slots["repeat"].minimum) == 1
 
@@ -122,7 +122,7 @@ def test_reversed_arrows_are_a_failing_control():
 def bound(tmp_path, constituents):
     """A domain that pins the theory and whose kind Piece is a Constituent (is_a), with these rows."""
     import yaml
-    from rede_compiler import modules
+    from rezono_compiler import modules
 
     domain = tmp_path / "bound"
     for folder in ("schema", "labels", "facts"):
@@ -131,7 +131,7 @@ def bound(tmp_path, constituents):
         "name": "bound", "version": "0.1.0", "default_language": "en",
         "imports": [{"name": "std-part", "path": str(THEORY), "sha256": modules.pack_hash(THEORY)}]}), "utf-8")
     (domain / "schema" / "bound.yaml").write_text(yaml.safe_dump({
-        "id": "https://rede.example/bound", "name": "bound", "prefixes": {"linkml": "https://w3id.org/linkml/"},
+        "id": "https://rezono.example/bound", "name": "bound", "prefixes": {"linkml": "https://w3id.org/linkml/"},
         "imports": ["linkml:types", "std-part:part"], "default_range": "string", "annotations": {"layer": "facts"},
         "classes": {"Piece": {"is_a": "Constituent", "attributes": {"title": {}}}}}), "utf-8")
     (domain / "labels" / "en.yaml").write_text("piece: piece\npiece.title: title\n", "utf-8")
@@ -143,7 +143,7 @@ def bound(tmp_path, constituents):
 def test_a_domain_kind_that_is_a_constituent_gets_the_theory_through_the_ordinary_compiler(tmp_path):
     """The binding that runs today, without view lowering: a domain pins the theory, and a kind of its own is
     a Constituent (is_a). Its elements are in the theory's tables, so the rules and axioms hold for them."""
-    from rede_compiler import batch, scenarios
+    from rezono_compiler import batch, scenarios
 
     domain = bound(tmp_path, [{"id": "whole", "title": "W"}, {"id": "half", "title": "H", "part_of": "whole", "repeat": 2},
                               {"id": "piece", "title": "P", "part_of": "half", "repeat": 3}])

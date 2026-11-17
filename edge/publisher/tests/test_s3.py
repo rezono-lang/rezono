@@ -5,16 +5,16 @@ import uuid
 
 import pytest
 
-from rede_publisher import publish, store
+from rezono_publisher import publish, store
 from test_publish import ROLES, Flaky, Interrupted, epoch
 
-ENDPOINT = os.environ.get("REDE_TEST_S3_ENDPOINT")
-pytestmark = pytest.mark.skipif(not ENDPOINT, reason="REDE_TEST_S3_ENDPOINT not set (moto runs in CI)")
+ENDPOINT = os.environ.get("REZONO_TEST_S3_ENDPOINT")
+pytestmark = pytest.mark.skipif(not ENDPOINT, reason="REZONO_TEST_S3_ENDPOINT not set (moto runs in CI)")
 
 
 @pytest.fixture
 def s3():
-    bucket = f"rede-test-{uuid.uuid4().hex[:8]}"
+    bucket = f"rezono-test-{uuid.uuid4().hex[:8]}"
     s = store.S3Store(bucket, ENDPOINT, "us-east-1")
     s.client.create_bucket(Bucket=bucket)
     return s

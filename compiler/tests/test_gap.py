@@ -15,8 +15,8 @@ from hypothesis import given, settings
 from hypothesis import strategies as st
 
 import rulegen as gen
-from rede_compiler import batch, gap, rules_dl
-from rede_compiler import rules as ir
+from rezono_compiler import batch, gap, rules_dl
+from rezono_compiler import rules as ir
 
 SOUFFLE = pytest.mark.skipif(shutil.which("souffle") is None, reason="needs souffle (the oracle)")
 ORACLE = settings(max_examples=min(settings().max_examples, 60), deadline=None)

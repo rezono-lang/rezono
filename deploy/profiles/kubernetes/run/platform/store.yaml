@@ -1,4 +1,4 @@
-# The store: one MinIO with the bucket `rede`, nothing kept. The publish job writes with the root keys through
+# The store: one MinIO with the bucket `rezono`, nothing kept. The publish job writes with the root keys through
 # the node port (it stands where CI stands, outside the cluster); the gate reads with keys of a user that may
 # only list the bucket and get its objects (kind.sh makes that user, policy below). Secret `store` is made by
 # kind.sh per run: root-user, root-password, reader-id, reader-secret.
@@ -6,7 +6,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: store
-  namespace: rede-platform
+  namespace: rezono-platform
 spec:
   replicas: 1
   selector:
@@ -23,7 +23,7 @@ spec:
           image: store
           env:
             - name: MINIO_DEFAULT_BUCKETS
-              value: rede
+              value: rezono
             - name: MINIO_ROOT_USER
               valueFrom:
                 secretKeyRef: { name: store, key: root-user }
@@ -47,7 +47,7 @@ spec:
             limits: { memory: 1Gi }
           volumeMounts:
             - { name: data, mountPath: /bitnami/minio/data }
-            - { name: policy, mountPath: /etc/rede }
+            - { name: policy, mountPath: /etc/rezono }
       volumes:
         - name: data
           emptyDir: {}
@@ -59,7 +59,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: store
-  namespace: rede-platform
+  namespace: rezono-platform
 spec:
   type: NodePort
   selector:
@@ -73,13 +73,13 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: store-read
-  namespace: rede-platform
+  namespace: rezono-platform
 data:
   read.json: |
     {
       "Version": "2012-10-17",
       "Statement": [
-        { "Effect": "Allow", "Action": ["s3:ListBucket"], "Resource": ["arn:aws:s3:::rede"] },
-        { "Effect": "Allow", "Action": ["s3:GetObject"], "Resource": ["arn:aws:s3:::rede/*"] }
+        { "Effect": "Allow", "Action": ["s3:ListBucket"], "Resource": ["arn:aws:s3:::rezono"] },
+        { "Effect": "Allow", "Action": ["s3:GetObject"], "Resource": ["arn:aws:s3:::rezono/*"] }
       ]
     }

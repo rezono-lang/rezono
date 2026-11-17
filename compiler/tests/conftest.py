@@ -7,11 +7,11 @@ from hypothesis import HealthCheck, settings
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
 sys.path.insert(0, str(HERE))
-# Bounded per pull request (docs/ci.md); the nightly run sets REDE_HYPOTHESIS_PROFILE=nightly.
+# Bounded per pull request (docs/ci.md); the nightly run sets REZONO_HYPOTHESIS_PROFILE=nightly.
 settings.register_profile("ci", max_examples=15, deadline=None, suppress_health_check=[HealthCheck.too_slow])
 settings.register_profile("pr", max_examples=200, deadline=None, suppress_health_check=[HealthCheck.too_slow])
 settings.register_profile("nightly", max_examples=5000, deadline=None, suppress_health_check=[HealthCheck.too_slow])
-settings.load_profile(os.environ.get("REDE_HYPOTHESIS_PROFILE", "pr"))
+settings.load_profile(os.environ.get("REZONO_HYPOTHESIS_PROFILE", "pr"))
 
 
 def _blocked_under(base: Path) -> list[str]:

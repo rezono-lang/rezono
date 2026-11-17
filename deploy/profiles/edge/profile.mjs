@@ -1,23 +1,23 @@
-// CPU and heap profiles of GET requests on the viewer, with every isolate named in REDE_INSPECTORS (the viewer
+// CPU and heap profiles of GET requests on the viewer, with every isolate named in REZONO_INSPECTORS (the viewer
 // and the gate of profile.sh) profiled during the same request, through the DevTools protocol of their
 // inspectors. Per path, in order (the first request meets a cold isolate): <n>-<path>-<worker>.cpuprofile and
 // .heapprofile (open in Chrome DevTools), and summary.md: the heap after start, before and after each request,
 // the status, the wall time, and the top functions by CPU self time and by sampled live allocations.
-// With REDE_SUBREQUESTS (the log harness.mjs writes), each request must reach the gate through GATE and must
+// With REZONO_SUBREQUESTS (the log harness.mjs writes), each request must reach the gate through GATE and must
 // not fail (status 5xx); the GATE calls and the bytes they read are counted per path. results.json holds the
 // numbers per path for a check to compare.
-//   REDE_INSPECTORS="viewer=9229 gate=9230" node profile.mjs <out dir> <path> [path ...]
+//   REZONO_INSPECTORS="viewer=9229 gate=9230" node profile.mjs <out dir> <path> [path ...]
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 const [out, ...paths] = process.argv.slice(2);
 const VIEWER = 'http://127.0.0.1:8787';
-const SUBREQUESTS = process.env.REDE_SUBREQUESTS;
+const SUBREQUESTS = process.env.REZONO_SUBREQUESTS;
 const logged = () => (SUBREQUESTS && existsSync(SUBREQUESTS) ? readFileSync(SUBREQUESTS, 'utf8') : '');
-const STORE_LOG = process.env.REDE_STORE_LOG;
+const STORE_LOG = process.env.REZONO_STORE_LOG;
 const storeLog = () => (STORE_LOG && existsSync(STORE_LOG) ? readFileSync(STORE_LOG, 'utf8') : '');
 // name=port of each inspector; every isolate is profiled during the same request.
-const INSPECTORS = (process.env.REDE_INSPECTORS ?? 'viewer=9229').split(/\s+/).filter(Boolean).map((p) => p.split('='));
+const INSPECTORS = (process.env.REZONO_INSPECTORS ?? 'viewer=9229').split(/\s+/).filter(Boolean).map((p) => p.split('='));
 mkdirSync(out, { recursive: true });
 
 async function session(name, port) {
@@ -119,7 +119,7 @@ for (const [i, path] of paths.entries()) {
 	const calls = logged().slice(offset).split('\n').filter((l) => l.startsWith('-> ')).length;
 	const gateBytes = [...logged().slice(offset).matchAll(/^<- \d+ (\d+) B /gm)].reduce((a, m) => a + Number(m[1]), 0);
 	const result = { path, status: res.status, bytes: body.length, wall_ms: Math.round(wall), gate_calls: calls, gate_bytes: gateBytes };
-	// Inside the gate: its reads of the store for this request (REDE_STORE_LOG, written by the Node gate).
+	// Inside the gate: its reads of the store for this request (REZONO_STORE_LOG, written by the Node gate).
 	const store = STORE_LOG ? storeLog().slice(storeOffset).split('\n').filter(Boolean) : [];
 	if (STORE_LOG) {
 		result.store_gets = store.filter((l) => l.startsWith('get ')).length;

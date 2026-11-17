@@ -12,7 +12,7 @@ from importlib import metadata
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-OWN = re.compile(r"^rede-")  # this repository's packages, installed from source
+OWN = re.compile(r"^rezono-")  # this repository's packages, installed from source
 TOOLING = {"pip"}  # comes with the pinned Python itself
 
 

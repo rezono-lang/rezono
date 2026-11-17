@@ -1,10 +1,10 @@
 """RV-K03: the filter and the check on it share no code.
 
-The publisher's filter decides what a role gets (rede_publisher.access); the checker derives the same on its
-own and compares (rede_checker.access). That is a check only while the two do not read the question through the
+The publisher's filter decides what a role gets (rezono_publisher.access); the checker derives the same on its
+own and compares (rezono_checker.access). That is a check only while the two do not read the question through the
 same functions. So the filter modules import nothing of the checker but its `check_*` entry points, no module of
-the publisher imports the checker's reading of the calculation program (rede_checker.calc), and the publisher's
-own reading (rede_publisher.calc_scope) agrees with the checker's on every calculation program in the repository.
+the publisher imports the checker's reading of the calculation program (rezono_checker.calc), and the publisher's
+own reading (rezono_publisher.calc_scope) agrees with the checker's on every calculation program in the repository.
 """
 
 import ast
@@ -13,25 +13,25 @@ from pathlib import Path
 
 import pytest
 
-from rede_checker import calc as checker_calc
-from rede_publisher import calc_scope
+from rezono_checker import calc as checker_calc
+from rezono_publisher import calc_scope
 
 ROOT = Path(__file__).resolve().parents[3]
-PUBLISHER = ROOT / "edge" / "publisher" / "rede_publisher"
+PUBLISHER = ROOT / "edge" / "publisher" / "rezono_publisher"
 # The modules that decide what a role gets: its rows and proofs, what it reads in full, its calculated rows and
 # the sources of its rows.
 FILTER = ("access.py", "calc_scope.py", "sources.py")
 
 
 def checker_imports(source: str) -> set[str]:
-    """Every name a module takes from the checker, wherever in the module: `rede_checker.calc.reads` for a name,
-    `rede_checker.calc` for a module."""
+    """Every name a module takes from the checker, wherever in the module: `rezono_checker.calc.reads` for a name,
+    `rezono_checker.calc` for a module."""
     out = set()
     for node in ast.walk(ast.parse(source)):
-        if isinstance(node, ast.ImportFrom) and (node.module or "").split(".")[0] == "rede_checker":
+        if isinstance(node, ast.ImportFrom) and (node.module or "").split(".")[0] == "rezono_checker":
             out |= {f"{node.module}.{a.name}" for a in node.names}
         elif isinstance(node, ast.Import):
-            out |= {a.name for a in node.names if a.name.split(".")[0] == "rede_checker"}
+            out |= {a.name for a in node.names if a.name.split(".")[0] == "rezono_checker"}
     return out
 
 
@@ -45,15 +45,15 @@ def test_a_filter_module_takes_only_check_entry_points_from_the_checker(name):
 def test_no_publisher_module_reads_the_calculation_program_through_the_checker():
     """`published_views`, `subject_of`, `reads` and `version_of` are how the checker decides what a role sees of
     a calculation. A publisher that calls them asks the checker what to publish, and the check then agrees."""
-    using = {p.name: sorted(n for n in checker_imports(p.read_text(encoding="utf-8")) if n.startswith("rede_checker.calc"))
+    using = {p.name: sorted(n for n in checker_imports(p.read_text(encoding="utf-8")) if n.startswith("rezono_checker.calc"))
              for p in sorted(PUBLISHER.glob("*.py"))}
     assert {name: names for name, names in using.items() if names} == {}
 
 
 def test_the_scan_sees_every_way_to_import():
-    source = ("import json\nfrom rede_checker import calc\nimport rede_checker.access as a\n"
-              "def f():\n    from rede_checker.calc import reads as r\n    from rede_canon import canonical_json\n")
-    assert checker_imports(source) == {"rede_checker.calc", "rede_checker.access", "rede_checker.calc.reads"}
+    source = ("import json\nfrom rezono_checker import calc\nimport rezono_checker.access as a\n"
+              "def f():\n    from rezono_checker.calc import reads as r\n    from rezono_canon import canonical_json\n")
+    assert checker_imports(source) == {"rezono_checker.calc", "rezono_checker.access", "rezono_checker.calc.reads"}
 
 
 # Every calculation program in the repository: the compiled goldens of the example packs, the contract fixtures
@@ -64,7 +64,7 @@ PROGRAMS = sorted(p for base in ("examples", "contracts/fixtures", "checker/test
 
 def program(path: Path) -> dict | None:
     doc = json.loads(path.read_text(encoding="utf-8"))
-    return doc if isinstance(doc, dict) and doc.get("format") == "rede.calc-ir/1" else None
+    return doc if isinstance(doc, dict) and doc.get("format") == "rezono.calc-ir/1" else None
 
 
 @pytest.mark.xfail(strict=True, reason="generated expected/compiled calc.json goldens are not stored in git")

@@ -7,9 +7,9 @@ from pathlib import Path
 import pytest
 import yaml
 
-from rede_checker import check, render
-from rede_checker.rules import load_rules
-from rede_checker.snapshots import STATES, resolve
+from rezono_checker import check, render
+from rezono_checker.rules import load_rules
+from rezono_checker.snapshots import STATES, resolve
 
 CONTRACTS = Path(__file__).resolve().parents[2] / "contracts"
 FIXTURES = CONTRACTS / "fixtures"
@@ -45,7 +45,7 @@ def test_fixture(name, role):
 
 @pytest.mark.parametrize("name", sorted(EXPECTED))
 def test_cli_is_deterministic(name):
-    args = [sys.executable, "-m", "rede_checker", "--proof", str(proof_path(name)), "--manifest", str(MANIFEST),
+    args = [sys.executable, "-m", "rezono_checker", "--proof", str(proof_path(name)), "--manifest", str(MANIFEST),
             "--rules", str(HERE / "rules.yaml"), "--snapshot-root", str(FIXTURES)]
     first, second = (subprocess.run(args, capture_output=True, text=True) for _ in range(2))
     assert first.returncode == (1 if EXPECTED[name] else 0), first.stderr

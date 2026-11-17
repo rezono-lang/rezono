@@ -1,5 +1,5 @@
 # assignment__task is open, so assigned is open; unassigned negates it without @absence.
-format: rede.rules/1
+format: rezono.rules/1
 pack: fixture
 relations:
 - name: assigned

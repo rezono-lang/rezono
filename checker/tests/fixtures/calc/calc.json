@@ -9,7 +9,7 @@
 {"id": "item.note", "index": 1, "reads": "optional", "table": "item__note", "type": "boolean"},
 {"id": "x0", "index": 0, "reads": "input", "table": "", "type": "number"}
 ],
-"format": "rede.calc-ir/1",
+"format": "rezono.calc-ir/1",
 "inputs": {"boolean": "entry__truth", "fact": "entry__name", "integer": "entry__number", "subject": "entry__item"},
 "pack": "calc",
 "parameters": "setting__value",

@@ -1,5 +1,5 @@
 # Arithmetic inside a recursive component: reach(m) from reach(n) with m = n + 1 never ends.
-format: rede.rules/1
+format: rezono.rules/1
 pack: fixture
 relations:
   - name: start

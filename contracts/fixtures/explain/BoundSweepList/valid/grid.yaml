@@ -6,7 +6,7 @@ sweeps:
     max: '40'
     step: '10'
     cells:
-      - {index: 0, value: '0', status: green, manifest: v-value-00-2, checks: [{name: 'rede:proofs', status: green}]}
+      - {index: 0, value: '0', status: green, manifest: v-value-00-2, checks: [{name: 'rezono:proofs', status: green}]}
       - {index: 1, value: '10', status: warning, manifest: v-value-01-2, checks: [{name: capacity, status: warning}]}
       - {index: 2, value: '20', status: red, checks: [{name: capacity, status: red}]}
       - {index: 3, value: '30', status: unavailable, checks: [{name: capacity, status: unavailable}]}

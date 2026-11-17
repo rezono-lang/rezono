@@ -1,6 +1,6 @@
-"""The SHACL shapes of a Reckon Data schema against an independent validator (M08; docs/reckon-data/l0.md §5).
+"""The SHACL shapes of a publication schema against an independent validator (M08; docs/publication/l0.md §5).
 
-pySHACL is the oracle: it knows SHACL and nothing of Reckon Data. On the conformance fixtures the shapes accept
+pySHACL is the oracle: it knows SHACL and nothing of the publication. On the conformance fixtures the shapes accept
 what the library's reader accepts, and each defect a shape can name is refused by both: by pySHACL through the
 shapes, and by the reader (`rdf.from_graph`, or `l0.read_rows` for what RDF cannot hold as a row). A difference
 is a defect in one of the two.
@@ -13,14 +13,14 @@ import pytest
 import yaml
 
 ROOT = Path(__file__).resolve().parents[3]
-sys.path.insert(0, str(ROOT))  # reckon_data is a directory of the repository, not an installed package
+sys.path.insert(0, str(ROOT))  # publication is a directory of the repository, not an installed package
 
 import pyshacl  # noqa: E402
 from rdflib import BNode, Graph, Literal, URIRef  # noqa: E402
 from rdflib.namespace import RDF, RDFS, SH, XSD  # noqa: E402
 
-from reckon_data import l0, rdf  # noqa: E402
-from reckon_data.tests.test_l0 import (  # noqa: E402
+from publication import l0, rdf  # noqa: E402
+from publication.tests.test_l0 import (  # noqa: E402
     FILES, FIXTURE, R01, THING, TREE, TREE_ROWS, TYPES, merge, rows_of, schema_of)
 
 import shacl  # noqa: E402  (this directory)

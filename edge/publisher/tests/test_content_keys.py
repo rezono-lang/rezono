@@ -8,7 +8,7 @@ import json
 import os
 import time
 
-from rede_publisher import collect, kept, pointers, publish, store
+from rezono_publisher import collect, kept, pointers, publish, store
 from test_publish import ROLES, SALARIES, epoch
 
 
