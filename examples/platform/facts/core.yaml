@@ -17,28 +17,28 @@ cluster_class:
   - {id: recovery}
   - {id: build}
 platform_role:
-  - {id: outside, zone: external, cluster_class: none, runs_images: "no"}
-  - {id: entry, zone: entry, cluster_class: edge, runs_images: "no"}
-  - {id: shared, zone: platform, cluster_class: base, runs_images: "no"}
-  - {id: control, zone: platform, cluster_class: control, runs_images: "no"}
-  - {id: build, zone: platform, cluster_class: build, runs_images: "no"}
-  - {id: workload-prod, zone: tenant, cluster_class: app-prod, runs_images: "yes"}
-  - {id: workload-dev, zone: tenant, cluster_class: app-dev, runs_images: "yes"}
-  - {id: storage, zone: storage, cluster_class: storage, runs_images: "no"}
-  - {id: recovery, zone: recovery, cluster_class: recovery, runs_images: "yes"}
+  - {id: outside, zone: external, cluster_class: none, runs_images: 'no'}
+  - {id: entry, zone: entry, cluster_class: edge, runs_images: 'no'}
+  - {id: shared, zone: platform, cluster_class: base, runs_images: 'no'}
+  - {id: control, zone: platform, cluster_class: control, runs_images: 'no'}
+  - {id: build, zone: platform, cluster_class: build, runs_images: 'no'}
+  - {id: workload-prod, zone: tenant, cluster_class: app-prod, runs_images: 'yes'}
+  - {id: workload-dev, zone: tenant, cluster_class: app-dev, runs_images: 'yes'}
+  - {id: storage, zone: storage, cluster_class: storage, runs_images: 'no'}
+  - {id: recovery, zone: recovery, cluster_class: recovery, runs_images: 'yes'}
 function:
-  - {id: ingress, recovery_allowed: "no", open_by_design: "yes"}
-  - {id: identity, recovery_allowed: "no", open_by_design: "no"}
-  - {id: database, recovery_allowed: "no", open_by_design: "no"}
-  - {id: dns, recovery_allowed: "yes", open_by_design: "yes"}
-  - {id: time, recovery_allowed: "yes", open_by_design: "yes"}
-  - {id: registry, recovery_allowed: "yes", open_by_design: "no"}
-  - {id: secrets, recovery_allowed: "yes", open_by_design: "no"}
-  - {id: control-plane, recovery_allowed: "yes", open_by_design: "no"}
-  - {id: gitops, recovery_allowed: "no", open_by_design: "no"}
-  - {id: git, recovery_allowed: "no", open_by_design: "no"}
-  - {id: object-storage, recovery_allowed: "yes", open_by_design: "no"}
-  - {id: signing, recovery_allowed: "no", open_by_design: "no"}
+  - {id: ingress, recovery_allowed: 'no', open_by_design: 'yes'}
+  - {id: identity, recovery_allowed: 'no', open_by_design: 'no'}
+  - {id: database, recovery_allowed: 'no', open_by_design: 'no'}
+  - {id: dns, recovery_allowed: 'yes', open_by_design: 'yes'}
+  - {id: time, recovery_allowed: 'yes', open_by_design: 'yes'}
+  - {id: registry, recovery_allowed: 'yes', open_by_design: 'no'}
+  - {id: secrets, recovery_allowed: 'yes', open_by_design: 'no'}
+  - {id: control-plane, recovery_allowed: 'yes', open_by_design: 'no'}
+  - {id: gitops, recovery_allowed: 'no', open_by_design: 'no'}
+  - {id: git, recovery_allowed: 'no', open_by_design: 'no'}
+  - {id: object-storage, recovery_allowed: 'yes', open_by_design: 'no'}
+  - {id: signing, recovery_allowed: 'no', open_by_design: 'no'}
 product:
   - {id: client}
   - {id: loadbalancer}
@@ -118,16 +118,16 @@ service:
   - {id: restore, product: recovery-env, role: recovery, step: 2}
   - {id: restore-bad, product: app, role: recovery, step: 2}
 release:
-  - {id: keycloak-25, product: keycloak, released_on_day: 100, stable: "yes"}
-  - {id: keycloak-26, product: keycloak, released_on_day: 200, stable: "yes"}
-  - {id: keycloak-27rc, product: keycloak, released_on_day: 250, stable: "no"}
-  - {id: postgresql-16, product: postgresql, released_on_day: 50, stable: "yes"}
-  - {id: postgresql-17, product: postgresql, released_on_day: 150, stable: "yes"}
+  - {id: keycloak-25, product: keycloak, released_on_day: 100, stable: 'yes'}
+  - {id: keycloak-26, product: keycloak, released_on_day: 200, stable: 'yes'}
+  - {id: keycloak-27rc, product: keycloak, released_on_day: 250, stable: 'no'}
+  - {id: postgresql-16, product: postgresql, released_on_day: 50, stable: 'yes'}
+  - {id: postgresql-17, product: postgresql, released_on_day: 150, stable: 'yes'}
 pin:
   - {id: pin-db-git, service: db-git, release: postgresql-16}
 choice:
   - {id: c-idp-db, service: idp, function: database, provider: db-idp}
   - {id: c-git-db, service: git, function: database, provider: db-git}
 artifact:
-  - {id: a-shop, for_service: shop, built_by: build, signed: "yes"}
-  - {id: a-lab, for_service: lab, built_by: build, signed: "no"}
+  - {id: a-shop, for_service: shop, built_by: build, signed: 'yes'}
+  - {id: a-lab, for_service: lab, built_by: build, signed: 'no'}
