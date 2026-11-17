@@ -54,7 +54,10 @@ from pathlib import Path
 from rede_canon import CanonError, canonical_bytes
 
 from . import l0
-from . import seal
+try:
+    from . import seal
+except ImportError:
+    seal = None  # type: ignore[assignment]
 from .hash import H, CJ, HashError, hash_rows, hashes
 
 STATEMENT_TYPE = "https://in-toto.io/Statement/v1"
