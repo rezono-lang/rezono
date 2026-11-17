@@ -1,0 +1,115 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+permissions:
+  contents: read
+
+jobs:
+  discover:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      python: ${{ steps.matrix.outputs.python }}
+      has_python: ${{ steps.matrix.outputs.has_python }}
+      node: ${{ steps.matrix.outputs.node }}
+      has_node: ${{ steps.matrix.outputs.has_node }}
+      python_editable: ${{ steps.matrix.outputs.python_editable }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          fetch-depth: 2
+      - id: matrix
+        env:
+          GITHUB_BASE_REF: ${{ github.base_ref }}
+          GITHUB_EVENT_BEFORE: ${{ github.event.before }}
+        run: python3 scripts/components.py ci-matrix
+
+  python:
+    needs: discover
+    if: needs.discover.outputs.has_python == 'true'
+    name: python (${{ matrix.component.folder }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        component: ${{ fromJson(needs.discover.outputs.python) }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0  # v7.1.0
+        with:
+          python-version-file: requirements/.python-version
+          cache: pip
+          cache-dependency-path: requirements/dev.txt
+      - name: Install from lockfile
+        run: |
+          set -euo pipefail
+          python -m pip install -q --no-deps --require-hashes -r requirements/dev.txt
+          python -m pip install -q --no-deps --no-build-isolation ${{ needs.discover.outputs.python_editable }}
+          python scripts/check-pinned.py requirements/dev.txt
+      - name: Generate contract types
+        run: contracts/gen-types.sh
+      - name: Check ${{ matrix.component.folder }}
+        env:
+          REDE_HYPOTHESIS_PROFILE: ci
+        run: |
+          set -euo pipefail
+          if [ "${{ matrix.component.kind }}" = "contracts" ]; then
+            contracts/check.sh
+            python -m pytest -q contracts/python
+          else
+            python -m pytest -q "${{ matrix.component.folder }}"
+          fi
+
+  node:
+    needs: discover
+    if: needs.discover.outputs.has_node == 'true'
+    name: node (${{ matrix.component.folder }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        component: ${{ fromJson(needs.discover.outputs.node) }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1  # v7.1.0
+        with:
+          node-version-file: .node-version
+          cache: npm
+          cache-dependency-path: ${{ matrix.component.folder }}/package-lock.json
+      - name: Install from lockfile
+        working-directory: ${{ matrix.component.folder }}
+        run: npm ci
+      - name: Test ${{ matrix.component.folder }}
+        working-directory: ${{ matrix.component.folder }}
+        run: npm test
+
+  check:
+    name: check
+    if: always()
+    needs: [discover, python, node]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Verify component jobs
+        env:
+          DISCOVER_RESULT: ${{ needs.discover.result }}
+          PYTHON_RESULT: ${{ needs.python.result }}
+          NODE_RESULT: ${{ needs.node.result }}
+        run: |
+          set -euo pipefail
+          echo "discover=$DISCOVER_RESULT python=$PYTHON_RESULT node=$NODE_RESULT"
+          [ "$DISCOVER_RESULT" = "success" ]
+          case "$PYTHON_RESULT" in success|skipped) ;; *) exit 1 ;; esac
+          case "$NODE_RESULT" in success|skipped) ;; *) exit 1 ;; esac
