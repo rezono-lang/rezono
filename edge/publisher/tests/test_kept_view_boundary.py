@@ -7,8 +7,8 @@ import tarfile
 from types import SimpleNamespace
 
 import pytest
-from rede_canon import sha256_hex
-from rede_publisher import batch, kept, publish, store, view_build
+from rezono_canon import sha256_hex
+from rezono_publisher import batch, kept, publish, store, view_build
 
 
 def archive_fixture(tmp_path, monkeypatch, with_views):
@@ -56,7 +56,7 @@ def test_verify_preserves_viewless_support_but_refuses_an_incomplete_view_archiv
         assert any("view-aware" in e and "C3 step 2" in e for e in refused)
         assert not output.exists(), "nothing from an unsupported archive is unpacked or run"
     else:
-        assert refused == [] and (output / "compiler/rede_compiler").is_dir()
+        assert refused == [] and (output / "compiler/rezono_compiler").is_dir()
 
 
 @pytest.mark.xfail(strict=True, reason="viewer/src/lib is not in the standalone repository")

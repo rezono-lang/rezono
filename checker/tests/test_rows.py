@@ -1,10 +1,10 @@
-"""The check of a role's row trees (rede_checker.proof.check_rows, O(page) step 3): each tree holds exactly
+"""The check of a role's row trees (rezono_checker.proof.check_rows, O(page) step 3): each tree holds exactly
 its snapshot, in key order, text ordered by its UTF-8 bytes. Trees made by hand here, not by the publisher."""
 
 import hashlib
 import json
 
-from rede_checker.proof import FORMAT, check_rows
+from rezono_checker.proof import FORMAT, check_rows
 
 # In UTF-16 (JavaScript's `<`) U+1F600 sorts before U+FFFF; in UTF-8 bytes after it. A key that begins
 # another sorts first, element by element: ["a"] < ["a", "b"] < ["a b"].

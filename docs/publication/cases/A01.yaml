@@ -1,0 +1,21 @@
+id: A01
+class: valid
+status: settled
+schema:
+  from: fixture.schema.json
+form: arrow-field
+input:
+  name: memory_need
+  storage: int64
+  extension:
+    name: rezono.quantity
+    metadata:
+      type: GiB
+      unit: GiB
+      storage_unit: B
+      factor: '1073741824'
+      scale: '0'
+expect:
+  accept: true
+sources:
+- '#369 L0 rev 2 §8'

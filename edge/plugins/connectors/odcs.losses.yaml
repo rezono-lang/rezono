@@ -1,5 +1,5 @@
-# The ODCS contract of a Reckon Data schema (docs/reckon-data/l0.md §2.5; odcs.py), read by a tool that knows
-# ODCS: what it does not get that a reader of Reckon Data does. The contract describes the columnar form (§4);
+# The ODCS contract of a publication schema (docs/publication/l0.md §2.5; odcs.py), read by a tool that knows
+# ODCS: what it does not get that a reader of the publication does. The contract describes the columnar form (§4);
 # what ODCS has no member for is written in `customProperties`. test_odcs.py holds this list to the contract.
 connector: odcs-out
 standard: ODCS
@@ -12,19 +12,19 @@ losses:
       of ODCS alone sees a small integer and a text with rules on them: the codes the slot allows, a value
       that is null exactly beside a state, a reason only where its state may carry it.
     fate: extension
-    carried_by: ["customProperties.reckonField"]
+    carried_by: ["customProperties.rezonoField"]
   - subject: unit
     what: >-
       The unit of a quantity, its storage unit and the factor between them. The column is the stored
       integer; a reader of ODCS alone does not know in which unit.
     fate: extension
-    carried_by: ["customProperties.reckonExtension"]
+    carried_by: ["customProperties.rezonoExtension"]
   - subject: money
     what: >-
       The currency of an amount and, for a rate, the unit it is per. The column is a decimal at the type's
       scale; a reader of ODCS alone does not know in which currency.
     fate: extension
-    carried_by: ["customProperties.reckonExtension"]
+    carried_by: ["customProperties.rezonoExtension"]
   - subject: identity
     what: >-
       The target of a reference that is not one row of this contract: an element of another pack, with the
@@ -32,32 +32,32 @@ losses:
       an element of a kind with subkinds, which is a row of that kind's table or of a subkind's. ODCS has a
       foreign key for a reference to one row of one table inside the contract only, so these have none.
     fate: extension
-    carried_by: ["customProperties.reckonExtension"]
+    carried_by: ["customProperties.rezonoExtension"]
   - subject: world
     what: >-
       Whether a kind or a relation is open or closed: whether a row that is not there says anything. ODCS
       has no member for it.
     fate: extension
-    carried_by: ["customProperties.reckonWorld"]
+    carried_by: ["customProperties.rezonoWorld"]
   - subject: proof
     what: >-
       That the table `$why` names the witness of a value. A reader of ODCS alone sees a table of five text
       columns with no relation to the others.
     fate: extension
-    carried_by: ["customProperties.reckonTable"]
+    carried_by: ["customProperties.rezonoTable"]
   - subject: source
     what: >-
       That the table `$src` names the sources of a fact, each as the JSON text of one source. A reader of
       ODCS alone sees a table of five text columns with no relation to the others.
     fate: extension
-    carried_by: ["customProperties.reckonTable"]
+    carried_by: ["customProperties.rezonoTable"]
   - subject: time
     what: >-
       That the columns `$valid` and `$known` of a versioned kind say when a version applies and when it
       was known. `$valid` is the JSON text of the validity; a reader of ODCS alone sees a text and a date
       in the key.
     fate: extension
-    carried_by: ["customProperties.reckonField"]
+    carried_by: ["customProperties.rezonoField"]
   - subject: structure
     what: >-
       The bounds of a ratio and of an integer that is stored as text, and the normal form of a value: a

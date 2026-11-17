@@ -1,5 +1,5 @@
 # Shapes only: a move that states the new world, and a combine that accepts wider read access.
-format: rede.operations/1
+format: rezono.operations/1
 pack: library
 operations:
   - {op: move, kind: Loan, slot: lent_on, to: Item, via: Loan.copy, world: closed}

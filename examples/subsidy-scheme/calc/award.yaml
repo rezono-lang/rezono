@@ -5,7 +5,7 @@
 # is chosen (W13), so the partial rate before 1 July 2026 differs from the one after. The evaluation date is
 # not part of the definition: the importing pack states it (as_of, decision W10).
 # Numbers are exact fractions; the only rounding is `round`, half away from zero, once per cost share.
-format: rede.calc/1
+format: rezono.calc/1
 pack: subsidy-scheme
 subject: application
 parameters: scheme_parameter.value

@@ -1,6 +1,6 @@
 # A counter with an explicit bound (decision R16): the one arithmetic in a recursive rule. depth starts at 0
 # and its rule adds 1 while the depth it reads is below 3, so it fires three times at most on every input.
-format: rede.rules/1
+format: rezono.rules/1
 pack: fixture
 relations:
   - name: depth

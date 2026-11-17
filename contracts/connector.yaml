@@ -1,8 +1,8 @@
-id: https://rede.dev/contracts/connector
-name: rede_connector
+id: https://rezono.org/contracts/connector
+name: rezono_connector
 title: Connector loss lists
 description: >-
-  What a mapping between Rede and an external standard does not carry (decision N7, M01). A connector
+  What a mapping between Rezono and an external standard does not carry (decision N7, M01). A connector
   states it as a loss list: one entry for every part of the meaning that a reader on the other side
   does not get, with what happens to it. The list is published beside what the connector writes and is
   tested: an export gives back the input except for the listed losses. The port contract (decision
@@ -10,8 +10,8 @@ description: >-
   round-trip fixture); this contract fixes the format of a loss entry and of the published list.
 prefixes:
   linkml: https://w3id.org/linkml/
-  rede: https://rede.dev/contracts/
-default_prefix: rede
+  rezono: https://rezono.org/contracts/
+default_prefix: rezono
 default_range: string
 imports:
   - linkml:types
@@ -35,10 +35,10 @@ enums:
     description: Which way the mapping runs, and so who loses.
     permissible_values:
       out: {description: "From a published epoch to the standard. A reader that knows only the standard loses what is listed."}
-      in: {description: "From a document in the standard to Rede. Rede does not take over what is listed."}
+      in: {description: "From a document in the standard to Rezono. Rezono does not take over what is listed."}
   LossSubject:
     description: >-
-      The part of the meaning that is lost. For `out` these are the parts of Rede's model
+      The part of the meaning that is lost. For `out` these are the parts of Rezono's model
       (docs/concepts.md, "The model"); for `in` the entry names the standard's own construct in `what`
       and the nearest part here. A new part is a change of this contract.
     permissible_values:

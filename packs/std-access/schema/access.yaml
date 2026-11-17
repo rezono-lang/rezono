@@ -1,8 +1,8 @@
-id: https://rede.example/std-access/access
+id: https://rezono.example/std-access/access
 name: std_access
 description: >-
   Roles in two layers (#351, section 4). A role is an element like any other: the pack names its roles as facts,
-  and its rules derive which typed elements a role may read, as may_read(role, kind, element). Rede knows only
+  and its rules derive which typed elements a role may read, as may_read(role, kind, element). Rezono knows only
   the generic capabilities below; a pack maps each of its roles to capabilities as facts (role__capability), and
   its read rules may grant a kind to every role that holds a capability.
 in_language: en

@@ -1,4 +1,4 @@
-id: https://rede.example/std-order/order
+id: https://rezono.example/std-order/order
 name: std_order
 description: >-
   Order and rank. An ordered element may come before others (precedes), may carry a whole-number rank,

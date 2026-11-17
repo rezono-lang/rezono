@@ -1,5 +1,5 @@
 # A pack's schema as LinkML (linkml_schema.py, M02), read by a tool that knows LinkML only: what it does not get
-# that the compiler does. Rede's own annotations are LinkML annotations, so the documents are valid LinkML; a
+# that the compiler does. Rezono's own annotations are LinkML annotations, so the documents are valid LinkML; a
 # reader that does not know a tag loses its meaning. test_linkml_schema.py holds this list to the export.
 connector: linkml-out
 standard: LinkML
@@ -52,7 +52,7 @@ losses:
   - subject: time
     what: >-
       That a slot is the validity or the knowledge time of its row. The reader gets the slot's URI
-      (`schema:validFrom`, `prov:generatedAtTime`), not that Rede reads the row by it.
+      (`schema:validFrom`, `prov:generatedAtTime`), not that Rezono reads the row by it.
     fate: weakened
     carried_by: ["slot_uri"]
   - subject: world

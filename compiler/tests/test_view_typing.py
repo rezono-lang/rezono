@@ -12,8 +12,8 @@ import shutil
 import pytest
 import yaml
 
-from rede_compiler import identity, modules, pack, views, view_typing as typing
-from rede_compiler import rules as ir
+from rezono_compiler import identity, modules, pack, views, view_typing as typing
+from rezono_compiler import rules as ir
 
 FIXTURE = Path(__file__).parent / 'fixtures' / 'minimal'
 
@@ -28,7 +28,7 @@ def models(tmp_path, domain_change=None, theory_change=None):
     meta = yaml.safe_load((theory / 'pack.yaml').read_text())
     write(theory / 'pack.yaml', meta | {'name': 'static-theory', 'theory': True})
     schema = yaml.safe_load((theory / 'schema/minimal.yaml').read_text())
-    schema.update(id='https://rede.example/static-theory', name='static_theory', classes={
+    schema.update(id='https://rezono.example/static-theory', name='static_theory', classes={
         'Node': {'attributes': {'id': {'identifier': True}, 'next': {'range': 'Node', 'multivalued': True}, 'note': {'range': 'string'}}}})
     schema.pop('enums', None)  # The theory does not import the minimal fixture's unrelated State enum.
     if theory_change:
@@ -48,7 +48,7 @@ def models(tmp_path, domain_change=None, theory_change=None):
 
 
 def doc(start='beta', steps=None, targets=None):
-    return {'format': 'rede.views/1', 'views': [{'theory': 'static-theory',
+    return {'format': 'rezono.views/1', 'views': [{'theory': 'static-theory',
         'kinds': [{'name': 'node', 'union': [{'populated_from': k} for k in (targets or [start, 'alpha'])]}],
         'arrows': [{'name': 'next', 'paths': [{'populated_from': start, 'steps': steps or [{'slot': 'alpha'}]}]}]}]}
 
@@ -105,7 +105,7 @@ def test_each_union_has_a_typed_identity_and_each_path_its_roots(tmp_path):
     # A subkind keeps its root's identity: a union of beta and its child left is one root, the id alone.
     view = resolve(tmp_path, domain, theory, doc('left', targets=['left', 'beta', 'alpha'])).views[0]
     assert view.arrows[0].paths[0].roots == ('beta', 'alpha')
-    one = resolve(tmp_path, domain, theory, {'format': 'rede.views/1', 'views': [{'theory': 'static-theory',
+    one = resolve(tmp_path, domain, theory, {'format': 'rezono.views/1', 'views': [{'theory': 'static-theory',
         'kinds': [{'name': 'node', 'union': [{'populated_from': 'left'}, {'populated_from': 'beta'}]}], 'arrows': []}]})
     assert one.views[0].kinds[0].identity == identity.Union(('beta',), 'VARCHAR')
 
@@ -315,7 +315,7 @@ def test_a_refusal_is_a_diagnostic_with_code_place_span_and_hint(tmp_path):
                            'where': 'views[static-theory].arrows[next]',
                            'span': {'file': 'separate-views.yaml', 'line': str(arrow), 'column': '5'},
                            'hint': 'add assume_functional: true to the arrow map, which becomes a pending obligation'}
-    contract = pytest.importorskip('rede_contracts.diagnostic')
+    contract = pytest.importorskip('rezono_contracts.diagnostic')
     contract.DiagnosticList.model_validate({'diagnostics': [found.doc()]})
 
 
@@ -352,7 +352,7 @@ def test_a_view_given_as_data_has_no_span(tmp_path):
 
 def test_a_pack_that_does_not_compile_keeps_the_view_typing_diagnostic(tmp_path):
     domain, theory, directory, _ = models(tmp_path)
-    write(directory / 'views.yaml', {'format': 'rede.views/1', 'views': [{'theory': 'static-theory',
+    write(directory / 'views.yaml', {'format': 'rezono.views/1', 'views': [{'theory': 'static-theory',
         'kinds': [{'name': 'node', 'union': [{'populated_from': 'beta'}]}],
         'arrows': [{'name': 'next', 'paths': [{'populated_from': 'beta', 'steps': [{'slot': 'state'}]}]}]}]})
     with pytest.raises(pack.CompileError) as error:

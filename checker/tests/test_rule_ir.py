@@ -7,12 +7,12 @@ import json
 
 import pytest
 
-from rede_checker.canon import encode_key, sha256_json
-from rede_checker.check import check
-from rede_checker.rules import load_rules
+from rezono_checker.canon import encode_key, sha256_json
+from rezono_checker.check import check
+from rezono_checker.rules import load_rules
 
 IR = {
-    "format": "rede.rules/1", "pack": "example",
+    "format": "rezono.rules/1", "pack": "example",
     "relations": [
         {"name": "entry", "role": "base", "key": [{"name": "id", "type": "string"}]},
         {"name": "line", "role": "base", "key": [{"name": "entry", "type": "string"}, {"name": "line", "type": "string"},
@@ -78,7 +78,7 @@ def test_a_wrong_assignment_is_refused():
 
 MIN = str(-2**63)
 OVERFLOW = {
-    "format": "rede.rules/1", "pack": "example",
+    "format": "rezono.rules/1", "pack": "example",
     "relations": [
         {"name": "size", "role": "base", "key": [{"name": "id", "type": "string"}, {"name": "n", "type": "integer"}]},
         {"name": "half", "role": "derived", "module": "m", "explain": "materialize",
@@ -213,8 +213,8 @@ def test_a_proof_may_mix_aggregates_with_and_without_position():
 
 def test_epoch_every_witness_and_complete():
     """check_epoch: all witnesses of an epoch at once, and every derived row has exactly one."""
-    from rede_checker.check import check_epoch
-    from rede_checker.rules import derived_relations
+    from rezono_checker.check import check_epoch
+    from rezono_checker.rules import derived_relations
 
     manifest, read = world()
     witnesses = proof()["witnesses"]
@@ -241,7 +241,7 @@ def test_epoch_every_witness_and_complete():
 
 
 def test_the_checker_binds_numeric_selections_and_refuses_an_unsafe_rule_phase():
-    from rede_checker.rules import check_calc_bindings
+    from rezono_checker.rules import check_calc_bindings
 
     doc = copy.deepcopy(IR)
     name = "calc__amount"
@@ -291,7 +291,7 @@ def test_the_checker_binds_numeric_selections_and_refuses_an_unsafe_rule_phase()
 
 
 def test_rule_and_calculation_witnesses_form_one_acyclic_graph():
-    from rede_checker.check import _check_graph
+    from rezono_checker.check import _check_graph
 
     doc = proof()
     doc["root"] = None
@@ -314,8 +314,8 @@ def test_rule_and_calculation_witnesses_form_one_acyclic_graph():
 
 
 def test_epoch_checks_calculation_before_accepting_a_consuming_rule(tmp_path, capsys):
-    from rede_checker.__main__ import main
-    from rede_checker.check import check_epoch
+    from rezono_checker.__main__ import main
+    from rezono_checker.check import check_epoch
 
     amount = "calc__amount"
     date = "2026-11-01"
@@ -381,8 +381,8 @@ def test_epoch_checks_calculation_before_accepting_a_consuming_rule(tmp_path, ca
 
 def test_epoch_for_a_role_negation_and_aggregates_only_over_full_relations():
     """O8: for one role, a witness may aggregate or negate only over a relation it reads in full."""
-    from rede_checker.check import check_epoch
-    from rede_checker.rules import derived_relations
+    from rezono_checker.check import check_epoch
+    from rezono_checker.rules import derived_relations
 
     manifest, read = world()
     witnesses = proof()["witnesses"]
@@ -397,7 +397,7 @@ def test_epoch_for_a_role_negation_and_aggregates_only_over_full_relations():
 
 def test_the_catalogue_of_derived_relations_is_kept():
     """A declared derived relation without a rule is refused; so is a rule head that is not declared."""
-    from rede_checker.rules import derived_relations
+    from rezono_checker.rules import derived_relations
 
     no_rule = {**IR, "rules": [r for r in IR["rules"] if r["id"] != "over"]}
     with pytest.raises(ValueError, match="without a rule"):
@@ -416,8 +416,8 @@ def extension_ir():
 
 
 def test_a_declaration_only_extension_is_derived_and_its_snapshot_must_be_empty():
-    from rede_checker.check import check_epoch
-    from rede_checker.rules import derived_relations
+    from rezono_checker.check import check_epoch
+    from rezono_checker.rules import derived_relations
 
     doc = extension_ir()
     rules = load_rules(doc)
@@ -435,7 +435,7 @@ def test_a_declaration_only_extension_is_derived_and_its_snapshot_must_be_empty(
 
 @pytest.mark.parametrize("value", [None, False, "true", 1])
 def test_the_empty_extension_exception_requires_an_explicit_typed_true(value):
-    from rede_checker.rules import derived_relations
+    from rezono_checker.rules import derived_relations
     doc = extension_ir()
     if value is None:
         del doc["relations"][-1]["extend"]
@@ -446,7 +446,7 @@ def test_the_empty_extension_exception_requires_an_explicit_typed_true(value):
 
 
 def test_a_base_relation_cannot_claim_the_extension_exception():
-    from rede_checker.rules import derived_relations
+    from rezono_checker.rules import derived_relations
     doc = extension_ir()
     doc["relations"][-1]["role"] = "base"
     with pytest.raises(ValueError, match="extend is a boolean"):
@@ -455,8 +455,8 @@ def test_a_base_relation_cannot_claim_the_extension_exception():
 
 @pytest.mark.parametrize("rule_id", ["fabricated", "entry_total"])
 def test_forged_extension_witnesses_cannot_prove_a_nonempty_snapshot(rule_id):
-    from rede_checker.check import check_epoch
-    from rede_checker.rules import derived_relations
+    from rezono_checker.check import check_epoch
+    from rezono_checker.rules import derived_relations
     doc = extension_ir()
     rules = load_rules(doc)
     forged = copy.deepcopy(proof()["witnesses"][0])
@@ -471,8 +471,8 @@ def test_forged_extension_witnesses_cannot_prove_a_nonempty_snapshot(rule_id):
 
 def test_the_aggregate_index_gives_the_same_result():
     """recompute with a shared index per source relation equals the plain scan, for every group."""
-    from rede_checker.check import recompute
-    from rede_checker.snapshots import read_rows
+    from rezono_checker.check import recompute
+    from rezono_checker.snapshots import read_rows
 
     rule = load_rules(IR)["entry_total"]
     spec = rule.aggregates[0]
@@ -491,7 +491,7 @@ SEAL = {"kind": "run", "period": "run__month", "row_sha256": "run__row_sha256", 
 
 def sealed():
     """October closed: r1 covered as it is, r2 never covered (late), r3 for November."""
-    from rede_canon import canonical_sha256
+    from rezono_canon import canonical_sha256
 
     hours = {"r1": "2", "r2": "3", "r3": "2"}
     month = {"r1": "2026-10-01", "r2": "2026-10-01", "r3": "2026-11-01"}
@@ -505,10 +505,10 @@ def sealed():
 
 def test_epoch_recomputes_a_seal():
     """check_epoch with seals (decision E3): row hashes, refused and accepted input are what the snapshots give."""
-    from rede_checker.check import check_epoch
-    from rede_checker.rules import load_seals
+    from rezono_checker.check import check_epoch
+    from rezono_checker.rules import load_seals
 
-    seals = load_seals({"format": "rede.rules/1", "pack": "example", "relations": [], "rules": [], "seals": [SEAL]})
+    seals = load_seals({"format": "rezono.rules/1", "pack": "example", "relations": [], "rules": [], "seals": [SEAL]})
     h, rows = sealed()
 
     def reasons(changed):
@@ -531,14 +531,14 @@ def test_epoch_recomputes_a_seal():
 
 def test_a_forged_seal_is_found():
     """Review P1: each forgery claims the rows the old rule would have given; the checker refuses them."""
-    from rede_canon import canonical_sha256
-    from rede_checker.check import check_epoch
-    from rede_checker.rules import load_seals
+    from rezono_canon import canonical_sha256
+    from rezono_checker.check import check_epoch
+    from rezono_checker.rules import load_seals
 
     h, rows = sealed()
 
     def reasons(changed, seal=SEAL):
-        seals = load_seals({"format": "rede.rules/1", "pack": "example", "relations": [], "rules": [], "seals": [seal]})
+        seals = load_seals({"format": "rezono.rules/1", "pack": "example", "relations": [], "rules": [], "seals": [seal]})
         m, r = world({**rows, **changed})
         return sorted((f["reason"], f.get("relation")) for f in check_epoch([], m, {}, r, derived=set(), seals=seals)["findings"])
 

@@ -1,4 +1,4 @@
-"""The check rede:assets (decision B10): the images one role gets are exactly those its cells name, intact,
+"""The check rezono:assets (decision B10): the images one role gets are exactly those its cells name, intact,
 with source and licence, and unable to act or reach outside the file."""
 import hashlib
 import json
@@ -7,7 +7,7 @@ import zlib
 
 import pytest
 
-from rede_checker.assets import check_assets, check_role_assets, png_problem, svg_problem
+from rezono_checker.assets import check_assets, check_role_assets, png_problem, svg_problem
 
 SVG = b'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1 1"><style>.a{fill:#c00}</style><path class="a" d="M0 0h1"/></svg>'
 

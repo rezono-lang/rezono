@@ -1,0 +1,4 @@
+# `decls` left out: a module without a declaration has the empty list.
+format: rezono.module/1
+module: {pack: lab, use: []}
+spans: []

@@ -7,8 +7,8 @@ import json
 from functools import lru_cache
 from pathlib import Path
 
-from rede_compiler import batch, calc, checks, explain, pack, scenarios, seal
-from rede_compiler import rules as ir
+from rezono_compiler import batch, calc, checks, explain, pack, scenarios, seal
+from rezono_compiler import rules as ir
 
 ROOT = Path(__file__).parent
 # Every example pack, at any depth, with rules and facts.

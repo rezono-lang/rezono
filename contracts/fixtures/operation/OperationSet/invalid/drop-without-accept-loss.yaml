@@ -1,4 +1,4 @@
-format: rede.operations/1
+format: rezono.operations/1
 pack: library
 operations:
   - {op: drop, kind: Item, slot: reference_only}

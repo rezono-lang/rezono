@@ -4,7 +4,7 @@ than read as "no records": an empty relation is written as [] and a file without
 import pytest
 
 from support import FIXTURE
-from rede_compiler import facts, pack, scenarios
+from rezono_compiler import facts, pack, scenarios
 
 
 @pytest.fixture(scope="module")

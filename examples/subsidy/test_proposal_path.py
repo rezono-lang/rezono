@@ -1,17 +1,17 @@
 """G6 on `subsidy` (RV-S18): the path of a proposal, per role, up to the checked difference that role reads.
 
-Three proposals on one published main, each through `rede_publisher.proposal` as propose.yml runs it (the
+Three proposals on one published main, each through `rezono_publisher.proposal` as propose.yml runs it (the
 delta on the pack at the base commit, the proposal manifest, then the difference per role):
 
   1  a household's size changes (`set`): both roles of the deployment get a difference, each of what it
      reads. The award moves for both; the payment against the ledger moves for `propose` only (it reads as
      the case officer), so `viewer` (the policy adviser) gets no row of the ledger, not even a count.
   2  a role is added (`insert` into `role`): that changes the closure of `may_read`, so no role gets a
-     difference (rede_publisher.difference.withheld). The proposal manifest is published as for any other.
+     difference (rezono_publisher.difference.withheld). The proposal manifest is published as for any other.
   3  the same kind of change as 1, with a publisher that drops one changed row: the checker
-     (rede_checker.difference) refuses it, nothing of the difference is written, and the run stops (exit 2).
+     (rezono_checker.difference) refuses it, nothing of the difference is written, and the run stops (exit 2).
 
-The gate test reads the same store (edge/gate/test/proposal-path.test.ts, REDE_TEST_PROPOSALS): per role,
+The gate test reads the same store (edge/gate/test/proposal-path.test.ts, REZONO_TEST_PROPOSALS): per role,
 the pages of `scenario` are the difference of what the role reads in the base and the proposal, and a
 proposal without a published difference is a 501. `cases.json` names the three for it, without a domain word.
 Needs the compiler with DuckDB, the publisher and git.
@@ -29,10 +29,10 @@ import pytest
 import yaml
 
 pytest.importorskip("duckdb")
-pytest.importorskip("rede_compiler")
-pytest.importorskip("rede_publisher")
+pytest.importorskip("rezono_compiler")
+pytest.importorskip("rezono_publisher")
 
-from rede_publisher import batch, difference, proposal, publish, store  # noqa: E402
+from rezono_publisher import batch, difference, proposal, publish, store  # noqa: E402
 
 HERE = Path(__file__).parent
 ROOT = HERE.parents[1]
@@ -40,8 +40,8 @@ PACK, NAME = "examples/subsidy", "subsidy"
 SCHEME = "examples/subsidy-scheme"  # the definition the pack imports by path (RV-X35)
 # The roles of the profile that publishes the pack, as the deployment has them.
 ROLES = yaml.safe_load((ROOT / "deploy" / "profiles" / "edge.yaml").read_text(encoding="utf-8"))["access"]["roles"]
-SIZE = {"format": "rede.delta/1", "changes": [{"op": "set", "kind": "household", "key": "H001", "slot": "persons", "value": 5}]}
-ROLE = {"format": "rede.delta/1", "changes": [{"op": "insert", "file": "facts/roles.yaml", "kind": "role", "key": "auditor",
+SIZE = {"format": "rezono.delta/1", "changes": [{"op": "set", "kind": "household", "key": "H001", "slot": "persons", "value": 5}]}
+ROLE = {"format": "rezono.delta/1", "changes": [{"op": "insert", "file": "facts/roles.yaml", "kind": "role", "key": "auditor",
                                                "values": {"title": "Auditor"}}]}
 LEDGER = ("ledger_payment", "calc__payment_difference")  # what only the case officer, so `propose`, reads
 
@@ -120,9 +120,9 @@ def test_the_path_of_a_proposal_ends_in_the_difference_each_role_reads(tmp_path)
     check(root, build(tmp_path, root))
 
 
-if __name__ == "__main__":  # .github/workflows/ci.yml: the publication REDE_TEST_PROPOSALS for the gate test
+if __name__ == "__main__":  # .github/workflows/ci.yml: the publication REZONO_TEST_PROPOSALS for the gate test
     import tempfile
 
-    out = Path(os.environ["REDE_TEST_PROPOSALS"])
+    out = Path(os.environ["REZONO_TEST_PROPOSALS"])
     check(out, build(Path(tempfile.mkdtemp()), out))
     sys.exit(0)

@@ -9,11 +9,11 @@ import subprocess
 import sys
 from pathlib import Path
 
-from rede_admission import Admission, Schema, rows
+from rezono_admission import Admission, Schema, rows
 
 HERE = Path(__file__).resolve().parents[1]
 BUNDLE = {
-    "format": "rede.schema-bundle/1",
+    "format": "rezono.schema-bundle/1",
     "pack": {"id": "t", "version": "1", "default_language": "en"},
     "kinds": [{"id": "thing", "identifier": "id", "id_type": "text"},
               {"id": "part", "id_type": "text"},
@@ -44,7 +44,7 @@ def test_rows_and_every_refusal():
     # Each refusal is a diagnostic of contracts/diagnostic.yaml (D15): an error with its code and place.
     assert refusals[0].diagnostic() == {"code": "wrong_type", "severity": "error", "where": "thing[1].size"}
     try:
-        from rede_contracts.diagnostic import DiagnosticList
+        from rezono_contracts.diagnostic import DiagnosticList
     except ImportError:  # the generated types are not installed where admission alone runs
         return
     DiagnosticList.model_validate({"diagnostics": [r.diagnostic() for r in refusals]})
@@ -66,12 +66,12 @@ def test_a_batch_needs_a_source_and_one_delivery_is_admitted_once():
 
 def test_admission_imports_nothing_of_the_compiler():
     # The owner's acceptance line: a fact never needs the compiler.
-    for path in sorted((HERE / "rede_admission").glob("*.py")):
+    for path in sorted((HERE / "rezono_admission").glob("*.py")):
         for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
             names = [a.name for a in node.names] if isinstance(node, ast.Import) else (
                 [node.module or ""] if isinstance(node, ast.ImportFrom) else [])
-            assert not any(n.split(".")[0] == "rede_compiler" for n in names), path.name
-    probe = "import sys, rede_admission; sys.exit(any(m.split('.')[0] == 'rede_compiler' for m in sys.modules))"
+            assert not any(n.split(".")[0] == "rezono_compiler" for n in names), path.name
+    probe = "import sys, rezono_admission; sys.exit(any(m.split('.')[0] == 'rezono_compiler' for m in sys.modules))"
     assert subprocess.run([sys.executable, "-c", probe], cwd=HERE).returncode == 0
 
 

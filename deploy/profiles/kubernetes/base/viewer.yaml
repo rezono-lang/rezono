@@ -1,7 +1,7 @@
-# The viewer as a Node container (adapter-node; REDE_PROFILE=kubernetes picks it, viewer/vite.config.ts). It reads
-# through the gate (REDE_GATE_URL, inside the cluster), forwarding the reader's bearer token; the gate decides the
-# role. ORIGIN, the public address, comes from the overlay's ConfigMap `viewer`. REDE_DRAFT_KEY seals a draft the
-# server showed and is the same in every replica, so it is a secret (rede-viewer).
+# The viewer as a Node container (adapter-node; REZONO_PROFILE=kubernetes picks it, viewer/vite.config.ts). It reads
+# through the gate (REZONO_GATE_URL, inside the cluster), forwarding the reader's bearer token; the gate decides the
+# role. ORIGIN, the public address, comes from the overlay's ConfigMap `viewer`. REZONO_DRAFT_KEY seals a draft the
+# server showed and is the same in every replica, so it is a secret (rezono-viewer).
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -23,18 +23,18 @@ spec:
           type: RuntimeDefault
       containers:
         - name: viewer
-          image: rede-viewer
+          image: rezono-viewer
           envFrom:
             - configMapRef:
                 name: viewer
           env:
             - name: PORT
               value: "3000"
-            - name: REDE_GATE_URL
+            - name: REZONO_GATE_URL
               value: http://gate:8080
-            - name: REDE_DRAFT_KEY
+            - name: REZONO_DRAFT_KEY
               valueFrom:
-                secretKeyRef: { name: rede-viewer, key: draft-key }
+                secretKeyRef: { name: rezono-viewer, key: draft-key }
           ports:
             - { name: http, containerPort: 3000 }
           readinessProbe:

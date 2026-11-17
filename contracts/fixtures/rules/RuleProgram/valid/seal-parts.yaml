@@ -1,5 +1,5 @@
 # A seal with a part and a part of a part (docs/compiler.md#parts).
-format: rede.rules/1
+format: rezono.rules/1
 pack: example
 relations: []
 seals:

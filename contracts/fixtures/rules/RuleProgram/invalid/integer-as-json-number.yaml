@@ -1,5 +1,5 @@
 # A stratum is decimal text, not a JSON number.
-format: rede.rules/1
+format: rezono.rules/1
 pack: fixture
 relations:
 - name: blocked

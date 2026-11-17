@@ -1,0 +1,28 @@
+id: X02
+class: context
+status: settled
+schema:
+  from: fixture.schema.json
+form: jsonld
+input:
+  '@context':
+  - <base>s-<schema id>/context.jsonld
+  - Host:
+      '@id': https://rezono.example/fixture/Host
+      '@context':
+        owner:
+          '@id': https://other.example/owner
+  $rows:
+  - $kind: Host
+    $id: host-a
+    memory_need: 400 GiB
+    owner:
+      $ref: team-platform
+    tags:
+    - gpu
+    - lab
+expect:
+  accept: false
+  error: JSON-LD processing error `protected term redefinition`
+sources:
+- '#369 L0 rev 2 §8'

@@ -1,0 +1,8 @@
+# An empty object is no expression: a value that is unknown is the literal `unknown <reason>`, never an empty node.
+format: rezono.module/1
+module:
+  pack: lab
+  use: []
+  decls:
+    - {param: quota, type: GiB, value: {}}
+spans: []

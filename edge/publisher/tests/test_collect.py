@@ -7,7 +7,7 @@ import time
 
 import pytest
 
-from rede_publisher import collect, kept, pointers, publish, store
+from rezono_publisher import collect, kept, pointers, publish, store
 from test_publish import ROLES, epoch
 
 OLD = time.time() - 3 * collect.DAY

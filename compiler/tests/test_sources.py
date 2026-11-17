@@ -7,9 +7,9 @@ from pathlib import Path
 import pytest
 import yaml
 
-from rede_canon import canonical_json
-from rede_compiler import emit, facts, pack, scenarios, sources, writer
-from rede_compiler.__main__ import main
+from rezono_canon import canonical_json
+from rezono_compiler import emit, facts, pack, scenarios, sources, writer
+from rezono_compiler.__main__ import main
 
 FIXTURE = Path(__file__).parent / "fixtures" / "minimal"
 DEFAULT = {"kind": "git", "name": "example/model", "revision": "a" * 40, "position": "corpus/snapshot.json"}
@@ -146,7 +146,7 @@ def test_sidecars_never_become_facts_or_engine_views(fixture, tmp_path):
 
 
 def test_sidecars_change_data_hash_only(fixture):
-    from rede_publisher.batch import definition_sha256, tree_sha256
+    from rezono_publisher.batch import definition_sha256, tree_sha256
     before = definition_sha256(fixture), tree_sha256(fixture)
     metadata(fixture, {"default": DEFAULT})
     after = definition_sha256(fixture), tree_sha256(fixture)

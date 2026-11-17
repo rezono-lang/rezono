@@ -5,7 +5,7 @@ import json
 import pytest
 import yaml
 
-from rede_publisher import kept
+from rezono_publisher import kept
 
 
 class ReachedInstall(Exception):

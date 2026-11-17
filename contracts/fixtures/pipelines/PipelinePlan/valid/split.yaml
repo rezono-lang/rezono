@@ -1,5 +1,5 @@
 # Two rule modules above the limit: two parts, and one relation forwarded from the first to the second.
-format: rede.pipelines/1
+format: rezono.pipelines/1
 max_views: "3"
 pipelines:
   - {name: integrity, sql: [engine/tables.sql, engine/integrity.sql], modules: [], views: [], tables: [alpha, beta__alpha], imports: [], exports: []}

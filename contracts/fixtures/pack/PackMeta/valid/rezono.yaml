@@ -1,0 +1,6 @@
+name: example-pack
+version: 0.1.0
+default_language: en
+rezono:
+  - {module: rezono/advice.rezono, form: rezono/advice.json, layer: facts}
+  - {module: rezono/parts/terms.rezono, form: rezono/parts/terms.json, layer: source}

@@ -1,5 +1,5 @@
 # A LinkML schema as a pack's schema modules (linkml_schema.py, M02): what the pack does not take over. What has
-# a meaning in LinkML that Rede does not read is refused with its place, not listed here; what is here has none
+# a meaning in LinkML that Rezono does not read is refused with its place, not listed here; what is here has none
 # in a pack, or comes from elsewhere. test_linkml_schema.py holds this list to the import.
 connector: linkml-in
 standard: LinkML

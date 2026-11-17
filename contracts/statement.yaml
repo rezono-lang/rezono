@@ -1,20 +1,20 @@
-id: https://rede.dev/contracts/statement
-name: rede_statement
+id: https://rezono.org/contracts/statement
+name: rezono_statement
 title: Epoch statement per role
 description: >-
   The one document per published epoch and filtered role that a signature covers (RV-X41; docs/ring2/signing.md,
   "What is signed"; decisions Y2.7 and Y2.8): an in-toto Statement (v1) whose subjects are the objects of the
-  role's Reckon Data form by their sha256, and whose predicate binds the role's manifest as its form carries it,
-  the role's own snapshots, the schema id, the dataset and annotation hashes (Reckon Data L0 section 6.2), and the
+  role's publication form by their sha256, and whose predicate binds the role's manifest as its form carries it,
+  the role's own snapshots, the schema id, the dataset and annotation hashes (publication L0 section 6.2), and the
   row tree: per table the RFC 9162 Merkle root over its hash rows, and the inclusion hash over those roots. Every
-  value is text, so Rede's canonical bytes are RFC 8785's. Nothing in it depends on a row the role may not read,
+  value is text, so Rezono's canonical bytes are RFC 8785's. Nothing in it depends on a row the role may not read,
   and it never names `pack_sha256` (O8). The publisher writes it beside the form's objects as `statement.json` and
-  names it in the form's index; `reckon_data.statement.verify` reads it back from the bytes alone. Unsigned until
+  names it in the form's index; `publication.statement.verify` reads it back from the bytes alone. Unsigned until
   RV-X42.
 prefixes:
   linkml: https://w3id.org/linkml/
-  rede: https://rede.dev/contracts/
-default_prefix: rede
+  rezono: https://rezono.org/contracts/
+default_prefix: rezono
 default_range: string
 imports:
   - linkml:types
@@ -52,7 +52,7 @@ types:
 classes:
   EpochStatement:
     tree_root: true
-    description: An in-toto Statement v1 over one role's published form, with Rede's epoch predicate.
+    description: An in-toto Statement v1 over one role's published form, with Rezono's epoch predicate.
     attributes:
       _type: {required: true, equals_string: "https://in-toto.io/Statement/v1"}
       subject:
@@ -61,7 +61,7 @@ classes:
         inlined_as_list: true
         required: true
         description: Every object the role's form index names except the statement itself, sorted by name.
-      predicateType: {required: true, equals_string: "https://rede.dev/epoch-statement/v1"}
+      predicateType: {required: true, equals_string: "https://rezono.org/epoch-statement/v1"}
       predicate: {required: true, range: EpochPredicate, inlined: true}
 
   Subject:
@@ -80,7 +80,7 @@ classes:
       (the version is in `predicateType`): `previous`, `compiler`, `source` and `checks` are not in it, not even
       empty; a later version adds what a question needs.
     attributes:
-      format: {required: true, equals_string: rede.epoch-statement/1}
+      format: {required: true, equals_string: rezono.epoch-statement/1}
       pack: {required: true, range: Name}
       role: {required: true, range: Name, description: "A filtered role; the complete role's statement is never made."}
       manifest: {required: true, range: ManifestId}
@@ -122,5 +122,5 @@ classes:
     class_uri: linkml:Any
     description: >-
       Table name to root (64 hex): a kind, a kind and its many-valued slot (`Kind__slot`), `$why` and `$src`. Its
-      keys are the schema's tables, so the contract holds the map's shape only; `reckon_data.statement.verify`
+      keys are the schema's tables, so the contract holds the map's shape only; `publication.statement.verify`
       recomputes every root from the rows.

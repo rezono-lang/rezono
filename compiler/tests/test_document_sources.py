@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from rede_compiler import facts, pack, sources
+from rezono_compiler import facts, pack, sources
 from test_sources import entries, fixture, metadata  # noqa: F401 (a pytest fixture)
 
 CONTRACT_FIXTURES = Path(__file__).resolve().parents[2] / "contracts/fixtures/source/Source"

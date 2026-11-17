@@ -1,0 +1,9 @@
+# A member the shape does not know: a reader refuses it, it does not skip it.
+format: rezono.module/1
+module:
+  pack: lab
+  use: []
+  decls:
+    - {kind: Host, slots: [], derived: [], note: later}
+spans:
+  - {at: /decls/0, line: "2", start: "14", end: "18"}

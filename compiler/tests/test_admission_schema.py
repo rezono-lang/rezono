@@ -1,4 +1,4 @@
-"""The compiler's facts pass admission (rede_admission, ruling 2 of 11-11-2026). The schema it judges against is
+"""The compiler's facts pass admission (rezono_admission, ruling 2 of 11-11-2026). The schema it judges against is
 built from the pack (facts.schema) so that loading a fact file does not compile the pack; it must be the schema
 the archived bundle states, for every pack with facts. And every refusal reaches the caller, not only the first."""
 
@@ -9,8 +9,8 @@ from pathlib import Path
 
 import pytest
 
-from rede_admission import Schema
-from rede_compiler import emit, facts, pack
+from rezono_admission import Schema
+from rezono_compiler import emit, facts, pack
 
 from support import FIXTURE
 

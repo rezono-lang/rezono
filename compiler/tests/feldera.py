@@ -35,7 +35,7 @@ def deploy(name, program, profile=None, workers=4, udf_rust="", udf_toml=""):
     # The build profile does not change what the SQL means; `unoptimized` builds in seconds instead of
     # minutes, so the correctness tests can use it (FELDERA_PROFILE), and a smoke test keeps `optimized`.
     profile = profile or os.environ.get("FELDERA_PROFILE", "optimized")
-    if not udf_rust and "CREATE FUNCTION rede_" in program:  # the calculation's UDF (udf/, docs/compiler.md)
+    if not udf_rust and "CREATE FUNCTION rezono_" in program:  # the calculation's UDF (udf/, docs/compiler.md)
         udf = Path(__file__).resolve().parents[2] / "udf"
         udf_rust, udf_toml = (udf / "udf.rs").read_text(), (udf / "udf.toml").read_text()
     try:

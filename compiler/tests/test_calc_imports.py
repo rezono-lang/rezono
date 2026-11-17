@@ -12,13 +12,13 @@ import pytest
 import yaml
 
 from calcsupport import run_both
-from rede_compiler import calc, calc_sql, emit, modules, pack, scenarios
-from rede_compiler.pack import CompileError
+from rezono_compiler import calc, calc_sql, emit, modules, pack, scenarios
+from rezono_compiler.pack import CompileError
 from support import FIXTURE, REPO
 
 THEORY = "shared-calc"
 CHOICE = {"name": "name", "valid_from": "valid_from", "valid_until": "valid_until", "known_from": "known_from"}
-BINDINGS = {"format": "rede.calc/1", "subject": "item", "parameters": "setting.value", "parameter_choice": CHOICE}
+BINDINGS = {"format": "rezono.calc/1", "subject": "item", "parameters": "setting.value", "parameter_choice": CHOICE}
 # What each importing pack states and holds: its evaluation date and its parameter rows
 # (element, name, value, valid_from, valid_until, known_from).
 CONSUMERS = {
@@ -70,7 +70,7 @@ def consumer(at: Path, theory: Path, date: str | None, **program) -> Path:
     shutil.copytree(FIXTURE, at)
     pin(at, theory)
     if date is not None:
-        write(at, "calc/date.yaml", {"format": "rede.calc/1", "pack": at.name, "subject": "item",
+        write(at, "calc/date.yaml", {"format": "rezono.calc/1", "pack": at.name, "subject": "item",
                                      "as_of": {"valid_at": date, "known_at": date}} | program)
     return at
 
@@ -148,7 +148,7 @@ def test_a_consumer_that_states_no_date_for_an_imported_calculation_is_refused(t
     with pytest.raises(CompileError, match=refusal.format("none")):
         pack.read(consumer(tmp_path / "none", theory, None))
     silent = consumer(tmp_path / "silent", theory, "2025-06-01")
-    write(silent, "calc/date.yaml", {"format": "rede.calc/1", "pack": "silent", "subject": "item"})
+    write(silent, "calc/date.yaml", {"format": "rezono.calc/1", "pack": "silent", "subject": "item"})
     with pytest.raises(CompileError, match=refusal.format("silent")):
         pack.read(silent)
 
@@ -189,8 +189,8 @@ def test_a_rule_reads_the_selection_of_the_calculation_its_pack_brings(tmp_path)
     The rule IR is that of the same files in one pack, but for the module and the file it names; on the
     batch backend the rule reads the selection after the calculation (`batch.phases`), and given the rows
     of the selection it reads them as an input like a table."""
-    from rede_compiler import batch
-    from rede_compiler import rules as rule_ir
+    from rezono_compiler import batch
+    from rezono_compiler import rules as rule_ir
 
     theory = with_findings(definition_pack(tmp_path / "theory", THEORY, {"rules": DEFINITION}, theory=True))
     date, parameters = CONSUMERS["two"]
@@ -218,8 +218,8 @@ def test_the_rules_after_the_calculation_equal_souffle_with_the_selection_rows_a
     """Bounded: one importing pack, two subjects. Soufflé reads the rule files as written over the import
     closure, with the rows of the selection as an input, and gives as a set what the phases give."""
     import souffle
-    from rede_compiler import batch
-    from rede_compiler import rules as rule_ir
+    from rezono_compiler import batch
+    from rezono_compiler import rules as rule_ir
 
     theory = with_findings(definition_pack(tmp_path / "theory", THEORY, {"rules": DEFINITION}, theory=True))
     date, parameters = CONSUMERS["one"]
@@ -240,7 +240,7 @@ def test_a_rule_of_an_imported_pack_on_the_importing_pack_s_selection_is_refused
     """The importing pack's own calculation rule is no selection the imported pack sees: refused, with the
     pack that gives it. And should the rules let it through, the calculation check still holds that the
     rule reads in its pack alone what it reads in the union."""
-    from rede_compiler import rules_dl
+    from rezono_compiler import rules_dl
 
     theory = with_findings(definition_pack(tmp_path / "theory", THEORY, {"rules": DEFINITION}, theory=True),
                            '.decl high(item: symbol)\nhigh(x) :- calc__twice(x, v, "known", ""), v > 5.\n')
@@ -268,7 +268,7 @@ def test_a_calculation_comes_through_a_pack_between(tmp_path, theory):
     pin(between, theory)
     twice = dict(share("v1", ("2025-01-01", "2027-01-01"), "2024-12-01", "floor"), id="twice@v1", rule="twice")
     twice["definitions"][0]["value"] = {"op": "add", "args": [{"rule": "share"}, {"rule": "share"}]}
-    write(between, "calc/twice.yaml", {"format": "rede.calc/1", "pack": "between", "subject": "item", "rules": [twice]})
+    write(between, "calc/twice.yaml", {"format": "rezono.calc/1", "pack": "between", "subject": "item", "rules": [twice]})
     with pytest.raises(CompileError, match=f"calc.import: between imports the calculation of {THEORY} and states no"):
         pack.read(between)
     date, parameters = CONSUMERS["two"]
@@ -315,7 +315,7 @@ def test_an_imported_calculation_is_bound_to_the_names_of_the_importing_pack(tmp
     schema.write_text(schema.read_text(encoding="utf-8") + "  Item:\n    attributes:\n      id:\n        identifier: true\n",
                       encoding="utf-8", newline="\n")
     item = "shared_calc_calc_item"
-    write(importing, "calc/date.yaml", {"format": "rede.calc/1", "pack": "two", "subject": item,
+    write(importing, "calc/date.yaml", {"format": "rezono.calc/1", "pack": "two", "subject": item,
                                         "as_of": {"valid_at": date, "known_at": date}})
     model = pack.read(importing)
     assert {"minimal_item", item} <= set(model.kinds) and "item" not in model.kinds
@@ -324,7 +324,7 @@ def test_an_imported_calculation_is_bound_to_the_names_of_the_importing_pack(tmp
     assert got["share"]["i0"] == ("known", "6", "", "rated", "v2")
 
 
-HASHED = ("pack.yaml", "channels.yaml", "schema/**/*.yaml", "reckon/**/*.reckon", "reckon/**/*.json",
+HASHED = ("pack.yaml", "channels.yaml", "schema/**/*.yaml", "rezono/**/*.rezono", "rezono/**/*.json",
           "labels/*.yaml", "messages/*.mf2", "rules/*.dl", "calc/*.yaml", "sweeps.yaml", "questions.yaml",
           "views.yaml", "icons/*.svg", "icons/sources.yaml")
 

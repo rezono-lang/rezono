@@ -1,13 +1,13 @@
-id: https://rede.dev/contracts/plugin
-name: rede_plugin
+id: https://rezono.org/contracts/plugin
+name: rezono_plugin
 title: Plugin declarations
 description: >-
   Deprecated alias for one wave (O12a): declare ports with contracts/port.yaml (PC1). A digest-pinned boundary plugin and the capabilities it declares (G2), and one invocation of it
   identified by its input hash.
 prefixes:
   linkml: https://w3id.org/linkml/
-  rede: https://rede.dev/contracts/
-default_prefix: rede
+  rezono: https://rezono.org/contracts/
+default_prefix: rezono
 default_range: string
 imports:
   - linkml:types

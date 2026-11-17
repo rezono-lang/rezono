@@ -1,5 +1,5 @@
 # An empty body: a fact written as a rule. A body of aggregates only is a rule; a body of nothing is not.
-format: rede.rules/1
+format: rezono.rules/1
 pack: fixture
 relations:
   - name: member

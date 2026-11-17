@@ -16,8 +16,8 @@ import yaml
 from hypothesis import given, settings, strategies as st
 
 from support import FIXTURE, REPO, violations
-from rede_compiler import emit, facts, modules, pack
-from rede_compiler import rules as ir
+from rezono_compiler import emit, facts, modules, pack
+from rezono_compiler import rules as ir
 
 STD = REPO / "packs" / "std-decision"
 BASE = ("decision", "decision__state", "decision__supersedes", "decision__decider", "decision__valid_from_day",
@@ -77,7 +77,7 @@ def program():
 
 
 def batch_eval(prog, data):
-    from rede_compiler import batch
+    from rezono_compiler import batch
     con = batch.connect(prog, {k: sorted(data.get(k, ())) for k in BASE})
     batch.compute(con, prog)
     return batch.read(con, prog)

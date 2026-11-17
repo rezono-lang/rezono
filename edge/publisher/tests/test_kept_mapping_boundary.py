@@ -7,9 +7,9 @@ from pathlib import Path
 import pytest
 import yaml
 
-from rede_canon import sha256_hex
-from rede_compiler import modules
-from rede_publisher import batch, kept, publish, store
+from rezono_canon import sha256_hex
+from rezono_compiler import modules
+from rezono_publisher import batch, kept, publish, store
 
 ROOT = Path(__file__).resolve().parents[3]
 

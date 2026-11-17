@@ -1,5 +1,5 @@
-id: https://rede.dev/contracts/port
-name: rede_port
+id: https://rezono.org/contracts/port
+name: rezono_port
 title: Port declarations
 description: >-
   One contract for every boundary port (decision O12a, PC1), with three kinds. `in`: what arrives is an
@@ -12,8 +12,8 @@ description: >-
   checklist and the loss-list format.
 prefixes:
   linkml: https://w3id.org/linkml/
-  rede: https://rede.dev/contracts/
-default_prefix: rede
+  rezono: https://rezono.org/contracts/
+default_prefix: rezono
 default_range: string
 imports:
   - linkml:types
@@ -49,7 +49,7 @@ enums:
   PortInput:
     description: What a run of the port starts from. Each kind has exactly one.
     permissible_values:
-      source: {description: "A source and a position in it, outside Rede (kind in)."}
+      source: {description: "A source and a position in it, outside Rezono (kind in)."}
       checked_epoch: {description: "A published epoch the checker accepted, read per role by hash (kind out)."}
       approved_plan: {description: "The plan hash the approver accepted; the effect journal claims it once (kind effect)."}
   PortOutput:
@@ -58,8 +58,8 @@ enums:
       changes only through a proposal that a person or a gate accepts.
     permissible_values:
       observation: {description: "Rows of the observation layer, each with its source, observed time and knowledge time (kind in)."}
-      projection: {description: "A target outside Rede made from a checked epoch: files, a table, an artifact or a descriptor (kind out)."}
-      world: {description: "A change outside Rede, once per plan hash (kind effect). Its result is read back as an observation."}
+      projection: {description: "A target outside Rezono made from a checked epoch: files, a table, an artifact or a descriptor (kind out)."}
+      world: {description: "A change outside Rezono, once per plan hash (kind effect). Its result is read back as an observation."}
   PortRowSource:
     description: How each row a port writes names where it comes from ("a source per row").
     permissible_values:
@@ -99,7 +99,7 @@ classes:
       consumes: {range: DeclarationName, multivalued: true, required: true, minimum_cardinality: 1, description: "The kinds read: sources, Output schemas, files or plans."}
       produces: {range: DeclarationName, multivalued: true, required: true, minimum_cardinality: 1, description: "The kinds written: observations, projections, or the results of an effect."}
       freshness: {range: PortFreshness, inlined: true, required: true, description: "The port's freshness facts (O11)."}
-      mapping_owner: {required: true, pattern: "^\\S+$", description: "Who answers for the mapping between Rede's kinds and the outside: a role or a team, never a person's account."}
+      mapping_owner: {required: true, pattern: "^\\S+$", description: "Who answers for the mapping between Rezono's kinds and the outside: a role or a team, never a person's account."}
       losses:
         range: Loss
         multivalued: true
@@ -154,11 +154,11 @@ classes:
   PortFootprint:
     description: >-
       What an in-port makes in its source to be able to read it, such as a probe (ruling of 12-11-2026 on
-      O12a). Allowed only when the source itself was made by an approved effect plan of Rede: every
+      O12a). Allowed only when the source itself was made by an approved effect plan of Rezono: every
       resource the port makes carries that plan's hash under `plan_label`, the port removes it in the same
       run, and what it could not remove is reported by the run, which then fails (PC11). The approval is
       that plan's, so the footprint needs no journal row of its own. A port that makes something in a source no approved plan
-      of Rede made, or that leaves something behind on purpose, is a port of kind effect.
+      of Rezono made, or that leaves something behind on purpose, is a port of kind effect.
     attributes:
       makes: {range: DeclarationName, multivalued: true, required: true, minimum_cardinality: 1, description: "The kinds of resource the port makes in its source; each is removed in the same run."}
       plan_label: {required: true, pattern: "^\\S+$", description: "The label or tag every such resource carries; its value is the hash of the approved effect plan that made the source."}

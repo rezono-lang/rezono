@@ -2,7 +2,7 @@
 # (docs/gui.md, "Questions as data"). They narrow the generic grounds and reach to decisions: a domain that
 # imports std-explain keeps those too. The label and sentence are in messages/<lang>.mf2. A filter names
 # relations only, base tables included, because that is what the gate serves today.
-format: rede.questions/1
+format: rezono.questions/1
 questions:
   # Who decided this, and when? From a conclusion back to each decision in force it rests on, and on to that
   # decision itself. Who and when are fields of its record, and its sources (S25) end the walk.

@@ -144,7 +144,7 @@ The awards add up to € 498,007.14; the 17 unknown applications are not in that
 | A240 | + € 4,550.00 | paid twice |
 | A003 | unknown, then + € 524.08 | paid before the income statement was in |
 
-A difference is drift: a finding with a proof, shown to the reader. It is not an error of Rede and it never changes an award.
+A difference is drift: a finding with a proof, shown to the reader. It is not an error of Rezono and it never changes an award.
 
 ## How a parameter stands on the evaluation day (std-time)
 
@@ -171,9 +171,9 @@ A role sees a conclusion only with a proof from rows it reads (O8). The adviser'
 ## Running it
 
 ```bash
-python -m rede_compiler check examples/subsidy               # read the pack and load the facts
-python -m rede_compiler compile examples/subsidy generated/subsidy
-python -m rede_compiler explain examples/subsidy generated/subsidy-explained
+python -m rezono_compiler check examples/subsidy               # read the pack and load the facts
+python -m rezono_compiler compile examples/subsidy generated/subsidy
+python -m rezono_compiler explain examples/subsidy generated/subsidy-explained
 python examples/subsidy/reference.py                         # the independent reference, per state
 python examples/subsidy/generate.py                          # the population again: the same bytes
 python edge/plugins/credential-in/credential_in.py observe examples/subsidy/credentials/inputs.yaml \

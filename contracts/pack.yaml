@@ -1,17 +1,17 @@
-id: https://rede.dev/contracts/pack
-name: rede_pack
+id: https://rezono.org/contracts/pack
+name: rezono_pack
 title: Pack files
 description: >-
   The files of a pack that are not LinkML: pack.yaml (name, version, language) and
   channels.yaml (the pack's part of the key: a shape and an optional icon per kind, a dash per arrow), icons/ (the icons, listed in icons/sources.yaml), and sweeps.yaml
   (the fact cell of a sweep) with the grid the compiler makes of it, ir/sweeps.json.
   views.yaml has a closed structural profile; loading it does not enable view execution.
-  Labels and messages are checked by the compiler (`python -m rede_compiler check`),
+  Labels and messages are checked by the compiler (`python -m rezono_compiler check`),
   because their element ids come from the schema.
 prefixes:
   linkml: https://w3id.org/linkml/
-  rede: https://rede.dev/contracts/
-default_prefix: rede
+  rezono: https://rezono.org/contracts/
+default_prefix: rezono
 default_range: string
 imports:
   - linkml:types
@@ -28,7 +28,7 @@ classes:
       class: {pattern: "^[a-z][a-z0-9]*(-[a-z0-9]+)*$", description: "What the pack's data is, said by whoever owns it (SO-5): a deploy profile publishes the pack only if its list publish.classes holds this class. Absent means unclassified, which a profile must list too. No class is known to code by name."}
       imports: {range: PackImport, multivalued: true, inlined_as_list: true, description: "Packs whose schema modules this pack uses, each pinned on the hash of its files."}
       modules: {range: ModuleInterface, multivalued: true, inlined_as_list: true, description: "The interface of a schema module: the kinds and enums other modules may use, and the namespace of its kinds. A module without one keeps everything public."}
-      reckon: {range: ReckonModule, multivalued: true, inlined_as_list: true, description: "The pack's modules written in Reckon (docs/reckon/publication.md §2, §3), each with its JSON form and the layer of its kinds."}
+      rezono: {range: RezonoModule, multivalued: true, inlined_as_list: true, description: "The pack's modules written in Rezono (docs/rezono/publication.md §2, §3), each with its JSON form and the layer of its kinds."}
       iri: {range: PackIri, inlined: true, description: "The pack's `base` and the namespaces of its kinds and reason codes (docs/ring2/iris.md section 4). Absent: the pack's published forms keep their stand-in base."}
 
   PackIri:
@@ -39,7 +39,7 @@ classes:
       reason code takes the namespace of an entry that names it, else `base`; its IRI is `<namespace>reason/<code>`.
       Every value is a whole https IRI ending in `/`; no part is put together in code. The compiler refuses a kind
       or reason code named in two entries, one the pack does not declare, and two packs of one compile with one
-      `base`. Changing a published `base` or namespace is a major change (Reckon Data L0 section 2.4); no check
+      `base`. Changing a published `base` or namespace is a major change (publication L0 section 2.4); no check
       catches it yet.
     attributes:
       base: {required: true, pattern: "^https://[^ #?]+/$", description: "Never shared by two packs, never reused."}
@@ -52,20 +52,20 @@ classes:
       kinds: {multivalued: true, description: "LinkML class names this pack declares."}
       reasons: {multivalued: true, pattern: "^[a-z][a-z0-9_]*$", description: "Reason codes of this pack's named outcomes."}
 
-  ReckonModule:
+  RezonoModule:
     description: >-
-      One module written in Reckon. The compiler reads its JSON form (contracts/reckon-module.yaml), never its
-      text, and lowers it beside schema/; the module is named by its path under reckon/ without .reckon, and both
-      files are definition (the pack's hash covers them). A file under reckon/ that no entry names is an error.
+      One module written in Rezono. The compiler reads its JSON form (contracts/rezono-module.yaml), never its
+      text, and lowers it beside schema/; the module is named by its path under rezono/ without .rezono, and both
+      files are definition (the pack's hash covers them). A file under rezono/ that no entry names is an error.
     attributes:
-      module: {required: true, pattern: "^reckon/[a-z][a-z0-9_]*(/[a-z][a-z0-9_]*)*\\.reckon$", description: "The module's text, relative to the pack; a refusal names it with a line."}
-      form: {required: true, pattern: "^reckon/[a-z][a-z0-9_]*(/[a-z][a-z0-9_]*)*\\.json$", description: "Its JSON form as `reckon/` writes it (`node src/write-form.ts`), relative to the pack."}
-      layer: {required: true, pattern: "^(source|facts|conclusions|plan|output|observation)$", description: "The layer of every kind of the module: Reckon has no word for one, and the compiler asks one of every kind."}
+      module: {required: true, pattern: "^rezono/[a-z][a-z0-9_]*(/[a-z][a-z0-9_]*)*\\.rezono$", description: "The module's text, relative to the pack; a refusal names it with a line."}
+      form: {required: true, pattern: "^rezono/[a-z][a-z0-9_]*(/[a-z][a-z0-9_]*)*\\.json$", description: "Its JSON form as `rezono/` writes it (`node src/write-form.ts`), relative to the pack."}
+      layer: {required: true, pattern: "^(source|facts|conclusions|plan|output|observation)$", description: "The layer of every kind of the module: Rezono has no word for one, and the compiler asks one of every kind."}
 
   PackImport:
     description: >-
       One pack import. A schema of this pack names a module of the imported pack as `<name>:<path>`.
-      `sha256` is the hash of the imported pack's files (`python -m rede_compiler hash <pack>`); a
+      `sha256` is the hash of the imported pack's files (`python -m rezono_compiler hash <pack>`); a
       different hash is an error, so an import never changes unnoticed.
     attributes:
       name: {required: true, pattern: "^[a-z][a-z0-9]*(-[a-z0-9]+)*$", description: The name in the imported pack.yaml.}
@@ -74,7 +74,7 @@ classes:
 
   ModuleInterface:
     description: >-
-      The public surface of one schema module (ticket F04, Reckon v0 §4c). Another module, of this pack or of
+      The public surface of one schema module (ticket F04, Rezono v0 §4c). Another module, of this pack or of
       a pack that imports it, may name only these kinds and enums, as a parent or a range; naming any other
       is a compile error. The module itself uses all it declares.
     attributes:
@@ -103,7 +103,7 @@ classes:
       Arrow-map name and step slot are unqualified slot components, not engine table names.
       This profile has no LinkML/module name resolver; theory names the imported pack.
     attributes:
-      format: {required: true, equals_string: rede.views/1}
+      format: {required: true, equals_string: rezono.views/1}
       views: {range: ViewSpec, multivalued: true, inlined_as_list: true, required: true, minimum_cardinality: 1}
 
   ViewSpec:
@@ -197,7 +197,7 @@ classes:
       ir/sweeps.json, written by the compiler when the pack has a sweep: each sweep with its grid,
       min, min + step, ... up to max, count values in all (at most 64).
     attributes:
-      format: {required: true, equals_string: rede.sweeps/1}
+      format: {required: true, equals_string: rezono.sweeps/1}
       sweeps: {range: PlannedSweep, multivalued: true, inlined_as_list: true, required: true}
 
   PlannedSweep:

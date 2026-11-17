@@ -4,5 +4,5 @@ standard_version: "1.12"
 direction: in
 losses:
   - subject: structure
-    what: A slot usage that narrows a range by a pattern. Rede reads the range and refuses the narrowing.
+    what: A slot usage that narrows a range by a pattern. Rezono reads the range and refuses the narrowing.
     fate: dropped

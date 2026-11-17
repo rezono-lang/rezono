@@ -12,11 +12,11 @@ from pathlib import Path
 
 import yaml
 
-from rede_compiler.pack import snake
+from rezono_compiler.pack import snake
 
 ROOT = Path(__file__).resolve().parents[2]
-CORE = [ROOT / "compiler" / "rede_compiler", ROOT / "checker" / "rede_checker", ROOT / "viewer" / "src",
-        ROOT / "edge" / "publisher" / "rede_publisher", ROOT / "edge" / "gate" / "src", ROOT / "compiler" / "tests"]
+CORE = [ROOT / "compiler" / "rezono_compiler", ROOT / "checker" / "rezono_checker", ROOT / "viewer" / "src",
+        ROOT / "edge" / "publisher" / "rezono_publisher", ROOT / "edge" / "gate" / "src", ROOT / "compiler" / "tests"]
 SUFFIXES = {".py", ".ts", ".svelte", ".js"}
 # Names the engine itself gives meaning to, so an example uses them by design: the closing fact of a seal
 # (decision E3, docs/compiler.md#design-m3-the-seal).

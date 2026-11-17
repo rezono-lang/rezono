@@ -1,5 +1,5 @@
 plugin: example-plugin
-image: example.invalid/rede/plugin:1.0.0
+image: example.invalid/rezono/plugin:1.0.0
 operation: apply
 unit: lab-run-1
 input_sha256: bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb

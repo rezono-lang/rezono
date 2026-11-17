@@ -19,7 +19,7 @@ import zipfile
 from pathlib import Path
 
 import pytest
-from rede_canon import canonical_sha256
+from rezono_canon import canonical_sha256
 
 ROOT = Path(__file__).resolve().parents[3]
 LOCKS = sorted((ROOT / "requirements").glob("*.txt"))
@@ -87,7 +87,7 @@ def test_the_runtime_artifact_is_checked_before_it_is_unpacked(tmp_path):
 
 
 def test_a_cached_runtime_artifact_is_checked_like_a_download(tmp_path):
-    """REDE_PYTHON_CACHE: a cached artifact with the pinned SHA-256 is used without a download and still goes
+    """REZONO_PYTHON_CACHE: a cached artifact with the pinned SHA-256 is used without a download and still goes
     through the digest check; one with other bytes is dropped and downloaded again, and only verified bytes
     are kept."""
     fake = _fake_runtime(tmp_path, "3.13.0")
@@ -101,7 +101,7 @@ def test_a_cached_runtime_artifact_is_checked_like_a_download(tmp_path):
         spec = tmp_path / "artifact"
         spec.write_text(f"url={url}\nsha256={sha}\nprefix={prefix}\n")
         return subprocess.run([str(ROOT / "scripts" / "python-runtime.sh"), str(spec)], capture_output=True, text=True,
-                              env={"PATH": os.environ["PATH"], "HOME": str(tmp_path), "REDE_PYTHON_CACHE": str(cache)})
+                              env={"PATH": os.environ["PATH"], "HOME": str(tmp_path), "REZONO_PYTHON_CACHE": str(cache)})
 
     r = install(f"file://{tarball}")
     assert "downloaded" in r.stderr and kept.read_bytes() == tarball.read_bytes(), r.stderr
@@ -182,13 +182,13 @@ def get_requires_for_build_editable(config_settings=None):
 
 def build_editable(wheel_directory, config_settings=None, metadata_directory=None):
     (HERE / "seen.json").write_text(json.dumps({k: v for k, v in os.environ.items() if k.startswith(("PYTHON", "PIP_"))}))
-    info = "rede_probe_edit-1.0.dist-info"
-    files = {info + "/METADATA": b"Metadata-Version: 2.1\\nName: rede-probe-edit\\nVersion: 1.0\\n",
+    info = "rezono_probe_edit-1.0.dist-info"
+    files = {info + "/METADATA": b"Metadata-Version: 2.1\\nName: rezono-probe-edit\\nVersion: 1.0\\n",
              info + "/WHEEL": b"Wheel-Version: 1.0\\nGenerator: test\\nRoot-Is-Purelib: true\\nTag: py3-none-any\\n",
-             "rede_probe_edit.pth": (str(HERE) + "\\n").encode()}
+             "rezono_probe_edit.pth": (str(HERE) + "\\n").encode()}
     b64 = lambda d: base64.urlsafe_b64encode(hashlib.sha256(d).digest()).rstrip(b"=").decode()
     record = "".join(f"{n},sha256={b64(d)},{len(d)}\\n" for n, d in files.items()) + info + "/RECORD,,\\n"
-    name = "rede_probe_edit-1.0-py3-none-any.whl"
+    name = "rezono_probe_edit-1.0-py3-none-any.whl"
     with zipfile.ZipFile(os.path.join(wheel_directory, name), "w") as z:
         for n, d in [*files.items(), (info + "/RECORD", record.encode())]:
             z.writestr(n, d)
@@ -200,9 +200,9 @@ def _editable_project(tmp_path):
     proj = tmp_path / "project"
     proj.mkdir()
     (proj / "pyproject.toml").write_text('[build-system]\nrequires = []\nbuild-backend = "backend"\nbackend-path = ["."]\n\n'
-                                         '[project]\nname = "rede-probe-edit"\nversion = "1.0"\n')
+                                         '[project]\nname = "rezono-probe-edit"\nversion = "1.0"\n')
     (proj / "backend.py").write_text(BACKEND)
-    (proj / "rede_probe_edit.py").write_text("VALUE = 'editable'\n")
+    (proj / "rezono_probe_edit.py").write_text("VALUE = 'editable'\n")
     return proj
 
 
@@ -272,7 +272,7 @@ def test_a_polluted_environment_does_not_reach_the_install(tmp_path):
     assert not (venv / "lib" / "left-over").exists(), "the virtualenv is made fresh"
     assert not (tmp_path / "elsewhere").exists()
     got = subprocess.run([str(venv / "bin" / "python"), "-I", "-c",
-                          "import probe_pkg, rede_probe_edit; print(probe_pkg.VALUE, rede_probe_edit.VALUE)"],
+                          "import probe_pkg, rezono_probe_edit; print(probe_pkg.VALUE, rezono_probe_edit.VALUE)"],
                          capture_output=True, text=True, env={"PATH": os.environ["PATH"]})
     assert got.stdout == "1 editable\n", got.stderr
     seen = json.loads((proj / "seen.json").read_text())
@@ -282,9 +282,9 @@ def test_a_polluted_environment_does_not_reach_the_install(tmp_path):
 
 
 def test_the_archived_publisher_runs_without_the_environment_site_hooks_or_planted_bytecode(tmp_path, monkeypatch):
-    """rede_publisher.kept.run_archived, offline with a stand-in publisher: nothing from the calling
+    """rezono_publisher.kept.run_archived, offline with a stand-in publisher: nothing from the calling
     environment, no .pth file or sitecustomize, and no planted .pyc reaches the archived run."""
-    from rede_publisher import kept
+    from rezono_publisher import kept
 
     tree = tmp_path / "tree"
     subprocess.run([sys.executable, "-I", "-m", "venv", "--without-pip", str(tree / ".venv")], check=True)
@@ -307,7 +307,7 @@ def test_the_archived_publisher_runs_without_the_environment_site_hooks_or_plant
     assert plain.stdout == "planted\n" and (markers / "pth").exists(), "the poison works on a plain run"
     for m in markers.iterdir():
         m.unlink()
-    package = tree / "edge" / "publisher" / "rede_publisher"
+    package = tree / "edge" / "publisher" / "rezono_publisher"
     package.mkdir(parents=True)
     (tree / "canon").mkdir()
     (tree / "compiler").mkdir()
@@ -358,9 +358,9 @@ def test_regen_goldens_never_replaces_a_kept_publication(tmp_path):
         "python": f'''#!/bin/sh
 echo "$*" >> {log}
 case "$*" in
-  "-m rede_compiler --help") echo "compile" ;;
-  "-m rede_compiler compile "*) mkdir -p "$4" ;;
-  "-m rede_publisher.kept "*) exit "${{KEPT_EXIT:-0}}" ;;
+  "-m rezono_compiler --help") echo "compile" ;;
+  "-m rezono_compiler compile "*) mkdir -p "$4" ;;
+  "-m rezono_publisher.kept "*) exit "${{KEPT_EXIT:-0}}" ;;
 esac
 ''',
         "npx": "#!/bin/sh\nexit 0\n",
@@ -374,7 +374,7 @@ esac
         r = subprocess.run(["bash", str(repo / "scripts" / "regen-goldens.sh")], env=env | {"KEPT_EXIT": exit_code},
                            capture_output=True, text=True)
         assert (r.returncode == 0) == (exit_code == "0"), r.stdout + r.stderr
-        assert "-m rede_publisher.kept examples/demo --make" in log.read_text().splitlines()
+        assert "-m rezono_publisher.kept examples/demo --make" in log.read_text().splitlines()
         assert {p: p.read_text() if p.exists() else None for p in kept} == kept, "a kept publication was touched"
 
 
@@ -387,8 +387,8 @@ def test_a_package_outside_the_lock_is_found(tmp_path):
 
 
 def test_the_build_record_names_the_publisher_source_and_the_runtime(monkeypatch):
-    pytest.importorskip("rede_compiler")
-    from rede_publisher import batch
+    pytest.importorskip("rezono_compiler")
+    from rezono_publisher import batch
 
     base = canonical_sha256(batch.build_record())
     tree = batch.tree_sha256

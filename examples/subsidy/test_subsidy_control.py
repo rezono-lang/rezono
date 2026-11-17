@@ -1,6 +1,6 @@
 """DV1 on subsidy: the scheme's parameters are decided values (`plane: control` on SchemeParameter). A planted
 direct delta on them is refused with its reason, the same way in batch (the compiler's loader) and in the step
-the live service admits through (rede_admission against the archived schema bundle). A reviewed batch whose rows
+the live service admits through (rezono_admission against the archived schema bundle). A reviewed batch whose rows
 name their decision is admitted, and a delta on a data-plane kind needs no review."""
 
 import json
@@ -8,11 +8,11 @@ from pathlib import Path
 
 import pytest
 
-from rede_admission import Admission, Schema
+from rezono_admission import Admission, Schema
 
-pytest.importorskip("rede_compiler")
+pytest.importorskip("rezono_compiler")
 
-from rede_compiler import facts, pack  # noqa: E402
+from rezono_compiler import facts, pack  # noqa: E402
 
 HERE = Path(__file__).parent
 BUNDLE = HERE / "expected" / "compiled" / "bundle" / "schema-bundle.json"

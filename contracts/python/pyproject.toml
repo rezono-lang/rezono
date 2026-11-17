@@ -1,7 +1,7 @@
 [project]
-name = "rede-contracts"
+name = "rezono-contracts"
 version = "0.1.0"
-description = "Python types generated from the Rede contracts (rede_contracts, by contracts/gen-types.sh; never edited by hand), and port declarations held to the port contract at run time (rede_ports, written by hand)."
+description = "Python types generated from the Rezono contracts (rezono_contracts, by contracts/gen-types.sh; never edited by hand), and port declarations held to the port contract at run time (rezono_ports, written by hand)."
 requires-python = ">=3.11"
 dependencies = ["pydantic>=2.7", "jsonschema>=4.20", "pyyaml>=6"]
 
@@ -13,10 +13,10 @@ requires = ["setuptools>=69"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
-packages = ["rede_contracts", "rede_ports"]
+packages = ["rezono_contracts", "rezono_ports"]
 
 [tool.setuptools.package-data]
-rede_contracts = ["*.schema.json"]
+rezono_contracts = ["*.schema.json"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

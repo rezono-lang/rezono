@@ -1,6 +1,6 @@
 # The known questions (docs/gui.md, "Questions as data"): each a combination of the building blocks
 # trace and suppose. The term is the name in code; its label and sentence are in messages/<lang>.mf2.
-format: rede.questions/1
+format: rezono.questions/1
 questions:
   # The route from a value back to its sources.
   - term: grounds

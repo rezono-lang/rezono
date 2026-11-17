@@ -1,4 +1,4 @@
-"""RV-K04: what one filtered role may read (rede_checker/access.py, decision O8), on a filter that got it wrong.
+"""RV-K04: what one filtered role may read (rezono_checker/access.py, decision O8), on a filter that got it wrong.
 
 One small world, written by hand: nothing here comes from the compiler or the publisher. The role `guest` reads
 every person, the documents it was granted, and what follows from those. `world()` is what a correct filter
@@ -12,8 +12,8 @@ from pathlib import Path
 
 import pytest
 
-from rede_checker import access
-from rede_checker.canon import encode_key
+from rezono_checker import access
+from rezono_checker.canon import encode_key
 
 KINDS = {"doc", "person"}
 COLUMNS = {"doc": ("doc",), "person": ("person",), "doc__author": ("doc", "person"), "role": (None,),
@@ -33,7 +33,7 @@ def derived(name, *columns):
 
 
 # Every role reads every person; a document only when granted. So `person` is read in full and `doc` is not.
-DOC = {"format": "rede.rules/1", "pack": "example",
+DOC = {"format": "rezono.rules/1", "pack": "example",
        "relations": [derived("may_read", "role", "kind", "id"), derived("authored", "person", "doc"),
                      derived("busy", "person"), derived("idle", "person")],
        "rules": [
@@ -44,7 +44,7 @@ DOC = {"format": "rede.rules/1", "pack": "example",
            rule("idle", "2", ("idle", "?p"), atom("person", "?p"), atom("busy", "?p", polarity="negative", stratum="1")),
        ]}
 # A calculation per document. It reads `person`, which the guest reads in full, or `doc__author`, which it does not.
-CALC = {"format": "rede.calc-ir/1", "subject": "doc", "as_of": "calc__as_of", "rules": [{"view": "calc__size"}],
+CALC = {"format": "rezono.calc-ir/1", "subject": "doc", "as_of": "calc__as_of", "rules": [{"view": "calc__size"}],
         "facts": [{"id": "people", "reads": "presence", "table": "person"}],
         "versions": [{"id": "size@v", "view": "calc__size__v",
                       "definitions": [{"when": {"boolean": True}, "value": {"fact": "people"}}]}]}

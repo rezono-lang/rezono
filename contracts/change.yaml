@@ -1,16 +1,16 @@
-id: https://rede.dev/contracts/change
-name: rede_change
+id: https://rezono.org/contracts/change
+name: rezono_change
 title: Change and its life cycle
 description: >-
-  One change in Rede, from delta to effect (docs/lifecycle.md): an edit in the viewer, a commit by
+  One change in Rezono, from delta to effect (docs/lifecycle.md): an edit in the viewer, a commit by
   hand, a batch from a journal, or the plan of a plugin with an effect. Every change follows the same
   state machine. The state is derived from facts (the proposal on the host, reviews, the outcome of
   the epoch, the result of a plugin), never set by hand. A review is a fact about exactly one content
   hash; merging is not accepting, so merged is not a state.
 prefixes:
   linkml: https://w3id.org/linkml/
-  rede: https://rede.dev/contracts/
-default_prefix: rede
+  rezono: https://rezono.org/contracts/
+default_prefix: rezono
 default_range: string
 imports:
   - linkml:types

@@ -31,7 +31,7 @@ def known(v) -> Val:
 
 
 def beyond(op: str) -> Val:
-    """W8: a step beyond the bound has a value Rede cannot hold: unknown, naming the bound and the operator."""
+    """W8: a step beyond the bound has a value Rezono cannot hold: unknown, naming the bound and the operator."""
     return Val("unknown", None, f"beyond the bound of W8 in {op}")
 
 

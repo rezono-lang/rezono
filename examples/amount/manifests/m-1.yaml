@@ -17,6 +17,6 @@ counts:
   - {relation: claim, rows: 2}
   - {relation: rate, rows: 2}
 snapshots:
-  - {relation: adjustment, role: viewer, complete: true, uri: "s3://rede-fixtures/amount/m-1/viewer/adjustment.json", sha256: ff10872d04cadb07dba56e8ad4bd6c77000f1c940cd4a08500ffa6730566beb9, format: json}
-  - {relation: claim, role: viewer, complete: true, uri: "s3://rede-fixtures/amount/m-1/viewer/claim.json", sha256: 715dba8ae90ee6d5ddc77891d818125fb49d1293bb5baa4985f152373dae25a9, format: json}
-  - {relation: rate, role: viewer, complete: true, uri: "s3://rede-fixtures/amount/m-1/viewer/rate.json", sha256: e963073d4cd7e8f65088506733f0ae61d52d99ef4de5f428dec3f46ec06ffd88, format: json}
+  - {relation: adjustment, role: viewer, complete: true, uri: "s3://rezono-fixtures/amount/m-1/viewer/adjustment.json", sha256: ff10872d04cadb07dba56e8ad4bd6c77000f1c940cd4a08500ffa6730566beb9, format: json}
+  - {relation: claim, role: viewer, complete: true, uri: "s3://rezono-fixtures/amount/m-1/viewer/claim.json", sha256: 715dba8ae90ee6d5ddc77891d818125fb49d1293bb5baa4985f152373dae25a9, format: json}
+  - {relation: rate, role: viewer, complete: true, uri: "s3://rezono-fixtures/amount/m-1/viewer/rate.json", sha256: e963073d4cd7e8f65088506733f0ae61d52d99ef4de5f428dec3f46ec06ffd88, format: json}

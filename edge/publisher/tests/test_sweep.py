@@ -10,9 +10,9 @@ import pytest
 import yaml
 
 pytest.importorskip("duckdb")
-pytest.importorskip("rede_compiler")
+pytest.importorskip("rezono_compiler")
 
-from rede_publisher import batch, publish, store, sweep  # noqa: E402
+from rezono_publisher import batch, publish, store, sweep  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[3]
 PACK = "packs/p"
@@ -73,7 +73,7 @@ def test_each_grid_value_is_a_manifest_or_a_diagnosis_against_main(repo, tmp_pat
     main_before = st.get("minimal/manifests/m-2.json")
     # The grid is archived with main, so the gate knows every value, also one not computed yet.
     archived = {f["file"]: f for f in json.loads(main_before)["compiled"]}
-    grid = json.loads(st.get(archived["ir/sweeps.json"]["uri"].removeprefix("s3://rede/")))
+    grid = json.loads(st.get(archived["ir/sweeps.json"]["uri"].removeprefix("s3://rezono/")))
     assert grid["sweeps"][0]["count"] == 4
     done = sweep.run(repo, PACK, base, st, ROLES)
     assert done == [(IDS[0], "manifest"), (IDS[1], "manifest"), (IDS[2], "diagnosis"), (IDS[3], "diagnosis")]
@@ -118,7 +118,7 @@ def test_a_variant_writes_only_what_the_swept_cell_changes(repo, tmp_path):
             key = s["uri"].removeprefix(st.uri(""))
             assert (s["uri"] == old["uri"]) is same
             assert (key not in new) is same
-            assert publish.sha256(st.get(s["uri"].removeprefix("s3://rede/"))) == s["sha256"]
+            assert publish.sha256(st.get(s["uri"].removeprefix("s3://rezono/"))) == s["sha256"]
         assert own and all(x["role"] == "checker" for x in m["snapshots"] + m["witnesses"]
                            if x["uri"].removeprefix(st.uri("")) in own)
         assert publish.role_objects(st, "minimal", vid, "checker")["relations/alpha__size.json"] in own
@@ -239,7 +239,7 @@ REACH = ('.decl sized(x: symbol, s: number)\nsized(x, s) :- alpha__size(x, s).\n
 def rows_of(files: dict, root: dict) -> list:
     """The rows of one proof tree as a reader gets them: from the root an index names, every piece by the
     sha256 that names it, a page's children under the root's own prefix."""
-    key = root["uri"].removeprefix("s3://rede/")
+    key = root["uri"].removeprefix("s3://rezono/")
     home = key[:key.index("/proof/")]
 
     def walk(path, digest):
@@ -256,7 +256,7 @@ def test_a_variant_names_the_proof_trees_of_its_base_and_writes_only_the_others(
     base's view index names a tree with the same root hash, the explain index names that root and the variant
     writes no copy; a tree the swept cell reaches is the variant's own. Every tree reads the same rows either
     way, and without a view index of the base (the first store) nothing changes."""
-    from rede_publisher import views
+    from rezono_publisher import views
 
     readable(repo)
     (repo / PACK / "rules" / "reach.dl").write_text(REACH)
@@ -444,10 +444,10 @@ def test_a_worker_s_malloc_returns_what_a_variant_freed(monkeypatch):
 
     monkeypatch.setattr(sweep.subprocess, "Popen", Child)
     monkeypatch.delenv("MALLOC_MMAP_THRESHOLD_", raising=False)
-    monkeypatch.setenv("REDE_PROBE", "kept")
+    monkeypatch.setenv("REZONO_PROBE", "kept")
     assert sweep.side_by_side(["pack"], 2) == (0, [])
     assert [e["MALLOC_MMAP_THRESHOLD_"] for e in started] == ["131072", "131072"]
-    assert all(e["REDE_PROBE"] == "kept" for e in started)
+    assert all(e["REZONO_PROBE"] == "kept" for e in started)
     started.clear()
     monkeypatch.setenv("MALLOC_MMAP_THRESHOLD_", "65536")
     sweep.side_by_side(["pack"], 1)

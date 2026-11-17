@@ -15,7 +15,7 @@ from collections import Counter
 import duckdb
 import pytest
 
-from rede_compiler import checks, emit, pack, scenarios
+from rezono_compiler import checks, emit, pack, scenarios
 from support import REPO
 
 PACKS = sorted(p.parent for p in (REPO / "examples").glob("**/pack.yaml")

@@ -1,5 +1,5 @@
 # An undo as the writer returns it: with the exact lines to put back (restore), here one value.
-format: rede.delta/1
+format: rezono.delta/1
 pack: library
 changes:
   - op: set

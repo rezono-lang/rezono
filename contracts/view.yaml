@@ -1,13 +1,13 @@
-id: https://rede.dev/contracts/view
-name: rede_view
+id: https://rezono.org/contracts/view
+name: rezono_view
 title: Key (visual language)
 description: >-
   The visual language as data, used by std-view. The viewer only interprets this.
   A pack may override values (a house style) but never the meaning of a channel.
 prefixes:
   linkml: https://w3id.org/linkml/
-  rede: https://rede.dev/contracts/
-default_prefix: rede
+  rezono: https://rezono.org/contracts/
+default_prefix: rezono
 default_range: string
 imports:
   - linkml:types
@@ -51,7 +51,7 @@ enums:
       origin_observation: {description: "A base fact whose origin is an observation."}
       derived: {description: "A conclusion of a rule, not a base fact; its text takes conclusion_typography."}
       assumption: {description: "A value taken as given until its source answers."}
-      drift: {description: "What Rede derives beside what a reference source says (decision R13); always two lines, never one."}
+      drift: {description: "What Rezono derives beside what a reference source says (decision R13); always two lines, never one."}
       screened: {description: "Present, and not visible for the reader's role: no content and no size."}
       proposal: {description: "A proposed value: the other side of the fold."}
       sealed: {description: "Closed by a seal: it no longer changes."}

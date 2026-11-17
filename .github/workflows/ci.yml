@@ -61,7 +61,7 @@ jobs:
         run: contracts/gen-types.sh
       - name: Check ${{ matrix.component.folder }}
         env:
-          REDE_HYPOTHESIS_PROFILE: ci
+          REZONO_HYPOTHESIS_PROFILE: ci
         run: |
           set -euo pipefail
           if [ "${{ matrix.component.kind }}" = "contracts" ]; then

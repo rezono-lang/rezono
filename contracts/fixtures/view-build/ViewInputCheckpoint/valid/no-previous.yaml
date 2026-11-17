@@ -1,6 +1,6 @@
-format: rede.view-inputs/1
+format: rezono.view-inputs/1
 build:
-  format: rede.view-build/1
+  format: rezono.view-build/1
   files: [{path: viewer/scripts/views.ts, sha256: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa}]
   node:
     executable_sha256: bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
@@ -8,6 +8,6 @@ build:
     platform: linux
     architecture: x64
     versions: [{name: v8, version: 13.6.233}]
-capture: {format: rede.view-capture/1, pack: p, manifest: m-2, role: viewer, relayout: false, layouts: []}
+capture: {format: rezono.view-capture/1, pack: p, manifest: m-2, role: viewer, relayout: false, layouts: []}
 index: ""
 layouts: []

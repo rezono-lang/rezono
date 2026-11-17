@@ -1,4 +1,4 @@
-format: rede.views/1
+format: rezono.views/1
 views:
   - theory: spans
     kinds:

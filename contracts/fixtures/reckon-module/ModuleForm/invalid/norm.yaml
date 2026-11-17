@@ -1,8 +1,0 @@
-# `norm` is reserved (v0 §5): its text is an R015 and has no form.
-format: rede.reckon-module/1
-module:
-  pack: lab
-  use: []
-  decls:
-    - {check: norm, name: patched, cond: {path: [host, patched]}}
-spans: []

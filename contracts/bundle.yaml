@@ -1,5 +1,5 @@
-id: https://rede.dev/contracts/bundle
-name: rede_bundle
+id: https://rezono.org/contracts/bundle
+name: rezono_bundle
 title: Schema bundle
 description: >-
   What the compiler gives the viewer: the olog of one pack, its labels and messages, its page
@@ -10,8 +10,8 @@ description: >-
   decimal text.
 prefixes:
   linkml: https://w3id.org/linkml/
-  rede: https://rede.dev/contracts/
-default_prefix: rede
+  rezono: https://rezono.org/contracts/
+default_prefix: rezono
 default_range: string
 imports:
   - linkml:types
@@ -42,7 +42,7 @@ enums:
   Derivation:
     permissible_values: {fact: {}, conclusion: {}}
   SemanticCase:
-    description: "The S3 case of a value (B09, `rede_compiler.types.Type.case`). Derived wins over money and quantity; its unit or currency stays on the type."
+    description: "The S3 case of a value (B09, `rezono_compiler.types.Type.case`). Derived wins over money and quantity; its unit or currency stays on the type."
     permissible_values: {scalar: {}, quantity: {}, money: {}, date: {}, enum: {}, ref: {}, derived: {}}
   SemanticBase:
     description: "What a value is stored as: a scalar, or `number` for a calculation's exact fraction."
@@ -90,7 +90,7 @@ classes:
   Bundle:
     tree_root: true
     attributes:
-      format: {required: true, pattern: "^rede\\.schema-bundle/1$"}
+      format: {required: true, pattern: "^rezono\\.schema-bundle/1$"}
       pack: {range: PackInfo, required: true, inlined: true}
       imports: {range: ImportedPack, multivalued: true, inlined_as_list: true, description: "Every pack this pack imports, also indirectly, by name; each pinned on its hash."}
       schemas: {range: SchemaFile, multivalued: true, inlined_as_list: true, required: true}
@@ -185,7 +185,7 @@ classes:
       slot_roles: {range: SlotRoles, inlined: true, description: "Recognised slot_uri roles, declared here or inherited, as slot element ids (S26). Left out when none exist. name_attribute remains for existing readers."}
       relationship: {range: boolean, description: "Present as true for a kind declared with represents_relationship (S27); its ends name it. Left out: an ordinary kind."}
       ends: {multivalued: true, minimum_cardinality: 2, description: "For a relationship: the distinct single-valued arrows of its identifying unique key, in key order, as slot element ids (S27)."}
-      plane: {range: Plane, description: "control for a kind of decided values (DV1; Reckon Data L0 section 3.7): it has a required, single-valued slot `decision`, and admission takes its rows only from a reviewed proposal. Declared on this class; its subkinds are control kinds too. Left out: a data-plane kind."}
+      plane: {range: Plane, description: "control for a kind of decided values (DV1; publication L0 section 3.7): it has a required, single-valued slot `decision`, and admission takes its rows only from a reviewed proposal. Declared on this class; its subkinds are control kinds too. Left out: a data-plane kind."}
       owner: {description: "For a control kind: the role or team that reviews a change to it."}
       iri: {pattern: "^https://[^ #?]+/[A-Z][A-Za-z0-9]*$", description: "The kind's lasting IRI, `<namespace><class>`, from pack.yaml `iri:` of the pack that declares it, else of the compiled pack (contracts/pack.yaml, PackIri; docs/ring2/iris.md section 4). Absent when neither declares the block: a reader takes `<base><class>`."}
       fold: {range: boolean, description: "Present as true for a helper kind the pack folds (`annotations: {explain: fold}`): an explanation shows no step of its own for it. Display only. Left out: not folded."}
@@ -229,7 +229,7 @@ classes:
   SemanticType:
     description: >-
       The meaning of one value (B10, S3b), projected from the compiler's one type model (B09,
-      `rede_compiler.types.Type`). Only what the model knows is written; a field without a value is left out,
+      `rezono_compiler.types.Type`). Only what the model knows is written; a field without a value is left out,
       and nothing is inferred from a name. A dimension is not modelled yet (P10.3).
     attributes:
       case: {range: SemanticCase, required: true}
@@ -386,7 +386,7 @@ classes:
       all logical checks of one kind in one view (`relation`), and which slot has which check is a metadata row.
     attributes:
       view: {required: true, description: "The name of the logical check, `<kind>__<subject>__<check>` or `<kind>__<check>`: `validation_result.info` and the manifest's check name. Until E11 is built, also the engine view."}
-      relation: {description: "The engine view that holds this check's rows, `rede__<check>` (E11). Absent until E11 step 2; then required."}
+      relation: {description: "The engine view that holds this check's rows, `rezono__<check>` (E11). Absent until E11 step 2; then required."}
       check: {range: Check, required: true}
       kind: {required: true}
       subject: {}

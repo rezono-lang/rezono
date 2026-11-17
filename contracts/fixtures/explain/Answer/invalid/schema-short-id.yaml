@@ -1,5 +1,5 @@
 # The output schema id is s- and 64 hex digits.
-format: rede.answer/1
+format: rezono.answer/1
 question: ask
 manifest_id: m-1
 nodes: []

@@ -1,12 +1,12 @@
 [project]
-name = "rede-compiler"
+name = "rezono-compiler"
 version = "0.1.0"
-description = "Rede compiler: pack -> engine SQL, sentences and schema bundle"
+description = "Rezono compiler: pack -> engine SQL, sentences and schema bundle"
 requires-python = ">=3.11"
-dependencies = ["linkml-runtime>=1.9", "pyyaml>=6", "rede-admission", "rede-canon"]  # install: scripts/install-python.sh (docs/ci.md §8)
+dependencies = ["linkml-runtime>=1.9", "pyyaml>=6", "rezono-admission", "rezono-canon"]  # install: scripts/install-python.sh (docs/ci.md §8)
 
 [project.optional-dependencies]
-# The batch backend (decision E1): `rede_compiler explain` and publishing without Feldera.
+# The batch backend (decision E1): `rezono_compiler explain` and publishing without Feldera.
 batch = ["duckdb>=1.1"]
 test = ["pytest>=8", "hypothesis>=6.100", "duckdb>=1.1"]
 
@@ -16,7 +16,7 @@ build-backend = "setuptools.build_meta"
 
 # The contracts the compiler reads are package data copied in from contracts/ at build time (setup.py).
 [tool.setuptools]
-packages = ["rede_compiler", "rede_compiler.operate"]
+packages = ["rezono_compiler", "rezono_compiler.operate"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests", "../examples"]

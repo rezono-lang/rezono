@@ -5,9 +5,9 @@ import json
 
 import pytest
 
-from rede_checker.canon import number
-from rede_checker.evaluate import _holds, _int
-from rede_checker.snapshots import read_rows
+from rezono_checker.canon import number
+from rezono_checker.evaluate import _holds, _int
+from rezono_checker.snapshots import read_rows
 
 
 def snapshot(value: dict) -> bytes:

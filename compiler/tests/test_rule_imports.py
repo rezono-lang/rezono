@@ -8,8 +8,8 @@ import pytest
 import yaml
 
 from support import FIXTURE
-from rede_compiler import emit, modules, pack, rules_sql
-from rede_compiler import rules as ir
+from rezono_compiler import emit, modules, pack, rules_sql
+from rezono_compiler import rules as ir
 
 
 def write_rules(at, text, module="core"):
@@ -82,8 +82,8 @@ def test_only_an_owner_can_open_an_extension_and_no_grant_is_invented(imported):
 
 def test_compiled_declaration_only_extension_reaches_the_independent_epoch_checker(imported):
     import hashlib
-    from rede_checker.check import check_epoch
-    from rede_checker.rules import derived_relations, load_rules
+    from rezono_checker.check import check_epoch
+    from rezono_checker.rules import derived_relations, load_rules
 
     owner, consumer = imported
     write_rules(owner, "// @extend\n.decl granted(r: symbol, k: symbol, x: symbol)\n")
@@ -119,7 +119,7 @@ def test_diamond_imports_keep_one_copy_of_the_rules(imported, tmp_path):
     (middle / "schema").mkdir(parents=True)
     (middle / "pack.yaml").write_text("name: middle\nversion: 0.1.0\ndefault_language: nl\n")
     (middle / "schema" / "empty.yaml").write_text(
-        "id: https://rede.example/empty\nname: empty\nimports: [linkml:types]\n")
+        "id: https://rezono.example/empty\nname: empty\nimports: [linkml:types]\n")
     pin(middle, owner)
     pin(consumer, middle, owner)
     assert list(program(consumer).rules) == ["registered"]
@@ -156,7 +156,7 @@ def test_extension_cannot_mark_a_base_table(imported):
 
 
 def test_access_kind_comparisons_follow_the_same_binding(imported):
-    from rede_compiler.rules_dl import parse_file, remap_statement
+    from rezono_compiler.rules_dl import parse_file, remap_statement
     text = ('may_read("reader", k, x) :- party__grade(x, k), k = "party".\n')
     statement = parse_file(text, "rules/access.dl")[0]
     mapped = remap_statement(statement, {"party": "terms_party"})

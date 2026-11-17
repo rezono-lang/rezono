@@ -1,4 +1,4 @@
-"""RV-K04: the calculation check (rede_checker/calc.py, decision W12) on planted faults, without the compiler.
+"""RV-K04: the calculation check (rezono_checker/calc.py, decision W12) on planted faults, without the compiler.
 
 The example is one compiled calculation program, frozen as data in tests/fixtures/calc: `calc.json` (ir/calc.json),
 `snapshots.json` (every table as its rows; a calculation view as subject, value, state, reason) and
@@ -18,10 +18,10 @@ from pathlib import Path
 
 import pytest
 
-from rede_checker import calc
-from rede_checker.canon import encode_key
-from rede_checker.check import check_epoch
-from rede_checker.rules import load_rules
+from rezono_checker import calc
+from rezono_checker.canon import encode_key
+from rezono_checker.check import check_epoch
+from rezono_checker.rules import load_rules
 
 HERE = Path(__file__).parent / "fixtures" / "calc"
 
@@ -212,7 +212,7 @@ def epoch(forge=None, full=None) -> set[str]:
     manifest = {"id": "m-1", "snapshots": [
         {"relation": name, "role": "all", "complete": True, "uri": name, "format": "json",
          "sha256": hashlib.sha256(data).hexdigest()} for name, data in files.items()]}
-    rules = load_rules({"format": "rede.rules/1", "relations": [], "rules": []})
+    rules = load_rules({"format": "rezono.rules/1", "relations": [], "rules": []})
     report = check_epoch([], manifest, rules, files.__getitem__, derived=set(), full=full,
                          calc_witnesses=witnesses, calc_ir=IR)
     return {f["reason"] for f in report["findings"]}
@@ -238,7 +238,7 @@ def test_no_test_of_the_checker_imports_the_compiler():
     """The checker's suite runs with the checker alone: no test file here has an import of the compiler."""
     tests = sorted(Path(__file__).parent.glob("*.py"))
     assert tests
-    assert [t.name for t in tests if re.search(r"^\s*(from|import)\s+rede_compiler", t.read_text(encoding="utf-8"), re.M)] == []
+    assert [t.name for t in tests if re.search(r"^\s*(from|import)\s+rezono_compiler", t.read_text(encoding="utf-8"), re.M)] == []
 
 
 # --- RV-K08: the cost follows the witnesses, not the snapshots ------------------------------------------------

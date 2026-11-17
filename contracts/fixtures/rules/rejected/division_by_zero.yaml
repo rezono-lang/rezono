@@ -1,5 +1,5 @@
 # A divisor of 0: refused when compiling, so that no engine ever divides by zero.
-format: rede.rules/1
+format: rezono.rules/1
 pack: fixture
 relations:
   - name: size

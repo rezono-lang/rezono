@@ -28,9 +28,9 @@ import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from rede_canon import canonical_bytes
+from rezono_canon import canonical_bytes
 
-FORMAT = "rede-frozen-baseline/1"
+FORMAT = "rezono-frozen-baseline/1"
 ACCESS = "may_read"  # std-access: may_read(role, kind, id)
 CALC = "calc:"  # a calculation result: calc:<rule>, rows (subject, value or state when not known)
 ROOT = Path(__file__).resolve().parent
@@ -51,7 +51,7 @@ def observe(pack_dir: Path) -> States:
                              for r, rows in (s.derived | s.seal).items()} for s in run}
     if (pack_dir / "calc").is_dir():
         from calcsupport import run as calc_run
-        from rede_compiler import calc, calc_sql, scenarios
+        from rezono_compiler import calc, calc_sql, scenarios
 
         prog = calc.build(model, model.calc)
         for label, rows in scenarios.states(model, pack_dir):

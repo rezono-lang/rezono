@@ -1,11 +1,11 @@
-id: https://rede.dev/contracts/view-build
-name: rede_view_build
+id: https://rezono.org/contracts/view-build
+name: rezono_view_build
 title: Published view build and captured inputs
 description: Static implementation identity in a build record and a private role's immutable layout inputs (C3).
 prefixes:
   linkml: https://w3id.org/linkml/
-  rede: https://rede.dev/contracts/
-default_prefix: rede
+  rezono: https://rezono.org/contracts/
+default_prefix: rezono
 default_range: string
 imports:
   - linkml:types
@@ -31,7 +31,7 @@ classes:
   ViewBuild:
     description: Optional views component of a build record; contains no role's data or layout hashes.
     attributes:
-      format: {required: true, pattern: "^rede\\.view-build/1$"}
+      format: {required: true, pattern: "^rezono\\.view-build/1$"}
       files: {range: ViewFile, multivalued: true, inlined_as_list: true, required: true}
       node: {range: ViewRuntime, inlined: true, required: true}
   PreviousView:
@@ -41,7 +41,7 @@ classes:
   ViewCapture:
     description: Private per-role inputs, committed by capture_sha256 in that role's index, never in a shared build.
     attributes:
-      format: {required: true, pattern: "^rede\\.view-capture/1$"}
+      format: {required: true, pattern: "^rezono\\.view-capture/1$"}
       pack: {required: true}
       manifest: {required: true, pattern: "^m-[0-9]+$"}
       role: {required: true}
@@ -56,7 +56,7 @@ classes:
   ViewInputCheckpoint:
     description: Private conditional object, committed before main so a restart cannot recapture newer history.
     attributes:
-      format: {required: true, pattern: "^rede\\.view-inputs/1$"}
+      format: {required: true, pattern: "^rezono\\.view-inputs/1$"}
       build: {range: ViewBuild, inlined: true, required: true}
       capture: {range: ViewCapture, inlined: true, required: true}
       index: {required: true, description: "Base64 of the exact previous index bytes, empty when there was none."}

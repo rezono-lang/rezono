@@ -1,5 +1,5 @@
 # A part is main, integrity, rules-<n> or calc.
-format: rede.pipelines/1
+format: rezono.pipelines/1
 max_views: "64"
 pipelines:
   - {name: part-a, sql: [engine/rules.sql]}

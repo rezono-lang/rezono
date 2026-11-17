@@ -1,4 +1,4 @@
-id: https://rede.example/std-decision/decision
+id: https://rezono.example/std-decision/decision
 name: std_decision
 description: >-
   The decision record. A decision is an origin of facts (S32, class decision): somebody decided it, on a day, and

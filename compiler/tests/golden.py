@@ -54,7 +54,7 @@ def differences(got: dict[str, bytes], want: dict[str, bytes], context: int = 3)
 
 
 def main(pack_dir: str, out_dir: str) -> None:
-    from rede_compiler import emit, pack
+    from rezono_compiler import emit, pack
 
     for path, data in golden(emit.compile_pack(pack.read(pack_dir))).items():
         target = Path(out_dir) / path

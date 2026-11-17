@@ -5,7 +5,7 @@ from hashlib import sha256
 import pytest
 
 from pilot import asked, check_local_sweeps, check_statuses, check_sweeps, checked_local_grid, reads_all_in_full
-from rede_publisher import pointers, publish, store
+from rezono_publisher import pointers, publish, store
 
 
 @pytest.fixture
@@ -194,7 +194,7 @@ class Pages:
 
 
 def page(rows, question="ask A where x > 1", manifest="m-3", **more):
-    return 200, {"format": "rede.answer/1", "question": "ask", "manifest_id": manifest, "output_schema": "s#A",
+    return 200, {"format": "rezono.answer/1", "question": "ask", "manifest_id": manifest, "output_schema": "s#A",
                  "expression": {"hash": "h", "text": question}, "dataset": {"$schema": "s#A", "rows": rows}, **more}
 
 
@@ -210,7 +210,7 @@ def test_an_ask_is_read_page_by_page_with_the_cursor_it_gave():
     (200, {**page([])[1], "manifest_id": "m-2"}),
     (200, {**page([])[1], "expression": {"hash": "h", "text": "ask B where x > 1"}}),
     (200, {**page([])[1], "output_schema": "s#B"}),
-    (200, {**page([])[1], "format": "rede.answer/2"}),
+    (200, {**page([])[1], "format": "rezono.answer/2"}),
 ])
 def test_an_ask_that_is_not_the_answer_of_the_question_fails(answer):
     with pytest.raises(SystemExit, match="ask"):

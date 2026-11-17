@@ -8,7 +8,7 @@ import json
 import pytest
 
 from feldera import URL, deploy, processed, push, query, stop
-from rede_compiler import emit, facts, rules_sql, seal
+from rezono_compiler import emit, facts, rules_sql, seal
 from rules_support import RULED, name, states
 from support import compile_dir
 
@@ -21,13 +21,13 @@ def updates(model, rows, weight):
 
 @pytest.mark.parametrize("example", RULED, ids=name)
 def test_incremental_on_feldera_equals_batch(example, tmp_path):
-    from rede_compiler import scenarios
+    from rezono_compiler import scenarios
 
     files = compile_dir(example, tmp_path)
     model, prog, run = states(example)
     plan = json.loads(files["engine/pipelines.json"])
     assert len(plan["pipelines"]) == 1, "split packs are measured by the M2 probe; one pipeline here"
-    pipeline = f"rede-rules-{example.name}"
+    pipeline = f"rezono-rules-{example.name}"
     deploy(pipeline, "\n".join(files[f] for f in plan["pipelines"][0]["sql"]), profile="unoptimized", workers=2)
     params = {t: [{"insert": r} for r in rs] for t, rs in emit.parameters(model).items()}
     previous = {}

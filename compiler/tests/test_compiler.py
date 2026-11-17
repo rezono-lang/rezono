@@ -9,7 +9,7 @@ import pytest
 import yaml
 
 from support import FIXTURE, REPO, compile_dir, text, violations
-from rede_compiler import emit, facts, pack
+from rezono_compiler import emit, facts, pack
 
 
 def tree(d: Path) -> dict[str, bytes]:
@@ -42,12 +42,12 @@ def test_two_compiles_give_identical_bytes(tmp_path):
 
 def test_every_sql_writer_quotes_and_escapes_through_one_definition():
     """RV-M01: one `q` and one `literal`; the rule translator's own `q` left a `"` in a name unescaped."""
-    from rede_compiler import batch, calc_sql, checks, rules_split, rules_sql, seal, sqltext
+    from rezono_compiler import batch, calc_sql, checks, rules_split, rules_sql, seal, sqltext
     assert {m.q for m in (batch, calc_sql, checks, emit, rules_split, rules_sql, seal)} == {sqltext.q}
     assert {m.literal for m in (calc_sql, checks, emit, rules_sql)} == {sqltext.literal}
     assert sqltext.q('a"b') == '"a""b"' and sqltext.literal("it's") == "'it''s'"
     assert rules_sql.lit_sql("it's", "string") == "'it''s'"
-    from rede_compiler import calc, names, rules, views, writer
+    from rezono_compiler import calc, names, rules, views, writer
     assert {m.NAME for m in (pack, rules, views)} == {names.NAME}
     assert {m.ISO_DATE for m in (calc, rules, writer)} == {names.ISO_DATE}
 
@@ -197,7 +197,7 @@ def test_names_that_become_engine_names_are_validated(fixture, change, message):
 def test_an_enum_defined_in_two_schema_files_is_qualified_by_its_module(fixture):
     """Two modules that do not import each other may use one name; each keeps its own (docs/compiler.md)."""
     (fixture / "schema" / "second.yaml").write_text(yaml.safe_dump({
-        "id": "https://rede.example/second", "name": "second", "in_language": "nl",
+        "id": "https://rezono.example/second", "name": "second", "in_language": "nl",
         "imports": ["linkml:types"], "default_range": "string", "annotations": {"layer": "facts"},
         "enums": {"State": {"permissible_values": {"low": {}}}}}))
     (fixture / "labels" / "nl.yaml").write_text("alpha: alfa\n")
@@ -715,7 +715,7 @@ def test_embedded_ids_are_injective(fixture, tmp_path):
 
 def test_check_reads_the_pack_and_every_fact_file(fixture, capsys):
     """`check` is the quick test for a pack author: no compile, but the schema, labels, messages and facts."""
-    from rede_compiler.__main__ import main
+    from rezono_compiler.__main__ import main
     (fixture / "facts").mkdir()
     (fixture / "facts" / "good.yaml").write_text("alpha: [{id: a, title: t}]\n")
     assert main(["check", str(fixture)]) == 0
@@ -1021,7 +1021,7 @@ def test_an_installed_compiler_reads_the_contracts_it_carries(tmp_path):
     (src / "contracts").mkdir(parents=True)
     for p in pack.CONTRACTS.glob("*.yaml"):
         shutil.copy(p, src / "contracts" / p.name)
-    shutil.copytree(repo / "compiler" / "rede_compiler", src / "compiler" / "rede_compiler",
+    shutil.copytree(repo / "compiler" / "rezono_compiler", src / "compiler" / "rezono_compiler",
                     ignore=shutil.ignore_patterns("__pycache__"))
     for name in ("pyproject.toml", "setup.py"):
         shutil.copy(repo / "compiler" / name, src / "compiler" / name)
@@ -1029,16 +1029,16 @@ def test_an_installed_compiler_reads_the_contracts_it_carries(tmp_path):
     work.mkdir()
     subprocess.run([sys.executable, "-m", "pip", "install", "-q", "--no-deps", "--no-build-isolation", "--no-index",
                     "--target", str(site), str(src / "compiler")], cwd=work, check=True)
-    shipped = site / "rede_compiler" / "contracts"
+    shipped = site / "rezono_compiler" / "contracts"
     assert tree(shipped) == {p.name: p.read_bytes() for p in sorted(pack.CONTRACTS.glob("*.yaml"))}
     # The installed copy first; the dependencies from this interpreter's path, without the checkout's compiler.
     own = Path(pack.__file__).resolve().parents[1]
     path = [str(site)] + [p for p in sys.path if p and Path(p).resolve() != own]
     env = {**os.environ, "PYTHONPATH": os.pathsep.join(path)}
-    probe = "from rede_compiler import pack; print(pack.__file__); print(pack.contract_dir())"
+    probe = "from rezono_compiler import pack; print(pack.__file__); print(pack.contract_dir())"
     where = subprocess.run([sys.executable, "-c", probe], cwd=work, env=env, capture_output=True, text=True, check=True)
-    assert [Path(line).resolve() for line in where.stdout.splitlines()] == [site / "rede_compiler" / "pack.py", shipped]
-    subprocess.run([sys.executable, "-m", "rede_compiler", "compile", str(FIXTURE), str(work / "out")], cwd=work, env=env,
+    assert [Path(line).resolve() for line in where.stdout.splitlines()] == [site / "rezono_compiler" / "pack.py", shipped]
+    subprocess.run([sys.executable, "-m", "rezono_compiler", "compile", str(FIXTURE), str(work / "out")], cwd=work, env=env,
                    check=True)
     expected, out = tmp_path / "expected", tree(work / "out")
     compile_dir(FIXTURE, expected)  # the CLI writes generated/sources.json beside these

@@ -1,0 +1,20 @@
+id: R15
+class: valid
+status: settled
+schema:
+  from: fixture.schema.json
+form: jsonl
+input: '{"$schema": "s-27edc0ea5ccdaa8c2c73c5a51b3e2ed44d5399b2199d6993c03a031b07a7562a", "rezono": "1.0"}
+
+  {"$kind": "Host", "$id": "host-a", "memory_need": "400 GiB", "owner": {"$unknown": "not_assigned"}, "tags": ["gpu", "lab"],
+  "$why": {"memory_need": "rezono:w/91c2"}}
+
+  {"$kind": "Host", "$id": "host-b", "memory_need": {"$unknown": ""}, "owner": {"$na": ""}, "tags": []}
+
+  '
+expect:
+  accept: true
+  same_rows_as: R01
+note: 'JSON Lines: a header, then the two rows of R01.'
+sources:
+- '#369 L0 rev 2 §8'

@@ -1,13 +1,13 @@
-id: https://rede.dev/contracts/source
-name: rede_source
+id: https://rezono.org/contracts/source
+name: rezono_source
 title: Sources of facts
 description: >-
   Where a base row comes from, separate from the proof that derives a conclusion (S25).
   A source is a locator, not content; the same shape serves pack facts and observations.
 prefixes:
   linkml: https://w3id.org/linkml/
-  rede: https://rede.dev/contracts/
-default_prefix: rede
+  rezono: https://rezono.org/contracts/
+default_prefix: rezono
 default_range: string
 imports:
   - linkml:types
