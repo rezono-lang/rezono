@@ -126,7 +126,8 @@ jobs:
           printf 'Dir::Cache::archives "%s";\nAPT::Keep-Downloaded-Packages "true";\n' "$archives" |
             sudo tee /etc/apt/apt.conf.d/99-rezono-oracle-cache > /dev/null
           bash scripts/install-souffle.sh
-          cp "$archives"/*.deb "$RUNNER_TEMP"/*souffle*.deb "$packages/"
+          find "$archives" -maxdepth 1 -type f -name '*.deb' -exec cp -t "$packages" -- {} +
+          cp "$RUNNER_TEMP"/*souffle*.deb "$packages/"
           (cd "$packages" && sha256sum ./*.deb > SHA256SUMS)
       - name: Generate contract types
         if: steps.types.outputs.cache-hit != 'true'
