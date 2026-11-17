@@ -2,12 +2,14 @@
 import argparse
 import hashlib
 import json
+import os
 import subprocess
 import sys
 import time
 import tempfile
 import xml.etree.ElementTree as ET
 
+from components import discover_python_packages
 from red_list import ROOT, extract_red_tests_from_source
 
 
@@ -39,12 +41,17 @@ def main() -> int:
                 if v.get("only", "python") == "python"]
         sample = sorted(pool, key=lambda case: hashlib.sha256(
             (args.task + "\0" + case).encode()).digest())[:3]
+        paths = [str(ROOT / folder) for folder in discover_python_packages()]
+        env = os.environ.copy()
+        if env.get("PYTHONPATH"):
+            paths.append(env["PYTHONPATH"])
+        env["PYTHONPATH"] = os.pathsep.join(paths)
         print(f"Task: {node}", flush=True)
         with tempfile.TemporaryDirectory() as directory, log.open("w", encoding="utf-8") as output:
             report = f"{directory}/results.xml"
             result = subprocess.run([sys.executable, "-m", "pytest", "-q", "--runxfail", f"--junitxml={report}",
                                      node, *sample], cwd=ROOT, stdout=output,
-                                    stderr=subprocess.STDOUT, timeout=115)
+                                    stderr=subprocess.STDOUT, env=env, timeout=115)
             if result.returncode:
                 raise ValueError(f"pytest exited with {result.returncode}")
             tests = ET.parse(report).findall(".//testcase")

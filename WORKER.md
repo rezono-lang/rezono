@@ -10,7 +10,7 @@ Make exactly one red test green: `<test id>`.
 - Read this card, the root `AGENTS.md`, and the `AGENTS.md` of the folder you work in.
 - You may write in the component reported by `python scripts/red_list.py --json` and in the source or fixtures the expectation explicitly requires.
 
-Use the exact id from `python scripts/red_list.py` wherever this card says `<test id>`. Configure this checkout with `git config user.name vdo89` and `git config user.email 222310762+vdo89@users.noreply.github.com`. Use Bash from the repository root. On Ubuntu with the Python version in requirements/.python-version, prepare a virtual environment once:
+Use the exact id from `python scripts/red_list.py` wherever this card says `<test id>`. Configure this checkout with `git config user.name vdo89` and `git config user.email 222310762+vdo89@users.noreply.github.com`. Run commands from the repository root. The quick check adds the discovered source packages to the Python path automatically. If the test dependencies are available, start directly with the quick check on any platform. The command examples below use Bash. For a fresh environment on Ubuntu with the Python version in requirements/.python-version, prepare a virtual environment once:
 
 ```bash
 python -m venv .venv
@@ -22,7 +22,7 @@ done
 bash contracts/gen-types.sh
 ```
 
-Fetch origin/main before removing the mark. Open the PR with `gh pr create --base main` and request automatic merging with `gh pr merge --auto --squash --author-email 222310762+vdo89@users.noreply.github.com`.
+Fetch origin/main before removing the mark. Open the PR with `gh pr create --base main` and request automatic merging with `gh pr merge --auto --squash --author-email 222310762+vdo89@users.noreply.github.com`. If GitHub rejects an explicit author address on a pending pull request, use the repository account?s verified private-email setting and retry with `gh pr merge --auto --squash`.
 
 ## Steps
 
