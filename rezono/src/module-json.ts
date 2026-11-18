@@ -33,7 +33,8 @@ function formatOf(module: Module): ModuleForm['format'] {
 	const extended = module.schema !== undefined || module.decls.some(decl => {
 		if ('kind' in decl) {
 			return decl.abstract || decl.embedded || hasMetadata(decl)
-				|| decl.slots.some(slot => slot.identifier || slot.embedded || slot.slotUri !== undefined || hasMetadata(slot));
+				|| decl.slots.some(slot => slot.identifier || slot.embedded || slot.slotUri !== undefined
+					|| slot.constraints !== undefined || hasMetadata(slot));
 		}
 		return 'enum' in decl && (decl.memberMetadata !== undefined || hasMetadata(decl));
 	});

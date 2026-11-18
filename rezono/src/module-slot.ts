@@ -1,4 +1,5 @@
 import { printMetadata, readMetadataLine, type Metadata } from './module-metadata.ts';
+import { printNumericSlotBound, readNumericSlotBound, type NumericSlotBound } from './module-slot-numeric.ts';
 import { block, named, opt, printWorld, typeOf, type Build, type Card, type Line, type Logical, type World, type ModuleComponent } from './module-support.ts';
 
 export interface SlotDecl extends Metadata {
@@ -10,13 +11,15 @@ export interface SlotDecl extends Metadata {
 	identifier?: true;
 	embedded?: true;
 	slotUri?: string;
+	constraints?: NumericSlotBound[];
 }
 
 export function readSlot(line: Logical, build: Build): SlotDecl {
 	const slot = build.strip<SlotDecl>(line.read!);
 	for (const child of line.block) {
 		if (readMetadataLine(slot, child, build)) continue;
-		if (child.read!.line !== 'iri') build.refuse(child, 'no line under this one');
+		if (child.read!.line === 'slot-numeric-bound') readNumericSlotBound(child, build, slot.constraints ??= []);
+		else if (child.read!.line !== 'iri') build.refuse(child, 'no line under this one');
 		else {
 			build.leaf(child);
 			if (slot.slotUri !== undefined) build.refuse(child, 'one slot IRI');
@@ -30,7 +33,8 @@ export function readSlot(line: Logical, build: Build): SlotDecl {
 export function printSlot(s: SlotDecl): string[] {
 	return block(`${s.slot}: ${s.type}${s.card ?? ''}${s.inverse !== undefined ? ` inverse ${s.inverse}` : ''}${printWorld(s.world)}${s.identifier ? ' identifier' : ''}${s.embedded ? ' embedded' : ''}`, [
 		...(s.slotUri === undefined ? [] : [`iri ${JSON.stringify(s.slotUri)}`]),
-		...printMetadata(s)
+		...printMetadata(s),
+		...(s.constraints ?? []).map(printNumericSlotBound)
 	]);
 }
 
