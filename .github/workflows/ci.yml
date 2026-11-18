@@ -192,10 +192,11 @@ jobs:
           WORKER_BRANCH: ${{ github.head_ref }}
           TASK_BASE: ${{ github.event.merge_group.base_sha || (startsWith(github.head_ref, 'task/') && github.event.pull_request.base.sha) || '' }}
           CANDIDATE_BASE: ${{ github.event.merge_group.base_sha || github.event.pull_request.base.sha }}
+          PULL_HEAD: ${{ github.event.pull_request.head.sha }}
         run: |
           set -euo pipefail
           python scripts/cluster_worker_tasks.py "$RUNNER_TEMP/inventory" --worker "$WORKER_BRANCH" \
-            --base "$TASK_BASE" --diff-base "$CANDIDATE_BASE" >> "$GITHUB_OUTPUT"
+            --base "$TASK_BASE" --diff-base "$CANDIDATE_BASE" --pull-head "$PULL_HEAD" >> "$GITHUB_OUTPUT"
 
   cluster_worker:
     needs: discover

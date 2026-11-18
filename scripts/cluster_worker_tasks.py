@@ -82,10 +82,26 @@ def touches_fixture(base: str, cluster: set[str]) -> bool:
     return False
 
 
-def route(cluster: set[str], *, worker: str = "", base: str = "", diff_base: str = "") -> tuple[str, list[str]]:
+def candidate_diff_base(base: str, pull_head: str) -> str:
+    """Use an advanced base only when HEAD is the synthetic merge of this exact pull request."""
+    if not pull_head:
+        return base
+    parents = git("show", "-s", "--format=%P", "HEAD").decode("ascii").split()
+    if len(parents) != 2 or parents[1] != pull_head or parents[0] == base:
+        return base
+    try:
+        git("merge-base", "--is-ancestor", base, parents[0])
+    except subprocess.CalledProcessError:
+        return base
+    return parents[0]
+
+
+def route(cluster: set[str], *, worker: str = "", base: str = "", diff_base: str = "",
+          pull_head: str = "") -> tuple[str, list[str]]:
     if diff_base:
         diff_base = git("rev-parse", "--verify", "--end-of-options", f"{diff_base}^{{commit}}").decode().strip()
         git("merge-base", "--is-ancestor", diff_base, "HEAD")
+        diff_base = candidate_diff_base(diff_base, pull_head)
     if worker.startswith("task/"):
         task = worker.removeprefix("task/")
         tasks = [task] if needs_fixture(resolve(task, base or diff_base or "origin/main"), cluster) else []
@@ -106,10 +122,12 @@ def main() -> None:
     parser.add_argument("--worker", default="")
     parser.add_argument("--base", default="")
     parser.add_argument("--diff-base", default="", help="Enable full-suite routing for changes against this candidate base")
+    parser.add_argument("--pull-head", default="", help="Source SHA for a GitHub pull request merge checkout")
     args = parser.parse_args()
     cluster = {node for path in args.inventory.rglob("items.json")
                for node in json.loads(path.read_text(encoding="utf-8"))["cluster"]}
-    mode, tasks = route(cluster, worker=args.worker, base=args.base, diff_base=args.diff_base)
+    mode, tasks = route(cluster, worker=args.worker, base=args.base, diff_base=args.diff_base,
+                        pull_head=args.pull_head)
     print(f"mode={mode}")
     print("tasks=" + ("" if mode == "suite" else json.dumps(tasks)))
 
