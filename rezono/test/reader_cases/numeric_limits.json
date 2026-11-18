@@ -1,0 +1,24 @@
+{
+  "source": "kind Task\n  estimate: Int?\n    minimum 1\n    maximum 200",
+  "declarations": [
+    {
+      "kind": "Task",
+      "slots": [
+        {
+          "slot": "estimate",
+          "type": "Int",
+          "card": "?",
+          "constraints": [
+            {
+              "minimum": "1"
+            },
+            {
+              "maximum": "200"
+            }
+          ]
+        }
+      ],
+      "derived": []
+    }
+  ]
+}

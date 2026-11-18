@@ -1,0 +1,16 @@
+{
+  "source": "kind Branch\n  code: Text identifier",
+  "declarations": [
+    {
+      "kind": "Branch",
+      "slots": [
+        {
+          "slot": "code",
+          "type": "Text",
+          "identifier": true
+        }
+      ],
+      "derived": []
+    }
+  ]
+}

@@ -1,0 +1,16 @@
+{
+  "source": "kind Staff is Person\n  branch: Branch",
+  "declarations": [
+    {
+      "kind": "Staff",
+      "slots": [
+        {
+          "slot": "branch",
+          "type": "Branch"
+        }
+      ],
+      "derived": [],
+      "parent": "Person"
+    }
+  ]
+}
