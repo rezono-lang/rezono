@@ -1,9 +1,10 @@
 """Verify standalone exports with LinkML's own reader and compare complete normalized bundles."""
 
-import hashlib
+import json
 from pathlib import Path
 import shutil
 
+import yaml
 from linkml.validator import validate
 from linkml_runtime.utils.schemaview import SchemaView
 
@@ -24,11 +25,32 @@ def exported(source, dest):
     return dest / (pack.read_meta(source)["name"] + ".yaml")
 
 
+def compiled_bundle(source):
+    return emit.compile_pack(pack.read(source))["bundle/schema-bundle.json"]
+
+
+def library_semantics(text, source):
+    """Compare each relocated schema span by the actual YAML key it still points to."""
+    schema = "schema/library.yaml"
+    tokens = {
+        (str(token.start_mark.line + 1), str(token.start_mark.column + 1)): token.value
+        for token in yaml.scan((source / schema).read_text(encoding="utf-8"))
+        if isinstance(token, yaml.ScalarToken)
+    }
+    bundle = json.loads(text)
+    for section in ("kinds", "arrows", "attributes", "unique_keys", "path_equations"):
+        for row in bundle[section]:
+            for owner in (row, row.get("sentence", {})):
+                span = owner.get("span")
+                if span and span["file"] == schema:
+                    span["line"] = tokens[span["line"], span["column"]]
+    return json.dumps(bundle, sort_keys=True)
+
+
 def rebuilt(source, root, dest):
     shutil.copytree(source, dest, ignore=shutil.ignore_patterns("schema"))
     linkml_schema.write(root, dest)
-    text = emit.compile_pack(pack.read(dest))["bundle/schema-bundle.json"]
-    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+    return compiled_bundle(dest)
 
 
 def test_library_round_trip_preserves_the_complete_normalized_bundle(tmp_path):
@@ -38,6 +60,7 @@ def test_library_round_trip_preserves_the_complete_normalized_bundle(tmp_path):
     assert view.induced_slot("title", "Work").required
     first = tmp_path / "first"
     initial = rebuilt(LIBRARY, root, first)
+    assert library_semantics(compiled_bundle(LIBRARY), LIBRARY) == library_semantics(initial, first)
     root = exported(first, tmp_path / "two")
     second = rebuilt(first, root, tmp_path / "second")
     assert initial == second

@@ -3,7 +3,6 @@ import pytest
 from case_support import ROOT, engine
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError, reason="Move the five zone/role literals from examples/platform/rules/core.dl to typed attributes in its core schema and facts. Read decisions/platform-derivation-acceptance.md.")
 def test_renaming_roles_and_zones_preserves_findings():
     from rezono_compiler import scenarios
     from rules_support import State, states

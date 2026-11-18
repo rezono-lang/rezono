@@ -18,3 +18,12 @@ active: selected run
 completion: step completion declaration
 expectation: expected token value
 observed: recorded token observation
+loop_requirement: prerequisite declaration
+loop_requirement.run: run
+loop_requirement.step: step
+loop_requirement.token: required token
+loop_requirement.reason: prerequisite evidence
+loop_refusal: terminal refusal
+loop_refusal.run: run
+loop_refusal.step: refused step
+loop_refusal.reason: refusal evidence

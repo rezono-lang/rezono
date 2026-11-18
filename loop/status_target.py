@@ -2,6 +2,11 @@
 
 import re
 from collections.abc import Mapping
+from typing import TypeGuard
+
+
+def is_commit_sha(value: object) -> TypeGuard[str]:
+    return isinstance(value, str) and re.fullmatch(r"[0-9a-f]{40}", value) is not None
 
 
 def target(proposal: Mapping[str, object]) -> str | None:
@@ -10,6 +15,6 @@ def target(proposal: Mapping[str, object]) -> str | None:
         return None
 
     commit = proposal.get("commit")
-    if not isinstance(commit, str) or not re.fullmatch(r"[0-9a-f]{40}", commit):
+    if not is_commit_sha(commit):
         raise ValueError("accepted proposal requires a full lowercase Git commit object ID")
     return commit
