@@ -351,8 +351,6 @@ def render_native_rules(root, packs, ready):
         f"Keep the legacy rule where a general scalar state lacks authenticated evidence. {states}",
         "The census cannot infer general state checks from a legacy file. Ordinary relation negation and explicit outcome values are separate.",
         state_summary,
-        "For example, [the subsidy assessment](../../examples/subsidy-scheme/rules/assessment.dl) derives an explicit outcome,",
-        "and [its findings](../../examples/subsidy-scheme/rules/findings.dl) read a known-only calculation selection.",
         "",
         "| Pack or source directory | Direct legacy files | Direct native files | General state evidence |",
         "| --- | ---: | ---: | --- |",
