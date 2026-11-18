@@ -20,7 +20,7 @@ from rezono_canon import canonical_json
 from rezono_compiler import operate, sources, writer
 from rezono_compiler import pack as packs
 from operation_source_support import companion, library, origin, per_record  # noqa: F401
-from test_operate import COMBINE, DROPS, MOVES, RENAMES, SPLIT, combine_ops, files, move_ops, run, \
+from operation_cases import COMBINE, DROPS, MOVES, RENAMES, SPLIT, combine_ops, files, move_ops, run, \
     split_ops
 
 
