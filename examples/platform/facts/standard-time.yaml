@@ -1,0 +1,6 @@
+axis:
+  - {id: support-days}
+platform_support_period:
+  - {id: support, on_axis: support-days, start: 1}
+reference_point:
+  - {id: day-three, on_axis: support-days, position: 3, horizon: 1}
