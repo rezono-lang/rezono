@@ -120,8 +120,11 @@ def request_rows(teams_path, catalog):
             target = connection["target"]
             if not isinstance(target, str) or not target.strip():
                 raise ValueError("connection target must be nonempty text")
+            port = connection["port"]
+            if type(port) is not int or not 1 <= port <= 65535:
+                raise ValueError("connection port must be an integer from 1 to 65535")
             row = {"id": f"{request_id}/{index}", **scope, "target_zone": target_zone,
-                   "target": target, "port": connection["port"]}
+                   "target": target, "port": port}
             if "peer" in connection:
                 peer = name(connection["peer"], "peer")
                 if peer not in teams:
