@@ -13,6 +13,39 @@
       "required": ["rows"],
       "properties": {
         "rows": {"type": "array", "items": {"type": "object"}},
+        "role_worlds": {
+          "type": "object",
+          "required": ["output", "clauses", "worlds"],
+          "additionalProperties": false,
+          "properties": {
+            "output": {"type": "string", "pattern": "^[a-z][a-z0-9_]*(?![\\s\\S])"},
+            "clauses": {"type": "string", "pattern": "\\S"},
+            "worlds": {
+              "type": "array",
+              "minItems": 2,
+              "maxItems": 2,
+              "items": {
+                "type": "object",
+                "required": ["name", "added_rows"],
+                "additionalProperties": false,
+                "properties": {
+                  "name": {"type": "string", "pattern": "^[a-z][a-z0-9_-]*(?![\\s\\S])"},
+                  "added_rows": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "required": ["kind", "id"],
+                      "properties": {
+                        "kind": {"type": "string", "minLength": 1},
+                        "id": {"type": "string", "minLength": 1}
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
         "select": {
           "type": "object",
           "required": ["kind", "id"],
