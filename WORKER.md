@@ -37,9 +37,13 @@ Fetch origin/main before removing the mark. Open the pull request with `gh pr cr
    - The push is rejected with "stale info" or "already exists": someone else has the task. Stop and report "taken".
    - The push fails in any other way: report the error. Do not report "taken".
 3. **Make the test pass.** Do not change what the test expects.
-4. **Remove the test's "expected to fail" mark.**
+4. **Remove the test's "expected to fail" mark.** Keep every other line of the test file exactly as written, including `import pytest` if removing the last mark leaves it unused.
 5. **Run the fast check:** `python scripts/fast_check.py "<test id>"`. It always runs your test. It prints at most twenty lines; the rest is in `.fast-check.log`. Search the log for lines that start with `ERROR`.
-6. **Commit and push** to your task branch. Push as soon as you have a commit: a task branch with no push for four hours and no pull request is given to someone else.
+6. **Commit your changes and check the committed diff before pushing.** Run this read-only policy check from the repository root:
+   ```bash
+   git fetch origin && python -I scripts/red_guard.py "$(git merge-base origin/main HEAD)" HEAD
+   ```
+   If it reports an error, correct the test-file edit, commit the correction and run the check again. Push promptly after it passes. A task branch with no push for four hours and no pull request is released.
    If a push to your task branch is rejected, your claim has expired and the task is no longer yours. Stop and report "lost"; do not force the push.
 7. **Open a pull request, ready for review,** and turn on auto-merge if the repository offers it. Say what changed and how you checked it.
 

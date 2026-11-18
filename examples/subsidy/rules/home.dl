@@ -1,0 +1,5 @@
+// The day on which the scheme is evaluated.
+.decl scheme_evaluation_day(day: symbol)
+scheme_evaluation_day(d) :- evaluation_day(d).
+
+.output scheme_evaluation_day
