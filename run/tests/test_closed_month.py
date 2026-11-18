@@ -40,7 +40,6 @@ def test_closed_month_reference(tmp_path):
     assert FileStore(tmp_path).get(sha256(FIRST).hexdigest()) == FIRST
 
 
-@pytest.mark.xfail(strict=True, reason="Read decisions/run-closed-month.md. Implement run/closed_month.py with immutable publication lookup, exact UTC allocation and close-scoped late findings.")
 def test_closed_month(tmp_path):
     from rezono_publisher.store import FileStore
 
