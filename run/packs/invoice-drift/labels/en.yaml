@@ -2,7 +2,8 @@ expected_line: Priced item
 expected_line.plan_hash: Priced plan digest
 expected_line.item: Priced item identifier
 expected_line.currency: Expected currency
-expected_line.minor: Expected amount in minor units
+expected_line.sign: Exact price sign
+expected_line.floor_minor: Proposed signed floor of the price magnitude in minor units
 expected_line.rounding_sha256: Applied rounding term digest
 invoice_line: Invoice line
 invoice_line.plan_hash: Observed plan digest
@@ -24,3 +25,64 @@ bound_invoice: Bound invoice line
 invoice_binding_count: Observed lines matching a priced item
 amount_difference: Invoice amount difference
 unbound_invoice: Unbound invoice line
+rounding_digit: Exact price or remainder digit
+rounding_digit.line: Priced line reference
+rounding_digit.part: Part of the decimal certificate
+rounding_digit.position: Decimal position from the units place
+rounding_digit.digit: Decimal digit
+rounding_digit.last: Most significant digit marker
+rounding_word: Signed word suffix
+rounding_word.line: Priced line reference
+rounding_word.part: Minor unit factor or signed floor
+rounding_word.position: Decimal position from the units place
+rounding_word.remaining: Signed quotient after dropping lower digits
+rounding_carry: Decimal equality carry
+rounding_carry.line: Priced line reference
+rounding_carry.equation: Equation checked at this position
+rounding_carry.position: Decimal position from the units place
+rounding_carry.carry: Incoming signed carry
+checked_column: Checked decimal column equality
+checked_equation: Verified exact decimal equality
+verified_rounding: Verified signed rounded minor amount
+bad_carry: Incomplete or conflicting carry sequence
+bad_digits: Incomplete or conflicting decimal digits
+bad_words: Incomplete or conflicting word suffixes
+carry_at: Recorded carry position
+carry_cell: Bounded carry into a decimal column
+checked_prefix: Verified prefix of a decimal equality
+coefficient: Contribution to a decimal equality column
+comparison_digit: Decimal digit with zero padding for comparison
+comparison_position: Position in the remainder or its gap
+digit_at: Recorded decimal position
+digit_cell: Valid digit at a decimal position
+digit_end: End of a decimal magnitude
+digit_end.last: Most significant digit
+digit_end.more: Higher digit required
+exact_floor: Verified signed floor and position relative to a tie
+exact_part: Exact decimal magnitude
+exact_part.denominator: Exact price denominator
+exact_part.gap: Remaining distance to the denominator
+exact_part.numerator: Exact numerator magnitude
+exact_part.remainder: Remainder after division
+gap_positive: Positive distance to the denominator
+half_position: Position relative to the half-unit threshold
+later_unequal_digit: More significant differing digit
+price_sign: Exact price sign
+price_sign.negative: Negative price
+price_sign.nonnegative: Zero or positive price
+round_away: Increase the magnitude by one minor unit
+rounding_equation: Exact decimal equality
+rounding_equation.complement: Denominator equals remainder plus gap
+rounding_equation.division: Scaled numerator equals floor times denominator plus remainder
+rounding_mode: Supported line rounding mode
+rounding_neighbor: Adjacent decimal positions
+signed_floor: Proposed floor with the exact price sign
+unequal_digit: Difference at a decimal position
+unequal_magnitudes: Different remainder and gap
+word_at: Recorded machine-word position
+word_cell: Signed word suffix at a decimal position
+word_digit: Magnitude of a signed word digit
+word_part: Signed machine-word operand
+word_part.floor: Proposed signed floor
+word_part.units: Minor units per billing unit
+word_step: One checked constant-division step

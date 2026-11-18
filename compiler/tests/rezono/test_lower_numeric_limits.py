@@ -5,7 +5,7 @@ from model_parity import compare_input, kind, slot
 
 @pytest.mark.xfail(
     strict=True, raises=AssertionError,
-    reason="Implement lower numeric limits in compiler/rezono_compiler/rezono_module.py. Read decisions/language-slots.md. Waits for test_lower_scalar_alias (same compiler lowering module).",
+    reason="Implement lower numeric limits in compiler/rezono_compiler/rezono_module.py. Read decisions/language-slots.md. Waits for test_lower_explicit_identifier while it owns the shared lowering module. Use the file priority in docs/rezono/language-coverage.md.",
 )
 def test_lower_numeric_limits(tmp_path):
     decl = kind("Task", slot("estimate", "Int", card="?", constraints=[{"minimum": "1"}, {"maximum": "200"}]))

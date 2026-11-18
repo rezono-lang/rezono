@@ -160,9 +160,6 @@ def run(case):
 SETTLED = sorted(i for i, c in FILES.items() if c["status"] == "settled" and i not in ELSEWHERE)
 
 
-@pytest.mark.xfail(strict=True, raises=FileNotFoundError, reason=(
-    "Needs docs/publication/cases/schema.json. See decisions/publication-case-pins.md for the case envelope."
-))
 def test_every_case_file_is_a_valid_case():
     envelope = json.loads((CASES / "schema.json").read_text("utf-8"))
     jsonschema.Draft202012Validator.check_schema(envelope)

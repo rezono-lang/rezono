@@ -33,7 +33,7 @@ def inputs(view_inputs, tmp_path, monkeypatch):
                 checkpoints=private.copy(), destination=destination)
 
 
-@pytest.mark.xfail(strict=True, reason="viewer/src/lib is not in the standalone repository")
+@pytest.mark.xfail(strict=True, reason="later: tekenweergaven")
 def test_receipt_binds_exact_manifest_capture_commitments_and_payloads(inputs):
     before = copy.deepcopy(inputs)
     result = candidates.commit_archive(**inputs)
@@ -55,7 +55,7 @@ def test_receipt_binds_exact_manifest_capture_commitments_and_payloads(inputs):
     assert any("view-aware" in e for e in kept.verify(inputs["pack_dir"], inputs["target"], inputs["manifest_key"], result.directory / "no-replay"))
 
 
-@pytest.mark.xfail(strict=True, reason="viewer/src/lib is not in the standalone repository")
+@pytest.mark.xfail(strict=True, reason="later: tekenweergaven")
 @pytest.mark.parametrize("after", [1, 2])
 def test_interrupted_pair_is_not_committed_and_same_retry_completes(inputs, monkeypatch, after):
     real, calls = candidates._put_new, []
@@ -75,7 +75,7 @@ def test_interrupted_pair_is_not_committed_and_same_retry_completes(inputs, monk
     assert len(list(partial.iterdir())) == 3
 
 
-@pytest.mark.xfail(strict=True, reason="viewer/src/lib is not in the standalone repository")
+@pytest.mark.xfail(strict=True, reason="later: tekenweergaven")
 @pytest.mark.parametrize("part", ["tar.gz", "sha256", "receipt.json"])
 def test_existing_mismatch_is_never_overwritten(inputs, part):
     result = candidates.commit_archive(**inputs)
@@ -87,7 +87,7 @@ def test_existing_mismatch_is_never_overwritten(inputs, part):
     assert before == {p.name: p.read_bytes() for p in result.directory.iterdir()}
 
 
-@pytest.mark.xfail(strict=True, reason="viewer/src/lib is not in the standalone repository")
+@pytest.mark.xfail(strict=True, reason="later: tekenweergaven")
 def test_committed_missing_payload_is_corruption_not_an_implicit_repair(inputs):
     result = candidates.commit_archive(**inputs)
     next(result.directory.glob("*.tar.gz")).unlink()
@@ -96,7 +96,7 @@ def test_committed_missing_payload_is_corruption_not_an_implicit_repair(inputs):
     assert not list(result.directory.glob("*.tar.gz"))
 
 
-@pytest.mark.xfail(strict=True, reason="viewer/src/lib is not in the standalone repository")
+@pytest.mark.xfail(strict=True, reason="later: tekenweergaven")
 @pytest.mark.parametrize("damage", ["role", "base"])
 def test_both_existing_verifications_finish_before_any_candidate_output(inputs, damage):
     if damage == "role":
@@ -119,7 +119,7 @@ def test_both_existing_verifications_finish_before_any_candidate_output(inputs, 
     assert list(inputs["destination"].iterdir()) == []
 
 
-@pytest.mark.xfail(strict=True, reason="viewer/src/lib is not in the standalone repository")
+@pytest.mark.xfail(strict=True, reason="later: tekenweergaven")
 def test_inputs_are_copied_once_instead_of_reading_a_live_provider(inputs, monkeypatch):
     real = kept_views.archive
     def change_original(root, pack, target, key, checkpoints):
@@ -130,7 +130,7 @@ def test_inputs_are_copied_once_instead_of_reading_a_live_provider(inputs, monke
     assert (candidates.commit_archive(**inputs).directory / "receipt.json").exists()
 
 
-@pytest.mark.xfail(strict=True, reason="viewer/src/lib is not in the standalone repository")
+@pytest.mark.xfail(strict=True, reason="later: tekenweergaven")
 def test_same_build_and_archive_for_two_epochs_have_distinct_candidate_identity(inputs):
     manifest = json.loads(inputs["target"][inputs["manifest_key"]])
     manifest["snapshots"] = []
@@ -146,7 +146,7 @@ def test_same_build_and_archive_for_two_epochs_have_distinct_candidate_identity(
     assert first.directory != second.directory and a["manifest_sha256"] != b["manifest_sha256"]
 
 
-@pytest.mark.xfail(strict=True, reason="viewer/src/lib is not in the standalone repository")
+@pytest.mark.xfail(strict=True, reason="later: tekenweergaven")
 @pytest.mark.parametrize("location", ["checkout", "published", "relative"])
 def test_obvious_public_or_implicit_destinations_fail_closed(inputs, location):
     if location == "checkout":
@@ -160,7 +160,7 @@ def test_obvious_public_or_implicit_destinations_fail_closed(inputs, location):
         candidates.commit_archive(**inputs)
 
 
-@pytest.mark.xfail(strict=True, reason="viewer/src/lib is not in the standalone repository")
+@pytest.mark.xfail(strict=True, reason="later: tekenweergaven")
 def test_linked_destination_is_refused_without_touching_target(inputs):
     link = inputs["destination"].parent / "linked"
     try:

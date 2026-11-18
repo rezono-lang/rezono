@@ -1084,15 +1084,21 @@ def test_a_failed_golden_explains_itself_in_a_few_lines():
     assert len(golden.differences({"big.json": b"\n" + lines}, {"big.json": lines}).splitlines()) == 7
 
 
-@pytest.mark.xfail(strict=True, reason="generated expected/compiled goldens are not stored in git")
-def test_no_committed_manifest_hashes_an_always_full_file():
+def test_no_committed_manifest_hashes_an_always_full_file(monkeypatch):
     """A committed large-files.json never lists a file of FULL: such a file is read back from the golden, so a
     regeneration under an older golden.py must not leave it as a hash. Reads the goldens only."""
     import golden
 
     examples = REPO / "examples"
-    manifests = sorted(examples.glob(f"**/expected/compiled/{golden.MANIFEST}"))
-    assert manifests
-    hashed = [f"{m.relative_to(examples).as_posix()}: {e['path']}" for m in manifests
+    recorded = Path(__file__).resolve().parent / "fixtures" / "recorded-output" / golden.MANIFEST
+    manifests = [recorded, *sorted(examples.glob(f"**/expected/compiled/{golden.MANIFEST}"))]
+    hashed = [f"{m.relative_to(REPO).as_posix()}: {e['path']}" for m in manifests
               for e in json.loads(m.read_text(encoding="utf-8")) if e["path"] in golden.FULL]
     assert not hashed, hashed
+
+    bundle = '{"kinds":["Item"]}\n'
+    monkeypatch.setattr(golden, "LARGE", 8)
+    assert golden.golden({"bundle/schema-bundle.json": bundle, "engine/tables.sql": "SELECT 1;\n"}) == {
+        "bundle/schema-bundle.json": bundle.encode("utf-8"),
+        golden.MANIFEST: recorded.read_text(encoding="utf-8").encode("utf-8"),
+    }
