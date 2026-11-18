@@ -96,7 +96,7 @@ OVERFLOW = {
 
 @pytest.mark.parametrize("s, t, n, bad", [(MIN, str(2**63), str(2**62), True), ("-8", "8", "4", False)])
 def test_an_intermediate_value_outside_bigint_is_refused(s, t, n, bad):
-    """Review of #208: -2^63 / -1 is 2^63, outside BIGINT. Feldera and DuckDB stop there, so a proof that
+    """-2^63 / -1 is 2^63, outside BIGINT. Feldera and DuckDB stop there, so a proof that
     goes on (n = t / 2 fits again) must not pass. The same bound holds for +, - and *."""
     rows = {"size": [["e1", s]], "half": [["e1", n]]}
     manifest, read = world(rows)
@@ -110,7 +110,7 @@ def test_an_intermediate_value_outside_bigint_is_refused(s, t, n, bad):
 
 
 def test_a_constant_outside_bigint_is_refused():
-    """Review of #208: x = t - 2^63 (an operand no engine has: SQL casts it to BIGINT) is refused, even where
+    """x = t - 2^63 (an operand no engine has: SQL casts it to BIGINT) is refused, even where
     the result would fit. The compiler refuses the constant too (constant_out_of_range)."""
     rules = copy.deepcopy(IR)
     rules["rules"][1]["assignments"] = [{"var": "?x", "op": "sub", "left": "?t", "right": str(2**63)}]
@@ -122,7 +122,7 @@ def test_a_constant_outside_bigint_is_refused():
 
 
 def test_a_sum_outside_bigint_is_refused_before_it_is_used():
-    """Review of #208: the sum of 2^63 - 1 and 2^63 - 2 lies outside BIGINT, where every engine stops; what
+    """The sum of 2^63 - 1 and 2^63 - 2 lies outside BIGINT, where every engine stops; what
     follows from it (here t - 10) must not pass."""
     big = [["e1", "a", str(2**63 - 1)], ["e1", "b", str(2**63 - 2)]]
     total, excess = str(2**64 - 3), str(2**64 - 13)
@@ -161,7 +161,7 @@ def test_over_a_key_column_needs_the_wildcard():
 
 
 def test_a_missing_binding_of_a_calculated_variable_is_refused():
-    """Review of #13: without ?x the assignment and the head could not be checked; that never passes."""
+    """Without ?x the assignment and the head could not be checked; that never passes."""
     p = proof()
     p["witnesses"][1]["bindings"] = [b for b in p["witnesses"][1]["bindings"] if b["variable"] != "?x"]
     manifest, read = world()
@@ -170,7 +170,7 @@ def test_a_missing_binding_of_a_calculated_variable_is_refused():
 
 
 def test_two_aggregates_over_one_group_are_told_apart_by_position():
-    """Review of #13: a count and a sum over the same relation and group each keep their evidence."""
+    """A count and a sum over the same relation and group each keep their evidence."""
     rules = copy.deepcopy(IR)
     rule = rules["rules"][0]
     rule["head"]["terms"] = ["?e", "?t"]
@@ -193,7 +193,7 @@ def test_two_aggregates_over_one_group_are_told_apart_by_position():
 
 
 def test_a_proof_may_mix_aggregates_with_and_without_position():
-    """Second review of #13: `position` is optional; one aggregate with it and one without both count."""
+    """`position` is optional; one aggregate with it and one without both count."""
     rules = copy.deepcopy(IR)
     rule = rules["rules"][0]
     rule["aggregates"].insert(0, {"relation": "entry", "terms": ["?e"], "function": "count", "as": "?n", "stratum": "0"})

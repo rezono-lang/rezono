@@ -1,4 +1,4 @@
-"""A counter with an explicit bound (#351 P6.2): what the unrolled rule computes, and what happens at the bound.
+"""A counter with an explicit bound: what the unrolled rule computes, and what happens at the bound.
 
 The shape is a depth from seeds along steps, on the domain-free fixture pack. The batch backend is compared
 with a plain fixpoint of the rules as written (always) and with Soufflé on the rule text as written (the

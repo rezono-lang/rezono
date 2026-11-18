@@ -9,4 +9,4 @@ expect:
   reads_rows: false
 note: E02 in check-only mode.
 sources:
-- '#350 P10.2a §11'
+- rezono/src/check.ts

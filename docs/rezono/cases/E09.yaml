@@ -11,4 +11,4 @@ expect:
       end: 33
 note: Team is open.
 sources:
-- '#350 P10.2a §11'
+- rezono/src/check.ts

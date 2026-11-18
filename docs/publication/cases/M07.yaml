@@ -20,4 +20,4 @@ form: schema
 expect:
   change_class: patch
 sources:
-- '#369 L0 rev 2 §8'
+- publication/rezono_publication/l0.py, classify

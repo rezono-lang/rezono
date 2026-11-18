@@ -60,7 +60,7 @@ def found(text, **kw):
 
 
 def test_a_cell_turned_round_with_its_columns_is_found():
-    """P1 of #237: rows/z2 -> columns/z1 with columns [zb, za] is the row (z1, z2) read backwards. As rows it holds;
+    """rows/z2 -> columns/z1 with columns [zb, za] is the row (z1, z2) read backwards. As rows it holds;
     the binding says from is za and to is zb, so it is refused."""
     found("is not of the Matrix's source", edges=[*EDGES, CELL("z2", "z1", columns=["zb", "za"])])
 
@@ -77,7 +77,7 @@ def test_a_cell_from_a_column_to_a_row_is_found():
 
 
 def test_a_head_whose_id_is_not_its_axis_and_element_is_found():
-    """P1 of #237: a page shows a node's id, so the id is the element it shows: a head `rows/zone/z2` that says it
+    """A page shows a node's id, so the id is the element it shows: a head `rows/zone/z2` that says it
     shows z1, or a node named after nothing, is refused."""
     found("is no head rows/<element>", nodes=changed(NODES, 1, of="zone/z1"))
     other = changed(NODES, 1, id="zone/hidden")
@@ -90,7 +90,7 @@ def test_a_head_of_an_element_of_another_kind_is_found():
 
 
 def test_nodes_that_show_other_elements_on_a_sheet_that_is_no_matrix_are_found():
-    """P1 of #237: on a Flow a node `zone/hidden` that says it shows `zone/z1` would put a hidden id on the page."""
+    """On a Flow a node `zone/hidden` that says it shows `zone/z1` would put a hidden id on the page."""
     nodes = [{"id": "zone/hidden", "of": "zone/z1", "x": 0, "y": 0, "width": 40, "height": 40, "status": "valid"}]
     found("only a Matrix has such nodes", nodes=nodes, edges=[], sheet="flow.zones")
     found("no Matrix of the bundle has this sheet", sheet="matrix.nothing")

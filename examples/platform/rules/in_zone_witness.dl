@@ -1,0 +1,6 @@
+.decl in_zone_witness(zone: symbol, source: symbol, target: symbol, function: symbol, port: number)
+
+in_zone_witness(zone, source, target, function, port) :-
+    flow(source, target, function, port),
+    zone_of(source, zone),
+    zone_of(target, zone).

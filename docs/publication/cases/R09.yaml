@@ -16,4 +16,4 @@ expect:
   accept: false
   error: tags allows only known
 sources:
-- '#369 L0 rev 2 §8'
+- publication/rezono_publication/l0.py, read_row

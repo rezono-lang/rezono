@@ -1,4 +1,4 @@
-# Expected outcomes for the zorgtoeslag pack (zorgtoeslag.rezono, data in facts.rezono). #401 D28.
+# Expected outcomes for the zorgtoeslag pack (zorgtoeslag.rezono, data in facts.rezono).
 #
 # Each case asks one thing of the pack and gives the expected result:
 #   value     a derived value of one subject: `subject.slot`; expect `value` (Rezono literal) or `state` + `reason`
@@ -11,7 +11,7 @@
 # `as_known` is the knowledge cut (v0 §5a rule 3); without it the cut is `knowledge` below.
 # `correction` is the correction row of a sealed month (v0 §5a): sealed value, current value, the version that
 # changed it. Its relation and form are v0 open point 4, so this field is provisional.
-# `uses` names the v0 constructs the case exercises (section numbers of the v0 reference on #350).
+# `uses` names the v0 constructs the case exercises (section numbers of the v0 reference).
 # `evidence` says what kind of claim a case makes:
 #   current   the outcome for the pack as written today. Z20: the pack does not compile in v0 (one R015, the
 #             time selection; its two decision tables are read); and Z22: so only the file of

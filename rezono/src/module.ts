@@ -81,6 +81,7 @@ export interface SlotDecl {
 	card?: Card;
 	inverse?: string;
 	world?: World;
+	identifier?: true;
 }
 export interface DerivedDecl {
 	derived: string;
@@ -96,6 +97,7 @@ export interface DerivedDecl {
 }
 export interface KindDecl {
 	kind: string;
+	embedded?: true;
 	world?: World;
 	applies?: { axis: 'at' | 'during' | 'in'; slot: string };
 	sealed?: string;
@@ -194,7 +196,7 @@ semantics.addOperation<unknown>('decl', {
 		if (value.numChildren) decl.value = optTree(value);
 		return named(n, decl);
 	},
-	KindLine: (_k, t, world) => named(t, { line: 'kind', kind: t.sourceString, ...(world.numChildren ? { world: world.child(0).decl() } : {}) }),
+	KindLine: (embedded, _k, t, world) => named(t, { line: 'kind', kind: t.sourceString, ...(embedded.numChildren ? { embedded: true } : {}), ...(world.numChildren ? { world: world.child(0).decl() } : {}) }),
 	ExtendLine: (_k, t) => named(t, { line: 'extend', extend: t.sourceString }),
 	AppliesLine: (_k, axis, _c, n) => named(n, { line: 'applies', axis: axis.sourceString, slot: n.sourceString }),
 	SealedLine: (_k, _at, _c, n) => ({ line: 'sealed', slot: n.sourceString }),
@@ -204,11 +206,12 @@ semantics.addOperation<unknown>('decl', {
 		if (value.numChildren) decl.value = optTree(value);
 		return named(n, decl);
 	},
-	SlotLine(n, _c, type, card, _inverse, inverse, world) {
+	SlotLine(n, _c, type, card, _inverse, inverse, world, identifier) {
 		const decl: Line = { line: 'slot', slot: n.sourceString, type: typeOf(type) };
 		if (card.numChildren) decl.card = opt(card);
 		if (inverse.numChildren) decl.inverse = opt(inverse);
 		if (world.numChildren) decl.world = world.child(0).decl();
+		if (identifier.numChildren) decl.identifier = true;
 		return named(n, decl);
 	},
 	VersionLine(_k, n, _commas, ctxs, _eq, value, src) {
@@ -533,7 +536,11 @@ function readModule(text: string, bare: boolean): ParsedModule {
 					else if (k.line === 'sealed' ? decl.sealed !== undefined : k.line === 'applies' && decl.applies) refuse(c, `one \`${k.line}\``);
 					else {
 						leaf(c);
-						if (k.line === 'slot') decl.slots.push(strip(k));
+						if (k.line === 'slot') {
+							if (k.identifier && decl.embedded) refuse(c, 'no identifier in an embedded kind');
+							else if (k.identifier && decl.slots.some((slot) => slot.identifier)) refuse(c, 'one identifier per kind');
+							else decl.slots.push(strip(k));
+						}
 						else if (k.line === 'sealed') decl.sealed = k.slot as string;
 						else decl.applies = strip<NonNullable<KindDecl['applies']>>(k);
 					}

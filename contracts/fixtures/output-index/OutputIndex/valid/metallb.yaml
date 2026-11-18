@@ -1,4 +1,4 @@
-# One render of a MetalLB configuration (#356 P7.10e): an address pool from a published row, a protocol
+# One render of a MetalLB configuration: an address pool from a published row, a protocol
 # default from the chart's values file, and an API version that is text of the template.
 format: rezono.output-index/1
 pack: platform

@@ -17,4 +17,4 @@ expect:
   change_class: major
 note: R01 is readable under A but not under B (N02), so the change narrows what a reader accepts (l0.md §2.3).
 sources:
-- '#417 review 6761310804'
+- publication/rezono_publication/l0.py, classify

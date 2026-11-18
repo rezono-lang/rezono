@@ -4,18 +4,16 @@ import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { moduleForm } from '../../src/module-json.ts';
 
-/** A refusal or a different tree is a case mismatch. A broken reader or fixture throws. */
+/** Only the recorded refusal is an expected mismatch. Any other failure throws. */
 export function mismatch(file) {
-    const { source, declarations } = JSON.parse(readFileSync(file, 'utf8'));
+    const { source, declarations, knownDiagnostics } = JSON.parse(readFileSync(file, 'utf8'));
     const { form, diagnostics } = moduleForm('rezono 0\npack sample\n' + source + '\n');
-    if (!form) return JSON.stringify(diagnostics);
-    try {
-        assert.equal(form.format, 'rezono.module/2');
-        assert.deepEqual(form.module.decls, declarations);
-    } catch (error) {
-        if (error instanceof assert.AssertionError) return error.message;
-        throw error;
+    if (!form) {
+        assert.deepEqual(diagnostics, knownDiagnostics, 'The reader returned a different diagnostic.');
+        return JSON.stringify(diagnostics);
     }
+    assert.equal(form.format, 'rezono.module/2');
+    assert.deepEqual(form.module.decls, declarations);
     return null;
 }
 

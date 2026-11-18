@@ -194,7 +194,7 @@ def test_a_name_or_shape_the_contract_refuses_is_refused(where, change, named):
 
 
 def test_the_pin_and_the_roots_are_recomputed_from_the_subjects_bytes():
-    """Condition (a) of the ruling on #886: other rows whose file hashes agree everywhere are still refused,
+    """Other rows whose file hashes agree everywhere are still refused,
     because the dataset pin, the roots and the inclusion hash are recomputed from the bytes."""
     data, index, objects = published()
     rows = changed(objects["rows.json"], b"host-b", b"host-c")

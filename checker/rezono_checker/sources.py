@@ -11,8 +11,7 @@ gets, never from what the publisher selected. Every finding blocks.
 - Each has at least one source, in canonical order without duplicates, and each source has its kind's fields.
 
 A source's metadata is the declared unit that belongs to its row: it follows the readable row as a whole,
-and nothing about a hidden row enters it or decides it (S25 as made precise by the owner on 08-11-2026,
-#329). So no text of a source is compared with the ids of hidden elements: a line 3 is not the element
+and nothing about a hidden row enters it or decides it. So no text of a source is compared with the ids of hidden elements: a line 3 is not the element
 B/3, and equal text is no access relation. The check reads only the role's own snapshots, so hidden rows
 cannot change its outcome. A finding never names a row the role does not read and never counts such rows.
 A source is a locator; this check says nothing about whether the row is true or where it really came from

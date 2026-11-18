@@ -24,7 +24,7 @@ bash contracts/gen-types.sh
 
 Use the GitHub sign-in already configured for this checkout when creating the pull request or enabling auto-merge. If the default CLI login is unavailable, use the connected GitHub integration or the configured credential helper without displaying or storing credentials.
 
-Fetch origin/main before removing the mark. Open the pull request with `gh pr create --base main`. Use its number in `gh pr merge <number> --auto`. After the required checks pass, GitHub enqueues the pull request, tests the combined candidate against the latest main and squash-merges the passing candidate.
+Fetch origin/main before removing the mark. After the required checks pass, GitHub enqueues the pull request, tests the combined candidate against the latest main and squash-merges the passing candidate.
 
 ## Steps
 
@@ -39,13 +39,20 @@ Fetch origin/main before removing the mark. Open the pull request with `gh pr cr
 3. **Make the test pass.** Do not change what the test expects.
 4. **Remove the test's "expected to fail" mark.** Keep every other line of the test file exactly as written, including `import pytest` if removing the last mark leaves it unused.
 5. **Run the fast check:** `python scripts/fast_check.py "<test id>"`. It always runs your test. It prints at most twenty lines; the rest is in `.fast-check.log`. Search the log for lines that start with `ERROR`.
-6. **Commit your changes and check the committed diff before pushing.** Run this read-only policy check from the repository root:
+6. **Validate the title, commit, then check the committed diff.** Stage your changes. Choose a starting verb from `python scripts/release-notes.py --topics` and describe the change. Use the same title for the final commit and pull request. Run these commands from the repository root:
+
+   ```bash
+   IFS= read -r -p 'Commit and pull request title: ' subject
+   python scripts/release-notes.py --subject "$subject" && git commit -m "$subject"
+   ```
+
+   If validation fails, choose a listed verb and run both lines again. After the commit succeeds, run the read-only policy check:
    ```bash
    git fetch origin && python -I scripts/red_guard.py "$(git merge-base origin/main HEAD)" HEAD
    ```
    If it reports an error, correct the test-file edit, commit the correction and run the check again. Push promptly after it passes. A task branch with no push for four hours and no pull request is released.
    If a push to your task branch is rejected, your claim has expired and the task is no longer yours. Stop and report "lost"; do not force the push.
-7. **Open a pull request, ready for review,** and turn on auto-merge if the repository offers it. Say what changed and how you checked it.
+7. **Open a pull request, ready for review,** with `gh pr create --base main --title "$subject"` in the same shell. Enable native auto-merge with `gh pr merge <number> --auto`. Say what changed and how you checked it.
 
 ## Done
 
