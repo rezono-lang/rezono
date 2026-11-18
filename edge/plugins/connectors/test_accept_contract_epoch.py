@@ -7,7 +7,6 @@ import accept
 from acceptance_sample import AT, objects
 
 
-@pytest.mark.xfail(strict=True, reason="In edge/plugins/connectors/accept.py compare the published ODCS version with the role index and schema. See decisions/connector-acceptance-pins.md.")
 def test_odcs_version_must_identify_the_same_epoch_as_its_index():
     sample = objects()
     contract = yaml.safe_load(sample["contract.odcs.yaml"])
