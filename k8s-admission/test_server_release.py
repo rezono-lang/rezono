@@ -40,6 +40,14 @@ def test_reconciled_admission_release_on_the_api_server():
     desired = fixture("publication.yaml")
     digest = desired["spec"]["digest"]
     name = desired["metadata"]["name"]
+    app = fetch(config, "applications.argoproj.io", os.environ["REZONO_ADMISSION_TEST_APPLICATION"],
+                "-n", os.environ["REZONO_ADMISSION_TEST_APPLICATION_NAMESPACE"])
+    revision = subprocess.check_output(["git", "-C", str(FIXTURES), "rev-parse", "HEAD"], text=True).strip()
+    assert app["status"]["sync"]["revision"] == revision
+    assert app["status"]["sync"]["status"] == "Synced"
+    tracked = {(row["kind"], row.get("namespace", ""), row["name"])
+               for row in app["status"]["resources"] if row.get("status") == "Synced"}
+    assert ("NamespacePublication", "admission-blue", name) in tracked
     for ns in ["admission-blue", "admission-green"]:
         assert fetch(config, "namespace", ns)["metadata"]["labels"]["rezono.dev/admission"] == "enabled"
     assert fetch(config, "namespacepublications.admission.rezono.org", name,
@@ -50,6 +58,8 @@ def test_reconciled_admission_release_on_the_api_server():
     for rule, filename in [("verified-supply", "pod.yaml"), ("in-zone-flow", "flow.yaml")]:
         binding = render_binding(rule=rule, digest=digest, parameter_name=name)
         policy = render_policy(rule=rule, digest=digest)
+        assert ("ValidatingAdmissionPolicy", "", policy["metadata"]["name"]) in tracked
+        assert ("ValidatingAdmissionPolicyBinding", "", binding["metadata"]["name"]) in tracked
         bound = fetch(config, "validatingadmissionpolicybinding", binding["metadata"]["name"])
         live = fetch(config, "validatingadmissionpolicy", policy["metadata"]["name"])
         assert bound["spec"]["policyName"] == live["metadata"]["name"]
