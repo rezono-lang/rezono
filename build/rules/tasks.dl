@@ -2,7 +2,6 @@
 .decl build_task_ready(run: symbol, task: symbol, reason: symbol)
 .decl build_task_waiting(run: symbol, task: symbol, token: symbol, reason: symbol)
 .decl build_task_stuck(run: symbol, task: symbol, reason: symbol)
-.decl build_policy_date_at_cut(run: symbol, reference: symbol)
 .decl build_ready_rank(run: symbol, task: symbol, rank: number, decision: symbol)
 .decl build_rank_conflict(run: symbol, task: symbol)
 .decl build_task_precedes(run: symbol, first: symbol, second: symbol)
@@ -24,10 +23,6 @@ build_task_scope(run, task, step, track) :- build_verified_cut(run),
 build_task_ready(run, task, reason) :- build_task_scope(run, task, step, _), ready(run, step, reason).
 build_task_waiting(run, task, token, reason) :- build_task_scope(run, task, step, _), waiting(run, step, token, reason).
 build_task_stuck(run, task, reason) :- build_task_scope(run, task, step, _), stuck(run, step, reason).
-
-build_policy_date_at_cut(run, reference) :- build_verified_cut(run),
-    build_policy_date__run(binding, run), build_policy_date__reference(binding, reference),
-    build_policy_date__observed_at(binding, tick), build_run__observed_at(run, tick).
 
 build_ready_rank(run, task, rank, decision) :- build_task_scope(run, task, _, track), build_task_ready(run, task, _),
     build_policy_date_at_cut(run, date), build_track_rank__track(policy, track), build_track_rank__rank(policy, rank),
