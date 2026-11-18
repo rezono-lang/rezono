@@ -1,7 +1,7 @@
-// The JSON form of a module (contracts/rezono-module.yaml, `rezono.module/1`): what the compiler reads of a
+// The JSON form of a module (contracts/rezono-module.yaml): what the compiler reads of a
 // pack written in Rezono, so that it needs no second parser (docs/rezono/expressions.md §12). Its three members:
 //
-//   format  `rezono.module/1`
+//   format  `rezono.module/1` or `rezono.module/2`, depending on the declarations
 //   module  the tree of the module as module.ts reads it. The tree is the JSON form, as for a question (§4a)
 //   spans   the place in the text of every node of `module` that has one (module.ts, `spans`): its JSON pointer
 //           (RFC 6901) into `module`, its 1-based line and its 0-based code-point offsets, end exclusive. They
@@ -29,7 +29,8 @@ export const MODULE_FORMAT = 'rezono.module/1';
 const EXTENDED_MODULE_FORMAT = 'rezono.module/2';
 
 function formatOf(module: Module): ModuleForm['format'] {
-	return module.decls.some((decl) => 'kind' in decl && (decl.abstract || decl.embedded || decl.slots.some((slot) => slot.identifier || slot.embedded)))
+	return module.decls.some((decl) => 'rules' in decl
+		|| ('kind' in decl && (decl.abstract || decl.embedded || decl.slots.some((slot) => slot.identifier || slot.embedded))))
 		? EXTENDED_MODULE_FORMAT
 		: MODULE_FORMAT;
 }
