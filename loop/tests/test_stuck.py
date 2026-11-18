@@ -5,7 +5,6 @@ import pytest
 from loop_oracle import evaluate
 
 
-@pytest.mark.xfail(strict=True, reason="Read decisions/loop-design.md. Implement packs/std-loop/rules/stuck.dl. Carry terminal refusal evidence and report cycles for affected steps in the active run.")
 def test_stuck_evidence():
     columns = {
         "declared": "run step reason",
