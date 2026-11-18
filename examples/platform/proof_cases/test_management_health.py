@@ -22,9 +22,6 @@ def inputs():
     }
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError, reason=(
-    "Implement schema/management_health.yaml and rules/management_health.dl for the platform. "
-    "Read decisions/platform-management-health.md for the run, service and observation token."))
 def test_management_health():
     from management_probes import compiled
 
