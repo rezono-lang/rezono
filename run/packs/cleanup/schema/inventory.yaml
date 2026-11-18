@@ -1,0 +1,32 @@
+id: https://rezono.org/examples/run/cleanup
+name: cleanup_inventory
+in_language: en
+imports:
+  - linkml:types
+default_range: string
+annotations:
+  layer: facts
+
+types:
+  PlanDigest:
+    typeof: string
+    pattern: '^[0-9a-f]{64}$'
+
+enums:
+  InventoryCoverage:
+    permissible_values:
+      complete:
+      incomplete:
+      unknown:
+
+classes:
+  Sweep:
+    attributes:
+      id: {identifier: true}
+      plan_hash: {range: PlanDigest}
+      coverage: {range: InventoryCoverage}
+  Resource:
+    attributes:
+      id: {identifier: true}
+      sweep: {range: Sweep, required: true}
+      plan_hash: {range: PlanDigest}
