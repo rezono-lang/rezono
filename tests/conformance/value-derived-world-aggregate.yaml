@@ -1,0 +1,28 @@
+id: value-derived-world-aggregate
+source: docs/semantics/value-cases.yaml#derived-world-aggregate
+status: settled
+input:
+  rows:
+    - {$kind: Group, $id: group-a}
+    - {$kind: Group, $id: group-b}
+    - {$kind: Item, $id: item-a, group: {$ref: group-a}, labels: [first], quantity: "3", weight: "3"}
+    - {$kind: Item, $id: item-other, group: {$ref: group-b}, labels: [first], quantity: "7", weight: "7"}
+  select: {kind: Group, id: group-a}
+  rules:
+    output: group_recorded_total
+    clauses: |
+      .decl member_measure(group: symbol, item: symbol, value: number)
+      member_measure(g, i, v) :- item(i), item__group(i, g), item__weight(i, v).
+      // @absence
+      .decl group_recorded_total(group: symbol, value: number)
+      group_recorded_total(g, n) :- group(g), n = sum v : { member_measure(g, _, v) }.
+      .output group_recorded_total
+expect:
+  value: "3"
+  state: known
+  reason: null
+  witness:
+    subject: {kind: Group, id: group-a}
+    members: [item-a]
+unsupported:
+  language: The shared question runner does not compile rule declarations or check absence witnesses.

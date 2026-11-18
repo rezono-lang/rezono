@@ -6,7 +6,7 @@ Each file goes through the same commands as before, `linkml-lint --ignore-warnin
 `linkml-validate -s SCHEMA.yaml -C CLASS FILE`, called in this process instead of one process per file:
 the same code path and options, without paying LinkML's import once per fixture (5 of checker's 9 minutes,
 measured 07-11-2026). A file is valid when the command exits 0; a crash counts as invalid, as a non-zero
-exit of the command did.
+exit of the command did. Module forms also use the compiler's native literal supplement.
 """
 
 from __future__ import annotations
@@ -17,6 +17,7 @@ import os
 import sys
 from pathlib import Path
 
+import yaml
 from linkml.linter.cli import main as lint
 from linkml.validator.cli import cli as validate
 
@@ -56,6 +57,12 @@ def main() -> int:
     for file in sorted(Path("fixtures").glob("*/*/*/*.yaml")):
         _, schema, cls, expect, _ = file.parts
         code, out = run(validate, ["-s", f"{schema}.yaml", "-C", cls, str(file)], quiet=True)
+        if code == 0 and schema == "rezono-module" and cls == "ModuleForm":
+            from rezono_compiler.native_literals import native_literal_errors
+
+            findings = native_literal_errors(yaml.safe_load(file.read_text(encoding="utf-8")))
+            if findings:
+                code, out = 1, "\n".join(findings)
         got = "valid" if code == 0 else "invalid"
         if got == expect:
             print(f"ok    {file}")

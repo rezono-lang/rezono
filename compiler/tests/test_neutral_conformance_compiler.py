@@ -6,6 +6,7 @@ from runpy import run_path
 
 import pytest
 
+from rezono_compiler import pack, rules
 from rezono_publication import l0, publication
 
 
@@ -21,6 +22,31 @@ class UntypedAggregate(AssertionError):
 def test_compiler_replays_neutral_case(case, tmp_path):
     result = replay["play"](case, tmp_path)
     assert replay["read_sum"](case, result.rows, result.witnesses) == case["expect"]
+
+
+def test_open_aggregate_requires_explicit_recorded_absence(tmp_path):
+    case = replay["case_file"]("value-derived-world-aggregate")
+    source = case["input"]["rules"]
+    result = replay["play"](case, tmp_path / "recorded")
+    relations = rules.load(result.rules).relations
+    assert relations["member_measure"].world == "open"
+    assert relations[source["output"]].world == "closed"
+    assert relations[source["output"]].absence is True
+    assert replay["read_sum"](case, result.rows, result.witnesses) == case["expect"]
+
+    assert source["clauses"].count("// @absence\n") == 1
+    source["clauses"] = source["clauses"].replace("// @absence\n", "")
+    with pytest.raises(pack.CompileError, match="aggregate_over_open"):
+        replay["play"](case, tmp_path / "unmarked")
+
+    # The same rows carry equal quantities in the closed slot of the neutral fixture.
+    assert source["clauses"].count("item__weight") == 1
+    source["clauses"] = source["clauses"].replace("item__weight", "item__quantity")
+    closed = replay["play"](case, tmp_path / "closed")
+    relations = rules.load(closed.rules).relations
+    assert relations["member_measure"].world == "closed"
+    assert not relations[source["output"]].absence
+    assert replay["read_sum"](case, closed.rows, closed.witnesses) == case["expect"]
 
 
 @pytest.mark.xfail(

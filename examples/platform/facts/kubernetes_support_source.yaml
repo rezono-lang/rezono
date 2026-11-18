@@ -1,0 +1,8 @@
+series_support_source:
+  - id: kubernetes-1.32-source
+    product: kubernetes
+    series: '1.32'
+    latest_patch: 1.32.13
+    support_end: '2026-02-28'
+    source_url: 'https://kubernetes.io/releases/1.32/'
+    source_sha256: f492a2967f2d157363d6b8822ea3e4b27598fea6bd583f226f43db7098d3d815

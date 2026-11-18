@@ -1,0 +1,7 @@
+name: build-selection
+version: 0.1.0
+default_language: en
+imports:
+  - name: std-loop
+    path: ../packs/std-loop
+    sha256: 9dcd87af81305ddae297456abd2af3be32ddea0fda2aa7478beb34b10f5dd836

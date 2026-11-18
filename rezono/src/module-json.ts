@@ -41,6 +41,7 @@ function formatOf(module: Module): ModuleForm['format'] {
 					|| slot.constraints !== undefined || hasMetadata(slot))
 				|| decl.equations?.length;
 		}
+		if ('base' in decl) return true;
 		return 'enum' in decl && (decl.memberMetadata !== undefined || hasMetadata(decl));
 	});
 	return extended ? EXTENDED_MODULE_FORMAT : MODULE_FORMAT;

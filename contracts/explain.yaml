@@ -8,6 +8,8 @@ description: >-
   compiler: only names that exist in the pack); the standard pack std-explain gives the known ones. The
   compiler puts them in the schema bundle in the form below, imports first, then the pack's own. The gate
   answers a question page by page (Answer, rezono.answer/1, from GET /<pack>/<manifest>/ask/<term>).
+  A questions.yaml document can also have an optional `acceptance` list of AcceptanceQuestion records
+  alongside or in place of `questions` and `reader`. These records stay in the owning pack's source.
 prefixes:
   linkml: https://w3id.org/linkml/
   rezono: https://rezono.org/contracts/
@@ -152,6 +154,24 @@ classes:
       proof: {required: true, pattern: "^[a-z][a-z0-9]*(_[a-z0-9]+)*$", description: "The term of the question that opens a row's proof: the one written, or the first a row of the relation offers in bundle order."}
       columns: {range: ReaderColumn, multivalued: true, inlined_as_list: true, required: true, description: "The columns shown, in order."}
       context: {range: ReaderContext, multivalued: true, inlined_as_list: true, description: "Shown above the answer, such as a reference date and a window. Absent: none."}
+  AcceptanceQuestion:
+    description: >-
+      An authored acceptance question and the tests that check it. Each id occurs once in its pack's
+      inventory and can also be used as a reader question id. Several tests can answer one question;
+      the same test can answer several questions. The inventory is source metadata outside the
+      reader and explanation answers.
+    attributes:
+      id: {required: true, pattern: '^[a-z][a-z0-9]*(-[a-z0-9]+)*$', description: "Kebab-case id within the owning pack."}
+      question: {required: true, pattern: '\S', description: "The nonblank authored question."}
+      tests:
+        required: true
+        multivalued: true
+        minimum_cardinality: 1
+        pattern: '^(?:[A-Za-z0-9_][A-Za-z0-9_.-]*/)*[A-Za-z0-9_][A-Za-z0-9_.-]*\.py::test_[A-Za-z0-9_]+$'
+        description: >-
+          POSIX paths relative to the owning pack followed by the bare pytest function name
+          (path.py::test_name). One pointer covers every parametrized case of that function.
+          Pack compilation checks the shape; repository tests can check that the pointers resolve.
   ReaderColumn:
     description: A column of a reader question's relation, as it is shown.
     attributes:

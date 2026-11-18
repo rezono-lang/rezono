@@ -7,8 +7,10 @@ from runpy import run_path
 
 import pytest
 
+from rezono_checker.calc import recorded, text
 from rezono_checker.check import check, check_epoch
 from rezono_checker.rules import derived_relations, load_rules
+from rezono_checker.snapshots import read_rows
 
 
 CORPUS = Path(__file__).resolve().parents[2] / "tests/conformance"
@@ -29,6 +31,30 @@ def verify(case, rule_document, witnesses, snapshots):
 
 def selected(case):
     return [case["input"]["select"]["id"], case["expect"]["value"]]
+
+
+@pytest.mark.parametrize("case", replay["cases"]("checker", "snapshot"))
+def test_checker_replays_neutral_snapshot(case):
+    authored = case["input"]["rows"]
+    selection = case["input"]["snapshot"]
+    rejected = selection["rejected"]
+
+    rows = dict(read_rows(json.dumps(authored).encode(), "json").values())
+    assert rows == {tuple(row["key"]): row["values"] for row in authored}
+    cell = rows[tuple(selection["key"])][selection["slot"]]
+    with pytest.raises(ValueError) as error:
+        read_rows(json.dumps([rejected]).encode(), "json")
+    actual = {
+        "value": cell.get("value", cell.get("minor_units")), "state": cell["state"],
+        "reason": cell.get("reason"), "witness": None, "refusal": str(error.value).partition(": ")[0],
+    }
+    assert actual == case["expect"]
+
+    if "minor_units" in cell:
+        admitted = recorded(cell["state"], cell["minor_units"], "")
+        assert admitted is not None and text(admitted.value) == case["expect"]["value"]
+        malformed = rejected["values"][selection["slot"]]
+        assert recorded(malformed["state"], malformed["minor_units"], "") is None
 
 
 @pytest.mark.parametrize("case", replay["cases"]("checker"))

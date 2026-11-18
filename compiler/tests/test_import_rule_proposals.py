@@ -113,9 +113,6 @@ def check(case, capsys, status):
     return report
 
 
-@pytest.mark.xfail(strict=True, raises=(AssertionError, SystemExit),
-                   reason="Check rule proposals through the compiler CLI. Read decisions/import-rule-proposals.md. "
-                          "Compare the exact withheld relation in DuckDB and Soufflé and report the complete explanation.")
 def test_rule_proposal_explains_the_original_set(tmp_path, capsys):
     case = prepare(tmp_path, FULL)
     verify_fixture(case, case.original)
@@ -124,9 +121,6 @@ def test_rule_proposal_explains_the_original_set(tmp_path, capsys):
     assert report.get("retained") == []
 
 
-@pytest.mark.xfail(strict=True, raises=(AssertionError, SystemExit),
-                   reason="Keep a verified remainder in compiler rule proposal results. "
-                          "Read decisions/import-rule-proposals.md and the SourceEntry in contracts/source.yaml.")
 def test_rule_proposal_keeps_the_sourced_remainder(tmp_path, capsys):
     case = prepare(tmp_path, PARTIAL, origin=ORIGIN)
     explained = case.original - {REMAINDER}
@@ -136,18 +130,12 @@ def test_rule_proposal_keeps_the_sourced_remainder(tmp_path, capsys):
     assert report.get("retained") == [{"row": row_ref(REMAINDER), "sources": [ORIGIN], "reason": REASON}]
 
 
-@pytest.mark.xfail(strict=True, raises=(AssertionError, SystemExit),
-                   reason="Refuse excess rows in the compiler rule proposal command. "
-                          "Read decisions/import-rule-proposals.md and report the actual counterexample.")
 def test_rule_proposal_refuses_one_excess_row(tmp_path, capsys):
     case = prepare(tmp_path, ALL_ITEMS)
     verify_fixture(case, case.original | {EXCESS})
     assert check(case, capsys, "excess_rows").get("excess") == refs({EXCESS})
 
 
-@pytest.mark.xfail(strict=True, raises=(AssertionError, SystemExit),
-                   reason="Charge required input facts in the compiler rule proposal byte comparison. "
-                          "Read decisions/import-rule-proposals.md and use canonical typed row bytes.")
 def test_rule_proposal_charges_needed_facts(tmp_path, capsys):
     case = prepare(tmp_path, ALL_ITEMS, extra=8, all_quantities=True)
     verify_fixture(case, case.original)
@@ -160,9 +148,6 @@ def test_rule_proposal_charges_needed_facts(tmp_path, capsys):
     assert report.get("sizes") == {"candidate_bytes": rule_bytes + support_bytes, "explained_bytes": original_bytes}
 
 
-@pytest.mark.xfail(strict=True, raises=(AssertionError, SystemExit),
-                   reason="Report unverified retained origins as gaps in the compiler rule proposal command. "
-                          "Read decisions/import-rule-proposals.md. A reason alone cannot establish a source.")
 def test_rule_proposal_reports_unverified_origin_as_a_gap(tmp_path, capsys):
     # The locator names an actual record, but that record has no quantity.
     wrong_origin = ORIGIN | {"position": "facts/rows.yaml#/item/1/quantity"}
