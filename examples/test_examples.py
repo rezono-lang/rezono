@@ -1,4 +1,4 @@
-"""A small recorded byte comparison, determinism for every example pack, and for every fact
+"""Recorded byte comparisons, determinism for every example pack, and for every fact
 file in facts/ its hand-written expected violations (on DuckDB). A file in diagnostics/ is a known bad
 import, kept to show what the checks find; it is no fact state and is never published, so it must
 give violations, exactly those in expected/diagnostics/."""
@@ -54,8 +54,8 @@ def test_examples_are_found(tmp_path):
 
 
 def test_golden_bytes(tmp_path):
-    """Compare the compiled parameter file and the outcome on two recorded rows."""
-    files = compile_dir(FIXTURE, tmp_path)
+    """Check the small recorded output and any complete example snapshots."""
+    files = compile_dir(FIXTURE, tmp_path / "recorded")
     path = "engine/parameters.json"
     recorded = (RECORDED_OUTPUT / "parameters.json").read_text(encoding="utf-8").encode("utf-8")
     diff = differences(golden({path: files[path]}), {path: recorded})
@@ -63,6 +63,14 @@ def test_golden_bytes(tmp_path):
     assert violations(files, load(FIXTURE, RECORDED_OUTPUT / "rows.yaml")) == {
         "alpha__size__value_range": {("outside", "10")},
     }
+
+    for example in EXAMPLES:
+        snapshot = example / "expected" / "compiled"
+        if not snapshot.is_dir():
+            continue
+        output = tmp_path / "examples" / example.relative_to(ROOT)
+        diff = differences(golden(compile_dir(example, output)), tree(snapshot))
+        assert not diff, f"{name(example)}:\n{diff}"
 
 
 @pytest.mark.parametrize("example", EXAMPLES, ids=name)
