@@ -1,4 +1,4 @@
-﻿import pytest
+import pytest
 
 from query_fixture import check_relation, evidence
 

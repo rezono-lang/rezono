@@ -1,4 +1,4 @@
-﻿# Sourced product records and bounded scenarios
+# Sourced product records and bounded scenarios
 
 Three version-specific publisher pages are identified by URL and SHA-256 of the HTTP response body in the acceptance evidence. Store the URL and digest with each authored product fact. CI works from pinned evidence offline. If the page changes, review its contents and digest before replacing the pin. No page body is part of the example.
 
