@@ -1,0 +1,3 @@
+// Invert the typed Link-to-Item arrow. The proof keeps both kinds explicit.
+.decl outgoing_link(item: symbol, link: symbol)
+outgoing_link(i, l) :- item(i), link(l), link__tail(l, i).
