@@ -111,8 +111,16 @@ jobs:
           inputs.tasks == ''
           || contains(fromJSON(inputs.tasks || '[]'), 'loop/tests/test_shared_admission_handoff.py--test_shared_admission_handoff')
           || contains(fromJSON(inputs.tasks || '[]'), 'k8s-admission/test_server_release.py--test_reconciled_admission_release_on_the_api_server')
+          || contains(fromJSON(inputs.tasks || '[]'), 'loop/tests/test_live_network_pairs.py--test_live_network_pairs')
         shell: bash
         run: bash loop/cluster/prepare-admission.sh
+      - name: Record the fixture network pairs
+        if: >-
+          contains(fromJSON(inputs.tasks || '[]'), 'loop/tests/test_live_network_pairs.py--test_live_network_pairs')
+        shell: bash
+        run: |
+          set -euo pipefail
+          PYTHONPATH="$PWD/loop" python loop/cluster/record_network.py
       - name: Select and run the repository's cluster tests
         if: inputs.tasks == ''
         shell: bash
