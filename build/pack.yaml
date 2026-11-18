@@ -4,4 +4,4 @@ default_language: en
 imports:
   - name: std-loop
     path: ../packs/std-loop
-    sha256: 9dcd87af81305ddae297456abd2af3be32ddea0fda2aa7478beb34b10f5dd836
+    sha256: 18b53e82962bbff0b87a64550f469af774fddda23686a9122fc4132759219232
