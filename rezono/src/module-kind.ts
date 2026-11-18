@@ -1,5 +1,6 @@
 import { block, declaration, named, opt, printWorld, type Build, type Line, type Logical, type World, type ModuleComponent } from './module-support.ts';
 import { printDerived, readDerived, type DerivedDecl } from './module-derived.ts';
+import { key, printKey, type KeyDecl } from './module-key.ts';
 import { printMetadata, readMetadataLine, type Metadata } from './module-metadata.ts';
 import { printSlot, readSlot, type SlotDecl } from './module-slot.ts';
 
@@ -12,6 +13,7 @@ export interface KindDecl extends Metadata {
 	sealed?: string;
 	slots: SlotDecl[];
 	derived: DerivedDecl[];
+	keys?: KeyDecl[];
 }
 export interface ExtendDecl {
 	extend: string;
@@ -25,7 +27,11 @@ function readKind(line: Logical, build: Build): KindDecl {
 		if (readMetadataLine(decl, child, build)) continue;
 		const member = child.read!;
 		if (member.line === 'derived') decl.derived.push(readDerived(child, build));
-		else if (!['applies', 'sealed', 'slot'].includes(member.line)) build.refuse(child, '`applies`, `sealed`, a slot or `derived`');
+		else if (member.line === 'key') {
+			build.leaf(child);
+			(decl.keys ??= []).push(build.strip<KeyDecl>(member));
+		}
+		else if (!['applies', 'sealed', 'slot'].includes(member.line)) build.refuse(child, '`applies`, `sealed`, a slot, `derived` or `unique`');
 		// A second applies or sealed line would replace the first unseen (v0 section 5a).
 		else if (member.line === 'sealed' ? decl.sealed !== undefined : member.line === 'applies' && decl.applies) build.refuse(child, `one \`${member.line}\``);
 		else if (member.line === 'slot') {
@@ -57,17 +63,18 @@ function printKind(d: KindDecl): string[] {
 		...(d.applies ? [`applies ${d.applies.axis}: ${d.applies.slot}`] : []),
 		...(d.sealed !== undefined ? [`sealed at: ${d.sealed}`] : []),
 		...d.slots.flatMap(printSlot),
-		...d.derived.flatMap(printDerived)
+		...d.derived.flatMap(printDerived),
+		...(d.keys ?? []).map(printKey)
 	]);
 }
 
 export const kind = {
-	lineRules: ['KindLine', 'ExtendLine', 'AppliesLine', 'SealedLine'],
+	lineRules: ['KindLine', 'ExtendLine', 'AppliesLine', 'SealedLine', ...key.lineRules],
 	grammar: String.raw`
   KindLine = (kw<"embedded"> | kw<"abstract">)? kw<"kind"> typeName World?
   ExtendLine = kw<"extend"> typeName
   AppliesLine = kw<"applies"> (at | during | in) ":" name
-  SealedLine = kw<"sealed"> at ":" name
+  SealedLine = kw<"sealed"> at ":" name${key.grammar}
   `,
 	actions: {
 		KindLine(modifier, _k, t, world) {
@@ -80,7 +87,8 @@ export const kind = {
 		},
 		ExtendLine: (_k, t) => named(t, { line: 'extend', extend: t.sourceString }),
 		AppliesLine: (_k, axis, _c, n) => named(n, { line: 'applies', axis: axis.sourceString, slot: n.sourceString }),
-		SealedLine: (_k, _at, _c, n) => ({ line: 'sealed', slot: n.sourceString })
+		SealedLine: (_k, _at, _c, n) => ({ line: 'sealed', slot: n.sourceString }),
+		...key.actions
 	},
 	declarations: {
 		kind: declaration<KindDecl>('kind', readKind, printKind),

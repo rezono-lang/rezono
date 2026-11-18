@@ -326,6 +326,8 @@ def main() -> int:
     parser.add_argument("--node", default=os.getenv("REZONO_NODE", "node"))
     parser.add_argument("--consumer", type=Path, help="existing pinned consumer of a library or theory pack")
     args = parser.parse_args()
+    # The compiler uses this runtime to read the authored source again.
+    os.environ["REZONO_NODE"] = args.node
     try:
         candidate(args.pack, args.candidate, args.node, args.consumer)
     except (OSError, ValueError, pack.CompileError, yaml.YAMLError) as error:
