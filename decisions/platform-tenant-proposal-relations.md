@@ -1,4 +1,4 @@
-﻿# Tenant proposal inputs and derived evidence
+# Tenant proposal inputs and derived evidence
 
 The operator preview uses the same request files as the portal. The three derived results below are production pack relations returned by the public request preview's `relation NAME` command. The pack consumes typed catalog and proposal inputs. Its adapter only converts declared fields to typed records. A proposal cannot grant itself review authority or read access.
 

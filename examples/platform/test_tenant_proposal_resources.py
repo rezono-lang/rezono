@@ -1,4 +1,4 @@
-﻿import pytest
+import pytest
 
 from tenant_oracle import calculate, load_requests
 from tenant_proposal_case import ROOT, load, proposal, query, write

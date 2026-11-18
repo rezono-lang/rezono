@@ -1,4 +1,4 @@
-﻿import pytest
+import pytest
 
 from tenant_proposal_case import load, proposal, query, write
 
