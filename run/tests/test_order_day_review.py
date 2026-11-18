@@ -31,7 +31,6 @@ def test_order_day_review_reference():
     assert datetime.fromisoformat(DAY).replace(tzinfo=timezone.utc) + timedelta(days=1) == datetime.fromisoformat(END)
 
 
-@pytest.mark.xfail(strict=True, reason="Read decisions/run-order-day-review.md. Implement the local plan and review boundaries in run/order_day_review.py. Waits for test_effective_currency and test_dispatch_policy.")
 def test_order_day_review():
     plan = implementation("order_day_review.py", "plan")
     review = implementation("order_day_review.py", "review")
