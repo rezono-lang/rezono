@@ -1,10 +1,20 @@
-from language_usage import inventory, passing_test, render, supported
+from language_usage import EVIDENCE, NATIVE_PACK_EVIDENCE, inventory, passing_test, render, supported
 
 
 def write(root, path, contents):
     target = root / path
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(contents, encoding="utf-8")
+
+
+def readiness(root, name):
+    row = next(line for line in render(root).splitlines() if line.startswith(f"| {name} |"))
+    return tuple(value.strip() for value in row.split("|")[-3:-1])
+
+
+def evidence(root, checks):
+    for path, name in checks:
+        write(root, path, f"def {name}():\n    assert True\n")
 
 
 def test_tally_uses_files_once_and_traverses_each_import(tmp_path):
@@ -39,9 +49,52 @@ def test_unresolved_and_transitively_cyclic_imports_keep_a_pack_pending(tmp_path
     write(tmp_path, "packs/b/pack.yaml", f"name: b\nimports:\n- {{name: a, path: ../a, sha256: {pin}}}\n")
     write(tmp_path, "examples/demo/pack.yaml", f"name: demo\nimports:\n- {{name: a, path: ../../packs/a, sha256: {pin}}}\n")
     write(tmp_path, "run/other/pack.yaml", f"name: other\nimports:\n- {{name: absent, path: ../absent, sha256: {pin}}}\n")
+    write(tmp_path, "run/malformed/pack.yaml", "name: malformed\nimports: 5\n")
 
-    for name in ("examples/demo", "run/other"):
+    for name in ("examples/demo", "run/other", "run/malformed"):
         assert f"| {name} | — | — | unresolved-pack-import |" in render(tmp_path)
+        assert readiness(tmp_path, name) == ("Pending: unresolved-pack-import",) * 2
+
+
+def test_mixed_and_native_conversion_have_separate_rule_evidence(tmp_path):
+    pin = "a" * 64
+    write(tmp_path, "packs/base/pack.yaml", "name: base\n")
+    write(tmp_path, "packs/base/rules/example.dl", ".decl sample(x: symbol)\n")
+    write(tmp_path, "packs/middle/pack.yaml", f"name: middle\nimports:\n- {{name: base, path: ../base, sha256: {pin}}}\n")
+    write(tmp_path, "run/top/pack.yaml", f"name: top\nimports:\n- {{name: middle, path: ../../packs/middle, sha256: {pin}}}\n")
+    evidence(tmp_path, EVIDENCE["relational-rule"])
+    # The closure includes the base rules even though the top and middle packs have no rule file of their own.
+    for name in ("packs/base", "packs/middle", "run/top"):
+        assert readiness(tmp_path, name) == (
+            "Ready", "Pending: native-rule, native-rule-publication-parity, native-rule-signatures",
+        )
+    evidence(tmp_path, EVIDENCE["native-rule"])
+    evidence(tmp_path, (NATIVE_PACK_EVIDENCE["native-rule-signatures"],))
+    assert readiness(tmp_path, "run/top") == ("Ready", "Pending: native-rule-publication-parity")
+    evidence(tmp_path, (NATIVE_PACK_EVIDENCE["native-rule-publication-parity"],))
+    pipe_reader, _ = EVIDENCE["relational-rule"]
+    (tmp_path / pipe_reader[0]).unlink()
+    assert readiness(tmp_path, "run/top") == ("Pending: relational-rule", "Ready")
+
+    write(tmp_path, "packs/base/rules/example.dl", "// @invariant\n.decl sample(x: symbol)\n")
+    evidence(tmp_path, EVIDENCE["relational-rule"])
+    assert readiness(tmp_path, "run/top") == ("Pending: conditional-check",) * 2
+
+
+def test_native_clauses_and_empty_sources_keep_conservative_conversion_status(tmp_path):
+    write(tmp_path, "packs/empty/pack.yaml", "name: empty\n")
+    write(tmp_path, "examples/unattached/sample.rezono", "rezono 0\npack unattached\nrule sample(x) when known(x)\n")
+    assert readiness(tmp_path, "packs/empty") == ("No language sources",) * 2
+    assert readiness(tmp_path, "examples/unattached") == ("No owning pack",) * 2
+
+    write(tmp_path, "packs/native/pack.yaml", "name: native\n")
+    write(tmp_path, "packs/native/sample.rezono", "rezono 0\npack native\nrule sample(x) when known(x)\n")
+    evidence(tmp_path, EVIDENCE["native-rule"])
+    assert readiness(tmp_path, "packs/native") == ("Pending: native-rule-publication-parity, native-rule-signatures",) * 2
+    evidence(tmp_path, NATIVE_PACK_EVIDENCE.values())
+    assert readiness(tmp_path, "packs/native") == ("Ready", "Ready")
+    write(tmp_path, "packs/native/sample.rezono", "rezono 0\npack native\nrule sample(x) when x.value is unknown\n")
+    assert readiness(tmp_path, "packs/native") == ("Pending: native-rule-state-review",) * 2
 
 
 def test_schema_support_requires_both_positive_evidence_checks(tmp_path):
