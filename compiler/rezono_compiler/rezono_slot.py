@@ -2,17 +2,21 @@
 
 from collections.abc import Mapping, Set
 
+from . import rezono_numeric_limits
 from .rezono_lowering import Refuse
 
 
 MEMBERS = {"slot", "type", "card"}
 BUILTIN_RANGES = {"Bool": "boolean", "Date": "date", "Text": "string"}
+LIST_CARDS = ("*", "+")
 
 
-def builtin_range(name: str, declared: bool) -> str | None:
+def builtin_range(name: str, declared: bool, *, extended_form: bool = False) -> str | None:
     # Bool became a built-in after modules could already declare it as a pack name.
     if name == "Bool" and declared:
         return None
+    if name == "Int":
+        return "integer" if extended_form and not declared else None
     return BUILTIN_RANGES.get(name)
 
 
@@ -21,11 +25,16 @@ def lower(slots: list[dict], declared: Set[str]) -> dict[str, dict]:
     out: dict[str, dict] = {} if any(slot.get("identifier") is True for slot in slots) else {"id": {"identifier": True}}
     for slot in slots:
         name = slot["type"]
-        attribute: dict[str, object] = {"range": builtin_range(name, name in declared) or name}
+        # Validation has already checked whether this version admits the built-in range.
+        attribute: dict[str, object] = {"range": builtin_range(name, name in declared, extended_form=True) or name}
+        if "constraints" in slot:
+            attribute.update(rezono_numeric_limits.lower(slot["constraints"]))
         if slot.get("identifier") is True:
             attribute["identifier"] = True
-        elif "card" not in slot:
+        elif "card" not in slot or slot["card"] == "+":
             attribute["required"] = True
+        if slot.get("card") in LIST_CARDS:
+            attribute["multivalued"] = True
         out[slot["slot"]] = attribute
     return out
 
@@ -36,7 +45,8 @@ def validate(slots: list, kind: str, at: str, own: Mapping[str, str], owners: Ma
     ok = True
     seen: set[str] = set()
     identifier_seen = False
-    allowed = MEMBERS | {"identifier"} if explicit_identifiers else MEMBERS
+    # The extended module form also carries slot constraints.
+    allowed = MEMBERS | {"identifier", "constraints"} if explicit_identifiers else MEMBERS
     for index, slot in enumerate(slots):
         here = f"{at}/slots/{index}"
         extra = sorted(set(slot) - allowed) if isinstance(slot, dict) else []
@@ -61,11 +71,24 @@ def validate(slots: list, kind: str, at: str, own: Mapping[str, str], owners: Ma
         if slot["slot"] == "id" and not explicit:
             refuse(here, "a slot named `id` is refused: `id` identifies the elements of a kind", "§5.1")
             ok = False
-        if slot.get("card", "?") != "?":
+        card = slot.get("card", "?")
+        if explicit and card in LIST_CARDS:
+            refuse(here, "an identifier cannot be multivalued", "§5.1")
+            ok = False
+        elif card not in ("?", *LIST_CARDS):
             refuse(here, f"a slot `{slot['type']}{slot['card']}` is not lowered (no ticket yet)")
             ok = False
         name, found = slot["type"], owners.get(slot["type"], [])
-        if name in own or builtin_range(name, bool(found)) is not None:
+        range_name = builtin_range(name, name in own or bool(found), extended_form=explicit_identifiers)
+        if "constraints" in slot:
+            try:
+                if range_name != "integer" or explicit or slot.get("card", "?") != "?":
+                    raise ValueError("integer limits need an Int slot that is single-valued and is not an identifier")
+                rezono_numeric_limits.lower(slot["constraints"])
+            except ValueError as error:
+                refuse(here, str(error), "§5.1")
+                ok = False
+        if name in own or range_name is not None:
             continue
         if len(found) == 1:
             uses.add(found[0])
