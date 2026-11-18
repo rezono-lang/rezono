@@ -20,7 +20,9 @@ def published_orders(folder):
 
 @pytest.mark.xfail(strict=True, raises=AssertionError, reason=(
     "Preserve the source enum order in compiler/rezono_compiler/pack.py through the published schema. "
-    "Read contracts/view.yaml (the board's columns). Independent of layout."
+    "Read contracts/view.yaml (the board's columns). Independent of layout. "
+    "Two older tests in compiler/tests/test_compiler.py require name order for qualified enums and an "
+    "ordered lane. Migrate those expectations and the obsolete lane warning together."
 ))
 def test_pack_enum_reordering_changes_the_published_order(tmp_path):
     folder = shutil.copytree(FIXTURE, tmp_path / "pack")
