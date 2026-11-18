@@ -22,6 +22,13 @@ NATIVE_RULE_EVIDENCE = (
 NATIVE_RULE_DESIGN = "27ff4dc926166484e549e4da0c95d400d067a18b"
 NATIVE_RULE_TESTS = "bd9a459f0e8c4934c92bd39b862208e25eb64363"
 NATIVE_RULE_SIGNATURES = "cb086e32909e616fdca40541c9d61c7a7401e14d"
+NATIVE_PACK_EVIDENCE = {
+    "native-rule-signatures": ("compiler/tests/rezono/test_native_rule_signatures.py", "test_native_rule_signatures"),
+    "native-rule-publication-parity": (
+        "compiler/tests/rezono/test_native_rule_publication_parity.py", "test_native_rule_publication_parity",
+    ),
+}
+RULE_SPELLINGS = {"relational-rule", "native-rule"}
 
 
 def paired(reader, lowerer):
@@ -236,7 +243,12 @@ def inventory(root=ROOT):
     def dependencies(folder):
         targets = []
         missing = False
-        for item in paths[folder].get("imports") or ():
+        declared = paths[folder].get("imports", [])
+        if declared is None:
+            declared = []
+        if not isinstance(declared, list):
+            return targets, True
+        for item in declared:
             if (not isinstance(item, dict) or set(item) != {"name", "path", "sha256"}
                     or not isinstance(item["path"], str)
                     or not re.fullmatch(r"[0-9a-f]{64}", str(item["sha256"]))):
@@ -312,6 +324,22 @@ def describe(features):
     return ", ".join(sorted(features)) if features else "—"
 
 
+def conversion_status(features, ready, native_pending, missing_import, owning_pack):
+    if missing_import:
+        return ("Pending: unresolved-pack-import",) * 2
+    if not owning_pack:
+        return ("No owning pack",) * 2
+    if not features:
+        return ("No language sources",) * 2
+
+    common = features - ready - RULE_SPELLINGS
+    mixed = common | ((features & {"relational-rule"}) - ready)
+    if "native-rule" in features:
+        mixed |= native_pending
+    native = common | native_pending if features & RULE_SPELLINGS else common
+    return tuple(f"Pending: {describe(missing)}" if missing else "Ready" for missing in (mixed, native))
+
+
 def native_rule_link(root, label, path, review_head):
     target = f"../../{path}"
     if not (root / path).is_file():
@@ -329,10 +357,10 @@ def render_native_rules(root, packs, ready):
     evidence = ", ".join(native_rule_link(root, label, path, NATIVE_RULE_TESTS)
                          for label, (path, _) in NATIVE_RULE_EVIDENCE)
     design = native_rule_link(root, "Native rules decision", "decisions/language-native-rules.md", NATIVE_RULE_DESIGN)
-    signatures = native_rule_link(root, "signature linking",
-                                  "compiler/tests/rezono/test_native_rule_signatures.py", NATIVE_RULE_SIGNATURES)
-    parity = native_rule_link(root, "publication parity",
-                              "compiler/tests/rezono/test_native_rule_publication_parity.py", NATIVE_RULE_TESTS)
+    signatures = native_rule_link(root, "signature linking", NATIVE_PACK_EVIDENCE["native-rule-signatures"][0],
+                                  NATIVE_RULE_SIGNATURES)
+    parity = native_rule_link(root, "publication parity", NATIVE_PACK_EVIDENCE["native-rule-publication-parity"][0],
+                              NATIVE_RULE_TESTS)
     states = native_rule_link(root, "state-evidence test",
                               "compiler/tests/rezono/test_native_rule_state_evidence.py", NATIVE_RULE_TESTS)
     status = "Supported" if "native-rule" in ready else "Pending"
@@ -380,6 +408,9 @@ def render(root=ROOT):
     root = root.resolve()
     packs = inventory(root)
     ready = supported(root)
+    native_pending = ({"native-rule"} - ready) | {
+        name for name, test in NATIVE_PACK_EVIDENCE.items() if not passing_test(root, test)
+    }
     counts = Counter(feature for usage in packs.values() for features in usage.files.values()
                      for feature in features - {STATE_REVIEW, "native-rule"})
     lines = ["# Rezono language coverage", "",
@@ -387,7 +418,8 @@ def render(root=ROOT):
              "Counts use each authored file once per feature. Higher counts give higher priority among available tasks.",
              "Support requires the applicable reader, form and lowering tests without expected-failure markers.",
              "Pack readiness includes transitive local imports.",
-             "Publication parity is checked separately.",
+             "Mixed conversion uses legacy pipe blocks. Native conversion uses typed rules.",
+             "Native conversion requires reader, form, IR, signature and publication evidence. Review explicit state predicates.",
              "", "| Feature | Files | Reader and lowering |", "| --- | ---: | --- |"]
     for name, count in sorted(counts.items(), key=lambda item: (-item[1], item[0])):
         evidence = EVIDENCE.get(name)
@@ -396,20 +428,23 @@ def render(root=ROOT):
             reader, lowerer = evidence
             status = ("Supported" if name in ready else "Pending") + f" ([reader](../../{reader[0]}), [lowering](../../{lowerer[0]}))"
         lines.append(f"| {name} | {count} | {status} |")
-    lines.extend(["", "| Pack or source directory | Direct features | Imported features | Pending features |",
-                  "| --- | --- | --- | --- |"])
+    lines.extend(["", "| Pack or source directory | Direct features | Imported features | Pending features | Mixed conversion | Native conversion |",
+                  "| --- | --- | --- | --- | --- | --- |"])
     for folder, usage in sorted(packs.items()):
         direct = {feature for values in usage.files.values() for feature in values}
         imports = {feature for dependency in usage.imports for values in packs[dependency].files.values()
                    for feature in values}
-        pending = (direct | imports) - ready
+        features = direct | imports
+        pending = features - ready
         if usage.missing_import:
             pending.add("unresolved-pack-import")
         status = "Ready" if direct or imports else "No language sources"
         if pending:
             status = describe(pending)
+        mixed, native = conversion_status(features, ready, native_pending, usage.missing_import,
+                                          (folder / "pack.yaml").is_file())
         lines.append(f"| {folder.relative_to(root).as_posix()} | {describe(direct - {STATE_REVIEW})} | "
-                     f"{describe(imports - {STATE_REVIEW})} | {status} |")
+                     f"{describe(imports - {STATE_REVIEW})} | {status} | {mixed} | {native} |")
     lines.extend(render_native_rules(root, packs, ready))
     return "\n".join(lines)
 
