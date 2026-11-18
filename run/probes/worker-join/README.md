@@ -27,11 +27,14 @@ The same launcher is available for offline tests. Stage its renderer using
 set `REZONO_WORKER_RENDERER` to that executable and install libarchive's `bsdtar`.
 
 With `--kubevirt`, the trial binds the Ready VMI to its active launcher and
-running compute container. It reads the named domain through read-only
-libvirt. The active domain must use KVM, retain its UUID and numeric runtime
-ID, and show increasing time for an online vCPU while running. The packaged
-libvirt selects the KVM accelerator for this domain type. An unavailable
-reading leaves acceleration unproven.
+running compute container. It checks the monitor's VMI UID before and after
+sampling, and matches the VMI firmware UUID to the live domain's SMBIOS UUID
+through read-only libvirt. KubeVirt keeps the UID in its launcher cache, so
+libvirt may report an empty metadata UID. A populated UID must match and
+duplicate UID entries fail the trial. The active domain must use KVM, retain
+its UUID and numeric runtime ID, and show increasing time for an online
+vCPU while running. The packaged libvirt selects the KVM accelerator for
+this domain type. An unavailable reading leaves acceleration unproven.
 
 CirrOS independently emits a complete serial line containing its NoCloud
 instance ID. The trial counts exact matches with the VMI firmware UUID and
@@ -52,6 +55,9 @@ The repository owner dispatches the [Ubuntu worker acceptance workflow](../../..
 - [CirrOS 0.5.2 user data](https://github.com/cirros-dev/cirros/blob/77a944c1e65f57ec145e8502eec1a02bd7e99a84/src/sbin/cirros-userdata)
 - [KubeVirt launcher diagnostics](https://kubevirt.io/user-guide/debug_virt_stack/virsh-commands/)
 - [KubeVirt domain naming](https://github.com/kubevirt/kubevirt/blob/c3d19093f9c7b843b3879b18dc088911c081c39e/pkg/virt-launcher/virtwrap/api/schema.go#L1533-L1538)
+- [KubeVirt launcher monitor arguments](https://github.com/kubevirt/kubevirt/blob/c3d19093f9c7b843b3879b18dc088911c081c39e/pkg/virt-controller/services/template.go#L460-L468)
+- [KubeVirt launcher UID cache](https://github.com/kubevirt/kubevirt/blob/c3d19093f9c7b843b3879b18dc088911c081c39e/pkg/virt-launcher/virtwrap/manager.go#L1620-L1628)
+- [KubeVirt SMBIOS UUID](https://github.com/kubevirt/kubevirt/blob/c3d19093f9c7b843b3879b18dc088911c081c39e/pkg/virt-launcher/virtwrap/converter/compute/sysinfo.go#L46-L61)
 - [Libvirt domain statistics](https://libvirt.org/manpages/virsh.html#domstats)
 - [Libvirt 11.10 accelerator selection](https://github.com/libvirt/libvirt/blob/v11.10.0/src/qemu/qemu_command.c#L7328-L7359)
 - [Libvirt 12.4 accelerator selection](https://github.com/libvirt/libvirt/blob/v12.4.0/src/qemu/qemu_command.c#L7417-L7448)

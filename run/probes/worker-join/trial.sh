@@ -232,7 +232,10 @@ done
 read -r pod pod_uid compute_id <<< "$identity"
 observe "launcher=$pod launcher_uid=$pod_uid"
 stage=guest-observations
-if ! vcpu=$(python3 "$sources/../flatcar/runtime.py" default_host-probe "$uid" \
+if ! firmware_uuid=$(jq -er '.spec.domain.firmware.uuid |
+    select(type == "string" and test("^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$"))' vmi.json); then
+    vcpu="kvm_vcpu=unproven vcpu_reason=firmware_identity_unavailable"
+elif ! vcpu=$(python3 "$sources/../flatcar/runtime.py" default_host-probe "$uid" "$firmware_uuid" \
     docker exec "$name" k0s kubectl --request-timeout=10s exec "$pod" -c compute --); then
     vcpu="kvm_vcpu=unproven vcpu_reason=reader_failed"
 fi
@@ -246,8 +249,7 @@ matches=0
 if ! current=$(identify_launcher) || [[ $current != "$identity" ]]; then
     reason=launcher_identity_unconfirmed
     vcpu="kvm_vcpu=unproven vcpu_reason=$reason"
-elif ! firmware_uuid=$(jq -er '.spec.domain.firmware.uuid |
-    select(type == "string" and test("^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$"))' vmi.json); then
+elif [[ -z $firmware_uuid ]]; then
     reason=firmware_identity_unavailable
 else
     for ((attempt=0; attempt<48; attempt++)); do
