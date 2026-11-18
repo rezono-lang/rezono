@@ -386,12 +386,18 @@ def lower(pack_dir: Path, d: Declared, form: dict, pack: str, owners: dict[str, 
                        "§3")
                 continue
         if "kind" in decl:
+            kind_fields = {}
+            if form["format"] == IDENTIFIER_FORMAT and "abstract" in decl:
+                abstract = rezono_kind.lower_abstract(decl, at, refuse)
+                if abstract is None:
+                    continue
+                decl, kind_fields = abstract
             lowered_kind = rezono_kind.lower(
                 decl, at, own, owners, declared_names, uses, refuse,
                 explicit_identifiers=form["format"] == IDENTIFIER_FORMAT,
             )
             if lowered_kind is not None:
-                classes[decl["kind"]] = lowered_kind
+                classes[decl["kind"]] = lowered_kind | kind_fields
         elif "enum" in decl:
             lowered_enum = rezono_enum.lower(decl, at, refuse)
             if lowered_enum is not None:
