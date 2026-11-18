@@ -54,6 +54,10 @@ types:
     typeof: string
     pattern: "^[0-9]+(\\.[0-9]+)?(/[0-9]+)?$"
     description: A number as the text wrote it (v0 §3).
+  SlotDecimalBound:
+    typeof: string
+    pattern: "^-?[0-9]+(\\.[0-9]+)?$"
+    description: A signed decimal slot bound, preserved as written.
   TypeName:
     typeof: string
     pattern: "^[A-Z][A-Za-z0-9]*$"
@@ -144,9 +148,22 @@ classes:
       start: {required: true, range: DecimalText, description: "The 0-based offset of its first character, in code points of the text."}
       end: {required: true, range: DecimalText, description: "The offset after its last character."}
 
+  ModuleWithLegacySlots:
+    description: The original slot restrictions for a module.
+    abstract: true
+    is_a: ModuleWithRules
+    slot_usage:
+      decls:
+        all_of:
+          # Other declaration types retain their existing validation.
+          - any_of:
+              - {range: LegacyKindDecl, inlined: true}
+              - none_of:
+                  - {range: KindDecl, inlined: true}
+
   Module:
     description: The original module shape.
-    is_a: ModuleWithRules
+    is_a: ModuleWithLegacySlots
     slot_usage:
       decls:
         none_of:
@@ -245,7 +262,13 @@ classes:
       world: {range: World}
       applies: {range: Applies, inlined: true}
       sealed: {range: Name, description: "The slot of `sealed at`. It has no place of its own: its kind's stands for it."}
-      slots: {required: true, range: Slot, multivalued: true, inlined_as_list: true}
+      slots:
+        required: true
+        multivalued: true
+        inlined_as_list: true
+        any_of:
+          - {range: Slot}
+          - {range: ConstrainedSlot}
       derived: {required: true, range: Derived, multivalued: true, inlined_as_list: true}
 
   KindDeclWithKeys:
@@ -276,13 +299,69 @@ classes:
       axis: {required: true, range: Axis}
       slot: {required: true, range: Name}
 
-  Slot:
+  SlotShape:
+    description: Members shared by unconstrained and constrained slots.
+    abstract: true
     attributes:
       slot: {required: true, range: Name}
       type: {required: true, range: TypeText}
       card: {range: Card}
       inverse: {range: Name}
       world: {range: World}
+
+  Slot:
+    description: A slot with no written constraints.
+    is_a: SlotShape
+
+  ConstrainedSlot:
+    description: A slot with at least one written constraint.
+    is_a: SlotShape
+    attributes:
+      constraints:
+        description: Slot constraints in the order they were written.
+        required: true
+        multivalued: true
+        inlined_as_list: true
+        minimum_cardinality: 1
+        any_of:
+          - {range: SlotCardinalityConstraint}
+          - {range: SlotMinimumConstraint}
+          - {range: SlotMaximumConstraint}
+          - {range: SlotPatternConstraint}
+
+  SlotCardinalityConstraint:
+    description: The inclusive range for the number of values in a slot.
+    attributes:
+      cardinality:
+        required: true
+        range: DecimalText
+        multivalued: true
+        minimum_cardinality: 2
+        maximum_cardinality: 2
+        description: The inclusive lower and upper number of values, in that order.
+
+  SlotMinimumConstraint:
+    description: An inclusive lower bound for a numeric slot value.
+    attributes:
+      minimum: {required: true, range: SlotDecimalBound}
+
+  SlotMaximumConstraint:
+    description: An inclusive upper bound for a numeric slot value.
+    attributes:
+      maximum: {required: true, range: SlotDecimalBound}
+
+  SlotPatternConstraint:
+    description: A pattern for the text value of a slot.
+    attributes:
+      pattern: {required: true, range: string}
+
+  LegacyKindDecl:
+    description: A version-one kind declaration with only unconstrained slots.
+    is_a: KindDecl
+    slot_usage:
+      slots:
+        any_of:
+          - {range: Slot}
 
   ExtendDecl:
     attributes:
