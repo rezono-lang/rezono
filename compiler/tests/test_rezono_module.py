@@ -101,6 +101,72 @@ def test_a_writer_reads_the_classes_of_a_module_as_it_reads_a_schema_file(tmp_pa
         assert layout.declared["delta"] == ["id", "gamma", "alpha", "state", "grade"]
 
 
+def test_unbounded_lists_compile_like_written_linkml(tmp_path):
+    oracle = Path(shutil.copytree(FIXTURE, tmp_path / "yaml" / "minimal"))
+    source = Path(shutil.copytree(FIXTURE, tmp_path / "rezono" / "minimal"))
+    (oracle / "schema/roles.yaml").write_text(
+        """id: https://rezono.example/roles
+name: roles
+imports: [linkml:types, minimal]
+default_range: string
+annotations: {layer: facts}
+enums:
+  Capability:
+    permissible_values: {read: {}, review: {}}
+classes:
+  Role:
+    attributes:
+      id: {identifier: true}
+      capability: {range: Capability, multivalued: true}
+      reviewers: {range: Alpha, multivalued: true, required: true}
+""", encoding="utf-8",
+    )
+    module(source, [
+        {"enum": "Capability", "world": "closed", "values": ["read", "review"]},
+        {"kind": "Role", "world": "closed", "slots": [
+            {"slot": "capability", "type": "Capability", "card": "*"},
+            {"slot": "reviewers", "type": "Alpha", "card": "+"},
+        ]},
+    ], name="roles")
+
+    records = {
+        "alpha": [{"id": "a", "title": "A"}, {"id": "b", "title": "B"}],
+        "role": [
+            {"id": "absent", "reviewers": ["a"]},
+            {"id": "empty", "capability": [], "reviewers": ["a"]},
+            {"id": "both", "capability": ["read", "review"], "reviewers": ["a", "b"]},
+            {"id": "missing", "capability": ["review"]},
+            {"id": "required-empty", "reviewers": []},
+            {"id": "refused", "capability": ["other"], "reviewers": ["z"]},
+        ],
+    }
+    expected_rows = {
+        "role__capability": {("both", "read"), ("both", "review"), ("missing", "review"), ("refused", "other")},
+        "role__reviewers": {("absent", "a"), ("empty", "a"), ("both", "a"), ("both", "b"), ("refused", "z")},
+    }
+    expected_violations = {
+        "role__reviewers__totality": {("missing", ""), ("required-empty", "")},
+        "role__reviewers__reference": {("refused", "z")},
+        "role__capability__value_range": {("refused", "other")},
+    }
+    for name, directory in (("yaml", oracle), ("rezono", source)):
+        output = tmp_path / "compiled" / name
+        assert main(["compile", str(directory), str(output)]) == 0
+        files = {path.relative_to(output).as_posix(): path.read_text(encoding="utf-8")
+                 for path in output.rglob("*") if path.is_file()}
+        bundle = json.loads(files["bundle/schema-bundle.json"])
+        capability = next(slot for slot in bundle["attributes"] if slot["id"] == "role.capability")
+        reviewers = next(slot for slot in bundle["arrows"] if slot["id"] == "role.reviewers")
+        assert capability["multivalued"] and not capability["required"]
+        assert reviewers["multivalued"] and reviewers["required"] and reviewers["target"] == "alpha"
+        for slot in (capability, reviewers):
+            assert "minimum_cardinality" not in slot and "maximum_cardinality" not in slot
+            assert slot["span"]["file"] == ("rezono/roles.rezono" if name == "rezono" else "schema/roles.yaml")
+        rows = facts.rows_of(pack.read(directory), records)
+        assert {rel: set(rows[rel]) for rel in expected_rows} == expected_rows
+        assert violations(files, rows) == expected_violations
+
+
 def test_compile_refuses_invalid_source_places(tmp_path, capsys):
     directory = written(tmp_path, "module")
     path = directory / "rezono/kinds.json"
@@ -296,7 +362,7 @@ REFUSALS = {
     "a check": ([{"check": "warn", "cond": {"lit": "true"}}], 10, "a check statement is not lowered yet"),
     "a reason": ([{"reason": "r", "text": '"r"'}], 10, "a reason declaration is not lowered"),
     "a slot named id": ([slot(slot="id", type="Text")], 11, "a slot named `id` is refused"),
-    "a slot T*": ([slot(slot="many", type="Text", card="*")], 11, "a slot `Text*` is not lowered"),
+    "an unknown slot suffix": ([slot(slot="many", type="Text", card="**")], 11, "a slot `Text**` is not lowered"),
     "an inverse": ([slot(slot="many", type="Beta", card="*", inverse="eta")], 11, "a slot with inverse is not lowered"),
     "world on a slot": ([slot(slot="note", type="Text", world="open")], 11, "a slot with world is not lowered"),
     "a DateTime slot": ([slot(slot="observed_at", type="DateTime")], 11, "DateTime is not Date, Text, or an enum or a kind of this pack"),
