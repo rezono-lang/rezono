@@ -24,6 +24,7 @@ and WHERE as the rule. It reads the final relations, so it is never part of a re
 
 from dataclasses import replace
 
+from . import feldera_names
 from .rules import Condition, calc_input_table, const_type, is_var, upper
 from .sqltext import literal, q
 
@@ -269,7 +270,7 @@ def feldera(prog, witnesses=False, relations=None, inputs=None, tables=True):
             if wants_witness(prog, r, witnesses):
                 stmts.append(f"CREATE MATERIALIZED VIEW {q(r.witness_relation)} AS\n{witness_select(prog, r)};")
         stmts += [f"CREATE MATERIALIZED VIEW {q(v)} AS\n{s};" for v, s in checks(prog, name)]
-    return "\n\n".join(stmts) + "\n"
+    return feldera_names.render("\n\n".join(stmts) + "\n")
 
 
 def _input_tables(prog, names):
@@ -283,7 +284,7 @@ def _input_tables(prog, names):
 
 def input_tables(prog, names):
     """Derived or calc relations another pipeline computes, as input tables of this one."""
-    return "\n\n".join(_input_tables(prog, sorted(names))) + "\n"
+    return feldera_names.render("\n\n".join(_input_tables(prog, sorted(names))) + "\n")
 
 
 def divides(prog):

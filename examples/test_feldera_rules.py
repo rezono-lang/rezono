@@ -5,7 +5,7 @@ from collections import Counter
 
 import pytest
 
-from feldera import URL, deploy, processed, push, query, stop
+from feldera import URL, deploy, processed, push, query, read_relation, stop
 from rezono_compiler import facts, rules_split, rules_sql, scenarios
 from rules_support import RULED, name, states
 from support import compile_dir
@@ -46,15 +46,15 @@ def export_rows(pipeline, prog, exports):
 def check_views(pipeline, prog, part, state, checks, refused):
     for rel in part["views"]:
         got = {tuple(str(row[c.name]) for c in prog.relations[rel].key)
-               for row in query(pipeline, f'SELECT * FROM "{rel}"')}
+               for row in read_relation(pipeline, rel)}
         assert got == state.derived[rel], (state.label, rel)
         for view in checks[rel]:
-            assert query(pipeline, f'SELECT * FROM "{view}"') == [], (state.label, view)
+            assert read_relation(pipeline, view) == [], (state.label, view)
     if part["name"] in ("main", "integrity"):
         for rel, want in state.seal.items():
             columns = ("id", "period_close") if rel in refused else ("id",)
             got = set()
-            for row in query(pipeline, f'SELECT * FROM "{rel}"'):
+            for row in read_relation(pipeline, rel):
                 assert row.keys() == set(columns), (state.label, rel, row.keys())
                 got.add(tuple(str(row[c]) for c in columns))
             assert got == want, (state.label, rel)

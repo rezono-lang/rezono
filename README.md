@@ -20,6 +20,10 @@ jq -e '.checks[] | select(.name == "rezono:proofs" and .status == "green" and .v
 
 The final command prints the recorded proof check. Open the same manifest to see the snapshot hashes and witness references. Explore other [examples](examples/) or read the [language guide](rezono/README.md).
 
+## Feldera relation names
+
+The pipeline plan, exported row tags and published snapshots identify relations by their logical names. For Feldera ingress and SQL queries, use the physical name in the compiled SQL. Feldera reserves the SQL function name `interval` even for quoted relations, so the compiler spells that relation `__rezono_interval` on Feldera. Pack names start with a letter, which keeps the alias distinct from a pack relation such as `rezono_interval`. The compiler's `facts` command emits updates keyed by the Feldera table name.
+
 ## Licences and contributing
 
 Code, tests and build scripts use Apache-2.0. Schemas and theories use CC0-1.0. Documentation and example content use CC-BY-4.0. See [LICENSE](LICENSE), the [licence texts](LICENSES/) and the [path-by-path attribution notice](NOTICE).

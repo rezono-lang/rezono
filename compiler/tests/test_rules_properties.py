@@ -465,7 +465,7 @@ def test_feldera_runs_generated_programs_as_duckdb_does(pick, tmp_path):
     operands and a body of aggregates only among them, on a running Feldera (FELDERA_URL; the label `feldera`), with a witness view per rule
     (the explain SQL): after the facts and after each single-fact change, every relation and every witness
     equals the batch backend (DuckDB, which divides with rezono_quotient), and Soufflé where it is installed."""
-    from feldera import URL, deploy, processed, push, query, stop
+    from feldera import URL, deploy, processed, push, read_relation, stop
     if not URL:
         pytest.skip("set FELDERA_URL to a running Feldera")
     seed = [s for s in range(500) for p in [ir.load(gen.program(s, 14, shapes=gen.ALL_SHAPES))]
@@ -489,11 +489,11 @@ def test_feldera_runs_generated_programs_as_duckdb_does(pick, tmp_path):
         want = duck.read(con, prog)
         for rel in prog.derived():
             cols = [c.name for c in prog.relations[rel].key]
-            assert {tuple(str(r[c]) for c in cols) for r in query(name, f'SELECT * FROM "{rel}"')} == want[rel], rel
+            assert {tuple(str(r[c]) for c in cols) for r in read_relation(name, rel)} == want[rel], rel
             for r in prog.rules_for(rel):
                 cols = sql.witness_columns(r)
                 table = f'SELECT * FROM "{r.witness_relation}"'
-                got = {tuple(str(x[c]) for c in cols) for x in query(name, table)}
+                got = {tuple(str(x[c]) for c in cols) for x in read_relation(name, r.witness_relation)}
                 assert got == {tuple(str(v) for v in x) for x in con.execute(table).fetchall()}, r.id
         if shutil.which("souffle"):
             assert souffle.run(prog, data, tmp_path) == want
