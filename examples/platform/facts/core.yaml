@@ -119,10 +119,10 @@ service:
   - {id: restore-bad, product: app, role: recovery, step: 2}
 release:
   - {id: keycloak-25, product: keycloak, released_on_day: 100, stable: 'yes'}
-  - {id: keycloak-26, product: keycloak, released_on_day: 200, stable: 'yes'}
+  - {id: keycloak-26, product: keycloak, released_on_day: 200, stable: 'yes', version: '26.0.0'}
   - {id: keycloak-27rc, product: keycloak, released_on_day: 250, stable: 'no'}
-  - {id: postgresql-16, product: postgresql, released_on_day: 50, stable: 'yes'}
-  - {id: postgresql-17, product: postgresql, released_on_day: 150, stable: 'yes'}
+  - {id: postgresql-16, product: postgresql, released_on_day: 50, stable: 'yes', series: '16'}
+  - {id: postgresql-17, product: postgresql, released_on_day: 150, stable: 'yes', series: '17'}
 pin:
   - {id: pin-db-git, service: db-git, release: postgresql-16}
 choice:
