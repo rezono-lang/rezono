@@ -102,7 +102,7 @@ def check_epoch(witnesses: list, manifest: dict, rules: dict, read_bytes, *, der
     proof = {"manifest_id": manifest["id"], "root": None, "witnesses": witnesses}
     if snapshots is None:
         return _report(proof, None, set(), findings)
-    findings.extend(check_state_projections(manifest, read_bytes, snapshots))
+    findings.extend(check_state_projections(manifest, read_bytes, snapshots, full=full))
     rows, groups = _rows(snapshots, findings), {}
     for s in seals:
         _check_seal(s, rows, findings)
