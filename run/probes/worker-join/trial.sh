@@ -52,6 +52,7 @@ test "$(git -C renderer rev-parse FETCH_HEAD)" = "$source_revision"
 git -C renderer checkout -q --detach FETCH_HEAD
 cp "$sources/render.go" renderer/probe.go
 (cd renderer && go build -mod=readonly -o "$scratch/render" probe.go)
+fetch 'https://raw.githubusercontent.com/kubernetes-client/python/5b23a44aa06010ac6ffe423d7b0e090caf7882ff/kubernetes/utils/quantity.py' 3c568e71032e144568280cb21af64d78dc23c526f7a4e05d2e3f53cdd0315a5d quantity.py
 if ! command -v qemu-system-x86_64 >/dev/null || ! command -v getfacl >/dev/null; then
     sudo -n apt-get update -qq
     sudo -n apt-get install -y -qq --no-install-recommends acl qemu-system-x86 qemu-utils
@@ -138,7 +139,8 @@ await_condition() { docker exec "$name" k0s kubectl "$@"; }
 apply operator.yaml
 # The disposable controller runs outside Kubernetes and has no node object.
 # Place infrastructure on the only enrolled worker using its verified label.
-control -n kubevirt patch deployment virt-operator --type=json -p     '[{"op":"replace","path":"/spec/template/spec/affinity/nodeAffinity/requiredDuringSchedulingIgnoredDuringExecution/nodeSelectorTerms","value":[{"matchExpressions":[{"key":"probe.rezono.org/role","operator":"In","values":["joined-worker"]}]}]}]'
+control -n kubevirt patch deployment virt-operator --type=json -p \
+    '[{"op":"replace","path":"/spec/template/spec/affinity/nodeAffinity/requiredDuringSchedulingIgnoredDuringExecution/nodeSelectorTerms","value":[{"matchExpressions":[{"key":"probe.rezono.org/role","operator":"In","values":["joined-worker"]}]}]}]'
 await_condition -n kubevirt rollout status deployment/virt-operator --timeout=240s
 stage=kubevirt-availability
 cat >> cr.yaml <<'YAML'
@@ -151,7 +153,9 @@ YAML
 apply cr.yaml
 await_condition -n kubevirt wait kubevirt/kubevirt --for=condition=Available --timeout=360s
 stage=kvm-allocation
-capacity=$(control get node proof-worker -o json | jq -er '.status.allocatable["devices.kubevirt.io/kvm"] | tonumber | select(. > 0)')
+raw_capacity=$(control get node proof-worker -o json | jq -er '.status.allocatable["devices.kubevirt.io/kvm"]')
+observe "node=proof-worker raw_kvm_capacity=$raw_capacity"
+capacity=$(python3 "$sources/../flatcar/capacity.py" quantity.py "$raw_capacity")
 observe "kubevirt_available=true node=proof-worker kvm_capacity=$capacity"
 stage=guest-readiness
 apply "$sources/../flatcar/vmi.yaml"

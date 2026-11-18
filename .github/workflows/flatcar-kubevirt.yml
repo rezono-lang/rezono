@@ -1,11 +1,6 @@
 name: Flatcar KubeVirt trial
 on:
   workflow_dispatch:
-  push:
-    branches: [fix/run-tests-test_flatcar.py]
-    paths:
-      - '.github/workflows/flatcar-kubevirt.yml'
-      - 'run/probes/**'
 permissions:
   contents: read
 jobs:
