@@ -49,9 +49,6 @@ def test_published_listener_port(publications):
         }
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError, reason=(
-    "Read decisions/platform-published-listener-policies.md. Implement the checked publication input for "
-    "examples/platform/network_policy.py so each allowed listener row drives both policy directions."))
 def test_render_published_listener_port(publications, monkeypatch):
     monkeypatch.syspath_prepend(str(ROOT))
     import network_policy
