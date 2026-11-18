@@ -26,7 +26,7 @@ def reading(xml=XML, last_xml=None, stats=STATS, last_stats=None):
             assert args == (NAME,)
             xml_calls += 1
             return xml if xml_calls == 1 or last_xml is None else last_xml
-        assert (operation, *args) == ("domstats", "--state", "--vcpu", DOMAIN)
+        assert (operation, *args) == ("domstats", "--raw", "--state", "--vcpu", DOMAIN)
         stat_calls += 1
         return stats if stat_calls == 1 or last_stats is None else last_stats
     return read

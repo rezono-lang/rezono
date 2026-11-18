@@ -58,7 +58,7 @@ def measure(read, name, vmi_uid, wait=time.sleep):
     domain_uuid, _ = expected
 
     def sample():
-        return vcpu_time(read("domstats", "--state", "--vcpu", domain_uuid))
+        return vcpu_time(read("domstats", "--raw", "--state", "--vcpu", domain_uuid))
 
     first = sample()
     for _ in range(5):
