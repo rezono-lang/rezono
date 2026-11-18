@@ -1,5 +1,6 @@
 """A small client for the Feldera HTTP API, for engine tests and measurements (FELDERA_URL)."""
 
+from contextlib import contextmanager
 import json
 import os
 import time
@@ -10,6 +11,18 @@ from pathlib import Path
 from rezono_compiler import feldera_names
 
 URL = os.environ.get("FELDERA_URL")
+
+
+class OracleMismatch(AssertionError):
+    """A comparison of independently obtained records or witnesses failed."""
+
+
+@contextmanager
+def comparing():
+    try:
+        yield
+    except AssertionError as error:
+        raise OracleMismatch("Feldera comparison differs from its reference") from error
 
 
 def call(method, path, body=None, raw=False):

@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from feldera import URL, deploy, processed, push, query, read_relation, stop
+from feldera import URL, comparing, deploy, processed, push, query, read_relation, stop
 from feldera_file_input import FileInputs
 from rezono_compiler import facts, rules_split, rules_sql, scenarios
 from rules_support import RULED, name, states
@@ -47,6 +47,7 @@ def export_rows(pipeline, prog, exports):
     return result
 
 
+@comparing()
 def check_views(pipeline, prog, part, state, checks, refused):
     for rel in part["views"]:
         got = {tuple(str(row[c.name]) for c in prog.relations[rel].key)
@@ -118,7 +119,8 @@ def test_incremental_on_feldera_equals_batch(example, tmp_path, oracle_input_dir
                 if part["exports"]:
                     current = export_rows(pipeline, prog, part["exports"])
                     for rel, rows in current.items():
-                        assert {tuple(map(str, row)) for row in rows} == state.rows[rel], (label, rel)
+                        with comparing():
+                            assert {tuple(map(str, row)) for row in rows} == state.rows[rel], (label, rel)
                         key = [c.name for c in prog.relations[rel].key]
                         relay[rel] = [{op: dict(zip(key, row, strict=True))}
                                       for op, changed in changes(previous.get(rel, []), rows) for row in changed]

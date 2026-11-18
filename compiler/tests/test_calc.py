@@ -712,7 +712,7 @@ def walk(e: dict) -> list[dict]:
 
 @pytest.mark.parametrize("case", ["full", "choice"])
 def test_feldera_gives_what_duckdb_gives(case):
-    from feldera import URL, deploy, processed, push, read_relation, stop
+    from feldera import URL, comparing, deploy, processed, push, read_relation, stop
     if not URL:
         pytest.skip("set FELDERA_URL to a running Feldera")
     doc, rows = (full_program(), item_rows()) if case == "full" else choice_case()
@@ -733,4 +733,5 @@ def test_feldera_gives_what_duckdb_gives(case):
                                  x["definition"], x["version"])
                   for x in read_relation(name, prog.engine[r])}
     stop(name)
-    assert got == run(PACK, prog, rows)
+    with comparing():
+        assert got == run(PACK, prog, rows)

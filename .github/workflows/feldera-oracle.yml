@@ -5,6 +5,10 @@ on:
     branches: [main]
   workflow_dispatch:
 
+concurrency:
+  group: feldera-oracle-${{ github.ref }}
+  cancel-in-progress: false
+
 permissions:
   contents: read
 
@@ -12,6 +16,8 @@ jobs:
   oracle:
     runs-on: ubuntu-24.04
     timeout-minutes: 120
+    outputs:
+      disagreement: ${{ steps.classify.outputs.confirmed }}
     defaults:
       run:
         shell: bash
@@ -37,8 +43,13 @@ jobs:
           bash scripts/install-souffle.sh
           echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
       - name: Compare compiler and example results with Feldera
+        id: compare
         timeout-minutes: 100
         run: bash compiler/ci/run_feldera_oracle.sh
+      - name: Classify the completed comparison
+        id: classify
+        if: failure() && steps.compare.outcome == 'failure' && github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: python compiler/ci/feldera_incident.py classify "$RUNNER_TEMP/feldera-oracle" >> "$GITHUB_OUTPUT"
       - name: Retain collected cases and test results
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.6.2
@@ -47,3 +58,24 @@ jobs:
           path: ${{ runner.temp }}/feldera-oracle/
           if-no-files-found: warn
           retention-days: 7
+
+  report:
+    needs: oracle
+    if: >-
+      ${{ !cancelled() && github.event_name == 'push' && github.ref == 'refs/heads/main' &&
+          needs.oracle.result == 'failure' && needs.oracle.outputs.disagreement == 'true' }}
+    permissions:
+      actions: read
+      contents: read
+      issues: write
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Record the first disagreement and last green main revision
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 compiler/ci/feldera_incident.py report

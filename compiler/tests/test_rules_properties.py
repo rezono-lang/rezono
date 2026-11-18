@@ -465,7 +465,7 @@ def test_feldera_runs_generated_programs_as_duckdb_does(pick, tmp_path):
     operands and a body of aggregates only among them, on a running Feldera (FELDERA_URL; the label `feldera`), with a witness view per rule
     (the explain SQL): after the facts and after each single-fact change, every relation and every witness
     equals the batch backend (DuckDB, which divides with rezono_quotient), and Soufflé where it is installed."""
-    from feldera import URL, deploy, processed, push, read_relation, stop
+    from feldera import URL, comparing, deploy, processed, push, read_relation, stop
     if not URL:
         pytest.skip("set FELDERA_URL to a running Feldera")
     seed = [s for s in range(500) for p in [ir.load(gen.program(s, 14, shapes=gen.ALL_SHAPES))]
@@ -483,6 +483,7 @@ def test_feldera_runs_generated_programs_as_duckdb_does(pick, tmp_path):
             updates.setdefault(rel, []).extend({op: dict(zip(columns[rel], r))} for r in rs)
         processed(name, push(name, updates))
 
+    @comparing()
     def same():
         con = duck.connect(prog, data)
         duck.compute(con, prog, witnesses=True)
