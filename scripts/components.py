@@ -364,7 +364,14 @@ def worker_items(folder: str, items: list[str], workers: int) -> list[list[str]]
     offset = 2 if readers and workers > 2 else 0
     if offset:
         # Keep pytest collection order within each execution process.
-        first = set(readers[::2])
+        # The second publication and the independent standards readers dominate
+        # this module. Give the table checks to the shorter reader as well.
+        costs = {
+            forms + "::test_a_ledger_payment_does_not_change_the_policy_adviser_s_form": 79_000,
+            forms + "::test_each_role_s_standards_exports_pass_their_readers": 55_000,
+            forms + "::test_each_role_s_tables_give_its_dataset_hash_alone": 7_700,
+        }
+        first = set(weighted_workers(readers, 2, costs, 200)[0])
         for node in items:
             if node in first:
                 groups[0].append(node)
