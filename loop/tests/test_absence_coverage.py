@@ -113,3 +113,33 @@ def test_incomplete_window_cannot_lend_bounds_to_the_complete_window():
     _, rows, _ = evaluate(pack.read(LOOP), data)
     assert rows["complete_sweep"] == {(RUN, SCOPE, SWEEP, "coverage")}
     assert not rows["current"] and not rows["drift"]
+
+
+@pytest.mark.parametrize(("second_bounds", "time", "expected"), [
+    pytest.param(None, 9, False, id="single-window-before-start"),
+    pytest.param(None, 11, True, id="single-window-inside"),
+    pytest.param((8, 12), 9, False, id="disagreed-start-cannot-widen"),
+    pytest.param((8, 12), 11, False, id="disagreed-start-invalidates-overlap"),
+    pytest.param((10, 13), 12, False, id="disagreed-stop-cannot-widen"),
+    pytest.param((10, 12), 10, True, id="identical-bounds-agree"),
+    pytest.param((10, 12), 12, False, id="identical-bounds-exclude-stop"),
+])
+def test_complete_windows_need_unambiguous_bounds(second_bounds, time, expected):
+    from rezono_compiler import pack
+
+    coverage = receipt(start=10, stop=12)
+    coverage["flow_node_report"][0].update(first=8, last=13)
+    if second_bounds is not None:
+        start, stop = second_bounds
+        original, = coverage["flow_sweep_window"]
+        coverage["flow_sweep_window"].append(dict(original, id="second", start=start, stop=stop))
+
+    data = recording(coverage, scope=SCOPE, sweep=SWEEP, event_time=time)
+    _, rows, _ = evaluate(pack.read(LOOP), data)
+
+    assert rows["current"] == ({(RUN, TOKEN, "absent", "", REASON)} if expected else set())
+    assert rows["drift"] == ({DRIFT} if expected else set())
+    refs = {record["id"] for record in coverage["flow_sweep_window"]}
+    assert rows["complete_sweep"] == (
+        {(RUN, SCOPE, SWEEP, ref) for ref in refs} if second_bounds in (None, (10, 12)) else set()
+    )
