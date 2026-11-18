@@ -5,7 +5,6 @@ import pytest
 from wire_fixtures import entry
 
 
-@pytest.mark.xfail(strict=True, reason="Read decisions/loop-fixture-evidence.md. Implement loop/recording_cli.py. Waits for test_recording_input and test_replay. Replay the checked-in trace through the ordinary command.")
 def test_recording_cli(monkeypatch, capsys):
     main = entry(monkeypatch, "recording_cli", "main")
     import json
