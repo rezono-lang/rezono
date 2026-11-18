@@ -214,7 +214,10 @@ def affected_components(
 
 # Files are assigned to jobs round-robin. Within a job pytest items share the
 # runner's cores, so one large parametrized file can use more than one core.
-SHARDS = {"compiler": 3, "examples": 5}
+FORMS_MODULE = "examples/subsidy/test_subsidy_forms.py"
+INDEPENDENT_PUBLICATIONS = "examples/subsidy/test_subsidy.py"
+RULE_EXAMPLES = "examples/test_rules.py"
+SHARDS = {"compiler": 3, "edge/publisher": 2}
 PARALLEL = {"compiler", "examples", "edge/publisher"}
 
 
@@ -226,6 +229,19 @@ def test_files(folder: str) -> list[str]:
         for path in directory.rglob(pattern)
         if path.is_file()
     })
+
+
+def shard_count(folder: str) -> int:
+    files = test_files(folder)
+    if folder != "examples":
+        return min(SHARDS.get(folder, 1), max(1, len(files)))
+    # Run 44301601328 placed the two CPU-heavy modules on the same runner.
+    # Choose the fewest round-robin partitions that separate the three long
+    # example modules, even as new test files change their sorted positions.
+    heavy = {RULE_EXAMPLES, INDEPENDENT_PUBLICATIONS, FORMS_MODULE}
+    positions = [i for i, file in enumerate(files) if file in heavy]
+    candidates = range(max(1, len(positions)), min(8, max(1, len(files))) + 1)
+    return min(candidates, key=lambda n: (len(positions) - len({i % n for i in positions}), n))
 
 
 def runner_cores() -> int:
@@ -345,14 +361,11 @@ def weighted_workers(items: list[str], workers: int, weights: dict[str, int], de
     return groups
 
 
-FORMS_MODULE = "examples/subsidy/test_subsidy_forms.py"
-
-
 def worker_items(folder: str, items: list[str], workers: int) -> list[list[str]]:
     if folder == "compiler" and workers > 1:
-        # The profile records calls at or above its threshold from each compiler worker's
-        # five reported durations in the linked run. The default is the sum of worker pytest
-        # times minus those calls, divided by the remaining IDs, rounded to milliseconds.
+        # Each timing is one of its worker's five reported durations in the
+        # linked run (or the per-ID additional source). The default uses the
+        # original run: unreported worker time divided by the remaining IDs.
         profile = json.loads((ROOT / ".github/workflows/compiler-duration-profile.json").read_text(encoding="utf-8"))
         return weighted_workers(items, workers, profile["call_ms"], profile["default_ms"])
     if folder != "examples" or workers == 1:
@@ -364,17 +377,40 @@ def worker_items(folder: str, items: list[str], workers: int) -> list[list[str]]
     offset = 2 if readers and workers > 2 else 0
     if offset:
         # Keep pytest collection order within each execution process.
-        first = set(readers[::2])
+        # The second publication and the independent standards readers dominate
+        # this module. Give the table checks to the shorter reader as well.
+        costs = {
+            forms + "::test_a_ledger_payment_does_not_change_the_policy_adviser_s_form": 79_000,
+            forms + "::test_each_role_s_standards_exports_pass_their_readers": 55_000,
+            forms + "::test_each_role_s_tables_give_its_dataset_hash_alone": 7_700,
+        }
+        first = set(weighted_workers(readers, 2, costs, 200)[0])
         for node in items:
             if node in first:
                 groups[0].append(node)
             elif node in readers:
                 groups[1].append(node)
     others = [i for i in items if not offset or i.split("::", 1)[0] != forms]
-    files = sorted({i.split("::", 1)[0] for i in others})
-    slots = {f: offset + n % (workers - offset) for n, f in enumerate(files)}
-    for node in others:
-        groups[slots[node.split("::", 1)[0]]].append(node)
+    # The independent subsidy tests each publish into their own tmp_path.
+    # Keep cached pack states and all other module-scoped fixtures together.
+    def unit(node: str) -> str:
+        path = node.partition("::")[0]
+        return node if path == INDEPENDENT_PUBLICATIONS else path
+
+    by_unit = Counter(map(unit, others))
+    # Rounded worker durations from run 44300384730. Unknown files cost one
+    # second per collected item, and new independent publications cost 17s.
+    weights = {
+        key: (17 if key.startswith(INDEPENDENT_PUBLICATIONS + "::") else count)
+        for key, count in by_unit.items()
+    }
+    weights.update({RULE_EXAMPLES: 125, "examples/test_examples.py": 75,
+                    "examples/subsidy/test_proposal_path.py": 45,
+                    "examples/subsidy/test_assessment_transition.py": 30,
+                    "examples/subsidy/test_tutorial.py": 30})
+    for index, units in enumerate(weighted_workers(sorted(by_unit), workers - offset, weights, 1), offset):
+        assigned = set(units)
+        groups[index].extend(node for node in others if unit(node) in assigned)
     return groups
 
 
@@ -418,6 +454,13 @@ def execute_worker(assignment: Path, journal: Path, report: Path) -> int:
         # Pytest resolves only assigned IDs, without walking the component again.
         plugins = [Evidence()]
         if "publication" in data:
+            # These short-lived RDF graphs caused 63 full-heap collections
+            # (20.6 s) in run 44302050936. Collect larger batches in these
+            # dedicated processes; all generations and finalizers remain active.
+            import gc
+            young, middle, old = gc.get_threshold()
+            gc.set_threshold(young * 8, middle, old)
+            print(f"Publication worker GC thresholds: {gc.get_threshold()}", flush=True)
             sys.path.insert(0, str(ROOT / ".github/workflows"))
             from publication_fixture import PublicationProducer, PublicationReader
 
@@ -571,7 +614,7 @@ def main() -> int:
              "label": c.folder if total == 1 else f"{c.folder} {shard + 1}/{total}"}
             for c in active
             if c.kind in ("contracts", "python")
-            for total in [min(SHARDS.get(c.folder, 1), max(1, len(test_files(c.folder))))]
+            for total in [shard_count(c.folder)]
             for shard in range(total)
         ]
         node_items = [
