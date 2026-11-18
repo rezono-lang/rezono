@@ -1,0 +1,22 @@
+format: rezono.calc/1
+pack: neutral
+subject: item
+as_of: {valid_at: 2026-01-01, known_at: 2026-01-01}
+rules:
+  - id: quantity_per_weight@v1
+    rule: quantity_per_weight
+    version: v1
+    output: quantity_per_weight.value
+    unit: ratio
+    valid_from: 2026-01-01
+    valid_until: 2027-01-01
+    known_from: 2026-01-01
+    definitions:
+      - name: divide
+        when: {boolean: true}
+        value:
+          op: ratio
+          args:
+            - {fact: item.quantity}
+            - {integer: "1"}
+            - {fact: recorded_weight.weight}

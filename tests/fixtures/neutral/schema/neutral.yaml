@@ -1,0 +1,28 @@
+id: https://rezono.org/fixtures/neutral
+name: neutral
+description: A small, domain-neutral schema for conformance cases.
+in_language: en
+imports:
+  - linkml:types
+default_range: string
+annotations:
+  layer: facts
+
+classes:
+  Item:
+    attributes:
+      id: {identifier: true}
+      group: {range: Group, required: true}
+      labels: {required: true, multivalued: true, minimum_cardinality: 1, maximum_cardinality: 2}
+      quantity: {range: integer}
+      weight: {range: integer, annotations: {world: open}}
+
+  Group:
+    attributes:
+      id: {identifier: true}
+
+  Link:
+    attributes:
+      id: {identifier: true}
+      tail: {range: Item, required: true}
+      head: {range: Item, required: true}

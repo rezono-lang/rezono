@@ -7,7 +7,6 @@ import pytest
 
 
 @pytest.mark.cluster
-@pytest.mark.xfail(strict=True, reason="Read decisions/shared-disposable-cluster.md. Depends on test_cluster_live_identity, test_cluster_admission_application and admission's test_desired_admission_release_reuses_both_rule_renderers. Stage the fixture Git mirror, pinned Argo and its render plugin in loop/cluster/ and connect the identity and kubeconfig in the disposable workflow. The admission component owns the real API dry-run.")
 def test_shared_admission_handoff():
     temp = Path(os.environ["RUNNER_TEMP"]).resolve(strict=True)
     shared = Path(os.environ["REZONO_CLUSTER_KUBECONFIG"]).resolve(strict=True)

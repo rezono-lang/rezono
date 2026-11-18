@@ -1,6 +1,8 @@
 .decl sweep_node_report_count(run: symbol, collector: symbol, window: symbol, node: symbol, variants: number)
-.decl covered_sweep_node(run: symbol, collector: symbol, window: symbol, ref: symbol, node: symbol)
-.decl sweep_node_counts(run: symbol, collector: symbol, window: symbol, ref: symbol, expected: number, covered: number)
+.decl covered_sweep_node(run: symbol, collector: symbol, window: symbol, start: number, stop: number, node: symbol)
+.decl sweep_node_counts(run: symbol, collector: symbol, window: symbol, start: number, stop: number, expected: number, covered: number)
+.decl covered_sweep_interval(run: symbol, collector: symbol, window: symbol, start: number, stop: number)
+.decl complete_sweep_interval(run: symbol, collector: symbol, window: symbol, start: number, stop: number)
 .decl complete_sweep(run: symbol, collector: symbol, window: symbol, ref: symbol)
 
 // Identical final reports agree. Distinct coverage tuples cannot both be final.
@@ -8,18 +10,28 @@ sweep_node_report_count(run, collector, window, node, variants) :-
     expected_node(run, collector, window, node),
     variants = count : { node_report(run, collector, window, node, _, _, _, _) }.
 
-covered_sweep_node(run, collector, window, ref, node) :-
-    sweep_window(run, collector, window, start, stop, ref),
+covered_sweep_node(run, collector, window, start, stop, node) :-
+    sweep_window(run, collector, window, start, stop, _),
     sweep_node_report_count(run, collector, window, node, 1),
     node_report(run, collector, window, node, first, last, 0, 0),
     start < stop, first <= start, last >= stop.
 
 // The two counts retain a contributor digest for each set of nodes.
-sweep_node_counts(run, collector, window, ref, expected, covered) :-
-    sweep_window(run, collector, window, _, _, ref),
+sweep_node_counts(run, collector, window, start, stop, expected, covered) :-
+    sweep_window(run, collector, window, start, stop, _),
     expected = count : { expected_node(run, collector, window, _) },
-    covered = count : { covered_sweep_node(run, collector, window, ref, _) }.
+    covered = count : { covered_sweep_node(run, collector, window, start, stop, _) }.
 
 // Covered nodes are drawn exclusively from the inventory in this scope.
+covered_sweep_interval(run, collector, window, start, stop) :-
+    sweep_node_counts(run, collector, window, start, stop, total, total), total > 0.
+
+// Equal bounds agree even when their source references differ.
+complete_sweep_interval(run, collector, window, start, stop) :-
+    covered_sweep_interval(run, collector, window, start, stop),
+    intervals = count : { covered_sweep_interval(run, collector, window, _, _) },
+    intervals = 1.
+
 complete_sweep(run, collector, window, ref) :-
-    sweep_node_counts(run, collector, window, ref, total, total), total > 0.
+    sweep_window(run, collector, window, start, stop, ref),
+    complete_sweep_interval(run, collector, window, start, stop).
