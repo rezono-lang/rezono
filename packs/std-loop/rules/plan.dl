@@ -13,7 +13,7 @@ refusal(run, step, reason) :-
     loop_refusal__reason(record, reason).
 
 .decl blocked_step(run: symbol, step: symbol)
-blocked_step(run, step) :- stuck(run, step, _).
+blocked_step(run, step) :- structural_stuck(run, step, _).
 
 .decl eligible(run: symbol, step: symbol, reason: symbol)
 eligible(run, step, reason) :- declared(run, step, reason), !blocked_step(run, step).
