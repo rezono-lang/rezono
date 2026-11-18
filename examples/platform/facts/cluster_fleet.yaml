@@ -1,0 +1,2 @@
+cluster_fleet_hub:
+  - {id: fleet, role: hub}
