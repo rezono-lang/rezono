@@ -69,9 +69,28 @@ def test_conversion_preserves_the_standard_access_declaration():
     assert "  | // @extend" in encoded
 
 
-def test_explicit_schema_metadata_is_never_silently_discarded():
-    with pytest.raises(ConversionError, match=r"schema/access\.yaml: no conversion for"):
-        sources(STD, "std-access")
+def test_conversion_renders_the_metadata_of_the_standard_access_pack():
+    access = sources(STD, "std-access")["access"]
+    assert access.lines[:7] == [
+        "schema std_access",
+        '  iri "https://rezono.example/std-access/access"',
+        "  language en",
+        '  prefix linkml = "https://w3id.org/linkml/"',
+        '  prefix rdfs = "http://www.w3.org/2000/01/rdf-schema#"',
+        '  import "linkml:types"',
+        "  default range Text",
+    ]
+    title = access.lines.index("  title: Text")
+    assert access.lines[title + 1] == '    iri "rdfs:label"'
+    assert "  capability: Capability*" in access.lines
+    member = access.lines.index("  value read")
+    assert access.lines[member + 1] == "    description \"reads what the pack's read rules give this capability\""
+    assert "  | // @extend" in access.lines
+
+
+def test_unrepresented_mappings_are_never_silently_discarded():
+    with pytest.raises(ConversionError, match=r"Constituent.part_of: no conversion for broad_mappings, close_mappings"):
+        sources(REPO / "packs/std-part", "std-part")
 
 
 def test_failed_reader_does_not_leave_a_candidate(tmp_path):

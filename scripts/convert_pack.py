@@ -71,6 +71,46 @@ def range_name(value: object, where: str) -> str:
     return TYPES[value] if value in TYPES else name(value, TYPE, where)
 
 
+def quoted(value: object, where: str) -> str:
+    if not isinstance(value, str):
+        raise ConversionError(f"{where}: expected text")
+    return json.dumps(value, ensure_ascii=False)
+
+
+def metadata_lines(doc: dict, where: str, indent: str) -> list[str]:
+    lines = []
+    if "description" in doc:
+        lines.append(f"{indent}description {quoted(doc['description'], where)}")
+    if "exact_mappings" in doc:
+        values = doc["exact_mappings"]
+        if not isinstance(values, list):
+            raise ConversionError(f"{where}: expected a list of exact mappings")
+        lines.extend(f"{indent}exact mapping {quoted(value, where)}" for value in values)
+    return lines
+
+
+def header_lines(doc: dict, identity: str, module: str, where: str) -> list[str]:
+    imports = doc.get("imports", ["linkml:types"])
+    default = doc.get("default_range", "string")
+    if (doc.get("id") == f"https://rezono.org/rezono/{identity}/{module}"
+            and doc.get("name") == module.replace("/", "_") and imports == ["linkml:types"]
+            and default == "string" and not {"in_language", "prefixes", "description", "exact_mappings"} & doc.keys()):
+        return []
+    if not isinstance(imports, list):
+        raise ConversionError(f"{where}: expected a list of imports")
+    lines = [f"schema {name(doc.get('name'), WORD, where)}", f"  iri {quoted(doc.get('id'), where)}"]
+    if "in_language" in doc:
+        lines.append(f"  language {name(doc['in_language'], WORD, where)}")
+    for prefix, iri in mapping(doc.get("prefixes", {}), where).items():
+        lines.append(f"  prefix {name(prefix, WORD, where)} = {quoted(iri, where)}")
+    lines.extend(f"  import {quoted(import_path, where)}" for import_path in imports)
+    lines.append(f"  default range {range_name(default, where)}")
+    lines.extend(metadata_lines(doc, where, "  "))
+    if "layer" in doc.get("annotations", {}):
+        lines.append(f"  annotation layer = {quoted(doc['annotations']['layer'], where)}")
+    return [*lines, ""]
+
+
 def flag(doc: dict, key: str, where: str) -> bool:
     value = doc.get(key, False)
     if type(value) is not bool:
@@ -90,7 +130,7 @@ def world(node: object, where: str, default: str) -> str:
 
 def slot_lines(slot: str, body: object, where: str) -> list[str]:
     doc = supported(body, {"range", "required", "multivalued", "identifier", "minimum_value", "maximum_value",
-                           "pattern", "annotations"}, where)
+                           "pattern", "annotations", "description", "exact_mappings", "slot_uri"}, where)
     if slot == "id" and doc == {"identifier": True}:
         return []  # The implicit id has this exact definition.
     if slot == "id":
@@ -106,6 +146,9 @@ def slot_lines(slot: str, body: object, where: str) -> list[str]:
     if flag(doc, "identifier", where):
         prefix += " identifier"
     lines = [prefix]
+    if "slot_uri" in doc:
+        lines.append(f"    iri {quoted(doc['slot_uri'], where)}")
+    lines.extend(metadata_lines(doc, where, "    "))
     for field, token in (("minimum_value", "minimum"), ("maximum_value", "maximum")):
         if field not in doc:
             continue
@@ -113,24 +156,15 @@ def slot_lines(slot: str, body: object, where: str) -> list[str]:
             raise ConversionError(f"{where}: {field} requires an exact integer")
         lines.append(f"    {token} {doc[field]}")
     if "pattern" in doc:
-        if not isinstance(doc["pattern"], str):
-            raise ConversionError(f"{where}: pattern must be text")
-        lines.append(f"    pattern {json.dumps(doc['pattern'], ensure_ascii=False)}")
+        lines.append(f"    pattern {quoted(doc['pattern'], where)}")
     return lines
 
 
 def schema_source(path: Path, identity: str, module: str) -> Source:
     where = f"schema/{module}.yaml"
     doc = supported(yaml.safe_load(path.read_text(encoding="utf-8")),
-                    {"id", "name", "imports", "default_range", "annotations", "enums", "classes"}, where)
-    # Reuse a header only when the lowering generates the same identity.
-    # An explicit header, other imports or schema metadata must be preserved
-    # by a reader and lowerer that understand them.
-    if (doc.get("id") != f"https://rezono.org/rezono/{identity}/{module}"
-            or doc.get("name") != module.replace("/", "_")
-            or doc.get("imports", ["linkml:types"]) != ["linkml:types"]
-            or doc.get("default_range", "string") != "string"):
-        raise ConversionError(f"{where}: explicit schema identity, imports or default range require schema metadata")
+                    {"id", "name", "imports", "default_range", "annotations", "enums", "classes",
+                     "in_language", "prefixes", "description", "exact_mappings"}, where)
     layer = supported(doc.get("annotations", {}), {"layer"}, where).get("layer", "facts")
     if layer not in pack.LAYERS:
         raise ConversionError(f"{where}: unknown layer {layer!r}")
@@ -138,21 +172,30 @@ def schema_source(path: Path, identity: str, module: str) -> Source:
     lines: list[str] = []
     for enum, definition in mapping(doc.get("enums", {}), where).items():
         place = f"{where}: {enum}"
-        body = supported(definition, {"permissible_values", "annotations"}, place)
+        body = supported(definition, {"permissible_values", "annotations", "description", "exact_mappings"}, place)
         members = mapping(body.get("permissible_values"), place)
-        if not members or any(value != {} for value in members.values()):
-            raise ConversionError(f"{place}: enum member metadata requires an explicit conversion")
+        if not members:
+            raise ConversionError(f"{place}: expected at least one enum member")
         own_world = world(body.get("annotations", {}), place, "closed")
         words = " | ".join(name(member, WORD, place) for member in members)
-        lines.extend([f"enum {name(enum, TYPE, place)} world {own_world} = {words}", ""])
+        lines.append(f"enum {name(enum, TYPE, place)} world {own_world} = {words}")
+        lines.extend(metadata_lines(body, place, "  "))
+        for member, definition in members.items():
+            member_where = f"{place}.{member}"
+            metadata = supported(definition, {"description", "exact_mappings"}, member_where)
+            if annotations := metadata_lines(metadata, member_where, "    "):
+                lines.extend([f"  value {member}", *annotations])
+        lines.append("")
 
     for kind, definition in mapping(doc.get("classes", {}), where).items():
         place = f"{where}: {kind}"
-        body = supported(definition, {"abstract", "is_a", "annotations", "attributes"}, place)
+        body = supported(definition, {"abstract", "is_a", "annotations", "attributes", "description",
+                                      "exact_mappings"}, place)
         abstract = "abstract " if flag(body, "abstract", place) else ""
         own_world = world(body.get("annotations", {}), place, "closed")
         parent = f" is {name(body['is_a'], TYPE, place)}" if "is_a" in body else ""
         lines.append(f"{abstract}kind {name(kind, TYPE, place)}{parent} world {own_world}")
+        lines.extend(metadata_lines(body, place, "  "))
         attributes = mapping(body.get("attributes", {}), place)
         if not parent and not any(isinstance(value, dict) and value.get("identifier") is True
                                   for value in attributes.values()):
@@ -162,7 +205,7 @@ def schema_source(path: Path, identity: str, module: str) -> Source:
         lines.append("")
     if not lines:
         raise ConversionError(f"{where}: no kind or enum declarations")
-    return Source(layer, lines)
+    return Source(layer, [*header_lines(doc, identity, module, where), *lines])
 
 
 def rule_lines(path: Path) -> list[str]:
