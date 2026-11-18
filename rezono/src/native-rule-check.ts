@@ -15,7 +15,16 @@ type Column = { name: string; type: string };
 type Declaration = { rule: string; locals?: Column[]; when?: Expression } &
 	({ args: Expression[] } | { columns: Column[] });
 
-type Signature = { columns: Column[]; world: World; role: 'input' | 'derived'; absence?: true };
+/** Linked evidence for a derived predicate: the states it can take and the places that explain partiality. */
+export interface PredicateSummary {
+	states: readonly string[];
+	related?: readonly Place[];
+}
+
+type Signature = {
+	columns: Column[]; world: World; role: 'input' | 'derived'; absence?: true;
+	predicate?: PredicateSummary;
+};
 
 export interface NativeRuleEnvironment {
 	schema: Schema;
@@ -51,12 +60,14 @@ class RuleFault extends Error {
 	readonly code: string;
 	readonly at: string;
 	readonly args: string[];
+	readonly related: readonly Place[];
 
-	constructor(code: string, at: string, args: string[]) {
+	constructor(code: string, at: string, args: string[], related: readonly Place[] = []) {
 		super(code);
 		this.code = code;
 		this.at = at;
 		this.args = args;
+		this.related = related;
 	}
 }
 
@@ -89,7 +100,9 @@ export function checkNativeRules(form: NativeRuleForm, environment: NativeRuleEn
 			dependencies.push(...checker.dependencies);
 		} catch (error) {
 			if (!(error instanceof RuleFault)) throw error;
-			diagnostics.push({ code: error.code, args: error.args, span: place(error.at) });
+			const diagnosis: NativeRuleDiagnostic = { code: error.code, args: error.args, span: place(error.at) };
+			if (error.related.length) diagnosis.related = [...error.related];
+			diagnostics.push(diagnosis);
 		}
 	}
 
@@ -215,6 +228,13 @@ class ClauseCheck {
 		if (signature.world === 'open' && !this.absence) refuse('R004', at, name);
 	}
 
+	// A negation or group needs a decided answer, so a predicate that can be undecided is refused.
+	private requireTotal(name: string, signature: Signature, at: string): void {
+		const { predicate } = signature;
+		if (!predicate || predicate.states.every(state => state === 'known')) return;
+		throw new RuleFault('R047', at, [name], predicate.related ?? []);
+	}
+
 	private row(call: [string, Expression[]], at: string, flow: Flow, premise: Premise, dependencyAt = at): Signature {
 		const [name, terms] = call;
 		const signature = this.relation(name);
@@ -237,7 +257,10 @@ class ClauseCheck {
 			}
 			this.requireType(this.scalar(term, pointer, flow, expected).type, expected, pointer);
 		});
-		if (premise !== 'positive') this.requireClosed(name, signature, dependencyAt);
+		if (premise !== 'positive') {
+			this.requireClosed(name, signature, dependencyAt);
+			this.requireTotal(name, signature, dependencyAt);
+		}
 		if (signature.role === 'derived') this.dependencies.push({ from: this.rule, to: name, at: dependencyAt, premise });
 		return signature;
 	}
