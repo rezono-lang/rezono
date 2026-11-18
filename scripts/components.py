@@ -5,6 +5,8 @@ from __future__ import annotations
 
 import argparse
 from collections import Counter
+from fnmatch import fnmatchcase
+import posixpath
 import re
 import json
 import os
@@ -57,16 +59,24 @@ def _has_py_tests(directory: Path) -> bool:
     )
 
 
-def _has_node_test_script(pkg_json: Path) -> bool:
+def _has_node_test_script(pkg_json: Path, *, keep_invalid: bool = False) -> bool:
+    if keep_invalid and pkg_json.is_symlink():
+        return True
     try:
         data = json.loads(pkg_json.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
-        return False
+        return keep_invalid
+    except UnicodeDecodeError:
+        if keep_invalid:
+            return True
+        raise
+    if keep_invalid and not isinstance(data, dict):
+        return True
     scripts = data.get("scripts")
     return isinstance(scripts, dict) and bool(scripts.get("test"))
 
 
-def discover_components(root: Path = ROOT) -> list[Component]:
+def discover_components(root: Path = ROOT, *, keep_invalid_node: bool = False) -> list[Component]:
     found: list[Component] = []
 
     def walk(current: Path, depth: int) -> None:
@@ -75,9 +85,13 @@ def discover_components(root: Path = ROOT) -> list[Component]:
         for child in sorted(current.iterdir(), key=lambda p: p.name):
             if not child.is_dir() or child.name.startswith(".") or child.name in SKIP_DIRS:
                 continue
+            if keep_invalid_node and child.is_symlink():
+                continue
             rel = child.relative_to(root).as_posix()
             pkg_json = child / "package.json"
-            if pkg_json.is_file() and _has_node_test_script(pkg_json):
+            if ((keep_invalid_node and pkg_json.is_symlink()) or pkg_json.is_file()) and _has_node_test_script(
+                pkg_json, keep_invalid=keep_invalid_node
+            ):
                 found.append(Component(folder=rel, kind="node"))
                 continue
             if (child / "check.sh").is_file() and (child / "gen-types.sh").is_file():
@@ -210,6 +224,256 @@ def affected_components(
             selected.add(consumer)
             pending.append(consumer)
     return [c for c in components if c.folder in selected]
+
+
+# These reads are outside package metadata. Test imports, subprocess readers and
+# build inputs count just as a declared library dependency does.
+PR_FILE_CONSUMERS = {
+    "admission": ("examples",),
+    "canon": ("edge/plugins/connectors", "examples", "k8s-admission", "loop"),
+    "checker": ("compiler", "examples", "k8s-admission", "loop", "run"),
+    "compiler": ("admission", "checker", "edge/plugins/connectors", "examples", "loop", "publication", "run"),
+    "edge/plugins/connectors": ("examples",),
+    "contracts": ("admission", "canon", "checker", "compiler", "edge/plugins/connectors", "loop", "publication", "rezono"),
+    "edge/publisher": ("compiler", "deploy/profiles/edge", "edge/plugins/connectors", "examples", "k8s-admission", "run"),
+    "loop": ("examples",),
+    "publication": ("checker", "compiler", "edge/plugins/connectors", "edge/publisher", "examples"),
+    "rezono": ("compiler",),
+}
+PACK_READERS = ("admission", "checker", "compiler", "edge/plugins/connectors", "edge/publisher", "examples",
+                "k8s-admission", "loop", "publication", "rezono", "run")
+SHARED_READERS = {
+    "docs/compiler/pack.md": ("compiler",),
+    "docs/publication/l0.md": ("edge/plugins/connectors",),
+    "docs/publication/cases/": ("compiler", "edge/plugins/connectors", "publication"),
+    "docs/rezono/cases/": ("compiler", "rezono"),
+    "docs/semantics/value-cases.yaml": ("compiler", "rezono"),
+    "docs/semantics/witness-alternatives-cases.yaml": ("checker", "compiler"),
+    "docs/tutorial.md": ("examples",),
+    "decisions/publication-case-pins.md": ("compiler",),
+    "decisions/conformance-*.md": ("compiler",),
+    "tests/fixtures/neutral/": ("checker", "compiler", "rezono"),
+    "tests/conformance/": ("checker", "compiler", "rezono"),
+    "packs/": PACK_READERS,
+    "examples/": PACK_READERS,
+    "examples/**/expected/**": ("contracts",),
+    "edge/plugins/*/plugin.yaml": ("contracts",),
+    "viewer/src/lib/canon.ts": ("compiler", "edge/publisher", "rezono"),
+}
+
+PYTHON_NAME = r"[A-Za-z0-9](?:[A-Za-z0-9_.-]*[A-Za-z0-9])?"
+SPECIFIER = r"(?:===|==|!=|<=|>=|~=|<|>)\s*[^\s,;()]+"
+SPECIFIERS = rf"{SPECIFIER}(?:\s*,\s*{SPECIFIER})*"
+REQUIREMENT = re.compile(
+    rf"\s*({PYTHON_NAME})(?:\s*\[\s*{PYTHON_NAME}(?:\s*,\s*{PYTHON_NAME})*\s*\])?"
+    rf"\s*(?:\(\s*{SPECIFIERS}\s*\)|{SPECIFIERS}|@\s*[^\s;]+)?\s*(?:;\s*\S.*)?"
+)
+NODE_GROUPS = ("dependencies", "optionalDependencies", "peerDependencies", "devDependencies")
+MANIFEST_NAMES = {"pyproject.toml", "package.json"}
+
+
+@dataclass(frozen=True)
+class Package:
+    path: str
+    kind: str
+    name: str
+    owner: str | None
+    dependencies: tuple[tuple[str, str], ...]
+    workspaces: tuple[str, ...] = ()
+
+
+def shared_readers(path: str) -> set[str] | None:
+    """Known direct readers, or None when the file has no safe selection."""
+    if path.startswith(("docs/", "decisions/")) and path.endswith(".md"):
+        readers: set[str] | None = set()
+    else:
+        readers = None
+    for pattern, owners in SHARED_READERS.items():
+        matches = path.startswith(pattern) if pattern.endswith("/") else fnmatchcase(path, pattern)
+        if matches:
+            if readers is None:
+                readers = set()
+            readers.update(owners)
+    return readers
+
+
+def component_owner(path: str, folders: set[str]) -> str | None:
+    while "/" in path:
+        path = path.rsplit("/", 1)[0]
+        if path in folders:
+            return path
+    return None
+
+
+def git_output(root: Path, *args: str) -> bytes:
+    return subprocess.check_output(["git", *args], cwd=root, stderr=subprocess.PIPE)
+
+
+def pull_request_range(root: Path, base_ref: str) -> tuple[str, str, list[str]]:
+    if not base_ref:
+        raise ValueError("no pull request base ref")
+    head = git_output(root, "rev-parse", "HEAD").decode().strip()
+    bases = git_output(root, "merge-base", "--all", f"origin/{base_ref}", head).decode().split()
+    if len(bases) != 1 or not all(re.fullmatch(r"[0-9a-f]{40}", rev) for rev in [head, *bases]):
+        raise ValueError("ambiguous pull request revision range")
+    base = bases[0]
+    contents = git_output(root, "diff", "--no-renames", "--name-only", "-z", base, head, "--")
+    return base, head, [os.fsdecode(name) for name in contents.split(b"\0") if name]
+
+
+def python_name(name: str) -> str:
+    if not re.fullmatch(PYTHON_NAME, name):
+        raise ValueError("invalid Python package name")
+    return re.sub(r"[-_.]+", "-", name).lower()
+
+
+def read_package(path: str, raw: bytes, folders: set[str]) -> Package:
+    owner = component_owner(path, folders)
+    if path.endswith("pyproject.toml"):
+        data = tomllib.loads(raw.decode("utf-8"))
+        project = data["project"]
+        dynamic = project.get("dynamic", [])
+        if (not isinstance(dynamic, list) or not all(isinstance(key, str) for key in dynamic)
+                or {"name", "dependencies", "optional-dependencies"} & set(dynamic)
+                or "dependency-groups" in data):
+            raise ValueError("dynamic package dependencies")
+        extras = project.get("optional-dependencies", {})
+        groups = [project.get("dependencies", []), data.get("build-system", {}).get("requires", []), *extras.values()]
+        dependencies = []
+        for requirements in groups:
+            if not isinstance(requirements, list):
+                raise ValueError("expected a list of Python requirements")
+            for requirement in requirements:
+                match = REQUIREMENT.fullmatch(requirement)
+                if match is None or re.search(r"@\s*file:", requirement, re.IGNORECASE):
+                    raise ValueError("unresolved Python requirement")
+                dependencies.append((python_name(match[1]), ""))
+        return Package(path, "python", python_name(project["name"]), owner, tuple(dependencies))
+
+    data = json.loads(raw)
+    workspace = data.get("workspaces", [])
+    if isinstance(workspace, dict):
+        workspace = workspace["packages"]
+    if not isinstance(workspace, list) or any(not isinstance(p, str) or not p for p in workspace):
+        raise ValueError("expected workspace path patterns")
+    name = data.get("name", "")
+    if not isinstance(name, str) or (not name and not workspace):
+        raise ValueError("package has no name")
+    dependencies = []
+    for group in NODE_GROUPS:
+        for dependency, version in data.get(group, {}).items():
+            if not dependency or not isinstance(version, str) or not version:
+                raise ValueError("invalid Node dependency")
+            dependencies.append((dependency, version))
+    return Package(path, "node", name, owner, tuple(dependencies), tuple(workspace))
+
+
+def node_target(package: Package, name: str, version: str,
+                providers: dict[tuple[str, str], Package], paths: dict[str, Package]) -> Package | None:
+    protocol, _, value = version.partition(":")
+    if protocol in ("file", "link") or protocol == "workspace" and value.startswith("."):
+        local = posixpath.normpath(posixpath.join(posixpath.dirname(package.path), value, "package.json"))
+        return paths[local]  # an unresolved local package cannot be pruned safely
+    if protocol in ("workspace", "npm"):
+        alias = value.rsplit("@", 1)[0] if "@" in value[1:] else value
+        if protocol == "npm" or (protocol == "workspace" and alias != value):
+            name = alias
+    target = providers.get(("node", name))
+    if protocol == "workspace" and target is None:
+        raise ValueError("workspace dependency does not name a local package")
+    return target
+
+
+def declared_dependents(root: Path, revision: str, folders: set[str],
+                        cache: dict[str, bytes]) -> dict[str, set[str]]:
+    manifests = {}
+    for item in git_output(root, "ls-tree", "-r", "-z", revision).split(b"\0"):
+        if not item:
+            continue
+        entry, path = item.split(b"\t", 1)
+        name = os.fsdecode(path)
+        basename = name.rsplit("/", 1)[-1]
+        if basename == "pnpm-workspace.yaml":
+            raise ValueError("workspace topology needs full selection")
+        if basename not in MANIFEST_NAMES:
+            continue
+        mode, kind, oid = entry.decode("ascii").split()
+        if mode not in ("100644", "100755") or kind != "blob":
+            raise ValueError("manifest is not a regular file")
+        if oid not in cache:
+            cache[oid] = git_output(root, "cat-file", "blob", oid)
+        manifests[name] = read_package(name, cache[oid], folders)
+
+    providers = {}
+    for package in manifests.values():
+        key = (package.kind, package.name)
+        if package.name:
+            if key in providers:
+                raise ValueError("ambiguous package name")
+            providers[key] = package
+
+    dependents: dict[str, set[str]] = {}
+    for package in manifests.values():
+        for name, version in package.dependencies:
+            target = (node_target(package, name, version, providers, manifests) if package.kind == "node"
+                      else providers.get(("python", name)))
+            if target and package.owner:
+                if not target.owner:
+                    raise ValueError("local dependency has no component")
+                dependents.setdefault(target.owner, set()).add(package.owner)
+        if package.workspaces and package.owner:
+            directory = posixpath.dirname(package.path)
+            for pattern in package.workspaces:
+                if pattern.startswith(("!", "/", "..")) or "{" in pattern or "\\" in pattern:
+                    raise ValueError("unsupported workspace pattern")
+                for target in manifests.values():
+                    if (target.kind == "node" and target.owner and target is not package
+                            and fnmatchcase(posixpath.dirname(target.path),
+                                           posixpath.join(directory, pattern.removeprefix("./").rstrip("/")))):
+                        dependents.setdefault(target.owner, set()).add(package.owner)
+    return dependents
+
+
+def pull_request_components(components: list[Component], root: Path, base_ref: str) -> list[Component]:
+    """Select consumers of changes against the exact PR range, without executing manifests."""
+    folders = {c.folder for c in components}
+    direct, pending = set(), set()
+    try:
+        base, head, changed = pull_request_range(root, base_ref)
+        for path in changed:
+            owner = component_owner(path, folders)
+            readers = shared_readers(path)
+            if readers is not None:
+                direct.update(readers & folders)
+                if path == "viewer/src/lib/canon.ts":
+                    pending.update(readers & folders)
+            if owner:
+                source = Path(path)
+                # The converter regression parses every tracked non-fixture Datalog file.
+                if source.suffix == ".dl" and "fixtures" not in source.parts:
+                    direct.add("compiler")
+                if owner == "loop" and not outside_cluster_plugin(source, root / "loop/pyproject.toml"):
+                    return list(components)  # the shipped plugin runs in every pytest process
+                pending.add(owner)
+            elif readers is None or path.startswith("edge/plugins/"):
+                return list(components)
+        if not pending:
+            return [c for c in components if c.folder in direct]
+        cache: dict[str, bytes] = {}
+        edges: dict[str, set[str]] = {}
+        for graph in (FILE_CONSUMERS, PR_FILE_CONSUMERS,
+                      declared_dependents(root, base, folders, cache), declared_dependents(root, head, folders, cache)):
+            for source, consumers in graph.items():
+                edges.setdefault(source, set()).update(set(consumers) & folders)
+    except (OSError, ValueError, AttributeError, KeyError, TypeError, subprocess.CalledProcessError):
+        return list(components)
+    affected = set()
+    while pending:
+        folder = pending.pop()
+        if folder not in affected:
+            affected.add(folder)
+            pending.update(edges.get(folder, ()))
+    return [c for c in components if c.folder in direct | affected]
 
 
 # Files are assigned to jobs round-robin. Within a job pytest items share the
@@ -602,13 +866,13 @@ def main() -> int:
         print(" ".join(discover_python_packages()))
         return 0
     if args.cmd == "ci-matrix":
-        comps = discover_components()
-        changed = _git_changed_files(
-            ROOT,
-            args.base_ref or None,
-            args.before or None,
-        )
-        active = affected_components(comps, changed)
+        pull_request = os.environ.get("GITHUB_EVENT_NAME") == "pull_request"
+        comps = discover_components(keep_invalid_node=pull_request)
+        if pull_request:
+            active = pull_request_components(comps, ROOT, args.base_ref)
+        else:
+            changed = _git_changed_files(ROOT, args.base_ref or None, args.before or None)
+            active = affected_components(comps, changed)
         py_items = [
             {"folder": c.folder, "kind": c.kind, "shard": shard, "total": total,
              "label": c.folder if total == 1 else f"{c.folder} {shard + 1}/{total}"}

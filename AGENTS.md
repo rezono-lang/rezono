@@ -35,7 +35,7 @@ Code under Apache-2.0, content under CC BY 4.0, schemas and theories under CC0 1
 
 Dependencies:
 
-- **At run time:** MIT, ISC, BSD, Apache-2.0, PSF-2.0, CC0-1.0, and MPL-2.0 as an unmodified package.
+- **At run time:** MIT, ISC, BSD, Apache-2.0, PSF-2.0, CC0-1.0, MPL-2.0 as an unmodified package, and EPL-2.0 as an unmodified package. See the [EPL-2.0 and generic views decision](decisions/runtime-epl-and-generic-views.md).
 - **Oracles and tools that are not shipped:** also UPL-1.0 and GPL.
 - **Nothing under GPL goes into a release or an image.**
 - **A dependency under any other licence does not come in.** Note it in `blocked/` with the reason; the owner may decide otherwise later.

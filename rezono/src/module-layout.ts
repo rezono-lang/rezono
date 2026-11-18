@@ -6,7 +6,7 @@ export interface Logical {
 	indent: number;
 	start: number;
 	end: number;
-	/** The code of its last physical line, without comment, for the continuation tests. */
+	/** The last physical line's code, or its full text within a verbatim block. */
 	last: string;
 	/** Parentheses left open, outside text literals and comments. */
 	depth: number;
@@ -45,33 +45,39 @@ const OPEN_END = /(?:=|(?:^|\s)[+\-*/]|[(,]|\b(?:when|then|else|and|or|not))$/;
 const GOES_ON = /^(?:(?:then|else|and|or)\b|=>|[+*/)]|-(?!-))/;
 
 /** Splits a file into logical lines and their blocks (§11); a tab in an indent is an R000. */
-export function layout(text: string, errors: Diagnostic[], cp: (at: number) => number): Logical[] {
+export function layout(
+	text: string, errors: Diagnostic[], cp: (at: number) => number, isVerbatimHeader: (code: string) => boolean
+): Logical[] {
 	const top: Logical[] = [];
 	const open: Logical[] = [];
 	let at = 0;
 	let current: Logical | undefined;
+	let verbatimIndent: number | undefined;
 	for (const raw of text.split('\n')) {
 		const start = at;
 		at += raw.length + 1;
 		const line = raw.endsWith('\r') ? raw.slice(0, -1) : raw;
-		const code = codeOf(line);
+		const indent = /^ */.exec(line)![0].length;
+		const verbatim = verbatimIndent !== undefined && indent > verbatimIndent;
+		const code = verbatim ? line : codeOf(line);
 		if (!code.trim()) continue;
-		const indent = /^ */.exec(code)![0].length;
+		if (!verbatim) verbatimIndent = undefined;
 		if (code[indent] === '\t') {
 			errors.push({ code: 'R000', span: { text: '\t', start: cp(start + indent), end: cp(start + indent + 1) }, args: ['spaces'] });
 			continue;
 		}
 		const body = code.slice(indent);
-		if (current && indent > current.indent && (current.depth > 0 || OPEN_END.test(current.last) || GOES_ON.test(body))) {
+		if (!verbatim && current && indent > current.indent && (current.depth > 0 || OPEN_END.test(current.last) || GOES_ON.test(body))) {
 			current.end = start + code.length;
 			current.last = body;
 			current.depth += depthOf(body);
 			continue;
 		}
-		current = { indent, start: start + indent, end: start + code.length, last: body, depth: depthOf(body), block: [] };
+		current = { indent, start: start + indent, end: start + code.length, last: body, depth: verbatim ? 0 : depthOf(body), block: [] };
 		while (open.length && open[open.length - 1].indent >= indent) open.pop();
 		(open.length ? open[open.length - 1].block : top).push(current);
 		open.push(current);
+		if (!verbatim && isVerbatimHeader(body)) verbatimIndent = indent;
 	}
 	return top;
 }
