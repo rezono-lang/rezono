@@ -2,6 +2,7 @@
 
 from collections.abc import Mapping, Set
 
+from . import rezono_metadata
 from .rezono_lowering import Refuse
 
 
@@ -21,7 +22,9 @@ def lower(slots: list[dict], declared: Set[str]) -> dict[str, dict]:
     out: dict[str, dict] = {} if any(slot.get("identifier") is True for slot in slots) else {"id": {"identifier": True}}
     for slot in slots:
         name = slot["type"]
-        attribute: dict[str, object] = {"range": builtin_range(name, name in declared) or name}
+        attribute = {"range": builtin_range(name, name in declared) or name} | rezono_metadata.lower(slot)
+        if "slotUri" in slot:
+            attribute["slot_uri"] = slot["slotUri"]
         if slot.get("identifier") is True:
             attribute["identifier"] = True
         elif "card" not in slot:
@@ -31,18 +34,22 @@ def lower(slots: list[dict], declared: Set[str]) -> dict[str, dict]:
 
 
 def validate(slots: list, kind: str, at: str, own: Mapping[str, str], owners: Mapping[str, list[str]],
-             uses: set[str], refuse: Refuse, *, explicit_identifiers: bool = False) -> bool:
+             uses: set[str], refuse: Refuse, *, extended: bool = False) -> bool:
     """Check slot forms and resolve references against all the modules of the pack."""
     ok = True
     seen: set[str] = set()
     identifier_seen = False
-    allowed = MEMBERS | {"identifier"} if explicit_identifiers else MEMBERS
+    allowed = MEMBERS | {"identifier", "slotUri"} | rezono_metadata.FIELDS if extended else MEMBERS
     for index, slot in enumerate(slots):
         here = f"{at}/slots/{index}"
         extra = sorted(set(slot) - allowed) if isinstance(slot, dict) else []
         if not isinstance(slot, dict) or extra:
             refuse(here, f"a slot with {', '.join(extra)} is not lowered" if extra else "not a slot of the form",
                    "§5.1")
+            ok = False
+            continue
+        if not rezono_metadata.valid(slot) or ("slotUri" in slot and not isinstance(slot["slotUri"], str)):
+            refuse(here, "invalid slot metadata", "§5.1")
             ok = False
             continue
         if slot["slot"] in seen:
