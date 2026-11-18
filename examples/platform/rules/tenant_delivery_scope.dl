@@ -1,0 +1,16 @@
+.decl tenant_delivery_scope(tenant: symbol, artifact: symbol, delivery_number: number)
+.decl tenant_apply_target(project_owner: symbol, cluster_owner: symbol, number: number)
+
+// Zero denotes tenant scope because delivery numbers start at one.
+tenant_delivery_scope(tenant, artifact, 0) :-
+    tenant_service_request__tenant(request, tenant), tenant_binding__scope(artifact, "tenant").
+
+tenant_delivery_scope(tenant, artifact, number) :-
+    tenant_delivery_number(tenant, service, number), tenant_binding__scope(artifact, "delivery").
+
+// A project can target a delivery only for the same tenant.
+tenant_apply_target(tenant, tenant, number) :-
+    tenant_delivery_number(tenant, service, number).
+
+.output tenant_delivery_scope
+.output tenant_apply_target

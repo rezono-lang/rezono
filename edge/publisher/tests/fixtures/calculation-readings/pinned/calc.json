@@ -1,0 +1,26 @@
+{
+  "format": "rezono.calc-ir/1",
+  "pack": "pinned",
+  "subject": "item",
+  "subject_table": "item",
+  "as_of": "calc__as_of",
+  "facts": [
+    {"id": "item.size", "type": "number", "reads": "attribute", "table": "item__size", "index": 1}
+  ],
+  "rules": [
+    {"rule": "size", "type": "number", "versions": ["size@v1"], "view": "calc__size"},
+    {"rule": "prior_size", "type": "number", "versions": ["prior_size@v2"], "view": "calc__prior_size"}
+  ],
+  "versions": [
+    {
+      "id": "size@v1", "rule": "size", "version": "v1", "view": "calc__size__v1",
+      "valid_from": "2025-01-01", "valid_until": "2026-01-01", "known_from": "2025-01-01",
+      "definitions": [{"name": "size", "when": {"boolean": true}, "value": {"fact": "item.size"}}]
+    },
+    {
+      "id": "prior_size@v2", "rule": "prior_size", "version": "v2", "view": "calc__prior_size__v2",
+      "valid_from": "2026-01-01", "valid_until": "2027-01-01", "known_from": "2026-01-01",
+      "definitions": [{"name": "previous", "when": {"boolean": true}, "value": {"rule": "size@v1"}}]
+    }
+  ]
+}

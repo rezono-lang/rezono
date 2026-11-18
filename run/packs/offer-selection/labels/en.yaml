@@ -42,6 +42,14 @@ declared_unit: demand with a stated amount unit
 unit_conflict: demand with contradictory amount units
 price_unit: amount unit for the demand
 charge_terms: rate and setup charge in the demand's unit
+charge_input: recorded order charge inputs
+charge_operand: nonnegative charge operand
+charge_digit: charge operand digit
+charge_term: amount contributed to a charge column
+charge_column: uncarried charge column
+charge_carry: amount carried to a charge column
+charge_limb: normalized charge digit
+charge_out_of_range: order charge outside the guarantee's integer range
 payable_charge: whole order charge in the demand's unit
 payable_micros: whole order charge in millionths
 payable_minor: whole order charge in minor currency units

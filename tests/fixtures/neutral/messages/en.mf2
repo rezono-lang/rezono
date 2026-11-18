@@ -1,0 +1,11 @@
+@locale en
+---
+arrow.total = Each {$kind} has exactly one {$arrow}.
+arrow.partial = Each {$kind} has at most one {$arrow}.
+attribute.total = Each {$kind} has exactly one {$attribute}.
+attribute.partial = Each {$kind} has at most one {$attribute}.
+attribute.many.total = Each {$kind} has at least one {$attribute}.
+attribute.many.partial = Each {$kind} may have more than one {$attribute}.
+is_a = Each {$kind} is a {$parent}.
+unique_key = Each {$key} belongs to at most one {$kind}.
+path_equation = For each {$kind}, {$equation} holds.
