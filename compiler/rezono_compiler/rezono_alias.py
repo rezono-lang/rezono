@@ -2,12 +2,14 @@
 
 import re
 
+from .rezono_lowering import Refuse
+
 
 NAME = re.compile(r"[A-Z][A-Za-z0-9]*")
 BASES = {"Bool": "boolean", "Date": "date", "Int": "integer", "Text": "string"}
 
 
-def lower(decl: dict, at: str, refuse) -> dict[str, str] | None:
+def lower(decl: dict, at: str, refuse: Refuse) -> dict[str, str] | None:
     name, base = decl.get("type"), decl.get("base")
     if (decl.keys() != {"type", "base"} or not isinstance(name, str) or NAME.fullmatch(name) is None
             or not isinstance(base, str)):

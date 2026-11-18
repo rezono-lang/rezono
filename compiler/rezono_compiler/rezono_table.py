@@ -21,6 +21,7 @@ The meaning is that of docs/rezono/tables.md §3 for `unique`, over inputs that 
 from __future__ import annotations
 
 import re
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -48,12 +49,13 @@ class Generated:
         return "\n".join(self.lines) + "\n"
 
 
-def lower_pack(pack, meta: dict, pack_dir: Path, errors: list[str]) -> list[Generated]:
+def lower_pack(pack, meta: dict, pack_dir: Path, errors: list[str],
+               *, forms: Mapping[str, dict] | None = None) -> list[Generated]:
     """The tables of every module of the pack itself, as rule text. A module of an imported pack holds no table
-    yet (rezono_module refuses one there), so this reads the root pack's modules only. `meta` is its pack.yaml."""
+    yet (rezono_module refuses one there). Reuse the forms read for the root pack if supplied."""
     out = []
     for d in rezono_module.declared(meta, pack_dir, []):
-        form = rezono_module.read_form(pack_dir, d, [])
+        form = forms.get(d.module) if forms is not None else rezono_module.effective_form(pack_dir, d, [])
         if form is None:
             continue
         gen = Generated(d.module, d.id.replace("/", "_"))
