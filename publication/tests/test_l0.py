@@ -67,6 +67,16 @@ ELSEWHERE = {
 }
 
 
+class MissingCase(KeyError):
+    """An expected public case file is absent."""
+
+
+def required_case(cid):
+    if cid not in FILES:
+        raise MissingCase(cid)
+    return FILES[cid]
+
+
 def merge(target, patch):
     """RFC 7396 JSON merge patch."""
     if not isinstance(patch, dict):
@@ -150,20 +160,36 @@ def run(case):
 SETTLED = sorted(i for i, c in FILES.items() if c["status"] == "settled" and i not in ELSEWHERE)
 
 
-@pytest.mark.xfail(strict=True, reason="docs/publication/cases/schema.json was held back by the split filter")
+@pytest.mark.xfail(strict=True, raises=FileNotFoundError, reason=(
+    "Needs docs/publication/cases/schema.json. See decisions/publication-case-pins.md for the case envelope."
+))
 def test_every_case_file_is_a_valid_case():
-    validator = jsonschema.Draft202012Validator(json.loads((CASES / "schema.json").read_text("utf-8")))
+    envelope = json.loads((CASES / "schema.json").read_text("utf-8"))
+    jsonschema.Draft202012Validator.check_schema(envelope)
+    validator = jsonschema.Draft202012Validator(envelope)
     for i, case in FILES.items():
         validator.validate(case)
         assert case["id"] == i
+    case = FILES["R01"]
+    for member in ("id", "class", "status", "schema", "form", "expect"):
+        assert not validator.is_valid({k: v for k, v in case.items() if k != member}), member
+    assert not validator.is_valid({**case, "exepct": case["expect"]})
+    assert not validator.is_valid({**case, "expect": {"accept": "true"}})
 
 
-@pytest.mark.xfail(strict=True, reason="conformance case S05 was held back by the split filter")
+@pytest.mark.xfail(strict=True, raises=MissingCase, reason=(
+    "Needs settled S05, R13, P02 and P04 in docs/publication/cases. See decisions/publication-case-pins.md."
+))
 def test_every_settled_case_runs_here_or_is_named():
     runnable = {"valid", "invalid", "change", "hash", "context", "admission"}
     assert {i for i in SETTLED if FILES[i]["class"] not in runnable} == set()
-    for i in REJECTED_FOR:
-        assert FILES[i]["expect"].get("accept") is False, i
+    for i in sorted(REJECTED_FOR.keys() & FILES.keys()):
+        case = FILES[i]
+        assert case["expect"].get("accept") is False, i
+        assert i in SETTLED and case["class"] in {"invalid", "admission", "context"}, i
+    missing = sorted(REJECTED_FOR.keys() - FILES.keys())
+    if missing:
+        raise MissingCase(", ".join(missing))
 
 
 @pytest.mark.parametrize("cid", [i for i in SETTLED if FILES[i]["class"] in ("valid", "invalid", "context",
@@ -212,10 +238,23 @@ def test_v02_two_versions_and_their_hash_keys():
     assert len(keys) == case["expect"]["versions"]
 
 
-@pytest.mark.xfail(strict=True, reason="conformance case P01 was held back by the split filter")
+@pytest.mark.xfail(strict=True, raises=MissingCase, reason=(
+    "Needs the settled P01 row in docs/publication/cases. Restore both P01 checks together. "
+    "See decisions/publication-case-pins.md."
+))
 def test_p01_the_pin_lives_in_the_import():
-    case = FILES["P01"]
+    case = required_case("P01")
+    assert case["status"] == "settled" and case["class"] == "valid" and case["form"] == "row"
+    assert case["expect"]["accept"] is True
     schema = schema_of(case)
+    alias, kind = schema["kinds"]["Host"]["slots"]["zone"]["ref"].split(".")
+    pin = schema["imports"][alias]
+    assert set(pin) == {"pack", "schema", "manifest", "dataset"}
+    assert kind == "Zone"
+    assert case["expect"]["arrow_ref_metadata"] == {"kind": kind, **pin}
+    assert case["expect"]["payload"]["zone"] == "dmz"
+    target = f"{pin['pack']}@{pin['schema']}@{pin['manifest']}@{pin['dataset']}:Zone/dmz"
+    assert case["input"]["zone"] == {"$ref": target}
     assert hash_rows(schema, [case["input"]])["Host"][0]["zone"] == case["expect"]["payload"]["zone"]
     field = {"name": "zone", "storage": "string",
              "extension": {"name": "rezono.ref", "metadata": case["expect"]["arrow_ref_metadata"]}}

@@ -8,7 +8,7 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 import pytest
 from rezono_canon import canonical_json
-from test_l0 import FILES, FIXTURE, R01, THING, TREE, TREE_ROWS, TYPES, merge, schema_of
+from test_l0 import FILES, FIXTURE, R01, THING, TREE, TREE_ROWS, TYPES, MissingCase, merge, required_case, schema_of
 
 from rezono_publication import arrow, l0
 from rezono_publication.hash import hashes
@@ -171,9 +171,12 @@ def test_h02_dictionary_encoded_parquet_reads_the_same(tmp_path):
     assert hashes(FIXTURE, arrow.from_arrow(FIXTURE, tables)) == hashes(FIXTURE, R01)
 
 
-@pytest.mark.xfail(strict=True, reason="conformance case P01 was held back by the split filter")
+@pytest.mark.xfail(strict=True, raises=MissingCase, reason=(
+    "Needs the same P01 row as test_p01_the_pin_lives_in_the_import. "
+    "See decisions/publication-case-pins.md and complete both P01 checks together."
+))
 def test_p01_the_pin_survives_arrow_and_parquet(tmp_path):
-    case = FILES["P01"]
+    case = required_case("P01")
     schema = schema_of(case)
     rows = [case["input"]]
     tables = arrow.to_arrow(schema, rows)
