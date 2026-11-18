@@ -44,6 +44,10 @@ def cases(engine):
     for path in sorted(DIRECTORY.glob("*.yaml")):
         if path.name != "sources.yaml":
             case = case_file(path.stem)
+            payload = case["input"]
+            if "rules" not in payload:
+                continue
+            assert "select" in payload, f"{case['id']}: a rule replay needs its selected subject"
             reason = case.get("unsupported", {}).get(engine)
             runnable.append(pytest.param(case, id=case["id"], marks=pytest.mark.skip(reason=reason)) if reason
                             else pytest.param(case, id=case["id"]))

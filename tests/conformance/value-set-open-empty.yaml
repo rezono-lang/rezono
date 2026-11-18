@@ -1,0 +1,35 @@
+id: value-set-open-empty
+source: docs/semantics/value-cases.yaml#set-open-empty
+status: settled
+input:
+  rows:
+  - kind: item
+    id: item-x
+    group: group-a
+    labels: []
+  - kind: item
+    id: item-a
+    group: group-a
+    labels:
+    - first
+  slot: item.labels
+  subject: item-x
+  cardinality: '*'
+  world: open
+  slot_cardinality:
+    item.labels: '*'
+expect:
+  value:
+    complete: false
+    count:
+      accepted: false
+      diagnostic: R004
+    any: false
+    known_absent_members: []
+  state: known
+  reason: null
+  witness: null
+unsupported:
+  feldera: The compiler refuses the unguarded count before sending rules to the engine.
+  language: The current language evaluator gives unknown for any on an empty open relation, while this
+    case distinguishes recorded positive evidence.

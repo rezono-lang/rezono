@@ -1,0 +1,24 @@
+id: value-reason-known-empty
+source: docs/semantics/value-cases.yaml#reason-known-empty
+status: settled
+input:
+  rows:
+  - kind: item
+    id: item-a
+    group: group-a
+    labels:
+    - first
+    - second
+    quantity: 7
+    weight: 3
+  slot: item.quantity
+  subject: item-a
+expect:
+  value: '7'
+  state: known
+  reason: null
+  witness:
+    relation: item__quantity
+    key:
+    - item-a
+    - '7'
