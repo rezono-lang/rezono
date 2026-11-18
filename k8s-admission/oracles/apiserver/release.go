@@ -83,6 +83,12 @@ func parseRelease(path string) (*release, error) {
 		if err := json.Unmarshal(item.Raw, object); err != nil {
 			return nil, err
 		}
+		switch obj := object.(type) {
+		case *admissionregistrationv1.ValidatingAdmissionPolicy:
+			defaultSelectors(obj.Spec.MatchConstraints)
+		case *admissionregistrationv1.ValidatingAdmissionPolicyBinding:
+			defaultSelectors(obj.Spec.MatchResources)
+		}
 		result.objects = append(result.objects, object)
 	}
 	for _, instance := range instances {
@@ -97,6 +103,20 @@ func parseRelease(path string) (*release, error) {
 		result.parameters = append(result.parameters, instance)
 	}
 	return result, nil
+}
+
+// The informer store normally receives objects after Kubernetes API defaulting.
+// Nil selectors in the matcher select nothing, while omitted API fields match everything.
+func defaultSelectors(match *admissionregistrationv1.MatchResources) {
+	if match == nil {
+		return
+	}
+	if match.NamespaceSelector == nil {
+		match.NamespaceSelector = &metav1.LabelSelector{}
+	}
+	if match.ObjectSelector == nil {
+		match.ObjectSelector = &metav1.LabelSelector{}
+	}
 }
 
 func (r *release) addDefinition(definition resourceDefinition) error {
