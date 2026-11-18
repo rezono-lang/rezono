@@ -10,7 +10,10 @@ def evaluate(name, columns, facts):
     text = source.read_text(encoding="utf-8")
     from rezono_compiler import batch, rules, rules_dl
 
-    inputs = {table: [(column, "string") for column in fields.split()] for table, fields in columns.items()}
+    inputs = {
+        table: [(column, "string") for column in fields.split()] if isinstance(fields, str) else fields
+        for table, fields in columns.items()
+    }
     program = rules.load(rules_dl.read_program(text, source.name, inputs, "std-loop"))
     connection = batch.connect(program, facts)
     try:
