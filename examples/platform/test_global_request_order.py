@@ -27,10 +27,6 @@ def assert_ordinals(rows, expected):
     assert sorted(map(tuple, rows)) == sorted(expected.items())
 
 
-@pytest.mark.xfail(strict=True, raises=MissingGlobalRequestOrdinal, reason=(
-    "Derive request_ordinal from complete requests across tenants in examples/platform/rules, with typed "
-    "ordering inputs in examples/platform/schema and request_preview.py. Read decisions/platform-global-request-order.md."
-))
 def test_global_request_ordinals_use_exact_time_tenant_and_service(tmp_path):
     teams = tmp_path / "teams"
     for request, second in reversed(REQUESTS):
