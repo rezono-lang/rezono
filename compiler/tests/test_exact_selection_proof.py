@@ -100,8 +100,7 @@ def verify(doc, calc_ir, rows, witnesses, *, value=VALUE):
 
 
 @pytest.mark.xfail(strict=True, raises=pytest.RaisesExc(ValueError, match="typed input for a numeric calculation"),
-                   reason="Waits for test_native_boolean_rule_inputs and test_independent_date_equality on the shared rule contract. "
-                          "Read decisions/exact-calculation-premises.md. In contracts/rules.yaml and "
+                   reason="Read decisions/exact-calculation-premises.md. In contracts/rules.yaml and "
                           "checker/rezono_checker admit a copy of a proved rational selection in a typed rule. "
                           "Preserve the integer projection and verify the calculation's independent grounds.")
 def test_checker_accepts_only_a_proved_exact_selection(calculation):

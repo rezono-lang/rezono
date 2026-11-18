@@ -10,7 +10,7 @@ Use the existing Calc spelling for keys and bindings. Whole values use signed de
 
 The first verifier accepts copying a rational variable into a rational column. It checks both declared types, the rule and calculation witnesses, and completeness when the copied relation is read in full. A text or integer destination, or an arithmetic or ordering operation on a rational variable, must be refused until that operation has its own semantics and evidence. The verifier recomputes the calculation even when the snapshot, conclusion and claimed witness value all agree.
 
-The acceptance fixture in `compiler/tests/test_exact_selection_proof.py` runs the existing Calc producer on DuckDB and checks its calculation witness against the source snapshots. Its rule IR and rule witness are supplied independently of the compiler. This first task changes the rule contract and the independent checker. It waits for the existing boolean and date input tasks that edit the same contract. A subsequent compiler task can target this verifier.
+The acceptance fixture in `compiler/tests/test_exact_selection_proof.py` runs the existing Calc producer on DuckDB and checks its calculation witness against the source snapshots. Its rule IR and rule witness are supplied independently of the compiler. This first task changes the rule contract and the independent checker. A subsequent compiler task can target this verifier.
 
 ## Later steps
 
