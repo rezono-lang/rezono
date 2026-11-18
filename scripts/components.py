@@ -245,6 +245,7 @@ PR_FILE_CONSUMERS = {
 PACK_READERS = ("admission", "checker", "compiler", "edge/plugins/connectors", "edge/publisher", "examples",
                 "k8s-admission", "loop", "publication", "rezono", "run")
 SHARED_READERS = {
+    "examples/platform/proof_cases/role-publication-cases.ts": ("tools/repl", "tools/mcp"),
     "docs/compiler/pack.md": ("compiler",),
     "docs/publication/l0.md": ("edge/plugins/connectors",),
     "docs/publication/cases/": ("compiler", "edge/plugins/connectors", "publication"),
