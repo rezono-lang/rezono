@@ -82,11 +82,41 @@ def test_uncovered_waiting_steps_remain_pending(tmp_path, capsys, last):
     assert (status, report) == (1, {"outcome": "pending", "plans": [[]] * len(last), "rounds": len(last)})
 
 
-def test_complete_quiet_sweep_publishes_fixed_point_witness(tmp_path, capsys):
+@pytest.mark.parametrize("complete", [True, False], ids=["complete", "partial"])
+def test_pending_completion_survives_quiet_sweep(tmp_path, capsys, complete):
     data = setup_recording(tmp_path)
     data["records"]["loop_pending_operation"] = [
+        {"id": "shipment-in-flight", "run": "active", "token": "shipped"},
+    ]
+    data["sweeps"] = [boundary("quiet", complete=complete)]
+    assert execute(tmp_path, capsys, data) == (1, {"outcome": "pending", "plans": [[]], "rounds": 1})
+
+    confirmed = observation("active", "delivery", "ship", "shipment-readback", 11, "yes")
+    data["sweeps"].append([confirmed])
+    assert execute(tmp_path, capsys, data) == (0, {"outcome": "success", "plans": [[], []], "rounds": 2})
+
+
+def test_complete_quiet_sweep_publishes_fixed_point_witness(tmp_path, capsys):
+    data = setup_recording(tmp_path)
+    records = data["records"]
+    records["loop_pending_operation"] = [
         {"id": "foreign-request", "run": "prior", "token": "seeded"},
-        {"id": "unrelated-request", "run": "active", "token": "unrelated"}]
+        {"id": "foreign-shipment", "run": "prior", "token": "shipped"},
+        {"id": "unrelated-request", "run": "active", "token": "unrelated"},
+        {"id": "previous-inspection", "run": "active", "token": "inspected"},
+    ]
+    records["loop_step"].append({"id": "inspect"})
+    records["loop_completion"] += [
+        {"id": "inspection-definition", "run": "active", "step": "inspect",
+         "token": "inspected", "reason": "inspection-definition"},
+        {"id": "foreign-definition", "run": "prior", "step": "ship",
+         "token": "unrelated", "reason": "foreign-definition"},
+    ]
+    records["loop_expectation"].append({"id": "inspected", "value": "yes"})
+    records["loop_observation"] = [
+        {"id": "inspection-readback", "run": "active", "token": "inspected", "event_time": 9,
+         "state": "known", "value": "yes", "reason": "inspection-readback"},
+    ]
     permit = observation("active", "late", "seed", "signed-permit", 11, "yes")
     data["sweeps"] = [boundary("closed-inventory"), [permit]]
     status, report = execute(tmp_path, capsys, data)
@@ -95,7 +125,6 @@ def test_complete_quiet_sweep_publishes_fixed_point_witness(tmp_path, capsys):
                                       "token": "seeded", "requirement": "permit-rule"}]
 
     # Verify the compiled explanation cites the source records, independently of their reason strings.
-    records = data["records"]
     records["loop_requirement"][0]["id"] = "prerequisite-source-row"
     records["loop_sweep_receipt"] = [{"id": "closed-inventory", "run": "active", "event_time": 10}]
     program, rows, explainer = evaluate(pack.read(LOOP), records)
