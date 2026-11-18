@@ -30,8 +30,8 @@ DIR = "rezono"
 KEY = "rezono"  # the key of pack.yaml (contract RezonoModule in contracts/pack.yaml)
 PAGE = "docs/rezono/publication.md"
 PATH = re.compile(r"^rezono/[a-z][a-z0-9_]*(/[a-z][a-z0-9_]*)*\.(rezono|json)$")
-# The two types a slot may have beside a kind or an enum (§5.1), and the LinkML type each lowers to.
-TYPES = {"Date": "date", "Text": "string"}
+# The built-in slot types (§5.1) and their LinkML ranges.
+TYPES = {"Bool": "boolean", "Date": "date", "Text": "string"}
 # Declarations this slice does not lower, by the member that names them: what, and where the page says so.
 REFUSED = {
     "unit": ("a unit is not lowered yet", "§6"),
@@ -189,7 +189,7 @@ def names(form: dict) -> dict[str, str]:
 
 def attributes(decl: dict) -> dict[str, dict]:
     """The LinkML attributes of a kind: the identifier `id`, then each slot in the order of the text (§5.1).
-    A slot's range is its type, Date and Text as LinkML types; `T` is required, `T?` is not."""
+    A slot's range uses the LinkML name for built-in types; `T` is required, `T?` is not."""
     out: dict[str, dict] = {"id": {"identifier": True}}
     for s in decl.get("slots") or []:
         slot: dict[str, object] = {"range": TYPES.get(s["type"], s["type"])}
