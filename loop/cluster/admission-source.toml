@@ -1,0 +1,2 @@
+repository_url = "http://fixture-git.fixture-system.svc/rezono.git"
+plugin_name = "rezono-admission-fixture"
