@@ -1,0 +1,26 @@
+id: https://rezono.org/std-loop/step-safety
+name: std_loop_step_safety
+description: Supplied obligations and their results for a step at an observation cut.
+imports: [linkml:types, loop_inputs]
+default_range: string
+annotations:
+  layer: facts
+
+enums:
+  LoopStepSafetyVerdict:
+    permissible_values:
+      proved:
+      refuted:
+      unknown:
+
+classes:
+  LoopStepSafetyCheck:
+    description: One recorded result with the identity of its obligation and evidence.
+    attributes:
+      id: {identifier: true}
+      run: {required: true}
+      step: {range: LoopStep, required: true}
+      cut: {required: true, description: The identity of the sweep receipt used for the check.}
+      obligation: {required: true}
+      verdict: {range: LoopStepSafetyVerdict, required: true}
+      reason: {required: true}

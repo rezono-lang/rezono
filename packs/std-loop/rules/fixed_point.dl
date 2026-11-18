@@ -9,6 +9,10 @@ possible_progress(run) :-
     eligible(run, step, _), !waiting_done(run, step), completion(run, step, token, _),
     loop_pending_operation__run(operation, run), loop_pending_operation__token(operation, token).
 
+// An undecided safety check can still be resolved by additional evidence.
+possible_progress(run) :-
+    current_step_safety_check(run, step, _, _, "unknown", _), !waiting_done(run, step).
+
 .decl fixed_point(run: symbol, sweep: symbol, step: symbol, token: symbol, requirement: symbol)
 fixed_point(run, sweep, step, token, requirement) :-
     loop_sweep_receipt__run(sweep, run), loop_sweep_receipt__event_time(sweep, _),

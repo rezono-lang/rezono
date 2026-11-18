@@ -7,15 +7,6 @@ from pack_records import LOOP, evaluate
 from rezono_compiler import pack
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason=(
-        "Read decisions/safe-step-rounds.md. In packs/std-loop, derive safe_alone and distinct waiting "
-        "reasons from supplied same-cut step checks, with positive source witnesses. "
-        "Start from the hand-authored checks in this test; no core variant implementation is required."
-    ),
-)
 def test_step_safety_reasons():
     checks = [
         ("safe", "storage", "proved", "variant-valid"),
