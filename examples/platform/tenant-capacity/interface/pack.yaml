@@ -1,0 +1,5 @@
+# The public notice schema and extension point for tenant summaries.
+name: platform-capacity-interface
+version: 0.1.0
+default_language: en
+imports: []

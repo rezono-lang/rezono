@@ -11,7 +11,10 @@ the rule IR, and shares no code with the publisher's filter (edge/publisher/test
   more is `not_readable`, a row less `readable_missing`. The relations of a seal with parts are readable only
   for a role that reads every part kind in full (`withheld_seals`). A calculated row names its subject, which must be
   readable (`not_readable`); which calculated rows a role sees is the calculation check's.
-- A kind is full for the role if a read rule grants it without a condition: with the role as a constant
+- A program that declares `may_read_full(role, kind)` requires a row of the complete snapshots for this role
+  and kind and a valid rule witness for that row. The evidence names the rule and the coverage row.
+  A program that predates the relation reads a kind in full if a read rule grants it without a condition:
+  with the role as a constant
   and only `K(x)`, or `may_read(r, "K", x) :- role(r), K(x).` for a role the complete `role` rows hold (for
   any other role that rule derives nothing, so nothing in full either), or
   `may_read(r, "K", x) :- role__capability(r, "c"), K(x).` for a role the complete `role__capability` rows map
@@ -47,9 +50,12 @@ from .calc import published_views, subject_of, version_of
 from .calc import reads as calc_reads
 from .calc import sources as calc_sources
 from .canon import INTEGER, encode_key
+from .check import _check_witness, _rows, shaped
+from .rules import load_rules
 from .snapshots import read_rows
 
 ACCESS = "may_read"
+READ_FULL = "may_read_full"
 ROLE = "role"  # the kind of the roles: `role(r)` in a read rule means every role the pack's facts name
 # A role's generic capabilities (std-access): `role__capability(r, "c")` in a read rule means every role the
 # pack's facts map to capability `c`.
@@ -172,6 +178,11 @@ def full_relations(doc: dict, columns: dict, kinds_full: set, relations: set, wi
     return {rel for rel in relations | derived if (view(rel) if rel in calc else plain(rel))}
 
 
+def _derived_premises(witness: dict, derived: set) -> set[tuple[str, str]]:
+    return {(p["row"]["relation"], p["row"]["key"]) for p in witness.get("premises", ())
+            if p["polarity"] == "positive" and p["row"]["relation"] in derived}
+
+
 def select(instances, derived: set, usable=None) -> dict[tuple[str, str], dict]:
     """For every derivable row its chosen proof, as R7 defines it (docs/formal.md §3), computed here and not
     with the compiler's selector. The rank of a row is the least, over its usable instances whose derived
@@ -181,8 +192,7 @@ def select(instances, derived: set, usable=None) -> dict[tuple[str, str], dict]:
     for i, w in enumerate(instances):
         if usable is not None and not usable(w):
             continue
-        needs = {(p["row"]["relation"], p["row"]["key"]) for p in w.get("premises", ())
-                 if p["polarity"] == "positive" and p["row"]["relation"] in derived}
+        needs = _derived_premises(w, derived)
         tie = (w["rule_id"], json.dumps([b["value"] for b in w.get("bindings", ())]))
         inst.append(((w["conclusion"]["relation"], w["conclusion"]["key"]), needs, tie, i, w))
     users = defaultdict(list)
@@ -217,6 +227,51 @@ def select(instances, derived: set, usable=None) -> dict[tuple[str, str], dict]:
         if r is not None and (head not in best or (r, tie, i) < best[head][0]):
             best[head] = ((r, tie, i), w)
     return {h: w for h, (_, w) in best.items()}
+
+
+def _witnessed_grants(doc: dict, role: str, chains: dict, every: dict, instances, derived: set,
+                      findings: list[dict]) -> list[dict]:
+    """Check coverage witnesses and their positive rule premises against the complete snapshots."""
+    coverage = {}
+    for key, (parts, _) in every.get(READ_FULL, {}).items():
+        if parts[:1] == (role,):
+            if len(parts) != 2 or parts[1] not in chains:
+                findings.append({"reason": "evidence_mismatch", "relation": READ_FULL, "key": key})
+            else:
+                coverage[(READ_FULL, key)] = parts[1]
+    if not coverage:
+        return []
+
+    by_row = defaultdict(list)
+    for index, witness in enumerate(instances):
+        conclusion = witness["conclusion"]
+        by_row[conclusion["relation"], conclusion["key"]].append((index, witness))
+    rules, groups = load_rules(doc), {}
+    checked = []
+    seen, pending = set(), set(coverage)
+    while pending:
+        ref = pending.pop()
+        seen.add(ref)
+        for index, witness in by_row[ref]:
+            problems: list[dict] = []
+            _check_witness(index, witness, rules, _rows(dict(every), problems), problems, groups)
+            if not problems:
+                checked.append(witness)
+                pending.update(_derived_premises(witness, derived) - seen)
+
+    supported = set(select(checked, derived))
+    proofs = defaultdict(set)
+    for witness in checked:
+        conclusion = witness["conclusion"]
+        ref = (conclusion["relation"], conclusion["key"])
+        if ref in coverage and _derived_premises(witness, derived) <= supported:
+            proofs[ref].add(witness["rule_id"])
+    out = []
+    for ref, kind in sorted(coverage.items()):
+        if not proofs[ref]:
+            findings.append({"reason": "evidence_mismatch", "relation": READ_FULL, "key": ref[1]})
+        out.extend({"kind": kind, "rule": rule, "ground": [READ_FULL, role, kind]} for rule in sorted(proofs[ref]))
+    return out
 
 
 def check_choice(witnesses, chosen: dict) -> list[dict]:
@@ -295,7 +350,9 @@ def check_role(role: str, complete: dict, snapshots: dict, claimed_full, columns
                 out[rel] = {}
         return out
 
-    every, mine = rows(complete, "complete"), rows(snapshots, role)
+    every = rows(complete, "complete")
+    complete_valid = not findings
+    mine = rows(snapshots, role)
     columns = dict(columns)
     views = set()
     if calc_ir is not None:  # a calculated row names its subject; the evaluation date names no element
@@ -311,17 +368,31 @@ def check_role(role: str, complete: dict, snapshots: dict, claimed_full, columns
     def readable(rel: str, parts) -> bool:
         return rel not in withheld and all(k is None or reads(k, v) for k, v in zip(columns[rel], parts))
 
-    named = any(p[:1] == (role,) for p, _ in every.get(ROLE, {}).values())
-    capabilities = frozenset(p[1] for p, _ in every.get(CAPABILITY, {}).values() if len(p) == 2 and p[0] == role)
-    evidence = grants(doc, role, chains, named, capabilities)
+    relations = doc.get("relations", ())
+    derived = {r["name"] for r in relations if r.get("role") == "derived"}
+    explicit = any(r["name"] == READ_FULL for r in relations)
+    if explicit:
+        instances = list(instances)
+        valid = [w for w in instances if shaped(w)]
+        if len(valid) != len(instances):
+            findings.append({"reason": "evidence_mismatch", "relation": READ_FULL, "detail": "malformed rule instances"})
+        evidence = _witnessed_grants(doc, role, chains, every, valid, derived, findings) if complete_valid else []
+        instances = valid
+    else:
+        named = any(p[:1] == (role,) for p, _ in every.get(ROLE, {}).values())
+        capabilities = frozenset(p[1] for p, _ in every.get(CAPABILITY, {}).values() if len(p) == 2 and p[0] == role)
+        evidence = grants(doc, role, chains, named, capabilities)
+    granted = {g["kind"] for g in evidence}
+    kinds_full = {k for k, chain in chains.items() if granted.intersection(chain)}
+    unreadable = {k for k in kinds_full if any(not reads(k, p[0]) for p, _ in every.get(k, {}).values())}
+    findings += [{"reason": "full_not_readable", "relation": k} for k in sorted(unreadable)]
+    if explicit and unreadable:
+        rejected = {ancestor for k in unreadable for ancestor in chains[k]}
+        evidence = [g for g in evidence if g["kind"] not in rejected]
+        kinds_full = {k for k, chain in chains.items() if (granted - rejected).intersection(chain)}
     if claimed_evidence is not None:
         findings += check_evidence(claimed_evidence, evidence)
-    kinds_full = {k for k, chain in chains.items() if {g["kind"] for g in evidence}.intersection(chain)}
     withheld = withheld_seals(doc, kinds_full)
-    for k in sorted(kinds_full):
-        if any(not reads(k, p[0]) for p, _ in every.get(k, {}).values()):
-            findings.append({"reason": "full_not_readable", "relation": k})
-    derived = {r["name"] for r in doc.get("relations", ()) if r.get("role") == "derived"}
     for rel in sorted((set(every) | set(mine)) - derived):
         if rel not in columns:
             findings.append({"reason": "no_columns", "relation": rel})

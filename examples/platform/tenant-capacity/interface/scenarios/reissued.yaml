@@ -1,0 +1,2 @@
+capacity_notice:
+  - {id: issued-notice, issuer: platform, origin: decision, period: first, free_cores: 4, total_cores: 7}
