@@ -25,6 +25,13 @@ RECORDED_BYTES = (
 
 
 def contract_errors(document):
+    if document["format"] == "rezono.module/3":
+        from contracts import validate as module_contract
+
+        assert hasattr(module_contract, "module_form_errors"), (
+            "Missing native ModuleForm entry point contracts.validate.module_form_errors"
+        )
+        return module_contract.module_form_errors(document)
     return [result.message for result in validate(document, str(SCHEMA), "ModuleForm").results]
 
 
