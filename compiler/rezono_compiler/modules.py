@@ -297,7 +297,12 @@ def load(pack_dir: Path, meta: dict, errors: list[str]) -> tuple[list[Module], d
         for m in modules.values():
             if m.form is not None:
                 try:
-                    m.sv.all_classes()
+                    classes = m.sv.all_classes()
+                    for kind in m.sv.schema.classes.values():
+                        for slot in kind.attributes.values():
+                            if slot.inlined and slot.range not in classes:
+                                errors.append(f"{m.pack_dir.name}/{m.rel}: {kind.name}.{slot.name}: "
+                                              f"an embedded reference must name a kind, not {slot.range}")
                 except (TypeError, ValueError, OSError) as e:
                     errors.append(f"{m.pack_dir.name}/{m.rel}: LinkML cannot read its lowered schema ({e})")
     return list(modules.values()), packs
