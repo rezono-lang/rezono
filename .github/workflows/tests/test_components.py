@@ -94,6 +94,34 @@ class SelectorTests(unittest.TestCase):
                 self.assertIsNone(ci._git_changed_files(ROOT, None, None))
 
 
+class RepositoryPullRequestSelectionTests(unittest.TestCase):
+    """The pull request selection on this repository's own dependency graph."""
+
+    def selected(self, *changed):
+        components = ci.discover_components(ROOT, keep_invalid_node=True)
+        head = ci.git_output(ROOT, "rev-parse", "HEAD").decode().strip()
+        with patch.object(ci, "pull_request_range", return_value=(head, head, list(changed))):
+            return {c.folder for c in ci.pull_request_components(components, ROOT, "main")}, components, head
+
+    def test_decision_only_change_selects_no_component_job(self):
+        selected, _, _ = self.selected("decisions/a-new-decision.md", "docs/a-new-page.md")
+        self.assertEqual(selected, set())
+
+    def test_compiler_change_selects_the_compiler_and_its_dependents_only(self):
+        selected, components, head = self.selected("compiler/rezono_compiler/__init__.py")
+        folders = {c.folder for c in components}
+        declared = ci.declared_dependents(ROOT, head, folders, {})
+        self.assertIn("compiler", selected)
+        self.assertLessEqual(declared["compiler"], selected)  # edge/publisher declares rezono-compiler
+        self.assertLessEqual(set(ci.PR_FILE_CONSUMERS["compiler"]) & folders, selected)
+        self.assertNotIn("tools/mcp", selected)
+        self.assertLess(selected, folders)
+
+    def test_unknown_path_selects_every_component(self):
+        selected, components, _ = self.selected("an-unknown-directory/resource.yaml")
+        self.assertEqual(selected, {c.folder for c in components})
+
+
 class PullRequestSelectorTests(unittest.TestCase):
     def repository(self, directory, files):
         root = Path(directory)
