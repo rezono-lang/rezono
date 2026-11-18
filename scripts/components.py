@@ -214,7 +214,7 @@ def affected_components(
 
 # Files are assigned to jobs round-robin. Within a job pytest items share the
 # runner's cores, so one large parametrized file can use more than one core.
-SHARDS = {"compiler": 3, "examples": 5}
+SHARDS = {"compiler": 3}
 PARALLEL = {"compiler", "examples", "edge/publisher"}
 
 
@@ -226,6 +226,19 @@ def test_files(folder: str) -> list[str]:
         for path in directory.rglob(pattern)
         if path.is_file()
     })
+
+
+def shard_count(folder: str) -> int:
+    files = test_files(folder)
+    if folder != "examples":
+        return min(SHARDS.get(folder, 1), max(1, len(files)))
+    # Run 44301601328 placed the two CPU-heavy modules on the same runner.
+    # Choose the fewest round-robin partitions that separate the three long
+    # example modules, even as new test files change their sorted positions.
+    heavy = {"examples/test_rules.py", "examples/subsidy/test_subsidy.py", FORMS_MODULE}
+    positions = [i for i, file in enumerate(files) if file in heavy]
+    candidates = range(min(3, max(1, len(files))), min(8, max(1, len(files))) + 1)
+    return min(candidates, key=lambda n: (len(positions) - len({i % n for i in positions}), n))
 
 
 def runner_cores() -> int:
@@ -595,7 +608,7 @@ def main() -> int:
              "label": c.folder if total == 1 else f"{c.folder} {shard + 1}/{total}"}
             for c in active
             if c.kind in ("contracts", "python")
-            for total in [min(SHARDS.get(c.folder, 1), max(1, len(test_files(c.folder))))]
+            for total in [shard_count(c.folder)]
             for shard in range(total)
         ]
         node_items = [
