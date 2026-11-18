@@ -6,7 +6,6 @@ from runpy import run_path
 import pytest
 
 
-@pytest.mark.xfail(strict=True, reason="Read decisions/delivery-commit-status.md. Implement loop/status_retry.py. Read the latest logical status before each retry.")
 def test_status_retry():
     publish = run_path(str(Path(__file__).resolve().parents[1] / "status_retry.py"))["publish"]
     remote = {}
