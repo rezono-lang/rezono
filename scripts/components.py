@@ -436,11 +436,12 @@ def execute_worker(assignment: Path, journal: Path, report: Path) -> int:
         plugins = [Evidence()]
         if "publication" in data:
             sys.path.insert(0, str(ROOT / ".github/workflows"))
-            from publication_fixture import PublicationProducer, PublicationReader
+            from publication_fixture import PublicationGC, PublicationProducer, PublicationReader
 
             share = data["publication"]
             plugin = PublicationProducer if share["producer"] else PublicationReader
             plugins.append(plugin(Path(share["directory"]), ROOT / FORMS_MODULE))
+            plugins.append(PublicationGC())
         return int(pytest.main([*args, "--", *expected], plugins=plugins))
 
 

@@ -1,5 +1,6 @@
 """Share the genuine module-scoped publication with the second immutable reader in this shard."""
 
+import gc
 import json
 import shutil
 import time
@@ -66,3 +67,28 @@ class PublicationReader:
         (self.directory / "reader.json").write_text(json.dumps(wait), encoding="utf-8")
         fixturedef.cached_result = (result, fixturedef.cache_key(request), None)
         return result
+
+
+class PublicationGC:
+    """Measure collection work for the large, short-lived publication object graphs."""
+    def __init__(self):
+        self.counts = [0, 0, 0]
+        self.seconds = [0.0, 0.0, 0.0]
+        self.started = 0.0
+
+    def trace(self, phase, info):
+        if phase == "start":
+            self.started = time.perf_counter()
+        else:
+            generation = info["generation"]
+            self.counts[generation] += 1
+            self.seconds[generation] += time.perf_counter() - self.started
+
+    def pytest_sessionstart(self, session):
+        gc.callbacks.append(self.trace)
+
+    def pytest_sessionfinish(self, session, exitstatus):
+        gc.callbacks.remove(self.trace)
+        print(f"Publication GC collections={self.counts}, seconds={self.seconds}")
+        from rezono_publisher import timing
+        print(f"Publication phases (s): {timing.spent()}")
