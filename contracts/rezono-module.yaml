@@ -190,6 +190,7 @@ classes:
           - {range: KindDeclWithKeys, inlined: true}
           - {range: RulesDecl, inlined: true}
           - {range: ScalarAliasDecl, inlined: true}
+          - {range: DatasetDecl, inlined: true}
 
   ModuleWithRules:
     mixins: [SchemaMetadata]
@@ -222,6 +223,13 @@ classes:
           - range: FactRow
           - range: RulesDecl
           - range: ScalarAliasDecl
+          - range: DatasetDecl
+
+  DatasetDecl:
+    description: A named fact dataset with its tables in source order.
+    attributes:
+      dataset: {required: true, range: Name}
+      decls: {required: true, range: FactTable, multivalued: true, inlined_as_list: true}
 
   RulesDecl:
     description: An embedded relational rules block (decisions/language-rules.md).

@@ -37,9 +37,11 @@ def constraint_facets(slot: dict, range_name: str | None) -> dict[str, int | boo
     return rezono_numeric_limits.lower(constraints)
 
 
-def lower(slots: list[dict], declared: Set[str]) -> dict[str, dict]:
+def lower(slots: list[dict], declared: Set[str], *, implicit_identifier: bool = True) -> dict[str, dict]:
     """Lower slots in written order, using an implicit identifier only when needed."""
-    out: dict[str, dict] = {} if any(slot.get("identifier") is True for slot in slots) else {"id": {"identifier": True}}
+    out: dict[str, dict] = {}
+    if implicit_identifier and not any(slot.get("identifier") is True for slot in slots):
+        out["id"] = {"identifier": True}
     for slot in slots:
         name = slot["type"]
         # Validation has already checked whether this version admits the built-in range.

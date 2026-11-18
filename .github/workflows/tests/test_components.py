@@ -11,9 +11,39 @@ import unittest
 from unittest.mock import patch
 from xml.etree import ElementTree
 
+import yaml
+
 ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / "scripts"))
 import components as ci
+
+
+class WorkflowEnvironmentTests(unittest.TestCase):
+    def test_python_collection_and_execution_get_the_locked_module_reader(self):
+        workflow = ROOT / ".github/workflows"
+        jobs = yaml.safe_load((workflow / "ci.yml").read_text(encoding="utf-8"))["jobs"]
+        for job, command in (("discover", "scripts/components.py inventory"),
+                             ("python", "scripts/components.py run-shard")):
+            steps = jobs[job]["steps"]
+            environment, = [i for i, step in enumerate(steps)
+                            if step.get("uses") == "./.github/workflows/python-environment"]
+            execution, = [i for i, step in enumerate(steps) if command in step.get("run", "")]
+            self.assertLess(environment, execution, job)
+
+        action = yaml.safe_load((workflow / "python-environment/action.yml").read_text(encoding="utf-8"))
+        steps = action["runs"]["steps"]
+        runtimes = [i for i, step in enumerate(steps) if step.get("uses", "").startswith("actions/setup-node@")]
+        self.assertEqual(len(runtimes), 1, "All Python jobs need the language runtime to compile authored packs")
+        runtime = steps[runtimes[0]]
+        self.assertRegex(runtime["uses"], r"^actions/setup-node@[a-f0-9]{40}$")
+        self.assertEqual(runtime["with"]["node-version-file"], ".node-version")
+        self.assertEqual(runtime["with"]["cache-dependency-path"], "rezono/package-lock.json")
+        installation, = [i for i, step in enumerate(steps)
+                         if step.get("working-directory") == "rezono" and step.get("run") == "npm ci"]
+        self.assertLess(runtimes[0], installation)
+        for step in (runtime, steps[installation]):
+            self.assertNotIn("if", step)
+            self.assertNotIn("continue-on-error", step)
 
 
 class SelectorTests(unittest.TestCase):

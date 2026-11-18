@@ -30,7 +30,6 @@ def fetch(config, *args):
 
 
 @pytest.mark.cluster
-@pytest.mark.xfail(strict=True, reason="Depends on the shared disposable cluster, complete policies and desired release reconciliation. Connect the existing cluster setup to the admission test kubeconfig and release, per decisions/k8s-admission-server-evidence.md.")
 def test_reconciled_admission_release_on_the_api_server():
     config = os.environ["REZONO_ADMISSION_TEST_KUBECONFIG"]
     assert Path(config).is_file()

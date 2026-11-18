@@ -76,12 +76,13 @@ class Imported:
 
 
 class _LegacySchemaView(SchemaView):
-    """Resolve legacy relative imports from the directory of the importing schema."""
+    """Resolve legacy relative imports without losing their pack in LinkML's closure."""
 
     def __init__(self, source: Path, importmap: dict[str, str | dict],
-                 lowered_paths: dict[Path, SchemaDefinition]) -> None:
+                 lowered_paths: dict[Path, SchemaDefinition], relative_imports: dict[Path, dict[str, str]]) -> None:
         super().__init__(source, importmap=importmap)
         self.lowered_paths = lowered_paths
+        self.relative_imports = relative_imports
 
     def load_import(self, imp: str, from_schema: SchemaDefinition | None = None) -> SchemaDefinition:
         source = (from_schema if from_schema is not None else self.schema).source_file
@@ -89,7 +90,14 @@ class _LegacySchemaView(SchemaView):
             path = (Path(source).parent / f"{imp}.yaml").resolve()
             if path in self.lowered_paths:
                 return deepcopy(self.lowered_paths[path])
-        return super().load_import(imp, from_schema=from_schema)
+        imported = super().load_import(imp, from_schema=from_schema)
+        if self.relative_imports and imported.source_file:
+            aliases = self.relative_imports.get(Path(imported.source_file).resolve())
+            if aliases:
+                # LinkML keys its closure by import name. Qualify relative imports
+                # on the dependency copy before it follows them.
+                imported.imports = [aliases.get(name, name) for name in imported.imports]
+        return imported
 
 
 def pack_hash(pack_dir: str | Path) -> str:
@@ -232,6 +240,7 @@ def load(pack_dir: Path, meta: dict, errors: list[str]) -> tuple[list[Module], d
     modules: dict[str, Module] = {}
     authored: dict[str | None, dict[str, dict]] = {}
     lowered_paths: dict[Path, SchemaDefinition] = {}
+    relative_imports: dict[Path, dict[str, str]] = {}
     views: list[tuple[dict[str, str | dict], list[str | None]]] = []
     for name, d, imports in sources:
         visible = dependency_order(packs, imports)
@@ -244,7 +253,7 @@ def load(pack_dir: Path, meta: dict, errors: list[str]) -> tuple[list[Module], d
         for f in sorted((d / "schema").rglob("*.yaml")):
             rel = f.relative_to(d / "schema").with_suffix("").as_posix()
             try:
-                sv = _LegacySchemaView(f, importmap, lowered_paths)
+                sv = _LegacySchemaView(f, importmap, lowered_paths, relative_imports)
                 sv.schema  # noqa: B018 -- LinkML parses on first use; a parse error is a compile error
             except (TypeError, ValueError) as e:
                 errors.append(f"{f.relative_to(d).as_posix()}: LinkML cannot read it ({e}); an annotation whose value is "
@@ -266,6 +275,7 @@ def load(pack_dir: Path, meta: dict, errors: list[str]) -> tuple[list[Module], d
             continue
         own = None if m.pack == meta["name"] else m.pack
         allowed = packs[own].imports if own else [p for p in packs if p in direct(meta)]
+        aliases: dict[str, str] = {}
         for imp in m.sv.schema.imports or []:
             imp = str(imp)
             prefix, _, rest = imp.partition(":")
@@ -287,7 +297,11 @@ def load(pack_dir: Path, meta: dict, errors: list[str]) -> tuple[list[Module], d
                 errors.append(f"{m.rel}: import '{imp}' is not a module")
                 continue
             m.imports.append(target)
+            if not rest:
+                aliases[imp] = target if own else module_id(m.pack, target)
         m.imports.sort()
+        if aliases:
+            relative_imports[m.file.resolve()] = aliases
     # A SchemaView can traverse another pack's imports. Make every lowered schema in
     # that pinned closure available under its logical name before LinkML follows it.
     for importmap, visible in views:
