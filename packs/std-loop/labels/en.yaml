@@ -27,3 +27,23 @@ loop_refusal: terminal refusal
 loop_refusal.run: run
 loop_refusal.step: refused step
 loop_refusal.reason: refusal evidence
+flow_sweep_window: flow sweep window
+flow_sweep_window.run: observed run
+flow_sweep_window.collector: collector
+flow_sweep_window.window: observation window
+flow_sweep_window.start: first included tick
+flow_sweep_window.stop: first excluded tick
+flow_expected_node: expected sweep node
+flow_expected_node.run: observed run
+flow_expected_node.collector: collector
+flow_expected_node.window: observation window
+flow_expected_node.node: expected node
+flow_node_report: final node coverage report
+flow_node_report.run: observed run
+flow_node_report.collector: collector
+flow_node_report.window: observation window
+flow_node_report.node: reporting node
+flow_node_report.first: coverage start
+flow_node_report.last: coverage end
+flow_node_report.gaps: interior gaps
+flow_node_report.lost: lost events
