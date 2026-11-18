@@ -1,7 +1,6 @@
-product_release_announcement:
-  - id: keycloak-26.0.0
+# The platform register's recorded date for the named release.
+product_release_reference:
+  - id: keycloak-26.0.0-register
     product: keycloak
     version: 26.0.0
     published: '2024-10-04'
-    source_url: 'https://www.keycloak.org/2024/10/keycloak-2600-released'
-    source_sha256: d5550883927968586033693bd391179dd441d4fd852ad8c55d535c0b8b593b82
