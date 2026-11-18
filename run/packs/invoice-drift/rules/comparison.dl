@@ -11,10 +11,17 @@ invoice_binding(invoice_ref, expected_ref, plan, item, currency) :-
 .decl bound_invoice(invoice_ref: symbol)
 bound_invoice(invoice_ref) :- invoice_binding(invoice_ref, _, _, _, _).
 
+.decl invoice_binding_count(expected_ref: symbol, plan: symbol, item: symbol, currency: symbol, lines: number)
+invoice_binding_count(expected_ref, plan, item, currency, lines) :-
+    expected_line(expected_ref), expected_line__plan_hash(expected_ref, plan),
+    expected_line__item(expected_ref, item), expected_line__currency(expected_ref, currency),
+    lines = count : { invoice_binding(_, expected_ref, plan, item, currency) }.
+
 .decl amount_difference(plan: symbol, item: symbol, expected_ref: symbol, invoice_ref: symbol,
     rounding_ref: symbol, expected_minor: number, observed_minor: number)
 amount_difference(plan, item, expected_ref, invoice_ref, rounding_ref, expected_minor, observed_minor) :-
     invoice_binding(invoice_ref, expected_ref, plan, item, currency),
+    invoice_binding_count(expected_ref, plan, item, currency, 1),
     verified_rounding(expected_ref, rounding_ref, expected_minor), invoice_line__minor(invoice_ref, observed_minor),
     expected_line__rounding_sha256(expected_ref, rounding_ref),
     rounding(rounding_ref), rounding__currency(rounding_ref, currency),
@@ -25,6 +32,9 @@ amount_difference(plan, item, expected_ref, invoice_ref, rounding_ref, expected_
 .decl unbound_invoice(invoice_ref: symbol, reason: symbol)
 unbound_invoice(invoice_ref, "missing_plan") :- invoice_line(invoice_ref), !tagged_invoice(invoice_ref).
 unbound_invoice(invoice_ref, "unmatched_item") :- tagged_invoice(invoice_ref), !bound_invoice(invoice_ref).
+unbound_invoice(invoice_ref, "ambiguous_binding") :-
+    invoice_binding(invoice_ref, expected_ref, plan, item, currency),
+    invoice_binding_count(expected_ref, plan, item, currency, lines), lines > 1.
 
 .output amount_difference
 .output unbound_invoice

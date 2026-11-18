@@ -8,7 +8,6 @@ import yaml
 from cluster_scenarios import WORKFLOW
 
 
-@pytest.mark.xfail(strict=True, reason="Read decisions/shared-disposable-cluster.md. Waits for test_kind_fixture_config, test_cilium_fixture_values and test_cluster_selection. Implement .github/workflows/disposable-cluster.yml, including pinned tools, locked repository dependencies and one cleanup path.")
 def test_cluster_workflow():
     config = yaml.load(WORKFLOW.read_text(encoding="utf-8"), Loader=yaml.BaseLoader)
     assert "pull_request" in config["on"] and "workflow_dispatch" in config["on"]

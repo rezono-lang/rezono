@@ -17,26 +17,34 @@ class Snapshot:
     done: set[str]
     stuck: set[str]
     drift: Collection[object]
+    fixed_point: Collection[tuple[str, str, str, str, str]] = ()
 
 
-def replay_snapshots(run: str, limit: int, snapshots: Iterator[Snapshot], *, report_limit: bool):
+def replay_report(run: str, limit: int, snapshots: Iterator[Snapshot], *, report_limit: bool):
     """Execute a frontier, consume one full sweep and decide again on its resulting state."""
     can_continue(0, limit, ())
     trace: list[list[str]] = []
     current = next(snapshots)
     while True:
         state = outcome(declared=current.declared, done=current.done, stuck=current.stuck, drift=current.drift)
+        if current.fixed_point:
+            return trace, "failure", sorted(current.fixed_point)
         if state != "pending":
-            return trace, state
+            return trace, state, []
         plans = list(frontier(run, current.ready, {step: step for step in current.declared}))
-        if not plans or (report_limit and len(trace) == limit):
-            return trace, "failure"
+        if report_limit and len(trace) == limit:
+            return trace, "failure", []
         can_continue(len(trace), limit, current.declared - current.done)
         following = next(snapshots, None)
         if following is None:
-            return trace, "failure"
+            return trace, "pending" if report_limit else "failure", []
         trace.append(plans)
         current = following
+
+
+def replay_snapshots(run: str, limit: int, snapshots: Iterator[Snapshot], *, report_limit: bool):
+    plans, state, _ = replay_report(run, limit, snapshots, report_limit=report_limit)
+    return plans, state
 
 
 def replay(

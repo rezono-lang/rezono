@@ -41,7 +41,6 @@ def test_effective_currency_reference():
         db.close()
 
 
-@pytest.mark.xfail(strict=True, reason="Read decisions/run-effective-currency.md. Implement run/effective_quote.py using std-time and the captured-price and exact-quote boundaries. Waits for test_price_capture and test_exact_quote.")
 def test_effective_currency():
     quote = implementation("effective_quote.py", "quote_at")
     rates = [FUTURE, OLD, NEW]

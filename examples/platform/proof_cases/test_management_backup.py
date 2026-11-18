@@ -27,7 +27,9 @@ def records():
 
 @pytest.mark.xfail(strict=True, raises=AssertionError, reason=(
     "Implement the platform backup-plan, scoped inventory and age rules in schema/management_backup.yaml "
-    "and rules/management_backup.dl using std-time and std-decision. Read decisions/platform-management-backup.md."))
+    "and rules/management_backup.dl using std-time and std-decision. Read decisions/platform-management-backup.md. "
+    "Requires native boolean rules for inventory completion and a common day projection for the copy, "
+    "inventory, and decision dates; the existing std-time view accepts one source kind per theory kind."))
 def test_management_backup_age_and_absence():
     from management_probes import compiled
 
@@ -114,9 +116,6 @@ def test_management_backup_restore_readback():
     assert all(e["cluster"] == "management" and e["probe_result"] == "unreachable" for e in boundaries)
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError, reason=(
-    "Derive backup and recovery storage routes from function placement in rules/management_backup_routes.dl. "
-    "Read decisions/platform-management-backup.md."))
 def test_management_backup_routes():
     from management_probes import compiled
 

@@ -74,3 +74,71 @@ def test_closed_month(tmp_path):
 
     with pytest.raises(ValueError):
         report(CorruptRead(), decision, timely)
+
+
+@pytest.mark.parametrize(
+    "plan_fields",
+    [
+        pytest.param({}, id="missing"),
+        pytest.param({"plan_hash": None}, id="null"),
+        pytest.param({"plan_hash": ""}, id="empty"),
+        pytest.param({"plan_hash": "plan"}, id="not-a-digest"),
+        pytest.param({"plan_hash": "A" * 64}, id="not-canonical"),
+    ],
+)
+def test_close_rejects_receipts_without_a_plan_digest(plan_fields):
+    report = implementation("closed_month.py", "report")
+    digest = sha256(FIRST).hexdigest()
+    decision = {"id": "close-apr", "month": "2032-04", "closed_at": CUT, "publication_sha256": digest}
+    receipt = {key: value for key, value in PERIOD.items() if key != "plan_hash"} | plan_fields
+
+    with pytest.raises(ValueError, match="plan hash for billing observation rental"):
+        report({digest: FIRST}, decision, [FEE, receipt])
+
+
+def test_close_distinguishes_a_retry_from_a_change_of_plan():
+    report = implementation("closed_month.py", "report")
+    digest = sha256(FIRST).hexdigest()
+    decision = {"id": "close-apr", "month": "2032-04", "closed_at": CUT, "publication_sha256": digest}
+
+    assert report({digest: FIRST}, decision, [PERIOD, PERIOD.copy()])["total_eur"] == [91, 60]
+    other_plan = dict(PERIOD, plan_hash=sha256(b"another order").hexdigest())
+    with pytest.raises(ValueError, match="conflicting billing observations for rental"):
+        report({digest: FIRST}, decision, [PERIOD, other_plan])
+
+
+@pytest.mark.parametrize(
+    ("received_at", "timely"),
+    [
+        pytest.param("2032-05-03T12:00:00.0000001Z", True, id="before"),
+        pytest.param("2032-05-03T12:00:00.0000003+00:00:00.0000002", True, id="fractional-offset"),
+        pytest.param("2032-05-03T14:00:00.000000200+02:00", False, id="equal-offset"),
+        pytest.param("2032-05-03T12:00:00.0000003Z", False, id="after"),
+    ],
+)
+def test_close_preserves_fractional_cutoff_order(received_at, timely):
+    report = implementation("closed_month.py", "report")
+    digest = sha256(FIRST).hexdigest()
+    decision = {"id": "close", "month": "2032-04", "closed_at": "2032-05-03T12:00:00.0000002Z",
+                "publication_sha256": digest}
+    result = report({digest: FIRST}, decision, [dict(FEE, received_at=received_at)])
+
+    amount = [5, 6] if timely else [0, 1]
+    assert result == {
+        "publication_sha256": digest,
+        "lines": {"setup-a": amount} if timely else {},
+        "total_eur": amount,
+        "late": [] if timely else [("setup-a", "close", "arrived_after_cutoff")],
+    }
+
+
+def test_close_splits_a_submicrosecond_period_at_the_utc_month_edge():
+    report = implementation("closed_month.py", "report")
+    digest = sha256(FIRST).hexdigest()
+    decision = {"id": "close-apr", "month": "2032-04", "closed_at": CUT, "publication_sha256": digest}
+    receipt = dict(PERIOD, start="2032-05-01T01:59:59.9999999+02:00",
+                   stop="2032-05-01T00:00:00.0000002Z")
+
+    assert report({digest: FIRST}, decision, [receipt])["lines"] == {"rental": [13, 9]}
+    may = dict(decision, id="close-may", month="2032-05", closed_at="2032-06-02T12:00:00Z")
+    assert report({digest: FIRST}, may, [receipt])["lines"] == {"rental": [26, 9]}

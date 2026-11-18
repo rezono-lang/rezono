@@ -99,6 +99,7 @@ export interface DerivedDecl {
 export interface KindDecl {
 	kind: string;
 	embedded?: true;
+	abstract?: true;
 	world?: World;
 	applies?: { axis: 'at' | 'during' | 'in'; slot: string };
 	sealed?: string;
@@ -197,7 +198,14 @@ semantics.addOperation<unknown>('decl', {
 		if (value.numChildren) decl.value = optTree(value);
 		return named(n, decl);
 	},
-	KindLine: (embedded, _k, t, world) => named(t, { line: 'kind', kind: t.sourceString, ...(embedded.numChildren ? { embedded: true } : {}), ...(world.numChildren ? { world: world.child(0).decl() } : {}) }),
+	KindLine(modifier, _k, t, world) {
+		const decl: Line = { line: 'kind', kind: t.sourceString };
+		const kindModifier = opt(modifier);
+		if (kindModifier === 'embedded') decl.embedded = true;
+		if (kindModifier === 'abstract') decl.abstract = true;
+		if (world.numChildren) decl.world = world.child(0).decl();
+		return named(t, decl);
+	},
 	ExtendLine: (_k, t) => named(t, { line: 'extend', extend: t.sourceString }),
 	AppliesLine: (_k, axis, _c, n) => named(n, { line: 'applies', axis: axis.sourceString, slot: n.sourceString }),
 	SealedLine: (_k, _at, _c, n) => ({ line: 'sealed', slot: n.sourceString }),

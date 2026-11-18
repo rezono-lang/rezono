@@ -22,6 +22,7 @@ line_rounding_mode.half_up: Round ties away from zero
 tagged_invoice: Invoice line tagged with a plan
 invoice_binding: Invoice line matched by plan, item and currency
 bound_invoice: Bound invoice line
+invoice_binding_count: Observed lines matching a priced item
 amount_difference: Invoice amount difference
 unbound_invoice: Unbound invoice line
 rounding_digit: Exact price or remainder digit

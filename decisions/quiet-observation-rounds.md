@@ -7,6 +7,14 @@ when a port returns no new values. In the typed recording format from
 the same epoch and units as the recording's admitted records. The empty array
 leaves object values alone. Each consumed sweep counts as a round.
 
+In a replay the typed adapter emits a LoopSweepReceipt for the current
+explicitly complete round. Older observation lists remain readable and can
+advance the plan. They carry no independent closure receipt. A recording
+that ends while its steps are still waiting reports `pending` and exits
+with status 1. Reaching the configured round bound still reports failure.
+A proved fixed point includes the run, sweep, blocked step, missing token
+and prerequisite reference in the command's `fixed_point` array.
+
 LoopSweep records carry this evidence. LoopDeadline attaches a step's budget
 in event-time units to a start observation of the same run. At the inclusive
 boundary an unfinished step is stuck and cannot be ready. LoopRequirement

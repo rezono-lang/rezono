@@ -1,0 +1,51 @@
+id: https://rezono.org/examples/platform-core/cluster-flow
+name: platform_cluster_flow
+description: Endpoint purposes, control service bindings and transports for inherent cluster flows.
+in_language: en
+imports: [linkml:types, core, placement, cluster_placement]
+default_range: string
+annotations:
+  layer: facts
+
+enums:
+  ClusterFlowEndpointPurpose:
+    permissible_values:
+      control:
+      agent:
+      worker:
+      fleet:
+      storage:
+      disk:
+  ClusterFlowTransportPurpose:
+    permissible_values:
+      registration:
+      apply:
+      control:
+      storage:
+  ClusterStorageSource:
+    permissible_values:
+      worker:
+      disk:
+
+classes:
+  ClusterFlowEndpoint:
+    attributes:
+      id: {identifier: true}
+      endpoint: {range: ClusterOwnedEndpoint, required: true}
+      purpose: {range: ClusterFlowEndpointPurpose, required: true}
+  ClusterControlService:
+    attributes:
+      id: {identifier: true}
+      service: {range: Service, required: true}
+  ClusterFlowTransport:
+    attributes:
+      id: {identifier: true}
+      purpose: {range: ClusterFlowTransportPurpose, required: true}
+      port: {range: integer, minimum_value: 1, maximum_value: 65535, required: true}
+  ClusterStorageUse:
+    attributes:
+      id: {identifier: true}
+      owner: {range: Cluster, required: true}
+      transport: {range: ClusterFlowTransport, required: true}
+      source_purpose: {range: ClusterStorageSource, required: true}
+      destination: {range: ClusterFlowEndpoint, required: true}

@@ -1,6 +1,13 @@
 offer: offer
 offer.price_micros: unit price in millionths
 offer.setup_price_micros: setup charge per machine in millionths
+offer.period_price_minor: price per billing period in minor currency units
+offer.setup_price_minor: setup charge per machine in minor currency units
+offer.guarantee_mode: offer enforcement mode
+guarantee_mode: enforcement mode
+guarantee_mode.binding_quote: binding quote
+guarantee_mode.estimate: estimate
+guarantee_mode.reject_above: reject above the total
 offer.provider: offer provider
 offer.tie_rank: source tie rank
 offer.stock: available quantity
@@ -11,6 +18,10 @@ offer.currency: offer currency
 demand: demand
 demand.quantity: required quantity
 demand.billed_periods: number of billed periods
+demand.amount_unit: unit for the quoted charge
+amount_unit: quote amount unit
+amount_unit.micros: millionths
+amount_unit.minor: minor currency units
 demand.boot: required boot method
 demand.currency: required currency
 eligible: eligible offer
@@ -22,7 +33,18 @@ guarantee.currency: guaranteed currency
 guarantee.scope: charge scope
 guarantee.mode: enforcement mode
 guarantee.total_micros: guaranteed total in millionths
+guarantee.total_minor: guaranteed total in minor currency units
+guarantee.period_price_minor: covered period price in minor currency units
+guarantee.setup_price_minor: covered setup charge in minor currency units
+guarantee.quantity: covered number of machines
+guarantee.billed_periods: covered number of billing periods
+declared_unit: demand with a stated amount unit
+unit_conflict: demand with contradictory amount units
+price_unit: amount unit for the demand
+charge_terms: rate and setup charge in the demand's unit
+payable_charge: whole order charge in the demand's unit
 payable_micros: whole order charge in millionths
+payable_minor: whole order charge in minor currency units
 conflicting_price: inconsistent whole order charge
 binding_mode: provider-enforced mode
 disputed_guarantee: contradictory provider record

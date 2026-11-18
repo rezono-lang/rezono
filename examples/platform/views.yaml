@@ -1,0 +1,14 @@
+format: rezono.views/1
+views:
+  - theory: std-time
+    kinds:
+      - name: interval
+        union:
+          - populated_from: cluster_access_window
+      - name: reference_point
+        union:
+          - populated_from: cluster_right_clock
+    attributes:
+      - {of: interval, name: start, populated_from: begins, reading: days}
+      - {of: interval, name: end, populated_from: ends, reading: days}
+      - {of: reference_point, name: position, populated_from: day, reading: days}
