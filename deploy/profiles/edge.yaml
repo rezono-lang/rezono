@@ -1,0 +1,6 @@
+# Role settings for the public subsidy publication example.
+access:
+  roles:
+    checker: complete
+    propose: may_read
+    viewer: may_read
