@@ -5,7 +5,6 @@ import pytest
 from wire_fixtures import entry
 
 
-@pytest.mark.xfail(strict=True, reason="Read decisions/delivery-commit-status.md. Implement loop/forgejo_read.py. Read the latest matching provider status across pages.")
 def test_forgejo_read(monkeypatch):
     read_status = entry(monkeypatch, "forgejo_read", "read_status")
     sha = "ab" * 20
