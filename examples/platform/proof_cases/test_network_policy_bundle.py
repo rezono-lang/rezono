@@ -3,7 +3,6 @@ import pytest
 from case_support import ROOT
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError, reason='Implement the single shared renderer in examples/platform/network_policy.py. Read decisions/platform-firewall-output.md. Admission consumes this same callable.')
 def test_network_policy_bundle():
     import importlib.util
     path = ROOT / "network_policy.py"
