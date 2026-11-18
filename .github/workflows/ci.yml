@@ -35,7 +35,11 @@ jobs:
         with:
           fetch-depth: 0
       - name: Run policy regression examples
-        run: python -I scripts/test_red_guard.py
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -I scripts/test_red_guard.py
+          python -I scripts/test_feldera_admission.py
       - id: matrix
         env:
           GITHUB_BASE_REF: ${{ github.base_ref }}

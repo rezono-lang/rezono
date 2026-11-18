@@ -26,6 +26,11 @@ Use the GitHub sign-in already configured for this checkout when creating the pu
 
 Fetch origin/main before removing the mark. After the required checks pass, GitHub enqueues the pull request, tests the combined candidate against the latest main and squash-merges the passing candidate.
 
+For a change to Feldera SQL generation or the live comparison, push the source branch and run
+`gh workflow run feldera-oracle.yml --ref "$(git branch --show-current)"`. The required evidence review checks
+the successful dispatch and its collected cases and JUnit report for the exact revision. A later successful
+dispatch automatically reopens a blocked review. A new commit needs its own evidence.
+
 ## Steps
 
 1. **Start from the main branch.**
