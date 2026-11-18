@@ -79,7 +79,11 @@ def test_fractional_order_uses_admitted_timestamp_witnesses(delivery_pack):
     }
 
 
-@pytest.mark.parametrize("timestamp", ["2026-02-29T00:00:00Z", "2026-01-01T00:00:00+01:00"])
+@pytest.mark.parametrize("timestamp", [
+    "2026-02-29T00:00:00Z",
+    "2026-01-01T00:00:00+01:00",
+    ["2026-01-01T00:00:00Z", "2026-01-02T00:00:00Z"],
+])
 def test_fact_input_refuses_invalid_instants(delivery_pack, timestamp):
     model, _ = delivery_pack
     with pytest.raises(facts.LoadError, match=r"tenant_service_request\[1\]\.submitted_at: invalid UTC timestamp"):

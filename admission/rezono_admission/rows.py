@@ -166,6 +166,8 @@ def _values(schema: Schema, s: Slot, value, where: str) -> list:
     """The values of one slot in a record: a list gives one row per item; a multivalued inlined slot whose target
     has an identifier also takes LinkML's dictionary form (each key an element's id, each value its record)."""
     if isinstance(value, list):
+        if s.input_format == "utc_instant" and not s.multivalued and len(value) != 1:
+            raise _Refused("invalid_utc_instant", where)
         return value
     ident = schema.kinds[schema.root(s.target)].identifier if s.target else None
     if s.multivalued and s.inlined and ident and isinstance(value, dict) and ident not in value:

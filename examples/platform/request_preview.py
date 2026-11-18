@@ -200,10 +200,13 @@ def request_rows(teams_path, catalog):
         profile = name(request["profile"], "profile")
         if profile not in profiles:
             raise ValueError(f"unknown profile {profile!r}")
+        timestamp = request["submittedAt"]
+        if not isinstance(timestamp, str):
+            raise ValueError("submission time must be a UTC timestamp")
         request_id = f"{tenant}/{service}"
         scope = {"tenant": tenant, "service": service}
         records["tenant_service_request"].append(
-            {"id": request_id, **scope, "profile": profile, "submitted_at": request["submittedAt"]}
+            {"id": request_id, **scope, "profile": profile, "submitted_at": timestamp}
         )
         for item, value in mapping(request["items"], "request items").items():
             size = name(value, "requested size")

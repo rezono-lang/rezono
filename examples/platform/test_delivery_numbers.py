@@ -39,3 +39,13 @@ def test_file_delivery_numbers_preserve_fractional_utc_order(tmp_path):
     assert preview(teams, catalog, "relation", "tenant_delivery_number") == [
         ["elm", "a-tie", 2], ["elm", "b-tie", 3], ["elm", "z-first", 1], ["reed", "studio", 1],
     ]
+
+
+def test_file_delivery_numbers_require_one_submitted_timestamp(tmp_path):
+    teams, catalog = copy_requests(tmp_path)
+    request = teams / "elm/ledger/request.json"
+    proposal = json.loads(request.read_text(encoding="utf-8"))
+    proposal["submittedAt"] = [proposal["submittedAt"], "2026-01-02T00:00:00Z"]
+    request.write_text(json.dumps(proposal), encoding="utf-8")
+    with pytest.raises(AssertionError, match="submission time must be a UTC timestamp"):
+        preview(teams, catalog, "relation", "tenant_delivery_number")
