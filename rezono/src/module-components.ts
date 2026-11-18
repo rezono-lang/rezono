@@ -10,6 +10,7 @@ import { nativeRule } from './module-native-rule.ts';
 import { parameter } from './module-parameter.ts';
 import { reason } from './module-reason.ts';
 import { rounding } from './module-rounding.ts';
+import { rules } from './module-rules.ts';
 import { slot } from './module-slot.ts';
 import { numericSlotBounds } from './module-slot-numeric.ts';
 import { table } from './module-table.ts';
@@ -19,7 +20,7 @@ import { version } from './module-version.ts';
 import type { BlockSyntax, Declaration, ModuleComponent } from './module-support.ts';
 
 // Ohm tries these alternatives in order. Generic assignments stand after slots and specific statements.
-const components = [header, metadata, rounding, reason, unit, enumeration, parameter, kind, derived, version, unless, table, facts, check, slot, numericSlotBounds] as const;
+const components = [header, metadata, rounding, reason, unit, enumeration, parameter, kind, derived, version, unless, table, facts, check, rules, slot, numericSlotBounds] as const;
 // Native signatures have columns, so their printer must precede the fact table printer.
 const registered: readonly ModuleComponent[] = [nativeRule, ...components];
 
@@ -37,6 +38,7 @@ export const declarationActions: ActionDict<unknown> = {
 };
 export const declarations = new Map<string, Declaration<object>>();
 export const blockSyntax = new Map<string, BlockSyntax>();
+export const verbatimBlocks = registered.flatMap(c => c.verbatimBlock ? [c.verbatimBlock] : []);
 for (const component of registered) {
 	for (const [rule, action] of Object.entries(component.actions)) {
 		if (rule in declarationActions) throw new Error(`Duplicate module rule: ${rule}`);

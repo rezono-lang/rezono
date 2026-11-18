@@ -1,3 +1,4 @@
+import type { SlotConstraint } from './module-slot.ts';
 import { named, type Build, type Logical, type ModuleComponent } from './module-support.ts';
 
 export type NumericSlotBound = { minimum: string } | { maximum: string };
@@ -15,21 +16,21 @@ function numericBoundsInOrder(minimum: string, maximum: string): boolean {
 		<= upper.coefficient * 10n ** BigInt(scale - upper.scale);
 }
 
-export function readNumericSlotBound(line: Logical, build: Build, bounds: NumericSlotBound[]): void {
+export function readNumericSlotBound(line: Logical, build: Build, constraints: SlotConstraint[]): void {
 	build.leaf(line);
 	const bound = build.strip<NumericSlotBound>(line.read!);
 	const name = 'minimum' in bound ? 'minimum' : 'maximum';
-	if (bounds.some(prior => name in prior)) {
+	if (constraints.some(prior => name in prior)) {
 		build.refuse(line, `one ${name} constraint per slot`);
 		return;
 	}
-	const minimum = 'minimum' in bound ? bound.minimum : bounds.find(prior => 'minimum' in prior)?.minimum;
-	const maximum = 'maximum' in bound ? bound.maximum : bounds.find(prior => 'maximum' in prior)?.maximum;
+	const minimum = 'minimum' in bound ? bound.minimum : constraints.find(prior => 'minimum' in prior)?.minimum;
+	const maximum = 'maximum' in bound ? bound.maximum : constraints.find(prior => 'maximum' in prior)?.maximum;
 	if (minimum !== undefined && maximum !== undefined && !numericBoundsInOrder(minimum, maximum)) {
 		build.refuse(line, 'a minimum no larger than the maximum');
 		return;
 	}
-	bounds.push(bound);
+	constraints.push(bound);
 }
 
 export function printNumericSlotBound(bound: NumericSlotBound): string {
