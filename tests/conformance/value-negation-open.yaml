@@ -1,0 +1,25 @@
+id: value-negation-open
+source: docs/semantics/value-cases.yaml#negation-open
+status: settled
+input:
+  rows:
+  - kind: item
+    id: item-a
+    group: group-a
+    labels:
+    - first
+    - second
+    quantity: 7
+    weight: 3
+  rule: unseen(x) :- item(x), !recorded_weight(x, 3).
+  open_relations:
+  - recorded_weight
+expect:
+  value:
+    accepted: false
+    diagnostic: R004
+  state: known
+  reason: null
+  witness: null
+unsupported:
+  feldera: The compiler refuses unguarded open-relation negation before generating SQL.

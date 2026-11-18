@@ -21,3 +21,12 @@ classes:
       published: {range: ReleasePublicationDate, required: true}
       source_url: {required: true, pattern: '^https://[^ ]+$'}
       source_sha256: {required: true, pattern: '^[0-9a-f]{64}$'}
+  ProductReleaseSource:
+    description: A pinned source for a specific product release and publication date.
+    attributes:
+      id: {identifier: true}
+      product: {range: Product, required: true}
+      version: {required: true}
+      published: {range: ReleasePublicationDate, required: true}
+      source_url: {required: true, pattern: '^https://[^ ]+$'}
+      source_sha256: {required: true, pattern: '^[0-9a-f]{64}$'}

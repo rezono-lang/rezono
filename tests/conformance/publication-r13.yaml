@@ -1,0 +1,47 @@
+id: publication-r13
+source: decisions/publication-case-pins.md#R13
+status: settled
+input:
+  rows:
+  - $kind: Item
+    $id: item-a
+    label: first
+    group:
+      $ref: other-groups@s-3737373737373737373737373737373737373737373737373737373737373737@m-7@d-a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9:Group/group-a
+  schema:
+    rezono: '1.0'
+    pack: neutral
+    base: https://example.org/neutral/
+    kinds:
+      Item:
+        world: closed
+        id:
+          type: Text
+        slots:
+          label:
+            type: Text
+            card: '1'
+            states:
+            - known
+          group:
+            ref: g.Group
+            card: '1'
+            states:
+            - known
+    imports:
+      g:
+        pack: groups
+        schema: s-3737373737373737373737373737373737373737373737373737373737373737
+        manifest: m-7
+        dataset: d-a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9
+  form: row
+expect:
+  value:
+    accepted: false
+    error_contains: pack and schema differ from the import
+  state: known
+  reason: null
+  witness: null
+unsupported:
+  feldera: Schema, hash, Arrow and Parquet pin validation belong to the publication boundary.
+  language: The language evaluator does not deserialize publication import pins.

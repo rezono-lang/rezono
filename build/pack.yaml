@@ -1,0 +1,10 @@
+name: build-selection
+version: 0.1.0
+default_language: en
+imports:
+  - name: std-decision
+    path: ../packs/std-decision
+    sha256: 2fd4cc60cc4f1c7dca42da2f5368a08a992de39df7cd7db205b9118dd1b8fe5a
+  - name: std-loop
+    path: ../packs/std-loop
+    sha256: b53461d0e225878fdfa4c56caafb0880c13943c330cf0d5834832565c1dcb3eb

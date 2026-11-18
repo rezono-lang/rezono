@@ -1,0 +1,24 @@
+id: value-check-invalid-overlap
+source: docs/semantics/value-cases.yaml#check-invalid-overlap
+status: settled
+input:
+  rows:
+  - kind: item
+    id: item-a
+    group: group-a
+    labels:
+    - first
+    - second
+    quantity:
+      state: invalid
+      reason: versions_overlap
+    weight: 3
+  check: 'check eligible: item.quantity = 7'
+expect:
+  value:
+    publication_blocked: true
+  state: invalid
+  reason: versions_overlap
+  witness: null
+unsupported:
+  feldera: This case supplies an already classified condition value to test publication policy.

@@ -1,4 +1,4 @@
-"""The closure pass of a complete epoch: no row is missing where a missing row is read (docs/formal.md §3).
+"""Check that complete snapshots contain every row required by the rules (docs/formal.md §3).
 
 The other checks of an epoch prove support: every row of a derived relation has a valid witness, and the witness
 graph is acyclic. So a snapshot holds no row the model lacks. It is the model only when it is also closed: every
@@ -34,27 +34,35 @@ def covered(rules, read=()) -> set:
     an invariant or an outcome (the checker reads their absence itself: an invariant is empty, an outcome gives one
     state), those in `read` (what the calculation reads, where a missing row is false or unknown), and every
     derived relation a rule of a covered relation reads."""
-    by_head = {}
-    for rule in rules.values():
-        by_head.setdefault(rule.head.relation, []).append(rule)
     todo = set(read) | set(getattr(rules, "invariants", ())) | set(getattr(rules, "outcomes", ()))
     for rule in rules.values():
         todo |= {b.atom.relation for b in rule.body if b.polarity != "positive"}
         todo |= {a.atom.relation for a in rule.aggregates}
-    out, todo = set(), sorted(todo & by_head.keys())
+    return dependencies(rules, todo)
+
+
+def dependencies(rules, relations) -> set:
+    """The derived relations that determine the contents of the given relations."""
+    by_head = {}
+    for rule in rules.values():
+        by_head.setdefault(rule.head.relation, []).append(rule)
+    out, todo = set(), sorted(set(relations) & by_head.keys())
     while todo:
         relation = todo.pop()
         if relation not in out:
             out.add(relation)
-            todo.extend(b.atom.relation for rule in by_head[relation] for b in rule.body if b.atom.relation in by_head)
+            for rule in by_head[relation]:
+                todo.extend(item.atom.relation for item in (*rule.body, *rule.aggregates)
+                            if item.atom.relation in by_head)
     return out
 
 
-def check(rules, rows, read=()) -> list:
+def check(rules, rows, read=(), *, domains=None) -> list:
     """One `underived_row` for each head row a rule of a covered relation derives from the snapshots and the head
     relation's snapshot lacks, with the rule and the least substitution that derives it. `rows(relation)` gives a
     complete snapshot as {key: (key parts, values)}. Raises ValueError for a rule whose instances cannot be
-    enumerated: a variable that no positive premise, aggregate or assignment binds."""
+    enumerated: a variable that no positive premise, aggregate or assignment binds.
+    With `domains`, check just the derived aggregate domains of a standalone proof and their dependencies."""
     ordered = {}
 
     def table(relation):
@@ -62,7 +70,8 @@ def check(rules, rows, read=()) -> list:
             ordered[relation] = sorted(rows(relation).values(), key=itemgetter(0))
         return ordered[relation]
 
-    scope, findings = covered(rules, read), []
+    scope = covered(rules, read) if domains is None else dependencies(rules, domains)
+    findings = []
     for rule in sorted(rules.values(), key=lambda r: r.id):
         if rule.head.relation not in scope:
             continue

@@ -1,0 +1,26 @@
+id: value-missing-required
+source: docs/semantics/value-cases.yaml#missing-required
+status: settled
+input:
+  rows:
+  - kind: item
+    id: item-a
+    labels:
+    - first
+    - second
+    quantity: 7
+    weight: 3
+  slot: item.group
+  subject: item-a
+  cardinality: '1'
+  world: closed
+expect:
+  value: null
+  state: unknown
+  reason: null
+  witness:
+    complete: true
+    absent:
+      relation: item__group
+      key:
+      - item-a

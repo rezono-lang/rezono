@@ -1,3 +1,5 @@
+product:
+  - id: kubernetes
 series_support_evidence:
   - id: kubernetes-1.32
     product: kubernetes

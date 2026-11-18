@@ -1,0 +1,17 @@
+id: value-tt-and-false-invalid
+source: docs/semantics/value-cases.yaml#tt-and-false-invalid
+status: settled
+input:
+  rows:
+    - {$kind: Group, $id: group-a}
+  select: {kind: Group, id: group-a}
+  language: "ask Group where true show false and invalid versions_overlap"
+expect:
+  value: false
+  state: known
+  reason: null
+  witness: null
+unsupported:
+  compiler: The batch replay accepts a rule aggregate with a materialized witness, while this case evaluates a scalar language expression.
+  checker: The selected scalar expression has no rule witness for the complete-epoch checker.
+  feldera: The SQL rule engine does not evaluate the language's scalar truth table for explicit invalid conditions.

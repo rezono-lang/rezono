@@ -149,15 +149,6 @@ def selected_grounds(epoch, cohort):
     return grounds
 
 
-class MissingGroundComparison(AssertionError):
-    """The converter has no checked-publication comparison entry point yet."""
-
-
-@pytest.mark.xfail(
-    strict=True,
-    raises=MissingGroundComparison,
-    reason="Compare checked grounds in scripts/convert_pack.py even when full publication results agree.",
-)
 def test_full_pack_comparison_preserves_grounds(tmp_path):
     baseline = scenario(tmp_path / "baseline", SELECTION)
     trial = scenario(tmp_path / "trial", SELECTION.replace('"left"', '"right"'))
@@ -176,9 +167,6 @@ def test_full_pack_comparison_preserves_grounds(tmp_path):
     assert before == selected_grounds(renamed, "left")
     assert before.isdisjoint(selected_grounds(trial, "right"))
 
-    compare = getattr(convert_pack, "compare_publications", None)
-    if compare is None:
-        raise MissingGroundComparison("converter lacks checked-publication comparison")
-    compare(baseline, renamed, ROLES)
+    convert_pack.compare_publications(baseline, renamed, ROLES)
     with pytest.raises(convert_pack.ConversionError, match="changed the grounds"):
-        compare(baseline, trial, ROLES)
+        convert_pack.compare_publications(baseline, trial, ROLES)
