@@ -1,0 +1,5 @@
+# Compare observed invoice lines with priced items
+
+Use the plan hash and ordered item together as the join key. Keep charges and setup fees as individual items. Use the observed provider rounding term with source URL and verified digest. Apply it to exact costs at the declared line boundary in the billing currency. Keep the expected-cost reference, invoice observation ID and rounding-source digest with every amount difference.
+
+The offline adapter `run/invoice_compare.py:invoice_facts(expected, observed, rounding)` converts these inputs to base rows for `run/packs/invoice-drift`. The pack derives `amount_difference(plan, item, expected_ref, invoice_ref, rounding_ref, expected_minor, observed_minor)` and `unbound_invoice(invoice_ref, reason)`. An absent plan tag or a nonexistent plan/item pair produces its own unbound finding. Use an exact signed difference by keeping both amounts. A matching total can hide two opposing errors in the lines; matching amounts on another plan cannot supply a binding.
