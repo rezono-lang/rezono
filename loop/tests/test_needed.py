@@ -5,7 +5,6 @@ import pytest
 from loop_oracle import evaluate
 
 
-@pytest.mark.xfail(strict=True, reason="Read decisions/loop-design.md. Implement packs/std-loop/rules/needed.dl. Combine explicit prerequisites with completion tokens of ordered predecessors.")
 def test_needed_evidence():
     columns = {
         "requirement": "run step token reason",
