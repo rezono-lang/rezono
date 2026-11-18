@@ -25,6 +25,7 @@ from typing import cast
 
 import yaml
 from . import rezono_alias, rezono_enum, rezono_extend, rezono_key, rezono_kind
+from .native_literals import NATIVE_FORMAT, native_literal_errors
 from .schemaview import SchemaView
 from linkml_runtime.linkml_model import SchemaDefinition
 from linkml_runtime.loaders.yaml_loader import YAMLLoader
@@ -130,9 +131,16 @@ def read_form(pack_dir: Path, d: Declared, errors: list[str],
     except (OSError, ValueError) as e:
         errors.append(f"{where}: not a JSON file ({e})")
         return None
-    module = module_body(doc, FORMAT) or module_body(doc, IDENTIFIER_FORMAT)
+    module = module_body(doc, FORMAT) or module_body(doc, IDENTIFIER_FORMAT) or module_body(doc, NATIVE_FORMAT)
     if module is None:
-        errors.append(f"{where}: not the form of a module ({FORMAT} or {IDENTIFIER_FORMAT}, contracts/rezono-module.yaml)")
+        errors.append(
+            f"{where}: not the form of a module ({FORMAT}, {IDENTIFIER_FORMAT}, or {NATIVE_FORMAT},"
+            " contracts/rezono-module.yaml)"
+        )
+        return None
+    findings = native_literal_errors(doc)
+    if findings:
+        errors.extend(f"{where}: {finding}" for finding in findings)
         return None
     if not valid_places(module, doc["spans"]):
         errors.append(f"{where}: spans must place each module node once, in order, with a positive line and "
@@ -168,7 +176,7 @@ def source_form(pack_dir: Path, d: Declared, submitted: dict, errors: list[str],
     except (OSError, UnicodeError):
         errors.append(f"{pack_dir.name}/{d.module}: cannot read the module as UTF-8")
         return None
-    if legacy(source):
+    if submitted["format"] != NATIVE_FORMAT and legacy(source):
         return submitted
     return authored_form(pack_dir, d, data, errors)
 

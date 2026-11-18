@@ -75,6 +75,17 @@ types:
   Date:
     typeof: string
     pattern: "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+  RuleRef:
+    typeof: string
+    pattern: '^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)?$'
+    description: The decoded spelling of a local or imported rule name.
+  RuleType:
+    typeof: string
+    pattern: '^([a-z][a-z0-9_]*\.)?[A-Z][A-Za-z0-9]*(<[A-Za-z0-9<>,]+>)?$'
+    description: A column type with an optional pack alias.
+  TrueFlag:
+    typeof: boolean
+    description: A native marker, constrained by rezono-module-literals.schema.json to true.
   NoTest:
     typeof: string
     pattern: "^-$"
@@ -117,6 +128,11 @@ enums:
     permissible_values:
       "..": {description: Both ends are in.}
       "..<": {description: The upper end is out.}
+  ExplainMode:
+    permissible_values:
+      materialize: {}
+      on_demand: {}
+      fold: {}
   Totality:
     description: "`partial` is the default and is not written (v0 §5d)."
     permissible_values:
@@ -134,8 +150,12 @@ classes:
   ModuleForm:
     description: The form of one module.
     attributes:
-      format: {required: true, equals_string_in: [rezono.module/1, rezono.module/2]}
-      module: {required: true, range: ModuleWithRules, inlined: true}
+      format: {required: true, equals_string_in: [rezono.module/1, rezono.module/2, rezono.module/3]}
+      module:
+        required: true
+        any_of:
+          - {range: ModuleWithRules, inlined: true}
+          - {range: NativeRuleModule, inlined: true}
       spans: {required: true, range: Place, multivalued: true, inlined_as_list: true, description: "The place of every node of `module` that has one, in the order of the canonical JSON of `module` (members by name, arrays by index); each node once."}
 
     rules:
@@ -153,6 +173,22 @@ classes:
                 - range_expression:
                     slot_conditions:
                       at: {pattern: "^/"}
+      - preconditions:
+          slot_conditions:
+            format: {equals_string: rezono.module/2}
+        postconditions:
+          slot_conditions:
+            module:
+              all_of:
+                - {range: ModuleWithRules, inlined: true}
+      - preconditions:
+          slot_conditions:
+            format: {equals_string: rezono.module/3}
+        postconditions:
+          slot_conditions:
+            module:
+              all_of:
+                - {range: NativeRuleModule, inlined: true}
 
   Place:
     description: >-
@@ -162,6 +198,7 @@ classes:
       `table <policy>`, a row of it at its whole line, a test and a value of it at their text. The module
       itself stands at the name of its schema in version 2. A clause of an `unless` and the range of a test
       have no place of their own: the two expressions of a clause have, and so have the test and its ends.
+      A native rule stands at its head name. Every head argument, column, local, option and expression has a place.
     attributes:
       at: {required: true, range: JsonPointer, description: "The node, as a pointer into `module`."}
       line: {required: true, range: DecimalText, pattern: "^[1-9][0-9]*$", description: The 1-based line of `start`.}
@@ -192,9 +229,10 @@ classes:
           - {range: ScalarAliasDecl, inlined: true}
           - {range: DatasetDecl, inlined: true}
 
-  ModuleWithRules:
+  ModuleHeader:
+    abstract: true
     mixins: [SchemaMetadata]
-    description: The header and declarations of a module, including relational rules, in the order of the text.
+    description: The header shared by the module formats.
     attributes:
       rezono: {range: NumberText, description: "The language version of the `rezono` line (v0 §4b); absent when the text has no such line."}
       pack: {required: true, range: PackName}
@@ -205,24 +243,29 @@ classes:
       prefixes: {all_of: [{range: PrefixMap, inlined: true}]}
       imports: {all_of: [{range: string, multivalued: true}], description: "The schema imports in written order."}
       defaultRange: {all_of: [{range: TypeText}]}
+
+  ModuleWithRules:
+    is_a: ModuleHeader
+    description: The module shape with recorded rules blocks.
+    attributes:
       decls:
         required: true
         multivalued: true
         inlined_as_list: true
         any_of:
-          - range: UnitDecl
-          - range: EnumDecl
-          - range: ReasonDecl
-          - range: RoundingDecl
-          - range: ParamDecl
-          - range: KindDeclWithKeys
-          - range: KindDecl
-          - range: ExtendDecl
-          - range: CheckDecl
-          - range: FactTable
-          - range: FactRow
+          - &unit_decl {range: UnitDecl}
+          - &enum_decl {range: EnumDecl}
+          - &reason_decl {range: ReasonDecl}
+          - &rounding_decl {range: RoundingDecl}
+          - &param_decl {range: ParamDecl}
+          - &kind_with_keys {range: KindDeclWithKeys}
+          - &kind_decl {range: KindDecl}
+          - &extend_decl {range: ExtendDecl}
+          - &check_decl {range: CheckDecl}
+          - &fact_table {range: FactTable}
+          - &fact_row {range: FactRow}
           - range: RulesDecl
-          - range: ScalarAliasDecl
+          - &scalar_alias {range: ScalarAliasDecl}
           - range: DatasetDecl
 
   DatasetDecl:
@@ -230,6 +273,173 @@ classes:
     attributes:
       dataset: {required: true, range: Name}
       decls: {required: true, range: FactTable, multivalued: true, inlined_as_list: true}
+
+  NativeRuleModule:
+    is_a: ModuleHeader
+    description: The module shape with native rules.
+    attributes:
+      decls:
+        required: true
+        multivalued: true
+        inlined_as_list: true
+        any_of:
+          - *unit_decl
+          - *enum_decl
+          - *reason_decl
+          - *rounding_decl
+          - *param_decl
+          - *kind_with_keys
+          - *kind_decl
+          - *extend_decl
+          - *check_decl
+          - *fact_table
+          - *fact_row
+          - *scalar_alias
+          - range: NativeRuleDecl
+
+  NativeRuleDecl:
+    description: An owning typed head or a positional clause of a native rule.
+    attributes:
+      rule: {required: true, range: RuleRef}
+      columns: {all_of: [{range: RuleColumn, multivalued: true, inlined_as_list: true, minimum_cardinality: 1}]}
+      args: {all_of: [{range: NativeRuleExpr, multivalued: true, inlined_as_list: true, minimum_cardinality: 1}]}
+      locals: {all_of: [{range: RuleColumn, multivalued: true, inlined_as_list: true, minimum_cardinality: 1}]}
+      when: {all_of: [{range: NativeRuleExpr, inlined: true}]}
+      options: {all_of: [{range: RuleOption, multivalued: true, inlined_as_list: true, minimum_cardinality: 1, maximum_cardinality: 7}]}
+    exactly_one_of:
+      - slot_conditions: {columns: {required: true}, args: {value_presence: ABSENT}}
+      - slot_conditions: {args: {required: true}, when: {required: true}, columns: {value_presence: ABSENT}}
+        none_of:
+          - slot_conditions: {options: {required: true}}
+
+    # The ordered list may contain each option kind at most once. The two storage modes
+    # share one kind, and fold has its own. A list of n options needs n distinct kinds.
+    # The cardinality clauses use contains constraints because LinkML's JSON Schema
+    # generator does not emit uniqueness for list_elements_unique.
+    all_of:
+      - any_of:
+          - slot_conditions:
+              options: {all_of: [{multivalued: true, maximum_cardinality: 1}]}
+          - &at_least_2_from_extend
+            any_of:
+              - all_of:
+                  - &extend_option
+                    slot_conditions:
+                      options: {required: true, all_of: [{multivalued: true, has_member: {range_expression: {slot_conditions: {extend: {required: true}}}}}]}
+                  - &at_least_1_from_invariant
+                    any_of:
+                      - &invariant_option
+                        slot_conditions:
+                          options: {required: true, all_of: [{multivalued: true, has_member: {range_expression: {slot_conditions: {invariant: {required: true}}}}}]}
+                      - &at_least_1_from_absence
+                        any_of:
+                          - &absence_option
+                            slot_conditions:
+                              options: {required: true, all_of: [{multivalued: true, has_member: {range_expression: {slot_conditions: {absence: {required: true}}}}}]}
+                          - &at_least_1_from_outcome
+                            any_of:
+                              - &outcome_option
+                                slot_conditions:
+                                  options: {required: true, all_of: [{multivalued: true, has_member: {range_expression: {slot_conditions: {outcome: {required: true}}}}}]}
+                              - &at_least_1_from_closes
+                                any_of:
+                                  - &closes_option
+                                    slot_conditions:
+                                      options: {required: true, all_of: [{multivalued: true, has_member: {range_expression: {slot_conditions: {closes: {required: true}}}}}]}
+                                  - &at_least_1_from_storage
+                                    any_of:
+                                      - &storage_option
+                                        slot_conditions:
+                                          options: {required: true, all_of: [{multivalued: true, has_member: {range_expression: {slot_conditions: {explain: {required: true, equals_string_in: [on_demand, materialize]}}}}}]}
+                                      - &fold_option
+                                        slot_conditions:
+                                          options: {required: true, all_of: [{multivalued: true, has_member: {range_expression: {slot_conditions: {explain: {required: true, equals_string: fold}}}}}]}
+              - &at_least_2_from_invariant
+                any_of:
+                  - {all_of: [*invariant_option, *at_least_1_from_absence]}
+                  - &at_least_2_from_absence
+                    any_of:
+                      - {all_of: [*absence_option, *at_least_1_from_outcome]}
+                      - &at_least_2_from_outcome
+                        any_of:
+                          - {all_of: [*outcome_option, *at_least_1_from_closes]}
+                          - &at_least_2_from_closes
+                            any_of:
+                              - {all_of: [*closes_option, *at_least_1_from_storage]}
+                              - &at_least_2_from_storage {all_of: [*storage_option, *fold_option]}
+      - any_of:
+          - slot_conditions:
+              options: {all_of: [{multivalued: true, maximum_cardinality: 2}]}
+          - &at_least_3_from_extend
+            any_of:
+              - {all_of: [*extend_option, *at_least_2_from_invariant]}
+              - &at_least_3_from_invariant
+                any_of:
+                  - {all_of: [*invariant_option, *at_least_2_from_absence]}
+                  - &at_least_3_from_absence
+                    any_of:
+                      - {all_of: [*absence_option, *at_least_2_from_outcome]}
+                      - &at_least_3_from_outcome
+                        any_of:
+                          - {all_of: [*outcome_option, *at_least_2_from_closes]}
+                          - &at_least_3_from_closes {all_of: [*closes_option, *storage_option, *fold_option]}
+      - any_of:
+          - slot_conditions:
+              options: {all_of: [{multivalued: true, maximum_cardinality: 3}]}
+          - &at_least_4_from_extend
+            any_of:
+              - {all_of: [*extend_option, *at_least_3_from_invariant]}
+              - &at_least_4_from_invariant
+                any_of:
+                  - {all_of: [*invariant_option, *at_least_3_from_absence]}
+                  - &at_least_4_from_absence
+                    any_of:
+                      - {all_of: [*absence_option, *at_least_3_from_outcome]}
+                      - &at_least_4_from_outcome {all_of: [*outcome_option, *closes_option, *storage_option, *fold_option]}
+      - any_of:
+          - slot_conditions:
+              options: {all_of: [{multivalued: true, maximum_cardinality: 4}]}
+          - &at_least_5_from_extend
+            any_of:
+              - {all_of: [*extend_option, *at_least_4_from_invariant]}
+              - &at_least_5_from_invariant
+                any_of:
+                  - {all_of: [*invariant_option, *at_least_4_from_absence]}
+                  - &at_least_5_from_absence {all_of: [*absence_option, *outcome_option, *closes_option, *storage_option, *fold_option]}
+      - any_of:
+          - slot_conditions:
+              options: {all_of: [{multivalued: true, maximum_cardinality: 5}]}
+          - &at_least_6_from_extend
+            any_of:
+              - {all_of: [*extend_option, *at_least_5_from_invariant]}
+              - &at_least_6_from_invariant {all_of: [*invariant_option, *absence_option, *outcome_option, *closes_option, *storage_option, *fold_option]}
+      - any_of:
+          - slot_conditions:
+              options: {all_of: [{multivalued: true, maximum_cardinality: 6}]}
+          - &at_least_7_from_extend {all_of: [*extend_option, *invariant_option, *absence_option, *outcome_option, *closes_option, *storage_option, *fold_option]}
+
+  RuleColumn:
+    description: The declared type of a head column or a clause-local name.
+    attributes:
+      name: {required: true, range: Name}
+      type: {required: true, range: RuleType}
+
+  RuleOption:
+    description: An authored option on a typed head.
+    attributes:
+      extend: {all_of: [{range: TrueFlag}]}
+      invariant: {all_of: [{range: TrueFlag}]}
+      absence: {all_of: [{range: TrueFlag}]}
+      outcome: {all_of: [{range: RuleType}]}
+      closes: {all_of: [{range: RuleRef}]}
+      explain: {all_of: [{range: ExplainMode}]}
+    exactly_one_of:
+      - slot_conditions: {extend: {required: true}}
+      - slot_conditions: {invariant: {required: true}}
+      - slot_conditions: {absence: {required: true}}
+      - slot_conditions: {outcome: {required: true}}
+      - slot_conditions: {closes: {required: true}}
+      - slot_conditions: {explain: {required: true}}
 
   RulesDecl:
     description: An embedded relational rules block (decisions/language-rules.md).
@@ -597,7 +807,7 @@ classes:
       neg: {range: Expr, inlined: true}
       when: {range: Expr, multivalued: true, inlined_as_list: true, description: "`[condition, then, else]`."}
       call: {array: {minimum_number_dimensions: 1}, any_of: [{range: string}, {range: Expr}], description: "`[name, [argument, …]]`: the arguments are a list inside the list, which LinkML can only say as an array of any depth."}
-    exactly_one_of:
+    exactly_one_of: &expr_members
       - slot_conditions: {lit: {required: true}}
       - slot_conditions: {path: {required: true}}
       - slot_conditions: {kind: {required: true}}
@@ -616,3 +826,31 @@ classes:
       - slot_conditions: {neg: {required: true}}
       - slot_conditions: {when: {required: true}}
       - slot_conditions: {call: {required: true}}
+
+  NativeRuleExpr:
+    description: An expression in a native rule, including wildcards in patterns.
+    attributes:
+      lit: {all_of: [{range: string}]}
+      path: {all_of: [{range: Word, multivalued: true, minimum_cardinality: 1}]}
+      wildcard: {all_of: [{range: TrueFlag}]}
+      dot: {multivalued: true, any_of: [{range: string}, {range: NativeRuleExpr}]}
+      agg: {multivalued: true, any_of: [{range: string}, {range: NativeRuleExpr}]}
+      filter: {range: NativeRuleExpr, multivalued: true, inlined_as_list: true}
+      cmp: {multivalued: true, any_of: [{range: string}, {range: NativeRuleExpr}]}
+      in: {range: NativeRuleExpr, multivalued: true, inlined_as_list: true}
+      is: {multivalued: true, any_of: [{range: string}, {range: NativeRuleExpr}]}
+      range: {multivalued: true, any_of: [{range: string}, {range: NativeRuleExpr}]}
+      and: {range: NativeRuleExpr, multivalued: true, inlined_as_list: true, minimum_cardinality: 2}
+      or: {range: NativeRuleExpr, multivalued: true, inlined_as_list: true, minimum_cardinality: 2}
+      not: {range: NativeRuleExpr, inlined: true}
+      imply: {range: NativeRuleExpr, multivalued: true, inlined_as_list: true}
+      arith: {multivalued: true, any_of: [{range: string}, {range: NativeRuleExpr}]}
+      neg: {range: NativeRuleExpr, inlined: true}
+      when: {range: NativeRuleExpr, multivalued: true, inlined_as_list: true}
+      call: {array: {minimum_number_dimensions: 1}, any_of: [{range: string}, {range: NativeRuleExpr}]}
+      kind: {all_of: [{range: RuleType}]}
+    exactly_one_of:
+      - exactly_one_of: *expr_members
+        slot_conditions: {wildcard: {value_presence: ABSENT}}
+      - slot_conditions: {wildcard: {required: true}}
+        none_of: *expr_members
