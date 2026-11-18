@@ -6,7 +6,6 @@ from runpy import run_path
 import pytest
 
 
-@pytest.mark.xfail(strict=True, reason="Read decisions/delivery-commit-status.md. Implement loop/status_times.py. Report elapsed waiting and completion only from current step evidence.")
 def test_status_times():
     times = run_path(str(Path(__file__).resolve().parents[1] / "status_times.py"))["times"]
     scope = {"run": "r", "tenant": "elm", "delivery": "elm-1", "step": "database"}
