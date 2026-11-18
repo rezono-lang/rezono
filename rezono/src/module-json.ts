@@ -29,6 +29,7 @@ export const MODULE_FORMAT = 'rezono.module/1';
 const EXTENDED_MODULE_FORMAT = 'rezono.module/2';
 
 function formatOf(module: Module): ModuleForm['format'] {
+	if (module.decls.some((decl) => 'base' in decl)) return EXTENDED_MODULE_FORMAT;
 	return module.decls.some((decl) => 'kind' in decl && (decl.abstract || decl.embedded || decl.slots.some((slot) => slot.identifier || slot.embedded)))
 		? EXTENDED_MODULE_FORMAT
 		: MODULE_FORMAT;
