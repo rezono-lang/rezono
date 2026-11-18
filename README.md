@@ -26,15 +26,13 @@ The released Python wheel includes the module reader. Put Node 24 on PATH or set
 executable, then run `rezono compile <pack> <output>`. YAML packs and older form-only modules continue
 to run with Python alone.
 
-To include the same reader in a standalone compiler wheel built from this checkout, prepare it from
-the locked language dependencies before building:
+To include the same reader in a standalone compiler wheel, run these commands from the checkout in
+the same shell.
 
-```bash
-work=$(mktemp -d)
-npm ci --prefix rezono --omit=dev --ignore-scripts
-node scripts/release-language.mjs "$work/language" "$work/module-reader"
-REZONO_PREPARED_READER="$work/module-reader" python -m pip wheel --no-deps --wheel-dir "$work" ./compiler
-```
+1. Set aside a working directory with `work=$(mktemp -d)`.
+2. Install the locked reader dependencies with `npm ci --prefix rezono --omit=dev --ignore-scripts`.
+3. Prepare the reader with `node scripts/release-language.mjs "$work/language" "$work/module-reader"`.
+4. Build the wheel with `REZONO_PREPARED_READER="$work/module-reader" python -m pip wheel --no-deps --wheel-dir "$work" ./compiler`.
 
 ## Licences and contributing
 
