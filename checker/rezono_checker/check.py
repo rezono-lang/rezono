@@ -109,7 +109,7 @@ def check_epoch(witnesses: list, manifest: dict, rules: dict, read_bytes, *, der
     proof = {"manifest_id": manifest["id"], "root": None, "witnesses": witnesses}
     if snapshots is None:
         return _report(proof, None, set(), findings)
-    findings.extend(check_state_projections(manifest, read_bytes, snapshots))
+    findings.extend(check_state_projections(manifest, read_bytes, snapshots, full=full))
     if full is None:  # admission is on the complete side; a role's proof only shows what it may read
         findings += completeness.check(manifest, read_bytes, completeness_authority,
                                        snapshots.get(completeness.RELATION))
