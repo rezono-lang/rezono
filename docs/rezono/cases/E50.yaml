@@ -37,5 +37,4 @@ note: The role reads `host__owner` in part, by the shape of its read rules, so t
   applicable 3).
 sources:
 - '#350 P10.2a §11'
-- 'the arbiter on #736, 12-11-2026, point 6 (RV-C19)'
 - 'values.md §4 (effective world, case withheld-optional)'

@@ -219,7 +219,7 @@ def test_trees_with_calculations_pass_and_a_missing_calculation_is_found():
     assert check_proof({"rules": []}, {"witnesses": [], "calc_witnesses": CALC[2:]}, SNAPSHOTS, *leaves(only), 65536, 128) == []
 
 
-# RV-C09: a sum over a key column, a min over a value column (with an unknown cell) and a count, each per x.
+# A sum over a key column, a min over a value column (with an unknown cell) and a count, each per x.
 WEIGHED = {
     "format": "rezono.rules/1",
     "relations": [
@@ -303,7 +303,7 @@ def test_the_valued_edges_of_an_aggregate_are_the_contributors_the_proof_check_h
 
 @pytest.mark.parametrize("tree,relation", [("back", "load"), ("forward", "w")])
 def test_a_changed_a_missing_and_an_added_contribution_are_found(tree, relation):
-    """The planted fault of RV-C09: one contribution changed, in either order of the graph; also one left out
+    """The planted fault: one contribution changed, in either order of the graph; also one left out
     (the edge without its value), one on a count edge and one on a premise."""
     want = expected(WEIGHED_WITNESSES, steps(WEIGHED, WEIGHED_WITNESSES, weighed_rows()))
     at = next(i for i, r in enumerate(want[tree][relation]) if r[-1] == "known:3")

@@ -192,7 +192,7 @@ def test_an_incomplete_outcome_blocks(tmp_path, rules, check):
         publish_pack(outcome_pack(tmp_path / "pack", rules), tmp_path)
 
 
-# RV-K18: a counter that reaches its bound blocks as a red check, `<relation>__exhausted`.
+# A counter that reaches its bound blocks as a red check, `<relation>__exhausted`.
 # The count of an element goes up to its size, and the bound stops it at 3.
 COUNTER = """.decl depth(a: symbol, n: number)
 depth(a, 0) :- alpha(a).
@@ -432,7 +432,7 @@ def test_a_forged_import_is_refused_before_anything_runs(tmp_path, monkeypatch, 
     assert any(named in r for r in refused), refused
 
 
-@pytest.mark.xfail(strict=True, reason="kept replay refuses packs importing theories with views.yaml")
+@pytest.mark.xfail(strict=True, reason="kept replay refuses packs importing theories with views.yaml. The subsidy example declares its theory mapping at the main pack root. Existing archive boundary tests require refusal before parsing or executing archived code, so enabling replay needs a specified and independently verified mapping boundary.")
 def test_a_kept_publication_with_imports_is_made_again_byte_for_byte(v2_imports):
     """The replay resolves the imports inside the archive, with the archived code."""
     assert kept.check(v2_imports) == []
@@ -597,7 +597,7 @@ def test_a_role_that_reads_everything_in_full_gets_what_the_checker_gets(tmp_pat
 
 
 def test_the_command_line_names_a_role_the_read_rules_give_nothing(tmp_path, capsys, monkeypatch):
-    """RV-S10: a role of the profile that the pack's read rules give no row (`propose` here) is published
+    """A role of the profile that the pack's read rules give no row (`propose` here) is published
     with nothing to read, and the publisher says so in a note; a role with rights is not named."""
     from rezono_publisher import __main__ as cli
 

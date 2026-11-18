@@ -1,4 +1,4 @@
-"""SQL text: the one place that quotes an identifier and escapes a text literal (RV-M01).
+"""SQL text: the one place that quotes an identifier and escapes a text literal.
 
 Every engine name and every string constant the compiler writes into SQL goes through here, for both
 dialects (Feldera and DuckDB): the two quote the same way.

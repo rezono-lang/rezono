@@ -479,7 +479,7 @@ def test_full_scope_comes_from_the_rules_not_from_the_data(tmp_path):
                          ids=["named", "not-named"])
 def test_role_rows_the_guest_cannot_read_change_no_byte(tmp_path, named, worlds):
     """A rule over every role (a2) gives node in full to a role the pack names, and nothing to one it does
-    not name (RV-S10): the guest then reads the nodes it was granted, none of them in full. Either way the
+    not name: the guest then reads the nodes it was granted, none of them in full. Either way the
     guest may not read `role` rows, and which other roles exist changes no byte of what it gets."""
     stores = []
     for i, roles in enumerate(worlds):
@@ -496,7 +496,7 @@ def test_role_rows_the_guest_cannot_read_change_no_byte(tmp_path, named, worlds)
 
 
 def test_a_configured_role_the_pack_does_not_name_reads_nothing(tmp_path):
-    """RV-S10: a2 and a3 are rules over every role, and derive rows only for a role the pack's facts name. A
+    """A2 and a3 are rules over every role, and derive rows only for a role the pack's facts name. A
     role of the profile that the pack does not name gets an empty projection and no witness, nothing in full.
     Read by its shape alone, a2 gave such a role node in full, and the publication went red on `rezono:access`."""
     s, m = published(epoch(full=True), tmp_path / "a", ROLES | {"stranger": "may_read"})
@@ -710,7 +710,7 @@ def calculated(role, publisher_sources=None, checker_sources=None):
 
 
 def test_a_calculation_view_is_full_only_for_a_role_that_reads_all_its_sources():
-    """RV-S26: full means a missing row is "none". The guest reads the subject kind in full and not the
+    """Full means a missing row is "none". The guest reads the subject kind in full and not the
     relation the calculation reads: it gets no calculated row, so the view is not full for it, and neither is
     the view that takes it as a premise. A role that reads every source has both in full, row for row."""
     views = {"calc__amount", "calc__twice"}
@@ -727,7 +727,7 @@ def test_a_calculation_view_is_full_only_for_a_role_that_reads_all_its_sources()
 
 @pytest.mark.parametrize("side", ["publisher_sources", "checker_sources"])
 def test_the_rule_for_a_full_calculation_view_changed_on_one_side_is_red(side):
-    """RV-S26: the publisher and the checker each read the sources of a view themselves. With the rule of
+    """The publisher and the checker each read the sources of a view themselves. With the rule of
     before on one side only (a view full by its subject kind alone), the two sets differ: `full_mismatch`."""
     by_subject = lambda ir: {}  # noqa: E731
     _, _, _, findings = calculated("guest", **{side: by_subject})
@@ -736,7 +736,7 @@ def test_the_rule_for_a_full_calculation_view_changed_on_one_side_is_red(side):
 
 
 def test_a_view_the_program_does_not_account_for_is_not_full():
-    """RV-S26: a rule without its versions, or a premise the program does not hold, says nothing of what the
+    """A rule without its versions, or a premise the program does not hold, says nothing of what the
     view rests on. Both readings then call it not full, also for a role that reads everything else."""
     ir = {"subject": "node", "as_of": "calc__as_of", "facts": [],
           "rules": [{"rule": "bare", "view": "calc__bare"}, {"rule": "lost", "view": "calc__lost", "versions": ["lost@v"]}],
@@ -1094,7 +1094,7 @@ def test_relation_named_like_the_witness_file_does_not_collide(tmp_path):
     e = epoch()
     _, m = published(dataclasses.replace(e, rows={**e.rows, "witnesses": [("a",)]},
                                          columns={**COLUMNS, "witnesses": ("node",)}), tmp_path)
-    # RV-Z01: an object's key is the hash of its bytes, so a name cannot collide; one uri, one content.
+    # An object's key is the hash of its bytes, so a name cannot collide; one uri, one content.
     named = {(x["uri"], x["sha256"]) for x in m["snapshots"] + m["witnesses"]}
     assert len(named) == len({u for u, _ in named})
     assert all(u.endswith(f"/toy/objects/{h}.json") for u, h in named)

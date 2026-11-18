@@ -1,4 +1,4 @@
-"""Where a pack may be published (SO-5, Arbiter (4), 11-11-2026): a pack says what its data is, a profile says
+"""Where a pack may be published (SO-5): a pack says what its data is, a profile says
 what it carries, and a pack whose class the profile does not carry is refused before anything is written.
 
 - The pack's class is the key `class` of its pack.yaml (contracts/pack.yaml), given by whoever owns the data.

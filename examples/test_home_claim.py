@@ -1,5 +1,4 @@
-"""A relation in a home's claim has exactly one row (docs/gui.md, The hero of a pack home; RV-V25, ruling 1,
-condition 2): on the main state and in every scenario the pack ships, read from its explained goldens. The
+"""A relation in a home's claim has exactly one row (docs/gui.md, The hero of a pack home): on the main state and in every scenario the pack ships, read from its explained goldens. The
 compiler cannot see the number of rows, and the home never picks one of several, so a second row would take the
 sentence off the home without a failure anywhere else. A role reads a part of these rows, so at most that
 one. Generic: every example pack that declares a claim; none is named here."""
@@ -20,7 +19,7 @@ def claim(table: Path) -> list[str]:
 PACKS = sorted(p.parent for p in EXAMPLES.rglob("channels.yaml") if claim(p))
 
 
-@pytest.mark.xfail(strict=True, reason="no standalone example pack declares a home claim yet")
+@pytest.mark.xfail(strict=True, reason="the standalone examples still need a declared home claim with one row per state")
 def test_an_example_pack_declares_a_claim():
     assert PACKS
 

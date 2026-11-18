@@ -17,4 +17,3 @@ note: '`all(p)` folds `and` over "in => p". For host-d, whose membership is unkn
   "in => p" is true whether it is a member or not: a member that is known to match still decides.'
 sources:
 - expressions.md §7 (sets and absence), formerly §13 point 14
-- arbiter, 11-11-2026, on #696

@@ -203,8 +203,8 @@ def engine_component() -> dict:
 
 
 def compute_rules(con, prog, relations=None) -> None:
-    """rezono_compiler.batch.compute, with a counter that reached its bound left to its check view
-    (RV-K18). The compiler raises `bound_reached` after every statement of the run has executed; here the run
+    """rezono_compiler.batch.compute, with a counter that reached its bound left to its check view.
+    The compiler raises `bound_reached` after every statement of the run has executed; here the run
     goes on, and `rule_checks` reads the rows past the bound from `<relation>__exhausted` as a red check like
     any other, so the publication is blocked (or a variant diagnosed) by one path, without a traceback."""
     from rezono_compiler import batch

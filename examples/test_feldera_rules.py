@@ -49,7 +49,7 @@ def test_incremental_on_feldera_equals_batch(example, tmp_path):
         for rel, want in sorted(seal.rows(model, rows).items()):  # refused and accepted input, as in batch
             got = {tuple(str(v) for v in r.values()) for r in query(pipeline, f'SELECT * FROM "{rel}"')}
             assert got == {tuple(str(v) for v in r) for r in want}, (label, rel)
-        for rel in sorted(prog.relations):  # every check of the rules is empty: W7 outcomes, R16 bounds (RV-K18)
+        for rel in sorted(prog.relations):  # every check of the rules is empty: W7 outcomes, R16 bounds
             for view, _ in rules_sql.checks(prog, rel):
                 assert query(pipeline, f'SELECT * FROM "{view}"') == [], (label, view)
         previous = rows

@@ -1,8 +1,8 @@
-"""The epoch statement of one role (RV-X41; docs/ring2/signing.md, "What is signed").
+"""The epoch statement of one role (docs/ring2/signing.md, "What is signed").
 
   python -m rezono_publication.statement verify DIR [--policy profile.yaml | --key seal.pub]
 
-One small document per published epoch and filtered role, the one thing a signature covers (RV-X42): an
+One small document per published epoch and filtered role, the one thing a signature covers: an
 in-toto Statement (v1) whose subjects are the objects of the role's publication form by their sha256, and whose
 predicate binds what the role reads and nothing more:
 
@@ -30,14 +30,14 @@ and so is the reader), names exactly the index's objects with their sha256, agre
 and its dataset pin, roots and inclusion hash are recomputed from the subjects' own bytes (the schema and rows
 read back with the L0 reader). A difference is named; an empty list is a statement that says what its files say.
 
-`verify_signature` is the reader's check of the signature (RV-X42): `statement.sigstore.json`, the Sigstore bundle
-cosign writes over the statement's bytes, beside it. It is RV-K23's one verification (`rezono_publication.seal`: its
+`verify_signature` is the reader's check of the signature: `statement.sigstore.json`, the Sigstore bundle
+cosign writes over the statement's bytes, beside it. It is the shared verification (`rezono_publication.seal`: its
 trust policy, its cosign, its key and its loop, `seal.Cosign.accepted`), on a file instead of a registry digest:
 one verifier of the policy that accepts is enough, and it reads only the statement, the signature and the public
 key. Without a policy the CLI says "signature not checked", never "verified". The signing itself is an effect
 (edge/plugins/sign-statement).
 
-Beside a sealed role form (RV-X43), the statement and that same signature are one referrer of the seal's digest
+Beside a sealed role form, the statement and that same signature are one referrer of the seal's digest
 (`ARTIFACT`, the two files as its layers): `attach` pushes it once the sealed index names the statement's sha256,
 signing nothing; `verify_sealed` is the reader of the seal and its statement together, see there.
 """
@@ -65,8 +65,8 @@ PREDICATE_TYPE = "https://rezono.org/epoch-statement/v1"
 FORMAT = "rezono.epoch-statement/1"
 LEGACY_STATEMENT_TYPES = (("https://rede.dev/epoch-statement/v1", "rede.epoch-statement/1"),)
 NAME = "statement.json"  # its name under the role's prefix, beside the form's objects
-SIGNATURE = "statement.sigstore.json"  # cosign's Sigstore bundle over the statement's bytes, beside it (RV-X42)
-ARTIFACT = "application/vnd.rezono.epoch-statement.v1"  # the two as a referrer of the role's seal (RV-X43)
+SIGNATURE = "statement.sigstore.json"  # cosign's Sigstore bundle over the statement's bytes, beside it
+ARTIFACT = "application/vnd.rezono.epoch-statement.v1"  # the two as a referrer of the role's seal
 LEGACY_ARTIFACTS = ("application/vnd.rede.epoch-statement.v1",)
 LAYERS = ((NAME, "application/vnd.in-toto+json"), (SIGNATURE, "application/vnd.dev.sigstore.bundle.v0.3+json"))
 MANIFEST_NAMES = ("id", "epoch", "knowledge_time", "definition_sha256")
@@ -313,8 +313,8 @@ def verify_signature(statement: Path, signature: Path, trust, cosign: seal.Cosig
 
 
 def referrer(seal_manifest: bytes, statement_bytes: bytes, signature: bytes) -> seal.Artifact:
-    """The role's statement and its signature (the bundle as RV-X42 stored it) as a referrer of the seal whose
-    manifest bytes these are (RV-X43): the same two files beside the same seal give the same digest."""
+    """The role's statement and its signature (the stored bundle) as a referrer of the seal whose
+    manifest bytes these are: the same two files beside the same seal give the same digest."""
     return seal.referrer((seal.digest_of(seal_manifest), len(seal_manifest)), ARTIFACT,
                          [(n, m, d) for (n, m), d in zip(LAYERS, (statement_bytes, signature))])
 
@@ -348,11 +348,11 @@ def attach(oras: seal.Oras, ref: str, statement_bytes: bytes, signature: bytes) 
 
 def verify_sealed(oras: seal.Oras, ref: str, index: bytes | None = None, trust=None,
                   cosign: seal.Cosign | None = None) -> dict:
-    """The reader of a sealed role form and its statement (RV-X43): the seal as `seal.verify` checks it (against
+    """The reader of a sealed role form and its statement: the seal as `seal.verify` checks it (against
     `index`, the one the gate serves, when given); then a referrer of its digest that holds the statement the
     sealed index names by sha256 and its signature; the statement against the sealed index and the carried
     files (`verify`, the objects the seal does not carry named with the index's sha256); and, with a trust
-    policy, the signature by `verify_signature`, RV-K23's one loop. The first referrer that passes is enough.
+    policy, the signature by `verify_signature`, in a single loop. The first referrer that passes is enough.
     Returns the seal's pin and digest, and the statement's sha256, referrer and what was checked of its
     signature (`not checked` without a policy). The seal's own signature is `seal.verify`'s and not asked here."""
     repository, body, pin, files = _sealed(oras, ref, index)
@@ -397,7 +397,7 @@ def _verify_dir(folder: Path) -> list[str]:
 
 
 def trust_of(policy: str | Path | None = None, key: str | Path | None = None):
-    """The trust policy a reader names: one public key file, a deploy profile's `seal.trust` (RV-K23's one policy;
+    """The trust policy a reader names: one public key file, a deploy profile's `seal.trust` (the shared policy;
     its paths relative to the current directory), or None: nothing to check a signature against."""
     if key:
         return (seal.Key(Path(key).as_posix()),)

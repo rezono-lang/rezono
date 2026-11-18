@@ -230,7 +230,7 @@ class Pack:
     calc: dict | None = None
     sweeps: list[dict] = field(default_factory=list)  # from sweeps.yaml: one fact cell each, with its grid
     questions: list[dict] = field(default_factory=list)  # explanation questions: imports first, then own
-    reader_questions: list[dict] = field(default_factory=list)  # reader questions (RV-C04): imports first, then own
+    reader_questions: list[dict] = field(default_factory=list)  # reader questions: imports first, then own
     seals: list[Seal] = field(default_factory=list)  # the sealed kind, if any
     iri: dict = field(default_factory=dict)  # pack.yaml `iri:` resolved (`iris`): base, kind -> IRI, reason IRIs
     folds: dict[str, str] = field(default_factory=dict)  # derived relations marked `@explain fold` -> their .decl
@@ -368,7 +368,7 @@ def read_meta(pack_dir: str | Path) -> dict:
     if "class" in meta and not (isinstance(meta["class"], str) and CLASS.fullmatch(meta["class"])):
         raise CompileError(f"{path}: class is a lower-case name with hyphens (contracts/pack.yaml), not {meta['class']!r}")
     try:
-        views.admit(pack_dir)  # a views.yaml outside the profile that executes is refused here (RV-C27)
+        views.admit(pack_dir)  # a views.yaml outside the profile that executes is refused here
     except views.ViewError as error:
         raise CompileError(str(error)) from error
     return meta | {"theory": value}
@@ -456,7 +456,7 @@ def iri_block(name: str, meta: dict, classes: set[str], modules_of: set[str], co
 
 
 def iris(pack: Pack, meta: dict, packs: dict, owner: dict, errors: list[str]) -> dict:
-    """The IRIs pack.yaml `iri:` declares (docs/ring2/iris.md §4; arbiter, 12-11-2026, ruling 2), resolved per kind
+    """The IRIs pack.yaml `iri:` declares (docs/ring2/iris.md §4), resolved per kind
     and reason code: {} when neither the pack nor any pack it imports declares the block, so nothing changes.
 
     A kind takes the namespace that the pack declaring it gives it: an entry of `namespaces` that names the kind,
@@ -734,7 +734,7 @@ def read(pack_dir: str | Path) -> Pack:
         except rules_dl.RuleError as e:
             errors.append(str(e))
     if not errors and (view_file := views.admit(pack_dir)) is not None:
-        # A view that executes (RV-C27): typed against the theory as its own pack, then lowered to ordinary
+        # A view that executes: typed against the theory as its own pack, then lowered to ordinary
         # rules, and every rule that read a mapped theory table is bound to the view's relation.
         from . import view_rules, view_typing
         try:
@@ -2134,7 +2134,7 @@ COMPARISON_CLASSES = ("equal", "different", "not_compared")
 
 
 def comparison_part(pack: Pack, raw, where: str, errors: list[str]) -> dict | None:
-    """A Report part `comparison` (`ComparisonPart` in contracts/view.yaml, RV-U19): a derived relation, the column that
+    """A Report part `comparison` (`ComparisonPart` in contracts/view.yaml): a derived relation, the column that
     holds its verdict, and the verdicts per class. Every verdict a rule of the relation can give must stand in exactly
     one class: a rule whose head writes a verdict no class names, or a variable there, stops the pack (unknown is
     explicit; the viewer never guesses a class)."""
@@ -2301,7 +2301,7 @@ READINGS = ("days", "yyyymmdd")  # a whole number read as a day (contracts/pack.
 
 
 def reader_question(pack: Pack, raw, where: str, asked: list[dict], errors: list[str]) -> dict | None:
-    """One reader question (RV-C04, docs/gui.md "Reader questions"), checked: a derived relation of the pack and
+    """One reader question (docs/gui.md "Reader questions"), checked: a derived relation of the pack and
     columns of it, each with a message; `element` a kind, on a text column only; `reading` (days or yyyymmdd) on a
     whole-number column only; a context as a kind with fields of its page, as a Cards part; and the proof a
     question with a present start that the relation's rows offer, by default the first in bundle order. The
@@ -2468,7 +2468,7 @@ def composed(q: dict, steps: list, where: str, errors: list[str]) -> None:
     """How suppose composes with the start and the answer (docs/gui.md, "Questions as data"): `given` is the
     first step, once, exactly from a delta or a sweep; a sweep gives a series and nothing else; `overlay` is
     `given` alone from a delta; `candidates` follows a trace from an absent start; `series` comes from a sweep;
-    `without` (the published variant whose only change withdraws the start fact, RV-X24) is the first step, once, from
+    `without` (the published variant whose only change withdraws the start fact) is the first step, once, from
     a present start."""
     sup = [s.get("suppose") if isinstance(s, dict) else None for s in steps]
     start, answer = q["start"], q["answer"]
@@ -2579,7 +2579,7 @@ def language(pack: Pack, pack_dir: Path, packs: dict, renames: dict, errors: lis
                 # A claim is shown in every language of the pack: its sentence is never a warning.
                 (errors if lang == default or mid in claimed else pack.warnings).append(f"messages/{lang}.mf2: no message '{mid}'")
         errors += [f"messages/{lang}.mf2: no message '{mid}' for a question" for mid in asked if mid not in ids]
-        # A reader question is read in every language of the pack (RV-C04): its texts are never a warning.
+        # A reader question is read in every language of the pack: its texts are never a warning.
         errors += [f"messages/{lang}.mf2: no message '{mid}' for reader question {r['id']}"
                    for r in pack.reader_questions
                    for mid in (r["title_message"], r["about_message"], *(c["message"] for c in r["columns"]))
@@ -2591,7 +2591,7 @@ def language(pack: Pack, pack_dir: Path, packs: dict, renames: dict, errors: lis
         if text:
             pack.messages[lang] = text
         carried[lang] = (set(labels), {mid: variables(block) for mid, block in [*imported.items(), *entries(body)]})
-    # A pack carries a language whole (RV-A25): each language has the labels and the messages of the default
+    # A pack carries a language whole: each language has the labels and the messages of the default
     # language and no others, the imported ones included, and a message names the same variables in each.
     for lang in langs:
         if lang == default or default not in carried:

@@ -1,4 +1,4 @@
-"""RV-K02: the checker holds rule safety itself. Its loader refuses a rule IR the compiler would refuse wherever a
+"""The checker holds rule safety itself. Its loader refuses a rule IR the compiler would refuse wherever a
 proof could otherwise pass that proves nothing, and the rest is named here as taken on trust (README, "Trusted
 base"). The rejected fixtures are the compiler's (contracts/fixtures/rules/rejected); the compiler is not imported."""
 

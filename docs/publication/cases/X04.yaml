@@ -30,5 +30,4 @@ expect:
     iri: https://rezono.example/people/Team/team-platform
 note: A kind's `iri` carries its namespace, and an element's IRI is built from it (§3.4). `Host` keeps the default `<base>Host`; `Team` lives in another namespace, and the `owner` of `host-a` points there.
 sources:
-- RV-X21 (arbiter, 11-11-2026)
 - docs/ring2/iris.md §4

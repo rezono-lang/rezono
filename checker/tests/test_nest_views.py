@@ -143,7 +143,7 @@ def test_a_state_the_role_s_rows_do_not_give_is_found():
 
 
 def test_a_part_known_to_have_no_container_is_on_no_sheet_and_an_unknown_one_stands_apart():
-    """The arbiter, 11-11-2026: without a container row a part stands apart where its container is unknown (a
+    """Without a container row a part stands apart where its container is unknown (a
     required arrow, an open relation, or one the role does not read in full). Where the arrow is optional, its
     relation closed and read in full, the element is known to have none: a part of nothing, on no sheet."""
     plain = [{k: v for k, v in n.items() if k != "states"} for n in NODES]
@@ -180,7 +180,7 @@ def test_a_part_with_two_containers_is_no_part():
 
 def test_two_elements_of_one_level_with_one_id_are_refused():
     """A container is named by its id alone: with a renewal and a transfer both `a3`, a line in `a3` would lie
-    in one of two. The viewer stops on it too (RV-V29)."""
+    in one of two. The viewer stops on it too."""
     rows = ROWS | {"transfer": [["a3"]]}
     found("renewal/a3 and transfer/a3 are two elements of level application with one id", rows=rows)
 

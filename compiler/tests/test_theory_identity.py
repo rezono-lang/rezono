@@ -4,7 +4,7 @@ Three evaluations must agree as sets: an exact Python reference written from the
 same_as claims, not a join), the DuckDB batch backend on the compiled IR, and Soufflé on the same program (when
 present, as in CI). The values a class compares come from a domain's own rules (the theory's @extend relations), so
 every case runs through a small neutral domain: by kind (`is_a: Referent`), and by a view with other names that
-executes through the bounded profile of RV-C27. No domain: the elements are letters.
+executes through the bounded execution profile. No domain: the elements are letters.
 """
 
 import shutil

@@ -80,7 +80,7 @@ def read_rows(data: bytes, fmt: str) -> dict:
 
 
 def rows_of(table) -> dict:
-    """read_rows of a snapshot already parsed: for a caller that needs the parsed list as well (RV-K08)."""
+    """read_rows of a snapshot already parsed: for a caller that needs the parsed list as well."""
     if not isinstance(table, list):
         raise ValueError(f"a snapshot is a list of rows, not a JSON {type(table).__name__}")
     rows = {}

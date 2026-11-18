@@ -601,7 +601,7 @@ def nest_levels(sheet: str, bundle: dict) -> dict | None:
     `origin`, where it names one, then the state). The binding names an arrow by its element id and a column
     by its name, as the compiler writes them. None: no such sheet or binding, or a binding whose arrows or
     columns the bundle does not have. An element's id is no part of the sheet's name: the page of one element
-    reads it from this sheet, and the element is a segment of the page's address (RV-V29)."""
+    reads it from this sheet, and the element is a segment of the page's address."""
     kind, _, name = sheet.partition(".")
     binding = next((n for n in bundle.get("channels", {}).get("nests", []) if n.get("id") == name), None)
     if kind != "nest" or binding is None or not isinstance(binding.get("levels"), list) or len(binding["levels"]) < 2:

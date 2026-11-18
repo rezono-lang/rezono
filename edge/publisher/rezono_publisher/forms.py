@@ -1,10 +1,10 @@
-"""Each role's publication form of a main manifest, after its publication (RV-K16, revised 16-11-2026;
-docs/publication/l0.md, `rezono_publication.publication`).
+"""Each role's publication form of a main manifest, after publication
+(docs/publication/l0.md, `rezono_publication.publication`).
 
   python -m rezono_publisher.forms PACK MANIFEST [--profile p | --store url]
   python -m rezono_publisher.forms --newest --profile p [--results FILE] [PACK_DIR ...]
 
-The forms follow the publication (RV-K16 revised 16-11-2026; job `forms` of promote.yml, after `publish`).
+The forms follow the publication (job `forms` of promote.yml, after `publish`).
 `--newest` takes each pack's newest main manifest (the packs of publish.packs, or the directories given) and makes
 its forms role by role: per role its objects, then its index, so a red role holds back only its own index and a
 run that stopped (a timeout) goes on where it was. A role whose index is there with the role's snapshots is passed
@@ -25,13 +25,12 @@ manifest names under the role), the role-neutral schema bundle, and which relati
   <pack>/<manifest>/<role>/publication/schema.json   the schema document (§2), canonical JSON
   <pack>/<manifest>/<role>/publication/rows.json     the rows as one collection {"$schema", "$rows"} (§3.1)
   <pack>/<manifest>/<role>/publication/hashes.json   every hash of §6.2, the dataset hash `d-…` among them
-  <pack>/<manifest>/<role>/publication/<export>      the standards exports made from that form (RV-K20): view.ttl,
+  <pack>/<manifest>/<role>/publication/<export>      the standards exports made from that form: view.ttl,
                                                 context.jsonld, prov.ttl, shapes.ttl, contract.odcs.yaml,
                                                 dcat.ttl, and the loss list of each (*.losses.yaml)
   <pack>/<manifest>/<role>/publication/table.<t>.arrow  each table of the columnar form (§4), one Arrow IPC file and
-  <pack>/<manifest>/<role>/publication/table.<t>.parquet  one Parquet file per table, `$` written `_` (l0.md §4.6;
-                                                RV-K19)
-  <pack>/<manifest>/<role>/publication/statement.json  the role's epoch statement (RV-X41, `rezono_publication.statement`):
+  <pack>/<manifest>/<role>/publication/table.<t>.parquet  one Parquet file per table, `$` written `_` (l0.md §4.6)
+  <pack>/<manifest>/<role>/publication/statement.json  the role's epoch statement (`rezono_publication.statement`):
                                                 every object above by its sha256, the role's manifest and
                                                 snapshots, the dataset and annotation hash, and the row-tree
                                                 roots with their inclusion hash; unsigned
@@ -52,7 +51,7 @@ the role's prefix gets, in the order of those bytes): the exporters walk the row
 given, so they are made from what was read, never from the form in memory, which equals it but need not have its
 order. `exports` is pure, so a second build from the bytes would repeat it on the same input (the tests hold that a
 form and its exports are the same bytes when made again). The standards' own readers are oracles: they run in the tests
-on a published store (`edge/plugins/connectors/accept.py`), never here. The tables (RV-K19) are read back from their
+on a published store (`edge/plugins/connectors/accept.py`), never here. The tables are read back from their
 own bytes, in each form: the rows they give hash to the form's hashes, and written again from those rows they are
 the same bytes. The statement is made last, from the form and every object above (the tables among them), and
 read back by the reader's own check (`rezono_publication.statement.verify`) from the bytes alone before anything is
@@ -103,7 +102,7 @@ FORMAT = "rezono.publication-form/1"
 MAIN = re.compile(r"^m-(\d+)$")
 OBJECTS = ("schema.json", "rows.json", "hashes.json")
 CONNECTORS = ROOT / "edge" / "plugins" / "connectors"  # the standards exporters (docs/standards.md)
-# The standards exports of a role's form (RV-K20), in the order they are made, each with its loss list
+# The standards exports of a role's form, in the order they are made, each with its loss list
 # (contracts/connector.yaml): the RDF view and its JSON-LD context (§5), the role's witnesses as PROV-O,
 # the SHACL shapes, the ODCS contract and the DCAT entry, which names the others by addresses relative to the
 # index. Each loss list is written under the same prefix, by its own name.
@@ -121,7 +120,7 @@ OPEN = ("Q13", "Q20")  # the open questions a connector may refuse a schema for 
 # The most objects a role's index may name: the bound of the listing format, written once in its description
 # (edge/gate/README.md, "publication forms"); the gate holds the same number (`FORM_OBJECTS` in edge/gate/src/forms.ts)
 # and each side's test reads it from there. Past half of it the design question is a listing in parts, not a higher
-# number (ARBITER, 12-11-2026, 09:58 UTC).
+# number.
 FORM_OBJECTS = 1024
 # A name the gate serves (`NAME` in edge/gate/src/forms.ts): no path, nothing hidden.
 NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
@@ -309,7 +308,7 @@ def verify(data: dict[str, bytes], form: dict, given: dict, bundle: dict, full) 
 
 
 def verified_exports(back: dict, h: dict, manifest: str, witnesses: list[dict]) -> dict[str, bytes]:
-    """The standards exports of a verified form (RV-K20), made once from what `verify` read back from its bytes
+    """The standards exports of a verified form, made once from what `verify` read back from its bytes
     (`back`): the exports of the bytes a reader fetches, in their order (the exporters follow the order of rows and
     keys). A second build would only repeat a pure function on the same input, at some 40% of the forms phase of
     the largest pack.
@@ -322,7 +321,7 @@ def verified_exports(back: dict, h: dict, manifest: str, witnesses: list[dict]) 
 
 
 def verified_tables(data: dict[str, bytes], form: dict, h: dict) -> dict[str, bytes]:
-    """The columnar form of a verified form (RV-K19; l0.md §4): one Arrow IPC and one Parquet file per table, named
+    """The columnar form of a verified form (l0.md §4): one Arrow IPC and one Parquet file per table, named
     by `arrow.file_name`. Each form's files are read back from their bytes alone, as a reader reads them, and the
     rows they give must have exactly the form's hashes (`hashes.json`); otherwise Blocked, and nothing is written.
     That they are the same bytes when written again, whatever the order of the rows, is the Arrow writer's own
@@ -354,7 +353,7 @@ def listable(names: list[str]) -> None:
 
 
 def epoch_statement(pack: str, role: str, form: dict, h: dict, sources: list[dict], objects: dict[str, bytes]) -> bytes:
-    """The role's epoch statement (RV-X41) over its form's objects, made from the verified form and held to the
+    """The role's epoch statement over its form's objects, made from the verified form and held to the
     reader's check of `rezono_publication.statement` from the bytes alone. Raises Blocked with what differs."""
     index = {"pack": pack, "role": role, "manifest": form["manifest"], "schema": h["schema"], "dataset": h["dataset"],
              "sources": sources, "objects": [{"name": n, "sha256": sha256(b)} for n, b in objects.items()]}

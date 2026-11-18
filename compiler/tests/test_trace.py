@@ -172,7 +172,7 @@ def weighed():
 
 
 def test_a_contributes_edge_of_a_sum_or_a_min_carries_what_its_row_gives():
-    """RV-C09: the value is the text the contributors hash states; a count edge and a premise carry none."""
+    """The value is the text the contributors hash states; a count edge and a premise carry none."""
     prog, witnesses, rows = weighed()
     valued = trace.steps(prog, witnesses, rows, valued=True)
     assert [s for s in valued if s[4] == "contributes"] == sorted([

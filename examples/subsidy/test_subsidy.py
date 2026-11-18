@@ -256,7 +256,7 @@ def test_the_profile_that_publishes_the_pack_names_no_role_the_pack_does_not(tmp
 def own(s, m, role: str) -> dict[str, bytes]:
     """Everything the publication holds for one role: its objects, and the manifest's lines that name it."""
     out = {name: s.get(name) for name in s.list(f"{PACK}/{m['id']}/{role}/")}
-    # Its snapshots, witnesses and sources are keyed by their bytes (RV-Z01): found through the manifest.
+    # Its snapshots, witnesses and sources are keyed by their bytes: found through the manifest.
     out |= {name: s.get(key) for name, key in publish.role_objects(s, PACK, m["id"], role).items()}
     for part in ("snapshots", "witnesses", "fact_sources"):
         out[part] = json.dumps([x for x in m[part] if x["role"] == role], sort_keys=True).encode()

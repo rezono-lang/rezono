@@ -1,4 +1,4 @@
-# A value of a decision table is the word that was written (`lit`), never a name in scope (`path`): the tree the reader made before RV-C31.
+# A value of a decision table is the word that was written (`lit`), never a name in scope (`path`).
 format: rezono.module/1
 module:
   pack: lab

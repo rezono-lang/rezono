@@ -1,6 +1,6 @@
 # std-decision: the decision record
 
-A standard pack (ticket RV-C03). Much of what a registration stores as a status or a policy row is a decision by a person, and a proof should end in one: a decision, a vendor fact, a design fact or an observation ([fact classes](../../docs/compiler/import.md#fact-classes-s32), class `decision`). This pack gives every domain the same kind for it, the rules for "in force on a date", four blocking axioms, five blocking schema rules, three findings and two explanation questions. It has no facts of its own. A domain imports it like `std-access`, and its decisions are rows of the kind `Decision`.
+A standard pack. Much of what a registration stores as a status or a policy row is a decision by a person, and a proof should end in one: a decision, a vendor fact, a design fact or an observation ([fact classes](../../docs/compiler/import.md#fact-classes-s32), class `decision`). This pack gives every domain the same kind for it, the rules for "in force on a date", four blocking axioms, five blocking schema rules, three findings and two explanation questions. It has no facts of its own. A domain imports it like `std-access`, and its decisions are rows of the kind `Decision`.
 
 ## Concepts
 
@@ -55,7 +55,7 @@ An explanation that says why needs more than the decision: what it serves, which
 
 **A domain may add to a principle.** What a principle means for the domain's own rules (for traffic, for money) is the domain's: it declares a subkind of `Principle` with that slot (`is_a: Principle`), so its rows are rows of `principle` and a rule of the domain reads the subkind's slot. A principle a rule reads must still have its `decision`, and the rule reads `in_force_on` through it.
 
-**Not here:** which relation a principle closes (a default deny, so that an explanation can say what is not allowed and why). That is the marker `@closes` on the domain's closing relation, whose rule names the principle in force (ticket RV-C21, question `contrast`); a slot that names a relation would put a definition into data.
+**Not here:** which relation a principle closes (a default deny, so that an explanation can say what is not allowed and why). That is the marker `@closes` on the domain's closing relation, whose rule names the principle in force (question `contrast`); a slot that names a relation would put a definition into data.
 
 ## Rules
 
@@ -161,7 +161,7 @@ The paused branch `claude/ex9-justification` drafts a pack `std-justification` (
 - **Days as whole numbers.** Rules cannot read a date yet ([roadmap](../../docs/roadmap.md#open-questions)). The date slots carry the slot roles, which the Timeline and calc read; the rules read `valid_from_day` and `valid_until_day`. The schema rules require each pair together; that the two say the same day is the ingest's duty, and a model check can hold it. When rules read dates, the `*_day` slots go and `ReferenceDate.day` becomes a date.
 - **In force is read on reference dates only.** Without a `reference_date` row nothing is in force, and `superseded_in_force` has no row.
 - **A stale `in_force`.** A record that still says `in_force` after its successor took effect is not reported: on a later reference date that is simply history, and the rules already leave it out of `in_force_on`.
-- **The proof-leaf check of RV-C03** (every leaf has a fact class) is a model check, not part of this pack.
+- **The proof-leaf check** (every leaf has a fact class) is a model check, not part of this pack.
 
 ## Standards
 

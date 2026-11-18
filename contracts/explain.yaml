@@ -54,7 +54,7 @@ enums:
     permissible_values:
       given: {description: "The deltas the start names: a published proposal or variant, or each variant of a sweep."}
       candidates: {description: "The candidate deltas the trace before it proposes."}
-      without: {description: "The published variant whose only change withdraws the start fact (consequence, RV-X24): with the pack's own means its standing changes (its state becomes withdrawn); no row is deleted (RV-A33). Its difference is what breaks without that fact. No such variant: the answer is not_computed."}
+      without: {description: "The published variant whose only change withdraws the start fact (consequence): with the pack's own means its standing changes (its state becomes withdrawn); no row is deleted. Its difference is what breaks without that fact. No such variant: the answer is not_computed."}
   DeltaKind:
     description: What a delta start names.
     permissible_values:
@@ -139,7 +139,7 @@ classes:
       limit: {range: integer, minimum_value: 1, required: true, description: "Nodes per page; the profile caps it."}
   ReaderQuestion:
     description: >-
-      A reader question (RV-C04; docs/gui.md, "Reader questions"): a question in the reader's words whose answer
+      A reader question (docs/gui.md, "Reader questions"): a question in the reader's words whose answer
       is the role's rows of one derived relation, each with a link to its proof. Written in questions.yaml
       under `reader:`; the compiler checks every name and resolves the proof. The viewer and the REPL offer it
       to a role that reads the relation in full or reads a row of it, and read the rows and the proof from the
@@ -227,7 +227,7 @@ classes:
       complete: {range: boolean, description: "For impact: true when every changed row the role reads has a ring and no relation of the difference is read in part (docs/interaction.md section 3); it counts nothing the role does not read."}
       incomplete: {range: Incompleteness, multivalued: true, description: "For impact, when not complete: why, in the order depth, budget, not_read_in_full."}
       undecided: {range: UndecidedRow, multivalued: true, inlined_as_list: true, description: "For an ask ... where: the binder rows on this page whose condition is unknown or invalid, in canonical key order. An answer never drops them (S1 §3.3)."}
-      expression: {range: AnswerExpression, inlined: true, description: "For an ask ... where (POST /<pack>/<manifest>/ask, RV-S16): the question asked, which has no term of the bundle; question is then ask."}
+      expression: {range: AnswerExpression, inlined: true, description: "For an ask ... where (POST /<pack>/<manifest>/ask): the question asked, which has no term of the bundle; question is then ask."}
       diagnostics: {range: RezonoDiagnostic, multivalued: true, inlined_as_list: true, description: "For an ask ... where: the warnings of the check, in source order. A text with an error gets no answer (400, with its diagnostics)."}
       dataset: {range: PublicationDataset, inlined: true, description: "For an ask ... where: this page as a publication dataset (P10.2a §8a; docs/publication/l0.md): the members $schema, schema and rows, the Answer rows of the page and then its Undecided rows, as Row JSON. Its $schema equals output_schema."}
       computed: {range: boolean, description: "True on a computed answer (contrast, consequence): derived by Rezono, not quoted, and shown as computed (docs/explain/contract.md, rule 5). Absent on the others."}
@@ -422,4 +422,4 @@ classes:
       premise: {range: RowRef, required: true, inlined: true}
       how: {range: StepHow, required: true}
       position: {range: integer, minimum_value: 0, required: true, description: "The premise's place in the rule body, or for contributes the aggregate's place in the rule."}
-      value: {pattern: "^(known:.*|unknown|not_applicable|invalid)$", description: "On a contributes step of a sum, min or max: what the premise's row contributes, the canonical text of its value with its state, as the witness's contributors_sha256 is taken over it (RV-C09). Absent on every other step, and where the published proof pieces state none."}
+      value: {pattern: "^(known:.*|unknown|not_applicable|invalid)$", description: "On a contributes step of a sum, min or max: what the premise's row contributes, the canonical text of its value with its state, as the witness's contributors_sha256 is taken over it. Absent on every other step, and where the published proof pieces state none."}

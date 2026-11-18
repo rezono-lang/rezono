@@ -1,4 +1,4 @@
-"""The shapes of a name and of a date the compiler accepts, defined once (RV-M01)."""
+"""The shapes of a name and of a date the compiler accepts, defined once."""
 
 import re
 

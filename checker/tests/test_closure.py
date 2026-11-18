@@ -1,4 +1,4 @@
-"""RV-K01: the closure pass. Every witness below is a correct proof, so only the missing row can refuse the epoch:
+"""The closure pass. Every witness below is a correct proof, so only the missing row can refuse the epoch:
 an engine that fails to derive a row leaves snapshots in which each negation and aggregate over it still checks.
 Hand-written rule IR, so nothing here depends on the compiler."""
 
@@ -318,7 +318,7 @@ def test_a_minimum_over_nothing_owes_no_row():
         ("flags", ["3"], "flags")]
 
 
-# --- a counter with an explicit bound (RV-K18) ---------------------------------------
+# --- a counter with an explicit bound ---------------------------------------
 
 def counting(condition):
     """`depth(a, 0) :- seed(a).  depth(b, m) :- depth(a, n), <condition>, step(a, b), m = n + 1.`"""

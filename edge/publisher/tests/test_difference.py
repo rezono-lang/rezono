@@ -93,7 +93,7 @@ def test_the_checker_refuses_what_is_not_the_change(spoil):
 
 
 def test_a_proof_tree_is_named_at_the_base_only_when_the_base_has_that_very_tree():
-    """RV-M24: the hash decides, and the place is the one the publisher works out itself: the same path under
+    """The hash decides, and the place is the one the publisher works out itself: the same path under
     the base's views for the same role. Anything else in the base's index keeps the variant's copy."""
     from rezono_publisher.difference import shared
 
@@ -164,7 +164,7 @@ def test_a_delta_that_may_change_a_right_gets_no_difference_decided_without_data
     assert not withheld(None, bundle, {"changes": [{"op": "set", "kind": "doc", "key": "d", "slot": "team"}]})  # no rules, no rights
 
 
-# RV-S04: the two base relations of the rules that are not schema tables, on fixture packs. A right that rests
+# The two base relations of the rules that are not schema tables, on fixture packs. A right that rests
 # on one of them changes with tables no rule body names.
 FIXTURES = Path(__file__).resolve().parents[3] / "compiler" / "tests" / "fixtures"
 READ = ".decl may_read(role: symbol, kind: symbol, element: symbol)\n"

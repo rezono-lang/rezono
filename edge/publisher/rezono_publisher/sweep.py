@@ -7,10 +7,10 @@ sweep, each published as a variant against m-N.
 With --workers N, N processes compute the variants side by side, each a share of the grid (side_by_side;
 sweep.sh asks for two). The store then holds what one process writes: a variant's bytes depend on its base
 and its value alone. A variant of the lab is 13 s of computation, so its 64 are 13 minutes one after
-another, whatever is written (RV-M24).
+another, whatever is written.
 
 With --newest the base is the pack's newest main manifest, at the commit it names: what publish.sh left as
-main, also when it found the pack unchanged and published nothing for HEAD (RV-M15).
+main, also when it found the pack unchanged and published nothing for HEAD.
 
 - The grid comes from the compiler (`sweeps.yaml` and the slot's `explore`). Each value is one delta `set` on
   main's facts at the base commit, in a private work dir (git worktree), in grid order. The epoch is N + 1, the
@@ -221,7 +221,7 @@ def run(repo: Path, pack: str, base_commit: str, st, roles: dict[str, str],
                         there = kept(st, name, vid, base)
                     if there:
                         # A run that stopped before the difference: made again, the same bytes. One that is
-                        # whole costs its lookup, so a sweep with nothing to compute writes nothing (RV-M15).
+                        # whole costs its lookup, so a sweep with nothing to compute writes nothing.
                         if there == "manifest" and not explained(st, name, vid, main):
                             _difference(st, name, vid, change_of(sw), label)
                         result = f"{there} kept"

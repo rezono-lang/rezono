@@ -1,4 +1,4 @@
-"""RV-K10: the Soufflé oracle on a pack's source reads the import closure (tests/souffle.py).
+"""The Soufflé oracle on a pack's source reads the import closure (tests/souffle.py).
 
 An imported pack brings its rules, and the program is the union over the import closure. So the oracle's
 program is the rule text as written, of the pack and of every pack it imports, the imported text under the
@@ -35,7 +35,7 @@ def test_the_source_is_the_union_over_the_import_closure(imported):
     text = souffle.pack_source(prog, consumer)
     assert REGISTERED in text and "missing(x) :- alpha(x), !registered(x)." in text
     assert sorted(decls(text)) == sorted(prog.relations), "every relation of the program is declared once"
-    # What RV-K10 found: the pack's own files alone leave the imported relation without a declaration.
+    # The pack's own files alone leave the imported relation without a declaration.
     assert "registered" not in decls(souffle.source(prog, [(consumer / "rules" / "core.dl").read_text()]))
 
 

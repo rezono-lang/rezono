@@ -78,7 +78,7 @@ def test_out_and_back_through_turtle_gives_the_input(schema, forms):
 
 
 def test_a_relative_address_is_read_against_the_entry_s_own_address():
-    """As the publisher writes it beside a role's form (RV-K20): no host in the bytes, the reader's site resolves."""
+    """As the publisher writes it beside a role's form: no host in the bytes, the reader's site resolves."""
     files = {"row-json": "rows.json", "turtle": "view.ttl"}
     text = dcat.to_turtle(FIXTURE, PIN, files)
     assert "https://data.example" not in text and "<rows.json>" in text
@@ -101,7 +101,7 @@ def test_the_documents_a_form_holds_to_are_beside_the_schema_id():
     assert all(held[d].startswith(rdf.schema_iri(FIXTURE)) for d in ("context", "shapes", "contract"))
 
 
-@pytest.mark.xfail(strict=True, reason="docs/publication/l0.md is not in the standalone repository yet")
+@pytest.mark.xfail(strict=True, reason="Restore section 7 of docs/publication/l0.md from the publication specification. The test needs its media-type table as an independent reference for the DCAT connector.")
 def test_the_media_types_are_those_of_the_specification():
     """§7 of docs/publication/l0.md is the one place that names them."""
     text = (ROOT / "docs" / "publication" / "l0.md").read_text(encoding="utf-8")

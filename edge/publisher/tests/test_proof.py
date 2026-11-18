@@ -292,7 +292,7 @@ deg(x, n) :- v(x), n = count : { w(x, _, _) }.
 
 
 def test_a_contributes_row_of_a_sum_carries_its_value_and_a_changed_one_is_refused():
-    """RV-C09: the row of a sum's contributor ends in what it contributes, in both trees; a count's row and a
+    """The row of a sum's contributor ends in what it contributes, in both trees; a count's row and a
     premise's do not. The independent check reads the value from the snapshot itself: one changed is refused."""
     doc = rules_dl.read_program(WEIGHED, "test.dl", {"v": [("x", "string")],
                                                      "w": [("x", "string"), ("y", "string"), ("w", "integer")]}, "test")

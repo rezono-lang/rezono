@@ -1,4 +1,4 @@
-"""A view with attribute maps executes, for the bounded profile of RV-C27 (docs/compiler.md, "Views that execute").
+"""A view with attribute maps executes, for the bounded execution profile (docs/compiler.md, "Views that execute").
 
 A neutral theory (`spans`: a span covers a mark on its line) with rules of its own, and a domain whose terms have
 dates and whose readings have a day written YYYYMMDD. The expectations are written here in Python, from the dates

@@ -117,7 +117,7 @@ def test_the_rules_as_written_equal_the_batch_backend_on_souffle_below_the_bound
 
 
 def test_the_check_view_on_feldera_holds_the_rows_past_the_bound(prog):
-    """RV-K18: on Feldera the engine SQL keeps the rows the counting rule would add past its bound in the
+    """On Feldera the engine SQL keeps the rows the counting rule would add past its bound in the
     materialized view `depth__exhausted`, which a reader takes as a red check (FELDERA_URL; the label `feldera`):
     two rows past the bound, and none once the count ends at it."""
     from feldera import URL, deploy, processed, push, query, stop

@@ -244,7 +244,7 @@ INSTANT = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z")
 
 
 def stated(who: str, at: str) -> dict:
-    """The origin of a value a person states, for `writer.apply_delta(stated=...)` (RV-M17): one source of kind
+    """The origin of a value a person states, for `writer.apply_delta(stated=...)`: one source of kind
     `person`, named by a plain identifier (never a display name or an address), positioned by the UTC instant of
     the statement, to the second. It means "stated by": no decision, publication or observation stands behind it."""
     if not isinstance(who, str) or not IDENTIFIER.fullmatch(who):
@@ -316,7 +316,7 @@ class Companions:
     A fact file without a companion is written as before: its rows have the file and line as their source.
     A fact file with one needs, per change that writes rows, the real origin of those rows from the trusted
     caller, never from the delta: `origins` (step -> {sources, reason?}), or else `stated`, the one origin of
-    every row the delta writes that `origins` does not name (RV-M17). Its companion keeps its form: `default`
+    every row the delta writes that `origins` does not name. Its companion keeps its form: `default`
     and `records` stay as they are, a selector that names no record or cell any more goes, and the rows the
     delta wrote are exact `rows` (`_kept`); a companion of rows only, or one whose layout cannot be kept, is
     the canonical rows form. The one thing a delta may carry is `sources` on the writer's own undo, honoured

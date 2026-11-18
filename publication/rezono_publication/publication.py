@@ -1,6 +1,6 @@
 """A role's form of a published Rezono epoch as a publication (docs/publication/l0.md): schema, rows and hashes.
 
-The publisher writes one form per role beside the role's own files (rezono_publisher.forms, RV-K16); the RD probes
+The publisher writes one form per role beside the role's own files (rezono_publisher.forms); the RD probes
 read it (probes/publication-thin). Input is what one role's part of a publication holds, never more:
 
 - the role-neutral definition (the epoch's archived schema bundle);
@@ -43,7 +43,7 @@ from .l0 import _number_spelling
 COMPLETE = "checker"  # the role whose snapshots are complete (contracts/manifest.yaml, Snapshot.complete)
 NOT_READ_IN_FULL = "not_read_in_full"  # the reason of an absence in a relation the role does not read in full
 BIGINT = ("-9223372036854775808", "9223372036854775807")  # Rezono's integer storage (docs/compiler.md, Tables)
-BASE = "https://rezono.example/{pack}/"  # §2.1 `base` of a pack whose pack.yaml declares no `iri:` (RV-X30)
+BASE = "https://rezono.example/{pack}/"  # §2.1 `base` of a pack whose pack.yaml declares no `iri:`
 MANIFEST_KEYS = ("id", "epoch", "knowledge_time", "definition_sha256", "compiled")
 SWEEPS_FILE = "ir/sweeps.json"  # the compiled sweep grid: per role at the gate, never in a role's form
 

@@ -102,7 +102,7 @@ def calculate(con, calculation, db, rows=None):
               *doc.get("inputs", {}).values()}
     needed |= {f.table for f in calculation.facts.values() if f.table and not f.derived}
     for t in sorted(needed & present - {""}):
-        # A date a view's reading reads (RV-C27) is ISO text in the rules' table, which the calculation compares
+        # A date a view's reading reads is ISO text in the rules' table, which the calculation compares
         # as a date: the column takes the schema's type. The cast keeps every value and its text.
         have = {c[0]: c[1] for c in con.execute(f"DESCRIBE {q(t)}").fetchall()}
         for name, kind, *_ in db.execute(f"DESCRIBE {q(t)}").fetchall():

@@ -244,7 +244,7 @@ def test_a_difference_shows_the_changed_cell(repo, tmp_path):
     assert leaf["rows"] == [{"key": ["a1", "2"], "change": "changed", "was": ["a1", "1"]}]
 
 
-# RV-M17: a proposal names who stated what it writes.
+# A proposal names who stated what it writes.
 GIT = {"kind": "git", "name": "example/model", "revision": "a" * 40, "position": "corpus/snapshot.json"}
 WHO, AT = "user-123 <0123456789abcdef@users.noreply.invalid>", "2026-11-10T21:03:11Z"
 STATED = {"kind": "person", "name": "user-123", "position": AT}

@@ -42,4 +42,4 @@ expect:
 note: 'A `decision` may be a reference to the row that records the decision; `reviewed` is asked about the target id of the reference (§3.4), never the text of `$ref`.'
 sources:
 - l0.md §3.7 (O13, O14)
-- DV1 (ARBITER, 12-11-2026 11:33 UTC)
+- DV1
