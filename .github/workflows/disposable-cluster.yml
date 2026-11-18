@@ -70,6 +70,8 @@ jobs:
       - uses: ./.github/workflows/python-environment
         with:
           editable: ${{ steps.packages.outputs.editable }}
+          # Collection loads each component's conftest before deselecting ordinary items.
+          oracle: 'true'
       - name: Create the runner-local cluster
         shell: bash
         run: |
