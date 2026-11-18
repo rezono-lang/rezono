@@ -24,7 +24,7 @@ from dataclasses import replace
 from itertools import groupby
 from operator import itemgetter
 
-from .canon import INTEGER, encode_key
+from .canon import INTEGER, CalcColumnType, calc_value, encode_key
 from .evaluate import _arith, _fits, _fold, _holds, cells
 from .rules import Calculation
 
@@ -175,7 +175,7 @@ def instances(rule, table):
         elif todo:  # the next atom that shares a variable with what is bound, or else the next: a product
             atom = next((a for a in todo if bound & set(a.terms)), todo[0])
             todo.remove(atom)
-            current = _join(current, _scan(atom, table(atom.relation), atom.relation in rule.calc_inputs))
+            current = _join(current, _scan(atom, table(atom.relation), rule.calc_input_type(atom.relation)))
         else:
             break
     unbound = sorted(rule.variables - set(current[0]))  # every step left over waits for one of these
@@ -212,9 +212,9 @@ def _merge(left, left_key, right, right_key):
         yield list(group), (run[1] if run is not end and run[0] == k else [])
 
 
-def _scan(atom, ordered, calc_input):
+def _scan(atom, ordered, calc_type: CalcColumnType | None):
     """The rows a positive atom matches, as a table over its variables: one pass over the relation in key order.
-    A calculation selection gives a rule only whole numbers (check._check_graph, `bad_calc_premise`)."""
+    A calculation selection only supplies values of its declared type (check._check_graph, `bad_calc_premise`)."""
     terms = atom.terms
     variables = tuple(dict.fromkeys(t for t in terms if t.startswith("?")))
     first = [terms.index(v) for v in variables]
@@ -224,7 +224,7 @@ def _scan(atom, ordered, calc_input):
     for parts, _ in ordered:
         if (len(parts) == len(terms) and all(parts[i] == t for i, t in constants)
                 and all(parts[i] == parts[j] for i, j in again)
-                and not (calc_input and not INTEGER.fullmatch(parts[1]))):
+                and (calc_type is None or calc_value(parts[1], calc_type))):
             out.append(tuple(parts[i] for i in first))
     return variables, out
 
