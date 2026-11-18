@@ -264,6 +264,10 @@ def compare_imported(consumer: Path, original: Path, candidate: Path, identity: 
 
 
 def compare(baseline: pack.Pack, trial: pack.Pack) -> None:
+    original_schemas = [{key: value for key, value in schema.items() if key != "file"} for schema in baseline.schemas]
+    trial_schemas = [{key: value for key, value in schema.items() if key != "file"} for schema in trial.schemas]
+    if original_schemas != trial_schemas:
+        raise ConversionError("the candidate changed the schema or module identity")
     if (list(map(kind_meaning, baseline.kinds.values())) != list(map(kind_meaning, trial.kinds.values()))
             or list(baseline.enums.items()) != list(trial.enums.items())):
         raise ConversionError("the candidate changed the typed schema")

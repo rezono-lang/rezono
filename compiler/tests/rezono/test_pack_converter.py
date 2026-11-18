@@ -82,6 +82,7 @@ def test_conversion_renders_the_metadata_of_the_standard_access_pack():
     ]
     title = access.lines.index("  title: Text")
     assert access.lines[title + 1] == '    iri "rdfs:label"'
+    assert '  annotation layer = "facts"' in access.lines
     assert "  capability: Capability*" in access.lines
     member = access.lines.index("  value read")
     assert access.lines[member + 1] == "    description \"reads what the pack's read rules give this capability\""
@@ -123,6 +124,12 @@ def test_imported_standard_pack_preserves_named_title_through_its_consumer(tmp_p
     del schema["classes"]["Role"]["attributes"]["title"]["slot_uri"]
     schema_file.write_bytes(yaml.safe_dump(schema).encode("utf-8"))
     with pytest.raises(ConversionError, match="changed the typed schema"):
+        compare_imported(consumer, original, trial, "std-access")
+
+    schema = yaml.safe_load((original / "schema/access.yaml").read_bytes())
+    schema["id"] = "https://rezono.example/std-access/wrong"
+    schema_file.write_bytes(yaml.safe_dump(schema).encode("utf-8"))
+    with pytest.raises(ConversionError, match="changed the schema or module identity"):
         compare_imported(consumer, original, trial, "std-access")
     assert metadata.read_bytes() == contents
     assert set(tmp_path.iterdir()) == {original, trial, consumer}
