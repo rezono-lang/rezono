@@ -1,0 +1,57 @@
+name: AnyBURL platform probe
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: anyburl-platform-probe
+  cancel-in-progress: false
+
+jobs:
+  probe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: bash
+    env:
+      INPUT_COMMIT: a1bc4a2612ae74eb6556c90e7f8efab309d93cdc
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0  # v7.1.0
+        with:
+          python-version: '3.13.18'  # requirements/.python-version at INPUT_COMMIT
+          cache: ''
+      - name: Install the pinned publication and comparison environment
+        run: |
+          set -euo pipefail
+          input="$RUNNER_TEMP/anyburl-input"
+          git worktree add --detach "$input" "$INPUT_COMMIT"
+          cd "$input"
+          python -m venv "$RUNNER_TEMP/anyburl-venv"
+          source "$RUNNER_TEMP/anyburl-venv/bin/activate"
+          python -m pip install --no-deps --require-hashes -r requirements/dev.txt
+          packages=$(python scripts/components.py python-packages)
+          for package in $packages; do
+            python -m pip install --no-deps --no-build-isolation -e "$package"
+          done
+          bash scripts/install-souffle.sh
+      - name: Publish, learn for sixty seconds, and replay the exact candidates
+        run: |
+          set -euo pipefail
+          source "$RUNNER_TEMP/anyburl-venv/bin/activate"
+          bash probes/anyburl/run.sh "$RUNNER_TEMP/anyburl-input" "$RUNNER_TEMP/anyburl-evidence" "$INPUT_COMMIT"
+      - name: Retain the input, raw rules, comparisons and measurements
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.6.2
+        with:
+          name: anyburl-platform-evidence
+          path: ${{ runner.temp }}/anyburl-evidence/
+          if-no-files-found: warn
+          retention-days: 90

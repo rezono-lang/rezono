@@ -746,16 +746,22 @@ def read(pack_dir: str | Path) -> Pack:
         forms = {m.rel: m.form for m in mods if m.pack_dir == pack_dir and m.form is not None}
         generated = rezono_table.lower_pack(pack, meta, pack_dir, errors, forms=forms)
     if not errors:
+        from . import native_rule_lowering
+
         try:
+            native = native_rule_lowering.lower_modules(meta, mods, packs, names)
             pack.rules, rule_warnings = rules_dl.read(pack, pack_dir, ordered, renames, calc_inputs=calc_inputs,
                                                       calc_parts=calc_parts, folds=pack.folds,
                                                       bodies=pack.rule_bodies, spans=pack.rule_spans,
-                                                      generated=generated, embedded=rezono_relational.sources(mods))
+                                                      generated=generated, embedded=rezono_relational.sources(mods),
+                                                      native=native)
             pack.warnings += rule_warnings
             if pack.rules:   # a variable or a column that joins two currencies is an error
                 amounts.columns(pack.rules, amounts.tables(pack))
-        except rules_dl.RuleError as e:
+        except (rules_dl.RuleError, CompileError) as e:
             errors.append(str(e))
+            if isinstance(e, CompileError):
+                typed[str(e)] = e.diagnostics
     if not errors and (view_file := views.admit(pack_dir)) is not None:
         # A view that executes: typed against the theory as its own pack, then lowered to ordinary
         # rules, and every rule that read a mapped theory table is bound to the view's relation.

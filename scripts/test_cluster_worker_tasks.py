@@ -131,6 +131,40 @@ class ClusterRoutingTests(unittest.TestCase):
         with self.assertRaises(subprocess.CalledProcessError):
             routing.route(set(), diff_base=separate)
 
+    def test_pull_request_uses_the_verified_merge_parent_when_main_has_advanced(self):
+        event_base = self.git("rev-parse", "HEAD")
+        self.git("branch", "pull-source")
+        self.write(routing.CLUSTER_WORKFLOW, "advanced main fixture configuration\n")
+        checkout_base = self.commit()
+        self.git("switch", "-q", "pull-source")
+        self.write("compiler/ordinary.py", "pass\n")
+        pull_head = self.commit()
+        self.git("switch", "-q", "--detach", checkout_base)
+        self.git("merge", "-q", "--no-ff", "-m", "Synthetic pull request merge", pull_head)
+        self.assertEqual(routing.route(set(), diff_base=event_base), ("suite", []))
+        self.assertEqual(routing.route(set(), diff_base=event_base, pull_head=pull_head), ("none", []))
+        self.assertEqual(routing.route(set(), diff_base=checkout_base, pull_head=pull_head), ("none", []))
+        self.assertEqual(routing.route(set(), diff_base=event_base, pull_head=checkout_base), ("suite", []))
+
+        self.git("switch", "-q", "pull-source")
+        self.write(CLUSTER_TEST, MARKED)
+        pull_head = self.commit()
+        self.assertEqual(routing.route(set(), diff_base=event_base, pull_head=pull_head), ("suite", []))
+        self.git("switch", "-q", "--detach", checkout_base)
+        self.git("merge", "-q", "--no-ff", "-m", "Merge a real fixture change", pull_head)
+        self.assertEqual(routing.route(set(), diff_base=event_base, pull_head=pull_head), ("suite", []))
+
+    def test_only_an_advance_on_the_original_base_is_trusted(self):
+        unrelated_parent = self.git("rev-parse", "HEAD")
+        self.write(routing.CLUSTER_WORKFLOW, "event base fixture configuration\n")
+        event_base = self.commit()
+        self.write("compiler/ordinary.py", "pass\n")
+        pull_head = self.commit()
+        self.git("switch", "-q", "--detach", unrelated_parent)
+        self.git("merge", "-q", "--no-ff", "-m", "Unchecked target history", pull_head)
+        self.assertEqual(routing.route(set(), diff_base=unrelated_parent), ("suite", []))
+        self.assertEqual(routing.route(set(), diff_base=event_base, pull_head=pull_head), ("none", []))
+
     def test_cli_preserves_exact_worker_list_and_encodes_the_full_suite_as_empty_input(self):
         scripts = self.root / "scripts"
         scripts.mkdir()

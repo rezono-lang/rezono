@@ -7,3 +7,14 @@ build_path: Changed path
 build_path_reader: Path reader
 build_selected_job: Selected job
 build_full_selection: Full selection reason
+build_task: Observed build task
+build_policy_date: Effective policy day
+build_track_rank: Track priority
+build_queue_limit: Planner queue threshold
+build_queue_reading: Queue reading
+build_task_ready: Ready task
+build_task_waiting: Waiting task
+build_task_stuck: Blocked task
+build_task_precedes: Ready task order
+build_planner_slot: Planner slot available
+build_planner_waiting: Planner waiting
