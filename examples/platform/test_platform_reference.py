@@ -63,9 +63,10 @@ def test_tenant_decision_examples():
     assert rows["requested"]["monthlyCost"] == [["elm", 7505, "EUR-cent"], ["reed", 2495, "EUR-cent"]]
     assert rows["requested"]["proposal"] == [["elm", "elm-1", "review"], ["reed", "reed-1", "denied"]]
     assert rows["requested"]["shortages"] == []
-    assert rows["third"]["shortages"] == [["guest-host", "cores", 1], ["guest-host", "memoryGiB", 2],
-                                          ["storage-pool", "storageGiB", 10]]
-    assert ["reed", "reed-2", "denied"] in rows["third"]["proposal"]
+    assert all(used == 0 for _, _, used, _ in rows["requested"]["capacity"])
+    assert rows["third"]["capacity"] == rows["requested"]["capacity"]
+    assert rows["third"]["shortages"] == []
+    assert ["reed", "reed-2", "standard"] in rows["third"]["proposal"]
 
 
 def test_control_host_is_derived_by_the_pack():
