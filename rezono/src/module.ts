@@ -170,6 +170,11 @@ function readModule(text: string, bare: boolean): ParsedModule {
 			build.refuse(line, stage === 0 ? '`pack`' : 'a declaration');
 			continue;
 		}
+		if ((r.line === 'dataset' && (bare || module.decls.length > 0))
+			|| (module.decls.length > 0 && 'dataset' in module.decls[0])) {
+			build.refuse(line, 'one dataset on its own in a module');
+			continue;
+		}
 		stage = 2;
 		module.decls.push(declaration.read(line, build) as Decl);
 	}

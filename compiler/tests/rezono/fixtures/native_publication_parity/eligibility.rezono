@@ -1,0 +1,6 @@
+rezono 0
+pack minimal
+rule listed(item: Alpha)
+rule listed(x) when x in Alpha and Alpha.title(x, "open")
+rule listed_count(scope: Beta, n: Int)
+rule listed_count(s, n) when s in Beta and n = listed(_).count()
