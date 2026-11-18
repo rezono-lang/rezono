@@ -44,6 +44,12 @@ jobs:
         env:
           BASE: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.event.before }}
         run: python3 -I scripts/leak_check.py --base "$BASE"
+      - name: Check Dependabot manifest coverage
+        working-directory: release-source
+        shell: bash
+        run: |
+          set -euo pipefail
+          yq -o=json .github/dependabot.yml | python3 -I scripts/test_dependabot.py
       - name: Warn about new literals outside packs
         id: pack_warnings
         if: ${{ !cancelled() && steps.full_checkout.outcome == 'success' }}
