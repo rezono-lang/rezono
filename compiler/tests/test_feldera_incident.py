@@ -13,6 +13,7 @@ import yaml
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "ci"))
 import feldera
 import feldera_incident as incident
+from feldera_shards import SHARDS, selection
 from verify_feldera_run import junit_key
 
 
@@ -80,6 +81,47 @@ def test_a_confirmed_disagreement_requires_complete_comparison_evidence(tmp_path
     assert run.returncode == 1
     message = ET.parse(report).find(".//failure").attrib["message"]
     assert incident.disagreements(*records({CASES[0]: message})) == [junit_key(CASES[0])[1]]
+
+
+@pytest.mark.parametrize("missing_subsidy_report", [False, True])
+def test_classifier_uses_complete_reports_from_the_parallel_comparison(tmp_path, missing_subsidy_report):
+    ci = Path(incident.__file__).resolve().parent
+    collected, report = RED
+    original = ET.fromstring(report)
+    inputs = tmp_path / "shards"
+    combined = tmp_path / "combined"
+    for shard in SHARDS:
+        folder = inputs / f"feldera-shard-1-{shard}"
+        folder.mkdir(parents=True)
+        nodes = selection(collected.splitlines(), shard)
+        (folder / "collection.txt").write_text(collected + "\n", encoding="utf-8")
+        (folder / "collected.txt").write_text("\n".join(nodes) + "\n", encoding="utf-8")
+        if missing_subsidy_report and shard == "subsidy":
+            continue
+        selected = set(map(junit_key, nodes))
+        suite = ET.Element("testsuite", name=shard)
+        suite.extend(case for case in original if (case.get("classname"), case.get("name")) in selected)
+        ET.ElementTree(suite).write(folder / "results.xml", encoding="utf-8")
+
+    merged = subprocess.run([sys.executable, str(ci / "feldera_shards.py"), "merge", inputs, combined, "1"],
+                            capture_output=True, text=True, timeout=10)
+    assert merged.returncode == int(missing_subsidy_report), merged.stderr
+    assert (combined / "results.xml").exists() == (not missing_subsidy_report)
+    if not missing_subsidy_report:
+        verified = subprocess.run(
+            [sys.executable, str(ci / "verify_feldera_run.py"), combined / "collected.txt", combined / "results.xml"],
+            capture_output=True, text=True, timeout=10,
+        )
+        assert verified.returncode == 1
+        assert verified.stderr.splitlines() == [f"ERROR failure: {case}" for case in CASES[7:9]]
+        combined_cases = incident.disagreements(
+            (combined / "collected.txt").read_text(encoding="utf-8"),
+            (combined / "results.xml").read_bytes(),
+        )
+        assert combined_cases == [junit_key(case)[1] for case in CASES[7:9]]
+    classified = subprocess.run([sys.executable, str(ci / "feldera_incident.py"), "classify", combined],
+                                capture_output=True, text=True, check=True, timeout=10)
+    assert classified.stdout.strip() == ("confirmed=false" if missing_subsidy_report else "confirmed=true")
 
 
 class History:
@@ -157,6 +199,15 @@ def test_only_the_serial_main_reporter_can_write_issues():
     workflow = yaml.load((root / incident.WORKFLOW).read_text(encoding="utf-8"), Loader=yaml.BaseLoader)
     assert workflow["concurrency"] == {"group": "feldera-oracle-${{ github.ref }}", "cancel-in-progress": "false"}
     assert workflow["permissions"] == {"contents": "read"}
+    oracle = workflow["jobs"]["oracle"]
+    assert oracle["outputs"] == {"disagreement": "${{ steps.classify.outputs.confirmed }}"}
+    assert oracle["needs"] == "compare" and oracle["if"] == "${{ !cancelled() }}"
+    ids = [step["id"] for step in oracle["steps"] if "id" in step]
+    assert ids == ["compare", "classify"]
+    classifier = next(step for step in oracle["steps"] if step.get("id") == "classify")
+    for guard in ("steps.compare.outcome == 'failure'", "github.event_name == 'push'", "github.ref == 'refs/heads/main'"):
+        assert guard in classifier["if"]
+    assert "classify \"$RUNNER_TEMP/feldera-oracle\"" in classifier["run"]
     job = workflow["jobs"]["report"]
     assert job["needs"] == "oracle" and job["permissions"] == {"actions": "read", "contents": "read", "issues": "write"}
     for guard in ("!cancelled()", "github.event_name == 'push'", "github.ref == 'refs/heads/main'",

@@ -42,15 +42,25 @@ selectors=(
   examples/test_feldera_rules.py::test_incremental_on_feldera_equals_batch
   examples/test_platform_incremental_proof.py::test_platform_incremental_delta_and_witnesses_match_batch
 )
-suite=(python -m pytest --rootdir="$PWD" -q -o empty_parameter_set_mark=fail_at_collect "${selectors[@]}")
-"${inside[@]}" "${suite[@]}" --collect-only | tee "$reports/collection.log"
-nodes="$reports/collected.txt"
-grep -E '^(compiler/tests|examples)/[^:]+\.py::' "$reports/collection.log" > "$nodes"
+suite=(python -u -m pytest --rootdir="$PWD" -o empty_parameter_set_mark=fail_at_collect)
+"${inside[@]}" "${suite[@]}" -q --collect-only "${selectors[@]}" | tee "$reports/collection.log"
+inventory="$reports/collection.txt"
+grep -E '^(compiler/tests|examples)/[^:]+\.py::' "$reports/collection.log" > "$inventory"
 for selector in "${selectors[@]}"; do
-  awk -v selected="$selector" '$0 == selected || index($0, selected "[") == 1 { found=1 } END { exit !found }' "$nodes" ||
+  awk -v selected="$selector" '$0 == selected || index($0, selected "[") == 1 { found=1 } END { exit !found }' "$inventory" ||
     { echo "No collected case for $selector" >&2; exit 1; }
 done
+nodes="$reports/collected.txt"
+shard=${FELDERA_SHARD:-}
+if [[ -n "$shard" ]]; then
+  python compiler/ci/feldera_shards.py select "$shard" "$inventory" > "$nodes"
+else
+  cp "$inventory" "$nodes"
+fi
+mapfile -t tests < "$nodes"
 result=0
-"${inside[@]}" "${suite[@]}" --junitxml="$reports/results.xml" || result=$?
-python compiler/ci/verify_feldera_run.py "$nodes" "$reports/results.xml"
+"${inside[@]}" "${suite[@]}" -v --junitxml="$reports/results.xml" "${tests[@]}" || result=$?
+if [[ -z "$shard" ]]; then
+  python compiler/ci/verify_feldera_run.py "$nodes" "$reports/results.xml"
+fi
 exit "$result"
