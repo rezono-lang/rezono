@@ -88,6 +88,7 @@ The scheme's definition is the pack [`subsidy-scheme`](../subsidy-scheme/README.
 | `calc/drift.yaml` | `payment_difference`: the ledger minus the award |
 | `scenarios/*.yaml` | an income statement arrives; October is closed; a late payment is refused; the threshold is supposed otherwise |
 | `labels/en.yaml`, `messages/en.mf2` | the labels and sentences of the ledger, the roles and the rules above, and the English of std-explain's questions |
+| `messages/en.mf2`, `specimen/nl.mf2` | the subsidy specimen texts under `subsidy.specimen.*`. The English messages are part of the pack bundle, and the Dutch file retains the matching translation for this example |
 | `reference.py` | an independent computation in exact fractions, standard library only: writes `expected/rules`, `expected/calc` and `expected/violations`, and recomputes the seal with its own row hash |
 | `test_subsidy.py` | the generator gives the same bytes; the evaluation date picks the rate; who gains and loses; access per role; the invariant blocks; the credentials are what the port observes, a changed byte is refused, and `attested` rests on its three grounds; two identifiers are one person only by a statement that holds, and without one the join is `unknown` with its reason |
 | `expected/compiled/`, `expected/explained/` | what the compiler makes, and the proofs with snapshots per state (both from CI) |
