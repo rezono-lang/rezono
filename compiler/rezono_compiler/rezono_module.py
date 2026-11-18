@@ -283,14 +283,15 @@ def is_dataset_form(path: Path) -> bool:
     return module is not None and named_dataset(module) is not None
 
 
-def header_errors(module: dict, pack: str) -> Iterator[tuple[str, str, str]]:
+def header_errors(module: dict, pack: str, *, native_rules: bool = False) -> Iterator[tuple[str, str, str]]:
     """Header refusals shared by schema lowering and dataset admission."""
     if module.get("rezono") != "0":
         yield "rezono", f"the `rezono` line says 0, not {module.get('rezono', 'nothing')}", "§3"
     if module["pack"] != pack:
         yield "pack", f"the `pack` line names {module['pack']}, not this pack, {pack}", "§3"
-    for i in range(len(module["use"])):
-        yield f"/use/{i}", "a `use` line is not lowered", "§6"
+    if not native_rules:
+        for i in range(len(module["use"])):
+            yield f"/use/{i}", "a `use` line is not lowered", "§6"
 
 
 
@@ -397,7 +398,9 @@ def lower(pack_dir: Path, d: Declared, form: dict, pack: str, owners: dict[str, 
         n = at if isinstance(at, int) else line.get(at) or line.get("/".join(at.split("/")[:3])) or 1
         errors.append(f"{where}:{n}: {what} ({PAGE} {section})")
 
-    for key, message, section in header_errors(module, pack):
+    native_rules = form["format"] == NATIVE_FORMAT
+    extended_format = form["format"] in (IDENTIFIER_FORMAT, NATIVE_FORMAT)
+    for key, message, section in header_errors(module, pack, native_rules=native_rules):
         place = key if key.startswith("/") else header_line(pack_dir, d, key)
         refuse(place, message, section)
     own = names(form)
@@ -423,19 +426,19 @@ def lower(pack_dir: Path, d: Declared, form: dict, pack: str, owners: dict[str, 
                 continue
         if "kind" in decl:
             kind_fields = {}
-            if form["format"] == IDENTIFIER_FORMAT and "abstract" in decl:
+            if extended_format and "abstract" in decl:
                 abstract = rezono_kind.lower_abstract(decl, at, refuse)
                 if abstract is None:
                     continue
                 decl, kind_fields = abstract
             keys = {}
-            if form["format"] == IDENTIFIER_FORMAT and "keys" in decl:
+            if extended_format and "keys" in decl:
                 decl = decl.copy()
                 if (keys := rezono_key.lower(decl.pop("keys"), f"{at}/keys", refuse)) is None:
                     continue
             lowered_kind = rezono_kind.lower(
                 decl, at, own, owners, declared_names, uses, refuse,
-                extended_format=form["format"] == IDENTIFIER_FORMAT,
+                extended_format=extended_format,
             )
             if lowered_kind is not None:
                 if keys:
@@ -445,6 +448,8 @@ def lower(pack_dir: Path, d: Declared, form: dict, pack: str, owners: dict[str, 
             lowered_enum = rezono_enum.lower(decl, at, refuse)
             if lowered_enum is not None:
                 enums[decl["enum"]] = lowered_enum
+        elif "rule" in decl and native_rules:
+            continue  # The rule assembler needs the checked schema and pinned imports.
         elif "extend" in decl:
             rezono_extend.validate(decl, at, imported, refuse)
         elif "rules" in decl and form["format"] == IDENTIFIER_FORMAT:
@@ -458,7 +463,7 @@ def lower(pack_dir: Path, d: Declared, form: dict, pack: str, owners: dict[str, 
             else:
                 refuse(at, "a fact row is not lowered (no ticket yet)")
         elif "type" in decl and "base" in decl:
-            if form["format"] != IDENTIFIER_FORMAT:
+            if not extended_format:
                 refuse(at, "a scalar alias requires rezono.module/2", "§5.1")
             elif alias := rezono_alias.lower(decl, at, refuse):
                 aliases[decl["type"]] = alias
