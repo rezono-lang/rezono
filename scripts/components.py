@@ -252,6 +252,7 @@ SHARED_READERS = {
     "docs/tutorial.md": ("examples",),
     "decisions/publication-case-pins.md": ("compiler",),
     "decisions/conformance-*.md": ("compiler",),
+    "decisions/language-native-rules.md": ("compiler",),
     "tests/fixtures/neutral/": ("checker", "compiler", "rezono"),
     "tests/conformance/": ("checker", "compiler", "rezono"),
     "packs/": PACK_READERS,
