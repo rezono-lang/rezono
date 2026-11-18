@@ -1,0 +1,112 @@
+{
+  "node_ranges": {
+    "hub": [
+      3221225985,
+      3221225998
+    ],
+    "base": [
+      3221226001,
+      3221226014
+    ],
+    "management": [
+      3221226017,
+      3221226030
+    ],
+    "virtualization": [
+      3221226033,
+      3221226046
+    ],
+    "production": [
+      3221226049,
+      3221226062
+    ],
+    "development": [
+      3221226065,
+      3221226078
+    ],
+    "storage": [
+      3221226081,
+      3221226094
+    ],
+    "build": [
+      3221226097,
+      3221226110
+    ],
+    "edge": [
+      3221226113,
+      3221226126
+    ],
+    "recovery": [
+      3221226129,
+      3221226142
+    ]
+  },
+  "endpoint_addresses": {
+    "agent-base": 3221226001,
+    "agent-build": 3221226097,
+    "agent-development": 3221226033,
+    "agent-edge": 3221226113,
+    "agent-hub": 3221225985,
+    "agent-management": 3221226017,
+    "agent-production": 3221226034,
+    "agent-recovery": 3221226129,
+    "agent-virtualization": 3221226035,
+    "build": 3221226098,
+    "control-base": 3221226002,
+    "control-build": 3221226099,
+    "control-development": 3221226018,
+    "control-edge": 3221226114,
+    "control-hub": 3221225986,
+    "control-management": 3221226019,
+    "control-production": 3221226020,
+    "control-recovery": 3221226130,
+    "control-virtualization": 3221226036,
+    "db-git": 3221226003,
+    "db-idp": 3221226004,
+    "disk-development": 3221226037,
+    "disk-production": 3221226038,
+    "dns": 3221226005,
+    "fleet-hub": 3221225987,
+    "git": 3221226006,
+    "gitops": 3221225988,
+    "idp": 3221226007,
+    "lab": 3221226065,
+    "lb": 3221226115,
+    "reg": 3221226008,
+    "restore": 3221226131,
+    "restore-bad": 3221226132,
+    "shop": 3221226049,
+    "sign": 3221226100,
+    "storage-data": 3221226081,
+    "store": 3221226082,
+    "time": 3221226009,
+    "user": 3221226116,
+    "vault": 3221226010,
+    "workers-base": 3221226011,
+    "workers-build": 3221226101,
+    "workers-development": 3221226039,
+    "workers-edge": 3221226117,
+    "workers-hub": 3221225989,
+    "workers-management": 3221226021,
+    "workers-production": 3221226040,
+    "workers-recovery": 3221226133,
+    "workers-virtualization": 3221226041
+  },
+  "protocols": {
+    "control-plane": "TCP",
+    "database": "TCP",
+    "dns": "UDP",
+    "fleet-apply": "TCP",
+    "fleet-registration": "TCP",
+    "git": "TCP",
+    "identity": "TCP",
+    "ingress": "TCP",
+    "object-storage": "TCP",
+    "persistent-volume": "TCP",
+    "registry": "TCP",
+    "secrets": "TCP",
+    "signing": "TCP",
+    "time": "UDP",
+    "vm-disk": "TCP"
+  }
+}
