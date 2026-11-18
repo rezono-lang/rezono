@@ -1,0 +1,9 @@
+# Two inventory sources name the same database and agree on its recorded attributes.
+database_reference:
+  - {id: a, same_as: [b]}
+  - {id: b}
+database_text_statement:
+  - {id: a-edition, referent: a, slot: edition, value: standard}
+  - {id: b-edition, referent: b, slot: edition, value: standard}
+  - {id: a-engine, referent: a, slot: engine, value: postgres}
+  - {id: b-engine, referent: b, slot: engine, value: postgres}

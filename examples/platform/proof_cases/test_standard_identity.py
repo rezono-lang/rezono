@@ -14,7 +14,6 @@ def publish_locally(pack_dir, destination):
     return publish.publish(epoch, store.FileStore(destination), {"checker": "complete"})
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError, reason="Supply the consistent database identity case in examples/platform/schema/database_identity.yaml, facts/identity.yaml and rules/database_identity.dl. Read decisions/platform-identity-diagnostic.md.")
 def test_standard_identity(tmp_path):
     imported("std-identity")
     _, baseline = engine()

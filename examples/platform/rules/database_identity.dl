@@ -1,0 +1,3 @@
+// Send each source statement to the imported identity theory.
+stated_text(r, slot, value) :- database_text_statement__referent(claim, r),
+    database_text_statement__slot(claim, slot), database_text_statement__value(claim, value).
