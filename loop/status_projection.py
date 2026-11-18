@@ -25,6 +25,8 @@ class StatusProjection:
     pack_sha256: str
     observations: tuple[dict[str, str | int], ...]
     proofs: tuple[dict, ...]
+    latest_at: str = ""
+    conflicts: frozenset[tuple[str, str]] = frozenset()
 
 
 @cache
@@ -68,8 +70,13 @@ def project_status(step: Mapping[str, str], evidence: Iterable[Observation]) -> 
         witnesses = explain.Explainer(program, rows, batch.witnesses(connection, program))
     snapshot = canonical_sha256({"pack_sha256": pack_sha256, "observations": observations})
     proofs = tuple(witnesses.proof(RELATION, row, snapshot) for row in selected)
+    (*_, latest), = rows["status_latest"]
+    latest_rank = int(latest)
+    latest_at = next(cast(str, row["at"]) for row in observations if row["event_time"] == latest_rank)
+    conflicts = (frozenset((state, reason) for *_, state, reason in rows["status_contender"])
+                 if rows["status_conflict"] else frozenset())
     return StatusProjection(cast(StatusState, selected[0][-2]), frozenset(row[-1] for row in selected),
-                            pack_sha256, observations, proofs)
+                            pack_sha256, observations, proofs, latest_at, conflicts)
 
 
 def project_with_reasons(step: Mapping[str, str], evidence: Iterable[Observation]) -> tuple[StatusState, set[str]]:

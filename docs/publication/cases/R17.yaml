@@ -1,0 +1,37 @@
+id: R17
+class: valid
+status: settled
+schema:
+  from: fixture.schema.json
+  merge:
+    enums:
+      ReadingModes:
+        world: open
+        values: [baseline]
+    types:
+      ReadingMode:
+        of: Enum
+        enum: ReadingModes
+    kinds:
+      Meter:
+        world: closed
+        id:
+          type: Text
+        slots:
+          modes:
+            card: '+'
+            type: ReadingMode
+            states: [known]
+form: row
+input:
+  $kind: Meter
+  $id: meter-example
+  modes: [baseline, calibration]
+expect:
+  accept: true
+note: >-
+  The open enumeration declares baseline and permits the new calibration value.
+  RDF represents the two modes as separate literals of datatype ReadingMode.
+  SHACL accepts both and the row reader reconstructs the same two-member set.
+sources:
+- decisions/language-enums.md
