@@ -86,7 +86,6 @@ export const kind = {
   ${key.grammar}
   ${pathEquation.grammar}`,
 	actions: {
-		...pathEquation.actions,
 		KindLine(modifier, _k, t, world) {
 			const decl: Line = { line: 'kind', kind: t.sourceString };
 			const kindModifier = opt(modifier);
@@ -98,7 +97,8 @@ export const kind = {
 		ExtendLine: (_k, t) => named(t, { line: 'extend', extend: t.sourceString }),
 		AppliesLine: (_k, axis, _c, n) => named(n, { line: 'applies', axis: axis.sourceString, slot: n.sourceString }),
 		SealedLine: (_k, _at, _c, n) => ({ line: 'sealed', slot: n.sourceString }),
-		...key.actions
+		...key.actions,
+		...pathEquation.actions
 	},
 	declarations: {
 		kind: declaration<KindDecl>('kind', readKind, printKind),
