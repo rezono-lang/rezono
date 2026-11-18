@@ -116,7 +116,8 @@ jobs:
         run: bash loop/cluster/prepare-admission.sh
       - name: Record the fixture network pairs
         if: >-
-          contains(fromJSON(inputs.tasks || '[]'), 'loop/tests/test_live_network_pairs.py--test_live_network_pairs')
+          inputs.tasks == ''
+          || contains(fromJSON(inputs.tasks || '[]'), 'loop/tests/test_live_network_pairs.py--test_live_network_pairs')
         shell: bash
         run: |
           set -euo pipefail
