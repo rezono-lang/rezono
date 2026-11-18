@@ -6,8 +6,6 @@ import json
 import pytest
 
 
-@pytest.mark.xfail(strict=True, raises=ImportError,
-                   reason="Implement indexed PROV activity lines in publication/rezono_publication/prov_index.py; read decisions/standard-export-index.md.")
 def test_proof_activity_lines_bind_their_own_conclusions():
     from rezono_publication.prov_index import indexed_prov
 

@@ -4,6 +4,8 @@ A municipal energy-saving subsidy scheme: households apply with quotes for a hea
 
 Everything here is synthetic. There is no such municipality, regulation, council decision, household, issuer or person. The seven applications in `facts/applications.yaml` are written by hand; the other 233, and the payment ledger, come from `generate.py`.
 
+The home states the scheme's evaluation day, which stays the same in the main state and every published scenario.
+
 ## Seven questions
 
 The pack exists to answer these. Nothing is in it that none of them needs.
