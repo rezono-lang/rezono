@@ -110,15 +110,6 @@ def _diagnostics(link, directory, forms, code):
     return found
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason=(
-        "Read decisions/language-native-rules.md (PR #431). Implement compiler/rezono_compiler/"
-        "native_rule_signatures.py. Link authored module/3 trees against the pinned schema closure. "
-        "No parser, form reader, pack integration or rule lowering prerequisite."
-    ),
-)
 def test_native_rule_signatures(tmp_path):
     """link(pack_dir, forms) accepts forms keyed by (pack name, relative Rezono source path).
 
