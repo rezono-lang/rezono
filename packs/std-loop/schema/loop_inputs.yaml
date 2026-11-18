@@ -37,3 +37,18 @@ classes:
       state: {required: true}
       value: {required: true}
       reason: {required: true}
+  LoopRequirement:
+    description: A prerequisite token explicitly required by a step in a run.
+    attributes:
+      id: {identifier: true}
+      run: {required: true}
+      step: {range: LoopStep, required: true}
+      token: {required: true}
+      reason: {required: true}
+  LoopRefusal:
+    description: A recorded terminal refusal to perform a step in a run.
+    attributes:
+      id: {identifier: true}
+      run: {required: true}
+      step: {range: LoopStep, required: true}
+      reason: {required: true}

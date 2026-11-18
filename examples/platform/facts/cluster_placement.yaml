@@ -1,6 +1,6 @@
 zone:
-  - {id: infrastructure}
-  - {id: build}
+  - {id: infrastructure, outside: 'no', entry_boundary: 'no', isolated_recovery: 'no', workload: 'no'}
+  - {id: build, outside: 'no', entry_boundary: 'no', isolated_recovery: 'no', workload: 'no'}
 
 cluster_placement_policy:
   - {id: hub, role: hub, zone: management}

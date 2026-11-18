@@ -19,7 +19,7 @@ import yaml
 from rezono_admission import Schema
 from rezono_admission import rows as admit
 
-from . import seal, spans, types
+from . import rezono_module, seal, spans, types
 from .diagnostics import Diagnosed, Diagnostic
 from .pack import Pack, snake
 
@@ -28,6 +28,7 @@ PLACE = re.compile(r"([^.\[\]]+)|\[([0-9]+)\]")  # admission's place: names, and
 PYTHON_TYPES = {"VARCHAR": str, "BIGINT": int, "BOOLEAN": bool, "DATE": datetime.date}
 SQL_TYPES = {"text": "VARCHAR", "enum": "VARCHAR", "integer": "BIGINT", "boolean": "BOOLEAN", "date": "DATE"}
 FORMAT = "rezono.schema-bundle/1"
+DATASET_FORMAT = "rezono.module/2"
 # A schema without kinds: what admission refuses of a document against it, beside its unknown kinds, is the
 # document's own shape (sections).
 SHAPE = Schema({"format": FORMAT, "pack": {"id": ""}, "kinds": []})
@@ -68,7 +69,7 @@ def document(path: Path, pack: Pack | None = None) -> dict[str, list]:
     A null document or section is refused. Use {} for an empty document or [] for an empty relation.
     """
     data = yaml.safe_load(path.read_text(encoding="utf-8"))
-    if pack is not None and isinstance(data, dict) and data.get("format") == "rezono.module/2":
+    if pack is not None and isinstance(data, dict) and data.get("format") == DATASET_FORMAT:
         data = scalar_dataset(schema(pack), data)
     return sections(data)
 
@@ -118,10 +119,14 @@ def load(pack: Pack, path: str | Path) -> dict[str, list[tuple]]:
 
 def scalar_dataset(judged: Schema, form: dict) -> dict[str, list]:
     """Decode a named module dataset into the records used by ordinary admission."""
-    module = form.get("module")
-    declarations = module.get("decls") if isinstance(module, dict) else None
-    if (not isinstance(declarations, list) or len(declarations) != 1
-            or not isinstance(declarations[0], dict)):
+    module = rezono_module.module_body(form, DATASET_FORMAT)
+    if module is None:
+        raise LoadError(f"expected {DATASET_FORMAT} with a module header and spans")
+    problems = [message for _, message, _ in rezono_module.header_errors(module, judged.pack)]
+    if problems:
+        raise LoadError("\n".join(problems))
+    declarations = module["decls"]
+    if len(declarations) != 1 or not isinstance(declarations[0], dict):
         raise LoadError("expected one named dataset in the module form")
     dataset = declarations[0]
     tables = dataset.get("decls")
