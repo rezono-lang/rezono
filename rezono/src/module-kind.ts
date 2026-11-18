@@ -8,6 +8,7 @@ export interface KindDecl extends Metadata {
 	kind: string;
 	embedded?: true;
 	abstract?: true;
+	parent?: string;
 	world?: World;
 	applies?: { axis: 'at' | 'during' | 'in'; slot: string };
 	sealed?: string;
@@ -58,7 +59,8 @@ function readExtension(line: Logical, build: Build): ExtendDecl {
 }
 
 function printKind(d: KindDecl): string[] {
-	return block(`${d.embedded ? 'embedded ' : d.abstract ? 'abstract ' : ''}kind ${d.kind}${printWorld(d.world)}`, [
+	const parent = d.parent === undefined ? '' : ` is ${d.parent}`;
+	return block(`${d.embedded ? 'embedded ' : d.abstract ? 'abstract ' : ''}kind ${d.kind}${parent}${printWorld(d.world)}`, [
 		...printMetadata(d),
 		...(d.applies ? [`applies ${d.applies.axis}: ${d.applies.slot}`] : []),
 		...(d.sealed !== undefined ? [`sealed at: ${d.sealed}`] : []),
@@ -71,17 +73,18 @@ function printKind(d: KindDecl): string[] {
 export const kind = {
 	lineRules: ['KindLine', 'ExtendLine', 'AppliesLine', 'SealedLine', ...key.lineRules],
 	grammar: String.raw`
-  KindLine = (kw<"embedded"> | kw<"abstract">)? kw<"kind"> typeName World?
+  KindLine = (kw<"embedded"> | kw<"abstract">)? kw<"kind"> typeName (is typeName)? World?
   ExtendLine = kw<"extend"> typeName
   AppliesLine = kw<"applies"> (at | during | in) ":" name
   SealedLine = kw<"sealed"> at ":" name${key.grammar}
   `,
 	actions: {
-		KindLine(modifier, _k, t, world) {
+		KindLine(modifier, _k, t, _is, parent, world) {
 			const decl: Line = { line: 'kind', kind: t.sourceString };
 			const kindModifier = opt(modifier);
 			if (kindModifier === 'embedded') decl.embedded = true;
 			if (kindModifier === 'abstract') decl.abstract = true;
+			if (parent.numChildren) decl.parent = opt(parent);
 			if (world.numChildren) decl.world = world.child(0).decl();
 			return named(t, decl);
 		},
