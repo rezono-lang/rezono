@@ -51,7 +51,7 @@ def records(pack: Pack, path: Path) -> list[tuple[str, object, dict]]:
     """(kind, id or None, record) for every record of a fact file, in file order, duplicates included."""
     out = []
     try:
-        data = facts.document(path)
+        data = facts.document(path, pack)
     except facts.LoadError as e:
         raise facts.LoadError(f"{path.name}: {e}") from None
     if path.parent.name == "facts" and path.with_suffix(".sources.yaml").exists():

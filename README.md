@@ -20,6 +20,20 @@ jq -e '.checks[] | select(.name == "rezono:proofs" and .status == "green" and .v
 
 The final command prints the recorded proof check. Open the same manifest to see the snapshot hashes and witness references. Explore other [examples](examples/) or read the [language guide](rezono/README.md).
 
+## Compile an authored Rezono pack
+
+The released Python wheel includes the module reader. Put Node 24 on PATH or set `REZONO_NODE` to its
+executable, then run `rezono compile <pack> <output>`. YAML packs and older form-only modules continue
+to run with Python alone.
+
+To include the same reader in a standalone compiler wheel, run these commands from the checkout in
+the same shell.
+
+1. Set aside a working directory with `work=$(mktemp -d)`.
+2. Install the locked reader dependencies with `npm ci --prefix rezono --omit=dev --ignore-scripts`.
+3. Prepare the reader with `node scripts/release-language.mjs "$work/language" "$work/module-reader"`.
+4. Build the wheel with `REZONO_PREPARED_READER="$work/module-reader" python -m pip wheel --no-deps --wheel-dir "$work" ./compiler`.
+
 ## Licences and contributing
 
 Code, tests and build scripts use Apache-2.0. Schemas and theories use CC0-1.0. Documentation and example content use CC-BY-4.0. See [LICENSE](LICENSE), the [licence texts](LICENSES/) and the [path-by-path attribution notice](NOTICE).
