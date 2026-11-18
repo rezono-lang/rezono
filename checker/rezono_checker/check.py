@@ -46,10 +46,15 @@ def check(proof: dict, manifest: dict, rules: dict, read_bytes, role: str | None
 
     rows, groups = _rows(snapshots, findings), {}
     proof = {**proof, "witnesses": _well_formed(proof.get("witnesses", []), findings)}
+    domains = set()
     for i, w in enumerate(proof["witnesses"]):
         if w is not None:
             _check_witness(i, w, rules, rows, findings, groups)
+            if (rule := rules.get(w["rule_id"])) is not None:
+                domains.update(aggregate.atom.relation for aggregate in rule.aggregates)
     _check_graph(proof, rules, findings)
+    if domains and not any(f["reason"] not in WARNINGS for f in findings):
+        findings.extend(closure.check(rules, lambda relation: rows(relation, None), domains=domains))
     return _report(proof, role, readable, findings)
 
 
