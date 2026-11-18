@@ -221,30 +221,47 @@ until identity=$(identify_launcher); do
     if (( SECONDS >= deadline )); then diagnose 1; fi
     sleep 2
 done
-read -r pod pod_uid <<< "$identity"
+read -r pod pod_uid compute_id <<< "$identity"
 observe "launcher=$pod launcher_uid=$pod_uid"
-stage=live-kvm-vcpu
-control exec "$pod" -c compute -- sh -ec "$(cat "$sources/../flatcar/kvm-vcpu.sh")"
-stage=vcpu-launcher-identity
-test "$(identify_launcher)" = "$identity"
-observe "guest_uid=$uid launcher_uid=$pod_uid kvm_vcpu=true"
-stage=guest-console
-# KubeVirt uses the VMI firmware UUID as the NoCloud instance-id.
-firmware_uuid=$(jq -er '.spec.domain.firmware.uuid | select(test("^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$"))' vmi.json)
+stage=guest-observations
+if ! vcpu=$(python3 "$sources/../flatcar/runtime.py" default_host-probe "$uid" \
+    docker exec "$name" k0s kubectl --request-timeout=10s exec "$pod" -c compute --); then
+    vcpu="kvm_vcpu=unproven vcpu_reason=reader_failed"
+fi
+
+# The console remains independently observable when libvirt cannot prove vCPU progress.
+console=unproven
+reason=marker_absent
 reads=0
 lines=0
 matches=0
-for ((attempt=0; attempt<48; attempt++)); do
-    if counts=$(control logs "$pod" -c guest-console-log 2>/dev/null |
-        LC_ALL=C awk -v expected="REZONO-GUEST-READY $firmware_uuid" -f "$sources/../flatcar/serial.awk"); then
-        reads=$((reads + 1))
-        read -r lines matches <<< "$counts"
-        if (( matches > 0 )); then break; fi
-    fi
-    sleep 2
-done
-observe "console_reads=$reads console_lines=$lines guest_marker_matches=$matches"
-(( matches > 0 ))
-stage=final-launcher-identity
-test "$(identify_launcher)" = "$identity"
-observe "guest_uid=$uid launcher_uid=$pod_uid guest_console_ready=true kvm_vcpu=true"
+if ! current=$(identify_launcher) || [[ $current != "$identity" ]]; then
+    reason=launcher_identity_unconfirmed
+    vcpu="kvm_vcpu=unproven vcpu_reason=$reason"
+elif ! firmware_uuid=$(jq -er '.spec.domain.firmware.uuid |
+    select(type == "string" and test("^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$"))' vmi.json); then
+    reason=firmware_identity_unavailable
+else
+    for ((attempt=0; attempt<48; attempt++)); do
+        if counts=$(control logs "$pod" -c guest-console-log 2>/dev/null |
+            LC_ALL=C awk -v expected="REZONO-GUEST-READY $firmware_uuid" -f "$sources/../flatcar/serial.awk"); then
+            reads=$((reads + 1))
+            read -r lines matches <<< "$counts"
+            if (( matches > 0 )); then
+                console=proven
+                reason=marker_matched
+                break
+            fi
+        fi
+        sleep 2
+    done
+    if (( reads == 0 )); then reason=console_unreadable; fi
+fi
+if ! current=$(identify_launcher) || [[ $current != "$identity" ]]; then
+    reason=launcher_identity_unconfirmed
+    console=unproven
+    vcpu="kvm_vcpu=unproven vcpu_reason=$reason"
+fi
+observe "guest_uid=$uid launcher_uid=$pod_uid $vcpu"
+observe "guest_console=$console console_reason=$reason console_reads=$reads console_lines=$lines guest_marker_matches=$matches"
+[[ $vcpu == "kvm_vcpu=proven "* && $console == proven ]]
