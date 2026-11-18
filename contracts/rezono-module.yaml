@@ -150,6 +150,7 @@ classes:
     slot_usage:
       decls:
         none_of:
+          - {range: KindDeclWithKeys, inlined: true}
           - {range: RulesDecl, inlined: true}
 
   ModuleWithRules:
@@ -168,6 +169,7 @@ classes:
           - range: ReasonDecl
           - range: RoundingDecl
           - range: ParamDecl
+          - range: KindDeclWithKeys
           - range: KindDecl
           - range: ExtendDecl
           - range: CheckDecl
@@ -232,6 +234,29 @@ classes:
       sealed: {range: Name, description: "The slot of `sealed at`. It has no place of its own: its kind's stands for it."}
       slots: {required: true, range: Slot, multivalued: true, inlined_as_list: true}
       derived: {required: true, range: Derived, multivalued: true, inlined_as_list: true}
+
+  KindDeclWithKeys:
+    description: A kind declaration with named keys, in the extended module format.
+    is_a: KindDecl
+    attributes:
+      keys:
+        required: true
+        range: CompositeKey
+        multivalued: true
+        inlined_as_list: true
+        minimum_cardinality: 1
+        list_elements_unique: true
+
+  CompositeKey:
+    description: A named unique key with its slots in the order written (decisions/language-keys.md).
+    attributes:
+      unique: {identifier: true, required: true, range: Name}
+      slots:
+        required: true
+        range: Name
+        multivalued: true
+        minimum_cardinality: 1
+        list_elements_unique: true
 
   Applies:
     attributes:
