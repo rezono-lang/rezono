@@ -24,7 +24,7 @@ bash contracts/gen-types.sh
 
 Use the GitHub sign-in already configured for this checkout when creating the pull request or enabling auto-merge. If the default CLI login is unavailable, use the connected GitHub integration or the configured credential helper without displaying or storing credentials.
 
-Fetch origin/main before removing the mark. Open the PR with `gh pr create --base main` and request automatic merging with `gh pr merge --auto --squash --author-email 222310762+vdo89@users.noreply.github.com`. If GitHub rejects an explicit author address on a pending pull request, use the verified account setting and retry with `gh pr merge --auto --squash`.
+Fetch origin/main before removing the mark. Open the pull request with `gh pr create --base main`. Use its number in `gh pr merge <number> --auto`. After the required checks pass, GitHub enqueues the pull request, tests the combined candidate against the latest main and squash-merges the passing candidate.
 
 ## Steps
 
