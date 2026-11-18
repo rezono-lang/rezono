@@ -1,0 +1,50 @@
+id: https://rezono.org/examples/run/invoice-drift
+name: invoice_drift
+in_language: en
+imports:
+  - linkml:types
+default_range: string
+annotations:
+  layer: facts
+
+types:
+  Digest:
+    typeof: string
+    pattern: '^[0-9a-f]{64}$'
+  CurrencyCode:
+    typeof: string
+    pattern: '^[A-Z]{3}$'
+
+enums:
+  LineRoundingMode:
+    permissible_values:
+      half_even:
+      half_up:
+
+classes:
+  ExpectedLine:
+    description: A priced item with a minor-unit amount derived using the verified rounding term.
+    attributes:
+      id: {identifier: true}
+      plan_hash: {range: Digest, required: true}
+      item: {required: true}
+      currency: {range: CurrencyCode, required: true}
+      minor: {range: integer, required: true}
+      rounding_sha256: {range: Digest, required: true}
+  InvoiceLine:
+    description: An observed billed amount with its recorded plan tag when present.
+    attributes:
+      id: {identifier: true}
+      plan_hash: {range: Digest}
+      item: {required: true}
+      currency: {range: CurrencyCode, required: true}
+      minor: {range: integer, required: true}
+  Rounding:
+    description: An observed billing term identified by its verified content digest.
+    attributes:
+      id: {identifier: true}
+      source_url: {required: true}
+      currency: {range: CurrencyCode, required: true}
+      boundary: {required: true}
+      mode: {range: LineRoundingMode, required: true}
+      minor_per_unit: {range: integer, minimum_value: 1, required: true}

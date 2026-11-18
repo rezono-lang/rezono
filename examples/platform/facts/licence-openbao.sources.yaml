@@ -1,0 +1,8 @@
+records:
+  - of: {kind: vendor_licence_notice, id: openbao-2.3.0}
+    kind: tool
+    name: Release notice inspection
+    revision: "2.3.0"
+    position: "L1 (first nonempty line, including its original terminator)"
+    url: https://raw.githubusercontent.com/openbao/openbao/v2.3.0/LICENSE
+    fragment_sha256: "ec7c973888963504ea1f7bab6115b41d45d809916d6225ae6a810f4b27492c92"

@@ -1,0 +1,48 @@
+.decl managed_health_reading(step: symbol, status: symbol, probe: symbol)
+managed_health_reading(step, status, probe) :-
+    health_step__service(step, service), health_probe__service(probe, service),
+    health_step__run(step, run), health_probe__run(probe, run),
+    health_step__token(step, token), health_probe__token(probe, token),
+    health_probe__status(probe, status), health_probe_status(status).
+
+.decl managed_health_observed(step: symbol)
+managed_health_observed(step) :- managed_health_reading(step, _, _).
+
+.decl health_probe_dated(probe: symbol)
+health_probe_dated(probe) :- health_probe__event_time(probe, _).
+
+.decl managed_health_undated(step: symbol)
+managed_health_undated(step) :- managed_health_reading(step, _, probe), !health_probe_dated(probe).
+
+.decl managed_health_timed(step: symbol, status: symbol, probe: symbol, time: number)
+managed_health_timed(step, status, probe, time) :-
+    managed_health_reading(step, status, probe), health_probe__event_time(probe, time).
+
+.decl managed_health_latest(step: symbol, time: number)
+managed_health_latest(step, time) :- managed_health_timed(step, _, _, _),
+    time = max observed : { managed_health_timed(step, _, _, observed) }.
+
+.decl managed_health_at_latest(step: symbol, status: symbol, probe: symbol)
+managed_health_at_latest(step, status, probe) :-
+    managed_health_latest(step, time), managed_health_timed(step, status, probe, time).
+
+.decl managed_health_disputed(step: symbol)
+managed_health_disputed(step) :-
+    managed_health_at_latest(step, status, _), managed_health_at_latest(step, other, _), status != other.
+
+.decl managed_health(step: symbol, status: symbol, evidence: symbol)
+managed_health(step, status, probe) :-
+    managed_health_at_latest(step, status, probe), !managed_health_disputed(step), !managed_health_undated(step).
+managed_health(step, "unknown", step) :- managed_health_disputed(step).
+managed_health(step, "unknown", step) :- managed_health_undated(step).
+managed_health(step, "unknown", step) :- health_step(step), !managed_health_observed(step).
+
+.decl managed_health_complete(step: symbol, probe: symbol)
+managed_health_complete(step, probe) :- managed_health(step, "healthy", probe).
+
+.decl managed_health_finding(step: symbol, probe: symbol)
+managed_health_finding(step, probe) :- managed_health(step, "unhealthy", probe).
+
+.output managed_health
+.output managed_health_complete
+.output managed_health_finding

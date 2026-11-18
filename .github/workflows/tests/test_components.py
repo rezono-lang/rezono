@@ -9,6 +9,7 @@ import sys
 import tempfile
 import unittest
 from unittest.mock import patch
+from xml.etree import ElementTree
 
 ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / "scripts"))
@@ -69,6 +70,72 @@ class InventoryTests(unittest.TestCase):
         self.assertCountEqual((node for group in groups for node in group), items)
         self.assertEqual(ci.weighted_workers(items, 1, {}, 1), [items])
 
+    def test_publication_fixture_is_built_once_and_read_from_isolated_stores(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            for rel in ("scripts/components.py", ".github/workflows/publication_fixture.py"):
+                (root / rel).parent.mkdir(parents=True)
+                shutil.copyfile(ROOT / rel, root / rel)
+            module = root / ci.FORMS_MODULE
+            module.parent.mkdir(parents=True)
+            module.write_text(
+                "from pathlib import Path\nimport pytest\nfrom rezono_publisher.store import FileStore\n"
+                "HERE = Path(__file__).parent\n"
+                "@pytest.fixture(scope='module')\n"
+                "def world(tmp_path_factory):\n"
+                "    if (HERE / 'fail').exists(): raise RuntimeError('publication failed')\n"
+                "    with (HERE / 'builds').open('x') as built: built.write('one')\n"
+                "    store = FileStore(tmp_path_factory.mktemp('store'), bucket='fixture')\n"
+                "    store.put_new('objects/seed', b'fresh')\n"
+                "    return store, {'source': str(store.root), 'nested': [3, None]}\n"
+                "def read(world, value):\n"
+                "    store, manifest = world\n"
+                "    assert store.get('objects/seed') == b'fresh' and store.bucket == 'fixture'\n"
+                "    assert manifest['nested'] == [3, None]\n"
+                "    store.put_new('private', value)\n"
+                "    return str(store.root) == manifest['source']\n"
+                "def test_a(world): (HERE / 'a-source').write_text(str(read(world, b'first')))\n"
+                "def test_b(world): (HERE / 'b-source').write_text(str(read(world, b'second')))\n", encoding="utf-8")
+            env = dict(os.environ, PYTEST_DISABLE_PLUGIN_AUTOLOAD="1", PYTEST_PLUGINS="rezono_cluster",
+                       PYTHONPATH=os.pathsep.join(map(str, (ROOT / "edge/publisher", ROOT / "loop"))))
+            plans, reports, receipts = [root / name for name in ("plans", "reports", "receipts")]
+            launcher = ("import sys; sys.path.insert(0, 'scripts'); import components\n"
+                        "from unittest.mock import patch\n"
+                        "with patch.object(components, 'runner_cores', return_value=4): "
+                        "raise SystemExit(components.main())")
+            def run(*args):
+                return subprocess.run([sys.executable, "-c", launcher, *map(str, args)],
+                                      env=env, cwd=root, capture_output=True, text=True, timeout=35)
+            collected = run("collect-component", "examples", plans)
+            self.assertEqual(collected.returncode, 0, collected.stdout + collected.stderr)
+            def execute():
+                return run("run-shard", "examples", 0, 1, plans, reports, receipts)
+            result = execute()
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertEqual((module.parent / "builds").read_text(), "one")
+            self.assertEqual(len(list(receipts.rglob("*.jsonl"))), 4)
+            self.assertIn("Current publication fixture producer:", result.stdout)
+            self.assertIn("Current publication fixture reader:", result.stdout)
+            self.assertEqual((module.parent / "a-source").read_text(), "True")
+            self.assertEqual((module.parent / "b-source").read_text(), "False")
+            original = (plans / "examples/items.json").read_text(encoding="utf-8")
+            manifest = json.loads(original)
+            try:
+                for selection in (manifest["items"][::-1], manifest["items"][1:]):
+                    (module.parent / "builds").unlink()
+                    (plans / "examples/items.json").write_text(
+                        json.dumps(dict(manifest, items=selection)), encoding="utf-8")
+                    selected = execute()
+                    self.assertEqual(selected.returncode, 0, selected.stdout + selected.stderr)
+                    self.assertEqual((module.parent / "b-source").read_text(), str(len(selection) == 1))
+                    self.assertEqual((module.parent / "builds").read_text(), "one")
+            finally:
+                (plans / "examples/items.json").write_text(original, encoding="utf-8")
+            (module.parent / "fail").touch()
+            failed = execute()
+            self.assertNotEqual(failed.returncode, 0)
+            self.assertIn("producer finished without a fresh publication fixture", failed.stdout + failed.stderr)
+
     def test_parametrization_skips_and_execution_evidence(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -90,8 +157,18 @@ class InventoryTests(unittest.TestCase):
                 "@pytest.mark.xfail(strict=True)\ndef test_expected(): assert False\n", encoding="utf-8")
             (component / "test_optional.py").write_text(
                 "import pytest\npytest.skip('optional module', allow_module_level=True)\n", encoding="utf-8")
+            (component / "test_cluster.py").write_text(
+                "import pytest\n"
+                "@pytest.fixture\ndef live_resource(): raise RuntimeError('live fixture executed')\n"
+                "@pytest.mark.cluster\n"
+                "@pytest.mark.xfail(strict=True)\n"
+                "class TestCluster:\n    def test_live(self, live_resource): pass\n"
+                "@pytest.mark.parametrize('live', [pytest.param(True, marks=pytest.mark.cluster, id='live'), "
+                "pytest.param(False, id='offline')])\n"
+                "def test_mode(live): assert not live\n", encoding="utf-8")
             matrix = [{"kind": "python", "folder": "compiler", "shard": n, "total": 2} for n in range(2)]
-            env = dict(os.environ, PYTEST_DISABLE_PLUGIN_AUTOLOAD="1", PYTHON_MATRIX=json.dumps(matrix))
+            env = dict(os.environ, PYTEST_DISABLE_PLUGIN_AUTOLOAD="1", PYTEST_PLUGINS="rezono_cluster",
+                       PYTHONPATH=str(ROOT / "loop"), PYTHON_MATRIX=json.dumps(matrix))
             def run(*args):
                 return subprocess.run([sys.executable, str(script), *map(str, args)], cwd=root, env=env,
                                       stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
@@ -103,11 +180,28 @@ class InventoryTests(unittest.TestCase):
             good("inventory", plans)
             self.assertIn('skipped', (plans / "compiler/collection.xml").read_text(encoding="utf-8"))
             inventory = json.loads((plans / "compiler/items.json").read_text(encoding="utf-8"))
-            self.assertEqual(14, len(inventory["items"]))
+            self.assertEqual(17, len(inventory["items"]))
+            self.assertEqual(inventory["cluster"], ["compiler/test_cluster.py::TestCluster::test_live",
+                                                    "compiler/test_cluster.py::test_mode[live]"])
             for shard in range(2):
                 good("run-shard", "compiler", shard, 2, plans, reports / str(shard), receipts)
             result = good("verify-execution", plans, receipts)
-            self.assertIn("inventoried 14, started 14, finished 14", result)
+            self.assertIn("inventoried 17, started 17, finished 17, disposable cluster required 2", result)
+            cases = {case.get("name"): case for report in reports.rglob("pytest-*.xml")
+                     for case in ElementTree.parse(report).iter("testcase")}
+            for name in ("test_live", "test_mode[live]"):
+                skip = cases[name].find("skipped")
+                self.assertEqual(skip.get("type"), "pytest.skip")
+                self.assertEqual(skip.get("message"), "Requires the dedicated disposable cluster")
+            self.assertIsNone(cases["test_mode[offline]"].find("skipped"))
+
+            skip_journal = next(p for p in (receipts / "compiler").glob("*.jsonl")
+                                if '"cluster-skip"' in p.read_text(encoding="utf-8"))
+            intact = skip_journal.read_text(encoding="utf-8")
+            skip_journal.write_text("".join(row for row in intact.splitlines(keepends=True)
+                                            if json.loads(row)[0] != "cluster-skip"), encoding="utf-8")
+            self.assertNotEqual(run("verify-execution", plans, receipts).returncode, 0)
+            skip_journal.write_text(intact, encoding="utf-8")
 
             journal = next(p for p in (receipts / "compiler").glob("*.jsonl") if p.stat().st_size)
             original = journal.read_text(encoding="utf-8")
@@ -123,11 +217,19 @@ class InventoryTests(unittest.TestCase):
             self.assertNotEqual(run("verify-execution", plans, receipts).returncode, 0)
 
             # A failing assertion is still observed, and always fails the shard.
-            (component / "test_states.py").write_text("def test_failure(): assert False\n", encoding="utf-8")
+            (component / "test_states.py").write_text(
+                "def test_failure(): assert False\ndef test_fixture(missing_fixture): pass\n", encoding="utf-8")
             good("inventory", plans)
             results = [run("run-shard", "compiler", n, 2, plans, reports / str(n), receipts) for n in range(2)]
             self.assertEqual(sorted(r.returncode for r in results), [0, 1])
-            self.assertIn("inventoried 13, started 13, finished 13", good("verify-execution", plans, receipts))
+            self.assertIn("fixture 'missing_fixture' not found", "".join(result.stdout for result in results))
+            self.assertIn("inventoried 17, started 17, finished 17", good("verify-execution", plans, receipts))
+
+            # An ambient or plugin filter cannot quietly shrink the independent inventory.
+            env["PYTEST_ADDOPTS"] = "-k test_mode"
+            filtered = run("inventory", plans)
+            self.assertNotEqual(filtered.returncode, 0)
+            self.assertIn("tests deselected during full inventory", filtered.stdout)
 
 
 if __name__ == "__main__":

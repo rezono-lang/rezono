@@ -1,0 +1,8 @@
+vendor_licence_notice:
+  - id: ceph-19.2.0
+    product: ceph
+    version: 19.2.0
+    scope: per-path-notices
+    declaration: See COPYING for path-specific licences and alternatives
+    source_url: 'https://raw.githubusercontent.com/ceph/ceph/v19.2.0/COPYING'
+    source_sha256: b3b44316a3230ed0193d522bc15d8ce3fb310ce777f7b86efdb1e5bd89109a13

@@ -5,7 +5,6 @@ import pytest
 from cluster_scenarios import CLUSTER, command, component, plugin_environment
 
 
-@pytest.mark.xfail(strict=True, reason="Read decisions/shared-disposable-cluster.md. Waits for test_cluster_marker. Implement loop/cluster/select_tests.py and discover test components across the supplied root. Preserve collection errors and reject globally empty selections.")
 def test_cluster_selection(tmp_path):
     a = component(tmp_path, "alpha", """import pytest
 pytestmark = pytest.mark.cluster

@@ -37,7 +37,6 @@ def test_invoice_evidence_reference():
     assert sum(half_up) == sum(observed) and [a - b for a, b in zip(observed, half_up)] == [1, -1]
 
 
-@pytest.mark.xfail(strict=True, reason="Read decisions/run-invoice-evidence.md. Implement run/invoice_compare.py and run/packs/invoice-drift. Derive witnessed amount differences and unbound invoice entries.")
 def test_invoice_evidence():
     normalize = implementation("invoice_compare.py", "invoice_facts")
 

@@ -10,12 +10,16 @@ from request_preview import relation_rows
 
 ROOT = Path(__file__).resolve().parent
 DAY = date(2026, 3, 1).toordinal()
+MARCH = (0, 31)
+JANUARY = (-59, -28)
 # An upstream observation, an in-month resize and disappearance, and an open interval.
 OBS = [("a", "lake", "ivy", -3, 2), ("b", "lake", "ivy", 3, 5),
        ("c", "lake", "ivy", 7, 0), ("d", "ridge", "larch", 26, 3)]
 
 
-def shares(events, lo, hi, cost):
+def shares(events, lo, hi, cost, *, coverage=()):
+    if not any(start <= lo and hi <= end for start, end in coverage):
+        return None
     core_days = {}
     for day in range(lo, hi):
         latest = {}
@@ -32,17 +36,37 @@ def shares(events, lo, hi, cost):
 
 
 def test_daily_oracle_examples():
-    assert shares(OBS, 0, 31, 107) == {"ivy": (26, Fraction(2782, 41)), "larch": (15, Fraction(1605, 41))}
-    assert shares(OBS, -59, -28, 103) == {"platform": (0, Fraction(103))}
+    assert shares(OBS, *MARCH, 107, coverage=(MARCH,)) == {
+        "ivy": (26, Fraction(2782, 41)), "larch": (15, Fraction(1605, 41)),
+    }
     resized = [(*row[:4], 4 if row[0] == "b" else row[4]) for row in OBS]
-    assert shares(resized, 0, 31, 107)["ivy"] == (22, Fraction(2354, 37))
+    assert shares(resized, *MARCH, 107, coverage=(MARCH,))["ivy"] == (22, Fraction(2354, 37))
+
+
+def test_daily_oracle_charges_the_platform_for_a_proven_empty_month():
+    assert shares(OBS, *JANUARY, 103, coverage=(JANUARY, MARCH)) == {"platform": (0, Fraction(103))}
+
+
+def test_daily_oracle_leaves_unmeasured_month_unknown():
+    assert shares(OBS, -59, -28, 103) is None
+    assert shares(OBS, *JANUARY, 103, coverage=(MARCH,)) is None
+
+
+@pytest.mark.parametrize("partial", [(-58, -28), (-59, -29)])
+def test_daily_oracle_leaves_a_partly_measured_month_unknown(partial):
+    assert shares(OBS, *JANUARY, 103, coverage=(partial, MARCH)) is None
 
 
 class MissingShareRules(AssertionError):
     pass
 
 
-@pytest.mark.xfail(strict=True, raises=MissingShareRules, reason="Implement the two shared-cost relations and their input schema in examples/platform/rules/shared_cost.dl and schema/shared_cost.yaml. Read decisions/platform-core-day-shares.md.")
+@pytest.mark.xfail(
+    strict=True,
+    raises=MissingShareRules,
+    reason="Implement covered shared-cost shares and balance in examples/platform/rules/shared_cost.dl "
+           "with inputs in schema/shared_cost.yaml. Read decisions/platform-core-day-shares.md.",
+)
 def test_monthly_shares_and_balance_follow_observations():
     model = pack.read(ROOT)
     required = {"shared_cost_share", "shared_cost_balance"}
@@ -50,9 +74,18 @@ def test_monthly_shares_and_balance_follow_observations():
     if not required <= set(program.derived()):
         raise MissingShareRules("the platform lacks observed core-day shares or their independent balance")
     assert program.reaches("shared_cost_share", "shared_cost_balance"), "balance must depend on actual shares"
-    for resize, price in [(5, 107), (4, 107), (5, 109)]:
+    cases = [
+        (5, 107, (JANUARY,)),
+        (4, 107, (JANUARY,)),
+        (5, 109, (JANUARY,)),
+        (5, 107, ()),
+        (5, 107, ((-58, -28),)),
+        (5, 107, ((-59, -29),)),
+    ]
+    for resize, price, january_coverage in cases:
         events = [(*row[:4], resize if row[0] == "b" else row[4]) for row in OBS]
-        months = [("march", 0, 31, price), ("january", -59, -28, 103)]
+        months = [("march", *MARCH, price), ("january", *JANUARY, 103)]
+        coverage = (MARCH, *january_coverage)
         for ordered in (events, events[::-1]):
             inputs = facts.rows_of(model, {
                 "tenant_service_request": [dict(id="juniper/unseen", tenant="juniper", service="unseen",
@@ -63,13 +96,17 @@ def test_monthly_shares_and_balance_follow_observations():
                                         for m, lo, hi, c in months],
                 "observed_delivery_size": [dict(id=k, delivery=d, tenant=t, day=DAY+i, cores=n)
                                            for k, d, t, i, n in ordered],
+                "observed_delivery_coverage": [dict(id=f"inventory/{lo}/{hi}", start_day=DAY+lo, end_day=DAY+hi)
+                                               for lo, hi in coverage],
             })
             actual = sorted(relation_rows(model, inputs, "shared_cost_share"))
             balance = sorted(relation_rows(model, inputs, "shared_cost_balance"))
             expected = []
             totals = []
             for m, lo, hi, c in months:
-                ledger = shares(events, lo, hi, c)
+                ledger = shares(events, lo, hi, c, coverage=coverage)
+                if ledger is None:
+                    continue
                 expected.extend((m, t, days, frac.numerator, frac.denominator)
                                 for t, (days, frac) in ledger.items())
                 total = sum((Fraction(n, d) for month, _, _, n, d in actual if month == m), Fraction())

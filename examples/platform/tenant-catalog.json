@@ -60,6 +60,7 @@
       ]
     }
   },
+  "landedDeliveries": [],
   "capacity": {
     "guest-host": {
       "cores": 9,

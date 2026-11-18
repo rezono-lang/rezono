@@ -38,3 +38,6 @@ classes:
       item: {required: true}
       size: {required: true}
       monthly_cents: {range: integer, required: true, minimum_value: 0}
+      cores: {range: integer, minimum_value: 0}
+      memory_gib: {range: integer, minimum_value: 0}
+      storage_gib: {range: integer, minimum_value: 0}

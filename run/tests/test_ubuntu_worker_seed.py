@@ -57,10 +57,6 @@ def check_attachment(argv, disk, machine, bootstrap):
     assert bootstrap not in commands
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError, reason=(
-    "Read decisions/ubuntu-outer-worker.md. Implement the outer NoCloud launch boundary in "
-    "run/probes/worker-join and use it for Ubuntu in the disposable trial. "
-    "Render with the pinned k0smotron cloud-init provisioner and attach its machine-specific seed."))
 def test_ubuntu_worker_seed(tmp_path, monkeypatch):
     adapter = JOIN / "ubuntu_worker.py"
     assert adapter.is_file(), "Ubuntu has no outer worker launcher with a NoCloud seed"

@@ -3,7 +3,6 @@ import pytest
 from tenant_proposal_case import load, proposal, query, quota, write
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError, reason="Depends on test_request_json_enters_compiler_base_tables. Extend request_preview.py and schema/tenant_proposal_input.yaml for landed delivery receipts, catalog dimensions, capacity, zones, provisions, authority and readable quota records. Read decisions/platform-tenant-proposal-relations.md.")
 def test_trusted_tenant_proposal_inputs(tmp_path):
     teams, catalog = proposal(tmp_path)
     model = load(catalog)

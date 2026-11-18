@@ -1,0 +1,38 @@
+id: https://rezono.org/std-loop/flow-sweep
+name: std_loop_flow_sweep
+description: Observation intervals, expected nodes and final coverage reports for flow sweeps.
+imports: [linkml:types]
+default_range: string
+annotations:
+  layer: facts
+
+classes:
+  FlowSweepWindow:
+    description: The identified sweep over an interval of source-event ticks.
+    attributes:
+      id: {identifier: true}
+      run: {required: true}
+      collector: {required: true}
+      window: {required: true}
+      start: {range: integer, required: true}
+      stop: {range: integer, required: true}
+  FlowExpectedNode:
+    description: A node in the inventory pinned to a sweep window.
+    attributes:
+      id: {identifier: true}
+      run: {required: true}
+      collector: {required: true}
+      window: {required: true}
+      node: {required: true}
+  FlowNodeReport:
+    description: A node's final coverage bounds and counts of gaps and lost events.
+    attributes:
+      id: {identifier: true}
+      run: {required: true}
+      collector: {required: true}
+      window: {required: true}
+      node: {required: true}
+      first: {range: integer, required: true}
+      last: {range: integer, required: true}
+      gaps: {range: integer, required: true}
+      lost: {range: integer, required: true}

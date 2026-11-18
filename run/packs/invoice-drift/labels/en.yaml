@@ -1,0 +1,25 @@
+expected_line: Priced item
+expected_line.plan_hash: Priced plan digest
+expected_line.item: Priced item identifier
+expected_line.currency: Expected currency
+expected_line.minor: Expected amount in minor units
+expected_line.rounding_sha256: Applied rounding term digest
+invoice_line: Invoice line
+invoice_line.plan_hash: Observed plan digest
+invoice_line.item: Observed item identifier
+invoice_line.currency: Observed currency
+invoice_line.minor: Observed amount in minor units
+rounding: Verified rounding term
+rounding.source_url: Rounding term source
+rounding.currency: Billing currency
+rounding.boundary: Rounding boundary
+rounding.mode: Rounding direction
+rounding.minor_per_unit: Minor units per billing unit
+line_rounding_mode: Line rounding mode
+line_rounding_mode.half_even: Round ties to even
+line_rounding_mode.half_up: Round ties away from zero
+tagged_invoice: Invoice line tagged with a plan
+invoice_binding: Invoice line matched by plan, item and currency
+bound_invoice: Bound invoice line
+amount_difference: Invoice amount difference
+unbound_invoice: Unbound invoice line
