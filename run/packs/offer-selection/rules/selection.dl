@@ -1,0 +1,20 @@
+// Eligibility requires positive evidence for every condition.
+.decl eligible(demand: symbol, offer: symbol, price: number, rank: number)
+eligible(d, o, p, r) :- demand(d), offer(o), demand__quantity(d, q), q > 0,
+    offer__stock(o, s), s >= q, offer__free_disks(o, n), n >= 1,
+    offer__virtualization(o, "observed"), demand__boot(d, b), offer__boot(o, b),
+    demand__currency(d, c), offer__currency(o, c), offer__price_micros(o, p), p >= 0,
+    offer__tie_rank(o, r).
+
+.decl outranked(demand: symbol, offer: symbol)
+outranked(d, o) :- eligible(d, o, p, _), eligible(d, _, lower, _), lower < p.
+outranked(d, o) :- eligible(d, o, p, r), eligible(d, _, p, lower), lower < r.
+
+// The source rank must distinguish equally priced winning offers.
+.decl rank_conflict(demand: symbol, offer: symbol)
+rank_conflict(d, o) :- eligible(d, o, p, r), eligible(d, other, p, r), o != other.
+
+.decl selected(demand: symbol, offer: symbol)
+selected(d, o) :- eligible(d, o, _, _), !outranked(d, o), !rank_conflict(d, o).
+
+.output selected

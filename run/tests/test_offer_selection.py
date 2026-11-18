@@ -3,7 +3,6 @@ import pytest
 from offline_cases import relation
 
 
-@pytest.mark.xfail(strict=True, reason="Read decisions/run-offline-acceptance.md. Implement run/packs/offer-selection.")
 def test_offer_selection():
     options = {
         "small": (164000, 20, 2, 1, "observed", "ignition", "USD"),
