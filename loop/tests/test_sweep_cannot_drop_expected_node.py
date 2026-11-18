@@ -44,7 +44,10 @@ def _receipt(scope, nodes, finals, retained):
     reason=(
         "Read decisions/scoped-completeness.md sections 1 and 3. Verify the expected nodes "
         "against the independently pinned source inventory before publishing complete_sweep. "
-        "Keep the interval, terminal reports, gap and loss requirements. Write in the Loop observation path."
+        "Keep the interval, terminal reports, gap and loss requirements. Write in the Loop observation path. "
+        "Blocked: the shortened case passes only the retained source name and digest to batch.epoch, which has "
+        "no archive and no admitted receipt input, and publish.publish receives an Epoch whose rows are already derived, so no "
+        "implementation path lets the pinned inventory reach complete_sweep. The planner must say how admission supplies verified_receipt."
     ),
 )
 def test_sweep_cannot_drop_expected_node(tmp_path):
