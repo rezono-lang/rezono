@@ -7,7 +7,6 @@ import pytest
 from cluster_scenarios import CLUSTER, command
 
 
-@pytest.mark.xfail(strict=True, reason="Read decisions/shared-disposable-cluster.md. Implement loop/cluster/admission_application.py to emit the fixture Application for the locally served checkout. Pin the revision, release path and in-cluster destination.")
 def test_cluster_admission_application(tmp_path):
     import os
 

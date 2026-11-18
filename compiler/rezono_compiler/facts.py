@@ -10,6 +10,7 @@ the files and their source sidecars.
 from __future__ import annotations
 
 import datetime
+import json
 import re
 from dataclasses import replace
 from pathlib import Path
@@ -20,7 +21,7 @@ from rezono_admission import rows as admit
 
 from . import seal, spans, types
 from .diagnostics import Diagnosed, Diagnostic
-from .pack import Pack
+from .pack import Pack, snake
 
 ISO_DATE = re.compile(r"^[0-9]{4}-[0-9]{2}-[0-9]{2}$")
 PLACE = re.compile(r"([^.\[\]]+)|\[([0-9]+)\]")  # admission's place: names, and positions from 1 in brackets
@@ -61,10 +62,15 @@ def files(pack_dir: str | Path) -> list[Path]:
     return [p for p in paths if not p.name.endswith(".sources.yaml")]
 
 
-def document(path: Path) -> dict[str, list]:
-    """The records per kind of a fact file, as written. Nothing missing reads as "no records" (P4): a null
-    document or a null section is refused, so a file without records is {} and an empty relation is []."""
-    return sections(yaml.safe_load(path.read_text(encoding="utf-8")))
+def document(path: Path, pack: Pack | None = None) -> dict[str, list]:
+    """Read records per kind, decoding a scalar dataset when its pack is available.
+
+    A null document or section is refused. Use {} for an empty document or [] for an empty relation.
+    """
+    data = yaml.safe_load(path.read_text(encoding="utf-8"))
+    if pack is not None and isinstance(data, dict) and data.get("format") == "rezono.module/2":
+        data = scalar_dataset(schema(pack), data)
+    return sections(data)
 
 
 def sections(data) -> dict[str, list]:
@@ -100,7 +106,7 @@ def schema(pack: Pack) -> Schema:
 def load(pack: Pack, path: str | Path) -> dict[str, list[tuple]]:
     path = Path(path)
     try:
-        data = document(path)
+        data = document(path, pack)
         rows = rows_of(pack, data)
     except LoadError as error:
         raise placed(error, path) from None
@@ -108,6 +114,80 @@ def load(pack: Pack, path: str | Path) -> dict[str, list[tuple]]:
         from .sources import file_entries
         file_entries(pack, path, data)  # malformed metadata blocks batch loading too; the row API stays unchanged
     return rows
+
+
+def scalar_dataset(judged: Schema, form: dict) -> dict[str, list]:
+    """Decode a named module dataset into the records used by ordinary admission."""
+    module = form.get("module")
+    declarations = module.get("decls") if isinstance(module, dict) else None
+    if (not isinstance(declarations, list) or len(declarations) != 1
+            or not isinstance(declarations[0], dict)):
+        raise LoadError("expected one named dataset in the module form")
+    dataset = declarations[0]
+    tables = dataset.get("decls")
+    if (dataset.keys() != {"dataset", "decls"} or not isinstance(dataset["dataset"], str)
+            or not dataset["dataset"] or not isinstance(tables, list)):
+        raise LoadError("expected one named dataset in the module form")
+
+    records: dict[str, list] = {}
+    for table in tables:
+        if not isinstance(table, dict) or table.keys() != {"fact", "columns", "rows"}:
+            raise LoadError("scalar datasets require fact tables")
+        if not isinstance(table["fact"], str):
+            raise LoadError("invalid dataset fact kind")
+        kind = snake(table["fact"])
+        if kind not in judged.kinds:
+            raise LoadError(f"unknown kind '{kind}'")
+        identifier = judged.kinds[judged.root(kind)].identifier
+        columns, rows = table["columns"], table["rows"]
+        if not isinstance(columns, list) or not columns or not all(isinstance(c, str) for c in columns):
+            raise LoadError(f"{kind}: expected a nonempty fact table header")
+        columns = [snake(column) for column in columns]
+        if columns[0] != identifier or len(set(columns)) != len(columns):
+            raise LoadError(f"{kind}: expected unique columns beginning with the identifier")
+        if not isinstance(rows, list):
+            raise LoadError(f"{kind}: expected fact table rows")
+
+        column_types = [judged.kinds[judged.root(kind)].id_type]
+        for column in columns[1:]:
+            slot = judged.slot(kind, column)
+            if slot is None:
+                raise LoadError(f"{kind}: unknown slot '{column}'")
+            if slot.multivalued or slot.inlined:
+                raise LoadError(f"{kind}.{column}: expected a scalar slot")
+            column_types.append(slot.type)
+
+        output = records.setdefault(kind, [])
+        for row in rows:
+            where = f"{kind}[{len(output) + 1}]"
+            if not isinstance(row, list) or len(row) != len(columns):
+                raise LoadError(f"{where}: row width does not match the fact table header")
+            output.append({column: scalar_cell(cell, SQL_TYPES[type_], f"{where}.{column}")
+                           for column, cell, type_ in zip(columns, row, column_types, strict=True)})
+    return records
+
+
+def scalar_cell(cell, sql_type: str, where: str):
+    """Convert a scalar literal only according to its declared column type."""
+    if not isinstance(cell, dict) or cell.keys() != {"lit"} or not isinstance(cell["lit"], str):
+        raise LoadError(f"{where}: expected a scalar literal")
+    raw = cell["lit"]
+    value: object = raw
+    if sql_type == "BIGINT" and re.fullmatch(r"-?[0-9]+", raw):
+        try:
+            value = int(raw)
+        except ValueError as error:
+            raise LoadError(f"{where}: invalid integer literal") from error
+    elif sql_type == "BOOLEAN" and raw in ("true", "false"):
+        value = raw == "true"
+    elif sql_type == "VARCHAR" and raw.startswith('"'):
+        try:
+            value = json.loads(raw)
+        except ValueError as error:
+            raise LoadError(f"{where}: invalid quoted text literal") from error
+    elif sql_type == "VARCHAR" and (not raw or any(c.isspace() for c in raw)):
+        raise LoadError(f"{where}: invalid unquoted text literal")
+    return typed(sql_type, value, where)
 
 
 def rows_of(pack: Pack, data: dict) -> dict[str, list[tuple]]:

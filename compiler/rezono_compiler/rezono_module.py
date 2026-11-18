@@ -187,12 +187,20 @@ def names(form: dict) -> dict[str, str]:
     return out
 
 
-def attributes(decl: dict) -> dict[str, dict]:
+def builtin_range(name: str, declared: bool) -> str | None:
+    # Bool became a built-in after modules could already declare it as a pack name.
+    if name == "Bool" and declared:
+        return None
+    return TYPES.get(name)
+
+
+def attributes(decl: dict, declared: Set[str]) -> dict[str, dict]:
     """The LinkML attributes of a kind: the identifier `id`, then each slot in the order of the text (§5.1).
     A slot's range uses the LinkML name for built-in types; `T` is required, `T?` is not."""
     out: dict[str, dict] = {"id": {"identifier": True}}
     for s in decl.get("slots") or []:
-        slot: dict[str, object] = {"range": TYPES.get(s["type"], s["type"])}
+        name = s["type"]
+        slot: dict[str, object] = {"range": builtin_range(name, name in declared) or name}
         if "card" not in s:
             slot["required"] = True
         out[s["slot"]] = slot
@@ -236,6 +244,7 @@ def lower(pack_dir: Path, d: Declared, form: dict, pack: str, owners: dict[str, 
     for i, _ in enumerate(module["use"]):
         refuse(f"/use/{i}", "a `use` line is not lowered")
     own = names(form)
+    declared_names = own.keys() | owners.keys()
     uses: set[str] = set()
     enums: dict[str, dict] = {}
     classes: dict[str, dict] = {}
@@ -256,7 +265,7 @@ def lower(pack_dir: Path, d: Declared, form: dict, pack: str, owners: dict[str, 
                 continue
         if "kind" in decl:
             if kind(decl, at, own, owners, uses, refuse):
-                classes[decl["kind"]] = {"attributes": attributes(decl)}
+                classes[decl["kind"]] = {"attributes": attributes(decl, declared_names)}
         elif "enum" in decl:
             if set(decl) - ENUM:
                 refuse(at, f"an enum with {', '.join(sorted(set(decl) - ENUM))} is not lowered", "§5.2")
@@ -321,13 +330,13 @@ def kind(decl: dict, at: str, own: dict, owners: dict[str, list[str]], uses: set
             refuse(here, f"a slot `{s['type']}{s['card']}` is not lowered (no ticket yet)")
             ok = False
         t, found = s["type"], owners.get(s["type"], [])
-        if t in TYPES or t in own:
+        if t in own or builtin_range(t, bool(found)) is not None:
             continue
         if len(found) == 1:
             uses.add(found[0])
             continue
         refuse(here, f"{t} is declared by modules {' and '.join(found)} of this pack" if found else
-               f"{t} is not Date, Text, or an enum or a kind of this pack", "§5.1")
+               f"{t} is not Date, Text, or an enum or a kind of this pack. Built-in Bool is also supported", "§5.1")
         ok = False
     return ok
 
@@ -362,10 +371,30 @@ def view(schema: dict, importmap: dict) -> SchemaView:
 
 
 def schema_classes(pack_dir: Path, rel: str) -> dict:
-    """The classes of the module at `rel` (rezono/<path>.rezono) as `lower` lowers them, in the order of the
-    text, for a reader that wants a module's classes as a schema file holds them. Only for a pack that compiles."""
+    """The classes of a compilable pack's module, with ranges from the compiler's name resolution."""
+    from . import modules  # The schema loader also calls this module's lowering functions.
+
+    meta = yaml.safe_load((pack_dir / "pack.yaml").read_text(encoding="utf-8")) or {}
+    loaded, _ = modules.load(pack_dir, meta, [])
+    schema = next(m.sv.schema for m in loaded if m.pack_dir == pack_dir and m.rel == rel)
+    classes = {}
+    for name, cls in schema.classes.items():
+        slots = {}
+        for slot, attr in cls.attributes.items():
+            if attr.identifier:
+                slots[slot] = {"identifier": True}
+            else:
+                slots[slot] = {"range": attr.range}
+                if attr.required:
+                    slots[slot]["required"] = True
+        classes[name] = {"attributes": slots}
+    return classes
+
+
+def class_slot_order(pack_dir: Path, rel: str) -> dict[str, list[str]]:
+    """Read a compiled module's class and slot order from its form for the writer."""
     meta = yaml.safe_load((pack_dir / "pack.yaml").read_text(encoding="utf-8")) or {}
     d = next(d for d in declared(meta, pack_dir, []) if d.module == rel)
     form = read_form(pack_dir, d, []) or {"module": {"decls": []}}
-    return {decl["kind"]: {"attributes": attributes(decl)} for decl in form["module"]["decls"]
-            if isinstance(decl, dict) and "kind" in decl}
+    return {decl["kind"]: ["id", *(s["slot"] for s in decl.get("slots") or [])]
+            for decl in form["module"]["decls"] if isinstance(decl, dict) and "kind" in decl}

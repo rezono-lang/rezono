@@ -3,7 +3,6 @@ import pytest
 from offline_cases import PLAN_HASH, relation
 
 
-@pytest.mark.xfail(strict=True, reason="Read decisions/run-offline-acceptance.md. Implement run/packs/dispatch.")
 def test_dispatch_policy():
     names = ("plan_hash", "approval_hash", "currency", "approval_currency", "decision",
              "cost_micros", "cap_micros", "event_us", "expires_us")

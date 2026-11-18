@@ -1,0 +1,26 @@
+{
+  "source": "https://github.com/rezono-lang/rezono/actions/runs/44272068010",
+  "reporting_threshold_ms": 5000,
+  "default_ms": 378,
+  "call_ms": {
+    "compiler/tests/test_calc.py::test_random_programs_give_what_the_reference_gives": 159380,
+    "compiler/tests/test_calc.py::test_the_evaluation_date_is_a_fact": 6930,
+    "compiler/tests/test_compiler.py::test_an_installed_compiler_reads_the_contracts_it_carries": 5670,
+    "compiler/tests/test_gap.py::test_a_present_start_completes_a_rule_and_an_absent_one_does_not": 5230,
+    "compiler/tests/test_generality.py::test_each_injected_error_lands_in_its_view": 17410,
+    "compiler/tests/test_generality.py::test_valid_facts_give_no_violations": 10220,
+    "compiler/tests/test_normalise.py::test_the_normal_form_is_a_rule_that_computes_the_same_rows": 7530,
+    "compiler/tests/test_operation_source_example.py::test_the_worked_example_carries_its_sources_through_every_step": 10920,
+    "compiler/tests/test_rules_properties.py::test_changes_cross_parts_through_the_export_stream": 28770,
+    "compiler/tests/test_rules_properties.py::test_every_partition_computes_what_one_pipeline_computes": 12140,
+    "compiler/tests/test_rules_properties.py::test_every_proof_is_valid_and_acyclic": 9440,
+    "compiler/tests/test_rules_properties.py::test_reached_only_recompute_equals_full_recompute": 17990,
+    "compiler/tests/test_std_decision.py::test_rules_and_axioms_agree_with_the_reference_on_any_registration": 34870,
+    "compiler/tests/test_theory_order.py::test_axioms_and_rules_agree_with_the_reference_on_any_graph": 17200,
+    "compiler/tests/test_theory_part.py::test_axioms_and_rules_agree_with_the_reference_on_any_graph": 14240,
+    "compiler/tests/test_theory_time.py::test_allen_gives_each_of_the_thirteen_relations": 8950,
+    "compiler/tests/test_theory_time.py::test_axioms_and_rules_agree_with_the_reference_on_any_world": 43430,
+    "compiler/tests/test_types.py::test_random_packs_keep_their_names": 7070,
+    "compiler/tests/test_view_execute.py::test_property_the_engine_agrees_with_the_dates_themselves": 12000
+  }
+}

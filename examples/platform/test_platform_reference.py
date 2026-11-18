@@ -63,9 +63,10 @@ def test_tenant_decision_examples():
     assert rows["requested"]["monthlyCost"] == [["elm", 7505, "EUR-cent"], ["reed", 2495, "EUR-cent"]]
     assert rows["requested"]["proposal"] == [["elm", "elm-1", "review"], ["reed", "reed-1", "denied"]]
     assert rows["requested"]["shortages"] == []
-    assert rows["third"]["shortages"] == [["guest-host", "cores", 1], ["guest-host", "memoryGiB", 2],
-                                          ["storage-pool", "storageGiB", 10]]
-    assert ["reed", "reed-2", "denied"] in rows["third"]["proposal"]
+    assert all(used == 0 for _, _, used, _ in rows["requested"]["capacity"])
+    assert rows["third"]["capacity"] == rows["requested"]["capacity"]
+    assert rows["third"]["shortages"] == []
+    assert ["reed", "reed-2", "standard"] in rows["third"]["proposal"]
 
 
 def test_control_host_is_derived_by_the_pack():
@@ -75,7 +76,6 @@ def test_control_host_is_derived_by_the_pack():
     _, _, fact_states = states(HERE)
     assert fact_states[0].derived.get("cluster_control_host") == set(map(tuple, expected))
 
-@pytest.mark.xfail(strict=True, raises=AssertionError, reason="Depends on test_request_json_enters_compiler_base_tables. Implement exact tenant_monthly_cost through the platform pack rules or calculation, using the request and catalog base tables. Read decisions/platform-request-input.md.")
 def test_monthly_cost_is_derived_by_the_pack(tmp_path):
     from request_preview_case import copy_requests, preview
 

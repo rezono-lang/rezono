@@ -1,0 +1,15 @@
+// Keep one term per requested item and matching catalog offer, even when prices are equal.
+.decl tenant_monthly_cost_term(tenant: symbol, service: symbol, request_item: symbol, offer: symbol, cents: number)
+tenant_monthly_cost_term(t, s, r, o, n) :-
+    tenant_request_item__tenant(r, t), tenant_request_item__service(r, s),
+    tenant_request_item__item(r, i), tenant_request_item__size(r, z),
+    tenant_catalog_offer__item(o, i), tenant_catalog_offer__size(o, z),
+    tenant_catalog_offer__monthly_cents(o, n).
+
+.decl tenant_monthly_cost(tenant: symbol, cents: number, unit: symbol)
+tenant_monthly_cost(t, total, "EUR-cent") :-
+    tenant_service_request__tenant(_, t),
+    total = sum n : { tenant_monthly_cost_term(t, _, _, _, n) }.
+
+.output tenant_monthly_cost_term
+.output tenant_monthly_cost

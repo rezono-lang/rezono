@@ -19,9 +19,15 @@ Use std-loop over std-order. Evaluate a finite declared set of steps for a pinne
 
 Use stratified rules, negation, counts and comparisons over finite inputs. A stuck step is ineligible. Compute structural blockers before readiness and diagnose a fixed point from the resulting frontier. Read observations through an envelope containing run ID, sweep ID and the existing Observation. Select the latest event time for each expectation in the active run. At equal times distinct incompatible values constitute conflicting evidence and cannot supply a token. Unknown and missing values cannot supply a token. Measure deadlines from a recorded start observation to a recorded sweep watermark, both in event time. Replay never consults a wall clock.
 
+### Loading the standard pack
+
+The standard pack directly imports the checked-out std-order definition by its content digest. Use the compiler to admit typed records and join each record's slot tables by its own identifier. Those projections supply the multi-column rule inputs: declaring an arbitrary multi-column fact table is unsupported. LoopStep specializes Ordered and uses its inherited precedes slot. An order graph belongs to one immutable plan; concurrent runs of that plan share step identities, while completion and observation evidence is always joined within its run.
+
+For pack input, LoopActiveRun supplies the run identifier. LoopCompletion has run, step, token and reason slots. LoopExpectation identifies the token and carries its expected value. LoopObservation identifies the event and carries run, token, integer event_time, state, value and a distinct reason. These records are evidence inputs. Derive the six public relations through the actual imported and local rules. A transitive dependency's explanation includes the original precedence edges and the source completion record.
+
 ## Executor
 
-Accept a checked manifest, run ID, positive round bound, initial evidence and declared ports. Each round computes a stable ready set, emits only its plans in step-key order, applies eligible plans, performs a complete observation sweep, then recomputes against the new evidence. Stop successfully when every declared step is done and the comparison yields no findings. Empty input succeeds immediately. A stuck step or a terminal drift finding gives a diagnostic failure. If another round is necessary after the bound, fail with the pending steps and witnesses. The executor contains no platform step names or numbered procedures.
+Accept a checked manifest, run ID, positive round bound, initial evidence and declared ports. Each round computes a stable ready set, emits only its plans in step-key order, applies eligible plans, performs a complete observation sweep, then recomputes against the new evidence. Stop successfully when every declared step is done and no unexpected finding remains. Report declared deliberate differences with their evidence; [quiet observation rounds](quiet-observation-rounds.md) defines the match. Empty input succeeds immediately. A stuck step or a terminal drift finding gives a diagnostic failure. If another round is necessary after the bound, fail with the pending steps and witnesses. The executor contains no platform step names or numbered procedures.
 
 Use declared plan, apply and status operations. Repeatable reconciliation proceeds within the approved run. A nonrepeatable effect requires approval binding its exact plan hash and a durable single-attempt claim before dispatch. An uncertain attempt is resolved through status using the same key, including after restart. Keep tool-specific ordering inside that tool.
 
@@ -52,3 +58,24 @@ Hubble supplies an independent witness for each scheduled fixture case. Retain i
 ### Ordering observation inputs
 
 Normalize the observation contract's UTC instant to an integer event-time offset using a common epoch and lossless precision for the entire input batch. Compare this integer only within a run and token. Preserve the original event identity and its evidence reference as separate strings. Neither identifier breaks ties. At the latest instant, every source that agrees on a known desired value supplies its own reason. Conflicting values or a mix of known and unknown at that instant supply no known token.
+
+### Recorded corrections
+
+The ordinary recording command also accepts a recording with a relative pack path and
+verified SHA-256, admitted std-loop records, declared ports and complete sweeps of
+run-scoped Observation envelopes. Resolve paths relative to the recording. Validate
+the declarations against contracts/port.yaml and the payloads against
+contracts/observation.yaml. The effect port represents recorded actions only. Relate
+each observation to its expectation by RowRef and retain its source and event ID.
+Feed this input to the existing replay executor. Compute needed, known, waiting,
+ready, done and stuck through the pinned pack on every snapshot, including the final
+sweep. Use ready rows for the frontier and current done, stuck and drift for the
+outcome. A complete sweep with no possible advance terminates with failure. The
+command emits the same plans/rounds/outcome report on failure and exits with code 1.
+
+The integration oracle uses seed before ship. Seed confirms at second 10 and ship
+at 11. A seed mismatch arriving last with event time 2 is stale: both completions
+stand. At second 12 the same mismatch revokes seed and establishes terminal drift.
+A later observation from another run changes neither result. Use the envelope evidence reference as the known-row reason. A control derives completion
+for both steps in a temporary copy of the real theory and repins it: the first frontier
+is empty. This checks that recorded decisions depend on the evaluated rule bytes.

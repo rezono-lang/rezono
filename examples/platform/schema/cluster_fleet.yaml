@@ -1,0 +1,14 @@
+id: https://rezono.org/examples/platform-core/cluster-fleet
+name: platform_cluster_fleet
+description: Declared role binding for the fleet coordinator.
+in_language: en
+imports: [linkml:types, placement]
+default_range: string
+annotations:
+  layer: facts
+
+classes:
+  ClusterFleetHub:
+    attributes:
+      id: {identifier: true}
+      role: {range: ClusterRole, required: true}

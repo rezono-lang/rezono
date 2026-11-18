@@ -15,7 +15,18 @@ spec:
         - name: root
           disk:
             bus: virtio
+        - name: seed
+          disk:
+            bus: virtio
   volumes:
     - name: root
       containerDisk:
         image: quay.io/kubevirt/cirros-container-disk-demo@sha256:ebdb8d8b9b480f6ee7664ed3fdde8428767664f507d98f94090edeff04d7ebf2
+    - name: seed
+      cloudInitNoCloud:
+        userData: |
+          #!/bin/sh
+          set -eu
+          instance=$(cirros-query get instance-id)
+          test -n "$instance"
+          printf '\nREZONO-GUEST-READY %s\n' "$instance" > /dev/ttyS0

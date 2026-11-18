@@ -1,6 +1,7 @@
 # Working rules
 
 Rezono is a domain-neutral, verifiable reasoning layer. These rules apply to people and agents alike.
+The [project vision](docs/vision.md) explains the reasoning behind these rules.
 
 ## What must stay true
 
@@ -38,3 +39,4 @@ Dependencies:
 - **Oracles and tools that are not shipped:** also UPL-1.0 and GPL.
 - **Nothing under GPL goes into a release or an image.**
 - **A dependency under any other licence does not come in.** Note it in `blocked/` with the reason; the owner may decide otherwise later.
+- See the [licence scope decision](decisions/platform-licence-scope.md) for products deployed by the reference platform.

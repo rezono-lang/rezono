@@ -5,7 +5,6 @@ import pytest
 from wire_fixtures import entry, fixture
 
 
-@pytest.mark.xfail(strict=True, reason="Read decisions/loop-fixture-evidence.md. Implement loop/case_schedule.py. Schedule each declared synthetic case exactly once without expanding host or port ranges.")
 def test_case_schedule(monkeypatch):
     schedule = entry(monkeypatch, "case_schedule", "schedule")
     cases = fixture("network")["cases"]

@@ -1,0 +1,20 @@
+// Read grants are valid only for the owner of the named evidence.
+.decl tenant_request_read(reader: symbol, grant: symbol, request: symbol)
+tenant_request_read(r, g, q) :- role__capability(r, "read"), request_read_grant__reader(g, r),
+    request_read_grant__request(g, q), request__owner(q, r).
+
+.decl tenant_quota_read(reader: symbol, grant: symbol, quota: symbol)
+tenant_quota_read(r, g, q) :- role__capability(r, "read"), quota_read_grant__reader(g, r),
+    quota_read_grant__quota(g, q), quota__owner(q, r).
+
+may_read(r, "role", r) :- role__capability(r, "read").
+may_read(r, "request", q) :- tenant_request_read(r, _, q).
+may_read(r, "request_read_grant", g) :- tenant_request_read(r, g, _).
+may_read(r, "quota", q) :- tenant_quota_read(r, _, q).
+may_read(r, "quota_read_grant", g) :- tenant_quota_read(r, g, _).
+
+.decl tenant_capacity_fits(reader: symbol, request: symbol, quota: symbol)
+tenant_capacity_fits(r, request, quota) :- may_read(r, "request", request),
+    may_read(r, "quota", quota), request__cores(request, requested), quota__cores(quota, limit), requested <= limit.
+
+.output tenant_capacity_fits

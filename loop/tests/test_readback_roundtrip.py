@@ -5,7 +5,6 @@ import pytest
 from wire_fixtures import entry
 
 
-@pytest.mark.xfail(strict=True, reason="Read decisions/loop-design.md. Implement loop/readback_roundtrip.py. Waits for test_field_readback and test_readback_identity. Recover original typed rows from two fields of one object.")
 def test_readback_roundtrip(monkeypatch):
     read_rows = entry(monkeypatch, "readback_roundtrip", "read_rows")
     ref = {"manifest": "m-a", "apiVersion": "v1", "kind": "ConfigMap", "namespace": "fixture", "name": "echo"}

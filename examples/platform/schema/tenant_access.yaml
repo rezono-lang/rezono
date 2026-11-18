@@ -1,0 +1,32 @@
+id: https://rezono.org/examples/platform-core/tenant-access
+name: platform_tenant_access
+description: Tenant-owned requests, independently issued quotas, and explicit read grants.
+in_language: en
+imports:
+  - linkml:types
+  - std-access:access
+default_range: string
+annotations:
+  layer: facts
+
+classes:
+  Request:
+    attributes:
+      id: {identifier: true}
+      owner: {range: Role, required: true}
+      cores: {range: integer, minimum_value: 1, required: true}
+  Quota:
+    attributes:
+      id: {identifier: true}
+      owner: {range: Role, required: true}
+      cores: {range: integer, minimum_value: 0, required: true}
+  RequestReadGrant:
+    attributes:
+      id: {identifier: true}
+      reader: {range: Role, required: true}
+      request: {range: Request, required: true}
+  QuotaReadGrant:
+    attributes:
+      id: {identifier: true}
+      reader: {range: Role, required: true}
+      quota: {range: Quota, required: true}

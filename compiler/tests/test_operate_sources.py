@@ -20,7 +20,7 @@ from rezono_canon import canonical_json
 from rezono_compiler import operate, sources, writer
 from rezono_compiler import pack as packs
 from operation_source_support import companion, library, origin, per_record  # noqa: F401
-from test_operate import COMBINE, DROPS, MOVES, RENAMES, SPLIT, combine_ops, files, move_ops, run, \
+from operation_cases import COMBINE, DROPS, MOVES, RENAMES, SPLIT, combine_ops, files, move_ops, run, \
     split_ops
 
 
@@ -141,6 +141,27 @@ def test_a_drop_loses_the_sources_of_the_rows_it_loses_and_keeps_every_other(lib
     assert by_ref(library) == {r: e for r, e in before.items() if r not in lost}
 
 
+@pytest.mark.parametrize("has_row", [True, False], ids=["last-row", "empty-input"])
+def test_a_drop_reports_exact_source_loss_for_an_empty_output(has_row):
+    work = writer.work_dir()
+    try:
+        pack = work / "generated"
+        kinds = {name: genpack.GKind(name, None, True, "facts") for name in ("a", "b")}
+        genpack.write_pack(genpack.Spec(kinds, {}), pack)
+        facts = pack / "facts"
+        facts.mkdir()
+        (facts / "state.yaml").write_text("a: [{id: a1}]\n" if has_row else "{}\n", encoding="utf-8")
+        companion(pack, "state.yaml")
+        expected = [{"relation": "a", "key": '["a1"]'}] if has_row else []
+        assert [entry["row"] for entry in by_ref(pack, "state.yaml").values()] == expected
+
+        impact, _ = run(pack, [{"op": "drop", "kind": "A", "accept_loss": True}], work)
+        assert by_ref(pack, "state.yaml") == {}
+        assert impact["operations"][0]["sources"]["lost"] == expected
+    finally:
+        shutil.rmtree(work)
+
+
 @pytest.mark.parametrize("op", [SPLIT, SPLIT | {"abstract": True}, COMBINE], ids=["split", "split-abstract", "combine"])
 def test_split_and_combine_carry_every_origin(library, tmp_path, op):
     companion(library, of=per_record)
@@ -225,11 +246,12 @@ def test_random_operations_carry_sources_or_refuse(data):
             return
         o = impact["operations"][0]
         after = by_ref(d, "state.yaml")
-        assert set(origins(after)) <= set(origins(before)), "an origin was invented"
+        carried = set(origins(after))
+        assert carried <= set(origins(before)), "an origin was invented"
         lost = {(x["relation"], x["key"]) for x in o["sources"]["lost"]}
         assert lost <= set(before)
-        if not lost:
-            assert set(origins(after)) == set(origins(before)) or not after, "an origin went without a lost row"
+        retained = {ref: entry for ref, entry in before.items() if ref not in lost}
+        assert set(origins(retained)) <= carried, "an origin went without a lost row"
         if o["lossless"]:
             assert not lost
         back = inverse_of(op, p)

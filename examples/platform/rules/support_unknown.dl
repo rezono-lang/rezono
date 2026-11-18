@@ -1,0 +1,8 @@
+// Release recency supplies no evidence about the end of vendor support.
+.decl has_vendor_support(release: symbol)
+has_vendor_support(r) :- vendor_support_statement__release(_, r).
+
+.decl support_unknown(service: symbol, release: symbol, state: symbol)
+support_unknown(s, r, "unknown") :- runs(s, r), !has_vendor_support(r).
+
+.output support_unknown

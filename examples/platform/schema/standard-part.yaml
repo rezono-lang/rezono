@@ -1,0 +1,17 @@
+id: https://rezono.org/examples/platform-core/standard-part
+name: platform_standard_part
+description: Components of a platform delivery and its catalog entry.
+in_language: en
+prefixes:
+  linkml: https://w3id.org/linkml/
+imports:
+  - linkml:types
+  - std-part:part
+default_range: string
+annotations:
+  layer: facts
+
+classes:
+  PlatformDeliveryComponent:
+    is_a: Constituent
+    description: An element in the platform delivery's component hierarchy.

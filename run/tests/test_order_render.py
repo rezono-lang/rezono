@@ -3,7 +3,6 @@ import pytest
 from offline_cases import implementation, FIXTURE, PLAN_HASH
 
 
-@pytest.mark.xfail(strict=True, reason="Read decisions/run-offline-acceptance.md. Implement run/order_render.py.")
 def test_order_render():
     render = implementation("order_render.py", "render")
     raw = (FIXTURE / "plan.json").read_bytes()

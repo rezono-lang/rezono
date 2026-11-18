@@ -3,7 +3,6 @@ import pytest
 from query_fixture import check_relation, evidence
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError, reason="Project both recovery scenarios to boundary rules before computing their difference. Read decisions/platform-query-results.md. Write examples/platform/rules/recovery_rule_delta.dl and its own module-specific metadata if needed.")
 def test_recovery_rule_delta():
     rows, _ = evidence()
     zones = dict(rows["zone_of"])

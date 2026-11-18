@@ -1,0 +1,13 @@
+sweep: inventory sweep
+sweep.plan_hash: plan digest
+sweep.coverage: sweep coverage
+resource: inventory resource
+resource.sweep: inventory sweep
+resource.plan_hash: resource plan digest
+inventory_coverage: sweep coverage
+inventory_coverage.complete: complete
+inventory_coverage.incomplete: incomplete
+inventory_coverage.unknown: unknown
+matching_resource: matching resource
+conflicting_sweep: conflicting sweep evidence
+cleaned: cleaned

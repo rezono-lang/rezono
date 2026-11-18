@@ -17,17 +17,18 @@ LAUNCHER = {"metadata": {"uid": POD, "name": "virt-launcher-host-probe-abcde", "
                                              "name": "host-probe", "uid": VM, "controller": True}]},
             "spec": {"nodeName": NODE, "containers": [{"name": "compute"}],
                      "initContainers": [{"name": "guest-console-log", "restartPolicy": "Always"}]},
-            "status": {"phase": "Running"}}
+            "status": {"phase": "Running", "containerStatuses": [
+                {"name": "compute", "containerID": "containerd://abc", "state": {"running": {}}}]}}
 
 
 def test_current_launcher_with_stale_predecessor():
     old = copy.deepcopy(LAUNCHER)
     old["metadata"]["uid"] = "old"
-    assert launcher(VMI, {"items": [old, LAUNCHER]}, VM, NODE) == (LAUNCHER["metadata"]["name"], POD)
+    assert launcher(VMI, {"items": [old, LAUNCHER]}, VM, NODE) == (LAUNCHER["metadata"]["name"], POD, "containerd://abc")
 
 
 @pytest.mark.parametrize("case", ["empty", "wrong_owner", "old_uid", "wrong_node", "terminating",
-                                  "no_console", "two_active", "wrong_vmi", "not_ready", "not_running"])
+                                  "no_console", "no_compute_id", "two_active", "wrong_vmi", "not_ready", "not_running"])
 def test_unconfirmed_launcher_is_rejected(case):
     vm, pod = copy.deepcopy(VMI), copy.deepcopy(LAUNCHER)
     if case == "wrong_owner":
@@ -40,6 +41,8 @@ def test_unconfirmed_launcher_is_rejected(case):
         pod["metadata"]["deletionTimestamp"] = "2026-01-01T00:00:00Z"
     elif case == "no_console":
         pod["spec"]["initContainers"] = []
+    elif case == "no_compute_id":
+        pod["status"]["containerStatuses"][0].pop("containerID")
     elif case == "two_active":
         vm["status"]["activePods"]["other"] = NODE
     elif case == "wrong_vmi":

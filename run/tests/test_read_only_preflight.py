@@ -3,7 +3,6 @@ import pytest
 from offline_cases import implementation
 
 
-@pytest.mark.xfail(strict=True, reason="Read decisions/run-offline-acceptance.md. Implement run/read_only_preflight.py.")
 def test_read_only_preflight():
     inspect = implementation("read_only_preflight.py", "inspect_offer")
     calls = []

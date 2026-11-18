@@ -1,0 +1,26 @@
+id: https://rezono.org/examples/run/offer-selection
+name: offer_selection
+in_language: en
+imports:
+  - linkml:types
+default_range: string
+annotations:
+  layer: facts
+
+classes:
+  Offer:
+    attributes:
+      id: {identifier: true}
+      price_micros: {range: integer, minimum_value: 0, required: true}
+      tie_rank: {range: integer, required: true}
+      stock: {range: integer, minimum_value: 0, required: true}
+      free_disks: {range: integer, minimum_value: 0, required: true}
+      virtualization: {required: true}
+      boot: {required: true}
+      currency: {required: true}
+  Demand:
+    attributes:
+      id: {identifier: true}
+      quantity: {range: integer, minimum_value: 1, required: true}
+      boot: {required: true}
+      currency: {required: true}

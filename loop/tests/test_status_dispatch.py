@@ -5,7 +5,6 @@ import pytest
 from wire_fixtures import entry
 
 
-@pytest.mark.xfail(strict=True, reason="Read decisions/delivery-commit-status.md. Implement loop/status_dispatch.py. Waits for test_forgejo_read, test_forgejo_write, test_status_target, test_status_retry, test_status_context and test_status_projection. Compose the accepted proposal and observations into provider traffic.")
 def test_status_dispatch(monkeypatch):
     report_step = entry(monkeypatch, "status_dispatch", "report_step")
     sha = "ac" * 20

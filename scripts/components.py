@@ -4,13 +4,15 @@
 from __future__ import annotations
 
 import argparse
-import hashlib
+from collections import Counter
+import re
 import json
 import os
 import shutil
 import subprocess
 import sys
 import tempfile
+import tomllib
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
@@ -113,35 +115,61 @@ def _git_changed_files(root: Path, base_ref: str | None, before_sha: str | None)
     event = os.environ.get("GITHUB_EVENT_NAME", "")
     if event == "workflow_dispatch":
         return None
-    if base_ref:
-        subprocess.run(
-            ["git", "fetch", "--no-tags", "--depth=50", "origin", base_ref],
-            cwd=root,
-            check=False,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
-        res = subprocess.run(
-            ["git", "diff", "--name-only", f"origin/{base_ref}...HEAD"],
-            cwd=root,
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-        if res.returncode == 0:
-            return [line.strip() for line in res.stdout.splitlines() if line.strip()]
+    if event == "merge_group":
+        base = os.environ.get("MERGE_GROUP_BASE_SHA", "")
+        head = os.environ.get("MERGE_GROUP_HEAD_SHA", "")
+        if not all(re.fullmatch(r"[0-9a-f]{40}", sha) for sha in (base, head)):
+            return None
+        def git(*arguments: str):
+            return subprocess.run(["git", *arguments], cwd=root, capture_output=True)
+        if git("rev-parse", "HEAD").stdout.decode().strip() != head:
+            return None
+        if git("merge-base", "--is-ancestor", base, head).returncode:
+            return None
+        revisions = [base, head]
+    elif base_ref:
+        # Discovery checks out full history, including the PR's target branch.
+        revisions = [f"origin/{base_ref}...HEAD"]
+    elif before_sha and re.fullmatch(r"(?!0{40})[0-9a-f]{40}", before_sha):
+        revisions = [before_sha, "HEAD"]
+    else:
         return None
-    if before_sha and set(before_sha) != {"0"}:
-        res = subprocess.run(
-            ["git", "diff", "--name-only", before_sha, "HEAD"],
-            cwd=root,
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-        if res.returncode == 0:
-            return [line.strip() for line in res.stdout.splitlines() if line.strip()]
-    return None
+    result = subprocess.run(
+        ["git", "diff", "--no-renames", "--name-only", "-z", *revisions, "--"],
+        cwd=root, capture_output=True,
+    )
+    if result.returncode:
+        return None
+    return [os.fsdecode(name) for name in result.stdout.split(bytes(1)) if name]
+
+
+# Components consumed by other checks via files or subprocesses,
+# including the offline runner's replay of a loop and the loop's admission proof.
+# A change to a shared library, fixture tree or unknown component runs everything.
+FILE_CONSUMERS = {
+    "k8s-admission": ("loop",),
+    "loop": ("run",),
+    "run": (),
+    "deploy/profiles/edge": ("edge/publisher",),
+}
+
+
+def outside_cluster_plugin(path: Path, manifest: Path) -> bool:
+    """The loop's pytest distribution ships only its explicitly listed modules."""
+    relative = path.relative_to("loop")
+    try:
+        packaging = tomllib.loads(manifest.read_text(encoding="utf-8"))["tool"]["setuptools"]
+    except (OSError, ValueError, KeyError, TypeError):
+        return False
+    if not isinstance(packaging, dict) or set(packaging) != {"py-modules"}:
+        return False
+    modules = packaging["py-modules"]
+    if not isinstance(modules, list) or not modules or not all(isinstance(m, str) and m.isidentifier() for m in modules):
+        return False
+    if relative.parent == Path("."):
+        return (relative.suffix == ".py" and relative.name not in {"setup.py", "conftest.py"}
+                and relative.stem not in modules)
+    return relative.parent == Path("tests") and relative.match("test_*.py")
 
 
 def affected_components(
@@ -149,39 +177,44 @@ def affected_components(
 ) -> list[Component]:
     if changed_files is None:
         return list(components)
-    if not changed_files:
-        return []
-
+    by_folder = {c.folder: c for c in components}
     selected: set[str] = set()
-    run_all = False
+    pending: list[str] = []
     for path in changed_files:
-        if path.startswith("to-port/") or path.endswith(".md"):
+        owner = next((c for c in components if path.startswith(c.folder + "/")), None)
+        if owner is None:
+            # Markdown, golden files and shared packs are read by component tests.
+            return list(components)
+        selected.add(owner.folder)
+        source = Path(path)
+        manifest = ROOT / owner.folder / "pyproject.toml"
+        if (owner.kind == "contracts" or source.name in {"pyproject.toml", "package.json", "conftest.py"}
+                or (manifest.exists() and not (owner.folder == "loop" and outside_cluster_plugin(source, manifest)))):
+            return list(components)
+        # Tests can themselves be imported as cross-component oracles. Shared
+        # source and test roots have no isolation contract, so keep full coverage.
+        # The leaf components below use the same file-consumer closure for test
+        # entry points and for production inputs.
+        pending.append(owner.folder)
+    visited: set[str] = set()
+    while pending:
+        folder = pending.pop()
+        if folder in visited:
             continue
-        matched = [
-            c.folder
-            for c in components
-            if path == c.folder or path.startswith(c.folder + "/")
-        ]
-        if matched:
-            for folder in matched:
-                selected.add(folder)
-                comp = next(c for c in components if c.folder == folder)
-                if comp.kind == "contracts":
-                    for other in components:
-                        if other.kind in ("contracts", "python"):
-                            selected.add(other.folder)
-        else:
-            run_all = True
-            break
-
-    if run_all:
-        return list(components)
+        visited.add(folder)
+        if folder not in FILE_CONSUMERS:
+            return list(components)
+        for consumer in FILE_CONSUMERS[folder]:
+            if consumer not in by_folder:
+                return list(components)
+            selected.add(consumer)
+            pending.append(consumer)
     return [c for c in components if c.folder in selected]
 
 
 # Files are assigned to jobs round-robin. Within a job pytest items share the
 # runner's cores, so one large parametrized file can use more than one core.
-SHARDS = {"compiler": 3, "examples": 3}
+SHARDS = {"compiler": 3, "examples": 5}
 PARALLEL = {"compiler", "examples", "edge/publisher"}
 
 
@@ -229,133 +262,200 @@ def check_contracts() -> int:
         return status
 
 
-def run_shard(folder: str, shard: int, total: int, report_dir: Path) -> int:
-    files = test_files(folder)
-    print(f"{folder} shard {shard + 1}/{total}: {json.dumps(files[shard::total])}", flush=True)
-    workers = runner_cores() if folder in PARALLEL else 1
-    report_dir.mkdir(parents=True, exist_ok=True)
-
-    def execute(worker: int, state: str) -> int:
-        args = [
-            sys.executable, str(Path(__file__).resolve()), "pytest-worker", folder,
-            str(shard), str(total), str(worker), str(workers), str(report_dir), state,
-        ]
-        env = {**os.environ, "PYTHONHASHSEED": os.environ.get("PYTHONHASHSEED", "0")}
-        return subprocess.run(args, cwd=ROOT, env=env, check=False).returncode
-
-    with tempfile.TemporaryDirectory() as state, ThreadPoolExecutor(max_workers=workers) as pool:
-        statuses = list(pool.map(lambda worker: execute(worker, state), range(workers)))
-        if not any(statuses) and folder in PARALLEL:
-            manifests = [
-                (Path(state) / f"collection-{worker}").read_text(encoding="ascii")
-                for worker in range(workers)
-            ]
-            if len(set(manifests)) != 1:
-                print("Workers collected different tests", file=sys.stderr)
-                return 1
-            if workers > 1 and folder != "examples":
-                count = int(manifests[0].split()[0])
-                claimed = sum(1 for _ in (Path(state) / "claims").iterdir())
-                if claimed != count:
-                    print(f"Assigned {claimed} of {count} collected tests", file=sys.stderr)
-                    return 1
-    # A failed worker always wins over an empty collection.
-    return next((code for code in statuses if code not in (0, 5)), 5 if 5 in statuses else 0)
+def inventory_path(directory: Path, folder: str) -> Path:
+    return directory / folder / "items.json"
 
 
-def pytest_worker(folder: str, shard: int, total: int, worker: int, workers: int, reports: Path, state: Path) -> int:
+def collect_component(folder: str, directory: Path) -> int:
     import pytest
 
-    # Match python -m pytest's import path while registering the partition
-    # after normal collection, including conftest exclusions and plug-ins.
     sys.path.insert(0, str(ROOT))
-    files = test_files(folder)
-    dynamic = workers > 1 and folder != "examples"
-    claims = state / "claims"
-    claims.mkdir(exist_ok=True)
+    dest = inventory_path(directory, folder)
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    collection_report = dest.with_name("collection.xml")
+    items: list[str] = []
+    config_path = None
 
-    class Partition:
-        had_items = False
+    class Inventory:
+        def pytest_collection_finish(self, session):
+            nonlocal config_path
+            items.extend(item.nodeid for item in session.items)
+            config_path = str(session.config.inipath.relative_to(ROOT)) if session.config.inipath else None
 
-        @pytest.hookimpl(trylast=True)
-        def pytest_collection_modifyitems(self, items):
-            self.had_items = bool(items)
-            collected = {item.path.relative_to(ROOT).as_posix() for item in items}
-            assigned = set(sorted(set(files) | collected)[shard::total])
-            local = [item for item in items if item.path.relative_to(ROOT).as_posix() in assigned]
-            digest = hashlib.sha256(json.dumps([item.nodeid for item in local]).encode()).hexdigest()
-            (state / f"collection-{worker}").write_text(f"{len(local)} {digest}", encoding="ascii")
-            if folder != "examples":
-                items[:] = local
-                return
-            # Preserve file-scoped state, including coverage accumulated across
-            # parametrized examples. Form-reader tests use an immutable store,
-            # and can run in two processes with their own module fixture.
-            forms = ROOT / "examples/subsidy/test_subsidy_forms.py"
-            form_items = sorted((item for item in local if item.path == forms), key=lambda item: item.nodeid)
-            if workers > 2 and form_items:
-                if worker < 2:
-                    chosen = set(form_items[worker::2])
-                    items[:] = [item for item in local if item in chosen]
-                    return
-                local = [item for item in local if item.path != forms]
-                index, slots = worker - 2, workers - 2
-            else:
-                index, slots = worker, workers
-            by_file = sorted({item.path for item in local})
-            worker_files = set(by_file[index::slots])
-            items[:] = [item for item in local if item.path in worker_files]
+    result = pytest.main(
+        [folder, "--collect-only", "-qq", "--rootdir", str(ROOT), f"--junitxml={collection_report}"],
+        plugins=[Inventory()],
+    )
+    if result == pytest.ExitCode.NO_TESTS_COLLECTED:
+        # A component without tests is valid only with the original blocked-file evidence.
+        if folder == "contracts/python" or subprocess.call(
+            [sys.executable, str(ROOT / "scripts/red_list.py"), "--all-tests-blocked", folder]
+        ):
+            return 1
+    elif result:
+        return int(result)
+    if len(items) != len(set(items)):
+        raise ValueError(f"{folder}: duplicate pytest node IDs in the inventory")
+    files = sorted(set(test_files(folder)) | {i.split("::", 1)[0] for i in items})
+    dest.write_text(json.dumps({"items": items, "files": files, "config": config_path}), encoding="utf-8")
+    print(f"{folder}: inventoried {len(items)} node IDs from {len(files)} test files", flush=True)
+    return 0
 
-        @pytest.hookimpl(tryfirst=True)
-        def pytest_runtestloop(self, session):
-            if not dynamic or session.testsfailed or session.config.option.collectonly:
-                return None
 
-            def acquire():
-                for index, item in enumerate(session.items):
-                    try:
-                        (claims / str(index)).touch(exist_ok=False)
-                    except FileExistsError:
-                        continue
-                    yield item
+def pytest_folder(component: dict) -> str:
+    return component["folder"] + ("/python" if component["kind"] == "contracts" else "")
 
-            # Reserve work just in time. Passing the next item through pytest's
-            # standard protocol preserves fixture setup and teardown.
-            available = acquire()
-            item = next(available, None)
-            while item is not None:
-                following = next(available, None)
-                item.config.hook.pytest_runtest_protocol(item=item, nextitem=following)
-                if session.shouldfail:
-                    raise session.Failed(session.shouldfail)
-                if session.shouldstop:
-                    raise session.Interrupted(session.shouldstop)
-                item = following
-            return True
 
-        @pytest.hookimpl(wrapper=True)
-        def pytest_make_collect_report(self, collector):
-            report = yield
-            # Module-level skips happen at collection, before items are split.
-            # Report each on exactly one runner.
-            if report.skipped and (shard or worker):
-                report.outcome = "passed"
-                report.result = []
-            return report
+def collect_matrix(matrix: list[dict], directory: Path) -> int:
+    folders = sorted({pytest_folder(c) for c in matrix})
+    def collect(folder: str) -> int:
+        return subprocess.call([sys.executable, __file__, "collect-component", folder, str(directory)])
+    with ThreadPoolExecutor(max_workers=runner_cores()) as pool:
+        statuses = list(pool.map(collect, folders))
+        return next((code for code in statuses if code), 0)
 
-    partition = Partition()
-    report = reports / f"pytest-{worker}.xml"
-    args = ["-q", "--durations=5", f"--junitxml={report}", folder]
-    status = pytest.main(args, plugins=[partition])
-    if status == pytest.ExitCode.NO_TESTS_COLLECTED and partition.had_items:
-        return 0
-    return int(status)
+
+def shard_items(plan: dict, shard: int, total: int) -> list[str]:
+    files = set(plan["files"][shard::total])
+    return [node for node in plan["items"] if node.split("::", 1)[0] in files]
+
+
+def weighted_workers(items: list[str], workers: int, weights: dict[str, int], default: int) -> list[list[str]]:
+    """Assign expensive IDs first, resolving ties in inventory order, then retain pytest's order."""
+    loads = [0] * workers
+    assigned = {}
+    for node in sorted(items, key=lambda item: -weights.get(item, default)):
+        slot = min(range(workers), key=loads.__getitem__)
+        assigned[node] = slot
+        loads[slot] += weights.get(node, default)
+    groups = [[] for _ in range(workers)]
+    for node in items:
+        groups[assigned[node]].append(node)
+    return groups
+
+
+def worker_items(folder: str, items: list[str], workers: int) -> list[list[str]]:
+    if folder == "compiler" and workers > 1:
+        # The profile records calls at or above its threshold from each compiler worker's
+        # five reported durations in the linked run. The default is the sum of worker pytest
+        # times minus those calls, divided by the remaining IDs, rounded to milliseconds.
+        profile = json.loads((ROOT / ".github/workflows/compiler-duration-profile.json").read_text(encoding="utf-8"))
+        return weighted_workers(items, workers, profile["call_ms"], profile["default_ms"])
+    if folder != "examples" or workers == 1:
+        return [items[n::workers] for n in range(workers)]
+    # Keep the examples' file-scoped accumulation and the two independent immutable readers.
+    forms = "examples/subsidy/test_subsidy_forms.py"
+    readers = sorted(i for i in items if i.split("::", 1)[0] == forms)
+    groups = [[] for _ in range(workers)]
+    offset = 2 if readers and workers > 2 else 0
+    if offset:
+        # Keep pytest collection order within each execution process.
+        first = set(readers[::2])
+        for node in items:
+            if node in first:
+                groups[0].append(node)
+            elif node in readers:
+                groups[1].append(node)
+    others = [i for i in items if not offset or i.split("::", 1)[0] != forms]
+    files = sorted({i.split("::", 1)[0] for i in others})
+    slots = {f: offset + n % (workers - offset) for n, f in enumerate(files)}
+    for node in others:
+        groups[slots[node.split("::", 1)[0]]].append(node)
+    return groups
+
+
+def execute_worker(assignment: Path, journal: Path, report: Path) -> int:
+    import pytest
+
+    sys.path.insert(0, str(ROOT))
+    data = json.loads(assignment.read_text(encoding="utf-8"))
+    expected = data["items"]
+    with journal.open("w", encoding="utf-8", buffering=1) as evidence:
+        if not expected:
+            return 0
+
+        class Evidence:
+            def pytest_collection_finish(self, session):
+                found = [i.nodeid for i in session.items]
+                if Counter(found) != Counter(expected):
+                    raise pytest.UsageError("The requested pytest IDs resolved to a different set")
+
+            def pytest_runtest_logstart(self, nodeid, location):
+                print(json.dumps(["start", nodeid]), file=evidence)
+
+            def pytest_runtest_logfinish(self, nodeid, location):
+                print(json.dumps(["finish", nodeid]), file=evidence)
+
+        args = ["-q", "--durations=5", "--rootdir", str(ROOT), f"--junitxml={report}"]
+        if data["config"]:
+            args.extend(["-c", data["config"]])
+        # Pytest resolves only assigned IDs, without walking the component again.
+        return int(pytest.main([*args, "--", *expected], plugins=[Evidence()]))
+
+
+def run_shard(folder: str, shard: int, total: int, plans: Path, reports: Path, receipts: Path) -> int:
+    plan = json.loads(inventory_path(plans, folder).read_text(encoding="utf-8"))
+    reports.mkdir(parents=True, exist_ok=True)
+    evidence = receipts / folder
+    evidence.mkdir(parents=True, exist_ok=True)
+    selected = shard_items(plan, shard, total)
+    groups = worker_items(folder, selected, runner_cores() if folder in PARALLEL else 1)
+    if Counter(i for group in groups for i in group) != Counter(selected):
+        raise ValueError("Worker assignments differ from the shard inventory")
+    print(f"{folder} shard {shard+1}/{total}: {len(selected)} test IDs", flush=True)
+    def execute(pair):
+        index, nodes = pair
+        assignment = reports / f"assignment-{index}.json"
+        assignment.write_text(json.dumps({"items": nodes, "config": plan["config"]}), encoding="utf-8")
+        return subprocess.call([
+            sys.executable, __file__, "execute-worker", str(assignment),
+            str(evidence / f"{shard}-{index}.jsonl"), str(reports / f"pytest-{index}.xml"),
+        ])
+    with ThreadPoolExecutor(max_workers=len(groups)) as pool:
+        statuses = list(pool.map(execute, enumerate(groups)))
+        status = next((code for code in statuses if code), 0)
+    # Write the expected number of journals even on failure, for diagnosis.
+    (evidence / f"{shard}.json").write_text(json.dumps(len(groups)), encoding="utf-8")
+    return status
+
+
+def verify_execution(matrix: list[dict], plans: Path, receipts: Path) -> int:
+    success = True
+    for folder in sorted({pytest_folder(c) for c in matrix}):
+        rows = [c for c in matrix if pytest_folder(c) == folder]
+        plan = json.loads(inventory_path(plans, folder).read_text(encoding="utf-8"))
+        observed = {"start": Counter(), "finish": Counter()}
+        for row in rows:
+            shard, total = row["shard"], row["total"]
+            directory = receipts / folder
+            expected = Counter(shard_items(plan, shard, total))
+            shard_counts = {"start": Counter(), "finish": Counter()}
+            try:
+                workers = json.loads((directory / f"{shard}.json").read_text(encoding="utf-8"))
+                for index in range(workers):
+                    journal = (directory / f"{shard}-{index}.jsonl").read_text(encoding="utf-8")
+                    for line in journal.splitlines():
+                        event, node = json.loads(line)
+                        shard_counts[event][node] += 1
+            except (OSError, ValueError, KeyError) as error:
+                print(f"{folder} shard {shard+1}: incomplete evidence: {error}", file=sys.stderr)
+                success = False
+            for event, counts in shard_counts.items():
+                observed[event].update(counts)
+                if counts != expected:
+                    print(f"{folder} shard {shard+1} {event}: missing {list((expected-counts).elements())}, "
+                          f"extra {list((counts-expected).elements())}", file=sys.stderr)
+                    success = False
+        for event, counts in observed.items():
+            if counts != Counter(plan["items"]):
+                print(f"{folder}: {event} differs from full component inventory", file=sys.stderr)
+                success = False
+        print(f"{folder}: inventoried {len(plan['items'])}, started {observed['start'].total()}, "
+              f"finished {observed['finish'].total()}")
+    return 0 if success else 1
 
 
 def main() -> int:
-    if sys.argv[1:2] == ["pytest-worker"]:
-        folder, shard, total, worker, workers, reports, state = sys.argv[2:]
-        return pytest_worker(folder, int(shard), int(total), int(worker), int(workers), Path(reports), Path(state))
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest="cmd", required=True)
     sub.add_parser("list", help="List discovered component folders and kinds.")
@@ -365,7 +465,20 @@ def main() -> int:
     shard_p.add_argument("folder")
     shard_p.add_argument("shard", type=int)
     shard_p.add_argument("total", type=int)
+    shard_p.add_argument("plans", type=Path)
     shard_p.add_argument("reports", type=Path)
+    shard_p.add_argument("receipts", type=Path)
+    collect = sub.add_parser("collect-component")
+    collect.add_argument("folder")
+    collect.add_argument("plans", type=Path)
+    for name in ("inventory", "verify-execution"):
+        command = sub.add_parser(name)
+        command.add_argument("plans", type=Path)
+        if name == "verify-execution":
+            command.add_argument("receipts", type=Path)
+    worker = sub.add_parser("execute-worker")
+    for name in ("assignment", "journal", "report"):
+        worker.add_argument(name, type=Path)
     matrix_p = sub.add_parser("ci-matrix", help="Emit GitHub Actions matrix outputs.")
     matrix_p.add_argument("--base-ref", default=os.environ.get("GITHUB_BASE_REF", ""))
     matrix_p.add_argument("--before", default=os.environ.get("GITHUB_EVENT_BEFORE", ""))
@@ -374,7 +487,15 @@ def main() -> int:
     if args.cmd == "check-contracts":
         return check_contracts()
     if args.cmd == "run-shard":
-        return run_shard(args.folder, args.shard, args.total, args.reports)
+        return run_shard(args.folder, args.shard, args.total, args.plans, args.reports, args.receipts)
+    if args.cmd == "inventory":
+        return collect_matrix(json.loads(os.environ["PYTHON_MATRIX"]), args.plans)
+    if args.cmd == "collect-component":
+        return collect_component(args.folder, args.plans)
+    if args.cmd == "execute-worker":
+        return execute_worker(args.assignment, args.journal, args.report)
+    if args.cmd == "verify-execution":
+        return verify_execution(json.loads(os.environ["PYTHON_MATRIX"]), args.plans, args.receipts)
     if args.cmd == "list":
         for comp in discover_components():
             print(f"{comp.folder}\t{comp.kind}")

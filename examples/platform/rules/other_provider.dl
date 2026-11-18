@@ -1,0 +1,6 @@
+// An authored choice bypasses every other provider of the same function.
+.decl other_provider(source: symbol, available: symbol, function: symbol, chosen: symbol, choice: symbol)
+other_provider(source, available, function, chosen, choice) :-
+    choice__service(choice, source), choice__function(choice, function), choice__provider(choice, chosen),
+    provider(available, function), available != chosen.
+.output other_provider

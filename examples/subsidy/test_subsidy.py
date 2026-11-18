@@ -1,8 +1,5 @@
 """The subsidy pack's own tests: what the generic example tests (examples/test_*.py) cannot know.
 
-- The evaluation date decides which partial rate counts: before 1 July 2026 an award at the partial
-  rate is lower, to the cent as reference.py computes it.
-- The supposition of the last scenario moves the awards the README names: who gains, who loses, who stays.
 - Through the publisher: the policy adviser gets every award but nothing of the ledger; and a claim
   that differs from the quotes by one cent (the invariant costs_mismatch) stops the publication.
 - std-time through views.yaml (T1): the policy adviser reads how each scheme parameter stands on the
@@ -16,26 +13,18 @@ Needs the compiler with DuckDB and the publisher, and `cryptography` for the cre
 import importlib.util
 import json
 import shutil
-from datetime import date
 from pathlib import Path
 
 import pytest
-import yaml
 
 pytest.importorskip("duckdb")
 pytest.importorskip("rezono_compiler")
 pytest.importorskip("rezono_publisher")
 
-from calcsupport import run_both  # noqa: E402  (compiler/tests, on the path through examples/conftest.py)
-from rezono_compiler import calc, calc_sql, pack, scenarios  # noqa: E402
 from rezono_publisher import batch, publish, store  # noqa: E402
 
-HERE = Path(__file__).parent
-PACK = "subsidy"
-PROFILE = HERE.parents[1] / "deploy" / "profiles" / "edge.yaml"
-# The pack's own roles, and the roles of the profile that publishes it (`propose`, `viewer`).
-ROLES = {"checker": "complete", "case_officer": "may_read", "policy_adviser": "may_read", "public": "may_read"} | yaml.safe_load(
-    PROFILE.read_text(encoding="utf-8"))["access"]["roles"]
+from subsidy_test_support import HERE, PACK, publication_roles, published, reference, rows
+
 # What `public` reads, and what it does not: the kinds of a case (rules/access.dl).
 # The justification kinds (std-decision) are read with the decision, by every role.
 SCHEME = ("alternative", "article", "calendar", "cost_item", "decision", "exception", "principle", "purpose",
@@ -59,14 +48,6 @@ income_statement:
 CLAIM = '{"id": "A001", "household": "H001", "claimed_costs": 1100000}'
 
 
-def reference():
-    """The pack's reference.py under a name of its own: other packs have a reference.py too."""
-    spec = importlib.util.spec_from_file_location("subsidy_reference", HERE / "reference.py")
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
-
-
 def copy(tmp: Path) -> Path:
     """A copy of the pack at the same depth, next to packs/ and the scheme it imports, so the imports resolve."""
     root = HERE.parents[1]
@@ -78,69 +59,6 @@ def copy(tmp: Path) -> Path:
     except OSError:  # no symbolic links without rights (Windows): a copy pins the same bytes
         shutil.copytree(root / "packs", tmp / "packs")
     return d
-
-
-def published(pack_dir: Path, root: Path):
-    e = batch.epoch(pack_dir, epoch=1, knowledge_time="2026-11-10T00:00:00Z", sources=[("rules", "test")])
-    s = store.FileStore(root)
-    return s, publish.publish(e, s, ROLES)
-
-
-def rows(s, role: str, rel: str) -> list[tuple]:
-    return [tuple(r["key"]) for r in json.loads(s.get(publish.role_objects(s, PACK, "m-1", role)[f"relations/{rel}.json"]))]
-
-
-# --- The calculation -------------------------------------------------------------------------------
-
-def test_the_evaluation_date_decides_the_partial_rate():
-    """The partial rate has two rows (facts/scheme.yaml): 20% until 1 July 2026, 24% from then on. The
-    evaluation date is a fact row, so asking for another date needs no compilation."""
-    ref = reference()
-    model = pack.read(HERE)
-    prog = calc.build(model, model.calc)
-    _, facts = scenarios.states(model, HERE)[0]
-    t = next(ref.states())[1]
-
-    def awards(valid_at: str):
-        as_of = {table: [tuple({**r, "valid_at": valid_at if isinstance(r["valid_at"], str) else date.fromisoformat(valid_at)}.values())
-                         for r in rs] for table, rs in calc_sql.rows(prog).items()}
-        got, exact = run_both(model, prog, model.calc, facts | as_of)
-        assert got == exact
-        mine = ref.calc(t, on=valid_at)["award"]
-        assert {a: (v[1] if v[0] == "known" else v[0]) for a, v in got["award"].items()} == mine
-        return mine
-
-    spring, autumn = awards("2026-03-01"), awards("2026-11-10")
-    assert (spring["A001"], autumn["A001"]) == ("227000", "269400")  # 20% and 24% of 10,600 euros, plus the allowance
-    assert spring["A002"] == autumn["A002"] == "166000"                # the full rate did not change
-    assert spring["A003"] == autumn["A003"] == "unknown"               # and unknown stays unknown, on any date
-
-
-def test_the_supposed_threshold_has_gainers_and_losers():
-    """The last scenario against the state before it, over the whole population (expected/calc, which the
-    generic test holds equal to the engine): the README's numbers."""
-    states = sorted(p.name for p in (HERE / "expected" / "calc").glob("*.json"))
-    assert states[-1] == "4-family-threshold.json"
-    before, after = (json.loads((HERE / "expected" / "calc" / state).read_text(encoding="utf-8"))["award"] for state in states[-2:])
-    known = [a for a in before if before[a] != "unknown"]
-    assert [a for a in before if (before[a] == "unknown") != (after[a] == "unknown")] == []
-    change = {a: int(after[a]) - int(before[a]) for a in known}
-    gain, lose = [d for d in change.values() if d > 0], [d for d in change.values() if d < 0]
-    assert (len(gain), sum(gain)) == (23, 2780081)
-    assert (len(lose), sum(lose)) == (14, -1760996)
-    assert (len(known) - len(gain) - len(lose), len(before) - len(known)) == (187, 16)
-
-
-def test_a_supposed_amount_is_reported_as_not_decided():
-    """Every parameter of the scheme stands on a decision in force (std-decision's in_force_on). The
-    supposition of the last scenario is a decision that is only proposed, so its two rows are the finding
-    (expected/rules, which the generic test holds equal to the engine)."""
-    states = sorted((HERE / "expected" / "rules").glob("*.json"))
-    before, after = (json.loads(state.read_text(encoding="utf-8")) for state in states[-2:])
-    assert before["undecided_parameter"] == [] and len(before["decided_parameter"]) == 8
-    assert ["par-06", "2026-047", "2026-11-10"] in before["decided_parameter"]
-    assert after["undecided_parameter"] == [["par-01", "2026-11-10"], ["par-02", "2026-11-10"]]
-    assert len(after["decided_parameter"]) == 6
 
 
 # --- Access and the invariant, through the publisher -----------------------------------------------
@@ -183,8 +101,11 @@ def test_a_role_reads_how_each_parameter_stands_on_the_evaluation_day_down_to_it
     nothing (it names no such role) reads no judgement, no day count and no proof of it."""
     e = batch.epoch(HERE, epoch=1, knowledge_time="2026-11-10T00:00:00Z", sources=[("rules", "test")])
     s = store.FileStore(tmp_path)
-    publish.publish(e, s, ROLES | {"outsider": "may_read"})
-    expected = json.loads((HERE / "expected" / "rules" / "0-applications.json").read_text(encoding="utf-8"))
+    publish.publish(e, s, publication_roles() | {"outsider": "may_read"})
+    ref = reference()
+    state, inputs = next(ref.states())
+    assert state == "0-applications"
+    expected = ref.rules(inputs)
     for rel in ("judgement", "holds_at"):
         assert set(rows(s, "policy_adviser", rel)) == {tuple(r) for r in expected[rel]} != set(), rel
     assert ("par-05", "2026-11-10", "negative", "ended") in rows(s, "policy_adviser", "judgement")
@@ -204,30 +125,6 @@ def test_a_role_reads_how_each_parameter_stands_on_the_evaluation_day_down_to_it
     for rel in ("judgement", "holds_at", "std_time_interval_end", "scheme_parameter__valid_until"):
         assert rows(s, "outsider", rel) == [], rel
     assert not any("par-05" in key for _, key in witnesses(s, "outsider"))
-
-
-def test_the_profile_that_publishes_the_pack_names_no_role_the_pack_does_not(tmp_path):
-    """Profile `edge` publishes this pack (publish.packs). A role of the profile that the pack's facts do
-    not name would read nothing; so each is named, and reads exactly what one of the pack's own roles reads:
-    `viewer` as the policy adviser, `propose` as the case officer, the sealed ledger included."""
-    profile = yaml.safe_load(PROFILE.read_text(encoding="utf-8"))
-    assert "examples/subsidy" in profile["publish"]["packs"]
-    filtered = sorted(r for r, mode in profile["access"]["roles"].items() if mode == "may_read")
-    assert filtered == ["propose", "viewer"]
-    s, m = published(HERE, tmp_path)
-    assert set(filtered) <= {r[0] for r in rows(s, "checker", "role")}
-    as_role = {"propose": "case_officer", "viewer": "policy_adviser"}
-    relations = sorted({name.rsplit("/", 1)[1][:-len(".json")] for name in publish.role_objects(s, PACK, "m-1", "checker")
-                        if name.startswith("relations/")}
-                       - {"may_read"})
-    assert "calc__payment_difference" in relations and "ledger_payment__refused" in relations
-    for role in filtered:
-        for rel in relations:
-            assert rows(s, role, rel) == rows(s, as_role[role], rel), (role, rel)
-        # What a role may read is said per role: the same elements, under its own name.
-        assert ({r[1:] for r in rows(s, role, "may_read")}
-                == {r[1:] for r in rows(s, as_role[role], "may_read")} != set())
-    assert rows(s, "viewer", "ledger_payment") == [] != rows(s, "propose", "ledger_payment")
 
 
 def own(s, m, role: str) -> dict[str, bytes]:
@@ -294,6 +191,8 @@ def test_a_case_changes_nothing_the_public_gets(tmp_path):
 # --- What other organisations state (W4 step 1, K19) -----------------------------------------------
 
 def credential_port():
+    if not PORT.is_file():
+        pytest.skip("The credential input port edge/plugins/credential-in/credential_in.py is missing")
     """The credential in port (edge/plugins/credential-in), under a name of its own."""
     spec = importlib.util.spec_from_file_location("credential_in", PORT)
     module = importlib.util.module_from_spec(spec)

@@ -6,7 +6,6 @@ import pytest
 import yaml
 
 
-@pytest.mark.xfail(strict=True, reason="Depends on the platform NetworkPolicy generator and test_managed_policy_baseline_and_directional_grants. Implement the release-bound batch preflight in k8s-admission/rendered_preflight.py. Read decisions/k8s-admission-rules.md.")
 def test_real_platform_policy_bundle_passes_preflight(monkeypatch):
     platform_dir = Path(__file__).resolve().parents[1] / "examples" / "platform"
     monkeypatch.syspath_prepend(str(platform_dir))

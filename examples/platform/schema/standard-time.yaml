@@ -1,0 +1,17 @@
+id: https://rezono.org/examples/platform-core/standard-time
+name: platform_standard_time
+description: Support intervals on an explicit day axis.
+in_language: en
+prefixes:
+  linkml: https://w3id.org/linkml/
+imports:
+  - linkml:types
+  - std-time:time
+default_range: string
+annotations:
+  layer: facts
+
+classes:
+  PlatformSupportPeriod:
+    is_a: Interval
+    description: The period for which a release receives platform support.

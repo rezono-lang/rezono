@@ -1,0 +1,4 @@
+platform_delivery_component:
+  - {id: database, part_of: delivery}
+  - {id: delivery, part_of: catalog-entry}
+  - {id: catalog-entry}

@@ -1,11 +1,12 @@
 """Every example pack with rules/, per fact state (facts/, then each scenario): the derived relations
-equal the pack's own reference (expected/rules) and Soufflé, incremental recompute equals batch, every
+equal the pack's own independent reference and Soufflé, incremental recompute equals batch, every
 derived row has a proof that the independent checker accepts, and the explained output (snapshots and
 proofs for the viewer) is byte-equal to expected/explained. Nothing here knows a pack."""
 
 import importlib
 import json
 import re
+import runpy
 import shutil
 from functools import lru_cache
 from pathlib import Path
@@ -34,40 +35,80 @@ def tree(d: Path) -> dict[str, bytes]:
     return {p.relative_to(d).as_posix(): p.read_bytes() for p in sorted(d.rglob("*")) if p.is_file()}
 
 
+def relation_rows(document):
+    assert document, "the reference must name the relations it checks"
+    return {relation: {tuple(map(str, row)) for row in rows} for relation, rows in document.items()}
+
+
 def reference(example, labels) -> dict[str, dict[str, set]]:
-    """{state: {relation: rows}} as the pack's reference gives them. One reference writes
-    expected/rules/<state>.json. A pack with a reference per module (reference/<module>.py) has
-    expected/rules/<module>/<state>.json instead: each module names its own relations, in every fact state, and
-    a relation several modules add to (the read rules) is the union of what they name."""
+    """Read the pack's independently authored rows for exactly the requested fact states."""
     root = example / "expected" / "rules"
+    if not root.is_dir() and (example / "reference.py").is_file():
+        source = runpy.run_path(str(example / "reference.py"))
+        # The reference applies each scenario to the previous state in place. Read its rows before advancing.
+        result = {}
+        for label, facts in source["states"]():
+            assert label not in result, label
+            result[label] = relation_rows(source["rules"](facts))
+        assert list(result) == labels, "one independent reference per fact state"
+        return result
+    if not root.is_dir() and (example / "oracle-rows.json").is_file():
+        assert len(labels) == 1 and labels[0].startswith("0-"), "one reference snapshot covers only initial facts"
+        rows = json.loads((example / "oracle-rows.json").read_text(encoding="utf-8"))
+        return {labels[0]: relation_rows(rows)}
+    # A modular reference contributes its own relations in every state. Read rules may span modules.
     parts = [root] if list(root.glob("*.json")) else sorted(d for d in root.iterdir() if d.is_dir())
+    assert parts, f"{root}: no independent rule references"
     out: dict[str, dict[str, set]] = {label: {} for label in labels}
     for part in parts:
         files = sorted(part.glob("*.json"))
         assert [f.stem for f in files] == labels, f"{part.relative_to(example)}: one file per fact state"
         for f in files:
-            for relation, rows in json.loads(f.read_text()).items():
+            for relation, rows in json.loads(f.read_text(encoding="utf-8")).items():
                 out[f.stem].setdefault(relation, set()).update(tuple(str(x) for x in r) for r in rows)
+    assert all(out.values()), f"{root}: a fact state has no reference relations"
     return out
 
 
-@pytest.mark.xfail(strict=True, reason="generated expected/rules goldens are not stored in git")
-@pytest.mark.parametrize("example", RULED, ids=name)
-def test_same_as_the_pack_reference(example):
-    """expected/rules, written by the pack's own reference, names the outcomes it checks, and the refused and
-    accepted input of a seal, which the reference computes itself."""
+class MissingPlatformRelations(AssertionError):
+    """The outstanding cluster projections from the independent platform reference."""
+
+
+PLATFORM = Path(__file__).resolve().parent / "platform"
+PENDING_PLATFORM = {
+    "cluster_endpoint_host", "cluster_endpoint_network", "cluster_endpoint_zone", "cluster_firewall_rule",
+    "cluster_fleet_member", "cluster_flow", "cluster_in_zone_policy", "cluster_machine_stack",
+    "cluster_network_stack", "cluster_service_placement", "cluster_worker_host", "cluster_worker_interface",
+}
+
+
+@pytest.mark.parametrize("example, pending", [
+    *(pytest.param(p, set(), id=name(p)) for p in RULED if p != PLATFORM),
+    pytest.param(PLATFORM, PENDING_PLATFORM, id="platform", marks=pytest.mark.xfail(
+        strict=True, raises=MissingPlatformRelations,
+        reason="Waits for the platform cluster projection tasks in examples/platform/proof_cases. "
+               "Read decisions/platform-derivation-acceptance.md. Every implemented relation must already agree.")),
+])
+def test_same_as_the_pack_reference(example, pending):
+    """Compare every named row and both sides of every seal, including expected empty relations."""
     _, _, run = states(example)
     wanted = reference(example, [s.label for s in run])
+    missing = set()
     for s in run:
         want = wanted[s.label]
         have = s.derived | s.seal
+        assert pending <= want.keys(), f"{s.label}: the reference omits a pending relation"
         assert sorted(set(s.seal) - set(want)) == [], f"{s.label}: the reference skips the seal"
         for relation, rows in sorted(want.items()):
+            if relation not in have and relation in pending:
+                missing.add(relation)
+                continue
             assert relation in have, f"{s.label}: {relation} is not derived"
             assert have[relation] == rows, f"{s.label}: {relation}"
+    if missing:
+        raise MissingPlatformRelations(sorted(missing))
 
 
-@pytest.mark.xfail(strict=True, reason="generated expected/rules goldens are not stored in git")
 @pytest.mark.parametrize("example", RULED, ids=name)
 def test_every_named_outcome_is_checked_by_the_reference_and_holds(example):
     """The pack's reference computes every named outcome itself (state and reason), and in
@@ -177,18 +218,29 @@ def test_a_changed_proof_is_refused(example):
             assert not check(proof, manifest, rules, read)["valid"], rel
 
 
-@pytest.mark.xfail(strict=True, reason="generated expected/explained goldens are not stored in git")
+class MissingExplainedReference(FileNotFoundError):
+    """The pack has no independent byte reference for the explained output."""
+
+
+@pytest.mark.xfail(strict=True, raises=MissingExplainedReference, reason=(
+    "Needs independent expected/explained bytes for every example fact state, proof and referenced "
+    "snapshot. A row reference alone cannot verify the serialized proof."))
 @pytest.mark.parametrize("example", RULED, ids=name)
 def test_explained_output_is_the_golden(example, tmp_path):
-    """What goes to the viewer: per state one proof per derived relation, with complete snapshots.
-    A new or changed golden comes from CI (artifact compiled-examples), never from a local machine."""
-    model, _, _ = states(example)
+    """Check all emitted proof and snapshot bytes against the pack's independent reference."""
+    model, _, run = states(example)
     got = explained(model, example)
-    want = tree(example / "expected" / "explained") if (example / "expected" / "explained").is_dir() else {}
-    diff = differences({k: v.encode() for k, v in got.items()}, want)
+    assert {path for path in got if path.endswith("/proofs.json")} == {f"{s.label}/proofs.json" for s in run}
+    for state in run:
+        proofs = json.loads(got[f"{state.label}/proofs.json"])
+        assert [(p["root"]["relation"], tuple(json.loads(p["root"]["key"]))) for p in proofs] == [
+            (rel, min(rows)) for rel, rows in sorted(state.derived.items()) if rows
+        ], state.label
+        for proof in proofs:
+            for rel in explain.relations_of(proof):
+                assert f"{state.label}/snapshots/{rel}.json" in got
+    root = example / "expected" / "explained"
+    if not root.is_dir():
+        raise MissingExplainedReference(f"{name(example)}: missing expected/explained")
+    diff = differences({k: v.encode() for k, v in got.items()}, tree(root))
     assert not diff, diff
-    for path, text in got.items():
-        if path.endswith("proofs.json"):
-            for proof in json.loads(text):
-                for rel in explain.relations_of(proof):
-                    assert f"{path.rsplit('/', 1)[0]}/snapshots/{rel}.json" in got

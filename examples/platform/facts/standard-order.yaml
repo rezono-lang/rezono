@@ -1,0 +1,4 @@
+platform_order_stage:
+  - {id: request, precedes: [review]}
+  - {id: review, precedes: [apply]}
+  - {id: apply}

@@ -1,0 +1,17 @@
+id: https://rezono.org/examples/platform-core/standard-order
+name: platform_standard_order
+description: Ordered stages of a platform proposal.
+in_language: en
+prefixes:
+  linkml: https://w3id.org/linkml/
+imports:
+  - linkml:types
+  - std-order:order
+default_range: string
+annotations:
+  layer: facts
+
+classes:
+  PlatformOrderStage:
+    is_a: Ordered
+    description: A stage in the platform proposal workflow.

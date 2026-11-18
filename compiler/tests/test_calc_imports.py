@@ -349,8 +349,6 @@ def test_definition_hash_covers_each_file_family(tmp_path):
     assert modules.pack_hash(tmp_path) == hashlib.sha256(canonical).hexdigest()
 
 
-@pytest.mark.xfail(strict=True, raises=FileNotFoundError,
-                   reason="Document the definition-file families in docs/compiler/pack.md; see decisions/pack-hash-coverage.md.")
 def test_hash_documentation_covers_every_definition_file_family():
     said = next(line for line in (REPO / "docs" / "compiler" / "pack.md").read_text(encoding="utf-8").splitlines()
                 if line.startswith("- **The hash**"))

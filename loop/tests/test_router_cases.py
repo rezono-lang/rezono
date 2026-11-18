@@ -5,7 +5,6 @@ import pytest
 from wire_fixtures import entry, fixture
 
 
-@pytest.mark.xfail(strict=True, reason="Read decisions/loop-fixture-evidence.md. Implement loop/router_cases.py. Classify only the registered cases against the union of allowances.")
 def test_router_cases(monkeypatch):
     router_verdicts = entry(monkeypatch, "router_cases", "router_verdicts")
     net = fixture("network")

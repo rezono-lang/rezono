@@ -1,0 +1,100 @@
+name: Prepare component test environment
+description: Install the locked toolchain, local packages, and generated contract types
+inputs:
+  editable:
+    description: Editable package arguments from component discovery
+    required: true
+  oracle:
+    description: Install the pinned Souffle oracle
+    default: 'false'
+  save-cache:
+    description: Populate the shared locked-environment cache
+    default: 'false'
+runs:
+  using: composite
+  steps:
+    - name: Cache locked Python environment
+      id: environment
+      uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830  # v4.3.0
+      with:
+        path: .venv
+        key: python-env-v2-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('requirements/.python-version', 'requirements/dev.txt') }}
+    - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0  # v7.1.0
+      with:
+        python-version-file: requirements/.python-version
+        cache: ${{ steps.environment.outputs.cache-hit != 'true' && 'pip' || '' }}
+        cache-dependency-path: requirements/dev.txt
+    - name: Install from lockfile
+      env:
+        CACHE_HIT: ${{ steps.environment.outputs.cache-hit }}
+      shell: bash
+      run: |
+        set -euo pipefail
+        if [[ "$CACHE_HIT" != true ]]; then
+          python -m venv .venv
+          .venv/bin/python -m pip install -q --no-deps --require-hashes -r requirements/dev.txt
+        fi
+    - name: Save locked environment before installing local packages
+      if: steps.environment.outputs.cache-hit != 'true' && inputs.save-cache == 'true'
+      uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830  # v4.3.0
+      with:
+        path: .venv
+        key: ${{ steps.environment.outputs.cache-primary-key }}
+    - name: Install repository packages
+      env:
+        EDITABLE: ${{ inputs.editable }}
+      shell: bash
+      run: |
+        set -euo pipefail
+        export PATH="$PWD/.venv/bin:$PATH"
+        echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
+        read -ra packages <<< "$EDITABLE"
+        python -m pip install -q --no-deps --no-build-isolation "${packages[@]}"
+        python scripts/check-pinned.py requirements/dev.txt
+    - name: Cache generated contract types
+      id: types
+      uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830  # v4.3.0
+      with:
+        path: |
+          contracts/python/rezono_contracts/*.py
+          contracts/python/rezono_contracts/*.schema.json
+          viewer/src/lib/contract/generated
+        key: contract-types-v1-${{ runner.os }}-${{ hashFiles('requirements/.python-version', 'requirements/dev.txt', 'contracts/*.yaml', 'contracts/gen-types.sh', 'contracts/python/rezono_contracts/**', 'viewer/package.json', 'viewer/src/lib/contract/generated/**') }}
+    - name: Cache the pinned oracle and its distribution packages
+      if: inputs.oracle == 'true'
+      id: oracle
+      uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830  # v4.3.0
+      with:
+        path: |
+          ${{ runner.temp }}/oracle-debs/*.deb
+          ${{ runner.temp }}/oracle-debs/SHA256SUMS
+        key: oracle-ubuntu-24.04-${{ runner.arch }}-${{ hashFiles('scripts/install-souffle.sh') }}
+    - name: Install the pinned Souffle oracle
+      if: inputs.oracle == 'true'
+      env:
+        CACHE_HIT: ${{ steps.oracle.outputs.cache-hit }}
+      shell: bash
+      run: |
+        set -euo pipefail
+        packages="$RUNNER_TEMP/oracle-debs"
+        mkdir -p "$packages"
+        if [[ "$CACHE_HIT" == true ]]; then
+          (cd "$packages" && sha256sum --check SHA256SUMS)
+          if sudo dpkg --install "$packages"/*.deb; then
+            souffle --version
+            exit 0
+          fi
+        fi
+        # The apt download user can traverse /var/tmp on hosted runners.
+        archives=$(mktemp -d /var/tmp/rezono-oracle.XXXXXX)
+        chmod 0755 "$archives"
+        printf 'Dir::Cache::archives "%s";\nAPT::Keep-Downloaded-Packages "true";\n' "$archives" |
+          sudo tee /etc/apt/apt.conf.d/99-rezono-oracle-cache > /dev/null
+        bash scripts/install-souffle.sh
+        find "$archives" -maxdepth 1 -type f -name '*.deb' -exec cp -t "$packages" -- {} +
+        cp "$RUNNER_TEMP"/*souffle*.deb "$packages/"
+        (cd "$packages" && sha256sum ./*.deb > SHA256SUMS)
+    - name: Generate contract types
+      if: steps.types.outputs.cache-hit != 'true'
+      shell: bash
+      run: contracts/gen-types.sh

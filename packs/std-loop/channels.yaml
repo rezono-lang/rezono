@@ -1,0 +1,12 @@
+kinds:
+  - {kind: loop_step, shape: rect}
+  - {kind: loop_active_run, shape: rect}
+  - {kind: loop_completion, shape: rect}
+  - {kind: loop_expectation, shape: rect}
+  - {kind: loop_observation, shape: rect}
+  - {kind: loop_requirement, shape: rect}
+  - {kind: loop_refusal, shape: rect}
+arrows:
+  - {arrow: loop_completion.step, dash: none}
+  - {arrow: loop_requirement.step, dash: none}
+  - {arrow: loop_refusal.step, dash: none}
