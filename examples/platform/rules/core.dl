@@ -9,15 +9,15 @@ provider(s, f) :- provides(s, f, _).
 asks(s, f) :- service__product(s, pr), demand__product(d, pr), demand__function(d, f).
 
 // Who serves a need: a written choice wins; else the only provider.
-.decl chosen(s: symbol, f: symbol)
-chosen(s, f) :- choice__service(c, s), choice__function(c, f).
+.decl provider_chosen(s: symbol, f: symbol)
+provider_chosen(s, f) :- choice__service(c, s), choice__function(c, f).
 .decl providers(f: symbol, n: number)
 providers(f, n) :- function(f), n = count : { provider(_, f) }.
 .decl needs(a: symbol, b: symbol, f: symbol)
 needs(a, b, f) :- asks(a, f), choice__service(c, a), choice__function(c, f), choice__provider(c, b).
-needs(a, b, f) :- asks(a, f), !chosen(a, f), provider(b, f), providers(f, n), n = 1.
+needs(a, b, f) :- asks(a, f), !provider_chosen(a, f), provider(b, f), providers(f, n), n = 1.
 .decl ambiguous_provider(a: symbol, f: symbol)
-ambiguous_provider(a, f) :- asks(a, f), !chosen(a, f), providers(f, n), n > 1.
+ambiguous_provider(a, f) :- asks(a, f), !provider_chosen(a, f), providers(f, n), n > 1.
 .decl unmet_need(a: symbol, f: symbol)
 unmet_need(a, f) :- asks(a, f), providers(f, n), n = 0.
 
