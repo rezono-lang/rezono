@@ -145,6 +145,8 @@ acceptance:
     question: Which Kubernetes patch and support end date are stated by the pinned release-series publication?
     tests:
       - acceptance/test_kubernetes_support.py::test_kubernetes_support
+      - acceptance/test_kubernetes_support.py::test_orphaned_support_slots_do_not_assert_support
+      - acceptance/test_kubernetes_support.py::test_support_requires_each_independent_ground
       - acceptance/test_support_window.py::test_support_window_uses_explicit_inclusive_dates
   - id: management-certificate-findings
     question: Which managed TLS endpoints have incorrect, expiring or missing certificates, and which readings cannot decide?
@@ -215,6 +217,7 @@ acceptance:
   - id: readable-publication-witnesses
     question: Which tenant conclusions have a fully readable witness, and which must be withheld when a premise cannot be read?
     tests:
+      - proof_cases/test_role_publication_fixture.py::test_role_publication_fixture
       - proof_cases/test_standard_access.py::test_standard_access
       - proof_cases/test_standard_access.py::test_standard_access_withholds_a_conclusion_with_an_unreadable_ground
   - id: recovery-isolation-firewall-change
