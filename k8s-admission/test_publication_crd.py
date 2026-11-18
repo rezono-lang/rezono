@@ -7,7 +7,6 @@ import pytest
 import yaml
 
 
-@pytest.mark.xfail(strict=True, reason="Define the structural parameter CRD in k8s-admission/resources/publication-crd.yaml; read decisions/k8s-admission-rules.md.")
 def test_namespace_publication_requires_typed_bounded_entries():
     path = Path(__file__).parent / "resources" / "publication-crd.yaml"
     crd = yaml.safe_load(path.read_text(encoding="utf-8"))
