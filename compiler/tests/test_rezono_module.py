@@ -196,6 +196,68 @@ def test_a_module_of_an_imported_pack_is_read_as_its_schema_is(tmp_path):
     assert {a["id"]: (a["target"], a["required"]) for a in b["arrows"]}["holder.party"] == ("party", True)
 
 
+def test_a_legacy_schema_imports_a_lowered_module_from_a_pinned_pack(tmp_path):
+    imported = lib(tmp_path)
+    directory = Path(shutil.copytree(FIXTURE, tmp_path / "packs" / "main"))
+    metadata = directory / "pack.yaml"
+    meta = yaml.safe_load(metadata.read_bytes())
+    meta["imports"] = [{"name": "lib", "path": "../lib", "sha256": modules.pack_hash(imported)}]
+    metadata.write_bytes(yaml.safe_dump(meta).encode("utf-8"))
+    source = directory / "schema/minimal.yaml"
+    schema = yaml.safe_load(source.read_bytes())
+    schema["imports"].append("lib:holder")
+    schema["classes"]["Alpha"]["attributes"]["holder"] = {"range": "Holder"}
+    source.write_bytes(yaml.safe_dump(schema).encode("utf-8"))
+    add(directory / "labels/nl.yaml", "alpha.holder: houder\n")
+
+    bundle = json.loads(compile_dir(directory, tmp_path / "out")["bundle/schema-bundle.json"])
+
+    assert not (imported / "schema/holder.yaml").exists()
+    assert any(s["module"] == "lib:holder" and s["file"] == "rezono/holder.rezono" for s in bundle["schemas"])
+    assert {a["id"]: a["target"] for a in bundle["arrows"]}["alpha.holder"] == "holder"
+
+    schema["imports"][-1] = "lib:missing"
+    source.write_bytes(yaml.safe_dump(schema).encode("utf-8"))
+    with pytest.raises(pack.CompileError, match="import 'lib:missing' is not a module"):
+        pack.read(directory)
+
+    relay = directory.with_name("relay")
+    relay.mkdir()
+    (relay / "pack.yaml").write_bytes(yaml.safe_dump({"name": "relay", "imports": meta["imports"]}).encode("utf-8"))
+    meta["imports"] = [{"name": "relay", "path": "../relay", "sha256": modules.pack_hash(relay)}]
+    metadata.write_bytes(yaml.safe_dump(meta).encode("utf-8"))
+    schema["imports"][-1] = "lib:holder"
+    source.write_bytes(yaml.safe_dump(schema).encode("utf-8"))
+    with pytest.raises(pack.CompileError, match="import 'lib:holder' names no pack that minimal imports"):
+        pack.read(directory)
+
+
+def test_a_legacy_relative_import_stays_at_its_schema_directory(tmp_path):
+    directory = Path(shutil.copytree(FIXTURE, tmp_path / "minimal"))
+    module(directory, [{"kind": "RootHolder", "world": "closed", "slots": [], "derived": []}], name="holder")
+    (directory / "rezono/terms").mkdir()
+    module(directory, [{"kind": "NestedHolder", "world": "closed", "slots": [], "derived": []}], name="terms/holder")
+    source = directory / "schema/minimal.yaml"
+    schema = yaml.safe_load(source.read_bytes())
+    schema["imports"].extend(["holder", "terms/child"])
+    schema["classes"]["Alpha"]["attributes"]["holder"] = {"range": "RootHolder"}
+    source.write_bytes(yaml.safe_dump(schema).encode("utf-8"))
+    (directory / "schema/terms").mkdir()
+    (directory / "schema/terms/child.yaml").write_text(
+        "id: https://rezono.example/child\nname: child\nimports: [linkml:types, holder]\n"
+        "default_range: string\nannotations: {layer: facts}\nclasses:\n  Child:\n    attributes:\n"
+        "      id: {identifier: true}\n      holder: {range: NestedHolder}\n", encoding="utf-8"
+    )
+    add(directory / "labels/nl.yaml",
+        "alpha.holder: houder\nroot_holder: houder\nnested_holder: houder\nchild: kind\nchild.holder: houder\n")
+
+    bundle = json.loads(compile_dir(directory, tmp_path / "out")["bundle/schema-bundle.json"])
+
+    targets = {arrow["id"]: arrow["target"] for arrow in bundle["arrows"]}
+    assert targets["alpha.holder"] == "root_holder"
+    assert targets["child.holder"] == "nested_holder"
+
+
 def test_a_pack_may_hold_modules_only(tmp_path):
     d = tmp_path / "only"
     (d / "labels").mkdir(parents=True)
