@@ -21,7 +21,6 @@ def grant(direction):
                      "ports": [{"protocol": "TCP", "port": 443}]}]}}
 
 
-@pytest.mark.xfail(strict=True, reason="Implement managed NetworkPolicy preflight in k8s-admission/managed_network_policy.py. Read decisions/k8s-admission-rules.md; use the publication for both directions and the renderer service label.")
 def test_managed_policy_baseline_and_directional_grants():
     from managed_network_policy import evaluate_network_policy
 
