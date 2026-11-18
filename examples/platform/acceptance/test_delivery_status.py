@@ -3,7 +3,6 @@ import pytest
 from query_fixture import portal_template
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError, reason="Render an observed state as a tenant-specific proposal commit status. Read decisions/platform-query-results.md. Write examples/platform/portal/delivery_status.py.")
 def test_delivery_status():
     render = portal_template("delivery_status").render
     sha = "ad" * 20

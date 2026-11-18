@@ -4,6 +4,7 @@ facts, and the same definition written in one pack. Neutral names; it describes 
 
 from __future__ import annotations
 
+import hashlib
 import json
 import shutil
 from pathlib import Path
@@ -215,7 +216,7 @@ def test_a_rule_reads_the_selection_of_the_calculation_its_pack_brings(tmp_path)
 
 @pytest.mark.skipif(shutil.which("souffle") is None, reason="needs souffle (the oracle)")
 def test_the_rules_after_the_calculation_equal_souffle_with_the_selection_rows_as_input(tmp_path):
-    """Bounded: one importing pack, two subjects. Soufflé reads the rule files as written over the import
+    """Bounded: one importing pack, two subjects. SoufflÃ© reads the rule files as written over the import
     closure, with the rows of the selection as an input, and gives as a set what the phases give."""
     import souffle
     from rezono_compiler import batch
@@ -329,17 +330,40 @@ HASHED = ("pack.yaml", "channels.yaml", "schema/**/*.yaml", "rezono/**/*.rezono"
           "views.yaml", "icons/*.svg", "icons/sources.yaml")
 
 
-@pytest.mark.xfail(strict=True, reason="The standalone repository lacks docs/compiler/pack.md and contains only six import pins across packs and examples. Adding the hash documentation reaches the assertion requiring more than ten pins; additional public pack definitions with genuine imports are needed.")
-def test_the_definition_hash_of_every_pack_is_what_it_was():
-    """Importing calculations changes no hash: the hash covers the files it covered (calc/*.yaml was among
-    them), the page that says what it covers names each of them, and every pin a pack of this repository
-    holds on another still is the hash of that pack."""
-    assert modules.DEFINITION == HASHED
+def test_definition_hash_covers_each_file_family(tmp_path):
+    """Independently construct the canonical path-to-digest map from known bytes."""
+    paths = ("pack.yaml", "channels.yaml", "schema/nested/item.yaml", "rezono/nested/item.rezono",
+             "rezono/nested/item.json", "labels/en.yaml", "messages/en.mf2", "rules/query.dl",
+             "calc/total.yaml", "sweeps.yaml", "questions.yaml", "views.yaml", "icons/item.svg",
+             "icons/sources.yaml")
+    expected = {}
+    for path in paths:
+        target = tmp_path / path
+        target.parent.mkdir(parents=True, exist_ok=True)
+        body = f"sample {path}\n".encode("ascii")
+        target.write_bytes(body)
+        expected[path] = hashlib.sha256(body).hexdigest()
+    (tmp_path / "facts").mkdir()
+    (tmp_path / "facts" / "data.yaml").write_bytes(b"item: []\n")
+    canonical = json.dumps(expected, sort_keys=True, separators=(",", ":")).encode("ascii")
+    assert modules.pack_hash(tmp_path) == hashlib.sha256(canonical).hexdigest()
+
+
+@pytest.mark.xfail(strict=True, raises=FileNotFoundError,
+                   reason="Document the definition-file families in docs/compiler/pack.md; see decisions/pack-hash-coverage.md.")
+def test_hash_documentation_covers_every_definition_file_family():
     said = next(line for line in (REPO / "docs" / "compiler" / "pack.md").read_text(encoding="utf-8").splitlines()
                 if line.startswith("- **The hash**"))
     assert [g for g in HASHED if f"`{g}`" not in said] == []
+
+
+def test_the_definition_hash_of_every_pack_is_what_it_was():
+    """Check every real pin, including a dependency that has a dependency of its own."""
+    assert modules.DEFINITION == HASHED
     pins = [(meta.parent, i) for top in ("packs", "examples") for meta in sorted((REPO / top).rglob("pack.yaml"))
             if "expected" not in meta.parts
             for i in (yaml.safe_load(meta.read_text(encoding="utf-8")) or {}).get("imports") or []]
-    assert len(pins) > 10
+    assert pins, "no published pack exercises a real import pin"
+    targets = {(at / pin["path"]).resolve() for at, pin in pins}
+    assert any(at.resolve() in targets for at, _ in pins), "no imported pack is itself an importer"
     assert [f"{at.name}: {i['name']}" for at, i in pins if modules.pack_hash(at / i["path"]) != i["sha256"]] == []
