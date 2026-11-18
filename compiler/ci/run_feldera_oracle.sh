@@ -59,11 +59,13 @@ docker image inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "$imag
 chmod 644 "$original"
 compiler_env=(--env CARGO_NET_OFFLINE=true --env RUSTC_WRAPPER=/tmp/rezono-measure-feldera-rustc
               --env CARGO_PROFILE_DEV_DEBUG=0 --env CARGO_PROFILE_UNOPTIMIZED_DEBUG=0)
-# Each part of the largest comparison builds a distinct program. The dependency cache remains
-# available without retaining per-program incremental state.
+# The generated operator crates are small and independent. Leave the engine's dependencies and
+# the pipeline link crate on their original profile.
+printf '\n' > "$inputs/operator-codegen-units"
 if [[ "$shard" == platform ]]; then
-  compiler_env+=(--env CARGO_INCREMENTAL=0)
+  printf '1\n' > "$inputs/operator-codegen-units"
 fi
+chmod 644 "$inputs/operator-codegen-units"
 docker run --detach --name "$container" --network none "${compiler_env[@]}" \
   --mount "type=bind,src=$PWD/compiler/ci/measure_feldera_rustc.sh,dst=/tmp/rezono-measure-feldera-rustc,readonly" \
   --mount "type=bind,src=$original,dst=/tmp/rezono-feldera-original-wrapper,readonly" \

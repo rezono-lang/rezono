@@ -27,8 +27,35 @@ for argument do
     esac
     previous=$argument
 done
+case "$crate" in
+    feldera_pipe_operator_????????????????)
+        hash=${crate#feldera_pipe_operator_}
+        case "$hash" in *[!a-f0-9]*) hash=;; esac
+        if [ -n "$hash" ] && [ "$units" = 256 ] &&
+           IFS= read -r operator_units 2>/dev/null < /tmp/rezono-oracle-input/operator-codegen-units &&
+           [ "$operator_units" = 1 ]; then
+            # Change only the observed flag; preserve argument order and boundaries.
+            remaining=$#
+            previous=
+            while [ "$remaining" -gt 0 ]; do
+                argument=$1
+                shift
+                if [ "$previous" = -C ] && [ "$argument" = codegen-units=256 ]; then
+                    set -- "$@" "codegen-units=$operator_units"
+                elif [ "$argument" = -Ccodegen-units=256 ]; then
+                    set -- "$@" "-Ccodegen-units=$operator_units"
+                else
+                    set -- "$@" "$argument"
+                fi
+                previous=$argument
+                remaining=$((remaining - 1))
+            done
+            units=$operator_units
+        fi
+        ;;
+esac
 set -- "$rustc" "$@"
-if IFS= read -r original < /tmp/rezono-feldera-original-wrapper && [ -n "$original" ]; then
+if IFS= read -r original 2>/dev/null < /tmp/rezono-feldera-original-wrapper && [ -n "$original" ]; then
     set -- "$original" "$@"
 fi
 case "$crate" in
