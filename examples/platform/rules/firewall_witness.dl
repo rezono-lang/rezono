@@ -1,0 +1,5 @@
+.decl firewall_witness(source_zone: symbol, target_zone: symbol, port: number, source: symbol, target: symbol, function: symbol)
+
+firewall_witness(source_zone, target_zone, port, source, target, function) :-
+    crossing(source, target, source_zone, target_zone, port),
+    flow(source, target, function, port).
