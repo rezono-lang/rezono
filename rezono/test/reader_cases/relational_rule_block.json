@@ -1,0 +1,13 @@
+{
+  "source": "rules eligibility\n  | .decl listed(item: symbol)\n  | listed(x) :- alpha(x).\n  | .output listed",
+  "declarations": [
+    {
+      "rules": "eligibility",
+      "lines": [
+        ".decl listed(item: symbol)",
+        "listed(x) :- alpha(x).",
+        ".output listed"
+      ]
+    }
+  ]
+}
