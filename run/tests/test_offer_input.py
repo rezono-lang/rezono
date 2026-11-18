@@ -1,3 +1,5 @@
+import pytest
+
 from input_contract_cases import DIGEST, verify
 
 
