@@ -202,7 +202,7 @@ def test_an_enum_defined_in_two_schema_files_is_qualified_by_its_module(fixture)
         "enums": {"State": {"permissible_values": {"low": {}}}}}))
     (fixture / "labels" / "nl.yaml").write_text("alpha: alfa\n")
     model = pack.read(fixture)
-    assert model.enums == {"minimal_state": ["high", "low"], "second_state": ["low"]}
+    assert model.enums == {"minimal_state": ["low", "high"], "second_state": ["low"]}
     assert model.kinds["beta"].slots["state"].enum == "minimal_state"
 
 
@@ -537,20 +537,17 @@ def test_an_attribute_that_cannot_order_is_no_lane_order(fixture, change):
     refused(fixture, "is bound as ordered, but alpha has no order")
 
 
-def test_an_ordered_lane_on_an_enum_warns_that_it_stands_in_name_order(fixture):
-    """The order of an enum is the order in which the schema lists its values, and the compiler does not keep it
-    yet: the bundle gives the values by name. So an ordered lane on an enum compiles, as before, and says what is
-    drawn; a nominal one says nothing. The fixture's schema lists State as low, high."""
+@pytest.mark.parametrize("level", ["ordered", "nominal"])
+def test_enum_lanes_preserve_the_schema_order_and_bound_level(fixture, level):
     with (fixture / "channels.yaml").open("a") as f:
-        f.write(FLOW.replace("level: nominal", "level: ordered"))
+        f.write(FLOW.replace("level: nominal", f"level: {level}"))
     model = pack.read(fixture)
-    [warning] = [w for w in model.warnings if "bound as ordered" in w]
-    assert warning.endswith("flow chain: lane 'beta.state' of beta is bound as ordered, but its lanes stand in name order: "
-                            "the compiler does not keep the order in which the schema lists the values of state yet")
-    enum = next(e for e in json.loads(emit.compile_pack(model)["bundle/schema-bundle.json"])["enums"] if e["id"] == "state")
-    assert enum["values"] == ["state.high", "state.low"]
-    (fixture / "channels.yaml").write_text((fixture / "channels.yaml").read_text().replace("level: ordered", "level: nominal"))
-    assert not [w for w in pack.read(fixture).warnings if "bound as ordered" in w]
+    assert not [w for w in model.warnings if "bound as ordered" in w]
+    bundle = json.loads(emit.compile_pack(model)["bundle/schema-bundle.json"])
+    enum = next(e for e in bundle["enums"] if e["id"] == "state")
+    assert enum["values"] == ["state.low", "state.high"]
+    [flow] = bundle["channels"]["flows"]
+    assert flow["nodes"][1]["lane"] == {"channel": "lane", "slot": "beta.state", "level": level, "meaning_message": "m.state"}
 
 
 MATRIX = (
