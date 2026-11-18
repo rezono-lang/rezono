@@ -1,15 +1,15 @@
 vendor_licence_notice:
   - id: postgresql-16.0
     product: postgresql
-    version: "16.0"
+    version: '16.0'
     scope: project-source
-    declaration: "PostgreSQL"
-    source_url: https://raw.githubusercontent.com/postgres/postgres/REL_16_0/COPYRIGHT
-    source_sha256: "1a7d13c3ab31961b91ba256f77d6e82e0b54bf992253060fe93bdb5466df416a"
+    declaration: PostgreSQL
+    source_url: 'https://raw.githubusercontent.com/postgres/postgres/REL_16_0/COPYRIGHT'
+    source_sha256: 1a7d13c3ab31961b91ba256f77d6e82e0b54bf992253060fe93bdb5466df416a
   - id: postgresql-17.0
     product: postgresql
-    version: "17.0"
+    version: '17.0'
     scope: project-source
-    declaration: "PostgreSQL"
-    source_url: https://raw.githubusercontent.com/postgres/postgres/REL_17_0/COPYRIGHT
-    source_sha256: "9bf20ee493926a7e17a74bc7f05089fbc014269667b1540bc35a6b194a40c9de"
+    declaration: PostgreSQL
+    source_url: 'https://raw.githubusercontent.com/postgres/postgres/REL_17_0/COPYRIGHT'
+    source_sha256: 9bf20ee493926a7e17a74bc7f05089fbc014269667b1540bc35a6b194a40c9de

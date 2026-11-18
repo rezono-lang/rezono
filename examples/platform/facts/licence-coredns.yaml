@@ -1,8 +1,8 @@
 vendor_licence_notice:
   - id: coredns-1.11.3
     product: coredns
-    version: "1.11.3"
+    version: 1.11.3
     scope: project-source
-    declaration: "Apache-2.0"
-    source_url: https://raw.githubusercontent.com/coredns/coredns/v1.11.3/LICENSE
-    source_sha256: "f0530760b1e2ffcf23df322db638ee06d06fc07fead0ed3ddd710f2e224698a9"
+    declaration: Apache-2.0
+    source_url: 'https://raw.githubusercontent.com/coredns/coredns/v1.11.3/LICENSE'
+    source_sha256: f0530760b1e2ffcf23df322db638ee06d06fc07fead0ed3ddd710f2e224698a9

@@ -1,8 +1,8 @@
 vendor_licence_notice:
   - id: chrony-4.6
     product: chrony
-    version: "4.6"
+    version: '4.6'
     scope: notice-text
-    declaration: "GPL version 2 text; project grant variant unspecified"
-    source_url: https://gitlab.com/chrony/chrony/-/raw/4.6/COPYING
-    source_sha256: "ab15fd526bd8dd18a9e77ebc139656bf4d33e97fc7238cd11bf60e2b9b8666c6"
+    declaration: GPL version 2 text; project grant variant unspecified
+    source_url: 'https://gitlab.com/chrony/chrony/-/raw/4.6/COPYING'
+    source_sha256: ab15fd526bd8dd18a9e77ebc139656bf4d33e97fc7238cd11bf60e2b9b8666c6

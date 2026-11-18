@@ -1,8 +1,8 @@
 vendor_licence_notice:
   - id: argocd-3.0.0
     product: argocd
-    version: "3.0.0"
+    version: 3.0.0
     scope: project-source
-    declaration: "Apache-2.0"
-    source_url: https://raw.githubusercontent.com/argoproj/argo-cd/v3.0.0/LICENSE
-    source_sha256: "c996fc213c94f4a4a838407d355b081226caa7b103a4f239bb87fb8f1d8e3a60"
+    declaration: Apache-2.0
+    source_url: 'https://raw.githubusercontent.com/argoproj/argo-cd/v3.0.0/LICENSE'
+    source_sha256: c996fc213c94f4a4a838407d355b081226caa7b103a4f239bb87fb8f1d8e3a60
