@@ -452,6 +452,11 @@ def lower(pack_dir: Path, d: Declared, form: dict, pack: str, owners: dict[str, 
             continue  # The rule assembler needs the checked schema and pinned imports.
         elif "extend" in decl:
             rezono_extend.validate(decl, at, imported, refuse)
+        elif "rules" in decl and form["format"] == IDENTIFIER_FORMAT:
+            from .rezono_relational import valid_block
+
+            if not valid_block(decl):
+                refuse(at, "a rules block needs a name and its written lines")
         elif "fact" in decl:
             if "columns" in decl:
                 refuse(at, "a fact table is not lowered yet", "§5.3")
