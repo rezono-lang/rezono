@@ -1,0 +1,6 @@
+.decl done(run: symbol, step: symbol, reason: symbol)
+
+// Cite each observation confirming the step's declared completion token in this run.
+done(run, step, reason) :-
+    completion(run, step, token, _),
+    known(run, token, reason).
