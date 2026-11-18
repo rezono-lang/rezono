@@ -292,7 +292,7 @@ def test_a_small_change_moves_no_view_given_the_previous_cut(seed, n, budget, da
 @settings(max_examples=min(settings().max_examples, 25))
 @given(seed=st.integers(0, 10**6), n=st.integers(4, 30), budget=st.integers(3, 10), steps=st.integers(1, 6))
 def test_changes_cross_parts_through_the_export_stream(seed, n, budget, steps):
-    """Review of #34: the real data path between parts. Each part runs on its own (DuckDB); after every
+    """The real data path between parts. Each part runs on its own (DuckDB); after every
     change the generated export query of a producing part is read as the relay reads it: deletes and
     inserts since the previous epoch, decoded and applied to the import tables of its readers. A delete
     that crosses a boundary can bring a count to 0 or switch a negation on. The parts together must
@@ -349,7 +349,7 @@ def test_changes_cross_parts_through_the_export_stream(seed, n, budget, steps):
 
 
 def test_count_and_sum_over_one_group_have_their_own_evidence():
-    """Review of #13: two aggregates over the same relation and group are told apart by position."""
+    """Two aggregates over the same relation and group are told apart by position."""
     from rezono_checker.check import check
     from rezono_checker.rules import load_rules
 

@@ -3,7 +3,7 @@
 An unquoted value in a flow map ends at its first comma, and what follows becomes a key of its own:
 `fanout: {range: integer, description: Children per page, at most.}` loads as the key `description` with the value
 `Children per page` and a key `at most.` with no value. LinkML refused the schema only in `ci` / `contracts`, and
-#1020 so turned merge window 75 red (16-11-2026). Two rules, on the composed YAML, so on what the file means rather
+the error escaped earlier checks. Two rules, on the composed YAML, so on what the file means rather
 than how it is written:
   - a key that holds whitespace and a period is a sentence, never a slot, class or enum name;
   - an entry of a flow map with no value at all (`{a: b, rest of a sentence}`) is text cut at a comma;

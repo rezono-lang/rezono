@@ -77,7 +77,7 @@ REFUSED = {
     "many": (control("Alpha", {"required": True, "multivalued": True}), "required, single-valued slot decision"),
     "enum": (control("Alpha", {"required": True, "range": "State"}), "required, single-valued slot decision"),
     "number": (control("Alpha", {"required": True, "range": "integer"}), "required, single-valued slot decision"),
-    # REVIEW-ENGINE-B on #799: below a data-plane parent it would share the parent's tables, unreviewed.
+    # Below a data-plane parent it would share the parent's tables, unreviewed.
     "below-data": (lambda s: s["classes"].update(Gamma={"is_a": "Alpha", "annotations": {
         "plane": "control", "owner": "board"}, "attributes": {"decision": {"required": True}}}),
         "not below a data-plane kind"),

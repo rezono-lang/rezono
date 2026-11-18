@@ -19,4 +19,4 @@ expect:
   change_class: invalid_successor
   error: added slot without `backfill`
 sources:
-- '#369 L0 rev 2 §8'
+- publication/rezono_publication/l0.py, classify

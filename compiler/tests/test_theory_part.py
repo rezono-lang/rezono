@@ -1,4 +1,4 @@
-"""Theory std-part (#314 §5.2, T3; lane G, G06): its axioms and rules against independent oracles.
+"""Theory std-part: its axioms and rules against independent oracles.
 
 Three evaluations must agree as sets: an exact Python reference written from the definitions (walking up
 from each part, not a join), the DuckDB batch backend on the compiled IR, and Soufflé on rules/part.dl as

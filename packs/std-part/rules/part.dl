@@ -1,4 +1,4 @@
-// Rules of std-part (#314 §5.2, T3), in the Datalog subset, so Soufflé is the oracle.
+// Rules of std-part, in the Datalog subset, so Soufflé is the oracle.
 // The base relations are the theory's tables: constituent__part_of(part, whole) and
 // constituent__repeat(part, n). Two axioms are checks of the schema: a constituent has at most one direct
 // whole (part_of is single-valued), and repeat is at least 1.

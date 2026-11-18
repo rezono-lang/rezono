@@ -6,7 +6,6 @@ import pytest
 import yaml
 
 
-@pytest.mark.xfail(strict=True, reason="Implement read_parameters in k8s-admission/parameter_reader.py; read decisions/k8s-admission-publication.md.")
 def test_preflight_preserves_the_scoped_resource_contract():
     from parameter_reader import read_parameters
 

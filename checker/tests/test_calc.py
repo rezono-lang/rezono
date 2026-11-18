@@ -115,7 +115,7 @@ def premise(by):  # uses reads rate, whose witness is gone
     by["calc__rate", "i0"]["keep"] = False
 
 
-# Witnesses a wrong engine could write consistently, row and all (review of #139).
+# Witnesses a wrong engine could write consistently, row and all.
 
 def unreadable(by):  # a condition that is no canonical value decides nothing; never a silent pass
     step(by["calc__prefer", "i0"], "special/when")["value"] = "yes"

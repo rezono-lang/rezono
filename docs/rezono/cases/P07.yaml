@@ -29,5 +29,4 @@ alternatives:
 note: host-c's condition is `true or invalid`, which Appendix A makes true, so this check alone does not see the
   contradiction.
 sources:
-- '#350/6761756263 D01 review, P07 open'
-- '#350 v0 §5, §7b'
+- rezono/README.md, What a check statement decides

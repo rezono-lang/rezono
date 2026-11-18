@@ -11,4 +11,4 @@ expect:
       end: 36
 note: A parse-level error comes first and is the only diagnostic (§1).
 sources:
-- '#350 P10.2a §11'
+- rezono/src/parse.ts

@@ -31,4 +31,4 @@ expect:
   accept: false
   error: storage scale 4 differs from the schema's scale 2
 sources:
-- '#369 L0 rev 2 §8'
+- publication/rezono_publication/l0.py, check_field

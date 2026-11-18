@@ -1,5 +1,5 @@
 """Frozen baseline acceptance: a replacement model must derive exactly the rows that today's packs derive
-(seam S5 of #351, C1 of #394; tests only, never in production).
+(tests only, never in production).
 
 The baseline is frozen as content. Every row set (one relation, in one fact state, of one pack) is a file
 `sets/<sha256>.json` holding its canonical JSON, and `index.json` names the hash of each relation's set per

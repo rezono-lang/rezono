@@ -11,4 +11,5 @@ expect:
       start: 9
       end: 28
 sources:
-- '#350 P10.2a §11'
+- rezono/src/print.ts
+- rezono/src/parse.ts

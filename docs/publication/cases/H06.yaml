@@ -37,5 +37,4 @@ note: >-
   The `$why` hash row is {"$key":["Host","host-a","memory_need","","",""],"proof":"rezono:w/91c2"} (l0.md §6.2
   step 6). Computed with rezono_canon; the dataset hash equals the worked vector of §6.2.
 sources:
-- '#369 L0 rev 2 §8'
-- '#417 review 6761310804'
+- publication/tests/test_hash.py, test_h06_annotation_hash

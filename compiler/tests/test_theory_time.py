@@ -1,4 +1,4 @@
-"""Theory std-time (#314 §5.2, T4; lane G, G03): its axioms and rules against independent oracles.
+"""Theory std-time: its axioms and rules against independent oracles.
 
 Three evaluations must agree as sets: an exact Python reference written from the definitions (bounds per
 interval and a decision tree for Allen's relations, not the thirteen rules), the DuckDB batch backend on the
@@ -215,7 +215,7 @@ def evaluate(intervals, references, tmp_path):
 def test_the_theory_is_fact_free_and_compiles_on_its_own():
     theory = pack.read(THEORY)
     assert theory.meta["theory"] is True and not (THEORY / "facts").exists()
-    assert set(theory.kinds) == {"interval", "axis", "series", "reference_point"}   # within the size limit of #314 §4
+    assert set(theory.kinds) == {"interval", "axis", "series", "reference_point"}
     files = emit.compile_pack(theory)
     for table in ("interval__start", "interval__end", "interval__unbounded", "interval__on_axis",
                   "reference_point__position"):

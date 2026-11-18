@@ -16,7 +16,7 @@ expect:
       start: 29
       end: 42
 alternatives:
-- by: '#350 P10.2a §11 table (R015 at `at` only)'
+- by: 'Alternative reading (R015 at `at` only)'
   expect:
     print: ask Host at 2026-11-01 as known 2026-10-26 where memory_need > 384 GiB
     diagnostics:
@@ -25,7 +25,9 @@ alternatives:
         text: at 2026-11-01
         start: 29
         end: 42
-note: The P10.2a table lists R015 at `at 2026-11-01` only; §1 reports every reserved construct at its span, so `expect`
-  lists both axes and `alternatives` keeps the table's reading (expressions.md §13 point 8).
+note: One reading reports R015 at `at 2026-11-01` only; §1 reports every reserved construct at its span, so `expect`
+  lists both axes and `alternatives` keeps that reading (expressions.md §13 point 8).
 sources:
-- '#350 P10.2a §11'
+- rezono/src/print.ts
+- rezono/src/parse.ts
+- rezono/README.md, Choices this slice makes

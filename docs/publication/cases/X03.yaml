@@ -8,5 +8,4 @@ expect:
   same_triples_as: LinkML gen-jsonld-context on the LinkML export of the pack
   same_validation_as: LinkML gen-shacl, on R01
 note: Needs the LinkML export of the fixture pack (Rezono v0 §9); runs in E03.
-sources:
-- '#369 L0 rev 2 §8'
+sources: []

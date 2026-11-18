@@ -26,4 +26,4 @@ expect:
 note: 'Only for a reader that does not implement versioned kinds: it rejects the schema, it does not ignore the
   member.'
 sources:
-- '#369 L0 rev 2 §8'
+- publication/rezono_publication/l0.py, check_schema

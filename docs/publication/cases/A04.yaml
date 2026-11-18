@@ -12,4 +12,4 @@ expect:
   - Polars
 note: Extension types present; the readers do not know them. Runs with the writer (E04).
 sources:
-- '#369 L0 rev 2 §8'
+- publication/tests/test_arrow.py, test_a04_t04_duckdb_reads_the_storage_values_as_written (DuckDB)

@@ -12,4 +12,4 @@ expect:
   accept: false
   error: integer must be text
 sources:
-- '#369 L0 rev 2 §8'
+- publication/rezono_publication/l0.py, check_schema

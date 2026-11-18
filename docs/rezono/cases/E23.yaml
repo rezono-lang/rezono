@@ -6,4 +6,4 @@ expect:
   print: ask Plan where memory in 256 GiB..<512 GiB
 note: 512 GiB is excluded.
 sources:
-- '#350 P10.2a §11'
+- rezono/src/print.ts

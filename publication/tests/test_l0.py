@@ -388,8 +388,7 @@ def test_a_float_column_is_rejected():
         l0.check_field(FIXTURE, "Host", {"name": "memory_need", "storage": "double"})
 
 
-# REVIEW (7) on #645: each input below was accepted before and must be refused (P1 points 1 to 6, then the
-# points Codex found in the code). Every one names the rule it is refused for.
+# Each invalid input below names the rule that requires its refusal.
 G = schema_of(FILES["G01"])
 RULE = {"$kind": "ZoneRule", "$id": "r", "decision": "prop-412", "allowed": False}
 

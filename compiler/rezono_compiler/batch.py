@@ -33,7 +33,7 @@ def connect(prog, data, threads=None):
 
 
 class BoundReached(ValueError):
-    """A counter reached its explicit bound (#351 P6.2). The relation would be cut off there, so nothing is
+    """A counter reached its explicit bound. The relation would be cut off there, so nothing is
     read from this run: reaching the bound is an error, never a relation with rows missing."""
 
     code = "bound_reached"

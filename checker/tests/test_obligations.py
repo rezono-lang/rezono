@@ -101,7 +101,7 @@ def test_several_reasons_for_unknown_publish():
 
 
 def test_an_outcome_over_no_kind_is_refused():
-    """Review of #465: an outcome that names an empty derived relation would make totality vacuous."""
+    """An outcome that names an empty derived relation would make totality vacuous."""
     decoy = relation("decoy", "derived", "id")
     for target in ("decoy", "owned_pair", "missing"):
         state = {**STATE, "outcome": target}
@@ -115,7 +115,7 @@ def test_an_outcome_over_no_kind_is_refused():
 
 
 def test_an_outcome_row_without_three_parts_is_a_finding_not_a_crash():
-    """Review of #465: a row {"key": []} is reported before any part of it is read."""
+    """A row {"key": []} is reported before any part of it is read."""
     rows = {"host": [["h1"]], "owned": [["h1"]], "state": [[], ["h1", "known", ""]]}
     report = epoch([HOST, OWNED, STATE], [KNOWN], rows)
     assert errors(report) == [("outcome_state", "state", encode_key([])), ("unproven_row", "state", encode_key([]))]

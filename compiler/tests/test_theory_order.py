@@ -1,4 +1,4 @@
-"""Theory std-order (#314 §5.2, T1): its axioms and rules against independent oracles.
+"""Theory std-order: its axioms and rules against independent oracles.
 
 Three evaluations must agree as sets: an exact Python reference written from the definitions, the DuckDB
 batch backend on the compiled IR, and Soufflé on rules/order.dl as written (when present, as in CI). The
@@ -20,9 +20,9 @@ pytest.importorskip("duckdb")
 
 
 def reference(precedes, rank):
-    """The definitions of #314 §5.2, by fixpoint: before is the transitive closure of precedes; comparable
+    """Compute the order relations by fixpoint: before is the transitive closure of precedes; comparable
     is before in either direction; order_cycle is what comes before itself; rank_conflict is a pair in
-    that closure whose ranks do not increase (#314 §5.2: if a comes before b and both have a rank)."""
+    that closure whose ranks do not increase (if a comes before b and both have a rank)."""
     before = set(precedes)
     while True:
         more = {(a, d) for a, b in before for c, d in precedes if b == c} - before
