@@ -20,11 +20,34 @@ def builtin_range(name: str, declared: bool, *, extended_form: bool = False) -> 
     return BUILTIN_RANGES.get(name)
 
 
-def constraint_facets(slot: dict, range_name: str | None) -> dict[str, int | bool]:
+def constraint_facets(slot: dict, range_name: str | None) -> dict[str, str | int | bool]:
+    """Keep the written pattern and let the pack loader validate it as a LinkML facet."""
+    facets: dict[str, str | int | bool] = {}
+    constraints = slot["constraints"]
+    if isinstance(constraints, list):
+        bounds = []
+        for constraint in constraints:
+            if not isinstance(constraint, dict) or "pattern" not in constraint:
+                bounds.append(constraint)
+                continue
+            if constraint.keys() != {"pattern"} or not isinstance(constraint["pattern"], str):
+                raise ValueError("a pattern constraint needs one text value")
+            if "pattern" in facets:
+                raise ValueError("the pattern constraint is written twice")
+            facets["pattern"] = constraint["pattern"]
+        if "pattern" in facets and not bounds:
+            if slot.get("identifier") is True and slot.get("card") in LIST_CARDS:
+                raise ValueError("an identifier cannot be multivalued")
+            return facets
+        constraints = bounds
+    facets.update(bound_facets(slot, range_name, constraints))
+    return facets
+
+
+def bound_facets(slot: dict, range_name: str | None, constraints: object) -> dict[str, int | bool]:
     """Resolve the authored bounds for a list or a single integer value."""
     card = slot.get("card", "?")
     explicit = slot.get("identifier") is True
-    constraints = slot["constraints"]
     if isinstance(constraints, list) and any(
         isinstance(constraint, dict) and "cardinality" in constraint for constraint in constraints
     ):
