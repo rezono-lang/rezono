@@ -1,0 +1,4 @@
+kinds:
+  - {kind: expected_line, shape: rect}
+  - {kind: invoice_line, shape: rect}
+  - {kind: rounding, shape: rect}
