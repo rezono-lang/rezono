@@ -58,6 +58,15 @@ def _active_editions(day: date, histories: Mapping[str, list[Edition]]) -> dict[
     return result
 
 
+def _unique_rate_object(pairs: list[tuple[str, object]]) -> dict[str, object]:
+    document: dict[str, object] = {}
+    for key, value in pairs:
+        if key in document:
+            raise ValueError(f"duplicate rate capture field {key!r}")
+        document[key] = value
+    return document
+
+
 def _rate_documents(rates: Iterable[Edition]) -> tuple[list[Edition], dict[str, dict[str, object]]]:
     editions: list[Edition] = []
     documents: dict[str, dict[str, object]] = {}
@@ -66,7 +75,7 @@ def _rate_documents(rates: Iterable[Edition]) -> tuple[list[Edition], dict[str, 
         raw = edition["body"]
         if sha256(raw).hexdigest() != digest:
             raise ValueError("rate capture bytes do not match the SHA-256 digest")
-        document = json.loads(raw)
+        document = json.loads(raw, object_pairs_hook=_unique_rate_object)
         if not isinstance(document, dict) or any(
             not isinstance(document.get(field), str) for field in ("base", "quote")
         ):
