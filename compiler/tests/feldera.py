@@ -1,5 +1,6 @@
 """A small client for the Feldera HTTP API, for engine tests and measurements (FELDERA_URL)."""
 
+import email.utils
 import json
 import os
 import time
@@ -65,16 +66,58 @@ def stop(name):
     wait(name, "storage_status", {"Cleared"})
 
 
-def push(name, updates, chunk=100_000):
-    """Send {table: [{"insert"|"delete": row}]} and return the completion tokens."""
-    tokens = []
+def post_ingress(path, body):
+    """Retry only a refused API connection. Ambiguous writes must fail the comparison."""
+    deadline = time.monotonic() + 120
+    backoff = 1
+    while True:
+        try:
+            return call("POST", path, body)["token"]
+        except urllib.error.HTTPError as error:
+            if error.code != 429:
+                raise
+            with error:
+                details = error.read(4096)
+            try:
+                refusal = json.loads(details)
+            except ValueError:
+                refusal = None
+            if not isinstance(refusal, dict) or refusal.get("error_code") != "ApiConnectionLimit":
+                raise
+            # An ingress connection could not be opened, so the submitted body was
+            # never accepted. Do not apply this policy to a lost response or other 429.
+            delay = backoff
+            retry_after = error.headers.get("Retry-After")
+            if retry_after is not None:
+                try:
+                    if retry_after.isascii() and retry_after.isdecimal():
+                        delay = max(delay, int(retry_after))
+                    else:
+                        when = email.utils.parsedate_to_datetime(retry_after)
+                        if when.tzinfo is None:
+                            raise ValueError("Retry-After has no time zone")
+                        delay = max(delay, when.timestamp() - time.time())
+                except (OverflowError, TypeError, ValueError):
+                    raise error
+            if time.monotonic() + delay >= deadline:
+                raise
+            time.sleep(delay)
+            backoff = min(backoff * 2, 16)
+
+
+def ingress_tokens(name, updates, chunk=100_000):
+    """Yield each receipt before sending the next batch, so a consumer can wait for it."""
     for table, rows in updates.items():
         endpoint = urllib.parse.quote(feldera_names.physical(table))
         for k in range(0, len(rows), chunk):
             q = urllib.parse.urlencode({"format": "json", "update_format": "insert_delete", "array": "true"})
             body = json.dumps(rows[k:k + chunk]).encode()
-            tokens.append(call("POST", f"/v0/pipelines/{name}/ingress/{endpoint}?{q}", body)["token"])
-    return tokens
+            yield post_ingress(f"/v0/pipelines/{name}/ingress/{endpoint}?{q}", body)
+
+
+def push(name, updates, chunk=100_000):
+    """Send all batches and return their completion tokens for callers that pipeline updates."""
+    return list(ingress_tokens(name, updates, chunk))
 
 
 def processed(name, tokens):

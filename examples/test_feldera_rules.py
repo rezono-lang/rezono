@@ -5,7 +5,7 @@ from collections import Counter
 
 import pytest
 
-from feldera import URL, deploy, processed, push, query, read_relation, stop
+from feldera import URL, deploy, ingress_tokens, processed, query, read_relation, stop
 from rezono_compiler import facts, rules_split, rules_sql, scenarios
 from rules_support import RULED, name, states
 from support import compile_dir
@@ -88,7 +88,8 @@ def test_incremental_on_feldera_equals_batch(example, tmp_path):
                 assert label == state.label
                 delta = {t: facts_delta[t] for t in part["tables"] if t in facts_delta}
                 delta.update({t: relay[t] for t in part["imports"]})
-                processed(pipeline, push(pipeline, delta))
+                # Finish each accepted ingress batch before opening another table's connection.
+                processed(pipeline, ingress_tokens(pipeline, delta))
                 check_views(pipeline, prog, part, state, checks, refused)
                 if part["exports"]:
                     current = export_rows(pipeline, prog, part["exports"])

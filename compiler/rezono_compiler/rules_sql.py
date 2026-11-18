@@ -239,10 +239,13 @@ def wants_witness(prog, rule, witnesses):
     return bool(witnesses)
 
 
-def empty_relation(rel):
+def empty_relation(rel, dialect):
     """A declaration-only extension is empty, with typed columns and no implicit grants or NULLs."""
     cols = [f"{lit_sql('0' if c.type == 'integer' else '', c.type)} AS {q(c.name)}" for c in rel.key]
-    return f"SELECT {', '.join(cols)} WHERE FALSE"
+    # Calcite requires a FROM clause before WHERE. A single constant row gives the
+    # filter a source without introducing any dependency on facts.
+    source = " FROM (VALUES (1)) AS seed(n)" if dialect == "feldera" else ""
+    return f"SELECT {', '.join(cols)}{source} WHERE FALSE"
 
 
 def feldera(prog, witnesses=False, relations=None, inputs=None, tables=True):
@@ -261,7 +264,7 @@ def feldera(prog, witnesses=False, relations=None, inputs=None, tables=True):
         if name in prog.bounds:
             body = unrolled(prog, name)
         else:
-            body = "\nUNION\n".join(rule_select(prog, r) for r in prog.rules_for(name)) or empty_relation(rel)
+            body = "\nUNION\n".join(rule_select(prog, r) for r in prog.rules_for(name)) or empty_relation(rel, "feldera")
             if prog.recursive(name):
                 cols = ", ".join(f"{q(c.name)} {SQL_TYPE[c.type]} NOT NULL" for c in rel.key)
                 stmts.append(f"DECLARE RECURSIVE VIEW {q(name)} ({cols});")
@@ -303,7 +306,7 @@ def duckdb_relation(prog, name):
     if name in prog.bounds:
         return [f"CREATE OR REPLACE TABLE {q(name)} AS\n{unrolled(prog, name, 'duckdb')};"]
     if not prog.recursive(name):
-        body = "\nUNION\n".join(rule_select(prog, r, dialect="duckdb") for r in rules) or empty_relation(rel)
+        body = "\nUNION\n".join(rule_select(prog, r, dialect="duckdb") for r in rules) or empty_relation(rel, "duckdb")
         return [f"CREATE OR REPLACE TABLE {q(name)} AS\n{body};"]
     rec = [r for r in rules if any(b.atom.relation == name for b in r.body)]
     base = [r for r in rules if r not in rec]
