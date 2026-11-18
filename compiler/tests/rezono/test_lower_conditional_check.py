@@ -22,7 +22,8 @@ class MissingConditionalLowering(AssertionError):
 
 
 @pytest.mark.xfail(strict=True, raises=MissingConditionalLowering,
-                   reason="Lower a class requirement through the ordinary pack compiler. Read decisions/language-checks.md.")
+                   reason="Lower a class requirement through the ordinary pack compiler. Read decisions/language-checks.md. "
+                          "Waits for test_lower_schema_metadata while that task owns rezono_kind.py.")
 def test_lower_conditional_check(tmp_path):
     legacy = Path(shutil.copytree(FIXTURE, tmp_path / "legacy/minimal"))
     authored = Path(shutil.copytree(FIXTURE, tmp_path / "authored/minimal"))
