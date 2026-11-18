@@ -24,7 +24,7 @@ from tempfile import TemporaryDirectory
 from typing import cast
 
 import yaml
-from . import rezono_enum, rezono_extend, rezono_kind, rezono_metadata, rezono_slot
+from . import rezono_enum, rezono_extend, rezono_key, rezono_kind, rezono_metadata, rezono_slot
 from .schemaview import SchemaView
 from linkml_runtime.linkml_model import SchemaDefinition
 from linkml_runtime.loaders.yaml_loader import YAMLLoader
@@ -330,6 +330,10 @@ def marks(module: Path, form: Path | dict) -> dict[tuple, tuple[int, int]]:
             for j, s in enumerate(decl.get("slots") or []):
                 if isinstance(s, dict) and isinstance(s.get("slot"), str):
                     place(f"/decls/{i}/slots/{j}", ("classes", decl["kind"], "attributes", s["slot"]))
+            if isinstance(keys := decl.get("keys"), list):
+                for j, key in enumerate(keys):
+                    if isinstance(key, dict) and isinstance(key.get("unique"), str):
+                        place(f"/decls/{i}/keys/{j}", ("classes", decl["kind"], "unique_keys", key["unique"]))
     return out
 
 
@@ -410,11 +414,18 @@ def lower(pack_dir: Path, d: Declared, form: dict, pack: str, owners: dict[str, 
                        "§3")
                 continue
         if "kind" in decl:
+            keys = {}
+            if form["format"] == IDENTIFIER_FORMAT and "keys" in decl:
+                decl = decl.copy()
+                if (keys := rezono_key.lower(decl.pop("keys"), f"{at}/keys", refuse)) is None:
+                    continue
             lowered_kind = rezono_kind.lower(
                 decl, at, own, owners, declared_names, uses, refuse,
                 extended=extended,
             )
             if lowered_kind is not None:
+                if keys:
+                    lowered_kind["unique_keys"] = keys
                 classes[decl["kind"]] = lowered_kind
         elif "enum" in decl:
             lowered_enum = rezono_enum.lower(decl, at, refuse, extended=extended)
@@ -435,7 +446,8 @@ def lower(pack_dir: Path, d: Declared, form: dict, pack: str, owners: dict[str, 
     if extended and "schema" in module:
         range_name = module.get("defaultRange", "Text")
         schema = rezono_metadata.header(
-            module, schema, d.layer, rezono_slot.builtin_range(range_name, range_name in declared_names), refuse
+            module, schema, d.layer,
+            rezono_slot.builtin_range(range_name, range_name in declared_names, extended_form=True), refuse,
         )
     return Lowered(d, schema, form, sorted(uses))
 
