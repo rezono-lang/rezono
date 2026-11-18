@@ -1,3 +1,4 @@
+# Fixture metadata review probe.
 # A multivalued arrow: a link kind with at least one and at most three targets.
 id: outage.target
 stable_id: "Outage#target"
