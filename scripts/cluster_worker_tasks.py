@@ -9,6 +9,10 @@ from fast_check import resolve
 from red_list import ROOT, extract_red_tests_from_source
 
 
+def needs_fixture(node: str, cluster: set[str]) -> bool:
+    return node in cluster or any(item.startswith(node + "[") for item in cluster)
+
+
 def promoted_tasks(base: str, cluster: set[str]) -> list[str]:
     changed = subprocess.check_output(
         ["git", "diff", "--name-only", "--diff-filter=M", "-z", base, "HEAD", "--"],
@@ -19,7 +23,7 @@ def promoted_tasks(base: str, cluster: set[str]) -> list[str]:
     for path in cluster_paths.intersection(changed):
         before = subprocess.check_output(["git", "show", f"{base}:{path}"], cwd=ROOT, encoding="utf-8")
         earlier = {item.id for item in extract_red_tests_from_source(before, path, [])
-                   if item.nodeid in cluster}
+                   if needs_fixture(item.nodeid, cluster)}
         after = (ROOT / path).read_text(encoding="utf-8")
         remaining = {item.id for item in extract_red_tests_from_source(after, path, [])}
         promoted.update(earlier - remaining)
@@ -36,7 +40,7 @@ def main() -> None:
                for node in json.loads(path.read_text(encoding="utf-8"))["cluster"]}
     if args.worker.startswith("task/"):
         task = args.worker.removeprefix("task/")
-        tasks = [task] if resolve(task, args.base) in cluster else []
+        tasks = [task] if needs_fixture(resolve(task, args.base), cluster) else []
     elif args.base:
         tasks = promoted_tasks(args.base, cluster)
     else:
