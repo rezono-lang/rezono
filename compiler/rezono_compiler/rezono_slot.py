@@ -2,6 +2,7 @@
 
 from collections.abc import Mapping, Set
 
+from . import rezono_cardinality
 from .rezono_lowering import Refuse
 
 
@@ -22,6 +23,8 @@ def lower(slots: list[dict], declared: Set[str]) -> dict[str, dict]:
     for slot in slots:
         name = slot["type"]
         attribute: dict[str, object] = {"range": builtin_range(name, name in declared) or name}
+        if "constraints" in slot:
+            attribute.update(rezono_cardinality.bounded_list(slot.get("card"), slot["constraints"]))
         if slot.get("identifier") is True:
             attribute["identifier"] = True
         elif "card" not in slot:
@@ -36,7 +39,8 @@ def validate(slots: list, kind: str, at: str, own: Mapping[str, str], owners: Ma
     ok = True
     seen: set[str] = set()
     identifier_seen = False
-    allowed = MEMBERS | {"identifier"} if explicit_identifiers else MEMBERS
+    # Explicit identifiers and bounded slots both belong to the extended module form.
+    allowed = MEMBERS | {"identifier", "constraints"} if explicit_identifiers else MEMBERS
     for index, slot in enumerate(slots):
         here = f"{at}/slots/{index}"
         extra = sorted(set(slot) - allowed) if isinstance(slot, dict) else []
@@ -61,7 +65,15 @@ def validate(slots: list, kind: str, at: str, own: Mapping[str, str], owners: Ma
         if slot["slot"] == "id" and not explicit:
             refuse(here, "a slot named `id` is refused: `id` identifies the elements of a kind", "§5.1")
             ok = False
-        if slot.get("card", "?") != "?":
+        if "constraints" in slot:
+            try:
+                rezono_cardinality.bounded_list(slot.get("card"), slot["constraints"])
+                if explicit:
+                    raise ValueError("a bounded list cannot be an identifier")
+            except ValueError as error:
+                refuse(here, str(error), "§5.1")
+                ok = False
+        elif slot.get("card", "?") != "?":
             refuse(here, f"a slot `{slot['type']}{slot['card']}` is not lowered (no ticket yet)")
             ok = False
         name, found = slot["type"], owners.get(slot["type"], [])
