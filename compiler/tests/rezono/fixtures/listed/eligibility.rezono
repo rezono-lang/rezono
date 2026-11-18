@@ -1,0 +1,6 @@
+rezono 0
+pack minimal
+rules eligibility
+  | .decl listed(item: symbol)
+  | listed(x) :- alpha(x).
+  | .output listed

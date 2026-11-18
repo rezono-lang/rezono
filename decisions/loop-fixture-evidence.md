@@ -1,0 +1,5 @@
+# Fixture enforcement layers and replay
+
+Use the packet-field projection in the platform firewall decision. Keep every distinct logical rule witness, including witnesses with identical packet fields. Classify each explicitly registered cross-zone test case against the union of all allowances. A denied service intention that matches any allowance is excess access at the router. Record it separately from the verdict for service isolation. Scope verification to versioned fixture case IDs. In-zone service cases do not exercise the router. Use independent hand-authored layer expectations and require the evidence for each applicable layer. A restrictive-router regression changes only the fixture's router rule, leaving case expectations untouched.
+
+An offline recording contains a run ID, requirements, completion tokens, initial evidence, ordered observation sweeps and a positive round limit. The replay entry point loads this recording and invokes the same executor used by replay callers. Its report records the sequence of emitted frontiers and the terminal outcome; expected frontiers live only in the test. Reject malformed recordings before executing a round.

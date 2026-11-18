@@ -3,7 +3,6 @@ import pytest
 from publication_wire_fixture import wire_case
 
 
-@pytest.mark.xfail(strict=True, reason="Depends on the publication CRD and binding renderer. Implement the in-zone-flow policy renderer in k8s-admission/policy_renderer.py with the registered parameter type. Read decisions/k8s-admission-publication.md.")
 def test_policy_and_binding_resolve_the_registered_parameter():
     resource, identity = wire_case()
     from bindings import render_binding

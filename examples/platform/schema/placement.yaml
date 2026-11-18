@@ -1,0 +1,27 @@
+id: https://rezono.org/examples/platform-core/placement
+name: platform_placement
+description: Declared cluster roles and their control-plane hosting requirements.
+in_language: en
+imports:
+  - linkml:types
+default_range: string
+annotations:
+  layer: facts
+
+enums:
+  ControlPlacement:
+    permissible_values:
+      local:
+      hosted:
+      none:
+
+classes:
+  ClusterRole:
+    attributes:
+      id: {identifier: true}
+      control_placement: {range: ControlPlacement, required: true}
+      control_host_role: {range: ClusterRole}
+  Cluster:
+    attributes:
+      id: {identifier: true}
+      role: {range: ClusterRole, required: true}
