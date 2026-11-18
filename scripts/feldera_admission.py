@@ -41,7 +41,7 @@ ORIGINAL = {
     "examples/test_platform_incremental_proof.py::test_platform_incremental_delta_and_witnesses_match_batch",
 }
 BACKEND = {f"compiler/rezono_compiler/{name}.py" for name in
-           ("calc_sql", "emit", "rules_split", "rules_sql", "seal", "sqltext")}
+           ("calc_sql", "emit", "rules_split", "rules_sql", "seal", "sqltext")} | {"udf/udf.rs", "udf/udf.toml"}
 HARNESS = {node.split("::", 1)[0] for node in ORIGINAL} | {
     ORACLE, "examples/rules_support.py", "examples/support.py", "examples/test_examples.py",
     "compiler/tests/rulegen.py", "compiler/tests/calcgen.py", "compiler/tests/calcsupport.py",
