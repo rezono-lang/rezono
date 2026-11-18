@@ -50,7 +50,6 @@ def test_recorded_flow_reference():
     assert {row[-3] for row in expected_rows(True)} <= statuses.keys()
 
 
-@pytest.mark.xfail(strict=True, reason="Read decisions/loop-flow-drift.md. Implement packs/std-loop/rules/flow_drift.dl. Compare scoped policy and observed tuples with both witnesses. Waits for test_complete_flow_sweep for the composed check.")
 def test_flow_drift_rows():
     raw = flow_rows()
     # Exercise the production comparison directly. Wrong scopes cannot certify absence.
