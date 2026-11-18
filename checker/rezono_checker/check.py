@@ -435,7 +435,7 @@ def _check_witness(i, w, rules, rows, findings, groups=None):
     for c in rule.conditions:
         if not all(t in theta for t in (c.left, c.right) if t.startswith("?")):
             continue
-        if not _holds(c.op, _value(c.left, theta), _value(c.right, theta)):
+        if not _holds(c.op, _value(c.left, theta), _value(c.right, theta), c.compare_as):
             find("condition_false", detail=f"{c.left} {c.op} {c.right}")
 
 

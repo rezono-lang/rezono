@@ -39,11 +39,13 @@ def aggregate_grounds(spec, theta, rows, groups) -> set[Ground]:
 def comparison(condition, theta):
     op = condition.op
     left, right = _value(condition.left, theta), _value(condition.right, theta)
-    result = _holds(op, left, right)
+    result = _holds(op, left, right, condition.compare_as)
     if op in ("gt", "ge"):
         op, left, right = {"gt": "lt", "ge": "le"}[op], right, left
     if op in ("eq", "ne"):
         left, right = sorted((left, right), key=str)
+    if condition.compare_as is not None:  # a typed guard is a different comparison of the same text
+        op = f"{condition.compare_as}:{op}"
     return op, left, right, result
 
 
