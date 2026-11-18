@@ -50,8 +50,6 @@ def check_quoted_lines(page: str):
     assert missing == []
 
 
-@pytest.mark.xfail(strict=True, raises=FileNotFoundError,
-                   reason="Write docs/tutorial.md using the subsidy pack, its reference.py and the worked scenario in this test.")
 def test_the_commands_give_what_the_page_says(tmp_path):
     page = PAGE.read_text(encoding="utf-8")
     check_quoted_lines(page)

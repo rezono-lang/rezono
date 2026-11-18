@@ -1,0 +1,68 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: namespacepublications.admission.rezono.org
+spec:
+  group: admission.rezono.org
+  scope: Namespaced
+  names:
+    plural: namespacepublications
+    singular: namespacepublication
+    kind: NamespacePublication
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          required: [spec]
+          properties:
+            spec:
+              type: object
+              description: Verified admission parameters for the resource namespace. Submit with strict field validation to reject unknown fields.
+              required: [digest, images, flows]
+              properties:
+                digest:
+                  type: string
+                  minLength: 64
+                  maxLength: 64
+                  pattern: '^[0-9a-f]{64}$'
+                images:
+                  type: array
+                  maxItems: 256
+                  x-kubernetes-list-type: map
+                  x-kubernetes-list-map-keys: [service, image]
+                  items:
+                    type: object
+                    required: [service, image]
+                    properties:
+                      service:
+                        type: string
+                        minLength: 1
+                        maxLength: 63
+                      image:
+                        type: string
+                        maxLength: 512
+                        pattern: '^[^@\s]+@sha256:[0-9a-f]{64}$'
+                flows:
+                  type: array
+                  maxItems: 256
+                  x-kubernetes-list-type: map
+                  x-kubernetes-list-map-keys: [source, destination, port]
+                  items:
+                    type: object
+                    required: [source, destination, port]
+                    properties:
+                      source:
+                        type: string
+                        minLength: 1
+                        maxLength: 63
+                      destination:
+                        type: string
+                        minLength: 1
+                        maxLength: 63
+                      port:
+                        type: integer
+                        minimum: 1
+                        maximum: 65535

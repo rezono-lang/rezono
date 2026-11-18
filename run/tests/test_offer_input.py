@@ -3,7 +3,6 @@ import pytest
 from input_contract_cases import DIGEST, verify
 
 
-@pytest.mark.xfail(strict=True, reason="Implement run/schemas/offer.json from decisions/run-external-evidence.md.")
 def test_exact_price_line_shape():
     base = dict(sku="small", currency="EUR", period_seconds=3600,
                 period_price_micros=120001, setup_price_micros=0, source_sha256=DIGEST)

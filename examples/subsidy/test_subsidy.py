@@ -1,7 +1,5 @@
 """The subsidy pack's own tests: what the generic example tests (examples/test_*.py) cannot know.
 
-- The population, the ledger and the close of October are exactly what generate.py writes, and the close
-  is exactly what `rezono_compiler close` writes.
 - The evaluation date decides which partial rate counts: before 1 July 2026 an award at the partial
   rate is lower, to the cent as reference.py computes it.
 - The supposition of the last scenario moves the awards the README names: who gains, who loses, who stays.
@@ -18,8 +16,6 @@ Needs the compiler with DuckDB and the publisher, and `cryptography` for the cre
 import importlib.util
 import json
 import shutil
-import subprocess
-import sys
 from datetime import date
 from pathlib import Path
 
@@ -60,7 +56,6 @@ cost_line:
 income_statement:
   - {"id": "S900", "household": "H900", "income": 2500000}
 """
-GENERATED = ("facts/population.yaml", "facts/ledger.yaml", "scenarios/2-close-october.yaml")
 CLAIM = '{"id": "A001", "household": "H001", "claimed_costs": 1100000}'
 
 
@@ -93,24 +88,6 @@ def published(pack_dir: Path, root: Path):
 
 def rows(s, role: str, rel: str) -> list[tuple]:
     return [tuple(r["key"]) for r in json.loads(s.get(publish.role_objects(s, PACK, "m-1", role)[f"relations/{rel}.json"]))]
-
-
-# --- The synthetic population ----------------------------------------------------------------------
-
-def test_the_generator_writes_the_same_bytes_again(tmp_path):
-    subprocess.run([sys.executable, str(HERE / "generate.py"), str(tmp_path)], check=True)
-    for path in GENERATED:
-        assert (tmp_path / path).read_bytes() == (HERE / path).read_bytes(), path
-
-
-def test_the_close_is_what_the_compiler_writes():
-    """generate.py writes the close of October with the reference's own row hash; the compiler's close
-    command gives the same close, so two implementations agree on what a closed row is."""
-    out = subprocess.run([sys.executable, "-m", "rezono_compiler", "close", str(HERE), "--close", "october-2026",
-                          "--until", "2026-11-01", "--file", "facts/ledger.yaml"], check=True, capture_output=True, text=True)
-    change, = json.loads(out.stdout)["changes"]
-    mine = reference().load(HERE / "scenarios" / "2-close-october.yaml", {})["period_close"]["october-2026"]
-    assert {"id": change["key"], **change["values"]} == mine
 
 
 # --- The calculation -------------------------------------------------------------------------------

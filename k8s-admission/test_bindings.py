@@ -5,7 +5,6 @@ import re
 import pytest
 
 
-@pytest.mark.xfail(strict=True, reason="Implement the binding renderer in k8s-admission/bindings.py; read decisions/k8s-admission-rules.md.")
 def test_bindings_deny_missing_namespace_parameters():
     from bindings import render_binding
 

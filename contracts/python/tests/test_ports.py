@@ -24,7 +24,7 @@ def declaration(path: Path) -> dict:
     return yaml.safe_load(path.read_text("utf-8"))
 
 
-@pytest.mark.xfail(strict=True, reason="port declarations in edge/plugins and edge/githost are not in the standalone repository yet")
+@pytest.mark.xfail(strict=True, reason="the public publisher has five standard mappings but does not emit the per-row output index required for out ports. Confirm the output index and checked-epoch integration before declaring these mappings as ports")
 def test_there_are_declarations():
     assert len(DECLARATIONS) >= 5
 

@@ -1,0 +1,16 @@
+{
+  "source": "abstract kind Person\n  name: Text",
+  "declarations": [
+    {
+      "kind": "Person",
+      "slots": [
+        {
+          "slot": "name",
+          "type": "Text"
+        }
+      ],
+      "derived": [],
+      "abstract": true
+    }
+  ]
+}

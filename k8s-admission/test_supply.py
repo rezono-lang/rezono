@@ -7,7 +7,6 @@ def image(letter):
     return "registry.example.org/sample/app@sha256:" + letter * 64
 
 
-@pytest.mark.xfail(strict=True, reason="Implement supply preflight in k8s-admission/supply.py using the projected namespace publication; read decisions/k8s-admission-rules.md.")
 def test_pod_images_match_service_and_namespace():
     from supply import evaluate_pod
 
