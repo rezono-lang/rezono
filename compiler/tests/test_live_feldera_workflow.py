@@ -20,7 +20,7 @@ def test_live_oracle_workflow_runs_the_compiler_entrypoint():
             if any(entry in step.get("run", "").splitlines() for step in job["steps"])]
     job, = jobs
     assert job["runs-on"].startswith("ubuntu-")
-    assert 0 < int(job["timeout-minutes"]) < 30
+    assert int(job["timeout-minutes"]) == 30
     assert job.get("permissions", job_file.get("permissions")) == {"contents": "read"}
     assert (ROOT / "compiler/ci/run_feldera_oracle.sh").is_file()
     assert job["strategy"]["matrix"]["shard"] == [
@@ -31,6 +31,8 @@ def test_live_oracle_workflow_runs_the_compiler_entrypoint():
     assert any(step.get("env") == {"FELDERA_SHARD": "${{ matrix.shard }}"} for step in job["steps"])
     assert job["steps"][0]["name"] == "Reserve disk space on the disposable runner"
     assert "RUNNER_ENVIRONMENT" in job["steps"][0]["run"]
+    comparison, = (step for step in job["steps"] if step.get("run") == entry)
+    assert "timeout-minutes" not in comparison
     setup, = [step["run"] for step in job["steps"] if "--pull" in step.get("run", "")]
     assert setup.index("bash compiler/ci/run_feldera_oracle.sh --pull") < setup.index("python -m venv")
     assert setup.index("python -m venv") < setup.index('wait "$pull_pid"', setup.index("python -m venv"))

@@ -91,7 +91,7 @@ def test_file_input_requires_the_declared_tables_and_healthy_metrics(tmp_path, m
 
 def test_timeout_counts_missing_and_lagging_streams(tmp_path, monkeypatch):
     feed = transport.FileInputs(tmp_path / "part", ["missing", "pending"])
-    ticks = iter((0, 120))
+    ticks = iter((0, 0, 120))
     monkeypatch.setattr(transport, "time", SimpleNamespace(monotonic=lambda: next(ticks)))
     monkeypatch.setattr(transport, "call", lambda *_: {
         "inputs": [{"config": {"stream": '"pending"'}, "metrics": {

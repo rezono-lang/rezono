@@ -19,7 +19,7 @@ jobs:
       matrix:
         shard: [library, projects, platform, tenant-capacity-interface, subsidy, compiler-calc, compiler-bound, compiler-rules]
     runs-on: ubuntu-24.04
-    timeout-minutes: 29
+    timeout-minutes: 30
     defaults:
       run:
         shell: bash
@@ -27,13 +27,23 @@ jobs:
       - name: Reserve disk space on the disposable runner
         run: |
           set -euo pipefail
-          df -h "$RUNNER_TEMP"
-          if [[ "${RUNNER_ENVIRONMENT:-}" == github-hosted ]]; then
-            sudo rm -rf -- /usr/share/dotnet /usr/local/lib/android /opt/ghc
-          fi
           docker_root=$(docker info --format '{{.DockerRootDir}}')
+          # The measured high-water use approached 40 GiB, including the image and dependencies.
+          # Leave another 40 GiB available for the next compilation and its reports.
+          minimum_kib=$((80 * 1024 * 1024))
+          disk_has_budget() {
+            df -Pk "$RUNNER_TEMP" "$docker_root" |
+              awk -v minimum="$minimum_kib" 'NR > 1 && $4 < minimum { short = 1 } END { exit short || NR < 2 }'
+          }
           df -h "$RUNNER_TEMP" "$docker_root"
-          df -Pk "$RUNNER_TEMP" "$docker_root" | awk 'NR > 1 && $4 < 40 * 1024 * 1024 { short = 1 } END { exit short || NR < 2 }'
+          if ! disk_has_budget && [[ "${RUNNER_ENVIRONMENT:-}" == github-hosted ]]; then
+            sudo rm -rf -- /usr/share/dotnet /usr/local/lib/android /opt/ghc
+            df -h "$RUNNER_TEMP" "$docker_root"
+          fi
+          if ! disk_has_budget; then
+            echo "::error::Feldera needs 80 GiB of free space for the runner and Docker filesystems."
+            exit 1
+          fi
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           persist-credentials: false
@@ -64,7 +74,6 @@ jobs:
           trap - EXIT
           echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
       - name: Run the assigned Feldera comparisons
-        timeout-minutes: 26
         env:
           FELDERA_SHARD: ${{ matrix.shard }}
         run: bash compiler/ci/run_feldera_oracle.sh

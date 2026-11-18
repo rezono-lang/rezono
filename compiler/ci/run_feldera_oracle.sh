@@ -71,7 +71,7 @@ else
 fi
 mapfile -t tests < "$nodes"
 result=0
-"${inside[@]}" "${suite[@]}" -v --junitxml="$reports/results.xml" "${tests[@]}" || result=$?
+"${inside[@]}" "${suite[@]}" -v --capture=tee-sys --junitxml="$reports/results.xml" "${tests[@]}" || result=$?
 if [[ -z "$shard" ]]; then
   python compiler/ci/verify_feldera_run.py "$nodes" "$reports/results.xml"
 fi

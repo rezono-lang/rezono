@@ -8,7 +8,7 @@ from pathlib import PurePosixPath
 from rezono_compiler import feldera_names
 from rezono_compiler.sqltext import literal
 
-from feldera import call
+from feldera import call, record_storage
 
 
 MOUNT = PurePosixPath("/tmp/rezono-oracle-input")
@@ -59,6 +59,8 @@ class FileInputs:
         return result
 
     def send(self, pipeline, updates):
+        started = time.monotonic()
+        record_storage(pipeline, f"write_inputs rows={sum(map(len, updates.values()))}")
         for table, events in updates.items():
             if not events:
                 continue
@@ -67,7 +69,10 @@ class FileInputs:
                     stream.write(json.dumps(event, allow_nan=False) + "\n")
             self.expected[feldera_names.physical(table)] += len(events)
 
-        deadline = time.monotonic() + 120
+        started_waiting = time.monotonic()
+        deadline = started_waiting + 120
+        record_storage(pipeline, f"wait_for_receipts expected_rows={sum(self.expected.values())} "
+                       f"write_seconds={started_waiting - started:.2f}")
         while True:
             stats = call("GET", f"/v0/pipelines/{pipeline}/stats")
             received = {}
@@ -87,6 +92,7 @@ class FileInputs:
             global_metrics = stats["global_metrics"]
             if (received == self.expected and global_metrics["total_input_records"] >= sum(self.expected.values())
                     and global_metrics["total_completed_records"] >= global_metrics["total_input_records"]):
+                record_storage(pipeline, f"receipts_complete wait_seconds={time.monotonic() - started_waiting:.2f}")
                 return
             if time.monotonic() >= deadline:
                 missing = sorted(self.expected.keys() - received.keys())

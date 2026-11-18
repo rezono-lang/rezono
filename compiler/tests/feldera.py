@@ -34,11 +34,16 @@ def call(method, path, body=None, raw=False):
     return text if raw else (json.loads(text) if text.strip() else None)
 
 
-def wait(name, field, done, timeout=3600):
-    end = time.time() + timeout
-    while time.time() < end:
+def wait(name, field, done, timeout=3600, *, telemetry=False):
+    started = time.monotonic()
+    last = None
+    while time.monotonic() < started + timeout:
         p = call("GET", f"/v0/pipelines/{name}")
-        if p[field] in done:
+        state = p[field]
+        if telemetry and state != last:
+            record_storage(name, f"{field}={state} wait_seconds={time.monotonic() - started:.2f}")
+            last = state
+        if state in done:
             return p
         if p.get("program_status", "").endswith("Error"):
             raise RuntimeError(json.dumps(p.get("program_error"))[:4000])
@@ -62,14 +67,17 @@ def deploy(name, program, profile=None, workers=4, udf_rust="", udf_toml=""):
         call("DELETE", f"/v0/pipelines/{name}")
     except urllib.error.HTTPError:
         pass
-    start = time.time()
+    start = time.monotonic()
+    record_storage(name, f"submit_sql bytes={len(program.encode('utf-8'))}")
     call("PUT", f"/v0/pipelines/{name}", {"name": name, "program_code": program, "runtime_config": {"workers": workers},
                                           "program_config": {"profile": profile}, "udf_rust": udf_rust, "udf_toml": udf_toml})
-    wait(name, "program_status", {"Success"})
-    compiled = time.time() - start
+    wait(name, "program_status", {"Success"}, telemetry=True)
+    compiled = time.monotonic() - start
+    record_storage(name, f"compiled compile_seconds={compiled:.2f}")
+    start = time.monotonic()
     call("POST", f"/v0/pipelines/{name}/start")
-    wait(name, "deployment_status", {"Running"})
-    record_storage(name, f"compile_seconds={compiled:.2f} start_seconds={time.time() - start - compiled:.2f}")
+    wait(name, "deployment_status", {"Running"}, telemetry=True)
+    record_storage(name, f"running start_seconds={time.monotonic() - start:.2f}")
     return compiled
 
 
@@ -87,8 +95,10 @@ def stop(name, *, delete=False):
 
 def record_storage(name, phase):
     if reports := os.environ.get("FELDERA_ORACLE_REPORTS"):
+        message = f"{name}: {phase} runner_free_bytes={shutil.disk_usage(reports).free}"
+        print(message, flush=True)
         with (Path(reports) / "storage.log").open("a", encoding="utf-8") as log:
-            print(f"{name}: {phase} runner_free_bytes={shutil.disk_usage(reports).free}", file=log)
+            print(message, file=log)
 
 
 def push(name, updates, chunk=100_000):
