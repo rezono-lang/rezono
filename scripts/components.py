@@ -454,6 +454,13 @@ def execute_worker(assignment: Path, journal: Path, report: Path) -> int:
         # Pytest resolves only assigned IDs, without walking the component again.
         plugins = [Evidence()]
         if "publication" in data:
+            # These short-lived RDF graphs caused 63 full-heap collections
+            # (20.6 s) in run 44302050936. Collect larger batches in these
+            # dedicated processes; all generations and finalizers remain active.
+            import gc
+            young, middle, old = gc.get_threshold()
+            gc.set_threshold(young * 8, middle, old)
+            print(f"Publication worker GC thresholds: {gc.get_threshold()}", flush=True)
             sys.path.insert(0, str(ROOT / ".github/workflows"))
             from publication_fixture import PublicationProducer, PublicationReader
 
