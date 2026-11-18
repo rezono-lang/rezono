@@ -12,5 +12,18 @@
       ],
       "derived": []
     }
+  ],
+  "knownDiagnostics": [
+    {
+      "code": "R000",
+      "span": {
+        "text": "embedded",
+        "start": 52,
+        "end": 60
+      },
+      "args": [
+        "end of input, \"world\", \"inverse\", \"+\", \"*\", \"?\", or \"<\""
+      ]
+    }
   ]
 }

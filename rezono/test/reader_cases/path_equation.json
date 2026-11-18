@@ -28,5 +28,18 @@
         }
       ]
     }
+  ],
+  "knownDiagnostics": [
+    {
+      "code": "R000",
+      "span": {
+        "text": "same_project",
+        "start": 82,
+        "end": 94
+      },
+      "args": [
+        "\"=\" or \":\""
+      ]
+    }
   ]
 }
