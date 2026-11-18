@@ -1,22 +1,31 @@
 # Provider workflow dispatch boundary
 
-The provider entry point is `.github/workflows/provider-run.yml`. Use one
-job with the static GitHub environment `provider-run` and a step identified
-as `provider_run`. This gives the operator and offline check a stable target
-distinct from the read-only preflight and the disposable host trial.
+Use `.github/workflows/provider-run.yml` for the operator's provider run.
+Its only event is `workflow_dispatch`. A small job named `verify_ref` checks
+the full runner-provided ref with `test "$GITHUB_REF" = refs/heads/main` under
+`sh` or `bash`. This shell comparison is case-sensitive. The job only checks
+the ref and has no provider operation.
 
-Enable only `workflow_dispatch`. Put the full `github.ref == 'refs/heads/main'`
-condition on the job itself. GitHub expression equality ignores case. As its
-first step, run `test "$GITHUB_REF" = refs/heads/main` under `sh` to check
-the runner-provided full ref case-sensitively. Subsequent steps use normal
-success gating. The provider step must be reachable on a successful main
-dispatch. This small job needs no job dependency or matrix. A diagnostic
-job with the right condition could otherwise conceal an unguarded provider
-step in another job.
+Place every other job in the literal `provider-run` environment behind that
+check. Normal jobs can depend on it directly or through preparation jobs.
+GitHub's default success condition then propagates a failed or skipped check.
+A cleanup job that runs after a failure lists `verify_ref` as a direct
+dependency and checks its success explicitly in its job condition. Inside
+an admitted job, steps may use normal failure cleanup. The operator configures
+the environment's required reviewer and its main-branch deployment restriction.
 
-The synthetic cases exercise those structural checks without running steps.
-The operator configures the environment's required reviewer and restricts
-deployments to the main branch. A literal environment reference cannot prove
-those server settings. Wire the real entry point only after the provider
-ports, durable claim and verification gates in the [operator guide](../run/OPERATOR.md)
-exist. Workflow shape alone establishes neither live readiness nor an order.
+## Separate acceptance for provider wiring
+
+The offline structural test proves the trigger, static environment and a
+reachable job named `provider_run`. Synthetic jobs exercise its success and
+cleanup paths. Their commands do not establish any provider operation.
+
+An open integration task remains before the workflow can meet the run
+acceptance criterion. The [provider port decision](run-provider-ports.md)
+defines operations and the shared executor; it does not yet name a live
+command. Once that command exists, check that the actual workflow invokes
+it and exercise that same entry point with recording ports. Require the
+approved plan's single order through the shared executor, delivery and a
+complete cleanup inventory. Replacing the invocation with a no-op must fail
+that test. The [operator guide](../run/OPERATOR.md) also requires a durable
+claim and separately verified deployment protection before live use.
