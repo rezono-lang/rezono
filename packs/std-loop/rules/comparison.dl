@@ -15,5 +15,6 @@ non_absence(run, token, time) :-
 current(run, token, "absent", value, reason) :-
     known_latest(run, token, time), observed(run, token, time, event, "absent", value, reason),
     loop_observation__scope(event, scope), loop_observation__sweep(event, sweep),
-    complete_sweep(run, scope, sweep, _),
+    complete_sweep(run, scope, sweep, coverage),
+    sweep_window(run, scope, sweep, start, stop, coverage), start <= time, time < stop,
     !non_absence(run, token, time).
