@@ -16,10 +16,16 @@ import fast_check
 
 CLUSTER_TEST = "example/tests/test_network.py"
 WORKER_TEST = "loop/tests/test_network.py"
-MARKED = "import pytest\n\n@pytest.mark.cluster\ndef test_network():\n    pass\n"
+MARKED = """import pytest
+
+@pytest.mark.cluster
+def test_network():
+    pass
+"""
 MARKED_ALIAS = "from pytest import mark as m\n\npytestmark = [m.cluster]\ndef test_network():\n    pass\n"
 ORDINARY = "def test_network():\n    pass\n"
-RED = '@pytest.mark.xfail(strict=True, reason="Requires the fixture")\n'
+RED = """@pytest.mark.xfail(strict=True, reason="Requires the fixture")
+"""
 
 
 class ClusterRoutingTests(unittest.TestCase):
