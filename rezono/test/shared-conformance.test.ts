@@ -9,7 +9,7 @@ interface Case {
 	status: 'settled';
 	input: {
 		rows: Record<string, unknown>[];
-		select: { kind: string; id: string };
+		select?: { kind: string; id: string };
 		language?: string;
 	};
 	expect: { value: unknown; state: StateName; reason: string | null; witness: unknown };
@@ -92,7 +92,8 @@ const cases = readdirSync(root)
 		const reason = entry.unsupported?.language;
 		if (reason !== undefined) assert.ok(typeof reason === 'string' && reason.trim(), `${entry.id}: give the specific language limitation`);
 		return entry;
-	});
+	})
+	.filter((entry) => entry.input.language !== undefined);
 
 test('the shared conformance corpus has a case for the language', () => {
 	assert.ok(cases.some((entry) => entry.unsupported?.language === undefined));
@@ -101,15 +102,17 @@ test('the shared conformance corpus has a case for the language', () => {
 const schema = readFixture();
 for (const { id, input, expect, unsupported } of cases) {
 	test(`shared conformance: ${id}`, { skip: unsupported?.language }, async () => {
-		assert.ok(typeof input.language === 'string' && input.language.trim(), 'a language case gives its question');
-		const checked = check(input.language, schema);
+		const { language, select } = input;
+		assert.ok(typeof language === 'string' && language.trim(), 'a language case gives its question');
+		assert.ok(select, 'a language case gives its selected subject');
+		const checked = check(language, schema);
 		assert.deepEqual(checked.diagnostics.filter(isError), []);
-		assert.equal(checked.answer?.kind, input.select.kind);
+		assert.equal(checked.answer?.kind, select.kind);
 		assert.equal(checked.answer?.shown.length, 1);
 		const result = await answer(checked, schema, load(schema, input.rows));
 		assert.ok(result);
-		const projected = result.rows.find((row) => row.$id === input.select.id);
-		const undecided = result.undecided.find((row) => row.$id === input.select.id);
+		const projected = result.rows.find((row) => row.$id === select.id);
+		const undecided = result.undecided.find((row) => row.$id === select.id);
 		const expected = { value: expect.value, state: expect.state, reason: expect.reason };
 		if (undecided) {
 			assert.deepEqual({ value: null, state: undecided.state, reason: undecided.reason || null }, expected);

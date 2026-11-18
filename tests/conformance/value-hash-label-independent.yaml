@@ -1,0 +1,26 @@
+id: value-hash-label-independent
+source: docs/semantics/value-cases.yaml#hash-label-independent
+status: settled
+input:
+  rows:
+  - kind: item
+    id: item-c
+    group: group-b
+    labels:
+    - second
+    quantity:
+      state: unknown
+      reason: not_assigned
+  slot: item.quantity
+  subject: item-c
+  labels:
+  - reason.not_assigned: Pending assignment
+  - reason.not_assigned: Awaiting assignment
+expect:
+  value:
+    same_hash: true
+  state: known
+  reason: null
+  witness: null
+unsupported:
+  feldera: Presentation labels and row hashing are not SQL operations.

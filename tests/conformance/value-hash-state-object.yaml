@@ -1,0 +1,31 @@
+id: value-hash-state-object
+source: docs/semantics/value-cases.yaml#hash-state-object
+status: settled
+input:
+  rows:
+  - kind: item
+    id: item-c
+    group: group-b
+    labels:
+    - second
+    quantity:
+      state: unknown
+      reason: not_assigned
+  slot: item.quantity
+  subject: item-c
+expect:
+  value:
+    hash_form:
+      $reason: not_assigned
+      $state: unknown
+    row_json:
+      $unknown: not_assigned
+    columnar:
+      quantity$state: 2
+      quantity$reason: not_assigned
+    language: unknown not_assigned
+  state: unknown
+  reason: not_assigned
+  witness: null
+unsupported:
+  feldera: Canonical row encodings and hashes are constructed outside the SQL engine.

@@ -1,0 +1,36 @@
+id: value-agg-unknown-member
+source: docs/semantics/value-cases.yaml#agg-unknown-member
+status: settled
+input:
+  rows:
+  - kind: item
+    id: item-a
+    group: group-a
+    labels:
+    - first
+    - second
+    quantity: 7
+    weight: 3
+  - kind: item
+    id: item-c
+    group: group-b
+    labels:
+    - second
+    quantity: 7
+    weight:
+      state: unknown
+      reason: no_spec
+  expression: sum item.weight
+expect:
+  value: null
+  state: unknown
+  reason: no_spec
+  witness:
+    contributors:
+    - subject: item-a
+      value: '3'
+    - subject: item-c
+      state: unknown
+      reason: no_spec
+unsupported:
+  feldera: Ordinary Datalog aggregate inputs do not carry the state of each integer member.

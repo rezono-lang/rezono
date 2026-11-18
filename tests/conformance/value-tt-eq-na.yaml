@@ -1,0 +1,27 @@
+id: value-tt-eq-na
+source: docs/semantics/value-cases.yaml#tt-eq-na
+status: settled
+input:
+  rows:
+  - kind: item
+    id: item-b
+    group: group-a
+    labels:
+    - first
+    weight: 3
+  - kind: item
+    id: item-x
+  expression: item-b.quantity = item-x.quantity
+expect:
+  value: null
+  state: not_applicable
+  reason: null
+  witness:
+    complete: true
+    absent:
+    - relation: item__quantity
+      key:
+      - item-b
+    - relation: item__quantity
+      key:
+      - item-x

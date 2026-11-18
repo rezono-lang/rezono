@@ -1,7 +1,7 @@
-// The JSON form of a module (contracts/rezono-module.yaml, `rezono.module/1`): what the compiler reads of a
+// The JSON form of a module (contracts/rezono-module.yaml): what the compiler reads of a
 // pack written in Rezono, so that it needs no second parser (docs/rezono/expressions.md §12). Its three members:
 //
-//   format  `rezono.module/1`
+//   format  `rezono.module/1` or `rezono.module/2`, depending on the declarations
 //   module  the tree of the module as module.ts reads it. The tree is the JSON form, as for a question (§4a)
 //   spans   the place in the text of every node of `module` that has one (module.ts, `spans`): its JSON pointer
 //           (RFC 6901) into `module`, its 1-based line and its 0-based code-point offsets, end exclusive. They
@@ -33,10 +33,11 @@ const NATIVE_RULE_MODULE_FORMAT = 'rezono.module/3';
 function formatOf(module: Module): ModuleForm['format'] {
 	if (module.decls.some(decl => 'rule' in decl)) return NATIVE_RULE_MODULE_FORMAT;
 	const extended = module.schema !== undefined || module.decls.some(decl => {
-		if ('dataset' in decl) return true;
+		if ('dataset' in decl || 'rules' in decl) return true;
 		if ('kind' in decl) {
 			return decl.abstract || decl.embedded || decl.keys?.length || hasMetadata(decl)
-				|| decl.slots.some(slot => slot.identifier || slot.embedded || slot.slotUri !== undefined || hasMetadata(slot));
+				|| decl.slots.some(slot => slot.identifier || slot.embedded || slot.slotUri !== undefined
+					|| slot.constraints !== undefined || hasMetadata(slot));
 		}
 		return 'enum' in decl && (decl.memberMetadata !== undefined || hasMetadata(decl));
 	});

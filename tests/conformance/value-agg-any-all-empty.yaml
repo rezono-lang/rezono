@@ -1,0 +1,31 @@
+id: value-agg-any-all-empty
+source: docs/semantics/value-cases.yaml#agg-any-all-empty
+status: settled
+input:
+  rows:
+  - kind: item
+    id: item-x
+    group: group-a
+    labels: []
+  - kind: item
+    id: item-a
+    group: group-a
+    labels:
+    - first
+  expression: any, all and none of the labels equal first
+  subject: item-x
+  world: closed
+  slot_cardinality:
+    item.labels: '*'
+expect:
+  value:
+    any: false
+    all: true
+    none: true
+  state: known
+  reason: null
+  witness:
+    relation: item__labels
+    owner: item-x
+    complete: true
+    contributors: []

@@ -1,0 +1,19 @@
+id: value-version-not-yet-known
+source: docs/semantics/value-cases.yaml#version-not-yet-known
+status: settled
+input:
+  rows:
+  - relation: quantity_version
+    id: v1
+    valid_from: '2026-01-01'
+    known_from: '2026-01-05'
+    value: '7'
+    valid_until: '2027-01-01'
+  valid_at: '2026-01-02'
+  known_at: '2026-01-04'
+  expression: select quantity version
+expect:
+  value: null
+  state: unknown
+  reason: null
+  witness: null
