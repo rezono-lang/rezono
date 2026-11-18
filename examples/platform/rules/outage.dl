@@ -1,0 +1,17 @@
+// Follow running dependencies to find the services that cannot run.
+.decl unavailable_service(cause: symbol, service: symbol)
+unavailable_service(cause, cause) :- failure_observation(cause).
+unavailable_service(cause, consumer) :-
+    unavailable_service(cause, provider),
+    service_need__consumer(need, consumer), service_need__provider(need, provider),
+    service_need__mode(need, "run").
+
+// Change-only dependencies never feed back into unavailability.
+.decl outage_impact(cause: symbol, consumer: symbol, effect: symbol)
+outage_impact(cause, consumer, "down") :- unavailable_service(cause, consumer), cause != consumer.
+outage_impact(cause, consumer, "change_blocked") :-
+    unavailable_service(cause, provider),
+    service_need__consumer(need, consumer), service_need__provider(need, provider),
+    service_need__mode(need, "change"), !unavailable_service(cause, consumer).
+
+.output outage_impact
