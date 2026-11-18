@@ -14,6 +14,7 @@ from pathlib import Path
 import yaml
 
 from cluster_oracle import cluster_relations
+from firewall_oracle import firewall_expectations
 
 HERE = Path(__file__).parent
 FACTS = yaml.safe_load((HERE / "facts" / "core.yaml").read_text())
@@ -176,9 +177,30 @@ def rows(relation):
     return sorted(list(row) for row in relation)
 
 
+def firewall_json(expectations):
+    """Keep each policy row on one line so changes can be reviewed individually."""
+    fields = []
+    for name, value in expectations.items():
+        if isinstance(value, list) and value:
+            encoded = "[\n" + ",\n".join("    " + json.dumps(row) for row in value) + "\n  ]"
+        else:
+            encoded = json.dumps(value)
+        fields.append("  " + json.dumps(name) + ": " + encoded)
+    return "{\n" + ",\n".join(fields) + "\n}\n"
+
+
 if __name__ == "__main__":
     for name, relation in RELATIONS.items():
         print(f"{name}\t{len(relation)}")
+    inputs = json.loads((HERE / "firewall-inputs.json").read_text())
+    firewall = firewall_expectations(inputs, RELATIONS)
+    fixed = firewall_expectations(inputs, RELATIONS, fixed=True)
+    for key, value in firewall.items():
+        print(f"{key}\t{len(value) if isinstance(value, list) else value}")
+    if any(result[key] for result in (firewall, fixed) for key in ("uncoveredCases", "unusedRules")):
+        raise ValueError("Boundary policy has an uncovered flow or an unused rule")
     if "--write" in sys.argv:
+        (HERE / "firewall-fixed-source.json").write_text(firewall_json(fixed))
+        (HERE / "firewall-expectations.json").write_text(firewall_json(firewall))
         out = {name: rows(relation) for name, relation in RELATIONS.items()}
         (HERE / "oracle-rows.json").write_text(json.dumps(out, indent=1, sort_keys=True) + "\n")

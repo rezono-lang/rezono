@@ -48,3 +48,10 @@ transports:
   fleet-apply: 6443
   vm-disk: 7001
   persistent-volume: 7002
+machine_stack:
+  os: Flatcar Container Linux
+  distribution: k0s
+  bootstrap_extension: ign
+network_stack:
+  policy: Cilium
+  observation: Hubble
