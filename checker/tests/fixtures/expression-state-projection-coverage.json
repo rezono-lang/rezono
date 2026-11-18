@@ -1,0 +1,44 @@
+{
+  "source": [
+    {
+      "key": ["visible"],
+      "values": {
+        "estimate": {"state": "unknown", "reason": "not_measured"},
+        "origin": {"state": "known", "value": "inputs/estimates.json#/0/estimate"}
+      }
+    },
+    {
+      "key": ["measured"],
+      "values": {
+        "estimate": {"state": "known", "value": "7"},
+        "origin": {"state": "known", "value": "inputs/estimates.json#/1/estimate"}
+      }
+    },
+    {
+      "key": ["withheld"],
+      "values": {
+        "estimate": {"state": "unknown", "reason": "restricted_detail"},
+        "origin": {"state": "known", "value": "inputs/estimates.json#/2/estimate"}
+      }
+    },
+    {
+      "key": ["omitted-slot"],
+      "values": {"origin": {"state": "known", "value": "inputs/estimates.json#/3"}}
+    }
+  ],
+  "projection": [
+    {
+      "key": ["visible", "unknown", "not_measured"],
+      "values": {"origin": {"state": "known", "value": "inputs/estimates.json#/0/estimate"}}
+    },
+    {
+      "key": ["measured", "known", ""],
+      "values": {"origin": {"state": "known", "value": "inputs/estimates.json#/1/estimate"}}
+    },
+    {
+      "key": ["withheld", "unknown", "restricted_detail"],
+      "values": {"origin": {"state": "known", "value": "inputs/estimates.json#/2/estimate"}}
+    }
+  ],
+  "read_grant": {"key": ["guest", "sensor", "visible"]}
+}

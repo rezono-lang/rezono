@@ -1,0 +1,23 @@
+id: value-refused-float
+source: docs/semantics/value-cases.yaml#refused-float
+status: settled
+input:
+  rows:
+  - kind: item
+    id: item-a
+    group: group-a
+    labels:
+    - first
+    - second
+    quantity: 1.0
+    weight: 3
+  slot: item.quantity
+expect:
+  value:
+    accepted: false
+    stage: fact_load
+  state: known
+  reason: null
+  witness: null
+unsupported:
+  feldera: The refusal happens at typed fact loading before rows are sent to the engine.

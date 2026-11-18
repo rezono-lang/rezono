@@ -1,0 +1,22 @@
+id: https://rezono.org/examples/platform-core/management-routes
+name: platform_management_routes
+description: Enrolled cluster placement and published telemetry listeners.
+in_language: en
+imports: [linkml:types]
+default_range: string
+annotations:
+  layer: facts
+
+classes:
+  TelemetryCluster:
+    description: A cluster whose collector sends observations.
+    attributes:
+      id: {identifier: true}
+      zone: {required: true}
+  TelemetryEndpoint:
+    description: A placed receiver for a telemetry channel on its published listener port.
+    attributes:
+      id: {identifier: true}
+      channel: {required: true}
+      zone: {required: true}
+      port: {range: integer, minimum_value: 1, maximum_value: 65535, required: true}

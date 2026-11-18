@@ -1,0 +1,19 @@
+// The product, the observation and the pinned vendor evidence ground the default.
+.decl published_default_transport(product_id: symbol, series: symbol, protocol: symbol, port: number, source_url: symbol, source_sha256: symbol)
+published_default_transport(product, series, protocol, port, url, hash) :-
+    product(product),
+    vendor_default_transport(observation),
+    vendor_default_transport__product(observation, product),
+    vendor_default_transport__series(observation, series),
+    vendor_default_transport__protocol(observation, protocol),
+    vendor_default_transport__port(observation, port),
+    vendor_default_transport__source_url(observation, url),
+    vendor_default_transport__source_sha256(observation, hash),
+    vendor_default_transport_source(source),
+    vendor_default_transport_source__product(source, product),
+    vendor_default_transport_source__series(source, series),
+    vendor_default_transport_source__protocol(source, protocol),
+    vendor_default_transport_source__port(source, port),
+    vendor_default_transport_source__source_url(source, url),
+    vendor_default_transport_source__source_sha256(source, hash).
+.output published_default_transport

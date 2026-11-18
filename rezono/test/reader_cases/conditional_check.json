@@ -1,0 +1,39 @@
+{
+  "source": "kind Member world closed\n  membership: MembershipType\n  home_branch: Branch?\n  require adult_home when membership = adult then home_branch is known\n    description \"Een volwassen lid heeft een thuisvestiging.\"",
+  "module": {
+    "rezono": "0",
+    "pack": "sample",
+    "use": [],
+    "decls": [{
+      "kind": "Member",
+      "world": "closed",
+      "slots": [
+        { "slot": "membership", "type": "MembershipType" },
+        { "slot": "home_branch", "type": "Branch", "card": "?" }
+      ],
+      "derived": [],
+      "checks": [{
+        "check": "require",
+        "name": "adult_home",
+        "when": { "cmp": ["=", { "path": ["membership"] }, { "path": ["adult"] }] },
+        "then": { "is": [{ "path": ["home_branch"] }, "known"] },
+        "description": "Een volwassen lid heeft een thuisvestiging."
+      }]
+    }]
+  },
+  "spanNames": {
+    "/decls/0": "Member",
+    "/decls/0/checks/0": "adult_home",
+    "/decls/0/checks/0/when": "membership = adult",
+    "/decls/0/checks/0/then": "home_branch is known"
+  },
+  "rejections": [
+    { "from": " then home_branch is known", "to": "" },
+    { "from": "  require adult_home", "to": "require adult_home" }
+  ],
+  "knownDiagnostics": [{
+    "code": "R000",
+    "span": { "text": "when", "start": 119, "end": 123 },
+    "args": ["end of input, \"or\", \"and\", \"where\", \"as\", \"at\", \"(\", \".\", \"/\", \"*\", \"..\", \"..<\", \"-\", \"+\", \"is\", \"in\", \">\", \"<\", \"=\", \"!=\", \">=\", \"<=\", \"=>\", or \":\""]
+  }]
+}

@@ -42,7 +42,8 @@ from __future__ import annotations
 
 import dataclasses
 import json
-import os
+import os as os  # The portability test replaces the host path implementation.
+import posixpath
 import sys
 from pathlib import Path, PurePosixPath
 
@@ -193,7 +194,8 @@ def text(doc: dict) -> str:
 
 def relative(src: str, dst: str) -> str:
     """The import that names `dst` from the file `src` (both paths without `.yaml`, relative to one root)."""
-    return PurePosixPath(os.path.relpath(dst, PurePosixPath(src).parent.as_posix())).as_posix()
+    root = PurePosixPath("/")
+    return posixpath.relpath(root / dst, (root / src).parent)
 
 
 # ---------------------------------------------------------------------------------------------------------------

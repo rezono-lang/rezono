@@ -1,0 +1,8 @@
+vendor_licence_notice:
+  - id: distribution-3.0.0
+    product: registry
+    version: 3.0.0
+    scope: project-source
+    declaration: Apache-2.0
+    source_url: 'https://raw.githubusercontent.com/distribution/distribution/v3.0.0/LICENSE'
+    source_sha256: cb5e8e7e5f4a3988e1063c142c60dc2df75605f4c46515e776e3aca6df976e14

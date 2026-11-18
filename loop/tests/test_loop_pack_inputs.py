@@ -15,12 +15,10 @@ def test_loop_pack_inputs(tmp_path):
     (shell / "rules").mkdir(parents=True)
     # Only the assembly shell is synthetic. All schema and adapter definitions come from production.
     shutil.copytree(LOOP / "schema", shell / "schema")
-    for item in ("labels", "channels.yaml", "messages"):
-        src = LOOP / item
-        if src.is_dir():
-            shutil.copytree(src, shell / item)
-        elif src.is_file():
-            shutil.copy(src, shell / item)
+    # Pack-wide labels can name relations outside this input fragment.
+    (shell / "labels").mkdir()
+    (shell / "labels" / "en.yaml").write_text("{}\n", encoding="utf-8")
+    shutil.copy(LOOP / "channels.yaml", shell / "channels.yaml")
     shutil.copy(LOOP / "rules" / "loop_inputs.dl", shell / "rules")
     shutil.copytree(ORDER, tmp_path / "std-order")
     meta = {"name": "std-loop", "version": "0.1.0", "theory": True, "default_language": "en",

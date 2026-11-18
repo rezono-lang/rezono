@@ -20,7 +20,6 @@ def test_named_pack_and_one_rename_are_valid(tmp_path):
     ]
 
 
-@pytest.mark.xfail(strict=True, reason="Reject undeclared OperationSet fields in compiler/rezono_compiler/operate/spec.py. Read contracts/operation.yaml.")
 def test_unrecognized_operation_set_field_is_refused(tmp_path):
     with pytest.raises(operate.OperationError, match="preview"):
         operate.load(write_change(tmp_path, preview=True))

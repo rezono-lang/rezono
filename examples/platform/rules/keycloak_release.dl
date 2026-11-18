@@ -1,0 +1,26 @@
+.decl product_release_observed(source: symbol, product_id: symbol, version: symbol, published: symbol, source_url: symbol, source_sha256: symbol)
+.decl published_release(product_id: symbol, version: symbol, published: symbol, source_url: symbol, source_sha256: symbol)
+.decl product_release_date_drift(reference: symbol, source: symbol, product_id: symbol, version: symbol, expected: symbol, observed: symbol)
+
+product_release_observed(source, product, version, published, url, digest) :-
+    product(product),
+    product_release_source(source),
+    product_release_source__product(source, product),
+    product_release_source__version(source, version),
+    product_release_source__published(source, published),
+    product_release_source__source_url(source, url),
+    product_release_source__source_sha256(source, digest).
+
+published_release(product, version, published, url, digest) :-
+    product_release_observed(source, product, version, published, url, digest).
+
+product_release_date_drift(reference, source, product, version, expected, observed) :-
+    product_release_reference(reference),
+    product_release_reference__product(reference, product),
+    product_release_reference__version(reference, version),
+    product_release_reference__published(reference, expected),
+    product_release_observed(source, product, version, observed, _, _),
+    expected != observed.
+
+.output published_release
+.output product_release_date_drift

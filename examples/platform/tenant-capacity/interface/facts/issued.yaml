@@ -1,0 +1,3 @@
+capacity_notice:
+  - {id: issued-notice, issuer: platform, origin: decision, period: first, free_cores: 3, total_cores: 8}
+  - {id: outside-notice, issuer: observer, origin: decision, period: first, free_cores: 5, total_cores: 6}

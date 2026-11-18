@@ -72,7 +72,7 @@ class MissingCapacityRules(AssertionError):
     pass
 
 
-@pytest.mark.xfail(strict=True, raises=MissingCapacityRules, reason="Depends on test_trusted_tenant_proposal_inputs. Derive landed tenant_resource_capacity and ordered candidate tenant_resource_shortage with witnesses in examples/platform/rules and calc. Read decisions/platform-tenant-proposal-relations.md.")
+@pytest.mark.xfail(strict=True, raises=MissingCapacityRules, reason="Depends on test_trusted_tenant_proposal_inputs and explicit trusted landed inventory coverage: missing and explicitly empty inventories currently produce the same typed rows. Derive tenant_resource_capacity and tenant_resource_shortage with witnesses once exact submission order and sequential reservations are supported; the compiler rejects text timestamp ordering and arithmetic in reservation recursion. Read decisions/platform-tenant-proposal-relations.md.")
 def test_real_proposal_capacity_and_three_resource_shortages(tmp_path):
     from proof_cases.case_support import verified
     from request_preview import preview_inputs

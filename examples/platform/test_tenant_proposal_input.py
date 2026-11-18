@@ -24,3 +24,30 @@ def test_trusted_tenant_proposal_inputs(tmp_path):
     assert ["elm-cpu", 6] in updated.get("tenant_quota__amount", [])
     assert ["elm-cpu", 4] not in updated.get("tenant_quota__amount", [])
     assert not updated.get("tenant_reviewer__action", [])
+
+
+@pytest.mark.parametrize(
+    ("inventory", "state", "revisions"),
+    [
+        pytest.param(None, "unknown", [], id="missing"),
+        pytest.param([], "complete", [], id="known-empty"),
+        pytest.param(
+            [{"request": "elm/ledger", "revision": "de" * 20, "cores": 6,
+              "memoryGiB": 12, "storageGiB": 70}],
+            "complete", [["elm/ledger", "de" * 20]], id="known-occupied",
+        ),
+    ],
+)
+def test_preview_preserves_landed_inventory_coverage(tmp_path, inventory, state, revisions):
+    teams, catalog = proposal(tmp_path)
+    model = load(catalog)
+    if inventory is None:
+        del model["landedDeliveries"]
+    else:
+        model["landedDeliveries"] = inventory
+    write(catalog, model)
+
+    tables = query(teams, catalog, "inputs")
+
+    assert tables.get("tenant_landed_inventory__state") == [["landed-deliveries", state]]
+    assert tables.get("tenant_landed_delivery__revision", []) == revisions

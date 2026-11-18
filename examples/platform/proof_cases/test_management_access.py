@@ -32,9 +32,6 @@ def records():
     }
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError, reason=(
-    "Implement platform membership, tenant roles, scoped rights and emergency windows in "
-    "schema/management_access.yaml and rules/management_access.dl. Read decisions/platform-management-access.md."))
 def test_management_cluster_rights():
     from management_probes import compiled
 

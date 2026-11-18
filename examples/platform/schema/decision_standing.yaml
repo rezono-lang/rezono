@@ -1,0 +1,32 @@
+id: https://rezono.org/examples/platform-core/decision-standing
+name: platform_decision_standing
+description: Platform statements bound to the decisions that establish them.
+in_language: en
+imports:
+  - linkml:types
+  - std-decision:decision
+default_range: string
+annotations:
+  layer: facts
+
+enums:
+  PlatformDecisionArea:
+    description: The part of the platform governed by the decision.
+    permissible_values:
+      review: {description: A reviewer's judgement.}
+      placement: {description: A decision to place a workload in a location.}
+      exclusion: {description: A separate decision to exclude a placement.}
+      zone_matrix: {description: An entry in the zone policy matrix.}
+      product_stance: {description: A stance on a product.}
+      capacity: {description: A capacity statement.}
+      shared_cost: {description: A shared monthly cost statement.}
+
+classes:
+  PlatformDecisionBinding:
+    description: A platform statement and the decision that gives it standing on a reference date.
+    attributes:
+      id: {identifier: true}
+      decision: {range: Decision, required: true}
+      area: {range: PlatformDecisionArea, required: true}
+      subject: {required: true, description: The platform element addressed by the statement.}
+      value: {required: true, description: The stance or value recorded for that element.}

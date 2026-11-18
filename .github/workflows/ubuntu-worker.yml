@@ -1,0 +1,39 @@
+name: Ubuntu worker acceptance
+run-name: Ubuntu worker ${{ inputs.trial }}
+on:
+  workflow_dispatch:
+    inputs:
+      trial:
+        description: Worker acceptance trial
+        type: choice
+        required: true
+        options:
+          - registration
+          - kubevirt
+permissions:
+  contents: read
+jobs:
+  host:
+    if: >-
+      github.repository == 'rezono-lang/rezono' &&
+      github.ref == 'refs/heads/main' &&
+      github.actor == 'vdo89' &&
+      github.triggering_actor == 'vdo89'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+          ref: ${{ github.sha }}
+      - name: Run the selected disposable Ubuntu trial
+        shell: bash
+        env:
+          TRIAL: ${{ inputs.trial }}
+        run: |
+          set -euo pipefail
+          case "$TRIAL" in
+            registration) exec bash run/probes/worker-join/trial.sh --ubuntu ;;
+            kubevirt) exec bash run/probes/worker-join/trial.sh --ubuntu --kubevirt ;;
+            *) echo "Unknown Ubuntu trial" >&2; exit 2 ;;
+          esac

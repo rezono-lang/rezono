@@ -30,7 +30,6 @@ def check_file(body, record, name, expected):
     assert record["sha256"] == hashlib.sha256(body).hexdigest()
 
 
-@pytest.mark.xfail(strict=True, raises=ImportError, reason="Index the JSON-LD context in publication/rezono_publication/context_index.py. Read decisions/standard-export-index.md.")
 def test_context_type_uses_its_slot_type():
     context = rdf.context(SCHEMA)
     assert context["@context"]["Point"]["@context"]["label"]["@type"].endswith("string")
@@ -41,7 +40,6 @@ def test_context_type_uses_its_slot_type():
     assert field({"pointer": "/@context/Point/@context/label/@type"}, "/kinds/Point/slots/label/type") in record["fields"]
 
 
-@pytest.mark.xfail(strict=True, raises=ImportError, reason="Index schema property shapes in edge/plugins/connectors/shacl_index.py. Read decisions/standard-export-index.md.")
 def test_shape_name_uses_its_slot_declaration():
     text = shacl.to_turtle(SCHEMA)
     line, = [i for i, s in enumerate(text.splitlines(), 1) if 'sh:name "label"' in s]
@@ -52,7 +50,6 @@ def test_shape_name_uses_its_slot_declaration():
     assert field({"line": line}, "/kinds/Point/slots/label") in record["fields"]
 
 
-@pytest.mark.xfail(strict=True, raises=ImportError, reason="Index the ODCS contract name in edge/plugins/connectors/odcs_index.py. Read decisions/standard-export-index.md.")
 def test_contract_name_uses_schema_pack():
     text = odcs.to_yaml(SCHEMA)
     assert yaml.safe_load(text)["name"] == "atlas"
@@ -63,7 +60,6 @@ def test_contract_name_uses_schema_pack():
     assert field({"pointer": "/name"}, "/pack") in record["fields"]
 
 
-@pytest.mark.xfail(strict=True, raises=ImportError, reason="Bind DCAT access URLs to the selected role listing in edge/plugins/connectors/dcat_index.py. Read decisions/standard-export-index.md.")
 def test_distribution_uses_its_matching_listed_object():
     import dcat
     from rezono_publication import l0

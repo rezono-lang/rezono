@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Literal flags in a native Rezono module form",
+  "if": {
+    "type": "object",
+    "required": ["format"],
+    "properties": {
+      "format": {"const": "rezono.module/3"}
+    }
+  },
+  "then": {
+    "properties": {
+      "module": {
+        "properties": {
+          "decls": {"items": {"$ref": "#/$defs/declaration"}}
+        }
+      }
+    }
+  },
+  "$defs": {
+    "asserted": {"const": true},
+    "declaration": {
+      "if": {"type": "object", "required": ["rule"]},
+      "then": {
+        "properties": {
+          "args": {"items": {"$ref": "#/$defs/expression"}},
+          "when": {"$ref": "#/$defs/expression"},
+          "options": {
+            "items": {
+              "properties": {
+                "extend": {"$ref": "#/$defs/asserted"},
+                "invariant": {"$ref": "#/$defs/asserted"},
+                "absence": {"$ref": "#/$defs/asserted"}
+              }
+            }
+          }
+        }
+      }
+    },
+    "expression": {
+      "properties": {
+        "wildcard": {"$ref": "#/$defs/asserted"}
+      },
+      "additionalProperties": {"$ref": "#/$defs/expression"},
+      "items": {"$ref": "#/$defs/expression"}
+    }
+  }
+}

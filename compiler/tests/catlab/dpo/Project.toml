@@ -1,0 +1,11 @@
+# The DPO oracle for tests, with a separate dependency lock from schema migration.
+[deps]
+ACSets = "227ef7b5-1206-438b-ac65-934d6da304b8"
+AlgebraicRewriting = "725a01d3-f174-5bbd-84e1-b9417bad95d9"
+Catlab = "134e5e36-593f-5add-ad60-77f754baafbe"
+
+[compat]
+ACSets = "=0.2.29"
+AlgebraicRewriting = "=0.5.0"
+Catlab = "=0.17.6"
+julia = "=1.11.9"

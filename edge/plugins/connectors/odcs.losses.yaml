@@ -82,6 +82,12 @@ losses:
       The pack's own checks and invariants. The quality rules hold the structure of the schema document;
       a check written as a rule is not a quality rule here.
     fate: dropped
+  - subject: check
+    what: >-
+      The owner of a control-plane kind and the requirement to review changes to it. The ODCS
+      contract describes dataset quality but carries neither the control owner nor the review
+      requirement. The schema digest identifies the source and cannot recover either.
+    fate: dropped
   - subject: rule
     what: The rules. The contract describes what was derived, not that it follows.
     fate: dropped

@@ -1,0 +1,38 @@
+recorded_quote: recorded quote
+recorded_line: recorded quote line
+recorded_line.quote: quote
+quote_digit: operand digit record
+quote_digit.line: quote line
+quote_digit.operand: operand
+quote_digit.position: decimal position
+quote_digit.value: digit value
+quote_operand: quote operand
+quote_operand.quantity: quantity
+quote_operand.billed_periods: billed periods
+quote_operand.period_price_micros: period price in millionths
+quote_operand.setup_price_micros: setup price in millionths
+quote_carry: decimal carry record
+quote_carry.amount: amount reference
+quote_carry.position: decimal position
+quote_carry.value: carry value
+operand_digit: operand digit
+conflicted_digit: conflicting operand digits
+priced_line: quote line with all recorded operands
+machine_term: contribution to machine charge
+machine_position: machine charge position
+machine_column: machine charge column
+line_term: contribution to quote line
+line_position: quote line position
+line_column: quote line column
+total_term: contribution to quote total
+incomplete_quote: quote with incomplete line evidence
+total_position: quote total position
+amount_column: amount column before decimal carry
+carry: decimal carry
+conflicted_carry: conflicting carry records
+column_position: amount column position
+next_position: next decimal position
+normalized_column: normalized amount column
+normalized_prefix: verified amount prefix
+complete_amount: completely verified amount
+amount_digit: amount digit

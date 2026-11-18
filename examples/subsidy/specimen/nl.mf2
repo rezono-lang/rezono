@@ -1,0 +1,26 @@
+@locale nl
+---
+# The subsidy example in the visual specimen. Its glyphs and styles belong to std-view.
+subsidy.specimen.sample = {{De toekenning is {$award}}}
+subsidy.specimen.sample.conclusion = Dus geldt de volledige toekenning niet.
+subsidy.specimen.use.origin_decision = {{{$sign} · raad, 9 dec 2025}}
+subsidy.specimen.mark.origin_decision = {{Adviesvergoeding {$allowance}}}
+subsidy.specimen.use.origin_vendor = {{{$sign} · regeling, art. 4}}
+subsidy.specimen.mark.origin_vendor = {{Drempel {$threshold}}}
+subsidy.specimen.use.origin_design = {{{$sign} · ontwerp van de regeling}}
+subsidy.specimen.mark.origin_design = Drie inkomensklassen
+subsidy.specimen.use.origin_observation = {{{$sign} · ontvangen 2 feb 2026}}
+subsidy.specimen.mark.origin_observation = Inkomensverklaring
+subsidy.specimen.mark.derived = {{Toekenning {$award}}}
+subsidy.specimen.use.assumption = {{Huishouden van {$sign} personen, aangenomen tot het register antwoordt}}
+subsidy.specimen.mark.assumption = 3
+subsidy.specimen.use.drift = {{Uitbetaald {$paid} {$sign} grootboek {$ledger}}}
+subsidy.specimen.use.screened = {{Aanvrager {$sign}}}
+subsidy.specimen.mark.proposal = Deeltarief 22% voor 2027
+subsidy.specimen.use.sealed = {{Grootboek oktober {$sign}}}
+subsidy.specimen.mark.sealed = 4 nov 2026
+subsidy.specimen.use.supposed = {{Toekenning {$sign} als het tarief 22% was}}
+subsidy.specimen.mark.supposed = {{{$supposed}}}
+subsidy.specimen.old.supposed = {{{$award}}}
+subsidy.specimen.number.rounded = Afgerond op hele euro's
+subsidy.specimen.number.reason = inkomensverklaring ontbreekt

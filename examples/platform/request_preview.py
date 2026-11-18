@@ -108,9 +108,17 @@ def catalog_rows(catalog):
         rows["tenant_zone_link"].append({
             "id": f"{source}/{target}/{port}", "source": source, "target": target, "port": port,
         })
-    rows["tenant_landed_delivery"] = landed_deliveries(catalog.get("landedDeliveries", []))
+    inventory_present = "landedDeliveries" in catalog
+    rows["tenant_landed_delivery"] = landed_deliveries(catalog["landedDeliveries"]) if inventory_present else []
+    rows["tenant_landed_inventory"] = [{
+        "id": "landed-deliveries", "state": "complete" if inventory_present else "unknown",
+    }]
     add_review_inputs(rows, catalog)
     rows["tenant_quota"] = readable_quotas(catalog)
+    for artifact, scope in mapping(catalog.get("bindings", {}), "catalog bindings").items():
+        if scope not in ("tenant", "delivery"):
+            raise ValueError("catalog binding scope must be tenant or delivery")
+        rows["tenant_binding"].append({"id": name(artifact, "binding artifact"), "scope": scope})
     return rows
 
 
@@ -234,7 +242,37 @@ def request_rows(teams_path, catalog):
                     raise ValueError(f"unknown peer {peer!r}")
                 row["peer"] = peer
             records["tenant_request_connection"].append(row)
+    add_request_order_keys(records["tenant_service_request"])
     return records
+
+
+def add_request_order_keys(requests):
+    """Encode independent ordering fields without assigning an ordinal to any request."""
+    instants = [(request, submission_instant(request["submitted_at"])) for request in requests]
+    global_times = ordering_keys(instant for _, instant in instants)
+    tenants = ordering_keys(request["tenant"] for request in requests)
+    global_services = ordering_keys(request["service"] for request in requests)
+    by_tenant = defaultdict(list)
+    for request, instant in instants:
+        request["global_submitted_at_key"] = global_times[instant]
+        request["tenant_key"] = tenants[request["tenant"]]
+        request["global_service_key"] = global_services[request["service"]]
+        by_tenant[request["tenant"]].append((request, instant))
+    for tenant_requests in by_tenant.values():
+        time_keys = ordering_keys(instant for _, instant in tenant_requests)
+        service_keys = ordering_keys(request["service"] for request, _ in tenant_requests)
+        for request, instant in tenant_requests:
+            request["submitted_at_key"] = time_keys[instant]
+            request["service_key"] = service_keys[request["service"]]
+
+
+def ordering_keys(values):
+    return {value: index for index, value in enumerate(sorted(set(values)))}
+
+
+def submission_instant(timestamp):
+    whole, _, fraction = timestamp.removesuffix("Z").partition(".")
+    return whole, fraction.rstrip("0")
 
 
 def preview_inputs(model, pack_path, teams_path, catalog_path):
@@ -258,7 +296,13 @@ def relation_rows(model, rows, name):
     calculation = calc.build(model, model.calc) if program.calc_inputs() else None
     connection, _, _ = batch.run(model, program, rows, calculation)
     with closing(connection):
-        return sorted(connection.execute(f"SELECT * FROM {q(name)}").fetchall())
+        result = connection.execute(f"SELECT * FROM {q(name)}").fetchall()
+    if name == "tenant_delivery_scope":
+        result = [
+            (tenant, artifact, tenant if number == 0 else f"{tenant}-{number}")
+            for tenant, artifact, number in result
+        ]
+    return sorted(result)
 
 
 def main(argv=None):

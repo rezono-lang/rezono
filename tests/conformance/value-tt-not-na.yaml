@@ -1,0 +1,14 @@
+id: value-tt-not-na
+source: docs/semantics/value-cases.yaml#tt-not-na
+status: settled
+input:
+  rows: []
+  expression: not value
+  bindings:
+    value:
+      state: not_applicable
+expect:
+  value: null
+  state: not_applicable
+  reason: null
+  witness: null

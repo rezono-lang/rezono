@@ -1,0 +1,15 @@
+.decl managed_telemetry_flow(cluster: symbol, endpoint: symbol, port: number)
+managed_telemetry_flow(cluster, endpoint, port) :-
+    telemetry_cluster__zone(cluster, _),
+    telemetry_endpoint__channel(endpoint, _), telemetry_endpoint__zone(endpoint, _),
+    telemetry_endpoint__port(endpoint, port).
+
+.decl managed_telemetry_firewall(cluster: symbol, endpoint: symbol, port: number)
+managed_telemetry_firewall(cluster, endpoint, port) :-
+    managed_telemetry_flow(cluster, endpoint, port),
+    telemetry_cluster__zone(cluster, source_zone),
+    telemetry_endpoint__zone(endpoint, destination_zone),
+    source_zone != destination_zone.
+
+.output managed_telemetry_flow
+.output managed_telemetry_firewall

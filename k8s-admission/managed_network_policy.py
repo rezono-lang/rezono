@@ -11,9 +11,10 @@ _DIRECTIONS = {"Ingress": ("ingress", "from"), "Egress": ("egress", "to")}
 
 
 def _service(selector):
-    if not isinstance(selector, dict) or selector.keys() != {"matchLabels"}:
+    if (not isinstance(selector, dict) or selector.keys() - {"matchLabels", "matchExpressions"}
+            or selector.get("matchExpressions", []) != []):
         return None
-    labels = selector["matchLabels"]
+    labels = selector.get("matchLabels")
     if not isinstance(labels, dict) or labels.keys() != {_SERVICE_LABEL}:
         return None
     value = labels[_SERVICE_LABEL]

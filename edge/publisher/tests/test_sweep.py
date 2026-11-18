@@ -12,6 +12,7 @@ import yaml
 pytest.importorskip("duckdb")
 pytest.importorskip("rezono_compiler")
 
+from rezono_compiler import modules  # noqa: E402
 from rezono_publisher import batch, publish, store, sweep  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -97,6 +98,42 @@ def test_each_grid_value_is_a_manifest_or_a_diagnosis_against_main(repo, tmp_pat
     assert sh("git", "status", "--porcelain", cwd=repo) == ""
     assert (repo / PACK / "facts" / "a.yaml").read_text() == FACTS
     assert sh("git", "worktree", "list", "--porcelain", cwd=repo).count("worktree ") == 1
+
+
+def test_role_scoped_sweep_publication(repo, tmp_path):
+    """Publish the real restricted-role sweep consumed by the Gate, REPL and MCP acceptances."""
+    sh("git", "config", "core.autocrlf", "false", cwd=repo)
+    explain = repo / "packs" / "std-explain"
+    shutil.copytree(ROOT / "packs" / "std-explain", explain)
+    pack = repo / PACK / "pack.yaml"
+    metadata = yaml.safe_load(pack.read_text(encoding="utf-8"))
+    metadata["imports"] = [{"name": "std-explain", "path": "../std-explain", "sha256": modules.pack_hash(explain)}]
+    pack.write_text(yaml.safe_dump(metadata, sort_keys=False), encoding="utf-8", newline="\n")
+
+    rules = repo / PACK / "rules"
+    rules.mkdir(exist_ok=True)
+    (rules / "access.dl").write_text(
+        '.decl may_read(role: symbol, kind: symbol, element: symbol)\n'
+        'may_read("partial", "alpha", "a1") :- alpha("a1").\n'
+        'may_read("other", "alpha", "a2") :- alpha("a2").\n'
+        '.output may_read\n',
+        encoding="utf-8",
+    )
+    commit(repo, "partially readable sweep")
+    roles = {"checker": "complete", "partial": "may_read", "other": "may_read"}
+    publication = store.FileStore(tmp_path / "sweep-publication")
+    base = sh("git", "rev-parse", "HEAD", cwd=repo)
+    epoch, time = sweep.base_of(repo, base)
+    result = batch.epoch(repo / PACK, epoch=epoch, knowledge_time=time, sources=[("rules", base)])
+    main = publish.publish(result, publication, roles)
+    assert main["id"] == "m-3"
+    assert sweep.roles_of(result, roles, "alpha", "a1") == (["checker", "partial"], ["checker"])
+    assert sweep.roles_of(result, roles, "alpha", "a2") == (["checker", "other"], ["checker"])
+    assert sweep.run(repo, PACK, base, publication, roles) == [
+        (f"v-size_scale-{index:02d}-4", outcome)
+        for index, outcome in enumerate(("manifest", "manifest", "diagnosis", "diagnosis"))
+    ]
+    assert publish.newest_main(publication, "minimal") == main
 
 
 def test_a_variant_writes_only_what_the_swept_cell_changes(repo, tmp_path):

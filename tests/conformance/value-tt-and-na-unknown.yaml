@@ -1,0 +1,16 @@
+id: value-tt-and-na-unknown
+source: docs/semantics/value-cases.yaml#tt-and-na-unknown
+status: settled
+input:
+  rows: []
+  expression: left and right
+  bindings:
+    left:
+      state: not_applicable
+    right:
+      state: unknown
+expect:
+  value: null
+  state: unknown
+  reason: null
+  witness: null

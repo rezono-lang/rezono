@@ -59,7 +59,7 @@ def repack(files, extra=None):
     return out.getvalue()
 
 
-@pytest.mark.xfail(strict=True, reason="viewer/src/lib is not in the standalone repository")
+@pytest.mark.xfail(strict=True, reason="later: tekenweergaven")
 def test_private_extension_roundtrip_is_exact_deterministic_and_does_not_publish(inputs, monkeypatch):
     root, pack, st, key, private, prepared = inputs
     before = dict(st.data)
@@ -80,7 +80,7 @@ def test_private_extension_roundtrip_is_exact_deterministic_and_does_not_publish
     assert any("view-aware" in e for e in kept.verify(pack, st, key, pack.parent / "unpacked"))
 
 
-@pytest.mark.xfail(strict=True, reason="viewer/src/lib is not in the standalone repository")
+@pytest.mark.xfail(strict=True, reason="later: tekenweergaven")
 @pytest.mark.parametrize("damage", ["source", "missing-source", "extra-source", "missing-capture", "extra-role",
                                     "role", "mode", "payload", "checkpoint-build"])
 def test_adversarial_extension_is_refused_before_execution(inputs, monkeypatch, damage):
@@ -114,7 +114,7 @@ def test_adversarial_extension_is_refused_before_execution(inputs, monkeypatch, 
         kept_views.verify(repack(files), st, key)
 
 
-@pytest.mark.xfail(strict=True, reason="viewer/src/lib is not in the standalone repository")
+@pytest.mark.xfail(strict=True, reason="later: tekenweergaven")
 @pytest.mark.parametrize("damage", ["commitment", "previous", "role", "missing"])
 def test_capture_is_bound_to_the_kept_target_role_index_not_its_own_assertion(inputs, damage):
     root, pack, st, key, private, _ = inputs
@@ -135,7 +135,7 @@ def test_capture_is_bound_to_the_kept_target_role_index_not_its_own_assertion(in
         kept_views.verify(archive, st, key)
 
 
-@pytest.mark.xfail(strict=True, reason="viewer/src/lib is not in the standalone repository")
+@pytest.mark.xfail(strict=True, reason="later: tekenweergaven")
 @pytest.mark.parametrize("name,kind", [("../outside", "file"), ("viewer/src/lib/link.ts", "symlink"),
                                        ("viewer/scripts/views.ts", "duplicate"), ("bin/node", "file")])
 def test_unsafe_or_undeclared_archive_members_are_refused(inputs, name, kind):
@@ -148,7 +148,7 @@ def test_unsafe_or_undeclared_archive_members_are_refused(inputs, name, kind):
         kept_views.verify(repack(files, entry), st, key)
 
 
-@pytest.mark.xfail(strict=True, reason="viewer/src/lib is not in the standalone repository")
+@pytest.mark.xfail(strict=True, reason="later: tekenweergaven")
 def test_creator_requires_explicit_complete_private_inputs(inputs):
     root, pack, st, key, private, _ = inputs
     # Even a store adapter containing production checkpoints is never enumerated for archival.
@@ -178,7 +178,7 @@ def edit_trusted_inventory(files, st, key, keep):
     st.data[key] = views.dumps(m)
 
 
-@pytest.mark.xfail(strict=True, reason="viewer/src/lib is not in the standalone repository")
+@pytest.mark.xfail(strict=True, reason="later: tekenweergaven")
 def test_a_self_consistent_core_only_inventory_is_refused(inputs):
     root, pack, st, key, private, _ = inputs
     files = members(kept_views.archive(root, pack, st, key, private))
@@ -188,7 +188,7 @@ def test_a_self_consistent_core_only_inventory_is_refused(inputs):
         kept_views.verify(repack(files), st, key)
 
 
-@pytest.mark.xfail(strict=True, reason="viewer/src/lib is not in the standalone repository")
+@pytest.mark.xfail(strict=True, reason="later: tekenweergaven")
 def test_extension_checks_pinned_bytes_but_does_not_claim_independent_dependency_closure(inputs):
     root, pack, st, key, private, prepared = inputs
     files = members(kept_views.archive(root, pack, st, key, private))
@@ -207,7 +207,7 @@ def test_extension_checks_pinned_bytes_but_does_not_claim_independent_dependency
     assert any("view-aware" in e for e in kept.verify(pack, st, key, pack.parent / "still-not-replayable"))
 
 
-@pytest.mark.xfail(strict=True, reason="viewer/src/lib is not in the standalone repository")
+@pytest.mark.xfail(strict=True, reason="later: tekenweergaven")
 @pytest.mark.parametrize("damage", ["raw-json", "raw-tar", "oversized-member", "too-many-members"])
 def test_malformed_or_oversized_input_is_refused_without_a_decode_fallback(inputs, monkeypatch, damage):
     root, pack, st, key, private, _ = inputs

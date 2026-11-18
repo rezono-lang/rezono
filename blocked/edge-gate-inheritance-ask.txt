@@ -1,0 +1,1 @@
+edge/gate: an ask across a visible inheritance family needs a role-safe evaluator for membership and inherited slot rows. The local gate reports that the question is unavailable.

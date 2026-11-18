@@ -1,0 +1,21 @@
+id: value-ask-undecided
+source: docs/semantics/value-cases.yaml#ask-undecided
+status: settled
+input:
+  rows:
+    - {$kind: Group, $id: group-a}
+    - {$kind: Item, $id: item-a, group: {$ref: group-a}, labels: [first], weight: {$unknown: not_assigned}}
+    - {$kind: Item, $id: item-b, group: {$ref: group-a}, labels: [first], weight: "7"}
+    - {$kind: Item, $id: item-c, group: {$ref: group-a}, labels: [first], weight: {$na: ""}}
+    - {$kind: Item, $id: item-d, group: {$ref: group-a}, labels: [first], weight: "3"}
+  select: {kind: Item, id: item-a}
+  language: "ask Item where weight = 7 show weight"
+expect:
+  value: null
+  state: unknown
+  reason: not_assigned
+  witness: {relation: item__weight, key: [item-a]}
+unsupported:
+  compiler: The rule compiler emits conclusions, while this case selects an undecided binder of an ask.
+  checker: The cause is an answer RowRef, while the shared checker replay expects a materialized rule witness.
+  feldera: The Datalog output has no Undecided answer kind or reason-bearing binder classification.
