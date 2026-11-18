@@ -1,0 +1,69 @@
+name: Catlab migration oracle
+
+on:
+  push:
+    branches:
+      - main
+      - 'task/compiler/tests/test_catlab_workflow.py--test_catlab_workflow_runs_the_real_multiset_comparison'
+    paths:
+      - 'compiler/**'
+      - 'canon/**'
+      - 'contracts/**'
+      - 'requirements/**'
+      - 'scripts/check-pinned.py'
+      - '.github/workflows/python-environment/**'
+      - '.github/workflows/catlab-oracle.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: catlab-oracle-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  compare:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      JULIA_VERSION: '1.11.9'
+      JULIA_DEPOT_PATH: ${{ runner.temp }}/julia-depot
+      JULIA_LOAD_PATH: '@:@stdlib'
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/workflows/python-environment
+        with:
+          editable: -e canon -e compiler -e contracts/python
+      - name: Install the Julia version recorded in the Catlab manifest
+        run: |
+          set -euo pipefail
+          download=(curl --fail --silent --show-error --location --retry 3 --proto '=https')
+          release=https://julialang-s3.julialang.org/bin
+          archive="julia-$JULIA_VERSION-linux-x86_64.tar.gz"
+          cd "$RUNNER_TEMP"
+          "${download[@]}" "$release/checksums/julia-$JULIA_VERSION.sha256" -o julia-checksums
+          awk -v archive="$archive" '$2 == archive { print; matched++ } END { exit matched != 1 }' \
+            julia-checksums > julia-checksum
+          "${download[@]}" "$release/linux/x64/${JULIA_VERSION%.*}/$archive" -o "$archive"
+          sha256sum --strict --check julia-checksum
+          cat julia-checksum
+          mkdir julia
+          tar --extract --gzip --file "$archive" --directory julia --strip-components=1
+          echo "$RUNNER_TEMP/julia/bin" >> "$GITHUB_PATH"
+      - name: Instantiate the committed Catlab project
+        run: |
+          set -euo pipefail
+          julia --version
+          julia --startup-file=no --project=compiler/tests/catlab -e 'using Pkg; Pkg.instantiate()'
+          git diff --exit-code -- compiler/tests/catlab/Project.toml compiler/tests/catlab/Manifest.toml
+      - name: Compare forward and reverse migration row multisets
+        run: |
+          set -euo pipefail
+          python compiler/tests/catlab/compare.py
+          echo "The Catlab migration multiset comparison passed." >> "$GITHUB_STEP_SUMMARY"
