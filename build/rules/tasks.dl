@@ -1,0 +1,64 @@
+.decl build_task_scope(run: symbol, task: symbol, step: symbol, track: symbol)
+.decl build_task_ready(run: symbol, task: symbol, reason: symbol)
+.decl build_task_waiting(run: symbol, task: symbol, token: symbol, reason: symbol)
+.decl build_task_stuck(run: symbol, task: symbol, reason: symbol)
+.decl build_policy_date_at_cut(run: symbol, reference: symbol)
+.decl build_ready_rank(run: symbol, task: symbol, rank: number, decision: symbol)
+.decl build_rank_conflict(run: symbol, task: symbol)
+.decl build_task_precedes(run: symbol, first: symbol, second: symbol)
+.decl build_queue_at_cut(run: symbol, count: number, reading: symbol)
+.decl build_queue_conflict(run: symbol)
+.decl build_queue_known(run: symbol, count: number, reading: symbol)
+.decl build_has_queue_count(run: symbol)
+.decl build_queue_threshold(run: symbol, limit: number, decision: symbol)
+.decl build_queue_policy_conflict(run: symbol)
+.decl build_queue_policy(run: symbol, limit: number, decision: symbol)
+.decl build_has_queue_policy(run: symbol)
+.decl build_planner_slot(run: symbol, reading: symbol, decision: symbol)
+.decl build_planner_waiting(run: symbol, reason: symbol)
+
+// The standard loop owns availability, waiting, and the proof of a blocked step.
+build_task_scope(run, task, step, track) :- build_verified_cut(run),
+    build_task__run(task, run), build_task__step(task, step), build_task__track(task, track),
+    build_task__source(task, source), source != "".
+build_task_ready(run, task, reason) :- build_task_scope(run, task, step, _), ready(run, step, reason).
+build_task_waiting(run, task, token, reason) :- build_task_scope(run, task, step, _), waiting(run, step, token, reason).
+build_task_stuck(run, task, reason) :- build_task_scope(run, task, step, _), stuck(run, step, reason).
+
+build_policy_date_at_cut(run, reference) :- build_verified_cut(run),
+    build_policy_date__run(binding, run), build_policy_date__reference(binding, reference),
+    build_policy_date__observed_at(binding, tick), build_run__observed_at(run, tick).
+
+build_ready_rank(run, task, rank, decision) :- build_task_scope(run, task, _, track), build_task_ready(run, task, _),
+    build_policy_date_at_cut(run, date), build_track_rank__track(policy, track), build_track_rank__rank(policy, rank),
+    build_track_rank__decision(policy, decision), in_force_on(decision, date).
+build_rank_conflict(run, task) :- build_ready_rank(run, task, a, _), build_ready_rank(run, task, b, _), a != b.
+build_task_precedes(run, first, second) :- build_ready_rank(run, first, a, _), build_ready_rank(run, second, b, _),
+    a < b, !build_rank_conflict(run, first), !build_rank_conflict(run, second).
+
+build_queue_at_cut(run, count, reading) :- build_verified_cut(run), build_run__observed_at(run, tick),
+    build_queue_reading__run(reading, run), build_queue_reading__observed_at(reading, tick),
+    build_queue_reading__count(reading, count), build_queue_reading__source(reading, source), source != "".
+build_queue_conflict(run) :- build_queue_at_cut(run, a, _), build_queue_at_cut(run, b, _), a != b.
+build_queue_known(run, count, reading) :- build_queue_at_cut(run, count, reading), !build_queue_conflict(run).
+build_has_queue_count(run) :- build_queue_known(run, _, _).
+
+build_queue_threshold(run, limit, decision) :- build_policy_date_at_cut(run, date),
+    build_queue_limit__decision(policy, decision), build_queue_limit__limit(policy, limit), in_force_on(decision, date).
+build_queue_policy_conflict(run) :- build_queue_threshold(run, a, _), build_queue_threshold(run, b, _), a != b.
+build_queue_policy(run, limit, decision) :- build_queue_threshold(run, limit, decision), !build_queue_policy_conflict(run).
+build_has_queue_policy(run) :- build_queue_policy(run, _, _).
+
+build_planner_slot(run, reading, decision) :- build_queue_known(run, count, reading),
+    build_queue_policy(run, limit, decision), count < limit.
+build_planner_waiting(run, "queue-limit") :- build_queue_known(run, count, _),
+    build_queue_policy(run, limit, _), count >= limit.
+build_planner_waiting(run, "queue-evidence-unknown") :- build_run(run), !build_has_queue_count(run).
+build_planner_waiting(run, "queue-policy-unknown") :- build_run(run), !build_has_queue_policy(run).
+
+.output build_task_ready
+.output build_task_waiting
+.output build_task_stuck
+.output build_task_precedes
+.output build_planner_slot
+.output build_planner_waiting

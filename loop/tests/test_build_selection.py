@@ -82,7 +82,7 @@ def capture(root, base, head, paths, *, coverage=True):
 def published(tmp, records):
     build = tmp / "build"
     shutil.copytree(ROOT / "build", build)
-    for pack in ("std-loop", "std-order"):
+    for pack in ("std-loop", "std-order", "std-decision"):
         shutil.copytree(ROOT / "packs" / pack, tmp / "packs" / pack)
     (build / "facts").mkdir()
     (build / "facts" / "input.yaml").write_text(yaml.safe_dump(records), encoding="utf-8")
