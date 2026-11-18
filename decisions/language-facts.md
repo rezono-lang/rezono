@@ -22,3 +22,26 @@ The corresponding JSON fragment is
   ]
 }
 ```
+
+## Writing a record cell
+
+Write an embedded record as braces around `slot: cell` pairs separated by commas, in the order of the embedded kind's slots: `{street: "Oostweg 5", city: "Middelburg"}`. A key is a slot name of the embedded kind; each value is an ordinary cell, so a record may hold lists, records and a dash. A repeated or unknown key is refused. An empty list is `[]`; a dash in place of the whole cell omits the slot.
+
+```rezono
+fact Branch
+  | code | address |
+  | oost | {street: "Oostweg 5", city: "Middelburg"} |
+```
+
+The cell's JSON fragment is
+
+```json
+{
+  "record": {
+    "street": {"lit": "\"Oostweg 5\""},
+    "city": {"lit": "\"Middelburg\""}
+  }
+}
+```
+
+Braces and `key: value` follow the metadata objects of annotations and the slot declaration form. A positional tuple was considered; it would break when the embedded kind gains a slot.
