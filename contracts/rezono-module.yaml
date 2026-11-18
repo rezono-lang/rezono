@@ -42,10 +42,14 @@ types:
     typeof: string
     pattern: "^[a-z][a-z0-9_]*$"
     description: A name of Rezono (v0 §3).
+  PackName:
+    typeof: string
+    pattern: "^[a-z]([a-z0-9_]*|[a-z0-9]*(-[a-z0-9]+)+)$"
+    description: A pack name from pack.yaml or a legacy Rezono name.
   DottedName:
     typeof: string
-    pattern: "^[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)*$"
-    description: Names with a dot between them, as a `use` line writes a pack.
+    pattern: "^[a-z]([a-z0-9_]*|[a-z0-9]*(-[a-z0-9]+)+)(\\.[a-z]([a-z0-9_]*|[a-z0-9]*(-[a-z0-9]+)+))*$"
+    description: Pack names joined by dots, as a `use` line writes a pack.
   Word:
     typeof: string
     pattern: "^\\S+$"
@@ -156,7 +160,7 @@ classes:
     description: The header and declarations of a module, including relational rules, in the order of the text.
     attributes:
       rezono: {range: NumberText, description: "The language version of the `rezono` line (v0 §4b); absent when the text has no such line."}
-      pack: {required: true, range: Name}
+      pack: {required: true, range: PackName}
       use: {required: true, range: Use, multivalued: true, inlined_as_list: true}
       decls:
         required: true
