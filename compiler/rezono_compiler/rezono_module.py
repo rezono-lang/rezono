@@ -26,7 +26,7 @@ from linkml_runtime.linkml_model import SchemaDefinition
 from linkml_runtime.loaders.yaml_loader import YAMLLoader
 
 FORMAT = "rezono.module/1"
-RULES_FORMAT = "rezono.module/2"
+FORMAT_V2 = "rezono.module/2"
 DIR = "rezono"
 KEY = "rezono"  # the key of pack.yaml (contract RezonoModule in contracts/pack.yaml)
 PAGE = "docs/rezono/publication.md"
@@ -121,13 +121,9 @@ def read_form(pack_dir: Path, d: Declared, errors: list[str]) -> dict | None:
     except (OSError, ValueError) as e:
         errors.append(f"{where}: not a JSON file ({e})")
         return None
-    module = module_body(doc, FORMAT)
+    module = module_body(doc, FORMAT) or module_body(doc, FORMAT_V2)
     if module is None:
-        candidate = module_body(doc, RULES_FORMAT)
-        if candidate is not None and any(isinstance(decl, dict) and "rules" in decl for decl in candidate["decls"]):
-            module = candidate
-    if module is None:
-        errors.append(f"{where}: not the form of a module ({FORMAT}, contracts/rezono-module.yaml)")
+        errors.append(f"{where}: not the form of a module ({FORMAT} or {FORMAT_V2}, contracts/rezono-module.yaml)")
         return None
     if not valid_places(module, doc["spans"]):
         errors.append(f"{where}: spans must place each module node once, in order, with a positive line and "
@@ -255,13 +251,15 @@ def builtin_range(name: str, declared: bool) -> str | None:
 
 
 def attributes(decl: dict, declared: Set[str]) -> dict[str, dict]:
-    """The LinkML attributes of a kind: the identifier `id`, then each slot in the order of the text (§5.1).
-    A slot's range uses the LinkML name for built-in types; `T` is required, `T?` is not."""
-    out: dict[str, dict] = {"id": {"identifier": True}}
-    for s in decl.get("slots") or []:
+    """Lower slots in written order, using an implicit `id` only when no slot identifies the kind (§5.1)."""
+    slots = decl.get("slots") or []
+    out: dict[str, dict] = {} if any(s.get("identifier") is True for s in slots) else {"id": {"identifier": True}}
+    for s in slots:
         name = s["type"]
         slot: dict[str, object] = {"range": builtin_range(name, name in declared) or name}
-        if "card" not in s:
+        if s.get("identifier") is True:
+            slot["identifier"] = True
+        elif "card" not in s:
             slot["required"] = True
         out[s["slot"]] = slot
     return out
@@ -320,7 +318,7 @@ def lower(pack_dir: Path, d: Declared, form: dict, pack: str, owners: dict[str, 
                        "§3")
                 continue
         if "kind" in decl:
-            if kind(decl, at, own, owners, uses, refuse):
+            if kind(decl, at, own, owners, uses, refuse, explicit_identifiers=form["format"] == FORMAT_V2):
                 classes[decl["kind"]] = {"attributes": attributes(decl, declared_names)}
         elif "enum" in decl:
             if set(decl) - ENUM:
@@ -335,7 +333,7 @@ def lower(pack_dir: Path, d: Declared, form: dict, pack: str, owners: dict[str, 
                 enums[decl["enum"]] = {"permissible_values": {v: {} for v in decl["values"]}}
         elif "extend" in decl:
             extend(decl, at, imported, refuse)
-        elif "rules" in decl and form["format"] == RULES_FORMAT:
+        elif "rules" in decl and form["format"] == FORMAT_V2:
             from .rezono_relational import valid_block
 
             if not valid_block(decl):
@@ -353,7 +351,8 @@ def lower(pack_dir: Path, d: Declared, form: dict, pack: str, owners: dict[str, 
     return Lowered(d, schema, sorted(uses))
 
 
-def kind(decl: dict, at: str, own: dict, owners: dict[str, list[str]], uses: set[str], refuse) -> bool:
+def kind(decl: dict, at: str, own: dict, owners: dict[str, list[str]], uses: set[str], refuse,
+         *, explicit_identifiers: bool = False) -> bool:
     """Check a kind against §5.1; True when it lowers. A slot's type resolves in the module, else in the pack."""
     ok = True
     if set(decl) - KIND:
@@ -372,9 +371,11 @@ def kind(decl: dict, at: str, own: dict, owners: dict[str, list[str]], uses: set
         refuse(f"{at}/derived/{k}", *DERIVED)
         ok = False
     seen: set[str] = set()
+    identifier_seen = False
+    allowed = SLOT | {"identifier"} if explicit_identifiers else SLOT
     for j, s in enumerate(decl.get("slots") or []):
         here = f"{at}/slots/{j}"
-        extra = sorted(set(s) - SLOT) if isinstance(s, dict) else []
+        extra = sorted(set(s) - allowed) if isinstance(s, dict) else []
         if not isinstance(s, dict) or extra:
             refuse(here, f"a slot with {', '.join(extra)} is not lowered" if extra else "not a slot of the form",
                    "§5.1")
@@ -384,7 +385,16 @@ def kind(decl: dict, at: str, own: dict, owners: dict[str, list[str]], uses: set
             refuse(here, f"the slot {s['slot']} is written twice in kind {decl['kind']}", "§5.1")
             ok = False
         seen.add(s["slot"])
-        if s["slot"] == "id":
+        explicit = s.get("identifier") is True
+        if "identifier" in s and not explicit:
+            refuse(here, "an explicit identifier must be marked true", "§5.1")
+            ok = False
+        if explicit:
+            if identifier_seen:
+                refuse(here, f"kind {decl['kind']} has more than one identifier", "§5.1")
+                ok = False
+            identifier_seen = True
+        if s["slot"] == "id" and not explicit:
             refuse(here, "a slot named `id` is refused: `id` identifies the elements of a kind", "§5.1")
             ok = False
         if s.get("card", "?") != "?":

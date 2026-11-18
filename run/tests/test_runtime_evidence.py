@@ -10,8 +10,13 @@ Unproven = runtime["Unproven"]
 NAME = "default_host-probe"
 OWNER = "00000000-0000-4000-8000-000000000001"
 DOMAIN = "00000000-0000-4000-8000-000000000002"
+FIRMWARE = "00000000-0000-4000-8000-000000000003"
+OWNER_ENTRY = f"<uid>{OWNER}</uid>"
+FIRMWARE_ENTRY = f"<entry name='uuid'>{FIRMWARE}</entry>"
 XML = (f"<domain type='kvm' id='12'><name>{NAME}</name><uuid>{DOMAIN}</uuid>"
-       f"<metadata><kubevirt xmlns='http://kubevirt.io'><uid>{OWNER}</uid></kubevirt></metadata></domain>")
+       f"<sysinfo type='smbios'><system>{FIRMWARE_ENTRY}</system></sysinfo>"
+       f"<metadata><kubevirt xmlns='http://kubevirt.io'>{OWNER_ENTRY}</kubevirt></metadata></domain>")
+MONITOR = b"/usr/bin/virt-launcher-monitor\0--name\0host-probe\0--uid\0" + OWNER.encode("ascii") + b"\0"
 STATS = b"state.state=1\nvcpu.current=1\nvcpu.0.state=2\nvcpu.0.time=100\n"
 
 
@@ -32,9 +37,21 @@ def reading(xml=XML, last_xml=None, stats=STATS, last_stats=None):
     return read
 
 
-def test_live_kvm_with_vcpu_progress():
-    for xml in (XML, XML.replace(f"<uid>{OWNER}</uid>", "")):
-        assert measure(reading(xml=xml, last_stats=STATS.replace(b"100", b"116")), NAME, OWNER, lambda _: None) == 16
+@pytest.mark.parametrize("uid_entry,field", [(OWNER_ENTRY, "matched"), ("<uid/>", "empty"), ("", "absent")])
+def test_live_kvm_with_vcpu_progress(uid_entry, field):
+    read = reading(xml=XML.replace(OWNER_ENTRY, uid_entry), last_stats=STATS.replace(b"100", b"116"))
+    observations = []
+
+    def observe(operation, *args):
+        observations.append(operation)
+        return read(operation, *args)
+
+    def read_monitor():
+        observations.append("monitor")
+        return MONITOR
+
+    assert measure(observe, read_monitor, NAME, OWNER, FIRMWARE, lambda _: None) == (16, field)
+    assert observations == ["monitor", "dumpxml", "domstats", "domstats", "dumpxml", "monitor"]
 
 
 @pytest.mark.parametrize("read,reason", [
@@ -42,6 +59,10 @@ def test_live_kvm_with_vcpu_progress():
     (reading(xml=XML.replace(" id='12'", "")), "inactive_domain"),
     (reading(xml=XML.replace(NAME, "other")), "domain_name_mismatch"),
     (reading(xml=XML.replace(OWNER, DOMAIN)), "vmi_uid_mismatch"),
+    (reading(xml=XML.replace(OWNER_ENTRY, OWNER_ENTRY + "<uid/>")), "vmi_uid_mismatch"),
+    (reading(xml=XML.replace(FIRMWARE, DOMAIN)), "domain_firmware_uuid_mismatch"),
+    (reading(xml=XML.replace(FIRMWARE_ENTRY, "")), "domain_firmware_uuid_mismatch"),
+    (reading(last_xml=XML.replace(FIRMWARE_ENTRY, FIRMWARE_ENTRY * 2)), "domain_firmware_uuid_mismatch"),
     (reading(xml=XML.replace("</domain>", "<commandline xmlns='http://libvirt.org/schemas/domain/qemu/1.0'/></domain>")),
      "custom_emulator_arguments"),
     (reading(last_xml=XML.replace("id='12'", "id='13'")), "domain_identity_changed"),
@@ -54,7 +75,18 @@ def test_live_kvm_with_vcpu_progress():
 ])
 def test_insufficient_evidence(read, reason):
     with pytest.raises(Unproven, match=f"^{reason}$"):
-        measure(read, NAME, OWNER, lambda _: None)
+        measure(read, lambda: MONITOR, NAME, OWNER, FIRMWARE, lambda _: None)
+
+
+@pytest.mark.parametrize("monitor_samples", [
+    [MONITOR.replace(OWNER.encode("ascii"), DOMAIN.encode("ascii"))],
+    [MONITOR, b"/pause\0--uid\0" + OWNER.encode("ascii") + b"\0"],
+    [MONITOR, MONITOR + b"--uid=" + OWNER.encode("ascii") + b"\0"],
+])
+def test_live_kvm_cannot_prove_progress_with_a_different_launcher_uid(monitor_samples):
+    read = reading(xml=XML.replace(OWNER_ENTRY, "<uid/>"), last_stats=STATS.replace(b"100", b"116"))
+    with pytest.raises(Unproven, match="^launcher_vmi_uid_mismatch$"):
+        measure(read, iter(monitor_samples).__next__, NAME, OWNER, FIRMWARE, lambda _: None)
 
 
 def test_rejected_read_only_connection_has_no_fallback(monkeypatch):

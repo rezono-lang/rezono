@@ -58,7 +58,7 @@ def sources(modules) -> tuple[rules_dl.Embedded, ...]:
         if module.form is None:
             continue
         form = json.loads(module.form.read_bytes())  # validated by the module loader
-        if form["format"] != rezono_module.RULES_FORMAT:
+        if form["format"] != rezono_module.FORMAT_V2:
             continue
         places = rezono_module.lines(form)
         blocks = {}

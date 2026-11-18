@@ -18,8 +18,7 @@ def write_status(
     if not is_commit_sha(sha):
         raise ValueError("commit must be a full SHA")
     repository = f"{quote(owner, safe='')}/{quote(repo, safe='')}"
-    return request(
-        "POST",
-        f"/api/v1/repos/{repository}/statuses/{sha}",
-        body={"context": context, "state": value["state"], "target_url": value["evidence"]},
-    )
+    body = {"context": context, "state": value["state"], "target_url": value["evidence"]}
+    if "description" in value:
+        body["description"] = value["description"]
+    return request("POST", f"/api/v1/repos/{repository}/statuses/{sha}", body=body)
