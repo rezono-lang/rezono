@@ -324,6 +324,54 @@ def test_a_legacy_relative_import_stays_at_its_schema_directory(tmp_path):
     assert targets["child.holder"] == "nested_holder"
 
 
+@pytest.mark.parametrize("pack_order", [("left", "right"), ("right", "left")])
+def test_relative_imports_in_two_pinned_packs_keep_distinct_modules(tmp_path, pack_order):
+    directory = Path(shutil.copytree(FIXTURE, tmp_path / "minimal"))
+    metadata = directory / "pack.yaml"
+    meta = yaml.safe_load(metadata.read_bytes())
+    root_schema = directory / "schema/minimal.yaml"
+    schema = yaml.safe_load(root_schema.read_bytes())
+    meta["imports"] = []
+    for side in pack_order:
+        identity = f"{side}pack"
+        imported = tmp_path / identity
+        (imported / "schema").mkdir(parents=True)
+        (imported / "labels").mkdir()
+        (imported / "labels/nl.yaml").write_bytes(f"{side}: {side}\n".encode("utf-8"))
+        (imported / "pack.yaml").write_bytes(f"name: {identity}\nversion: '0'\ndefault_language: nl\n".encode("utf-8"))
+        (imported / "schema/consumer.yaml").write_bytes(
+            f"id: https://rezono.example/{identity}/consumer\nname: consumer\nimports: [linkml:types, holder]\n"
+            "annotations: {layer: facts}\n".encode("utf-8")
+        )
+        kind = side.title()
+        module(imported, [{"kind": kind, "world": "closed", "slots": [], "derived": []}], pack=identity, name="holder")
+        meta["imports"].append({"name": identity, "path": f"../{identity}", "sha256": modules.pack_hash(imported)})
+        schema["imports"].append(f"{identity}:consumer")
+        schema["classes"]["Alpha"]["attributes"][side] = {"range": kind}
+        add(directory / "labels/nl.yaml", f"alpha.{side}: {side}\n")
+    metadata.write_bytes(yaml.safe_dump(meta).encode("utf-8"))
+    root_schema.write_bytes(yaml.safe_dump(schema).encode("utf-8"))
+
+    bundle = json.loads(compile_dir(directory, tmp_path / "out")["bundle/schema-bundle.json"])
+
+    assert {a["id"]: a["target"] for a in bundle["arrows"] if a["id"].startswith("alpha.")} == {
+        "alpha.left": "left", "alpha.right": "right",
+    }
+    assert {(v["module"], v["file"]) for v in bundle["schemas"] if v["module"].endswith(":holder")} == {
+        ("leftpack:holder", "rezono/holder.rezono"), ("rightpack:holder", "rezono/holder.rezono"),
+    }
+
+    left = tmp_path / "leftpack"
+    source = left / "schema/consumer.yaml"
+    source.write_bytes(source.read_bytes().replace(b", holder]", b", rightpack:holder]"))
+    with pytest.raises(pack.CompileError, match="not the pinned"):
+        pack.read(directory)
+    next(pin for pin in meta["imports"] if pin["name"] == "leftpack")["sha256"] = modules.pack_hash(left)
+    metadata.write_bytes(yaml.safe_dump(meta).encode("utf-8"))
+    with pytest.raises(pack.CompileError, match="import 'rightpack:holder' names no pack that leftpack imports"):
+        pack.read(directory)
+
+
 def test_a_pack_may_hold_modules_only(tmp_path):
     d = tmp_path / "only"
     (d / "labels").mkdir(parents=True)
