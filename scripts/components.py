@@ -214,6 +214,9 @@ def affected_components(
 
 # Files are assigned to jobs round-robin. Within a job pytest items share the
 # runner's cores, so one large parametrized file can use more than one core.
+FORMS_MODULE = "examples/subsidy/test_subsidy_forms.py"
+INDEPENDENT_PUBLICATIONS = "examples/subsidy/test_subsidy.py"
+RULE_EXAMPLES = "examples/test_rules.py"
 SHARDS = {"compiler": 3}
 PARALLEL = {"compiler", "examples", "edge/publisher"}
 
@@ -235,9 +238,9 @@ def shard_count(folder: str) -> int:
     # Run 44301601328 placed the two CPU-heavy modules on the same runner.
     # Choose the fewest round-robin partitions that separate the three long
     # example modules, even as new test files change their sorted positions.
-    heavy = {"examples/test_rules.py", "examples/subsidy/test_subsidy.py", FORMS_MODULE}
+    heavy = {RULE_EXAMPLES, INDEPENDENT_PUBLICATIONS, FORMS_MODULE}
     positions = [i for i, file in enumerate(files) if file in heavy]
-    candidates = range(min(3, max(1, len(files))), min(8, max(1, len(files))) + 1)
+    candidates = range(max(1, len(positions)), min(8, max(1, len(files))) + 1)
     return min(candidates, key=lambda n: (len(positions) - len({i % n for i in positions}), n))
 
 
@@ -358,9 +361,6 @@ def weighted_workers(items: list[str], workers: int, weights: dict[str, int], de
     return groups
 
 
-FORMS_MODULE = "examples/subsidy/test_subsidy_forms.py"
-
-
 def worker_items(folder: str, items: list[str], workers: int) -> list[list[str]]:
     if folder == "compiler" and workers > 1:
         # The profile records calls at or above its threshold from each compiler worker's
@@ -393,19 +393,18 @@ def worker_items(folder: str, items: list[str], workers: int) -> list[list[str]]
     others = [i for i in items if not offset or i.split("::", 1)[0] != forms]
     # The independent subsidy tests each publish into their own tmp_path.
     # Keep cached pack states and all other module-scoped fixtures together.
-    independent = "examples/subsidy/test_subsidy.py"
     def unit(node: str) -> str:
         path = node.partition("::")[0]
-        return node if path == independent else path
+        return node if path == INDEPENDENT_PUBLICATIONS else path
 
     by_unit = Counter(map(unit, others))
     # Rounded worker durations from run 44300384730. Unknown files cost one
     # second per collected item, and new independent publications cost 17s.
     weights = {
-        key: (17 if key.startswith(independent + "::") else count)
+        key: (17 if key.startswith(INDEPENDENT_PUBLICATIONS + "::") else count)
         for key, count in by_unit.items()
     }
-    weights.update({"examples/test_rules.py": 125, "examples/test_examples.py": 75,
+    weights.update({RULE_EXAMPLES: 125, "examples/test_examples.py": 75,
                     "examples/subsidy/test_proposal_path.py": 45,
                     "examples/subsidy/test_assessment_transition.py": 30,
                     "examples/subsidy/test_tutorial.py": 30})
