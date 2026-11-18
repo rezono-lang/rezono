@@ -3,12 +3,13 @@
 from functools import cached_property
 import json
 from pathlib import Path
+from tempfile import TemporaryDirectory
 
 import yaml
 
 from offline_cases import RUN
 from rezono_canon import sha256_hex
-from rezono_compiler import modules, pack, rules, writer
+from rezono_compiler import pack, rules, writer
 from rezono_publisher import batch, publish, store
 
 
@@ -121,18 +122,19 @@ def checked(name, directory, files=None, roles=None, *, change=None):
     source = RUN / "packs" / name
     if not (source / "pack.yaml").is_file():
         raise MissingReaderQuestion(f"owning pack {name} is missing")
-    target = modules.copy_closure(source, directory / "input")
-    for filename, records in (files or {}).items():
-        path = target / "facts" / filename
-        path.parent.mkdir(exist_ok=True)
-        path.write_text(yaml.safe_dump(records, sort_keys=False), encoding="utf-8")
-    if change is not None:
-        changed, _ = writer.apply_delta(target, {"format": writer.FORMAT, "changes": [change]})
-        writer.write_files(target, changed)
-    epoch = batch.epoch(target, epoch=1, knowledge_time="2026-01-15T00:00:00Z",
-                        sources=[("rules", "run-acceptance-design")])
-    bucket = store.FileStore(directory / "published")
-    manifest = publish.publish(epoch, bucket, roles or {"checker": "complete"})
+    with TemporaryDirectory(prefix=writer.WORK_PREFIX) as work:
+        target = writer.checkout(source, work)
+        for filename, records in (files or {}).items():
+            path = target / "facts" / filename
+            path.parent.mkdir(exist_ok=True)
+            path.write_text(yaml.safe_dump(records, sort_keys=False), encoding="utf-8")
+        if change is not None:
+            changed, _ = writer.apply_delta(target, {"format": writer.FORMAT, "changes": [change]})
+            writer.write_files(target, changed)
+        epoch = batch.epoch(target, epoch=1, knowledge_time="2026-01-15T00:00:00Z",
+                            sources=[("rules", "run-acceptance-design")])
+        bucket = store.FileStore(directory / "published")
+        manifest = publish.publish(epoch, bucket, roles or {"checker": "complete"})
     saved = bucket.get(f"{epoch.pack}/manifests/{manifest['id']}.json")
     manifest = json.loads(saved)
     assert {"name": "rezono:proofs", "status": "green", "violations": 0} in manifest["checks"]
