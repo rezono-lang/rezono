@@ -31,6 +31,7 @@ const EXTENDED_MODULE_FORMAT = 'rezono.module/2';
 
 function formatOf(module: Module): ModuleForm['format'] {
 	const extended = module.schema !== undefined || module.decls.some(decl => {
+		if ('dataset' in decl) return true;
 		if ('kind' in decl) {
 			return decl.abstract || decl.embedded || hasMetadata(decl)
 				|| decl.slots.some(slot => slot.identifier || slot.embedded || slot.slotUri !== undefined || hasMetadata(slot));

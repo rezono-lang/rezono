@@ -17,7 +17,7 @@ import json
 import os
 import re
 import subprocess
-from collections.abc import Iterator, Mapping, Set
+from collections.abc import Callable, Iterator, Mapping, Set
 from dataclasses import dataclass, field
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -146,13 +146,29 @@ def effective_form(pack_dir: Path, d: Declared, errors: list[str]) -> dict | Non
     submitted = read_form(pack_dir, d, errors)
     if submitted is None:
         return None
+    return source_form(pack_dir, d, submitted, errors, lambda source: legacy_header(source, submitted))
+
+
+def effective_dataset_form(pack_dir: Path, d: Declared, pack: str, submitted: dict,
+                           errors: list[str]) -> dict | None:
+    """Read authored dataset tables unless the exact historical form-only declaration is present."""
+    module = submitted["module"]
+    name = Path(d.module).stem
+    matches_legacy = not submitted["spans"] and not any(header_errors(module, pack))
+    header = f"rezono 0\npack {pack}\ndataset {name}"
+    return source_form(pack_dir, d, submitted, errors,
+                       lambda source: matches_legacy and source.replace("\r\n", "\n").removesuffix("\n") == header)
+
+
+def source_form(pack_dir: Path, d: Declared, submitted: dict, errors: list[str],
+                legacy: Callable[[str], bool]) -> dict | None:
     try:
         data = (pack_dir / d.module).read_bytes()
         source = data.decode("utf-8")
     except (OSError, UnicodeError):
         errors.append(f"{pack_dir.name}/{d.module}: cannot read the module as UTF-8")
         return None
-    if legacy_header(source, submitted):
+    if legacy(source):
         return submitted
     return authored_form(pack_dir, d, data, errors)
 
