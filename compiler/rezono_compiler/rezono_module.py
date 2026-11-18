@@ -30,7 +30,8 @@ from linkml_runtime.loaders.yaml_loader import YAMLLoader
 
 FORMAT = "rezono.module/1"
 DIR = "rezono"
-READER = Path(__file__).resolve().parents[2] / DIR / "src" / "write-form.ts"
+PACKAGED_READER = Path(__file__).with_name("module_reader") / "src" / "write-form.js"
+CHECKOUT_READER = Path(__file__).resolve().parents[2] / DIR / "src" / "write-form.ts"
 KEY = "rezono"  # the key of pack.yaml (contract RezonoModule in contracts/pack.yaml)
 PAGE = "docs/rezono/publication.md"
 PATH = re.compile(r"^rezono/[a-z][a-z0-9_]*(/[a-z][a-z0-9_]*)*\.(rezono|json)$")
@@ -168,6 +169,11 @@ def legacy_header(source: str, form: dict) -> bool:
 
 def authored_form(pack_dir: Path, d: Declared, data: bytes, errors: list[str]) -> dict | None:
     where = f"{pack_dir.name}/{d.module}"
+    reader = PACKAGED_READER if PACKAGED_READER.is_file() else CHECKOUT_READER
+    if not reader.is_file():
+        errors.append(f"{where}: the compiler installation does not include the module reader")
+        return None
+    hint = "use Node 24" if reader == PACKAGED_READER else "use Node 24 and run npm ci in rezono/"
     node = os.environ.get("REZONO_NODE", "node")
     env = {key: value for key, value in os.environ.items() if not key.upper().startswith("NODE_")}
     try:
@@ -175,17 +181,17 @@ def authored_form(pack_dir: Path, d: Declared, data: bytes, errors: list[str]) -
             source, target = Path(directory) / "source.rezono", Path(directory) / "form.json"
             source.write_bytes(data)
             result = subprocess.run(
-                [node, str(READER), source.name, target.name], cwd=directory,
+                [node, str(reader), source.name, target.name], cwd=directory,
                 capture_output=True, encoding="utf-8", env=env,
             )
             if result.returncode == 0:
                 return read_form(pack_dir, d, errors, authored_output=target)
     except (OSError, UnicodeError):
-        errors.append(f"{where}: cannot run the module reader; use Node 24 and run npm ci in rezono/")
+        errors.append(f"{where}: cannot run the module reader; {hint}")
         return None
     diagnostics = [f"{where}:{line.split(':', 1)[1]}" for line in result.stderr.splitlines()
                    if line.startswith(f"{source.name}:")]
-    errors.extend(diagnostics or [f"{where}: the module reader failed; use Node 24 and run npm ci in rezono/"])
+    errors.extend(diagnostics or [f"{where}: the module reader failed; {hint}"])
     return None
 
 

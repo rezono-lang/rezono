@@ -38,6 +38,7 @@ class Build(build_py):
             info.mkdir()
             requirements = "".join(f"Requires-Dist: {req}\n" for req in project["dependencies"])
             (info / "METADATA").write_text(f"Metadata-Version: 2.1\nName: {project['name']}\nVersion: {VERSION}\n{requirements}")
+        shutil.copytree(self.distribution.module_reader, runtime / "compiler/rezono_compiler/module_reader")
         for pattern in ("contracts/*.yaml", "requirements/*.txt", "requirements/.python-*"):
             for item in sorted(ROOT.glob(pattern)):
                 dest = runtime / item.relative_to(ROOT)
@@ -49,6 +50,9 @@ class Build(build_py):
 def main():
     out = Path(sys.argv[1]).resolve()
     work = Path(sys.argv[2]).resolve()
+    reader = Path(sys.argv[3]).resolve()
+    if not (reader / "src/write-form.js").is_file():
+        raise SystemExit("Prepare the compiler module reader with scripts/release-language.mjs first")
     dist = Distribution({
         "name": "rezono", "version": VERSION,
         "description": "Rezono reasoning engine and command-line tools",
@@ -61,6 +65,7 @@ def main():
             "rezono-publish=rezono_publisher.__main__:main",
         ]},
     })
+    dist.module_reader = reader
     dist.script_name = "scripts/release-wheel.py"
     dist.get_command_obj("build").build_base = str(work / "build")
     dist.get_command_obj("egg_info").egg_base = str(work)
