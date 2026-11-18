@@ -68,7 +68,6 @@ def test_tenant_decision_examples():
     assert ["reed", "reed-2", "denied"] in rows["third"]["proposal"]
 
 
-@pytest.mark.xfail(strict=True, reason="Implement cluster control-host placement in examples/platform/schema, facts and rules. Read decisions/platform-clusters.md and compare the complete independent rows.")
 def test_control_host_is_derived_by_the_pack():
     from rules_support import states
 
