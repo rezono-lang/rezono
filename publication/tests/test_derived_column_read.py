@@ -17,8 +17,6 @@ def read(schema, rows):
     return l0.read_collection(schema, json.loads(body))
 
 
-@pytest.mark.xfail(strict=True, raises=MissingTupleKey,
-                   reason="Read explicit derived tuple order and verify the key against typed cells.")
 def test_publication_derived_column_read():
     known = {"card": "1", "states": ["known"], "derived": True}
     kinds = {

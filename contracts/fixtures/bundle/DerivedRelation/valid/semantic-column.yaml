@@ -1,0 +1,8 @@
+# A derived column whose checked type is a reference to a kind, stored as the kind's text identifier.
+id: ranked_stage
+module: counts
+explain: materialize
+world: closed
+columns:
+  - {name: stage, type: string, semantic: {case: ref, base: string, target: stage}}
+  - {name: count, type: integer}
