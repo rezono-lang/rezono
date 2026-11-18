@@ -25,6 +25,7 @@ epoch, or the epoch is not published (correctness blocks). `// @release <role>` 
 delimited release under O8 and refused until it is built. `// @closes <relation>` above a `.decl` says that a
 row of this relation states, for its key, that no row of that relation holds there: the
 compiler adds the invariant `<this>_closes_<relation>`, the keys at which both hold.
+`// @text_order` immediately above a rule makes its `<` comparisons lexicographical comparisons of text.
 """
 
 from __future__ import annotations
@@ -55,6 +56,7 @@ RELEASE = re.compile(r"^//\s*@release\b")  # reserved (O8, delimited release): r
 OUTCOME = re.compile(r"^//\s*@outcome(?:\s+(\S+))?\s*$")
 EXTEND = re.compile(r"^//\s*@extend\s*$")
 CLOSES = re.compile(r"^//\s*@closes\s+(\S+)\s*$")
+TEXT_ORDER = re.compile(r"^//\s*@text_order\s*$")
 
 
 class RuleError(ValueError):
@@ -263,6 +265,8 @@ def parse_file(text: str, where: str, columns: list | None = None):
         if p.at(";"):
             p.fail("disjunction is not supported; write two rules")
         p.take(".")
+        if any(TEXT_ORDER.match(comment) for comment in t.comments):
+            body = [("cmp", ir.TEXT_LT, *item[2:]) if item[:2] == ("cmp", "lt") else item for item in body]
         out.append(("rule", head, body, head[2]))
         if columns is not None:
             columns.append(start - text.rfind("\n", 0, start))
@@ -701,7 +705,9 @@ def to_rule(rid, module, where, head, body, line, columns=lambda name: None) -> 
             fail("'_' only inside an aggregate, not in a comparison or arithmetic")
         if b[0] == "cmp":
             kinds = {typ(t) for t in (b[2], b[3])} - {None}
-            if b[1] not in ("eq", "ne") and kinds - {"integer"}:
+            if b[1] == ir.TEXT_LT and kinds - {"string"}:
+                fail(f"{show(b[2])} < {show(b[3])}: @text_order compares text")
+            if b[1] not in ("eq", "ne", ir.TEXT_LT) and kinds - {"integer"}:
                 fail(f"{show(b[2])} {b[1]} {show(b[3])}: an order comparison needs whole numbers, not text")
             if len(kinds) > 1:
                 fail(f"{show(b[2])} and {show(b[3])} have different types")

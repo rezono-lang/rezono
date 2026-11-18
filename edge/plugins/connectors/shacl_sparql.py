@@ -255,8 +255,12 @@ class _Translator:
             else:
                 raise Refused(f"{rule.id}: the assignment {s.op} has no SPARQL form here")
             lines.append(f"BIND({expr} AS {v(s.var)})")
-        for c in rule.conditions:  # the IR compares texts by equality only, so the canonical form keeps order
-            lines.append(f"FILTER({term(c.left, c.right)} {COMPARE[c.op]} {term(c.right, c.left)})")
+        for c in rule.conditions:
+            if c.op == ir.TEXT_LT:
+                left, right = (v(t) if ir.is_var(t) else _constant(t, "string") for t in (c.left, c.right))
+                lines.append(f"FILTER(STR({left}) < STR({right}))")
+            else:
+                lines.append(f"FILTER({term(c.left, c.right)} {COMPARE[c.op]} {term(c.right, c.left)})")
         for b in rule.body:
             if b.polarity == "negative":
                 lines.append("FILTER NOT EXISTS " + self.call(b.atom.relation, renamed(b.atom.terms), negated=True)[0])

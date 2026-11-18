@@ -16,7 +16,8 @@ from .names import ISO_DATE, NAME
 
 FORMAT = "rezono.rules/1"
 FUNCTIONS = ("count", "sum", "min", "max")
-COMPARISONS = ("eq", "ne", "lt", "le", "gt", "ge")
+TEXT_LT = "text_lt"  # lexicographical order of UTF-8 text, without a language-specific collation
+COMPARISONS = ("eq", "ne", "lt", "le", "gt", "ge", TEXT_LT)
 ARITHMETIC = ("add", "sub", "mul", "div")
 # `days`: the whole number of days from the ISO date `right` (a constant) to the ISO date `left` (a text
 # variable), in the proleptic Gregorian calendar. Only a view's reading makes it: no rule file can
@@ -602,6 +603,10 @@ def _check_rule(rule, relations):
             if is_var(t) and t not in bound:
                 raise IRError("unsafe_variable", f"{rule.id}: {t} in a condition is not bound")
         kinds = {types[t] for t in (c.left, c.right) if is_var(t)}
+        if c.op == TEXT_LT:
+            if kinds - {"string"}:
+                raise IRError("bad_condition", f"{rule.id}: text order needs text")
+            continue
         if not kinds:  # two constants: typed by their own form
             kinds = {const_type(t) for t in (c.left, c.right)}
         if c.op not in ("eq", "ne") and kinds != {"integer"}:

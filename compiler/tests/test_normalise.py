@@ -75,7 +75,7 @@ def variant(rule: ir.Rule, rnd: random.Random) -> ir.Rule:
         body.append(rnd.choice(body))
     aggregates = [replace(a, atom=atom(a.atom), var=t(a.var)) for a in rule.aggregates]
     turned = {"lt": "gt", "gt": "lt", "le": "ge", "ge": "le", "eq": "eq", "ne": "ne"}
-    conditions = [ir.Condition(turned[c.op], t(c.right), t(c.left)) if rnd.random() < 0.5
+    conditions = [ir.Condition(turned[c.op], t(c.right), t(c.left)) if c.op in turned and rnd.random() < 0.5
                   else ir.Condition(c.op, t(c.left), t(c.right)) for c in rule.conditions]
     assignments = [ir.Assignment(t(s.var), s.op, t(s.right), t(s.left)) if s.op in normalise.COMMUTATIVE
                    and rnd.random() < 0.5 else ir.Assignment(t(s.var), s.op, t(s.left), t(s.right))
@@ -134,7 +134,7 @@ def changes(rule: ir.Rule):
                 terms = b.atom.terms[:k] + ("fresh-constant",) + b.atom.terms[k + 1:]
                 yield replace(rule, body=(*others, replace(b, atom=replace(b.atom, terms=terms))))
     for n, c in enumerate(rule.conditions):
-        other = {"lt": "le", "le": "lt", "gt": "ge", "ge": "gt", "eq": "ne", "ne": "eq"}[c.op]
+        other = {"lt": "le", "le": "lt", "gt": "ge", "ge": "gt", "eq": "ne", "ne": "eq", ir.TEXT_LT: "lt"}[c.op]
         yield replace(rule, conditions=(*rule.conditions[:n], replace(c, op=other), *rule.conditions[n + 1:]))
     for n, s in enumerate(rule.assignments):
         other = {"add": "sub", "sub": "add", "mul": "div", "div": "mul", "days": "add"}[s.op]

@@ -3,7 +3,6 @@
 import argparse
 from collections import defaultdict
 from contextlib import closing
-from datetime import datetime
 import json
 from pathlib import Path
 import re
@@ -201,16 +200,10 @@ def request_rows(teams_path, catalog):
         profile = name(request["profile"], "profile")
         if profile not in profiles:
             raise ValueError(f"unknown profile {profile!r}")
-        timestamp = request["submittedAt"]
-        if not isinstance(timestamp, str) or not re.fullmatch(
-            r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z", timestamp
-        ):
-            raise ValueError("submission time must be a UTC timestamp")
-        datetime.fromisoformat(timestamp)
         request_id = f"{tenant}/{service}"
         scope = {"tenant": tenant, "service": service}
         records["tenant_service_request"].append(
-            {"id": request_id, **scope, "profile": profile, "submitted_at": timestamp}
+            {"id": request_id, **scope, "profile": profile, "submitted_at": request["submittedAt"]}
         )
         for item, value in mapping(request["items"], "request items").items():
             size = name(value, "requested size")
@@ -234,28 +227,7 @@ def request_rows(teams_path, catalog):
                     raise ValueError(f"unknown peer {peer!r}")
                 row["peer"] = peer
             records["tenant_request_connection"].append(row)
-    add_request_order_keys(records["tenant_service_request"])
     return records
-
-
-def add_request_order_keys(requests):
-    """Encode UTC instants and service names independently within each tenant."""
-    by_tenant = defaultdict(list)
-    for request in requests:
-        by_tenant[request["tenant"]].append(request)
-    for tenant_requests in by_tenant.values():
-        instants = [submission_instant(request["submitted_at"]) for request in tenant_requests]
-        time_keys = {value: index for index, value in enumerate(sorted(set(instants)))}
-        names = sorted({request["service"] for request in tenant_requests})
-        service_keys = {value: index for index, value in enumerate(names)}
-        for request, instant in zip(tenant_requests, instants, strict=True):
-            request["submitted_at_key"] = time_keys[instant]
-            request["service_key"] = service_keys[request["service"]]
-
-
-def submission_instant(timestamp):
-    whole, _, fraction = timestamp.removesuffix("Z").partition(".")
-    return whole, fraction.rstrip("0")
 
 
 def preview_inputs(model, pack_path, teams_path, catalog_path):

@@ -35,6 +35,7 @@ CODES = (
     "unknown_slot",
     "dictionary_value_not_record",  # LinkML's dictionary form with a value that is not a record
     "invalid_sha256",  # a value that is not a canonical digest on a formatted slot
+    "invalid_utc_instant",  # a value that is not a valid UTC timestamp on a formatted slot
     "wrong_type",  # a value that is not of its slot's type
     "decision_missing",  # a record of a control kind that names no decision (DV1)
     "source_missing",  # a batch without a source (step.py)
@@ -152,8 +153,8 @@ def _add(schema: Schema, kind: str, record, derived_id: str | None, rows: dict, 
                 v = _add(schema, s.target, v, embedded_id(eid, s, n if s.multivalued else None), rows,
                          f"{where}.{name}[{n}]", watch, context)
             v = _typed(s.type, v, f"{where}.{name}")
-            if s.input_format == "sha256" and not INPUT_FORMATS["sha256"].fullmatch(v):
-                raise _Refused("invalid_sha256", f"{where}.{name}")
+            if s.input_format:
+                v = _formatted(s.input_format, v, f"{where}.{name}")
             row = (eid, v)
             rows.setdefault(s.table, []).append(row)
             if on_row:
@@ -195,3 +196,20 @@ def _typed(bundle_type: str, v, where: str):
     if not isinstance(v, t) or (t is int and isinstance(v, bool)) or (t is datetime.date and isinstance(v, datetime.datetime)):
         raise _Refused("wrong_type", where)
     return v
+
+
+def _formatted(format_name: str, value: str, where: str) -> str:
+    match = INPUT_FORMATS[format_name].fullmatch(value)
+    code = f"invalid_{format_name}"
+    if match is None:
+        raise _Refused(code, where)
+    if format_name != "utc_instant":
+        return value
+    second = match["second"]
+    try:
+        datetime.datetime.fromisoformat(second)
+    except ValueError:
+        raise _Refused(code, where) from None
+    # The fraction is exact. "+" sorts before "." and the digits, so a shorter prefix sorts first.
+    fraction = (match["fraction"] or "").rstrip("0")
+    return second + (f".{fraction}" if fraction else "") + "+00:00"

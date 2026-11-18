@@ -73,6 +73,7 @@ enums:
       le: {}
       gt: {}
       ge: {}
+      text_lt: {description: Lexicographical order of UTF-8 text.}
   ArithmeticOperator:
     description: >-
       Bounded integer arithmetic. In a recursive rule only as a counter with an explicit bound:

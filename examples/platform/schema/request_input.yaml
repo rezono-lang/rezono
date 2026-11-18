@@ -15,9 +15,11 @@ classes:
       tenant: {required: true}
       service: {required: true}
       profile: {required: true}
-      submitted_at: {required: true}
-      submitted_at_key: {range: integer, minimum_value: 0}
-      service_key: {range: integer, minimum_value: 0}
+      submitted_at:
+        required: true
+        annotations: {input_format: utc_instant}
+      submitted_at_key: {range: integer, minimum_value: 0, description: Legacy input ignored by delivery numbering.}
+      service_key: {range: integer, minimum_value: 0, description: Legacy input ignored by delivery numbering.}
   TenantRequestItem:
     attributes:
       id: {identifier: true}

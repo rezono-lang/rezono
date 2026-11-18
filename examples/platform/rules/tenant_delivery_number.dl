@@ -1,22 +1,24 @@
-.decl tenant_delivery_request_order(tenant: symbol, service: symbol, submission: number, service_name: number)
+.decl tenant_delivery_request_order(tenant: symbol, service: symbol, submission: symbol)
 .decl tenant_delivery_predecessor(tenant: symbol, service: symbol, prior_service: symbol)
 .decl tenant_delivery_number(tenant: symbol, service: symbol, number: number)
 
-tenant_delivery_request_order(t, s, submitted, name) :-
+tenant_delivery_request_order(t, s, submitted) :-
     tenant_service_request__tenant(r, t), tenant_service_request__service(r, s),
-    tenant_service_request__submitted_at_key(r, submitted), tenant_service_request__service_key(r, name).
+    tenant_service_request__submitted_at(r, submitted).
 
+// @text_order
 tenant_delivery_predecessor(t, s, prior) :-
-    tenant_delivery_request_order(t, s, submitted, _), tenant_delivery_request_order(t, prior, earlier, _),
-    earlier < submitted.
+    tenant_delivery_request_order(t, s, submitted), tenant_delivery_request_order(t, prior, earlier),
+    s != prior, earlier < submitted.
 
+// @text_order
 tenant_delivery_predecessor(t, s, prior) :-
-    tenant_delivery_request_order(t, s, submitted, name), tenant_delivery_request_order(t, prior, submitted, earlier),
-    earlier < name.
+    tenant_delivery_request_order(t, s, submitted), tenant_delivery_request_order(t, prior, submitted),
+    prior < s.
 
 // Only services in the same tenant can contribute to the one-based ordinal.
 tenant_delivery_number(t, s, number) :-
-    tenant_delivery_request_order(t, s, _, _),
+    tenant_delivery_request_order(t, s, _),
     predecessors = count : { tenant_delivery_predecessor(t, s, _) },
     number = predecessors + 1.
 

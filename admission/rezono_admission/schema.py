@@ -18,7 +18,13 @@ from rezono_canon import canonical_sha256
 # The bundle's attribute types and the Python type a fact value has in each (contracts/bundle.yaml). An enum
 # value is text; money and quantities are integers of their unit.
 PYTHON = {"text": "str", "enum": "str", "integer": "int", "boolean": "bool", "date": "date"}
-INPUT_FORMATS = {"sha256": re.compile(r"[0-9a-f]{64}")}
+INPUT_FORMATS = {
+    "sha256": re.compile(r"[0-9a-f]{64}"),
+    "utc_instant": re.compile(
+        r"(?P<second>[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2})"
+        r"(?:\.(?P<fraction>[0-9]+))?(?:Z|\+00:00)"
+    ),
+}
 
 
 @dataclass(frozen=True)

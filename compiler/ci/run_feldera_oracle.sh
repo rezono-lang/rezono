@@ -37,6 +37,8 @@ selectors=(
   examples/test_feldera.py::test_feldera_accepts_the_sql_and_finds_the_errors
   examples/test_feldera_rules.py::test_incremental_on_feldera_equals_batch
   examples/test_platform_incremental_proof.py::test_platform_incremental_delta_and_witnesses_match_batch
+  examples/test_tenant_delivery_order.py::test_delivery_order_matches_souffle_on_the_written_rules
+  examples/test_tenant_delivery_order.py::test_live_delivery_order_matches_batch_after_a_submission_update
 )
 suite=(python -m pytest --rootdir="$PWD" -q -o empty_parameter_set_mark=fail_at_collect "${selectors[@]}")
 "${inside[@]}" "${suite[@]}" --collect-only | tee "$reports/collection.log"

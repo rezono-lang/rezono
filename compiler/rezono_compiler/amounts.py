@@ -22,7 +22,7 @@ from .rules_dl import RuleError
 
 PLAIN = ""   # a whole number that is no amount and has no unit
 NUMBER = re.compile(r"^-?[0-9]+$")
-SYMBOL = {"eq": "=", "ne": "!=", "lt": "<", "le": "<=", "gt": ">", "ge": ">="}
+SYMBOL = {"eq": "=", "ne": "!=", "lt": "<", "le": "<=", "gt": ">", "ge": ">=", "text_lt": "<"}
 
 
 def unit_of(pack, slot) -> types.Unit | None:

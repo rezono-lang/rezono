@@ -14,11 +14,12 @@ from itertools import accumulate
 from pathlib import Path
 
 from rezono_compiler.gap import days_text
-from rezono_compiler.rules import const_type, is_var
+from rezono_compiler.rules import TEXT_LT, const_type, is_var
 
 TYPE = {"string": "symbol", "integer": "number"}
 INPUT = ("base", "calc")  # what the rules read: a table, and a calculation selection with the rows given
-OPS = {"eq": "=", "ne": "!=", "lt": "<", "le": "<=", "gt": ">", "ge": ">=", "add": "+", "sub": "-", "mul": "*", "div": "/"}
+OPS = {"eq": "=", "ne": "!=", "lt": "<", "le": "<=", "gt": ">", "ge": ">=", TEXT_LT: "<",
+       "add": "+", "sub": "-", "mul": "*", "div": "/"}
 
 
 def _term(t, typ):
@@ -58,7 +59,7 @@ def _rule(prog, r):
             continue
         parts.append(f"{_term(s.var, 'integer')} = {_term(s.left, 'integer')} {OPS[s.op]} {_term(s.right, 'integer')}")
     for c in r.conditions:
-        t = types.get(c.left) or types.get(c.right) or const_type(c.left)
+        t = "string" if c.op == TEXT_LT else types.get(c.left) or types.get(c.right) or const_type(c.left)
         if any(a.var in (c.left, c.right) for a in r.aggregates) or any(s.var in (c.left, c.right) for s in r.assignments):
             t = "integer"
         parts.append(f"{_term(c.left, t)} {OPS[c.op]} {_term(c.right, t)}")

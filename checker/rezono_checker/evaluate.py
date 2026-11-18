@@ -8,6 +8,7 @@ import datetime
 import re
 
 from .canon import INTEGER, measure, number, number_text, payload
+from .rules import TEXT_LT
 
 
 def _value(term, theta):
@@ -54,9 +55,11 @@ def _arith(op, left, right):
 
 
 def _holds(op, left, right):
-    """A comparison of two canonical values: equality as text, order only between integers."""
+    """Compare canonical values using equality, explicit text order, or integer order."""
     if op in ("eq", "ne"):
         return (left == right) == (op == "eq")
+    if op == TEXT_LT:
+        return left < right
     a, b = _int(left), _int(right)
     if a is None or b is None:
         return False

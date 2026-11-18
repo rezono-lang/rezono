@@ -47,6 +47,7 @@ TEXT = {
     "dictionary_value_not_record": "{where}: in the dictionary form, the value must be a record",
     "wrong_type": "{where}: is not a {type}",
     "invalid_sha256": "{where}: invalid SHA-256 digest",
+    "invalid_utc_instant": "{where}: invalid UTC timestamp",
     "decision_missing": "{where}: a decided value names its decision (plane: control)",
 }
 

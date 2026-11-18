@@ -24,10 +24,11 @@ and WHERE as the rule. It reads the final relations, so it is never part of a re
 
 from dataclasses import replace
 
-from .rules import Condition, calc_input_table, const_type, is_var, upper
+from .rules import Condition, TEXT_LT, calc_input_table, const_type, is_var, upper
 from .sqltext import literal, q
 
-OPS = {"eq": "=", "ne": "<>", "lt": "<", "le": "<=", "gt": ">", "ge": ">=", "add": "+", "sub": "-", "mul": "*", "div": "/"}
+OPS = {"eq": "=", "ne": "<>", "lt": "<", "le": "<=", "gt": ">", "ge": ">=", TEXT_LT: "<",
+       "add": "+", "sub": "-", "mul": "*", "div": "/"}
 SQL_TYPE = {"string": "VARCHAR", "integer": "BIGINT"}
 # Integer division truncated toward zero, on the absolute values, so it does not depend on how `//` rounds a
 # negative operand; HUGEINT, so that abs(-2^63) fits. Only the quotient -2^63 / -1 does not fit a BIGINT.
@@ -95,7 +96,7 @@ class RuleSQL:
                 self.env[s.var] = f"({left} {OPS[s.op]} {right})"
             self.types[s.var] = "integer"
         for c in rule.conditions:
-            t = self.types.get(c.left) or self.types.get(c.right) or const_type(c.left)
+            t = "string" if c.op == TEXT_LT else self.types.get(c.left) or self.types.get(c.right) or const_type(c.left)
             self.where.append(f"{self.term(c.left, t)} {OPS[c.op]} {self.term(c.right, t)}")
         for i, b in enumerate(x for x in rule.body if x.polarity == "negative"):
             rel = prog.relations[b.atom.relation]

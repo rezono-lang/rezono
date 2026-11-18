@@ -28,7 +28,8 @@ from dataclasses import dataclass
 from .canon import INTEGER
 
 FUNCTIONS = ("count", "sum", "min", "max")
-COMPARISONS = ("eq", "ne", "lt", "le", "gt", "ge")
+TEXT_LT = "text_lt"
+COMPARISONS = ("eq", "ne", "lt", "le", "gt", "ge", TEXT_LT)
 OPERATORS = ("add", "sub", "mul", "div", "days")  # days: a view's reading of an ISO date (evaluate._arith)
 
 
@@ -200,6 +201,7 @@ def load_rules(doc: dict) -> dict:
     if ir and doc["format"] != "rezono.rules/1":
         raise ValueError(f"unknown rule format {doc['format']}")
     keys = {r["name"]: [c["name"] for c in r.get("key", [])] for r in doc.get("relations", [])} if ir else {}
+    key_types = {r["name"]: [c.get("type") for c in r.get("key", [])] for r in doc.get("relations", [])} if ir else {}
     calc_relations = {r["name"] for r in doc.get("relations", ()) if ir and r.get("role") == "calc"}
     for r in doc.get("relations", []) if ir else ():
         if r.get("role") == "derived" and r.get("values"):  # a witness proves a key; nothing would prove a value
@@ -253,6 +255,7 @@ def load_rules(doc: dict) -> dict:
             if a.var is not None and not a.var.startswith("?"):
                 raise ValueError(f"{rule.id}: aggregate result {a.var} is not a variable")
         _check_safety(rule)
+        _check_text_order(rule, key_types)
         rules[rule.id] = rule
 
     strata = {}
@@ -271,6 +274,21 @@ def load_rules(doc: dict) -> dict:
     if ir:
         check_worlds(doc, rules)
     return rules
+
+
+def _check_text_order(rule: Rule, key_types: dict) -> None:
+    """A variable compared as text must come from a text column in every positive binding."""
+    compared = {t for c in rule.conditions if c.op == TEXT_LT for t in (c.left, c.right) if t.startswith("?")}
+    if not compared:
+        return
+    column_types = {t: set() for t in compared}
+    for body in rule.body:
+        if body.polarity == "positive":
+            for t, typ in zip(body.atom.terms, key_types.get(body.atom.relation, ())):
+                if t in compared:
+                    column_types[t].add(typ)
+    if any(types != {"string"} for types in column_types.values()):
+        raise ValueError(f"{rule.id}: text order needs text")
 
 
 def _check_safety(rule: Rule) -> None:
