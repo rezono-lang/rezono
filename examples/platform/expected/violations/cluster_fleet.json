@@ -1,0 +1,5 @@
+{
+  "cluster_fleet_hub__role__reference": [
+    ["fleet", "hub"]
+  ]
+}
