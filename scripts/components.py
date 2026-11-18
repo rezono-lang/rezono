@@ -345,6 +345,9 @@ def weighted_workers(items: list[str], workers: int, weights: dict[str, int], de
     return groups
 
 
+FORMS_MODULE = "examples/subsidy/test_subsidy_forms.py"
+
+
 def worker_items(folder: str, items: list[str], workers: int) -> list[list[str]]:
     if folder == "compiler" and workers > 1:
         # The profile records calls at or above its threshold from each compiler worker's
@@ -355,7 +358,7 @@ def worker_items(folder: str, items: list[str], workers: int) -> list[list[str]]
     if folder != "examples" or workers == 1:
         return [items[n::workers] for n in range(workers)]
     # Keep the examples' file-scoped accumulation and the two independent immutable readers.
-    forms = "examples/subsidy/test_subsidy_forms.py"
+    forms = FORMS_MODULE
     readers = sorted(i for i in items if i.split("::", 1)[0] == forms)
     groups = [[] for _ in range(workers)]
     offset = 2 if readers and workers > 2 else 0
@@ -413,7 +416,15 @@ def execute_worker(assignment: Path, journal: Path, report: Path) -> int:
         if data["config"]:
             args.extend(["-c", data["config"]])
         # Pytest resolves only assigned IDs, without walking the component again.
-        return int(pytest.main([*args, "--", *expected], plugins=[Evidence()]))
+        plugins = [Evidence()]
+        if "publication" in data:
+            sys.path.insert(0, str(ROOT / ".github/workflows"))
+            from publication_fixture import PublicationProducer, PublicationReader
+
+            share = data["publication"]
+            plugin = PublicationProducer if share["producer"] else PublicationReader
+            plugins.append(plugin(Path(share["directory"]), ROOT / FORMS_MODULE))
+        return int(pytest.main([*args, "--", *expected], plugins=plugins))
 
 
 def run_shard(folder: str, shard: int, total: int, plans: Path, reports: Path, receipts: Path) -> int:
@@ -426,17 +437,34 @@ def run_shard(folder: str, shard: int, total: int, plans: Path, reports: Path, r
     if Counter(i for group in groups for i in group) != Counter(selected):
         raise ValueError("Worker assignments differ from the shard inventory")
     print(f"{folder} shard {shard+1}/{total}: {len(selected)} test IDs", flush=True)
+    paired_readers = (folder == "examples" and len(groups) > 2 and
+                      all(group and all(node.partition("::")[0] == FORMS_MODULE for node in group)
+                          for group in groups[:2]))
+
     def execute(pair):
         index, nodes = pair
         assignment = reports / f"assignment-{index}.json"
-        assignment.write_text(json.dumps({"items": nodes, "config": plan["config"]}), encoding="utf-8")
-        return subprocess.call([
-            sys.executable, __file__, "execute-worker", str(assignment),
-            str(evidence / f"{shard}-{index}.jsonl"), str(reports / f"pytest-{index}.xml"),
-        ])
-    with ThreadPoolExecutor(max_workers=len(groups)) as pool:
-        statuses = list(pool.map(execute, enumerate(groups)))
+        data = {"items": nodes, "config": plan["config"]}
+        share = paired_readers and index < 2
+        if share:
+            data["publication"] = {"directory": directory, "producer": index == 0}
+        try:
+            assignment.write_text(json.dumps(data), encoding="utf-8")
+            return subprocess.call([
+                sys.executable, __file__, "execute-worker", str(assignment),
+                str(evidence / f"{shard}-{index}.jsonl"), str(reports / f"pytest-{index}.xml"),
+            ])
+        finally:
+            if share and index == 0:
+                (Path(directory) / "producer-finished").touch()
+    with tempfile.TemporaryDirectory(prefix="pytest-fixture-") as directory:
+        with ThreadPoolExecutor(max_workers=len(groups)) as pool:
+            statuses = list(pool.map(execute, enumerate(groups)))
         status = next((code for code in statuses if code), 0)
+        if paired_readers and not status:
+            for role in ("producer", "reader"):
+                timing = (Path(directory) / f"{role}.json").read_text(encoding="utf-8")
+                print(f"Current publication fixture {role}: {timing}", flush=True)
     # Write the expected number of journals even on failure, for diagnosis.
     (evidence / f"{shard}.json").write_text(json.dumps(len(groups)), encoding="utf-8")
     return status
