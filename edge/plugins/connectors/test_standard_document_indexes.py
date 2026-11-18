@@ -63,7 +63,6 @@ def test_contract_name_uses_schema_pack():
     assert field({"pointer": "/name"}, "/pack") in record["fields"]
 
 
-@pytest.mark.xfail(strict=True, raises=ImportError, reason="Bind DCAT access URLs to the selected role listing in edge/plugins/connectors/dcat_index.py. Read decisions/standard-export-index.md.")
 def test_distribution_uses_its_matching_listed_object():
     import dcat
     from rezono_publication import l0
