@@ -1,0 +1,48 @@
+{
+  "run": "fixture-run",
+  "limit": 3,
+  "requirements": {
+    "seed": [],
+    "prepare": [
+      "seeded"
+    ],
+    "publish": [
+      "prepared"
+    ]
+  },
+  "completion": {
+    "seed": "seeded",
+    "prepare": "prepared",
+    "publish": "published"
+  },
+  "initial": [
+    [
+      "previous-run",
+      "prepared",
+      "old"
+    ]
+  ],
+  "sweeps": [
+    [
+      [
+        "fixture-run",
+        "seeded",
+        "observed-seed"
+      ]
+    ],
+    [
+      [
+        "fixture-run",
+        "prepared",
+        "observed-prepared"
+      ]
+    ],
+    [
+      [
+        "fixture-run",
+        "published",
+        "observed-published"
+      ]
+    ]
+  ]
+}
