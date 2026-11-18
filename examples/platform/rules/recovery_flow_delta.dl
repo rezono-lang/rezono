@@ -1,0 +1,8 @@
+// Recovery isolation only removes requested flows, so relaxing it can only add them.
+.decl recovery_isolated_flow(source: symbol, target: symbol, function: symbol, port: number)
+recovery_isolated_flow(a, b, f, p) :- flow(a, b, f, p), !recovery_reaches_out(a, b, f).
+
+.decl recovery_flow_delta(change: symbol, source: symbol, target: symbol, function: symbol, port: number)
+recovery_flow_delta("added", a, b, f, p) :- flow(a, b, f, p), !recovery_isolated_flow(a, b, f, p).
+
+.output recovery_flow_delta
