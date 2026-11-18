@@ -1,0 +1,9 @@
+# Provenance of standard exports
+
+The publisher produces five mappings: RDF (the view and its context), PROV-O, SHACL, ODCS and DCAT. An out-port declaration promises that consumers can trace the corresponding output from a checked epoch. Publish the declarations after the mappings fulfil this promise.
+
+Implement row indexing first for the RDF view. Its exporter can expose an indexed variant taking the schema, visible rows and the role's mapping from (kind, element id) to authoritative row references. Return the existing Turtle bytes and an OutputFile record from contracts/output-index.yaml. At each emitted subject declaration record the actual one-based line and the originating row. Bind the record to the digest of the exact bytes. Source keys come from the supplied references: the displayed element id can differ from a source row's key. Refuse a missing binding instead of attributing the output to another row.
+
+This first increment covers row identity. Complete the value-level and proof bindings before advertising the port. PROV-O has evidence from the role's witnesses. The context, SHACL and ODCS depend on the schema, and DCAT describes the published distributions. These fields require actual schema or manifest origins. Attaching arbitrary data rows to them would give false provenance. The checked-epoch publisher must eventually verify those origins and publish the index with the corresponding role's files.
+
+For PROV-O, the indexed exporter takes the epoch id, dataset pin and the witnesses selected for the role. Return the Turtle bytes and the OutputFile record for prov.ttl. Bind each proof activity's subject line to its own conclusion row. The activity identifier is the canonical digest of that witness. A role's index and output may refer only to its supplied witnesses.
