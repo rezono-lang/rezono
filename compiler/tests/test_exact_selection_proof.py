@@ -99,10 +99,6 @@ def verify(doc, calc_ir, rows, witnesses, *, value=VALUE):
                        calc_witnesses=witnesses, calc_ir=calc_ir)
 
 
-@pytest.mark.xfail(strict=True, raises=pytest.RaisesExc(ValueError, match="typed input for a numeric calculation"),
-                   reason="Read decisions/exact-calculation-premises.md. In contracts/rules.yaml and "
-                          "checker/rezono_checker admit a copy of a proved rational selection in a typed rule. "
-                          "Preserve the integer projection and verify the calculation's independent grounds.")
 def test_checker_accepts_only_a_proved_exact_selection(calculation):
     calc_ir, run = calculation
     _, rows, witnesses = run()
