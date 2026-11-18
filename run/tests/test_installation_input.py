@@ -3,7 +3,6 @@ import pytest
 from offline_cases import implementation, case
 
 
-@pytest.mark.xfail(strict=True, reason="Read decisions/run-offline-acceptance.md. Implement run/installation_input.py.")
 def test_installation_input():
     machines = implementation("installation_input.py", "machines")
     observed = case()["machine_observations"]
