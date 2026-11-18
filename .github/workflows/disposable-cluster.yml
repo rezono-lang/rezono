@@ -106,6 +106,13 @@ jobs:
           retry cilium status --wait --wait-duration 2m
           retry kubectl wait --for=condition=Ready --timeout=60s node/rezono-fixture-control-plane
           kubectl get storageclass standard
+      - name: Reconcile the checked admission release in Argo
+        if: >-
+          inputs.tasks == ''
+          || contains(fromJSON(inputs.tasks || '[]'), 'loop/tests/test_shared_admission_handoff.py--test_shared_admission_handoff')
+          || contains(fromJSON(inputs.tasks || '[]'), 'k8s-admission/test_server_release.py--test_reconciled_admission_release_on_the_api_server')
+        shell: bash
+        run: bash loop/cluster/prepare-admission.sh
       - name: Select and run the repository's cluster tests
         if: inputs.tasks == ''
         shell: bash
@@ -145,6 +152,13 @@ jobs:
             exit 0
           fi
           export PATH="$dir:$PATH"
+          bridge="$RUNNER_TEMP/rezono-fixture/admission-bridge"
+          if [[ -f "$bridge.pid" ]]; then
+            kill "$(cat "$bridge.pid")" 2>/dev/null || true
+            if [[ "${{ job.status }}" != success ]]; then
+              tail -n 40 "$bridge.log"
+            fi
+          fi
           kind delete cluster --name rezono-fixture --kubeconfig "$KUBECONFIG"
           clusters=$(kind get clusters)
           if grep -Fxq rezono-fixture <<< "$clusters"; then

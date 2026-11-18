@@ -1,0 +1,8 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ConfigManagementPlugin
+metadata:
+  name: rezono-admission-fixture
+spec:
+  generate:
+    command: [bash, ../loop/cluster/render-admission-fixture.sh]
+  provideGitCreds: false
