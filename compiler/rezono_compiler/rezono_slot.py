@@ -8,6 +8,7 @@ from .rezono_lowering import Refuse
 
 MEMBERS = {"slot", "type", "card"}
 BUILTIN_RANGES = {"Bool": "boolean", "Date": "date", "Text": "string"}
+LIST_CARDS = ("*", "+")
 
 
 def builtin_range(name: str, declared: bool) -> str | None:
@@ -27,8 +28,10 @@ def lower(slots: list[dict], declared: Set[str]) -> dict[str, dict]:
             attribute.update(rezono_cardinality.bounded_list(slot.get("card"), slot["constraints"]))
         if slot.get("identifier") is True:
             attribute["identifier"] = True
-        elif "card" not in slot:
+        elif "card" not in slot or slot["card"] == "+":
             attribute["required"] = True
+        if slot.get("card") in LIST_CARDS:
+            attribute["multivalued"] = True
         out[slot["slot"]] = attribute
     return out
 
@@ -65,6 +68,7 @@ def validate(slots: list, kind: str, at: str, own: Mapping[str, str], owners: Ma
         if slot["slot"] == "id" and not explicit:
             refuse(here, "a slot named `id` is refused: `id` identifies the elements of a kind", "§5.1")
             ok = False
+        card = slot.get("card", "?")
         if "constraints" in slot:
             try:
                 rezono_cardinality.bounded_list(slot.get("card"), slot["constraints"])
@@ -73,7 +77,10 @@ def validate(slots: list, kind: str, at: str, own: Mapping[str, str], owners: Ma
             except ValueError as error:
                 refuse(here, str(error), "§5.1")
                 ok = False
-        elif slot.get("card", "?") != "?":
+        elif explicit and card in LIST_CARDS:
+            refuse(here, "an identifier cannot be multivalued", "§5.1")
+            ok = False
+        elif card not in ("?", *LIST_CARDS):
             refuse(here, f"a slot `{slot['type']}{slot['card']}` is not lowered (no ticket yet)")
             ok = False
         name, found = slot["type"], owners.get(slot["type"], [])

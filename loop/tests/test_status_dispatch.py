@@ -1,6 +1,15 @@
 """Compose the accepted proposal and observations into provider traffic."""
 
+import pytest
+
 from wire_fixtures import entry
+
+
+def status_page(rows, query, limit=None):
+    if limit is None:
+        limit = query["limit"]
+    start = (query["page"] - 1) * limit
+    return list(reversed(rows))[start:start + limit]
 
 
 def test_status_dispatch(monkeypatch):
@@ -13,7 +22,7 @@ def test_status_dispatch(monkeypatch):
     def request(method, path, **options):
         if method == "GET":
             assert path == f"/api/v1/repos/example/delivery/commits/{sha}/statuses"
-            return list(reversed(statuses))
+            return status_page(statuses, options["query"])
         assert (method, path) == ("POST", f"/api/v1/repos/example/delivery/statuses/{sha}")
         body = options["body"]
         statuses.append({"context": body["context"], "status": body["state"], "target_url": body["target_url"]})
@@ -48,7 +57,7 @@ def test_status_dispatch_links_the_published_rule_evidence():
 
     def request(method, path, **options):
         if method == "GET":
-            return sent
+            return status_page(sent, options["query"])
         body = options["body"]
         sent.append({**body, "status": body["state"]})
 
@@ -64,8 +73,9 @@ def test_status_dispatch_links_the_published_rule_evidence():
 class CommitStatuses:
     """Keep the documented provider fields across independent client calls."""
 
-    def __init__(self):
+    def __init__(self, page_size=None):
         self.rows = {}
+        self.page_size = page_size
 
     def client(self):
         def request(method, path, **options):
@@ -74,14 +84,14 @@ class CommitStatuses:
                 repository, resource, sha = endpoint.rsplit("/", 2)
                 assert resource == "commits"
                 rows = self.rows.get((repository, sha), [])
-                page, limit = options["query"]["page"], options["query"]["limit"]
-                return list(reversed(rows))[(page - 1) * limit:page * limit]
+                return status_page(rows, options["query"], self.page_size)
             assert method == "POST"
             repository, resource = endpoint.rsplit("/", 1)
             assert resource == "statuses"
             body = options["body"]
-            row = {**body, "status": body["state"]}
-            self.rows.setdefault((repository, sha), []).append(row)
+            rows = self.rows.setdefault((repository, sha), [])
+            row = {**body, "id": len(rows) + 1, "status": body["state"]}
+            rows.append(row)
             return row
 
         return request
@@ -110,6 +120,48 @@ def test_delayed_status_cannot_replace_newer_evidence():
     report_step(provider.client(), "example", "delivery", proposal, step, [done])
     report_step(provider.client(), "example", "delivery", proposal, step, [stuck])
     assert [state for state, _ in provider.published(sha)] == ["success"]
+
+
+@pytest.mark.parametrize("page_size", [None, 1])
+def test_delayed_report_reads_its_run_behind_an_intervening_run(page_size):
+    from loop.status_dispatch import report_step
+
+    sha = "ac" * 20
+    proposal = {"commit": sha, "accepted": True}
+    step, done, stuck = dated_observations()
+    provider = CommitStatuses(page_size)
+    other = {**step, "run": "another"}
+    other_done = {**done, **other, "reason": "https://example.org/another-done"}
+
+    report_step(provider.client(), "example", "delivery", proposal, step, [done])
+    report_step(provider.client(), "example", "delivery", proposal, other, [other_done])
+    report_step(provider.client(), "example", "delivery", proposal, step, [stuck])
+    report_step(provider.client(), "example", "delivery", proposal, step, [done])
+    expected = [("success", done["reason"]), ("success", other_done["reason"])]
+    assert provider.published(sha) == expected
+
+    report_step(provider.client(), "example", "delivery", proposal, step,
+                [{**stuck, "at": "2026-01-01T00:03:00Z"}])
+    assert provider.published(sha) == [*expected, ("failure", stuck["reason"])]
+
+
+def test_unreadable_event_history_prevents_a_write():
+    from loop.status_dispatch import report_step
+
+    sha = "ac" * 20
+    proposal = {"commit": sha, "accepted": True}
+    step, done, stuck = dated_observations()
+    provider = CommitStatuses(page_size=1)
+    other = {**step, "run": "another"}
+    report_step(provider.client(), "example", "delivery", proposal, step, [done])
+    report_step(provider.client(), "example", "delivery", proposal, other, [{**done, **other}])
+    first, _ = provider.rows["/api/v1/repos/example/delivery", sha]
+    prefix, _, source = first["description"].rsplit(" ", 2)
+    first["description"] = f"{prefix} unknown {source}"
+
+    with pytest.raises(ValueError, match="event time"):
+        report_step(provider.client(), "example", "delivery", proposal, step, [stuck])
+    assert [state for state, _ in provider.published(sha)] == ["success", "success"]
 
 
 def test_status_uses_the_grounded_instant_and_keeps_other_runs_independent():
