@@ -1,0 +1,23 @@
+id: value-agg-na-member
+source: docs/semantics/value-cases.yaml#agg-na-member
+status: settled
+input:
+  rows:
+    - {$kind: Group, $id: group-a}
+    - {$kind: Group, $id: group-b}
+    - {$kind: Item, $id: item-a, group: {$ref: group-a}, labels: [first], quantity: "3"}
+    - {$kind: Item, $id: item-b, group: {$ref: group-a}, labels: [first], quantity: {$na: not_assigned}}
+    - {$kind: Item, $id: item-c, group: {$ref: group-a}, labels: [first], quantity: "4"}
+    - {$kind: Item, $id: item-d, group: {$ref: group-b}, labels: [first], quantity: "3"}
+    - {$kind: Item, $id: item-e, group: {$ref: group-b}, labels: [first], quantity: "4"}
+  select: {kind: Group, id: group-a}
+  language: "ask g: Group where true show (Item where group = g).sum(quantity)"
+expect:
+  value: null
+  state: not_applicable
+  reason: not_assigned
+  witness: null
+unsupported:
+  compiler: A compiled integer fact row cannot carry an inapplicable aggregate member and its reason code.
+  checker: The integer aggregate witness replay checks known scalar contributors and cannot verify an inapplicable member.
+  feldera: The ordinary Datalog sum receives integer members without the state of an inapplicable row.

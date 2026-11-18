@@ -1,0 +1,27 @@
+id: value-projection-show
+source: docs/semantics/value-cases.yaml#projection-show
+status: settled
+input:
+  rows:
+  - kind: item
+    id: item-a
+    group: group-a
+    labels:
+    - first
+    - second
+    quantity: 7
+    weight: 3
+  - kind: group
+    id: group-a
+  ask: 'ask i: Item where weight > 2 show i.weight, group'
+expect:
+  value:
+    columns:
+      binder: ref Item
+      c1: integer
+      c2: ref Group
+  state: known
+  reason: null
+  witness: null
+unsupported:
+  feldera: Projection shape is a language and publication contract, outside SQL evaluation.

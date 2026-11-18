@@ -1008,15 +1008,18 @@ def test_a_part_of_arrow_to_many_is_no_tree(fixture):
 
 def test_an_installed_compiler_reads_the_contracts_it_carries(tmp_path):
     """A non-editable install of the compiler, built from a copy of compiler/ and contracts/ and run from a
-    directory outside any checkout, carries contracts/*.yaml byte for byte as package data, reads them from there,
+    directory outside any checkout, carries the runtime contracts byte for byte as package data, reads them from there,
     and compiles a pack given by path to the same bytes as the compiler of this checkout."""
     import os
     import subprocess
     import sys
 
+    from rezono_compiler.native_literals import LITERALS_SCHEMA
+
     repo, src = pack.CONTRACTS.parent, tmp_path / "src"
+    contracts = [*pack.CONTRACTS.glob("*.yaml"), pack.CONTRACTS / LITERALS_SCHEMA]
     (src / "contracts").mkdir(parents=True)
-    for p in pack.CONTRACTS.glob("*.yaml"):
+    for p in contracts:
         shutil.copy(p, src / "contracts" / p.name)
     shutil.copytree(repo / "compiler" / "rezono_compiler", src / "compiler" / "rezono_compiler",
                     ignore=shutil.ignore_patterns("__pycache__"))
@@ -1027,7 +1030,7 @@ def test_an_installed_compiler_reads_the_contracts_it_carries(tmp_path):
     subprocess.run([sys.executable, "-m", "pip", "install", "-q", "--no-deps", "--no-build-isolation", "--no-index",
                     "--target", str(site), str(src / "compiler")], cwd=work, check=True)
     shipped = site / "rezono_compiler" / "contracts"
-    assert tree(shipped) == {p.name: p.read_bytes() for p in sorted(pack.CONTRACTS.glob("*.yaml"))}
+    assert tree(shipped) == {p.name: p.read_bytes() for p in contracts}
     # The installed copy first; the dependencies from this interpreter's path, without the checkout's compiler.
     own = Path(pack.__file__).resolve().parents[1]
     path = [str(site)] + [p for p in sys.path if p and Path(p).resolve() != own]
@@ -1084,15 +1087,21 @@ def test_a_failed_golden_explains_itself_in_a_few_lines():
     assert len(golden.differences({"big.json": b"\n" + lines}, {"big.json": lines}).splitlines()) == 7
 
 
-@pytest.mark.xfail(strict=True, reason="generated expected/compiled goldens are not stored in git")
-def test_no_committed_manifest_hashes_an_always_full_file():
+def test_no_committed_manifest_hashes_an_always_full_file(monkeypatch):
     """A committed large-files.json never lists a file of FULL: such a file is read back from the golden, so a
     regeneration under an older golden.py must not leave it as a hash. Reads the goldens only."""
     import golden
 
     examples = REPO / "examples"
-    manifests = sorted(examples.glob(f"**/expected/compiled/{golden.MANIFEST}"))
-    assert manifests
-    hashed = [f"{m.relative_to(examples).as_posix()}: {e['path']}" for m in manifests
+    recorded = Path(__file__).resolve().parent / "fixtures" / "recorded-output" / golden.MANIFEST
+    manifests = [recorded, *sorted(examples.glob(f"**/expected/compiled/{golden.MANIFEST}"))]
+    hashed = [f"{m.relative_to(REPO).as_posix()}: {e['path']}" for m in manifests
               for e in json.loads(m.read_text(encoding="utf-8")) if e["path"] in golden.FULL]
     assert not hashed, hashed
+
+    bundle = '{"kinds":["Item"]}\n'
+    monkeypatch.setattr(golden, "LARGE", 8)
+    assert golden.golden({"bundle/schema-bundle.json": bundle, "engine/tables.sql": "SELECT 1;\n"}) == {
+        "bundle/schema-bundle.json": bundle.encode("utf-8"),
+        golden.MANIFEST: recorded.read_text(encoding="utf-8").encode("utf-8"),
+    }

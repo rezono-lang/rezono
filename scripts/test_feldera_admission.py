@@ -225,6 +225,65 @@ class Admission(unittest.TestCase):
             finally:
                 os.chdir(previous)
 
+    def test_only_the_exact_schedule_assertions_can_skip_dispatch(self):
+        path = "compiler/tests/test_live_feldera_workflow.py"
+        before = (
+            b'    assert set(events) == {"push", "workflow_dispatch"}\n'
+            b'    assert events["push"]["branches"] == ["main"]\n'
+            b'    assert not ({"paths", "paths-ignore"} & events["push"].keys())\n'
+        )
+        after = (
+            b'    if set(events) == {"push", "workflow_dispatch"}:\n'
+            b'        assert events["push"] == {"branches": ["main"]}\n'
+            b'    else:\n'
+            b'        assert set(events) == {"schedule", "workflow_dispatch"}\n'
+            b'        assert events["schedule"] == [{"cron": "17 2 * * *"}]\n'
+            b'        assert job_file["concurrency"] == {\n'
+            b'            "group": "feldera-oracle-${{ github.ref }}",\n'
+            b'            "cancel-in-progress": "false",\n'
+            b'        }\n'
+        )
+        body = b'    assert (ROOT / "compiler/ci/run_feldera_oracle.sh").is_file()\n'
+        with tempfile.TemporaryDirectory() as folder, patch.object(gate, "proof", return_value=None) as proof:
+            previous = Path.cwd()
+            try:
+                os.chdir(folder)
+
+                def git(*args, payload=None):
+                    return subprocess.check_output(
+                        ["git", "-c", "user.name=Fixture", "-c", "user.email=change@example.org", *args],
+                        input=payload,
+                    ).decode("ascii").strip()
+
+                def commit(data, mode="100644", filename=path):
+                    blob = git("hash-object", "-w", "--stdin", payload=data)
+                    git("update-index", "--add", "--cacheinfo", f"{mode},{blob},{filename}")
+                    git("commit", "-qm", "fixture")
+                    return git("rev-parse", "HEAD")
+
+                git("init", "-q")
+                base = commit(before + body)
+                head = commit(after + body)
+                self.assertTrue(gate.review(base, head, BRANCH, REPO))
+                proof.assert_not_called()
+                for changed in (
+                    after.replace(b"17 2", b"18 2") + body,
+                    after.replace(b'"false"', b'"true"') + body,
+                    after.replace(b"workflow_dispatch", b"workflow_run") + body,
+                    after + body.replace(b".is_file()", b".exists()"),
+                    after + body + b"    assert True\n",
+                    b"import os\n" + after + body,
+                ):
+                    with self.subTest(changed=changed):
+                        self.assertFalse(gate.review(base, commit(changed), BRANCH, REPO))
+                self.assertFalse(gate.review(base, commit(after + body, "100755"), BRANCH, REPO))
+                self.assertFalse(gate.review(base, commit(after + body, "120000"), BRANCH, REPO))
+                commit(after + body)
+                self.assertFalse(gate.review(base, commit(b"extra", filename="README.md"), BRANCH, REPO))
+                self.assertEqual(proof.call_count, 9)
+            finally:
+                os.chdir(previous)
+
 
 if __name__ == "__main__":
     unittest.main()

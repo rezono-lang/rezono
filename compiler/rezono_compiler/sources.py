@@ -153,27 +153,42 @@ def collected(entries) -> list[dict]:
     return out
 
 
-def file_entries(pack: Pack, path: Path, data: dict | None = None, *, metadata=UNSET) -> list[dict]:
+def file_entries(pack: Pack, path: Path, data: dict | None = None, *, metadata=UNSET,
+                 relative: Path | None = None) -> list[dict]:
     companion = path.with_suffix(".sources.yaml")
     if metadata is UNSET and companion.exists():
         metadata = yaml.safe_load(companion.read_text("utf-8"))
-    return text_entries(pack, path.name, path.read_text("utf-8"), data, metadata=metadata)
+    dataset = facts.dataset_at(path)
+    return text_entries(pack, relative.as_posix() if relative is not None else path.name,
+                        "" if dataset is not None else path.read_text("utf-8"), data,
+                        metadata=metadata, dataset=dataset)
 
 
-def text_entries(pack: Pack, name: str, text: str, data: dict | None = None, *, metadata=UNSET) -> list[dict]:
+def text_entries(pack: Pack, name: str, text: str, data: dict | None = None, *, metadata=UNSET,
+                 dataset: facts.DatasetForm | None = None) -> list[dict]:
     """The same row/source reader on supplied text, without file or network access."""
     path = Path(name)
-    data = (yaml.safe_load(text) or {}) if data is None else data
+    judged = facts.schema(pack)
+    raw = data
+    if dataset is not None:
+        raw = dataset.form
+    elif data is None or path.suffix == ".json":
+        raw = yaml.safe_load(text) or {}
+    pointers = None
+    authored_lines = {span["at"]: span["line"] for span in dataset.form["spans"]} if dataset and dataset.source else {}
+    if isinstance(raw, dict) and raw.get("format") == facts.DATASET_FORMAT:
+        data, pointers = facts.located_scalar_dataset(judged, raw)
+    elif data is None:
+        data = raw
     if not isinstance(data, dict):
         raise facts.LoadError(f"{path.name}: fact data is a mapping of kinds to records")
     companion = path.with_suffix(".sources.yaml")
     explicit = metadata is not UNSET
     default, overrides, exact = sidecar(pack, companion, metadata) if explicit else (None, {}, {})
     # Implicit sources cite the containing record's line, including any inlined facts it supplies.
-    tree = yaml.compose(text) if not explicit else None
+    tree = yaml.compose(text) if not explicit and pointers is None else None
     sections = {k.value: v for k, v in tree.value} if isinstance(tree, yaml.MappingNode) else {}
     out, matched, matched_rows = [], set(), set()
-    judged = facts.schema(pack)
 
     def choices(kind, key, slot):
         selected = None
@@ -194,7 +209,15 @@ def text_entries(pack: Pack, name: str, text: str, data: dict | None = None, *, 
                 raise facts.LoadError(f"{path.name}: {kind} record {i} is no mapping")
             fallback = [([default], None)] if default else None
             if not explicit:
-                fallback = [([{"kind": "pack", "name": f"facts/{path.name}", "position": str(nodes[i].start_mark.line + 1)}], None)]
+                if pointers is None:
+                    name, position = f"facts/{path.name}", str(nodes[i].start_mark.line + 1)
+                elif dataset is not None and dataset.source is not None:
+                    pointer = pointers[kind][i].removeprefix("/module")
+                    name, position = dataset.source, authored_lines[f"{pointer}/0"]
+                else:
+                    name = path.as_posix() if path.parent.parts else f"rezono/{path.name}"
+                    position = f"{name}#{pointers[kind][i]}"
+                fallback = [([{"kind": "pack", "name": name, "position": position}], None)]
 
             def record_context(row_kind, row_key, parent):
                 return choices(row_kind, row_key, None) or parent
@@ -227,7 +250,9 @@ def text_entries(pack: Pack, name: str, text: str, data: dict | None = None, *, 
 
 
 def read(pack: Pack, pack_dir: str | Path) -> list[dict]:
-    return collected(e for path in facts.files(pack_dir) for e in file_entries(pack, path))
+    pack_dir = Path(pack_dir)
+    return collected(e for path in facts.files(pack_dir)
+                     for e in file_entries(pack, path, relative=path.relative_to(pack_dir)))
 
 
 def compile_sources(pack: Pack, pack_dir: str | Path) -> str:

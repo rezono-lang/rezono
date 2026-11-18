@@ -1,0 +1,45 @@
+id: value-warn-never-blocks
+source: docs/semantics/value-cases.yaml#warn-never-blocks
+status: settled
+input:
+  rows:
+  - kind: item
+    id: item-a
+    group: group-a
+    labels:
+    - first
+    - second
+    quantity: 7
+    weight: 3
+  - kind: item
+    id: item-c
+    group: group-b
+    labels:
+    - second
+    quantity:
+      state: unknown
+      reason: not_assigned
+  - kind: item
+    id: item-d
+    group: group-b
+    labels:
+    - second
+    quantity:
+      state: invalid
+      reason: invalid_input
+    weight: 0
+  - kind: item
+    id: item-f
+    quantity: 3
+  check: warn item.quantity = 7
+expect:
+  value:
+    publication_blocked:
+      'false': false
+      unknown: false
+      invalid: false
+  state: known
+  reason: null
+  witness: null
+unsupported:
+  feldera: Ordinary integer facts cannot carry the explicit unknown and invalid inputs for this warning.

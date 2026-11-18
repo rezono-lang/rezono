@@ -1,0 +1,25 @@
+id: value-world-closed-absent
+source: docs/semantics/value-cases.yaml#world-closed-absent
+status: settled
+input:
+  rows:
+  - kind: item
+    id: item-a
+    group: group-a
+    labels:
+    - first
+    - second
+    quantity: 7
+    weight: 3
+  expression: item-x in Item
+  world: closed
+expect:
+  value: false
+  state: known
+  reason: null
+  witness:
+    complete: true
+    absent:
+      relation: item
+      key:
+      - item-x

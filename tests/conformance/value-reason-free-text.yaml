@@ -1,0 +1,16 @@
+id: value-reason-free-text
+source: docs/semantics/value-cases.yaml#reason-free-text
+status: settled
+input:
+  rows: []
+  row_json:
+    quantity:
+      $unknown: not yet assigned
+expect:
+  value:
+    accepted: false
+  state: known
+  reason: null
+  witness: null
+unsupported:
+  feldera: This is a row document validation case, outside SQL evaluation.

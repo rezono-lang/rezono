@@ -2,3 +2,6 @@ kinds:
   - {kind: expected_line, shape: rect}
   - {kind: invoice_line, shape: rect}
   - {kind: rounding, shape: rect}
+  - {kind: rounding_digit, shape: rect}
+  - {kind: rounding_word, shape: rect}
+  - {kind: rounding_carry, shape: rect}

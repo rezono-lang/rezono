@@ -1,8 +1,8 @@
 """Modules written in Rezono: the key `rezono` of pack.yaml, and the lowering of a module's declarations to the
 schema model (docs/rezono/publication.md §2, §3, §5.1, §5.2).
 
-The compiler does not parse Rezono. It reads the JSON form that `rezono/` writes of a module
-(contracts/rezono-module.yaml) and lowers its kinds, slots and enums to the LinkML schema that says the same, so
+The compiler uses the language reader in `rezono/` to build a module's JSON form from its authored text
+(contracts/rezono-module.yaml). It lowers the resulting kinds, slots and enums to the LinkML schema, so
 that every check after this one is the check a schema file gets. A module is a schema module of its pack, named
 by its path under `rezono/` without `.rezono`; pack.yaml names it with its form and the layer of its kinds.
 
@@ -14,24 +14,31 @@ in the module's file. The lowering is a pure function of the form: the same form
 from __future__ import annotations
 
 import json
+import os
 import re
-from collections.abc import Iterator, Mapping, Set
+import subprocess
+from collections.abc import Callable, Iterator, Mapping, Set
 from dataclasses import dataclass, field
 from pathlib import Path
+from tempfile import TemporaryDirectory
 from typing import cast
 
 import yaml
+from . import rezono_alias, rezono_enum, rezono_extend, rezono_key, rezono_kind, rezono_metadata, rezono_slot
+from .native_literals import NATIVE_FORMAT, native_literal_errors
 from .schemaview import SchemaView
 from linkml_runtime.linkml_model import SchemaDefinition
 from linkml_runtime.loaders.yaml_loader import YAMLLoader
 
 FORMAT = "rezono.module/1"
+IDENTIFIER_FORMAT = "rezono.module/2"
 DIR = "rezono"
+PACKAGED_READER = Path(__file__).with_name("module_reader") / "src" / "write-form.js"
+CHECKOUT_READER = Path(__file__).resolve().parents[2] / DIR / "src" / "write-form.ts"
 KEY = "rezono"  # the key of pack.yaml (contract RezonoModule in contracts/pack.yaml)
 PAGE = "docs/rezono/publication.md"
+DATASET_FORMAT = "rezono.module/2"
 PATH = re.compile(r"^rezono/[a-z][a-z0-9_]*(/[a-z][a-z0-9_]*)*\.(rezono|json)$")
-# The built-in slot types (§5.1) and their LinkML ranges.
-TYPES = {"Bool": "boolean", "Date": "date", "Text": "string"}
 # Declarations this slice does not lower, by the member that names them: what, and where the page says so.
 REFUSED = {
     "unit": ("a unit is not lowered yet", "§6"),
@@ -40,11 +47,6 @@ REFUSED = {
     "reason": ("a reason declaration is not lowered (no ticket yet)", "§6"),
     "check": ("a check statement is not lowered yet", "§6"),
 }
-DERIVED = ("a derived value is not lowered yet", "§5.4")
-EXTEND = {"extend", "derived"}
-KIND = {"kind", "world", "applies", "sealed", "slots", "derived"}
-SLOT = {"slot", "type", "card"}
-ENUM = {"enum", "world", "values"}
 
 
 @dataclass(frozen=True)
@@ -65,11 +67,13 @@ class Lowered:
     """A module lowered: its LinkML schema, and the modules of its pack whose names it uses."""
     declared: Declared
     schema: dict
+    form: dict
     uses: list[str] = field(default_factory=list)  # module ids within the pack, sorted
 
 
-def declared(meta: dict, pack_dir: Path, errors: list[str], *, reject_undeclared: bool = True) -> list[Declared]:
-    """Check the declared paths and layers. Pack compilation also refuses files absent from the manifest."""
+def declared(meta: dict, pack_dir: Path, errors: list[str], *, reject_undeclared: bool = True,
+             include_datasets: bool = False) -> list[Declared]:
+    """Check declared paths and layers, then select modules for schema lowering or fact discovery."""
     from .pack import LAYERS  # pack imports modules, which imports this module
 
     where = f"{pack_dir.name}/pack.yaml: {KEY}"
@@ -102,8 +106,13 @@ def declared(meta: dict, pack_dir: Path, errors: list[str], *, reject_undeclared
         if layer not in LAYERS:
             errors.append(f"{at}: layer must be one of {LAYERS}, not {layer!r}")
             ok = False
-        if ok:
-            out.append(Declared(module, form, layer))
+        if not ok:
+            continue
+        if not include_datasets and is_dataset_form(pack_dir / form):
+            if meta.get("theory") is True:
+                errors.append(f"{pack_dir.name}/{form}: a theory pack cannot contain fact files")
+            continue
+        out.append(Declared(module, form, layer))
     if reject_undeclared and (pack_dir / DIR).is_dir():
         for p in sorted((pack_dir / DIR).rglob("*")):
             rel = p.relative_to(pack_dir).as_posix()
@@ -112,40 +121,140 @@ def declared(meta: dict, pack_dir: Path, errors: list[str], *, reject_undeclared
     return out
 
 
-def read_form(pack_dir: Path, d: Declared, errors: list[str]) -> dict | None:
+def read_form(pack_dir: Path, d: Declared, errors: list[str],
+              *, authored_output: Path | None = None) -> dict | None:
     """The form of a module, if it is one: format, module and spans, and nothing else."""
-    where = f"{pack_dir.name}/{d.form}"
+    path = authored_output if authored_output is not None else pack_dir / d.form
+    where = f"{pack_dir.name}/{d.module if authored_output is not None else d.form}"
     try:
-        doc = json.loads((pack_dir / d.form).read_bytes())
+        doc = json.loads(path.read_bytes())
     except (OSError, ValueError) as e:
         errors.append(f"{where}: not a JSON file ({e})")
         return None
-    module = module_body(doc, FORMAT)
+    module = module_body(doc, FORMAT) or module_body(doc, IDENTIFIER_FORMAT) or module_body(doc, NATIVE_FORMAT)
     if module is None:
-        errors.append(f"{where}: not the form of a module ({FORMAT}, contracts/rezono-module.yaml)")
+        errors.append(
+            f"{where}: not the form of a module ({FORMAT}, {IDENTIFIER_FORMAT}, or {NATIVE_FORMAT},"
+            " contracts/rezono-module.yaml)"
+        )
         return None
-    if not valid_places(module, doc["spans"]):
+    findings = native_literal_errors(doc)
+    if findings:
+        errors.extend(f"{where}: {finding}" for finding in findings)
+        return None
+    spans = doc["spans"]
+    if not valid_places(module, spans) and not (
+        "schema" in module and valid_places(module, spans, legacy_metadata=True)
+        and authored_output is None and form_only_source(pack_dir / d.module, doc)
+    ):
         errors.append(f"{where}: spans must place each module node once, in order, with a positive line and "
                       "nonnegative start and end offsets in ascending order (contracts/rezono-module.yaml)")
         return None
     return doc
 
 
-def place_pointers(value: object, at: str = "", member: str = "") -> Iterator[str]:
-    """Canonical pointers in span order. The module, unless clauses and range bodies have no own place."""
+def effective_form(pack_dir: Path, d: Declared, errors: list[str]) -> dict | None:
+    """Validate the submitted form, then use the authored declarations and their locations."""
+    submitted = read_form(pack_dir, d, errors)
+    if submitted is None:
+        return None
+    return source_form(pack_dir, d, submitted, errors, lambda source: legacy_header(source, submitted))
+
+
+def effective_dataset_form(pack_dir: Path, d: Declared, pack: str, submitted: dict,
+                           errors: list[str]) -> dict | None:
+    """Read authored dataset tables unless the exact historical form-only declaration is present."""
+    module = submitted["module"]
+    name = Path(d.module).stem
+    matches_legacy = not submitted["spans"] and not any(header_errors(module, pack))
+    header = f"rezono 0\npack {pack}\ndataset {name}"
+    return source_form(pack_dir, d, submitted, errors,
+                       lambda source: matches_legacy and source.replace("\r\n", "\n").removesuffix("\n") == header)
+
+
+def source_form(pack_dir: Path, d: Declared, submitted: dict, errors: list[str],
+                legacy: Callable[[str], bool]) -> dict | None:
+    try:
+        data = (pack_dir / d.module).read_bytes()
+        source = data.decode("utf-8")
+    except (OSError, UnicodeError):
+        errors.append(f"{pack_dir.name}/{d.module}: cannot read the module as UTF-8")
+        return None
+    if submitted["format"] != NATIVE_FORMAT and legacy(source):
+        return submitted
+    return authored_form(pack_dir, d, data, errors)
+
+
+def legacy_header(source: str, form: dict) -> bool:
+    """Older form-only modules pair a matching source header with placeholder offsets."""
+    if any(place["start"] != "0" or place["end"] != "1" for place in form["spans"]):
+        return False
+    module = form["module"]
+    header = [f"rezono {module['rezono']}"] if "rezono" in module else []
+    header.append(f"pack {module['pack']}")
+    actual = [line for raw in source.splitlines() if (line := raw.partition("--")[0].strip())]
+    return actual == header
+
+
+def authored_form(pack_dir: Path, d: Declared, data: bytes, errors: list[str]) -> dict | None:
+    where = f"{pack_dir.name}/{d.module}"
+    reader = PACKAGED_READER if PACKAGED_READER.is_file() else CHECKOUT_READER
+    if not reader.is_file():
+        errors.append(f"{where}: the compiler installation does not include the module reader")
+        return None
+    hint = "use Node 24" if reader == PACKAGED_READER else "use Node 24 and run npm ci in rezono/"
+    node = os.environ.get("REZONO_NODE", "node")
+    env = {key: value for key, value in os.environ.items() if not key.upper().startswith("NODE_")}
+    try:
+        with TemporaryDirectory(prefix="rezono-module-") as directory:
+            source, target = Path(directory) / "source.rezono", Path(directory) / "form.json"
+            source.write_bytes(data)
+            result = subprocess.run(
+                [node, str(reader), source.name, target.name], cwd=directory,
+                capture_output=True, encoding="utf-8", env=env,
+            )
+            if result.returncode == 0:
+                return read_form(pack_dir, d, errors, authored_output=target)
+    except (OSError, UnicodeError):
+        errors.append(f"{where}: cannot run the module reader; {hint}")
+        return None
+    diagnostics = [f"{where}:{line.split(':', 1)[1]}" for line in result.stderr.splitlines()
+                   if line.startswith(f"{source.name}:")]
+    errors.extend(diagnostics or [f"{where}: the module reader failed; {hint}"])
+    return None
+
+
+def form_only_source(path: Path, form: dict) -> bool:
+    try:
+        return legacy_header(path.read_text(encoding="utf-8"), form)
+    except (OSError, UnicodeError):
+        return False
+
+
+def place_pointers(value: object, at: str = "", member: str = "", *, legacy_metadata: bool = False) -> Iterator[str]:
+    """Canonical pointers in span order. Metadata containers have no place of their own."""
     if isinstance(value, dict):
-        if at and member not in ("unless", "between"):
+        excluded = {"unless", "between"} if legacy_metadata else {"unless", "between", "memberMetadata"}
+        if (at and member not in excluded) or (not at and "schema" in value and not legacy_metadata):
             yield at
         for key in sorted(value, key=lambda s: s.encode("utf-16-be", "surrogatepass")):
             escaped = key.replace("~", "~0").replace("/", "~1")
-            yield from place_pointers(value[key], f"{at}/{escaped}", key)
+            child = value[key]
+            pointer = f"{at}/{escaped}"
+            if legacy_metadata:
+                yield from place_pointers(child, pointer, key, legacy_metadata=True)
+            elif member == "memberMetadata":
+                if isinstance(child, dict):
+                    yield pointer
+            elif key not in ("annotations", "prefixes"):
+                yield from place_pointers(child, pointer, key)
     elif isinstance(value, list):
         for i, item in enumerate(value):
-            yield from place_pointers(item, f"{at}/{i}", member)
+            yield from place_pointers(item, f"{at}/{i}", member, legacy_metadata=legacy_metadata)
 
 
-def valid_places(module: dict, spans: list) -> bool:
-    expected = place_pointers(module)
+def valid_places(module: dict, spans: list, *, legacy_metadata: bool = False) -> bool:
+    expected = place_pointers(module, legacy_metadata=legacy_metadata)
     for place in spans:
         if not isinstance(place, dict) or place.keys() != {"at", "line", "start", "end"}:
             return False
@@ -164,22 +273,48 @@ def module_body(form: object, expected_format: str) -> dict | None:
     if not isinstance(form, dict) or form.keys() != {"format", "module", "spans"}:
         return None
     module = form["module"]
+    header = {"rezono", "pack", "use", "decls"}
+    if expected_format == IDENTIFIER_FORMAT:
+        header |= rezono_metadata.HEADER
     if (form["format"] != expected_format or not isinstance(form["spans"], list)
             or not isinstance(module, dict) or not isinstance(module.get("pack"), str)
             or not isinstance(module.get("use"), list) or not isinstance(module.get("decls"), list)
-            or not module.keys() <= {"rezono", "pack", "use", "decls"}):
+            or not module.keys() <= header or not rezono_metadata.valid_header(module)):
         return None
     return module
 
 
-def header_errors(module: dict, pack: str) -> Iterator[tuple[str, str, str]]:
+def named_dataset(module: dict) -> dict | None:
+    """Recognize the single named declaration handled by the fact loader."""
+    declarations = module["decls"]
+    if len(declarations) != 1 or not isinstance(declarations[0], dict):
+        return None
+    dataset = declarations[0]
+    if (dataset.keys() == {"dataset", "decls"} and isinstance(dataset["dataset"], str)
+            and dataset["dataset"] and isinstance(dataset["decls"], list)):
+        return dataset
+    return None
+
+
+def is_dataset_form(path: Path) -> bool:
+    """Dispatch only recognized dataset forms; leave other documents to ordinary schema validation."""
+    try:
+        doc = json.loads(path.read_bytes())
+    except (OSError, ValueError):
+        return False
+    module = module_body(doc, DATASET_FORMAT)
+    return module is not None and named_dataset(module) is not None
+
+
+def header_errors(module: dict, pack: str, *, native_rules: bool = False) -> Iterator[tuple[str, str, str]]:
     """Header refusals shared by schema lowering and dataset admission."""
     if module.get("rezono") != "0":
         yield "rezono", f"the `rezono` line says 0, not {module.get('rezono', 'nothing')}", "§3"
     if module["pack"] != pack:
         yield "pack", f"the `pack` line names {module['pack']}, not this pack, {pack}", "§3"
-    for i in range(len(module["use"])):
-        yield f"/use/{i}", "a `use` line is not lowered", "§6"
+    if not native_rules:
+        for i in range(len(module["use"])):
+            yield f"/use/{i}", "a `use` line is not lowered", "§6"
 
 
 
@@ -194,12 +329,15 @@ def lines(form: dict) -> dict[str, int]:
     return out
 
 
-def marks(module: Path, form: Path) -> dict[tuple, tuple[int, int]]:
-    """The (line, column) of every kind and slot of a module, by the path of keys its lowered schema holds it at
-    (`classes`, the class, then `attributes` and the slot), as `spans.marks` gives them for a schema file (MOD2).
+def marks(module: Path, form: Path | dict) -> dict[tuple, tuple[int, int]]:
+    """The (line, column) of each kind, slot and path equation, by its keys in the lowered schema (MOD2).
     The place is the name as written: the form gives its offset in code points, the text the line it is on."""
-    text = module.read_text(encoding="utf-8")
-    doc = json.loads(form.read_bytes())
+    if isinstance(form, Path):
+        text = module.read_text(encoding="utf-8")
+        doc = json.loads(form.read_bytes())
+    else:
+        text = module.read_bytes().decode("utf-8")
+        doc = form
     start = {s["at"]: s["start"] for s in doc["spans"]}
     limit = str(len(text))
     out: dict[tuple, tuple[int, int]] = {}
@@ -213,9 +351,16 @@ def marks(module: Path, form: Path) -> dict[tuple, tuple[int, int]]:
     for i, decl in enumerate(doc["module"]["decls"]):
         if isinstance(decl, dict) and isinstance(decl.get("kind"), str):
             place(f"/decls/{i}", ("classes", decl["kind"]))
+            if isinstance(equations := decl.get("equations"), list):
+                for j, _ in enumerate(equations):
+                    place(f"/decls/{i}/equations/{j}", ("classes", decl["kind"], "annotations", "path_equations", j))
             for j, s in enumerate(decl.get("slots") or []):
                 if isinstance(s, dict) and isinstance(s.get("slot"), str):
                     place(f"/decls/{i}/slots/{j}", ("classes", decl["kind"], "attributes", s["slot"]))
+            if isinstance(keys := decl.get("keys"), list):
+                for j, key in enumerate(keys):
+                    if isinstance(key, dict) and isinstance(key.get("unique"), str):
+                        place(f"/decls/{i}/keys/{j}", ("classes", decl["kind"], "unique_keys", key["unique"]))
     return out
 
 
@@ -232,33 +377,18 @@ def header_line(pack_dir: Path, d: Declared, word: str) -> int:
     return 1
 
 
+def declaration_name(decl: dict) -> str | None:
+    name = decl.get("kind", decl.get("enum", decl.get("type") if "base" in decl else None))
+    return name if isinstance(name, str) else None
+
+
 def names(form: dict) -> dict[str, str]:
-    """The kinds and enums a form declares: LinkML name -> the pointer of its first declaration."""
+    """The schema names a form declares and the pointer of each first declaration."""
     out: dict[str, str] = {}
     for i, decl in enumerate(form["module"]["decls"]):
-        name = decl.get("kind", decl.get("enum")) if isinstance(decl, dict) else None
-        if isinstance(name, str):
+        name = declaration_name(decl) if isinstance(decl, dict) else None
+        if name is not None:
             out.setdefault(name, f"/decls/{i}")
-    return out
-
-
-def builtin_range(name: str, declared: bool) -> str | None:
-    # Bool became a built-in after modules could already declare it as a pack name.
-    if name == "Bool" and declared:
-        return None
-    return TYPES.get(name)
-
-
-def attributes(decl: dict, declared: Set[str]) -> dict[str, dict]:
-    """The LinkML attributes of a kind: the identifier `id`, then each slot in the order of the text (§5.1).
-    A slot's range uses the LinkML name for built-in types; `T` is required, `T?` is not."""
-    out: dict[str, dict] = {"id": {"identifier": True}}
-    for s in decl.get("slots") or []:
-        name = s["type"]
-        slot: dict[str, object] = {"range": builtin_range(name, name in declared) or name}
-        if "card" not in s:
-            slot["required"] = True
-        out[s["slot"]] = slot
     return out
 
 
@@ -267,7 +397,7 @@ def lower_pack(pack_dir: Path, meta: dict, pack: str, declared_by: Mapping[str, 
     """Lower every module of one pack. `pack` is the pack's name, `declared_by` the LinkML names each schema
     module of the pack declares, by module id within the pack, `imported` whether another pack imports it. Every
     refusal names the module's file and line."""
-    forms = {d: read_form(pack_dir, d, errors) for d in declared(meta, pack_dir, errors)}
+    forms = {d: effective_form(pack_dir, d, errors) for d in declared(meta, pack_dir, errors)}
     owners: dict[str, list[str]] = {}
     for mid, ns in sorted(declared_by.items()):
         for n in ns:
@@ -286,12 +416,15 @@ def lower(pack_dir: Path, d: Declared, form: dict, pack: str, owners: dict[str, 
     adds nothing to the schema: its tables are rules, which rezono_table writes once the pack's model is read
     (§9.1)."""
     where, line, module = f"{pack_dir.name}/{d.module}", lines(form), form["module"]
+    metadata_format = form["format"] == IDENTIFIER_FORMAT
 
     def refuse(at: str | int, what: str, section: str = "§6") -> None:
         n = at if isinstance(at, int) else line.get(at) or line.get("/".join(at.split("/")[:3])) or 1
         errors.append(f"{where}:{n}: {what} ({PAGE} {section})")
 
-    for key, message, section in header_errors(module, pack):
+    native_rules = form["format"] == NATIVE_FORMAT
+    extended_format = form["format"] in (IDENTIFIER_FORMAT, NATIVE_FORMAT)
+    for key, message, section in header_errors(module, pack, native_rules=native_rules):
         place = key if key.startswith("/") else header_line(pack_dir, d, key)
         refuse(place, message, section)
     own = names(form)
@@ -299,13 +432,14 @@ def lower(pack_dir: Path, d: Declared, form: dict, pack: str, owners: dict[str, 
     uses: set[str] = set()
     enums: dict[str, dict] = {}
     classes: dict[str, dict] = {}
+    aliases: dict[str, dict[str, str]] = {}
     for i, decl in enumerate(module["decls"]):
         at = f"/decls/{i}"
         if not isinstance(decl, dict):
             refuse(at, "not a declaration of the form")
             continue
-        name = decl.get("kind", decl.get("enum"))
-        if isinstance(name, str):
+        name = declaration_name(decl)
+        if name is not None:
             elsewhere = [o for o in owners.get(name, []) if o != d.id]
             if own[name] != at:
                 refuse(at, f"{name} is declared twice in this module", "§3")
@@ -315,104 +449,62 @@ def lower(pack_dir: Path, d: Declared, form: dict, pack: str, owners: dict[str, 
                        "§3")
                 continue
         if "kind" in decl:
-            if kind(decl, at, own, owners, uses, refuse):
-                classes[decl["kind"]] = {"attributes": attributes(decl, declared_names)}
+            kind_fields = {}
+            if extended_format and "abstract" in decl:
+                abstract = rezono_kind.lower_abstract(decl, at, refuse)
+                if abstract is None:
+                    continue
+                decl, kind_fields = abstract
+            keys = {}
+            if extended_format and "keys" in decl:
+                decl = decl.copy()
+                if (keys := rezono_key.lower(decl.pop("keys"), f"{at}/keys", refuse)) is None:
+                    continue
+            lowered_kind = rezono_kind.lower(
+                decl, at, own, owners, declared_names, uses, refuse,
+                extended_format=extended_format,
+            )
+            if lowered_kind is not None:
+                if keys:
+                    lowered_kind["unique_keys"] = keys
+                classes[decl["kind"]] = lowered_kind | kind_fields
         elif "enum" in decl:
-            if set(decl) - ENUM:
-                refuse(at, f"an enum with {', '.join(sorted(set(decl) - ENUM))} is not lowered", "§5.2")
-            elif decl.get("world") == "open":
-                refuse(at, "an open enum (`world open`) is refused", "§5.2")
-            elif twice := [k for k, v in enumerate(decl["values"]) if v in decl["values"][:k]]:
-                for k in twice:
-                    refuse(f"{at}/values/{k}", f"the value {decl['values'][k]} is written twice in enum {decl['enum']}",
-                           "§5.2")
-            else:
-                enums[decl["enum"]] = {"permissible_values": {v: {} for v in decl["values"]}}
+            lowered_enum = rezono_enum.lower(decl, at, refuse, extended=metadata_format)
+            if lowered_enum is not None:
+                enums[decl["enum"]] = lowered_enum
+        elif "rule" in decl and native_rules:
+            continue  # The rule assembler needs the checked schema and pinned imports.
         elif "extend" in decl:
-            extend(decl, at, imported, refuse)
+            rezono_extend.validate(decl, at, imported, refuse)
+        elif "rules" in decl and form["format"] == IDENTIFIER_FORMAT:
+            from .rezono_relational import valid_block
+
+            if not valid_block(decl):
+                refuse(at, "a rules block needs a name and its written lines")
         elif "fact" in decl:
             if "columns" in decl:
                 refuse(at, "a fact table is not lowered yet", "§5.3")
             else:
                 refuse(at, "a fact row is not lowered (no ticket yet)")
+        elif "type" in decl and "base" in decl:
+            if not extended_format:
+                refuse(at, "a scalar alias requires rezono.module/2", "§5.1")
+            elif alias := rezono_alias.lower(decl, at, refuse):
+                aliases[decl["type"]] = alias
         else:
             refuse(at, *next((REFUSED[k] for k in REFUSED if k in decl), ("not a declaration this compiler reads",)))
     schema = {"id": f"https://rezono.org/rezono/{pack}/{d.id}", "name": d.id.replace("/", "_"),
               "imports": ["linkml:types"], "default_range": "string", "annotations": {"layer": d.layer},
               "enums": enums, "classes": classes}
-    return Lowered(d, schema, sorted(uses))
-
-
-def kind(decl: dict, at: str, own: dict, owners: dict[str, list[str]], uses: set[str], refuse) -> bool:
-    """Check a kind against §5.1; True when it lowers. A slot's type resolves in the module, else in the pack."""
-    ok = True
-    if set(decl) - KIND:
-        refuse(at, f"a kind with {', '.join(sorted(set(decl) - KIND))} is not lowered", "§5.1")
-        ok = False
-    if decl.get("world") != "closed":
-        refuse(at, "an open kind is refused: a kind says `world closed`", "§5.1")
-        ok = False
-    if "applies" in decl:
-        refuse(f"{at}/applies", "`applies` is not lowered yet")
-        ok = False
-    if "sealed" in decl:
-        refuse(at, "`sealed at` is not lowered yet")
-        ok = False
-    for k, _ in enumerate(decl.get("derived") or []):
-        refuse(f"{at}/derived/{k}", *DERIVED)
-        ok = False
-    seen: set[str] = set()
-    for j, s in enumerate(decl.get("slots") or []):
-        here = f"{at}/slots/{j}"
-        extra = sorted(set(s) - SLOT) if isinstance(s, dict) else []
-        if not isinstance(s, dict) or extra:
-            refuse(here, f"a slot with {', '.join(extra)} is not lowered" if extra else "not a slot of the form",
-                   "§5.1")
-            ok = False
-            continue
-        if s["slot"] in seen:
-            refuse(here, f"the slot {s['slot']} is written twice in kind {decl['kind']}", "§5.1")
-            ok = False
-        seen.add(s["slot"])
-        if s["slot"] == "id":
-            refuse(here, "a slot named `id` is refused: `id` identifies the elements of a kind", "§5.1")
-            ok = False
-        if s.get("card", "?") != "?":
-            refuse(here, f"a slot `{s['type']}{s['card']}` is not lowered (no ticket yet)")
-            ok = False
-        t, found = s["type"], owners.get(s["type"], [])
-        if t in own or builtin_range(t, bool(found)) is not None:
-            continue
-        if len(found) == 1:
-            uses.add(found[0])
-            continue
-        refuse(here, f"{t} is declared by modules {' and '.join(found)} of this pack" if found else
-               f"{t} is not Date, Text, or an enum or a kind of this pack. Built-in Bool is also supported", "§5.1")
-        ok = False
-    return ok
-
-
-def extend(decl: dict, at: str, imported: bool, refuse) -> None:
-    """Check an `extend` against §9.1: each derived value is a decision table under `unique`. What needs the pack's
-    model (the kind, the inputs, the values) rezono_table checks; here what the form alone refuses."""
-    if set(decl) - EXTEND:
-        refuse(at, f"an extend with {', '.join(sorted(set(decl) - EXTEND))} is not lowered", "§9.1")
-        return
-    if imported:
-        refuse(at, "a decision table in a module of an imported pack is not lowered yet", "§9.1")
-        return
-    for k, dv in enumerate(decl.get("derived") or []):
-        here = f"{at}/derived/{k}"
-        t = dv.get("table") if isinstance(dv, dict) else None
-        if not isinstance(t, dict):
-            refuse(here, *DERIVED)
-        elif t.get("table") != "unique":
-            refuse(here, f"a table `{t.get('table')}` is not lowered yet", "§9.1")
-        elif "totality" in dv:
-            refuse(here, "`total` on a table is not lowered: its proof is the check of `rezono/` (tables.md §7, "
-                         "point 3)", "§9.1")
-        elif "card" in dv:
-            refuse(here, f"a derived value `{dv['type']}{dv['card']}` is not lowered yet", "§9.1")
+    if aliases:
+        schema["types"] = aliases
+    if metadata_format and "schema" in module:
+        range_name = module.get("defaultRange", "Text")
+        schema = rezono_metadata.header(
+            module, schema, d.layer,
+            rezono_slot.builtin_range(range_name, range_name in declared_names, extended_form=True), refuse,
+        )
+    return Lowered(d, schema, form, sorted(uses))
 
 
 def view(schema: dict, importmap: dict) -> SchemaView:
@@ -446,6 +538,7 @@ def class_slot_order(pack_dir: Path, rel: str) -> dict[str, list[str]]:
     """Read a compiled module's class and slot order from its form for the writer."""
     meta = yaml.safe_load((pack_dir / "pack.yaml").read_text(encoding="utf-8")) or {}
     d = next(d for d in declared(meta, pack_dir, []) if d.module == rel)
-    form = read_form(pack_dir, d, []) or {"module": {"decls": []}}
-    return {decl["kind"]: ["id", *(s["slot"] for s in decl.get("slots") or [])]
+    form = effective_form(pack_dir, d, []) or {"module": {"decls": []}}
+    return {decl["kind"]: ([] if decl.get("embedded") is True else ["id"])
+            + [s["slot"] for s in decl.get("slots") or []]
             for decl in form["module"]["decls"] if isinstance(decl, dict) and "kind" in decl}

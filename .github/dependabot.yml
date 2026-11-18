@@ -1,0 +1,77 @@
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directories:
+      - /
+      - /.github/actions/release-rehearsal
+      - /.github/workflows/python-environment
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        applies-to: version-updates
+        patterns: ["*"]
+
+  - package-ecosystem: pip
+    directories:
+      - /admission
+      - /canon
+      - /checker
+      - /compiler
+      - /contracts/python
+      - /edge/publisher
+      - /loop
+      - /publication
+      - /requirements
+    schedule:
+      interval: weekly
+    groups:
+      python:
+        applies-to: version-updates
+        patterns: ["*"]
+
+  - package-ecosystem: npm
+    directories:
+      - /deploy/profiles/edge/tools
+      - "/edge/gate*"
+      - /rezono
+      - "/tools/mcp*"
+      - "/tools/repl*"
+    schedule:
+      interval: weekly
+    groups:
+      javascript:
+        applies-to: version-updates
+        patterns: ["*"]
+
+  - package-ecosystem: gomod
+    directories:
+      - /k8s-admission/oracles/apiserver
+      - /k8s-admission/oracles/cel
+      - /k8s-admission/oracles/flow-expression
+    schedule:
+      interval: weekly
+    groups:
+      go:
+        applies-to: version-updates
+        patterns: ["*"]
+
+  - package-ecosystem: julia
+    directories:
+      - /compiler/tests/catlab
+      - /compiler/tests/catlab/dpo
+    schedule:
+      interval: weekly
+    groups:
+      julia:
+        applies-to: version-updates
+        patterns: ["*"]
+
+  - package-ecosystem: docker
+    directory: /deploy/profiles/kubernetes/run
+    schedule:
+      interval: weekly
+    groups:
+      containers:
+        applies-to: version-updates
+        patterns: ["*"]

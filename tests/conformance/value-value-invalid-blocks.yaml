@@ -1,0 +1,49 @@
+id: value-value-invalid-blocks
+source: docs/semantics/value-cases.yaml#value-invalid-blocks
+status: settled
+input:
+  rows:
+    - {$kind: Group, $id: group-a}
+    - {$kind: Item, $id: item-a, group: {$ref: group-a}, labels: [plain], quantity: {$na: ""}, weight: "3"}
+    - {$kind: Item, $id: item-f, group: {$ref: group-a}, labels: [plain], quantity: {$na: ""}, weight: "0"}
+  derive: ask Item where true show (when weight = 0 then invalid division_by_zero else 6 / weight)
+  questions:
+    positive: ask Answer where c1 > 0 show c1
+  publication:
+    checked: "check positive: answer.c1 > 0"
+    warned: warn answer.c1 > 0
+expect:
+  value:
+    fixture:
+      type: Ratio
+      rows: [{id: item-a, c1: "2"}, {id: item-f, c1: {$invalid: division_by_zero}}]
+      undecided: []
+      counts: {rows: 2, undecided: 0, not_applicable: 0}
+    positive:
+      rows: [{id: item-a, c1: "2"}]
+      undecided: [item-f]
+      counts: {rows: 1, undecided: 1, not_applicable: 0}
+    checked:
+      verb: check
+      name: positive
+      outcome: blocked
+      violations: []
+      undecided:
+        - id: item-f
+          state: invalid
+          reason: division_by_zero
+          cause: {relation: answer__c1, key: [item-f]}
+      blocking: [item-f]
+    warned:
+      verb: warn
+      outcome: publishes
+      violations: []
+      undecided:
+        - id: item-f
+          state: invalid
+          reason: division_by_zero
+          cause: {relation: answer__c1, key: [item-f]}
+      blocking: []
+  state: invalid
+  reason: division_by_zero
+  witness: {relation: answer__c1, key: [item-f]}

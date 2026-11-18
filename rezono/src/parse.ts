@@ -10,25 +10,14 @@
 // Parse-level checks come first (§1): with an R000, R014, R016 or R018 there is no tree and no R015. A text
 // with only R015s has a tree, so it prints; it is not evaluated.
 import type { Node } from 'ohm-js';
-import { grammar } from './grammar.ts';
+import { grammar, nativeRuleGrammar } from './grammar.ts';
+import { readRuleName } from './rule-names.ts';
 import type { Ask, CheckDecl, Context, Expr, Path, Question, Suppose, Tail, TimeSel } from './tree.ts';
 
-/** A place in the source: the text and its 0-based code-point offsets, end exclusive (§11). */
-export interface Span {
-	text: string;
-	start: number;
-	end: number;
-}
-/** A diagnostic: its code, its place and the values its sentence needs (the sentences are in `messages/`). */
-export interface Diagnostic {
-	code: string;
-	span: Span;
-	args: string[];
-	/** What to write instead: a sentence of `messages/` by its id, with its values. */
-	hint?: { id: string; args: string[] };
-	/** The names it may have meant, nearest first. */
-	suggest?: string[];
-}
+import { placed, points, refused, reserved, run, spanAt, spanOf, startRun, type Diagnostic, type Span } from './parse-support.ts';
+
+export { points, type Diagnostic, type Span } from './parse-support.ts';
+
 export interface Parsed {
 	/** Absent when a parse-level check failed. */
 	tree?: Question;
@@ -36,63 +25,6 @@ export interface Parsed {
 	diagnostics: Diagnostic[];
 	/** The place of every node of the tree, for the checks that follow the parse. */
 	spans: WeakMap<object, Span>;
-}
-
-/** What one parse collects; the semantics below are built once and read it through this. */
-interface Run {
-	text: string;
-	/** Code-point offset per UTF-16 offset, or undefined when the two are equal (no astral character). */
-	points?: number[];
-	spans: WeakMap<object, Span>;
-	/** Nodes that are an id token, so that `host-b.owner` reads as one path. */
-	ids: WeakSet<object>;
-	errors: Diagnostic[];
-	reserved: Diagnostic[];
-	/** Time selections on a literal: the writer meant the question's context (§4, E30). */
-	misplaced: [Diagnostic, 'at' | 'as_known'][];
-}
-let run: Run;
-
-/** Code-point offset per UTF-16 offset, or undefined when the two are equal (no astral character). */
-export function points(text: string): number[] | undefined {
-	if (!/[\uD800-\uDBFF]/.test(text)) return undefined;
-	const at: number[] = [];
-	let n = 0;
-	for (let i = 0; i < text.length; i++) {
-		at.push(n);
-		const c = text.charCodeAt(i);
-		if (!(c >= 0xd800 && c <= 0xdbff)) n++;
-	}
-	at.push(n);
-	return at;
-}
-
-function spanAt(from: number, to: number): Span {
-	const p = run.points;
-	return { text: run.text.slice(from, to), start: p ? p[from] : from, end: p ? p[to] : to };
-}
-/** The span of a parse node, without the white space and comments around it. */
-function spanOf(node: Node): Span {
-	let { startIdx: from, endIdx: to } = node.source;
-	const lead = /^(?:\s|--[^\n]*)*/.exec(run.text.slice(from, to))![0].length;
-	from += lead;
-	while (to > from && /\s/.test(run.text[to - 1])) to--;
-	return spanAt(from, to);
-}
-/** Records the place of a tree node; a node keeps its first, innermost place. */
-function placed<T extends object>(node: Node, tree: T): T {
-	if (!run.spans.has(tree)) run.spans.set(tree, spanOf(node));
-	return tree;
-}
-function reserved(node: Node, what: string): Diagnostic {
-	const d: Diagnostic = { code: 'R015', span: spanOf(node), args: [what] };
-	run.reserved.push(d);
-	return d;
-}
-
-/** A parse-level error at a node: with one, the text has no tree. */
-function refused(node: Node, code: string, args: string[]): void {
-	run.errors.push({ code, span: spanOf(node), args });
 }
 
 const semantics = grammar.createSemantics();
@@ -253,9 +185,9 @@ semantics.addOperation<unknown>('tree', {
 	},
 	Dotted_name(base, _dot, name) {
 		const b = base.tree() as Expr;
-		if ('path' in b) return placed(this, { path: [...b.path, name.sourceString] });
-		if ('lit' in b && run.ids.has(b)) return placed(this, { path: [b.lit, name.sourceString] });
-		return placed(this, { dot: [b, name.sourceString] } as Expr);
+		if ('path' in b) return placed(this, { path: [...b.path, readRuleName(name)] });
+		if ('lit' in b && run.ids.has(b)) return placed(this, { path: [b.lit, readRuleName(name)] });
+		return placed(this, { dot: [b, readRuleName(name)] } as Expr);
 	},
 	Agg: (name, _open, arg, _close) => [name.sourceString, ...arg.children.map((a) => a.tree())],
 	Atom(e) {
@@ -284,6 +216,32 @@ semantics.addOperation<unknown>('tree', {
 	}
 });
 
+const nativeRuleSemantics = nativeRuleGrammar.extendSemantics(semantics);
+nativeRuleSemantics.extendOperation<unknown>('tree', {
+	QualifiedKind(pack, _dot, kind) {
+		return placed(this, { kind: [readRuleName(pack), kind.sourceString].join('.') });
+	},
+	quotedName(_open, _first, _rest, _close) {
+		return placed(this, { path: [readRuleName(this)] });
+	},
+	wildcard(_mark) {
+		return placed(this, { wildcard: true });
+	},
+	Call(name, _open, args, _close) {
+		return placed(this, { call: [name.tree(), all(args)] } as Expr);
+	},
+	NativeCallName_schema(kind, _dot, member) {
+		return [(kind.tree() as { kind: string }).kind, readRuleName(member)].join('.');
+	},
+	NativeCallName_kind(kind, _dot, member) {
+		return [kind.sourceString, readRuleName(member)].join('.');
+	},
+	NativeCallName_imported(pack, _dot, member) {
+		return [readRuleName(pack), readRuleName(member)].join('.');
+	},
+	NativeCallName_local: readRuleName,
+});
+
 /** The token at a place where the parse could not go on: a word, or one other character; empty at the end. */
 function tokenAt(text: string, at: number): [number, number] {
 	const m = /[A-Za-z0-9_]+|\S/uy;
@@ -308,13 +266,14 @@ export { semantics, placed, refused, reserved };
  * and the code points of the file itself (`at`), since a blank has none of its astral characters.
  */
 export function readRule<T>(text: string, rule: string, read: (node: Node) => T, spans = new WeakMap<object, Span>(), at = points(text)): Read<T> {
-	run = { text, points: at, spans, ids: new WeakSet(), errors: [], reserved: [], misplaced: [] };
-	const match = grammar.match(text, rule);
+	startRun(text, spans, at);
+	const native = rule === 'NativeRuleLine';
+	const match = (native ? nativeRuleGrammar : grammar).match(text, rule);
 	if (match.failed()) {
 		const at = Math.min(match.getRightmostFailurePosition(), text.length);
 		return { errors: [{ code: 'R000', span: spanAt(...tokenAt(text, at)), args: [match.getExpectedText()] }], reserved: [], spans };
 	}
-	const value = read(semantics(match) as unknown as Node);
+	const value = read((native ? nativeRuleSemantics : semantics)(match) as unknown as Node);
 	return { value, errors: run.errors, reserved: run.reserved, spans };
 }
 

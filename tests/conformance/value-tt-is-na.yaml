@@ -1,0 +1,25 @@
+id: value-tt-is-na
+source: docs/semantics/value-cases.yaml#tt-is-na
+status: settled
+input:
+  rows:
+  - kind: item
+    id: item-b
+    group: group-a
+    labels:
+    - first
+    weight: 3
+  expression: item-b.quantity is n/a
+expect:
+  value: true
+  state: known
+  reason: null
+  witness:
+    complete: true
+    absent:
+      relation: item__quantity
+      key:
+      - item-b
+unsupported:
+  compiler: The state predicate is not an operation of the calculation input contract.
+  feldera: The state predicate has no lowering from the calculation input contract.

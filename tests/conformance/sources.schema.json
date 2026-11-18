@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Conformance source inventory",
+  "type": "object",
+  "required": ["version", "sources"],
+  "additionalProperties": false,
+  "properties": {
+    "version": {"const": 1},
+    "sources": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["id", "source"],
+        "additionalProperties": false,
+        "properties": {
+          "id": {"pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*(?![\\s\\S])", "type": "string"},
+          "source": {"pattern": "^(?:docs|decisions)/(?:[a-zA-Z0-9][a-zA-Z0-9_-]*/)*[a-zA-Z0-9][a-zA-Z0-9_-]*\\.(?:yaml|md)#[a-zA-Z0-9][a-zA-Z0-9-]*(?![\\s\\S])", "type": "string"}
+        }
+      }
+    }
+  }
+}
