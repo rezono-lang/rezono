@@ -46,10 +46,15 @@ def check(proof: dict, manifest: dict, rules: dict, read_bytes, role: str | None
 
     rows, groups = _rows(snapshots, findings), {}
     proof = {**proof, "witnesses": _well_formed(proof.get("witnesses", []), findings)}
+    domains = set()
     for i, w in enumerate(proof["witnesses"]):
         if w is not None:
             _check_witness(i, w, rules, rows, findings, groups)
+            if (rule := rules.get(w["rule_id"])) is not None:
+                domains.update(aggregate.atom.relation for aggregate in rule.aggregates)
     _check_graph(proof, rules, findings)
+    if domains and not any(f["reason"] not in WARNINGS for f in findings):
+        findings.extend(closure.check(rules, lambda relation: rows(relation, None), domains=domains))
     return _report(proof, role, readable, findings)
 
 
@@ -440,6 +445,17 @@ def recompute(spec, fixed, relation_rows, groups=None):
     The group is every row of the right arity that matches the fixed (non-'_') positions of the rule.
     `groups` caches an index per (relation, arity, fixed positions), so each relation is scanned once.
     """
+    members = aggregate_members(spec, fixed, relation_rows, groups)
+    if spec.function == "count":
+        return len(members), sha256_json([[k] for k, _ in members]), f"known:{len(members)}", False
+    read = cells(spec, [(json.loads(k), values) for k, values in members])
+    contributors = sha256_json([[k, value_text(v)] for (k, _), v in zip(members, read)])
+    result = _fold(spec.function, read)
+    return len(members), contributors, result, result == "invalid"
+
+
+def aggregate_members(spec, fixed, relation_rows, groups=None):
+    """The exact group whose members the checker uses to verify an aggregate."""
     arity, positions = len(spec.atom.terms), tuple(pos for pos, _ in fixed)
     index_key = (spec.atom.relation, id(relation_rows), arity, positions)
     if groups is None or index_key not in groups:
@@ -452,13 +468,19 @@ def recompute(spec, fixed, relation_rows, groups=None):
         if groups is None:
             groups = {}
         groups[index_key] = index
-    members = groups[index_key].get(tuple(v for _, v in fixed), [])
-    if spec.function == "count":
-        return len(members), sha256_json([[k] for k, _ in members]), f"known:{len(members)}", False
-    read = cells(spec, [(json.loads(k), values) for k, values in members])
-    contributors = sha256_json([[k, value_text(v)] for (k, _), v in zip(members, read)])
-    result = _fold(spec.function, read)
-    return len(members), contributors, result, result == "invalid"
+    return groups[index_key].get(tuple(v for _, v in fixed), [])
+
+
+def _calc_premise_problem(row, rule, calculated, calc_views):
+    if row in calculated:
+        witness = calculated[row]
+        column_type = (rule.calc_input_type(row[0]) if rule else None) or "integer"
+        if (witness["state"] != "known" or witness.get("reason", "")
+                or not calc_value(witness.get("value", ""), column_type)):
+            return "bad_calc_premise"
+    elif row[0] in calc_views:
+        return "unproven_premise"
+    return None
 
 
 def _check_graph(proof, rules, findings, calc_witnesses=(), calc_views=frozenset()):
@@ -501,16 +523,12 @@ def _check_graph(proof, rules, findings, calc_witnesses=(), calc_views=frozenset
             row = (p["row"]["relation"], p["row"]["key"])
             if p["polarity"] != "positive":
                 continue
-            if row in calculated:
-                calc_witness = calculated[row]
-                value = calc_witness.get("value", "")
-                calc_type = (rule.calc_input_type(row[0]) if rule else None) or "integer"
-                if (calc_witness["state"] != "known" or calc_witness.get("reason", "")
-                        or not calc_value(value, calc_type)):
-                    findings.append({"reason": "bad_calc_premise", "witness": i, "relation": row[0], "key": row[1]})
-            if row[0] in calc_views and row not in calculated:
-                findings.append({"reason": "unproven_premise", "witness": i, "relation": row[0], "key": row[1]})
-            elif row in proved:
+            problem = _calc_premise_problem(row, rule, calculated, calc_views)
+            if problem:
+                findings.append({"reason": problem, "witness": i, "relation": row[0], "key": row[1]})
+            if problem == "unproven_premise":
+                continue
+            if row in proved:
                 graph[ref].add(row)
             elif row[0] in derived:
                 findings.append({"reason": "unproven_premise", "witness": i, "relation": row[0], "key": row[1]})

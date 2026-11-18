@@ -1,0 +1,20 @@
+id: value-world-open-absent
+source: docs/semantics/value-cases.yaml#world-open-absent
+status: settled
+input:
+  rows:
+  - kind: item
+    id: item-a
+    group: group-a
+    labels:
+    - first
+    - second
+    quantity: 7
+    weight: 3
+  expression: item-x in Item
+  world: open
+expect:
+  value: null
+  state: unknown
+  reason: null
+  witness: null

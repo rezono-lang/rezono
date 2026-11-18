@@ -1,0 +1,70 @@
+id: value-withheld-two-world
+source: docs/semantics/value-cases.yaml#withheld-two-world
+status: settled
+input:
+  rows:
+  - kind: item
+    id: item-a
+    group: group-a
+    labels:
+    - first
+    - second
+    quantity: 7
+    weight: 3
+  - kind: item
+    id: item-b
+    group: group-a
+    labels:
+    - first
+    weight: 1
+  - kind: item
+    id: item-c
+    group: group-b
+    labels:
+    - second
+    quantity: 7
+    weight: 5
+  - kind: item
+    id: item-d
+    group: group-b
+    labels:
+    - second
+    quantity: 7
+    weight:
+      state: unknown
+      reason: no_spec
+  ask: ask Item where weight > 2
+  order_by:
+  - id
+  role: summary
+  page_size: '1'
+  second_world_adds:
+  - kind: item
+    id: item-private
+    group: group-b
+    labels:
+    - second
+    weight: 6
+  readable_items:
+  - item-a
+  - item-b
+  - item-c
+  - item-d
+expect:
+  value:
+    equal:
+    - page_bytes
+    - cursor
+    - counts
+    - dataset_hash
+    matching:
+    - item-a
+    - item-c
+    undecided:
+    - item-d
+  state: known
+  reason: null
+  witness: null
+unsupported:
+  compiler: Compilation does not render role-scoped pages or cursors.
+  feldera: The role-scoped page and cursor are publication outputs.

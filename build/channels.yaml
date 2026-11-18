@@ -1,0 +1,8 @@
+kinds:
+  - {kind: build_run, shape: rect}
+  - {kind: build_component, shape: rect}
+  - {kind: build_manifest, shape: rect}
+  - {kind: build_test_file, shape: rect}
+  - {kind: build_dependency, shape: rect}
+  - {kind: build_path, shape: rect}
+  - {kind: build_path_reader, shape: rect}

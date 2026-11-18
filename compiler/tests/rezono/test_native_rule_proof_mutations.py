@@ -184,13 +184,6 @@ def rejects(report, reason, **labels):
                for f in report["findings"]), report
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=pytest.RaisesExc(AssertionError, match="A proof left out a tied contender"),
-    reason="Read decisions/language-native-rules.md sections 4, 5 and 11. In checker/rezono_checker, "
-           "independently check that a complete derived comparison snapshot used by a proof includes the "
-           "tied contender required by the frozen rules, even if the reported groups still add up.",
-)
 def test_native_rule_proof_mutations():
     doc, rows, witnesses = scoped_sweep()
     for report in (epoch(doc, rows, witnesses), proof(doc, rows, witnesses)):

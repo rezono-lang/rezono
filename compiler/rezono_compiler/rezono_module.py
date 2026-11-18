@@ -25,6 +25,7 @@ from typing import cast
 
 import yaml
 from . import rezono_alias, rezono_enum, rezono_extend, rezono_key, rezono_kind, rezono_metadata, rezono_slot
+from .native_literals import NATIVE_FORMAT, native_literal_errors
 from .schemaview import SchemaView
 from linkml_runtime.linkml_model import SchemaDefinition
 from linkml_runtime.loaders.yaml_loader import YAMLLoader
@@ -130,9 +131,16 @@ def read_form(pack_dir: Path, d: Declared, errors: list[str],
     except (OSError, ValueError) as e:
         errors.append(f"{where}: not a JSON file ({e})")
         return None
-    module = module_body(doc, FORMAT) or module_body(doc, IDENTIFIER_FORMAT)
+    module = module_body(doc, FORMAT) or module_body(doc, IDENTIFIER_FORMAT) or module_body(doc, NATIVE_FORMAT)
     if module is None:
-        errors.append(f"{where}: not the form of a module ({FORMAT} or {IDENTIFIER_FORMAT}, contracts/rezono-module.yaml)")
+        errors.append(
+            f"{where}: not the form of a module ({FORMAT}, {IDENTIFIER_FORMAT}, or {NATIVE_FORMAT},"
+            " contracts/rezono-module.yaml)"
+        )
+        return None
+    findings = native_literal_errors(doc)
+    if findings:
+        errors.extend(f"{where}: {finding}" for finding in findings)
         return None
     spans = doc["spans"]
     if not valid_places(module, spans) and not (
@@ -172,7 +180,7 @@ def source_form(pack_dir: Path, d: Declared, submitted: dict, errors: list[str],
     except (OSError, UnicodeError):
         errors.append(f"{pack_dir.name}/{d.module}: cannot read the module as UTF-8")
         return None
-    if legacy(source):
+    if submitted["format"] != NATIVE_FORMAT and legacy(source):
         return submitted
     return authored_form(pack_dir, d, data, errors)
 
@@ -407,7 +415,7 @@ def lower(pack_dir: Path, d: Declared, form: dict, pack: str, owners: dict[str, 
     adds nothing to the schema: its tables are rules, which rezono_table writes once the pack's model is read
     (§9.1)."""
     where, line, module = f"{pack_dir.name}/{d.module}", lines(form), form["module"]
-    extended = form["format"] == IDENTIFIER_FORMAT
+    metadata_format = form["format"] == IDENTIFIER_FORMAT
 
     def refuse(at: str | int, what: str, section: str = "§6") -> None:
         n = at if isinstance(at, int) else line.get(at) or line.get("/".join(at.split("/")[:3])) or 1
@@ -451,18 +459,23 @@ def lower(pack_dir: Path, d: Declared, form: dict, pack: str, owners: dict[str, 
                     continue
             lowered_kind = rezono_kind.lower(
                 decl, at, own, owners, declared_names, uses, refuse,
-                extended_format=extended,
+                extended_format=form["format"] == IDENTIFIER_FORMAT,
             )
             if lowered_kind is not None:
                 if keys:
                     lowered_kind["unique_keys"] = keys
                 classes[decl["kind"]] = lowered_kind | kind_fields
         elif "enum" in decl:
-            lowered_enum = rezono_enum.lower(decl, at, refuse, extended=extended)
+            lowered_enum = rezono_enum.lower(decl, at, refuse, extended=metadata_format)
             if lowered_enum is not None:
                 enums[decl["enum"]] = lowered_enum
         elif "extend" in decl:
             rezono_extend.validate(decl, at, imported, refuse)
+        elif "rules" in decl and form["format"] == IDENTIFIER_FORMAT:
+            from .rezono_relational import valid_block
+
+            if not valid_block(decl):
+                refuse(at, "a rules block needs a name and its written lines")
         elif "fact" in decl:
             if "columns" in decl:
                 refuse(at, "a fact table is not lowered yet", "§5.3")
@@ -480,7 +493,7 @@ def lower(pack_dir: Path, d: Declared, form: dict, pack: str, owners: dict[str, 
               "enums": enums, "classes": classes}
     if aliases:
         schema["types"] = aliases
-    if extended and "schema" in module:
+    if metadata_format and "schema" in module:
         range_name = module.get("defaultRange", "Text")
         schema = rezono_metadata.header(
             module, schema, d.layer,

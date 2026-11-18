@@ -1,0 +1,9 @@
+build_run: Build observation
+build_component: Test suite
+build_manifest: Package manifest
+build_test_file: Test file
+build_dependency: Suite dependency
+build_path: Changed path
+build_path_reader: Path reader
+build_selected_job: Selected job
+build_full_selection: Full selection reason

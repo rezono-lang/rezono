@@ -11,6 +11,7 @@ import { parameter } from './module-parameter.ts';
 import { reason } from './module-reason.ts';
 import { rounding } from './module-rounding.ts';
 import { rules } from './module-rules.ts';
+import { scalarAlias } from './module-scalar-alias.ts';
 import { slot } from './module-slot.ts';
 import { table } from './module-table.ts';
 import { unit } from './module-unit.ts';
@@ -21,10 +22,10 @@ import type { BlockSyntax, Declaration, ModuleComponent } from './module-support
 // Ohm tries these alternatives in order. Generic assignments stand after slots and specific statements.
 const components = [header, metadata, rounding, reason, unit, enumeration, parameter, kind, derived, version, unless, table, facts, check, rules, slot] as const;
 // Native signatures have columns, so their printer must precede the fact table printer.
-const registered: readonly ModuleComponent[] = [nativeRule, ...components];
+const registered: readonly ModuleComponent[] = [nativeRule, scalarAlias, ...components];
 
 type DeclOf<T> = T extends { declarations: infer Entries } ? Entries[keyof Entries] extends Declaration<infer D> ? D : never : never;
-export type Decl = DeclOf<typeof components[number] | typeof nativeRule>;
+export type Decl = DeclOf<typeof components[number] | typeof nativeRule | typeof scalarAlias>;
 
 const lines = [...registered.flatMap(c => c.lineRules), ...registered.flatMap(c => c.trailingRules ?? [])];
 export const moduleGrammar = `  Line = ${lines.join(' | ')}

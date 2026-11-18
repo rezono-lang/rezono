@@ -1,0 +1,17 @@
+id: value-world-default
+source: docs/semantics/value-cases.yaml#world-default
+status: settled
+input:
+  rows:
+    - {$kind: Group, $id: group-a}
+  select: {kind: Group, id: group-a}
+  language: "ask Group where true show Item.any()"
+expect:
+  value: false
+  state: known
+  reason: null
+  witness: null
+unsupported:
+  compiler: The neutral fixture uses an unannotated LinkML kind, while the shared compiler replay produces only a selected sum and has no membership-result form.
+  checker: The selected closed-world membership result has no positive rule conclusion or complete-epoch witness to check.
+  feldera: This case reads the language's membership result for an empty kind. The shared Datalog case interface expects a selected materialized row.

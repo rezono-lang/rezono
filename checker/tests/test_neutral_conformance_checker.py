@@ -47,12 +47,6 @@ def test_checker_replays_neutral_case(case, tmp_path):
     assert not report["valid"] and "aggregate_contributors" in {f["reason"] for f in report["findings"]}
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=IncompleteAggregateAccepted,
-    reason="Verify closure of a selected aggregate's complete contributor group against the admitted "
-           "base snapshots. Read tests/conformance/value-agg-sum-empty.yaml. Write in checker/.",
-)
 def test_checker_refuses_an_incomplete_conformance_aggregate_scope(tmp_path):
     case = replay["case_file"]("value-agg-sum-empty")
     result = replay["play"](case, tmp_path / "original")
