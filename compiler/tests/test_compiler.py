@@ -1008,15 +1008,18 @@ def test_a_part_of_arrow_to_many_is_no_tree(fixture):
 
 def test_an_installed_compiler_reads_the_contracts_it_carries(tmp_path):
     """A non-editable install of the compiler, built from a copy of compiler/ and contracts/ and run from a
-    directory outside any checkout, carries contracts/*.yaml byte for byte as package data, reads them from there,
+    directory outside any checkout, carries the runtime contracts byte for byte as package data, reads them from there,
     and compiles a pack given by path to the same bytes as the compiler of this checkout."""
     import os
     import subprocess
     import sys
 
+    from rezono_compiler.native_literals import LITERALS_SCHEMA
+
     repo, src = pack.CONTRACTS.parent, tmp_path / "src"
+    contracts = [*pack.CONTRACTS.glob("*.yaml"), pack.CONTRACTS / LITERALS_SCHEMA]
     (src / "contracts").mkdir(parents=True)
-    for p in pack.CONTRACTS.glob("*.yaml"):
+    for p in contracts:
         shutil.copy(p, src / "contracts" / p.name)
     shutil.copytree(repo / "compiler" / "rezono_compiler", src / "compiler" / "rezono_compiler",
                     ignore=shutil.ignore_patterns("__pycache__"))
@@ -1027,7 +1030,7 @@ def test_an_installed_compiler_reads_the_contracts_it_carries(tmp_path):
     subprocess.run([sys.executable, "-m", "pip", "install", "-q", "--no-deps", "--no-build-isolation", "--no-index",
                     "--target", str(site), str(src / "compiler")], cwd=work, check=True)
     shipped = site / "rezono_compiler" / "contracts"
-    assert tree(shipped) == {p.name: p.read_bytes() for p in sorted(pack.CONTRACTS.glob("*.yaml"))}
+    assert tree(shipped) == {p.name: p.read_bytes() for p in contracts}
     # The installed copy first; the dependencies from this interpreter's path, without the checkout's compiler.
     own = Path(pack.__file__).resolve().parents[1]
     path = [str(site)] + [p for p in sys.path if p and Path(p).resolve() != own]
