@@ -1,0 +1,66 @@
+{
+  "source": "schema field_notes\n  iri \"urn:example:field-notes\"\n  language en\n  prefix rdfs = \"http://www.w3.org/2000/01/rdf-schema#\"\n  import \"urn:example:references\"\n  import \"linkml:types\"\n  default range Text\n  description \"Recording field observations.\"\n  annotation layer = \"facts\"\nkind Observation world closed\n  description \"An observation made outdoors.\"\n  caption: Text\n    iri \"rdfs:label\"\n    description \"A brief label.\"\n  detail: Text?\nenum Evidence world closed = sketch | photo\n  description \"How the observation was recorded.\"\n  value photo\n    description \"A photograph taken on site.\"",
+  "module": {
+    "rezono": "0",
+    "pack": "sample",
+    "use": [],
+    "schema": "field_notes",
+    "iri": "urn:example:field-notes",
+    "language": "en",
+    "prefixes": { "rdfs": "http://www.w3.org/2000/01/rdf-schema#" },
+    "imports": ["urn:example:references", "linkml:types"],
+    "defaultRange": "Text",
+    "description": "Recording field observations.",
+    "annotations": { "layer": "facts" },
+    "decls": [
+      {
+        "kind": "Observation",
+        "world": "closed",
+        "description": "An observation made outdoors.",
+        "slots": [
+          {
+            "slot": "caption",
+            "type": "Text",
+            "slotUri": "rdfs:label",
+            "description": "A brief label."
+          },
+          { "slot": "detail", "type": "Text", "card": "?" }
+        ],
+        "derived": []
+      },
+      {
+        "enum": "Evidence",
+        "world": "closed",
+        "values": ["sketch", "photo"],
+        "description": "How the observation was recorded.",
+        "memberMetadata": { "photo": { "description": "A photograph taken on site." } }
+      }
+    ]
+  },
+  "spanNames": {
+    "/decls/0": "Observation",
+    "/decls/0/slots/0": "caption",
+    "/decls/1": "Evidence"
+  },
+  "rejections": [
+    { "from": "schema field_notes", "to": "schema second_schema\n  iri \"urn:example:second-schema\"\n  language en\nschema field_notes" },
+    { "from": "    iri \"rdfs:label\"", "to": "  iri \"rdfs:label\"" }
+  ],
+  "knownDiagnostics": [
+    {"code":"R000","span":{"text":"field_notes","start":28,"end":39},"args":["\"=\" or \":\""]},
+    {"code":"R000","span":{"text":"\"","start":46,"end":47},"args":["\"=\" or \":\""]},
+    {"code":"R000","span":{"text":"en","start":83,"end":85},"args":["\"=\" or \":\""]},
+    {"code":"R000","span":{"text":"rdfs","start":95,"end":99},"args":["\"=\" or \":\""]},
+    {"code":"R000","span":{"text":"\"","start":151,"end":152},"args":["\"=\" or \":\""]},
+    {"code":"R000","span":{"text":"\"","start":185,"end":186},"args":["\"=\" or \":\""]},
+    {"code":"R000","span":{"text":"range","start":210,"end":215},"args":["\"=\" or \":\""]},
+    {"code":"R000","span":{"text":"\"","start":235,"end":236},"args":["\"=\" or \":\""]},
+    {"code":"R000","span":{"text":"layer","start":280,"end":285},"args":["\"=\" or \":\""]},
+    {"code":"R000","span":{"text":"\"","start":340,"end":341},"args":["\"=\" or \":\""]},
+    {"code":"R000","span":{"text":"\"","start":396,"end":397},"args":["\"=\" or \":\""]},
+    {"code":"R000","span":{"text":"\"","start":425,"end":426},"args":["\"=\" or \":\""]},
+    {"code":"R000","span":{"text":"\"","start":516,"end":517},"args":["\"=\" or \":\""]},
+    {"code":"R000","span":{"text":"photo","start":560,"end":565},"args":["\"=\" or \":\""]},
+    {"code":"R000","span":{"text":"\"","start":582,"end":583},"args":["\"=\" or \":\""]}
+  ]
+}

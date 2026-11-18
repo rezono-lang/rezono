@@ -5,3 +5,14 @@ Use the plan hash, ordered item and billing currency together as the join key. K
 The offline adapter `run/invoice_compare.py:invoice_facts(expected, observed, rounding)` converts these inputs to base rows for `run/packs/invoice-drift`. The pack derives `amount_difference(plan, item, expected_ref, invoice_ref, rounding_ref, expected_minor, observed_minor)` and `unbound_invoice(invoice_ref, reason)`. An absent plan tag or a nonexistent plan/item pair produces its own unbound finding. Use an exact signed difference by keeping both amounts. A matching total can hide two opposing errors in the lines; matching amounts on another plan cannot supply a binding.
 
 The pack compares amounts only when a priced item has one observed invoice line for its plan, item and currency. If several distinct invoice references claim that item, every contributing line has an `ambiguous_binding` finding with the price record and all matching invoice references as grounds. A replay of identical evidence under the same reference counts as one line. Split charges require independently evidenced allocations before their amounts can be compared.
+
+Keep the reduced numerator magnitude and denominator in separate decimal
+digit rows with the original price sign. The adapter may propose a signed
+floor and the carries for two equalities. The pack checks every column of
+each equality. The scaled price numerator equals the floor magnitude times
+the denominator plus the remainder. The denominator equals the remainder
+plus a positive gap. The rule chooses the rounded value by comparing the
+remainder and the gap and applying the term's tie mode. The factor and the
+floor use the existing minor-unit integer range. The price operands retain
+their full width. A stored rounded-only price cannot establish the new
+evidence required for an amount difference.

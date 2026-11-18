@@ -559,6 +559,20 @@ def read(pack_dir: str | Path) -> Pack:
             if c.is_a and parent is None:  # LinkML cannot induce its slots either: nothing more to check
                 errors.append(f"class {cname}: parent {c.is_a} is not in the import closure of {m.id}")
                 continue
+            ancestors = {cname}
+            ancestor = c
+            while ancestor.is_a:
+                if ancestor.is_a in ancestors:
+                    errors.append(f"class {cname}: inheritance forms a cycle through {ancestor.is_a}")
+                    break
+                parent_class = sv.get_class(ancestor.is_a)
+                if parent_class is None:
+                    errors.append(f"class {cname}: parent {ancestor.is_a} is not a kind")
+                    break
+                ancestors.add(ancestor.is_a)
+                ancestor = parent_class
+            if ancestor.is_a:
+                continue
             induced = sv.class_induced_slots(cname)
             if any(s.key for s in induced):
                 errors.append(f"class {cname}: use 'identifier', not 'key'")
@@ -721,7 +735,8 @@ def read(pack_dir: str | Path) -> Pack:
     generated = []
     if not errors:
         from . import rezono_table  # it reads the pack's model, so it runs once the model is read
-        generated = rezono_table.lower_pack(pack, meta, Path(pack_dir), errors)
+        forms = {m.rel: m.form for m in mods if m.pack_dir == pack_dir and m.form is not None}
+        generated = rezono_table.lower_pack(pack, meta, pack_dir, errors, forms=forms)
     if not errors:
         try:
             pack.rules, rule_warnings = rules_dl.read(pack, pack_dir, ordered, renames, calc_inputs=calc_inputs,
