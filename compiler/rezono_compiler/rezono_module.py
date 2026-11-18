@@ -282,8 +282,7 @@ def lines(form: dict) -> dict[str, int]:
 
 
 def marks(module: Path, form: Path | dict) -> dict[tuple, tuple[int, int]]:
-    """The (line, column) of every kind and slot of a module, by the path of keys its lowered schema holds it at
-    (`classes`, the class, then `attributes` and the slot), as `spans.marks` gives them for a schema file (MOD2).
+    """The (line, column) of each kind, slot and path equation, by its keys in the lowered schema (MOD2).
     The place is the name as written: the form gives its offset in code points, the text the line it is on."""
     if isinstance(form, Path):
         text = module.read_text(encoding="utf-8")
@@ -307,6 +306,9 @@ def marks(module: Path, form: Path | dict) -> dict[tuple, tuple[int, int]]:
             for j, s in enumerate(decl.get("slots") or []):
                 if isinstance(s, dict) and isinstance(s.get("slot"), str):
                     place(f"/decls/{i}/slots/{j}", ("classes", decl["kind"], "attributes", s["slot"]))
+            if isinstance(equations := decl.get("equations"), list):
+                for j, _ in enumerate(equations):
+                    place(f"/decls/{i}/equations/{j}", ("classes", decl["kind"], "annotations", "path_equations", j))
     return out
 
 
