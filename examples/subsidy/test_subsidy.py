@@ -1,8 +1,5 @@
 """The subsidy pack's own tests: what the generic example tests (examples/test_*.py) cannot know.
 
-- The evaluation date decides which partial rate counts: before 1 July 2026 an award at the partial
-  rate is lower, to the cent as reference.py computes it.
-- The supposition of the last scenario moves the awards the README names: who gains, who loses, who stays.
 - Through the publisher: the policy adviser gets every award but nothing of the ledger; and a claim
   that differs from the quotes by one cent (the invariant costs_mismatch) stops the publication.
 - std-time through views.yaml (T1): the policy adviser reads how each scheme parameter stands on the
@@ -16,7 +13,6 @@ Needs the compiler with DuckDB and the publisher, and `cryptography` for the cre
 import importlib.util
 import json
 import shutil
-from datetime import date
 from pathlib import Path
 
 import pytest
@@ -26,8 +22,6 @@ pytest.importorskip("duckdb")
 pytest.importorskip("rezono_compiler")
 pytest.importorskip("rezono_publisher")
 
-from calcsupport import run_both  # noqa: E402  (compiler/tests, on the path through examples/conftest.py)
-from rezono_compiler import calc, calc_sql, pack, scenarios  # noqa: E402
 from rezono_publisher import batch, publish, store  # noqa: E402
 
 HERE = Path(__file__).parent
@@ -59,14 +53,6 @@ income_statement:
 CLAIM = '{"id": "A001", "household": "H001", "claimed_costs": 1100000}'
 
 
-def reference():
-    """The pack's reference.py under a name of its own: other packs have a reference.py too."""
-    spec = importlib.util.spec_from_file_location("subsidy_reference", HERE / "reference.py")
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
-
-
 def copy(tmp: Path) -> Path:
     """A copy of the pack at the same depth, next to packs/ and the scheme it imports, so the imports resolve."""
     root = HERE.parents[1]
@@ -88,59 +74,6 @@ def published(pack_dir: Path, root: Path):
 
 def rows(s, role: str, rel: str) -> list[tuple]:
     return [tuple(r["key"]) for r in json.loads(s.get(publish.role_objects(s, PACK, "m-1", role)[f"relations/{rel}.json"]))]
-
-
-# --- The calculation -------------------------------------------------------------------------------
-
-def test_the_evaluation_date_decides_the_partial_rate():
-    """The partial rate has two rows (facts/scheme.yaml): 20% until 1 July 2026, 24% from then on. The
-    evaluation date is a fact row, so asking for another date needs no compilation."""
-    ref = reference()
-    model = pack.read(HERE)
-    prog = calc.build(model, model.calc)
-    _, facts = scenarios.states(model, HERE)[0]
-    t = next(ref.states())[1]
-
-    def awards(valid_at: str):
-        as_of = {table: [tuple({**r, "valid_at": valid_at if isinstance(r["valid_at"], str) else date.fromisoformat(valid_at)}.values())
-                         for r in rs] for table, rs in calc_sql.rows(prog).items()}
-        got, exact = run_both(model, prog, model.calc, facts | as_of)
-        assert got == exact
-        mine = ref.calc(t, on=valid_at)["award"]
-        assert {a: (v[1] if v[0] == "known" else v[0]) for a, v in got["award"].items()} == mine
-        return mine
-
-    spring, autumn = awards("2026-03-01"), awards("2026-11-10")
-    assert (spring["A001"], autumn["A001"]) == ("227000", "269400")  # 20% and 24% of 10,600 euros, plus the allowance
-    assert spring["A002"] == autumn["A002"] == "166000"                # the full rate did not change
-    assert spring["A003"] == autumn["A003"] == "unknown"               # and unknown stays unknown, on any date
-
-
-def test_the_supposed_threshold_has_gainers_and_losers():
-    """The last scenario against the state before it, over the whole population (expected/calc, which the
-    generic test holds equal to the engine): the README's numbers."""
-    states = sorted(p.name for p in (HERE / "expected" / "calc").glob("*.json"))
-    assert states[-1] == "4-family-threshold.json"
-    before, after = (json.loads((HERE / "expected" / "calc" / state).read_text(encoding="utf-8"))["award"] for state in states[-2:])
-    known = [a for a in before if before[a] != "unknown"]
-    assert [a for a in before if (before[a] == "unknown") != (after[a] == "unknown")] == []
-    change = {a: int(after[a]) - int(before[a]) for a in known}
-    gain, lose = [d for d in change.values() if d > 0], [d for d in change.values() if d < 0]
-    assert (len(gain), sum(gain)) == (23, 2780081)
-    assert (len(lose), sum(lose)) == (14, -1760996)
-    assert (len(known) - len(gain) - len(lose), len(before) - len(known)) == (187, 16)
-
-
-def test_a_supposed_amount_is_reported_as_not_decided():
-    """Every parameter of the scheme stands on a decision in force (std-decision's in_force_on). The
-    supposition of the last scenario is a decision that is only proposed, so its two rows are the finding
-    (expected/rules, which the generic test holds equal to the engine)."""
-    states = sorted((HERE / "expected" / "rules").glob("*.json"))
-    before, after = (json.loads(state.read_text(encoding="utf-8")) for state in states[-2:])
-    assert before["undecided_parameter"] == [] and len(before["decided_parameter"]) == 8
-    assert ["par-06", "2026-047", "2026-11-10"] in before["decided_parameter"]
-    assert after["undecided_parameter"] == [["par-01", "2026-11-10"], ["par-02", "2026-11-10"]]
-    assert len(after["decided_parameter"]) == 6
 
 
 # --- Access and the invariant, through the publisher -----------------------------------------------

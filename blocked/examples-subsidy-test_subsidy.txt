@@ -1,1 +1,4 @@
-examples/subsidy/test_subsidy.py: FileNotFoundError: [Errno 2] No such file or directory: 'deploy/profiles/edge.yaml'
+examples/subsidy/test_subsidy.py: 18 items collect. Four credential-input cases need the credential-in port; the role-time case needs an independent rules reference.
+The credential port path is edge/plugins/credential-in/credential_in.py. Its manifest also references three missing signed status-list inputs.
+The publisher profile case passed with installed local distributions. Twelve other publisher items still need individual verification.
+The three award and decision cases from this file run in examples/subsidy/test_subsidy_scenarios.py.
