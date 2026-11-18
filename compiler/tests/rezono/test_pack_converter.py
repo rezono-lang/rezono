@@ -1,10 +1,13 @@
 """Check the conversion inputs before the language and publication oracles run."""
 
 from pathlib import Path
+import shutil
 
 import pytest
+import yaml
 
-from scripts.convert_pack import ConversionError, candidate, rule_lines, sources
+from rezono_compiler import modules
+from scripts.convert_pack import ConversionError, candidate, compare_imported, rule_lines, sources
 
 
 REPO = Path(__file__).resolve().parents[3]
@@ -83,3 +86,24 @@ def test_failed_reader_does_not_leave_a_candidate(tmp_path):
     assert authored.read_bytes() == before
     assert not destination.exists()
     assert set(tmp_path.iterdir()) == {original}
+
+
+def test_imported_standard_pack_preserves_named_title_through_its_consumer(tmp_path):
+    original = Path(shutil.copytree(STD, tmp_path / "std-access"))
+    trial = Path(shutil.copytree(STD, tmp_path / "trial"))
+    consumer = Path(shutil.copytree(REPO / "compiler/tests/fixtures/minimal", tmp_path / "consumer"))
+    metadata = consumer / "pack.yaml"
+    meta = yaml.safe_load(metadata.read_bytes())
+    meta["imports"] = [{"name": "std-access", "path": "../std-access", "sha256": modules.pack_hash(original)}]
+    contents = yaml.safe_dump(meta).encode("utf-8")
+    metadata.write_bytes(contents)
+    compare_imported(consumer, original, trial, "std-access")
+
+    schema_file = trial / "schema/access.yaml"
+    schema = yaml.safe_load(schema_file.read_bytes())
+    del schema["classes"]["Role"]["attributes"]["title"]["slot_uri"]
+    schema_file.write_bytes(yaml.safe_dump(schema).encode("utf-8"))
+    with pytest.raises(ConversionError, match="changed the typed schema"):
+        compare_imported(consumer, original, trial, "std-access")
+    assert metadata.read_bytes() == contents
+    assert set(tmp_path.iterdir()) == {original, trial, consumer}

@@ -203,7 +203,35 @@ def rule_meaning(doc: dict | None) -> dict | None:
                               for rule in doc["rules"]]}
 
 
-def candidate(original: Path, destination: Path, node: str) -> None:
+def compare_imported(consumer: Path, original: Path, candidate: Path, identity: str) -> None:
+    """Check a candidate library through the same pinned consumer as its baseline."""
+    consumer = consumer.resolve()
+    baseline = pack.read(consumer)
+    meta = pack.read_meta(consumer)
+    matches = [entry for entry in meta.get("imports", []) if entry.get("name") == identity]
+    if len(matches) != 1 or (consumer / matches[0]["path"]).resolve() != original:
+        raise ConversionError(f"consumer must import the original {identity} pack")
+    with tempfile.TemporaryDirectory(prefix=".rezono-consumer-", dir=consumer.parent) as temporary:
+        copy = Path(temporary)
+        shutil.copytree(consumer, copy, dirs_exist_ok=True)
+        matches[0]["path"] = Path(os.path.relpath(candidate, copy)).as_posix()
+        matches[0]["sha256"] = modules.pack_hash(candidate)
+        (copy / "pack.yaml").write_bytes(yaml.safe_dump(meta, sort_keys=False).encode("utf-8"))
+        compare(baseline, pack.read(copy))
+
+
+def compare(baseline: pack.Pack, trial: pack.Pack) -> None:
+    if (list(map(kind_meaning, baseline.kinds.values())) != list(map(kind_meaning, trial.kinds.values()))
+            or list(baseline.enums.items()) != list(trial.enums.items())):
+        raise ConversionError("the candidate changed the typed schema")
+    if (rule_meaning(baseline.rules) != rule_meaning(trial.rules)
+            or baseline.rule_bodies != trial.rule_bodies):
+        raise ConversionError("the candidate changed the rule IR beyond authored source locations")
+    if (baseline.labels, baseline.messages, baseline.channels) != (trial.labels, trial.messages, trial.channels):
+        raise ConversionError("the candidate changed presentation metadata")
+
+
+def candidate(original: Path, destination: Path, node: str, consumer: Path | None = None) -> None:
     original = original.resolve()
     destination = destination.resolve()
     if original.parent != destination.parent or original == destination or destination.exists():
@@ -237,13 +265,10 @@ def candidate(original: Path, destination: Path, node: str) -> None:
             entries.append({"module": module_path, "form": form_path, "layer": source.layer})
         meta["rezono"] = entries
         (stage / "pack.yaml").write_bytes(yaml.safe_dump(meta, sort_keys=False).encode("utf-8"))
-        baseline, trial = pack.read(original), pack.read(stage)
-        if (list(map(kind_meaning, baseline.kinds.values())) != list(map(kind_meaning, trial.kinds.values()))
-                or list(baseline.enums.items()) != list(trial.enums.items())):
-            raise ConversionError("the candidate changed the typed schema")
-        if (rule_meaning(baseline.rules) != rule_meaning(trial.rules)
-                or baseline.rule_bodies != trial.rule_bodies):
-            raise ConversionError("the candidate changed the rule IR beyond authored source locations")
+        if consumer is None:
+            compare(pack.read(original), pack.read(stage))
+        else:
+            compare_imported(consumer, original, stage, identity)
         stage.rename(destination)
 
 
@@ -252,9 +277,10 @@ def main() -> int:
     parser.add_argument("pack", type=Path)
     parser.add_argument("candidate", type=Path)
     parser.add_argument("--node", default=os.getenv("REZONO_NODE", "node"))
+    parser.add_argument("--consumer", type=Path, help="existing pinned consumer of a library or theory pack")
     args = parser.parse_args()
     try:
-        candidate(args.pack, args.candidate, args.node)
+        candidate(args.pack, args.candidate, args.node, args.consumer)
     except (OSError, ValueError, pack.CompileError, yaml.YAMLError) as error:
         parser.exit(1, f"{error}\n")
     print("Candidate compiled. Compare both publications before replacing the original pack.")
