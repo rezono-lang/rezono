@@ -5,5 +5,18 @@
       "type": "Cents",
       "base": "Int"
     }
+  ],
+  "knownDiagnostics": [
+    {
+      "code": "R000",
+      "span": {
+        "text": "Cents",
+        "start": 26,
+        "end": 31
+      },
+      "args": [
+        "\"=\" or \":\""
+      ]
+    }
   ]
 }
