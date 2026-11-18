@@ -34,6 +34,10 @@ Use the following convention for the first source-archive fixture. The receipt h
 
 The pinned fixture inventory contains the expected member keys. Its content contains a record for each member with `key`, `rows` and a terminal `Source`. A member that reports no rows has `rows: []` and its own authenticated terminal source. Each observed row retains its keyed values and source. Both artifacts are canonical arrays ordered by typed member key. The authoritative fixture keeps the expected inventory and terminal content commitments separate from the submitted candidate so a mutation can change candidate bytes and hashes while keeping the evidence of what the read had to contain.
 
+A pack declares the protected input with the reserved signature `.decl verified_receipt(receipt: symbol, source: symbol, scope: symbol, cut: symbol, inventory: symbol, content: symbol)` and no clause. The compiler accepts exactly that name and signature without rules and refuses a fact, rule, proposal or scenario row that supplies or derives it. A pack can still derive its own conclusions from it, such as `complete`. [Shared rule interface](#2-shared-rule-interface)
+
+At the batch boundary the caller passes the candidate references as `completeness_receipts`, the trusted contexts as `completeness_authority`, and the store that resolves both. Batch admits the candidates with the checker's shared admission and fills `verified_receipt` with the admitted rows only. The publisher writes the candidate references to the complete manifest, never to a role's manifest, and checks the epoch against the same trusted contexts. It never publishes the trusted contexts. Without a trusted context the candidate stays listed, its coverage stays unknown and the relation stays empty.
+
 ## 2. Shared rule interface
 
 Put the rules in the fact-free standard pack `std-completeness`. Admission supplies the verified receipt and the exact authenticated read. `Source`, `Scope` and `Cut` identify their bound definitions and `Receipt` is the receipt digest. The two hash arguments identify the verified inventory and contents.
