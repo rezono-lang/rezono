@@ -64,3 +64,34 @@ unauthenticated_target: unauthenticated target
 verified: verified
 unverified_supply: unverified supply
 build_reaches_tenant: build reaches tenant
+vendor_licence_notice: supplier licence notice
+vendor_licence_notice.product: product
+vendor_licence_notice.version: source release
+vendor_licence_notice.scope: scope of declaration
+vendor_licence_notice.declaration: licence declaration
+vendor_licence_notice.source_url: release notice URL
+vendor_licence_notice.source_sha256: notice file SHA-256
+licence_release_binding: selected release and source notice
+licence_release_binding.selected_release: selected release
+licence_release_binding.notice: source notice
+licence_release_binding.basis: release correspondence
+product_licence_gap: missing product licence evidence
+product_licence_gap.product: product
+product_licence_gap.reason: reason for missing evidence
+licence_scope: scope of licence evidence
+licence_scope.project-source: project source
+licence_scope.per-path-notices: terms vary by path
+licence_scope.notice-text: licence text in the notice
+release_correspondence: release correspondence
+release_correspondence.exact-scenario-release: exact scenario release
+release_correspondence.example-of-selected-series: example patch of selected series
+licence_gap_reason: reason for missing licence evidence
+licence_gap_reason.unknown-implementation: implementation unspecified
+licence_gap_reason.unknown-unverified-source: source notice unverified
+service_licence_notice: source notice for a service
+service_has_release: service has a selected release
+service_has_licence_notice: service has a matching source notice
+product_licence_gap_reason: reason for missing product evidence
+product_has_licence_gap: product has an identified evidence gap
+component_product_licence: component source licence
+component_licence_state: component licence evidence status

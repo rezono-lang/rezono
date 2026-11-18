@@ -1,0 +1,43 @@
+// A service selection and its vendor notice must refer to the same product.
+.decl service_licence_notice(service: symbol, product_id: symbol, notice: symbol, basis: symbol)
+service_licence_notice(s, p, n, b) :- service__product(s, p), runs(s, r), release__product(r, p),
+    licence_release_binding__selected_release(k, r), licence_release_binding__notice(k, n),
+    licence_release_binding__basis(k, b), vendor_licence_notice__product(n, p).
+
+// A reference release supplies information even when the service has no selected version.
+.decl service_has_release(service: symbol)
+service_has_release(s) :- runs(s, _).
+service_licence_notice(s, p, n, "reference-source-release") :- service__product(s, p),
+    !service_has_release(s), vendor_licence_notice__product(n, p).
+
+.decl component_product_licence(service: symbol, product_id: symbol, version: symbol, basis: symbol, scope: symbol, declaration: symbol, source_url: symbol, source_sha256: symbol)
+component_product_licence(s, p, v, b, scope, l, u, h) :- service_licence_notice(s, p, n, b),
+    vendor_licence_notice__version(n, v), vendor_licence_notice__scope(n, scope),
+    vendor_licence_notice__declaration(n, l), vendor_licence_notice__source_url(n, u),
+    vendor_licence_notice__source_sha256(n, h).
+.output component_product_licence
+
+.decl service_has_licence_notice(service: symbol)
+service_has_licence_notice(s) :- service_licence_notice(s, _, _, _).
+.decl product_licence_gap_reason(product_id: symbol, reason: symbol)
+product_licence_gap_reason(p, reason) :- product_licence_gap__product(g, p), product_licence_gap__reason(g, reason).
+.decl product_has_licence_gap(product_id: symbol)
+product_has_licence_gap(p) :- product_licence_gap_reason(p, _).
+.decl component_licence_state(service: symbol, product_id: symbol, state: symbol)
+component_licence_state(s, p, b) :- service_licence_notice(s, p, _, b).
+component_licence_state(s, p, "unknown-selected-release") :- service__product(s, p),
+    service_has_release(s), !service_has_licence_notice(s).
+component_licence_state(s, p, "unknown-no-reference") :- service__product(s, p),
+    !service_has_release(s), !service_has_licence_notice(s), !product_has_licence_gap(p).
+component_licence_state(s, p, reason) :- service__product(s, p), !service_has_licence_notice(s),
+    !service_has_release(s), product_licence_gap_reason(p, reason).
+.output component_licence_state
+
+// The catalogue reader can follow the release selection and the notice through public inventory rows.
+may_read("platform-catalogue", "product", p) :- product(p).
+may_read("platform-catalogue", "service", s) :- service(s).
+may_read("platform-catalogue", "release", r) :- release(r).
+may_read("platform-catalogue", "pin", k) :- pin(k).
+may_read("platform-catalogue", "vendor_licence_notice", n) :- vendor_licence_notice(n).
+may_read("platform-catalogue", "licence_release_binding", b) :- licence_release_binding(b).
+may_read("platform-catalogue", "product_licence_gap", g) :- product_licence_gap(g).

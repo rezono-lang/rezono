@@ -1,0 +1,22 @@
+{
+  "licence_release_binding__notice__reference": [
+    ["bind-keycloak-26", "keycloak-26.0.0"],
+    ["bind-postgresql-16", "postgresql-16.0"],
+    ["bind-postgresql-17", "postgresql-17.0"]
+  ],
+  "licence_release_binding__selected_release__reference": [
+    ["bind-keycloak-26", "keycloak-26"],
+    ["bind-postgresql-16", "postgresql-16"],
+    ["bind-postgresql-17", "postgresql-17"]
+  ],
+  "product_licence_gap__product__reference": [
+    ["app", "app"],
+    ["builder", "builder"],
+    ["client", "client"],
+    ["forgejo", "forgejo"],
+    ["loadbalancer", "loadbalancer"],
+    ["recovery-env", "recovery-env"],
+    ["registry", "registry"],
+    ["signer", "signer"]
+  ]
+}

@@ -1,0 +1,46 @@
+id: https://rezono.org/examples/platform-product-licence
+name: platform_product_licence
+imports: [linkml:types, core]
+default_range: string
+annotations:
+  layer: facts
+
+enums:
+  LicenceScope:
+    permissible_values:
+      project-source:
+      per-path-notices:
+      notice-text:
+  ReleaseCorrespondence:
+    permissible_values:
+      exact-scenario-release:
+      example-of-selected-series:
+  LicenceGapReason:
+    permissible_values:
+      unknown-implementation:
+      unknown-unverified-source:
+
+classes:
+  VendorLicenceNotice:
+    description: An observed licence declaration in one named source release.
+    attributes:
+      id: {identifier: true}
+      product: {range: Product, required: true}
+      version: {required: true}
+      scope: {range: LicenceScope, required: true}
+      declaration: {required: true}
+      source_url: {required: true, pattern: "^https://[^ ]+$"}
+      source_sha256: {required: true, pattern: "^[0-9a-f]{64}$"}
+  LicenceReleaseBinding:
+    description: The scenario's correspondence between an internal release and a vendor source release.
+    attributes:
+      id: {identifier: true}
+      selected_release: {range: Release, required: true}
+      notice: {range: VendorLicenceNotice, required: true}
+      basis: {range: ReleaseCorrespondence, required: true}
+  ProductLicenceGap:
+    description: Why the catalogue currently lacks an observed licence for this product.
+    attributes:
+      id: {identifier: true}
+      product: {range: Product, required: true}
+      reason: {range: LicenceGapReason, required: true}

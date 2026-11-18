@@ -1,0 +1,8 @@
+records:
+  - of: {kind: vendor_licence_notice, id: argocd-3.0.0}
+    kind: tool
+    name: Release notice inspection
+    revision: "3.0.0"
+    position: "L2 (first nonempty line, including its original terminator)"
+    url: https://raw.githubusercontent.com/argoproj/argo-cd/v3.0.0/LICENSE
+    fragment_sha256: "0de3c4af0f678b866d34d71a3c0ba36b3d2cb521239b51fc57a8089d616f5857"

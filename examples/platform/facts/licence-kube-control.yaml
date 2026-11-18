@@ -1,0 +1,8 @@
+vendor_licence_notice:
+  - id: kube-control-1.32.13
+    product: kube-control
+    version: 1.32.13
+    scope: project-source
+    declaration: Apache-2.0
+    source_url: 'https://raw.githubusercontent.com/kubernetes/kubernetes/v1.32.13/LICENSE'
+    source_sha256: cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30

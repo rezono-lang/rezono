@@ -23,6 +23,12 @@ kinds:
   shape: rect
 - kind: artifact
   shape: rect
+- kind: vendor_licence_notice
+  shape: rect
+- kind: licence_release_binding
+  shape: rect
+- kind: product_licence_gap
+  shape: rect
 arrows:
 - arrow: platform_role.zone
   dash: none
@@ -55,4 +61,12 @@ arrows:
 - arrow: artifact.for_service
   dash: none
 - arrow: artifact.built_by
+  dash: none
+- arrow: vendor_licence_notice.product
+  dash: none
+- arrow: licence_release_binding.selected_release
+  dash: none
+- arrow: licence_release_binding.notice
+  dash: none
+- arrow: product_licence_gap.product
   dash: none
