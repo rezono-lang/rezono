@@ -1,11 +1,15 @@
 """Compare each compiled Feldera pipeline with the independent batch run at every example fact state."""
 
 import json
+import os
+import tempfile
 from collections import Counter
+from pathlib import Path
 
 import pytest
 
 from feldera import URL, comparing, deploy, processed, push, query, read_relation, stop
+from feldera_file_input import FileInputs
 from rezono_compiler import facts, rules_split, rules_sql, scenarios
 from rules_support import RULED, name, states
 from support import compile_dir
@@ -61,8 +65,20 @@ def check_views(pipeline, prog, part, state, checks, refused):
             assert got == want, (state.label, rel)
 
 
+@pytest.fixture
+def oracle_input_dir():
+    shared = os.environ.get("FELDERA_ORACLE_INPUT_DIR")
+    if shared is None:
+        yield None
+        return
+    with tempfile.TemporaryDirectory(dir=shared) as directory:
+        path = Path(directory)
+        path.chmod(0o755)
+        yield path
+
+
 @pytest.mark.parametrize("example", RULED, ids=name)
-def test_incremental_on_feldera_equals_batch(example, tmp_path):
+def test_incremental_on_feldera_equals_batch(example, tmp_path, oracle_input_dir):
     files = compile_dir(example, tmp_path)
     model, prog, run = states(example)
     plan = json.loads(files["engine/pipelines.json"])
@@ -76,12 +92,18 @@ def test_incremental_on_feldera_equals_batch(example, tmp_path):
     # Replay all states of one producer before its consumers. Only Feldera's output crosses boundaries,
     # and only one running pipeline needs to fit on the runner at a time.
     forwarded = [{} for _ in inputs]
-    for part in parts:
+    for index, part in enumerate(parts):
         pipeline = f"rezono-rules-{example.name}-{part['name']}"
         sql = "\n".join(files[path] for path in part["sql"])
         if part["exports"]:
             # The production export is a stream. Materialize its rows for snapshot queries after the barrier.
             sql += f'\nCREATE MATERIALIZED VIEW "oracle_export_snapshot" AS SELECT * FROM "{plan["export_view"]}";'
+        feeds = None
+        if oracle_input_dir is not None:
+            tables = {t for t in part["tables"] if any(delta.get(t) for _, delta in inputs)}
+            tables.update(t for t in part["imports"] if any(relay[t] for relay in forwarded))
+            feeds = FileInputs(oracle_input_dir / str(index), tables)
+            sql = feeds.connect(sql)
         deploy(pipeline, sql, profile="unoptimized", workers=2)
         try:
             previous = {}
@@ -89,7 +111,10 @@ def test_incremental_on_feldera_equals_batch(example, tmp_path):
                 assert label == state.label
                 delta = {t: facts_delta[t] for t in part["tables"] if t in facts_delta}
                 delta.update({t: relay[t] for t in part["imports"]})
-                processed(pipeline, push(pipeline, delta))
+                if feeds is None:
+                    processed(pipeline, push(pipeline, delta))
+                else:
+                    feeds.send(pipeline, delta)
                 check_views(pipeline, prog, part, state, checks, refused)
                 if part["exports"]:
                     current = export_rows(pipeline, prog, part["exports"])
