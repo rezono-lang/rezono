@@ -11,7 +11,7 @@ import pytest
 import yaml
 
 from rezono_canon import canonical_json
-from rezono_compiler import pack, source_writer as sw, sources, writer
+from rezono_compiler import facts, pack, source_writer as sw, sources, writer
 from test_sources import DEFAULT, fixture  # noqa: F401 (a pytest fixture)
 
 DATA, COMPANION = "facts/data.yaml", "facts/data.sources.yaml"
@@ -93,6 +93,35 @@ def test_facts_and_companion_change_together_and_the_undo_gives_both_back(checke
     assert files(checked_out) == before  # the comment, the selectors and the CRLF of the companion too
     again, _ = writer.apply_delta(checked_out, redo, undo=True)
     assert again == texts
+
+
+@pytest.mark.parametrize("nl,header,footer", [
+    ("\n", "", ""), ("\r\n", "# input\r\n", "\r\n# end\r\n"),
+])
+def test_delete_last_record_leaves_a_readable_empty_document(checked_out, nl, header, footer):
+    path = checked_out / DATA
+    row = "alpha:" + nl + "  - {id: a, title: Alpha, size: 1}" + nl
+    path.write_bytes((header + row + footer).encode())
+    model = pack.read(checked_out)
+    assert facts.load(model, path)["alpha"] == [("a",)]
+    original = files(checked_out)
+
+    removed, undo = writer.apply_delta(checked_out, delta({"op": "delete"}))
+    writer.write_files(checked_out, removed)
+    assert facts.load(model, path) == {} and read(checked_out) == []
+    assert path.read_bytes() == (header + "{}" + nl + footer).encode()
+    assert removed[COMPANION] == HEAD
+    empty = files(checked_out)
+
+    insert = delta({"op": "insert", "file": DATA, "key": "b", "values": {"title": "Beta", "size": 2}})
+    added, remove = writer.apply_delta(checked_out, insert, origins={0: {"sources": [DECISION]}})
+    writer.write_files(checked_out, added)
+    assert facts.load(model, path)["alpha"] == [("b",)] and read(checked_out) == sources.collected(BETA)
+    assert added[DATA].startswith(header + "alpha:" + nl) and added[DATA].endswith(nl + footer)
+    writer.write_files(checked_out, writer.apply_delta(checked_out, remove, undo=True)[0])
+    assert files(checked_out) == empty
+    writer.write_files(checked_out, writer.apply_delta(checked_out, undo, undo=True)[0])
+    assert files(checked_out) == original
 
 
 def test_a_second_delta_on_a_companion_that_kept_its_form(checked_out):
