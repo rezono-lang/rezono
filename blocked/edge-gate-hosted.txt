@@ -1,0 +1,1 @@
+edge/gate: hosted identity, visitor access, and proposal or live-supposition writes are separate from the in-process local reader.

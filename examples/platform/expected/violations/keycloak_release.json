@@ -1,5 +1,5 @@
 {
-  "product_release_announcement__product__reference": [
-    ["keycloak-26.0.0", "keycloak"]
+  "product_release_reference__product__reference": [
+    ["keycloak-26.0.0-register", "keycloak"]
   ]
 }

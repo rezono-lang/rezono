@@ -4,6 +4,15 @@ import { key, printKey, type KeyDecl } from './module-key.ts';
 import { printMetadata, readMetadataLine, type Metadata } from './module-metadata.ts';
 import { pathEquation, printPathEquation, type PathEquationDecl } from './module-path-equation.ts';
 import { printSlot, readSlot, type SlotDecl } from './module-slot.ts';
+import { printExpr } from './print-expression.ts';
+import type { Expr } from './tree.ts';
+
+interface ConditionalCheckDecl extends Pick<Metadata, 'description'> {
+	check: 'require';
+	name: string;
+	when: Expr;
+	then: Expr;
+}
 
 export interface KindDecl extends Metadata {
 	kind: string;
@@ -17,10 +26,20 @@ export interface KindDecl extends Metadata {
 	slots: SlotDecl[];
 	derived: DerivedDecl[];
 	keys?: KeyDecl[];
+	checks?: ConditionalCheckDecl[];
 }
 export interface ExtendDecl {
 	extend: string;
 	derived: DerivedDecl[];
+}
+
+function readConditionalCheck(line: Logical, build: Build): ConditionalCheckDecl {
+	const decl = build.strip<ConditionalCheckDecl>(line.read!);
+	for (const child of line.block) {
+		if (child.read!.line === 'description') readMetadataLine(decl, child, build);
+		else build.refuse(child, '`description`');
+	}
+	return decl;
 }
 
 function readKind(line: Logical, build: Build): KindDecl {
@@ -35,11 +54,12 @@ function readKind(line: Logical, build: Build): KindDecl {
 			continue;
 		}
 		if (member.line === 'derived') decl.derived.push(readDerived(child, build));
+		else if (member.line === 'conditionalCheck') (decl.checks ??= []).push(readConditionalCheck(child, build));
 		else if (member.line === 'key') {
 			build.leaf(child);
 			(decl.keys ??= []).push(build.strip<KeyDecl>(member));
 		}
-		else if (!['applies', 'sealed', 'slot'].includes(member.line)) build.refuse(child, '`applies`, `sealed`, a slot, `derived`, `unique` or `equal`');
+		else if (!['applies', 'sealed', 'slot'].includes(member.line)) build.refuse(child, '`applies`, `sealed`, a slot, `derived`, `unique`, `equal` or `require`');
 		// A second applies or sealed line would replace the first unseen (v0 section 5a).
 		else if (member.line === 'sealed' ? decl.sealed !== undefined : member.line === 'applies' && decl.applies) build.refuse(child, `one \`${member.line}\``);
 		else if (member.line === 'slot') {
@@ -74,17 +94,22 @@ function printKind(d: KindDecl): string[] {
 		...d.slots.flatMap(printSlot),
 		...(d.equations ?? []).map(printPathEquation),
 		...d.derived.flatMap(printDerived),
-		...(d.keys ?? []).map(printKey)
+		...(d.keys ?? []).map(printKey),
+		...(d.checks ?? []).flatMap(check => block(
+			`${check.check} ${check.name} when ${printExpr(check.when)} then ${printExpr(check.then)}`,
+			printMetadata(check)
+		))
 	]);
 }
 
 export const kind = {
-	lineRules: ['KindLine', 'ExtendLine', 'AppliesLine', 'SealedLine', ...key.lineRules, ...pathEquation.lineRules],
+	lineRules: ['KindLine', 'ExtendLine', 'AppliesLine', 'SealedLine', 'ConditionalCheckLine', ...key.lineRules, ...pathEquation.lineRules],
 	grammar: String.raw`
   KindLine = (kw<"embedded"> | kw<"abstract">)? kw<"kind"> typeName (is typeName)? World?
   ExtendLine = kw<"extend"> typeName
   AppliesLine = kw<"applies"> (at | during | in) ":" name
   SealedLine = kw<"sealed"> at ":" name
+  ConditionalCheckLine = kw<"require"> name kw<"when"> Expr kw<"then"> Expr
   ${key.grammar}
   ${pathEquation.grammar}`,
 	actions: {
@@ -100,6 +125,9 @@ export const kind = {
 		ExtendLine: (_k, t) => named(t, { line: 'extend', extend: t.sourceString }),
 		AppliesLine: (_k, axis, _c, n) => named(n, { line: 'applies', axis: axis.sourceString, slot: n.sourceString }),
 		SealedLine: (_k, _at, _c, n) => ({ line: 'sealed', slot: n.sourceString }),
+		ConditionalCheckLine: (_require, name, _when, when, _then, then) => named(name, {
+			line: 'conditionalCheck', check: 'require', name: name.sourceString, when: when.tree(), then: then.tree()
+		}),
 		...key.actions,
 		...pathEquation.actions
 	},

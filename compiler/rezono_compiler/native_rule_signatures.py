@@ -305,12 +305,23 @@ def read_clause(schema: Schema, source: Source, at: str, decl: dict, signatures:
             calls[pointer] = target
             arguments.extend((arg, t, f"{pointer}/call/1/{i}", False)
                              for i, (arg, t) in enumerate(zip(terms, expected, strict=True)))
-        if "in" in node and "kind" in node["in"][1]:
-            target, _ = schema.type(source, node["in"][1]["kind"], f"{pointer}/in/1")
-            if target not in schema.classes:
-                raise Refusal("R003", f"{target!r} is not a kind for membership", f"{pointer}/in/1")
-            memberships[pointer] = target
-            arguments.append((node["in"][0], target, f"{pointer}/in/0", False))
+        if "in" not in node:
+            continue
+        subject, domain = node["in"]
+        kind, slot = domain.get("dot", (domain, None))
+        if "kind" not in kind:
+            continue
+        domain_at = f"{pointer}/in/1"
+        target, _ = schema.type(source, kind["kind"], domain_at)
+        if target not in schema.classes:
+            raise Refusal("R003", f"{target!r} is not a kind for membership", domain_at)
+        value = target
+        if slot is not None:
+            (table, value), _ = schema.slot(target, slot, domain_at)
+            if table is not None:
+                continue  # Only identifier projection is backed by the kind's membership relation.
+        memberships[pointer] = target
+        arguments.append((subject, value, f"{pointer}/in/0", False))
 
     def value_type(node: dict, pointer: str) -> str | None:
         if "neg" in node:

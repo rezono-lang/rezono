@@ -97,12 +97,6 @@ def rule_program(artifacts):
     return document, origins
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=(pack.CompileError, AssertionError),
-    reason="Link native and legacy modules through ordinary pack compilation. Read docs/rezono/native-rule-pack-link.md. "
-    "Waits for the native rule signature linker and the native rule IR entry point.",
-)
 def test_native_rule_pack_link(tmp_path):
     legacy, _, _ = compile_fixture(tmp_path / "legacy", mixed=False)
     expected, _ = rule_program(compile_pack(legacy))
