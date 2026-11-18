@@ -68,6 +68,53 @@ def test_a_named_proof_is_kept_and_a_pack_without_reader_questions_has_none(fixt
     assert "reader_questions" not in bundle(plain)
 
 
+def test_acceptance_questions_stay_separate_from_published_proofs(fixture):
+    reader(fixture, SIZED)
+    before = emit.compile_pack(pack.read(fixture))
+    file = fixture / "questions.yaml"
+    document = yaml.safe_load(file.read_text(encoding="utf-8"))
+    pointer = "proof_cases/test_records.py::test_record_origin"
+    first = {"id": SIZED["id"], "question": "How big is the item?",
+             "tests": [pointer, "acceptance/test_views.py::test_size"]}
+    second = {"id": "where-from", "question": "Which record supplies the item?", "tests": [pointer]}
+
+    def write(doc):
+        file.write_text(yaml.safe_dump(doc, sort_keys=False), encoding="utf-8")
+
+    inventory = [first, second]
+    write(document | {"acceptance": inventory})
+    model = pack.read(fixture)
+    assert model.acceptance_questions == inventory
+    assert emit.compile_pack(model) == before
+    assert not (fixture / "proof_cases/test_records.py").exists()
+
+    acceptance_only = {"format": "rezono.questions/1", "acceptance": inventory}
+    write(acceptance_only)
+    model = pack.read(fixture)
+    assert model.acceptance_questions == inventory
+    assert not model.reader_questions
+    assert [question["term"] for question in model.questions][:3] == ["grounds", "reach", "gap"]
+
+    invalid = [
+        (None, "each a list"),
+        ([first, first], "id how-big is used twice"),
+        ([first | {"relation": "sized"}], "needs exactly id, question and tests"),
+        ([{"id": first["id"], "tests": first["tests"]}], "needs exactly id, question and tests"),
+        ([first | {"id": "HowBig"}], "must be kebab case"),
+        ([first | {"question": " \n"}], "must be nonblank text"),
+        ([first | {"tests": []}], "at least one test pointer"),
+        ([first | {"tests": pointer}], "at least one test pointer"),
+    ]
+    for unsafe in ("../test_rows.py::test_records", "/test_rows.py::test_records", "./test_rows.py::test_records",
+                   "proof_cases//test_rows.py::test_records", "C:/test_rows.py::test_records",
+                   "proof_cases\\test_rows.py::test_records", pointer + "[variant]", "test_rows.py", 42):
+        invalid.append(([first | {"tests": [unsafe]}], "relative Python test pointer"))
+    for entries, message in invalid:
+        write(acceptance_only | {"acceptance": entries})
+        with pytest.raises(pack.CompileError, match=message):
+            pack.read(fixture)
+
+
 def test_removing_the_relation_a_reader_question_names_fails_compilation(fixture):
     reader(fixture, SIZED)
     pack.read(fixture)
