@@ -5,7 +5,6 @@ import pytest
 from offline_cases import implementation, FIXTURE, SOURCE
 
 
-@pytest.mark.xfail(strict=True, reason="Read decisions/run-offline-acceptance.md. Implement run/price_capture.py.")
 def test_price_capture():
     read = implementation("price_capture.py", "hourly_micros")
     raw = (FIXTURE / "public-price-response.json").read_bytes()
