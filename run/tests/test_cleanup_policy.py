@@ -9,4 +9,5 @@ def test_cleanup_policy():
              "sweep__coverage": [("clear", "complete"), ("occupied", "complete")],
              "resource__sweep": [("a", "clear"), ("b", "occupied"), ("c", "occupied")],
              "resource__plan_hash": [("a", "b" * 64), ("b", PLAN_HASH)]}
-    assert relation("cleanup", facts, "cleaned") == {("clear",)}
+    # Historical rows remain readable. None records a dispatch or page response.
+    assert relation("cleanup", facts, "cleaned") == set()

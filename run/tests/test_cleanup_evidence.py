@@ -2,7 +2,7 @@
 
 import pytest
 
-from offline_cases import PLAN_HASH, relation
+from offline_cases import PLAN_HASH, implementation, relation
 
 
 def observations():
@@ -78,3 +78,24 @@ def test_matching_resource_on_last_page():
     assert relation("cleanup", facts, "cleaned") == set()
     facts["resource__plan_hash"] = [("item", "b" * 64)]
     assert relation("cleanup", facts, "cleaned") == {("scan",)}
+
+
+def test_raw_page_evidence():
+    capture = implementation("inventory_chain.py", "page_facts")
+    root = dict(sweep_id="scan", page_id="first", next_page_id="last",
+                resources=[dict(id="unrelated", plan_hash=None)])
+    tail = dict(sweep_id="scan", page_id="last", next_page_id=None, resources=[])
+    foreign = dict(tail, sweep_id="another", resources=[dict(id="machine", plan_hash=PLAN_HASH)])
+    events = {key: rows for key, rows in observations().items()
+              if key.startswith(("sweep__", "attempt")) and key != "sweep__coverage"}
+
+    def cleanup(pages):
+        return relation("cleanup", events | capture(pages, "scan", "first"), "cleanup_evidence")
+
+    pages = capture([tail, foreign, root], "scan", "first")
+    terminal = next(row for row, token in pages["page__token"] if token == "last")
+    assert cleanup([tail, foreign, root]) == {("scan", "receipt", terminal)}
+    assert cleanup([foreign, root]) == set()
+    assert cleanup([root, tail, tail]) == set()
+    assert cleanup([root, dict(tail, resources=[dict(id="unrelated", plan_hash=PLAN_HASH)])]) == set()
+    assert cleanup([]) == set()
