@@ -1,0 +1,16 @@
+id: https://rezono.org/examples/platform-core/cluster-worker-network
+name: platform_cluster_worker_network
+description: Declared worker nodes and their attached endpoints.
+in_language: en
+imports: [linkml:types, placement, cluster_placement]
+default_range: string
+annotations:
+  layer: facts
+
+classes:
+  ClusterWorkerNode:
+    description: A named node assigned to one cluster and one of its worker endpoints.
+    attributes:
+      id: {identifier: true}
+      owner: {range: Cluster, required: true}
+      endpoint: {range: ClusterOwnedEndpoint, required: true}

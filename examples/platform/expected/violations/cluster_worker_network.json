@@ -1,0 +1,24 @@
+{
+  "cluster_worker_node__endpoint__reference": [
+    ["node-base", "workers-base"],
+    ["node-build", "workers-build"],
+    ["node-development", "workers-development"],
+    ["node-edge", "workers-edge"],
+    ["node-hub", "workers-hub"],
+    ["node-management", "workers-management"],
+    ["node-production", "workers-production"],
+    ["node-recovery", "workers-recovery"],
+    ["node-virtualization", "workers-virtualization"]
+  ],
+  "cluster_worker_node__owner__reference": [
+    ["node-base", "base"],
+    ["node-build", "build"],
+    ["node-development", "development"],
+    ["node-edge", "edge"],
+    ["node-hub", "hub"],
+    ["node-management", "management"],
+    ["node-production", "production"],
+    ["node-recovery", "recovery"],
+    ["node-virtualization", "virtualization"]
+  ]
+}
