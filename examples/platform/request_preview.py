@@ -108,7 +108,11 @@ def catalog_rows(catalog):
         rows["tenant_zone_link"].append({
             "id": f"{source}/{target}/{port}", "source": source, "target": target, "port": port,
         })
-    rows["tenant_landed_delivery"] = landed_deliveries(catalog.get("landedDeliveries", []))
+    inventory_present = "landedDeliveries" in catalog
+    rows["tenant_landed_delivery"] = landed_deliveries(catalog["landedDeliveries"]) if inventory_present else []
+    rows["tenant_landed_inventory"] = [{
+        "id": "landed-deliveries", "state": "complete" if inventory_present else "unknown",
+    }]
     add_review_inputs(rows, catalog)
     rows["tenant_quota"] = readable_quotas(catalog)
     return rows
