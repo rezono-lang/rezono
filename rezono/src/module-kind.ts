@@ -1,5 +1,6 @@
 import { block, declaration, named, opt, printWorld, type Build, type Line, type Logical, type World, type ModuleComponent } from './module-support.ts';
 import { printDerived, readDerived, type DerivedDecl } from './module-derived.ts';
+import { pathEquation, printPathEquation, type PathEquationDecl } from './module-path-equation.ts';
 import { printSlot, type SlotDecl } from './module-slot.ts';
 
 export interface KindDecl {
@@ -9,6 +10,7 @@ export interface KindDecl {
 	world?: World;
 	applies?: { axis: 'at' | 'during' | 'in'; slot: string };
 	sealed?: string;
+	equations?: PathEquationDecl[];
 	slots: SlotDecl[];
 	derived: DerivedDecl[];
 }
@@ -22,8 +24,13 @@ function readKind(line: Logical, build: Build): KindDecl {
 	build.spans.set(decl, build.spans.get(line.read!)!);
 	for (const child of line.block) {
 		const member = child.read!;
+		if (member.line === 'pathEquation') {
+			build.leaf(child);
+			(decl.equations ??= []).push(build.strip<PathEquationDecl>(member));
+			continue;
+		}
 		if (member.line === 'derived') decl.derived.push(readDerived(child, build));
-		else if (!['applies', 'sealed', 'slot'].includes(member.line)) build.refuse(child, '`applies`, `sealed`, a slot or `derived`');
+		else if (!['applies', 'sealed', 'slot'].includes(member.line)) build.refuse(child, '`applies`, `sealed`, a slot, `derived` or `equal`');
 		// A second applies or sealed line would replace the first unseen (v0 section 5a).
 		else if (member.line === 'sealed' ? decl.sealed !== undefined : member.line === 'applies' && decl.applies) build.refuse(child, `one \`${member.line}\``);
 		else {
@@ -54,19 +61,21 @@ function printKind(d: KindDecl): string[] {
 		...(d.applies ? [`applies ${d.applies.axis}: ${d.applies.slot}`] : []),
 		...(d.sealed !== undefined ? [`sealed at: ${d.sealed}`] : []),
 		...d.slots.map(printSlot),
+		...(d.equations ?? []).map(printPathEquation),
 		...d.derived.flatMap(printDerived)
 	]);
 }
 
 export const kind = {
-	lineRules: ['KindLine', 'ExtendLine', 'AppliesLine', 'SealedLine'],
+	lineRules: ['KindLine', 'ExtendLine', 'AppliesLine', 'SealedLine', ...pathEquation.lineRules],
 	grammar: String.raw`
   KindLine = (kw<"embedded"> | kw<"abstract">)? kw<"kind"> typeName World?
   ExtendLine = kw<"extend"> typeName
   AppliesLine = kw<"applies"> (at | during | in) ":" name
   SealedLine = kw<"sealed"> at ":" name
-  `,
+  ${pathEquation.grammar}`,
 	actions: {
+		...pathEquation.actions,
 		KindLine(modifier, _k, t, world) {
 			const decl: Line = { line: 'kind', kind: t.sourceString };
 			const kindModifier = opt(modifier);
