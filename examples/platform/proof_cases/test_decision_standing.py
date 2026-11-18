@@ -48,8 +48,6 @@ def test_standard_decision_distinguishes_expiry_from_withdrawal():
     assert not {("timeboxed","edge"),("earlier","edge"),("exclusion","after")} & state.derived["in_force_on"]
 
 
-@pytest.mark.xfail(strict=True, raises=MissingPlatformRule,
-                   reason="Import std-decision and add dated grounds, placement and exclusion findings to examples/platform/schema and rules. Read decisions/platform-decision-standing.md.")
 def test_platform_recalculates_and_retains_conflicting_placements():
     model = pack.read(ROOT)
     program = rules.load(model.rules)

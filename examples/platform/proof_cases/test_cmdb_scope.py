@@ -36,8 +36,6 @@ def test_fixture_matches_real_domain_placements_without_a_cmdb():
         "cluster_service_placement", ("idp","base"), state=(model,baseline))
 
 
-@pytest.mark.xfail(strict=True, raises=MissingReferenceImport,
-                   reason="Add the mapped CMDB reference intake, separate reference schema and scoped drift rules under examples/platform. Read decisions/platform-cmdb-scope.md.")
 def test_mapped_cmdb_scope_does_not_write_domain_placements(tmp_path):
     # The only inbound data is a source-system JSON export. The test never writes normalized reference rows.
     cli = ROOT / "portal" / "import_cmdb.py"

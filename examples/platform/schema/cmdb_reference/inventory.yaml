@@ -1,0 +1,27 @@
+id: https://rezono.org/examples/platform-core/cmdb-reference
+name: platform_cmdb_reference
+description: External inventory evidence kept apart from authoritative platform placement.
+in_language: en
+imports: [linkml:types]
+default_range: string
+annotations:
+  layer: facts
+
+classes:
+  CmdbExport:
+    description: A named export, even if it supplies no observations or declarations.
+    attributes:
+      id: {identifier: true}
+  CmdbObservation:
+    description: One service placement reported in an external inventory export.
+    attributes:
+      id: {identifier: true}
+      export: {range: CmdbExport, required: true}
+      service: {required: true}
+      cluster: {required: true}
+  CmdbScope:
+    description: Explicit completeness for one service in one external inventory export.
+    attributes:
+      id: {identifier: true}
+      export: {range: CmdbExport, required: true}
+      service: {required: true}

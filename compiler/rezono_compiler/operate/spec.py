@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 import re
+from functools import lru_cache
 from pathlib import Path
 
 import yaml
+
+from ..pack import contract_dir
 
 
 FORMAT = "rezono.operations/1"
@@ -27,10 +30,20 @@ class OperationError(Exception):
     pass
 
 
+@lru_cache(maxsize=1)
+def _operation_set_fields() -> frozenset[str]:
+    contract = yaml.safe_load((contract_dir() / "operation.yaml").read_text(encoding="utf-8"))
+    return frozenset(contract["classes"]["OperationSet"]["attributes"])
+
+
 def load(path: str | Path) -> dict:
     doc = yaml.safe_load(Path(path).read_text(encoding="utf-8"))
     if not isinstance(doc, dict) or doc.get("format") != FORMAT:
         raise OperationError(f"{path}: not an operation set ({FORMAT})")
+    fields = _operation_set_fields()
+    unknown = [f"{path}: unknown operation set field {field!r}" for field in doc if field not in fields]
+    if unknown:
+        raise OperationError("\n".join(unknown))
     ops = doc.get("operations")
     if not isinstance(ops, list) or not ops:
         raise OperationError(f"{path}: no operations")

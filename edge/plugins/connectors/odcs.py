@@ -192,6 +192,23 @@ def _bound_rule(schema: dict, table: str, column: str, slot: dict, t: dict):
     return _rule("bounds", "conformity", query=_count(table, " OR ".join(broken)))
 
 
+def _quality_pattern(pattern: str) -> str:
+    """Keep the reader's Unicode word class in DuckDB's whole-text match."""
+    word = r"\p{L}\p{N}_"
+
+    def translate(token: re.Match[str]) -> str:
+        if token[0] == r"\w":
+            return f"[{word}]"
+        if token[0].startswith("["):
+            return re.sub(r"\\.", lambda escape: word if escape[0] == r"\w" else escape[0],
+                          token[0], flags=re.DOTALL)
+        return token[0]
+
+    # Read escapes and bracket expressions as units so escaped literals stay literal.
+    translated = re.sub(r"\\.|\[\^?\]?(?:\\.|[^\\\]])*\]", translate, pattern, flags=re.DOTALL)
+    return f"^(?:{translated})$"
+
+
 def _value_rules(schema: dict, table: str, column: str, slot: dict) -> list:
     """What the type of a value or member column adds that its storage does not say."""
     if "ref" in slot:
@@ -202,7 +219,7 @@ def _value_rules(schema: dict, table: str, column: str, slot: dict) -> list:
     rules = []
     if t["of"] == "Text" and "pattern" in t:  # the reader matches the whole text
         rules.append(_rule("pattern", "conformity", metric="invalidValues",
-                           arguments={"pattern": f"^(?:{t['pattern']})$"}))
+                           arguments={"pattern": _quality_pattern(t["pattern"])}))
     elif t["of"] == "Enum":
         enum = schema["enums"][t["enum"]]
         if isinstance(enum, list):  # closed; an open enum may gain values, so its members are not a rule

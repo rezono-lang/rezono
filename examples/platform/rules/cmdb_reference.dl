@@ -1,0 +1,24 @@
+// An export supplies reference evidence only. Scope belongs to that same export.
+.decl cmdb_reported(export: symbol, service: symbol, cluster: symbol)
+cmdb_reported(e, s, c) :- cmdb_observation__export(o, e), cmdb_observation__service(o, s),
+    cmdb_observation__cluster(o, c).
+
+.decl cmdb_covered(export: symbol, service: symbol)
+cmdb_covered(e, s) :- cmdb_scope__export(k, e), cmdb_scope__service(k, s).
+
+.decl cmdb_has_report(export: symbol, service: symbol)
+cmdb_has_report(e, s) :- cmdb_reported(e, s, _).
+
+.decl cmdb_mismatch(export: symbol, service: symbol, expected: symbol, reported: symbol)
+cmdb_mismatch(e, s, c, r) :- cluster_service_placement(s, c), cmdb_reported(e, s, r), c != r.
+
+.decl cmdb_missing(export: symbol, service: symbol)
+cmdb_missing(e, s) :- cluster_service_placement(s, _), cmdb_covered(e, s), !cmdb_has_report(e, s).
+
+.decl cmdb_unknown(export: symbol, service: symbol)
+cmdb_unknown(e, s) :- cmdb_export(e), cluster_service_placement(s, _),
+    !cmdb_covered(e, s), !cmdb_has_report(e, s).
+
+.output cmdb_mismatch
+.output cmdb_missing
+.output cmdb_unknown

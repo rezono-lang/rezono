@@ -1,0 +1,21 @@
+.decl managed_backup_restored(backup: symbol, trial: symbol)
+managed_backup_restored(backup, trial) :-
+    backup_trial__backup(trial, backup),
+    backup_trial__run(trial, run),
+    backup_trial__cluster(trial, recovery),
+    backup_readback__trial(readback, trial),
+    backup_readback__backup(readback, backup),
+    backup_readback__run(readback, run),
+    backup_readback__cluster(readback, recovery),
+    backup_readback__source_evidence(readback, capture),
+    backup_readback__payload_sha256(readback, digest),
+    backup_capture__backup(capture, backup),
+    backup_capture__run(capture, run),
+    backup_capture__source_cluster(capture, source),
+    backup_capture__payload_sha256(capture, digest),
+    source != recovery,
+    readback != capture,
+    readback != trial,
+    capture != trial.
+
+.output managed_backup_restored
