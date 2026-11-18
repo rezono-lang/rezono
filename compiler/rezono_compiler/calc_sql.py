@@ -6,7 +6,7 @@ column is NOT NULL: a missing input becomes an explicit state, never NULL (forma
 
 Arithmetic goes through a few pure functions with the same names in both dialects: SQL macros on
 128-bit integers in DuckDB, a Rust UDF (udf/) in Feldera. A result denominator of 0 marks overflow
-or division by zero: an overflow is `unknown` (W8: the value exists, Rezono cannot hold it), a division
+or division by zero: an overflow is `unknown` (the value exists, Rezono cannot hold it), a division
 by zero `invalid`. The body of the SQL is the same text for both dialects.
 
 Each expression node becomes columns of one rule-version view. Nodes are computed per height, in
@@ -40,8 +40,8 @@ POW_BITS = 6  # exponents below 2**6 are multiplied out; a larger one overflows 
 
 
 def beyond(op: str) -> str:
-    """W8: the reason of a step beyond the bound, naming the bound and the operator."""
-    return f"beyond the bound of W8 in {op}"
+    """Name the numeric bound and the operator that exceeded it."""
+    return f"beyond the exact-number bound (2^63 - 1) in {op}"
 
 
 def big(i: int) -> str:
