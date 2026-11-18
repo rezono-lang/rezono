@@ -77,9 +77,6 @@ def ordinary_check(state):
                        derived={"outgoing", *INVARIANTS})
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError,
-                   reason="Verify independent certificates in checker/rezono_checker/transition.py. "
-                          "Read decisions/safe-step-rounds.md. Reapply deltas and verify the full invariant inventory.")
 def test_transition_certificate():
     base = snapshot("base", OLD)
     variant = snapshot("variant", NEW)
