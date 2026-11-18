@@ -5,7 +5,7 @@ import pytest
 from loop_oracle import evaluate
 
 
-@pytest.mark.xfail(strict=True, reason="Read decisions/loop-design.md. Implement packs/std-loop/rules/known.dl. Match desired values to the latest unambiguous known observation in the active run.")
+@pytest.mark.xfail(strict=True, reason="Read decisions/loop-design.md. Implement packs/std-loop/rules/known.dl. The oracle declares observed.event as text, but Datalog ordering comparisons and max require integers. Selecting the latest observation needs a typed event-time input or an explicit order relation.")
 def test_known_evidence():
     columns = {
         "active": "run",
