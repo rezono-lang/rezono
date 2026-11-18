@@ -397,7 +397,7 @@ def lower(pack_dir: Path, d: Declared, form: dict, pack: str, owners: dict[str, 
                     continue
             lowered_kind = rezono_kind.lower(
                 decl, at, own, owners, declared_names, uses, refuse,
-                explicit_identifiers=form["format"] == IDENTIFIER_FORMAT,
+                extended_format=form["format"] == IDENTIFIER_FORMAT,
             )
             if lowered_kind is not None:
                 if keys:
@@ -454,5 +454,6 @@ def class_slot_order(pack_dir: Path, rel: str) -> dict[str, list[str]]:
     meta = yaml.safe_load((pack_dir / "pack.yaml").read_text(encoding="utf-8")) or {}
     d = next(d for d in declared(meta, pack_dir, []) if d.module == rel)
     form = effective_form(pack_dir, d, []) or {"module": {"decls": []}}
-    return {decl["kind"]: ["id", *(s["slot"] for s in decl.get("slots") or [])]
+    return {decl["kind"]: ([] if decl.get("embedded") is True else ["id"])
+            + [s["slot"] for s in decl.get("slots") or []]
             for decl in form["module"]["decls"] if isinstance(decl, dict) and "kind" in decl}
