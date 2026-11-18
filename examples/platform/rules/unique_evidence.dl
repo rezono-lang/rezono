@@ -1,6 +1,9 @@
+.decl unique_evidence_explicit_choice(service: symbol, function: symbol)
+unique_evidence_explicit_choice(s, f) :- choice__service(c, s), choice__function(c, f).
+
 // For an implicit provider, retain each demand and offer that supports the flow.
 .decl unique_evidence(source: symbol, target: symbol, function: symbol, port: number, demand: symbol, offer: symbol)
-unique_evidence(a, b, f, p, d, o) :- flow(a, b, f, p), !chosen(a, f),
+unique_evidence(a, b, f, p, d, o) :- flow(a, b, f, p), !unique_evidence_explicit_choice(a, f),
     service__product(a, ap), demand__product(d, ap), demand__function(d, f),
     service__product(b, bp), offer__product(o, bp), offer__function(o, f), offer__port(o, p).
 
