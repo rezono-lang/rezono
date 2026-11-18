@@ -108,6 +108,12 @@ if ! $registered; then
     observe "node_registered=false"
     exit 1
 fi
+observe "$(jq -r '.status.conditions[] | select(.type == "Ready") | "node_condition=Ready status=\(.status) reason=\(.reason)"' node.json)"
+if ! jq -e 'any(.status.conditions[]; .type == "Ready" and .status == "True")' node.json >/dev/null; then
+    control -n kube-system get pods -o json |
+        jq -r '.items[] | "pod=\(.metadata.name) phase=\(.status.phase) waiting=\([.status.containerStatuses[]?.state.waiting.reason // empty]|join(","))"' |
+        while read -r row; do observe "$row"; done
+fi
 jq -e '.metadata.labels["probe.rezono.org/role"] == "joined-worker" and
     (.status.nodeInfo.osImage | contains("Flatcar")) and
     (.status.nodeInfo.kubeletVersion | startswith("v1.36.6")) and
