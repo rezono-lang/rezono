@@ -25,6 +25,12 @@
         "reason": {"type": ["string", "null"]},
         "witness": {"type": ["object", "array", "null"]}
       }
+    },
+    "unsupported": {
+      "type": "object",
+      "minProperties": 1,
+      "propertyNames": {"enum": ["compiler", "checker", "feldera", "language"]},
+      "additionalProperties": {"type": "string", "pattern": "\\S"}
     }
   }
 }

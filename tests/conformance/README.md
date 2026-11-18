@@ -10,6 +10,8 @@ Write a case as `<id>.yaml` next to the inventory, using
 [`case.schema.json`](case.schema.json). Use the neutral pack's input rows and the
 settled behavior from the named specification. Record the expected value, value
 state, reason and witness. Use `null` for an absent value, reason or witness.
+When an engine cannot run a case, record its specific reason in `unsupported`
+under `compiler`, `checker`, `feldera` or `language`.
 
 For an open or gap source, first record the adopted behavior and its rationale
 in `decisions/conformance-<id>.md`. If a source will stay outside this corpus,
