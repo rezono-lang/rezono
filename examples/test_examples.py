@@ -136,9 +136,7 @@ class MissingCalculationFiles(FileNotFoundError):
 
 @pytest.mark.parametrize("example", [
     *(pytest.param(e, id=name(e)) for e in CALC if e != SUBSIDY),
-    pytest.param(SUBSIDY, id="subsidy", marks=pytest.mark.xfail(
-        strict=True, raises=MissingCalculationFiles, reason="Needs independent expected/calc JSON for every "
-        "subsidy fact state. The worked amounts are in examples/subsidy/README.md and reference.py.")),
+    pytest.param(SUBSIDY, id="subsidy"),
 ])
 def test_calculation_reference_files(example):
     """Compare the complete serialized output and write candidates for missing or changed files under compiled/."""
