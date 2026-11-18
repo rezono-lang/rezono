@@ -4,6 +4,7 @@ import, kept to show what the checks find; it is no fact state and is never publ
 give violations, exactly those in expected/diagnostics/."""
 
 import json
+from functools import cache
 from pathlib import Path
 
 import pytest
@@ -70,6 +71,7 @@ def test_diagnostics(example, fixture, tmp_path):
 # --- Calculation rules (M3): every pack with calc/, per fact state --------------------------------
 
 CALC = [e for e in EXAMPLES if (e / "calc").is_dir()]
+SUBSIDY = ROOT / "subsidy"
 # Packs whose expected/calc no calc/ program covers yet: one explicit list, each with its reason.
 # A pack that gets calc/ must leave the list (the test below fails until it does).
 CALC_GAPS: dict[str, str] = {}
@@ -78,6 +80,10 @@ WITH_EXPECTED_CALC = [e for e in EXAMPLES if (e / "expected" / "calc").is_dir()]
 
 def test_every_known_gap_is_a_pack():
     assert set(CALC_GAPS) <= {name(e) for e in WITH_EXPECTED_CALC}, "CALC_GAPS names a pack without expected/calc"
+
+
+def test_calculation_examples_are_found():
+    assert SUBSIDY in CALC, "the subsidy example evaluates the award and payment difference"
 
 
 @pytest.mark.parametrize("example", WITH_EXPECTED_CALC, ids=name)
@@ -90,31 +96,73 @@ def test_every_expected_calc_has_a_program(example):
     assert (example / "calc").is_dir(), f"{name(example)} has expected/calc but no calc/ program"
 
 
-
-@pytest.mark.xfail(strict=True, reason="generated expected/calc goldens are not stored in git")
-@pytest.mark.parametrize("example", CALC, ids=name)
-def test_calculation_rules(example):
-    """Per fact state (facts/ together, then each scenarios/*.yaml cumulatively): DuckDB gives exactly
-    what the exact reference gives, and that is expected/calc/<state>.json. A new or changed golden
-    comes from CI (artifact compiled-examples), never from a local machine."""
+@cache
+def checked_calculations(example):
+    """Run both evaluators once per fact state. Keep their agreed results for the byte comparison."""
     model = pack.read(example)
     prog = calc.build(model, model.calc)
-    states = scenarios.states(model, example)
-    files = sorted((example / "expected" / "calc").glob("*.json"))
-    wrong = []
-    for label, rows in states:
-        rows = rows | {t: [tuple(r.values()) for r in rs] for t, rs in calc_sql.rows(prog).items()}
-        got, reference = run_both(model, prog, model.calc, rows)
+    evaluation_rows = {t: [tuple(r.values()) for r in rs] for t, rs in calc_sql.rows(prog).items()}
+    outputs = {}
+    for label, rows in scenarios.states(model, example):
+        assert label not in outputs, label
+        got, reference = run_both(model, prog, model.calc, rows | evaluation_rows)
         assert got == reference, label
+        assert got and got.keys() == prog.rules.keys(), label
+        outputs[label] = got
+    return outputs
+
+
+@pytest.mark.parametrize("example", CALC, ids=name)
+def test_calculation_rules(example):
+    """Check the full DuckDB and exact Python results for the initial facts and each authored scenario."""
+    facts = [stem for directory, stem in FACT_FILES if directory == example]
+    labels = ([f"0-{facts[0]}"] if facts else []) + [p.stem for p in sorted((example / "scenarios").glob("*.yaml"))]
+    assert labels and list(checked_calculations(example)) == labels
+
+
+def test_receiving_the_income_statement_establishes_the_award_and_payment_difference():
+    """The worked A003 scenario in the subsidy README, in cents."""
+    outputs = checked_calculations(SUBSIDY)
+    before, after = outputs["0-applications"], outputs["1-income-received"]
+    assert before["award"]["A003"][:2] == before["payment_difference"]["A003"][:2] == ("unknown", "")
+    # The documented partial rate gives 327550 × 24% = 78612. The ledger already paid 131020.
+    assert after["award"]["A003"][:2] == ("known", "78612")
+    assert after["payment_difference"]["A003"][:2] == ("known", "52408")
+
+
+class MissingCalculationFiles(FileNotFoundError):
+    """The reviewed calculation files for one or more fact states are absent."""
+
+
+@pytest.mark.parametrize("example", [
+    *(pytest.param(e, id=name(e)) for e in CALC if e != SUBSIDY),
+    pytest.param(SUBSIDY, id="subsidy", marks=pytest.mark.xfail(
+        strict=True, raises=MissingCalculationFiles, reason="Needs independent expected/calc JSON for every "
+        "subsidy fact state. The worked amounts are in examples/subsidy/README.md and reference.py.")),
+])
+def test_calculation_reference_files(example):
+    """Compare the complete serialized output and write candidates for missing or changed files under compiled/."""
+    outputs = checked_calculations(example)
+    files = sorted((example / "expected" / "calc").glob("*.json"))
+    missing, changed = [], []
+    for label, result in outputs.items():
         want = example / "expected" / "calc" / f"{label}.json"
-        text = golden_text(got)
-        if not want.exists() or want.read_text(encoding="utf-8") != text:
-            out = REPO / "compiled" / example.relative_to(REPO) / "expected" / "calc" / want.name
-            out.parent.mkdir(parents=True, exist_ok=True)
-            out.write_text(text, encoding="utf-8")
-            wrong.append(label)
-    assert [f.stem for f in files] == [s for s, _ in states], "one expected/calc file per fact state"
-    assert not wrong, f"expected/calc differs for {wrong}; the new files are in the CI artifact"
+        data = golden_text(result).encode("utf-8")
+        if not want.exists():
+            missing.append(label)
+        elif want.read_bytes() != data:
+            changed.append(label)
+        else:
+            continue
+        out = REPO / "compiled" / example.relative_to(REPO) / "expected" / "calc" / want.name
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_bytes(data)
+    assert not changed, f"expected/calc differs for {changed}; candidates are under compiled/"
+    unexpected = {f.stem for f in files} - outputs.keys()
+    assert not unexpected, f"unexpected expected/calc files: {sorted(unexpected)}"
+    if missing:
+        raise MissingCalculationFiles(f"{name(example)}: missing expected/calc for {missing}")
+    assert [f.stem for f in files] == list(outputs), "one expected/calc file per fact state"
 
 
 def golden_text(results: dict[str, dict]) -> str:
