@@ -61,3 +61,54 @@ def test_authored_module_ignores_comments_and_exposes_unknown_declarations(tmp_p
     assert "| unclassified-authored-syntax | 1 | Pending |" in output
     assert "| kind |" not in output
     assert output == render(tmp_path)
+
+
+def test_native_readiness_requires_reader_form_and_ir_evidence(tmp_path):
+    reader = "rezono/test/test_native_rule_reader_roundtrip.py"
+    form = "compiler/tests/rezono/test_native_rule_form_contract.py"
+    ir = "compiler/tests/rezono/test_native_rule_ir_listed.py"
+    write(tmp_path, reader, "def test_native_rule_reader_roundtrip():\n    assert True\n")
+    write(tmp_path, ir, "def test_native_rule_ir_listed():\n    assert True\n")
+    assert "native-rule" not in supported(tmp_path)
+    pending = render(tmp_path)
+    assert f"[reader](../../{reader})" in pending
+    assert "github.com/rezono-lang/rezono/blob/" in pending
+    assert f"/{form})" in pending
+    write(tmp_path, form, "@pytest.mark.xfail(strict=True)\ndef test_native_rule_form_contract():\n    assert True\n")
+    assert "native-rule" not in supported(tmp_path)
+    write(tmp_path, form, "def test_native_rule_form_contract():\n    assert True\n")
+    assert "native-rule" in supported(tmp_path)
+    assert "relational-rule" not in supported(tmp_path)
+    assert "Native reader, form and IR proof gate: **Supported**" in render(tmp_path)
+
+
+def test_native_rule_census_deduplicates_mixed_files_and_reports_state_sources(tmp_path):
+    pin = "a" * 64
+    write(tmp_path, "packs/base/pack.yaml", "name: base\n")
+    write(tmp_path, "packs/base/rezono/query.rezono", """
+rezono 0
+pack base
+rules legacy
+  | .decl example(value:symbol)
+rule unresolved(item)
+  when item.result is unknown
+""")
+    write(tmp_path, "examples/demo/pack.yaml", f"name: demo\nimports:\n- {{name: base, path: ../../packs/base, sha256: {pin}}}\n")
+    write(tmp_path, "examples/demo/rules/legacy.dl", '.decl outcome(id:symbol, state:symbol)\noutcome(a, "unknown") :- known_input(a), !seen(a).\n')
+    write(tmp_path, "run/only-native/pack.yaml", "name: isolated\n")
+    write(tmp_path, "run/only-native/rezono/query.rezono", """
+rezono 0
+pack isolated
+rule display(x) when x.label = "is invalid" -- x.status is known
+rule `is invalid`(x) when shown(x)
+extend Example
+  derived ready: Bool = value is n/a
+""")
+
+    output = render(tmp_path)
+    assert "3 distinct source files, with 2 using Datalog or interim pipes and 2 using native rules" in output
+    state_link = "[query.rezono](../../packs/base/rezono/query.rezono)"
+    assert f"| packs/base | 1 | 1 | Review explicit state predicates ({state_link}) |" in output
+    assert f"| examples/demo | 1 | 0 | Review explicit state predicates ({state_link}) |" in output
+    assert "| run/only-native | 0 | 1 | No explicit state predicate found |" in output
+    assert "| packs/base | native-rule, relational-rule | — | native-rule, native-rule-state-review, relational-rule |" in output
