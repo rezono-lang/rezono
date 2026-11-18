@@ -18,7 +18,6 @@ def test_bid_price_sweep_reference():
         "amber", "amber", "blue"]
 
 
-@pytest.mark.xfail(strict=True, reason="Read decisions/run-bid-price-sweep.md. Extend run/packs/offer-selection with whole-order guarantee eligibility, payable costs and a price sweep. Waits for test_offer_selection.")
 def test_bid_price_sweep():
     from rezono_compiler import pack, writer
     from rezono_publisher import batch, sweep

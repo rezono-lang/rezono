@@ -11,8 +11,15 @@ classes:
   Offer:
     attributes:
       id: {identifier: true}
-      price_micros: {range: integer, minimum_value: 0, required: true}
+      price_micros: {range: integer, minimum_value: 0}
       setup_price_micros: {range: integer, minimum_value: 0}
+      period_price_minor:
+        range: integer
+        minimum_value: 0
+        annotations:
+          explore: {value: {min: 499, max: 501, step: 1}}
+      setup_price_minor: {range: integer, minimum_value: 0}
+      guarantee_mode: {range: GuaranteeMode}
       provider: {}
       tie_rank: {range: integer, required: true}
       stock: {range: integer, minimum_value: 0, required: true}
@@ -25,6 +32,7 @@ classes:
       id: {identifier: true}
       quantity: {range: integer, minimum_value: 1, required: true}
       billed_periods: {range: integer, minimum_value: 1}
+      amount_unit: {range: AmountUnit}
       boot: {required: true}
       currency: {required: true}
   Guarantee:
@@ -38,3 +46,19 @@ classes:
       scope: {required: true}
       mode: {required: true}
       total_micros: {range: integer, minimum_value: 0}
+      total_minor: {range: integer, minimum_value: 0}
+      period_price_minor: {range: integer, minimum_value: 0}
+      setup_price_minor: {range: integer, minimum_value: 0}
+      quantity: {range: integer, minimum_value: 1}
+      billed_periods: {range: integer, minimum_value: 1}
+
+enums:
+  AmountUnit:
+    permissible_values:
+      micros:
+      minor:
+  GuaranteeMode:
+    permissible_values:
+      estimate:
+      binding_quote:
+      reject_above:
