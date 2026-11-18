@@ -168,8 +168,7 @@ def submission(source, base, head, engine, path, evidence):
     strict=True, raises=AssertionError,
     reason="Build selection trusts an emptied mapped-reader relation. Verify the pinned Git inventories and publish "
            "a readerless witness for a certified empty mapping. Read decisions/scoped-completeness.md §3. "
-           "The implementation belongs to build/ and the trusted build observation and publication adapter."
-           " Waits for an admission path owned by core: batch.epoch and publish must verify the archived submitted evidence against the retained context and supply it as protected input before the rules run (decisions/scoped-completeness.md section 1, Admission and replay transport), and for test_completeness_receipt_exact_inventory. Today batch.epoch receives only source digests (see PR #616).",
+           "The implementation belongs to build/ and the trusted build observation and publication adapter.",
 )
 def test_mapped_path_requires_reader_inventory(tmp_path):
     source = tmp_path / "source"

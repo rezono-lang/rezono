@@ -14,8 +14,9 @@ from round_visibility_publication import checked_loop_publication
     reason=(
         "Read decisions/scoped-completeness.md sections 1 and 3. Only the selected members of a valid "
         "independently checked current batch certificate enter ready. A supplied positive result "
-        "without the complete obligation inventory is not a certificate. Write in the Loop round admission path."
-        " Waits for an admission path owned by core: batch.epoch and publish must verify the archived submitted evidence against the retained context and supply it as protected input before the rules run (decisions/scoped-completeness.md section 1, Admission and replay transport), and for test_completeness_receipt_exact_inventory. Today batch.epoch receives only source digests (see PR #616)."
+        "without the complete obligation inventory is not a certificate. Write in the Loop round admission path. "
+        "Waits for test_completeness_receipt_exact_inventory: ready needs the std-completeness admission that "
+        "checks submitted evidence against the retained context and only then supplies a protected rule input."
     ),
 )
 def test_ready_requires_checked_batch_member(tmp_path):
