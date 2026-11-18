@@ -12,7 +12,26 @@
       "type": "object",
       "required": ["rows"],
       "properties": {
-        "rows": {"type": "array", "items": {"type": "object"}}
+        "rows": {"type": "array", "items": {"type": "object"}},
+        "select": {
+          "type": "object",
+          "required": ["kind", "id"],
+          "additionalProperties": false,
+          "properties": {
+            "kind": {"type": "string", "minLength": 1},
+            "id": {"type": "string", "minLength": 1}
+          }
+        },
+        "language": {"type": "string", "pattern": "\\S"},
+        "rules": {
+          "type": "object",
+          "required": ["output", "clauses"],
+          "additionalProperties": false,
+          "properties": {
+            "output": {"type": "string", "pattern": "^[a-z][a-z0-9_]*(?![\\s\\S])"},
+            "clauses": {"type": "string", "pattern": "\\S"}
+          }
+        }
       }
     },
     "expect": {
