@@ -22,6 +22,10 @@ CORPUS = Path(__file__).resolve().parents[3] / "tests/conformance"
 ORIGIN = {"file": "rezono/measure.rezono", "line": "3"}
 
 
+class MissingFilteredCountDiagnostic(AssertionError):
+    """The unsupported filter is currently refused without R044."""
+
+
 def replay_groups(case, lowered):
     native = case["input"]["native_filter"]
     expected = case["expect"]
@@ -80,4 +84,6 @@ def test_expression_python_filtered_count():
         lower(unsupported)
     error = refused.value
     found = [diagnostic.code for diagnostic in getattr(error, "diagnostics", ())]
+    if not found and str(error) == "rezono/measure.rezono:3: an aggregate filter must fix a ranged key column by equality":
+        raise MissingFilteredCountDiagnostic(str(error))
     assert found == [native["unrepresentable"]["code"]], str(error)
