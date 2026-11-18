@@ -7,16 +7,15 @@ mkdir -p "$reports"
 # Official v0.383.0 Linux amd64 image. The release includes the SQL compiler and Rust build cache.
 image=images.feldera.com/feldera/pipeline-manager@sha256:7e1580efd340af0f6267386bd5da57aa10ef5b46572855245108209baf24bb5f
 container="feldera-oracle-${GITHUB_RUN_ID:?}-${GITHUB_RUN_ATTEMPT:?}"
+export FELDERA_ORACLE_SANDBOX="$container" FELDERA_ORACLE_REPORTS="$reports"
 inputs=$(mktemp -d "$RUNNER_TEMP/feldera-inputs.XXXXXXXX")
 chmod 755 "$inputs"
 cleanup() {
   status=$?
   trap - EXIT
   if docker container inspect "$container" >/dev/null 2>&1; then
-    if (( status != 0 )); then
-      docker logs --tail 250 "$container" > "$reports/engine.log" 2>&1 || true
-    fi
-    docker rm --force --volumes "$container" >/dev/null || exit 1
+    python compiler/tests/feldera_service.py || status=1
+    docker rm --force --volumes "$container" >/dev/null || status=1
   fi
   rm -rf -- "$inputs" || exit 1
   exit "$status"
@@ -24,16 +23,16 @@ cleanup() {
 trap cleanup EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
-docker run --detach --name "$container" --network none --env CARGO_NET_OFFLINE=true \
-  --mount "type=bind,src=$inputs,dst=/tmp/rezono-oracle-input,readonly" "$image"
+# Hold the isolated network while each compilation replaces its writable engine and build artifacts.
+docker run --detach --name "$container" --network none --read-only --entrypoint /bin/sleep "$image" infinity
+docker image inspect --format 'pinned image bytes={{.Size}}' "$image" > "$reports/storage.log"
 pid=$(docker inspect --format '{{.State.Pid}}' "$container")
 # Only loopback exists here. Enter the service network, then drop back to the runner user.
 export FELDERA_URL=http://127.0.0.1:8080
 inside=(sudo nsenter --target "$pid" --net -- sudo -H -u "$(id -un)" --
         env "PATH=$PATH" "FELDERA_URL=$FELDERA_URL" FELDERA_PROFILE=unoptimized GITHUB_ACTIONS=true \
-        "FELDERA_ORACLE_INPUT_DIR=$inputs")
-"${inside[@]}" curl --fail --silent --show-error --retry 45 --retry-connrefused \
-  --retry-delay 2 --retry-max-time 95 --max-time 5 "$FELDERA_URL/healthz"
+        "FELDERA_ORACLE_INPUT_DIR=$inputs" "FELDERA_ORACLE_IMAGE=$image"
+        "FELDERA_ORACLE_SANDBOX=$container" "FELDERA_ORACLE_REPORTS=$reports")
 
 selectors=(
   compiler/tests/test_calc.py::test_feldera_gives_what_duckdb_gives
