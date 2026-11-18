@@ -194,7 +194,7 @@ def affected_components(
 
 # Files are assigned to jobs round-robin. Within a job pytest items share the
 # runner's cores, so one large parametrized file can use more than one core.
-SHARDS = {"compiler": 3, "examples": 3}
+SHARDS = {"compiler": 3, "examples": 5}
 PARALLEL = {"compiler", "examples", "edge/publisher"}
 
 
@@ -300,7 +300,27 @@ def shard_items(plan: dict, shard: int, total: int) -> list[str]:
     return [node for node in plan["items"] if node.split("::", 1)[0] in files]
 
 
+def weighted_workers(items: list[str], workers: int, weights: dict[str, int], default: int) -> list[list[str]]:
+    """Assign expensive IDs first, resolving ties in inventory order, then retain pytest's order."""
+    loads = [0] * workers
+    assigned = {}
+    for node in sorted(items, key=lambda item: -weights.get(item, default)):
+        slot = min(range(workers), key=loads.__getitem__)
+        assigned[node] = slot
+        loads[slot] += weights.get(node, default)
+    groups = [[] for _ in range(workers)]
+    for node in items:
+        groups[assigned[node]].append(node)
+    return groups
+
+
 def worker_items(folder: str, items: list[str], workers: int) -> list[list[str]]:
+    if folder == "compiler" and workers > 1:
+        # The profile records calls at or above its threshold from each compiler worker's
+        # five reported durations in the linked run. The default is the sum of worker pytest
+        # times minus those calls, divided by the remaining IDs, rounded to milliseconds.
+        profile = json.loads((ROOT / ".github/workflows/compiler-duration-profile.json").read_text(encoding="utf-8"))
+        return weighted_workers(items, workers, profile["call_ms"], profile["default_ms"])
     if folder != "examples" or workers == 1:
         return [items[n::workers] for n in range(workers)]
     # Keep the examples' file-scoped accumulation and the two independent immutable readers.
