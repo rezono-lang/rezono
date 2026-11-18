@@ -43,17 +43,20 @@ def export_rows(pipeline, prog, exports):
     return result
 
 
-def check_views(pipeline, prog, part, state):
+def check_views(pipeline, prog, part, state, checks, refused):
     for rel in part["views"]:
         got = {tuple(str(row[c.name]) for c in prog.relations[rel].key)
                for row in query(pipeline, f'SELECT * FROM "{rel}"')}
         assert got == state.derived[rel], (state.label, rel)
-        for view, _ in rules_sql.checks(prog, rel):
+        for view in checks[rel]:
             assert query(pipeline, f'SELECT * FROM "{view}"') == [], (state.label, view)
     if part["name"] in ("main", "integrity"):
         for rel, want in state.seal.items():
-            got = {tuple(str(row[c]) for c in ("id", "period_close") if c in row)
-                   for row in query(pipeline, f'SELECT * FROM "{rel}"')}
+            columns = ("id", "period_close") if rel in refused else ("id",)
+            got = set()
+            for row in query(pipeline, f'SELECT * FROM "{rel}"'):
+                assert row.keys() == set(columns), (state.label, rel, row.keys())
+                got.add(tuple(str(row[c]) for c in columns))
             assert got == want, (state.label, rel)
 
 
@@ -63,7 +66,11 @@ def test_incremental_on_feldera_equals_batch(example, tmp_path):
     model, prog, run = states(example)
     plan = json.loads(files["engine/pipelines.json"])
     parts = plan["pipelines"]
-    assert sorted(rel for part in parts for rel in part["views"]) == sorted(prog.derived())
+    assigned = [rel for part in parts for rel in part["views"]]
+    assert sorted(assigned) == sorted(prog.derived())
+    checks = {rel: [v for v, _ in rules_sql.checks(prog, rel)] for rel in prog.relations}
+    assert {v for rel in assigned for v in checks[rel]} == {v for views in checks.values() for v in views}
+    refused = {seal.refused for seal in model.seals}
     inputs = list(fact_updates(model, files, example))
     # Replay all states of one producer before its consumers. Only Feldera's output crosses boundaries,
     # and only one running pipeline needs to fit on the runner at a time.
@@ -82,7 +89,7 @@ def test_incremental_on_feldera_equals_batch(example, tmp_path):
                 delta = {t: facts_delta[t] for t in part["tables"] if t in facts_delta}
                 delta.update({t: relay[t] for t in part["imports"]})
                 processed(pipeline, push(pipeline, delta))
-                check_views(pipeline, prog, part, state)
+                check_views(pipeline, prog, part, state, checks, refused)
                 if part["exports"]:
                     current = export_rows(pipeline, prog, part["exports"])
                     for rel, rows in current.items():
