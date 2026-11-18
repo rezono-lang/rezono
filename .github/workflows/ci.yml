@@ -30,6 +30,7 @@ jobs:
       node: ${{ steps.matrix.outputs.node }}
       has_node: ${{ steps.matrix.outputs.has_node }}
       python_editable: ${{ steps.matrix.outputs.python_editable }}
+      cluster_tasks: ${{ steps.cluster.outputs.tasks }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
@@ -77,6 +78,24 @@ jobs:
           if-no-files-found: error
           overwrite: true
           retention-days: 2
+      - name: Route assigned cluster tests from the inventory
+        id: cluster
+        if: steps.matrix.outputs.has_python == 'true'
+        env:
+          WORKER_BRANCH: ${{ github.head_ref }}
+          TASK_BASE: ${{ github.event.merge_group.base_sha || (startsWith(github.head_ref, 'task/') && github.event.pull_request.base.sha) || '' }}
+        run: |
+          set -euo pipefail
+          python scripts/cluster_worker_tasks.py "$RUNNER_TEMP/inventory" --worker "$WORKER_BRANCH" \
+            --base "$TASK_BASE" >> "$GITHUB_OUTPUT"
+
+  cluster_worker:
+    needs: discover
+    if: needs.discover.outputs.cluster_tasks != '' && needs.discover.outputs.cluster_tasks != '[]'
+    uses: ./.github/workflows/disposable-cluster.yml
+    with:
+      tasks: ${{ needs.discover.outputs.cluster_tasks }}
+      base: ${{ github.event.merge_group.base_sha || github.event.pull_request.base.sha }}
 
   python:
     needs: discover
@@ -149,7 +168,7 @@ jobs:
             python scripts/red_list.py --skips "$report" | tee -a "$GITHUB_STEP_SUMMARY"
           done
       - name: Measure the worker check
-        if: startsWith(github.head_ref, 'task/') && matrix.component.shard == 0
+        if: startsWith(github.head_ref, 'task/') && matrix.component.shard == 0 && needs.discover.outputs.cluster_tasks == '[]'
         env:
           BRANCH: ${{ github.head_ref }}
           COMPONENT: ${{ matrix.component.folder }}
@@ -190,7 +209,7 @@ jobs:
   check:
     name: check
     if: always()
-    needs: [discover, python, node]
+    needs: [discover, python, node, cluster_worker]
     permissions:
       contents: read
       actions: read
@@ -235,9 +254,15 @@ jobs:
           DISCOVER_RESULT: ${{ needs.discover.result }}
           PYTHON_RESULT: ${{ needs.python.result }}
           NODE_RESULT: ${{ needs.node.result }}
+          CLUSTER_RESULT: ${{ needs.cluster_worker.result }}
+          CLUSTER_TASKS: ${{ needs.discover.outputs.cluster_tasks }}
         run: |
           set -euo pipefail
-          echo "discover=$DISCOVER_RESULT python=$PYTHON_RESULT node=$NODE_RESULT"
+          echo "discover=$DISCOVER_RESULT python=$PYTHON_RESULT node=$NODE_RESULT cluster=$CLUSTER_RESULT"
           [ "$DISCOVER_RESULT" = "success" ]
           case "$PYTHON_RESULT" in success|skipped) ;; *) exit 1 ;; esac
           case "$NODE_RESULT" in success|skipped) ;; *) exit 1 ;; esac
+          case "$CLUSTER_TASKS" in
+            ''|'[]') [ "$CLUSTER_RESULT" = skipped ] ;;
+            *) [ "$CLUSTER_RESULT" = success ] ;;
+          esac

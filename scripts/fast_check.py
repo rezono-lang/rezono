@@ -13,12 +13,12 @@ from components import discover_python_packages
 from red_list import ROOT, extract_red_tests_from_source
 
 
-def resolve(task: str) -> str:
+def resolve(task: str, base_revision: str = "origin/main") -> str:
     relpath = task.split("--", 1)[0]
     path = (ROOT / relpath).resolve()
     if not path.is_relative_to(ROOT) or not path.is_file():
         raise ValueError("unknown test file")
-    base = subprocess.run(["git", "show", f"origin/main:{relpath}"], cwd=ROOT,
+    base = subprocess.run(["git", "show", f"{base_revision}:{relpath}"], cwd=ROOT,
                           capture_output=True, encoding="utf-8")
     for source in (path.read_text(encoding="utf-8"), base.stdout):
         for red in extract_red_tests_from_source(source, relpath, []):
@@ -30,11 +30,12 @@ def resolve(task: str) -> str:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("task")
+    parser.add_argument("--base", default="origin/main", help="Git revision before the task changed")
     args = parser.parse_args()
     log = ROOT / ".fast-check.log"
     start = time.monotonic()
     try:
-        node = resolve(args.task)
+        node = resolve(args.task, args.base)
         vectors = json.loads((ROOT / "contracts/fixtures/canon/vectors.json").read_text(encoding="utf-8"))
         pool = [f"canon/tests/test_vectors.py::test_{kind}[{v['name']}]"
                 for kind in ("valid", "invalid") for v in vectors[kind]
