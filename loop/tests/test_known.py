@@ -5,7 +5,6 @@ import pytest
 from loop_oracle import evaluate
 
 
-@pytest.mark.xfail(strict=True, reason="Read decisions/loop-design.md. Implement packs/std-loop/rules/known.dl. Order observations by integer event time within the active run and token. Preserve every supporting evidence reference at an unambiguous latest instant.")
 def test_known_evidence():
     columns = {
         "active": "run",
