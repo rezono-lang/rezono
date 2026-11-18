@@ -194,10 +194,98 @@ function dependency(...body: Fragment<Expr>[]): Sample {
 	};
 }
 
+function readsZero(states: Schema['kinds'][string]['slots'][string]['states'],
+	{ card = '1', indirect = false, absence = false, knownRows = false, positive = false }: {
+		card?: '1' | '?'; indirect?: boolean; absence?: boolean; knownRows?: boolean; positive?: boolean;
+	} = {}): Sample {
+	const called = call(indirect ? 'zero_alias' : 'zero', x);
+	const ready = and(itemRow, positive ? called : not(called));
+	const relation = derived([item]);
+	const zero = knownRows
+		? and(itemRow, call('Item.value', x, n), compare('=', n, lit('0')))
+		: and(itemRow, compare('=', path('x', 'value'), lit('0')));
+	return {
+		...record([
+			declaration('ready', [item], absence),
+			clause('ready', [x], ready),
+			...(indirect ? [declaration('zero_alias', [item]), clause('zero_alias', [x], call('zero', x))] : []),
+			declaration('zero', [item]),
+			clause('zero', [x], zero),
+		]),
+		environment: {
+			schema: { ...schema, kinds: { Item: { ...schema.kinds.Item, slots: {
+				...schema.kinds.Item.slots, value: { type: 'Int', card, world: 'closed', states },
+			} } } },
+			relations: { ...environment.relations, ready: derived([item], absence), zero: relation, zero_alias: relation },
+		},
+	};
+}
+
+function readsLinkedZero(positive: boolean, extension = false): Sample {
+	const called = call('terms.zero', x);
+	const ready = and(itemRow, positive ? called : not(called));
+	return {
+		...record([
+			declaration('ready', [item]),
+			clause('ready', [x], ready),
+			...(extension ? [clause('terms.zero', [x], itemRow)] : []),
+		]),
+		environment: { ...environment, relations: { ...environment.relations, 'terms.zero': derived([item]) } },
+	};
+}
+
 type Finding = { code: string; at: string; token: string; related?: { at: string; token: string } };
 type Pair = { name: string; safe: Sample; unsafe: Sample; finding: Finding };
 
 const pairs: Pair[] = [
+	{
+		name: 'negation of a comparison needs a known result even for a closed relation',
+		safe: readsZero(['known'], { knownRows: true }),
+		unsafe: readsZero(['known', 'unknown']),
+		finding: { code: 'R047', at: '/decls/1/when/and/1', token: 'not zero(x)' },
+	},
+	{
+		name: 'a missing required scalar does not establish the negated comparison',
+		safe: readsZero(['known'], { knownRows: true }),
+		unsafe: readsZero(['known']),
+		finding: { code: 'R047', at: '/decls/1/when/and/1', token: 'not zero(x)' },
+	},
+	{
+		name: 'a missing optional scalar does not establish the negated comparison',
+		safe: readsZero(['known'], { knownRows: true }),
+		unsafe: readsZero(['known'], { card: '?' }),
+		finding: { code: 'R047', at: '/decls/1/when/and/1', token: 'not zero(x)' },
+	},
+	{
+		name: 'negation follows a forward dependency whose comparison can be invalid',
+		safe: readsZero(['known'], { indirect: true, knownRows: true }),
+		unsafe: readsZero(['known', 'invalid'], { indirect: true }),
+		finding: { code: 'R047', at: '/decls/1/when/and/1', token: 'not zero_alias(x)' },
+	},
+	{
+		name: 'an absence declaration does not turn a partial comparison into a decision',
+		safe: readsZero(['known'], { absence: true, knownRows: true }),
+		unsafe: readsZero(['known', 'unknown', 'invalid'], { absence: true }),
+		finding: { code: 'R047', at: '/decls/1/when/and/1', token: 'not zero(x)' },
+	},
+	{
+		name: 'a partial relation still supplies positive rows',
+		safe: readsZero(['known', 'unknown'], { positive: true }),
+		unsafe: readsZero(['known', 'unknown']),
+		finding: { code: 'R047', at: '/decls/1/when/and/1', token: 'not zero(x)' },
+	},
+	{
+		name: 'a supplied derived signature has no evidence of totality',
+		safe: readsLinkedZero(true),
+		unsafe: readsLinkedZero(false),
+		finding: { code: 'R047', at: '/decls/1/when/and/1', token: 'not terms.zero(x)' },
+	},
+	{
+		name: 'a local extension does not establish the imported signature totality',
+		safe: readsLinkedZero(true, true),
+		unsafe: readsLinkedZero(false, true),
+		finding: { code: 'R047', at: '/decls/1/when/and/1', token: 'not terms.zero(x)' },
+	},
 	{
 		name: 'a local annotation gives a head variable a type but supplies no row',
 		safe: sample('selected', [x, n], bound, [localN]),
