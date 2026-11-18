@@ -79,12 +79,6 @@ def published_role_name(directory):
     return role.get("name_attribute")
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason="Lower module/2 schema identity, descriptions, and slotUri in compiler/rezono_compiler/rezono_module.py. "
-           "Read decisions/language-metadata.md and the JSON shape in PR #446.",
-)
 def test_lower_schema_metadata(tmp_path):
     legacy = tmp_path / "yaml" / "std-access"
     authored = tmp_path / "module" / "std-access"
