@@ -100,7 +100,7 @@ Rezono {
   EnumLine = kw<"enum"> typeName World? "=" NonemptyListOf<name, "|">
   World = kw<"world"> (kw<"open"> | kw<"closed">)
   ParamLine = kw<"param"> name ":" Type (kw<"per"> typeName)? ("=" Expr)?
-  KindLine = kw<"kind"> typeName World?
+  KindLine = kw<"embedded">? kw<"kind"> typeName World?
   ExtendLine = kw<"extend"> typeName
   AppliesLine = kw<"applies"> (at | during | in) ":" name
   SealedLine = kw<"sealed"> at ":" name
