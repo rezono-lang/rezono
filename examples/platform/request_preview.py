@@ -234,7 +234,28 @@ def request_rows(teams_path, catalog):
                     raise ValueError(f"unknown peer {peer!r}")
                 row["peer"] = peer
             records["tenant_request_connection"].append(row)
+    add_request_order_keys(records["tenant_service_request"])
     return records
+
+
+def add_request_order_keys(requests):
+    """Encode UTC instants and service names independently within each tenant."""
+    by_tenant = defaultdict(list)
+    for request in requests:
+        by_tenant[request["tenant"]].append(request)
+    for tenant_requests in by_tenant.values():
+        instants = [submission_instant(request["submitted_at"]) for request in tenant_requests]
+        time_keys = {value: index for index, value in enumerate(sorted(set(instants)))}
+        names = sorted({request["service"] for request in tenant_requests})
+        service_keys = {value: index for index, value in enumerate(names)}
+        for request, instant in zip(tenant_requests, instants, strict=True):
+            request["submitted_at_key"] = time_keys[instant]
+            request["service_key"] = service_keys[request["service"]]
+
+
+def submission_instant(timestamp):
+    whole, _, fraction = timestamp.removesuffix("Z").partition(".")
+    return whole, fraction.rstrip("0")
 
 
 def preview_inputs(model, pack_path, teams_path, catalog_path):
