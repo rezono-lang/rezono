@@ -1,0 +1,499 @@
+{
+ "requested": {
+  "applicationTargets": [
+   [
+    "elm",
+    "elm-1"
+   ],
+   [
+    "reed",
+    "reed-1"
+   ]
+  ],
+  "capacity": [
+   [
+    "guest-host",
+    "cores",
+    8,
+    9
+   ],
+   [
+    "guest-host",
+    "memoryGiB",
+    16,
+    18
+   ],
+   [
+    "storage-pool",
+    "storageGiB",
+    90,
+    100
+   ]
+  ],
+  "catalog": [
+   [
+    "elm",
+    "elm-1",
+    {
+     "apiVersion": "backstage.io/v1alpha1",
+     "kind": "Component",
+     "metadata": {
+      "name": "ledger",
+      "namespace": "elm"
+     },
+     "spec": {
+      "lifecycle": "production",
+      "owner": "group:elm/elm",
+      "type": "service"
+     }
+    }
+   ],
+   [
+    "reed",
+    "reed-1",
+    {
+     "apiVersion": "backstage.io/v1alpha1",
+     "kind": "Component",
+     "metadata": {
+      "name": "studio",
+      "namespace": "reed"
+     },
+     "spec": {
+      "lifecycle": "development",
+      "owner": "group:reed/reed",
+      "type": "service"
+     }
+    }
+   ]
+  ],
+  "connections": [
+   [
+    "elm",
+    "elm-1",
+    "partner",
+    443,
+    "review",
+    "profile"
+   ],
+   [
+    "reed",
+    "reed-1",
+    "elm-1/managed-database",
+    5432,
+    "denied",
+    "isolation"
+   ]
+  ],
+  "deliveries": [
+   [
+    "elm",
+    "elm-1",
+    "guest-cluster",
+    "cluster",
+    "medium"
+   ],
+   [
+    "elm",
+    "elm-1",
+    "managed-database",
+    "database",
+    "medium"
+   ],
+   [
+    "reed",
+    "reed-1",
+    "guest-cluster",
+    "cluster",
+    "small"
+   ]
+  ],
+  "isolationFindings": [
+   [
+    "reed",
+    "reed-1",
+    "elm-1/managed-database",
+    5432,
+    false,
+    false
+   ]
+  ],
+  "monthlyCost": [
+   [
+    "elm",
+    7505,
+    "EUR-cent"
+   ],
+   [
+    "reed",
+    2495,
+    "EUR-cent"
+   ]
+  ],
+  "placements": [
+   [
+    "elm",
+    "elm-1",
+    "database-in-guest",
+    "managed-database"
+   ],
+   [
+    "elm",
+    "elm-1",
+    "guest-control",
+    "guest-cluster"
+   ],
+   [
+    "elm",
+    "elm-1",
+    "virtual-workers",
+    "guest-cluster"
+   ],
+   [
+    "reed",
+    "reed-1",
+    "guest-control",
+    "guest-cluster"
+   ],
+   [
+    "reed",
+    "reed-1",
+    "virtual-workers",
+    "guest-cluster"
+   ]
+  ],
+  "proposal": [
+   [
+    "elm",
+    "elm-1",
+    "review"
+   ],
+   [
+    "reed",
+    "reed-1",
+    "denied"
+   ]
+  ],
+  "scope": [
+   [
+    "elm",
+    "gitops-project",
+    "elm"
+   ],
+   [
+    "elm",
+    "identity-organization",
+    "elm"
+   ],
+   [
+    "elm",
+    "registry-project",
+    "elm"
+   ],
+   [
+    "elm",
+    "secret-policy",
+    "elm"
+   ],
+   [
+    "reed",
+    "gitops-project",
+    "reed"
+   ],
+   [
+    "reed",
+    "identity-organization",
+    "reed"
+   ],
+   [
+    "reed",
+    "registry-project",
+    "reed"
+   ],
+   [
+    "reed",
+    "secret-policy",
+    "reed"
+   ]
+  ],
+  "shortages": []
+ },
+ "third": {
+  "applicationTargets": [
+   [
+    "elm",
+    "elm-1"
+   ],
+   [
+    "reed",
+    "reed-1"
+   ],
+   [
+    "reed",
+    "reed-2"
+   ]
+  ],
+  "capacity": [
+   [
+    "guest-host",
+    "cores",
+    10,
+    9
+   ],
+   [
+    "guest-host",
+    "memoryGiB",
+    20,
+    18
+   ],
+   [
+    "storage-pool",
+    "storageGiB",
+    110,
+    100
+   ]
+  ],
+  "catalog": [
+   [
+    "elm",
+    "elm-1",
+    {
+     "apiVersion": "backstage.io/v1alpha1",
+     "kind": "Component",
+     "metadata": {
+      "name": "ledger",
+      "namespace": "elm"
+     },
+     "spec": {
+      "lifecycle": "production",
+      "owner": "group:elm/elm",
+      "type": "service"
+     }
+    }
+   ],
+   [
+    "reed",
+    "reed-1",
+    {
+     "apiVersion": "backstage.io/v1alpha1",
+     "kind": "Component",
+     "metadata": {
+      "name": "studio",
+      "namespace": "reed"
+     },
+     "spec": {
+      "lifecycle": "development",
+      "owner": "group:reed/reed",
+      "type": "service"
+     }
+    }
+   ],
+   [
+    "reed",
+    "reed-2",
+    {
+     "apiVersion": "backstage.io/v1alpha1",
+     "kind": "Component",
+     "metadata": {
+      "name": "draft",
+      "namespace": "reed"
+     },
+     "spec": {
+      "lifecycle": "development",
+      "owner": "group:reed/reed",
+      "type": "service"
+     }
+    }
+   ]
+  ],
+  "connections": [
+   [
+    "elm",
+    "elm-1",
+    "partner",
+    443,
+    "review",
+    "profile"
+   ],
+   [
+    "reed",
+    "reed-1",
+    "elm-1/managed-database",
+    5432,
+    "denied",
+    "isolation"
+   ]
+  ],
+  "deliveries": [
+   [
+    "elm",
+    "elm-1",
+    "guest-cluster",
+    "cluster",
+    "medium"
+   ],
+   [
+    "elm",
+    "elm-1",
+    "managed-database",
+    "database",
+    "medium"
+   ],
+   [
+    "reed",
+    "reed-1",
+    "guest-cluster",
+    "cluster",
+    "small"
+   ],
+   [
+    "reed",
+    "reed-2",
+    "guest-cluster",
+    "cluster",
+    "small"
+   ]
+  ],
+  "isolationFindings": [
+   [
+    "reed",
+    "reed-1",
+    "elm-1/managed-database",
+    5432,
+    false,
+    false
+   ]
+  ],
+  "monthlyCost": [
+   [
+    "elm",
+    7505,
+    "EUR-cent"
+   ],
+   [
+    "reed",
+    4990,
+    "EUR-cent"
+   ]
+  ],
+  "placements": [
+   [
+    "elm",
+    "elm-1",
+    "database-in-guest",
+    "managed-database"
+   ],
+   [
+    "elm",
+    "elm-1",
+    "guest-control",
+    "guest-cluster"
+   ],
+   [
+    "elm",
+    "elm-1",
+    "virtual-workers",
+    "guest-cluster"
+   ],
+   [
+    "reed",
+    "reed-1",
+    "guest-control",
+    "guest-cluster"
+   ],
+   [
+    "reed",
+    "reed-1",
+    "virtual-workers",
+    "guest-cluster"
+   ],
+   [
+    "reed",
+    "reed-2",
+    "guest-control",
+    "guest-cluster"
+   ],
+   [
+    "reed",
+    "reed-2",
+    "virtual-workers",
+    "guest-cluster"
+   ]
+  ],
+  "proposal": [
+   [
+    "elm",
+    "elm-1",
+    "review"
+   ],
+   [
+    "reed",
+    "reed-1",
+    "denied"
+   ],
+   [
+    "reed",
+    "reed-2",
+    "denied"
+   ]
+  ],
+  "scope": [
+   [
+    "elm",
+    "gitops-project",
+    "elm"
+   ],
+   [
+    "elm",
+    "identity-organization",
+    "elm"
+   ],
+   [
+    "elm",
+    "registry-project",
+    "elm"
+   ],
+   [
+    "elm",
+    "secret-policy",
+    "elm"
+   ],
+   [
+    "reed",
+    "gitops-project",
+    "reed"
+   ],
+   [
+    "reed",
+    "identity-organization",
+    "reed"
+   ],
+   [
+    "reed",
+    "registry-project",
+    "reed"
+   ],
+   [
+    "reed",
+    "secret-policy",
+    "reed"
+   ]
+  ],
+  "shortages": [
+   [
+    "guest-host",
+    "cores",
+    1
+   ],
+   [
+    "guest-host",
+    "memoryGiB",
+    2
+   ],
+   [
+    "storage-pool",
+    "storageGiB",
+    10
+   ]
+  ]
+ }
+}
