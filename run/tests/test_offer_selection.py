@@ -21,4 +21,17 @@ def test_offer_selection():
              "demand__boot": [("two", "ignition"), ("four", "ignition")]}
     for index, name in enumerate(columns):
         facts["offer__" + name] = [(key, row[index]) for key, row in options.items()]
+    facts["demand__billed_periods"] = [("two", 1), ("four", 1)]
+    facts["offer__provider"] = [(key, "paper") for key in options]
+    facts["offer__setup_price_micros"] = [(key, 0) for key in options]
+    # Independently recorded whole-order commitments for the two-machine order.
+    totals = {"small": 328000, "tie": 328000, "expensive": 958000, "no_stock": 2,
+              "used_disk": 2, "unknown_cpu": 2, "boot": 2, "currency": 2}
+    for offer, total in totals.items():
+        source = f"confirmed-{offer}"
+        facts.setdefault("guarantee", []).append((source,))
+        fields = {"offer": offer, "demand": "two", "provider": "paper", "currency": options[offer][-1],
+                  "mode": "binding_quote", "scope": "whole_order", "total_micros": total}
+        for field, value in fields.items():
+            facts.setdefault(f"guarantee__{field}", []).append((source, value))
     assert relation("offer-selection", facts, "selected") == {("two", "small")}

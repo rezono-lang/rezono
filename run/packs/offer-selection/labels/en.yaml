@@ -1,5 +1,7 @@
 offer: offer
 offer.price_micros: unit price in millionths
+offer.setup_price_micros: setup charge per machine in millionths
+offer.provider: offer provider
 offer.tie_rank: source tie rank
 offer.stock: available quantity
 offer.free_disks: unallocated disks
@@ -8,9 +10,25 @@ offer.boot: supported boot method
 offer.currency: offer currency
 demand: demand
 demand.quantity: required quantity
+demand.billed_periods: number of billed periods
 demand.boot: required boot method
 demand.currency: required currency
 eligible: eligible offer
-outranked: outranked offer
-rank_conflict: duplicate price and rank
+guarantee: provider guarantee
+guarantee.offer: covered offer
+guarantee.demand: covered order
+guarantee.provider: issuing provider
+guarantee.currency: guaranteed currency
+guarantee.scope: charge scope
+guarantee.mode: enforcement mode
+guarantee.total_micros: guaranteed total in millionths
+payable_micros: whole order charge in millionths
+conflicting_price: inconsistent whole order charge
+binding_mode: provider-enforced mode
+disputed_guarantee: contradictory provider record
+confirmed_total: provider-enforced whole order charge
+conflicting_terms: contradictory ranking or provider evidence
+eligible_offer: eligible candidate
+comparison: candidate comparison
+excluded: candidate lacking eligibility
 selected: selected offer
