@@ -111,3 +111,60 @@ def test_invoice_rounding_requires_complete_and_correct_arithmetic():
         batch.compute(con, program)
         outputs = batch.read(con, program, ["amount_difference"])["amount_difference"]
     assert {row[1] for row in outputs} == {"intact"}
+
+
+def test_missing_rounding_carry_publishes_an_unverifiable_bound_amount(tmp_path):
+    from rezono_checker.check import check
+    from rezono_checker.rules import load_rules
+    from rezono_compiler import batch, explain, pack, rules
+    from rezono_publisher import batch as publication_batch, publish, store
+    from rezono_publisher.views import key_of
+
+    normalize = implementation("invoice_compare.py", "invoice_facts")
+    prices = [cost("tie", [5, 8]), cost("intact", [5, 8])]
+    observed = [invoice("tie", 64, "invoice/1"), invoice("intact", 64, "invoice/2")]
+    rounding = terms("half_up")
+    data = normalize(prices, observed, rounding)
+    carries = data["rounding_carry__carry"]
+    (required,) = [row for row in carries if row[0] == "cost/tie/division/1"]
+    carries.remove(required)
+
+    directory = RUN / "packs" / "invoice-drift"
+    model = pack.read(directory)
+    program = rules.load(model.rules)
+    with closing(batch.connect(program, data)) as con:
+        batch.compute(con, program, witnesses=True)
+        rows = batch.read(con, program, program.base_used()) | batch.read(con, program)
+        explainer = explain.Explainer(program, rows, batch.witnesses(con, program))
+    assert rows["amount_difference"] == {
+        (prices[1]["plan_hash"], "intact", "cost/intact", "invoice/2", rounding["sha256"], "63", "64")
+    }
+    assert not rows["unbound_invoice"]
+    key = (prices[0]["plan_hash"], "tie", "EUR", "cost/tie", "invoice/1", "64", "unverified_rounding")
+
+    epoch = publish.Epoch(
+        pack=model.meta["name"], epoch=1, knowledge_time="2032-01-01T00:00:00Z",
+        pack_sha256=sha256(json.dumps(data, sort_keys=True).encode()).hexdigest(),
+        definition_sha256=publication_batch.definition_sha256(directory),
+        compiler_sha256=sha256(b"invoice test compiler").hexdigest(),
+        schema_version=str(model.meta["version"]), engine=publication_batch.engine_component(),
+        sources=[("invoice", "recorded")], checks=[], kinds=frozenset(model.kinds),
+        columns=publication_batch.columns(model), rows=rows, rules=json.dumps(model.rules),
+        witnesses=explainer.chosen(),
+    )
+    bucket = store.FileStore(tmp_path)
+    manifest = publish.publish(epoch, bucket, {"checker": "complete"})
+    snapshot, = [s for s in manifest["snapshots"] if s["relation"] == "unverifiable_invoice_amount"]
+    def read(uri):
+        return bucket.get(key_of(uri))
+    assert json.loads(read(snapshot["uri"])) == [{"key": list(key)}]
+    proof = explainer.proof("unverifiable_invoice_amount", key, manifest["id"])
+    verified = check(proof, manifest, load_rules(model.rules), read)
+    assert verified["valid"], verified["findings"]
+    grounds = {(row["relation"], row["key"]) for witness in proof["witnesses"]
+               for premise in witness["premises"] if (row := premise.get("row"))}
+    assert {
+        ("expected_line", explain.key_text(("cost/tie",))),
+        ("invoice_line", explain.key_text(("invoice/1",))),
+        ("invoice_line__minor", explain.key_text(("invoice/1", "64"))),
+    } <= grounds
