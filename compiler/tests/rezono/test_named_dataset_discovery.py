@@ -161,6 +161,41 @@ def test_declared_dataset_uses_authored_rows_and_locations(declared_dataset, tmp
     assert form_path.read_bytes() == original_form
 
 
+class MissingOptionalFactState(Exception):
+    pass
+
+
+@pytest.mark.xfail(strict=True, raises=MissingOptionalFactState,
+                   reason="Lower explicit n/a in an optional fact column without creating a slot row.")
+def test_lower_named_dataset(declared_dataset, tmp_path, capsys):
+    root, form, submitted = declared_dataset
+    form.write_text(json.dumps(submitted), encoding="utf-8")
+    source = form.with_suffix(".rezono")
+    authored = ('rezono 0\npack minimal\ndataset sample\n  fact Alpha\n'
+                '    | id | title | size |\n'
+                '    | a-one | "One" | n/a |\n    | a-two | "Two" | 8 |\n')
+    model = pack.read(root)
+    legacy = tmp_path / "sample.yaml"
+    legacy.write_text(
+        'alpha:\n  - {id: a-one, title: One}\n  - {id: a-two, title: Two, size: 8}\n', encoding="utf-8",
+    )
+    expected = facts.load(model, legacy)
+    assert expected["alpha__size"] == [("a-two", 8)]
+
+    source.write_text(authored.replace("| n/a |", "| 3 |"), encoding="utf-8")
+    known = scenarios.states(model, root)[0][1]
+    assert known["alpha__size"] == [("a-one", 3), ("a-two", 8)]
+    source.write_text(authored, encoding="utf-8")
+    status = main(["check", str(root)])
+    report = capsys.readouterr()
+    if status == 1 and "alpha[1].size: 'n/a' is not a BIGINT" in report.err:
+        raise MissingOptionalFactState(report.err.strip())
+    assert status == 0, report.err
+    assert facts.load(model, form) == expected
+    assert scenarios.states(model, root)[0][1] == expected
+    assert form.read_bytes() == json.dumps(submitted).encode("utf-8")
+
+
 @pytest.mark.parametrize("fault", ["future_format", "mixed", "invalid_cell", "theory"])
 def test_declared_dataset_rejects_invalid_forms(declared_dataset, tmp_path, capsys, fault):
     root, form_path, form = declared_dataset
