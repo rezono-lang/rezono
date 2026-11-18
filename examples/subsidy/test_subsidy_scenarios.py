@@ -1,7 +1,5 @@
 """Subsidy awards and decisions in the two final cumulative states."""
-import importlib.util
 from datetime import date
-from pathlib import Path
 
 import pytest
 
@@ -11,15 +9,7 @@ pytest.importorskip("rezono_compiler")
 from calcsupport import checked, connect, results, run_both
 from rezono_compiler import calc, calc_sql, pack, scenarios
 
-HERE = Path(__file__).parent
-
-
-def reference():
-    """The pack's reference.py under a name of its own: other packs have a reference.py too."""
-    spec = importlib.util.spec_from_file_location("subsidy_reference", HERE / "reference.py")
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
+from subsidy_test_support import HERE, reference
 
 
 def test_the_evaluation_date_decides_the_partial_rate():

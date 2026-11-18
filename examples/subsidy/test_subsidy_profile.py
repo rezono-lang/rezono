@@ -8,7 +8,7 @@ pytest.importorskip("rezono_publisher")
 
 from rezono_publisher import publish
 
-from subsidy_publication_support import HERE, PACK, PROFILE, published, rows
+from subsidy_test_support import HERE, PACK, PROFILE, published, rows
 
 
 def test_the_profile_that_publishes_the_pack_names_no_role_the_pack_does_not(tmp_path):

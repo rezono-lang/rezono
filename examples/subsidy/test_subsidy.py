@@ -23,7 +23,7 @@ pytest.importorskip("rezono_publisher")
 
 from rezono_publisher import batch, publish, store  # noqa: E402
 
-from subsidy_publication_support import HERE, PACK, ROLES, published, rows
+from subsidy_test_support import HERE, PACK, ROLES, published, reference, rows
 
 # What `public` reads, and what it does not: the kinds of a case (rules/access.dl).
 # The justification kinds (std-decision) are read with the decision, by every role.
@@ -102,7 +102,10 @@ def test_a_role_reads_how_each_parameter_stands_on_the_evaluation_day_down_to_it
     e = batch.epoch(HERE, epoch=1, knowledge_time="2026-11-10T00:00:00Z", sources=[("rules", "test")])
     s = store.FileStore(tmp_path)
     publish.publish(e, s, ROLES | {"outsider": "may_read"})
-    expected = json.loads((HERE / "expected" / "rules" / "0-applications.json").read_text(encoding="utf-8"))
+    ref = reference()
+    state, inputs = next(ref.states())
+    assert state == "0-applications"
+    expected = ref.rules(inputs)
     for rel in ("judgement", "holds_at"):
         assert set(rows(s, "policy_adviser", rel)) == {tuple(r) for r in expected[rel]} != set(), rel
     assert ("par-05", "2026-11-10", "negative", "ended") in rows(s, "policy_adviser", "judgement")
@@ -188,6 +191,8 @@ def test_a_case_changes_nothing_the_public_gets(tmp_path):
 # --- What other organisations state (W4 step 1, K19) -----------------------------------------------
 
 def credential_port():
+    if not PORT.is_file():
+        pytest.skip("The credential input port edge/plugins/credential-in/credential_in.py is missing")
     """The credential in port (edge/plugins/credential-in), under a name of its own."""
     spec = importlib.util.spec_from_file_location("credential_in", PORT)
     module = importlib.util.module_from_spec(spec)
