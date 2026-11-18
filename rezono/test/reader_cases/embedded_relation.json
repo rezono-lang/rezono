@@ -1,0 +1,16 @@
+{
+  "source": "kind Branch\n  address: Address embedded",
+  "declarations": [
+    {
+      "kind": "Branch",
+      "slots": [
+        {
+          "slot": "address",
+          "type": "Address",
+          "embedded": true
+        }
+      ],
+      "derived": []
+    }
+  ]
+}

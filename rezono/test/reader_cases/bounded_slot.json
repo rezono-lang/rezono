@@ -1,0 +1,24 @@
+{
+  "source": "kind Work\n  authors: Text*\n    cardinality 1..3",
+  "declarations": [
+    {
+      "kind": "Work",
+      "slots": [
+        {
+          "slot": "authors",
+          "type": "Text",
+          "card": "*",
+          "constraints": [
+            {
+              "cardinality": [
+                "1",
+                "3"
+              ]
+            }
+          ]
+        }
+      ],
+      "derived": []
+    }
+  ]
+}
