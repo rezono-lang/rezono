@@ -1,0 +1,20 @@
+{
+  "format": "rezono.calc-ir/1",
+  "pack": "direct",
+  "subject": "item",
+  "subject_table": "item",
+  "as_of": "calc__as_of",
+  "facts": [
+    {"id": "item.size", "type": "number", "reads": "attribute", "table": "item__size", "index": 1}
+  ],
+  "rules": [
+    {"rule": "measure", "type": "number", "versions": ["measure@v1"], "view": "calc__measure"}
+  ],
+  "versions": [
+    {
+      "id": "measure@v1", "rule": "measure", "version": "v1", "view": "calc__measure__v1",
+      "valid_from": "2026-01-01", "valid_until": "2027-01-01", "known_from": "2026-01-01",
+      "definitions": [{"name": "size", "when": {"boolean": true}, "value": {"fact": "item.size"}}]
+    }
+  ]
+}

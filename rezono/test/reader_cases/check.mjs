@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { moduleForm } from '../../src/module-json.ts';
+import { moduleForm, moduleFromJson, moduleToJson } from '../../src/module-json.ts';
 import { parse } from '../../src/parse.ts';
 import { parseModule } from '../../src/module.ts';
 import { printModule } from '../../src/print.ts';
@@ -54,14 +54,28 @@ function nativeRuleMismatch({ source, form: expected, knownDiagnostics, extended
 export function mismatch(file) {
     const fixture = JSON.parse(readFileSync(file, 'utf8'));
     if (fixture.form) return nativeRuleMismatch(fixture);
-    const { source, declarations, knownDiagnostics } = fixture;
-    const { form, diagnostics } = moduleForm('rezono 0\npack sample\n' + source + '\n');
+    const source = 'rezono 0\npack sample\n' + fixture.source + '\n';
+    const { form, diagnostics } = moduleForm(source);
     if (!form) {
-        assert.deepEqual(diagnostics, knownDiagnostics, 'The reader returned a different diagnostic.');
+        assert.deepEqual(diagnostics, fixture.knownDiagnostics, 'The reader returned a different diagnostic.');
         return JSON.stringify(diagnostics);
     }
     assert.equal(form.format, 'rezono.module/2');
-    assert.deepEqual(form.module.decls, declarations);
+    if (fixture.module) {
+        assert.deepEqual(form.module, fixture.module);
+        assert.deepEqual(moduleFromJson(JSON.parse(moduleToJson(form))), form);
+    } else {
+        assert.deepEqual(form.module.decls, fixture.declarations);
+    }
+    for (const [at, name] of Object.entries(fixture.spanNames ?? {})) {
+        const place = form.spans.find(span => span.at === at);
+        assert.ok(place, `Missing authored span at ${at}.`);
+        assert.equal([...source].slice(Number(place.start), Number(place.end)).join(''), name);
+    }
+    for (const { from, to } of fixture.rejections ?? []) {
+        assert.ok(source.includes(from), `No source to replace: ${from}`);
+        assert.equal(moduleForm(source.replace(from, to)).form, undefined, `Accepted ${to}`);
+    }
     return null;
 }
 

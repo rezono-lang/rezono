@@ -1,0 +1,18 @@
+group:
+  - {id: group-a}
+  - {id: group-b}
+
+item:
+  - {id: item-a, group: group-a, labels: [first, second], quantity: 7, weight: 3}
+  - {id: item-b, group: group-a, labels: [first], weight: 3}
+  - {id: item-c, group: group-b, labels: [second], quantity: 7}
+  - {id: item-d, group: group-b, labels: [second], quantity: 7, weight: 0}
+
+link:
+  - {id: link-a, tail: item-a, head: item-b}
+  - {id: link-b, tail: item-a, head: item-c}
+  - {id: link-c, tail: item-d, head: item-a}
+
+role:
+  - {id: reader, title: Reader, capability: [read, read_restricted]}
+  - {id: summary, title: Summary reader, capability: [read]}

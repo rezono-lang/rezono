@@ -1,0 +1,3 @@
+// Reading this open relation as a calculation column keeps a missing measurement unknown.
+.decl recorded_weight(item: symbol, weight: number)
+recorded_weight(i, w) :- item(i), item__weight(i, w).
