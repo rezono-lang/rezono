@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
-set -euo pipefail
+set -Eeuo pipefail
 umask 077
+
+if (( $# > 1 )) || [[ $# == 1 && ${1:-} != --kubevirt ]]; then
+    echo "usage: trial.sh [--kubevirt]" >&2
+    exit 2
+fi
 
 sources=$(cd "$(dirname "$0")" && pwd)
 scratch=$(mktemp -d)
@@ -79,7 +84,7 @@ helm template cilium cilium.tgz --namespace kube-system --kube-version 1.36.6 \
 docker exec -i "$name" k0s kubectl apply --server-side -f - < cilium.yaml >/dev/null
 # The bootstrap capability exists only for this temporary controller. Pipe it
 # directly into the renderer; the private machine document is removed on exit.
-docker exec "$name" k0s token create --role worker --expiry 12m | ./render > worker.ign
+docker exec "$name" k0s token create --role worker --expiry 12m | ./render "$@" > worker.ign
 observe "ignition_rendered=true"
 qemu-system-x86_64 -machine q35,accel=kvm -cpu host -m 7G -smp 3 \
     -display none -monitor none -no-reboot -serial "file:$scratch/serial.log" \
@@ -157,3 +162,58 @@ PY
 )
 observe "$lease_evidence"
 observe "$(jq -r '"node=\(.metadata.name) uid=\(.metadata.uid) os=\(.status.nodeInfo.osImage) kubelet=\(.status.nodeInfo.kubeletVersion) ready=true lease=true"' node.json)"
+
+if (( $# == 0 )); then
+    exit 0
+fi
+
+fetch 'https://raw.githubusercontent.com/kubernetes-client/python/5b23a44aa06010ac6ffe423d7b0e090caf7882ff/kubernetes/utils/quantity.py' 3c568e71032e144568280cb21af64d78dc23c526f7a4e05d2e3f53cdd0315a5d quantity.py
+stage=operator
+diagnose() {
+    local status=$?
+    observe "failed_stage=$stage status=$status"
+    control -n kubevirt get pods -o wide || true
+    control get events -A --field-selector type=Warning -o custom-columns=Reason:.reason,Message:.message | tail -20 || true
+    exit "$status"
+}
+trap diagnose ERR
+base=https://github.com/kubevirt/kubevirt/releases/download/v1.9.1
+fetch "$base/kubevirt-operator.yaml" 9ac45a436c49d32e6fc21d542bcb7600b970705297b9e6752f3ef9b0a1d292da operator.yaml
+fetch "$base/kubevirt-cr.yaml" 43106136dbce3312bdbfdeae612aacafc6c12da518d233f90645b4685d84a2af cr.yaml
+apply() { docker exec -i "$name" k0s kubectl apply --server-side -f - < "$1"; }
+await_condition() { docker exec "$name" k0s kubectl "$@"; }
+apply operator.yaml
+# The disposable controller runs outside Kubernetes and has no node object.
+# Place infrastructure on the only enrolled worker using its verified label.
+control -n kubevirt patch deployment virt-operator --type=json -p \
+    '[{"op":"replace","path":"/spec/template/spec/affinity/nodeAffinity/requiredDuringSchedulingIgnoredDuringExecution/nodeSelectorTerms","value":[{"matchExpressions":[{"key":"probe.rezono.org/role","operator":"In","values":["joined-worker"]}]}]}]'
+await_condition -n kubevirt rollout status deployment/virt-operator --timeout=240s
+stage=kubevirt-availability
+cat >> cr.yaml <<'YAML'
+  infra:
+    replicas: 1
+    nodePlacement:
+      nodeSelector:
+        probe.rezono.org/role: joined-worker
+YAML
+apply cr.yaml
+await_condition -n kubevirt wait kubevirt/kubevirt --for=condition=Available --timeout=360s
+stage=kvm-allocation
+raw_capacity=$(control get node proof-worker -o json | jq -er '.status.allocatable["devices.kubevirt.io/kvm"]')
+observe "node=proof-worker raw_kvm_capacity=$raw_capacity"
+capacity=$(python3 "$sources/../flatcar/capacity.py" quantity.py "$raw_capacity")
+observe "kubevirt_available=true node=proof-worker kvm_capacity=$capacity"
+stage=guest-readiness
+apply "$sources/../flatcar/vmi.yaml"
+await_condition wait vmi/host-probe --for=condition=Ready --timeout=240s
+control get vmi host-probe -o json | jq -e '.status.phase == "Running" and .status.nodeName == "proof-worker"'
+pod=$(control get pods -l kubevirt.io/domain=host-probe -o jsonpath='{.items[0].metadata.name}')
+stage=guest-console
+for ((attempt=0; attempt<48; attempt++)); do
+    control logs "$pod" -c guest-console-log > console.log && grep -Eq 'login:|Welcome to CirrOS' console.log && break
+    sleep 2
+done
+grep -Eq 'login:|Welcome to CirrOS' console.log
+stage=live-kvm-vcpu
+control exec "$pod" -c compute -- sh -ec 'for fd in /proc/[0-9]*/fd/*; do case "$(readlink "$fd")" in *kvm-vcpu*) exit 0;; esac; done; exit 1'
+observe "guest_uid=$(control get vmi host-probe -o jsonpath='{.metadata.uid}') guest_console_ready=true kvm_vcpu=true"
