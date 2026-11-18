@@ -31,11 +31,12 @@ const EXTENDED_MODULE_FORMAT = 'rezono.module/2';
 
 function formatOf(module: Module): ModuleForm['format'] {
 	const extended = module.schema !== undefined || module.decls.some(decl => {
-		if ('base' in decl) return true;
+		if ('dataset' in decl) return true;
 		if ('kind' in decl) {
 			return decl.abstract || decl.embedded || hasMetadata(decl)
 				|| decl.slots.some(slot => slot.identifier || slot.embedded || slot.slotUri !== undefined || hasMetadata(slot));
 		}
+		if ('base' in decl) return true;
 		return 'enum' in decl && (decl.memberMetadata !== undefined || hasMetadata(decl));
 	});
 	return extended ? EXTENDED_MODULE_FORMAT : MODULE_FORMAT;

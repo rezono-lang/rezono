@@ -1,0 +1,6 @@
+.decl listed(item: symbol)
+listed(x) :- alpha(x), alpha__title(x, "open").
+.decl listed_count(scope: symbol, n: number)
+listed_count(s, n) :- beta(s), n = count : { listed(_) }.
+.output listed
+.output listed_count
