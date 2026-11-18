@@ -44,7 +44,9 @@ def test_legacy_rule_form_contract():
     strict=True,
     raises=AssertionError,
     reason="Validate native module/3 rule nodes in contracts/rezono-module.yaml. "
-    "Read decisions/language-native-rules.md and the authored form beside this test.",
+    "Read decisions/language-native-rules.md and the authored form beside this test. "
+    "LinkML 1.12.1 accepts false for a boolean slot, while its schema linter rejects "
+    "boolean equality. This form requires a validator that can check the literal true.",
 )
 def test_native_rule_form_contract():
     fixture = (NATIVE / "rules.json").read_bytes()
