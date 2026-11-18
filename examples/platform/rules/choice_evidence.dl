@@ -1,0 +1,7 @@
+// Keep the authored choice and each matching offer for an explicitly routed flow.
+.decl choice_evidence(source: symbol, target: symbol, function: symbol, port: number, choice: symbol, offer: symbol)
+choice_evidence(a, b, f, p, c, o) :-
+    flow(a, b, f, p),
+    choice__service(c, a), choice__function(c, f), choice__provider(c, b),
+    service__product(b, product), offer__product(o, product), offer__function(o, f), offer__port(o, p).
+.output choice_evidence
