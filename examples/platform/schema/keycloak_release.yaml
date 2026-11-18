@@ -1,0 +1,23 @@
+id: https://rezono.org/examples/platform-core/keycloak-release
+name: platform_keycloak_release
+imports: [linkml:types, core]
+default_range: string
+annotations:
+  layer: facts
+
+types:
+  ReleasePublicationDate:
+    description: The published calendar date in YYYY-MM-DD form for the rule projection.
+    typeof: string
+    pattern: '^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$'
+
+classes:
+  ProductReleaseAnnouncement:
+    description: A named release and its date in a published product announcement.
+    attributes:
+      id: {identifier: true}
+      product: {range: Product, required: true}
+      version: {required: true}
+      published: {range: ReleasePublicationDate, required: true}
+      source_url: {required: true, pattern: '^https://[^ ]+$'}
+      source_sha256: {required: true, pattern: '^[0-9a-f]{64}$'}
