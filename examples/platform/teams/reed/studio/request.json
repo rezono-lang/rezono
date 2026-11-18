@@ -1,0 +1,15 @@
+{
+  "profile": "development",
+  "items": {
+    "cluster": "small"
+  },
+  "connections": [
+    {
+      "targetZone": "stable",
+      "target": "elm-1/managed-database",
+      "peer": "elm",
+      "port": 5432
+    }
+  ],
+  "submittedAt": "2026-01-02T00:00:00Z"
+}

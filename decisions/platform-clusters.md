@@ -1,5 +1,9 @@
 # Cluster placement and fleet management
 
+## Size at the tenant design checkpoint
+
+The original fact file contains 121 authored rows and its Datalog module contains 34 rule clauses. The cluster scenario adds 10 cluster rows, nine role-zone mappings, 19 service assignments, two storage-use rows and five synthetic transport entries. The tenant model adds 14 catalog and policy entries (one per top-level table member), two request files and one additional request for the capacity comparison. At this checkpoint the baseline, cluster and tenant reference programs contain 157, 75 and 104 nonblank, non-comment Python lines respectively. These figures count the independent reference separately from pack rules. A new tenant changes the team table and request files. A new catalog item changes the catalog table.
+
 The cluster scenario replaces the baseline's shared control endpoint with one endpoint per Kubernetes cluster. Cluster identity, role and service placement are authored intent. Neither network reachability nor a product name establishes ownership. Use these inputs to explain reachability and to project firewall boundaries. Keep the original service example as a reproducible baseline.
 
 | Role | Instance | Control host | Worker host |
