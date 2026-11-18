@@ -31,6 +31,9 @@ def test_live_oracle_workflow_runs_the_compiler_entrypoint():
     assert any(step.get("env") == {"FELDERA_SHARD": "${{ matrix.shard }}"} for step in job["steps"])
     assert job["steps"][0]["name"] == "Reserve disk space on the disposable runner"
     assert "RUNNER_ENVIRONMENT" in job["steps"][0]["run"]
+    setup, = [step["run"] for step in job["steps"] if "--pull" in step.get("run", "")]
+    assert setup.index("bash compiler/ci/run_feldera_oracle.sh --pull") < setup.index("python -m venv")
+    assert setup.index("python -m venv") < setup.index('wait "$pull_pid"', setup.index("python -m venv"))
 
     oracle = job_file["jobs"]["oracle"]
     assert oracle["needs"] == "compare"

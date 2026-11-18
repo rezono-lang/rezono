@@ -2,10 +2,17 @@
 set -euo pipefail
 
 cd "$(dirname "$0")/../.."
-reports="${RUNNER_TEMP:?}/feldera-oracle"
-mkdir -p "$reports"
 # Official v0.383.0 Linux amd64 image. The release includes the SQL compiler and Rust build cache.
 image=images.feldera.com/feldera/pipeline-manager@sha256:7e1580efd340af0f6267386bd5da57aa10ef5b46572855245108209baf24bb5f
+if [[ "${1:-}" == --pull ]]; then
+  exec docker pull "$image"
+fi
+if (( $# != 0 )); then
+  echo "Usage: $0 [--pull]" >&2
+  exit 2
+fi
+reports="${RUNNER_TEMP:?}/feldera-oracle"
+mkdir -p "$reports"
 container="feldera-oracle-${GITHUB_RUN_ID:?}-${GITHUB_RUN_ATTEMPT:?}"
 inputs=$(mktemp -d "$RUNNER_TEMP/feldera-inputs.XXXXXXXX")
 chmod 755 "$inputs"
@@ -24,7 +31,9 @@ cleanup() {
 trap cleanup EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
+# The compiled pipelines run the same unoptimized code without generating debug information.
 docker run --detach --name "$container" --network none --env CARGO_NET_OFFLINE=true \
+  --env CARGO_PROFILE_DEV_DEBUG=0 --env CARGO_PROFILE_UNOPTIMIZED_DEBUG=0 \
   --mount "type=bind,src=$inputs,dst=/tmp/rezono-oracle-input,readonly" "$image"
 pid=$(docker inspect --format '{{.State.Pid}}' "$container")
 # Only loopback exists here. Enter the service network, then drop back to the runner user.

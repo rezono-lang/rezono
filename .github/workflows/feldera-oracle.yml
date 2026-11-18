@@ -44,6 +44,10 @@ jobs:
       - name: Install the locked dependencies and generate contract types
         run: |
           set -euo pipefail
+          pull_log="$RUNNER_TEMP/feldera-image-pull.log"
+          bash compiler/ci/run_feldera_oracle.sh --pull > "$pull_log" 2>&1 &
+          pull_pid=$!
+          trap 'kill "$pull_pid" 2>/dev/null || true; wait "$pull_pid" 2>/dev/null || true' EXIT
           python -m venv .venv
           source .venv/bin/activate
           python -m pip install --no-deps --require-hashes -r requirements/dev.txt
@@ -53,6 +57,11 @@ jobs:
           done
           bash contracts/gen-types.sh
           bash scripts/install-souffle.sh
+          if ! wait "$pull_pid"; then
+            cat "$pull_log" >&2
+            exit 1
+          fi
+          trap - EXIT
           echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
       - name: Run the assigned Feldera comparisons
         timeout-minutes: 26
