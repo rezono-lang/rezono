@@ -1,12 +1,18 @@
 """Replay a billing close against the exact price publication it names."""
 
 from collections.abc import Iterable
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
+from decimal import Decimal
 from fractions import Fraction
 from hashlib import sha256
 import json
 import re
 from typing import Literal, Protocol, TypedDict
+
+
+_EPOCH = datetime(1970, 1, 1, tzinfo=timezone.utc)
+_SUBMICROSECOND = re.compile(r"[.,][0-9]{6}([0-9]+)$")
+_OFFSET_FRACTION = re.compile(r"[.,]([0-9]+)$")
 
 
 class PublicationReader(Protocol):
@@ -82,24 +88,46 @@ def _rates(store: PublicationReader, digest: str) -> dict[str, Fraction]:
     return rates
 
 
-def _utc(value: str) -> datetime:
+def _seconds(delta: timedelta) -> Fraction:
+    return delta.days * 86400 + delta.seconds + Fraction(delta.microseconds, 1_000_000)
+
+
+def _utc(value: str) -> Fraction:
+    """Return exact seconds from the UTC epoch without truncating the input fraction."""
     instant = datetime.fromisoformat(value)
-    if instant.tzinfo is None:
+    offset = instant.utcoffset()
+    if offset is None:
         raise ValueError("billing instants require a UTC offset")
-    return instant.astimezone(timezone.utc)
+
+    if value.endswith("Z"):
+        local, zone = value[:-1], ""
+    else:
+        boundary = max(value.rfind("+"), value.rfind("-"))
+        local, zone = value[:boundary], value[boundary:]
+
+    seconds = _seconds(instant.replace(tzinfo=timezone.utc) - _EPOCH)
+    if remainder := _SUBMICROSECOND.search(local):
+        seconds += Fraction(Decimal("0.000000" + remainder[1]))
+
+    offset_seconds = _seconds(offset)
+    if fraction := _OFFSET_FRACTION.search(zone):
+        # datetime can discard the full fraction of a subsecond-only offset.
+        whole = abs(offset) // timedelta(seconds=1)
+        magnitude = whole + Fraction(Decimal("0." + fraction[1]))
+        offset_seconds = -magnitude if zone.startswith("-") else magnitude
+    return seconds - offset_seconds
 
 
-def _month_window(month: str) -> tuple[datetime, datetime]:
+def _month_window(month: str) -> tuple[Fraction, Fraction]:
     if not re.fullmatch(r"[0-9]{4}-[0-9]{2}", month):
         raise ValueError("the close month must have the format YYYY-MM")
     year, number = map(int, month.split("-"))
     start = datetime(year, number, 1, tzinfo=timezone.utc)
-    if number == 12:
-        return start, datetime(year + 1, 1, 1, tzinfo=timezone.utc)
-    return start, start.replace(month=number + 1)
+    end = datetime(year + 1, 1, 1, tzinfo=timezone.utc) if number == 12 else start.replace(month=number + 1)
+    return _seconds(start - _EPOCH), _seconds(end - _EPOCH)
 
 
-def _allocation(observation: Observation, month_start: datetime, month_end: datetime) -> Fraction:
+def _allocation(observation: Observation, month_start: Fraction, month_end: Fraction) -> Fraction:
     if observation["kind"] == "once":
         return Fraction(month_start <= _utc(observation["event_at"]) < month_end)
     if observation["kind"] != "period":
@@ -109,8 +137,7 @@ def _allocation(observation: Observation, month_start: datetime, month_end: date
     if end <= begin:
         raise ValueError("a billing period must end after it starts")
     overlap = min(end, month_end) - max(begin, month_start)
-    quantum = datetime.resolution
-    return Fraction(max(0, overlap // quantum), (end - begin) // quantum)
+    return max(Fraction(), overlap) / (end - begin)
 
 
 def _ratio(amount: Fraction) -> list[int]:
