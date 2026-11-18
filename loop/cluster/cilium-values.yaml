@@ -1,0 +1,14 @@
+# Use the PodCIDRs assigned by the disposable kind cluster.
+ipam:
+  mode: kubernetes
+
+policyEnforcementMode: default
+operator:
+  replicas: 1
+
+hubble:
+  enabled: true
+  relay:
+    enabled: true
+  ui:
+    enabled: false

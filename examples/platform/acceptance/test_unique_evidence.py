@@ -3,7 +3,6 @@ import pytest
 from query_fixture import check_relation, evidence
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError, reason="Explain implicit provider selection with the demand and matching offer identifiers. Read decisions/platform-query-results.md. Write examples/platform/rules/unique_evidence.dl and its own module-specific metadata if needed.")
 def test_unique_evidence():
     rows, facts = evidence()
     products = {r["id"]: r["product"] for r in facts["service"]}

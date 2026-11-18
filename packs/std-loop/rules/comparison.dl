@@ -1,0 +1,17 @@
+// The expectation's identity is the reference to its desired value.
+.decl desired(run: symbol, token: symbol, value: symbol, reason: symbol)
+desired(run, token, value, token) :- active(run), expectation(token, value).
+
+// Use the same latest event time as known, retaining every agreeing evidence reference.
+.decl current(run: symbol, token: symbol, state: symbol, value: symbol, reason: symbol)
+current(run, token, "known", value, reason) :-
+    known_latest(run, token, time), observed(run, token, time, _, "known", value, reason),
+    !known_conflict(run, token, time).
+
+.decl non_absence(run: symbol, token: symbol, event_time: number)
+non_absence(run, token, time) :-
+    known_latest(run, token, time), observed(run, token, time, _, state, _, _), state != "absent".
+
+current(run, token, "absent", value, reason) :-
+    known_latest(run, token, time), observed(run, token, time, _, "absent", value, reason),
+    !non_absence(run, token, time).
