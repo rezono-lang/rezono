@@ -5,7 +5,6 @@ import pytest
 from wire_fixtures import entry, fixture
 
 
-@pytest.mark.xfail(strict=True, reason="Read decisions/loop-fixture-evidence.md. Implement loop/boundary_excess.py. Preserve a residual allowance even when service isolation denies the same tuple.")
 def test_boundary_excess(monkeypatch):
     excess = entry(monkeypatch, "boundary_excess", "excess")
     cases = fixture("network")["cases"]
