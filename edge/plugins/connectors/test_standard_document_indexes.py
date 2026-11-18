@@ -52,7 +52,6 @@ def test_shape_name_uses_its_slot_declaration():
     assert field({"line": line}, "/kinds/Point/slots/label") in record["fields"]
 
 
-@pytest.mark.xfail(strict=True, raises=ImportError, reason="Index the ODCS contract name in edge/plugins/connectors/odcs_index.py. Read decisions/standard-export-index.md.")
 def test_contract_name_uses_schema_pack():
     text = odcs.to_yaml(SCHEMA)
     assert yaml.safe_load(text)["name"] == "atlas"
