@@ -1,4 +1,4 @@
-# The platform register's recorded date for the named release.
+# Separately authored register fixture for the release comparison.
 product_release_reference:
   - id: keycloak-26.0.0-register
     product: keycloak

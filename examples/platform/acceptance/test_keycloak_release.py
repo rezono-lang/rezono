@@ -26,7 +26,7 @@ def _release_slots(relation, key, release):
 def _outcomes(program, rows):
     relations = ["published_release", "product_release_date_drift"]
     with batch.connect(program, rows, threads=1) as connection:
-        batch.compute(connection, program, relations=relations)
+        batch.compute(connection, program, relations=["product_release_observed", *relations])
         return batch.read(connection, program, relations)
 
 
