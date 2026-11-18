@@ -41,7 +41,6 @@ def test_context_type_uses_its_slot_type():
     assert field({"pointer": "/@context/Point/@context/label/@type"}, "/kinds/Point/slots/label/type") in record["fields"]
 
 
-@pytest.mark.xfail(strict=True, raises=ImportError, reason="Index schema property shapes in edge/plugins/connectors/shacl_index.py. Read decisions/standard-export-index.md.")
 def test_shape_name_uses_its_slot_declaration():
     text = shacl.to_turtle(SCHEMA)
     line, = [i for i, s in enumerate(text.splitlines(), 1) if 'sh:name "label"' in s]
