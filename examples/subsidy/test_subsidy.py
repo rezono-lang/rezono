@@ -16,7 +16,6 @@ import shutil
 from pathlib import Path
 
 import pytest
-import yaml
 
 pytest.importorskip("duckdb")
 pytest.importorskip("rezono_compiler")
@@ -24,12 +23,8 @@ pytest.importorskip("rezono_publisher")
 
 from rezono_publisher import batch, publish, store  # noqa: E402
 
-HERE = Path(__file__).parent
-PACK = "subsidy"
-PROFILE = HERE.parents[1] / "deploy" / "profiles" / "edge.yaml"
-# The pack's own roles, and the roles of the profile that publishes it (`propose`, `viewer`).
-ROLES = {"checker": "complete", "case_officer": "may_read", "policy_adviser": "may_read", "public": "may_read"} | yaml.safe_load(
-    PROFILE.read_text(encoding="utf-8"))["access"]["roles"]
+from subsidy_publication_support import HERE, PACK, ROLES, published, rows
+
 # What `public` reads, and what it does not: the kinds of a case (rules/access.dl).
 # The justification kinds (std-decision) are read with the decision, by every role.
 SCHEME = ("alternative", "article", "calendar", "cost_item", "decision", "exception", "principle", "purpose",
@@ -64,16 +59,6 @@ def copy(tmp: Path) -> Path:
     except OSError:  # no symbolic links without rights (Windows): a copy pins the same bytes
         shutil.copytree(root / "packs", tmp / "packs")
     return d
-
-
-def published(pack_dir: Path, root: Path):
-    e = batch.epoch(pack_dir, epoch=1, knowledge_time="2026-11-10T00:00:00Z", sources=[("rules", "test")])
-    s = store.FileStore(root)
-    return s, publish.publish(e, s, ROLES)
-
-
-def rows(s, role: str, rel: str) -> list[tuple]:
-    return [tuple(r["key"]) for r in json.loads(s.get(publish.role_objects(s, PACK, "m-1", role)[f"relations/{rel}.json"]))]
 
 
 # --- Access and the invariant, through the publisher -----------------------------------------------
@@ -137,30 +122,6 @@ def test_a_role_reads_how_each_parameter_stands_on_the_evaluation_day_down_to_it
     for rel in ("judgement", "holds_at", "std_time_interval_end", "scheme_parameter__valid_until"):
         assert rows(s, "outsider", rel) == [], rel
     assert not any("par-05" in key for _, key in witnesses(s, "outsider"))
-
-
-def test_the_profile_that_publishes_the_pack_names_no_role_the_pack_does_not(tmp_path):
-    """Profile `edge` publishes this pack (publish.packs). A role of the profile that the pack's facts do
-    not name would read nothing; so each is named, and reads exactly what one of the pack's own roles reads:
-    `viewer` as the policy adviser, `propose` as the case officer, the sealed ledger included."""
-    profile = yaml.safe_load(PROFILE.read_text(encoding="utf-8"))
-    assert "examples/subsidy" in profile["publish"]["packs"]
-    filtered = sorted(r for r, mode in profile["access"]["roles"].items() if mode == "may_read")
-    assert filtered == ["propose", "viewer"]
-    s, m = published(HERE, tmp_path)
-    assert set(filtered) <= {r[0] for r in rows(s, "checker", "role")}
-    as_role = {"propose": "case_officer", "viewer": "policy_adviser"}
-    relations = sorted({name.rsplit("/", 1)[1][:-len(".json")] for name in publish.role_objects(s, PACK, "m-1", "checker")
-                        if name.startswith("relations/")}
-                       - {"may_read"})
-    assert "calc__payment_difference" in relations and "ledger_payment__refused" in relations
-    for role in filtered:
-        for rel in relations:
-            assert rows(s, role, rel) == rows(s, as_role[role], rel), (role, rel)
-        # What a role may read is said per role: the same elements, under its own name.
-        assert ({r[1:] for r in rows(s, role, "may_read")}
-                == {r[1:] for r in rows(s, as_role[role], "may_read")} != set())
-    assert rows(s, "viewer", "ledger_payment") == [] != rows(s, "propose", "ledger_payment")
 
 
 def own(s, m, role: str) -> dict[str, bytes]:

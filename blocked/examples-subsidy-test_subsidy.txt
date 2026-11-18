@@ -1,4 +1,4 @@
-examples/subsidy/test_subsidy.py: 18 items collect. Four credential-input cases need the credential-in port; the role-time case needs an independent rules reference.
+examples/subsidy/test_subsidy.py: 17 items collect. Four credential-input cases need the credential-in port; the role-time case needs an independent rules reference.
 The credential port path is edge/plugins/credential-in/credential_in.py. Its manifest also references three missing signed status-list inputs.
-The publisher profile case passed with installed local distributions. Twelve other publisher items still need individual verification.
-The three award and decision cases from this file run in examples/subsidy/test_subsidy_scenarios.py.
+Twelve other publisher items still need individual verification in an installed environment.
+The three award and decision cases run in test_subsidy_scenarios.py. The published profile role comparison runs in test_subsidy_profile.py.
