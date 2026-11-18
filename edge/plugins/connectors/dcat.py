@@ -127,6 +127,9 @@ def read(g: Graph) -> dict:
     m = re.fullmatch(re.escape(rdf.REZONO) + r"m/(m-[0-9]+)@(d-[0-9a-f]{64})", str(dataset))
     if not m:
         _fail(str(dataset), "not the name of an epoch")
+    versions = tuple(g.objects(dataset, DCAT.version))
+    if versions != (Literal(m[1]),):
+        _fail(str(dataset), "expected one DCAT version literal matching the dataset epoch")
     media = {MEDIA + kind: form for form, (kind, _) in FORMS.items()}
     files, conforms = {}, {}
     for distribution in g.objects(dataset, DCAT.distribution):
@@ -135,7 +138,7 @@ def read(g: Graph) -> dict:
             _fail(str(distribution), "not a distribution of this entry")
         files[form] = str(g.value(distribution, DCAT.accessURL))
         conforms[form] = sorted(str(o) for o in g.objects(distribution, DCTERMS.conformsTo))
-    return {"identifier": str(g.value(dataset, DCTERMS.identifier)), "version": str(g.value(dataset, DCAT.version)),
+    return {"identifier": str(g.value(dataset, DCTERMS.identifier)), "version": str(versions[0]),
             "pin": {"manifest": m[1], "dataset": m[2]}, "schema": str(g.value(dataset, DCTERMS.conformsTo)),
             "files": files, "conforms": conforms}
 
