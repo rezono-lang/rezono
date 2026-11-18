@@ -21,10 +21,12 @@ def cluster_relations(scenario, services, baseline_flow, baseline_zones):
     members = set()
     endpoints = {}
     zones = {}
+    networks = {}
     flows = set()
 
-    def endpoint(name, host, zone=None):
+    def endpoint(name, host, zone=None, network=None):
         endpoints[name] = host
+        networks[name] = network or host
         zones[name] = zone or scenario["zones"][clusters[host]]
         return name
 
@@ -45,8 +47,8 @@ def cluster_relations(scenario, services, baseline_flow, baseline_zones):
         worker_hosts[cluster] = worker_host
         members.add((cluster, hub))
         control = endpoint(f"control-{cluster}", control_host)
-        agent = endpoint(f"agent-{cluster}", worker_host, scenario["zones"][role])
-        worker = endpoint(f"workers-{cluster}", worker_host, scenario["zones"][role])
+        agent = endpoint(f"agent-{cluster}", worker_host, scenario["zones"][role], network=cluster)
+        worker = endpoint(f"workers-{cluster}", worker_host, scenario["zones"][role], network=cluster)
         flows.add((agent, fleet, "fleet-registration", ports["fleet-registration"]))
         flows.add((fleet, control, "fleet-apply", ports["fleet-apply"]))
         if hosted:
@@ -69,7 +71,16 @@ def cluster_relations(scenario, services, baseline_flow, baseline_zones):
             target = f"control-{consumer_cluster}"
         flows.add((source, target, function, port))
 
+    machines = {(f"node-{cluster}", cluster, worker_hosts[cluster]) for cluster in worker_hosts}
+    stack = scenario["machine_stack"]
+    network = scenario["network_stack"]
     return {
+        "cluster_endpoint_network": set(networks.items()),
+        "cluster_network_stack": {(cluster, network["policy"], network["observation"]) for cluster in control_hosts},
+        "cluster_machine_stack": {(name, owner, host, stack["os"], stack["distribution"],
+                                   f"{name}.{stack['bootstrap_extension']}") for name, owner, host in machines},
+        "cluster_worker_interface": {(name, owner, "secondary" if owner != host else "native")
+                                     for name, owner, host in machines},
         "cluster_service_placement": set(placement.items()),
         "cluster_control_host": set(control_hosts.items()),
         "cluster_worker_host": set(worker_hosts.items()),

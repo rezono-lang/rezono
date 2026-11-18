@@ -1,0 +1,16 @@
+{
+  "source": "embedded kind Address\n  street: Text",
+  "declarations": [
+    {
+      "kind": "Address",
+      "slots": [
+        {
+          "slot": "street",
+          "type": "Text"
+        }
+      ],
+      "derived": [],
+      "embedded": true
+    }
+  ]
+}

@@ -23,3 +23,9 @@ Each Kubernetes cluster owns one control endpoint. Its placement is physical hos
 The fixture declares cluster rows, role-based service placement, storage use and synthetic transports. Standalone calculation derives endpoint placement, fleet membership and flows by joining these inputs. A service-level request for the control-plane function resolves to its own cluster. For the old shared control service, the management cluster's control endpoint takes its place. Every other service keeps its own identity. The baseline service facts and their original expectations stay available for comparison.
 
 A future product substitution can be compared after both products have sourced capabilities. Comparing observed placement with desired placement requires a recorded run of this scenario with evidence for each discrepancy.
+
+## Guest networking and machine bootstrap
+
+Every Kubernetes cluster has a Cilium policy layer and Hubble flow observation. Every modeled Kubernetes machine runs k0s on Flatcar Container Linux, with one machine-specific Ignition input derived from desired state. The minimal scenario has one machine per cluster. Each application worker is a VM. A secondary network gives its interface an address from its own cluster and zone. A packet from that interface retains the application source network at the boundary. The virtualization pod network would translate the source and give the firewall the wrong identity. VM disk traffic belongs to the virtualization host. Hosted control still uses the management network.
+
+The compatibility of k0smotron worker bootstrap with Flatcar Ignition and KubeVirt hosting on Flatcar are two open questions. Record each result from an independent run. Ubuntu LTS with cloud-init is the candidate fallback if a trial establishes incompatibility. The placement oracle models desired machine inputs and network identities without treating either trial as successful.

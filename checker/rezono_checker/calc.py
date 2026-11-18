@@ -15,14 +15,14 @@ from graphlib import CycleError, TopologicalSorter
 
 from .canon import encode_key, number, number_text
 
-BOUND = 2**63 - 1  # W8: every numerator and denominator, in lowest terms
+BOUND = 2**63 - 1  # every numerator and denominator, in lowest terms
 
 
 def beyond(op: str) -> "Val":
-    """W8: a step whose exact result exceeds the bound has a value Rezono cannot hold,
+    """A step whose exact result exceeds the bound has a value Rezono cannot hold,
     so it is unknown, with a reason that names the bound and the operator; invalid is for a result that
     cannot exist."""
-    return Val("unknown", None, f"beyond the bound of W8 in {op}")
+    return Val("unknown", None, f"beyond the exact-number bound (2^63 - 1) in {op}")
 SEVERITY = {"known": 0, "not_applicable": 1, "unknown": 2, "invalid": 3}  # W9: the order is the precedence
 CONSTANTS = ("integer", "boolean")
 
@@ -95,7 +95,7 @@ def constant(e: dict) -> Val:
     return known(Fraction(int(e["integer"]))) if "integer" in e else known(bool(e["boolean"]))
 
 
-# --- the semantics (W8, W9) -----------------------------------------------------------------------
+# --- the semantics (exact arithmetic and state precedence) -----------------------------------------------------------------------
 
 def logic(op: str, vals: list[Val]) -> Val:
     """and: false as soon as one argument is a known false; or: true as soon as one is a known true.
@@ -371,7 +371,7 @@ def published_views(ir: dict) -> set[str]:
 
 
 def sources(ir: dict) -> dict[str, set[str] | None]:
-    """Per published view, what it rests on besides its subject kind (O8): the relations the versions
+    """Per published view, what it rests on besides its subject kind: the relations the versions
     behind it read (`reads`, absences included) and the views those versions name as a premise. Behind a rule's
     view are all versions of the rule, behind a version's view that version. None: the program does not hold
     what the view names (the rule's versions, a version, a premise), so the view is not accounted for."""

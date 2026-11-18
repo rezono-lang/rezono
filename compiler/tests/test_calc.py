@@ -133,15 +133,15 @@ def test_semantics_on_hand_written_cases():
     assert v["lazy"]["i0"] == ("known", "1") and v["lazy"]["i1"] == ("invalid", "division by zero in ratio")
     assert v["short"]["i0"] == ("not_applicable", "fact item.note does not apply")
     assert v["short"]["i1"] == ("known", "false")  # a known false decides an and
-    # W8: a step beyond the bound has a value Rezono cannot hold: unknown, naming the bound and the
+    # A step beyond the bound has a value Rezono cannot hold: unknown, naming the bound and the
     # operator; a division by zero stays invalid (lazy). What rests on such a step is unknown too, and no
     # definition is chosen on a condition that went beyond the bound.
-    assert v["overflow"]["i0"] == ("unknown", "beyond the bound of W8 in add")
-    assert v["big_ratio"]["i0"] == ("unknown", "beyond the bound of W8 in ratio")
-    assert v["after_overflow"]["i0"] == ("unknown", "beyond the bound of W8 in add")
-    assert v["guarded"]["i0"] == ("unknown", "beyond the bound of W8 in pow")
+    assert v["overflow"]["i0"] == ("unknown", "beyond the exact-number bound (2^63 - 1) in add")
+    assert v["big_ratio"]["i0"] == ("unknown", "beyond the exact-number bound (2^63 - 1) in ratio")
+    assert v["after_overflow"]["i0"] == ("unknown", "beyond the exact-number bound (2^63 - 1) in add")
+    assert v["guarded"]["i0"] == ("unknown", "beyond the exact-number bound (2^63 - 1) in pow")
     assert v["eighth"]["i0"] == ("known", "1/8")
-    assert v["too_big"]["i0"] == ("unknown", "beyond the bound of W8 in pow")
+    assert v["too_big"]["i0"] == ("unknown", "beyond the exact-number bound (2^63 - 1) in pow")
     assert v["odd"]["i0"] == ("known", "-1")
     assert v["parameters"]["i0"] == ("unknown", "parameter s1 is missing")
     assert v["concept"] == {"i0": ("known", "6"), "i1": ("unknown", "fact x0 is missing"),

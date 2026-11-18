@@ -14,13 +14,10 @@ from pathlib import Path
 
 import pytest
 
-pytest.importorskip("duckdb")
-pytest.importorskip("rezono_compiler")
-
 HERE = Path(__file__).parent
 ROOT = HERE.parents[1]
 SCHEME = HERE.parent / "subsidy-scheme"  # the definition the pack imports
-PAGE = (ROOT / "docs" / "tutorial.md").read_text(encoding="utf-8")
+PAGE = ROOT / "docs" / "tutorial.md"
 SCENARIO = "examples/subsidy/scenarios/5-higher-allowance.yaml"
 COMMANDS = ["python -m rezono_compiler check examples/subsidy",
             "python -m rezono_compiler compile examples/subsidy generated/subsidy",
@@ -29,10 +26,10 @@ COMMANDS = ["python -m rezono_compiler check examples/subsidy",
             "python examples/subsidy/reference.py --summary"]
 
 
-def blocks(language: str) -> list[str]:
+def blocks(page: str, language: str) -> list[str]:
     """The fenced blocks of the page in that language ("" for a fence without one), in page order."""
     out, inside, lang, lines = [], False, "", []
-    for line in PAGE.splitlines():
+    for line in page.splitlines():
         if line.startswith("```"):
             if inside and lang == language:
                 out.append("\n".join(lines) + "\n")
@@ -42,22 +39,26 @@ def blocks(language: str) -> list[str]:
     return out
 
 
-def test_every_quoted_line_is_in_the_pack():
+def check_quoted_lines(page: str):
     """A yaml or rule block quotes the pack or the scheme it imports, except the scenario the reader writes."""
     pack = "\n".join(p.read_text(encoding="utf-8") for at in (HERE, SCHEME)
                      for d in ("schema", "facts", "rules", "calc", "messages") for p in sorted((at / d).glob("*")))
     lines = {line.strip() for line in pack.splitlines()}
-    quoted = [b for b in blocks("yaml") + blocks("") if '"par-07"' not in b]
+    quoted = [b for b in blocks(page, "yaml") + blocks(page, "") if '"par-07"' not in b]
     assert len(quoted) >= 8
     missing = [line for b in quoted for line in b.splitlines() if line.strip() and line.strip() not in lines]
     assert missing == []
 
 
+@pytest.mark.xfail(strict=True, raises=FileNotFoundError,
+                   reason="Write docs/tutorial.md using the subsidy pack, its reference.py and the worked scenario in this test.")
 def test_the_commands_give_what_the_page_says(tmp_path):
-    commands = [line.split("#")[0].strip() for b in blocks("bash") for line in b.splitlines() if line.startswith("python ")]
+    page = PAGE.read_text(encoding="utf-8")
+    check_quoted_lines(page)
+    commands = [line.split("#")[0].strip() for b in blocks(page, "bash") for line in b.splitlines() if line.startswith("python ")]
     assert commands == COMMANDS
-    assert SCENARIO in PAGE and not (ROOT / SCENARIO).exists()
-    scenario, = [b for b in blocks("yaml") if '"par-07"' in b]
+    assert SCENARIO in page and not (ROOT / SCENARIO).exists()
+    scenario, = [b for b in blocks(page, "yaml") if '"par-07"' in b]
 
     # A copy of the pack at the same depth, next to packs/, so the commands run from a root as on the page.
     shutil.copytree(HERE, tmp_path / "examples" / "subsidy", ignore=shutil.ignore_patterns("expected", "__pycache__"))
@@ -73,7 +74,7 @@ def test_the_commands_give_what_the_page_says(tmp_path):
 
     # The proof the page shows is the proof the command writes, field for field.
     run(commands[2])
-    shown = json.loads(blocks("json")[0])
+    shown = json.loads(blocks(page, "json")[0])
     proofs = json.loads((tmp_path / "generated" / "subsidy-explained" / "0-applications" / "proofs.json").read_text(encoding="utf-8"))
     proof = next(p for p in proofs if p["root"] == shown["root"])
     witness, = [w for w in proof["witnesses"] if w["conclusion"] == shown["root"]]

@@ -1,0 +1,9 @@
+{
+  "source": "type Cents = Int",
+  "declarations": [
+    {
+      "type": "Cents",
+      "base": "Int"
+    }
+  ]
+}
