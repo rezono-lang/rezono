@@ -95,7 +95,8 @@ class InventoryTests(unittest.TestCase):
                 "    return str(store.root) == manifest['source']\n"
                 "def test_a(world): (HERE / 'a-source').write_text(str(read(world, b'first')))\n"
                 "def test_b(world): (HERE / 'b-source').write_text(str(read(world, b'second')))\n", encoding="utf-8")
-            env = dict(os.environ, PYTHONPATH=str(ROOT / "edge/publisher"), PYTEST_DISABLE_PLUGIN_AUTOLOAD="1")
+            env = dict(os.environ, PYTEST_DISABLE_PLUGIN_AUTOLOAD="1", PYTEST_PLUGINS="rezono_cluster",
+                       PYTHONPATH=os.pathsep.join(map(str, (ROOT / "edge/publisher", ROOT / "loop"))))
             plans, reports, receipts = [root / name for name in ("plans", "reports", "receipts")]
             launcher = ("import sys; sys.path.insert(0, 'scripts'); import components\n"
                         "from unittest.mock import patch\n"
