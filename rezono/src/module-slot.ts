@@ -1,6 +1,7 @@
-import { named, opt, printWorld, typeOf, type Card, type Line, type World, type ModuleComponent } from './module-support.ts';
+import { printMetadata, readMetadataLine, type Metadata } from './module-metadata.ts';
+import { block, named, opt, printWorld, typeOf, type Build, type Card, type Line, type Logical, type World, type ModuleComponent } from './module-support.ts';
 
-export interface SlotDecl {
+export interface SlotDecl extends Metadata {
 	slot: string;
 	type: string;
 	card?: Card;
@@ -8,10 +9,29 @@ export interface SlotDecl {
 	world?: World;
 	identifier?: true;
 	embedded?: true;
+	slotUri?: string;
 }
 
-export function printSlot(s: SlotDecl): string {
-	return `${s.slot}: ${s.type}${s.card ?? ''}${s.inverse !== undefined ? ` inverse ${s.inverse}` : ''}${printWorld(s.world)}${s.identifier ? ' identifier' : ''}${s.embedded ? ' embedded' : ''}`;
+export function readSlot(line: Logical, build: Build): SlotDecl {
+	const slot = build.strip<SlotDecl>(line.read!);
+	for (const child of line.block) {
+		if (readMetadataLine(slot, child, build)) continue;
+		if (child.read!.line !== 'iri') build.refuse(child, 'no line under this one');
+		else {
+			build.leaf(child);
+			if (slot.slotUri !== undefined) build.refuse(child, 'one slot IRI');
+			else if (typeof child.read!.value !== 'string') build.refuse(child, 'a JSON string');
+			else slot.slotUri = child.read!.value;
+		}
+	}
+	return slot;
+}
+
+export function printSlot(s: SlotDecl): string[] {
+	return block(`${s.slot}: ${s.type}${s.card ?? ''}${s.inverse !== undefined ? ` inverse ${s.inverse}` : ''}${printWorld(s.world)}${s.identifier ? ' identifier' : ''}${s.embedded ? ' embedded' : ''}`, [
+		...(s.slotUri === undefined ? [] : [`iri ${JSON.stringify(s.slotUri)}`]),
+		...printMetadata(s)
+	]);
 }
 
 export const slot = {
