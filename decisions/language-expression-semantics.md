@@ -55,6 +55,16 @@ Publish a conclusion to a role only when a complete, founded and readable altern
 4. Keep physical column types in the IR and carry each ordered logical column type into the compiled bundle when it is richer. Construct derived publication slots from the checked column types, including integer bounds, nominal references or identifier representations, enums, refinements, units and currencies. A legacy column with only a physical type uses its physical scalar semantics. Refuse unsupported mappings. Validate encoded keys separately from the typed cell payload and check their agreement.
 5. The ordinary publisher, publication reader and snapshot reconstruction must agree on the typed values. A published count supports numeric comparison. An integer slot with `"zero"` fails validation even when its tuple key is changed to match. Validate manifests, definitions and witnesses against the bytes of the publication that owns them. Rebuilding the same inputs reproduces the same artifacts.
 
+### Ordered derived tuple keys
+
+For each derived relation it exports as a kind, the publisher writes a `tuple_key` array on that kind in the role's schema document. The array lists the distinct column names in their checked bundle order. Its names must equal the kind's slot names, with every slot marked `derived: true`, card `1` and states `["known"]`. The kind keeps a `Text` identifier. The array is part of the pinned schema hash and supplies the order to a reader of the schema and row collection alone. JSON object member order has no authority.
+
+The reader validates each cell under its declared slot type. It reconstructs the snapshot key parts in `tuple_key` order, using the canonical identifier of a reference's checked target, canonical integer text and the original text for a text slot. Use the checked type's exact snapshot representation for other supported scalars. The row's `$id` must equal the canonical JSON of those parts byte for byte. The snapshot reconstruction uses the same validated parts. An independently supplied schema with `tuple_key: ["stage", "count", "label"]` yields the key `["stage-a","9007199254740993","001"]` for a reference to `stage-a`, that exact integer and the text `001`.
+
+Before accepting a newly produced form, compare its ordered key and slot types with the schema projected for that role from the independently pinned bundle. Reject a missing expected array even when the submitted schema and rows are rehashed consistently. A historical form without `tuple_key` retains its original pinned schema and validation rules. Evidence claiming the typed tuple guarantee requires the explicit array.
+
+The array follows the existing visibility of the derived kind and its columns. For a role that sees the same definition in two worlds, the checked order remains `["stage", "count", "label"]` even when the role receives no result row in either world. Add a hidden contributor in the second world. The role still receives the same schema metadata and no additional row, proof or source.
+
 See [native rule forms](language-native-rules.md#7-json-form-of-a-rule), [native pack linking](../docs/rezono/native-rule-pack-link.md), the [rule IR](../contracts/rules.yaml) and [publication schema and row validation](../publication/rezono_publication/l0.py).
 
 ## 4. Migration equivalence
