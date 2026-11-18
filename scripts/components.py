@@ -235,10 +235,12 @@ PR_FILE_CONSUMERS = {
     "compiler": ("admission", "checker", "edge/plugins/connectors", "examples", "loop", "publication", "run"),
     "edge/plugins/connectors": ("examples",),
     "contracts": ("admission", "canon", "checker", "compiler", "edge/plugins/connectors", "loop", "publication", "rezono"),
+    "edge/gate": ("tools/repl", "tools/mcp"),
     "edge/publisher": ("compiler", "deploy/profiles/edge", "edge/plugins/connectors", "examples", "k8s-admission", "run"),
     "loop": ("examples",),
     "publication": ("checker", "compiler", "edge/plugins/connectors", "edge/publisher", "examples"),
     "rezono": ("compiler",),
+    "tools/repl": ("tools/mcp",),
 }
 # These are test entry points and a private subprocess helper, rather than inputs to
 # the installed packages. Their shared corpus is still routed by SHARED_READERS.
@@ -251,6 +253,7 @@ PR_TEST_LEAVES = frozenset({
 PACK_READERS = ("admission", "checker", "compiler", "edge/plugins/connectors", "edge/publisher", "examples",
                 "k8s-admission", "loop", "publication", "rezono", "run")
 SHARED_READERS = {
+    "examples/platform/proof_cases/role-publication-cases.ts": ("tools/repl", "tools/mcp"),
     "docs/compiler/pack.md": ("compiler",),
     "docs/publication/l0.md": ("edge/plugins/connectors",),
     "docs/publication/cases/": ("compiler", "edge/plugins/connectors", "publication"),
