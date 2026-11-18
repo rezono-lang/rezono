@@ -655,6 +655,8 @@ def apply_change(lay: Layout, text: str, ch: dict) -> tuple[str, dict]:
             expected[kind] = records[:i] + [rec] + records[i + 1:]
 
     out = text[:edit[0]] + edit[2] + text[edit[1]:]
+    if op == "delete" and not out:
+        out = nl
     exact = restored(lines, ch.get("restore"))
     if exact is not None:
         out = exact

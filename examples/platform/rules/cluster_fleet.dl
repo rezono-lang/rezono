@@ -1,0 +1,8 @@
+.decl cluster_fleet_member(cluster: symbol, hub: symbol)
+
+// Both the member and the bound coordinator must own a control endpoint.
+cluster_fleet_member(cluster, hub) :-
+    cluster_control_host(cluster, _),
+    cluster_fleet_hub__role(_, role),
+    cluster__role(hub, role),
+    cluster_control_host(hub, _).
