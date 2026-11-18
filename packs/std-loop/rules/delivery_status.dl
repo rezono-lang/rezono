@@ -1,0 +1,44 @@
+.decl status_observation_state(event: symbol, state: symbol)
+.decl status_reading(tenant: symbol, delivery: symbol, step: symbol, run: symbol, time: number, event: symbol, at: symbol, state: symbol, reason: symbol)
+.decl status_latest(tenant: symbol, delivery: symbol, step: symbol, run: symbol, time: number)
+.decl status_contender(tenant: symbol, delivery: symbol, step: symbol, run: symbol, state: symbol, reason: symbol)
+.decl status_disagreement(tenant: symbol, delivery: symbol, step: symbol, run: symbol, reason: symbol)
+.decl status_conflict(tenant: symbol, delivery: symbol, step: symbol, run: symbol)
+.decl current_delivery_status(tenant: symbol, delivery: symbol, step: symbol, run: symbol, state: symbol, reason: symbol)
+
+status_observation_state(event, "success") :- loop_status_observation__relation(event, "done").
+status_observation_state(event, "failure") :- loop_status_observation__relation(event, "stuck").
+status_observation_state(event, "pending") :- loop_status_observation__relation(event, "planned").
+status_observation_state(event, "pending") :- loop_status_observation__relation(event, "waiting").
+
+status_reading(tenant, delivery, step, run, time, event, at, state, reason) :-
+    loop_status_observation__tenant(event, tenant), loop_status_observation__delivery(event, delivery),
+    loop_status_observation__step(event, step), loop_status_observation__run(event, run),
+    loop_status_observation__event_time(event, time), loop_status_observation__at(event, at),
+    status_observation_state(event, state), loop_status_observation__reason(event, reason).
+
+status_latest(tenant, delivery, step, run, latest) :-
+    status_reading(tenant, delivery, step, run, _, _, _, _, _),
+    latest = max time : { status_reading(tenant, delivery, step, run, time, _, _, _, _) }.
+
+status_contender(tenant, delivery, step, run, state, reason) :-
+    status_latest(tenant, delivery, step, run, time),
+    status_reading(tenant, delivery, step, run, time, _, _, state, reason).
+
+// An undated reading can still disagree with the latest comparable reading.
+status_contender(tenant, delivery, step, run, state, reason) :-
+    status_reading(tenant, delivery, step, run, -1, _, _, state, reason).
+
+status_disagreement(tenant, delivery, step, run, reason) :-
+    status_contender(tenant, delivery, step, run, state, reason),
+    status_contender(tenant, delivery, step, run, other, _), state != other.
+
+status_conflict(tenant, delivery, step, run) :- status_disagreement(tenant, delivery, step, run, _).
+
+current_delivery_status(tenant, delivery, step, run, state, reason) :-
+    status_latest(tenant, delivery, step, run, time),
+    status_reading(tenant, delivery, step, run, time, _, _, state, reason),
+    !status_conflict(tenant, delivery, step, run).
+
+current_delivery_status(tenant, delivery, step, run, "pending", reason) :-
+    status_disagreement(tenant, delivery, step, run, reason).

@@ -80,10 +80,6 @@ def test_element_grants_and_coverage_have_separate_witnesses(epoch):
     assert [(p["row"]["relation"], json.loads(p["row"]["key"])) for p in proof["premises"]] == [("permit", ["scope"])]
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError, reason=(
-    "Read decisions/witnessed-read-completeness.md. Use the witnessed explicit population right in "
-    "edge/publisher/rezono_publisher/access.py. Keep independent element filtering and reject incomplete coverage."
-))
 def test_publisher_uses_the_witnessed_population_for_explicit_programs(epoch):
     for role, expected in (("whole", {"first", "second"}), ("enumerator", {"first", "second"}),
                            ("partial", {"first"}), ("absent", set())):

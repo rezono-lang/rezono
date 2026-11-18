@@ -7,7 +7,6 @@ import odcs
 from rezono_publication import arrow
 
 
-@pytest.mark.xfail(strict=True, reason="Preserve Unicode word matching in ODCS quality rules in edge/plugins/connectors/odcs.py. Read decisions/odcs-quality-coverage.md.")
 def test_unicode_word_rule_agrees_with_the_publication_reader():
     schema = {"rezono": "1.0", "base": "https://example.org/labels/", "pack": "labels",
               "types": {"Word": {"of": "Text", "pattern": r"\w+"}},

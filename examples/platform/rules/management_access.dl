@@ -1,0 +1,28 @@
+// These counts check the recorded positions, including calendar rows with the
+// same identifier. A missing or ambiguous position cannot establish a right.
+// @absence
+.decl current_cluster_access_window(window: symbol)
+current_cluster_access_window(window) :-
+    cluster_access_window(window), interval__start(window, begins), interval__end(window, ends),
+    starts = count : { interval__start(window, _) },
+    stops = count : { interval__end(window, _) },
+    cluster_right_clock(clock), reference_point__position(clock, day),
+    positions = count : { reference_point__position(clock, _) },
+    clocks = count : { cluster_right_clock(_) },
+    starts = 1, stops = 1, positions = 1, clocks = 1, begins <= day, day < ends.
+
+.decl managed_cluster_right(identity: symbol, cluster: symbol, action: symbol, resource: symbol, namespace: symbol)
+managed_cluster_right(identity, cluster, action, resource, namespace) :-
+    current_cluster_access_window(membership),
+    cluster_membership__identity(membership, identity), cluster_membership__organization(membership, org),
+    cluster_tenant_role__identity(assignment, identity), cluster_tenant_role__organization(assignment, org),
+    cluster_tenant_role__tenant_role(assignment, role),
+    cluster_action_decision__organization(decision, org), cluster_action_decision__tenant_role(decision, role),
+    cluster_action_decision__cluster(decision, cluster), cluster_action_decision__action(decision, action),
+    cluster_action_decision__resource(decision, resource), cluster_action_decision__namespace(decision, namespace).
+managed_cluster_right(identity, cluster, action, resource, namespace) :-
+    current_cluster_access_window(grant), cluster_emergency_grant__identity(grant, identity),
+    cluster_emergency_grant__cluster(grant, cluster), cluster_emergency_grant__action(grant, action),
+    cluster_emergency_grant__resource(grant, resource), cluster_emergency_grant__namespace(grant, namespace).
+
+.output managed_cluster_right

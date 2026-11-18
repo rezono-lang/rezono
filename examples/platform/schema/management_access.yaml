@@ -1,0 +1,59 @@
+id: https://rezono.org/examples/platform-core/management-access
+name: platform_management_access
+description: Independent eligibility and scope facts for managed cluster rights.
+in_language: en
+imports: [linkml:types]
+default_range: string
+annotations:
+  layer: facts
+
+classes:
+  ClusterAccessWindow:
+    abstract: true
+    description: The half-open calendar window of a membership or an emergency grant.
+    attributes:
+      id: {identifier: true}
+      begins: {range: date, required: true}
+      ends: {range: date, required: true}
+
+  ClusterMembership:
+    is_a: ClusterAccessWindow
+    description: An identity's time-limited membership in an organization.
+    attributes:
+      identity: {required: true}
+      organization: {required: true}
+
+  ClusterTenantRole:
+    description: A role assigned independently to an identity in one organization.
+    attributes:
+      id: {identifier: true}
+      identity: {required: true}
+      organization: {required: true}
+      tenant_role: {required: true}
+
+  ClusterActionDecision:
+    description: The exact cluster action an organization grants to a tenant role.
+    attributes:
+      id: {identifier: true}
+      organization: {required: true}
+      tenant_role: {required: true}
+      cluster: {required: true}
+      action: {required: true}
+      resource: {required: true}
+      namespace: {required: true}
+
+  ClusterEmergencyGrant:
+    is_a: ClusterAccessWindow
+    description: A separate, time-limited grant for one exact cluster action.
+    attributes:
+      identity: {required: true}
+      cluster: {required: true}
+      action: {required: true}
+      resource: {required: true}
+      namespace: {required: true}
+
+  ClusterRightClock:
+    description: The explicitly supplied calendar day at which rights are read.
+    attributes:
+      id: {identifier: true}
+      day: {range: date, required: true}

@@ -7,8 +7,9 @@ for its subkinds, along the parent chain of the schema (is_a). A role without ro
 Non-interference: what a role gets depends only on what it may read, never on a row it may not.
 - A base row is readable if every column that holds an element (`columns`: the kind per column, from the
   schema) holds one the role may read. A column without a kind (an attribute value) decides nothing.
-- A role reads a relation in full by the shape of its read rules, not by the rows of the relation: kind K
-  is full for a role if a rule grants every element of K without a condition. With the role as a constant
+- A role in a program that declares `may_read_full(role, kind)` reads a kind in full only with an evaluated
+  coverage row and its rule witness. Coverage grants no element rights. For older programs, a kind is
+  full for a role if a rule grants every element of the kind without a condition. With the role as a constant
   and only `K(x)` in the body, that is the configured role of that name. With
   `may_read(r, "K", x) :- role(r), K(x).` it is every role the pack's facts name, as the rule says: for a
   configured role without its own `role` row the rule derives nothing, so it gives that role nothing in
@@ -44,6 +45,7 @@ from rezono_compiler.rules import INT
 from . import calc_scope
 
 ACCESS = "may_read"
+READ_FULL = "may_read_full"
 ROLE = "role"  # the kind of the roles (std-access): `role(r)` in a read rule means every role the pack names
 # The mapping of a role to a generic capability (std-access, the multivalued slot `capability` of Role): in a
 # read rule, `role__capability(r, "c")` means every role the pack maps to capability `c` (roles in two layers).
@@ -59,12 +61,10 @@ class Uncovered(Exception):
 class Full(frozenset):
     """The relations a role reads in full, with the evidence for each kind it reads in full (B19).
 
-    `evidence` is one entry per read rule that gives the role a kind without a condition, sorted:
-    `{"kind", "rule", "ground"}`, where `ground` is the row the grant rests on, as `[relation, *columns]`
-    (`role` or `role__capability`), or `[]` for a rule that names the role as a constant. The checker
-    derives the same entries from the complete rows and the rule IR and requires them equal; a total, an
-    absence or a seal over a kind counts as complete for the role only through such an entry, and only while
-    every element of the kind is readable (`Uncovered`)."""
+    Each evidence entry has `{"kind", "rule", "ground"}`. In explicit programs the ground is the witnessed
+    `[may_read_full, role, kind]` row. In older programs it is the row the unconditional read rule rests on
+    (`role` or `role__capability`), or `[]` for a rule that names the role as a constant. A total, an absence
+    or a seal over a kind counts as complete for the role only while every element is readable (`Uncovered`)."""
 
     evidence: tuple = ()
 
@@ -115,7 +115,7 @@ def choose(instances, derived) -> dict[tuple[str, str], dict]:
 class Scope:
     """What one filtered role may read in an epoch, decided before any derived row is looked at."""
 
-    def __init__(self, rows: dict, kinds, parents: dict, columns: dict, rules: dict, role: str):
+    def __init__(self, rows: dict, kinds, parents: dict, columns: dict, rules: dict, role: str, witnesses=()):
         grants = rows.get(ACCESS, ())
         if any(len(r) != 3 for r in grants):
             raise ValueError(f"{ACCESS} has three columns (role, kind, id): an element is typed")
@@ -133,7 +133,10 @@ class Scope:
         self.named = any(r[0] == role for r in rows.get(ROLE, ()))  # the pack's facts name this role
         # The capabilities the pack's facts map this role to (roles in two layers).
         self.capabilities = {r[1] for r in rows.get(CAPABILITY, ()) if len(r) == 2 and r[0] == role}
-        self.grants = self._grants(rules, role)
+        if any(r["name"] == READ_FULL for r in rules.get("relations", ())):
+            self.grants = self._witnessed_grants(rows.get(READ_FULL, ()), rules, witnesses, role)
+        else:
+            self.grants = self._grants(rules, role)
         self.full_kinds = {k for k, chain in self.chains.items() if {g["kind"] for g in self.grants}.intersection(chain)}
         for k in sorted(self.full_kinds):
             for r in rows.get(k, ()):
@@ -163,6 +166,35 @@ class Scope:
             if parts and not all(p["kind"] in self.full_kinds for p in parts):
                 out |= {s["refused"], s["accepted"], s["row_sha256"], *(p["accepted"] for p in parts)}
         return frozenset(out)
+
+    def _witnessed_grants(self, rows, rules: dict, witnesses, role: str) -> list[dict]:
+        """Match evaluated coverage rows to the rule substitutions that derived them."""
+        if any(len(row) != 2 for row in rows):
+            raise Uncovered(f"{READ_FULL} has two columns (role, kind)")
+        coverage = {key_text(row): row[1] for row in rows if row[0] == role}
+        if not coverage:
+            return []
+        heads = {r["id"]: r["head"]["terms"] for r in rules.get("rules", ())
+                 if r["head"]["relation"] == READ_FULL}
+        proven = defaultdict(set)
+        for w in witnesses:
+            relation, key = ref(w)
+            rule_id = w["rule_id"]
+            if relation != READ_FULL or key not in coverage or rule_id not in heads:
+                continue
+            bindings = {b["variable"]: b["value"] for b in w.get("bindings", ())}
+            terms = heads[rule_id]
+            if any(t.startswith("?") and t not in bindings for t in terms):
+                continue
+            if key_text(bindings[t] if t.startswith("?") else t for t in terms) == key:
+                proven[key].add(rule_id)
+        granted = []
+        for key, kind in sorted(coverage.items(), key=lambda item: item[1]):
+            if kind not in self.chains or key not in proven:
+                raise Uncovered(f"role {role}: no matching coverage witness for kind {kind}")
+            granted.extend({"kind": kind, "rule": rule_id, "ground": [READ_FULL, role, kind]}
+                           for rule_id in sorted(proven[key]))
+        return granted
 
     def _grants(self, rules: dict, role: str) -> list[dict]:
         """Each read rule that gives this role a kind without a condition, with the row it rests on. A rule over
@@ -283,7 +315,7 @@ def for_role(rows: dict, kinds, parents: dict, columns: dict, rules: dict, witne
     the read rules and the dependencies). With calculation rules (`calc_ir`, ir/calc.json), a calculated
     row and its witness are the role's only as `calc_visible` says.
     """
-    scope = Scope(rows, kinds, parents, with_calc(columns, calc_ir), rules, role)
+    scope = Scope(rows, kinds, parents, with_calc(columns, calc_ir), rules, role, witnesses)
     nkey = {r["name"]: len(r["key"]) for r in rules.get("relations", ())}
     readable = {rel: [r for r in rs if scope.readable(rel, r)] for rel, rs in rows.items()
                 if rel not in scope.derived and rel not in scope.calc_inputs}
