@@ -167,11 +167,16 @@ def main():
         assets = directory / "assets"
         assets.mkdir()
         with ThreadPoolExecutor(max_workers=len(ARTIFACTS)) as pool:
-            list(pool.map(partial(fetch, directory), ARTIFACTS.items()))
-        if not shutil.which("qemu-system-x86_64") or not shutil.which("qemu-img"):
-            subprocess.run(["sudo", "-n", "apt-get", "-qq", "update"], check=True, timeout=80)
-            subprocess.run(["sudo", "-n", "apt-get", "-qq", "install", "-y", "--no-install-recommends",
-                            "qemu-system-x86", "qemu-utils"], check=True, timeout=120)
+            downloads = [pool.submit(fetch, directory, item) for item in ARTIFACTS.items()]
+            if not all(shutil.which(tool) for tool in ("qemu-system-x86_64", "qemu-img", "getfacl")):
+                apt = ["sudo", "-n", "env", "DEBIAN_FRONTEND=noninteractive", "NEEDRESTART_MODE=a",
+                       "apt-get", "-o", "Acquire::Retries=1", "-o", "Acquire::http::Timeout=25",
+                       "-o", "DPkg::Lock::Timeout=45"]
+                subprocess.run([*apt, "update", "-qq"], check=True, timeout=95)
+                subprocess.run([*apt, "install", "-y", "--no-install-recommends",
+                                "qemu-system-x86", "qemu-utils", "acl"], check=True, timeout=205)
+            for download in downloads:
+                download.result()
         for name in ("k0s", "kubevirt-operator.yaml", "kubevirt-cr.yaml"):
             (directory / name).rename(assets / name)
         shutil.copyfile(HERE / "vmi.yaml", assets / "vmi.yaml")

@@ -64,7 +64,7 @@ observe "stage=$stage"
 wait_for 130 k get --raw=/readyz
 stage=cilium
 observe "stage=$stage"
-k -n kube-system apply --server-side -f cilium.yaml >/dev/null
+k apply --server-side -f cilium.yaml >/dev/null
 wait_for 150 k wait node --all --for=condition=Ready --timeout=3s
 k -n kube-system rollout status daemonset/cilium --timeout=100s
 k -n kube-system rollout status deployment/hubble-relay --timeout=100s
