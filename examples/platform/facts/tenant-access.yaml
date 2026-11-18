@@ -1,0 +1,16 @@
+role:
+  - {id: elm, title: Elm, capability: [read]}
+  - {id: reed, title: Reed, capability: [read]}
+request:
+  - {id: elm-request, owner: elm, cores: 2}
+  - {id: reed-request, owner: reed, cores: 2}
+# The quota issuer supplies these independently of the requests and fleet totals.
+quota:
+  - {id: elm-quota, owner: elm, cores: 4}
+  - {id: reed-quota, owner: reed, cores: 4}
+request_read_grant:
+  - {id: elm-request-read, reader: elm, request: elm-request}
+  - {id: reed-request-read, reader: reed, request: reed-request}
+quota_read_grant:
+  - {id: elm-quota-read, reader: elm, quota: elm-quota}
+  - {id: reed-quota-read, reader: reed, quota: reed-quota}
