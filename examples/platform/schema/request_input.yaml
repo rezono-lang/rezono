@@ -20,6 +20,9 @@ classes:
         annotations: {input_format: utc_instant}
       submitted_at_key: {range: integer, minimum_value: 0, description: Legacy input ignored by delivery numbering.}
       service_key: {range: integer, minimum_value: 0, description: Legacy input ignored by delivery numbering.}
+      global_submitted_at_key: {range: integer, minimum_value: 0}
+      tenant_key: {range: integer, minimum_value: 0}
+      global_service_key: {range: integer, minimum_value: 0}
   TenantRequestItem:
     attributes:
       id: {identifier: true}

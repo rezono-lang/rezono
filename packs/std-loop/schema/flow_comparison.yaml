@@ -1,0 +1,39 @@
+id: https://rezono.org/std-loop/flow-comparison
+name: std_loop_flow_comparison
+description: Closed policy snapshots bound to the scope of independently recorded flow events.
+imports: [linkml:types]
+default_range: string
+annotations:
+  layer: facts
+
+classes:
+  FlowPolicyBinding:
+    description: The closed policy snapshot selected for a run, collector and window.
+    attributes:
+      id: {identifier: true}
+      run: {required: true}
+      collector: {required: true}
+      window: {required: true}
+      snapshot: {required: true}
+  FlowAllowance:
+    description: An identified tuple permitted by the selected policy snapshot.
+    attributes:
+      id: {identifier: true}
+      snapshot: {required: true}
+      source: {required: true}
+      destination: {required: true}
+      protocol: {required: true}
+      port: {range: integer, required: true}
+  FlowObservedEvent:
+    description: An independently recorded observation of a service flow.
+    attributes:
+      id: {identifier: true}
+      run: {required: true}
+      collector: {required: true}
+      window: {required: true}
+      tick: {range: integer, required: true}
+      source: {required: true}
+      destination: {required: true}
+      protocol: {required: true}
+      port: {range: integer, required: true}
+      verdict: {required: true}

@@ -1,0 +1,22 @@
+id: value-hash-negative-zero
+source: docs/semantics/value-cases.yaml#hash-negative-zero
+status: settled
+input:
+  rows:
+    - key: [item-a]
+      values:
+        amount: {state: known, currency: EUR, minor_units: '0'}
+        label: {state: known, value: '-0'}
+  snapshot:
+    key: [item-a]
+    slot: amount
+    rejected:
+      key: [item-a]
+      values:
+        amount: {state: known, currency: EUR, minor_units: '-0'}
+expect:
+  value: '0'
+  state: known
+  reason: null
+  witness: null
+  refusal: minor_units is not a decimal integer

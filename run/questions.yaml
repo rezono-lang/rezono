@@ -1,0 +1,11 @@
+format: rezono.questions/1
+acceptance:
+  - id: probe-profile-budgets
+    question: Which cells and physical requirements does this probe profile have, and what is each variant's phase budget?
+    tests: [tests/test_probe_profile_budgets.py::test_probe_profile_budgets]
+  - id: physical-or-nested
+    question: Which complete physical or nested allocation is supported for this workload and purchase scope?
+    tests: [tests/test_physical_nested_allocation.py::test_physical_nested_allocation]
+  - id: run-reconciliation
+    question: How do this run's forecast, measured work and purchase registry agree, and how do rated and billed totals compare with their approved ceilings?
+    tests: [tests/test_run_reconciliation.py::test_run_reconciliation]

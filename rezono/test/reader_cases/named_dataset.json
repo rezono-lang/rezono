@@ -1,0 +1,36 @@
+{
+  "source": "dataset entries\n  fact Alpha\n    | id | title | size |\n    | a-one | \"One\" | n/a |\n  fact Beta\n    | id | alpha |\n    | b-one | a-one |",
+  "module": {
+    "rezono": "0",
+    "pack": "sample",
+    "use": [],
+    "decls": [
+      {
+        "dataset": "entries",
+        "decls": [
+          {
+            "fact": "Alpha",
+            "columns": ["id", "title", "size"],
+            "rows": [[{"lit": "a-one"}, {"lit": "\"One\""}, {"lit": "n/a"}]]
+          },
+          {
+            "fact": "Beta",
+            "columns": ["id", "alpha"],
+            "rows": [[{"lit": "b-one"}, {"lit": "a-one"}]]
+          }
+        ]
+      }
+    ]
+  },
+  "spanNames": {
+    "/decls/0": "entries",
+    "/decls/0/decls/0": "Alpha",
+    "/decls/0/decls/0/rows/0/2": "n/a",
+    "/decls/0/decls/1": "Beta",
+    "/decls/0/decls/1/rows/0/1": "a-one"
+  },
+  "rejections": [
+    {"from": "| b-one | a-one |", "to": "| b-one |"},
+    {"from": "fact Beta", "to": "kind Beta"}
+  ]
+}

@@ -1,0 +1,37 @@
+demand:
+  - {id: pair, quantity: 1, billed_periods: 2, amount_unit: minor, boot: disk, currency: EUR}
+
+offer:
+  - id: amber
+    period_price_minor: 500
+    setup_price_minor: 300
+    guarantee_mode: binding_quote
+    provider: amber-provider
+    tie_rank: 0
+    stock: 2
+    free_disks: 1
+    virtualization: observed
+    boot: disk
+    currency: EUR
+  - id: blue
+    period_price_minor: 600
+    setup_price_minor: 100
+    guarantee_mode: reject_above
+    provider: blue-provider
+    tie_rank: 1
+    stock: 2
+    free_disks: 1
+    virtualization: observed
+    boot: disk
+    currency: EUR
+  - id: clear
+    period_price_minor: 1
+    setup_price_minor: 0
+    guarantee_mode: estimate
+    provider: clear-provider
+    tie_rank: 2
+    stock: 2
+    free_disks: 1
+    virtualization: observed
+    boot: disk
+    currency: EUR

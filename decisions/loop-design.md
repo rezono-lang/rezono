@@ -67,6 +67,17 @@ run-scoped Observation envelopes. Resolve paths relative to the recording. Valid
 the declarations against contracts/port.yaml and the payloads against
 contracts/observation.yaml. The effect port represents recorded actions only. Relate
 each observation to its expectation by RowRef and retain its source and event ID.
+
+The optional recording `clock` declares the run's UTC-offset-bearing `origin` and a
+positive integer `ticks_per_second`. Admitted integer event times and boundaries
+are ticks on that clock. Historical recordings without a clock use the earliest
+source instant and the exact decimal precision of the first received round with
+an observation from the active run. Fix that origin and unit for the rest of the
+replay. When a consumed round requires finer precision, refine the integer
+representation for that snapshot and rescale all admitted times on that clock
+together. A later round can change neither a prior decision nor the time a
+stored tick represents.
+
 Feed this input to the existing replay executor. Compute needed, known, waiting,
 ready, done and stuck through the pinned pack on every snapshot, including the final
 sweep. Use ready rows for the frontier and current done, stuck and drift for the

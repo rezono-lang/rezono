@@ -1,0 +1,28 @@
+.decl request_order_fields(request: symbol, submission: number, tenant: number, service: number)
+.decl request_predecessor(request: symbol, prior: symbol)
+.decl request_ordinal(request: symbol, ordinal: number)
+
+request_order_fields(r, submission, tenant, service) :-
+    tenant_service_request(r), tenant_service_request__submitted_at(r, _),
+    tenant_service_request__tenant(r, _), tenant_service_request__service(r, _),
+    tenant_service_request__global_submitted_at_key(r, submission), tenant_service_request__tenant_key(r, tenant),
+    tenant_service_request__global_service_key(r, service).
+
+request_predecessor(r, prior) :-
+    request_order_fields(r, submission, _, _), request_order_fields(prior, earlier, _, _),
+    earlier < submission.
+
+request_predecessor(r, prior) :-
+    request_order_fields(r, submission, tenant, _), request_order_fields(prior, submission, earlier, _),
+    earlier < tenant.
+
+request_predecessor(r, prior) :-
+    request_order_fields(r, submission, tenant, service), request_order_fields(prior, submission, tenant, earlier),
+    earlier < service.
+
+request_ordinal(r, ordinal) :-
+    request_order_fields(r, _, _, _),
+    predecessors = count : { request_predecessor(r, _) },
+    ordinal = predecessors + 1.
+
+.output request_ordinal

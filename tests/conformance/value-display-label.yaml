@@ -1,0 +1,30 @@
+id: value-display-label
+source: docs/semantics/value-cases.yaml#display-label
+status: settled
+input:
+  rows:
+  - kind: item
+    id: item-c
+    group: group-b
+    labels:
+    - second
+    quantity:
+      state: unknown
+      reason: not_assigned
+  slot: item.quantity
+  subject: item-c
+  locale: en
+  labels:
+    reason.not_assigned: Pending assignment
+expect:
+  value:
+    hatched: true
+    label: Pending assignment
+  state: unknown
+  reason: not_assigned
+  witness: null
+unsupported:
+  compiler: The compiler supplies state and label data but does not render a cell.
+  checker: A rendered cell is a view responsibility, outside proof validation.
+  feldera: Cell hatching and translated text are presentation operations.
+  language: The language reader and evaluator do not render table cells.

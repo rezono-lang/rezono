@@ -1,8 +1,16 @@
-// A service selection and its vendor notice must refer to the same product.
-.decl service_licence_notice(service: symbol, product_id: symbol, notice: symbol, basis: symbol)
-service_licence_notice(s, p, n, b) :- service__product(s, p), runs(s, r), release__product(r, p),
+// A binding proposes a notice for the selected product. The versions must corroborate it.
+.decl selected_licence_binding(service: symbol, product_id: symbol, release: symbol, notice: symbol, basis: symbol)
+selected_licence_binding(s, p, r, n, b) :- service__product(s, p), runs(s, r), release__product(r, p),
     licence_release_binding__selected_release(k, r), licence_release_binding__notice(k, n),
     licence_release_binding__basis(k, b), vendor_licence_notice__product(n, p).
+
+.decl service_licence_notice(service: symbol, product_id: symbol, notice: symbol, basis: symbol)
+service_licence_notice(s, p, n, "exact-scenario-release") :-
+    selected_licence_binding(s, p, r, n, "exact-scenario-release"),
+    release__version(r, v), vendor_licence_notice__version(n, v).
+service_licence_notice(s, p, n, "example-of-selected-series") :-
+    selected_licence_binding(s, p, r, n, "example-of-selected-series"),
+    release__series(r, v), vendor_licence_notice__series(n, v).
 
 // A reference release supplies information even when the service has no selected version.
 .decl service_has_release(service: symbol)

@@ -2741,6 +2741,10 @@
   [
    "idp",
    "keycloak-26"
+  ],
+  [
+   "reg",
+   "distribution-3.0.0"
   ]
  ],
  "unauthenticated_target": [],

@@ -1,0 +1,10 @@
+cluster_worker_node:
+  - {id: node-hub, owner: hub, endpoint: workers-hub}
+  - {id: node-base, owner: base, endpoint: workers-base}
+  - {id: node-management, owner: management, endpoint: workers-management}
+  - {id: node-virtualization, owner: virtualization, endpoint: workers-virtualization}
+  - {id: node-production, owner: production, endpoint: workers-production}
+  - {id: node-development, owner: development, endpoint: workers-development}
+  - {id: node-build, owner: build, endpoint: workers-build}
+  - {id: node-edge, owner: edge, endpoint: workers-edge}
+  - {id: node-recovery, owner: recovery, endpoint: workers-recovery}

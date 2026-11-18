@@ -63,6 +63,28 @@ class RuleError(ValueError):
     pass
 
 
+@dataclass(frozen=True)
+class Embedded:
+    """Rule text placed at its original source lines and columns."""
+
+    pack: str
+    stem: str
+    file: str
+    text: str
+
+
+@dataclass(frozen=True)
+class NativeSource:
+    """Authored rule statements with their resolved names and head positions."""
+
+    pack: str
+    stem: str
+    file: str
+    text: str
+    statements: tuple[tuple, ...]
+    columns: tuple[int, ...]
+
+
 @dataclass
 class Tok:
     kind: str
@@ -397,7 +419,8 @@ def module_of(source: str, root: str, stem: str) -> str:
 
 def read(pack, pack_dir: Path, imports=None, renames=None, *, calc_inputs=None, calc_parts=None,
          folds: dict | None = None, bodies: dict | None = None, spans: dict | None = None,
-         generated: list | None = None) -> tuple[dict | None, list[str]]:
+         generated: list | None = None, embedded: tuple[Embedded, ...] = (),
+         native: tuple[NativeSource, ...] = ()) -> tuple[dict | None, list[str]]:
     """The IR of the pinned rule closure (None when every rules/ is empty), and warnings. Raises RuleError.
 
     `calc_parts` is each imported pack's part of the calculation (`calc.read_closure`): a rule reads a
@@ -407,7 +430,9 @@ def read(pack, pack_dir: Path, imports=None, renames=None, *, calc_inputs=None, 
     publishes the body as written (MOD14). `spans` receives, per rule id, its (file, line, column): of its head,
     or for a rule `@closes` generates, of the `.decl` that has the mark (MOD2). `generated` is the rule text of the
     decision tables of the pack's modules written in Rezono (rezono_table.Generated): each is read as a rule file
-    of the pack is, its module the module's id, its file and lines the module's (docs/rezono/publication.md §9.1)."""
+    of the pack is, its module the module's id, its file and lines the module's (docs/rezono/publication.md §9.1).
+    `embedded` contains relational block text aligned to its source coordinates; `native` holds checked
+    statements and head columns from authored Rezono rule modules."""
     from .calc import selection_name  # calc reads this module, so it is imported here
 
     imports, renames = imports or {}, renames or {}
@@ -421,7 +446,14 @@ def read(pack, pack_dir: Path, imports=None, renames=None, *, calc_inputs=None, 
     sources = [(p.name, p.dir) for p in imports.values()] + [(root, Path(pack_dir))]
     files = [(owner, f) for owner, at in sources for f in sorted((at / "rules").glob("*.dl"))]
     entries = [(source, f.stem, f"rules/{f.name}" if source == root else f"{source}:rules/{f.name}", f, None)
-               for source, f in files] + [(root, g.stem, g.module, None, g) for g in generated or []]
+               for source, f in files]
+    entries += [(item.pack, item.stem, item.file if item.pack == root else f"{item.pack}:{item.file}",
+                 item.text, None) for item in embedded]
+    entries += [(item.pack, item.stem, item.file, item, None) for item in native]
+    # Process dependency packs first so their relations can be extended by importers.
+    source_order = {owner: index for index, (owner, _) in enumerate(sources)}
+    entries.sort(key=lambda entry: (source_order[entry[0]], entry[1]))
+    entries += [(root, g.stem, g.module, g.text, g.at) for g in generated or []]
     if not entries:
         return None, []
     tables = base_tables(pack)
@@ -435,7 +467,7 @@ def read(pack, pack_dir: Path, imports=None, renames=None, *, calc_inputs=None, 
             visible[n] |= visible[dep]
     worlds = base_worlds(pack)
     module_sources, texts = {}, {}
-    for source, stem, where, f, g in entries:
+    for source, stem, where, contents, at in entries:
         module = module_of(source, root, stem)
         if not ir.NAME.match(stem):
             errors.append(f"{where}: module name '{stem}' is not lower snake case")
@@ -444,11 +476,16 @@ def read(pack, pack_dir: Path, imports=None, renames=None, *, calc_inputs=None, 
             errors.append(f"{where}: module {module} collides with {module_sources[module]}")
             continue
         try:
-            text, starts = f.read_text(encoding="utf-8") if g is None else g.text, []
-            stmts = [remap_statement(s, renames.get(source, {})) for s in parse_file(text, where, starts)]
-            if g is not None:  # at the module's lines; a column of the generated text is no place in it
-                stmts, starts = [at_line(s, g.at) for s in stmts], [1] * len(starts)
-            texts[where] = text
+            if isinstance(contents, NativeSource):
+                text, stmts, starts = contents.text, contents.statements, list(contents.columns)
+            else:
+                text = contents.read_text(encoding="utf-8") if isinstance(contents, Path) else contents
+                starts = []
+                stmts = [remap_statement(s, renames.get(source, {})) for s in parse_file(text, where, starts)]
+                if at is not None:  # a column of the generated text is no place in the module
+                    stmts, starts = [at_line(s, at) for s in stmts], [1] * len(starts)
+            # The same module can also supply generated rules. Keep its aligned authored text.
+            texts.setdefault(where, text)
         except RuleError as e:
             errors.append(str(e))
             continue

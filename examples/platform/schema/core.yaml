@@ -65,6 +65,8 @@ classes:
       product: {range: Product, required: true}
       released_on_day: {range: integer, required: true}
       stable: {range: YesNo, required: true}
+      version: {description: Exact version selected by the scenario when known.}
+      series: {description: Release series selected by the scenario when known.}
   Pin:
     attributes:
       id: {identifier: true}

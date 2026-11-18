@@ -13,6 +13,16 @@ inputs:
 runs:
   using: composite
   steps:
+    # Tests and collection can compile packs from authored sources through Python.
+    - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1  # v7.1.0
+      with:
+        node-version-file: .node-version
+        cache: npm
+        cache-dependency-path: rezono/package-lock.json
+    - name: Install the Rezono reader from its lockfile
+      shell: bash
+      working-directory: rezono
+      run: npm ci
     - name: Cache locked Python environment
       id: environment
       uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830  # v4.3.0
@@ -58,8 +68,9 @@ runs:
         path: |
           contracts/python/rezono_contracts/*.py
           contracts/python/rezono_contracts/*.schema.json
+          contracts/typescript/generated
           viewer/src/lib/contract/generated
-        key: contract-types-v1-${{ runner.os }}-${{ hashFiles('requirements/.python-version', 'requirements/dev.txt', 'contracts/*.yaml', 'contracts/gen-types.sh', 'contracts/python/rezono_contracts/**', 'viewer/package.json', 'viewer/src/lib/contract/generated/**') }}
+        key: contract-types-v2-${{ runner.os }}-${{ hashFiles('requirements/.python-version', 'requirements/dev.txt', 'contracts/*.yaml', 'contracts/gen-types.sh', 'contracts/python/rezono_contracts/**', 'viewer/package.json', 'viewer/src/lib/contract/generated/**') }}
     - name: Cache the pinned oracle and its distribution packages
       if: inputs.oracle == 'true'
       id: oracle
@@ -80,6 +91,30 @@ runs:
         mkdir -p "$packages"
         if [[ "$CACHE_HIT" == true ]]; then
           (cd "$packages" && sha256sum --check SHA256SUMS)
+          # The oracle only needs these verified executables and libraries. On
+          # disposable runners, unpack them without rebuilding the global package
+          # database and indexes; keep the normal install for incompatible images.
+          prefix="$RUNNER_TEMP/rezono-oracle"
+          mkdir -p "$prefix/bin" "$prefix/probe"
+          for deb in "$packages"/*.deb; do
+            dpkg-deb --extract "$deb" "$prefix"
+          done
+          cat > "$prefix/bin/souffle" <<'SH'
+        #!/usr/bin/env bash
+        set -euo pipefail
+        root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../usr" && pwd -P)
+        export PATH="$root/bin:$PATH"
+        export LD_LIBRARY_PATH="$root/lib/x86_64-linux-gnu${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+        exec "$root/bin/souffle" "$@"
+        SH
+          chmod +x "$prefix/bin/souffle"
+          printf '.decl probe(x:number)\nprobe(1).\n.output probe\n' > "$prefix/probe/probe.dl"
+          if "$prefix/bin/souffle" -j 1 -D "$prefix/probe" "$prefix/probe/probe.dl" &&
+             [[ "$(cat "$prefix/probe/probe.csv")" == 1 ]]; then
+            "$prefix/bin/souffle" --version
+            echo "$prefix/bin" >> "$GITHUB_PATH"
+            exit 0
+          fi
           if sudo dpkg --install "$packages"/*.deb; then
             souffle --version
             exit 0

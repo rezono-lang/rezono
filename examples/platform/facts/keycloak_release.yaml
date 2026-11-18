@@ -1,0 +1,6 @@
+# Separately authored register fixture for the release comparison.
+product_release_reference:
+  - id: keycloak-26.0.0-register
+    product: keycloak
+    version: 26.0.0
+    published: '2024-10-04'

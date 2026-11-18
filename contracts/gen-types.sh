@@ -6,16 +6,20 @@ set -euo pipefail
 cd "$(dirname "$0")"
 # One contract at a time; a contract that imports another (bundle imports view) carries its types.
 SCHEMAS="bundle proof explain plugin port proposal output-index diagnostic"
-ts=../viewer/src/lib/contract/generated
+ts=typescript/generated
 py=python/rezono_contracts
-mkdir -p "$py"
+mkdir -p "$py" "$ts"
+for s in $SCHEMAS manifest; do
+  gen-typescript "$s.yaml" > "$ts/$s.ts"
+done
 if [ -f ../viewer/package.json ]; then
-  mkdir -p "$ts"
+  viewer_ts=../viewer/src/lib/contract/generated
+  mkdir -p "$viewer_ts"
+  for s in $SCHEMAS; do
+    cp "$ts/$s.ts" "$viewer_ts/$s.ts"
+  done
 fi
 for s in $SCHEMAS; do
-  if [ -f ../viewer/package.json ]; then
-    gen-typescript "$s.yaml" > "$ts/$s.ts"
-  fi
   gen-pydantic "$s.yaml" > "$py/${s//-/_}.py"  # a Python module name has no hyphen
 done
 # A contract that code holds at run time also gets its JSON Schema, the schema LinkML's own validator checks

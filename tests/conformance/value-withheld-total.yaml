@@ -1,0 +1,51 @@
+id: value-withheld-total
+source: docs/semantics/value-cases.yaml#withheld-total
+status: settled
+input:
+  rows:
+    - {kind: group, id: group-a}
+    - {kind: item, id: item-a, group: group-a, labels: [first], quantity: 7}
+    - {kind: item, id: item-b, group: group-a, labels: [second], quantity: 3}
+    - {kind: link, id: link-a, tail: item-a, head: item-b}
+  role_worlds:
+    output: role_total
+    clauses: |
+      .decl link_quantity(group: symbol, link: symbol, quantity: number)
+      link_quantity(g, l, q) :- group(g), link(l), link__tail(l, i), item__group(i, g), item__quantity(i, q).
+      .decl role_total(group: symbol, quantity: number)
+      role_total(g, n) :- group(g), n = sum q : { link_quantity(g, _, q) }.
+      .output role_total
+    worlds:
+      - name: original
+        added_rows: []
+      - name: more-hidden-links
+        added_rows:
+          - {kind: link, id: link-hidden, tail: item-b, head: item-a}
+expect:
+  state: known
+  reason: null
+  value:
+    original: {summary: [], reader: [[group-a, "7"]]}
+    more-hidden-links: {summary: [], reader: [[group-a, "10"]]}
+  witness:
+    original:
+      summary: null
+      reader:
+        rule: role_total
+        premises:
+          - {relation: group, key: [group-a]}
+        aggregate:
+          relation: link_quantity
+          members:
+            - [group-a, link-a, "7"]
+    more-hidden-links:
+      summary: null
+      reader:
+        rule: role_total
+        premises:
+          - {relation: group, key: [group-a]}
+        aggregate:
+          relation: link_quantity
+          members:
+            - [group-a, link-a, "7"]
+            - [group-a, link-hidden, "3"]

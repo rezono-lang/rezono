@@ -1,0 +1,22 @@
+id: https://rezono.org/examples/platform-core/service-need
+name: platform_service_need
+description: A service needs another service for running or for changes.
+in_language: en
+imports: [linkml:types, core]
+default_range: string
+annotations:
+  layer: facts
+
+enums:
+  ServiceNeedMode:
+    permissible_values:
+      run: {description: The consumer needs the provider to continue running.}
+      change: {description: The consumer needs the provider to make a change.}
+
+classes:
+  ServiceNeed:
+    attributes:
+      id: {identifier: true}
+      consumer: {range: Service, required: true}
+      provider: {range: Service, required: true}
+      mode: {range: ServiceNeedMode, required: true}

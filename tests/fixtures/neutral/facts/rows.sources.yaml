@@ -1,0 +1,9 @@
+# The values were authored for this fixture. The record override gives the zero its own locator.
+default:
+  kind: pack
+  name: facts/rows.yaml
+  position: '$'
+  ownership: first_party
+records:
+  - of: {kind: item, id: item-d, slot: weight}
+    position: '$.item[3].weight'

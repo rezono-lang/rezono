@@ -1,0 +1,38 @@
+cluster_flow_endpoint:
+  - {id: fleet-hub, endpoint: fleet-hub, purpose: fleet}
+  - {id: storage-data, endpoint: storage-data, purpose: storage}
+  - {id: control-hub, endpoint: control-hub, purpose: control}
+  - {id: agent-hub, endpoint: agent-hub, purpose: agent}
+  - {id: control-base, endpoint: control-base, purpose: control}
+  - {id: agent-base, endpoint: agent-base, purpose: agent}
+  - {id: control-management, endpoint: control-management, purpose: control}
+  - {id: agent-management, endpoint: agent-management, purpose: agent}
+  - {id: control-virtualization, endpoint: control-virtualization, purpose: control}
+  - {id: agent-virtualization, endpoint: agent-virtualization, purpose: agent}
+  - {id: control-production, endpoint: control-production, purpose: control}
+  - {id: agent-production, endpoint: agent-production, purpose: agent}
+  - {id: workers-production, endpoint: workers-production, purpose: worker}
+  - {id: disk-production, endpoint: disk-production, purpose: disk}
+  - {id: control-development, endpoint: control-development, purpose: control}
+  - {id: agent-development, endpoint: agent-development, purpose: agent}
+  - {id: workers-development, endpoint: workers-development, purpose: worker}
+  - {id: disk-development, endpoint: disk-development, purpose: disk}
+  - {id: control-build, endpoint: control-build, purpose: control}
+  - {id: agent-build, endpoint: agent-build, purpose: agent}
+  - {id: control-edge, endpoint: control-edge, purpose: control}
+  - {id: agent-edge, endpoint: agent-edge, purpose: agent}
+  - {id: control-recovery, endpoint: control-recovery, purpose: control}
+  - {id: agent-recovery, endpoint: agent-recovery, purpose: agent}
+cluster_control_service:
+  - {id: control-plane, service: cp}
+cluster_flow_transport:
+  - {id: fleet-registration, purpose: registration, port: 443}
+  - {id: fleet-apply, purpose: apply, port: 6443}
+  - {id: control-plane, purpose: control, port: 6443}
+  - {id: vm-disk, purpose: storage, port: 7001}
+  - {id: persistent-volume, purpose: storage, port: 7002}
+cluster_storage_use:
+  - {id: production-vm-disk, owner: production, transport: vm-disk, source_purpose: disk, destination: storage-data}
+  - {id: production-volume, owner: production, transport: persistent-volume, source_purpose: worker, destination: storage-data}
+  - {id: development-vm-disk, owner: development, transport: vm-disk, source_purpose: disk, destination: storage-data}
+  - {id: development-volume, owner: development, transport: persistent-volume, source_purpose: worker, destination: storage-data}

@@ -1,14 +1,21 @@
 name: Disposable cluster
 
 on:
-  pull_request:
   workflow_dispatch:
+  workflow_call:
+    inputs:
+      tasks:
+        type: string
+        required: true
+      base:
+        type: string
+        required: true
 
 permissions:
   contents: read
 
 concurrency:
-  group: disposable-cluster-${{ github.event.pull_request.number || github.ref }}
+  group: disposable-cluster-${{ github.event.pull_request.number || github.ref }}-${{ inputs.tasks != '' && 'worker' || 'suite' }}
   cancel-in-progress: true
 
 jobs:
@@ -25,6 +32,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
+          fetch-depth: 0
           persist-credentials: false
       - name: Install pinned cluster tools
         shell: bash
@@ -97,15 +105,50 @@ jobs:
           retry cilium status --wait --wait-duration 2m
           retry kubectl wait --for=condition=Ready --timeout=60s node/rezono-fixture-control-plane
           kubectl get storageclass standard
+      - name: Reconcile the checked admission release in Argo
+        if: >-
+          inputs.tasks == ''
+          || contains(fromJSON(inputs.tasks || '[]'), 'loop/tests/test_shared_admission_handoff.py--test_shared_admission_handoff')
+          || contains(fromJSON(inputs.tasks || '[]'), 'k8s-admission/test_server_release.py--test_reconciled_admission_release_on_the_api_server')
+          || contains(fromJSON(inputs.tasks || '[]'), 'loop/tests/test_live_network_pairs.py--test_live_network_pairs')
+        shell: bash
+        run: bash loop/cluster/prepare-admission.sh
+      - name: Record the fixture network pairs
+        if: >-
+          inputs.tasks == ''
+          || contains(fromJSON(inputs.tasks || '[]'), 'loop/tests/test_live_network_pairs.py--test_live_network_pairs')
+        shell: bash
+        run: |
+          set -euo pipefail
+          PYTHONPATH="$PWD/loop" python loop/cluster/record_network.py
       - name: Select and run the repository's cluster tests
+        if: inputs.tasks == ''
         shell: bash
         env:
           PYTEST_ADDOPTS: -rA
         run: |
           set -euo pipefail
+          export REZONO_CLUSTER_KUBECONFIG="$KUBECONFIG"
           selector=loop/cluster/select_tests.py
           python "$selector" --collect-only
           python "$selector"
+      - name: Run the assigned fast checks in the fixture
+        if: inputs.tasks != ''
+        shell: bash
+        env:
+          TASKS: ${{ inputs.tasks }}
+          TASK_BASE: ${{ inputs.base }}
+          PYTEST_ADDOPTS: --rezono-cluster
+        run: |
+          set -euo pipefail
+          export REZONO_CLUSTER_KUBECONFIG="$KUBECONFIG"
+          echo "Testing checkout $(git rev-parse HEAD)"
+          assigned=$(jq -er '.[]' <<< "$TASKS")
+          while IFS= read -r task; do
+            start=$SECONDS
+            python scripts/fast_check.py "$task" --base "$TASK_BASE" | tee "$RUNNER_TEMP/fast.txt"
+            echo "Fast check took $((SECONDS-start)) seconds and printed $(wc -l < "$RUNNER_TEMP/fast.txt") lines" | tee -a "$GITHUB_STEP_SUMMARY"
+          done <<< "$assigned"
       - name: Remove the named cluster and verify cleanup
         if: always()
         shell: bash
@@ -117,6 +160,13 @@ jobs:
             exit 0
           fi
           export PATH="$dir:$PATH"
+          bridge="$RUNNER_TEMP/rezono-fixture/admission-bridge"
+          if [[ -f "$bridge.pid" ]]; then
+            kill "$(cat "$bridge.pid")" 2>/dev/null || true
+            if [[ "${{ job.status }}" != success ]]; then
+              tail -n 40 "$bridge.log"
+            fi
+          fi
           kind delete cluster --name rezono-fixture --kubeconfig "$KUBECONFIG"
           clusters=$(kind get clusters)
           if grep -Fxq rezono-fixture <<< "$clusters"; then

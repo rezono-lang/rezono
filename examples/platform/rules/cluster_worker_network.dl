@@ -1,0 +1,34 @@
+// Derive worker hosts and network attachments from the shared placement evidence.
+.decl worker_host_conflict(cluster: symbol)
+worker_host_conflict(c) :- endpoint_worker_host(c, h), endpoint_worker_host(c, other), h != other.
+
+.decl cluster_worker_host(cluster: symbol, host: symbol)
+cluster_worker_host(c, h) :- endpoint_worker_host(c, h), cluster_control_host(c, _), !worker_host_conflict(c).
+
+.decl endpoint_network_candidate(endpoint: symbol, network: symbol)
+endpoint_network_candidate(e, h) :- cluster_service_binding__service(b, e),
+    cluster_service_binding__cluster(b, h), cluster_service_binding__endpoint_zone(b, _),
+    cluster_endpoint_host(e, h).
+endpoint_network_candidate(e, h) :- cluster_owned_endpoint__network(e, "host"), cluster_endpoint_host(e, h).
+endpoint_network_candidate(e, c) :- cluster_owned_endpoint__network(e, "owner"),
+    cluster_owned_endpoint__owner(e, c), cluster_endpoint_host(e, _).
+
+.decl endpoint_network_conflict(endpoint: symbol)
+endpoint_network_conflict(e) :- endpoint_network_candidate(e, n),
+    endpoint_network_candidate(e, other), n != other.
+
+.decl cluster_endpoint_network(endpoint: symbol, network: symbol)
+cluster_endpoint_network(e, n) :- endpoint_network_candidate(e, n), !endpoint_network_conflict(e).
+
+.decl worker_node_network(node: symbol, owner: symbol, host: symbol)
+worker_node_network(n, c, h) :- cluster_worker_node__owner(n, c), cluster_worker_node__endpoint(n, e),
+    cluster_owned_endpoint__owner(e, c), cluster_owned_endpoint__hosting(e, "workforce"),
+    cluster_endpoint_host(e, h), cluster_worker_host(c, h), cluster_endpoint_network(e, c).
+
+.decl cluster_worker_interface(node: symbol, network: symbol, attachment: symbol)
+cluster_worker_interface(n, c, "native") :- worker_node_network(n, c, c).
+cluster_worker_interface(n, c, "secondary") :- worker_node_network(n, c, h), c != h.
+
+.output cluster_worker_host
+.output cluster_worker_interface
+.output cluster_endpoint_network
