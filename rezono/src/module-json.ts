@@ -38,7 +38,8 @@ function formatOf(module: Module): ModuleForm['format'] {
 			if (decl.parent !== undefined) return true;
 			return decl.abstract || decl.embedded || decl.keys?.length || hasMetadata(decl)
 				|| decl.slots.some(slot => slot.identifier || slot.embedded || slot.slotUri !== undefined
-					|| slot.constraints !== undefined || hasMetadata(slot));
+					|| slot.constraints !== undefined || hasMetadata(slot))
+				|| decl.equations?.length;
 		}
 		return 'enum' in decl && (decl.memberMetadata !== undefined || hasMetadata(decl));
 	});
