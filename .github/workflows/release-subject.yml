@@ -1,0 +1,17 @@
+name: Release subject
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, edited]
+permissions:
+  contents: read
+jobs:
+  subjects:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Check the squash commit subject
+        env:
+          SUBJECT: ${{ github.event.pull_request.title }}
+        run: python scripts/release-notes.py --subject "$SUBJECT"
