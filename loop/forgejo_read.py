@@ -31,6 +31,10 @@ def read_status(request, owner: str, repo: str, sha: str, context: str, *, page_
                 state, evidence = row.get("status"), row.get("target_url")
                 if not isinstance(state, str) or not state or not isinstance(evidence, str):
                     raise ValueError("matching commit status lacks state or evidence")
-                return {"state": state, "evidence": evidence}
+                status = {"state": state, "evidence": evidence}
+                description = row.get("description")
+                if isinstance(description, str) and description:
+                    status["description"] = description
+                return status
         if len(rows) < page_size:
             return None
