@@ -68,9 +68,8 @@ class Lowered:
     uses: list[str] = field(default_factory=list)  # module ids within the pack, sorted
 
 
-def declared(meta: dict, pack_dir: Path, errors: list[str]) -> list[Declared]:
-    """The modules pack.yaml names under `rezono`, each checked: a module and its form under rezono/, and a
-    layer. A file under rezono/ that pack.yaml does not name is refused: no part of a module is skipped."""
+def declared(meta: dict, pack_dir: Path, errors: list[str], *, reject_undeclared: bool = True) -> list[Declared]:
+    """Check the declared paths and layers. Pack compilation also refuses files absent from the manifest."""
     from .pack import LAYERS  # pack imports modules, which imports this module
 
     where = f"{pack_dir.name}/pack.yaml: {KEY}"
@@ -105,7 +104,7 @@ def declared(meta: dict, pack_dir: Path, errors: list[str]) -> list[Declared]:
             ok = False
         if ok:
             out.append(Declared(module, form, layer))
-    if (pack_dir / DIR).is_dir():
+    if reject_undeclared and (pack_dir / DIR).is_dir():
         for p in sorted((pack_dir / DIR).rglob("*")):
             rel = p.relative_to(pack_dir).as_posix()
             if p.is_file() and p.suffix in (".rezono", ".json") and rel not in named:
