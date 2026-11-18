@@ -8,7 +8,20 @@ default_range: string
 annotations:
   layer: facts
 
+enums:
+  TenantLandedInventoryState:
+    permissible_values:
+      complete:
+        description: The catalog supplies the full inventory, which may be empty.
+      unknown:
+        description: The catalog does not supply the inventory.
+
 classes:
+  TenantLandedInventory:
+    description: Coverage of the landed delivery receipts supplied by a trusted catalog.
+    attributes:
+      id: {identifier: true}
+      state: {range: TenantLandedInventoryState, required: true}
   TenantLandedDelivery:
     attributes:
       id: {identifier: true}

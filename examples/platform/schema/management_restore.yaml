@@ -1,0 +1,35 @@
+id: https://rezono.org/examples/platform-core/management-restore
+name: platform_management_restore
+description: A restore trial and the independently recorded backup capture and recovery readback.
+in_language: en
+imports: [linkml:types]
+default_range: string
+annotations:
+  layer: facts
+
+classes:
+  BackupTrial:
+    description: A named backup scheduled for restoration in a particular recovery cluster and run.
+    attributes:
+      id: {identifier: true}
+      backup: {required: true}
+      run: {required: true}
+      cluster: {required: true}
+  BackupCapture:
+    description: The original backup payload observed at capture, with its own evidence identifier.
+    attributes:
+      id: {identifier: true}
+      backup: {required: true}
+      run: {required: true}
+      source_cluster: {required: true}
+      payload_sha256: {required: true, pattern: '^[0-9a-f]{64}$'}
+  BackupReadback:
+    description: Bytes independently read in recovery and linked to the original capture evidence.
+    attributes:
+      id: {identifier: true}
+      backup: {required: true}
+      run: {required: true}
+      cluster: {required: true}
+      trial: {required: true}
+      source_evidence: {required: true}
+      payload_sha256: {required: true, pattern: '^[0-9a-f]{64}$'}

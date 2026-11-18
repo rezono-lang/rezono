@@ -59,9 +59,9 @@ def grid(sweep: dict) -> list[int]:
 def roles_of(e: publish.Epoch, roles: dict[str, str], kind: str, key: str) -> tuple[list[str], list[str]]:
     """Who gets the variant and who sees its status, with the access semantics of a publication (O7, O8).
 
-    A reader may read the swept element (kind, key). A status reader reads every relation in full: by the
-    shape of its read rules, never by the data, so whether a role sees the status tells nothing about a row
-    it may not read. Every other reader sees `unavailable` (the gate does that).
+    A reader may read the swept element (kind, key). A status reader has coverage of every relation,
+    so whether a role sees the status tells nothing about a row it may not read. Every other reader sees
+    `unavailable` (the gate does that).
     """
     doc = json.loads(e.rules)
     columns = access.with_calc(e.columns, publish.calc_ir(e))  # as a publication sees them
@@ -74,7 +74,7 @@ def roles_of(e: publish.Epoch, roles: dict[str, str], kind: str, key: str) -> tu
         if mode != access.FILTERED:
             raise ValueError(f"role {role}: unknown access {mode!r}")
         try:
-            scope = access.Scope(e.rows, e.kinds, e.parents, columns, doc, role)
+            scope = access.Scope(e.rows, e.kinds, e.parents, columns, doc, role, e.witnesses)
         except access.Uncovered as err:
             raise publish.Blocked(f"{publish.ACCESS_CHECK}: {err}") from err
         if not scope.reads(kind, key):

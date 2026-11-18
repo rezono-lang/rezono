@@ -122,10 +122,43 @@ def read_form(pack_dir: Path, d: Declared, errors: list[str]) -> dict | None:
     except (OSError, ValueError) as e:
         errors.append(f"{where}: not a JSON file ({e})")
         return None
-    if module_body(doc, FORMAT) is None and module_body(doc, IDENTIFIER_FORMAT) is None:
+    module = module_body(doc, FORMAT) or module_body(doc, IDENTIFIER_FORMAT)
+    if module is None:
         errors.append(f"{where}: not the form of a module ({FORMAT} or {IDENTIFIER_FORMAT}, contracts/rezono-module.yaml)")
         return None
+    if not valid_places(module, doc["spans"]):
+        errors.append(f"{where}: spans must place each module node once, in order, with a positive line and "
+                      "nonnegative start and end offsets in ascending order (contracts/rezono-module.yaml)")
+        return None
     return doc
+
+
+def place_pointers(value: object, at: str = "", member: str = "") -> Iterator[str]:
+    """Canonical pointers in span order. The module, unless clauses and range bodies have no own place."""
+    if isinstance(value, dict):
+        if at and member not in ("unless", "between"):
+            yield at
+        for key in sorted(value, key=lambda s: s.encode("utf-16-be", "surrogatepass")):
+            escaped = key.replace("~", "~0").replace("/", "~1")
+            yield from place_pointers(value[key], f"{at}/{escaped}", key)
+    elif isinstance(value, list):
+        for i, item in enumerate(value):
+            yield from place_pointers(item, f"{at}/{i}", member)
+
+
+def valid_places(module: dict, spans: list) -> bool:
+    expected = place_pointers(module)
+    for place in spans:
+        if not isinstance(place, dict) or place.keys() != {"at", "line", "start", "end"}:
+            return False
+        if not isinstance(place["at"], str) or place["at"] != next(expected, None):
+            return False
+        line, start, end = place["line"], place["start"], place["end"]
+        if not all(isinstance(n, str) and re.fullmatch(r"0|[1-9][0-9]*", n) for n in (line, start, end)):
+            return False
+        if line == "0" or (len(start), start) > (len(end), end):
+            return False
+    return next(expected, None) is None
 
 
 def module_body(form: object, expected_format: str) -> dict | None:
@@ -169,12 +202,15 @@ def marks(module: Path, form: Path) -> dict[tuple, tuple[int, int]]:
     The place is the name as written: the form gives its offset in code points, the text the line it is on."""
     text = module.read_text(encoding="utf-8")
     doc = json.loads(form.read_bytes())
-    start = {str(s["at"]): int(s["start"]) for s in doc["spans"]}
+    start = {s["at"]: s["start"] for s in doc["spans"]}
+    limit = str(len(text))
     out: dict[tuple, tuple[int, int]] = {}
 
     def place(at: str, path: tuple) -> None:
-        if at in start:
-            n = start[at]
+        offset = start.get(at)
+        # A structurally valid form can describe a different text. Only map a position in this source.
+        if offset is not None and (len(offset), offset) <= (len(limit), limit):
+            n = int(offset)
             out[path] = (text.count("\n", 0, n) + 1, n - text.rfind("\n", 0, n))
     for i, decl in enumerate(doc["module"]["decls"]):
         if isinstance(decl, dict) and isinstance(decl.get("kind"), str):

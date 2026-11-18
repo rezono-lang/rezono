@@ -15,6 +15,7 @@ import yaml
 
 from support import FIXTURE, compile_dir, text, violations
 from rezono_compiler import facts, modules, pack, rezono_module, writer
+from rezono_compiler.__main__ import main
 
 HERE = Path(__file__).resolve().parent / "fixtures" / "rezono"
 SHARED = FIXTURE.parent / "shared"
@@ -100,6 +101,61 @@ def test_a_writer_reads_the_classes_of_a_module_as_it_reads_a_schema_file(tmp_pa
         assert layout.declared["delta"] == ["id", "gamma", "alpha", "state", "grade"]
 
 
+def test_compile_refuses_invalid_source_places(tmp_path, capsys):
+    directory = written(tmp_path, "module")
+    path = directory / "rezono/kinds.json"
+    form = json.loads(path.read_bytes())
+    places = form["spans"]
+    first, *rest = places
+    changes = [
+        [], places[:-1], places + [places[-1]], list(reversed(places)), [places[1], *rest],
+        [{}, *rest], [None, *rest], [dict(first, at="/decls/unknown"), *rest],
+        [dict(first, text="unexpected"), *rest], [dict(first, line="0"), *rest],
+        [dict(first, line="01"), *rest], [dict(first, start="١"), *rest],
+        [dict(first, line=True), *rest], [dict(first, start=True), *rest],
+        [dict(first, start=-1), *rest], [dict(first, start="-1"), *rest],
+        [dict(first, end="0"), *rest],
+    ]
+    output = tmp_path / "out"
+    for changed in changes:
+        path.write_text(json.dumps(dict(form, spans=changed)), encoding="utf-8")
+        assert main(["compile", str(directory), str(output)]) == 1, changed
+        assert "rezono/kinds.json: spans" in capsys.readouterr().err
+        assert not (output / "bundle/schema-bundle.json").exists()
+
+
+def test_the_language_readers_places_are_accepted_in_canonical_order(tmp_path):
+    # Produced by the language reader from rezono/test/module.rezono, including nested unless clauses and ranges.
+    fixture = HERE.parents[3] / "contracts/fixtures/rezono-module/ModuleForm/valid/every-member.yaml"
+    form = json.loads(fixture.read_bytes())
+    assert list(rezono_module.place_pointers(form["module"])) == [p["at"] for p in form["spans"]]
+    assert rezono_module.valid_places(form["module"], form["spans"])
+
+    directory = written(tmp_path, "module")
+    source = directory / "rezono/kinds.rezono"
+    path = directory / "rezono/kinds.json"
+    text = source.read_text(encoding="utf-8")
+    prefix = "-- 🪶\n"
+    source.write_text(prefix + text, encoding="utf-8")
+    form = json.loads(path.read_bytes())
+    for place in form["spans"]:
+        place["line"] = str(1 + int(place["line"]))
+        place["start"] = str(len(prefix) + int(place["start"]))
+        place["end"] = place["start"]  # Zero-width spans are valid.
+    path.write_text(json.dumps(form), encoding="utf-8")
+    bundle = json.loads(compile_dir(directory, tmp_path / "out")["bundle/schema-bundle.json"])
+    gamma = next(k for k in bundle["kinds"] if k["id"] == "gamma")
+    assert source.read_text(encoding="utf-8").splitlines()[int(gamma["span"]["line"]) - 1][
+        int(gamma["span"]["column"]) - 1:].startswith("Gamma")
+
+    # The form reader accepts arbitrarily large decimal offsets. A position outside this source has no mark.
+    gamma_place = next(p for p in form["spans"] if p["at"] == "/decls/1")
+    gamma_place["start"] = gamma_place["end"] = "9" * 5000
+    assert rezono_module.valid_places(form["module"], form["spans"])
+    path.write_text(json.dumps(form), encoding="utf-8")
+    assert ("classes", "Gamma") not in rezono_module.marks(source, path)
+
+
 def test_a_changed_module_or_form_changes_the_definition_hash(tmp_path):
     d = written(tmp_path, "module")
     before = modules.pack_hash(d)
@@ -160,20 +216,25 @@ def module(d: Path, decls: list, pack: str = "minimal", use=(), rezono: str | No
     3 and on, declaration i on line 10(i+1), its slots on the lines under it, its derived values from 5 lines
     under it and its `applies` 9 lines under it. The text holds only the header, the lines a refusal of a
     header line names."""
-    spans = [{"at": f"/use/{k}", "line": str(3 + k)} for k, _ in enumerate(use)]
-    for i, decl in enumerate(decls):
-        n = 10 * (i + 1)
-        spans.append({"at": f"/decls/{i}", "line": str(n)})
-        spans += [{"at": f"/decls/{i}/slots/{j}", "line": str(n + 1 + j)} for j, _ in enumerate(decl.get("slots", []))]
-        spans += [{"at": f"/decls/{i}/derived/{k}", "line": str(n + 5 + k)} for k, _ in enumerate(decl.get("derived", []))]
-        if "applies" in decl:
-            spans.append({"at": f"/decls/{i}/applies", "line": str(n + 9)})
+    def fixture_line(pointer: str) -> int:
+        group, index, *rest = pointer[1:].split("/")
+        if group == "use":
+            return 3 + int(index)
+        base = 10 * (1 + int(index))
+        if rest[:1] == ["slots"]:
+            return base + 1 + int(rest[1])
+        if rest[:1] == ["derived"]:
+            return base + 5 + int(rest[1])
+        return base + 9 if rest[:1] == ["applies"] else base
+
     body = {"decls": decls, "pack": pack, "use": [{"use": u} for u in use]}
     if rezono is not None:
         body["rezono"] = rezono
+    spans = [{"at": p, "line": str(fixture_line(p)), "start": "0", "end": "1"}
+             for p in rezono_module.place_pointers(body)]
     (d / "rezono").mkdir(exist_ok=True)
     (d / "rezono" / f"{name}.json").write_bytes(json.dumps({"format": "rezono.module/1", "module": body,
-                                                            "spans": [s | {"start": "0", "end": "1"} for s in spans]},
+                                                            "spans": spans},
                                                            sort_keys=True).encode("utf-8"))
     header = (f"rezono {rezono}\n" if rezono is not None else "") + f"pack {pack}\n"
     (d / "rezono" / f"{name}.rezono").write_bytes(header.encode("utf-8"))

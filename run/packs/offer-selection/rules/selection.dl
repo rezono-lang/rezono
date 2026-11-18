@@ -1,12 +1,34 @@
+// One demand uses a single amount unit. Earlier demands use millionths.
+.decl declared_unit(demand: symbol)
+declared_unit(d) :- demand__amount_unit(d, _).
+
+.decl unit_conflict(demand: symbol)
+unit_conflict(d) :- demand__amount_unit(d, a), demand__amount_unit(d, b), a != b.
+
+.decl price_unit(demand: symbol, unit: symbol)
+price_unit(d, "micros") :- demand(d), !declared_unit(d).
+price_unit(d, unit) :- demand(d), demand__amount_unit(d, unit), !unit_conflict(d).
+
+.decl charge_terms(demand: symbol, offer: symbol, rate: number, setup: number)
+charge_terms(d, o, rate, setup) :- price_unit(d, "micros"), offer(o),
+    offer__price_micros(o, rate), offer__setup_price_micros(o, setup).
+charge_terms(d, o, rate, setup) :- price_unit(d, "minor"), offer(o),
+    offer__period_price_minor(o, rate), offer__setup_price_minor(o, setup).
+
 // Bill the requested machines for every period and one setup charge per machine.
+.decl payable_charge(demand: symbol, offer: symbol, total: number)
+payable_charge(d, o, total) :- charge_terms(d, o, rate, setup), rate >= 0, setup >= 0,
+    demand__quantity(d, q), q > 0, demand__billed_periods(d, periods), periods > 0,
+    usage = periods * rate, machine = usage + setup, total = q * machine.
+
 .decl payable_micros(demand: symbol, offer: symbol, total: number)
-payable_micros(d, o, total) :- demand(d), offer(o), demand__quantity(d, q), q > 0,
-    demand__billed_periods(d, periods), periods > 0, offer__price_micros(o, rate), rate >= 0,
-    offer__setup_price_micros(o, setup), setup >= 0, usage = periods * rate,
-    machine = usage + setup, total = q * machine.
+payable_micros(d, o, total) :- price_unit(d, "micros"), payable_charge(d, o, total).
+
+.decl payable_minor(demand: symbol, offer: symbol, total: number)
+payable_minor(d, o, total) :- price_unit(d, "minor"), payable_charge(d, o, total).
 
 .decl conflicting_price(demand: symbol, offer: symbol)
-conflicting_price(d, o) :- payable_micros(d, o, a), payable_micros(d, o, b), a != b.
+conflicting_price(d, o) :- payable_charge(d, o, a), payable_charge(d, o, b), a != b.
 
 .decl binding_mode(guarantee: symbol)
 binding_mode(g) :- guarantee__mode(g, "binding_quote").
@@ -21,20 +43,34 @@ disputed_guarantee(g) :- guarantee__offer(g, a), guarantee__offer(g, b), a != b.
 disputed_guarantee(g) :- guarantee__provider(g, a), guarantee__provider(g, b), a != b.
 disputed_guarantee(g) :- guarantee__currency(g, a), guarantee__currency(g, b), a != b.
 disputed_guarantee(g) :- guarantee__total_micros(g, a), guarantee__total_micros(g, b), a != b.
+disputed_guarantee(g) :- guarantee__total_minor(g, a), guarantee__total_minor(g, b), a != b.
+disputed_guarantee(g) :- guarantee__period_price_minor(g, a), guarantee__period_price_minor(g, b), a != b.
+disputed_guarantee(g) :- guarantee__setup_price_minor(g, a), guarantee__setup_price_minor(g, b), a != b.
+disputed_guarantee(g) :- guarantee__quantity(g, a), guarantee__quantity(g, b), a != b.
+disputed_guarantee(g) :- guarantee__billed_periods(g, a), guarantee__billed_periods(g, b), a != b.
 
 .decl confirmed_total(demand: symbol, offer: symbol, total: number)
 confirmed_total(d, o, total) :- guarantee(g), guarantee__offer(g, o), guarantee__demand(g, d),
     offer__provider(o, provider), guarantee__provider(g, provider), demand__currency(d, c),
     guarantee__currency(g, c), guarantee__scope(g, "whole_order"), guarantee__total_micros(g, total),
-    binding_mode(g), !disputed_guarantee(g).
+    price_unit(d, "micros"), binding_mode(g), !disputed_guarantee(g).
+confirmed_total(d, o, total) :- guarantee(g), guarantee__offer(g, o), guarantee__demand(g, d),
+    offer__provider(o, provider), guarantee__provider(g, provider), demand__currency(d, c),
+    guarantee__currency(g, c), guarantee__scope(g, "whole_order"), guarantee__total_minor(g, total),
+    price_unit(d, "minor"), charge_terms(d, o, rate, setup),
+    guarantee__period_price_minor(g, rate), guarantee__setup_price_minor(g, setup),
+    demand__quantity(d, q), guarantee__quantity(g, q),
+    demand__billed_periods(d, p), guarantee__billed_periods(g, p),
+    offer__guarantee_mode(o, mode), guarantee__mode(g, mode), binding_mode(g), !disputed_guarantee(g).
 
 .decl conflicting_terms(demand: symbol, offer: symbol)
 conflicting_terms(d, o) :- confirmed_total(d, o, a), confirmed_total(d, o, b), a != b.
 conflicting_terms(d, o) :- demand(d), offer__tie_rank(o, a), offer__tie_rank(o, b), a != b.
 conflicting_terms(d, o) :- demand(d), offer__provider(o, a), offer__provider(o, b), a != b.
+conflicting_terms(d, o) :- demand(d), offer__guarantee_mode(o, a), offer__guarantee_mode(o, b), a != b.
 
 .decl eligible(demand: symbol, offer: symbol, total: number, rank: number)
-eligible(d, o, total, r) :- payable_micros(d, o, total), !conflicting_price(d, o),
+eligible(d, o, total, r) :- payable_charge(d, o, total), !conflicting_price(d, o),
     confirmed_total(d, o, total), !conflicting_terms(d, o),
     demand__quantity(d, q), offer__stock(o, s), s >= q, offer__free_disks(o, n), n >= 1,
     offer__virtualization(o, "observed"), demand__boot(d, b), offer__boot(o, b),

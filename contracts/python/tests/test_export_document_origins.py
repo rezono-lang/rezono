@@ -13,7 +13,6 @@ def problems(field):
     return validate(field, str(CONTRACT), "OutputField").results
 
 
-@pytest.mark.xfail(strict=True, reason="Extend contracts/output-index.yaml with exclusive document origins. Read decisions/standard-export-index.md.")
 def test_schema_and_role_listing_are_distinct_typed_field_origins():
     for origin, file, raw, pointer in [
         ("schema", "schema.json", b'{"pack":"atlas"}', "/pack"),

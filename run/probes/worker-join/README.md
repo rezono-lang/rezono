@@ -38,6 +38,12 @@ instance ID. The trial counts exact matches with the VMI firmware UUID and
 reports only the counts and result. It checks the VMI, launcher and compute
 container identities again before accepting either observation.
 
+## Running the Ubuntu trials
+
+The repository owner dispatches the [Ubuntu worker acceptance workflow](../../../.github/workflows/ubuntu-worker.yml) on `main`. Select `registration` for the worker identity and lease observations. Select `kubevirt` for a fresh worker, its nested guest console and the matching domain's vCPU samples. Each dispatch uses a separate GitHub-hosted runner and records observations in its job summary.
+
+## References
+
 - [K0smotron provisioner](https://github.com/k0sproject/k0smotron/blob/c23391b08842d8b824e40e1324267f08b923f743/internal/provisioner/ignition.go)
 - [Controller-only container](https://docs.k0sproject.io/stable/k0s-in-docker/)
 - [Flatcar release digest](https://stable.release.flatcar-linux.net/amd64-usr/4757.2.3/flatcar_production_qemu_image.img.bz2.DIGESTS)

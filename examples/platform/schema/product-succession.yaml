@@ -1,0 +1,39 @@
+id: https://rezono.org/examples/platform-core/product-succession
+name: platform_product_succession
+description: Recorded product stances, succession links and individual services using a product.
+in_language: en
+imports: [linkml:types, core, standard-time, "std-decision:decision"]
+default_range: string
+annotations:
+  layer: facts
+
+enums:
+  ProductStanceValue:
+    permissible_values:
+      in_use:
+      phase_out:
+      retired:
+
+classes:
+  ProductStance:
+    description: A recorded decision and its originating product support period.
+    attributes:
+      id: {identifier: true}
+      decision: {range: Decision, required: true}
+      product: {range: Product, required: true}
+      stance: {range: ProductStanceValue, required: true}
+      period: {range: PlatformSupportPeriod, required: true}
+  ProductSuccessor:
+    description: A decision that names a successor and the support period for its handoff.
+    attributes:
+      id: {identifier: true}
+      decision: {range: Decision, required: true}
+      old: {range: Product, required: true}
+      new: {range: Product, required: true}
+      period: {range: PlatformSupportPeriod, required: true}
+  ServiceProductUse:
+    description: The recorded product that a service uses.
+    attributes:
+      id: {identifier: true}
+      service: {range: Service, required: true}
+      product: {range: Product, required: true}
