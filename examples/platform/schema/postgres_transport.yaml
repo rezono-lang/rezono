@@ -16,3 +16,14 @@ classes:
       port: {range: integer, minimum_value: 1, maximum_value: 65535, required: true}
       source_url: {required: true, pattern: '^https://[^ ]+$'}
       source_sha256: {required: true, pattern: '^[0-9a-f]{64}$'}
+
+  VendorDefaultTransportSource:
+    description: The default listening transport recorded in independently pinned vendor evidence.
+    attributes:
+      id: {identifier: true}
+      product: {range: Product, required: true}
+      series: {required: true}
+      protocol: {required: true}
+      port: {range: integer, minimum_value: 1, maximum_value: 65535, required: true}
+      source_url: {required: true, pattern: '^https://[^ ]+$'}
+      source_sha256: {required: true, pattern: '^[0-9a-f]{64}$'}
