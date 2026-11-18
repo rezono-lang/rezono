@@ -5,7 +5,6 @@ import pytest
 from wire_fixtures import entry, fixture
 
 
-@pytest.mark.xfail(strict=True, reason="Read decisions/loop-fixture-evidence.md. Implement loop/isolation_findings.py. Distinguish unintended boundary allowances from service isolation.")
 def test_isolation_findings(monkeypatch):
     findings = entry(monkeypatch, "isolation_findings", "findings")
     net = fixture("network")

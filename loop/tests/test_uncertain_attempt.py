@@ -5,7 +5,6 @@ import pytest
 from wire_fixtures import entry
 
 
-@pytest.mark.xfail(strict=True, reason="Read decisions/loop-design.md. Implement loop/uncertain_attempt.py. Reconcile a consumed or uncertain nonrepeatable effect through status only.")
 def test_uncertain_attempt(monkeypatch):
     next_operation = entry(monkeypatch, "uncertain_attempt", "next_operation")
     digest = "bc" * 32
