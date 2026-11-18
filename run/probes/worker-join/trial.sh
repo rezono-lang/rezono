@@ -224,7 +224,9 @@ done
 read -r pod pod_uid <<< "$identity"
 observe "launcher=$pod launcher_uid=$pod_uid"
 stage=live-kvm-vcpu
-control exec "$pod" -c compute -- sh -ec 'for fd in /proc/[0-9]*/fd/*; do case "$(readlink "$fd")" in *kvm-vcpu*) exit 0;; esac; done; exit 1'
+control exec "$pod" -c compute -- sh -ec "$(cat "$sources/../flatcar/kvm-vcpu.sh")"
+stage=vcpu-launcher-identity
+test "$(identify_launcher)" = "$identity"
 observe "guest_uid=$uid launcher_uid=$pod_uid kvm_vcpu=true"
 stage=guest-console
 # KubeVirt uses the VMI firmware UUID as the NoCloud instance-id.
