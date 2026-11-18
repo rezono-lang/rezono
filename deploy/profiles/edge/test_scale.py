@@ -37,7 +37,6 @@ def test_sibling_route_cannot_supply_baseline_reads():
     assert check(rows, "map", "twin")[1]
 
 
-@pytest.mark.xfail(strict=True, reason="Require measured growth of the same snapshot for the control pair in deploy/profiles/edge/scale.py. Read docs/gui.md on work per request.")
 def test_unmatched_snapshot_is_not_a_growth_measurement():
     rows = sample()
     rows[-1] = measurement("control:twin", "twin/different", 100)

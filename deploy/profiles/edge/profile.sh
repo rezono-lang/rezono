@@ -100,14 +100,15 @@ if [ -n "$copy" ]; then
     rel=$(python -c 'import json, sys; print(max(json.load(open(sys.argv[1]))["page"]["kinds"], key=lambda k: (k["count"], k["kind"]))["kind"])' "$work/control-page.json")
     off=$(wc -c < "$work/store.log")
     code=$(curl -s -o "$work/control.json" -w '%{http_code}' "http://127.0.0.1:8788/gate/$p/$m/snapshots/$rel")
-    python - "$out/results.json" "$work/store.log" "$off" "control:$p" "$code" "$work/control.json" <<'PY'
+    python - "$out/results.json" "$work/store.log" "$off" "control:$p" "$code" "$work/control.json" "$rel" <<'PY'
 import json, sys
-results, log, off, path, code, body = sys.argv[1:7]
+results, log, off, path, code, body, relation = sys.argv[1:8]
 lines = open(log, "rb").read()[int(off):].decode().splitlines()
 gets = [line.split(" ", 2) for line in lines if line.startswith("get ")]
 lists = [line.split(" ", 2) for line in lines if line.startswith("list ")]
 rs = json.load(open(results))
-rs.append({"path": path, "status": int(code), "gate_calls": 1, "gate_bytes": len(open(body, "rb").read()),
+rs.append({"path": path, "status": int(code), "snapshot": relation,
+           "gate_calls": 1, "gate_bytes": len(open(body, "rb").read()),
            "store_gets": len(gets), "store_bytes": sum(int(g[1]) for g in gets),
            "store_listed": sum(int(x[1]) for x in lists), "store_reads": [[g[2], int(g[1])] for g in gets]})
 json.dump(rs, open(results, "w"), indent=1)
