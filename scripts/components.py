@@ -217,7 +217,7 @@ def affected_components(
 FORMS_MODULE = "examples/subsidy/test_subsidy_forms.py"
 INDEPENDENT_PUBLICATIONS = "examples/subsidy/test_subsidy.py"
 RULE_EXAMPLES = "examples/test_rules.py"
-SHARDS = {"compiler": 3}
+SHARDS = {"compiler": 3, "edge/publisher": 2}
 PARALLEL = {"compiler", "examples", "edge/publisher"}
 
 
