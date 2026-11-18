@@ -5,7 +5,6 @@ import pytest
 from loop_oracle import evaluate
 
 
-@pytest.mark.xfail(strict=True, reason="Read decisions/loop-design.md. Implement packs/std-loop/rules/ready.dl. Select eligible steps with no unmet requirements and preserve declaration evidence.")
 def test_ready_evidence():
     columns = {
         "eligible": "run step reason",
