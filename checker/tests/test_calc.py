@@ -79,13 +79,13 @@ def zero(by):  # x0 is missing for i1, and was taken as 0: 0 + 1
     w.update(value="1", state="known", reason="")
 
 
-def wrapped(by):  # 2^63 - 1 + 1 beyond W8's bound, given as the value a 64-bit sum wraps to
+def wrapped(by):  # 2^63 - 1 + 1 beyond the numeric bound, given as the value a 64-bit sum wraps to
     w = by["calc__overflow", "i0"]
     step(w, "base/value").update(value="-9223372036854775808", state="known", reason="")
     w.update(value="-9223372036854775808", state="known", reason="")
 
 
-def guessed(by):  # pow(2, 64) beyond the bound, given as its exact value: known is still not what W8 says
+def guessed(by):  # pow(2, 64) beyond the bound, given as its exact value: the result must still be unknown
     w = by["calc__too_big", "i0"]
     step(w, "base/value").update(value=str(2**64), state="known", reason="")
     w.update(value=str(2**64), state="known", reason="")

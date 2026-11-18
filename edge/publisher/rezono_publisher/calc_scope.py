@@ -74,7 +74,7 @@ def reads(ir: dict, version: str | None) -> set[str]:
 
 
 def view_sources(ir: dict) -> dict[str, frozenset[str] | None]:
-    """What every published view rests on, besides its subject kind (O8): each relation that any
+    """What every published view rests on, besides its subject kind: each relation that any
     version of its rule reads, absences included, and each calculation view such a version takes as a premise.
     The view of a version rests on that version alone. None where the program does not account for the view
     (a rule without its versions, a version or a premise the program does not hold): nothing is known of it."""
