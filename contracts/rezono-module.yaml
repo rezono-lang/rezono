@@ -116,9 +116,19 @@ classes:
   ModuleForm:
     description: The form of one module.
     attributes:
-      format: {required: true, equals_string: rezono.module/1}
-      module: {required: true, range: Module, inlined: true}
+      format: {required: true, equals_string_in: [rezono.module/1, rezono.module/2]}
+      module: {required: true, range: ModuleWithRules, inlined: true}
       spans: {required: true, range: Place, multivalued: true, inlined_as_list: true, description: "The place of every node of `module` that has one, in the order of the canonical JSON of `module` (members by name, arrays by index); each node once."}
+
+    rules:
+      - preconditions:
+          slot_conditions:
+            format: {equals_string: rezono.module/1}
+        postconditions:
+          slot_conditions:
+            module:
+              all_of:
+                - {range: Module, inlined: true}
 
   Place:
     description: >-
@@ -135,7 +145,15 @@ classes:
       end: {required: true, range: DecimalText, description: "The offset after its last character."}
 
   Module:
-    description: The header of a module and its declarations, in the order of the text.
+    description: The original module shape.
+    is_a: ModuleWithRules
+    slot_usage:
+      decls:
+        none_of:
+          - {range: RulesDecl, inlined: true}
+
+  ModuleWithRules:
+    description: The header and declarations of a module, including relational rules, in the order of the text.
     attributes:
       rezono: {range: NumberText, description: "The language version of the `rezono` line (v0 §4b); absent when the text has no such line."}
       pack: {required: true, range: Name}
@@ -155,6 +173,13 @@ classes:
           - range: CheckDecl
           - range: FactTable
           - range: FactRow
+          - range: RulesDecl
+
+  RulesDecl:
+    description: An embedded relational rules block (decisions/language-rules.md).
+    attributes:
+      rules: {required: true, range: Name}
+      lines: {required: true, range: string, multivalued: true, description: "The ordered rule lines as written, including empty lines and comments."}
 
   Use:
     attributes:
