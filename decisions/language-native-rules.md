@@ -86,7 +86,7 @@ A native block uses `rezono.module/2`. It carries `rules` and `clauses`. An inte
 }
 ```
 
-Each body part carries exactly one of `atom`, `not`, `count` or `compare`. `not` contains an atom. `count` contains `result` (the variable name without `?`) and `atom`. A `compare` contains `left`, `op` and `right`. Use the existing module `spans` envelope with JSON pointers and code-point offsets. A clause's origin is the head relation token, for example `/module/decls/0/clauses/0/head/relation`. Keep spans for atom names, fields, terms, `not`, `count` and comparison operators so each refusal points to its authored token. Printing preserves clause order, body order and names.
+Each body part carries exactly one of `atom`, `not`, `count` or `compare`. `not` contains an atom. `count` contains `result` (the variable name without `?`) and `atom`. A `compare` contains `left`, `op` and `right`. Use the existing module `spans` envelope with JSON pointers relative to the module object and code-point offsets. A clause's origin is the head relation token, for example `/decls/0/clauses/0/head/relation`. Keep spans for atom names, fields, terms, `not`, `count` and comparison operators so each refusal points to its authored token. Printing preserves clause order, body order and names.
 
 ## Checking and lowering
 
