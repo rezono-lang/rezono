@@ -24,7 +24,10 @@ def test_ubuntu_trial_dispatch(tmp_path):
 
     job, = workflow["jobs"].values()
     assert set(job["if"].split(" && ")) == {
-        "github.repository == 'rezono-lang/rezono'", "github.ref == 'refs/heads/main'", "github.actor == 'vdo89'",
+        "github.repository == 'rezono-lang/rezono'",
+        "github.ref == 'refs/heads/main'",
+        "github.actor == 'vdo89'",
+        "github.triggering_actor == 'vdo89'",
     }
     assert job["runs-on"] == "ubuntu-24.04" and job["timeout-minutes"] == "40"
     checkout, trial = job["steps"]

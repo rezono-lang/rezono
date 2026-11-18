@@ -40,7 +40,7 @@ container identities again before accepting either observation.
 
 ## Running the Ubuntu trials
 
-Dispatch the [Ubuntu worker acceptance workflow](../../../.github/workflows/ubuntu-worker.yml) on `main`. Select `registration` for the worker identity and lease observations. Select `kubevirt` for a fresh worker, its nested guest console and the matching domain's vCPU samples. Each dispatch uses a separate GitHub-hosted runner and records observations in its job summary.
+The repository owner dispatches the [Ubuntu worker acceptance workflow](../../../.github/workflows/ubuntu-worker.yml) on `main`. Select `registration` for the worker identity and lease observations. Select `kubevirt` for a fresh worker, its nested guest console and the matching domain's vCPU samples. Each dispatch uses a separate GitHub-hosted runner and records observations in its job summary.
 
 ## References
 

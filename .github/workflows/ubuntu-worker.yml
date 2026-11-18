@@ -14,7 +14,11 @@ permissions:
   contents: read
 jobs:
   host:
-    if: github.repository == 'rezono-lang/rezono' && github.ref == 'refs/heads/main' && github.actor == 'vdo89'
+    if: >-
+      github.repository == 'rezono-lang/rezono' &&
+      github.ref == 'refs/heads/main' &&
+      github.actor == 'vdo89' &&
+      github.triggering_actor == 'vdo89'
     runs-on: ubuntu-24.04
     timeout-minutes: 40
     steps:
