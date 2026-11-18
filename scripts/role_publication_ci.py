@@ -25,14 +25,25 @@ READ_FILES = {
     "scripts/components.py", "scripts/role_publication_ci.py", "scripts/test_role_publication_ci.py",
     "viewer/src/lib/canon.ts",
 }
-PLATFORM_TEST = "examples/platform/proof_cases/test_role_publication_fixture.py::test_role_publication_fixture"
-REPL_TEST = "tools/repl/test/publication.accept.ts"
-MCP_TEST = "tools/mcp/test/publication.accept.ts"
+PUBLISHER_CASES = (
+    "examples/platform/proof_cases/test_role_publication_fixture.py::test_role_publication_fixture",
+    "edge/publisher/tests/test_sweep.py::test_role_scoped_sweep_publication",
+)
+NODE_TESTS = (
+    "tools/repl/test/publication.accept.ts", "tools/mcp/test/publication.accept.ts",
+    "tools/repl/test/sweep.accept.ts", "tools/mcp/test/sweep.accept.ts",
+)
 MCP_REPLAY = "tools/mcp/src/replay.ts"
 PACK, MANIFEST = "platform-core", "m-1"
 ROLES = ("elm", "reed")
-NODE_CASES = {f"published {role} session replays bytewise and sees only its own rows and grounds" for role in ROLES}
-NODE_CASES.update(f"{role} sees only its published rows and replays the shared answers" for role in ROLES)
+NODE_CASES = {
+    *(f"published {role} session replays bytewise and sees only its own rows and grounds" for role in ROLES),
+    *(f"{role} sees only its published rows and replays the shared answers" for role in ROLES),
+    "the published sweep uses the same named question and replays the exact series for each role",
+    "a sweep the role cannot see is indistinguishable from an absent sweep",
+    *(f"{role} sees the same scoped published sweep through the gate, REPL and MCP"
+      for role in ("checker", "partial", "other")),
+}
 
 
 def affected(paths: list[str], folders: set[str]) -> bool:
@@ -75,32 +86,42 @@ def passing_cases(report: Path, expected: set[str]) -> None:
                 raise ValueError(f"{report.name} {case.get('name')}: {verdict} {item.get('message', '')}")
 
 
-def platform_stores(work: Path) -> tuple[Path, Path]:
+def run_publisher_cases(work: Path) -> Path:
     import pytest
-    from rezono_publisher import batch, publish, store
 
     sys.path.insert(0, str(ROOT))
 
-    class RequiredCase:
+    class RequiredCases:
         def pytest_collection_finish(self, session):
-            if [item.nodeid for item in session.items] != [PLATFORM_TEST]:
-                pytest.exit("The exact platform publication fixture must be collected once")
-            if session.items[0].get_closest_marker("xfail") is not None:
-                pytest.exit("The required platform publication fixture is marked xfail")
+            if Counter(item.nodeid for item in session.items) != Counter(PUBLISHER_CASES):
+                pytest.exit("The exact publisher cases must each be collected once")
+            if any(item.get_closest_marker("xfail") is not None for item in session.items):
+                pytest.exit("A required publisher case is marked xfail")
 
-    report = work / "platform.xml"
+    report = work / "publisher.xml"
     runs = work / "pytest"
     result = pytest.main(["--rootdir", str(ROOT), "--basetemp", str(runs), "--junitxml", str(report),
-                          "-q", "-o", "addopts=", "-o", "junit_family=xunit2", PLATFORM_TEST],
-                         plugins=[RequiredCase()])
+                          "-q", "-o", "addopts=", "-o", "junit_family=xunit2", *PUBLISHER_CASES],
+                         plugins=[RequiredCases()])
     if result != pytest.ExitCode.OK:
-        raise ValueError(f"The platform publication fixture failed with pytest status {result}")
-    passing_cases(report, {"test_role_publication_fixture"})
-    publications = [case / "publication" for case in runs.iterdir() if case.is_dir()
-                    and not case.is_symlink() and (case / "publication").is_dir()]
-    if len(publications) != 1:
-        raise ValueError(f"Expected one FileStore from the platform fixture, got {len(publications)}")
-    initial_path, = publications
+        raise ValueError(f"The exact publisher cases failed with pytest status {result}")
+    passing_cases(report, {case.split("::", 1)[1] for case in PUBLISHER_CASES})
+    return runs
+
+
+def case_store(runs: Path, name: str) -> Path:
+    candidates = [case / name for case in runs.iterdir() if case.is_dir()
+                  and not case.is_symlink() and (case / name).is_dir()]
+    if len(candidates) != 1:
+        raise ValueError(f"Expected one publisher FileStore named {name}, got {len(candidates)}")
+    path, = candidates
+    return path
+
+
+def platform_stores(runs: Path) -> tuple[Path, Path]:
+    from rezono_publisher import batch, publish, store
+
+    initial_path = case_store(runs, "publication")
     retained_path = initial_path.with_name("second-publication")
     if not retained_path.is_dir():
         raise ValueError("The platform fixture did not produce its replica FileStore")
@@ -119,11 +140,13 @@ def platform_stores(work: Path) -> tuple[Path, Path]:
     return initial_path, retained_path
 
 
-def node_proof(work: Path, store: Path, retained: Path) -> None:
+def node_proof(work: Path, store: Path, retained: Path, sweep: Path) -> None:
     report = work / "node.xml"
-    env = {**os.environ, "REZONO_REPL_TEST_STORE": str(store), "REZONO_REPL_RETAINED_STORE": str(retained)}
-    subprocess.run(["node", "--test", "--test-reporter=junit", f"--test-reporter-destination={report}",
-                    REPL_TEST, MCP_TEST], cwd=ROOT, check=True, timeout=100, env=env)
+    env = {**os.environ, "REZONO_REPL_TEST_STORE": str(store), "REZONO_REPL_RETAINED_STORE": str(retained),
+           "REZONO_REPL_SWEEP_STORE": str(sweep)}
+    subprocess.run(["node", "--test", "--test-reporter=spec", "--test-reporter-destination=stdout",
+                    "--test-reporter=junit", f"--test-reporter-destination={report}",
+                    *NODE_TESTS], cwd=ROOT, check=True, timeout=100, env=env)
     passing_cases(report, NODE_CASES)
 
 
@@ -135,6 +158,10 @@ def stdio_proof(work: Path, store: Path, retained: Path, role: str, peer: str) -
           for prefix in (role, peer, "unused")),
         *({"tool": "grounds", "args": {"pack": PACK, "target": ["tenant_capacity_fits", actor, key, f"{actor}-quota"]}}
           for actor, key in ((role, f"{role}-request"), (peer, f"{peer}-request"), (role, "unused-request"))),
+        {"tool": "row", "args": {"pack": PACK, "kind": "Request", "id": f"{role}-request"}},
+        {"tool": "more", "args": {}},
+        *({"tool": "row", "args": {"pack": PACK, "kind": "Request", "key": [key]}}
+          for key in (f"{peer}-request", "unused-request")),
     ]
     plan_file.write_text(json.dumps({"pack": PACK, "calls": calls}), encoding="utf-8")
     process = ["node", MCP_REPLAY]
@@ -146,8 +173,9 @@ def stdio_proof(work: Path, store: Path, retained: Path, role: str, peer: str) -
         raise ValueError(f"Wrong recorded publication or role for {role}")
     if [{field: call[field] for field in ("tool", "args")} for call in results] != calls:
         raise ValueError(f"Missing or changed stdio calls for {role}")
-    ask, search, foreign_search, empty_search, grounds, foreign_grounds, missing_grounds = results
-    if [item["error"] for item in results] != [False, False, False, False, False, True, True]:
+    ask, search, foreign_search, empty_search, grounds, foreign_grounds, missing_grounds = results[:7]
+    row, next_row, foreign_row, missing_row = results[7:]
+    if [item["error"] for item in results] != [False, False, False, False, False, True, True, False, False, True, True]:
         raise ValueError(f"Wrong stdio result polarity for {role}")
     own = {f"{role}-request", f"{role}-second-request"}
     if not all(item in ask["text"] for item in own) or f"{peer}-" in ask["text"]:
@@ -157,6 +185,8 @@ def stdio_proof(work: Path, store: Path, retained: Path, role: str, peer: str) -
     refusal = "error: not found (or outside your view)"
     if "tenant_capacity_fits" not in grounds["text"] or foreign_grounds["text"] != refusal or missing_grounds["text"] != refusal:
         raise ValueError(f"Unexpected grounds visibility for {role}")
+    if "cores" not in row["text"] or "owner" not in next_row["text"] or foreign_row["text"] != missing_row["text"]:
+        raise ValueError(f"Unexpected row visibility or continuation for {role}")
     for publication in (store, retained):
         subprocess.run([*process, "replay", str(recording), "--store", publication.as_uri()],
                        cwd=ROOT, check=True, timeout=45)
@@ -170,11 +200,13 @@ def run() -> None:
             raise ValueError(f"The pinned setup did not generate the {name} contract types")
     with tempfile.TemporaryDirectory(prefix="rezono-role-publication-") as directory:
         work = Path(directory).resolve()
-        store, retained = platform_stores(work)
-        node_proof(work, store, retained)
+        runs = run_publisher_cases(work)
+        store, retained = platform_stores(runs)
+        sweep = case_store(runs, "sweep-publication")
+        node_proof(work, store, retained, sweep)
         for role, peer in ((ROLES[0], ROLES[1]), (ROLES[1], ROLES[0])):
             stdio_proof(work, store, retained, role, peer)
-    print("Verified one platform fixture, four current/retained Node cases and two current/retained stdio replays.")
+    print("Verified two publisher fixtures, nine Node cases and two current/retained stdio replays.")
 
 
 def main() -> None:

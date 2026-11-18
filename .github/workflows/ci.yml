@@ -214,7 +214,7 @@ jobs:
           editable: ${{ needs.discover.outputs.python_editable }}
       - name: Install the locked MCP dependencies
         run: npm ci --ignore-scripts --prefix tools/mcp
-      - name: Verify REPL and MCP against the same two-role publication
+      - name: Verify role-scoped current, retained and sweep publications
         run: python scripts/role_publication_ci.py run
 
   python:
@@ -382,7 +382,7 @@ jobs:
           ROLE_PUBLICATION_RESULT: ${{ needs.role_publication.result }}
         run: |
           set -euo pipefail
-          echo "discover=$DISCOVER_RESULT python=$PYTHON_RESULT node=$NODE_RESULT light=$LIGHT_RESULT cluster=$CLUSTER_RESULT"
+          echo "discover=$DISCOVER_RESULT python=$PYTHON_RESULT node=$NODE_RESULT light=$LIGHT_RESULT cluster=$CLUSTER_RESULT role_publication=$ROLE_PUBLICATION_RESULT"
           [ "$DISCOVER_RESULT" = "success" ]
           case "$PYTHON_RESULT" in success|skipped) ;; *) exit 1 ;; esac
           case "$NODE_RESULT" in success|skipped) ;; *) exit 1 ;; esac

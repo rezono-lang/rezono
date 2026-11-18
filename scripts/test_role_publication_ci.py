@@ -18,6 +18,7 @@ class SelectionTests(unittest.TestCase):
         for path in ("edge/gate/package-lock.json", "tools/repl/test/publication.accept.ts", "tools/mcp/src/replay.ts",
                      "examples/platform/facts/requests.yaml", "packs/std-explain/labels/en.yaml",
                      "contracts/proof.yaml", "compiler/rezono_compiler/pack.py", "rezono/src/module.ts",
+                     "edge/publisher/tests/test_sweep.py", "tools/repl/test/sweep.accept.ts",
                      "viewer/src/lib/canon.ts", "unclassified/source.txt"):
             with self.subTest(path=path):
                 self.assertTrue(proof.affected([path], components))
