@@ -3,7 +3,6 @@ import pytest
 from offline_cases import implementation, PLAN_HASH
 
 
-@pytest.mark.xfail(strict=True, reason="Read decisions/run-offline-acceptance.md. Implement run/order_uncertainty.py.")
 def test_order_uncertainty():
     apply = implementation("order_uncertainty.py", "invoke")
     events = []
