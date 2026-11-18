@@ -23,6 +23,8 @@ release: release
 release.product: product
 release.released_on_day: released on day
 release.stable: stable
+release.version: selected exact version
+release.series: selected release series
 pin: pin
 pin.service: service
 pin.release: release
@@ -49,6 +51,9 @@ flow: flow
 crossing: crossing
 firewall_rule: firewall rule
 in_zone_policy: in zone policy
+cluster_flow: inherent cluster flow
+cluster_firewall_rule: cross-zone cluster rule
+cluster_in_zone_policy: within-zone cluster policy
 flow_from_step: flow from step
 stable_release: stable release
 has_stable: has stable
@@ -67,6 +72,7 @@ build_reaches_tenant: build reaches tenant
 vendor_licence_notice: supplier licence notice
 vendor_licence_notice.product: product
 vendor_licence_notice.version: source release
+vendor_licence_notice.series: source release series
 vendor_licence_notice.scope: scope of declaration
 vendor_licence_notice.declaration: licence declaration
 vendor_licence_notice.source_url: release notice URL
@@ -88,6 +94,7 @@ release_correspondence.example-of-selected-series: example patch of selected ser
 licence_gap_reason: reason for missing licence evidence
 licence_gap_reason.unknown-implementation: implementation unspecified
 licence_gap_reason.unknown-unverified-source: source notice unverified
+selected_licence_binding: candidate source notice for the selected release
 service_licence_notice: source notice for a service
 service_has_release: service has a selected release
 service_has_licence_notice: service has a matching source notice

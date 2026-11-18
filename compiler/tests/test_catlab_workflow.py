@@ -6,7 +6,6 @@ import pytest
 import yaml
 
 
-@pytest.mark.xfail(strict=True, reason="Wire the locked Catlab comparison into a post-merge GitHub job that also supports manual dispatch")
 def test_catlab_workflow_runs_the_real_multiset_comparison():
     root = Path(__file__).resolve().parents[2]
     workflow = yaml.load((root / ".github/workflows/catlab-oracle.yml").read_text("utf-8"), Loader=yaml.BaseLoader)

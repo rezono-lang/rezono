@@ -9,7 +9,6 @@ import pytest
 
 
 @pytest.mark.cluster
-@pytest.mark.xfail(strict=True, reason="Read decisions/shared-disposable-cluster.md. Waits for test_cluster_workflow. Wire REZONO_CLUSTER_KUBECONFIG in the disposable workflow and verify actual ready fixture objects before admitting dependent probes.")
 def test_cluster_live_identity():
     config = Path(os.environ["REZONO_CLUSTER_KUBECONFIG"]).resolve(strict=True)
     assert config.is_relative_to(Path(os.environ["RUNNER_TEMP"]).resolve(strict=True))

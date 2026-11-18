@@ -8,12 +8,14 @@ import yaml
 from cluster_scenarios import WORKFLOW
 
 
-@pytest.mark.xfail(strict=True, reason="Read decisions/shared-disposable-cluster.md. Waits for test_kind_fixture_config, test_cilium_fixture_values and test_cluster_selection. Implement .github/workflows/disposable-cluster.yml, including pinned tools, locked repository dependencies and one cleanup path.")
 def test_cluster_workflow():
     config = yaml.load(WORKFLOW.read_text(encoding="utf-8"), Loader=yaml.BaseLoader)
-    assert "pull_request" in config["on"] and "workflow_dispatch" in config["on"]
-    assert "pull_request_target" not in config["on"]
+    assert set(config["on"]) == {"workflow_dispatch", "workflow_call"}
     assert config["permissions"] == {"contents": "read"}
+    ci = yaml.load(WORKFLOW.with_name("ci.yml").read_text(encoding="utf-8"), Loader=yaml.BaseLoader)
+    [caller] = [job for job in ci["jobs"].values() if job.get("uses") == "./.github/workflows/disposable-cluster.yml"]
+    assert "cluster_mode == 'tasks'" in caller["if"] and "cluster_mode == 'suite'" in caller["if"]
+    assert caller["with"]["tasks"] == "${{ needs.discover.outputs.cluster_tasks }}"
     jobs = list(config["jobs"].values())
     owners = [job for job in jobs if any("kind create cluster" in s.get("run", "") for s in job["steps"])]
     assert len(owners) == 1

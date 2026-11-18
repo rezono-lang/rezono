@@ -1,0 +1,19 @@
+id: value-ask-unknown-outranks-na
+source: docs/semantics/value-cases.yaml#ask-unknown-outranks-na
+status: settled
+input:
+  rows:
+    - {$kind: Group, $id: group-a}
+    - {$kind: Item, $id: item-a, group: {$ref: group-a}, labels: [first], quantity: {$na: ""}, weight: {$unknown: no_spec}}
+    - {$kind: Item, $id: item-b, group: {$ref: group-a}, labels: [first], quantity: {$na: ""}, weight: "3"}
+  select: {kind: Item, id: item-a}
+  language: "ask Item where quantity = 7 and weight > 1 show quantity"
+expect:
+  value: null
+  state: unknown
+  reason: no_spec
+  witness: {relation: item__weight, key: [item-a]}
+unsupported:
+  compiler: The rule compiler emits conclusions, while this case selects an undecided binder of an ask.
+  checker: The cause is an answer RowRef, while the shared checker replay expects a materialized rule witness.
+  feldera: The Datalog output has no Undecided answer kind or reason-bearing binder classification.

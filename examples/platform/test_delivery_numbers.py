@@ -6,10 +6,6 @@ from delivery_inventory_support import add_service, delivery_id, exact, expected
 from request_preview_case import copy_requests
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError, reason=(
-    "Use the existing request tables to derive per-tenant numbering in rules/tenant_delivery_number.dl. "
-    "Read decisions/platform-delivery-inventory.md."
-))
 def test_file_delivery_numbers(tmp_path):
     teams, catalog = copy_requests(tmp_path)
 

@@ -7,6 +7,7 @@ import sys
 from dataclasses import dataclass, field
 from importlib import resources
 from pathlib import Path
+from typing import TypedDict
 
 import yaml
 from rezono_admission.schema import INPUT_FORMATS
@@ -217,6 +218,12 @@ class ClassRule:
     otherwise: list[Condition]
 
 
+class AcceptanceQuestion(TypedDict):
+    id: str
+    question: str
+    tests: list[str]
+
+
 @dataclass
 class Pack:
     meta: dict
@@ -244,6 +251,7 @@ class Pack:
     rule_spans: dict[str, tuple | None] = field(default_factory=dict)
     # P10.3: the units the pack and the packs it imports declare, by the name of their LinkML type (`units`).
     units: dict[str, types.Unit] = field(default_factory=dict)
+    acceptance_questions: list[AcceptanceQuestion] = field(default_factory=list)  # own source inventory
 
     def ancestors(self, kind: str) -> list[str]:
         """The kind itself, then its parent, up to the root."""
@@ -562,6 +570,20 @@ def read(pack_dir: str | Path) -> Pack:
             if c.is_a and parent is None:  # LinkML cannot induce its slots either: nothing more to check
                 errors.append(f"class {cname}: parent {c.is_a} is not in the import closure of {m.id}")
                 continue
+            ancestors = {cname}
+            ancestor = c
+            while ancestor.is_a:
+                if ancestor.is_a in ancestors:
+                    errors.append(f"class {cname}: inheritance forms a cycle through {ancestor.is_a}")
+                    break
+                parent_class = sv.get_class(ancestor.is_a)
+                if parent_class is None:
+                    errors.append(f"class {cname}: parent {ancestor.is_a} is not a kind")
+                    break
+                ancestors.add(ancestor.is_a)
+                ancestor = parent_class
+            if ancestor.is_a:
+                continue
             induced = sv.class_induced_slots(cname)
             if any(s.key for s in induced):
                 errors.append(f"class {cname}: use 'identifier', not 'key'")
@@ -733,19 +755,26 @@ def read(pack_dir: str | Path) -> Pack:
             errors.append(str(e))
     generated = []
     if not errors:
-        from . import rezono_table  # it reads the pack's model, so it runs once the model is read
-        generated = rezono_table.lower_pack(pack, meta, Path(pack_dir), errors)
+        from . import rezono_relational, rezono_table  # table lowering reads the pack's model
+        forms = {m.rel: m.form for m in mods if m.pack_dir == pack_dir and m.form is not None}
+        generated = rezono_table.lower_pack(pack, meta, pack_dir, errors, forms=forms)
     if not errors:
+        from . import native_rule_lowering
+
         try:
+            native = native_rule_lowering.lower_modules(meta, mods, packs, names)
             pack.rules, rule_warnings = rules_dl.read(pack, pack_dir, ordered, renames, calc_inputs=calc_inputs,
                                                       calc_parts=calc_parts, folds=pack.folds,
                                                       bodies=pack.rule_bodies, spans=pack.rule_spans,
-                                                      generated=generated)
+                                                      generated=generated, embedded=rezono_relational.sources(mods),
+                                                      native=native)
             pack.warnings += rule_warnings
             if pack.rules:   # a variable or a column that joins two currencies is an error
                 amounts.columns(pack.rules, amounts.tables(pack))
-        except rules_dl.RuleError as e:
+        except (rules_dl.RuleError, CompileError) as e:
             errors.append(str(e))
+            if isinstance(e, CompileError):
+                typed[str(e)] = e.diagnostics
     if not errors and (view_file := views.admit(pack_dir)) is not None:
         # A view that executes: typed against the theory as its own pack, then lowered to ordinary
         # rules, and every rule that read a mapped theory table is bound to the view's relation.
@@ -2259,7 +2288,8 @@ def questions(pack: Pack, pack_dir: Path, packs: dict, errors: list[str]) -> lis
     first, a dependency before the pack that imports it, then the pack's own `questions.yaml`, each in file
     order. Every name a question uses must exist in this pack; a term is used once in the whole closure."""
     sources = [(p.dir / "questions.yaml", f"{name}/questions.yaml") for name, p in packs.items()]
-    sources.append((pack_dir / "questions.yaml", "questions.yaml"))
+    own = pack_dir / "questions.yaml"
+    sources.append((own, "questions.yaml"))
     kinds = set(pack.kinds)
     derived = {r["name"] for r in (pack.rules or {}).get("relations", []) if r["role"] == "derived"}
     relations = set(rules_dl.base_tables(pack)) | derived
@@ -2267,15 +2297,20 @@ def questions(pack: Pack, pack_dir: Path, packs: dict, errors: list[str]) -> lis
     names = {"kinds": kinds, "relations": relations, "rules": rules, "layers": set(LAYERS)}
     sweeps_ = {s["name"] for s in pack.sweeps}
     out, terms, readers = [], set(), []
+    sections = ("questions", "reader", "acceptance")
     for path, where in sources:
         if not path.exists():
             continue
         doc = yaml.safe_load(path.read_text("utf-8"))
         if not isinstance(doc, dict) or doc.get("format") != "rezono.questions/1" \
-                or not {"format"} < set(doc) <= {"format", "questions", "reader"} \
-                or not all(isinstance(doc.get(k, []), list) for k in ("questions", "reader")):
-            errors.append(f"{where}: must be a mapping with format rezono.questions/1 and questions or reader, each a list")
+                or not {"format"} < set(doc) <= {"format", *sections} \
+                or not all(isinstance(doc.get(k, []), list) for k in sections):
+            errors.append(f"{where}: must be a mapping with format rezono.questions/1 and questions or reader "
+                          "or acceptance, each a list")
             continue
+        acceptance = acceptance_questions(doc.get("acceptance", []), where, errors)
+        if path == own:
+            pack.acceptance_questions = acceptance
         readers += [(r, f"{where}: reader question {n}") for n, r in enumerate(doc.get("reader", []))]
         for n, q in enumerate(doc.get("questions", [])):
             q = question(q, f"{where}: question {n}", names, sweeps_, errors)
@@ -2302,8 +2337,38 @@ def questions(pack: Pack, pack_dir: Path, packs: dict, errors: list[str]) -> lis
 
 
 READER_ID = re.compile(r"^[a-z][a-z0-9]*(-[a-z0-9]+)*$")  # kebab case: the reader question's address
+TEST_POINTER = re.compile(r"(?:[A-Za-z0-9_][A-Za-z0-9_.-]*/)*[A-Za-z0-9_][A-Za-z0-9_.-]*\.py::test_[A-Za-z0-9_]+")
 MESSAGE_ID = re.compile(r"^[a-z][a-z0-9_.]*$")  # a message id, as messages/<lang>.mf2 writes one (ENTRY)
 READINGS = ("days", "yyyymmdd")  # a whole number read as a day (contracts/pack.yaml, ViewColumn.reading)
+
+
+def acceptance_questions(entries: list, where: str, errors: list[str]) -> list[AcceptanceQuestion]:
+    """Validate the pack's source-only test inventory without opening the test paths."""
+    result: list[AcceptanceQuestion] = []
+    ids: set[str] = set()
+    for index, raw in enumerate(entries):
+        at = f"{where}: acceptance question {index}"
+        if not isinstance(raw, dict) or set(raw) != {"id", "question", "tests"}:
+            errors.append(f"{at}: needs exactly id, question and tests")
+            continue
+        id_, question, tests = raw["id"], raw["question"], raw["tests"]
+        if not isinstance(id_, str) or not READER_ID.fullmatch(id_):
+            errors.append(f"{at}: id must be kebab case")
+            continue
+        at = f"{where}: acceptance question {id_}"
+        before = len(errors)
+        if id_ in ids:
+            errors.append(f"{at}: id {id_} is used twice in this pack")
+        ids.add(id_)
+        if not isinstance(question, str) or not question.strip():
+            errors.append(f"{at}: question must be nonblank text")
+        if not isinstance(tests, list) or not tests:
+            errors.append(f"{at}: tests needs at least one test pointer")
+        elif any(not isinstance(test, str) or not TEST_POINTER.fullmatch(test) for test in tests):
+            errors.append(f"{at}: tests must use a relative Python test pointer path.py::test_name")
+        if len(errors) == before:
+            result.append({"id": id_, "question": question, "tests": tests})
+    return result
 
 
 def reader_question(pack: Pack, raw, where: str, asked: list[dict], errors: list[str]) -> dict | None:

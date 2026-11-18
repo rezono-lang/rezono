@@ -8,6 +8,7 @@ from tempfile import TemporaryDirectory
 
 import pytest
 
+from checked_questions import checked
 from offline_cases import RUN
 from rezono_compiler import writer
 from rezono_publisher import batch, publish, store
@@ -31,10 +32,6 @@ def rows(publication, name):
     return {tuple(item["key"]) for item in json.loads(raw)}
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError, reason=(
-    "Read decisions/run-offline-acceptance.md and decisions/run-bid-price-sweep.md. "
-    "Waits for test_bid_price_sweep. Publish the selected payable offer from run/packs/offer-selection "
-    "when its recorded stock changes, keeping the unaffected alternative's full charge."))
 def test_stock_changes_published_quote(tmp_path):
     source = RUN / "packs" / "offer-selection"
     baseline = publication(source, tmp_path / "baseline")
@@ -60,3 +57,15 @@ def test_stock_changes_published_quote(tmp_path):
             totals = {(offer, int(amount)) for demand, offer, amount in rows(result, "payable_minor")
                       if demand == "pair" and offer in {winner, "blue"}}
             assert totals == {(winner, payable), ("blue", second)}
+
+
+def test_checked_question_publishes_the_changed_stock(tmp_path):
+    source = RUN / "packs" / "offer-selection" / "facts" / "market.yaml"
+    before = source.read_bytes()
+    change = {"op": "set", "kind": "offer", "key": "amber", "slot": "stock", "value": 0}
+
+    publication = checked("offer-selection", tmp_path, change=change)
+
+    assert ("amber", "0") in publication.rows("offer__stock")
+    assert {row for row in publication.rows("selected") if row[0] == "pair"} == {("pair", "blue")}
+    assert source.read_bytes() == before

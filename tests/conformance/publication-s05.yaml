@@ -1,0 +1,42 @@
+id: publication-s05
+source: decisions/publication-case-pins.md#S05
+status: settled
+input:
+  rows: []
+  schema:
+    rezono: '1.0'
+    pack: neutral
+    base: https://example.org/neutral/
+    kinds:
+      Item:
+        world: closed
+        id:
+          type: Text
+        slots:
+          label:
+            type: Text
+            card: '1'
+            states:
+            - known
+          group:
+            ref: g.Group
+            card: '1'
+            states:
+            - known
+    imports:
+      g:
+        pack: groups
+        schema: s-373737373737373737373737373737373737373737373737373737373737373
+        manifest: m-7
+        dataset: d-a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9
+  form: schema
+expect:
+  value:
+    accepted: false
+    error_contains: full schema id
+  state: known
+  reason: null
+  witness: null
+unsupported:
+  feldera: Schema, hash, Arrow and Parquet pin validation belong to the publication boundary.
+  language: The language evaluator does not deserialize publication import pins.

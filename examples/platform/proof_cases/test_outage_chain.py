@@ -39,8 +39,6 @@ def test_management_and_runtime_frontiers():
     assert impacts("monitor", NEEDS) == set()
 
 
-@pytest.mark.xfail(strict=True, raises=MissingPlatformRule,
-                   reason="Implement typed run/change needs and recursive outage_impact in examples/platform/schema and rules. Read decisions/platform-outage-chain.md.")
 def test_recursive_outages_and_checked_need_chains():
     model = pack.read(ROOT)
     program = rules.load(model.rules)

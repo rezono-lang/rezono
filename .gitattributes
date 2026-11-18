@@ -45,6 +45,14 @@ examples/*/views.yaml pack-definition
 examples/*/icons/*.svg pack-definition
 examples/*/icons/sources.yaml pack-definition
 
+# The nested capacity interface is also a digest-pinned pack.
+examples/platform/tenant-capacity/interface/pack.yaml pack-definition
+examples/platform/tenant-capacity/interface/channels.yaml pack-definition
+examples/platform/tenant-capacity/interface/schema/**/*.yaml pack-definition
+examples/platform/tenant-capacity/interface/labels/*.yaml pack-definition
+examples/platform/tenant-capacity/interface/messages/*.mf2 pack-definition
+examples/platform/tenant-capacity/interface/rules/*.dl pack-definition
+
 compiler/tests/fixtures/*/pack.yaml pack-definition
 compiler/tests/fixtures/*/channels.yaml pack-definition
 compiler/tests/fixtures/*/schema/**/*.yaml pack-definition
@@ -59,6 +67,21 @@ compiler/tests/fixtures/*/questions.yaml pack-definition
 compiler/tests/fixtures/*/views.yaml pack-definition
 compiler/tests/fixtures/*/icons/*.svg pack-definition
 compiler/tests/fixtures/*/icons/sources.yaml pack-definition
+
+tests/fixtures/neutral/pack.yaml pack-definition
+tests/fixtures/neutral/channels.yaml pack-definition
+tests/fixtures/neutral/schema/**/*.yaml pack-definition
+tests/fixtures/neutral/labels/*.yaml pack-definition
+tests/fixtures/neutral/messages/*.mf2 pack-definition
+tests/fixtures/neutral/rules/*.dl pack-definition
+tests/fixtures/neutral/calc/*.yaml pack-definition
+
+run/packs/invoice-drift/pack.yaml pack-definition
+run/packs/invoice-drift/channels.yaml pack-definition
+run/packs/invoice-drift/schema/**/*.yaml pack-definition
+run/packs/invoice-drift/labels/*.yaml pack-definition
+run/packs/invoice-drift/messages/*.mf2 pack-definition
+run/packs/invoice-drift/rules/*.dl pack-definition
 
 edge/plugins/connectors/fixtures/*/pack.yaml pack-definition
 edge/plugins/connectors/fixtures/*/channels.yaml pack-definition

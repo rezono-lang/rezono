@@ -1,0 +1,27 @@
+id: value-reason-tie-constant
+source: docs/semantics/value-cases.yaml#reason-tie-constant
+status: settled
+input:
+  rows:
+  - kind: item
+    id: item-c
+    group: group-b
+    labels:
+    - second
+    quantity:
+      state: unknown
+      reason: aa_early
+  expression: quantity + unknown no_rate
+  subject: item-c
+expect:
+  value: null
+  state: unknown
+  reason: aa_early
+  witness:
+    cause:
+      relation: item__quantity
+      key:
+      - item-c
+unsupported:
+  compiler: The calculation input contract does not accept a typed unknown literal as an operand.
+  feldera: There is no lowering for an arithmetic operand that is an explicit unknown literal.

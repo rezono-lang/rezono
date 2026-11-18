@@ -1,0 +1,32 @@
+id: value-ask-na-left-out
+source: docs/semantics/value-cases.yaml#ask-na-left-out
+status: settled
+input:
+  rows:
+    - {$kind: Group, $id: group-a}
+    - {$kind: Item, $id: item-a, group: {$ref: group-a}, labels: [plain], quantity: {$na: ""}, weight: "7"}
+    - {$kind: Item, $id: item-b, group: {$ref: group-a}, labels: [plain], quantity: {$na: ""}, weight: {$na: ""}}
+    - {$kind: Item, $id: item-c, group: {$ref: group-a}, labels: [plain], quantity: {$na: ""}, weight: {$unknown: not_recorded}}
+    - {$kind: Item, $id: item-d, group: {$ref: group-a}, labels: [plain], quantity: {$na: ""}, weight: {$na: ""}}
+    - {$kind: Item, $id: item-e, group: {$ref: group-a}, labels: [plain], quantity: {$na: ""}, weight: "1"}
+  questions:
+    positive: ask Item where weight > 4 show (1 * weight)
+    negative: ask Item where not (weight > 4) show (1 * weight)
+    absent: ask Item where weight is n/a show (1 * weight)
+expect:
+  value:
+    positive:
+      rows: [{id: item-a, c1: "7"}]
+      undecided: [item-c]
+      counts: {rows: 1, undecided: 1, not_applicable: 2}
+    negative:
+      rows: [{id: item-e, c1: "1"}]
+      undecided: [item-c]
+      counts: {rows: 1, undecided: 1, not_applicable: 2}
+    absent:
+      rows: [{id: item-b, c1: {$na: ""}}, {id: item-d, c1: {$na: ""}}]
+      undecided: []
+      counts: {rows: 2, undecided: 0, not_applicable: 0}
+  state: unknown
+  reason: not_recorded
+  witness: {relation: item__weight, key: [item-c]}

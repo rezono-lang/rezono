@@ -1,0 +1,40 @@
+// An export supplies reference evidence only. Scope belongs to that same export.
+.decl cmdb_reported(export: symbol, service: symbol, cluster: symbol)
+cmdb_reported(e, s, c) :- cmdb_observation__export(o, e), cmdb_observation__service(o, s),
+    cmdb_observation__cluster(o, c).
+
+.decl cmdb_covered(export: symbol, service: symbol)
+cmdb_covered(e, s) :- cmdb_scope__export(k, e), cmdb_scope__service(k, s).
+
+.decl cmdb_has_report(export: symbol, service: symbol)
+cmdb_has_report(e, s) :- cmdb_reported(e, s, _).
+
+// Compare membership in the authoritative placements of a known placed service.
+.decl cmdb_unexpected_placement(export: symbol, service: symbol, cluster: symbol)
+cmdb_unexpected_placement(e, s, c) :- cmdb_reported(e, s, c), cluster_service_placement(s, _),
+    !cluster_service_placement(s, c).
+
+// A missing CMDB observation is evidence only with complete scope for this export and service.
+.decl cmdb_missing_placement(export: symbol, service: symbol, cluster: symbol)
+cmdb_missing_placement(e, s, c) :- cluster_service_placement(s, c), cmdb_covered(e, s), !cmdb_reported(e, s, c).
+
+// A single authoritative cluster gives the existing expected/reported finding an unambiguous expected value.
+.decl cmdb_multiple_placements(service: symbol)
+cmdb_multiple_placements(s) :- cluster_service_placement(s, c), cluster_service_placement(s, other), c != other.
+
+.decl cmdb_mismatch(export: symbol, service: symbol, expected: symbol, reported: symbol)
+cmdb_mismatch(e, s, c, r) :- cluster_service_placement(s, c), cmdb_unexpected_placement(e, s, r),
+    !cmdb_multiple_placements(s).
+
+.decl cmdb_missing(export: symbol, service: symbol)
+cmdb_missing(e, s) :- cluster_service_placement(s, _), cmdb_covered(e, s), !cmdb_has_report(e, s).
+
+.decl cmdb_unknown(export: symbol, service: symbol)
+cmdb_unknown(e, s) :- cmdb_export(e), cluster_service_placement(s, _),
+    !cmdb_covered(e, s), !cmdb_has_report(e, s).
+
+.output cmdb_mismatch
+.output cmdb_unexpected_placement
+.output cmdb_missing_placement
+.output cmdb_missing
+.output cmdb_unknown

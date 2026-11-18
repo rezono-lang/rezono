@@ -5,10 +5,10 @@ description: >-
   The index of one render (seam S12): for every field of every generated file, where it is
   (a line, a JSON pointer or both) and where it came from. A field is `knowledge` (a published row, by the
   RowRef of the conclusion whose witness grounds it), `chart_default` (a value the template took from the
-  chart's own values file) or `chart_constant` (text of a template). Generators, renderers, the Lens, the gate
+  chart's own values file), `chart_constant` (text of a template), `schema` (the role's canonical schema)
+  or `role_listing` (the role's listing of published objects). Generators, renderers, the Lens, the gate
   route to a field's grounds and the controls all read this one index. It is bound to the manifest whose rows
-  were rendered and to the hash of the render's input, so an index never describes other output. Nothing
-  emits it yet (B21); the render step (P7.10) and publication with each generated pull request (P7.11b) do.
+  were rendered and to the hash of the render's input, so an index never describes other output.
 prefixes:
   linkml: https://w3id.org/linkml/
   rezono: https://rezono.org/contracts/
@@ -20,7 +20,7 @@ imports:
 types:
   Sha256:
     typeof: string
-    pattern: "^[0-9a-f]{64}$"
+    pattern: "^[0-9a-f]{64}(?![\\s\\S])"
   Name:
     typeof: string
     pattern: "^[a-z][a-z0-9]*(_[a-z0-9]+)*$"
@@ -31,7 +31,7 @@ types:
   JsonPointer:
     typeof: string
     description: An RFC 6901 JSON pointer into the file's parsed document; the empty pointer is the whole document.
-    pattern: "^(/([^~/]|~[01])*)*$"
+    pattern: "^(/([^~/]|~[01])*)*(?![\\s\\S])"
 
 enums:
   FieldOrigin:
@@ -40,6 +40,8 @@ enums:
       knowledge: {description: "A value of a published row: `witness` names the conclusion that grounds it."}
       chart_default: {description: "A value the template took from the chart's values file: `default` names the file and the pointer of the default in it."}
       chart_constant: {description: "Text of the template itself: `template` names its file and line."}
+      schema: {description: "A value from the role's canonical schema: `document` names schema.json."}
+      role_listing: {description: "A value from the role's published object listing: `document` names index.json."}
 
 classes:
   OutputIndex:
@@ -68,7 +70,7 @@ classes:
     description: >-
       One field of a generated file: a scalar the renderer wrote. It is found by its line, its JSON pointer
       or both. Its origin decides which one place it names: `knowledge` a witness, `chart_constant` a template
-      line, `chart_default` a pointer into the values file; the other two are absent.
+      line, `chart_default` a pointer into the values file, and `schema` or `role_listing` a document pointer.
     attributes:
       line: {range: integer, minimum_value: 1, description: The 1-based line of the field in the published bytes.}
       pointer: {range: JsonPointer, description: The field in the parsed document (a YAML or JSON output file).}
@@ -76,6 +78,13 @@ classes:
       witness: {range: RowRef, inlined: true, description: "For `knowledge`: the conclusion row whose witness grounds the value (contracts/proof.yaml, RowRef)."}
       template: {range: TemplateLine, inlined: true, description: "For `chart_constant`: the template file and line."}
       default: {range: ValuesPointer, inlined: true, description: "For `chart_default`: the values file and the pointer of the default."}
+      document:
+        range: DocumentPointer
+        inlined: true
+        description: A location in the exact source document.
+        any_of:
+          - range: SchemaDocumentPointer
+          - range: RoleListingPointer
     any_of:
       - slot_conditions: {line: {required: true}}
       - slot_conditions: {pointer: {required: true}}
@@ -98,6 +107,36 @@ classes:
       - description: A chart default names no template line.
         preconditions: {slot_conditions: {origin: {equals_string: chart_default}}}
         postconditions: {slot_conditions: {template: {value_presence: ABSENT}}}
+      - description: A schema field names a location in the role's canonical schema.
+        preconditions: {slot_conditions: {origin: {equals_string: schema}}}
+        postconditions: {slot_conditions: {document: {required: true, all_of: [{range: SchemaDocumentPointer}]}}}
+      - description: A role listing field names a location in the role's publication listing.
+        preconditions: {slot_conditions: {origin: {equals_string: role_listing}}}
+        postconditions: {slot_conditions: {document: {required: true, all_of: [{range: RoleListingPointer}]}}}
+      - description: Document origins have no row or chart sources.
+        preconditions: {slot_conditions: {document: {value_presence: PRESENT}}}
+        postconditions:
+          none_of:
+            - slot_conditions: {witness: {value_presence: PRESENT}}
+            - slot_conditions: {template: {value_presence: PRESENT}}
+            - slot_conditions: {default: {value_presence: PRESENT}}
+
+  DocumentPointer:
+    description: A location in an exact source document beside the current role's published form.
+    attributes:
+      file: {required: true, range: RelativePath, description: The document name within the role's form.}
+      sha256: {required: true, range: Sha256, description: The hash of the exact document bytes.}
+      pointer: {required: true, range: JsonPointer, description: The location in the parsed source document.}
+
+  SchemaDocumentPointer:
+    is_a: DocumentPointer
+    slot_usage:
+      file: {equals_string: schema.json}
+
+  RoleListingPointer:
+    is_a: DocumentPointer
+    slot_usage:
+      file: {equals_string: index.json}
 
   RowRef:
     description: A reference to one row of one relation, as in contracts/proof.yaml.

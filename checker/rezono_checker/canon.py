@@ -1,11 +1,29 @@
 """Canonical text forms of keys and values. JSON and hashes follow the one rule in rezono_canon."""
 
 import re
+from decimal import Decimal
 from fractions import Fraction
+from math import gcd
+from typing import Literal
 
 from rezono_canon import canonical_json, canonical_sha256
 
 INTEGER = re.compile(r"0|-?[1-9][0-9]*")  # integers travel as decimal strings, never JSON numbers; no "-0" (K9)
+_POSITIVE = re.compile(r"[1-9][0-9]*")
+CalcColumnType = Literal["integer", "rational"]
+
+
+def calc_value(text: str, column_type: CalcColumnType) -> bool:
+    """Whether a selection value has the canonical spelling for its rule column."""
+    if column_type == "integer":
+        return INTEGER.fullmatch(text) is not None
+    n, slash, d = text.partition("/")
+    if not INTEGER.fullmatch(n):
+        return False
+    if not slash:
+        return True
+    # Decimal decodes the decimal digits exactly without a string-to-int digit limit.
+    return bool(d != "1" and _POSITIVE.fullmatch(d) and gcd(int(Decimal(n)), int(Decimal(d))) == 1)
 
 
 def encode_key(parts) -> str:

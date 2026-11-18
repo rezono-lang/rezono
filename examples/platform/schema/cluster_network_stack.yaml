@@ -1,0 +1,15 @@
+id: https://rezono.org/examples/platform-core/cluster-network-stack
+name: platform_cluster_network_stack
+description: The policy and observation products selected for the cluster scenario.
+in_language: en
+imports: [linkml:types]
+default_range: string
+annotations:
+  layer: facts
+
+classes:
+  NetworkStackChoice:
+    attributes:
+      id: {identifier: true}
+      policy: {required: true}
+      observation: {required: true}

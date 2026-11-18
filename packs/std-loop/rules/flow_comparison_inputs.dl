@@ -1,0 +1,18 @@
+.decl bound_policy(run: symbol, collector: symbol, window: symbol, snapshot: symbol)
+bound_policy(run, collector, window, snapshot) :-
+    flow_policy_binding__run(record, run), flow_policy_binding__collector(record, collector),
+    flow_policy_binding__window(record, window), flow_policy_binding__snapshot(record, snapshot).
+
+.decl allowed_flow(snapshot: symbol, source: symbol, destination: symbol, protocol: symbol, port: number, ref: symbol)
+allowed_flow(snapshot, source, destination, protocol, port, ref) :-
+    flow_allowance__snapshot(ref, snapshot), flow_allowance__source(ref, source),
+    flow_allowance__destination(ref, destination), flow_allowance__protocol(ref, protocol),
+    flow_allowance__port(ref, port).
+
+.decl flow_event(run: symbol, collector: symbol, window: symbol, tick: number, source: symbol, destination: symbol, protocol: symbol, port: number, verdict: symbol, ref: symbol)
+flow_event(run, collector, window, tick, source, destination, protocol, port, verdict, ref) :-
+    flow_observed_event__run(ref, run), flow_observed_event__collector(ref, collector),
+    flow_observed_event__window(ref, window), flow_observed_event__tick(ref, tick),
+    flow_observed_event__source(ref, source), flow_observed_event__destination(ref, destination),
+    flow_observed_event__protocol(ref, protocol), flow_observed_event__port(ref, port),
+    flow_observed_event__verdict(ref, verdict).

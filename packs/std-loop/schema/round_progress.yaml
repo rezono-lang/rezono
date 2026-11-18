@@ -1,0 +1,20 @@
+id: https://rezono.org/std-loop/round-progress
+name: std_loop_round_progress
+description: Observation coverage and outstanding work at the current reconciliation boundary.
+imports: [linkml:types]
+default_range: string
+annotations:
+  layer: facts
+classes:
+  LoopSweepReceipt:
+    description: A named reader receipt closing the observation round of one run.
+    attributes:
+      id: {identifier: true}
+      run: {required: true}
+      event_time: {range: integer, required: true}
+  LoopPendingOperation:
+    description: An outstanding operation that can still supply its token in this run.
+    attributes:
+      id: {identifier: true}
+      run: {required: true}
+      token: {required: true}

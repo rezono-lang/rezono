@@ -10,3 +10,6 @@ waiting(run, step, token, reason) :-
     needed(run, step, token, reason),
     !waiting_done(run, step),
     !waiting_known(run, token).
+
+waiting(run, step, obligation, reason) :-
+    step_safety_blocker(run, step, _, obligation, reason), !waiting_done(run, step).

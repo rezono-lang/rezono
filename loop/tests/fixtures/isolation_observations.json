@@ -1,0 +1,15 @@
+[
+  {"case": "echo", "layer": "service", "verdict": "allow", "ref": "service/echo"},
+  {"case": "echo", "layer": "router", "verdict": "allow", "ref": "router/echo"},
+  {"case": "upper", "layer": "service", "verdict": "allow", "ref": "service/upper"},
+  {"case": "upper", "layer": "router", "verdict": "allow", "ref": "router/upper"},
+  {"case": "outside", "layer": "service", "verdict": "deny", "ref": "service/outside"},
+  {"case": "outside", "layer": "router", "verdict": "deny", "ref": "router/outside"},
+  {"case": "overlap", "layer": "service", "verdict": "deny", "ref": "service/overlap"},
+  {"case": "overlap", "layer": "router", "verdict": "allow", "ref": "router/overlap"},
+  {"case": "other-rule", "layer": "service", "verdict": "allow", "ref": "service/other-rule"},
+  {"case": "other-rule", "layer": "router", "verdict": "allow", "ref": "router/other-rule"},
+  {"case": "closed", "layer": "service", "verdict": "deny", "ref": "service/closed"},
+  {"case": "closed", "layer": "router", "verdict": "deny", "ref": "router/closed"},
+  {"case": "local", "layer": "service", "verdict": "deny", "ref": "service/local"}
+]

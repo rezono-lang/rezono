@@ -1,0 +1,49 @@
+// A candidate supplies the entire visible subset domain, including itself and the empty subset.
+.decl loop_batch_unproved(batch: symbol)
+loop_batch_unproved(b) :-
+    loop_batch_visible__batch(row, b), loop_batch_visible__subset(row, v),
+    !loop_batch_candidate__verdict(v, "proved").
+
+.decl loop_batch_write_conflict(batch: symbol)
+loop_batch_write_conflict(b) :-
+    loop_batch_member__batch(x, b), loop_batch_member__batch(y, b),
+    loop_batch_member__position(x, i), loop_batch_member__position(y, j), i < j,
+    loop_batch_member__step(x, s), loop_batch_member__step(y, t),
+    loop_batch_write__step(a, s), loop_batch_write__step(z, t),
+    loop_batch_write__target(a, slot), loop_batch_write__target(z, slot).
+
+.decl loop_certified_batch(batch: symbol, domain: symbol, size: number)
+loop_certified_batch(b, d, n) :-
+    loop_batch_candidate__domain(b, d), loop_batch_candidate__size(b, n),
+    loop_batch_domain__width(d, w), n > 0, n <= w,
+    loop_batch_visible__batch(full, b), loop_batch_visible__subset(full, b),
+    loop_batch_visible__batch(base, b), loop_batch_visible__subset(base, e),
+    loop_batch_candidate__domain(e, d), loop_batch_candidate__size(e, 0),
+    !loop_batch_unproved(b), !loop_batch_write_conflict(b).
+
+.decl loop_batch_priority(batch: symbol, position: number, priority: number)
+loop_batch_priority(b, i, p) :-
+    loop_batch_member__batch(m, b), loop_batch_member__position(m, i),
+    loop_batch_member__step(m, s), loop_batch_step__priority(s, p).
+
+.decl loop_batch_difference(first: symbol, second: symbol, position: number)
+loop_batch_difference(a, b, i) :-
+    loop_certified_batch(a, d, n), loop_certified_batch(b, d, n),
+    loop_batch_priority(a, i, p), loop_batch_priority(b, i, q), p != q.
+
+.decl loop_batch_earlier_difference(first: symbol, second: symbol, position: number)
+loop_batch_earlier_difference(a, b, i) :-
+    loop_batch_difference(a, b, i), loop_batch_difference(a, b, j), j < i.
+
+.decl loop_batch_preceded(batch: symbol)
+loop_batch_preceded(b) :-
+    loop_certified_batch(a, d, m), loop_certified_batch(b, d, n), m > n.
+loop_batch_preceded(b) :-
+    loop_batch_difference(a, b, i), !loop_batch_earlier_difference(a, b, i),
+    loop_batch_priority(a, i, p), loop_batch_priority(b, i, q), p < q.
+
+.decl loop_selected_batch(batch: symbol)
+loop_selected_batch(b) :- loop_certified_batch(b, _, _), !loop_batch_preceded(b).
+
+.output loop_certified_batch
+.output loop_selected_batch

@@ -1,9 +1,15 @@
 """Render the modeled service grants for one namespace as NetworkPolicies."""
 
+from __future__ import annotations
+
 import hashlib
 import json
 import re
 from collections.abc import Iterable, Mapping
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from rezono_publisher.retained_calculation import StoreReader
 
 
 _NAMESPACE = re.compile(r"[a-z0-9](?:[-a-z0-9]{0,61}[a-z0-9])?")
@@ -63,3 +69,40 @@ def render_network_policies(
                 "podSelector": _selector(local), "policyTypes": [direction], field: rules,
             }))
     return bundle
+
+
+def render_published_network_policies(
+    namespace: str, store: StoreReader, manifest: dict, role: str
+) -> list[dict]:
+    """Render only the listener grants in the checked publication for the reading role."""
+    from rezono_checker.snapshots import read_rows
+    from rezono_ports import refusal
+    from rezono_publisher.publish import PROOFS
+    from rezono_publisher.views import key_of
+
+    reason = refusal(manifest)
+    if reason:
+        raise ValueError(reason)
+    if [check["status"] for check in manifest["checks"] if check["name"] == PROOFS] != ["green"]:
+        raise ValueError("publication needs a successful proof check")
+
+    entries = [entry for entry in manifest["snapshots"]
+               if entry["role"] == role and entry["relation"] == "listener_case_decision"]
+    if len(entries) != 1:
+        raise ValueError("expected one listener decision snapshot for the reading role")
+    entry, = entries
+    key = key_of(entry["uri"])
+    if store.uri(key) != entry["uri"]:
+        raise ValueError("listener snapshot is outside the publication store")
+    data = store.get(key)
+    if data is None or hashlib.sha256(data).hexdigest() != entry["sha256"]:
+        raise ValueError("listener snapshot digest mismatch")
+
+    flows = []
+    for (source, destination, protocol, port, decision), _ in read_rows(data, entry["format"]).values():
+        if decision == "allowed":
+            if not re.fullmatch(r"[1-9][0-9]{0,4}", port):
+                raise ValueError("expected a canonical listener port")
+            flows.append({"source": source, "destination": destination, "protocol": protocol,
+                          "fromPort": int(port), "toPort": int(port)})
+    return render_network_policies(namespace, flows)
