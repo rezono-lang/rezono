@@ -136,10 +136,6 @@ class NativeGroupLoweringMissing(ModuleNotFoundError):
     """The specific production entry point has yet to be implemented."""
 
 
-@pytest.mark.xfail(strict=True, raises=NativeGroupLoweringMissing, reason=(
-    "Lower checked native aggregate clauses via lower_group_clause in compiler/rezono_compiler/native_rule_groups.py. "
-    "Read decisions/language-native-rules.md sections 5 and 7. Uses supplied signatures and the existing IR stratifier."
-))
 def test_native_rule_ir_groups():
     check_groups(FROZEN_IR)
     try:

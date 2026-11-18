@@ -20,6 +20,7 @@
 // the lines under a `table` line with them. A value of a table is a literal, an id or a bare word, never a state.
 import * as ohm from 'ohm-js';
 import { moduleGrammar } from './module-components.ts';
+import { aggregates, keywords } from './rule-names.ts';
 
 const source = String.raw`
 Rezono {
@@ -130,12 +131,7 @@ ${moduleGrammar}
   checkVerb (check, require, warn or norm) = ("check" | "require" | "warn" | "norm") wordEnd
 
   // The keywords of v0 §3, with the two literals of Bool (§3 here). None of them is a name.
-  keyword = ( "pack" | "use" | "as" | "private" | "unit" | "enum" | "param" | "kind" | "extend" | "derived"
-            | "rule" | "check" | "warn" | "require" | "fact" | "decide" | "assume" | "theory" | "view"
-            | "example" | "ask" | "suppose" | "propose" | "when" | "then" | "else" | "unless" | "where" | "show"
-            | "not" | "and" | "or" | "in" | "is" | "version" | "valid" | "known" | "at" | "by" | "on"
-            | "because" | "until" | "requires" | "sources" | "world" | "open" | "closed" | "inverse" | "rezono"
-            | "norm" | "exception" | "applies" | "replaces" | "deprecated" | "true" | "false" ) wordEnd
+  keyword = (${keywords.map(word => '"' + word + '"').join(' | ')}) wordEnd
   // A contextual word is a name wherever it is not expected as a word; it is never a unit.
   contextual = ("during" | "order" | "group" | "limit") wordEnd
 
@@ -145,7 +141,7 @@ ${moduleGrammar}
   oddWord (a word) = ~keyword (az | cap) wordChar* ~("-" wordChar)
   valueWord (a word) = keyword
   rowId (an id) = idTok | numTok | name | typeName | oddWord
-  aggName (an aggregate) = ("sum" | "count" | "min" | "max" | "any" | "all" | "none") ~wordChar
+  aggName (an aggregate) = (${aggregates.map(word => '"' + word + '"').join(' | ')}) ~wordChar
 
   cmpOp = "<=" | ">=" | "!=" | "=" ~">" | "<" | ">"
   rangeOp = "..<" | ".."
@@ -188,3 +184,19 @@ ${moduleGrammar}
 
 /** The grammar, built once: Ohm reads the text above, without generated code and without `eval`. */
 export const grammar = ohm.grammar(source);
+
+/** Native rules reuse the expression precedence and add pattern atoms only in rule lines. */
+export const nativeRuleGrammar = ohm.grammar(String.raw`
+NativeRules <: Rezono {
+  Dotted_name := Dotted "." rName
+  Atom := literal | Call | QualifiedKind | quotedName | wildcard | Atom_paren | idTok | typeName | name | oddWord
+  Call := NativeCallName "(" ListOf<Expr, ","> ")"
+  NativeCallName = QualifiedKind "." RuleCallMember    -- schema
+                 | typeName "." RuleCallMember         -- kind
+                 | rName "." RuleCallMember            -- imported
+                 | rName                               -- local
+  RuleCallMember = ~(aggName "(") rName
+  QualifiedKind = rName "." typeName
+  wildcard = "_" ~wordChar
+}
+`, { Rezono: grammar });
