@@ -1,0 +1,24 @@
+id: https://rezono.org/examples/platform-core/tenant-binding
+name: platform_tenant_binding
+description: Catalog scope declarations for the tenant request preview.
+in_language: en
+imports:
+  - linkml:types
+default_range: string
+annotations:
+  layer: facts
+
+enums:
+  TenantBindingScope:
+    permissible_values:
+      tenant:
+        description: One artifact per requesting tenant.
+      delivery:
+        description: One artifact per delivery within a requesting tenant.
+
+classes:
+  TenantBinding:
+    description: The scope a trusted catalog declares for an artifact.
+    attributes:
+      id: {identifier: true}
+      scope: {range: TenantBindingScope, required: true}
