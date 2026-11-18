@@ -10,6 +10,7 @@
     "compiler/tests/test_generality.py::test_each_injected_error_lands_in_its_view": 17410,
     "compiler/tests/test_generality.py::test_valid_facts_give_no_violations": 10220,
     "compiler/tests/test_normalise.py::test_the_normal_form_is_a_rule_that_computes_the_same_rows": 7530,
+    "compiler/tests/test_operate_sources.py::test_random_operations_carry_sources_or_refuse": 102600,
     "compiler/tests/test_operation_source_example.py::test_the_worked_example_carries_its_sources_through_every_step": 10920,
     "compiler/tests/test_rules_properties.py::test_changes_cross_parts_through_the_export_stream": 28770,
     "compiler/tests/test_rules_properties.py::test_every_partition_computes_what_one_pipeline_computes": 12140,
@@ -22,5 +23,8 @@
     "compiler/tests/test_theory_time.py::test_axioms_and_rules_agree_with_the_reference_on_any_world": 43430,
     "compiler/tests/test_types.py::test_random_packs_keep_their_names": 7070,
     "compiler/tests/test_view_execute.py::test_property_the_engine_agrees_with_the_dates_themselves": 12000
+  },
+  "additional_sources": {
+    "compiler/tests/test_operate_sources.py::test_random_operations_carry_sources_or_refuse": "https://github.com/rezono-lang/rezono/actions/runs/44303925098"
   }
 }

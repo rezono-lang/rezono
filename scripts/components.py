@@ -363,9 +363,9 @@ def weighted_workers(items: list[str], workers: int, weights: dict[str, int], de
 
 def worker_items(folder: str, items: list[str], workers: int) -> list[list[str]]:
     if folder == "compiler" and workers > 1:
-        # The profile records calls at or above its threshold from each compiler worker's
-        # five reported durations in the linked run. The default is the sum of worker pytest
-        # times minus those calls, divided by the remaining IDs, rounded to milliseconds.
+        # Each timing is one of its worker's five reported durations in the
+        # linked run (or the per-ID additional source). The default uses the
+        # original run: unreported worker time divided by the remaining IDs.
         profile = json.loads((ROOT / ".github/workflows/compiler-duration-profile.json").read_text(encoding="utf-8"))
         return weighted_workers(items, workers, profile["call_ms"], profile["default_ms"])
     if folder != "examples" or workers == 1:
