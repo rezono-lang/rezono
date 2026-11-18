@@ -1,0 +1,69 @@
+zone:
+  - {id: infrastructure}
+  - {id: build}
+
+cluster_placement_policy:
+  - {id: hub, role: hub, zone: management}
+  - {id: base, role: base, zone: platform}
+  - {id: management, role: management, zone: management}
+  - {id: virtualization, role: virtualization, zone: infrastructure}
+  - {id: application, role: application, zone: tenant, worker_host_role: virtualization}
+  - {id: storage, role: storage, zone: storage}
+  - {id: build, role: build, zone: build}
+  - {id: edge, role: edge, zone: entry}
+  - {id: recovery, role: recovery, zone: recovery}
+
+cluster_service_binding:
+  # The cluster control endpoint represents the service with no separate endpoint.
+  - {id: user, service: user, cluster: edge, endpoint_zone: service}
+  - {id: lb, service: lb, cluster: edge, endpoint_zone: cluster}
+  - {id: idp, service: idp, cluster: base, endpoint_zone: cluster}
+  - {id: db-idp, service: db-idp, cluster: base, endpoint_zone: cluster}
+  - {id: db-git, service: db-git, cluster: base, endpoint_zone: cluster}
+  - {id: dns, service: dns, cluster: base, endpoint_zone: cluster}
+  - {id: time, service: time, cluster: base, endpoint_zone: cluster}
+  - {id: reg, service: reg, cluster: base, endpoint_zone: cluster}
+  - {id: vault, service: vault, cluster: base, endpoint_zone: cluster}
+  - {id: cp, service: cp, cluster: management}
+  - {id: gitops, service: gitops, cluster: hub, endpoint_zone: cluster}
+  - {id: git, service: git, cluster: base, endpoint_zone: cluster}
+  - {id: store, service: store, cluster: storage, endpoint_zone: cluster}
+  - {id: sign, service: sign, cluster: build, endpoint_zone: cluster}
+  - {id: build, service: build, cluster: build, endpoint_zone: cluster}
+  - {id: shop, service: shop, cluster: production, endpoint_zone: cluster}
+  - {id: lab, service: lab, cluster: development, endpoint_zone: cluster}
+  - {id: restore, service: restore, cluster: recovery, endpoint_zone: cluster}
+  - {id: restore-bad, service: restore-bad, cluster: recovery, endpoint_zone: cluster}
+
+cluster_owned_endpoint:
+  - {id: fleet-hub, owner: hub, hosting: local, network: host}
+  - {id: storage-data, owner: storage, hosting: local, network: host}
+  - {id: control-hub, owner: hub, hosting: control, network: host}
+  - {id: agent-hub, owner: hub, hosting: workforce, network: owner}
+  - {id: workers-hub, owner: hub, hosting: workforce, network: owner}
+  - {id: control-base, owner: base, hosting: control, network: host}
+  - {id: agent-base, owner: base, hosting: workforce, network: owner}
+  - {id: workers-base, owner: base, hosting: workforce, network: owner}
+  - {id: control-management, owner: management, hosting: control, network: host}
+  - {id: agent-management, owner: management, hosting: workforce, network: owner}
+  - {id: workers-management, owner: management, hosting: workforce, network: owner}
+  - {id: control-virtualization, owner: virtualization, hosting: control, network: host}
+  - {id: agent-virtualization, owner: virtualization, hosting: workforce, network: owner}
+  - {id: workers-virtualization, owner: virtualization, hosting: workforce, network: owner}
+  - {id: control-production, owner: production, hosting: control, network: host}
+  - {id: agent-production, owner: production, hosting: workforce, network: owner}
+  - {id: workers-production, owner: production, hosting: workforce, network: owner}
+  - {id: disk-production, owner: production, hosting: workforce, network: host}
+  - {id: control-development, owner: development, hosting: control, network: host}
+  - {id: agent-development, owner: development, hosting: workforce, network: owner}
+  - {id: workers-development, owner: development, hosting: workforce, network: owner}
+  - {id: disk-development, owner: development, hosting: workforce, network: host}
+  - {id: control-build, owner: build, hosting: control, network: host}
+  - {id: agent-build, owner: build, hosting: workforce, network: owner}
+  - {id: workers-build, owner: build, hosting: workforce, network: owner}
+  - {id: control-edge, owner: edge, hosting: control, network: host}
+  - {id: agent-edge, owner: edge, hosting: workforce, network: owner}
+  - {id: workers-edge, owner: edge, hosting: workforce, network: owner}
+  - {id: control-recovery, owner: recovery, hosting: control, network: host}
+  - {id: agent-recovery, owner: recovery, hosting: workforce, network: owner}
+  - {id: workers-recovery, owner: recovery, hosting: workforce, network: owner}
