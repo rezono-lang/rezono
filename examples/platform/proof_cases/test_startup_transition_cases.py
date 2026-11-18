@@ -7,10 +7,6 @@ from management_probes import compiled
 from rezono_compiler import pack, rules
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError, reason=(
-    "Implement platform startup transition bindings and typed protection, runtime-provider and coverage "
-    "projections in the platform pack. Read decisions/safe-step-rounds.md, sections 1, 3 and 4. "
-    "Independent pack-level case, without certified replay or disposable cluster."))
 def test_startup_transition_cases():
     relation = "startup_transition_result"
     assert relation in rules.load(pack.read(ROOT).rules).derived(), "Missing platform startup transition results"
