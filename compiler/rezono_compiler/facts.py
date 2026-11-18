@@ -106,13 +106,13 @@ def _named_datasets(pack_dir: Path) -> list[Path]:
 
 
 def document(path: Path, pack: Pack | None = None) -> dict[str, list]:
-    """Read records per kind, decoding a scalar dataset when its pack is available.
+    """Read records per kind from a fact file or a named dataset.
 
     A null document or section is refused. Use {} for an empty document or [] for an empty relation.
     """
     data = yaml.safe_load(path.read_text(encoding="utf-8"))
-    if pack is not None and isinstance(data, dict) and data.get("format") == DATASET_FORMAT:
-        data = scalar_dataset(schema(pack), data)
+    if isinstance(data, dict) and data.get("format") == DATASET_FORMAT:
+        data = scalar_dataset(schema(pack), data) if pack is not None else untyped_dataset(data)
     return sections(data)
 
 
@@ -185,31 +185,16 @@ def located_scalar_dataset(judged: Schema, form: dict) -> tuple[dict[str, list],
     records: dict[str, list] = {}
     pointers: dict[str, list[str]] = {}
     for table_index, table in enumerate(tables):
-        if not isinstance(table, dict) or table.keys() != {"fact", "columns", "rows"}:
-            raise LoadError("scalar datasets require fact tables")
-        if not isinstance(table["fact"], str):
-            raise LoadError("invalid dataset fact kind")
-        kind = snake(table["fact"])
+        kind, columns, rows = dataset_table(table)
         if kind not in judged.kinds:
             raise LoadError(f"unknown kind '{kind}'")
         identifier = judged.kinds[judged.root(kind)].identifier
-        columns, rows = table["columns"], table["rows"]
-        if not isinstance(columns, list) or not columns or not all(isinstance(c, str) for c in columns):
-            raise LoadError(f"{kind}: expected a nonempty fact table header")
-        columns = [snake(column) for column in columns]
-        if columns[0] != identifier or len(set(columns)) != len(columns):
+        if columns[0] != identifier:
             raise LoadError(f"{kind}: expected unique columns beginning with the identifier")
-        if not isinstance(rows, list):
-            raise LoadError(f"{kind}: expected fact table rows")
 
-        column_types = [judged.kinds[judged.root(kind)].id_type]
         for column in columns[1:]:
-            slot = judged.slot(kind, column)
-            if slot is None:
+            if judged.slot(kind, column) is None:
                 raise LoadError(f"{kind}: unknown slot '{column}'")
-            if slot.multivalued or slot.inlined:
-                raise LoadError(f"{kind}.{column}: expected a scalar slot")
-            column_types.append(slot.type)
 
         output = records.setdefault(kind, [])
         places = pointers.setdefault(kind, [])
@@ -217,10 +202,102 @@ def located_scalar_dataset(judged: Schema, form: dict) -> tuple[dict[str, list],
             where = f"{kind}[{len(output) + 1}]"
             if not isinstance(row, list) or len(row) != len(columns):
                 raise LoadError(f"{where}: row width does not match the fact table header")
-            output.append({column: scalar_cell(cell, SQL_TYPES[type_], f"{where}.{column}")
-                           for column, cell, type_ in zip(columns, row, column_types, strict=True)})
+            output.append(dataset_record(zip(columns, row, strict=True), where, judged, kind))
             places.append(f"/module/decls/0/decls/{table_index}/rows/{row_index}")
     return records, pointers
+
+
+def untyped_dataset(form: dict) -> dict[str, list]:
+    """Read the authored shapes when no pack is available to supply column types."""
+    module = rezono_module.module_body(form, DATASET_FORMAT)
+    if module is None:
+        raise LoadError(f"expected {DATASET_FORMAT} with a module header and spans")
+    problems = [message for _, message, _ in rezono_module.header_errors(module, module["pack"])]
+    if problems:
+        raise LoadError("\n".join(problems))
+
+    records: dict[str, list] = {}
+    for table in _named_dataset(module)["decls"]:
+        kind, columns, rows = dataset_table(table)
+        output = records.setdefault(kind, [])
+        for row in rows:
+            where = f"{kind}[{len(output) + 1}]"
+            if not isinstance(row, list) or len(row) != len(columns):
+                raise LoadError(f"{where}: row width does not match the fact table header")
+            output.append(dataset_record(zip(columns, row, strict=True), where))
+    return records
+
+
+def dataset_table(table) -> tuple[str, list[str], list]:
+    if not isinstance(table, dict) or table.keys() != {"fact", "columns", "rows"}:
+        raise LoadError("datasets require fact tables")
+    if not isinstance(table["fact"], str):
+        raise LoadError("invalid dataset fact kind")
+    kind = snake(table["fact"])
+    columns, rows = table["columns"], table["rows"]
+    if not isinstance(columns, list) or not columns or not all(isinstance(c, str) for c in columns):
+        raise LoadError(f"{kind}: expected a nonempty fact table header")
+    columns = [snake(column) for column in columns]
+    if len(set(columns)) != len(columns):
+        raise LoadError(f"{kind}: expected unique columns beginning with the identifier")
+    if not isinstance(rows, list):
+        raise LoadError(f"{kind}: expected fact table rows")
+    return kind, columns, rows
+
+
+def dataset_record(entries, where: str, judged: Schema | None = None, kind: str | None = None) -> dict:
+    identity = judged.kinds[judged.root(kind)] if judged is not None else None
+    record = {}
+    seen = set()
+    for name, cell in entries:
+        if not isinstance(name, str):
+            raise LoadError(f"{where}: expected a named record field")
+        name = snake(name)
+        if name in seen:
+            raise LoadError(f"{where}: duplicate field '{name}'")
+        seen.add(name)
+        slot = None
+        if identity is not None and name != identity.identifier:
+            slot = judged.slot(kind, name)
+            if slot is None:
+                raise LoadError(f"{where}: unknown slot '{name}'")
+        if cell == {"boundary": "omitted"}:
+            continue
+        field = f"{where}.{name}"
+        if slot is not None:
+            record[name] = dataset_cell(cell, field, SQL_TYPES[slot.type], slot.multivalued,
+                                        judged, slot.target if slot.inlined else None)
+        else:
+            sql_type = SQL_TYPES[identity.id_type] if identity is not None else None
+            record[name] = dataset_cell(cell, field, sql_type)
+    return record
+
+
+def dataset_cell(cell, where: str, sql_type: str | None = None, repeated: bool = False,
+                 judged: Schema | None = None, target: str | None = None):
+    if isinstance(cell, dict) and cell.keys() == {"list"}:
+        if (sql_type is not None and not repeated) or not isinstance(cell["list"], list):
+            raise LoadError(f"{where}: expected a value of the declared slot")
+        return [dataset_cell(item, f"{where}[{index}]", sql_type, judged=judged, target=target)
+                for index, item in enumerate(cell["list"], 1)]
+    if isinstance(cell, dict) and cell.keys() == {"record"}:
+        if (sql_type is not None and target is None) or not isinstance(cell["record"], dict):
+            raise LoadError(f"{where}: expected a value of the declared slot")
+        return dataset_record(cell["record"].items(), where, judged, target)
+    if sql_type is not None:
+        return scalar_cell(cell, sql_type, where)
+    if not isinstance(cell, dict) or cell.keys() != {"lit"} or not isinstance(cell["lit"], str):
+        raise LoadError(f"{where}: expected a fact literal")
+    raw = cell["lit"]
+    if re.fullmatch(r"-?(?:0|[1-9][0-9]*)", raw):
+        return scalar_cell(cell, "BIGINT", where)
+    if raw in ("true", "false"):
+        return scalar_cell(cell, "BOOLEAN", where)
+    if ISO_DATE.fullmatch(raw):
+        return scalar_cell(cell, "DATE", where)
+    if raw.startswith('"'):
+        return scalar_cell(cell, "VARCHAR", where)
+    return raw
 
 
 def scalar_cell(cell, sql_type: str, where: str):

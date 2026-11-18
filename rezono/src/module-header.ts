@@ -1,11 +1,13 @@
 import { listOf, named, opt, type ModuleComponent } from './module-support.ts';
 import type { Module } from './module.ts';
+import { printSchema } from './module-metadata.ts';
 
 export function printHeader(m: Module): string[] {
 	return [
 		...(m.rezono !== undefined ? [`rezono ${m.rezono}`] : []),
 		`pack ${m.pack}`,
-		...m.use.map((u) => `use ${u.use}${u.as !== undefined ? ` as ${u.as}` : ''}`)
+		...m.use.map((u) => `use ${u.use}${u.as !== undefined ? ` as ${u.as}` : ''}`),
+		...printSchema(m)
 	];
 }
 
@@ -13,8 +15,11 @@ export const header = {
 	lineRules: ['RezonoLine', 'PackLine', 'UseLine'],
 	grammar: String.raw`
   RezonoLine = kw<"rezono"> number
-  PackLine = kw<"pack"> name
-  UseLine = kw<"use"> NonemptyListOf<name, "."> (as name)?
+  PackLine = kw<"pack"> packName
+  UseLine = kw<"use"> NonemptyListOf<packName, "."> (as name)?
+
+  packName (a name) = hyphenatedPackName | name
+  hyphenatedPackName = az (az | d)* ("-" (az | d)+)+ ~wordChar
   `,
 	actions: {
 		RezonoLine: (_k, n) => ({ line: 'rezono', rezono: n.sourceString }),
