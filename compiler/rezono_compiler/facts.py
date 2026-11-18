@@ -55,12 +55,54 @@ class LoadError(Diagnosed):
 
 
 def files(pack_dir: str | Path) -> list[Path]:
-    """Fact data files only: a .sources.yaml companion is metadata, never a kind section."""
-    paths = sorted((Path(pack_dir) / "facts").glob("*.yaml"))
+    """Legacy fact files followed by declared datasets, in path order within each group."""
+    pack_dir = Path(pack_dir)
+    paths = sorted((pack_dir / "facts").glob("*.yaml"))
     for path in paths:
         if path.name.endswith(".sources.yaml") and not path.with_name(path.name.removesuffix(".sources.yaml") + ".yaml").is_file():
             raise LoadError(f"{path.name}: a source sidecar has no companion fact file")
-    return [p for p in paths if not p.name.endswith(".sources.yaml")]
+    return [p for p in paths if not p.name.endswith(".sources.yaml")] + _named_datasets(pack_dir)
+
+
+def _named_datasets(pack_dir: Path) -> list[Path]:
+    manifest = pack_dir / "pack.yaml"
+    if not manifest.exists():
+        return []
+    try:
+        meta = yaml.safe_load(manifest.read_text(encoding="utf-8"))
+    except (OSError, yaml.YAMLError) as error:
+        raise LoadError(f"pack.yaml: cannot read dataset declarations ({error})") from error
+    if not isinstance(meta, dict):
+        raise LoadError("pack.yaml: expected a mapping of pack metadata")
+
+    errors: list[str] = []
+    modules = rezono_module.declared(meta, pack_dir, errors, reject_undeclared=False)
+    if errors:
+        raise LoadError("\n".join(errors))
+    source_dir = pack_dir.resolve() / rezono_module.DIR
+    datasets = []
+    for declared in modules:
+        path = pack_dir / declared.form
+        try:
+            if not all((pack_dir / name).resolve().is_relative_to(source_dir)
+                       for name in (declared.module, declared.form)):
+                raise LoadError(f"{declared.form}: a module or form resolves outside {rezono_module.DIR}/")
+            form = json.loads(path.read_bytes())
+        except (OSError, ValueError) as error:
+            raise LoadError(f"{declared.form}: cannot read module form ({error})") from error
+        if rezono_module.module_body(form, rezono_module.FORMAT) is not None:
+            continue
+        module = rezono_module.module_body(form, DATASET_FORMAT)
+        if module is None:
+            raise LoadError(f"{declared.form}: expected a Rezono module form")
+        if not any(isinstance(decl, dict) and "dataset" in decl for decl in module["decls"]):
+            continue
+        name = _named_dataset(module)["dataset"]
+        basename = Path(declared.module).stem
+        if name != basename:
+            raise LoadError(f"{declared.form}: module '{basename}' declares dataset '{name}'")
+        datasets.append(path)
+    return sorted(datasets)
 
 
 def document(path: Path, pack: Pack | None = None) -> dict[str, list]:
@@ -117,14 +159,7 @@ def load(pack: Pack, path: str | Path) -> dict[str, list[tuple]]:
     return rows
 
 
-def scalar_dataset(judged: Schema, form: dict) -> dict[str, list]:
-    """Decode a named module dataset into the records used by ordinary admission."""
-    module = rezono_module.module_body(form, DATASET_FORMAT)
-    if module is None:
-        raise LoadError(f"expected {DATASET_FORMAT} with a module header and spans")
-    problems = [message for _, message, _ in rezono_module.header_errors(module, judged.pack)]
-    if problems:
-        raise LoadError("\n".join(problems))
+def _named_dataset(module: dict) -> dict:
     declarations = module["decls"]
     if len(declarations) != 1 or not isinstance(declarations[0], dict):
         raise LoadError("expected one named dataset in the module form")
@@ -133,6 +168,18 @@ def scalar_dataset(judged: Schema, form: dict) -> dict[str, list]:
     if (dataset.keys() != {"dataset", "decls"} or not isinstance(dataset["dataset"], str)
             or not dataset["dataset"] or not isinstance(tables, list)):
         raise LoadError("expected one named dataset in the module form")
+    return dataset
+
+
+def scalar_dataset(judged: Schema, form: dict) -> dict[str, list]:
+    """Decode a named module dataset into the records used by ordinary admission."""
+    module = rezono_module.module_body(form, DATASET_FORMAT)
+    if module is None:
+        raise LoadError(f"expected {DATASET_FORMAT} with a module header and spans")
+    problems = [message for _, message, _ in rezono_module.header_errors(module, judged.pack)]
+    if problems:
+        raise LoadError("\n".join(problems))
+    tables = _named_dataset(module)["decls"]
 
     records: dict[str, list] = {}
     for table in tables:

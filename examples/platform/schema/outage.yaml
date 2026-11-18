@@ -1,0 +1,14 @@
+id: https://rezono.org/examples/platform-core/outage
+name: platform_outage
+description: Reported unavailability of services in a platform scenario.
+in_language: en
+imports: [linkml:types]
+default_range: string
+annotations:
+  layer: facts
+
+classes:
+  FailureObservation:
+    description: A directly observed service failure, identified by the service that failed.
+    attributes:
+      id: {identifier: true}

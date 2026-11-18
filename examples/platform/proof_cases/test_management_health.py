@@ -57,9 +57,6 @@ def test_management_health_readback():
     assert {e["channel"] for e in events if e["kind"] == "collector-delivery"} == {"metrics", "logs", "alerts"}
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError, reason=(
-    "Derive telemetry flows and crossed-zone firewall needs in rules/management_routes.dl and its schema. "
-    "Use the placement and ports in decisions/platform-management-health.md."))
 def test_management_observation_routes():
     from management_probes import compiled
 

@@ -1,0 +1,15 @@
+.decl network_stack_selection(policy: symbol, observation: symbol)
+network_stack_selection(p, o) :- network_stack_choice__policy(c, p),
+    network_stack_choice__observation(c, o).
+
+.decl competing_network_stack_selection(policy: symbol, observation: symbol)
+competing_network_stack_selection(p, o) :- network_stack_selection(p, o),
+    network_stack_selection(other, _), p != other.
+competing_network_stack_selection(p, o) :- network_stack_selection(p, o),
+    network_stack_selection(_, other), o != other.
+
+.decl cluster_network_stack(cluster: symbol, policy: symbol, observation: symbol)
+cluster_network_stack(c, p, o) :- cluster_control_host(c, _), network_stack_selection(p, o),
+    !competing_network_stack_selection(p, o).
+
+.output cluster_network_stack
