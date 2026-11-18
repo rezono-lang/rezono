@@ -11,6 +11,7 @@ or a different violation fails the mutation check.
 | [Epochs](Epochs.tla) | [Completion before marker](Epochs.cfg), [transaction with step-end relay](EpochsTxn.cfg) | [Push marker without waiting](EpochsNoWait.cfg) and [relay at the marker row](EpochsTxnAtRow.cfg) violate `Complete`. |
 | [Effect](Effect.tla) | [Retained plan claim](Effect.cfg) | [Omit the retained claim guard](EffectNoLock.cfg) violates `AtMostOneSubmit`. |
 | [Claims](Claims.tla) | [Lease, generation and open-PR checks](Claims.cfg) | [Omit the open-PR check at deletion](ClaimsNoOpenPRCheck.cfg) violates `SafeRemoval`. |
+| [Rounds](Rounds.tla) | [Certified visible prefixes and observed completion](Rounds.cfg) | [Trust a submit](RoundsTrustSubmit.cfg) violates `DoneHasCurrentMatchingObservation`. [Check only the combined result](RoundsCombinedOnly.cfg) violates `EveryVisiblePrefixValid`. |
 
 ## Protocols and assumptions
 
@@ -42,6 +43,23 @@ read and the delete, so the deletion receipt records the unsafe removal.
 The model bounds clock ticks and generations to check safety with a finite
 state space.
 
+**Rounds.** Two workers can claim and submit individual members of a batch
+over two observation cuts and two run identities. An exposed resource needs
+protection. An independent audit member allows two safe submissions and a
+crash between them. The genesis cut starts from a certified empty base.
+Later cuts need closed coverage of the observed state before evaluating a
+batch. Deliveries may arrive in any order. Only a reading at the active run
+and cut supplies current evidence. The model retains claims and submission history
+across cuts and run changes. A later cut clears completion tokens and
+reestablishes them through matching readback.
+
+The model explores every allowed choice within its batch bound. It assumes
+an effect becomes visible at one modeled boundary and an environmental
+correction preserves safety before the new cut is observed. A missing
+receipt or unreachable producer can leave the system waiting. Eventual
+completion would require fairness and a responsive environment. See
+[safe transition rounds](../decisions/safe-step-rounds.md).
+
 ## What ties a model to the code
 
 A model proves properties of its protocol. The table lists tests that replay
@@ -61,6 +79,14 @@ action has no direct replay there.
 | Claims | `Tick`, `Acquire`, `Renew` | None. |
 | Claims | `OpenPR`, `ClosePR`, `Observe` | None. |
 | Claims | `Delete`, `Confirm`, `DiscardConfirmation` | None. |
+| Rounds | `Evaluate` | None for certification of a batch. |
+| Rounds | `Claim` | None for the durable write. |
+| Rounds | `SubmitOne`, `Crash`, `LoseReply` | None for physical dispatch, interruption or reply loss. |
+| Rounds | `Correct` | None for changing the physical resource. |
+| Rounds | `Observe`, `Reconcile` | [Recorded correction](../loop/tests/test_recorded_correction.py) replays a late observation, rejects a foreign run and revokes completion on newer contrary evidence. |
+| Rounds | `CloseSweep` | [Fixed-point replay](../loop/tests/test_replay_fixed_point.py) exercises complete and partial coverage. |
+| Rounds | `NextRound` | [Recorded correction](../loop/tests/test_recorded_correction.py) replays the next observed frontier. None for replacing the pinned certificate. |
+| Rounds | `ConcludeFixedPoint` | [Fixed-point replay](../loop/tests/test_replay_fixed_point.py) distinguishes terminal blocked evidence from pending completion. |
 
 The [effect eligibility test](../loop/tests/test_attempt_approval.py) compares
 the candidate with the approved plan hash.
@@ -73,4 +99,7 @@ From this directory, use the verified jar path as `TLA_JAR`.
 ~~~bash
 java -cp "$TLA_JAR" tlc2.TLC -config Claims.cfg Claims.tla
 bash must-fail.sh ClaimsNoOpenPRCheck.cfg Claims.tla
+java -cp "$TLA_JAR" tlc2.TLC -config Rounds.cfg Rounds.tla
+bash must-fail.sh RoundsTrustSubmit.cfg Rounds.tla
+bash must-fail.sh RoundsCombinedOnly.cfg Rounds.tla
 ~~~

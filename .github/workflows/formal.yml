@@ -59,6 +59,7 @@ jobs:
           check EpochsTxn.cfg MCEpochs.tla
           check Effect.cfg Effect.tla
           check Claims.cfg Claims.tla
+          check Rounds.cfg Rounds.tla
 
       - name: Check the expected invariant violations
         run: |
@@ -67,3 +68,5 @@ jobs:
           bash must-fail.sh EpochsTxnAtRow.cfg MCEpochs.tla
           bash must-fail.sh EffectNoLock.cfg Effect.tla
           bash must-fail.sh ClaimsNoOpenPRCheck.cfg Claims.tla
+          bash must-fail.sh RoundsTrustSubmit.cfg Rounds.tla
+          bash must-fail.sh RoundsCombinedOnly.cfg Rounds.tla
