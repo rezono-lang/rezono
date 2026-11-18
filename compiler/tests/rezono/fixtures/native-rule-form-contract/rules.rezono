@@ -1,0 +1,4 @@
+pack sample
+-- 🍂
+rule marked(item: Marker) explain on_demand explain fold
+rule marked(x) with y: Marker when Marker.near(_, y) and y.near = x

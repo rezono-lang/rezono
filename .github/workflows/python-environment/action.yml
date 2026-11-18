@@ -13,6 +13,16 @@ inputs:
 runs:
   using: composite
   steps:
+    # Tests and collection can compile packs from authored sources through Python.
+    - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1  # v7.1.0
+      with:
+        node-version-file: .node-version
+        cache: npm
+        cache-dependency-path: rezono/package-lock.json
+    - name: Install the Rezono reader from its lockfile
+      shell: bash
+      working-directory: rezono
+      run: npm ci
     - name: Cache locked Python environment
       id: environment
       uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830  # v4.3.0
