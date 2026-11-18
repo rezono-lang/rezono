@@ -1,10 +1,16 @@
+.decl sweep_node_report_count(run: symbol, collector: symbol, window: symbol, node: symbol, variants: number)
 .decl covered_sweep_node(run: symbol, collector: symbol, window: symbol, ref: symbol, node: symbol)
 .decl sweep_node_counts(run: symbol, collector: symbol, window: symbol, ref: symbol, expected: number, covered: number)
 .decl complete_sweep(run: symbol, collector: symbol, window: symbol, ref: symbol)
 
+// Identical final reports agree. Distinct coverage tuples cannot both be final.
+sweep_node_report_count(run, collector, window, node, variants) :-
+    expected_node(run, collector, window, node),
+    variants = count : { node_report(run, collector, window, node, _, _, _, _) }.
+
 covered_sweep_node(run, collector, window, ref, node) :-
     sweep_window(run, collector, window, start, stop, ref),
-    expected_node(run, collector, window, node),
+    sweep_node_report_count(run, collector, window, node, 1),
     node_report(run, collector, window, node, first, last, 0, 0),
     start < stop, first <= start, last >= stop.
 

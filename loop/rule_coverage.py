@@ -1,7 +1,7 @@
 """Account for declared firewall witnesses using positive fixture cases."""
 
 from collections.abc import Iterable, Mapping
-from typing import TypedDict
+from typing import NotRequired, TypedDict
 
 
 class Endpoint(TypedDict):
@@ -10,6 +10,8 @@ class Endpoint(TypedDict):
 
 
 class Rule(TypedDict):
+    source: NotRequired[str]
+    destination: NotRequired[str]
     function: str
     sourceFrom: int
     sourceTo: int
@@ -29,25 +31,40 @@ class Case(TypedDict):
     service: str
 
 
+class RuleCoverage(TypedDict):
+    rule: Rule
+    caseIds: list[str]
+
+
+def _rule_order(rule: Rule) -> tuple[str, int, int, int, str, int, int, str, str]:
+    return (
+        rule["function"], rule["sourceFrom"], rule["sourceTo"], rule["destinationAddress"],
+        rule["protocol"], rule["fromPort"], rule["toPort"], rule.get("source", ""),
+        rule.get("destination", ""),
+    )
+
+
 def coverage(
     endpoints: Mapping[str, Endpoint], rules: Iterable[Rule], cases: Iterable[Case]
-) -> dict[str, list[str]]:
-    """Return positive cross-zone case IDs per function, including empty coverage."""
+) -> list[RuleCoverage]:
+    """Return each declared rule with its own positive cross-zone case IDs."""
     positive = []
     for case in cases:
         source, destination = endpoints[case["source"]], endpoints[case["destination"]]
         if case["router"] == case["service"] == "allow" and source["zone"] != destination["zone"]:
             positive.append((case, source["address"], destination["address"]))
 
-    covered: dict[str, set[str]] = {}
-    for rule in rules:
-        matching = covered.setdefault(rule["function"], set())
-        for case, source, destination in positive:
+    covered: list[RuleCoverage] = []
+    for rule in sorted(rules, key=_rule_order):
+        matching = {
+            case["id"]
+            for case, source, destination in positive
             if (
                 rule["sourceFrom"] <= source <= rule["sourceTo"]
                 and destination == rule["destinationAddress"]
                 and case["protocol"] == rule["protocol"]
                 and rule["fromPort"] <= case["port"] <= rule["toPort"]
-            ):
-                matching.add(case["id"])
-    return {function: sorted(covered[function]) for function in sorted(covered)}
+            )
+        }
+        covered.append({"rule": rule.copy(), "caseIds": sorted(matching)})
+    return covered

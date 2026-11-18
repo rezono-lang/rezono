@@ -6,6 +6,7 @@ from pathlib import Path
 import subprocess
 
 import yaml
+from checked_release_fixture import MANIFEST_KEY, publish_evidence
 
 
 ROOT = Path(__file__).parent
@@ -18,7 +19,9 @@ def check_offline_oracle(driver, tmp_path):
         return yaml.safe_load((ROOT / "fixtures" / "server" / name).read_text(encoding="utf-8"))
 
     publication = load("publication.yaml")
-    release = list(render_release(["admission-blue", "admission-green"], [publication]))
+    store = publish_evidence(tmp_path / "checked")
+    release = render_release(["admission-blue", "admission-green"], [publication],
+                             store=store, manifest_key=MANIFEST_KEY)
     file = tmp_path / "release.json"
     file.write_text(json.dumps({"apiVersion": "v1", "kind": "List", "items": release}), encoding="utf-8")
     for filename, group, resource in [("pod.yaml", "", "pods"), ("flow.yaml", "networking.k8s.io", "networkpolicies")]:

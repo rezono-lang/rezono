@@ -112,7 +112,8 @@ class TypedRecording:
         from rezono_compiler import batch, facts, scenarios
         from rezono_compiler.diagnostics import Diagnosed
 
-        times = {e.time for sweep in self.rounds for e in sweep.events}
+        # Stored observations already use the selected run's relative clock.
+        times = {e.time for sweep in self.rounds for e in sweep.events if e.envelope["run"] == self.run}
         start = min(times, default=0)
         scale = lcm(*(at.denominator for at in times))
         offsets = {at: int((at - start) * scale) for at in times}

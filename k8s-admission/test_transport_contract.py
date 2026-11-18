@@ -58,7 +58,6 @@ def test_transport_publication_interchange():
             read_parameters("platform", invalid)
 
 
-@pytest.mark.xfail(strict=True, reason="Depends on test_transport_publication_interchange, the shared NetworkPolicy renderer and managed preflight. Implement protocol-aware checks in k8s-admission/managed_network_policy.py per decisions/k8s-admission-transport.md.")
 def test_rendered_transport_publication_matrix(monkeypatch):
     monkeypatch.syspath_prepend(str(ROOT.parent / "examples" / "platform"))
     from managed_network_policy import evaluate_network_policy

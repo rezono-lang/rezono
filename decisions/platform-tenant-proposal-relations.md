@@ -23,6 +23,9 @@ and its charged cores, memoryGiB and storageGiB. Use the request identifier as t
 `tenant_landed_delivery` and retain the revision as a witness. The resource amounts come
 from that landing, so a proposed catalog change cannot reprice past usage. An empty list
 means no recorded landings in this complete base snapshot. A duplicate identity is invalid.
+When the inventory is missing, the reference calculation reports null landed usage for
+each published limit. Admission remains unknown unless a connection already denies the
+request. Shortage rows report only measured positive deficits.
 
 Compare the combined candidate to this base, in the same submission order as the proposal
 preview. A proposed replacement contributes only its difference from the landed amount.

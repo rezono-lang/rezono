@@ -35,7 +35,16 @@ supplies independent human approval at deployment time.
 Prove inventory completion from a chain rooted in the requested first page.
 Every successor must be present once in the same sweep and the chain must end.
 A timeout, a cycle, or a missing page yields unknown status. Derive absence
-only after a complete sweep with no matching plan hash.
+only after a complete sweep with no matching plan hash. The cleanup pack
+joins the recorded delete dispatch and sweep start on attempt ID, run, scope
+and plan digest. The start must be strictly later than dispatch. Legacy
+coverage reports remain readable and cannot establish completeness.
+
+The inventory adapter projects each page response independently. A null
+successor is recorded as the empty string, which cannot be a page token.
+The source array length and tagged or explicitly untagged item rows travel
+with the page. The rules check the rooted chain and all of its item counts.
+Cleanup evidence names the dispatch, sweep, terminal and contributing pages.
 
 The alternative of using a single provider-specific order document as plan,
 approval and cleanup proof loses the independence of these observations.
