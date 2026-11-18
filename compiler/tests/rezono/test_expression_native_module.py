@@ -117,3 +117,18 @@ rule borrowed(item: other.Parcel) when item in other.Parcel
     with pytest.raises(pack.CompileError) as refused:
         compiled(directory)
     assert any(item.code == "R046" and item.where.endswith("/use/0") for item in refused.value.diagnostics)
+
+    owned = author(owner, "borrowed", """rezono 0
+pack shared-terms
+rule owned(item: Party) when item in Party
+""", 3)
+    write_metadata(owner, rezono=[owned])
+    unauthorized_extension = author(directory, "extension", """rezono 0
+pack minimal
+use shared-terms as terms
+rule terms.owned(item) when item in terms.Party
+""", 3)
+    write_metadata(directory, rezono=[native, unauthorized_extension], imports=[pin(owner)])
+    with pytest.raises(pack.CompileError) as refused:
+        compiled(directory)
+    assert any(item.code == "R046" and "extendable" in item.message for item in refused.value.diagnostics)

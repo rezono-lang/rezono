@@ -62,8 +62,7 @@ def replay_groups(case, lowered):
 
 @pytest.mark.xfail(strict=True, raises=MissingFilteredCountDiagnostic,
                    reason="Report R044 for a well-typed unrepresentable filter in compiler/rezono_compiler/native_rule_groups.py. "
-                          "Read decisions/language-expression-semantics.md. Waits for test_expression_python_negated_call "
-                          "while it owns the same lowerer.")
+                          "Read decisions/language-expression-semantics.md.")
 def test_expression_python_filtered_count():
     case = yaml.safe_load((CORPUS / "expression-filtered-count.yaml").read_bytes())
     schema = json.loads((CORPUS / "case.schema.json").read_bytes())
