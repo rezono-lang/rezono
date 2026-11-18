@@ -1,1 +1,0 @@
-examples/subsidy/test_subsidy.py: FileNotFoundError: [Errno 2] No such file or directory: 'deploy/profiles/edge.yaml'
