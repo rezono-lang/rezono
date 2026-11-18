@@ -16,10 +16,29 @@ mkdir -p "$reports"
 container="feldera-oracle-${GITHUB_RUN_ID:?}-${GITHUB_RUN_ATTEMPT:?}"
 inputs=$(mktemp -d "$RUNNER_TEMP/feldera-inputs.XXXXXXXX")
 chmod 755 "$inputs"
+shard=${FELDERA_SHARD:-}
+collector=
+copy_rust_trace() {
+  local snapshot="$reports/.rustc.$BASHPID"
+  if docker exec "$container" sh -c '
+      expected="$HOME/.feldera/compiler/rust-compilation"
+      cd "$expected" && [ "$(pwd -P)" = "$expected" ] &&
+        test -s .rezono-rustc.log && cat .rezono-rustc.log
+    ' > "$snapshot" 2>/dev/null; then
+    mv -f -- "$snapshot" "$reports/rustc.log"
+  else
+    rm -f -- "$snapshot"
+  fi
+}
 cleanup() {
   status=$?
   trap - EXIT
+  if [[ -n "$collector" ]]; then
+    kill "$collector" 2>/dev/null || true
+    wait "$collector" 2>/dev/null || true
+  fi
   if docker container inspect "$container" >/dev/null 2>&1; then
+    copy_rust_trace || true
     if (( status != 0 )); then
       docker logs --tail 250 "$container" > "$reports/engine.log" 2>&1 || true
     fi
@@ -31,9 +50,6 @@ cleanup() {
 trap cleanup EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
-trace="$reports/rustc.log"
-touch "$trace"
-chmod 666 "$trace"
 if ! docker image inspect "$image" >/dev/null 2>&1; then
   docker pull "$image"
 fi
@@ -45,12 +61,11 @@ compiler_env=(--env CARGO_NET_OFFLINE=true --env RUSTC_WRAPPER=/tmp/rezono-measu
               --env CARGO_PROFILE_DEV_DEBUG=0 --env CARGO_PROFILE_UNOPTIMIZED_DEBUG=0)
 # Each part of the largest comparison builds a distinct program. The dependency cache remains
 # available without retaining per-program incremental state.
-if [[ "${FELDERA_SHARD:-}" == platform ]]; then
+if [[ "$shard" == platform ]]; then
   compiler_env+=(--env CARGO_INCREMENTAL=0)
 fi
 docker run --detach --name "$container" --network none "${compiler_env[@]}" \
   --mount "type=bind,src=$PWD/compiler/ci/measure_feldera_rustc.sh,dst=/tmp/rezono-measure-feldera-rustc,readonly" \
-  --mount "type=bind,src=$trace,dst=/tmp/rezono-feldera-rustc.log" \
   --mount "type=bind,src=$original,dst=/tmp/rezono-feldera-original-wrapper,readonly" \
   --mount "type=bind,src=$inputs,dst=/tmp/rezono-oracle-input,readonly" "$image"
 pid=$(docker inspect --format '{{.State.Pid}}' "$container")
@@ -61,6 +76,16 @@ inside=(sudo nsenter --target "$pid" --net -- sudo -H -u "$(id -un)" --
         "FELDERA_ORACLE_REPORTS=$reports" "FELDERA_ORACLE_INPUT_DIR=$inputs")
 "${inside[@]}" curl --fail --silent --show-error --retry 45 --retry-connrefused \
   --retry-delay 2 --retry-max-time 95 --max-time 5 "$FELDERA_URL/healthz"
+if [[ "$shard" == platform ]]; then
+  # Retain the active Rust invocation even if GitHub stops the job before cleanup.
+  (
+    while docker container inspect "$container" >/dev/null 2>&1; do
+      copy_rust_trace || true
+      sleep 5
+    done
+  ) &
+  collector=$!
+fi
 docker image inspect --format 'pinned image bytes={{.Size}}' "$image" > "$reports/storage.log"
 df -h "$reports" >> "$reports/storage.log"
 printf 'runner cpus=%s architecture=%s\n' "$(nproc)" "$(uname -m)" >> "$reports/storage.log"
@@ -88,7 +113,6 @@ for selector in "${selectors[@]}"; do
     { echo "No collected case for $selector" >&2; exit 1; }
 done
 nodes="$reports/collected.txt"
-shard=${FELDERA_SHARD:-}
 if [[ -n "$shard" ]]; then
   python compiler/ci/feldera_shards.py select "$shard" "$inventory" > "$nodes"
 else

@@ -38,18 +38,21 @@ case "$debug" in default|none|line-directives-only|line-tables-only|limited|full
 case "$units" in default) ;; *[!0-9]*) units=other ;; esac
 case "$opt" in default|0|1|2|3|s|z) ;; *) opt=other ;; esac
 
-log=/tmp/rezono-feldera-rustc.log
-started=$(date +%s)
-printf 'rustc start crate=%s epoch=%s incremental=%s debuginfo=%s units=%s opt=%s\n' \
-    "$crate" "$started" "$incremental" "$debug" "$units" "$opt" >> "$log"
-result=0
-if [ -x /usr/bin/time ]; then
-    /usr/bin/time -a -o "$log" -f "rustc resources crate=$crate elapsed_seconds=%e cpu=%P max_rss_kib=%M" \
-        "$@" || result=$?
-else
-    "$@" || result=$?
+workspace=$(pwd -P) || exec "$@"
+while [ "${workspace##*/}" != rust-compilation ]; do
+    case "$workspace" in ''|/) exec "$@" ;; esac
+    workspace=${workspace%/*}
+done
+log="$workspace/.rezono-rustc.log"
+started=$(date +%s) || exec "$@"
+# A diagnostic failure must leave rustc's original invocation and result intact.
+if ! { printf 'rustc start crate=%s epoch=%s incremental=%s debuginfo=%s units=%s opt=%s\n' \
+    "$crate" "$started" "$incremental" "$debug" "$units" "$opt" >> "$log"; } 2>/dev/null; then
+    exec "$@"
 fi
-finished=$(date +%s)
-printf 'rustc finish crate=%s epoch=%s elapsed_seconds=%s status=%s\n' \
-    "$crate" "$finished" "$((finished - started))" "$result" >> "$log"
+result=0
+"$@" || result=$?
+finished=$(date +%s) || exit "$result"
+{ printf 'rustc finish crate=%s epoch=%s elapsed_seconds=%s status=%s\n' \
+    "$crate" "$finished" "$((finished - started))" "$result" >> "$log"; } 2>/dev/null || true
 exit "$result"
