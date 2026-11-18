@@ -49,12 +49,6 @@ def test_open_aggregate_requires_explicit_recorded_absence(tmp_path):
     assert replay["read_sum"](case, closed.rows, closed.witnesses) == case["expect"]
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=UntypedAggregate,
-    reason="Preserve a proved aggregate's integer type through the compiled bundle and publication "
-           "schema. Read tests/conformance/value-agg-sum-empty.yaml. Write in compiler/ and publication/.",
-)
 def test_compiled_conformance_aggregate_refuses_a_nonnumeric_publication_value(tmp_path):
     case = replay["case_file"]("value-agg-sum-empty")
     result = replay["play"](case, tmp_path)

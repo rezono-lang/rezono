@@ -160,8 +160,15 @@ def schema_document(bundle: dict, full=None) -> tuple[dict, dict]:
         if name in kinds:
             raise FormError(f"derived relation {r['id']} collides with kind {name}")
         cols = [c["name"] for c in r["columns"]]
+        column_types = {}
+        for c in r["columns"]:
+            column_types[c["name"]] = "Text"
+            if c["type"] == "integer":  # an integer column keeps its type: no text that is not an integer
+                column_types[c["name"]] = f"{name}{pascal(c['name'])}"
+                types[column_types[c["name"]]] = {"of": "Integer", "min": BIGINT[0], "max": BIGINT[1]}
         kinds[name] = {"world": "open" if partial(r["id"]) else r["world"], "id": {"type": "Text"},
-                       "slots": {c: {"type": "Text", "card": "1", "states": ["known"], "derived": True} for c in cols}}
+                       "slots": {c: {"type": column_types[c], "card": "1", "states": ["known"], "derived": True}
+                                 for c in cols}}
         plan["derived"][r["id"]] = (name, cols)
     doc = {"rezono": "1.0", "pack": pack, "base": base, "kinds": kinds}
     if types:
