@@ -65,9 +65,22 @@ class Admission(unittest.TestCase):
                                        "\n  compiler/tests/test_new_proof.py::test_roundtrip\n")
         self.assertTrue({n.split("::")[0] for n in gate.ORIGINAL} <= selected)
         self.assertTrue(gate.relevant("compiler/tests/test_new_proof.py", selected))
-        with patch.object(gate, "changed", return_value=["docs/feldera.md", "examples/platform/facts/core.yaml"]), \
+        with patch.object(gate, "changed", return_value=[
+                "docs/feldera.md", "examples/platform/facts/core.yaml", "udf/AGENTS.md"]), \
              patch.object(gate, "proof", side_effect=AssertionError("unexpected API access")):
             self.assertTrue(gate.review("base", HEAD, BRANCH, REPO))
+
+    def test_udf_inputs_require_proof_for_the_reviewed_revision(self):
+        for path in ("udf/udf.rs", "udf/udf.toml"):
+            with self.subTest(path=path), patch.object(gate, "changed", return_value=[path]), \
+                 patch.object(gate, "proof", return_value=None) as proof:
+                self.assertFalse(gate.review("base", HEAD, BRANCH, REPO))
+                proof.assert_called_once_with(HEAD, BRANCH, REPO)
+
+                proof.reset_mock()
+                proof.return_value = RUN
+                self.assertTrue(gate.review("base", HEAD, BRANCH, REPO))
+                proof.assert_called_once_with(HEAD, BRANCH, REPO)
 
     def test_only_the_requested_branch_dispatch_proves_this_revision(self):
         self.assertTrue(gate.matches(RUN, HEAD, BRANCH, REPO))
