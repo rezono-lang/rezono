@@ -1,0 +1,7 @@
+name: neutral
+version: 0.1.0
+default_language: en
+imports:
+  - name: std-access
+    path: ../../../packs/std-access
+    sha256: 3b079ebbea56f3e04d90b603b593f3f2f3aeed36e0d06ba74709e9567bed6808

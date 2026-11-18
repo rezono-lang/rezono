@@ -1,0 +1,5 @@
+// Both readers can see items and their groups. Reading a link requires the additional capability.
+.decl may_read(role: symbol, kind: symbol, element: symbol)
+may_read(r, "item", i) :- role__capability(r, "read"), item(i).
+may_read(r, "group", g) :- role__capability(r, "read"), group(g).
+may_read(r, "link", l) :- role__capability(r, "read_restricted"), link(l).
