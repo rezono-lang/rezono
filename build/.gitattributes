@@ -1,0 +1,5 @@
+pack.yaml pack-definition
+channels.yaml pack-definition
+labels/*.yaml pack-definition
+schema/**/*.yaml pack-definition
+rules/*.dl pack-definition
