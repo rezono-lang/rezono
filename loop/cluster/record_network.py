@@ -132,6 +132,7 @@ def start_services(cluster: Cluster, matrix: dict) -> dict[str, str]:
         if case["protocol"] != "TCP":
             raise ValueError("This fixture only starts TCP listeners")
         ports.setdefault(case["destination"], set()).add(case["port"])
+    ports["peer"].add(MARKER_PORT)
     for endpoint, listened in sorted(ports.items()):
         cluster.apply({
             "apiVersion": "v1", "kind": "Pod",
@@ -163,6 +164,10 @@ def policies(cluster: Cluster, matrix: dict, endpoints: Iterable[str], removed: 
              "ports": [{"protocol": case["protocol"], "port": case["port"]}]}
             for case in grants
         ]
+        if endpoint == "peer":
+            # Keep the coverage marker reachable from the fixture's echo pod in both sweeps.
+            rules.append({"from": [{"podSelector": {"matchLabels": {**cluster.label, labels: "echo"}}}],
+                          "ports": [{"protocol": "TCP", "port": MARKER_PORT}]})
         name = f"{endpoint}-fixture-service"
         cluster.apply({
             "apiVersion": "networking.k8s.io/v1", "kind": "NetworkPolicy",
