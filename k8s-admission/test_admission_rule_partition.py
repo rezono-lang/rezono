@@ -60,10 +60,6 @@ def evaluate(program, rows, relation):
         return batch.read(connection, program, [relation])[relation]
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="Partition the typed admission rule into a model projection and one request fragment.",
-)
 def test_partition_typed_admission_rule():
     source = program_for("pod_image")
     cases = [(POD, True), (OTHER_NAMESPACE, False), (OTHER_SERVICE, False), (OTHER_IMAGE, False)]
