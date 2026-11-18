@@ -5,7 +5,6 @@ import pytest
 from wire_fixtures import entry, fixture
 
 
-@pytest.mark.xfail(strict=True, reason="Read decisions/loop-fixture-evidence.md. Implement loop/rule_coverage.py. Account for each logical rule with a registered positive witness.")
 def test_rule_coverage(monkeypatch):
     coverage = entry(monkeypatch, "rule_coverage", "coverage")
     net = fixture("network")
