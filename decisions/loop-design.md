@@ -52,3 +52,24 @@ Hubble supplies an independent witness for each scheduled fixture case. Retain i
 ### Ordering observation inputs
 
 Normalize the observation contract's UTC instant to an integer event-time offset using a common epoch and lossless precision for the entire input batch. Compare this integer only within a run and token. Preserve the original event identity and its evidence reference as separate strings. Neither identifier breaks ties. At the latest instant, every source that agrees on a known desired value supplies its own reason. Conflicting values or a mix of known and unknown at that instant supply no known token.
+
+### Recorded corrections
+
+The ordinary recording command also accepts a recording with a relative pack path and
+verified SHA-256, admitted std-loop records, declared ports and complete sweeps of
+run-scoped Observation envelopes. Resolve paths relative to the recording. Validate
+the declarations against contracts/port.yaml and the payloads against
+contracts/observation.yaml. The effect port represents recorded actions only. Relate
+each observation to its expectation by RowRef and retain its source and event ID.
+Feed this input to the existing replay executor. Compute needed, known, waiting,
+ready, done and stuck through the pinned pack on every snapshot, including the final
+sweep. Use ready rows for the frontier and current done, stuck and drift for the
+outcome. A complete sweep with no possible advance terminates with failure. The
+command emits the same plans/rounds/outcome report on failure and exits with code 1.
+
+The integration oracle uses seed before ship. Seed confirms at second 10 and ship
+at 11. A seed mismatch arriving last with event time 2 is stale: both completions
+stand. At second 12 the same mismatch revokes seed and establishes terminal drift.
+A later observation from another run changes neither result. Use the envelope evidence reference as the known-row reason. A control derives completion
+for both steps in a temporary copy of the real theory and repins it: the first frontier
+is empty. This checks that recorded decisions depend on the evaluated rule bytes.
