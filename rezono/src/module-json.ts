@@ -29,7 +29,7 @@ export const MODULE_FORMAT = 'rezono.module/1';
 const EXTENDED_MODULE_FORMAT = 'rezono.module/2';
 
 function formatOf(module: Module): ModuleForm['format'] {
-	return module.decls.some((decl) => 'kind' in decl && decl.slots.some((slot) => slot.identifier))
+	return module.decls.some((decl) => 'kind' in decl && (decl.embedded || decl.slots.some((slot) => slot.identifier)))
 		? EXTENDED_MODULE_FORMAT
 		: MODULE_FORMAT;
 }
@@ -133,5 +133,5 @@ export function moduleFromJson(value: unknown): ModuleForm {
 		return p.at === expected[i].at && [p.line, p.start, p.end].every((n) => typeof n === 'string' && WHOLE.test(n)) && p.line !== '0' && BigInt(p.start) <= BigInt(p.end);
 	};
 	if (!Array.isArray(spans) || spans.length !== expected.length || !spans.every(placed)) throw not('`spans` does not place the nodes of `module`, each once and in their order');
-	return { format: MODULE_FORMAT, module: own.module, spans: spans.map(({ at, line, start, end }) => ({ at, line, start, end })) };
+	return { format, module: own.module, spans: spans.map(({ at, line, start, end }) => ({ at, line, start, end })) };
 }
