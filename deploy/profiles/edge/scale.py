@@ -11,9 +11,9 @@ only if both answered 200 with every measure, and the copy's page:
   is bounded at publication, so only its count is compared;
 - reads at most 1.75 times as many objects plus 4 (a tree grows a level by the logarithm of the data), makes at
   most 2 more GATE calls, gets at most 1.5 times the GATE bytes plus 16 KiB, lists at most 8 more keys.
-A control pair (`control:PACK`, `control:COPY`: a whole snapshot read straight from the gate) must fail the
-object check; if it does not, the check cannot tell a page that reads the data from one that does not, and
-fails. CPU and heap are shown, not checked. Prints a Markdown table; exit 1 on growth or a missing measure.
+A control pair (`control:PACK`, `control:COPY`: a whole snapshot read straight from the gate) must measure
+growth of the same snapshot. If it does not, the check cannot distinguish a page read from a full snapshot
+read and fails. CPU and heap are shown, not checked. Prints a Markdown table; exit 1 on growth or a missing measure.
 """
 
 from __future__ import annotations
@@ -32,6 +32,10 @@ def bounded(key: str) -> bool:
     return "/views/" in key
 
 
+def object_grew(original: int, measured: int) -> bool:
+    return measured > original * OBJECT[0] + OBJECT[1]
+
+
 def objects(pack: str, copy: str, base_reads: dict, reads: list) -> list[str]:
     """The objects the copy read that are larger than the same object of the pack (or that the pack never read)."""
     out = []
@@ -41,9 +45,24 @@ def objects(pack: str, copy: str, base_reads: dict, reads: list) -> list[str]:
         twin = pack + key[len(copy):] if key.startswith(f"{copy}/") else key
         if twin not in base_reads:
             out.append(f"{key}: read on {copy}, never on {pack}")
-        elif size > base_reads[twin] * OBJECT[0] + OBJECT[1]:
+        elif object_grew(base_reads[twin], size):
             out.append(f"{key}: {base_reads[twin]} bytes on {pack}, {size} on {copy}")
     return out
+
+
+def growing_snapshots(pack: str, copy: str, base: dict, grown: dict) -> int:
+    if "snapshot" in base or "snapshot" in grown:
+        # A changed snapshot has a new content-addressed store key. The request records its relation.
+        relation = base.get("snapshot")
+        if not isinstance(relation, str) or not relation or relation != grown.get("snapshot"):
+            return 0
+        return int(object_grew(base["gate_bytes"], grown["gate_bytes"]))
+
+    # Older profiles can prove growth only for matching keys read by the controls themselves.
+    baseline = {key.removeprefix(f"{pack}/"): size for key, size in base["store_reads"]
+                if key.startswith(f"{pack}/") and not bounded(key)}
+    return sum(object_grew(baseline[name], size) for key, size in grown["store_reads"]
+               if key.startswith(f"{copy}/") and (name := key.removeprefix(f"{copy}/")) in baseline)
 
 
 def check(results: list[dict], pack: str, copy: str) -> tuple[list[str], list[str]]:
@@ -66,7 +85,6 @@ def check(results: list[dict], pack: str, copy: str) -> tuple[list[str], list[st
         if missing:
             failures += missing
             continue
-        grew = objects(pack, copy, base_reads, grown["store_reads"])
         cells = []
         for m, (factor, slack) in COUNTED.items():
             limit = base[m] * factor + slack
@@ -75,10 +93,12 @@ def check(results: list[dict], pack: str, copy: str) -> tuple[list[str], list[st
             if not ok:
                 failures.append(f"{path}: {m} {base[m]} on {pack}, {grown[m]} on {copy} (at most {limit:.0f})")
         if control:
-            cells.append(f"{len(grew)} larger (must be > 0)" + ("" if grew else " ✗"))
-            if not grew:
-                failures.append(f"{path}: a whole snapshot read is not larger on {copy}: the check cannot tell")
+            count = growing_snapshots(pack, copy, base, grown)
+            cells.append(f"{count} larger (must be > 0)" + ("" if count else " ✗"))
+            if not count:
+                failures.append(f"{path}: no matching snapshot measured larger on {copy}: the check cannot tell")
         else:
+            grew = objects(pack, copy, base_reads, grown["store_reads"])
             cells.append(f"{len(grew)} larger" + (" ✗" if grew else ""))
             failures += [f"{path}: {g}" for g in grew]
         cells += [f"{base.get(m, '–')} → {grown.get(m, '–')}" for m in SHOWN]
