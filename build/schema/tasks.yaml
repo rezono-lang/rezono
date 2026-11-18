@@ -16,7 +16,7 @@ classes:
       track: {required: true}
       source: {required: true}
   BuildPolicyDate:
-    description: The reference day derived from the recorded observation cut.
+    description: A reference day asserted for an observation cut and checked against its recorded UTC timestamp.
     attributes:
       id: {identifier: true}
       run: {range: BuildRun, required: true}
