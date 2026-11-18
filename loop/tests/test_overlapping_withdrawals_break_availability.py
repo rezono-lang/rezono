@@ -21,6 +21,7 @@ from round_visibility_publication import checked_loop_publication
         "boundaries from the retained effect declarations. Refuse overlapping withdrawals even when "
         "every submitted pair checks and the violating boundary was left out. Preserve observed "
         "old rows and residual effects. Write in the Loop round admission path."
+        " Waits for an admission path owned by core: batch.epoch and publish must verify the archived submitted evidence against the retained context and supply it as protected input before the rules run (decisions/scoped-completeness.md section 1, Admission and replay transport), and for test_completeness_receipt_exact_inventory. Today batch.epoch receives only source digests (see PR #616)."
     ),
 )
 def test_overlapping_withdrawals_break_availability(tmp_path):
