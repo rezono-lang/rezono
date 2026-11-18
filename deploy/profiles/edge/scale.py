@@ -48,14 +48,16 @@ def objects(pack: str, copy: str, base_reads: dict, reads: list) -> list[str]:
 
 def check(results: list[dict], pack: str, copy: str) -> tuple[list[str], list[str]]:
     by = {r["path"]: r for r in results}
-    base_reads = {k: n for r in results if r["path"].startswith((f"/{pack}", f"control:{pack}"))
-                  for k, n in r.get("store_reads", []) if k.startswith(f"{pack}/")}
-    rows, failures = [], []
     pairs = [(p, f"/{copy}{p[len(pack) + 1:]}") for p in by
              if p == f"/{pack}" or p.startswith((f"/{pack}/", f"/{pack}?"))]
+    control_path = f"control:{pack}"
+    base_paths = {path for path, _ in pairs} | {control_path}
+    base_reads = {k: n for r in results if r["path"] in base_paths
+                  for k, n in r.get("store_reads", []) if k.startswith(f"{pack}/")}
+    rows, failures = [], []
     if not pairs:
         failures.append(f"no path of {pack} was profiled")
-    for path, mirror in pairs + [(f"control:{pack}", f"control:{copy}")]:
+    for path, mirror in pairs + [(control_path, f"control:{copy}")]:
         base, grown = by.get(path), by.get(mirror)
         control = path.startswith("control:")
         if base is None or grown is None:
