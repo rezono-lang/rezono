@@ -80,6 +80,30 @@ runs:
         mkdir -p "$packages"
         if [[ "$CACHE_HIT" == true ]]; then
           (cd "$packages" && sha256sum --check SHA256SUMS)
+          # The oracle only needs these verified executables and libraries. On
+          # disposable runners, unpack them without rebuilding the global package
+          # database and indexes; keep the normal install for incompatible images.
+          prefix="$RUNNER_TEMP/rezono-oracle"
+          mkdir -p "$prefix/bin" "$prefix/probe"
+          for deb in "$packages"/*.deb; do
+            dpkg-deb --extract "$deb" "$prefix"
+          done
+          cat > "$prefix/bin/souffle" <<'SH'
+        #!/usr/bin/env bash
+        set -euo pipefail
+        root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../usr" && pwd -P)
+        export PATH="$root/bin:$PATH"
+        export LD_LIBRARY_PATH="$root/lib/x86_64-linux-gnu${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+        exec "$root/bin/souffle" "$@"
+        SH
+          chmod +x "$prefix/bin/souffle"
+          printf '.decl probe(x:number)\nprobe(1).\n.output probe\n' > "$prefix/probe/probe.dl"
+          if "$prefix/bin/souffle" -j 1 -D "$prefix/probe" "$prefix/probe/probe.dl" &&
+             [[ "$(cat "$prefix/probe/probe.csv")" == 1 ]]; then
+            "$prefix/bin/souffle" --version
+            echo "$prefix/bin" >> "$GITHUB_PATH"
+            exit 0
+          fi
           if sudo dpkg --install "$packages"/*.deb; then
             souffle --version
             exit 0
