@@ -49,12 +49,22 @@ class SelectorTests(unittest.TestCase):
 
 
 class InventoryTests(unittest.TestCase):
+    def test_weighted_workers_keep_every_id_in_pytest_order(self):
+        items = ["a", "b", "c", "d", "e", "f", "g"]
+        groups = ci.weighted_workers(items, 3, {"c": 20, "e": 4, "b": 4}, 1)
+        self.assertEqual(groups, [["c"], ["a", "b", "f"], ["d", "e", "g"]])
+        self.assertCountEqual((node for group in groups for node in group), items)
+        self.assertEqual(ci.weighted_workers(items, 1, {}, 1), [items])
+
     def test_parametrization_skips_and_execution_evidence(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             (root / "scripts").mkdir()
             script = root / "scripts/components.py"
             shutil.copyfile(ROOT / "scripts/components.py", script)
+            profile = Path(".github/workflows/compiler-duration-profile.json")
+            (root / profile.parent).mkdir(parents=True)
+            shutil.copyfile(ROOT / profile, root / profile)
             component = root / "compiler"
             component.mkdir()
             (component / "test_numbers.py").write_text(
