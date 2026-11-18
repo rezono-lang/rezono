@@ -29,7 +29,6 @@ def test_page_can_stay_small_while_control_grows():
     assert check(rows, "map", "twin")[1]
 
 
-@pytest.mark.xfail(strict=True, reason="Scope baseline reads to the named pack in deploy/profiles/edge/scale.py. Read docs/gui.md on work per request.")
 def test_sibling_route_cannot_supply_baseline_reads():
     rows = sample()
     rows[1] = measurement("/twin", "twin/extra", 100)
