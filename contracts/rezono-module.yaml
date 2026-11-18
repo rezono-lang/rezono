@@ -151,6 +151,7 @@ classes:
       decls:
         none_of:
           - {range: RulesDecl, inlined: true}
+          - {range: ScalarAliasDecl, inlined: true}
 
   ModuleWithRules:
     description: The header and declarations of a module, including relational rules, in the order of the text.
@@ -174,6 +175,7 @@ classes:
           - range: FactTable
           - range: FactRow
           - range: RulesDecl
+          - range: ScalarAliasDecl
 
   RulesDecl:
     description: An embedded relational rules block (decisions/language-rules.md).
@@ -185,6 +187,12 @@ classes:
         multivalued: true
         pattern: '^(?![\s\S]*[\r\n])'
         description: "The ordered rule lines as written, including empty lines and comments."
+
+  ScalarAliasDecl:
+    description: A named scalar alias (decisions/language-slots.md).
+    attributes:
+      type: {required: true, range: TypeName}
+      base: {required: true, range: TypeName}
 
   Use:
     attributes:
