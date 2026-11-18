@@ -4,7 +4,7 @@ import argparse
 from hashlib import sha256
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import os
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 import subprocess
 import sys
 from tempfile import TemporaryDirectory
@@ -53,6 +53,11 @@ def render_argo(source: Path) -> None:
     repository, = [obj for obj in objects if obj["kind"] == "Deployment"
                    and obj["metadata"]["name"] == "argocd-repo-server"]
     spec = repository["spec"]["template"]["spec"]
+    copyutil, = [row for row in spec["initContainers"] if row["name"] == "copyutil"]
+    repo_server, = [row for row in spec["containers"] if row["name"] == "argocd-repo-server"]
+    runtime, = [mount for mount in copyutil["volumeMounts"] if mount["name"] == "var-files"]
+    plugins, = [mount for mount in repo_server["volumeMounts"] if mount["name"] == "plugins"]
+    config_dir = PurePosixPath(plugins["mountPath"]).with_name("config")
     spec["volumes"].extend([
         {"name": "admission-plugin", "configMap": {"name": PLUGIN}},
         {"name": "admission-plugin-tmp", "emptyDir": {}},
@@ -60,7 +65,7 @@ def render_argo(source: Path) -> None:
     spec["containers"].append({
         "name": PLUGIN,
         "image": ARGO_IMAGE,
-        "command": ["/var/run/argocd/argocd-cmp-server"],
+        "command": [str(PurePosixPath(runtime["mountPath"]) / "argocd-cmp-server")],
         "securityContext": {
             "runAsNonRoot": True,
             "runAsUser": 999,
@@ -68,9 +73,9 @@ def render_argo(source: Path) -> None:
             "capabilities": {"drop": ["ALL"]},
         },
         "volumeMounts": [
-            {"name": "var-files", "mountPath": "/var/run/argocd"},
-            {"name": "plugins", "mountPath": "/home/argocd/cmp-server/plugins"},
-            {"name": "admission-plugin", "mountPath": "/home/argocd/cmp-server/config", "readOnly": True},
+            runtime,
+            plugins,
+            {"name": "admission-plugin", "mountPath": str(config_dir), "readOnly": True},
             {"name": "admission-plugin-tmp", "mountPath": "/tmp"},
         ],
     })

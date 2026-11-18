@@ -4,14 +4,18 @@ umask 077
 work="$RUNNER_TEMP/rezono-fixture"
 [[ "$KUBECONFIG" == "$RUNNER_TEMP/rezono-fixture.kubeconfig" ]]
 kube=(kubectl --kubeconfig "$KUBECONFIG" --context kind-rezono-fixture --request-timeout=30s)
-apply() {
+retry() {
+  local attempt
   for attempt in 1 2 3; do
-    if "${kube[@]}" apply --server-side "$@"; then
+    if "$@"; then
       return 0
     fi
     if [[ "$attempt" != 3 ]]; then sleep 4; fi
   done
   return 1
+}
+apply() {
+  retry "${kube[@]}" apply --server-side "$@"
 }
 revision=$(git rev-parse HEAD)
 mirror="$work/git"
@@ -72,7 +76,10 @@ curl --fail --silent --show-error --location --retry 3 --max-time 120 \
 printf '0b38189d6e1fd76ef5c3db10355026c48a02020d82bf21a1a1b5ab16dffe4f3c  %s\n' "$argo_source" | sha256sum --check
 python loop/cluster/admission_fixture.py argo "$argo_source" > "$work/argo-fixture.yaml"
 apply --namespace argocd -f "$work/argo-fixture.yaml"
-"${kube[@]}" wait --for=condition=Established --timeout=90s crd/applications.argoproj.io crd/appprojects.argoproj.io
+for crd in applications.argoproj.io appprojects.argoproj.io; do
+  retry "${kube[@]}" wait --timeout=45s \
+    --for='jsonpath={.status.conditions[?(@.type=="Established")].status}=True' "crd/$crd"
+done
 for component in deployment/argocd-redis deployment/argocd-repo-server statefulset/argocd-application-controller; do
   "${kube[@]}" --namespace argocd rollout status --timeout=180s "$component"
 done
