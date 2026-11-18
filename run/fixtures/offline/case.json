@@ -1,8 +1,8 @@
 {
   "plan_file": "plan.json",
-  "price_file": "public-price-response.json",
+  "price_file": "price-facts.json",
   "approval": {
-    "plan_hash": "8402bbc2ea3d0e92acee572c54d1256d82de52089052c57dda68a75d56614112",
+    "plan_hash": "e919be970648421f6374c599bcec647bfc62fe9f1df92e0346e2f40c89b41c0f",
     "budget_cents": 162,
     "currency": "USD",
     "expires_at": "2030-01-02T00:00:00Z",
@@ -11,7 +11,7 @@
   "clock": "2030-01-01T12:00:00Z",
   "order_receipt": {
     "id": "order-one",
-    "plan_hash": "8402bbc2ea3d0e92acee572c54d1256d82de52089052c57dda68a75d56614112"
+    "plan_hash": "e919be970648421f6374c599bcec647bfc62fe9f1df92e0346e2f40c89b41c0f"
   },
   "machine_observations": [
     {
@@ -45,7 +45,7 @@
       "resources": [
         {
           "id": "machine-1",
-          "plan_hash": "8402bbc2ea3d0e92acee572c54d1256d82de52089052c57dda68a75d56614112"
+          "plan_hash": "e919be970648421f6374c599bcec647bfc62fe9f1df92e0346e2f40c89b41c0f"
         }
       ]
     },

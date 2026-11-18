@@ -3,8 +3,7 @@
 Offline acceptance uses the local request file, recorded provider responses,
 and a throwaway journal. It requires no account. Live ordering remains gated
 on a complete independently verified quote, supported installation and a
-shared durable claim store. The public price page in the example covers two
-offer rows and does not authorize a purchase.
+shared durable claim store. The offline price fixture contains two observed SKU rates and does not authorize a purchase.
 
 | Order | Operator action | Evidence to retain |
 | --- | --- | --- |

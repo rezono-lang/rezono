@@ -7,14 +7,23 @@ Cleanup requires a complete independent inventory after deletion. The local
 request file stands in for the committed portal request in CI. No provider
 client, credential, or wall clock is needed for replay.
 
-The raw two-record [Vultr public price response](https://api.vultr.com/v2/plans-metal?per_page=2)
-is preserved byte for byte in `run/fixtures/offline/public-price-response.json`.
-Its SHA-256 is `4e592b33e7855de0ef463d447254686044edb00b2f770c0104a179a88331343e`.
-The response has 23 total offers and a next cursor; this is evidence for two
-line prices only. Its invoice type is monthly. Replay declares two billed
-hourly units, USD and zero setup costs. These are synthetic billing facts;
-the snapshot does not establish actual minimum terms, taxes or the amount
-a provider would invoice. A live run needs a complete quote and terms.
+Two SKU/hourly-rate pairs were observed in the
+[Vultr public plan listing](https://api.vultr.com/v2/plans-metal?per_page=2).
+The original response SHA-256 was
+`4e592b33e7855de0ef463d447254686044edb00b2f770c0104a179a88331343e`. The listing
+was paginated, and the rows reported monthly invoicing. Retain the URL and
+response digest for provenance. The repository-authored offline input,
+`run/fixtures/offline/price-facts.json`, contains only the two identifiers
+and their observed rates. Its SHA-256 is
+`7f4cb977a2cc577039ea302c5e2a98b47225943392d01121b0b1bd2093f21f02`. The plan
+binds both digests. Verify the exact local bytes against `price_facts_sha256`
+before parsing. Approval, order correlation and cleanup use the digest of the
+plan itself.
+
+Replay supplies USD, machine quantities, stock, two hourly billing units,
+zero setup charges, the spending ceiling and all dates. These assumptions
+do not establish provider terms, minimum charges, taxes or current stock.
+A live run needs a complete quote and terms.
 
 The independent arithmetic is two units each of two machines at 164,000
 millionths of a dollar per unit and one at 479,000: 1,614,000 millionths.
@@ -32,7 +41,7 @@ using the same journal may reconcile by status but contributes zero new orders. 
 
 | Boundary | Contract |
 | --- | --- |
-| Price capture | Parse verified source bytes using exact decimal arithmetic. Return per-SKU hourly prices as integer millionths. Never fetch in the replay reader. |
+| Price capture | Parse the verified price-facts bytes using exact decimal arithmetic. Return per-SKU hourly prices as integer millionths. Never fetch in the replay reader. |
 | Cost | Sum the declared quantities, integer unit prices, billing units and per-machine setup. An empty quote costs zero. |
 | Dispatch gate | A rule pack consumes candidate rows with matching row IDs but independently sourced approval and plan fields. Require approve, exact hash and currency, known payable amount at or below the ceiling, and an observed time strictly before expiry. Boundary adapters convert cents to millionths and UTC instants to integer microseconds. |
 | Order renderer | Hash the exact planned bytes before rendering the order port payload. The operation key and every requested item's plan tag equal that digest. Preserve the SKU and quantity of each line. Never include deployment credentials. |
