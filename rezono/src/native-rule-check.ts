@@ -1,5 +1,5 @@
 import type { Place } from './module-json.ts';
-import { inPart, knownType, type Schema, type World } from './schema.ts';
+import { knownType, type Schema, type World } from './schema.ts';
 import type { Path, State } from './tree.ts';
 
 type Expression =
@@ -73,8 +73,6 @@ export function checkNativeRules(form: NativeRuleForm, environment: NativeRuleEn
 	const places = new Map(form.spans.map(place => [place.at, place]));
 	const diagnostics: NativeRuleDiagnostic[] = [];
 	const dependencies: Dependency[] = [];
-	const undecided = new Set<string>();
-	const declaredHere = new Set<string>();
 
 	function place(at: string): Place {
 		const span = places.get(at);
@@ -83,51 +81,28 @@ export function checkNativeRules(form: NativeRuleForm, environment: NativeRuleEn
 	}
 
 	for (const [index, declaration] of form.module.decls.entries()) {
-		if (!isDeclaration(declaration)) continue;
-		if ('columns' in declaration && !declaration.rule.includes('.')) declaredHere.add(declaration.rule);
-		if (!declaration.when) continue;
+		if (!isDeclaration(declaration) || !declaration.when) continue;
 		const at = '/decls/' + index;
 		const checker = new ClauseCheck(environment, declaration.rule);
 		try {
 			checker.check(declaration, declaration.when, at);
 			dependencies.push(...checker.dependencies);
-			if (checker.canBeUndecided) undecided.add(declaration.rule);
 		} catch (error) {
 			if (!(error instanceof RuleFault)) throw error;
 			diagnostics.push({ code: error.code, args: error.args, span: place(error.at) });
 		}
 	}
 
-	// A signature alone does not establish the totality of clauses owned by another form.
-	for (const [name, signature] of Object.entries(environment.relations)) {
-		if (signature.role === 'derived' && !declaredHere.has(name)) undecided.add(name);
-	}
-
 	const outgoing = new Map<string, Dependency[]>();
-	const readers = new Map<string, string[]>();
 	for (const edge of dependencies) {
 		const edges = outgoing.get(edge.from) ?? [];
 		if (!outgoing.has(edge.from)) outgoing.set(edge.from, edges);
 		edges.push(edge);
-		if (edge.premise !== 'negative') {
-			const names = readers.get(edge.to) ?? [];
-			if (!readers.has(edge.to)) readers.set(edge.to, names);
-			names.push(edge.from);
-		}
-	}
-	// The set iterator visits newly added readers until every dependent relation is accounted for.
-	for (const name of undecided) {
-		for (const reader of readers.get(name) ?? []) undecided.add(reader);
 	}
 	for (const edge of dependencies) {
 		if (edge.premise === 'positive') continue;
 		const related = returnPath(edge.to, edge.from, outgoing);
-		if (related === undefined) {
-			if (edge.premise === 'negative' && undecided.has(edge.to)) {
-				diagnostics.push({ code: 'R047', args: ['known'], span: place(edge.at) });
-			}
-			continue;
-		}
+		if (related === undefined) continue;
 		const diagnosis: NativeRuleDiagnostic = {
 			code: 'R043', args: [edge.from, edge.to], span: place(edge.at),
 		};
@@ -165,7 +140,6 @@ function returnPath(start: string, goal: string, outgoing: Map<string, Dependenc
 
 class ClauseCheck {
 	readonly dependencies: Dependency[] = [];
-	canBeUndecided = false;
 	private readonly schema: Schema;
 	private readonly relations: Record<string, Signature>;
 	private readonly rule: string;
@@ -443,12 +417,8 @@ class ClauseCheck {
 			}
 			if (!Object.hasOwn(kind.slots, member)) refuse('R001', at, member);
 			const slot = kind.slots[member];
-			const many = slot.card === '*' || slot.card === '+';
-			// A missing scalar is unknown or not applicable even when every recorded value is known.
-			this.canBeUndecided ||= !many || kind.world === 'open' || slot.world === 'open'
-				|| inPart(this.schema, type, member) || slot.states.some(state => state !== 'known');
 			type = slot.ref ?? slot.type ?? 'Text';
-			set ||= many;
+			set ||= slot.card === '*' || slot.card === '+';
 		}
 		return { type, set };
 	}
