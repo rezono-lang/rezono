@@ -26,6 +26,7 @@ from linkml_runtime.linkml_model import SchemaDefinition
 from linkml_runtime.loaders.yaml_loader import YAMLLoader
 
 FORMAT = "rezono.module/1"
+RULES_FORMAT = "rezono.module/2"
 DIR = "rezono"
 KEY = "rezono"  # the key of pack.yaml (contract RezonoModule in contracts/pack.yaml)
 PAGE = "docs/rezono/publication.md"
@@ -121,6 +122,10 @@ def read_form(pack_dir: Path, d: Declared, errors: list[str]) -> dict | None:
         errors.append(f"{where}: not a JSON file ({e})")
         return None
     module = module_body(doc, FORMAT)
+    if module is None:
+        candidate = module_body(doc, RULES_FORMAT)
+        if candidate is not None and any(isinstance(decl, dict) and "rules" in decl for decl in candidate["decls"]):
+            module = candidate
     if module is None:
         errors.append(f"{where}: not the form of a module ({FORMAT}, contracts/rezono-module.yaml)")
         return None
@@ -330,6 +335,11 @@ def lower(pack_dir: Path, d: Declared, form: dict, pack: str, owners: dict[str, 
                 enums[decl["enum"]] = {"permissible_values": {v: {} for v in decl["values"]}}
         elif "extend" in decl:
             extend(decl, at, imported, refuse)
+        elif "rules" in decl and form["format"] == RULES_FORMAT:
+            from .rezono_relational import valid_block
+
+            if not valid_block(decl):
+                refuse(at, "a rules block needs a name and its written lines")
         elif "fact" in decl:
             if "columns" in decl:
                 refuse(at, "a fact table is not lowered yet", "§5.3")

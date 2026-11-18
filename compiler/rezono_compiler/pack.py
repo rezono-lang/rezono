@@ -720,14 +720,14 @@ def read(pack_dir: str | Path) -> Pack:
             errors.append(str(e))
     generated = []
     if not errors:
-        from . import rezono_table  # it reads the pack's model, so it runs once the model is read
+        from . import rezono_relational, rezono_table  # the table lowering reads the pack's model
         generated = rezono_table.lower_pack(pack, meta, Path(pack_dir), errors)
     if not errors:
         try:
             pack.rules, rule_warnings = rules_dl.read(pack, pack_dir, ordered, renames, calc_inputs=calc_inputs,
                                                       calc_parts=calc_parts, folds=pack.folds,
                                                       bodies=pack.rule_bodies, spans=pack.rule_spans,
-                                                      generated=generated)
+                                                      generated=generated, embedded=rezono_relational.sources(mods))
             pack.warnings += rule_warnings
             if pack.rules:   # a variable or a column that joins two currencies is an error
                 amounts.columns(pack.rules, amounts.tables(pack))
