@@ -83,7 +83,6 @@ def test_transport_coverage_in_both_released_directions(tmp_path, monkeypatch):
         assert (offline, cel) == (want, want), identity
 
 
-@pytest.mark.xfail(strict=True, raises=(AssertionError, ModuleNotFoundError), reason="Depends on the platform generator, typed transport publication, desired release and standalone CEL oracle. Update both directions in k8s-admission/policy_renderer.py per decisions/k8s-admission-transport.md.")
 def test_manual_cel_matches_generated_transport_grants(tmp_path, monkeypatch):
     monkeypatch.syspath_prepend(str(ROOT.parent / "examples" / "platform"))
     from network_policy import render_network_policies

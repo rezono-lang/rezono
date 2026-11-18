@@ -45,7 +45,7 @@ def archive_fixture(tmp_path, monkeypatch, with_views):
 
 @pytest.mark.parametrize(
     "with_views",
-    [False, pytest.param(True, marks=pytest.mark.xfail(strict=True, reason="viewer/src/lib is not in the standalone repository"))],
+    [False, pytest.param(True, marks=pytest.mark.xfail(strict=True, reason="later: tekenweergaven"))],
 )
 def test_verify_preserves_viewless_support_but_refuses_an_incomplete_view_archive(tmp_path, monkeypatch, with_views):
     pack, st, key = archive_fixture(tmp_path, monkeypatch, with_views)
@@ -59,7 +59,7 @@ def test_verify_preserves_viewless_support_but_refuses_an_incomplete_view_archiv
         assert refused == [] and (output / "compiler/rezono_compiler").is_dir()
 
 
-@pytest.mark.xfail(strict=True, reason="viewer/src/lib is not in the standalone repository")
+@pytest.mark.xfail(strict=True, reason="later: tekenweergaven")
 def test_replay_refuses_view_aware_capability_before_any_archived_subprocess(tmp_path, monkeypatch):
     pack, st, _ = archive_fixture(tmp_path, monkeypatch, True)
     monkeypatch.setattr(kept.subprocess, "run", lambda *a, **k: pytest.fail("unsupported archived code executed"))
@@ -68,7 +68,7 @@ def test_replay_refuses_view_aware_capability_before_any_archived_subprocess(tmp
     assert not (tmp_path / "new/store").exists()
 
 
-@pytest.mark.xfail(strict=True, reason="viewer/src/lib is not in the standalone repository")
+@pytest.mark.xfail(strict=True, reason="later: tekenweergaven")
 def test_current_replay_cannot_silently_drop_the_view_component(tmp_path, monkeypatch):
     pack, st, _ = archive_fixture(tmp_path, monkeypatch, True)
     monkeypatch.setattr(batch, "epoch", lambda *a, **k: pytest.fail("view-aware current replay computed an epoch"))
