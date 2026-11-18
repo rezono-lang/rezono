@@ -31,7 +31,9 @@ BUNDLE = {
         {"id": "holder.keeps", "kind": "holder", "name": "keeps", "table": "holder__keeps", "target": "item",
          "required": False, "multivalued": True, "world": "closed"},
     ],
-    "relations": [{"id": "kept_part", "world": "closed", "columns": [{"name": "holder"}, {"name": "part"}]}],
+    "relations": [{"id": "kept_part", "world": "closed", "columns": [
+        {"name": "holder", "type": "string"}, {"name": "part", "type": "string"},
+    ]}],
 }
 TABLES = ["item", "part", "spare", "tool", "holder", "item__label", "part__size", "item__inside", "holder__keeps",
           "kept_part"]

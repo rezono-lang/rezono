@@ -17,7 +17,8 @@ element without a readable value, withheld or none (its files cannot tell the tw
 shape of the role's read rules, never from the data, so the schema of a role's form depends on no hidden row.
 
 A derived relation is a kind of its own: its element id is Rezono's canonical row key `CJ([parts])`, so the id is
-the row, and each column is a known `Text` slot marked `derived`. An enum relation is schema (`enums`), not data.
+the row, and each column is a known slot of its checked rule type marked `derived`. An enum relation is schema
+(`enums`), not data.
 Exact values only: an integer is `Integer` with Rezono's BIGINT bounds; nothing is ever a float.
 
 A subkind (`is_a`) is a kind with a `parent` that restates its parent's slots (§2.1). In Rezono an element of a
@@ -43,6 +44,7 @@ from .l0 import _number_spelling
 COMPLETE = "checker"  # the role whose snapshots are complete (contracts/manifest.yaml, Snapshot.complete)
 NOT_READ_IN_FULL = "not_read_in_full"  # the reason of an absence in a relation the role does not read in full
 BIGINT = ("-9223372036854775808", "9223372036854775807")  # Rezono's integer storage (docs/compiler.md, Tables)
+RULE_COLUMN_TYPES = {"string": "Text", "integer": "Integer", "rational": "Ratio"}
 BASE = "https://rezono.example/{pack}/"  # §2.1 `base` of a pack whose pack.yaml declares no `iri:`
 MANIFEST_KEYS = ("id", "epoch", "knowledge_time", "definition_sha256", "compiled")
 SWEEPS_FILE = "ir/sweeps.json"  # the compiled sweep grid: per role at the gate, never in a role's form
@@ -159,10 +161,18 @@ def schema_document(bundle: dict, full=None) -> tuple[dict, dict]:
         name = pascal(r["id"])
         if name in kinds:
             raise FormError(f"derived relation {r['id']} collides with kind {name}")
-        cols = [c["name"] for c in r["columns"]]
+        slots = {}
+        for column in r["columns"]:
+            column_name, column_type = column["name"], column.get("type")
+            if not isinstance(column_type, str) or column_type not in RULE_COLUMN_TYPES:
+                raise FormError(f"{r['id']}.{column_name}: unsupported rule column type {column_type!r}")
+            slot = {"type": RULE_COLUMN_TYPES[column_type], "card": "1", "states": ["known"], "derived": True}
+            if column_type == "integer":
+                slot.update(min=BIGINT[0], max=BIGINT[1])
+            slots[column_name] = slot
         kinds[name] = {"world": "open" if partial(r["id"]) else r["world"], "id": {"type": "Text"},
-                       "slots": {c: {"type": "Text", "card": "1", "states": ["known"], "derived": True} for c in cols}}
-        plan["derived"][r["id"]] = (name, cols)
+                       "slots": slots}
+        plan["derived"][r["id"]] = (name, list(slots))
     doc = {"rezono": "1.0", "pack": pack, "base": base, "kinds": kinds}
     if types:
         doc["types"] = types
