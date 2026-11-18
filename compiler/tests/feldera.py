@@ -8,6 +8,7 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 
+from feldera_service import start_engine
 from rezono_compiler import feldera_names
 
 URL = os.environ.get("FELDERA_URL")
@@ -53,14 +54,18 @@ def deploy(name, program, profile=None, workers=4, udf_rust="", udf_toml=""):
     if not udf_rust and "CREATE FUNCTION rezono_" in program:  # the calculation's UDF (udf/, docs/compiler.md)
         udf = Path(__file__).resolve().parents[2] / "udf"
         udf_rust, udf_toml = (udf / "udf.rs").read_text(), (udf / "udf.toml").read_text()
-    try:
-        call("POST", f"/v0/pipelines/{name}/stop?force=true")
-        wait(name, "deployment_status", {"Stopped"})
-        call("POST", f"/v0/pipelines/{name}/clear")
-        wait(name, "storage_status", {"Cleared"})
-        call("DELETE", f"/v0/pipelines/{name}")
-    except urllib.error.HTTPError:
-        pass
+    sandbox = os.environ.get("FELDERA_ORACLE_SANDBOX")
+    if sandbox:
+        start_engine(sandbox, name)
+    else:
+        try:
+            call("POST", f"/v0/pipelines/{name}/stop?force=true")
+            wait(name, "deployment_status", {"Stopped"})
+            call("POST", f"/v0/pipelines/{name}/clear")
+            wait(name, "storage_status", {"Cleared"})
+            call("DELETE", f"/v0/pipelines/{name}")
+        except urllib.error.HTTPError:
+            pass
     start = time.time()
     call("PUT", f"/v0/pipelines/{name}", {"name": name, "program_code": program, "runtime_config": {"workers": workers},
                                           "program_config": {"profile": profile}, "udf_rust": udf_rust, "udf_toml": udf_toml})
