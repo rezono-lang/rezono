@@ -30,7 +30,11 @@ def launcher(vmi, pods, uid, node):
         sidecars = {item["name"] for item in spec.get("initContainers", [])
                     if item.get("restartPolicy") == "Always"}
         if "compute" in containers and "guest-console-log" in containers | sidecars:
-            matches.append((meta["name"], meta["uid"]))
+            running = [entry["containerID"] for entry in pod["status"].get("containerStatuses", [])
+                       if entry.get("name") == "compute" and entry.get("containerID")
+                       and "running" in entry.get("state", {})]
+            if len(running) == 1:
+                matches.append((meta["name"], meta["uid"], running[0]))
     if len(matches) != 1:
         raise ValueError(f"expected one matching running launcher, found {len(matches)}")
     return matches[0]
