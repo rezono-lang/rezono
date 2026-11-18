@@ -21,6 +21,53 @@ permissions:
   contents: read
 
 jobs:
+  light_checks:
+    name: Light checks
+    if: >-
+      github.event_name == 'pull_request' ||
+      github.event_name == 'merge_group' ||
+      (github.event_name == 'push' && github.ref == 'refs/heads/main')
+    permissions:
+      contents: read
+    runs-on: ubuntu-24.04
+    timeout-minutes: 27
+    steps:
+      - id: full_checkout
+        name: Check out the candidate with history
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          path: release-source
+      - name: Check tracked files and the exception budget
+        working-directory: release-source
+        env:
+          BASE: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.event.before }}
+        run: python3 -I scripts/leak_check.py --base "$BASE"
+      - id: python
+        if: ${{ !cancelled() && steps.full_checkout.outcome == 'success' }}
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0
+        with:
+          python-version-file: release-source/requirements/.python-version
+      # The README makes editable installs. Give it its own checkout so the release build starts clean.
+      - id: readme_checkout
+        name: Check out the candidate for the README
+        if: ${{ !cancelled() && steps.python.outcome == 'success' }}
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+          path: readme-source
+      - name: Run the README example
+        if: ${{ !cancelled() && steps.readme_checkout.outcome == 'success' }}
+        working-directory: readme-source
+        shell: bash
+        run: bash scripts/check-quickstart.sh
+      - name: Run the release rehearsal
+        if: ${{ !cancelled() && steps.python.outcome == 'success' }}
+        uses: ./release-source/.github/actions/release-rehearsal
+        with:
+          source-directory: release-source
+
   discover:
     runs-on: ubuntu-24.04
     timeout-minutes: 12
