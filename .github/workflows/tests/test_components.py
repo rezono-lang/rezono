@@ -54,10 +54,12 @@ class InventoryTests(unittest.TestCase):
             component = root / "compiler"
             component.mkdir()
             (component / "test_numbers.py").write_text(
-                "import pytest\n@pytest.mark.parametrize('n', range(12))\n"
+                "import pytest\n"
+                "@pytest.mark.parametrize('n', range(12))\n"
                 "def test_number(n): assert n >= 0\n", encoding="utf-8")
             (component / "test_states.py").write_text(
-                "import pytest\n@pytest.mark.skip(reason='offline')\ndef test_skip(): pass\n"
+                "import pytest\n"
+                "@pytest.mark.skip(reason='offline')\ndef test_skip(): pass\n"
                 "@pytest.mark.xfail(strict=True)\ndef test_expected(): assert False\n", encoding="utf-8")
             (component / "test_optional.py").write_text(
                 "import pytest\npytest.skip('optional module', allow_module_level=True)\n", encoding="utf-8")
