@@ -78,3 +78,40 @@ def test_management_observation_routes():
                     ("work" if destination == "shared" else "ops", "alerts", "9443")}
         assert state.derived.get("managed_telemetry_flow") == streams
         assert state.derived.get("managed_telemetry_firewall") == crossing
+
+
+def test_missing_recorder_is_unavailable(tmp_path, monkeypatch):
+    import subprocess
+    from management_probes import live_events
+
+    config = tmp_path / "fixture.kubeconfig"
+    config.touch()
+    for key, value in (("GITHUB_RUN_ID", "17"), ("GITHUB_RUN_ATTEMPT", "2"), ("RUNNER_TEMP", str(tmp_path)),
+                       ("REZONO_CLUSTER_KUBECONFIG", str(config))):
+        monkeypatch.setenv(key, value)
+
+    def read(command, **kwargs):
+        if command[-2:] == ["config", "current-context"]:
+            return "kind-rezono-fixture\n"
+        assert "record-health-17-2" in command
+        if "--ignore-not-found" in command:
+            return ""
+        raise subprocess.CalledProcessError(1, command)
+
+    monkeypatch.setattr(subprocess, "check_output", read)
+    with pytest.raises(AssertionError, match="Missing real recorder Job"):
+        live_events("health")
+
+    def denied(command, **kwargs):
+        if command[-2:] == ["config", "current-context"]:
+            return "kind-rezono-fixture\n"
+        raise subprocess.CalledProcessError(1, command, stderr="Forbidden")
+
+    monkeypatch.setattr(subprocess, "check_output", denied)
+    with pytest.raises(subprocess.CalledProcessError) as refusal:
+        live_events("health")
+    assert refusal.value.stderr == "Forbidden"
+
+    monkeypatch.setattr(subprocess, "check_output", lambda *args, **kwargs: "wrong-context\n")
+    with pytest.raises(ValueError, match="wrong context"):
+        live_events("health")

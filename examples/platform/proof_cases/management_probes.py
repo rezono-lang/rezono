@@ -25,15 +25,20 @@ def live_events(feature):
     assert run.isdecimal() and attempt.isdecimal(), "Requires the real disposable workflow run"
     assert os.environ.get("REZONO_CLUSTER_KUBECONFIG") and os.environ.get("RUNNER_TEMP"), "Requires the dedicated fixture kubeconfig"
     config = Path(os.environ["REZONO_CLUSTER_KUBECONFIG"]).resolve(strict=True)
-    assert config.is_relative_to(Path(os.environ["RUNNER_TEMP"]).resolve(strict=True))
+    if not config.is_relative_to(Path(os.environ["RUNNER_TEMP"]).resolve(strict=True)):
+        raise ValueError("Recorder kubeconfig is outside the disposable workspace")
     command = ["kubectl", "--kubeconfig", str(config), "--request-timeout=15s"]
     def read(*args):
         return subprocess.check_output([*command, *args], text=True, timeout=25)
-    assert read("config", "current-context").strip() == "kind-rezono-fixture"
+    if read("config", "current-context").strip() != "kind-rezono-fixture":
+        raise ValueError("Recorder kubeconfig has the wrong context")
     command.extend(["--context", "kind-rezono-fixture", "-n", "rezono-probes"])
     name = f"record-{feature}-{run}-{attempt}"
-    job = json.loads(read("get", "job", name, "-o", "json"))
-    assert job["status"]["succeeded"] == 1
+    raw = read("get", "job", name, "--ignore-not-found", "-o", "json")
+    assert raw.strip(), f"Missing real recorder Job {name}"
+    job = json.loads(raw)
+    if job.get("status", {}).get("succeeded") != 1:
+        raise RuntimeError(f"Recorder Job {name} did not complete successfully")
     pods = json.loads(read("get", "pods", "-l", f"job-name={name}", "-o", "json"))["items"]
     pod, = [p for p in pods if p["status"]["phase"] == "Succeeded"
             and any(o["uid"] == job["metadata"]["uid"] and o["controller"] for o in p["metadata"]["ownerReferences"])]
