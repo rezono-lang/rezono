@@ -1,0 +1,5 @@
+kinds:
+  - {kind: recorded_quote, shape: rect}
+  - {kind: recorded_line, shape: rect}
+  - {kind: quote_digit, shape: rect}
+  - {kind: quote_carry, shape: rect}

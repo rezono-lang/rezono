@@ -1,0 +1,173 @@
+# Stable case IDs and their authored specification records.
+version: 1
+sources:
+  - id: language-e53
+    source: docs/rezono/cases/E53.yaml#E53
+  - id: publication-p01
+    source: decisions/publication-case-pins.md#P01
+  - id: publication-p02
+    source: decisions/publication-case-pins.md#P02
+  - id: publication-p04
+    source: decisions/publication-case-pins.md#P04
+  - id: publication-r13
+    source: decisions/publication-case-pins.md#R13
+  - id: publication-s05
+    source: decisions/publication-case-pins.md#S05
+  - id: publication-x03
+    source: docs/publication/cases/X03.yaml#X03
+  - id: publication-y01
+    source: docs/publication/cases/Y01.yaml#Y01
+  - id: publication-y02
+    source: docs/publication/cases/Y02.yaml#Y02
+  - id: publication-y03
+    source: docs/publication/cases/Y03.yaml#Y03
+  - id: publication-y04
+    source: docs/publication/cases/Y04.yaml#Y04
+  - id: value-agg-any-all-empty
+    source: docs/semantics/value-cases.yaml#agg-any-all-empty
+  - id: value-agg-min-empty
+    source: docs/semantics/value-cases.yaml#agg-min-empty
+  - id: value-agg-na-member
+    source: docs/semantics/value-cases.yaml#agg-na-member
+  - id: value-agg-sum-empty
+    source: docs/semantics/value-cases.yaml#agg-sum-empty
+  - id: value-agg-unknown-member
+    source: docs/semantics/value-cases.yaml#agg-unknown-member
+  - id: value-ask-na-left-out
+    source: docs/semantics/value-cases.yaml#ask-na-left-out
+  - id: value-ask-undecided
+    source: docs/semantics/value-cases.yaml#ask-undecided
+  - id: value-ask-unknown-outranks-na
+    source: docs/semantics/value-cases.yaml#ask-unknown-outranks-na
+  - id: value-bare-state-text
+    source: docs/semantics/value-cases.yaml#bare-state-text
+  - id: value-check-invalid-overlap
+    source: docs/semantics/value-cases.yaml#check-invalid-overlap
+  - id: value-check-unknown
+    source: docs/semantics/value-cases.yaml#check-unknown
+  - id: value-derived-world-aggregate
+    source: docs/semantics/value-cases.yaml#derived-world-aggregate
+  - id: value-display-label
+    source: docs/semantics/value-cases.yaml#display-label
+  - id: value-hash-bool-key
+    source: docs/semantics/value-cases.yaml#hash-bool-key
+  - id: value-hash-empty-table
+    source: docs/semantics/value-cases.yaml#hash-empty-table
+  - id: value-hash-label-independent
+    source: docs/semantics/value-cases.yaml#hash-label-independent
+  - id: value-hash-na-name
+    source: docs/semantics/value-cases.yaml#hash-na-name
+  - id: value-hash-negative-zero
+    source: docs/semantics/value-cases.yaml#hash-negative-zero
+  - id: value-hash-state-object
+    source: docs/semantics/value-cases.yaml#hash-state-object
+  - id: value-missing-optional
+    source: docs/semantics/value-cases.yaml#missing-optional
+  - id: value-missing-required
+    source: docs/semantics/value-cases.yaml#missing-required
+  - id: value-negation-open
+    source: docs/semantics/value-cases.yaml#negation-open
+  - id: value-overflow
+    source: docs/semantics/value-cases.yaml#overflow
+  - id: value-parameter-none
+    source: docs/semantics/value-cases.yaml#parameter-none
+  - id: value-parameter-two
+    source: docs/semantics/value-cases.yaml#parameter-two
+  - id: value-payload-empty-text
+    source: docs/semantics/value-cases.yaml#payload-empty-text
+  - id: value-print-literal-scale
+    source: docs/semantics/value-cases.yaml#print-literal-scale
+  - id: value-projection-omitted
+    source: docs/semantics/value-cases.yaml#projection-omitted
+  - id: value-projection-show
+    source: docs/semantics/value-cases.yaml#projection-show
+  - id: value-projection-viewer-column
+    source: docs/semantics/value-cases.yaml#projection-viewer-column
+  - id: value-reason-calc-prose
+    source: docs/semantics/value-cases.yaml#reason-calc-prose
+  - id: value-reason-free-text
+    source: docs/semantics/value-cases.yaml#reason-free-text
+  - id: value-reason-known-empty
+    source: docs/semantics/value-cases.yaml#reason-known-empty
+  - id: value-reason-tie
+    source: docs/semantics/value-cases.yaml#reason-tie
+  - id: value-reason-tie-constant
+    source: docs/semantics/value-cases.yaml#reason-tie-constant
+  - id: value-refused-float
+    source: docs/semantics/value-cases.yaml#refused-float
+  - id: value-require-unknown
+    source: docs/semantics/value-cases.yaml#require-unknown
+  - id: value-rule-body-unknown
+    source: docs/semantics/value-cases.yaml#rule-body-unknown
+  - id: value-set-closed-empty
+    source: docs/semantics/value-cases.yaml#set-closed-empty
+  - id: value-set-open-empty
+    source: docs/semantics/value-cases.yaml#set-open-empty
+  - id: value-set-state-whole
+    source: docs/semantics/value-cases.yaml#set-state-whole
+  - id: value-tt-and-false-invalid
+    source: docs/semantics/value-cases.yaml#tt-and-false-invalid
+  - id: value-tt-and-false-unknown
+    source: docs/semantics/value-cases.yaml#tt-and-false-unknown
+  - id: value-tt-and-na-unknown
+    source: docs/semantics/value-cases.yaml#tt-and-na-unknown
+  - id: value-tt-eq-na
+    source: docs/semantics/value-cases.yaml#tt-eq-na
+  - id: value-tt-is-na
+    source: docs/semantics/value-cases.yaml#tt-is-na
+  - id: value-tt-not-na
+    source: docs/semantics/value-cases.yaml#tt-not-na
+  - id: value-tt-or-true-invalid
+    source: docs/semantics/value-cases.yaml#tt-or-true-invalid
+  - id: value-tt-when-unknown
+    source: docs/semantics/value-cases.yaml#tt-when-unknown
+  - id: value-two-values-single
+    source: docs/semantics/value-cases.yaml#two-values-single
+  - id: value-unknown-not-zero
+    source: docs/semantics/value-cases.yaml#unknown-not-zero
+  - id: value-value-invalid-blocks
+    source: docs/semantics/value-cases.yaml#value-invalid-blocks
+  - id: value-value-reason
+    source: docs/semantics/value-cases.yaml#value-reason
+  - id: value-version-none
+    source: docs/semantics/value-cases.yaml#version-none
+  - id: value-version-not-yet-known
+    source: docs/semantics/value-cases.yaml#version-not-yet-known
+  - id: value-version-overlap
+    source: docs/semantics/value-cases.yaml#version-overlap
+  - id: value-viewer-invalid-arrow
+    source: docs/semantics/value-cases.yaml#viewer-invalid-arrow
+  - id: value-viewer-missing-optional
+    source: docs/semantics/value-cases.yaml#viewer-missing-optional
+  - id: value-warn-never-blocks
+    source: docs/semantics/value-cases.yaml#warn-never-blocks
+  - id: value-withheld-derived-negation
+    source: docs/semantics/value-cases.yaml#withheld-derived-negation
+  - id: value-withheld-optional
+    source: docs/semantics/value-cases.yaml#withheld-optional
+  - id: value-withheld-outcome
+    source: docs/semantics/value-cases.yaml#withheld-outcome
+  - id: value-withheld-screened
+    source: docs/semantics/value-cases.yaml#withheld-screened
+  - id: value-withheld-total
+    source: docs/semantics/value-cases.yaml#withheld-total
+  - id: value-withheld-two-world
+    source: docs/semantics/value-cases.yaml#withheld-two-world
+  - id: value-world-closed-absent
+    source: docs/semantics/value-cases.yaml#world-closed-absent
+  - id: value-world-default
+    source: docs/semantics/value-cases.yaml#world-default
+  - id: value-world-open-absent
+    source: docs/semantics/value-cases.yaml#world-open-absent
+  - id: witness-alternative-through-its-own-row
+    source: docs/semantics/witness-alternatives-cases.yaml#alternative-through-its-own-row
+  - id: witness-and-or-two-rules
+    source: docs/semantics/witness-alternatives-cases.yaml#and-or-two-rules
+  - id: witness-finite-alternatives-on-a-cycle
+    source: docs/semantics/witness-alternatives-cases.yaml#finite-alternatives-on-a-cycle
+  - id: witness-mutual-support-in-the-epoch
+    source: docs/semantics/witness-alternatives-cases.yaml#mutual-support-in-the-epoch
+  - id: witness-role-left-with-only-mutual-support
+    source: docs/semantics/witness-alternatives-cases.yaml#role-left-with-only-mutual-support
+  - id: witness-role-with-a-hidden-alternative
+    source: docs/semantics/witness-alternatives-cases.yaml#role-with-a-hidden-alternative
