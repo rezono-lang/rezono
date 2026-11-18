@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterator, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import json
 from pathlib import Path, PurePosixPath
 import re
@@ -32,6 +32,7 @@ class LinkedClause:
     module: str
     calls: dict[str, str]
     paths: dict[str, ResolvedPath]
+    memberships: dict[str, str] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -176,7 +177,7 @@ def source_for(owner: str, path: str, form: dict, root: str, allowed: list[str],
     name = PurePosixPath(path)
     aliases: dict[str, str] = {}
     unqualified: list[str] = []
-    body = rezono_module.module_body(form, "rezono.module/3")
+    body = rezono_module.module_body(form, rezono_module.NATIVE_FORMAT)
     source = Source(owner, path, spans.where(owner, root, path), rules_dl.module_of(owner, root, name.stem),
                     rezono_module.lines(form) if body is not None else {}, aliases, ())
     if (body is None or body["pack"] != owner or name.is_absolute() or name.suffix != ".rezono"
@@ -285,6 +286,7 @@ def read_clause(schema: Schema, source: Source, at: str, decl: dict, signatures:
     explicit = set(known)
     paths: dict[str, ResolvedPath] = {}
     calls: dict[str, str] = {}
+    memberships: dict[str, str] = {}
     arguments: list[tuple[dict, str, str, bool]] = []
     for index, (arg, (_, expected, _)) in enumerate(zip(head, signature.key, strict=True)):
         if "wildcard" in arg:
@@ -303,11 +305,23 @@ def read_clause(schema: Schema, source: Source, at: str, decl: dict, signatures:
             calls[pointer] = target
             arguments.extend((arg, t, f"{pointer}/call/1/{i}", False)
                              for i, (arg, t) in enumerate(zip(terms, expected, strict=True)))
-        if "in" in node and "kind" in node["in"][1]:
-            target, _ = schema.type(source, node["in"][1]["kind"], f"{pointer}/in/1")
-            if target not in schema.classes:
-                raise Refusal("R003", f"{target!r} is not a kind for membership", f"{pointer}/in/1")
-            arguments.append((node["in"][0], target, f"{pointer}/in/0", False))
+        if "in" not in node:
+            continue
+        subject, domain = node["in"]
+        kind, slot = domain.get("dot", (domain, None))
+        if "kind" not in kind:
+            continue
+        domain_at = f"{pointer}/in/1"
+        target, _ = schema.type(source, kind["kind"], domain_at)
+        if target not in schema.classes:
+            raise Refusal("R003", f"{target!r} is not a kind for membership", domain_at)
+        value = target
+        if slot is not None:
+            (table, value), _ = schema.slot(target, slot, domain_at)
+            if table is not None:
+                continue  # Only identifier projection is backed by the kind's membership relation.
+        memberships[pointer] = target
+        arguments.append((subject, value, f"{pointer}/in/0", False))
 
     def value_type(node: dict, pointer: str) -> str | None:
         if "neg" in node:
@@ -363,7 +377,7 @@ def read_clause(schema: Schema, source: Source, at: str, decl: dict, signatures:
         path = node.get("path", ())
         if len(path) > 1 and path[0] in known:
             value_type(node, pointer)
-    return LinkedClause(relation, signature.module, calls, paths)
+    return LinkedClause(relation, signature.module, calls, paths, memberships)
 
 
 def link(pack_dir: str | Path, forms: Mapping[tuple[str, str], dict]) -> Linked:
@@ -374,6 +388,14 @@ def link(pack_dir: str | Path, forms: Mapping[tuple[str, str], dict]) -> Linked:
     schema_errors: list[str] = []
     definitions, imported = modules.load(directory, meta, schema_errors)
     names = modules.Names(definitions, pack.snake, schema_errors, root=root)
+    return link_modules(meta, definitions, imported, names, forms)
+
+
+def link_modules(meta: dict, definitions: list[modules.Module], imported: dict[str, modules.Imported],
+                 names: modules.Names, forms: Mapping[tuple[str, str], dict]) -> Linked:
+    """Link native forms using the schema and import pins already read by pack compilation."""
+    root = meta["name"]
+    schema_errors = names.errors
     schema = Schema(definitions, names)
     errors: list[Diagnostic] = []
     rules: list[tuple[Source, str, dict]] = []

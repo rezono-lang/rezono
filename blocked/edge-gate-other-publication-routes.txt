@@ -1,0 +1,1 @@
+edge/gate: manifests listings, asset files, publication forms, and page composition need separate role-scoped adapters and tests. Current support includes exact main manifests, scoped snapshots, catalogue, row and proof questions, and published sweeps.

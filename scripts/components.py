@@ -235,14 +235,41 @@ PR_FILE_CONSUMERS = {
     "compiler": ("admission", "checker", "edge/plugins/connectors", "examples", "loop", "publication", "run"),
     "edge/plugins/connectors": ("examples",),
     "contracts": ("admission", "canon", "checker", "compiler", "edge/plugins/connectors", "loop", "publication", "rezono"),
+    "edge/gate": ("tools/repl", "tools/mcp"),
     "edge/publisher": ("compiler", "deploy/profiles/edge", "edge/plugins/connectors", "examples", "k8s-admission", "run"),
     "loop": ("examples",),
     "publication": ("checker", "compiler", "edge/plugins/connectors", "edge/publisher", "examples"),
     "rezono": ("compiler",),
+    "tools/repl": ("tools/mcp",),
+}
+# These are test entry points and a private subprocess helper, rather than inputs to
+# the installed packages. Their shared corpus is still routed by SHARED_READERS.
+PR_TEST_LEAVES = frozenset({
+    "checker/tests/test_neutral_conformance_checker.py",
+    "compiler/tests/test_neutral_conformance_compiler.py",
+    "compiler/tests/rezono/neutral-answer-cases.mjs",
+    "compiler/tests/rezono/test_neutral_answer_cases.py",
+})
+LANGUAGE_COVERAGE_LEAVES = (
+    "compiler/tests/rezono/language_usage.py",
+    "compiler/tests/rezono/test_language_usage.py",
+)
+LANGUAGE_COVERAGE_REPORT = "docs/rezono/language-coverage.md"
+LANGUAGE_COVERAGE_COMMAND = (
+    "Run `python compiler/tests/rezono/language_usage.py` from the repository root for the current inventory."
+)
+
+# The generated command and the link targets in three documentation pages.
+LANGUAGE_COVERAGE_MANUAL_REFERENCES = {
+    LANGUAGE_COVERAGE_REPORT: LANGUAGE_COVERAGE_COMMAND,
+    "docs/README.md": "(rezono/language-coverage.md)",
+    "docs/compiler/rules.md": "(../rezono/language-coverage.md)",
+    "docs/formal.md": "(rezono/language-coverage.md)",
 }
 PACK_READERS = ("admission", "checker", "compiler", "edge/plugins/connectors", "edge/publisher", "examples",
                 "k8s-admission", "loop", "publication", "rezono", "run")
 SHARED_READERS = {
+    "examples/platform/proof_cases/role-publication-cases.ts": ("tools/repl", "tools/mcp"),
     "docs/compiler/pack.md": ("compiler",),
     "docs/publication/l0.md": ("edge/plugins/connectors",),
     "docs/publication/cases/": ("compiler", "edge/plugins/connectors", "publication"),
@@ -250,6 +277,7 @@ SHARED_READERS = {
     "docs/semantics/value-cases.yaml": ("compiler", "rezono"),
     "docs/semantics/witness-alternatives-cases.yaml": ("checker", "compiler"),
     "docs/tutorial.md": ("examples",),
+    "decisions/language-native-rules.md": ("compiler",),
     "decisions/publication-case-pins.md": ("compiler",),
     "decisions/conformance-*.md": ("compiler",),
     "tests/fixtures/neutral/": ("checker", "compiler", "edge/publisher", "rezono"),
@@ -307,6 +335,71 @@ def component_owner(path: str, folders: set[str]) -> str | None:
 
 def git_output(root: Path, *args: str) -> bytes:
     return subprocess.check_output(["git", *args], cwd=root, stderr=subprocess.PIPE)
+
+
+def independent_test_leaves(root: Path, revision: str, leaves: dict[str, list[str]], folders: set[str],
+                            *, manual_references: dict[str, str] | None = None) -> bool:
+    """Refuse a narrowed test selection if either tree names an outside reader."""
+    leaf_paths = {path for paths in leaves.values() for path in paths}
+    tracked = sorted(leaf_paths | (manual_references or {}).keys())
+    raw = git_output(root, "ls-tree", "-z", revision, "--", *tracked)
+    entries = [entry for entry in raw.split(b"\0") if entry]
+    if any(entry.split(b" ", 1)[0] not in {b"100644", b"100755"} for entry in entries):
+        return False
+    if manual_references is not None and len(entries) != len(tracked):
+        return False
+    for owner, paths in leaves.items():
+        # Search the basename without its extension as well, so Python imports,
+        # run_path calls and subprocess filenames all count as readers.
+        # The selector and its matrix regression run as the discovery step.
+        names = [Path(path).name if Path(path).suffix == ".md" else Path(path).stem for path in paths]
+        for page, expected in (manual_references or {}).items():
+            document = git_output(root, "show", f"{revision}:{page}").decode("utf-8")
+            if "\0" in document:
+                return False
+            if page in leaf_paths:
+                references = [line for line in document.splitlines() if any(name in line for name in names)]
+                if references != [expected]:
+                    return False
+                continue
+            link = re.search(r"\[[^\]\r\n]+\]" + re.escape(expected), document)
+            if link is None or document.count(expected) != 1:
+                return False
+            if any(name in document.replace(expected, "", 1) for name in names):
+                return False
+        patterns = [arg for name in names for arg in ("-e", name)]
+        result = subprocess.run(
+            ["git", "grep", "-F", "-I", "-l", "-z", *patterns, revision, "--", ".",
+             ":(exclude,top)scripts/components.py", ":(exclude,top).github/workflows/tests/test_components.py"],
+            cwd=root, capture_output=True,
+        )
+        if result.returncode not in (0, 1):
+            raise ValueError("cannot check readers of a test leaf")
+        prefix = revision + ":"
+        for item in result.stdout.split(b"\0"):
+            if item:
+                entry = os.fsdecode(item)
+                if not entry.startswith(prefix):
+                    return False
+                name = entry[len(prefix):]
+                if component_owner(name, folders) == owner:
+                    continue
+                if name not in (manual_references or {}):
+                    return False
+    return True
+
+
+def language_coverage_only(root: Path, base: str, head: str, changed: list[str], folders: set[str]) -> bool | None:
+    """Return None outside the coverage-only scope and verify both trees within it."""
+    changes = set(changed)
+    leaves = set(LANGUAGE_COVERAGE_LEAVES)
+    if changes.isdisjoint(leaves) or not changes <= leaves | {LANGUAGE_COVERAGE_REPORT}:
+        return None
+    return "compiler" in folders and all(
+        independent_test_leaves(root, revision, {"compiler": [*LANGUAGE_COVERAGE_LEAVES, LANGUAGE_COVERAGE_REPORT]}, folders,
+                                manual_references=LANGUAGE_COVERAGE_MANUAL_REFERENCES)
+        for revision in (base, head)
+    )
 
 
 def pull_request_range(root: Path, base_ref: str) -> tuple[str, str, list[str]]:
@@ -438,8 +531,14 @@ def pull_request_components(components: list[Component], root: Path, base_ref: s
     """Select consumers of changes against the exact PR range, without executing manifests."""
     folders = {c.folder for c in components}
     direct, pending = set(), set()
+    leaves: dict[str, list[str]] = {}
     try:
         base, head, changed = pull_request_range(root, base_ref)
+        coverage = language_coverage_only(root, base, head, changed, folders)
+        if coverage is False:
+            return list(components)
+        if coverage:
+            return [component for component in components if component.folder == "compiler"]
         for path in changed:
             owner = component_owner(path, folders)
             readers = shared_readers(path)
@@ -454,11 +553,17 @@ def pull_request_components(components: list[Component], root: Path, base_ref: s
                     direct.add("compiler")
                 if owner == "loop" and not outside_cluster_plugin(source, root / "loop/pyproject.toml"):
                     return list(components)  # the shipped plugin runs in every pytest process
-                pending.add(owner)
+                if path in PR_TEST_LEAVES:
+                    direct.add(owner)
+                    leaves.setdefault(owner, []).append(path)
+                else:
+                    pending.add(owner)
             elif readers is None or path.startswith("edge/plugins/"):
                 return list(components)
-        if not pending:
+        if not pending and not leaves:
             return [c for c in components if c.folder in direct]
+        if leaves and not all(independent_test_leaves(root, revision, leaves, folders) for revision in (base, head)):
+            return list(components)
         cache: dict[str, bytes] = {}
         edges: dict[str, set[str]] = {}
         for graph in (FILE_CONSUMERS, PR_FILE_CONSUMERS,

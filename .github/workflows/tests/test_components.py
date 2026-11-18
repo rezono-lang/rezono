@@ -123,14 +123,16 @@ class PullRequestSelectorTests(unittest.TestCase):
         self.git(root, "commit", "-qm", "Fixture")
         return self.git(root, "rev-parse", "HEAD")
 
-    def matrix(self, root, event, base):
+    def matrix_output(self, root, event, base):
         head = self.git(root, "rev-parse", "HEAD")
         env = os.environ.copy()
         env.pop("GITHUB_OUTPUT", None)
         env.update(GITHUB_EVENT_NAME=event, GITHUB_BASE_REF="main" if event == "pull_request" else "",
                    GITHUB_EVENT_BEFORE=base, MERGE_GROUP_HEAD_SHA=head, MERGE_GROUP_BASE_SHA=base)
-        output = subprocess.check_output([sys.executable, str(root / "scripts/components.py"), "ci-matrix"], cwd=root, env=env,
-                                         text=True)
+        return subprocess.check_output([sys.executable, str(root / "scripts/components.py"), "ci-matrix"], cwd=root, env=env)
+
+    def matrix(self, root, event, base):
+        output = self.matrix_output(root, event, base).decode()
         fields = dict(line.split("=", 1) for line in output.splitlines())
         return {item["folder"] for kind in ("python", "node") for item in json.loads(fields[kind])}
 
@@ -204,6 +206,51 @@ class PullRequestSelectorTests(unittest.TestCase):
             self.write(root, {"edge/plugins/connectors/accept.py": "FORMAT = 'second'\n"})
             self.commit(root)
             self.assertEqual(self.matrix(root, "pull_request", base), {"edge/plugins/connectors", "examples"})
+
+    def test_declared_conformance_test_leaf_preserves_shared_validation_and_native_matrices(self):
+        with tempfile.TemporaryDirectory() as directory:
+            entry = "compiler/tests/rezono/test_neutral_answer_cases.py"
+            probe = "compiler/tests/rezono/neutral-answer-cases.mjs"
+            root, base = self.repository(directory, {
+                "compiler/pyproject.toml": '[project]\nname = "rezono-compiler"\n',
+                "checker/pyproject.toml": '[project]\nname = "checker"\n',
+                "downstream/pyproject.toml": '[project]\nname = "downstream"\ndependencies = ["rezono-compiler"]\n',
+                "rezono/package.json": '{"name":"rezono","scripts":{"test":"node --test"}}',
+                entry: 'def test_probe(): assert "neutral-answer-cases.mjs"\n',
+                probe: 'export const expected = 1;\n',
+            })
+            self.write(root, {"unknown/example.yaml": "case: base\n"})
+            self.commit(root)
+            baseline = {event: self.matrix_output(root, event, base) for event in ("merge_group", "push")}
+            (root / "unknown/example.yaml").unlink()
+            self.write(root, {
+                entry: 'def test_probe(): assert "neutral-answer-cases.mjs".endswith(".mjs")\n',
+                probe: 'export const expected = 2;\n',
+                "tests/conformance/neutral-case.yaml": "case: example\n",
+            })
+            self.commit(root)
+            self.assertEqual(self.matrix(root, "pull_request", base), {"checker", "compiler", "rezono"})
+            for event, expected in baseline.items():
+                self.assertEqual(self.matrix_output(root, event, base), expected, event)
+
+    def test_cross_component_readers_in_either_tree_keep_full_source_selection(self):
+        entry = "compiler/tests/test_neutral_conformance_compiler.py"
+        readers = (
+            'from compiler.tests.test_neutral_conformance_compiler import collect\n',
+            'from runpy import run_path\nrun_path(ROOT / "compiler" / "tests" / "test_neutral_conformance_compiler.py")\n',
+        )
+        for first, last in ((readers[0], ""), ("", readers[1])):
+            with self.subTest(base_reader=bool(first)), tempfile.TemporaryDirectory() as directory:
+                root, base = self.repository(directory, {
+                    "compiler/pyproject.toml": '[project]\nname = "rezono-compiler"\n',
+                    "independent/pyproject.toml": '[project]\nname = "independent"\n',
+                    "consumer/pyproject.toml": '[project]\nname = "consumer"\n',
+                    entry: 'def collect(): return 1\n',
+                    "consumer/tests/test_the_input.py": first,
+                })
+                self.write(root, {entry: 'def collect(): return 2\n', "consumer/tests/test_the_input.py": last})
+                self.commit(root)
+                self.assertEqual(self.matrix(root, "pull_request", base), {"compiler", "consumer", "independent"})
 
     def test_owned_datalog_selects_the_compiler_inventory(self):
         with tempfile.TemporaryDirectory() as directory:

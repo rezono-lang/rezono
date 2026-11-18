@@ -1,0 +1,84 @@
+id: expression-filtered-count
+source: decisions/language-expression-semantics.md#1-expressions-and-evidence
+status: settled
+input:
+  rows:
+    - {relation: batch, key: [north, early]}
+    - {relation: batch, key: [north, quiet]}
+    - {relation: entry, key: [north, early, first]}
+    - {relation: entry, key: [north, early, second]}
+    - {relation: entry, key: [south, early, outside_zone]}
+    - {relation: entry, key: [north, late, outside_band]}
+  native_filter:
+    source: |
+      rezono 0
+      pack measurement
+      rule tally(a: Text, b: Text, n: Int) when batch(a, b)
+        and n = (entry(_, _, _) where it.zone = a and b = it.band).count()
+    declaration:
+      rule: tally
+      columns:
+        - {name: a, type: Text}
+        - {name: b, type: Text}
+        - {name: n, type: Int}
+      when:
+        and:
+          - call: [batch, [{path: [a]}, {path: [b]}]]
+          - cmp:
+              - "="
+              - {path: [n]}
+              - agg:
+                  - count
+                  - filter:
+                      - call: [entry, [{wildcard: true}, {wildcard: true}, {wildcard: true}]]
+                      - and:
+                          - cmp: ["=", {path: [it, zone]}, {path: [a]}]
+                          - cmp: ["=", {path: [b]}, {path: [it, band]}]
+    relations:
+      - name: batch
+        role: base
+        world: closed
+        key:
+          - {name: zone, type: string}
+          - {name: band, type: string}
+      - name: entry
+        role: base
+        world: closed
+        key:
+          - {name: zone, type: string}
+          - {name: band, type: string}
+          - {name: item, type: string}
+      - name: tally
+        role: derived
+        module: measure
+        key:
+          - {name: a, type: string}
+          - {name: b, type: string}
+          - {name: n, type: integer}
+    wrong_type:
+      source: "it.zone = 7"
+      diagnostic:
+        code: R003
+        text: "7"
+    unbound:
+      source: "it.zone = other"
+      diagnostic:
+        code: R042
+        text: other
+    unrepresentable:
+      comparison: ["!=", {path: [b]}, {path: [it, band]}]
+      code: R044
+expect:
+  value:
+    aggregates:
+      - {relation: entry, terms: ["?a", "?b", "_"], function: count, as: "?n", stratum: "0"}
+    rows:
+      - [north, early, "2"]
+      - [north, quiet, "0"]
+  state: known
+  reason: null
+  witness:
+    - group: [north, early]
+      contributors: [[north, early, first], [north, early, second]]
+    - group: [north, quiet]
+      contributors: []

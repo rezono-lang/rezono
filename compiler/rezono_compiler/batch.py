@@ -26,9 +26,11 @@ def connect(prog, data, threads=None):
         con.execute(f"CREATE TABLE {q(sql.relation_source(rel))} ("
                     + ", ".join(f"{q(c.name)} {sql.SQL_TYPE[c.type]} NOT NULL" for c in rel.key) + ");")
     for rel, rows in data.items():
-        if rows and rel in prog.relations and prog.relations[rel].role in ("base", "calc"):
-            con.executemany(f"INSERT INTO {q(sql.relation_source(prog.relations[rel]))} "
-                            f"VALUES ({', '.join('?' * len(rows[0]))})", [list(r) for r in rows])
+        relation = prog.relations.get(rel)
+        if rows and relation is not None and relation.role in ("base", "calc"):
+            placeholders = ", ".join("?" for _ in relation.key + relation.values)
+            con.executemany(f"INSERT INTO {q(sql.relation_source(relation))} "
+                            f"VALUES ({placeholders})", [list(r) for r in rows])
     return con
 
 
