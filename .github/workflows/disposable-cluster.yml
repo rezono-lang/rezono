@@ -103,6 +103,7 @@ jobs:
           PYTEST_ADDOPTS: -rA
         run: |
           set -euo pipefail
+          export REZONO_CLUSTER_KUBECONFIG="$KUBECONFIG"
           selector=loop/cluster/select_tests.py
           python "$selector" --collect-only
           python "$selector"
