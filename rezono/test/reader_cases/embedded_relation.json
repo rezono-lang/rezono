@@ -22,7 +22,7 @@
         "end": 60
       },
       "args": [
-        "end of input, \"world\", \"inverse\", \"+\", \"*\", \"?\", or \"<\""
+        "end of input, \"identifier\", \"world\", \"inverse\", \"+\", \"*\", \"?\", or \"<\""
       ]
     }
   ]
