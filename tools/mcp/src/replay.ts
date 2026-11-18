@@ -10,7 +10,7 @@ import type { Pin } from './server.ts';
 
 const CALL = z.object({
 	tool: z.enum(['ask', 'grounds', 'kinds', 'more', 'reach', 'row', 'schema', 'search', 'sweep']),
-	args: z.record(z.unknown()),
+	args: z.record(z.string(), z.unknown()),
 }).strict();
 const PLAN = z.object({
 	pack: z.string().min(1),
