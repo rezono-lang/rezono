@@ -1,0 +1,20 @@
+// An ambiguous value cannot authorize dispatch, even when one value would pass alone.
+.decl conflicting_input(candidate: symbol)
+conflicting_input(c) :- candidate__plan_hash(c, a), candidate__plan_hash(c, b), a != b.
+conflicting_input(c) :- candidate__approval_hash(c, a), candidate__approval_hash(c, b), a != b.
+conflicting_input(c) :- candidate__currency(c, a), candidate__currency(c, b), a != b.
+conflicting_input(c) :- candidate__approval_currency(c, a), candidate__approval_currency(c, b), a != b.
+conflicting_input(c) :- candidate__decision(c, a), candidate__decision(c, b), a != b.
+conflicting_input(c) :- candidate__cost_micros(c, a), candidate__cost_micros(c, b), a != b.
+conflicting_input(c) :- candidate__cap_micros(c, a), candidate__cap_micros(c, b), a != b.
+conflicting_input(c) :- candidate__event_us(c, a), candidate__event_us(c, b), a != b.
+conflicting_input(c) :- candidate__expires_us(c, a), candidate__expires_us(c, b), a != b.
+
+.decl authorized(candidate: symbol)
+authorized(c) :- candidate(c), candidate__plan_hash(c, hash), candidate__approval_hash(c, hash),
+    candidate__currency(c, currency), candidate__approval_currency(c, currency),
+    candidate__decision(c, "approve"), candidate__cost_micros(c, cost), candidate__cap_micros(c, cap),
+    cost >= 0, cost <= cap, candidate__event_us(c, event), candidate__expires_us(c, expires),
+    event < expires, !conflicting_input(c).
+
+.output authorized
