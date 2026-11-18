@@ -3,8 +3,6 @@
 import pytest
 
 
-@pytest.mark.xfail(strict=True, raises=ImportError,
-                   reason="Implement reads_all_in_full in deploy/profiles/edge/pilot.py. See test_pilot.py for the manifest contract.")
 def test_full_visibility_requires_each_relation():
     from pilot import reads_all_in_full
 
