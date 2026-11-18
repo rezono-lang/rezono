@@ -1,0 +1,20 @@
+{
+  "job": "https://github.com/rezono-lang/rezono/actions/runs/44252183769/job/134625269003",
+  "revision": "7496834442da3995b19fde11eb9abe9c488bbba3",
+  "conclusion": "failure",
+  "observations": [
+    {"time": "2026-11-18T06:39:32.0691383Z", "event": "node_condition", "type": "Ready", "status": "True", "reason": "KubeletReady"},
+    {"time": "2026-11-18T06:39:52.4174335Z", "event": "lease_renewal", "samples": [
+      {"uid": "07219007-4728-4126-8ee0-193988707b3f", "renew_time": "2026-11-18T06:39:29.411898Z"},
+      {"uid": "07219007-4728-4126-8ee0-193988707b3f", "renew_time": "2026-11-18T06:39:49.558801Z"}
+    ]},
+    {"time": "2026-11-18T06:39:52.4203798Z", "event": "node_identity", "name": "proof-worker", "uid": "7cc4ee8f-d012-4611-8a67-ce926de4ab5f", "os": "Flatcar Container Linux by Kinvolk 4757.2.3", "kubelet": "v1.36.6+k0s"},
+    {"time": "2026-11-18T06:40:21.3159135Z", "event": "operator_rollout", "name": "virt-operator", "result": "success"},
+    {"time": "2026-11-18T06:42:01.0324969Z", "event": "kvm_allocation", "available": true, "node": "proof-worker", "raw_capacity": "1k", "capacity": 1000},
+    {"time": "2026-11-18T06:42:06.8947960Z", "event": "vmi", "name": "host-probe", "uid": "24993c5c-2ff2-42aa-85dc-ea6eb15c4f51", "phase": "Running", "ready": true, "node": "proof-worker"},
+    {"time": "2026-11-18T06:42:07.2249855Z", "event": "launcher", "name": "virt-launcher-host-probe-hlddd", "uid": "06ea6136-ad16-44e2-b5da-664b1b5c63fe", "controller_vmi_uid": "24993c5c-2ff2-42aa-85dc-ea6eb15c4f51", "node": "proof-worker"},
+    {"time": "2026-11-18T06:43:51.6360435Z", "event": "failure", "stage": "guest-console", "exit_code": 1}
+  ],
+  "guest_console": "unconfirmed",
+  "live_kvm_vcpu": "not_run"
+}

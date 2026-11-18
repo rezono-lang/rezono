@@ -55,3 +55,33 @@ restartable sidecar.
 [KubeVirt VMI status](https://github.com/kubevirt/kubevirt/blob/c3d19093f9c7b843b3879b18dc088911c081c39e/staging/src/kubevirt.io/api/core/v1/types.go#L304-L306),
 [launcher template](https://github.com/kubevirt/kubevirt/blob/c3d19093f9c7b843b3879b18dc088911c081c39e/pkg/virt-controller/services/template.go#L718-L724),
 [serial console sidecar](https://github.com/kubevirt/kubevirt/blob/c3d19093f9c7b843b3879b18dc088911c081c39e/pkg/virt-controller/services/serialconsolelog.go).
+
+### Launcher identified; guest console unconfirmed
+
+On 2026-11-18 the disposable CI worker reported Flatcar 4757.2.3, kubelet
+v1.36.6+k0s and Ready with reason KubeletReady. Two samples of the same
+node-owned Lease renewed at 06:39:29.411898 and 06:39:49.558801 UTC, 20.146903
+seconds apart. The operator rolled out, KubeVirt became Available, and
+`proof-worker` advertised 1000 allocatable KVM devices (`1k`).
+[Job at revision 7496834](https://github.com/rezono-lang/rezono/actions/runs/44252183769/job/134625269003)
+
+The API reported `host-probe` Ready and Running on that worker. Its active
+launcher was `virt-launcher-host-probe-hlddd`. The probe checked the active
+pod UID, the controlling VMI UID, namespace and node before it emitted the
+launcher identity. The selected record retains the checked association and
+the two Kubernetes renewal times separately from the job timestamps.
+[Recorded observations](../run/fixtures/flatcar-kubevirt-host.json) and
+[probe at the tested revision](https://github.com/rezono-lang/rezono/blob/7496834442da3995b19fde11eb9abe9c488bbba3/run/probes/worker-join/trial.sh#L209-L235)
+
+The console check exited with status 1 at 06:43:51 UTC. The trial did not
+confirm a login prompt or welcome banner. Its live KVM vCPU check and final
+launcher identity recheck were never reached. The cause of the missing
+console observation is unknown. Keep host acceptance open. This job measured
+a disposable CI VM; provider hardware and a Flatcar inner guest remain untested.
+
+The trial pinned k0smotron v2.3.1 at `c23391b08842d8b824e40e1324267f08b923f743`,
+the worker binary at v1.36.6+k0s.0, the Cilium chart at 1.20.5, and KubeVirt
+at v1.9.1. The guest image was the CirrOS container disk at
+`sha256:ebdb8d8b9b480f6ee7664ed3fdde8428767664f507d98f94090edeff04d7ebf2`.
+[Bootstrap inputs](https://github.com/rezono-lang/rezono/tree/7496834442da3995b19fde11eb9abe9c488bbba3/run/probes/worker-join)
+and [guest manifest](https://github.com/rezono-lang/rezono/blob/7496834442da3995b19fde11eb9abe9c488bbba3/run/probes/flatcar/vmi.yaml)
