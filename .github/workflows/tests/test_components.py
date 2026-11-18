@@ -27,9 +27,22 @@ class SelectorTests(unittest.TestCase):
         self.assertEqual(selected("k8s-admission/parameter_reader.py"), {"k8s-admission", "loop", "run"})
         for path in ("scripts/components.py", "packs/common/pack.yaml", "contracts/core.yaml",
                      "contracts/python/tests/test_ports.py", "loop/pyproject.toml", "unknown/resource",
+                     "loop/rezono_cluster.py", "loop/tests/conftest.py", "loop/tests/wire_fixtures.py",
+                     "loop/tests/fixtures/recording.json",
                      "docs/publication/l0.md", "docs/compiler/pack.md", "README.md",
                      "decisions/run-offline-acceptance.md", "publication/tests/test_l0.py"):
             self.assertEqual(selected(path), {c.folder for c in components}, path)
+
+    def test_plugin_package_expansion_preserves_full_coverage(self):
+        components = ci.discover_components()
+        with tempfile.TemporaryDirectory() as tmp, patch.object(ci, "ROOT", Path(tmp)):
+            loop = Path(tmp) / "loop"
+            loop.mkdir()
+            for layout in ('py-modules = ["rezono_cluster", "replay"]',
+                           'packages = ["replay"]', 'py-modules = "replay"', "invalid TOML"):
+                with self.subTest(layout=layout):
+                    (loop / "pyproject.toml").write_text("[tool.setuptools]\n" + layout, encoding="utf-8")
+                    self.assertEqual(ci.affected_components(components, ["loop/replay.py"]), components)
 
     def test_uses_only_the_candidate_range(self):
         base = subprocess.check_output(["git", "rev-parse", "HEAD^"], cwd=ROOT, text=True).strip()

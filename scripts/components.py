@@ -12,6 +12,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import tomllib
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
@@ -142,7 +143,7 @@ def _git_changed_files(root: Path, base_ref: str | None, before_sha: str | None)
     return [os.fsdecode(name) for name in result.stdout.split(bytes(1)) if name]
 
 
-# Unpackaged components consumed by other checks via files or subprocesses,
+# Components consumed by other checks via files or subprocesses,
 # including the offline runner's replay of a loop and the loop's admission proof.
 # A change to a shared library, fixture tree or unknown component runs everything.
 FILE_CONSUMERS = {
@@ -151,6 +152,24 @@ FILE_CONSUMERS = {
     "run": (),
     "deploy/profiles/edge": ("edge/publisher",),
 }
+
+
+def outside_cluster_plugin(path: Path, manifest: Path) -> bool:
+    """The loop's pytest distribution ships only its explicitly listed modules."""
+    relative = path.relative_to("loop")
+    try:
+        packaging = tomllib.loads(manifest.read_text(encoding="utf-8"))["tool"]["setuptools"]
+    except (OSError, ValueError, KeyError, TypeError):
+        return False
+    if not isinstance(packaging, dict) or set(packaging) != {"py-modules"}:
+        return False
+    modules = packaging["py-modules"]
+    if not isinstance(modules, list) or not modules or not all(isinstance(m, str) and m.isidentifier() for m in modules):
+        return False
+    if relative.parent == Path("."):
+        return (relative.suffix == ".py" and relative.name not in {"setup.py", "conftest.py"}
+                and relative.stem not in modules)
+    return relative.parent == Path("tests") and relative.match("test_*.py")
 
 
 def affected_components(
@@ -167,9 +186,10 @@ def affected_components(
             # Markdown, golden files and shared packs are read by component tests.
             return list(components)
         selected.add(owner.folder)
-        name = Path(path).name
-        if (owner.kind == "contracts" or (ROOT / owner.folder / "pyproject.toml").exists()
-                or name in {"pyproject.toml", "package.json", "conftest.py"}):
+        source = Path(path)
+        manifest = ROOT / owner.folder / "pyproject.toml"
+        if (owner.kind == "contracts" or source.name in {"pyproject.toml", "package.json", "conftest.py"}
+                or (manifest.exists() and not (owner.folder == "loop" and outside_cluster_plugin(source, manifest)))):
             return list(components)
         # Tests can themselves be imported as cross-component oracles. Shared
         # source and test roots have no isolation contract, so keep full coverage.
