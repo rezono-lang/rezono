@@ -3,7 +3,7 @@ name = "rezono-compiler"
 version = "0.1.0"
 description = "Rezono compiler: pack -> engine SQL, sentences and schema bundle"
 requires-python = ">=3.11"
-dependencies = ["linkml-runtime>=1.9", "pyyaml>=6", "rezono-admission", "rezono-canon"]  # install: scripts/install-python.sh (docs/ci.md §8)
+dependencies = ["linkml-runtime>=1.9", "pyyaml>=6", "jsonschema>=4.20", "rezono-admission", "rezono-canon"]  # install: scripts/install-python.sh (docs/ci.md §8)
 
 [project.optional-dependencies]
 # The batch backend: `rezono_compiler explain` and publishing without Feldera.
