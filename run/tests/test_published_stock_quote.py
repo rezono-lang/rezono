@@ -31,10 +31,6 @@ def rows(publication, name):
     return {tuple(item["key"]) for item in json.loads(raw)}
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError, reason=(
-    "Read decisions/run-offline-acceptance.md and decisions/run-bid-price-sweep.md. "
-    "Waits for test_bid_price_sweep. Publish the selected payable offer from run/packs/offer-selection "
-    "when its recorded stock changes, keeping the unaffected alternative's full charge."))
 def test_stock_changes_published_quote(tmp_path):
     source = RUN / "packs" / "offer-selection"
     baseline = publication(source, tmp_path / "baseline")
