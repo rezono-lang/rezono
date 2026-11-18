@@ -28,10 +28,15 @@ import { printModule } from './print.ts';
 export const MODULE_FORMAT = 'rezono.module/1';
 const EXTENDED_MODULE_FORMAT = 'rezono.module/2';
 
+function slotConstraintFormat(module: Module): ModuleForm['format'] {
+	const hasConstraints = module.decls.some((decl) => 'kind' in decl && decl.slots.some((slot) => slot.constraints !== undefined));
+	return hasConstraints ? EXTENDED_MODULE_FORMAT : MODULE_FORMAT;
+}
+
 function formatOf(module: Module): ModuleForm['format'] {
 	return module.decls.some((decl) => 'kind' in decl && (decl.abstract || decl.embedded || decl.slots.some((slot) => slot.identifier || slot.embedded)))
 		? EXTENDED_MODULE_FORMAT
-		: MODULE_FORMAT;
+		: slotConstraintFormat(module);
 }
 
 /** The place of one node of `module`; the numbers are decimal text. */

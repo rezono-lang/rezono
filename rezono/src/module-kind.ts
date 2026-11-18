@@ -1,6 +1,6 @@
 import { block, declaration, named, opt, printWorld, type Build, type Line, type Logical, type World, type ModuleComponent } from './module-support.ts';
 import { printDerived, readDerived, type DerivedDecl } from './module-derived.ts';
-import { printSlot, type SlotDecl } from './module-slot.ts';
+import { printSlot, readSlot, type SlotDecl } from './module-slot.ts';
 
 export interface KindDecl {
 	kind: string;
@@ -27,13 +27,16 @@ function readKind(line: Logical, build: Build): KindDecl {
 		// A second applies or sealed line would replace the first unseen (v0 section 5a).
 		else if (member.line === 'sealed' ? decl.sealed !== undefined : member.line === 'applies' && decl.applies) build.refuse(child, `one \`${member.line}\``);
 		else {
-			build.leaf(child);
 			if (member.line === 'slot') {
-				if (member.identifier && decl.embedded) build.refuse(child, 'no identifier in an embedded kind');
-				else if (member.identifier && decl.slots.some((slot) => slot.identifier)) build.refuse(child, 'one identifier per kind');
-				else decl.slots.push(build.strip(member));
-			} else if (member.line === 'sealed') decl.sealed = member.slot as string;
-			else decl.applies = build.strip<NonNullable<KindDecl['applies']>>(member);
+				const slot = readSlot(child, build);
+				if (slot.identifier && decl.embedded) build.refuse(child, 'no identifier in an embedded kind');
+				else if (slot.identifier && decl.slots.some((previous) => previous.identifier)) build.refuse(child, 'one identifier per kind');
+				else decl.slots.push(slot);
+			} else {
+				build.leaf(child);
+				if (member.line === 'sealed') decl.sealed = member.slot as string;
+				else decl.applies = build.strip<NonNullable<KindDecl['applies']>>(member);
+			}
 		}
 	}
 	return decl;
@@ -53,7 +56,7 @@ function printKind(d: KindDecl): string[] {
 	return block(`${d.embedded ? 'embedded ' : d.abstract ? 'abstract ' : ''}kind ${d.kind}${printWorld(d.world)}`, [
 		...(d.applies ? [`applies ${d.applies.axis}: ${d.applies.slot}`] : []),
 		...(d.sealed !== undefined ? [`sealed at: ${d.sealed}`] : []),
-		...d.slots.map(printSlot),
+		...d.slots.flatMap(printSlot),
 		...d.derived.flatMap(printDerived)
 	]);
 }
