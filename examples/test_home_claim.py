@@ -19,7 +19,7 @@ def claim(table: Path) -> list[str]:
 PACKS = sorted(p.parent for p in EXAMPLES.rglob("channels.yaml") if claim(p))
 
 
-@pytest.mark.xfail(strict=True, reason="the standalone examples still need a declared home claim with one row per state")
+@pytest.mark.xfail(strict=True, reason="the standalone examples still need a declared home claim with one row per state. The companion test reads generated expected/explained snapshots, which are absent from the public checkout and are not prepared by CI before testing")
 def test_an_example_pack_declares_a_claim():
     assert PACKS
 
