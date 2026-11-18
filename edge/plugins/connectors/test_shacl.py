@@ -22,6 +22,7 @@ from rdflib.namespace import RDF, RDFS, SH, XSD  # noqa: E402
 from rezono_publication import l0, rdf  # noqa: E402
 from publication.tests.test_l0 import (  # noqa: E402
     FILES, FIXTURE, R01, THING, TREE, TREE_ROWS, TYPES, merge, rows_of, schema_of)
+from publication.tests.test_rdf import canon  # noqa: E402
 
 import shacl  # noqa: E402  (this directory)
 
@@ -75,26 +76,44 @@ def test_a_dataset_the_reader_accepts_conforms(schema, rows):
     assert validate(schema, rdf.to_graph(schema, rows)) == (True, set())
 
 
-@pytest.mark.xfail(strict=True, reason="fewer than five valid RDF conformance cases remain after split filtering")
-def test_every_valid_case_with_an_rdf_form_conforms():
-    """The settled valid cases of §8. A case the converter refuses (Q13, Q20) has no graph to validate, and the
-    shapes refuse its schema for the same reason."""
-    seen = refused = 0
-    for case in FILES.values():
-        if case["class"] != "valid" or case["status"] != "settled" or case["form"] not in ("row", "rows", "collection"):
-            continue
-        schema = schema_of(case)
-        try:
-            graph = rdf.to_graph(schema, rows_of(case))
-        except rdf.RdfError as e:
-            assert "Q13" in str(e) or "Q20" in str(e), case["id"]
-            with pytest.raises(rdf.RdfError, match="Q13|Q20"):
-                shacl.shapes(schema)
-            refused += 1
-            continue
-        assert validate(schema, graph) == (True, set()), case["id"]
-        seen += 1
-    assert seen >= 3 and seen + refused >= 5
+SETTLED_ROWS = sorted(cid for cid, case in FILES.items()
+                      if case["class"] == "valid" and case["status"] == "settled"
+                      and case["form"] in {"row", "rows", "collection"})
+# An element with multiple versions has no node mapping. An imported reference carries no target base IRI.
+NO_RDF_FORM = {"V02": "Q13", "P01": "Q20"}
+
+
+def assert_no_rdf_form(schema, rows, question):
+    assert l0.read_rows(schema, rows) == rows
+    with pytest.raises(rdf.RdfError, match=rf"\({question}\)"):
+        rdf.to_graph(schema, rows)
+    with pytest.raises(rdf.RdfError, match=rf"\({question}\)"):
+        shacl.shapes(schema)
+
+
+@pytest.mark.parametrize("cid", SETTLED_ROWS)
+def test_every_valid_case_with_an_rdf_form_conforms(cid):
+    case = FILES[cid]
+    assert case["expect"]["accept"] is True
+    schema, rows = schema_of(case), rows_of(case)
+    if cid in NO_RDF_FORM:
+        assert_no_rdf_form(schema, rows, NO_RDF_FORM[cid])
+        return
+    graph = rdf.to_graph(schema, rows)
+    assert validate(schema, graph) == (True, set())
+    assert canon(rdf.from_graph(schema, graph)) == canon(rows)
+
+
+def test_public_corpus_has_at_least_three_graph_cases():
+    graph_cases = set(SETTLED_ROWS) - NO_RDF_FORM.keys()
+    assert len(graph_cases) >= 3, sorted(graph_cases)
+
+
+@pytest.mark.xfail(strict=True, raises=AssertionError, reason=(
+    "Needs a fifth settled valid row, rows or collection case in docs/publication/cases. "
+    "The public P01 imported-reference case would count as a Q20 refusal."))
+def test_public_corpus_has_at_least_five_rdf_comparisons():
+    assert len(SETTLED_ROWS) >= 5, SETTLED_ROWS
 
 
 # ---------------------------------------------------------------------------------------------------------------
@@ -259,14 +278,20 @@ def test_another_schema_is_another_document():
     assert shacl.document_iri(FIXTURE) != shacl.document_iri(TYPES)
 
 
-def test_what_has_no_rdf_form_is_refused():
-    with pytest.raises(rdf.RdfError, match="Q13"):
-        shacl.shapes(schema_of(FILES["V02"]))
+def test_reader_refuses_an_rdf_subject_of_the_versioned_kind():
+    schema = schema_of(FILES["V02"])
+    graph = Graph()
+    graph.add((URIRef(BASE + "Plan/example"), RDF.type, URIRef(BASE + "Plan")))
+    with pytest.raises(rdf.RdfError, match=r"\(Q13\)"):
+        rdf.from_graph(schema, graph)
+
+
+def test_an_imported_reference_without_a_target_base_has_no_rdf_form():
     elsewhere = merge(FIXTURE, {"imports": {"org": {"pack": "org", "schema": "s-" + "0" * 64}},
                                 "kinds": {"Host": {"slots": {"site": {"card": "?", "ref": "org.Site",
                                                                       "states": ["known", "not_applicable"]}}}}})
-    with pytest.raises(rdf.RdfError, match="Q20"):
-        shacl.shapes(elsewhere)
+    row = dict(R01[0], site={"$ref": "org@s-" + "0" * 64 + ":Site/annex"})
+    assert_no_rdf_form(elsewhere, [row], "Q20")
 
 
 # ---------------------------------------------------------------------------------------------------------------
