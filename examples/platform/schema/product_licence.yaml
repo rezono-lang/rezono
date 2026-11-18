@@ -27,6 +27,7 @@ classes:
       id: {identifier: true}
       product: {range: Product, required: true}
       version: {required: true}
+      series: {description: Release series observed in the vendor source when known.}
       scope: {range: LicenceScope, required: true}
       declaration: {required: true}
       source_url: {required: true, pattern: "^https://[^ ]+$"}

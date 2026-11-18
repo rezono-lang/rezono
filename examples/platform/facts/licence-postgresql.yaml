@@ -2,6 +2,7 @@ vendor_licence_notice:
   - id: postgresql-16.0
     product: postgresql
     version: '16.0'
+    series: '16'
     scope: project-source
     declaration: PostgreSQL
     source_url: 'https://raw.githubusercontent.com/postgres/postgres/REL_16_0/COPYRIGHT'
@@ -9,6 +10,7 @@ vendor_licence_notice:
   - id: postgresql-17.0
     product: postgresql
     version: '17.0'
+    series: '17'
     scope: project-source
     declaration: PostgreSQL
     source_url: 'https://raw.githubusercontent.com/postgres/postgres/REL_17_0/COPYRIGHT'
