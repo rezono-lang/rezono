@@ -1,5 +1,7 @@
 """A completed inventory can establish absence; a restore identifies one backup."""
 
+from hashlib import sha256
+
 import pytest
 
 from case_support import imported, verified
@@ -20,8 +22,6 @@ def records():
             {"id": "last", "service": "kept", "target": "vault", "taken": "2026-06-08"},
             {"id": "fresh", "service": "kept", "target": "vault", "taken": "2026-06-09"},
         ],
-        "backup_trial": [{"id": "restore-1", "backup": "last", "cluster": "recovery", "result": "restored",
-                          "management": "offline", "before_hash": "a" * 64, "restored_hash": "a" * 64}],
     }
 
 
@@ -47,21 +47,53 @@ def test_management_backup_age_and_absence():
     imported("std-decision")
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError, reason=(
-    "Derive a restore witness for exactly the tested backup in rules/management_restore.dl. "
-    "Depends on test_management_backup_age_and_absence. Read decisions/platform-management-backup.md."))
-def test_management_restore_matches_copy():
+@pytest.mark.parametrize(("kind", "changes"), [
+    pytest.param(None, {}, id="matching-capture-and-readback"),
+    pytest.param("backup_capture", None, id="missing-capture"),
+    pytest.param("backup_readback", None, id="missing-readback"),
+    pytest.param("backup_capture", {"backup": "fresh"}, id="different-backup-captured"),
+    pytest.param("backup_readback", {"backup": "fresh"}, id="different-backup-read"),
+    pytest.param("backup_capture", {"id": "capture-2"}, id="capture-evidence-mismatch"),
+    pytest.param("backup_readback", {"id": "capture-1"}, id="reused-observation-id"),
+    pytest.param("backup_readback", {"trial": "restore-2"}, id="different-trial"),
+    pytest.param("backup_capture", {"run": "other"}, id="capture-from-another-run"),
+    pytest.param("backup_readback", {"run": "other"}, id="readback-from-another-run"),
+    pytest.param("backup_readback", {"cluster": "elsewhere"}, id="wrong-recovery-cluster"),
+    pytest.param("backup_capture", {"source_cluster": "recovery"}, id="same-cluster"),
+    pytest.param("backup_readback", {"payload_sha256": sha256(b"other bytes").hexdigest()}, id="different-readback-bytes"),
+])
+def test_management_restore_matches_copy(kind, changes):
     from management_probes import compiled
 
-    data = records()
-    for restored_hash in ("a" * 64, "b" * 64):
-        data["backup_trial"][0]["restored_hash"] = restored_hash
-        model, state = compiled(data)
-        expected = {("last", "restore-1")} if restored_hash == "a" * 64 else set()
-        assert state.derived.get("managed_backup_restored") == expected
-        if expected:
-            leaves = verified("managed_backup_restored", ("last", "restore-1"), state=(model, state))
-            assert ("backup_trial__backup", ("restore-1", "last")) in leaves
+    captured_payload = b"fresh backup marker\n"
+    recovered_payload = b"fresh backup marker\n"
+    capture_digest = sha256(captured_payload).hexdigest()
+    readback_digest = sha256(recovered_payload).hexdigest()
+    data = {
+        "backup_trial": [{"id": "restore-1", "backup": "last", "cluster": "recovery", "run": "trial-run"}],
+        "backup_capture": [{"id": "capture-1", "backup": "last", "source_cluster": "work", "run": "trial-run",
+                            "payload_sha256": capture_digest}],
+        "backup_readback": [{"id": "readback-1", "backup": "last", "cluster": "recovery", "run": "trial-run",
+                             "trial": "restore-1", "source_evidence": "capture-1", "payload_sha256": readback_digest}],
+    }
+    if kind is not None:
+        if changes is None:
+            data[kind].clear()
+        else:
+            data[kind][0].update(changes)
+
+    model, state = compiled(data)
+    restored = ("last", "restore-1")
+    assert state.derived.get("managed_backup_restored") == ({restored} if kind is None else set())
+    if kind is None:
+        leaves = verified("managed_backup_restored", restored, state=(model, state))
+        assert {
+            ("backup_trial__backup", ("restore-1", "last")),
+            ("backup_capture__backup", ("capture-1", "last")),
+            ("backup_capture__payload_sha256", ("capture-1", capture_digest)),
+            ("backup_readback__source_evidence", ("readback-1", "capture-1")),
+            ("backup_readback__payload_sha256", ("readback-1", readback_digest)),
+        } <= leaves
 
 
 @pytest.mark.cluster
