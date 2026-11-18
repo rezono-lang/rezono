@@ -1,0 +1,5 @@
+# Value a quote on its UTC order day
+
+Use a closed edition history per price series and currency pair. Each edition has an inclusive start day, original bytes, source URL and SHA-256. The next distinct start in that series closes it. Give the last edition an explicit unbounded end. Read effective intervals through std-time at the requested UTC day. An unknown value or multiple active editions is a finding for that series. Never select by input order. Verify the selected source bytes before using them.
+
+The offline entry point `run/effective_quote.py:quote_at(instant, lines, prices, rates)` returns the quote or problems as defined in the test. Keep the captured hourly price reader and exact per-machine setup arithmetic from the offline acceptance decision. Capture amounts in USD and convert to EUR with the selected rate in EUR per USD. Publish reduced numerator and denominator pairs in major currency units and pin both selected source digests. The fixture varies only the FX rate at the day boundary. Selecting the newest record or rounding to whole cents would change its answers.
