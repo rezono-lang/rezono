@@ -14,6 +14,8 @@ loop_observation.event_time: recorded event time
 loop_observation.state: observed state
 loop_observation.value: observed value
 loop_observation.reason: observation evidence
+loop_observation.scope: observation collector scope
+loop_observation.sweep: observation sweep window
 active: selected run
 completion: step completion declaration
 expectation: expected token value

@@ -37,6 +37,8 @@ classes:
       state: {required: true}
       value: {required: true}
       reason: {required: true}
+      scope: {description: The collector scope in which the lookup was made.}
+      sweep: {description: The observation window in that scope.}
   LoopRequirement:
     description: A prerequisite token explicitly required by a step in a run.
     attributes:
