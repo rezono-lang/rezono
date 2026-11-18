@@ -1,0 +1,5 @@
+kinds:
+  - {kind: sweep, shape: rect}
+  - {kind: resource, shape: rect}
+arrows:
+  - {arrow: resource.sweep, dash: none}
