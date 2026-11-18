@@ -14,7 +14,7 @@ import pytest
 import yaml
 
 from support import FIXTURE, compile_dir, text, violations
-from rezono_compiler import facts, modules, pack, writer
+from rezono_compiler import facts, modules, pack, rezono_module, writer
 
 HERE = Path(__file__).resolve().parent / "fixtures" / "rezono"
 SHARED = FIXTURE.parent / "shared"
@@ -202,6 +202,8 @@ def test_a_bool_slot_prefers_a_declared_kind(tmp_path, declaration):
         if declaration == "another_module":
             module(d, [target], name="target")
     linked = pack.read(d).slot("eta", "linked")
+    classes = rezono_module.schema_classes(d, "rezono/m.rezono")
+    assert classes["Eta"]["attributes"]["linked"]["range"] == ("boolean" if declaration == "none" else "Bool")
     if declaration == "none":
         assert not linked.arrow
         assert linked.sql_type == "BOOLEAN"

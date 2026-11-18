@@ -109,15 +109,16 @@ def layout(pack_dir: str | Path) -> Layout:
     kinds, declared = [], {}
     for s in model.schemas:
         d = pack_dir if s["pack"] == model.meta["name"] else dirs[s["pack"]]
-        if s["file"].endswith(".rezono"):  # a module written in Rezono: its classes as it lowers them
-            doc = {"classes": rezono_module.schema_classes(d, s["file"])}
+        if s["file"].endswith(".rezono"):
+            slots_by_class = rezono_module.class_slot_order(d, s["file"])
         else:
             doc = yaml.safe_load((d / s["file"]).read_text("utf-8")) or {}
-        for cname, c in (doc.get("classes") or {}).items():
-            c = c or {}
+            slots_by_class = {cname: list((c or {}).get("slots") or []) + list((c or {}).get("attributes") or {})
+                              for cname, c in (doc.get("classes") or {}).items()}
+        for cname, slots in slots_by_class.items():
             k = name_of.get((s["module"], cname), packs.snake(cname))
             kinds.append(k)
-            declared[k] = list(c.get("slots") or []) + list(c.get("attributes") or {})
+            declared[k] = slots
     return Layout(model, kinds, declared)
 
 

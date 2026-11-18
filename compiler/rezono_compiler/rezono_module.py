@@ -371,11 +371,30 @@ def view(schema: dict, importmap: dict) -> SchemaView:
 
 
 def schema_classes(pack_dir: Path, rel: str) -> dict:
-    """The classes of the module at `rel` (rezono/<path>.rezono) as `lower` lowers them, in the order of the
-    text, for a reader that wants a module's classes as a schema file holds them. Only for a pack that compiles."""
+    """The classes of a compilable pack's module, with ranges from the compiler's name resolution."""
+    from . import modules  # The schema loader also calls this module's lowering functions.
+
+    meta = yaml.safe_load((pack_dir / "pack.yaml").read_text(encoding="utf-8")) or {}
+    loaded, _ = modules.load(pack_dir, meta, [])
+    schema = next(m.sv.schema for m in loaded if m.pack_dir == pack_dir and m.rel == rel)
+    classes = {}
+    for name, cls in schema.classes.items():
+        slots = {}
+        for slot, attr in cls.attributes.items():
+            if attr.identifier:
+                slots[slot] = {"identifier": True}
+            else:
+                slots[slot] = {"range": attr.range}
+                if attr.required:
+                    slots[slot]["required"] = True
+        classes[name] = {"attributes": slots}
+    return classes
+
+
+def class_slot_order(pack_dir: Path, rel: str) -> dict[str, list[str]]:
+    """Read a compiled module's class and slot order from its form for the writer."""
     meta = yaml.safe_load((pack_dir / "pack.yaml").read_text(encoding="utf-8")) or {}
     d = next(d for d in declared(meta, pack_dir, []) if d.module == rel)
     form = read_form(pack_dir, d, []) or {"module": {"decls": []}}
-    declared_names = names(form).keys()
-    return {decl["kind"]: {"attributes": attributes(decl, declared_names)} for decl in form["module"]["decls"]
-            if isinstance(decl, dict) and "kind" in decl}
+    return {decl["kind"]: ["id", *(s["slot"] for s in decl.get("slots") or [])]
+            for decl in form["module"]["decls"] if isinstance(decl, dict) and "kind" in decl}
