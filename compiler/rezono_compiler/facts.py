@@ -46,6 +46,7 @@ TEXT = {
     "unknown_slot": "{where}: unknown slot '{name}'",
     "dictionary_value_not_record": "{where}: in the dictionary form, the value must be a record",
     "wrong_type": "{where}: is not a {type}",
+    "invalid_sha256": "{where}: invalid SHA-256 digest",
     "decision_missing": "{where}: a decided value names its decision (plane: control)",
 }
 
@@ -99,7 +100,7 @@ def schema(pack: Pack) -> Schema:
             if s.arrow:
                 arrows.append(common | {"target": s.range, "inlined": s.inlined})
             else:
-                attributes.append(common | {"type": s.type.bundle})
+                attributes.append(common | present({"type": s.type.bundle, "input_format": s.input_format}))
     return Schema({"format": FORMAT, "pack": {"id": pack.meta["name"]}, "kinds": kinds, "attributes": attributes,
                    "arrows": arrows})
 

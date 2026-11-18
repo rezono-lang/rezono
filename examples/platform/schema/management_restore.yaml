@@ -22,7 +22,10 @@ classes:
       backup: {required: true}
       run: {required: true}
       source_cluster: {required: true}
-      payload_sha256: {required: true, pattern: '^[0-9a-f]{64}$'}
+      payload_sha256:
+        required: true
+        pattern: '^[0-9a-f]{64}$'
+        annotations: {input_format: sha256}
   BackupReadback:
     description: Bytes independently read in recovery and linked to the original capture evidence.
     attributes:
@@ -32,4 +35,7 @@ classes:
       cluster: {required: true}
       trial: {required: true}
       source_evidence: {required: true}
-      payload_sha256: {required: true, pattern: '^[0-9a-f]{64}$'}
+      payload_sha256:
+        required: true
+        pattern: '^[0-9a-f]{64}$'
+        annotations: {input_format: sha256}

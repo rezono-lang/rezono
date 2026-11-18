@@ -39,6 +39,9 @@ enums:
   ValueType:
     description: The type of a value in the engine. Arrows carry the id type of their target.
     permissible_values: {text: {}, integer: {}, boolean: {}, date: {}, enum: {}}
+  InputFormat:
+    permissible_values:
+      sha256: {description: A canonical lowercase SHA-256 digest as 64 hexadecimal characters.}
   Derivation:
     permissible_values: {fact: {}, conclusion: {}}
   SemanticCase:
@@ -253,6 +256,7 @@ classes:
     attributes:
       type: {range: ValueType, required: true}
       schema_type: {required: true, description: "The LinkML range, for example a pack type such as Cents."}
+      input_format: {range: InputFormat, description: "A format that admission requires before admitting this attribute."}
       derivation: {range: Derivation, required: true}
       enum: {}
       minimum: {range: DecimalInteger}
