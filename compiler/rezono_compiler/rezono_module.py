@@ -303,12 +303,12 @@ def marks(module: Path, form: Path | dict) -> dict[tuple, tuple[int, int]]:
     for i, decl in enumerate(doc["module"]["decls"]):
         if isinstance(decl, dict) and isinstance(decl.get("kind"), str):
             place(f"/decls/{i}", ("classes", decl["kind"]))
-            for j, s in enumerate(decl.get("slots") or []):
-                if isinstance(s, dict) and isinstance(s.get("slot"), str):
-                    place(f"/decls/{i}/slots/{j}", ("classes", decl["kind"], "attributes", s["slot"]))
             if isinstance(equations := decl.get("equations"), list):
                 for j, _ in enumerate(equations):
                     place(f"/decls/{i}/equations/{j}", ("classes", decl["kind"], "annotations", "path_equations", j))
+            for j, s in enumerate(decl.get("slots") or []):
+                if isinstance(s, dict) and isinstance(s.get("slot"), str):
+                    place(f"/decls/{i}/slots/{j}", ("classes", decl["kind"], "attributes", s["slot"]))
     return out
 
 
