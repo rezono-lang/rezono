@@ -223,13 +223,28 @@ until identity=$(identify_launcher); do
 done
 read -r pod pod_uid <<< "$identity"
 observe "launcher=$pod launcher_uid=$pod_uid"
+stage=live-kvm-vcpu
+control exec "$pod" -c compute -- sh -ec "$(cat "$sources/../flatcar/kvm-vcpu.sh")"
+stage=vcpu-launcher-identity
+test "$(identify_launcher)" = "$identity"
+observe "guest_uid=$uid launcher_uid=$pod_uid kvm_vcpu=true"
 stage=guest-console
+# KubeVirt uses the VMI firmware UUID as the NoCloud instance-id.
+firmware_uuid=$(jq -er '.spec.domain.firmware.uuid | select(test("^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$"))' vmi.json)
+reads=0
+lines=0
+matches=0
 for ((attempt=0; attempt<48; attempt++)); do
-    control logs "$pod" -c guest-console-log > console.log && grep -Eq 'login:|Welcome to CirrOS' console.log && break
+    if counts=$(control logs "$pod" -c guest-console-log 2>/dev/null |
+        LC_ALL=C awk -v expected="REZONO-GUEST-READY $firmware_uuid" -f "$sources/../flatcar/serial.awk"); then
+        reads=$((reads + 1))
+        read -r lines matches <<< "$counts"
+        if (( matches > 0 )); then break; fi
+    fi
     sleep 2
 done
-grep -Eq 'login:|Welcome to CirrOS' console.log
-stage=live-kvm-vcpu
-control exec "$pod" -c compute -- sh -ec 'for fd in /proc/[0-9]*/fd/*; do case "$(readlink "$fd")" in *kvm-vcpu*) exit 0;; esac; done; exit 1'
+observe "console_reads=$reads console_lines=$lines guest_marker_matches=$matches"
+(( matches > 0 ))
+stage=final-launcher-identity
 test "$(identify_launcher)" = "$identity"
 observe "guest_uid=$uid launcher_uid=$pod_uid guest_console_ready=true kvm_vcpu=true"
