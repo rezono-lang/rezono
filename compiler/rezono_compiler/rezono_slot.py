@@ -37,6 +37,8 @@ def lower(slots: list[dict], declared: Set[str], *, implicit_identifier: bool = 
             attribute["required"] = True
         if slot.get("card") in LIST_CARDS:
             attribute["multivalued"] = True
+        if slot.get("embedded") is True:
+            attribute["inlined"] = True
         out[slot["slot"]] = attribute
     return out
 
@@ -47,8 +49,7 @@ def validate(slots: list, kind: str, at: str, own: Mapping[str, str], owners: Ma
     ok = True
     seen: set[str] = set()
     identifier_seen = False
-    # The extended module form also carries slot constraints.
-    allowed = MEMBERS | {"identifier", "constraints"} if explicit_identifiers else MEMBERS
+    allowed = MEMBERS | {"identifier", "constraints", "embedded"} if explicit_identifiers else MEMBERS
     for index, slot in enumerate(slots):
         here = f"{at}/slots/{index}"
         extra = sorted(set(slot) - allowed) if isinstance(slot, dict) else []
@@ -62,10 +63,17 @@ def validate(slots: list, kind: str, at: str, own: Mapping[str, str], owners: Ma
             ok = False
         seen.add(slot["slot"])
         explicit = slot.get("identifier") is True
+        embedded = slot.get("embedded") is True
+        if "embedded" in slot and not embedded:
+            refuse(here, "an embedded reference must be marked true", "§5.1")
+            ok = False
         if "identifier" in slot and not explicit:
             refuse(here, "an explicit identifier must be marked true", "§5.1")
             ok = False
         if explicit:
+            if embedded:
+                refuse(here, "an embedded reference cannot be an identifier", "§5.1")
+                ok = False
             if identifier_seen:
                 refuse(here, f"kind {kind} has more than one identifier", "§5.1")
                 ok = False

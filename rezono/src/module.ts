@@ -100,7 +100,8 @@ function readModule(text: string, bare: boolean): ParsedModule {
 			errors.push(tornAt(text, line.start + cut[0], line.start + cut[1], cp));
 		} else {
 			const statement = only(text, line);
-			const r = readRule(statement, rule, (m) => m.decl() as Line, spans, map);
+			const syntax = rule === 'Line' && /^rule(?![A-Za-z0-9_-])/.test(text.slice(line.start, line.end)) ? 'NativeRuleLine' : rule;
+			const r = readRule(statement, syntax, (m) => m.decl() as Line, spans, map);
 			// The rest of the source is blank here. An incomplete statement fails where its line ends.
 			for (const e of r.errors) if (e.span.start > cp(line.end)) e.span = { text: '', start: cp(line.end), end: cp(line.end) };
 			const alternative = r.errors.length && invalidFirst?.(text, line, cp, (rule) =>
