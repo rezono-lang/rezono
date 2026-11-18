@@ -1,0 +1,16 @@
+.decl tenant_delivery_item(tenant: symbol, delivery: number, component: symbol, item: symbol, size: symbol)
+.decl tenant_delivery_placement(tenant: symbol, delivery: number, provision: symbol, component: symbol)
+
+// A service name identifies a request only within its tenant.
+tenant_delivery_item(t, n, c, i, z) :-
+    tenant_delivery_number(t, s, n),
+    tenant_request_item__tenant(r, t), tenant_request_item__service(r, s),
+    tenant_request_item__item(r, i), tenant_request_item__size(r, z),
+    tenant_catalog_item__component(i, c).
+
+tenant_delivery_placement(t, n, p, c) :-
+    tenant_delivery_item(t, n, c, i, _),
+    tenant_catalog_item__provision(i, p).
+
+.output tenant_delivery_item
+.output tenant_delivery_placement

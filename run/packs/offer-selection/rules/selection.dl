@@ -15,11 +15,6 @@ charge_terms(d, o, rate, setup) :- price_unit(d, "micros"), offer(o),
 charge_terms(d, o, rate, setup) :- price_unit(d, "minor"), offer(o),
     offer__period_price_minor(o, rate), offer__setup_price_minor(o, setup).
 
-// Bill the requested machines for every period and one setup charge per machine.
-.decl payable_charge(demand: symbol, offer: symbol, total: number)
-payable_charge(d, o, total) :- charge_terms(d, o, rate, setup), rate >= 0, setup >= 0,
-    demand__quantity(d, q), q > 0, demand__billed_periods(d, periods), periods > 0,
-    usage = periods * rate, machine = usage + setup, total = q * machine.
 
 .decl payable_micros(demand: symbol, offer: symbol, total: number)
 payable_micros(d, o, total) :- price_unit(d, "micros"), payable_charge(d, o, total).
@@ -87,7 +82,8 @@ comparison(d, o, other, higher, r) :- eligible(d, o, total, _), eligible(d, othe
 comparison(d, o, other, total, later) :- eligible(d, o, total, rank), eligible(d, other, total, later), rank < later.
 
 .decl excluded(demand: symbol, contender: symbol)
-excluded(d, o) :- demand(d), offer(o), !eligible_offer(d, o).
+excluded(d, o) :- charge_out_of_range(d, o).
+excluded(d, o) :- demand(d), offer(o), !charge_out_of_range(d, o), !eligible_offer(d, o).
 
 .decl selected(demand: symbol, offer: symbol)
 selected(d, o) :- eligible(d, o, _, _), inventory = count : { offer(_) },
