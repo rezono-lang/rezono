@@ -165,9 +165,6 @@ class MissingOptionalFactState(Exception):
     pass
 
 
-@pytest.mark.xfail(strict=True, raises=MissingOptionalFactState,
-                   reason="Lower explicit n/a in an optional fact column without creating a slot row. "
-                          "Read decisions/language-library-datasets.md. Use compiler/rezono_compiler/facts.py.")
 def test_lower_named_dataset(declared_dataset, tmp_path, capsys):
     root, form, submitted = declared_dataset
     form.write_text(json.dumps(submitted), encoding="utf-8")

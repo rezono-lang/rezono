@@ -176,26 +176,37 @@ def sections(data) -> dict[str, list]:
     return data
 
 
-def schema(pack: Pack) -> Schema:
+class FactSchema(Schema):
+    """Keep module slot cardinality alongside the unchanged admission bundle."""
+
+    def __init__(self, bundle: dict, optional_slots: set[str]):
+        super().__init__(bundle)
+        self.optional_slots = frozenset(optional_slots)
+
+
+def schema(pack: Pack) -> FactSchema:
     """What admission judges a pack's facts against: the kinds, attributes and arrows of its schema bundle
     (emit.bundle), only the fields admission reads. A test holds them equal to the archived bundle's; the hash
     is of these fields, not of the archived bundle."""
     def present(d):
         return {k: v for k, v in d.items() if v is not None}
     kinds, attributes, arrows = [], [], []
+    optional_slots = set()
     for k, kind in pack.kinds.items():
         kinds.append(present({"id": k, "parent": kind.parent, "abstract": kind.abstract,
                               "identifier": kind.identifier,
                               "id_type": types.of_sql(pack.kinds[pack.root(k)].id_type).bundle,
                               "plane": kind.plane, "owner": kind.owner}))
         for s in kind.slots.values():
+            if not s.required and not s.minimum_cardinality:
+                optional_slots.add(s.table)
             common = {"kind": k, "name": s.name, "table": s.table, "multivalued": s.multivalued}
             if s.arrow:
                 arrows.append(common | {"target": s.range, "inlined": s.inlined})
             else:
                 attributes.append(common | {"type": s.type.bundle})
-    return Schema({"format": FORMAT, "pack": {"id": pack.meta["name"]}, "kinds": kinds, "attributes": attributes,
-                   "arrows": arrows})
+    return FactSchema({"format": FORMAT, "pack": {"id": pack.meta["name"]}, "kinds": kinds,
+                       "attributes": attributes, "arrows": arrows}, optional_slots)
 
 
 def load(pack: Pack, path: str | Path) -> dict[str, list[tuple]]:
@@ -218,13 +229,13 @@ def _named_dataset(module: dict) -> dict:
     return dataset
 
 
-def scalar_dataset(judged: Schema, form: dict) -> dict[str, list]:
+def scalar_dataset(judged: FactSchema, form: dict) -> dict[str, list]:
     """Decode a named module dataset into the records used by ordinary admission."""
     records, _ = located_scalar_dataset(judged, form)
     return records
 
 
-def located_scalar_dataset(judged: Schema, form: dict) -> tuple[dict[str, list], dict[str, list[str]]]:
+def located_scalar_dataset(judged: FactSchema, form: dict) -> tuple[dict[str, list], dict[str, list[str]]]:
     """Decode each record with its JSON pointer for publication provenance."""
     module = rezono_module.module_body(form, DATASET_FORMAT)
     if module is None:
@@ -297,7 +308,7 @@ def dataset_table(table) -> tuple[str, list[str], list]:
     return kind, columns, rows
 
 
-def dataset_record(entries, where: str, judged: Schema | None = None, kind: str | None = None) -> dict:
+def dataset_record(entries, where: str, judged: FactSchema | None = None, kind: str | None = None) -> dict:
     identity = judged.kinds[judged.root(kind)] if judged is not None else None
     record = {}
     seen = set()
@@ -316,6 +327,10 @@ def dataset_record(entries, where: str, judged: Schema | None = None, kind: str 
         if cell == {"boundary": "omitted"}:
             continue
         field = f"{where}.{name}"
+        if judged is not None and cell == {"lit": "n/a"}:
+            if slot is None or slot.table not in judged.optional_slots:
+                raise LoadError(f"{field}: n/a requires an optional slot")
+            continue
         if slot is not None:
             record[name] = dataset_cell(cell, field, SQL_TYPES[slot.type], slot.multivalued,
                                         judged, slot.target if slot.inlined else None)
@@ -326,7 +341,7 @@ def dataset_record(entries, where: str, judged: Schema | None = None, kind: str 
 
 
 def dataset_cell(cell, where: str, sql_type: str | None = None, repeated: bool = False,
-                 judged: Schema | None = None, target: str | None = None):
+                 judged: FactSchema | None = None, target: str | None = None):
     if isinstance(cell, dict) and cell.keys() == {"list"}:
         if (sql_type is not None and not repeated) or not isinstance(cell["list"], list):
             raise LoadError(f"{where}: expected a value of the declared slot")
