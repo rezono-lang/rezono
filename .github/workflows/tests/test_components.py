@@ -69,6 +69,56 @@ class InventoryTests(unittest.TestCase):
         self.assertCountEqual((node for group in groups for node in group), items)
         self.assertEqual(ci.weighted_workers(items, 1, {}, 1), [items])
 
+    def test_publication_fixture_is_built_once_and_read_from_isolated_stores(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            for rel in ("scripts/components.py", ".github/workflows/publication_fixture.py"):
+                (root / rel).parent.mkdir(parents=True)
+                shutil.copyfile(ROOT / rel, root / rel)
+            module = root / ci.FORMS_MODULE
+            module.parent.mkdir(parents=True)
+            module.write_text(
+                "from pathlib import Path\nimport pytest\nfrom rezono_publisher.store import FileStore\n"
+                "HERE = Path(__file__).parent\n"
+                "@pytest.fixture(scope='module')\n"
+                "def world(tmp_path_factory):\n"
+                "    if (HERE / 'fail').exists(): raise RuntimeError('publication failed')\n"
+                "    with (HERE / 'builds').open('x') as built: built.write('one')\n"
+                "    store = FileStore(tmp_path_factory.mktemp('store'), bucket='fixture')\n"
+                "    store.put_new('objects/seed', b'fresh')\n"
+                "    return store, {'source': str(store.root), 'nested': [3, None]}\n"
+                "def read(world, value):\n"
+                "    store, manifest = world\n"
+                "    assert store.get('objects/seed') == b'fresh' and store.bucket == 'fixture'\n"
+                "    assert manifest['nested'] == [3, None]\n"
+                "    store.put_new('private', value)\n"
+                "    return str(store.root) == manifest['source']\n"
+                "def test_a(world): assert read(world, b'first')\n"
+                "def test_b(world): assert not read(world, b'second')\n", encoding="utf-8")
+            env = dict(os.environ, PYTHONPATH=str(ROOT / "edge/publisher"), PYTEST_DISABLE_PLUGIN_AUTOLOAD="1")
+            plans, reports, receipts = [root / name for name in ("plans", "reports", "receipts")]
+            launcher = ("import sys; sys.path.insert(0, 'scripts'); import components\n"
+                        "from unittest.mock import patch\n"
+                        "with patch.object(components, 'runner_cores', return_value=4): "
+                        "raise SystemExit(components.main())")
+            def run(*args):
+                return subprocess.run([sys.executable, "-c", launcher, *map(str, args)],
+                                      env=env, cwd=root, capture_output=True, text=True, timeout=35)
+            collected = run("collect-component", "examples", plans)
+            self.assertEqual(collected.returncode, 0, collected.stdout + collected.stderr)
+            def execute():
+                return run("run-shard", "examples", 0, 1, plans, reports, receipts)
+            result = execute()
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertEqual((module.parent / "builds").read_text(), "one")
+            self.assertEqual(len(list(receipts.rglob("*.jsonl"))), 4)
+            self.assertIn("Current publication fixture producer:", result.stdout)
+            self.assertIn("Current publication fixture reader:", result.stdout)
+            (module.parent / "fail").touch()
+            failed = execute()
+            self.assertNotEqual(failed.returncode, 0)
+            self.assertIn("producer finished without a fresh publication fixture", failed.stdout + failed.stderr)
+
     def test_parametrization_skips_and_execution_evidence(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
