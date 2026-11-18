@@ -5,7 +5,6 @@ import pytest
 from loop_oracle import evaluate
 
 
-@pytest.mark.xfail(strict=True, reason="Read decisions/loop-design.md. Implement packs/std-loop/rules/done.dl. Require confirmation of the declared completion token in the same run.")
 def test_done_evidence():
     columns = {
         "completion": "run step token reason",

@@ -3,7 +3,6 @@
 import pytest
 
 
-@pytest.mark.xfail(strict=True, reason="Implement project_flows in k8s-admission/flow_projection.py; read decisions/k8s-admission-publication.md.")
 def test_same_namespace_flow_rows_are_unique_and_numerically_ordered():
     from flow_projection import project_flows
 
