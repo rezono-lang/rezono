@@ -371,10 +371,27 @@ def worker_items(folder: str, items: list[str], workers: int) -> list[list[str]]
             elif node in readers:
                 groups[1].append(node)
     others = [i for i in items if not offset or i.split("::", 1)[0] != forms]
-    files = sorted({i.split("::", 1)[0] for i in others})
-    slots = {f: offset + n % (workers - offset) for n, f in enumerate(files)}
-    for node in others:
-        groups[slots[node.split("::", 1)[0]]].append(node)
+    # The independent subsidy tests each publish into their own tmp_path.
+    # Keep cached pack states and all other module-scoped fixtures together.
+    independent = "examples/subsidy/test_subsidy.py"
+    def unit(node: str) -> str:
+        path = node.partition("::")[0]
+        return node if path == independent else path
+
+    by_unit = Counter(map(unit, others))
+    # Rounded worker durations from run 44300384730. Unknown files cost one
+    # second per collected item, and new independent publications cost 17s.
+    weights = {
+        key: (17 if key.startswith(independent + "::") else count)
+        for key, count in by_unit.items()
+    }
+    weights.update({"examples/test_rules.py": 125, "examples/test_examples.py": 75,
+                    "examples/subsidy/test_proposal_path.py": 45,
+                    "examples/subsidy/test_assessment_transition.py": 30,
+                    "examples/subsidy/test_tutorial.py": 30})
+    for index, units in enumerate(weighted_workers(sorted(by_unit), workers - offset, weights, 1), offset):
+        assigned = set(units)
+        groups[index].extend(node for node in others if unit(node) in assigned)
     return groups
 
 
