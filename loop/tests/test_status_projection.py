@@ -6,7 +6,6 @@ from runpy import run_path
 import pytest
 
 
-@pytest.mark.xfail(strict=True, reason="Read decisions/delivery-commit-status.md. Implement loop/status_projection.py. Project a step from matching run evidence.")
 def test_status_projection():
     project = run_path(str(Path(__file__).resolve().parents[1] / "status_projection.py"))["project"]
     step = {"tenant": "elm", "delivery": "elm-1", "step": "database", "run": "new"}
