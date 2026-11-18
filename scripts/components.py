@@ -240,6 +240,14 @@ PR_FILE_CONSUMERS = {
     "publication": ("checker", "compiler", "edge/plugins/connectors", "edge/publisher", "examples"),
     "rezono": ("compiler",),
 }
+# These are test entry points and a private subprocess helper, rather than inputs to
+# the installed packages. Their shared corpus is still routed by SHARED_READERS.
+PR_TEST_LEAVES = frozenset({
+    "checker/tests/test_neutral_conformance_checker.py",
+    "compiler/tests/test_neutral_conformance_compiler.py",
+    "compiler/tests/rezono/neutral-answer-cases.mjs",
+    "compiler/tests/rezono/test_neutral_answer_cases.py",
+})
 PACK_READERS = ("admission", "checker", "compiler", "edge/plugins/connectors", "edge/publisher", "examples",
                 "k8s-admission", "loop", "publication", "rezono", "run")
 SHARED_READERS = {
@@ -307,6 +315,32 @@ def component_owner(path: str, folders: set[str]) -> str | None:
 
 def git_output(root: Path, *args: str) -> bytes:
     return subprocess.check_output(["git", *args], cwd=root, stderr=subprocess.PIPE)
+
+
+def independent_test_leaves(root: Path, revision: str, leaves: dict[str, list[str]], folders: set[str]) -> bool:
+    """Refuse a narrowed test selection if either tree names an outside reader."""
+    entries = git_output(root, "ls-tree", "-z", revision, "--", *(path for paths in leaves.values() for path in paths))
+    if any(entry.split(b" ", 1)[0] not in {b"100644", b"100755"} for entry in entries.split(b"\0") if entry):
+        return False
+    for owner, paths in leaves.items():
+        # Search the basename without its extension as well, so Python imports,
+        # run_path calls and subprocess filenames all count as readers.
+        # The selector and its matrix regression run as the discovery step.
+        patterns = [arg for path in paths for arg in ("-e", Path(path).stem)]
+        result = subprocess.run(
+            ["git", "grep", "-F", "-I", "-l", "-z", *patterns, revision, "--", ".",
+             ":(exclude,top)scripts/components.py", ":(exclude,top).github/workflows/tests/test_components.py"],
+            cwd=root, capture_output=True,
+        )
+        if result.returncode not in (0, 1):
+            raise ValueError("cannot check readers of a test leaf")
+        prefix = revision + ":"
+        for item in result.stdout.split(b"\0"):
+            if item:
+                entry = os.fsdecode(item)
+                if not entry.startswith(prefix) or component_owner(entry[len(prefix):], folders) != owner:
+                    return False
+    return True
 
 
 def pull_request_range(root: Path, base_ref: str) -> tuple[str, str, list[str]]:
@@ -438,6 +472,7 @@ def pull_request_components(components: list[Component], root: Path, base_ref: s
     """Select consumers of changes against the exact PR range, without executing manifests."""
     folders = {c.folder for c in components}
     direct, pending = set(), set()
+    leaves: dict[str, list[str]] = {}
     try:
         base, head, changed = pull_request_range(root, base_ref)
         for path in changed:
@@ -454,11 +489,17 @@ def pull_request_components(components: list[Component], root: Path, base_ref: s
                     direct.add("compiler")
                 if owner == "loop" and not outside_cluster_plugin(source, root / "loop/pyproject.toml"):
                     return list(components)  # the shipped plugin runs in every pytest process
-                pending.add(owner)
+                if path in PR_TEST_LEAVES:
+                    direct.add(owner)
+                    leaves.setdefault(owner, []).append(path)
+                else:
+                    pending.add(owner)
             elif readers is None or path.startswith("edge/plugins/"):
                 return list(components)
-        if not pending:
+        if not pending and not leaves:
             return [c for c in components if c.folder in direct]
+        if leaves and not all(independent_test_leaves(root, revision, leaves, folders) for revision in (base, head)):
+            return list(components)
         cache: dict[str, bytes] = {}
         edges: dict[str, set[str]] = {}
         for graph in (FILE_CONSUMERS, PR_FILE_CONSUMERS,
