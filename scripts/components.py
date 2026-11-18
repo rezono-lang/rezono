@@ -235,10 +235,12 @@ PR_FILE_CONSUMERS = {
     "compiler": ("admission", "checker", "edge/plugins/connectors", "examples", "loop", "publication", "run"),
     "edge/plugins/connectors": ("examples",),
     "contracts": ("admission", "canon", "checker", "compiler", "edge/plugins/connectors", "loop", "publication", "rezono"),
+    "edge/gate": ("tools/repl", "tools/mcp"),
     "edge/publisher": ("compiler", "deploy/profiles/edge", "edge/plugins/connectors", "examples", "k8s-admission", "run"),
     "loop": ("examples",),
     "publication": ("checker", "compiler", "edge/plugins/connectors", "edge/publisher", "examples"),
     "rezono": ("compiler",),
+    "tools/repl": ("tools/mcp",),
 }
 PACK_READERS = ("admission", "checker", "compiler", "edge/plugins/connectors", "edge/publisher", "examples",
                 "k8s-admission", "loop", "publication", "rezono", "run")

@@ -125,6 +125,7 @@ jobs:
       python_editable: ${{ steps.matrix.outputs.python_editable }}
       cluster_mode: ${{ steps.cluster.outputs.mode }}
       cluster_tasks: ${{ steps.cluster.outputs.tasks }}
+      role_publication: ${{ steps.role_publication.outputs.required }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
@@ -136,6 +137,7 @@ jobs:
           python -I scripts/test_red_guard.py
           python -I scripts/test_feldera_admission.py
           python -I scripts/test_cluster_worker_tasks.py
+          python -I scripts/test_role_publication_ci.py
       - id: matrix
         env:
           GITHUB_BASE_REF: ${{ github.base_ref }}
@@ -143,6 +145,11 @@ jobs:
           MERGE_GROUP_HEAD_SHA: ${{ github.event.merge_group.head_sha }}
           GITHUB_EVENT_BEFORE: ${{ github.event.before }}
         run: python3 scripts/components.py ci-matrix
+      - name: Select the role-publication proof
+        id: role_publication
+        env:
+          BASE: ${{ github.event.merge_group.base_sha || github.event.pull_request.base.sha }}
+        run: python3 scripts/role_publication_ci.py select --base "$BASE" >> "$GITHUB_OUTPUT"
       - uses: ./.github/workflows/python-environment
         if: steps.matrix.outputs.has_python == 'true'
         with:
@@ -191,6 +198,24 @@ jobs:
     with:
       tasks: ${{ needs.discover.outputs.cluster_tasks }}
       base: ${{ github.event.merge_group.base_sha || github.event.pull_request.base.sha }}
+
+  role_publication:
+    name: Published role tools
+    needs: discover
+    if: needs.discover.outputs.role_publication == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: ./.github/workflows/python-environment
+        with:
+          editable: ${{ needs.discover.outputs.python_editable }}
+      - name: Install the locked MCP dependencies
+        run: npm ci --ignore-scripts --prefix tools/mcp
+      - name: Verify REPL and MCP against the same two-role publication
+        run: python scripts/role_publication_ci.py run
 
   python:
     needs: discover
@@ -304,7 +329,7 @@ jobs:
   check:
     name: check
     if: always()
-    needs: [discover, python, node, light_checks, cluster_worker]
+    needs: [discover, python, node, light_checks, cluster_worker, role_publication]
     permissions:
       contents: read
       actions: read
@@ -353,6 +378,8 @@ jobs:
           LIGHT_RESULT: ${{ needs.light_checks.result }}
           CLUSTER_RESULT: ${{ needs.cluster_worker.result }}
           CLUSTER_MODE: ${{ needs.discover.outputs.cluster_mode }}
+          ROLE_PUBLICATION_REQUIRED: ${{ needs.discover.outputs.role_publication }}
+          ROLE_PUBLICATION_RESULT: ${{ needs.role_publication.result }}
         run: |
           set -euo pipefail
           echo "discover=$DISCOVER_RESULT python=$PYTHON_RESULT node=$NODE_RESULT light=$LIGHT_RESULT cluster=$CLUSTER_RESULT"
@@ -367,5 +394,10 @@ jobs:
           case "$CLUSTER_MODE" in
             none) [ "$CLUSTER_RESULT" = skipped ] ;;
             suite|tasks) [ "$CLUSTER_RESULT" = success ] ;;
+            *) exit 1 ;;
+          esac
+          case "$ROLE_PUBLICATION_REQUIRED" in
+            true) [ "$ROLE_PUBLICATION_RESULT" = success ] ;;
+            false) [ "$ROLE_PUBLICATION_RESULT" = skipped ] ;;
             *) exit 1 ;;
           esac
