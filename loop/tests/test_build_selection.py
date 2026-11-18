@@ -1,4 +1,5 @@
 """Compare a checked build publication with the existing selector on the same Git observation."""
+from copy import deepcopy
 import hashlib
 import json
 from pathlib import Path
@@ -8,6 +9,8 @@ import subprocess
 import pytest
 import yaml
 
+from loop.build_selection_receipt import seal_selection_inventory, verify_selection_inventory
+from rezono_compiler import pack
 from rezono_publisher import batch, publish, store
 from scripts import components
 
@@ -47,11 +50,11 @@ def repository(root, path):
     return components.pull_request_range(root, "main")
 
 
-def capture(root, base, head, paths, *, coverage=True):
+def capture(root, base, head, paths):
     records = {
         "build_run": [
             {"id": "current", "event": "pull_request", "base_sha": base, "head_sha": head,
-             "engine_sha": ENGINE, "observed_at": OBSERVED_AT, **({"receipt": "receipt"} if coverage else {})}
+             "engine_sha": ENGINE, "observed_at": OBSERVED_AT, "receipt": "receipt"}
         ],
         "loop_sweep_receipt": [{"id": "receipt", "run": "current", "event_time": OBSERVED_AT}],
         "build_component": [{"id": name, "run": "current", "kind": "python", "folder": name} for name in SUITES],
@@ -76,7 +79,7 @@ def capture(root, base, head, paths, *, coverage=True):
             for path in paths if path.startswith("alpha/")
         ],
     }
-    return records
+    return seal_selection_inventory(pack.read(ROOT / "build"), records)
 
 
 def published(tmp, records):
@@ -111,6 +114,7 @@ def test_build_selection_matches_python(tmp_path, path, wanted, fallback):
     assert paths == [path]
     records = capture(source, base, head, paths)
     rows = published(tmp_path, records)
+    verify_selection_inventory(records, lambda relation: {tuple(row["key"]) for row in rows[relation]})
 
     universe = [components.Component(name, "python") for name in SUITES]
     legacy = {component.folder for component in components.pull_request_components(universe, source, "main")}
@@ -128,3 +132,77 @@ def test_build_selection_requires_matching_receipt(tmp_path):
     rows = published(tmp_path, records)
     assert {row["key"][1] for row in rows["build_selected_job"]} == set(SUITES)
     assert [row["key"] for row in rows["build_full_selection"]] == [["current", "missing-observation-receipt"]]
+
+
+@pytest.mark.parametrize(("path", "change"), [
+    ("alpha/engine.py", "omit-reader"),
+    ("alpha/engine.py", "add-reader"),
+    ("alpha/engine.py", "replace-reader"),
+    ("alpha/engine.py", "omit-dependency"),
+    ("decisions/note.md", "add-reader"),
+    ("decisions/note.md", "omit-cover"),
+])
+def test_build_selection_requires_exact_receipted_inventory(tmp_path, path, change):
+    source = tmp_path / "source"
+    base, head, paths = repository(source, path)
+    trusted = capture(source, base, head, paths)
+    records = deepcopy(trusted)
+    if change == "omit-reader":
+        records["build_path_reader"].clear()
+    elif change == "omit-dependency":
+        records["build_dependency"] = [edge for edge in records["build_dependency"] if edge["consumer"] != "gamma"]
+    elif change == "replace-reader":
+        records["build_path_reader"][0]["component"] = "spare"
+    elif change == "omit-cover":
+        records["period_close"].clear()
+    else:
+        records["build_path_reader"].append({"id": "extra", "path": "change", "component": "spare",
+                                             "kind": "direct", "source": "declared reader"})
+
+    rows = published(tmp_path, records)
+    reason = "unverified-selection-inventory"
+    assert [row["key"] for row in rows["build_full_selection"]] == [["current", reason]]
+    assert {tuple(row["key"]) for row in rows["build_selected_job"]} == {("current", suite, reason) for suite in SUITES}
+    with pytest.raises(ValueError, match="protected selection inventory"):
+        verify_selection_inventory(trusted, lambda relation: {tuple(row["key"]) for row in rows[relation]})
+
+
+@pytest.mark.parametrize(("field", "replacement"), [
+    ("observed_at", OBSERVED_AT + 60),
+    ("base_sha", "b" * 40),
+    ("head_sha", "c" * 40),
+    ("engine_sha", "d" * 40),
+    ("event", "merge_group"),
+])
+def test_build_selection_requires_the_receipted_run_identity(tmp_path, field, replacement):
+    source = tmp_path / "source"
+    base, head, paths = repository(source, "alpha/engine.py")
+    trusted = capture(source, base, head, paths)
+    submitted = deepcopy(trusted)
+    submitted["build_run"][0][field] = replacement
+    if field == "observed_at":
+        submitted["loop_sweep_receipt"][0]["event_time"] = replacement
+    rows = published(tmp_path, submitted)
+    assert any(row["key"] == ["current", "unverified-selection-inventory"] for row in rows["build_full_selection"])
+    assert {row["key"][1] for row in rows["build_selected_job"]} == set(SUITES)
+    with pytest.raises(ValueError, match="protected selection inventory"):
+        verify_selection_inventory(trusted, lambda relation: {tuple(row["key"]) for row in rows[relation]})
+
+
+@pytest.mark.parametrize("altered", ["reader", "suite"])
+def test_build_selection_verifier_compares_the_protected_receipt(tmp_path, altered):
+    source = tmp_path / "source"
+    base, head, paths = repository(source, "alpha/engine.py")
+    trusted = capture(source, base, head, paths)
+    other = deepcopy(trusted)
+    del other["period_close"], other["build_selection_cut"]
+    if altered == "reader":
+        other["build_path_reader"][0]["component"] = "spare"
+        expected = {"spare"}
+    else:
+        other["build_component"][0]["kind"] = "node"
+        expected = {"alpha", "beta", "gamma"}
+    rows = published(tmp_path, seal_selection_inventory(pack.read(ROOT / "build"), other))
+    assert {row["key"][1] for row in rows["build_selected_job"]} == expected
+    with pytest.raises(ValueError, match="protected selection inventory"):
+        verify_selection_inventory(trusted, lambda relation: {tuple(row["key"]) for row in rows[relation]})

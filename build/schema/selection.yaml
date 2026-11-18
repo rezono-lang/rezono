@@ -45,6 +45,30 @@ classes:
       engine_sha: {range: Commit, required: true}
       observed_at: {range: integer, required: true}
       receipt: {range: LoopSweepReceipt}
+  BuildSelectionCut:
+    description: Complete path, reader and dependency inventory of one run, closed by its observation receipt.
+    annotations: {seal: observed_on}
+    attributes:
+      id: {identifier: true, description: The ID of the corresponding build run.}
+      run: {range: BuildRun, required: true}
+      receipt: {range: LoopSweepReceipt, required: true}
+      event: {range: BuildEvent, required: true}
+      base_sha: {range: Commit, required: true}
+      head_sha: {range: Commit, required: true}
+      engine_sha: {range: Commit, required: true}
+      observed_at: {range: integer, required: true}
+      observed_on: {range: date, required: true}
+  PeriodClose:
+    description: The protected observer's receipt over the exact selection inventory.
+    attributes:
+      id: {identifier: true, description: The ID of the corresponding sweep receipt.}
+      closed_until: {range: date, required: true}
+      covers: {range: BuildSelectionCover, multivalued: true, inlined_as_list: true}
+  BuildSelectionCover:
+    description: The canonical hash of a selection cut and its complete set of parts.
+    attributes:
+      element: {range: BuildSelectionCut, required: true}
+      sha256: {required: true, pattern: "^[a-f0-9]{64}$"}
   BuildComponent:
     description: An observed selectable suite in this run.
     attributes:
@@ -54,8 +78,10 @@ classes:
       folder: {required: true}
   BuildManifest:
     description: The manifest blob that declared a package at one observed revision.
+    annotations: {sealed_with: run}
     attributes:
       id: {identifier: true}
+      run: {range: BuildSelectionCut, required: true}
       component: {range: BuildComponent, required: true}
       path: {required: true}
       revision: {range: Commit, required: true}
@@ -68,8 +94,10 @@ classes:
       path: {required: true}
   BuildDependency:
     description: A sourced dependency from an observed component to its consumer.
+    annotations: {sealed_with: run}
     attributes:
       id: {identifier: true}
+      run: {range: BuildSelectionCut, required: true}
       dependency: {range: BuildComponent, required: true}
       consumer: {range: BuildComponent, required: true}
       kind: {range: DependencyKind, required: true}
@@ -77,13 +105,15 @@ classes:
       source: {required: true}
   BuildPath:
     description: One changed path and the result of checking its reader mapping.
+    annotations: {sealed_with: run}
     attributes:
       id: {identifier: true}
-      run: {range: BuildRun, required: true}
+      run: {range: BuildSelectionCut, required: true}
       path: {required: true}
       coverage: {range: PathCoverage, required: true}
   BuildPathReader:
     description: An owning or reading suite and the scope of propagation for one changed path.
+    annotations: {sealed_with: path}
     attributes:
       id: {identifier: true}
       path: {range: BuildPath, required: true}
