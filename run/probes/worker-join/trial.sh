@@ -76,7 +76,7 @@ observe "controller_ready=true nodes_before=0"
 helm template cilium cilium.tgz --namespace kube-system --kube-version 1.36.6 \
     --set operator.replicas=1 --set hubble.enabled=true --set hubble.relay.enabled=true \
     --set 'ipam.operator.clusterPoolIPv4PodCIDRList[0]=10.244.0.0/16' > cilium.yaml
-docker exec -i "$name" k0s kubectl -n kube-system apply --server-side -f - < cilium.yaml >/dev/null
+docker exec -i "$name" k0s kubectl apply --server-side -f - < cilium.yaml >/dev/null
 # The bootstrap capability exists only for this temporary controller. Pipe it
 # directly into the renderer; the private machine document is removed on exit.
 docker exec "$name" k0s token create --role worker --expiry 12m | ./render > worker.ign
