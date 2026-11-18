@@ -151,6 +151,7 @@ classes:
       decls:
         none_of:
           - {range: RulesDecl, inlined: true}
+          - {range: DatasetDecl, inlined: true}
 
   ModuleWithRules:
     description: The header and declarations of a module, including relational rules, in the order of the text.
@@ -174,6 +175,13 @@ classes:
           - range: FactTable
           - range: FactRow
           - range: RulesDecl
+          - range: DatasetDecl
+
+  DatasetDecl:
+    description: A named fact dataset with its tables in source order.
+    attributes:
+      dataset: {required: true, range: Name}
+      decls: {required: true, range: FactTable, multivalued: true, inlined_as_list: true}
 
   RulesDecl:
     description: An embedded relational rules block (decisions/language-rules.md).

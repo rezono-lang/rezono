@@ -11,8 +11,9 @@ from __future__ import annotations
 
 import datetime
 import json
+import os
 import re
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 import yaml
@@ -65,9 +66,15 @@ def files(pack_dir: str | Path) -> list[Path]:
 
 
 def _named_datasets(pack_dir: Path) -> list[Path]:
+    meta, modules = _module_entries(pack_dir)
+    return sorted(pack_dir / declared.form for declared in modules
+                  if _declared_dataset(pack_dir, meta, declared) is not None)
+
+
+def _module_entries(pack_dir: Path) -> tuple[dict, list[rezono_module.Declared]]:
     manifest = pack_dir / "pack.yaml"
     if not manifest.exists():
-        return []
+        return {}, []
     try:
         meta = yaml.safe_load(manifest.read_text(encoding="utf-8"))
     except (OSError, yaml.YAMLError) as error:
@@ -79,30 +86,73 @@ def _named_datasets(pack_dir: Path) -> list[Path]:
     modules = rezono_module.declared(meta, pack_dir, errors, reject_undeclared=False, include_datasets=True)
     if errors:
         raise LoadError("\n".join(errors))
+    return meta, modules
+
+
+@dataclass(frozen=True)
+class DatasetForm:
+    form: dict
+    source: str | None
+
+
+def _declared_dataset(pack_dir: Path, meta: dict, declared: rezono_module.Declared) -> DatasetForm | None:
+    path = pack_dir / declared.form
     source_dir = pack_dir.resolve() / rezono_module.DIR
-    datasets = []
-    for declared in modules:
-        path = pack_dir / declared.form
-        try:
-            if not all((pack_dir / name).resolve().is_relative_to(source_dir)
-                       for name in (declared.module, declared.form)):
-                raise LoadError(f"{declared.form}: a module or form resolves outside {rezono_module.DIR}/")
-            form = json.loads(path.read_bytes())
-        except (OSError, ValueError) as error:
-            raise LoadError(f"{declared.form}: cannot read module form ({error})") from error
-        if rezono_module.module_body(form, rezono_module.FORMAT) is not None:
-            continue
-        module = rezono_module.module_body(form, DATASET_FORMAT)
-        if module is None:
-            raise LoadError(f"{declared.form}: expected a Rezono module form")
-        if not any(isinstance(decl, dict) and "dataset" in decl for decl in module["decls"]):
-            continue
-        name = _named_dataset(module)["dataset"]
-        basename = Path(declared.module).stem
-        if name != basename:
-            raise LoadError(f"{declared.form}: module '{basename}' declares dataset '{name}'")
-        datasets.append(path)
-    return sorted(datasets)
+    try:
+        if not all((pack_dir / name).resolve().is_relative_to(source_dir)
+                   for name in (declared.module, declared.form)):
+            raise LoadError(f"{declared.form}: a module or form resolves outside {rezono_module.DIR}/")
+        submitted = json.loads(path.read_bytes())
+    except (OSError, ValueError) as error:
+        raise LoadError(f"{declared.form}: cannot read module form ({error})") from error
+    if rezono_module.module_body(submitted, rezono_module.FORMAT) is not None:
+        return None
+    module = rezono_module.module_body(submitted, DATASET_FORMAT)
+    if module is None:
+        raise LoadError(f"{declared.form}: expected a Rezono module form")
+    if not any(isinstance(decl, dict) and "dataset" in decl for decl in module["decls"]):
+        return None
+
+    basename = Path(declared.module).stem
+    name = _named_dataset(module)["dataset"]
+    if name != basename:
+        raise LoadError(f"{declared.form}: module '{basename}' declares dataset '{name}'")
+    if submitted["spans"] and not rezono_module.valid_places(module, submitted["spans"]):
+        raise LoadError(f"{declared.form}: spans must place each module node")
+
+    errors: list[str] = []
+    pack_name = str(meta.get("name", ""))
+    effective = rezono_module.effective_dataset_form(pack_dir, declared, pack_name, submitted, errors)
+    if effective is None:
+        raise LoadError("\n".join(errors))
+    if effective is submitted:
+        return DatasetForm(submitted, None)
+    authored = rezono_module.module_body(effective, DATASET_FORMAT)
+    dataset = rezono_module.named_dataset(authored) if authored is not None else None
+    if authored is None or dataset is None:
+        raise LoadError(f"{declared.module}: expected one named dataset")
+    if dataset["dataset"] != basename:
+        raise LoadError(f"{declared.module}: module '{basename}' declares dataset '{dataset['dataset']}'")
+    errors = [message for _, message, _ in rezono_module.header_errors(authored, pack_name)]
+    if errors:
+        raise LoadError(f"{declared.module}: " + "; ".join(errors))
+    return DatasetForm(effective, declared.module)
+
+
+def dataset_at(path: Path) -> DatasetForm | None:
+    """Resolve a declared dataset's authored source while retaining standalone JSON forms."""
+    if path.suffix != ".json":
+        return None
+    for spelling in dict.fromkeys((Path(os.path.abspath(path)), path.resolve())):
+        for parent in spelling.parents:
+            if parent.name != rezono_module.DIR or not (parent.parent / "pack.yaml").is_file():
+                continue
+            pack_dir = parent.parent
+            meta, modules = _module_entries(pack_dir)
+            for declared in modules:
+                if pack_dir / declared.form == spelling:
+                    return _declared_dataset(pack_dir, meta, declared)
+    return None
 
 
 def document(path: Path, pack: Pack | None = None) -> dict[str, list]:
@@ -110,7 +160,8 @@ def document(path: Path, pack: Pack | None = None) -> dict[str, list]:
 
     A null document or section is refused. Use {} for an empty document or [] for an empty relation.
     """
-    data = yaml.safe_load(path.read_text(encoding="utf-8"))
+    dataset = dataset_at(path)
+    data = dataset.form if dataset is not None else yaml.safe_load(path.read_text(encoding="utf-8"))
     if pack is not None and isinstance(data, dict) and data.get("format") == DATASET_FORMAT:
         data = scalar_dataset(schema(pack), data)
     return sections(data)
