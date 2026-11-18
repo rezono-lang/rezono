@@ -1,11 +1,13 @@
 """Require the round proof to account for intermediate adapter boundaries."""
+import json
+
 import pytest
 
 from rezono_canon import canonical_bytes
 from rezono_checker.transition import check_transition_certificate
 from round_visibility_cases import (
     ACTIVATE_A, A_RESTORED, A_WITHDRAWN, ALL_STATES, EFFECTS, Effect, FINISHED_ONLY, INITIAL,
-    LANES, OPENING, RUN, SOLO_A, SOLO_B, VIOLATION, WITHDRAW_A, WITHDRAW_B, serving, visible_boundaries,
+    LANES, OPENING, ROUNDS, RUN, SOLO_A, SOLO_B, VIOLATION, WITHDRAW_A, WITHDRAW_B, serving, visible_boundaries,
 )
 from round_visibility_pair import MANIFEST, PROGRAM, pair_evidence
 from round_visibility_publication import checked_loop_publication
@@ -48,8 +50,17 @@ def test_overlapping_withdrawals_break_availability(tmp_path):
     assert not check_transition_certificate(*overlap)["valid"]
     assert states[A_WITHDRAWN.state][WITHDRAW_B] == VIOLATION
     assert states[A_WITHDRAWN.state][ACTIVATE_A] == A_RESTORED.state
-    residual = pair_evidence(A_WITHDRAWN, (ACTIVATE_A,), A_RESTORED.state)
-    assert check_transition_certificate(*residual)["valid"]
+    for current, following in zip(ROUNDS[:-1], ROUNDS[1:], strict=True):
+        readback = current.readback
+        (chosen,) = current.selected
+        assert set(states[readback.state]) == set(current.candidates)
+        assert states[readback.state][chosen] == following.readback.state
+        assert check_transition_certificate(*pair_evidence(
+            readback, (chosen,), following.readback.state,
+        ))["valid"]
+        observed = json.loads(following.readback.source_bytes())
+        assert observed["plan_hash"] == chosen.plan_hash
+        assert observed["cut"] == following.readback.cut
     unobserved = pair_evidence(OPENING, (ACTIVATE_A,), A_RESTORED.state)
     assert check_transition_certificate(*unobserved)["findings"] == [{"reason": "delta_old_row_missing"}]
 

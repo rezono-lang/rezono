@@ -17,8 +17,6 @@ ISSUER = "lane-observer"
 LANES: tuple[Lane, Lane] = ("lane-a", "lane-b")
 LANE_PHASE = "lane__phase"
 INITIAL: State = ("old", "old")
-# Both obligations are required at a boundary. The result rows are separate evidence.
-OBLIGATIONS = ("lane-inventory-intact", "at-least-one-lane-serving")
 
 
 @dataclass(frozen=True)
