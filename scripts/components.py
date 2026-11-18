@@ -164,21 +164,17 @@ def affected_components(
     for path in changed_files:
         owner = next((c for c in components if path.startswith(c.folder + "/")), None)
         if owner is None:
-            if path.startswith(("docs/", "decisions/", "to-port/")) and path.endswith(".md"):
-                continue
-            if "/" not in path and path.endswith(".md"):
-                continue
+            # Markdown, golden files and shared packs are read by component tests.
             return list(components)
         selected.add(owner.folder)
         name = Path(path).name
-        if owner.kind == "contracts" or name in {"pyproject.toml", "package.json", "conftest.py"}:
+        if (owner.kind == "contracts" or (ROOT / owner.folder / "pyproject.toml").exists()
+                or name in {"pyproject.toml", "package.json", "conftest.py"}):
             return list(components)
-        # Only dedicated test entry points are local. Helpers, conftests,
-        # example packs, generated contracts and package metadata can be inputs.
-        if (name.startswith("test_") or name.endswith("_test.py")) and name.endswith(".py"):
-            continue
-        if owner.kind == "node" and name.endswith(".test.ts"):
-            continue
+        # Tests can themselves be imported as cross-component oracles. Shared
+        # source and test roots have no isolation contract, so keep full coverage.
+        # The leaf components below use the same file-consumer closure for test
+        # entry points and for production inputs.
         pending.append(owner.folder)
     visited: set[str] = set()
     while pending:

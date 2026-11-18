@@ -21,10 +21,14 @@ class SelectorTests(unittest.TestCase):
         def selected(*files):
             return {c.folder for c in ci.affected_components(components, list(files))}
         self.assertEqual(selected("run/tests/test_quote.py"), {"run"})
+        self.assertEqual(selected("run/dispatch_policy.py"), {"run"})
+        self.assertEqual(selected("loop/replay.py"), {"loop", "run"})
         self.assertEqual(selected("loop/tests/test_case.py", "run/tests/test_quote.py"), {"loop", "run"})
         self.assertEqual(selected("k8s-admission/parameter_reader.py"), {"k8s-admission", "loop", "run"})
         for path in ("scripts/components.py", "packs/common/pack.yaml", "contracts/core.yaml",
-                     "contracts/python/tests/test_ports.py", "loop/pyproject.toml", "unknown/resource"):
+                     "contracts/python/tests/test_ports.py", "loop/pyproject.toml", "unknown/resource",
+                     "docs/publication/l0.md", "docs/compiler/pack.md", "README.md",
+                     "decisions/run-offline-acceptance.md", "publication/tests/test_l0.py"):
             self.assertEqual(selected(path), {c.folder for c in components}, path)
 
     def test_uses_only_the_candidate_range(self):
