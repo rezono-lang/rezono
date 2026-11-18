@@ -13,9 +13,15 @@ def test_live_oracle_workflow_runs_the_compiler_entrypoint():
     path = ROOT / ".github/workflows/feldera-oracle.yml"
     job_file = yaml.load(path.read_text(encoding="utf-8"), Loader=yaml.BaseLoader)
     events = job_file["on"]
-    assert set(events) == {"push", "workflow_dispatch"}
-    assert events["push"]["branches"] == ["main"]
-    assert not ({"paths", "paths-ignore"} & events["push"].keys())
+    if set(events) == {"push", "workflow_dispatch"}:
+        assert events["push"] == {"branches": ["main"]}
+    else:
+        assert set(events) == {"schedule", "workflow_dispatch"}
+        assert events["schedule"] == [{"cron": "17 2 * * *"}]
+        assert job_file["concurrency"] == {
+            "group": "feldera-oracle-${{ github.ref }}",
+            "cancel-in-progress": "false",
+        }
     entry = "bash compiler/ci/run_feldera_oracle.sh"
     jobs = [job for job in job_file["jobs"].values()
             if any(entry in step.get("run", "").splitlines() for step in job["steps"])]

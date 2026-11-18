@@ -56,6 +56,62 @@ def test_legacy_unit_rates_alone_cannot_prove_a_choice():
     assert relation("offer-selection", facts, "selected") == set()
 
 
+@pytest.mark.parametrize(("rate", "setup", "claimed_total"), [
+    (2**62, 0, None),
+    (2**62 - 1, 1, 2**63 - 1),
+    (2**62, 0, 2**63 - 1),
+])
+def test_wide_charge_is_checked_without_losing_other_offers(tmp_path, rate, setup, claimed_total):
+    from shutil import copytree
+
+    import yaml
+
+    from rezono_compiler import batch, explain, facts, pack, rules, trace
+
+    directory = tmp_path / "offer-selection"
+    copytree(RUN / "packs" / directory.name, directory)
+    terms = {"period_price_minor": rate, "setup_price_minor": setup}
+    mode = "estimate" if claimed_total is None else "binding_quote"
+    extra = {"offer": [
+        {"id": "wide", "provider": "wide-provider", "guarantee_mode": mode, "tie_rank": 3,
+         "stock": 2, "free_disks": 1, "virtualization": "observed", "boot": "disk", "currency": "EUR", **terms},
+    ]}
+    if claimed_total is not None:
+        extra["guarantee"] = [
+            {"id": "wide-receipt", "demand": "pair", "offer": "wide", "provider": "wide-provider",
+             "currency": "EUR", "scope": "whole_order", "mode": mode, "quantity": 1,
+             "billed_periods": 2, "total_minor": claimed_total, **terms},
+        ]
+    (directory / "facts/wide.yaml").write_text(yaml.safe_dump(extra), encoding="utf-8")
+
+    model = pack.read(directory)
+    program = rules.load(model.rules)
+    source = {}
+    for path in facts.files(directory):
+        for name, rows in facts.load(model, path).items():
+            source.setdefault(name, []).extend(rows)
+    assert ("wide", rate) in source["offer__period_price_minor"]
+    with batch.connect(program, source) as connection:
+        batch.compute(connection, program, witnesses=True)
+        rows = batch.read(connection, program)
+        snapshots = batch.read(connection, program, program.base_used()) | rows
+        proofs = explain.Explainer(program, snapshots, batch.witnesses(connection, program)).chosen()
+
+    actual_total = 2 * Fraction(rate) + setup
+    assert rows["selected"] == {("pair", "amber")}
+    assert ("pair", "clear", "2") in rows["payable_minor"]
+    if actual_total == claimed_total:
+        total = str(int(actual_total))
+        assert ("pair", "wide", total) in rows["payable_minor"]
+        assert ("pair", "wide", total, "3") in rows["eligible"]
+        assert not rows["charge_out_of_range"]
+    else:
+        assert rows["charge_out_of_range"] == {("pair", "wide")}
+        assert not any(row[1] == "wide" for row in rows["payable_minor"] | rows["eligible"])
+        key = explain.key_text(("pair", "wide"))
+        assert any(step[:5] == ("excluded", key, "charge_out_of_range", key, "positive")
+                   for step in trace.steps(program, proofs, snapshots))
+
 
 def test_selection_proof_accounts_for_every_candidate():
     from rezono_compiler import batch, explain, pack, rules, trace

@@ -55,3 +55,24 @@ def test_effective_currency():
         assert quote(TIMES[1], LINES, prices, fx) == {"problems": [reason]}
     with pytest.raises(ValueError):
         quote(TIMES[1], LINES, [PRICE], [dict(NEW, body=OLD["body"])])
+
+
+@pytest.mark.parametrize("first, second", [(2, 3), (3, 2)])
+def test_quote_rejects_duplicate_fx_members(first, second):
+    quote = implementation("effective_quote.py", "quote_at")
+    raw = f'{{"base":"USD","quote":"EUR","n":{first},"n":{second},"d":4}}'.encode("utf-8")
+    rate = edition("2032-03-01", raw, "duplicate-rate")
+    with pytest.raises(ValueError, match="duplicate rate capture field 'n'"):
+        quote(TIMES[0], LINES, [PRICE], [rate])
+
+
+def test_quote_keeps_the_exact_ratio_and_source_digests():
+    quote = implementation("effective_quote.py", "quote_at")
+    rate = edition("2032-03-01", b'{"base":"USD","quote":"EUR","n":2,"d":4}', "bounded-rate")
+    result = quote(TIMES[0], LINES, [PRICE], [rate])
+    usd = 2 * (3 * Fraction("1.25") + Fraction("0.125"))
+    assert Fraction(*result["usd"]) == usd
+    assert Fraction(*result["eur"]) == usd * Fraction(2, 4)
+    assert result["price_source"] == sha256(PRICE["body"]).hexdigest()
+    assert result["fx_source"] == sha256(rate["body"]).hexdigest()
+    assert result["problems"] == []

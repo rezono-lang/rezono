@@ -6,11 +6,6 @@ from delivery_inventory_support import add_service, delivery_id, exact, expected
 from request_preview_case import copy_requests
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError, reason=(
-    "Depends on test_file_delivery_numbers and test_trusted_tenant_proposal_inputs. "
-    "Join request items, components and provisions in rules/tenant_delivery_inventory.dl. "
-    "Read decisions/platform-delivery-inventory.md."
-))
 def test_file_delivery_inventory(tmp_path):
     teams, catalog = copy_requests(tmp_path)
 
