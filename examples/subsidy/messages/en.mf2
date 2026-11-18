@@ -186,3 +186,28 @@ explain.unpublished = {{Not published yet: propose {$element} to get the answer.
 
 # rules/home.dl
 rule.scheme_evaluation_day = The scheme is evaluated on {$d}.
+
+# The subsidy example in the visual specimen. Its glyphs and styles belong to std-view.
+subsidy.specimen.sample = {{The award is {$award}}}
+subsidy.specimen.sample.conclusion = So the full award does not hold.
+subsidy.specimen.use.origin_decision = {{{$sign} · council, 9 Dec 2025}}
+subsidy.specimen.mark.origin_decision = {{Advice allowance {$allowance}}}
+subsidy.specimen.use.origin_vendor = {{{$sign} · scheme, art. 4}}
+subsidy.specimen.mark.origin_vendor = {{Threshold {$threshold}}}
+subsidy.specimen.use.origin_design = {{{$sign} · design of the scheme}}
+subsidy.specimen.mark.origin_design = Three income classes
+subsidy.specimen.use.origin_observation = {{{$sign} · received 2 Feb 2026}}
+subsidy.specimen.mark.origin_observation = Income statement
+subsidy.specimen.mark.derived = {{Award {$award}}}
+subsidy.specimen.use.assumption = {{Household of {$sign} persons, assumed until the register answers}}
+subsidy.specimen.mark.assumption = 3
+subsidy.specimen.use.drift = {{Paid {$paid} {$sign} ledger {$ledger}}}
+subsidy.specimen.use.screened = {{Applicant {$sign}}}
+subsidy.specimen.mark.proposal = Partial rate 22% for 2027
+subsidy.specimen.use.sealed = {{Ledger October {$sign}}}
+subsidy.specimen.mark.sealed = 4 Nov 2026
+subsidy.specimen.use.supposed = {{Award {$sign} if the rate were 22%}}
+subsidy.specimen.mark.supposed = {{{$supposed}}}
+subsidy.specimen.old.supposed = {{{$award}}}
+subsidy.specimen.number.rounded = Rounded to whole euros
+subsidy.specimen.number.reason = income statement missing

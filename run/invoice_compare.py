@@ -1,7 +1,7 @@
 """Turn recorded billing evidence into inputs for the invoice drift pack."""
 
 from collections import defaultdict
-from collections.abc import Iterable, Mapping
+from collections.abc import Callable, Iterable, Mapping
 from fractions import Fraction
 from hashlib import sha256
 import json
@@ -20,12 +20,67 @@ def _text(record: Record, field: str, pattern: str | None = None) -> str:
     return value
 
 
-def _round_minor(amount: Fraction, mode: str) -> int:
-    if mode == "half_even":
-        return round(amount)
-    whole, remainder = divmod(abs(amount.numerator), amount.denominator)
-    rounded = whole + (2 * remainder >= amount.denominator)
-    return -rounded if amount < 0 else rounded
+def _digits(value: int) -> list[int]:
+    """Least significant digit first, with zero represented by one digit."""
+    digits = []
+    while value >= 10:
+        value, digit = divmod(value, 10)
+        digits.append(digit)
+    digits.append(value)
+    return digits
+
+
+def _rounding_certificate(
+    ref: str, amount: Fraction, units: int, add: Callable[[str, str, dict[str, str | int]], None],
+) -> tuple[str, int]:
+    """Supply a candidate quotient and carry evidence for independently checked equations."""
+    numerator = abs(amount.numerator)
+    denominator = amount.denominator
+    quotient, remainder = divmod(numerator * units, denominator)
+    sign = "negative" if amount < 0 else "nonnegative"
+    floor = -quotient if sign == "negative" else quotient
+    gap = denominator - remainder
+    digits = {part: _digits(value) for part, value in (
+        ("numerator", numerator), ("denominator", denominator),
+        ("remainder", remainder), ("gap", gap),
+    )}
+    for part, values in digits.items():
+        for index, digit in enumerate(values):
+            add("rounding_digit", f"{ref}/{part}/{index}",
+                {"line": ref, "part": part, "position": index, "digit": digit,
+                 "last": "last" if index == len(values) - 1 else "more"})
+
+    for part, value in (("units", units), ("floor", floor)):
+        remaining = value
+        for index, _ in enumerate(_digits(abs(value))):
+            add("rounding_word", f"{ref}/{part}/{index}",
+                {"line": ref, "part": part, "position": index, "remaining": remaining})
+            magnitude = abs(remaining) // 10
+            remaining = -magnitude if remaining < 0 else magnitude
+
+    division: dict[int, int] = defaultdict(int)
+    for signum, name, factor in ((1, "numerator", units), (-1, "denominator", quotient)):
+        factor_digits = _digits(factor)
+        for index, digit in enumerate(digits[name]):
+            for offset, other in enumerate(factor_digits):
+                division[index + offset] += signum * digit * other
+    for index, digit in enumerate(digits["remainder"]):
+        division[index] -= digit
+
+    complement: dict[int, int] = defaultdict(int)
+    for signum, name in ((1, "denominator"), (-1, "remainder"), (-1, "gap")):
+        for index, digit in enumerate(digits[name]):
+            complement[index] += signum * digit
+
+    # Each carry is just a candidate. The pack checks the complete sequence.
+    for equation, coefficients in (("division", division), ("complement", complement)):
+        carry = 0
+        for index in range(max(coefficients) + 2):
+            add("rounding_carry", f"{ref}/{equation}/{index}", {
+                "line": ref, "equation": equation, "position": index, "carry": carry,
+            })
+            carry = (carry + coefficients.get(index, 0)) // 10
+    return sign, floor
 
 
 def invoice_facts(
@@ -76,8 +131,9 @@ def invoice_facts(
         key = (plan, item)
         if prices.setdefault(key, (ref, amount)) != (ref, amount) or cost_refs.setdefault(ref, key) != key:
             raise ValueError("conflicting priced item evidence")
+        sign, floor = _rounding_certificate(ref, amount, units, add)
         add("expected_line", ref, {"plan_hash": plan, "item": item, "currency": currency,
-                                  "minor": _round_minor(amount * units, mode), "rounding_sha256": digest})
+                                  "sign": sign, "floor_minor": floor, "rounding_sha256": digest})
 
     invoices: dict[str, tuple[str | None, str, str, int]] = {}
     for line in observed:
