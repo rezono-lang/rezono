@@ -1,0 +1,55 @@
+id: value-withheld-derived-negation
+source: docs/semantics/value-cases.yaml#withheld-derived-negation
+status: settled
+input:
+  rows:
+  - kind: item
+    id: item-a
+    group: group-a
+    labels:
+    - first
+    - second
+    quantity: 7
+    weight: 3
+  - kind: item
+    id: item-c
+    group: group-b
+    labels:
+    - second
+    quantity: 7
+  - kind: item
+    id: item-d
+    group: group-b
+    labels:
+    - second
+    quantity: 7
+    weight: 0
+  - kind: link
+    id: link-a
+    tail: item-a
+    head: item-b
+  - kind: link
+    id: link-b
+    tail: item-a
+    head: item-c
+  - kind: link
+    id: link-c
+    tail: item-d
+    head: item-a
+  rule: missing_link_a(x) :- item(x), !outgoing_link(x, "link-a").
+  subject: item-c
+  role: summary
+  readable_links:
+  - link-c
+  reads_in_part:
+  - outgoing_link
+expect:
+  value:
+    derived_row_visible: false
+    proof_visible: false
+  state: known
+  reason: null
+  witness: null
+unsupported:
+  compiler: The compiler builds the rule, while role filtering happens at publication.
+  feldera: The full engine may derive a row; role filtering is applied outside Datalog evaluation.

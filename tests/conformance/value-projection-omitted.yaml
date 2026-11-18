@@ -1,0 +1,26 @@
+id: value-projection-omitted
+source: docs/semantics/value-cases.yaml#projection-omitted
+status: settled
+input:
+  rows:
+  - kind: item
+    id: item-b
+    group: group-a
+    labels:
+    - first
+    weight: 3
+  schema_fields:
+  - id
+  - group
+  - labels
+  - quantity
+  - weight
+expect:
+  value:
+    accepted: false
+  state: known
+  reason: null
+  witness: null
+unsupported:
+  compiler: Sparse authored fact input is not the full publication row document validated here.
+  feldera: The omitted member is checked at the publication row boundary.

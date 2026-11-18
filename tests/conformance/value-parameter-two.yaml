@@ -1,0 +1,39 @@
+id: value-parameter-two
+source: docs/semantics/value-cases.yaml#parameter-two
+status: settled
+input:
+  rows:
+  - relation: quantity_parameter
+    id: a
+    valid_from: '2026-01-01'
+    known_from: '2026-01-01'
+    value: '7'
+    valid_until: '2027-01-01'
+  - relation: quantity_parameter
+    id: b
+    valid_from: '2026-01-01'
+    known_from: '2026-01-01'
+    value: '9'
+    valid_until: '2027-01-01'
+  valid_at: '2026-01-02'
+  known_at: '2026-01-04'
+  expression: select quantity parameter
+expect:
+  value: null
+  state: invalid
+  reason: versions_overlap
+  witness:
+    candidates:
+    - relation: quantity_parameter
+      key:
+      - a
+    - relation: quantity_parameter
+      key:
+      - b
+unsupported:
+  compiler: The calculation result carries a prose ambiguity reason instead of the specified versions_overlap
+    code.
+  checker: The calculation checker reports the ambiguity in prose instead of the specified versions_overlap
+    code.
+  feldera: The calculation result carries a prose ambiguity reason instead of the specified versions_overlap
+    code.
