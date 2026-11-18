@@ -79,7 +79,7 @@ test('tokens: an id with a hyphen is one token, a minus between names needs spac
 	assert.deepEqual(cond('scw-pro2-m.hourly_price > 0'), { cmp: ['>', { path: ['scw-pro2-m', 'hourly_price'] }, { lit: '0' }] });
 });
 
-test('a word followed by a hyphen and an id character is an id, whatever the word (review of #648)', () => {
+test('a word followed by a hyphen and an id character is an id, whatever the word', () => {
 	const keywords = 'pack use as private unit enum param kind extend derived rule check warn require fact decide assume theory view example ask suppose propose when then else unless where show not and or in is version valid known at by on because until requires sources world open closed inverse rezono norm exception applies replaces deprecated true false during order group limit unknown invalid'.split(' ');
 	for (const word of keywords) {
 		const id = { lit: `${word}-x` };

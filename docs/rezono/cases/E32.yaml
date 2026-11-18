@@ -6,4 +6,4 @@ expect:
   print: ask Plan where Plan.count() > 10
 note: True for every row or for none.
 sources:
-- '#350 P10.2a §11'
+- rezono/src/print.ts

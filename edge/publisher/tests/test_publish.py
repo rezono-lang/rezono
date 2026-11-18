@@ -570,7 +570,7 @@ def test_a_filter_bug_is_red_because_the_checker_derives_access_itself(tmp_path,
 
 
 def test_a_filter_that_drops_a_derivable_row_is_red(tmp_path, monkeypatch):
-    """Review of #196 (O8, R7): a filter that chose the proof over all data first would lose reach(a), which
+    """A filter that chose the proof over all data first would lose reach(a), which
     the guest can derive from path(a, b). Its snapshot is a closed world, so the row would read as false;
     the checker derives the role's derived rows itself and finds it missing."""
     real = access.for_role
@@ -590,7 +590,7 @@ def test_a_filter_that_drops_a_derivable_row_is_red(tmp_path, monkeypatch):
 
 
 def test_a_proof_that_is_not_the_ranked_choice_is_red(tmp_path, monkeypatch):
-    """Review of #196 (R7): reach(a) has a proof of rank 2 (through path(a, b)) and one of rank 3 (through
+    """reach(a) has a proof of rank 2 (through path(a, b)) and one of rank 3 (through
     path(a, secret)). Both are valid, so only an independent choice finds that the publisher took the worse."""
     real = access.choose
     head = ("reach", canonical_json(["a"]))

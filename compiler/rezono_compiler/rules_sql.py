@@ -14,7 +14,7 @@ One SELECT per rule; the rules of a relation are a UNION, so the relation is a s
   `rezono_quotient` on 128 bits (`DUCKDB_MACROS`). The divisor is a non-zero constant (the IR checks it), so no
   engine ever divides by zero;
 - recursion (linear, one relation): Feldera DECLARE RECURSIVE VIEW; DuckDB WITH RECURSIVE ... UNION;
-- a counter with an explicit bound (rules.Bound, #351 P6.2): no recursion on either engine. The rule is
+- a counter with an explicit bound (rules.Bound): no recursion on either engine. The rule is
   unrolled into one level per time it can fire, and what it would add beyond the bound is the check
   `<relation>__exhausted`: reaching the bound is a red check, never a relation cut off in silence.
 
@@ -200,7 +200,7 @@ def outcome_checks(prog, name):
 
 
 def bound_checks(prog, name, dialect="feldera"):
-    """The check of a counter with an explicit bound (#351 P6.2), as (view, SELECT): `<relation>__exhausted`
+    """The check of a counter with an explicit bound, as (view, SELECT): `<relation>__exhausted`
     holds the rows the counting rule would add where it stopped, read from the final relation with the bound
     turned round. A row is a red check: the count reached its bound, so the relation is not whole."""
     b = prog.bounds.get(name)

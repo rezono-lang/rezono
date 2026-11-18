@@ -2,7 +2,7 @@ id: https://rezono.org/contracts/output-index
 name: rezono_output_index
 title: Output index
 description: >-
-  The index of one render (issue 356 section 2, P7.11; seam S12): for every field of every generated file, where it is
+  The index of one render (seam S12): for every field of every generated file, where it is
   (a line, a JSON pointer or both) and where it came from. A field is `knowledge` (a published row, by the
   RowRef of the conclusion whose witness grounds it), `chart_default` (a value the template took from the
   chart's own values file) or `chart_constant` (text of a template). Generators, renderers, the Lens, the gate
@@ -35,7 +35,7 @@ types:
 
 enums:
   FieldOrigin:
-    description: Where a field of a generated file came from (issue 356, P7.10d).
+    description: Where a field of a generated file came from.
     permissible_values:
       knowledge: {description: "A value of a published row: `witness` names the conclusion that grounds it."}
       chart_default: {description: "A value the template took from the chart's values file: `default` names the file and the pointer of the default in it."}

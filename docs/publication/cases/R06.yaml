@@ -30,4 +30,4 @@ expect:
   error: not an integer
 note: 'Each text is rejected: a float, an exponent, a negative zero (the bounds hold 0, so only the spelling refuses it).'
 sources:
-- '#369 L0 rev 2 §8'
+- publication/rezono_publication/l0.py, loads and read_collection

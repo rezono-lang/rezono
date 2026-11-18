@@ -85,7 +85,7 @@ o(x, n) :- e(x), p(x, s), t = s / -1, n = t / 2.
 
 
 def test_an_assignment_outside_bigint_fails_however_the_rest_goes():
-    """Review of #208: -2^63 / -1 is 2^63, outside BIGINT, where every engine stops; t / 2 would fit again.
+    """-2^63 / -1 is 2^63, outside BIGINT, where every engine stops; t / 2 would fit again.
     The walk fails at that assignment and does not reach the end of the rule. The same holds for +, - and *."""
     prog = ir.load(rules_dl.read_program(OVERFLOW, "test", {"e": [("x", "string")],
                                                              "p": [("x", "string"), ("s", "integer")]}, "test"))
@@ -121,7 +121,7 @@ c(x, n) :- e(x), t = sum s : { p(x, s) }, n = t / 2.
 
 
 def test_a_sum_outside_bigint_fails_before_it_is_used():
-    """Review of #208: (2^63 - 1) + (2^63 - 2) lies outside BIGINT; t / 2 would fit again."""
+    """(2^63 - 1) + (2^63 - 2) lies outside BIGINT; t / 2 would fit again."""
     prog = ir.load(rules_dl.read_program(SUM, "test", {"e": [("x", "string")],
                                                         "p": [("x", "string"), ("s", "integer")]}, "test"))
     big = {"e": [["k"]], "p": [["k", str(2**63 - 1)], ["k", str(2**63 - 2)]]}

@@ -37,7 +37,7 @@ PROFILE = HERE.parents[1] / "deploy" / "profiles" / "edge.yaml"
 ROLES = {"checker": "complete", "case_officer": "may_read", "policy_adviser": "may_read", "public": "may_read"} | yaml.safe_load(
     PROFILE.read_text(encoding="utf-8"))["access"]["roles"]
 # What `public` reads, and what it does not: the kinds of a case (rules/access.dl).
-# The justification kinds (std-decision, #786) are read with the decision, by every role.
+# The justification kinds (std-decision) are read with the decision, by every role.
 SCHEME = ("alternative", "article", "calendar", "cost_item", "decision", "exception", "principle", "purpose",
           "reference_date", "role", "scheme_parameter")
 CASE = ("advice_report", "application", "closed_payment", "cost_line", "household", "income_statement", "ledger_payment",

@@ -2,7 +2,7 @@ id: https://rezono.org/contracts/diagnostic
 name: rezono_diagnostic
 title: Diagnostics
 description: >-
-  One error model for every component that judges what an author wrote (D15, #394 A6; milestone MOD
+  One error model for every component that judges what an author wrote (D15; milestone MOD
   principle 5): the compiler, admission, and later the Rezono parser, the checker, the gate's model check
   (MOD6), the REPL and a language server. A diagnostic is a code, a severity, where it was found (a logical
   place and, where the text is known, a span in the form of the schema bundle's MOD2 spans) and a hint.

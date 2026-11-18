@@ -9,4 +9,4 @@ expect:
   same_dataset_hash_in_both_worlds: true
 note: Runs with the ask endpoint (D22).
 sources:
-- '#369 L0 rev 2 §8'
+- docs/rezono/cases/E49.yaml and E50.yaml

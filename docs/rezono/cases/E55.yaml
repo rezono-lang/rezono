@@ -6,4 +6,4 @@ expect:
   print: ask Host where host.memory_need > 384 GiB
 note: The implicit binder can be named.
 sources:
-- '#350 P10.2a §11'
+- rezono/src/print.ts

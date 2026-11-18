@@ -12,4 +12,5 @@ expect:
       end: 20
 note: Several binders are reserved.
 sources:
-- '#350 P10.2a §11'
+- rezono/src/print.ts
+- rezono/src/parse.ts

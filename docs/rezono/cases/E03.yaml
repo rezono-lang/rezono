@@ -9,4 +9,5 @@ expect:
     plan: binder
 note: '`plan` is the implicit binder (§5 rules 1 and 6).'
 sources:
-- '#350 P10.2a §11'
+- rezono/src/print.ts
+- rezono/src/check.ts

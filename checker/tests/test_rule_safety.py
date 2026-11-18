@@ -135,7 +135,7 @@ def test_an_unsafe_rule_is_refused(doc, message):
     ({"assignments": [{"var": 3, "op": "add", "left": "?n", "right": "1"}]}, "names its result"),
 ])
 def test_a_term_that_is_no_text_is_refused_as_bad_input(part, message):
-    """Review of #549 (P2): a JSON number as a term, or an assignment without a result, is a ValueError like
+    """A JSON number as a term, or an assignment without a result, is a ValueError like
     every other refusal, so the publisher reports it as rule definitions the checker refuses."""
     with pytest.raises(ValueError, match=message):
         load_rules(program(("sized", "?x", "?n"), [literal("size", "?x", "?n")], **part))

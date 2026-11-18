@@ -172,8 +172,7 @@ def _check_calc(witnesses, ir, rows, concluded, derived, full, findings):
     for f in calc.check(good, ir, lambda relation: rows(relation, None)):
         findings.append(f)
     # calc.check says whether each result is computed right; whether it may publish is decided here. An
-    # `invalid` result never does: the model contradicts itself, which is ours to fix (values.md §3.3, owner
-    # on #350). A witness that records another state than the checker computes is already calc_result.
+    # `invalid` result never does: the model contradicts itself, which is ours to fix. A witness that records another state than the checker computes is already calc_result.
     for i, w in enumerate(good):
         if w["state"] == "invalid":
             findings.append({"reason": "calc_invalid", "witness": i, "relation": w["conclusion"]["relation"],

@@ -34,7 +34,7 @@ def test_a_decided_value_names_its_decision():
 
 
 def test_a_decided_value_has_exactly_one_decision_and_it_is_not_empty():
-    # REVIEW-ENGINE-B on #799: a list is unwrapped for a single-valued slot, so the rows are judged, not the text.
+    # A list is unwrapped for a single-valued slot, so the rows are judged, not the text.
     got, refusals = rows(Schema(BUNDLE), {"rate": [{"id": "r1", "decision": [""]}, {"id": "r2", "decision": ["a", "b"]},
                                                    {"id": "r3", "decision": ["d-3"]}, {"id": "r4", "decision": []}]})
     assert [(r.code, r.where) for r in refusals] == [

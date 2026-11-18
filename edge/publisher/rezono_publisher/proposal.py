@@ -1,4 +1,4 @@
-"""The manifest of a proposal (decision of the coordinator, #47): after the pull request is open, the delta
+"""The manifest of a proposal: after the pull request is open, the delta
 on the pack at its base commit, as one epoch, published per role next to the main manifests.
 
   python -m rezono_publisher.proposal PACK --profile deploy/profiles/edge.yaml --proposal <id> \

@@ -4,7 +4,7 @@ use std.money                          -- EUR, €
 use std.units                          -- d, month, year
 
 --- A small slice of the Dutch healthcare allowance (Wet op de zorgtoeslag, Awir), written to test
---- Rezono v0 before the freeze (#401 D28). Amounts, rates and article numbers are illustrative,
+--- Rezono v0 before the freeze. Amounts, rates and article numbers are illustrative,
 --- not the published figures. Not an application: Rezono verifies such rules, it does not execute them.
 
 rounding date down                     -- 2026-02-29 does not exist: an 18th birthday falls on 2026-02-28
