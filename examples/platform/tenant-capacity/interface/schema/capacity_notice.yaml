@@ -1,0 +1,20 @@
+id: https://rezono.org/examples/platform-core/capacity-notice
+name: platform_capacity_notice
+description: The public capacity declaration shared by the platform issuer and tenant readers.
+in_language: en
+imports:
+  - linkml:types
+default_range: string
+annotations:
+  layer: facts
+
+classes:
+  CapacityNotice:
+    description: The platform's public declaration of capacity and total use.
+    attributes:
+      id: {identifier: true}
+      issuer: {required: true}
+      origin: {required: true}
+      period: {required: true}
+      free_cores: {range: integer, minimum_value: 0, required: true}
+      total_cores: {range: integer, minimum_value: 0, required: true}
