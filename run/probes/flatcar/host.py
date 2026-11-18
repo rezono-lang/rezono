@@ -7,6 +7,7 @@ from functools import partial
 import hashlib
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 import json
+import os
 from pathlib import Path
 import shutil
 import signal
@@ -102,8 +103,14 @@ def boot(directory, assets):
         config = directory / "host.ign"
         config.write_text(json.dumps(ignition(server.server_port, assets)))
         serial = directory / "serial.log"
+        if not os.access("/dev/kvm", os.R_OK | os.W_OK):
+            original = subprocess.check_output(["getfacl", "-p", "/dev/kvm"])
+            subprocess.run(["sudo", "-n", "setfacl", "-m", f"u:{os.getuid()}:rw", "/dev/kvm"],
+                           check=True)
+            stack.callback(subprocess.run, ["sudo", "-n", "setfacl", "--restore=-"],
+                           input=original, check=True)
         proc = subprocess.Popen([
-            "sudo", "-n", "-g", "kvm", "qemu-system-x86_64",
+            "qemu-system-x86_64",
             "-machine", "q35,accel=kvm", "-cpu", "host", "-smp", "4", "-m", "9G",
             "-display", "none", "-monitor", "none", "-no-reboot", "-serial", f"file:{serial}",
             "-drive", f"file={directory / 'host.img'},if=virtio,format=qcow2",
@@ -125,6 +132,11 @@ def boot(directory, assets):
                 print(output[output.rindex("HOST-PROBE FAILED"):][-7000:], flush=True)
                 raise RuntimeError("Flatcar guest reported failure")
             time.sleep(3)
+        if serial.exists():
+            lines = serial.read_text(errors="replace").splitlines()
+            relevant = [line[:320] for line in lines
+                        if any(word in line.lower() for word in ("failed", "error", "panic", "ignition"))]
+            print("\n".join(relevant[-18:]), flush=True)
         raise RuntimeError(f"Flatcar probe exited or timed out; QEMU status={proc.poll()}, markers={seen}")
 
 

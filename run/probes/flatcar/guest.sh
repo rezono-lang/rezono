@@ -3,6 +3,7 @@ set -euo pipefail
 exec > /dev/ttyS0 2>&1
 export PATH=/opt/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin
 stage=bootstrap
+echo "HOST-PROBE stage=$stage"
 k() { /opt/bin/k0s kubectl --request-timeout=12s "$@"; }
 failed() {
     echo "HOST-PROBE FAILED stage=$stage"
@@ -42,26 +43,31 @@ stage=k0s
 systemctl start k0scontroller
 wait_for 130 k get --raw=/readyz
 stage=cilium
+echo "HOST-PROBE stage=$stage"
 k -n kube-system apply --server-side -f cilium.yaml >/dev/null
 wait_for 150 k wait node --all --for=condition=Ready --timeout=3s
 k -n kube-system rollout status daemonset/cilium --timeout=100s
 k -n kube-system rollout status deployment/hubble-relay --timeout=100s
 stage=operator
+echo "HOST-PROBE stage=$stage"
 k apply --server-side -f kubevirt-operator.yaml >/dev/null
 k -n kubevirt rollout status deployment/virt-operator --timeout=150s
 wait_for 80 k apply -f kubevirt-cr.yaml
 stage=kubevirt
+echo "HOST-PROBE stage=$stage"
 k -n kubevirt wait kubevirt/kubevirt --for=condition=Available --timeout=225s
 node=$(k get nodes -o jsonpath='{.items[0].metadata.name}')
 capacity=$(k get node "$node" -o jsonpath='{.status.allocatable.devices\.kubevirt\.io/kvm}')
 test "${capacity:-0}" -gt 0
 echo "HOST-PROBE node=$node kvm_capacity=$capacity"
 stage=vmi
+echo "HOST-PROBE stage=$stage"
 k apply -f vmi.yaml
 k wait vmi/host-probe --for=condition=Ready --timeout=150s
 test "$(k get vmi host-probe -o jsonpath='{.status.nodeName}')" = "$node"
 pod=$(k get pods -l kubevirt.io/domain=host-probe -o jsonpath='{.items[0].metadata.name}')
 stage=guest_boot
+echo "HOST-PROBE stage=$stage"
 guest_ready() { k logs "$pod" -c guest-console-log | grep -E 'login:|Welcome to CirrOS' >/dev/null; }
 wait_for 120 guest_ready
 accelerated() {
