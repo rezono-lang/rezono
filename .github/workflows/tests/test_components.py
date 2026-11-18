@@ -9,6 +9,7 @@ import sys
 import tempfile
 import unittest
 from unittest.mock import patch
+from xml.etree import ElementTree
 
 ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / "scripts"))
@@ -90,8 +91,18 @@ class InventoryTests(unittest.TestCase):
                 "@pytest.mark.xfail(strict=True)\ndef test_expected(): assert False\n", encoding="utf-8")
             (component / "test_optional.py").write_text(
                 "import pytest\npytest.skip('optional module', allow_module_level=True)\n", encoding="utf-8")
+            (component / "test_cluster.py").write_text(
+                "import pytest\n"
+                "@pytest.fixture\ndef live_resource(): raise RuntimeError('live fixture executed')\n"
+                "@pytest.mark.cluster\n"
+                "@pytest.mark.xfail(strict=True)\n"
+                "class TestCluster:\n    def test_live(self, live_resource): pass\n"
+                "@pytest.mark.parametrize('live', [pytest.param(True, marks=pytest.mark.cluster, id='live'), "
+                "pytest.param(False, id='offline')])\n"
+                "def test_mode(live): assert not live\n", encoding="utf-8")
             matrix = [{"kind": "python", "folder": "compiler", "shard": n, "total": 2} for n in range(2)]
-            env = dict(os.environ, PYTEST_DISABLE_PLUGIN_AUTOLOAD="1", PYTHON_MATRIX=json.dumps(matrix))
+            env = dict(os.environ, PYTEST_DISABLE_PLUGIN_AUTOLOAD="1", PYTEST_PLUGINS="rezono_cluster",
+                       PYTHONPATH=str(ROOT / "loop"), PYTHON_MATRIX=json.dumps(matrix))
             def run(*args):
                 return subprocess.run([sys.executable, str(script), *map(str, args)], cwd=root, env=env,
                                       stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
@@ -103,11 +114,28 @@ class InventoryTests(unittest.TestCase):
             good("inventory", plans)
             self.assertIn('skipped', (plans / "compiler/collection.xml").read_text(encoding="utf-8"))
             inventory = json.loads((plans / "compiler/items.json").read_text(encoding="utf-8"))
-            self.assertEqual(14, len(inventory["items"]))
+            self.assertEqual(17, len(inventory["items"]))
+            self.assertEqual(inventory["cluster"], ["compiler/test_cluster.py::TestCluster::test_live",
+                                                    "compiler/test_cluster.py::test_mode[live]"])
             for shard in range(2):
                 good("run-shard", "compiler", shard, 2, plans, reports / str(shard), receipts)
             result = good("verify-execution", plans, receipts)
-            self.assertIn("inventoried 14, started 14, finished 14", result)
+            self.assertIn("inventoried 17, started 17, finished 17, disposable cluster required 2", result)
+            cases = {case.get("name"): case for report in reports.rglob("pytest-*.xml")
+                     for case in ElementTree.parse(report).iter("testcase")}
+            for name in ("test_live", "test_mode[live]"):
+                skip = cases[name].find("skipped")
+                self.assertEqual(skip.get("type"), "pytest.skip")
+                self.assertEqual(skip.get("message"), "Requires the dedicated disposable cluster")
+            self.assertIsNone(cases["test_mode[offline]"].find("skipped"))
+
+            skip_journal = next(p for p in (receipts / "compiler").glob("*.jsonl")
+                                if '"cluster-skip"' in p.read_text(encoding="utf-8"))
+            intact = skip_journal.read_text(encoding="utf-8")
+            skip_journal.write_text("".join(row for row in intact.splitlines(keepends=True)
+                                            if json.loads(row)[0] != "cluster-skip"), encoding="utf-8")
+            self.assertNotEqual(run("verify-execution", plans, receipts).returncode, 0)
+            skip_journal.write_text(intact, encoding="utf-8")
 
             journal = next(p for p in (receipts / "compiler").glob("*.jsonl") if p.stat().st_size)
             original = journal.read_text(encoding="utf-8")
@@ -123,11 +151,19 @@ class InventoryTests(unittest.TestCase):
             self.assertNotEqual(run("verify-execution", plans, receipts).returncode, 0)
 
             # A failing assertion is still observed, and always fails the shard.
-            (component / "test_states.py").write_text("def test_failure(): assert False\n", encoding="utf-8")
+            (component / "test_states.py").write_text(
+                "def test_failure(): assert False\ndef test_fixture(missing_fixture): pass\n", encoding="utf-8")
             good("inventory", plans)
             results = [run("run-shard", "compiler", n, 2, plans, reports / str(n), receipts) for n in range(2)]
             self.assertEqual(sorted(r.returncode for r in results), [0, 1])
-            self.assertIn("inventoried 13, started 13, finished 13", good("verify-execution", plans, receipts))
+            self.assertIn("fixture 'missing_fixture' not found", "".join(result.stdout for result in results))
+            self.assertIn("inventoried 17, started 17, finished 17", good("verify-execution", plans, receipts))
+
+            # An ambient or plugin filter cannot quietly shrink the independent inventory.
+            env["PYTEST_ADDOPTS"] = "-k test_mode"
+            filtered = run("inventory", plans)
+            self.assertNotEqual(filtered.returncode, 0)
+            self.assertIn("tests deselected during full inventory", filtered.stdout)
 
 
 if __name__ == "__main__":
