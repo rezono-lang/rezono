@@ -1,0 +1,7 @@
+# The first capacity at which the third request fits
+
+A capacity_exploration record names the pool, request and numeric candidate values. Values are evaluated in ascending numeric order. The public publish_exploration(pack_directory, file_store, exploration_id, role) entry point reads that record, evaluates each candidate as an ordinary assumption, and returns the key of the published result. Use the existing publisher and admission rules; every sample names the role's real checked manifest and the specific third request witness. The first_change entry cites those same manifests and witnesses immediately before and after the first change. If every sampled outcome agrees the field is null.
+
+A first approved request takes six cores, the second is denied, and the third needs four. For values 6, 9, 10, 12 the first successful value is 10, preceded by 9. Removing the first request's two-core database moves the threshold to 8 on a different written grid. A grid entirely above the threshold has no change. The independent ordered ledger supplies expectations for all three statuses, every actual landing and the remaining cores at each value.
+
+Run `python -m pytest -q examples/platform/proof_cases/test_admission_threshold.py`. This example uses the ordinary admission input and output relations described in the held admission-assumption task. Only the facts, rules and portal integration under `examples/platform` are needed for this extension.

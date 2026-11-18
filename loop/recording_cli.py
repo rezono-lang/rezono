@@ -6,7 +6,8 @@ import sys
 from collections.abc import Sequence
 
 from loop.recording_input import load_recording
-from loop.replay import replay
+from loop.replay import replay, replay_snapshots
+from loop.typed_recording import TypedRecording
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -16,7 +17,10 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     try:
         recording = load_recording(args.recording)
-        plans, outcome = replay(**recording)
+        if isinstance(recording, TypedRecording):
+            plans, outcome = replay_snapshots(recording.run, recording.limit, recording.snapshots(), report_limit=True)
+        else:
+            plans, outcome = replay(**recording)
     except (OSError, ValueError) as error:
         print(error, file=sys.stderr)
         return 1

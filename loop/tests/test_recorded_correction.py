@@ -23,7 +23,6 @@ def observation(run, sweep, step, position, second, value):
     }
 
 
-@pytest.mark.xfail(strict=True, reason="Read decisions/loop-design.md (Recorded corrections). Waits for test_loop_pack_order (#162), test_replay (#187), test_recording_input and test_recording_cli. Extend loop/recording_input.py, loop/recording_cli.py and loop/replay.py to admit typed recordings and drive the existing executor from std-loop decisions.")
 def test_recorded_correction(monkeypatch, tmp_path, capsys):
     from rezono_compiler import batch, modules
 
