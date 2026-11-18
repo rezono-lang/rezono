@@ -43,12 +43,17 @@ def lower_source(module: modules.Module, form: dict, root: str,
         offset = int(start)
         line = text.count("\n", 0, offset) + 1
         column = offset - text.rfind("\n", 0, offset)
-        if set(declaration) - {"rule", "columns", "args", "when"}:
+        options = declaration.get("options")
+        if set(declaration) - {"rule", "columns", "args", "when", "options"} or (
+            options is not None and
+            (len(options) != 1 or options[0].keys() != {"extend"} or options[0]["extend"] is not True)
+        ):
             refuse(where, at, line, column, "Rule options and locals are not lowered yet")
         if "columns" in declaration:
             name = declaration["rule"]
-            key = [(col, storage) for col, _, storage in linked.signatures[name].key]
-            statements.append(("decl", name, key, line, None, False, False, None, False, None, False))
+            signature = linked.signatures[name]
+            key = [(col, storage) for col, _, storage in signature.key]
+            statements.append(("decl", name, key, line, None, False, False, None, signature.extend, None, False))
         if "when" in declaration:
             clause = linked.clauses[module.pack, module.rel, at]
             signature = linked.signatures[clause.relation]
