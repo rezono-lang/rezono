@@ -108,8 +108,5 @@ def test_checked_choice_changes_bound_parameters_and_preflight(releases, monkeyp
     check_grants(releases, monkeypatch, explicit_empty=False)
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError, reason=(
-    "Read decisions/admission-database-selector.md. Make k8s-admission/managed_network_policy.py "
-    "admit the same exact service selector when matchExpressions is an empty list."))
 def test_checked_choice_with_empty_selector_expressions(releases, monkeypatch):
     check_grants(releases, monkeypatch, explicit_empty=True)
