@@ -1,0 +1,37 @@
+name: Apiserver oracle dependency probe
+
+on:
+  push:
+    branches: ["task/k8s-admission/test_offline_apiserver.py--test_offline_apiserver_accepts_only_the_published_cases"]
+
+permissions:
+  contents: read
+
+jobs:
+  upstream:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Inspect the pinned policy evaluator
+        shell: bash
+        working-directory: k8s-admission/oracles/apiserver
+        run: |
+          set -euo pipefail
+          go version
+          module="$(go mod download -json k8s.io/apiserver | tee "$RUNNER_TEMP/upstream.json" | python -c 'import json, sys; print(json.load(sys.stdin)["Dir"])')"
+          python -c 'import json, sys; x=json.load(open(sys.argv[1])); print(x["Version"], x["Sum"], x["GoModSum"])' "$RUNNER_TEMP/upstream.json"
+          policy="$module/pkg/admission/plugin/policy"
+          find "$policy" -maxdepth 2 -name '*.go' ! -name '*_test.go' -printf '%P\n' | sort
+          for dir in generic matching validating; do
+            if [[ -d "$policy/$dir" ]]; then
+              grep -nE '^(type [A-Z]|func [A-Z]|func \([^)]*\) [A-Z])' "$policy/$dir"/*.go | grep -v '_test.go:' | sed "s|$policy/||g"
+            fi
+          done
+          for file in generic/plugin.go validating/plugin.go validating/validator.go generic/dispatcher.go; do
+            if [[ -f "$policy/$file" ]]; then
+              awk '/^func New|^func \(.*Dispatch|^type (Dispatcher|PolicyHook|Evaluator)/ { lines=45 } lines > 0 { print; lines-- }' "$policy/$file"
+            fi
+          done
