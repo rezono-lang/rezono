@@ -1,0 +1,3 @@
+.decl listed(item: symbol)
+listed(x) :- alpha(x).
+.output listed
