@@ -14,6 +14,14 @@ ROOT = Path(__file__).resolve().parents[3]
 SCOPES = ("examples", "packs", "run")
 BASIC_READER = ("rezono/test/module-json.test.ts", "the same text gives the same bytes, and they are the bytes of the contract fixture")
 BASIC_LOWERER = ("compiler/tests/test_rezono_module.py", "test_a_module_gives_the_bundle_and_the_engine_of_the_schema_file_that_says_the_same")
+NATIVE_RULE_EVIDENCE = (
+    ("reader", ("rezono/test/test_native_rule_reader_roundtrip.py", "test_native_rule_reader_roundtrip")),
+    ("form", ("compiler/tests/rezono/test_native_rule_form_contract.py", "test_native_rule_form_contract")),
+    ("IR and witness", ("compiler/tests/rezono/test_native_rule_ir_listed.py", "test_native_rule_ir_listed")),
+)
+NATIVE_RULE_DESIGN = "27ff4dc926166484e549e4da0c95d400d067a18b"
+NATIVE_RULE_TESTS = "bd9a459f0e8c4934c92bd39b862208e25eb64363"
+NATIVE_RULE_SIGNATURES = "cb086e32909e616fdca40541c9d61c7a7401e14d"
 
 
 def paired(reader, lowerer):
@@ -22,7 +30,7 @@ def paired(reader, lowerer):
     )
 
 
-# Both tests must exist without an expected-failure marker. The ordinary
+# The required tests must exist without an expected-failure marker. The ordinary
 # component suites run these checks. An untested feature stays pending.
 EVIDENCE = {
     feature: (BASIC_READER, BASIC_LOWERER)
@@ -43,6 +51,7 @@ EVIDENCE = {
         ("rezono/test/test_relational_rule_block.py", "test_relational_rule_block"),
         ("compiler/tests/rezono/test_rule_witness.py", "test_rezono_rule_proves_listed_item"),
     ),
+    "native-rule": tuple(test for _, test in NATIVE_RULE_EVIDENCE),
     "boolean-slot": (BASIC_READER, ("compiler/tests/rezono/test_library_boolean.py", "test_library_boolean_slot")),
     "decision-table": (BASIC_READER, ("compiler/tests/test_rezono_table.py", "test_the_oracle_runs_the_text_the_compiler_reads")),
 }
@@ -141,15 +150,21 @@ MODULE_SYNTAX = {
     "dated-fact": r"^\s*fact\b.*\b(?:valid|known)\b", "fact-provenance": r"^\s*fact\b.* @ ",
     "parameters": r"^param\b", "units": r"^(?:unit|rounding)\b", "calculation": r"^\s*derived\b",
     "exceptions": r"^\s*unless\b", "decision-table": r"^\s*table\b", "table-policy": r"^\s*table\s+(?!unique\b)\w+", "conditional-check": r"^(?:require|warn)\b",
-    "relational-rule": r"^rules?\b", "time-policy": r"^\s+(?:applies|sealed) at:", "schema-metadata": r"^reason\b",
+    "relational-rule": r"^rules\b", "native-rule": r"^rule\b",
+    "time-policy": r"^\s+(?:applies|sealed) at:", "schema-metadata": r"^reason\b",
 }
+RULE_DECLARATION = re.compile(r"^rule\b[^\n]*(?:\n[ \t][^\n]*)*", re.MULTILINE)
+STATE_PREDICATE = re.compile(r"\bis\s+(?:known\b|unknown\b|invalid\b|n/a(?![\w/]))")
+STATE_REVIEW = "native-rule-state-review"
 
 
 def authored_features(path):
     raw = path.read_text(encoding="utf-8")
-    # The usage inventory only looks for authored syntax, outside line comments.
-    tokens = re.sub(r'"(?:\\.|[^"\\])*"|--[^\n]*', "", raw)
+    # Look for authored syntax outside comments, literals and escaped names.
+    tokens = re.sub(r'"(?:\\.|[^"\\])*"|\x60[^\x60\n]*\x60|--[^\n]*', " ", raw)
     found = {name for name, pattern in MODULE_SYNTAX.items() if re.search(pattern, tokens, re.MULTILINE)}
+    if any(STATE_PREDICATE.search(rule[0]) for rule in RULE_DECLARATION.finditer(tokens)):
+        found.add(STATE_REVIEW)
     known_lines = [r"^(?:rezono|pack|extend)\b", *MODULE_SYNTAX.values()]
     if any(line and not any(re.search(pattern, line) for pattern in known_lines)
            for line in tokens.splitlines() if not line.startswith((" ", "\t"))):
@@ -297,15 +312,80 @@ def describe(features):
     return ", ".join(sorted(features)) if features else "—"
 
 
+def native_rule_link(root, label, path, review_head):
+    target = f"../../{path}"
+    if not (root / path).is_file():
+        target = f"https://github.com/rezono-lang/rezono/blob/{review_head}/{path}"
+    return f"[{label}]({target})"
+
+
+def render_native_rules(root, packs, ready):
+    rule_files = {
+        path: features for usage in packs.values() for path, features in usage.files.items()
+        if features & {"relational-rule", "native-rule"}
+    }
+    legacy = {path for path, features in rule_files.items() if "relational-rule" in features}
+    native = {path for path, features in rule_files.items() if "native-rule" in features}
+    evidence = ", ".join(native_rule_link(root, label, path, NATIVE_RULE_TESTS)
+                         for label, (path, _) in NATIVE_RULE_EVIDENCE)
+    design = native_rule_link(root, "Native rules decision", "decisions/language-native-rules.md", NATIVE_RULE_DESIGN)
+    signatures = native_rule_link(root, "signature linking",
+                                  "compiler/tests/rezono/test_native_rule_signatures.py", NATIVE_RULE_SIGNATURES)
+    parity = native_rule_link(root, "publication parity",
+                              "compiler/tests/rezono/test_native_rule_publication_parity.py", NATIVE_RULE_TESTS)
+    states = native_rule_link(root, "state-evidence test",
+                              "compiler/tests/rezono/test_native_rule_state_evidence.py", NATIVE_RULE_TESTS)
+    status = "Supported" if "native-rule" in ready else "Pending"
+    state_summary = ("The table identifies sources for state-evidence review."
+                     if any(STATE_REVIEW in features for features in rule_files.values())
+                     else "No pack has a confirmed general state blocker in this census.")
+    lines = [
+        "", "## Native rules in module form 3", "",
+        f"The expression syntax and migration are specified in the language decision. {design}",
+        f"The rule census includes {len(rule_files)} distinct source files, with {len(legacy)} using Datalog or interim pipes and {len(native)} using native rules.",
+        "A mixed file counts once in the total and in each spelling it uses.",
+        f"Native reader, form and IR proof gate: **{status}** ({evidence}).",
+        f"This gate covers initial integration. Whole-pack migration also requires {signatures} and {parity}.",
+        "",
+        "An explicit state predicate needs a review of its evidence. "
+        f"Keep the legacy rule where a general scalar state lacks authenticated evidence. {states}",
+        "The census cannot infer general state checks from a legacy file. Ordinary relation negation and explicit outcome values are separate.",
+        state_summary,
+        "",
+        "| Pack or source directory | Direct legacy files | Direct native files | General state evidence |",
+        "| --- | ---: | ---: | --- |",
+    ]
+    for folder, usage in sorted(packs.items()):
+        direct = usage.files.keys() & rule_files.keys()
+        inherited = {path for dependency in usage.imports for path in packs[dependency].files} & rule_files.keys()
+        if not (direct or inherited):
+            continue
+        state_sources = [path for path in sorted(direct | inherited) if STATE_REVIEW in rule_files[path]]
+        if state_sources:
+            sources = ", ".join(
+                f"[{path.name}](../../{path.relative_to(root).as_posix()})" for path in state_sources
+            )
+            state = f"Review explicit state predicates ({sources})"
+        elif (direct | inherited) & legacy:
+            state = "Unknown until legacy conversion"
+        else:
+            state = "No explicit state predicate found"
+        lines.append(
+            f"| {folder.relative_to(root).as_posix()} | {len(direct & legacy)} | {len(direct & native)} | {state} |"
+        )
+    return lines
+
+
 def render(root=ROOT):
     root = root.resolve()
     packs = inventory(root)
     ready = supported(root)
-    counts = Counter(feature for usage in packs.values() for features in usage.files.values() for feature in features)
+    counts = Counter(feature for usage in packs.values() for features in usage.files.values()
+                     for feature in features - {STATE_REVIEW, "native-rule"})
     lines = ["# Rezono language coverage", "",
              "Run `python compiler/tests/rezono/language_usage.py` from the repository root for the current inventory.",
              "Counts use each authored file once per feature. Higher counts give higher priority among available tasks.",
-             "Support requires both reader and lowering tests without expected-failure markers.",
+             "Support requires the applicable reader, form and lowering tests without expected-failure markers.",
              "Pack readiness includes transitive local imports.",
              "Publication parity is checked separately.",
              "", "| Feature | Files | Reader and lowering |", "| --- | ---: | --- |"]
@@ -320,14 +400,17 @@ def render(root=ROOT):
                   "| --- | --- | --- | --- |"])
     for folder, usage in sorted(packs.items()):
         direct = {feature for values in usage.files.values() for feature in values}
-        imports = {feature for dependency in usage.imports for values in packs[dependency].files.values() for feature in values}
+        imports = {feature for dependency in usage.imports for values in packs[dependency].files.values()
+                   for feature in values}
         pending = (direct | imports) - ready
         if usage.missing_import:
             pending.add("unresolved-pack-import")
         status = "Ready" if direct or imports else "No language sources"
         if pending:
             status = describe(pending)
-        lines.append(f"| {folder.relative_to(root).as_posix()} | {describe(direct)} | {describe(imports)} | {status} |")
+        lines.append(f"| {folder.relative_to(root).as_posix()} | {describe(direct - {STATE_REVIEW})} | "
+                     f"{describe(imports - {STATE_REVIEW})} | {status} |")
+    lines.extend(render_native_rules(root, packs, ready))
     return "\n".join(lines)
 
 
