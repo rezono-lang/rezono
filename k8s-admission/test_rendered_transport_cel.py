@@ -1,31 +1,34 @@
 """Replay real platform grants against the released, hand-written CEL rule."""
 
 import json
+from hashlib import sha256
 import os
 from pathlib import Path
 import subprocess
 
 import pytest
 import yaml
+from checked_release_fixture import MANIFEST_KEY, publish_evidence
 
 
 ROOT = Path(__file__).parent.resolve()
 PROTOCOLS = ("TCP", "UDP", "SCTP")
 
 
-def release_for(protocol):
+def release_for(protocol, directory):
     from admission_release import render_release
 
     template = ROOT / "fixtures" / "blue-namespace-publication.yaml"
     publication = yaml.safe_load(template.read_text(encoding="utf-8"))
     spec = publication["spec"]
     # A different release authorizes each transport for the very same service pair and port.
-    spec["digest"] = {"TCP": "a", "UDP": "b", "SCTP": "c"}[protocol] * 64
+    store = publish_evidence(directory, protocol)
+    spec["digest"] = sha256(store.get(MANIFEST_KEY)).hexdigest()
     row = {"source": "idp", "destination": "dns", "port": 53}
     spec["flows"] = [row] if protocol == "TCP" else []
     if protocol != "TCP":
         spec["transportFlows"] = [dict(row, protocol=protocol)]
-    items = list(render_release(["blue"], [publication]))
+    items = render_release(["blue"], [publication], store=store, manifest_key=MANIFEST_KEY)
     return {"apiVersion": "v1", "kind": "List", "items": items}, spec["digest"]
 
 
@@ -54,7 +57,7 @@ def test_manual_cel_matches_generated_transport_grants(tmp_path, monkeypatch):
     subprocess.run(["go", "build", "-o", str(executable), "."], cwd=oracle, check=True, timeout=180)
     release_file = tmp_path / "release.json"
     for published in PROTOCOLS:
-        release, digest = release_for(published)
+        release, digest = release_for(published, tmp_path / published)
         release_file.write_text(json.dumps(release), encoding="utf-8")
         for requested in PROTOCOLS:
             flow = {"source": "idp", "destination": "dns", "fromPort": 53,
