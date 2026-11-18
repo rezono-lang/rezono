@@ -104,16 +104,6 @@ def _witnesses(rows, window, nodes, cases, run, changed, assess):
 
 
 @pytest.mark.cluster
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason=(
-        "Read decisions/shared-disposable-cluster.md. Depends on test_shared_admission_handoff (#441). "
-        "Use loop/cluster/ and loop/ to record the seven hand-written network pairs on its runner and kubeconfig. "
-        "Capture real probe, router and Hubble witnesses and final node coverage. Read back the applied service "
-        "policy before each sweep; remove only the echo grant for the second sweep. Reuse the disposable workflow."
-    ),
-)
 def test_live_network_pairs(monkeypatch):
     """Use network.json expectations and the existing recorder and Hubble window contracts."""
     run = os.environ.get("GITHUB_RUN_ID", "")
