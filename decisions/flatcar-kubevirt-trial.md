@@ -2,7 +2,9 @@
 
 The owner can run the Flatcar KubeVirt trial workflow manually. Its temporary
 k0s control plane runs in a container. A separate Flatcar VM joins it using
-the worker provisioning path. Both run on the same Ubuntu runner. Regular PR
+the worker provisioning path. Both run on the same Ubuntu runner. By default
+the script stops after worker enrollment. The host workflow passes `--kubevirt`
+to prepare the worker for KubeVirt and continue past enrollment. Regular PR
 checks do not launch these VMs.
 
 The trial first requires a Flatcar worker with a Ready condition and a renewed
@@ -10,7 +12,8 @@ node lease. The upstream KubeVirt v1.9.1 operator selects control-plane nodes,
 so this single-worker trial explicitly places its infrastructure on the joined
 worker. The host passes only when KubeVirt becomes Available, the node
 advertises allocatable KVM, and a Running and Ready VMI on that node produces
-a guest login banner with a live KVM vCPU visible in its compute container.
+a console login prompt or welcome banner with a live KVM vCPU visible in its
+compute container. The console check observes boot without signing in.
 The outer VM and controller are removed when the script exits.
 
 ## Observations

@@ -2,6 +2,11 @@
 set -Eeuo pipefail
 umask 077
 
+if (( $# > 1 )) || [[ $# == 1 && ${1:-} != --kubevirt ]]; then
+    echo "usage: trial.sh [--kubevirt]" >&2
+    exit 2
+fi
+
 sources=$(cd "$(dirname "$0")" && pwd)
 scratch=$(mktemp -d)
 name=rezono-join-${GITHUB_RUN_ID:-$$}-${GITHUB_RUN_ATTEMPT:-1}
@@ -52,7 +57,6 @@ test "$(git -C renderer rev-parse FETCH_HEAD)" = "$source_revision"
 git -C renderer checkout -q --detach FETCH_HEAD
 cp "$sources/render.go" renderer/probe.go
 (cd renderer && go build -mod=readonly -o "$scratch/render" probe.go)
-fetch 'https://raw.githubusercontent.com/kubernetes-client/python/5b23a44aa06010ac6ffe423d7b0e090caf7882ff/kubernetes/utils/quantity.py' 3c568e71032e144568280cb21af64d78dc23c526f7a4e05d2e3f53cdd0315a5d quantity.py
 if ! command -v qemu-system-x86_64 >/dev/null || ! command -v getfacl >/dev/null; then
     sudo -n apt-get update -qq
     sudo -n apt-get install -y -qq --no-install-recommends acl qemu-system-x86 qemu-utils
@@ -80,7 +84,7 @@ helm template cilium cilium.tgz --namespace kube-system --kube-version 1.36.6 \
 docker exec -i "$name" k0s kubectl apply --server-side -f - < cilium.yaml >/dev/null
 # The bootstrap capability exists only for this temporary controller. Pipe it
 # directly into the renderer; the private machine document is removed on exit.
-docker exec "$name" k0s token create --role worker --expiry 12m | ./render > worker.ign
+docker exec "$name" k0s token create --role worker --expiry 12m | ./render "$@" > worker.ign
 observe "ignition_rendered=true"
 qemu-system-x86_64 -machine q35,accel=kvm -cpu host -m 7G -smp 3 \
     -display none -monitor none -no-reboot -serial "file:$scratch/serial.log" \
@@ -122,6 +126,11 @@ jq -e '.metadata.labels["probe.rezono.org/role"] == "joined-worker" and
 control -n kube-node-lease get lease proof-worker -o json | jq -e '.spec.renewTime != null' >/dev/null
 observe "$(jq -r '"node=\(.metadata.name) uid=\(.metadata.uid) os=\(.status.nodeInfo.osImage) kubelet=\(.status.nodeInfo.kubeletVersion) ready=true lease=true"' node.json)"
 
+if (( $# == 0 )); then
+    exit 0
+fi
+
+fetch 'https://raw.githubusercontent.com/kubernetes-client/python/5b23a44aa06010ac6ffe423d7b0e090caf7882ff/kubernetes/utils/quantity.py' 3c568e71032e144568280cb21af64d78dc23c526f7a4e05d2e3f53cdd0315a5d quantity.py
 stage=operator
 diagnose() {
     local status=$?
@@ -170,4 +179,4 @@ done
 grep -Eq 'login:|Welcome to CirrOS' console.log
 stage=live-kvm-vcpu
 control exec "$pod" -c compute -- sh -ec 'for fd in /proc/[0-9]*/fd/*; do case "$(readlink "$fd")" in *kvm-vcpu*) exit 0;; esac; done; exit 1'
-observe "guest_uid=$(control get vmi host-probe -o jsonpath='{.metadata.uid}') guest_login=true kvm_vcpu=true"
+observe "guest_uid=$(control get vmi host-probe -o jsonpath='{.metadata.uid}') guest_console_ready=true kvm_vcpu=true"

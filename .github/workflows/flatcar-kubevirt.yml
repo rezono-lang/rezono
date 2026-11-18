@@ -16,4 +16,4 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          bash run/probes/worker-join/trial.sh
+          bash run/probes/worker-join/trial.sh --kubevirt
