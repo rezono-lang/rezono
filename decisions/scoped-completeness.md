@@ -24,6 +24,16 @@ Resolve the expected inventory independently of the submitted results. Replay th
 
 Missing pages, gaps, lost events, conflicting final reports, inaccessible evidence or mismatched pins leave coverage unknown. An attested empty inventory is valid where the scope permits emptiness. A missing inventory leaves coverage unknown. A verified receipt can be replayed at its recorded cut. Each new cut requires its own evidence.
 
+### Admission and replay transport
+
+The complete epoch manifest can carry an optional `completeness_receipts` list. Each entry uses the existing [archived-file reference](../contracts/manifest.yaml) with `file`, `uri` and `sha256`. It pins immutable candidate receipt bytes read through the same storage resolver as snapshots. Keep this list on the complete verification side. The role proof exposes only the receipt evidence that role is authorized to read.
+
+Use the same references at the ordinary batch and publisher boundary and in Loop or Run replay. Submit the candidate references separately from the trusted authority context. Load the allowed source, issuer, scope, enumeration and cut evidence from the verified definition or the protected caller context. The independent checker replays that binding using the authoritative enumeration or source commitment. The candidate's references select bytes to check. They confer no authority over those bytes. Only successful admission can supply the protected `verified_receipt` input.
+
+Use the following convention for the first source-archive fixture. The receipt has the seven fields above. Its `source` is a `Source`. Its `issuer` gives an `id` and an `authorization` archived-file reference that must match the trusted context. Its `scope` binds a `definition` archived-file reference, a named `query` and ordered `bindings` with `name`, `type` and canonical `value`. Its `cut` binds a `frontier` using the manifest's source-position shape. The `inventory` and `content` fields are archived-file references. Take the receipt `id` over the canonical array `["rezono.completeness-receipt/1", body]`, with `body` holding the other six fields.
+
+The pinned fixture inventory contains the expected member keys. Its content contains a record for each member with `key`, `rows` and a terminal `Source`. A member that reports no rows has `rows: []` and its own authenticated terminal source. Each observed row retains its keyed values and source. Both artifacts are canonical arrays ordered by typed member key. The authoritative fixture keeps the expected inventory and terminal content commitments separate from the submitted candidate so a mutation can change candidate bytes and hashes while keeping the evidence of what the read had to contain.
+
 ## 2. Shared rule interface
 
 Put the rules in the fact-free standard pack `std-completeness`. Admission supplies the verified receipt and the exact authenticated read. `Source`, `Scope` and `Cut` identify their bound definitions and `Receipt` is the receipt digest. The two hash arguments identify the verified inventory and contents.
