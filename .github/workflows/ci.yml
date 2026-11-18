@@ -44,6 +44,52 @@ jobs:
         env:
           BASE: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.event.before }}
         run: python3 -I scripts/leak_check.py --base "$BASE"
+      - name: Warn about new literals outside packs
+        id: pack_warnings
+        if: ${{ !cancelled() && steps.full_checkout.outcome == 'success' }}
+        continue-on-error: true
+        working-directory: release-source
+        shell: bash
+        env:
+          POLICY: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.sha }}
+          BASE: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.event.before }}
+          HEAD: ${{ github.event.pull_request.head.sha || github.event.merge_group.head_sha || github.sha }}
+        run: |
+          set -euo pipefail
+          git show "$POLICY:scripts/pack_warnings.py" | python -I - "$BASE" "$HEAD"
+      - name: Check the single commit used as the squash subject
+        id: single_subject
+        if: ${{ !cancelled() && steps.full_checkout.outcome == 'success' && github.event_name == 'pull_request' && github.event.pull_request.commits == 1 }}
+        continue-on-error: true
+        working-directory: release-source
+        shell: bash
+        env:
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          python scripts/release-notes.py --subject "$(git log -1 --format=%s "$HEAD")"
+      - name: Test the candidate pack warning rules
+        id: pack_warning_tests
+        if: ${{ !cancelled() && steps.full_checkout.outcome == 'success' }}
+        continue-on-error: true
+        working-directory: release-source
+        run: python -I scripts/test_pack_warnings.py
+      - name: Report advisory release checks
+        if: ${{ !cancelled() }}
+        shell: bash
+        env:
+          PACK_WARNINGS: ${{ steps.pack_warnings.outcome }}
+          SINGLE_SUBJECT: ${{ steps.single_subject.outcome }}
+          PACK_WARNING_TESTS: ${{ steps.pack_warning_tests.outcome }}
+        run: |
+          set -euo pipefail
+          {
+            printf '| Advisory release check | Outcome |\n'
+            printf '| --- | --- |\n'
+            printf '| Pack warnings | %s |\n' "$PACK_WARNINGS"
+            printf '| Single-commit subject | %s |\n' "$SINGLE_SUBJECT"
+            printf '| Pack warning tests | %s |\n' "$PACK_WARNING_TESTS"
+          } >> "$GITHUB_STEP_SUMMARY"
       - id: python
         if: ${{ !cancelled() && steps.full_checkout.outcome == 'success' }}
         uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0
@@ -63,7 +109,7 @@ jobs:
         shell: bash
         run: bash scripts/check-quickstart.sh
       - name: Run the release rehearsal
-        if: ${{ !cancelled() && steps.python.outcome == 'success' }}
+        if: ${{ !cancelled() && steps.python.outcome == 'success' && github.event_name != 'push' }}
         uses: ./release-source/.github/actions/release-rehearsal
         with:
           source-directory: release-source
@@ -77,6 +123,7 @@ jobs:
       node: ${{ steps.matrix.outputs.node }}
       has_node: ${{ steps.matrix.outputs.has_node }}
       python_editable: ${{ steps.matrix.outputs.python_editable }}
+      cluster_mode: ${{ steps.cluster.outputs.mode }}
       cluster_tasks: ${{ steps.cluster.outputs.tasks }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
@@ -88,6 +135,7 @@ jobs:
           set -euo pipefail
           python -I scripts/test_red_guard.py
           python -I scripts/test_feldera_admission.py
+          python -I scripts/test_cluster_worker_tasks.py
       - id: matrix
         env:
           GITHUB_BASE_REF: ${{ github.base_ref }}
@@ -125,20 +173,20 @@ jobs:
           if-no-files-found: error
           overwrite: true
           retention-days: 2
-      - name: Route assigned cluster tests from the inventory
+      - name: Route the disposable cluster from the candidate
         id: cluster
-        if: steps.matrix.outputs.has_python == 'true'
         env:
           WORKER_BRANCH: ${{ github.head_ref }}
           TASK_BASE: ${{ github.event.merge_group.base_sha || (startsWith(github.head_ref, 'task/') && github.event.pull_request.base.sha) || '' }}
+          CANDIDATE_BASE: ${{ github.event.merge_group.base_sha || github.event.pull_request.base.sha }}
         run: |
           set -euo pipefail
           python scripts/cluster_worker_tasks.py "$RUNNER_TEMP/inventory" --worker "$WORKER_BRANCH" \
-            --base "$TASK_BASE" >> "$GITHUB_OUTPUT"
+            --base "$TASK_BASE" --diff-base "$CANDIDATE_BASE" >> "$GITHUB_OUTPUT"
 
   cluster_worker:
     needs: discover
-    if: needs.discover.outputs.cluster_tasks != '' && needs.discover.outputs.cluster_tasks != '[]'
+    if: needs.discover.outputs.cluster_mode == 'tasks' || needs.discover.outputs.cluster_mode == 'suite'
     uses: ./.github/workflows/disposable-cluster.yml
     with:
       tasks: ${{ needs.discover.outputs.cluster_tasks }}
@@ -215,7 +263,7 @@ jobs:
             python scripts/red_list.py --skips "$report" | tee -a "$GITHUB_STEP_SUMMARY"
           done
       - name: Measure the worker check
-        if: startsWith(github.head_ref, 'task/') && matrix.component.shard == 0 && needs.discover.outputs.cluster_tasks == '[]'
+        if: startsWith(github.head_ref, 'task/') && matrix.component.shard == 0 && needs.discover.outputs.cluster_mode != 'tasks'
         env:
           BRANCH: ${{ github.head_ref }}
           COMPONENT: ${{ matrix.component.folder }}
@@ -304,7 +352,7 @@ jobs:
           NODE_RESULT: ${{ needs.node.result }}
           LIGHT_RESULT: ${{ needs.light_checks.result }}
           CLUSTER_RESULT: ${{ needs.cluster_worker.result }}
-          CLUSTER_TASKS: ${{ needs.discover.outputs.cluster_tasks }}
+          CLUSTER_MODE: ${{ needs.discover.outputs.cluster_mode }}
         run: |
           set -euo pipefail
           echo "discover=$DISCOVER_RESULT python=$PYTHON_RESULT node=$NODE_RESULT light=$LIGHT_RESULT cluster=$CLUSTER_RESULT"
@@ -316,7 +364,8 @@ jobs:
             workflow_dispatch) [ "$LIGHT_RESULT" = skipped ] ;;
             *) exit 1 ;;
           esac
-          case "$CLUSTER_TASKS" in
-            ''|'[]') [ "$CLUSTER_RESULT" = skipped ] ;;
-            *) [ "$CLUSTER_RESULT" = success ] ;;
+          case "$CLUSTER_MODE" in
+            none) [ "$CLUSTER_RESULT" = skipped ] ;;
+            suite|tasks) [ "$CLUSTER_RESULT" = success ] ;;
+            *) exit 1 ;;
           esac
