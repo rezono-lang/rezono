@@ -115,7 +115,7 @@ classes:
     attributes:
       row: {range: RowRef, required: true, inlined: true}
       sources: {range: Source, required: true, multivalued: true, inlined_as_list: true, minimum_cardinality: 1, description: "Every source of the row; a writer sorts and deduplicates them."}
-      reason: {description: "Message key explaining why this row remains a fact instead of being derived (S29)."}
+      reason: {description: "Message key explaining why this row remains a fact, as defined in decisions/import-rule-proposals.md."}
 
   SourceSet:
     description: The manifest's reference to a role's file of source entries.

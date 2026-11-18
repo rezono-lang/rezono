@@ -55,7 +55,7 @@ def sources(modules) -> tuple[rules_dl.Embedded, ...]:
     result = []
     for module in modules:
         form = module.form
-        if form is None or form["format"] != rezono_module.FORMAT_V2:
+        if form is None or form["format"] != rezono_module.IDENTIFIER_FORMAT:
             continue
         places = rezono_module.lines(form)
         blocks = {}

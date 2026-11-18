@@ -101,6 +101,72 @@ def test_a_writer_reads_the_classes_of_a_module_as_it_reads_a_schema_file(tmp_pa
         assert layout.declared["delta"] == ["id", "gamma", "alpha", "state", "grade"]
 
 
+def test_unbounded_lists_compile_like_written_linkml(tmp_path):
+    oracle = Path(shutil.copytree(FIXTURE, tmp_path / "yaml" / "minimal"))
+    source = Path(shutil.copytree(FIXTURE, tmp_path / "rezono" / "minimal"))
+    (oracle / "schema/roles.yaml").write_text(
+        """id: https://rezono.example/roles
+name: roles
+imports: [linkml:types, minimal]
+default_range: string
+annotations: {layer: facts}
+enums:
+  Capability:
+    permissible_values: {read: {}, review: {}}
+classes:
+  Role:
+    attributes:
+      id: {identifier: true}
+      capability: {range: Capability, multivalued: true}
+      reviewers: {range: Alpha, multivalued: true, required: true}
+""", encoding="utf-8",
+    )
+    module(source, [
+        {"enum": "Capability", "world": "closed", "values": ["read", "review"]},
+        {"kind": "Role", "world": "closed", "slots": [
+            {"slot": "capability", "type": "Capability", "card": "*"},
+            {"slot": "reviewers", "type": "Alpha", "card": "+"},
+        ]},
+    ], name="roles")
+
+    records = {
+        "alpha": [{"id": "a", "title": "A"}, {"id": "b", "title": "B"}],
+        "role": [
+            {"id": "absent", "reviewers": ["a"]},
+            {"id": "empty", "capability": [], "reviewers": ["a"]},
+            {"id": "both", "capability": ["read", "review"], "reviewers": ["a", "b"]},
+            {"id": "missing", "capability": ["review"]},
+            {"id": "required-empty", "reviewers": []},
+            {"id": "refused", "capability": ["other"], "reviewers": ["z"]},
+        ],
+    }
+    expected_rows = {
+        "role__capability": {("both", "read"), ("both", "review"), ("missing", "review"), ("refused", "other")},
+        "role__reviewers": {("absent", "a"), ("empty", "a"), ("both", "a"), ("both", "b"), ("refused", "z")},
+    }
+    expected_violations = {
+        "role__reviewers__totality": {("missing", ""), ("required-empty", "")},
+        "role__reviewers__reference": {("refused", "z")},
+        "role__capability__value_range": {("refused", "other")},
+    }
+    for name, directory in (("yaml", oracle), ("rezono", source)):
+        output = tmp_path / "compiled" / name
+        assert main(["compile", str(directory), str(output)]) == 0
+        files = {path.relative_to(output).as_posix(): path.read_text(encoding="utf-8")
+                 for path in output.rglob("*") if path.is_file()}
+        bundle = json.loads(files["bundle/schema-bundle.json"])
+        capability = next(slot for slot in bundle["attributes"] if slot["id"] == "role.capability")
+        reviewers = next(slot for slot in bundle["arrows"] if slot["id"] == "role.reviewers")
+        assert capability["multivalued"] and not capability["required"]
+        assert reviewers["multivalued"] and reviewers["required"] and reviewers["target"] == "alpha"
+        for slot in (capability, reviewers):
+            assert "minimum_cardinality" not in slot and "maximum_cardinality" not in slot
+            assert slot["span"]["file"] == ("rezono/roles.rezono" if name == "rezono" else "schema/roles.yaml")
+        rows = facts.rows_of(pack.read(directory), records)
+        assert {rel: set(rows[rel]) for rel in expected_rows} == expected_rows
+        assert violations(files, rows) == expected_violations
+
+
 def test_compile_refuses_invalid_source_places(tmp_path, capsys):
     directory = written(tmp_path, "module")
     path = directory / "rezono/kinds.json"
@@ -194,6 +260,116 @@ def test_a_module_of_an_imported_pack_is_read_as_its_schema_is(tmp_path):
             "id": "https://rezono.org/rezono/lib/holder"} in b["schemas"]
     assert {k["id"]: k["module"] for k in b["kinds"]}["holder"] == "lib:holder"
     assert {a["id"]: (a["target"], a["required"]) for a in b["arrows"]}["holder.party"] == ("party", True)
+
+
+def test_a_legacy_schema_imports_a_lowered_module_from_a_pinned_pack(tmp_path):
+    imported = lib(tmp_path)
+    directory = Path(shutil.copytree(FIXTURE, tmp_path / "packs" / "main"))
+    metadata = directory / "pack.yaml"
+    meta = yaml.safe_load(metadata.read_bytes())
+    meta["imports"] = [{"name": "lib", "path": "../lib", "sha256": modules.pack_hash(imported)}]
+    metadata.write_bytes(yaml.safe_dump(meta).encode("utf-8"))
+    source = directory / "schema/minimal.yaml"
+    schema = yaml.safe_load(source.read_bytes())
+    schema["imports"].append("lib:holder")
+    schema["classes"]["Alpha"]["attributes"]["holder"] = {"range": "Holder"}
+    source.write_bytes(yaml.safe_dump(schema).encode("utf-8"))
+    add(directory / "labels/nl.yaml", "alpha.holder: houder\n")
+
+    bundle = json.loads(compile_dir(directory, tmp_path / "out")["bundle/schema-bundle.json"])
+
+    assert not (imported / "schema/holder.yaml").exists()
+    assert any(s["module"] == "lib:holder" and s["file"] == "rezono/holder.rezono" for s in bundle["schemas"])
+    assert {a["id"]: a["target"] for a in bundle["arrows"]}["alpha.holder"] == "holder"
+
+    schema["imports"][-1] = "lib:missing"
+    source.write_bytes(yaml.safe_dump(schema).encode("utf-8"))
+    with pytest.raises(pack.CompileError, match="import 'lib:missing' is not a module"):
+        pack.read(directory)
+
+    relay = directory.with_name("relay")
+    relay.mkdir()
+    (relay / "pack.yaml").write_bytes(yaml.safe_dump({"name": "relay", "imports": meta["imports"]}).encode("utf-8"))
+    meta["imports"] = [{"name": "relay", "path": "../relay", "sha256": modules.pack_hash(relay)}]
+    metadata.write_bytes(yaml.safe_dump(meta).encode("utf-8"))
+    schema["imports"][-1] = "lib:holder"
+    source.write_bytes(yaml.safe_dump(schema).encode("utf-8"))
+    with pytest.raises(pack.CompileError, match="import 'lib:holder' names no pack that minimal imports"):
+        pack.read(directory)
+
+
+def test_a_legacy_relative_import_stays_at_its_schema_directory(tmp_path):
+    directory = Path(shutil.copytree(FIXTURE, tmp_path / "minimal"))
+    module(directory, [{"kind": "RootHolder", "world": "closed", "slots": [], "derived": []}], name="holder")
+    (directory / "rezono/terms").mkdir()
+    module(directory, [{"kind": "NestedHolder", "world": "closed", "slots": [], "derived": []}], name="terms/holder")
+    source = directory / "schema/minimal.yaml"
+    schema = yaml.safe_load(source.read_bytes())
+    schema["imports"].extend(["holder", "terms/child"])
+    schema["classes"]["Alpha"]["attributes"]["holder"] = {"range": "RootHolder"}
+    source.write_bytes(yaml.safe_dump(schema).encode("utf-8"))
+    (directory / "schema/terms").mkdir()
+    (directory / "schema/terms/child.yaml").write_text(
+        "id: https://rezono.example/child\nname: child\nimports: [linkml:types, holder]\n"
+        "default_range: string\nannotations: {layer: facts}\nclasses:\n  Child:\n    attributes:\n"
+        "      id: {identifier: true}\n      holder: {range: NestedHolder}\n", encoding="utf-8"
+    )
+    add(directory / "labels/nl.yaml",
+        "alpha.holder: houder\nroot_holder: houder\nnested_holder: houder\nchild: kind\nchild.holder: houder\n")
+
+    bundle = json.loads(compile_dir(directory, tmp_path / "out")["bundle/schema-bundle.json"])
+
+    targets = {arrow["id"]: arrow["target"] for arrow in bundle["arrows"]}
+    assert targets["alpha.holder"] == "root_holder"
+    assert targets["child.holder"] == "nested_holder"
+
+
+@pytest.mark.parametrize("pack_order", [("left", "right"), ("right", "left")])
+def test_relative_imports_in_two_pinned_packs_keep_distinct_modules(tmp_path, pack_order):
+    directory = Path(shutil.copytree(FIXTURE, tmp_path / "minimal"))
+    metadata = directory / "pack.yaml"
+    meta = yaml.safe_load(metadata.read_bytes())
+    root_schema = directory / "schema/minimal.yaml"
+    schema = yaml.safe_load(root_schema.read_bytes())
+    meta["imports"] = []
+    for side in pack_order:
+        identity = f"{side}pack"
+        imported = tmp_path / identity
+        (imported / "schema").mkdir(parents=True)
+        (imported / "labels").mkdir()
+        (imported / "labels/nl.yaml").write_bytes(f"{side}: {side}\n".encode("utf-8"))
+        (imported / "pack.yaml").write_bytes(f"name: {identity}\nversion: '0'\ndefault_language: nl\n".encode("utf-8"))
+        (imported / "schema/consumer.yaml").write_bytes(
+            f"id: https://rezono.example/{identity}/consumer\nname: consumer\nimports: [linkml:types, holder]\n"
+            "annotations: {layer: facts}\n".encode("utf-8")
+        )
+        kind = side.title()
+        module(imported, [{"kind": kind, "world": "closed", "slots": [], "derived": []}], pack=identity, name="holder")
+        meta["imports"].append({"name": identity, "path": f"../{identity}", "sha256": modules.pack_hash(imported)})
+        schema["imports"].append(f"{identity}:consumer")
+        schema["classes"]["Alpha"]["attributes"][side] = {"range": kind}
+        add(directory / "labels/nl.yaml", f"alpha.{side}: {side}\n")
+    metadata.write_bytes(yaml.safe_dump(meta).encode("utf-8"))
+    root_schema.write_bytes(yaml.safe_dump(schema).encode("utf-8"))
+
+    bundle = json.loads(compile_dir(directory, tmp_path / "out")["bundle/schema-bundle.json"])
+
+    assert {a["id"]: a["target"] for a in bundle["arrows"] if a["id"].startswith("alpha.")} == {
+        "alpha.left": "left", "alpha.right": "right",
+    }
+    assert {(v["module"], v["file"]) for v in bundle["schemas"] if v["module"].endswith(":holder")} == {
+        ("leftpack:holder", "rezono/holder.rezono"), ("rightpack:holder", "rezono/holder.rezono"),
+    }
+
+    left = tmp_path / "leftpack"
+    source = left / "schema/consumer.yaml"
+    source.write_bytes(source.read_bytes().replace(b", holder]", b", rightpack:holder]"))
+    with pytest.raises(pack.CompileError, match="not the pinned"):
+        pack.read(directory)
+    next(pin for pin in meta["imports"] if pin["name"] == "leftpack")["sha256"] = modules.pack_hash(left)
+    metadata.write_bytes(yaml.safe_dump(meta).encode("utf-8"))
+    with pytest.raises(pack.CompileError, match="import 'rightpack:holder' names no pack that leftpack imports"):
+        pack.read(directory)
 
 
 def test_a_pack_may_hold_modules_only(tmp_path):
@@ -296,7 +472,7 @@ REFUSALS = {
     "a check": ([{"check": "warn", "cond": {"lit": "true"}}], 10, "a check statement is not lowered yet"),
     "a reason": ([{"reason": "r", "text": '"r"'}], 10, "a reason declaration is not lowered"),
     "a slot named id": ([slot(slot="id", type="Text")], 11, "a slot named `id` is refused"),
-    "a slot T*": ([slot(slot="many", type="Text", card="*")], 11, "a slot `Text*` is not lowered"),
+    "an unknown slot suffix": ([slot(slot="many", type="Text", card="**")], 11, "a slot `Text**` is not lowered"),
     "an inverse": ([slot(slot="many", type="Beta", card="*", inverse="eta")], 11, "a slot with inverse is not lowered"),
     "world on a slot": ([slot(slot="note", type="Text", world="open")], 11, "a slot with world is not lowered"),
     "a DateTime slot": ([slot(slot="observed_at", type="DateTime")], 11, "DateTime is not Date, Text, or an enum or a kind of this pack"),

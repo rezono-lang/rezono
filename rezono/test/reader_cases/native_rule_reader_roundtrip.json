@@ -1,0 +1,122 @@
+{
+  "source": "rezono 0\npack minimal\nrule listed(item: Alpha)\nrule listed(x) when x in Alpha\n",
+  "form": {
+    "format": "rezono.module/3",
+    "module": {
+      "rezono": "0",
+      "pack": "minimal",
+      "use": [],
+      "decls": [
+        {"rule": "listed", "columns": [{"name": "item", "type": "Alpha"}]},
+        {
+          "rule": "listed",
+          "args": [{"path": ["x"]}],
+          "when": {"in": [{"path": ["x"]}, {"kind": "Alpha"}]}
+        }
+      ]
+    },
+    "spans": [
+      {"at": "/decls/0", "line": "3", "start": "27", "end": "33"},
+      {"at": "/decls/0/columns/0", "line": "3", "start": "34", "end": "38"},
+      {"at": "/decls/1", "line": "4", "start": "52", "end": "58"},
+      {"at": "/decls/1/args/0", "line": "4", "start": "59", "end": "60"},
+      {"at": "/decls/1/when", "line": "4", "start": "67", "end": "77"},
+      {"at": "/decls/1/when/in/0", "line": "4", "start": "67", "end": "68"},
+      {"at": "/decls/1/when/in/1", "line": "4", "start": "72", "end": "77"}
+    ]
+  },
+  "knownDiagnostics": [
+    {"code": "R000", "span": {"text": "rule", "start": 22, "end": 26}},
+    {"code": "R000", "span": {"text": "rule", "start": 47, "end": 51}}
+  ],
+  "extended": {
+    "source": "rezono 0\npack rule-demo\nuse std-order as ordering\nrule `replaces`(`at`: ordering.Alpha, n: Int) explain fold when\n  ordering.Alpha.related(_, `at`)\n  and not ordering.`count`(`at`)\n  or (Alpha.related(_, `at`) where it.active is known).count() >= 1 + 2 * 3\nrule `replaces`(x, x.`at`) with local: ordering.Alpha when x in ordering.Alpha\nrule eligible(x) when x.score >= 1 + 2 * 3\n  or not x.active and x.score in 1..<10\n",
+    "ask": "ask Alpha where x.score >= 1 + 2 * 3 or not x.active and x.score in 1..<10",
+    "module": {
+      "rezono": "0",
+      "pack": "rule-demo",
+      "use": [{"use": "std-order", "as": "ordering"}],
+      "decls": [
+        {
+          "rule": "replaces",
+          "columns": [{"name": "at", "type": "ordering.Alpha"}, {"name": "n", "type": "Int"}],
+          "options": [{"explain": "fold"}],
+          "when": {
+            "or": [
+              {
+                "and": [
+                  {"call": ["ordering.Alpha.related", [{"wildcard": true}, {"path": ["at"]}]]},
+                  {"not": {"call": ["ordering.count", [{"path": ["at"]}]]}}
+                ]
+              },
+              {
+                "cmp": [
+                  ">=",
+                  {
+                    "agg": [
+                      "count",
+                      {
+                        "filter": [
+                          {"call": ["Alpha.related", [{"wildcard": true}, {"path": ["at"]}]]},
+                          {"is": [{"path": ["it", "active"]}, "known"]}
+                        ]
+                      }
+                    ]
+                  },
+                  {"arith": ["+", {"lit": "1"}, {"arith": ["*", {"lit": "2"}, {"lit": "3"}]}]}
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "rule": "replaces",
+          "args": [{"path": ["x"]}, {"path": ["x", "at"]}],
+          "locals": [{"name": "local", "type": "ordering.Alpha"}],
+          "when": {"in": [{"path": ["x"]}, {"kind": "ordering.Alpha"}]}
+        },
+        {
+          "rule": "eligible",
+          "args": [{"path": ["x"]}],
+          "when": {
+            "or": [
+              {"cmp": [">=", {"path": ["x", "score"]}, {"arith": ["+", {"lit": "1"}, {"arith": ["*", {"lit": "2"}, {"lit": "3"}]}]}]},
+              {
+                "and": [
+                  {"not": {"path": ["x", "active"]}},
+                  {"in": [{"path": ["x", "score"]}, {"range": [{"lit": "1"}, "..<", {"lit": "10"}]}]}
+                ]
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "spans": [
+      {"at": "/decls/0", "line": "4", "start": "55", "end": "65"},
+      {"at": "/decls/0/columns/0", "line": "4", "start": "66", "end": "70"},
+      {"at": "/decls/0/columns/1", "line": "4", "start": "88", "end": "89"},
+      {"at": "/decls/0/when", "line": "5", "start": "116", "end": "256"},
+      {"at": "/decls/0/when/or/0/and/0", "line": "5", "start": "116", "end": "147"},
+      {"at": "/decls/0/when/or/0/and/0/call/1/0", "line": "5", "start": "139", "end": "140"},
+      {"at": "/decls/0/when/or/0/and/1/not", "line": "6", "start": "158", "end": "180"},
+      {"at": "/decls/1", "line": "8", "start": "262", "end": "272"},
+      {"at": "/decls/1/args/1", "line": "8", "start": "276", "end": "282"},
+      {"at": "/decls/1/locals/0", "line": "8", "start": "289", "end": "294"},
+      {"at": "/decls/1/when", "line": "8", "start": "316", "end": "335"},
+      {"at": "/decls/2", "line": "9", "start": "341", "end": "349"},
+      {"at": "/decls/2/when/or/1/and/1/in/1", "line": "10", "start": "412", "end": "418"},
+      {"at": "/use/0", "line": "3", "start": "28", "end": "37"}
+    ]
+  },
+  "refusals": [
+    {
+      "source": "rezono 0\r\npack minimal\r\nrule listed(x) if Alpha.member(x)\r\n",
+      "diagnostics": [{"code": "R000", "span": {"text": "if", "start": 39, "end": 41}}]
+    },
+    {
+      "source": "rezono 0\r\npack minimal\r\nrule listed(?x) when x in Alpha\r\n",
+      "diagnostics": [{"code": "R000", "span": {"text": "?", "start": 36, "end": 37}}]
+    }
+  ]
+}

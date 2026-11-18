@@ -23,9 +23,10 @@ Rule safety is not trusted either (`_check_safety`): every variable is bound, so
 cannot choose a value. What the loader does take on trust is in the checker's README, "Trusted base".
 """
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 
-from .canon import INTEGER
+from .canon import INTEGER, CalcColumnType
 
 FUNCTIONS = ("count", "sum", "min", "max")
 COMPARISONS = ("eq", "ne", "lt", "le", "gt", "ge")
@@ -75,6 +76,14 @@ class Rule:
     assignments: tuple = ()
     bare_values: bool = False  # rule IR: bindings are bare key values, not '<state>:<payload>'
     calc_inputs: frozenset[str] = frozenset()  # these premises need their own checked W12 witness
+    rational_calc_inputs: frozenset[str] = frozenset()  # the subset with exact numbers
+
+    def calc_input_type(self, relation: str) -> CalcColumnType | None:
+        if relation in self.rational_calc_inputs:
+            return "rational"
+        if relation in self.calc_inputs:
+            return "integer"
+        return None
 
     @property
     def variables(self) -> frozenset:
@@ -194,14 +203,58 @@ def load_seals(doc: dict) -> list[dict]:
     return out
 
 
+def _rational_keys(relations: Sequence[dict]) -> dict[str, tuple[bool, ...]]:
+    """Rational columns are selection values and derived key columns."""
+    result = {}
+    for r in relations:
+        columns = tuple(c.get("type") == "rational" for c in r.get("key", ()))
+        if any(c.get("type") == "rational" for c in r.get("values") or ()):
+            raise ValueError(f"{r['name']}: a rational column is part of the key")
+        if not any(columns):
+            continue
+        if ((r.get("role") != "derived" and (r.get("role") != "calc" or columns != (False, True, False, False)))
+                or sum(other["name"] == r["name"] for other in relations) != 1):
+            raise ValueError(f"{r['name']}: expected a rational selection value or a derived key column")
+        result[r["name"]] = columns
+    return result
+
+
+def _check_rational_uses(rule: Rule, keys: dict[str, tuple[bool, ...]]) -> None:
+    """Copy a rational variable without converting it or using it in an operation."""
+    rational, other = set(), set()
+    atoms = (rule.head, *(b.atom for b in rule.body), *(a.atom for a in rule.aggregates))
+    for atom in atoms:
+        columns = keys.get(atom.relation)
+        if columns is None:
+            other.update(t for t in atom.terms if t.startswith("?"))
+            continue
+        if len(atom.terms) != len(columns):
+            raise ValueError(f"{rule.id}: {atom.relation} needs one term for each key column")
+        for term, exact in zip(atom.terms, columns):
+            if exact and not term.startswith("?"):
+                raise ValueError(f"{rule.id}: a rational column must bind or copy a variable")
+            if term.startswith("?"):
+                (rational if exact else other).add(term)
+    if rational & other:
+        raise ValueError(f"{rule.id}: a rational variable must use rational columns throughout")
+    operations = {term for c in (*rule.conditions, *rule.assignments) for term in (c.left, c.right, c.var)}
+    operations |= {a.var for a in rule.aggregates}
+    if rational & operations or any(a.atom.relation in keys for a in rule.aggregates):
+        raise ValueError(f"{rule.id}: a rational value is only copied")
+    if any(b.atom.relation in keys and b.polarity != "positive" for b in rule.body):
+        raise ValueError(f"{rule.id}: a rational premise must be positive")
+
+
 def load_rules(doc: dict) -> dict:
     """Read rule definitions and check their stratification. Raises ValueError on bad input."""
     ir = doc.get("format") is not None
     if ir and doc["format"] != "rezono.rules/1":
         raise ValueError(f"unknown rule format {doc['format']}")
-    keys = {r["name"]: [c["name"] for c in r.get("key", [])] for r in doc.get("relations", [])} if ir else {}
-    calc_relations = {r["name"] for r in doc.get("relations", ()) if ir and r.get("role") == "calc"}
-    for r in doc.get("relations", []) if ir else ():
+    relations = doc.get("relations", ()) if ir else ()
+    keys = {r["name"]: [c["name"] for c in r.get("key", [])] for r in relations}
+    calc_relations = {r["name"] for r in relations if r.get("role") == "calc"}
+    rational_keys = _rational_keys(relations)
+    for r in relations:
         if r.get("role") == "derived" and r.get("values"):  # a witness proves a key; nothing would prove a value
             raise ValueError(f"{r['name']}: a derived relation is a set, without value columns")
         if "release" in r:  # a release has proof obligations this checker does not verify yet
@@ -225,6 +278,8 @@ def load_rules(doc: dict) -> dict:
                               for c in r.get("assignments", [])) if ir else (),
             bare_values=ir,
             calc_inputs=frozenset(b["relation"] for b in r.get("body", ()) if b["relation"] in calc_relations),
+            rational_calc_inputs=frozenset(b["relation"] for b in r.get("body", ())
+                                           if b["relation"] in calc_relations and b["relation"] in rational_keys),
         )
         for c in rule.assignments:
             if not isinstance(c.var, str):
@@ -253,6 +308,8 @@ def load_rules(doc: dict) -> dict:
             if a.var is not None and not a.var.startswith("?"):
                 raise ValueError(f"{rule.id}: aggregate result {a.var} is not a variable")
         _check_safety(rule)
+        if rational_keys:
+            _check_rational_uses(rule, rational_keys)
         rules[rule.id] = rule
 
     strata = {}
@@ -402,7 +459,8 @@ def check_calc_bindings(doc: dict, rules: dict, calculation: dict | None) -> Non
         key = [(c["name"], c["type"]) for c in declaration["key"]]
         if (selections.get(name) != "number" or declaration.get("values") or declaration.get("world", "open") != "open"
                 or len(key) != 4 or key[0] not in (("subject", "string"), ("subject", "integer"))
-                or key[1:] != [("value", "integer"), ("state", "string"), ("reason", "string")]
+                or key[1] not in (("value", "integer"), ("value", "rational"))
+                or key[2:] != [("state", "string"), ("reason", "string")]
                 or sum(r["name"] == name for r in declarations) != 1):
             raise ValueError(f"{name}: expected one open, typed input for a numeric calculation selection")
     after, todo = set(inputs), sorted(inputs)

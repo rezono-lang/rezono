@@ -1,0 +1,25 @@
+id: value-agg-sum-empty
+source: docs/semantics/value-cases.yaml#agg-sum-empty
+status: settled
+input:
+  rows:
+    - {$kind: Group, $id: group-a}
+    - {$kind: Group, $id: group-b}
+    - {$kind: Item, $id: item-a, group: {$ref: group-b}, labels: [first], quantity: "7", weight: "1"}
+  select: {kind: Group, id: group-a}
+  language: "ask g: Group where true show (Item where group = g).sum(quantity)"
+  rules:
+    output: group_sum
+    clauses: |
+      .decl member_quantity(group: symbol, item: symbol, quantity: number)
+      member_quantity(g, i, v) :- item(i), item__group(i, g), item__quantity(i, v).
+      .decl group_sum(group: symbol, quantity: number)
+      group_sum(g, n) :- group(g), n = sum v : { member_quantity(g, _, v) }.
+      .output group_sum
+expect:
+  value: "0"
+  state: known
+  reason: null
+  witness:
+    subject: {kind: Group, id: group-a}
+    members: []

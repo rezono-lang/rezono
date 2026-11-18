@@ -97,6 +97,70 @@ def test_declared_dataset_compiles_and_checks_with_typed_rows(declared_dataset, 
         ]
 
 
+@pytest.mark.parametrize("source", [
+    "not a valid Rezono declaration\n",
+    "rezono 0\npack other\ndataset sample\n",
+    "rezono 0\npack minimal\ndataset other\n",
+    "rezono 1\npack minimal\ndataset sample\n",
+    "rezono 0\npack minimal\ndataset sample\n  broken fact\n",
+    "rezono 0\npack minimal\n",
+    "rezono 0\npack minimal\ndataset sample\n  fact Alpha\n    | id |\n    | - |\n",
+    'rezono 0\npack other\ndataset sample\n  fact Alpha\n    | id |\n    | "item" |\n',
+    'rezono 0\npack minimal\ndataset other\n  fact Alpha\n    | id |\n    | "item" |\n',
+])
+def test_declared_dataset_refuses_invalid_source_with_unchanged_form(declared_dataset, tmp_path, capsys, source):
+    root, form_path, form = declared_dataset
+    form_path.write_text(json.dumps(form), encoding="utf-8")
+    form_path.with_suffix(".rezono").write_text(source, encoding="utf-8")
+    output = tmp_path / "compiled"
+
+    assert main(["compile", str(root), str(output)]) == 1
+    assert main(["check", str(root)]) == 1
+    assert main(["facts", str(root), str(form_path)]) == 1
+    assert not output.exists()
+    assert capsys.readouterr().err.count("sample.rezono") == 3
+    with pytest.raises(facts.LoadError, match=r"sample\.rezono"):
+        scenarios.states(pack.read(root), root)
+
+
+def test_declared_dataset_uses_authored_rows_and_locations(declared_dataset, tmp_path, capsys):
+    root, form_path, form = declared_dataset
+    form_path.write_text(json.dumps(form), encoding="utf-8")
+    original_form = form_path.read_bytes()
+    source = form_path.with_suffix(".rezono")
+    text = (
+        "rezono 0\npack minimal\ndataset sample\n"
+        "  fact Alpha\n"
+        "    | id | title | size |\n"
+        '    | sample-item | "Authored title" | 8 |\n'
+        "    | s1 | North | 3 |\n"
+    )
+    source.write_text(text, encoding="utf-8")
+    output = tmp_path / "compiled"
+
+    assert facts.files(root) == [form_path]
+    assert main(["compile", str(root), str(output)]) == 0
+    assert main(["check", str(root)]) == 0
+    assert "sample.json 6 rows" in capsys.readouterr().out
+    assert main(["facts", str(root), str(form_path)]) == 0
+    assert json.loads(capsys.readouterr().out)["alpha__size"] == [
+        {"insert": {"id": "s1", "v": 3}}, {"insert": {"id": "sample-item", "v": 8}}
+    ]
+    model = pack.read(root)
+    assert scenarios.states(model, root)[0][1]["alpha__size"] == [("s1", 3), ("sample-item", 8)]
+    entries = json.loads((output / "generated/sources.json").read_bytes())
+    assert {entry["row"]["relation"] for entry in entries} == {"alpha", "alpha__title", "alpha__size"}
+    for entry in entries:
+        identifier = json.loads(entry["row"]["key"])[0]
+        assert entry["sources"] == [
+            {"kind": "pack", "name": "rezono/data/sample.rezono", "position": {"sample-item": "6", "s1": "7"}[identifier]}
+        ]
+
+    source.write_text(text.replace("| 8 |", "| 9 |"), encoding="utf-8")
+    assert scenarios.states(model, root)[0][1]["alpha__size"] == [("s1", 3), ("sample-item", 9)]
+    assert form_path.read_bytes() == original_form
+
+
 @pytest.mark.parametrize("fault", ["future_format", "mixed", "invalid_cell", "theory"])
 def test_declared_dataset_rejects_invalid_forms(declared_dataset, tmp_path, capsys, fault):
     root, form_path, form = declared_dataset
