@@ -4,7 +4,7 @@
 // writes are the bytes the contract's check validates.
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
@@ -63,6 +63,38 @@ test('print and JSON round-trip', () => {
 	const read = moduleFromJson(JSON.parse(json));
 	assert.deepEqual(read, made.form);
 	assert.equal(moduleToJson(read), json);
+});
+
+test('pack headers and use targets round-trip existing pack slugs', (t) => {
+	const lines = ['rezono 0', 'pack std-access', 'use std-order as order_pack', 'use catalog.std-part',
+		'kind Item', '  item_code: Text'];
+	const sourceText = lines.join('\n') + '\n';
+	const dir = mkdtempSync(join(tmpdir(), 'rezono-pack-form-'));
+	t.after(() => rmSync(dir, { recursive: true, force: true }));
+	const sourcePath = join(dir, 'access.rezono');
+	const targetPath = join(dir, 'access.json');
+	writeFileSync(sourcePath, sourceText);
+
+	const diagnostics: string[] = [];
+	assert.equal(writeForm(sourcePath, targetPath, (line) => diagnostics.push(line)), 0, diagnostics.join('\n'));
+	const form = moduleFromJson(JSON.parse(readFileSync(targetPath, 'utf8')));
+	assert.equal(form.module.pack, 'std-access');
+	assert.deepEqual(form.module.use, [{ use: 'std-order', as: 'order_pack' }, { use: 'catalog.std-part' }]);
+	assert.equal(printModule(form.module), sourceText);
+	for (const [index, use] of form.module.use.entries()) {
+		const span = form.spans.find((entry) => entry.at === `/use/${index}`);
+		assert.ok(span);
+		assert.equal(sourceText.slice(Number(span.start), Number(span.end)), use.use);
+	}
+
+	assert.equal(formOf(['pack legacy_pack', 'use legacy.module_name']).module.pack, 'legacy_pack');
+	for (const name of ['-std', 'std-', 'std-Access', 'std-ac_cess', 'std-access.']) {
+		assert.deepEqual(refused([`pack ${name}`]), ['R000 line 1']);
+		assert.deepEqual(refused(['pack lab', `use ${name}`]), ['R000 line 2']);
+	}
+	assert.deepEqual(refused(['pack lab', 'use std-access as wrong-alias']), ['R000 line 2']);
+	assert.deepEqual(refused(['pack lab', 'kind Item', '  item-code: Text']), ['R000 line 3']);
+	assert.deepEqual(refused(['pack lab', 'kind Std-Access']), ['R000 line 2']);
 });
 
 test('the normal form of a module: one statement on a line, two spaces for each block', () => {

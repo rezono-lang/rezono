@@ -23,7 +23,10 @@ tagged_invoice: Invoice line tagged with a plan
 invoice_binding: Invoice line matched by plan, item and currency
 bound_invoice: Bound invoice line
 invoice_binding_count: Observed lines matching a priced item
+verified_invoice_amount: Verified rounded invoice comparator
+invoice_amount_verification_count: Verified rounded amounts for a priced item
 amount_difference: Invoice amount difference
+unverifiable_invoice_amount: Invoice amount has unverified rounding
 unbound_invoice: Unbound invoice line
 rounding_digit: Exact price or remainder digit
 rounding_digit.line: Priced line reference

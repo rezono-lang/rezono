@@ -14,7 +14,7 @@ The working rules in `AGENTS.md` are the short form; this page is the reason beh
 
 ## Rules, not scripts
 
-- What follows from facts is a rule in a pack, in Datalog, recursion included. No production code walks a graph, sums a column or picks a winner. An independent oracle in the tests may, and should, compute the same answer its own way.
+- What follows from facts is a rule in a pack, written in Rezono with Datalog semantics including recursion, negation and counting. No production code walks a graph, sums a column or picks a winner. An independent oracle in the tests may, and should, compute the same answer its own way.
 - Code may read input, render output from derived rows, apply a plan, and observe. It does not decide.
 - Everything that follows is compiled: tables, checks, explanation queries, sentences, admission policy, firewall rules, publication. Generated output is never edited by hand.
 - A standard pack (`packs/std-*`) is used wherever it fits: time, order, parts, identity, decisions, access, the loop and the view. An example does not grow its own variant.
@@ -61,7 +61,7 @@ The working rules in `AGENTS.md` are the short form; this page is the reason beh
 
 - An oracle checks that Rezono computes correctly. It is independent and runs only in tests. A difference blocks: it is a bug in Rezono, unless checking both against the rule shows that the oracle was wrong.
 - A reference source checks that what Rezono derives agrees with what was observed, or with what another system registered. A difference is drift: a finding with a proof from both sides, shown to readers.
-- The two are never mixed.
+- Keep the comparisons separate. The [formal foundations](formal.md#11-independent-oracles) record which independent comparisons run and what each one checks.
 
 ## Reading
 

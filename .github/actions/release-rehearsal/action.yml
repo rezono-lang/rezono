@@ -1,0 +1,28 @@
+name: Rehearse the release
+description: Build and verify the release distributions and write the release notes.
+inputs:
+  source-directory:
+    description: Path to the full checkout from the workspace.
+    default: '.'
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+      with:
+        node-version: '24.14.0'
+        package-manager-cache: false
+    - name: Check the installed distributions and report archive sizes
+      working-directory: ${{ inputs.source-directory }}
+      shell: bash
+      run: bash scripts/release-check.sh "$RUNNER_TEMP/distributions"
+    - name: Generate release notes
+      working-directory: ${{ inputs.source-directory }}
+      shell: bash
+      run: python scripts/release-notes.py >> "$GITHUB_STEP_SUMMARY"
+    - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      if: github.event_name == 'workflow_dispatch'
+      with:
+        name: checked-distributions
+        path: ${{ runner.temp }}/distributions/
+        if-no-files-found: error
+        retention-days: 2

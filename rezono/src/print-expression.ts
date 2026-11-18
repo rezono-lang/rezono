@@ -5,6 +5,7 @@
 // Module declarations are assembled separately (`printModule`).
 import type { Ask, Expr, Question, Tail } from './tree.ts';
 import { isAsk, isCheck } from './tree.ts';
+import { spellName, spellQualifiedName } from './rule-names.ts';
 
 // Precedence, lowest first (§4). A node prints in parentheses where the place it stands in needs a higher level.
 const COND = 0;
@@ -52,14 +53,15 @@ const whole = (e: Expr) => expr(e, COND, true);
 
 function bare(e: Expr, last: boolean): string {
 	if ('lit' in e) return e.lit;
-	if ('path' in e) return e.path.join('.');
-	if ('kind' in e) return e.kind;
-	if ('dot' in e) return `${base(e.dot[0])}.${e.dot[1]}`;
+	if ('wildcard' in e) return '_';
+	if ('path' in e) return e.path.map(name => spellName(name)).join('.');
+	if ('kind' in e) return spellQualifiedName(e.kind);
+	if ('dot' in e) return `${base(e.dot[0])}.${spellName(e.dot[1])}`;
 	if ('agg' in e) {
 		const [name, of, arg] = e.agg;
 		return `${base(of)}.${name}(${arg ? whole(arg) : ''})`;
 	}
-	if ('call' in e) return `${e.call[0]}(${e.call[1].map(whole).join(', ')})`;
+	if ('call' in e) return `${spellQualifiedName(e.call[0], true)}(${e.call[1].map(whole).join(', ')})`;
 	if ('timesel' in e) {
 		const [base, sel] = e.timesel;
 		return [expr(base, DOTTED, false), ...(sel.at ? [`at ${atom(sel.at)}`] : []), ...(sel.as_known ? [`as known ${atom(sel.as_known)}`] : [])].join(' ');

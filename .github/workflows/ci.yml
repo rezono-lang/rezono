@@ -21,6 +21,53 @@ permissions:
   contents: read
 
 jobs:
+  light_checks:
+    name: Light checks
+    if: >-
+      github.event_name == 'pull_request' ||
+      github.event_name == 'merge_group' ||
+      (github.event_name == 'push' && github.ref == 'refs/heads/main')
+    permissions:
+      contents: read
+    runs-on: ubuntu-24.04
+    timeout-minutes: 27
+    steps:
+      - id: full_checkout
+        name: Check out the candidate with history
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          path: release-source
+      - name: Check tracked files and the exception budget
+        working-directory: release-source
+        env:
+          BASE: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.event.before }}
+        run: python3 -I scripts/leak_check.py --base "$BASE"
+      - id: python
+        if: ${{ !cancelled() && steps.full_checkout.outcome == 'success' }}
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0
+        with:
+          python-version-file: release-source/requirements/.python-version
+      # The README makes editable installs. Give it its own checkout so the release build starts clean.
+      - id: readme_checkout
+        name: Check out the candidate for the README
+        if: ${{ !cancelled() && steps.python.outcome == 'success' }}
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+          path: readme-source
+      - name: Run the README example
+        if: ${{ !cancelled() && steps.readme_checkout.outcome == 'success' }}
+        working-directory: readme-source
+        shell: bash
+        run: bash scripts/check-quickstart.sh
+      - name: Run the release rehearsal
+        if: ${{ !cancelled() && steps.python.outcome == 'success' }}
+        uses: ./release-source/.github/actions/release-rehearsal
+        with:
+          source-directory: release-source
+
   discover:
     runs-on: ubuntu-24.04
     timeout-minutes: 12
@@ -113,16 +160,6 @@ jobs:
         with:
           editable: ${{ needs.discover.outputs.python_editable }}
           oracle: ${{ matrix.component.folder == 'compiler' || matrix.component.folder == 'examples' }}
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1  # v7.1.0
-        if: matrix.component.folder == 'compiler'
-        with:
-          node-version-file: .node-version
-          cache: npm
-          cache-dependency-path: rezono/package-lock.json
-      - name: Install the Rezono reader from its lockfile
-        if: matrix.component.folder == 'compiler'
-        working-directory: rezono
-        run: npm ci
       - name: Prepare the Ubuntu worker seed tools
         if: matrix.component.folder == 'run'
         shell: bash
@@ -219,7 +256,7 @@ jobs:
   check:
     name: check
     if: always()
-    needs: [discover, python, node, cluster_worker]
+    needs: [discover, python, node, light_checks, cluster_worker]
     permissions:
       contents: read
       actions: read
@@ -260,18 +297,25 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
       - name: Verify component jobs
         if: always()
+        shell: bash
         env:
           DISCOVER_RESULT: ${{ needs.discover.result }}
           PYTHON_RESULT: ${{ needs.python.result }}
           NODE_RESULT: ${{ needs.node.result }}
+          LIGHT_RESULT: ${{ needs.light_checks.result }}
           CLUSTER_RESULT: ${{ needs.cluster_worker.result }}
           CLUSTER_TASKS: ${{ needs.discover.outputs.cluster_tasks }}
         run: |
           set -euo pipefail
-          echo "discover=$DISCOVER_RESULT python=$PYTHON_RESULT node=$NODE_RESULT cluster=$CLUSTER_RESULT"
+          echo "discover=$DISCOVER_RESULT python=$PYTHON_RESULT node=$NODE_RESULT light=$LIGHT_RESULT cluster=$CLUSTER_RESULT"
           [ "$DISCOVER_RESULT" = "success" ]
           case "$PYTHON_RESULT" in success|skipped) ;; *) exit 1 ;; esac
           case "$NODE_RESULT" in success|skipped) ;; *) exit 1 ;; esac
+          case "$GITHUB_EVENT_NAME" in
+            pull_request|merge_group|push) [ "$LIGHT_RESULT" = success ] ;;
+            workflow_dispatch) [ "$LIGHT_RESULT" = skipped ] ;;
+            *) exit 1 ;;
+          esac
           case "$CLUSTER_TASKS" in
             ''|'[]') [ "$CLUSTER_RESULT" = skipped ] ;;
             *) [ "$CLUSTER_RESULT" = success ] ;;

@@ -17,13 +17,14 @@ import json
 import os
 import re
 import subprocess
-from collections.abc import Iterator, Mapping, Set
+from collections.abc import Callable, Iterator, Mapping, Set
 from dataclasses import dataclass, field
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import cast
 
 import yaml
+from . import rezono_alias, rezono_enum, rezono_extend, rezono_key, rezono_kind
 from .schemaview import SchemaView
 from linkml_runtime.linkml_model import SchemaDefinition
 from linkml_runtime.loaders.yaml_loader import YAMLLoader
@@ -37,8 +38,6 @@ KEY = "rezono"  # the key of pack.yaml (contract RezonoModule in contracts/pack.
 PAGE = "docs/rezono/publication.md"
 DATASET_FORMAT = "rezono.module/2"
 PATH = re.compile(r"^rezono/[a-z][a-z0-9_]*(/[a-z][a-z0-9_]*)*\.(rezono|json)$")
-# The built-in slot types (§5.1) and their LinkML ranges.
-TYPES = {"Bool": "boolean", "Date": "date", "Text": "string"}
 # Declarations this slice does not lower, by the member that names them: what, and where the page says so.
 REFUSED = {
     "unit": ("a unit is not lowered yet", "§6"),
@@ -47,11 +46,6 @@ REFUSED = {
     "reason": ("a reason declaration is not lowered (no ticket yet)", "§6"),
     "check": ("a check statement is not lowered yet", "§6"),
 }
-DERIVED = ("a derived value is not lowered yet", "§5.4")
-EXTEND = {"extend", "derived"}
-KIND = {"kind", "world", "applies", "sealed", "slots", "derived"}
-SLOT = {"slot", "type", "card"}
-ENUM = {"enum", "world", "values"}
 
 
 @dataclass(frozen=True)
@@ -152,13 +146,29 @@ def effective_form(pack_dir: Path, d: Declared, errors: list[str]) -> dict | Non
     submitted = read_form(pack_dir, d, errors)
     if submitted is None:
         return None
+    return source_form(pack_dir, d, submitted, errors, lambda source: legacy_header(source, submitted))
+
+
+def effective_dataset_form(pack_dir: Path, d: Declared, pack: str, submitted: dict,
+                           errors: list[str]) -> dict | None:
+    """Read authored dataset tables unless the exact historical form-only declaration is present."""
+    module = submitted["module"]
+    name = Path(d.module).stem
+    matches_legacy = not submitted["spans"] and not any(header_errors(module, pack))
+    header = f"rezono 0\npack {pack}\ndataset {name}"
+    return source_form(pack_dir, d, submitted, errors,
+                       lambda source: matches_legacy and source.replace("\r\n", "\n").removesuffix("\n") == header)
+
+
+def source_form(pack_dir: Path, d: Declared, submitted: dict, errors: list[str],
+                legacy: Callable[[str], bool]) -> dict | None:
     try:
         data = (pack_dir / d.module).read_bytes()
         source = data.decode("utf-8")
     except (OSError, UnicodeError):
         errors.append(f"{pack_dir.name}/{d.module}: cannot read the module as UTF-8")
         return None
-    if legacy_header(source, submitted):
+    if legacy(source):
         return submitted
     return authored_form(pack_dir, d, data, errors)
 
@@ -288,8 +298,7 @@ def lines(form: dict) -> dict[str, int]:
 
 
 def marks(module: Path, form: Path | dict) -> dict[tuple, tuple[int, int]]:
-    """The (line, column) of every kind and slot of a module, by the path of keys its lowered schema holds it at
-    (`classes`, the class, then `attributes` and the slot), as `spans.marks` gives them for a schema file (MOD2).
+    """The (line, column) of each kind, slot and path equation, by its keys in the lowered schema (MOD2).
     The place is the name as written: the form gives its offset in code points, the text the line it is on."""
     if isinstance(form, Path):
         text = module.read_text(encoding="utf-8")
@@ -310,9 +319,16 @@ def marks(module: Path, form: Path | dict) -> dict[tuple, tuple[int, int]]:
     for i, decl in enumerate(doc["module"]["decls"]):
         if isinstance(decl, dict) and isinstance(decl.get("kind"), str):
             place(f"/decls/{i}", ("classes", decl["kind"]))
+            if isinstance(equations := decl.get("equations"), list):
+                for j, _ in enumerate(equations):
+                    place(f"/decls/{i}/equations/{j}", ("classes", decl["kind"], "annotations", "path_equations", j))
             for j, s in enumerate(decl.get("slots") or []):
                 if isinstance(s, dict) and isinstance(s.get("slot"), str):
                     place(f"/decls/{i}/slots/{j}", ("classes", decl["kind"], "attributes", s["slot"]))
+            if isinstance(keys := decl.get("keys"), list):
+                for j, key in enumerate(keys):
+                    if isinstance(key, dict) and isinstance(key.get("unique"), str):
+                        place(f"/decls/{i}/keys/{j}", ("classes", decl["kind"], "unique_keys", key["unique"]))
     return out
 
 
@@ -329,35 +345,18 @@ def header_line(pack_dir: Path, d: Declared, word: str) -> int:
     return 1
 
 
+def declaration_name(decl: dict) -> str | None:
+    name = decl.get("kind", decl.get("enum", decl.get("type") if "base" in decl else None))
+    return name if isinstance(name, str) else None
+
+
 def names(form: dict) -> dict[str, str]:
-    """The kinds and enums a form declares: LinkML name -> the pointer of its first declaration."""
+    """The schema names a form declares and the pointer of each first declaration."""
     out: dict[str, str] = {}
     for i, decl in enumerate(form["module"]["decls"]):
-        name = decl.get("kind", decl.get("enum")) if isinstance(decl, dict) else None
-        if isinstance(name, str):
+        name = declaration_name(decl) if isinstance(decl, dict) else None
+        if name is not None:
             out.setdefault(name, f"/decls/{i}")
-    return out
-
-
-def builtin_range(name: str, declared: bool) -> str | None:
-    # Bool became a built-in after modules could already declare it as a pack name.
-    if name == "Bool" and declared:
-        return None
-    return TYPES.get(name)
-
-
-def attributes(decl: dict, declared: Set[str]) -> dict[str, dict]:
-    """Lower slots in written order, using an implicit `id` only when no slot identifies the kind (§5.1)."""
-    slots = decl.get("slots") or []
-    out: dict[str, dict] = {} if any(s.get("identifier") is True for s in slots) else {"id": {"identifier": True}}
-    for s in slots:
-        name = s["type"]
-        slot: dict[str, object] = {"range": builtin_range(name, name in declared) or name}
-        if s.get("identifier") is True:
-            slot["identifier"] = True
-        elif "card" not in s:
-            slot["required"] = True
-        out[s["slot"]] = slot
     return out
 
 
@@ -398,13 +397,14 @@ def lower(pack_dir: Path, d: Declared, form: dict, pack: str, owners: dict[str, 
     uses: set[str] = set()
     enums: dict[str, dict] = {}
     classes: dict[str, dict] = {}
+    aliases: dict[str, dict[str, str]] = {}
     for i, decl in enumerate(module["decls"]):
         at = f"/decls/{i}"
         if not isinstance(decl, dict):
             refuse(at, "not a declaration of the form")
             continue
-        name = decl.get("kind", decl.get("enum"))
-        if isinstance(name, str):
+        name = declaration_name(decl)
+        if name is not None:
             elsewhere = [o for o in owners.get(name, []) if o != d.id]
             if own[name] != at:
                 refuse(at, f"{name} is declared twice in this module", "§3")
@@ -414,116 +414,49 @@ def lower(pack_dir: Path, d: Declared, form: dict, pack: str, owners: dict[str, 
                        "§3")
                 continue
         if "kind" in decl:
-            if kind(decl, at, own, owners, uses, refuse, explicit_identifiers=form["format"] == IDENTIFIER_FORMAT):
-                classes[decl["kind"]] = {"attributes": attributes(decl, declared_names)}
+            kind_fields = {}
+            if form["format"] == IDENTIFIER_FORMAT and "abstract" in decl:
+                abstract = rezono_kind.lower_abstract(decl, at, refuse)
+                if abstract is None:
+                    continue
+                decl, kind_fields = abstract
+            keys = {}
+            if form["format"] == IDENTIFIER_FORMAT and "keys" in decl:
+                decl = decl.copy()
+                if (keys := rezono_key.lower(decl.pop("keys"), f"{at}/keys", refuse)) is None:
+                    continue
+            lowered_kind = rezono_kind.lower(
+                decl, at, own, owners, declared_names, uses, refuse,
+                extended_format=form["format"] == IDENTIFIER_FORMAT,
+            )
+            if lowered_kind is not None:
+                if keys:
+                    lowered_kind["unique_keys"] = keys
+                classes[decl["kind"]] = lowered_kind | kind_fields
         elif "enum" in decl:
-            if set(decl) - ENUM:
-                refuse(at, f"an enum with {', '.join(sorted(set(decl) - ENUM))} is not lowered", "§5.2")
-            elif decl.get("world") == "open":
-                refuse(at, "an open enum (`world open`) is refused", "§5.2")
-            elif twice := [k for k, v in enumerate(decl["values"]) if v in decl["values"][:k]]:
-                for k in twice:
-                    refuse(f"{at}/values/{k}", f"the value {decl['values'][k]} is written twice in enum {decl['enum']}",
-                           "§5.2")
-            else:
-                enums[decl["enum"]] = {"permissible_values": {v: {} for v in decl["values"]}}
+            lowered_enum = rezono_enum.lower(decl, at, refuse)
+            if lowered_enum is not None:
+                enums[decl["enum"]] = lowered_enum
         elif "extend" in decl:
-            extend(decl, at, imported, refuse)
+            rezono_extend.validate(decl, at, imported, refuse)
         elif "fact" in decl:
             if "columns" in decl:
                 refuse(at, "a fact table is not lowered yet", "§5.3")
             else:
                 refuse(at, "a fact row is not lowered (no ticket yet)")
+        elif "type" in decl and "base" in decl:
+            if form["format"] != IDENTIFIER_FORMAT:
+                refuse(at, "a scalar alias requires rezono.module/2", "§5.1")
+            elif alias := rezono_alias.lower(decl, at, refuse):
+                aliases[decl["type"]] = alias
         else:
             refuse(at, *next((REFUSED[k] for k in REFUSED if k in decl), ("not a declaration this compiler reads",)))
     schema = {"id": f"https://rezono.org/rezono/{pack}/{d.id}", "name": d.id.replace("/", "_"),
               "imports": ["linkml:types"], "default_range": "string", "annotations": {"layer": d.layer},
               "enums": enums, "classes": classes}
+    if aliases:
+        schema["types"] = aliases
     return Lowered(d, schema, form, sorted(uses))
-
-
-def kind(decl: dict, at: str, own: dict, owners: dict[str, list[str]], uses: set[str], refuse,
-         *, explicit_identifiers: bool = False) -> bool:
-    """Check a kind against §5.1; True when it lowers. A slot's type resolves in the module, else in the pack."""
-    ok = True
-    if set(decl) - KIND:
-        refuse(at, f"a kind with {', '.join(sorted(set(decl) - KIND))} is not lowered", "§5.1")
-        ok = False
-    if decl.get("world") != "closed":
-        refuse(at, "an open kind is refused: a kind says `world closed`", "§5.1")
-        ok = False
-    if "applies" in decl:
-        refuse(f"{at}/applies", "`applies` is not lowered yet")
-        ok = False
-    if "sealed" in decl:
-        refuse(at, "`sealed at` is not lowered yet")
-        ok = False
-    for k, _ in enumerate(decl.get("derived") or []):
-        refuse(f"{at}/derived/{k}", *DERIVED)
-        ok = False
-    seen: set[str] = set()
-    identifier_seen = False
-    allowed = SLOT | {"identifier"} if explicit_identifiers else SLOT
-    for j, s in enumerate(decl.get("slots") or []):
-        here = f"{at}/slots/{j}"
-        extra = sorted(set(s) - allowed) if isinstance(s, dict) else []
-        if not isinstance(s, dict) or extra:
-            refuse(here, f"a slot with {', '.join(extra)} is not lowered" if extra else "not a slot of the form",
-                   "§5.1")
-            ok = False
-            continue
-        if s["slot"] in seen:
-            refuse(here, f"the slot {s['slot']} is written twice in kind {decl['kind']}", "§5.1")
-            ok = False
-        seen.add(s["slot"])
-        explicit = s.get("identifier") is True
-        if "identifier" in s and not explicit:
-            refuse(here, "an explicit identifier must be marked true", "§5.1")
-            ok = False
-        if explicit:
-            if identifier_seen:
-                refuse(here, f"kind {decl['kind']} has more than one identifier", "§5.1")
-                ok = False
-            identifier_seen = True
-        if s["slot"] == "id" and not explicit:
-            refuse(here, "a slot named `id` is refused: `id` identifies the elements of a kind", "§5.1")
-            ok = False
-        if s.get("card", "?") != "?":
-            refuse(here, f"a slot `{s['type']}{s['card']}` is not lowered (no ticket yet)")
-            ok = False
-        t, found = s["type"], owners.get(s["type"], [])
-        if t in own or builtin_range(t, bool(found)) is not None:
-            continue
-        if len(found) == 1:
-            uses.add(found[0])
-            continue
-        refuse(here, f"{t} is declared by modules {' and '.join(found)} of this pack" if found else
-               f"{t} is not Date, Text, or an enum or a kind of this pack. Built-in Bool is also supported", "§5.1")
-        ok = False
-    return ok
-
-
-def extend(decl: dict, at: str, imported: bool, refuse) -> None:
-    """Check an `extend` against §9.1: each derived value is a decision table under `unique`. What needs the pack's
-    model (the kind, the inputs, the values) rezono_table checks; here what the form alone refuses."""
-    if set(decl) - EXTEND:
-        refuse(at, f"an extend with {', '.join(sorted(set(decl) - EXTEND))} is not lowered", "§9.1")
-        return
-    if imported:
-        refuse(at, "a decision table in a module of an imported pack is not lowered yet", "§9.1")
-        return
-    for k, dv in enumerate(decl.get("derived") or []):
-        here = f"{at}/derived/{k}"
-        t = dv.get("table") if isinstance(dv, dict) else None
-        if not isinstance(t, dict):
-            refuse(here, *DERIVED)
-        elif t.get("table") != "unique":
-            refuse(here, f"a table `{t.get('table')}` is not lowered yet", "§9.1")
-        elif "totality" in dv:
-            refuse(here, "`total` on a table is not lowered: its proof is the check of `rezono/` (tables.md §7, "
-                         "point 3)", "§9.1")
-        elif "card" in dv:
-            refuse(here, f"a derived value `{dv['type']}{dv['card']}` is not lowered yet", "§9.1")
 
 
 def view(schema: dict, importmap: dict) -> SchemaView:
@@ -558,5 +491,6 @@ def class_slot_order(pack_dir: Path, rel: str) -> dict[str, list[str]]:
     meta = yaml.safe_load((pack_dir / "pack.yaml").read_text(encoding="utf-8")) or {}
     d = next(d for d in declared(meta, pack_dir, []) if d.module == rel)
     form = effective_form(pack_dir, d, []) or {"module": {"decls": []}}
-    return {decl["kind"]: ["id", *(s["slot"] for s in decl.get("slots") or [])]
+    return {decl["kind"]: ([] if decl.get("embedded") is True else ["id"])
+            + [s["slot"] for s in decl.get("slots") or []]
             for decl in form["module"]["decls"] if isinstance(decl, dict) and "kind" in decl}

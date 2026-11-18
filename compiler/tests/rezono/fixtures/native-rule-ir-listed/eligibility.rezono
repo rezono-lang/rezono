@@ -1,0 +1,4 @@
+rezono 0
+pack minimal
+rule listed(item: Alpha)
+rule listed(x) when x in Alpha
