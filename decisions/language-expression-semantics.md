@@ -55,6 +55,14 @@ Publish a conclusion to a role only when a complete, founded and readable altern
 4. Keep physical column types in the IR and carry each ordered logical column type into the compiled bundle when it is richer. Construct derived publication slots from the checked column types, including integer bounds, nominal references or identifier representations, enums, refinements, units and currencies. A legacy column with only a physical type uses its physical scalar semantics. Refuse unsupported mappings. Validate encoded keys separately from the typed cell payload and check their agreement.
 5. The ordinary publisher, publication reader and snapshot reconstruction must agree on the typed values. A published count supports numeric comparison. An integer slot with `"zero"` fails validation even when its tuple key is changed to match. Validate manifests, definitions and witnesses against the bytes of the publication that owns them. Rebuilding the same inputs reproduces the same artifacts.
 
+### Logical types in the bundle
+
+Add an optional `semantic` member to each derived relation's `RuleColumn` using the existing [`SemanticType` shape](../contracts/bundle.yaml). Project it from the linked signature's resolved schema and physical column types. Keep `type` as the checked rule IR's physical type. Use the physical scalar semantics for a historical column without `semantic`.
+
+A reference uses `case: ref`, the target identifier's `base` and a `target` equal to the resolved kind identifier in the same pinned bundle. The kind's declaring schema and pack establish its owner. An enum likewise identifies the resolved bundle enum. A named scalar range keeps its resolved owner-qualified schema name. Resolve refinements, units and currencies through their pinned definitions. Reject an ambiguous target, an incompatible physical type or a declared logical mapping that the publication cannot validate.
+
+For the supplied-bundle fixture, the ordered columns are `stage`, `count` and `label`. The `stage` column has physical `string` and `semantic: {case: ref, base: string, target: stage}` and resolves to the pinned `Stage` kind with a text identifier. The other two columns have physical `integer` and `string`, respectively. The publication schema uses a reference, an integer and text in that order.
+
 ### Ordered derived tuple keys
 
 For each derived relation it exports as a kind, the publisher writes a `tuple_key` array on that kind in the role's schema document. The array lists the distinct column names in their checked bundle order. Its names must equal the kind's slot names, with every slot marked `derived: true`, card `1` and states `["known"]`. The kind keeps a `Text` identifier. The array is part of the pinned schema hash and supplies the order to a reader of the schema and row collection alone. JSON object member order has no authority.
