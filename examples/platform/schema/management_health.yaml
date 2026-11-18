@@ -30,3 +30,6 @@ classes:
       run: {required: true}
       token: {required: true}
       status: {range: HealthProbeStatus, required: true}
+      event_time:
+        range: integer
+        description: Source observation time in Unix seconds. Older readings without a time make the step unknown.
