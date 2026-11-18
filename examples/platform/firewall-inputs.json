@@ -44,13 +44,13 @@
   "endpoint_addresses": {
     "agent-base": 3221226001,
     "agent-build": 3221226097,
-    "agent-development": 3221226033,
+    "agent-development": 3221226065,
     "agent-edge": 3221226113,
     "agent-hub": 3221225985,
     "agent-management": 3221226017,
-    "agent-production": 3221226034,
+    "agent-production": 3221226049,
     "agent-recovery": 3221226129,
-    "agent-virtualization": 3221226035,
+    "agent-virtualization": 3221226033,
     "build": 3221226098,
     "control-base": 3221226002,
     "control-build": 3221226099,
@@ -60,22 +60,22 @@
     "control-management": 3221226019,
     "control-production": 3221226020,
     "control-recovery": 3221226130,
-    "control-virtualization": 3221226036,
+    "control-virtualization": 3221226034,
     "db-git": 3221226003,
     "db-idp": 3221226004,
-    "disk-development": 3221226037,
-    "disk-production": 3221226038,
+    "disk-development": 3221226035,
+    "disk-production": 3221226036,
     "dns": 3221226005,
     "fleet-hub": 3221225987,
     "git": 3221226006,
     "gitops": 3221225988,
     "idp": 3221226007,
-    "lab": 3221226065,
+    "lab": 3221226066,
     "lb": 3221226115,
     "reg": 3221226008,
     "restore": 3221226131,
     "restore-bad": 3221226132,
-    "shop": 3221226049,
+    "shop": 3221226050,
     "sign": 3221226100,
     "storage-data": 3221226081,
     "store": 3221226082,
@@ -84,13 +84,13 @@
     "vault": 3221226010,
     "workers-base": 3221226011,
     "workers-build": 3221226101,
-    "workers-development": 3221226039,
+    "workers-development": 3221226067,
     "workers-edge": 3221226117,
     "workers-hub": 3221225989,
     "workers-management": 3221226021,
-    "workers-production": 3221226040,
+    "workers-production": 3221226051,
     "workers-recovery": 3221226133,
-    "workers-virtualization": 3221226041
+    "workers-virtualization": 3221226037
   },
   "protocols": {
     "control-plane": "TCP",
@@ -108,5 +108,73 @@
     "signing": "TCP",
     "time": "UDP",
     "vm-disk": "TCP"
+  },
+  "fixed_source_addresses": {
+    "agent-hub": 3325256705,
+    "fleet-hub": 3325256706,
+    "gitops": 3325256707,
+    "agent-base": 3325256721,
+    "reg": 3325256722,
+    "agent-management": 3325256737,
+    "agent-virtualization": 3325256753,
+    "agent-production": 3325256769,
+    "shop": 3325256770,
+    "agent-development": 3325256785,
+    "lab": 3325256786,
+    "agent-build": 3325256817,
+    "build": 3325256818,
+    "agent-edge": 3325256833,
+    "agent-recovery": 3325256849,
+    "restore": 3325256850,
+    "restore-bad": 3325256851
+  },
+  "egress_ranges": {
+    "hub": [
+      3325256705,
+      3325256718
+    ],
+    "base": [
+      3325256721,
+      3325256734
+    ],
+    "management": [
+      3325256737,
+      3325256750
+    ],
+    "virtualization": [
+      3325256753,
+      3325256766
+    ],
+    "production": [
+      3325256769,
+      3325256782
+    ],
+    "development": [
+      3325256785,
+      3325256798
+    ],
+    "storage": [
+      3325256801,
+      3325256814
+    ],
+    "build": [
+      3325256817,
+      3325256830
+    ],
+    "edge": [
+      3325256833,
+      3325256846
+    ],
+    "recovery": [
+      3325256849,
+      3325256862
+    ]
+  },
+  "fixed_source_features": {
+    "addressFamily": "IPv4",
+    "egressGateway": true,
+    "bpfMasquerade": true,
+    "kubeProxyReplacement": true,
+    "hostedKubeProxy": false
   }
 }

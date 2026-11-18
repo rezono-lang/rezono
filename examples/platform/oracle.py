@@ -192,12 +192,15 @@ def firewall_json(expectations):
 if __name__ == "__main__":
     for name, relation in RELATIONS.items():
         print(f"{name}\t{len(relation)}")
-    firewall = firewall_expectations(json.loads((HERE / "firewall-inputs.json").read_text()), RELATIONS)
+    inputs = json.loads((HERE / "firewall-inputs.json").read_text())
+    firewall = firewall_expectations(inputs, RELATIONS)
+    fixed = firewall_expectations(inputs, RELATIONS, fixed=True)
     for key, value in firewall.items():
         print(f"{key}\t{len(value) if isinstance(value, list) else value}")
-    if firewall["uncoveredCases"] or firewall["unusedRules"]:
+    if any(result[key] for result in (firewall, fixed) for key in ("uncoveredCases", "unusedRules")):
         raise ValueError("Boundary policy has an uncovered flow or an unused rule")
     if "--write" in sys.argv:
+        (HERE / "firewall-fixed-source.json").write_text(firewall_json(fixed))
         (HERE / "firewall-expectations.json").write_text(firewall_json(firewall))
         out = {name: rows(relation) for name, relation in RELATIONS.items()}
         (HERE / "oracle-rows.json").write_text(json.dumps(out, indent=1, sort_keys=True) + "\n")
