@@ -1,0 +1,30 @@
+.decl tagged_invoice(invoice_ref: symbol)
+tagged_invoice(invoice_ref) :- invoice_line(invoice_ref), invoice_line__plan_hash(invoice_ref, _).
+
+.decl invoice_binding(invoice_ref: symbol, expected_ref: symbol, plan: symbol, item: symbol, currency: symbol)
+invoice_binding(invoice_ref, expected_ref, plan, item, currency) :-
+    invoice_line(invoice_ref), expected_line(expected_ref),
+    invoice_line__plan_hash(invoice_ref, plan), expected_line__plan_hash(expected_ref, plan),
+    invoice_line__item(invoice_ref, item), expected_line__item(expected_ref, item),
+    invoice_line__currency(invoice_ref, currency), expected_line__currency(expected_ref, currency).
+
+.decl bound_invoice(invoice_ref: symbol)
+bound_invoice(invoice_ref) :- invoice_binding(invoice_ref, _, _, _, _).
+
+.decl amount_difference(plan: symbol, item: symbol, expected_ref: symbol, invoice_ref: symbol,
+    rounding_ref: symbol, expected_minor: number, observed_minor: number)
+amount_difference(plan, item, expected_ref, invoice_ref, rounding_ref, expected_minor, observed_minor) :-
+    invoice_binding(invoice_ref, expected_ref, plan, item, currency),
+    expected_line__minor(expected_ref, expected_minor), invoice_line__minor(invoice_ref, observed_minor),
+    expected_line__rounding_sha256(expected_ref, rounding_ref),
+    rounding(rounding_ref), rounding__currency(rounding_ref, currency),
+    rounding__source_url(rounding_ref, _), rounding__boundary(rounding_ref, "line"),
+    rounding__mode(rounding_ref, _), rounding__minor_per_unit(rounding_ref, units), units > 0,
+    expected_minor != observed_minor.
+
+.decl unbound_invoice(invoice_ref: symbol, reason: symbol)
+unbound_invoice(invoice_ref, "missing_plan") :- invoice_line(invoice_ref), !tagged_invoice(invoice_ref).
+unbound_invoice(invoice_ref, "unmatched_item") :- tagged_invoice(invoice_ref), !bound_invoice(invoice_ref).
+
+.output amount_difference
+.output unbound_invoice
