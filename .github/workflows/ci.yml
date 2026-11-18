@@ -94,6 +94,16 @@ jobs:
         with:
           editable: ${{ needs.discover.outputs.python_editable }}
           oracle: ${{ matrix.component.folder == 'compiler' || matrix.component.folder == 'examples' }}
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1  # v7.1.0
+        if: matrix.component.folder == 'compiler'
+        with:
+          node-version-file: .node-version
+          cache: npm
+          cache-dependency-path: rezono/package-lock.json
+      - name: Install the Rezono reader from its lockfile
+        if: matrix.component.folder == 'compiler'
+        working-directory: rezono
+        run: npm ci
       - name: Prepare the Ubuntu worker seed tools
         if: matrix.component.folder == 'run'
         shell: bash
