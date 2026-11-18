@@ -17,4 +17,4 @@ expect:
   change_class: minor
 note: Introducing `reasons` is minor only because it lists every code the lineage's datasets use (l0.md §2.3).
 sources:
-- '#417 review 6761310804'
+- publication/rezono_publication/l0.py, classify

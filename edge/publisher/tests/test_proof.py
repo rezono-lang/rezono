@@ -218,7 +218,7 @@ def source_entries():
 
 @pytest.mark.parametrize("limit,fanout", [(proof.PIECE, proof.FANOUT), (400, 2)])
 def test_source_trees_of_every_size_pass_the_independent_check(limit, fanout):
-    """S25 by row (#345): per relation a tree of the role's entries without their row reference, by key, so the
+    """S25 by row: per relation a tree of the role's entries without their row reference, by key, so the
     sources of one row are one lookup. The checker rebuilds the rows from the entries on its own."""
     entries = source_entries()
     made, roots = proof.sources_plan(entries, "p/m/r/views", limit, fanout)

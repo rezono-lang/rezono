@@ -17,5 +17,4 @@ expect:
     not_applicable: 0
 note: Reading an answer as a kind is reserved; host-d's undecided row is carried from q1's `Undecided`; the witnesses
   are the same as the composed question's.
-sources:
-- '#350 P10.2a §11'
+sources: []

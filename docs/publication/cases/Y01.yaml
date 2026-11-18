@@ -4,7 +4,7 @@ status: pending
 schema:
   from: fixture.schema.json
 form: answer
-input: 'P10.2a E51 (docs/rezono/cases/E51.yaml, #411)'
+input: 'P10.2a E51 (docs/rezono/cases/E51.yaml)'
 expect:
   kinds:
   - Answer
@@ -22,4 +22,4 @@ expect:
   schema_member_is_output_schema_id: true
 note: Runs with the ask endpoint (D22).
 sources:
-- '#369 L0 rev 2 §8'
+- docs/rezono/cases/E51.yaml

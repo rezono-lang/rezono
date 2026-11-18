@@ -36,5 +36,5 @@ note: The role reads `host__owner` in part, by the shape of its read rules, so t
   `n/a` rows the role reads. Was open until 12-11-2026, when `expect` read the missing value as `n/a` (not
   applicable 3).
 sources:
-- '#350 P10.2a §11'
+- rezono/src/evaluate.ts
 - 'values.md §4 (effective world, case withheld-optional)'

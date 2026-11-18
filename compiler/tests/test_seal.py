@@ -642,5 +642,5 @@ def calc_with_a_part(tmp: Path, part: str, inputs: str | None = None) -> Path:
     ("Setting", None, "parameters: kind 'setting' is a sealed kind or a part of one"),
 ])
 def test_a_calculation_cannot_read_a_part_of_a_sealed_kind(tmp_path, part, inputs, message):
-    # Review P1 of #232: a part counts only when its element is accepted, so the calculation refusal covers it.
+    # A part counts only when its element is accepted, so the calculation refusal covers it.
     refused(calc_with_a_part(tmp_path, part, inputs), message)

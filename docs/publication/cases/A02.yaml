@@ -19,4 +19,4 @@ expect:
   accept: false
   error: extension metadata `scale` differs from the schema
 sources:
-- '#369 L0 rev 2 §8'
+- publication/rezono_publication/l0.py, check_field

@@ -193,7 +193,7 @@ def test_a_kept_variant_with_its_differences_costs_a_lookup(repo, tmp_path):
 
 
 def test_difference_reads_are_reused_without_changing_any_published_byte(repo, tmp_path, monkeypatch):
-    """A readable sweep (unlike the original fixture) exercises difference publishing after #224."""
+    """A readable sweep (unlike the original fixture) exercises difference publishing."""
     from collections import Counter
 
     readable(repo)

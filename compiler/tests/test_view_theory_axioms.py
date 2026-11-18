@@ -1,4 +1,4 @@
-"""THV1 (#401): a strong axiom of a theory blocks publication when the violation reaches the theory only through a view.
+"""THV1: a strong axiom of a theory blocks publication when the violation reaches the theory only through a view.
 
 Each case is a small domain that imports one standard theory pack as it is (std-order, std-part, std-time) and maps
 its own kinds onto it with a view (docs/compiler.md, "Views that execute").

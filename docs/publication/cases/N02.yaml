@@ -16,4 +16,4 @@ expect:
   accept: false
   error: reason code `not_assigned` not declared
 sources:
-- '#369 L0 rev 2 §8'
+- publication/rezono_publication/l0.py, read_collection

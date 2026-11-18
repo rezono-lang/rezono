@@ -17,7 +17,7 @@ default_prefix: rezono
 default_range: string
 imports:
   - linkml:types
-  - connector  # Loss: the format of a loss-list entry (M01, #710)
+  - connector  # Loss: the format of a loss-list entry (M01)
 
 types:
   PortName:

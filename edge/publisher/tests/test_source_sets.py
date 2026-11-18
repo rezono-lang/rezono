@@ -130,7 +130,7 @@ def lookup(pieces: dict, root: dict, key: list):
 
 
 def test_the_views_carry_each_roles_sources_as_trees_by_row(tmp_path):
-    """S25 step 6a for O(page) (#345): beside the proof pieces, the view index lists the role's source entries
+    """S25 step 6a for O(page): beside the proof pieces, the view index lists the role's source entries
     as key-range trees by row, checked against the set the manifest names, so the gate reads one row's sources
     with one lookup and never the whole set. A manifest without a source set (before S25) gets no trees."""
     side = {"default": GIT, "records": [{"of": {"kind": "beta", "id": "b1"}, "position": "rows.json#/1"}]}
@@ -164,7 +164,7 @@ def viewer_sources(tmp: Path, **world) -> tuple[bytes, dict]:
 
 
 def test_hidden_rows_change_no_byte_of_a_roles_sources(tmp_path):
-    """S25 made precise by the owner (08-11-2026, #329): a source follows its readable row as a declared unit.
+    """S25: a source follows its readable row as a declared unit.
     Adding a hidden gamma 3 and a hidden alpha x, or removing the hidden alpha s1, changes nothing the viewer
     gets: not its source bytes, not their hash, not whether they are published. A line 3 is not the element
     gamma/3, and equal text is no access relation."""

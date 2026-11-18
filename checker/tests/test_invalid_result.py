@@ -1,5 +1,5 @@
-"""AUD-C1: an evaluated `invalid` calculation result blocks the publication (values.md §3.3, owner on #350:
-`invalid` means the model contradicts itself, which is ours to fix). The proof of it stays in the report."""
+"""AUD-C1: an evaluated `invalid` calculation result blocks publication because
+the model contradicts itself. The proof of it stays in the report."""
 
 import hashlib
 import json

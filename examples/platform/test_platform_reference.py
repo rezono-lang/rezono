@@ -75,11 +75,21 @@ def test_control_host_is_derived_by_the_pack():
     _, _, fact_states = states(HERE)
     assert fact_states[0].derived.get("cluster_control_host") == set(map(tuple, expected))
 
-@pytest.mark.xfail(strict=True, reason="Implement file-based tenant request ingestion and exact monthly cost in the platform pack. Read decisions/platform-tenants.md. Write examples/platform/schema/tenant.yaml, facts/tenant.yaml, and the tenant calculation or rule module.")
-def test_monthly_cost_is_derived_by_the_pack():
-    from rules_support import states
+@pytest.mark.xfail(strict=True, raises=AssertionError, reason="Depends on test_request_json_enters_compiler_base_tables. Implement exact tenant_monthly_cost through the platform pack rules or calculation, using the request and catalog base tables. Read decisions/platform-request-input.md.")
+def test_monthly_cost_is_derived_by_the_pack(tmp_path):
+    from request_preview_case import copy_requests, preview
 
+    teams, catalog = copy_requests(tmp_path)
     expected = json.loads((HERE / "tenant-rows.json").read_text())["requested"]["monthlyCost"]
-    _, _, fact_states = states(HERE)
-    actual = fact_states[0].derived.get("tenant_monthly_cost")
-    assert actual == {tuple(map(str, row)) for row in expected}
+    def costs():
+        return preview(teams, catalog, "relation", "tenant_monthly_cost")
+    assert costs() == expected
+    request = teams / "elm/ledger/request.json"
+    changed = json.loads(request.read_text())
+    del changed["items"]["database"]
+    request.write_text(json.dumps(changed))
+    assert costs() == [["elm", 4995, "EUR-cent"], ["reed", 2495, "EUR-cent"]]
+    prices = json.loads(catalog.read_text())
+    prices["catalog"]["cluster"]["sizes"]["small"][3] += 1
+    catalog.write_text(json.dumps(prices))
+    assert costs() == [["elm", 4995, "EUR-cent"], ["reed", 2496, "EUR-cent"]]

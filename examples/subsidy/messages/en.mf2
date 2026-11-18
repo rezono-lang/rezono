@@ -183,3 +183,6 @@ explain.outside = Outside your view
 explain.more = More from here
 explain.empty = {{No answer for {$element}.}}
 explain.unpublished = {{Not published yet: propose {$element} to get the answer.}}
+
+# rules/home.dl
+rule.scheme_evaluation_day = The scheme is evaluated on {$d}.

@@ -14,5 +14,4 @@ expect:
     blocking: []
 note: 'host-b and host-d pass: n/a does not apply.'
 sources:
-- '#350/6751612214 owner settlement, point 3'
-- '#350 v0 §5, §7b'
+- rezono/README.md, What a check statement decides

@@ -1,4 +1,4 @@
-// Rules of std-order (#314 §5.2), in the Datalog subset, so Soufflé is the oracle.
+// Rules of std-order, in the Datalog subset, so Soufflé is the oracle.
 // The base relations are the theory's tables: ordered__precedes(a, b) and ordered__rank(a, n).
 
 // before: the transitive closure of precedes.

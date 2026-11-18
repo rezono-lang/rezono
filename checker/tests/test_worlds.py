@@ -69,7 +69,7 @@ def test_absence_stops_open_and_is_only_on_derived_relations():
 
 
 def test_an_absence_label_must_be_earned():
-    """Review of #458: a plain copy of an open relation labelled absence would be closed, and negating it would
+    """A plain copy of an open relation labelled absence would be closed, and negating it would
     pass. Each rule of an absence relation negates an open relation, aggregates over one, or reads another
     absence relation."""
     copy_ = rule("copied_owner", "copied_owner", [("owner", "positive", "0")])

@@ -15,4 +15,4 @@ expect:
       reason: no_spec
     not_applicable: 1
 sources:
-- '#350 P10.2a §11'
+- rezono/src/evaluate.ts
