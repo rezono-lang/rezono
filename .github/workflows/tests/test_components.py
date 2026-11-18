@@ -93,8 +93,8 @@ class InventoryTests(unittest.TestCase):
                 "    assert manifest['nested'] == [3, None]\n"
                 "    store.put_new('private', value)\n"
                 "    return str(store.root) == manifest['source']\n"
-                "def test_a(world): assert read(world, b'first')\n"
-                "def test_b(world): assert not read(world, b'second')\n", encoding="utf-8")
+                "def test_a(world): (HERE / 'a-source').write_text(str(read(world, b'first')))\n"
+                "def test_b(world): (HERE / 'b-source').write_text(str(read(world, b'second')))\n", encoding="utf-8")
             env = dict(os.environ, PYTHONPATH=str(ROOT / "edge/publisher"), PYTEST_DISABLE_PLUGIN_AUTOLOAD="1")
             plans, reports, receipts = [root / name for name in ("plans", "reports", "receipts")]
             launcher = ("import sys; sys.path.insert(0, 'scripts'); import components\n"
@@ -114,6 +114,21 @@ class InventoryTests(unittest.TestCase):
             self.assertEqual(len(list(receipts.rglob("*.jsonl"))), 4)
             self.assertIn("Current publication fixture producer:", result.stdout)
             self.assertIn("Current publication fixture reader:", result.stdout)
+            self.assertEqual((module.parent / "a-source").read_text(), "True")
+            self.assertEqual((module.parent / "b-source").read_text(), "False")
+            original = (plans / "examples/items.json").read_text(encoding="utf-8")
+            manifest = json.loads(original)
+            try:
+                for selection in (manifest["items"][::-1], manifest["items"][1:]):
+                    (module.parent / "builds").unlink()
+                    (plans / "examples/items.json").write_text(
+                        json.dumps(dict(manifest, items=selection)), encoding="utf-8")
+                    selected = execute()
+                    self.assertEqual(selected.returncode, 0, selected.stdout + selected.stderr)
+                    self.assertEqual((module.parent / "b-source").read_text(), str(len(selection) == 1))
+                    self.assertEqual((module.parent / "builds").read_text(), "one")
+            finally:
+                (plans / "examples/items.json").write_text(original, encoding="utf-8")
             (module.parent / "fail").touch()
             failed = execute()
             self.assertNotEqual(failed.returncode, 0)
