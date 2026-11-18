@@ -1,4 +1,4 @@
-﻿# Acceptance cases for platform derivations and proof visibility
+# Acceptance cases for platform derivations and proof visibility
 
 The platform pack owns authored facts and derives results in its schema and rule modules. The independent Python model supplies expected rows. The following finite cases define acceptance for implementation. They do not report an observed deployment or a passing engine comparison.
 
@@ -23,7 +23,7 @@ CI must compare the complete portable relation inventory and each relation's com
 
 A candidate consists of source, listening destination, protocol and port. Keep the listener inventory independent of permissions. First union all applicable firewall allowances. A cross-zone candidate outside that union has a firewall-denial witness. For remaining candidates, evaluate the applicable service-isolation policies, including same-zone traffic. A denied candidate at this stage has a service-isolation witness. Report a positive case only if every applicable layer permits it. Keep excess firewall reachability visible even when service isolation blocks the final connection.
 
-Use four synthetic sources or destinations in two zones. Source A may reach listener X through rule R1 and listener Y through rule R2, both on TCP 443. Listener Z has the same transport and zone with no allowance. Peer B shares the source range with A. A→Y must survive the union even when enumerated as an alternative to R1. A→Z is denied at the firewall. B→X, with no service grant, is firewall-permitted by R1 and denied by service isolation. A→X, with its service grant, is permitted end to end. A non-listening destination produces no candidate. Compare the complete disjoint decision sets and reason witnesses. These cases use symbolic inputs and static model evaluation.
+Use two synthetic sources and three listening destinations across two zones. Source A may reach listener X through rule R1 and listener Y through rule R2, both on TCP 443. Listener Z has the same transport and zone with no allowance. Peer B shares the source range with A. A→Y must survive the union even when enumerated as an alternative to R1. A→Z is denied at the firewall. B→X, with no service grant, is firewall-permitted by R1 and denied by service isolation. A→X, with its service grant, is permitted end to end. A non-listening destination produces no candidate. Compare the complete disjoint decision sets and reason witnesses. These cases use symbolic inputs and static model evaluation.
 
 ## Import and exercise the five standard packs
 
