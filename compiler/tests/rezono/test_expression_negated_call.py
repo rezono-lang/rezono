@@ -151,13 +151,6 @@ def position(place):
     return (place["file"], int(place["line"]), int(place["column"]))
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=NegatedCallMismatch,
-    reason="Use the same linked predicate summaries as TypeScript at native_rule_lowering.lower_source. "
-           "Require native R047 with source causes before constructing negative IR; a checked total rule "
-           "still lowers. The supplied vector avoids a dependency on the linker-state implementation.",
-)
 def test_expression_python_negated_call(closure, vector):
     directory, _ = closure
     inputs, expected = vector["input"], vector["expect"]
