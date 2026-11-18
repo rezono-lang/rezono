@@ -14,4 +14,4 @@ expect:
       reason: not_assigned
     not_applicable: 2
 sources:
-- '#350 P10.2a §11'
+- rezono/src/evaluate.ts

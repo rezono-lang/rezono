@@ -80,7 +80,7 @@ PINS = (".python-artifact", ".python-digest", ".python-version")
 # Build records come in three versions (docs/ci.md section 8). v3 ("format": "rezono.build/3") names the
 # hash of everything that can change what is installed or run, pyproject.toml and the checker included,
 # so its archive is checked against the record alone. v2 named no checker: its archive holds none (one
-# that does is refused, as nothing binds it), and since the publisher needs the checker (R7, #56) it
+# that does is refused, as nothing binds it), and since the publisher needs the checker (R7) it
 # installs but cannot replay. v1 (no "format") does not name pyproject.toml; its
 # archives were made by `git archive` of one commit, so every member must be exactly the file at the
 # same path in that commit's tree. This table is reviewed code: the commit is never taken from an

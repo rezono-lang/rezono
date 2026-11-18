@@ -13,4 +13,5 @@ expect:
     hint: to set the date of the question, write `ask Host at 2026-11-01 where …`
 note: 'Grammar valid: `at 2026-11-01` is a time selection on `384 GiB`, not the question''s date (§4).'
 sources:
-- '#350 P10.2a §11'
+- rezono/src/print.ts
+- rezono/src/parse.ts

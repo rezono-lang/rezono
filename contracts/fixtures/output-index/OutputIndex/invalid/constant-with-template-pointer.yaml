@@ -1,4 +1,4 @@
-# A chart constant is a template line, not a pointer (review on #444).
+# A chart constant is a template line, not a pointer.
 format: rezono.output-index/1
 pack: platform
 manifest: m-42

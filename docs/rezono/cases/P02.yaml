@@ -15,5 +15,4 @@ expect:
     - host-d
 note: '`require` is fail-closed: unknown blocks.'
 sources:
-- '#350/6751612214 owner settlement, point 3'
-- '#350 v0 §5, §7b'
+- rezono/README.md, What a check statement decides

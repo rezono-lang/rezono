@@ -4,7 +4,7 @@ Subsidy is the first published pack whose roles read differently: the case offic
 the policy adviser does not. The publication form checks:
 
 - each role's form verifies from its own files alone: the objects its index names, nothing else;
-- non-interference (R6, the two-world test of #666): two packs that differ only in a ledger payment, which the
+- non-interference (R6, the two-world test): two packs that differ only in a ledger payment, which the
   policy adviser does not read, give the policy adviser the same bytes and the case officer other bytes;
 - the complete form is written nowhere: no `publication/` object outside the filtered roles' own prefixes.
 

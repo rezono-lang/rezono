@@ -60,6 +60,7 @@ def stop(name):
     call("POST", f"/v0/pipelines/{name}/stop?force=true")
     wait(name, "deployment_status", {"Stopped"})
     call("POST", f"/v0/pipelines/{name}/clear")
+    wait(name, "storage_status", {"Cleared"})
 
 
 def push(name, updates, chunk=100_000):

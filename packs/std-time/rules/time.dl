@@ -1,4 +1,4 @@
-// Rules of std-time (#314 §5.2, T4), in the Datalog subset, so Soufflé is the oracle.
+// Rules of std-time, in the Datalog subset, so Soufflé is the oracle.
 // The base relations are the theory's tables: interval__on_axis(i, l), interval__start(i, s),
 // interval__end(i, e), interval__unbounded(i, side), interval__extension_end(i, x), interval__known_from(i, k),
 // interval__in_series(i, q), reference_point__on_axis(r, l), reference_point__position(r, p) and

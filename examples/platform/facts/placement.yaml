@@ -1,0 +1,21 @@
+cluster_role:
+  - {id: hub, control_placement: local}
+  - {id: base, control_placement: local}
+  - {id: management, control_placement: local}
+  - {id: virtualization, control_placement: local}
+  - {id: application, control_placement: hosted, control_host_role: management}
+  - {id: storage, control_placement: none}
+  - {id: build, control_placement: local}
+  - {id: edge, control_placement: local}
+  - {id: recovery, control_placement: local}
+cluster:
+  - {id: hub, role: hub}
+  - {id: base, role: base}
+  - {id: management, role: management}
+  - {id: virtualization, role: virtualization}
+  - {id: production, role: application}
+  - {id: development, role: application}
+  - {id: storage, role: storage}
+  - {id: build, role: build}
+  - {id: edge, role: edge}
+  - {id: recovery, role: recovery}

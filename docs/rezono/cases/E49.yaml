@@ -27,4 +27,4 @@ expect:
 note: 'Pages, cursors, counts and the dataset hash are byte-identical in both worlds: host-e is not readable by
   `viewer` and no readable row depends on it.'
 sources:
-- '#350 P10.2a §11'
+- rezono/src/evaluate.ts

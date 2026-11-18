@@ -44,7 +44,7 @@ def run(command, args: list[str], quiet: bool) -> tuple[int, str]:
 def main() -> int:
     os.chdir(Path(__file__).resolve().parent)
     fail = 0
-    # Keys YAML made out of text, such as a flow map's value split on its comma (#1020): every file, fixtures too.
+    # Keys YAML made out of text, such as a flow map's value split on its comma: every file, fixtures too.
     if yaml_keys.main([str(p) for p in sorted(Path(".").rglob("*.yaml"))]):
         fail = 1
     # Lint errors block; warnings (style, such as a missing description) are printed only. See AGENTS.md rule 5.

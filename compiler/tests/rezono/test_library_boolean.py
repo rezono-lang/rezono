@@ -11,7 +11,6 @@ from rezono_compiler import rezono_module
 LIBRARY = Path(__file__).resolve().parents[3] / "examples" / "library"
 
 
-@pytest.mark.xfail(strict=True, reason="Lower Bool slots through compiler/rezono_compiler/rezono_module.py. Read decisions/language-slots.md and compare the library Copy.reference_only slot.")
 def test_library_boolean_slot(tmp_path):
     name = "reference_only"
     slot = {"slot": name, "type": "Bool"}

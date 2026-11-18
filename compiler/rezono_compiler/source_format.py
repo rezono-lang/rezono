@@ -1,4 +1,4 @@
-"""The source-format edit boundary (B13, #394 A9): every edit of a fact, rule or calc file goes through one
+"""The source-format edit boundary (B13): every edit of a fact, rule or calc file goes through one
 interface, so the switch of the source text from YAML and Datalog to Rezono (D12) is a migration, not a rewrite.
 
 A `SourceFormat` is what an edit needs to know of the text a pack is written in, per kind of file:

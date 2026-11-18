@@ -1,0 +1,7 @@
+// A control endpoint belongs to its cluster and is placed according to that cluster's role.
+.decl cluster_control_host(cluster: symbol, host: symbol)
+cluster_control_host(c, c) :- cluster__role(c, r), cluster_role__control_placement(r, "local").
+cluster_control_host(c, h) :- cluster__role(c, r), cluster_role__control_placement(r, "hosted"),
+    cluster_role__control_host_role(r, hr), cluster__role(h, hr).
+
+.output cluster_control_host

@@ -11,4 +11,4 @@ expect:
     undecided: []
     not_applicable: 0
 sources:
-- '#350 P10.2a §11'
+- rezono/src/evaluate.ts

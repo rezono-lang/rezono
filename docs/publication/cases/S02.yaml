@@ -21,4 +21,4 @@ expect:
   schema_id: s-27edc0ea5ccdaa8c2c73c5a51b3e2ed44d5399b2199d6993c03a031b07a7562a
 note: 'The fixture with members reordered and whitespace added: the same id.'
 sources:
-- '#369 L0 rev 2 §8'
+- publication/rezono_publication/l0.py, loads and check_schema

@@ -6,7 +6,6 @@ from runpy import run_path
 import pytest
 
 
-@pytest.mark.xfail(strict=True, reason="Read decisions/loop-design.md. Implement loop/frontier.py. Emit plans only for ready steps in stable order and deduplicate witnesses.")
 def test_frontier():
     frontier = run_path(str(Path(__file__).resolve().parents[1] / "frontier.py"))["frontier"]
     plans = {"b": "plan-b", "a": "plan-a", "c": "plan-c"}

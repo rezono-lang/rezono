@@ -1,0 +1,91 @@
+# The compiler hashes the Git bytes of pack definition files (modules.DEFINITION).
+# Keep their working-tree line endings identical on Windows and Unix.
+[attr]pack-definition text=auto eol=lf
+
+packs/*/pack.yaml pack-definition
+packs/*/channels.yaml pack-definition
+packs/*/schema/**/*.yaml pack-definition
+packs/*/rezono/**/*.rezono pack-definition
+packs/*/rezono/**/*.json pack-definition
+packs/*/labels/*.yaml pack-definition
+packs/*/messages/*.mf2 pack-definition
+# Rule libraries also exist outside declared packs.
+packs/std-access/rules/*.dl pack-definition
+packs/std-decision/rules/*.dl pack-definition
+packs/std-explain/rules/*.dl pack-definition
+packs/std-identity/rules/*.dl pack-definition
+packs/std-order/rules/*.dl pack-definition
+packs/std-part/rules/*.dl pack-definition
+packs/std-time/rules/*.dl pack-definition
+packs/std-view/rules/*.dl pack-definition
+packs/*/calc/*.yaml pack-definition
+packs/*/sweeps.yaml pack-definition
+packs/*/questions.yaml pack-definition
+packs/*/views.yaml pack-definition
+packs/*/icons/*.svg pack-definition
+packs/*/icons/sources.yaml pack-definition
+
+examples/*/pack.yaml pack-definition
+examples/*/channels.yaml pack-definition
+examples/*/schema/**/*.yaml pack-definition
+examples/*/rezono/**/*.rezono pack-definition
+examples/*/rezono/**/*.json pack-definition
+examples/*/labels/*.yaml pack-definition
+# Published example bundles also have messages; only source packs are pinned.
+examples/library/messages/*.mf2 pack-definition
+examples/platform/messages/*.mf2 pack-definition
+examples/projects/messages/*.mf2 pack-definition
+examples/subsidy/messages/*.mf2 pack-definition
+examples/subsidy-scheme/messages/*.mf2 pack-definition
+examples/*/rules/*.dl pack-definition
+examples/*/calc/*.yaml pack-definition
+examples/*/sweeps.yaml pack-definition
+examples/*/questions.yaml pack-definition
+examples/*/views.yaml pack-definition
+examples/*/icons/*.svg pack-definition
+examples/*/icons/sources.yaml pack-definition
+
+compiler/tests/fixtures/*/pack.yaml pack-definition
+compiler/tests/fixtures/*/channels.yaml pack-definition
+compiler/tests/fixtures/*/schema/**/*.yaml pack-definition
+compiler/tests/fixtures/*/rezono/**/*.rezono pack-definition
+compiler/tests/fixtures/*/rezono/**/*.json pack-definition
+compiler/tests/fixtures/*/labels/*.yaml pack-definition
+compiler/tests/fixtures/*/messages/*.mf2 pack-definition
+compiler/tests/fixtures/*/rules/*.dl pack-definition
+compiler/tests/fixtures/*/calc/*.yaml pack-definition
+compiler/tests/fixtures/*/sweeps.yaml pack-definition
+compiler/tests/fixtures/*/questions.yaml pack-definition
+compiler/tests/fixtures/*/views.yaml pack-definition
+compiler/tests/fixtures/*/icons/*.svg pack-definition
+compiler/tests/fixtures/*/icons/sources.yaml pack-definition
+
+edge/plugins/connectors/fixtures/*/pack.yaml pack-definition
+edge/plugins/connectors/fixtures/*/channels.yaml pack-definition
+edge/plugins/connectors/fixtures/*/schema/**/*.yaml pack-definition
+edge/plugins/connectors/fixtures/*/rezono/**/*.rezono pack-definition
+edge/plugins/connectors/fixtures/*/rezono/**/*.json pack-definition
+edge/plugins/connectors/fixtures/*/labels/*.yaml pack-definition
+edge/plugins/connectors/fixtures/*/messages/*.mf2 pack-definition
+edge/plugins/connectors/fixtures/*/rules/*.dl pack-definition
+edge/plugins/connectors/fixtures/*/calc/*.yaml pack-definition
+edge/plugins/connectors/fixtures/*/sweeps.yaml pack-definition
+edge/plugins/connectors/fixtures/*/questions.yaml pack-definition
+edge/plugins/connectors/fixtures/*/views.yaml pack-definition
+edge/plugins/connectors/fixtures/*/icons/*.svg pack-definition
+edge/plugins/connectors/fixtures/*/icons/sources.yaml pack-definition
+
+edge/plugins/connectors/fixtures/linkml-standard/pack/pack.yaml pack-definition
+edge/plugins/connectors/fixtures/linkml-standard/pack/channels.yaml pack-definition
+edge/plugins/connectors/fixtures/linkml-standard/pack/schema/**/*.yaml pack-definition
+edge/plugins/connectors/fixtures/linkml-standard/pack/rezono/**/*.rezono pack-definition
+edge/plugins/connectors/fixtures/linkml-standard/pack/rezono/**/*.json pack-definition
+edge/plugins/connectors/fixtures/linkml-standard/pack/labels/*.yaml pack-definition
+edge/plugins/connectors/fixtures/linkml-standard/pack/messages/*.mf2 pack-definition
+edge/plugins/connectors/fixtures/linkml-standard/pack/rules/*.dl pack-definition
+edge/plugins/connectors/fixtures/linkml-standard/pack/calc/*.yaml pack-definition
+edge/plugins/connectors/fixtures/linkml-standard/pack/sweeps.yaml pack-definition
+edge/plugins/connectors/fixtures/linkml-standard/pack/questions.yaml pack-definition
+edge/plugins/connectors/fixtures/linkml-standard/pack/views.yaml pack-definition
+edge/plugins/connectors/fixtures/linkml-standard/pack/icons/*.svg pack-definition
+edge/plugins/connectors/fixtures/linkml-standard/pack/icons/sources.yaml pack-definition

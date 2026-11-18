@@ -6,4 +6,4 @@ expect:
   print: ask Plan where round(hourly_price * 730 h) > € 500
 note: Exact rounding of the pack.
 sources:
-- '#350 P10.2a §11'
+- rezono/src/print.ts

@@ -6,4 +6,4 @@ expect:
   print: ask Host where not clusters.any(count > 1)
 note: HostCluster is closed through Host, so `not` is allowed (§6, worlds).
 sources:
-- '#350 P10.2a §11'
+- rezono/src/print.ts

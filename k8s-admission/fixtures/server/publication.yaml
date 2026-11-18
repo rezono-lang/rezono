@@ -1,0 +1,14 @@
+apiVersion: admission.rezono.org/v1alpha1
+kind: NamespacePublication
+metadata:
+  name: admission-sample
+  namespace: admission-blue
+spec:
+  digest: dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd
+  images:
+    - service: web
+      image: registry.example.org/sample/app@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+  flows:
+    - source: reader
+      destination: web
+      port: 443

@@ -666,7 +666,7 @@ def test_a_calculation_over_a_relation_read_in_part_is_not_the_roles(tmp_path):
 
 
 def test_a_filter_that_drops_visible_calculated_rows_is_red(tmp_path, monkeypatch):
-    """Review of #196 (O8, W12): the viewer reads alpha in full, so both calculated rows are its. A filter
+    """The viewer reads alpha in full, so both calculated rows are its. A filter
     that drops them and their witnesses is red: the checker derives what the role may see itself."""
     from rezono_publisher import access
 

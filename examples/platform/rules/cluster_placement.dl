@@ -1,0 +1,39 @@
+// Endpoint ownership, physical placement and network attachment are separate.
+.decl cluster_placement_zone(cluster: symbol, zone: symbol)
+cluster_placement_zone(c, z) :- cluster__role(c, r), cluster_placement_policy__role(p, r),
+    cluster_placement_policy__zone(p, z).
+
+.decl uses_hosted_workers(policy: symbol)
+uses_hosted_workers(p) :- cluster_placement_policy__worker_host_role(p, _).
+
+.decl endpoint_worker_host(cluster: symbol, host: symbol)
+endpoint_worker_host(c, h) :- cluster__role(c, r), cluster_placement_policy__role(p, r),
+    cluster_placement_policy__worker_host_role(p, hr), cluster__role(h, hr).
+endpoint_worker_host(c, c) :- cluster__role(c, r), cluster_placement_policy__role(p, r),
+    !uses_hosted_workers(p).
+
+.decl cluster_service_placement(service: symbol, cluster: symbol)
+cluster_service_placement(s, c) :- cluster_service_binding__service(b, s), cluster_service_binding__cluster(b, c).
+
+.decl cluster_endpoint_host(endpoint: symbol, host: symbol)
+cluster_endpoint_host(s, c) :- cluster_service_binding__service(b, s), cluster_service_binding__cluster(b, c),
+    cluster_service_binding__endpoint_zone(b, _).
+cluster_endpoint_host(e, c) :- cluster_owned_endpoint__owner(e, c), cluster_owned_endpoint__hosting(e, "local").
+cluster_endpoint_host(e, h) :- cluster_owned_endpoint__owner(e, c), cluster_owned_endpoint__hosting(e, "control"),
+    cluster_control_host(c, h).
+cluster_endpoint_host(e, h) :- cluster_owned_endpoint__owner(e, c), cluster_owned_endpoint__hosting(e, "workforce"),
+    endpoint_worker_host(c, h).
+
+.decl cluster_endpoint_zone(endpoint: symbol, zone: symbol)
+cluster_endpoint_zone(s, z) :- cluster_service_binding__service(b, s), cluster_service_binding__cluster(b, c),
+    cluster_service_binding__endpoint_zone(b, "cluster"), cluster_placement_zone(c, z).
+cluster_endpoint_zone(s, z) :- cluster_service_binding__service(b, s),
+    cluster_service_binding__endpoint_zone(b, "service"), zone_of(s, z).
+cluster_endpoint_zone(e, z) :- cluster_owned_endpoint__network(e, "host"),
+    cluster_endpoint_host(e, h), cluster_placement_zone(h, z).
+cluster_endpoint_zone(e, z) :- cluster_owned_endpoint__network(e, "owner"),
+    cluster_owned_endpoint__owner(e, c), cluster_placement_zone(c, z).
+
+.output cluster_service_placement
+.output cluster_endpoint_host
+.output cluster_endpoint_zone

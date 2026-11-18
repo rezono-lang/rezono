@@ -214,7 +214,7 @@ def test_a_sheet_of_lanes_and_relation_lines_the_role_reads_passes():
 
 
 def test_a_quantity_on_a_line_to_a_stub_an_unknown_or_a_screened_end_is_found():
-    """P1 of #216: a line to a placeholder has no rows behind both ends, so it carries no quantity or width; the
+    """A line to a placeholder has no rows behind both ends, so it carries no quantity or width; the
     checker refuses one instead of passing it unchecked."""
     q = {"slot": "signed", "value": "999999"}
     found("yet shows a quantity or a width", edges=with_(EDGES, 2, quantity=q))
@@ -231,7 +231,7 @@ def test_a_quantity_on_a_line_to_a_stub_an_unknown_or_a_screened_end_is_found():
 
 
 def test_a_count_and_a_sum_from_two_pairs_of_columns_are_found():
-    """P1 of #216: the number of rows and the quantity hold in the same pair of columns. Here p1 and a1 stand
+    """The number of rows and the quantity hold in the same pair of columns. Here p1 and a1 stand
     twice as (posting, account), summing 12, and once as (period, posting), summing 100: 2 rows with 100 is
     neither."""
     rows = dict(ROWS, period_line=[*ROWS["period_line"], ["p1", "a1", "x", "100"]])
