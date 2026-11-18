@@ -27,7 +27,8 @@ currencies, negative quantities and binary floating point at this boundary.
 
 Work only in the file or subdirectory named by the assigned test. All paths
 below are relative to `run/`. The tests define exact argument and return
-shapes. Invalid data and a source hash mismatch raise ValueError.
+shapes. For replay, `orders` counts new dispatches in this invocation; a restart
+using the same journal may reconcile by status but contributes zero new orders. Invalid data and a source hash mismatch raise ValueError.
 
 | Boundary | Contract |
 | --- | --- |
@@ -48,3 +49,12 @@ SQLite claim only proves durability within its storage lifetime. A protected
 live run needs a durable shared backend across runners and its authenticated
 provider inventory. Neither an ephemeral CI file nor a delete acknowledgment
 proves real-world cleanup.
+
+Select the cheapest observed offer compatible with the requested currency,
+boot method, capacity, hardware virtualization and one unallocated data disk.
+Within an equal price use the smallest stable tie rank from the source fixture.
+An unmet demand has no selection. The cleanup deadline is inclusive: an
+applied attempt still uncleaned at a recorded watermark at or after its
+deadline produces an overdue finding. Unknown time produces no assertion.
+The request reader binds its exact bytes to a full immutable Git commit,
+repository and path before supplying the decoded request to the shared loop.

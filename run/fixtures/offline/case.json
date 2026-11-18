@@ -1,8 +1,4 @@
 {
-  "request": {
-    "id": "sample",
-    "service": "sample-service"
-  },
   "plan_file": "plan.json",
   "price_file": "public-price-response.json",
   "approval": {
@@ -70,5 +66,19 @@
       "next_page_id": null,
       "resources": []
     }
+  ],
+  "request_file": "request.json",
+  "request_sha256": "1fe104148c6ba837e80ef717e4946a44ed4b761170adff5c01573db192e913c9",
+  "delete_receipt": {
+    "accepted": true,
+    "id": "order-one"
+  },
+  "operations": [
+    "submit_order",
+    "observe_machines",
+    "apply_installation",
+    "observe_delivery",
+    "delete_resources",
+    "list_inventory"
   ]
 }
