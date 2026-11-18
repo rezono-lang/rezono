@@ -10,7 +10,6 @@ import odcs
 from rezono_publication import l0
 
 
-@pytest.mark.xfail(strict=True, reason="Declare the dropped control-owner and reviewed-change requirement in edge/plugins/connectors/odcs.losses.yaml. Read decisions/odcs-quality-coverage.md.")
 def test_loss_list_names_the_omitted_control_owner_and_review():
     schema = {"rezono": "1.0", "base": "https://example.org/limits/", "pack": "limits",
               "kinds": {"Limit": {"id": {"type": "Text"}, "world": "closed",
