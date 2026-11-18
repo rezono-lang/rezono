@@ -11,7 +11,6 @@ from rezono_compiler import facts, pack
 LIBRARY = Path(__file__).resolve().parents[3] / "examples/library"
 
 
-@pytest.mark.xfail(strict=True, raises=(AssertionError, facts.LoadError), reason="Decode scalar module dataset rows through facts.load in compiler/rezono_compiler/facts.py. Read decisions/language-library-acceptance.md. Independent of reader and schema lowering.")
 def test_scalar_dataset_rows(tmp_path):
     table = {
         "fact": "Copy", "columns": ["barcode", "reference_only"],
