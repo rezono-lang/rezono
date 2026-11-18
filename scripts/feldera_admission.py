@@ -19,6 +19,15 @@ from verify_feldera_run import verify
 ORACLE = ".github/workflows/feldera-oracle.yml"
 POLICY = ".github/workflows/red-policy.yml"
 STEP = "Require live Feldera evidence for backend changes"
+PUSH_HEADER = (
+    b"name: Live Feldera oracle\n\non:\n  push:\n    branches: [main]\n  workflow_dispatch:\n\n"
+)
+NIGHTLY_HEADER = re.compile(
+    rb"name: Live Feldera oracle\n\non:\n  schedule:\n    - cron: (['\"])"
+    rb"[0-5]?[0-9] (?:[01]?[0-9]|2[0-3]) \* \* \*\1\n"
+    rb"  workflow_dispatch:\n\nconcurrency:\n  group: feldera-oracle-\$\{\{ github\.ref \}\}\n"
+    rb"  cancel-in-progress: false\n\n"
+)
 ORIGINAL = {
     "compiler/tests/test_calc.py::test_feldera_gives_what_duckdb_gives[full]",
     "compiler/tests/test_calc.py::test_feldera_gives_what_duckdb_gives[choice]",
@@ -57,6 +66,23 @@ def changed(base, head):
     # No rename detection: both old and new names must be checked, including deletions.
     data = subprocess.check_output(["git", "diff", "--no-renames", "--name-only", "-z", base, head, "--"])
     return [p.decode("utf-8", "surrogateescape") for p in data.split(b"\0") if p]
+
+
+def oracle_blob(revision):
+    entry = subprocess.check_output(["git", "ls-tree", "-z", revision, "--", ORACLE])
+    ordinary_file = re.fullmatch(rb"100644 blob ([0-9a-f]+)\t" + re.escape(ORACLE.encode("ascii")) + rb"\0", entry)
+    if ordinary_file:
+        return subprocess.check_output(["git", "cat-file", "blob", ordinary_file[1].decode("ascii")])
+    return b""
+
+
+def only_install_nightly_schedule(base, head):
+    before = oracle_blob(base)
+    if not before.startswith(PUSH_HEADER + b"permissions:\n"):
+        return False
+    after = oracle_blob(head)
+    header = NIGHTLY_HEADER.match(after)
+    return bool(header and after[header.end():] == before[len(PUSH_HEADER):])
 
 
 def api(path, *, post=False, binary=False):
@@ -124,7 +150,11 @@ def proof(head, branch, owner):
 
 def review(base, head, branch, owner):
     selected = selected_files(RUNNER.read_text(encoding="utf-8"))
-    if not any(relevant(path, selected) for path in changed(base, head)):
+    paths = changed(base, head)
+    if paths == [ORACLE] and only_install_nightly_schedule(base, head):
+        print("The daily schedule and per-ref concurrency change leaves the live comparison unchanged.")
+        return True
+    if not any(relevant(path, selected) for path in paths):
         print("The change does not affect the Feldera backend or live comparison.")
         return True
     run = proof(head, branch, owner)

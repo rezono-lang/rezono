@@ -146,6 +146,72 @@ class Admission(unittest.TestCase):
             gate.resume(RUN)
             self.assertEqual(requests, [])
 
+    def test_only_a_daily_scheduler_replacement_can_skip_dispatch(self):
+        def git(*args, payload=None):
+            return subprocess.check_output(
+                ["git", "-c", "user.name=Fixture", "-c", "user.email=change@example.org", *args],
+                input=payload,
+            ).decode("utf-8").strip()
+
+        header = "name: Live Feldera oracle\n\n"
+        push = "on:\n  push:\n    branches: [main]\n  workflow_dispatch:\n\n"
+        nightly = ("on:\n  schedule:\n    - cron: '23 2 * * *'\n  workflow_dispatch:\n\n"
+                   "concurrency:\n  group: feldera-oracle-${{ github.ref }}\n  cancel-in-progress: false\n\n")
+        body = "permissions:\n  contents: read\n\njobs:\n  oracle:\n    steps:\n      - run: compare\n"
+        with tempfile.TemporaryDirectory() as tmp:
+            previous = Path.cwd()
+            try:
+                os.chdir(tmp)
+                git("init", "-q")
+                git("config", "core.filemode", "true")
+                flow = Path(gate.ORACLE)
+                flow.parent.mkdir(parents=True)
+
+                def put(workflow, mode="100644"):
+                    blob = git("hash-object", "-w", "--stdin", payload=workflow.encode("utf-8"))
+                    git("update-index", "--add", "--cacheinfo", f"{mode},{blob},{gate.ORACLE}")
+
+                def commit(workflow, mode="100644"):
+                    put(workflow, mode)
+                    git("commit", "--allow-empty", "-qm", "workflow revision")
+                    return git("rev-parse", "HEAD")
+
+                before = commit(header + push + body)
+                with patch.object(gate, "proof", return_value=None) as proof:
+                    expected = header + nightly + body
+                    replacement = commit(expected)
+                    self.assertTrue(gate.review(before, replacement, BRANCH, REPO))
+                    proof.assert_not_called()
+                    for description, workflow in {
+                        "minutes outside UTC clock": expected.replace("23 2", "60 2"),
+                        "hours outside UTC clock": expected.replace("23 2", "23 24"),
+                        "multiple runs per night": expected.replace("23 2", "23 2,3"),
+                        "twice repetitive hour": expected.replace("23 2", "23 *"),
+                        "additional cron": expected.replace("  workflow_dispatch:", "    - cron: '0 5 * * *'\n  workflow_dispatch:"),
+                        "push retained": expected.replace("  schedule:", "  push:\n  schedule:"),
+                        "dispatch removed": expected.replace("  workflow_dispatch:\n", ""),
+                        "dispatch changed": expected.replace("  workflow_dispatch:", "  workflow_dispatch: {}"),
+                        "other concurrency group": expected.replace("github.ref", "github.sha"),
+                        "cancels running workflow": expected.replace("false", "true"),
+                        "additional concurrency field": expected.replace("false\n", "false\n  extra: true\n"),
+                        "job changed": expected.replace("run: compare", "run: changed"),
+                        "permissions changed": expected.replace("contents: read", "contents: write"),
+                        "name changed": expected.replace("Live Feldera oracle", "Other oracle"),
+                        "duplicate top-level trigger": expected + "on:\n  push:\n",
+                    }.items():
+                        with self.subTest(description=description):
+                            self.assertFalse(gate.review(before, commit(workflow), BRANCH, REPO))
+                    self.assertFalse(gate.review(before, commit(expected, "100755"), BRANCH, REPO))
+                    self.assertFalse(gate.review(before, commit(expected, "120000"), BRANCH, REPO))
+                    put(expected)
+                    Path("unrelated.txt").write_text("also changed\n", encoding="utf-8")
+                    git("add", "unrelated.txt")
+                    git("commit", "-qm", "change also adds a path")
+                    self.assertFalse(gate.review(before, "HEAD", BRANCH, REPO))
+                    self.assertEqual(proof.call_count, 18)
+            finally:
+                os.chdir(previous)
+
 
 if __name__ == "__main__":
     unittest.main()
