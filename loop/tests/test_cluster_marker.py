@@ -5,7 +5,6 @@ import pytest
 from cluster_scenarios import command, component, plugin_environment
 
 
-@pytest.mark.xfail(strict=True, reason="Read decisions/shared-disposable-cluster.md. Package the shared pytest11 plugin in loop/pyproject.toml and loop/rezono_cluster.py. Register cluster and exclude it by default, including under component-local pytest configuration.")
 def test_cluster_marker(tmp_path):
     path = component(tmp_path, "alpha", """import pytest
 def test_ordinary(): pass
