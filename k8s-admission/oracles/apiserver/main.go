@@ -20,7 +20,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/apiserver/pkg/admission"
-	"k8s.io/apiserver/pkg/admission/plugin/policy/matching"
 	"k8s.io/apiserver/pkg/admission/plugin/policy/validating"
 	"k8s.io/apiserver/pkg/authentication/user"
 	"k8s.io/apiserver/pkg/authorization/authorizer"
@@ -35,7 +34,6 @@ func evaluator(ctx context.Context, bundle *release) (*validating.Plugin, error)
 		runtime.NewScheme(), bundle.listKinds, bundle.parameters...,
 	)
 	factory := informers.NewSharedInformerFactory(client, 0)
-	namespaces := factory.Core().V1().Namespaces()
 	plugin := validating.NewPlugin(nil)
 	plugin.SetEnabled(true)
 	plugin.SetExternalKubeClientSet(client)
@@ -43,7 +41,6 @@ func evaluator(ctx context.Context, bundle *release) (*validating.Plugin, error)
 	plugin.SetDynamicClient(parameters)
 	plugin.SetRESTMapper(bundle.mapper)
 	plugin.SetDrainedNotification(ctx.Done())
-	plugin.SetMatcher(matching.NewMatcher(namespaces.Lister(), client))
 	plugin.SetAuthorizer(authorizer.AuthorizerFunc(func(context.Context, authorizer.Attributes) (authorizer.Decision, string, error) {
 		return authorizer.DecisionDeny, "no external authorization in the offline oracle", nil
 	}))
