@@ -1,0 +1,177 @@
+name: Disposable cluster
+
+on:
+  workflow_dispatch:
+  workflow_call:
+    inputs:
+      tasks:
+        type: string
+        required: true
+      base:
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: disposable-cluster-${{ github.event.pull_request.number || github.ref }}-${{ inputs.tasks != '' && 'worker' || 'suite' }}
+  cancel-in-progress: true
+
+jobs:
+  fixture:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      KIND_VERSION: v0.33.0
+      KUBECTL_VERSION: v1.34.11
+      HELM_VERSION: v3.17.3
+      CILIUM_CLI_VERSION: v0.18.3
+      CILIUM_CHART_VERSION: '1.20.5'
+      CILIUM_CHART_SHA256: 0c7592eb75179ecf46dd3ec22145916f0164c4401214ea15afb5b230b1d11a21
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Install pinned cluster tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          work="$RUNNER_TEMP/rezono-fixture"
+          printf 'KUBECONFIG=%s\n' "$RUNNER_TEMP/rezono-fixture.kubeconfig" >> "$GITHUB_ENV"
+          mkdir -p "$work/bin"
+          cd "$work"
+          download() {
+            curl --fail --silent --show-error --location --retry 3 --max-time 120 --output "$2" "$1"
+          }
+          verified() {
+            local url=$1 suffix=$2 file=$3 digest
+            download "$url" "$file"
+            download "$url.$suffix" "$file.checksum"
+            digest=$(awk 'NR == 1 {print $1}' "$file.checksum")
+            [[ "$digest" =~ ^[0-9a-f]{64}$ ]]
+            printf '%s  %s\n' "$digest" "$file" | sha256sum --check
+          }
+          verified "https://github.com/kubernetes-sigs/kind/releases/download/$KIND_VERSION/kind-linux-amd64" sha256sum kind
+          verified "https://dl.k8s.io/release/$KUBECTL_VERSION/bin/linux/amd64/kubectl" sha256 kubectl
+          verified "https://get.helm.sh/helm-$HELM_VERSION-linux-amd64.tar.gz" sha256 helm.tar.gz
+          verified "https://github.com/cilium/cilium-cli/releases/download/$CILIUM_CLI_VERSION/cilium-linux-amd64.tar.gz" sha256sum cilium.tar.gz
+          tar -xzf helm.tar.gz linux-amd64/helm
+          tar -xzf cilium.tar.gz cilium
+          install -m 755 kind kubectl linux-amd64/helm cilium bin/
+          download "https://helm.cilium.io/cilium-$CILIUM_CHART_VERSION.tgz" cilium.tgz
+          printf '%s  %s\n' "$CILIUM_CHART_SHA256" cilium.tgz | sha256sum --check
+          echo "$work/bin" >> "$GITHUB_PATH"
+      - name: Discover repository Python packages
+        id: packages
+        shell: bash
+        run: |
+          set -euo pipefail
+          packages=$(python3 scripts/components.py python-packages)
+          read -ra directories <<< "$packages"
+          {
+            printf 'editable='
+            printf ' -e %s' "${directories[@]}"
+            printf '\n'
+          } >> "$GITHUB_OUTPUT"
+      - uses: ./.github/workflows/python-environment
+        with:
+          editable: ${{ steps.packages.outputs.editable }}
+          # Collection loads each component's conftest before deselecting ordinary items.
+          oracle: 'true'
+      - name: Create the runner-local cluster
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          kind create cluster --name rezono-fixture --config loop/cluster/kind.yaml --kubeconfig "$RUNNER_TEMP/rezono-fixture.kubeconfig"
+          test "$(kubectl config current-context)" = kind-rezono-fixture
+      - name: Install Cilium and wait for the fixture
+        shell: bash
+        run: |
+          set -euo pipefail
+          retry() {
+            local attempt
+            for attempt in 1 2 3; do
+              if "$@"; then return 0; fi
+              echo "Attempt $attempt failed: $*" >&2
+              sleep 5
+            done
+            return 1
+          }
+          retry helm upgrade --install cilium "$RUNNER_TEMP/rezono-fixture/cilium.tgz" \
+            --namespace kube-system --version "$CILIUM_CHART_VERSION" --values loop/cluster/cilium-values.yaml
+          retry cilium status --wait --wait-duration 2m
+          retry kubectl wait --for=condition=Ready --timeout=60s node/rezono-fixture-control-plane
+          kubectl get storageclass standard
+      - name: Reconcile the checked admission release in Argo
+        if: >-
+          inputs.tasks == ''
+          || contains(fromJSON(inputs.tasks || '[]'), 'loop/tests/test_shared_admission_handoff.py--test_shared_admission_handoff')
+          || contains(fromJSON(inputs.tasks || '[]'), 'k8s-admission/test_server_release.py--test_reconciled_admission_release_on_the_api_server')
+          || contains(fromJSON(inputs.tasks || '[]'), 'loop/tests/test_live_network_pairs.py--test_live_network_pairs')
+        shell: bash
+        run: bash loop/cluster/prepare-admission.sh
+      - name: Record the fixture network pairs
+        if: >-
+          inputs.tasks == ''
+          || contains(fromJSON(inputs.tasks || '[]'), 'loop/tests/test_live_network_pairs.py--test_live_network_pairs')
+        shell: bash
+        run: |
+          set -euo pipefail
+          PYTHONPATH="$PWD/loop" python loop/cluster/record_network.py
+      - name: Select and run the repository's cluster tests
+        if: inputs.tasks == ''
+        shell: bash
+        env:
+          PYTEST_ADDOPTS: -rA
+        run: |
+          set -euo pipefail
+          export REZONO_CLUSTER_KUBECONFIG="$KUBECONFIG"
+          selector=loop/cluster/select_tests.py
+          python "$selector" --collect-only
+          python "$selector"
+      - name: Run the assigned fast checks in the fixture
+        if: inputs.tasks != ''
+        shell: bash
+        env:
+          TASKS: ${{ inputs.tasks }}
+          TASK_BASE: ${{ inputs.base }}
+          PYTEST_ADDOPTS: --rezono-cluster
+        run: |
+          set -euo pipefail
+          export REZONO_CLUSTER_KUBECONFIG="$KUBECONFIG"
+          echo "Testing checkout $(git rev-parse HEAD)"
+          assigned=$(jq -er '.[]' <<< "$TASKS")
+          while IFS= read -r task; do
+            start=$SECONDS
+            python scripts/fast_check.py "$task" --base "$TASK_BASE" | tee "$RUNNER_TEMP/fast.txt"
+            echo "Fast check took $((SECONDS-start)) seconds and printed $(wc -l < "$RUNNER_TEMP/fast.txt") lines" | tee -a "$GITHUB_STEP_SUMMARY"
+          done <<< "$assigned"
+      - name: Remove the named cluster and verify cleanup
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          dir="$RUNNER_TEMP/rezono-fixture/bin"
+          if [[ ! -x "$dir/kind" ]]; then
+            echo "Cluster creation did not start."
+            exit 0
+          fi
+          export PATH="$dir:$PATH"
+          bridge="$RUNNER_TEMP/rezono-fixture/admission-bridge"
+          if [[ -f "$bridge.pid" ]]; then
+            kill "$(cat "$bridge.pid")" 2>/dev/null || true
+            if [[ "${{ job.status }}" != success ]]; then
+              tail -n 40 "$bridge.log"
+            fi
+          fi
+          kind delete cluster --name rezono-fixture --kubeconfig "$KUBECONFIG"
+          clusters=$(kind get clusters)
+          if grep -Fxq rezono-fixture <<< "$clusters"; then
+            echo "The disposable cluster is still registered." >&2
+            exit 1
+          fi
+          rm -f -- "$KUBECONFIG"
+          echo "Disposable cluster rezono-fixture is absent."

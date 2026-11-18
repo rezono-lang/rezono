@@ -11,13 +11,13 @@ MANIFEST_KEY = "admission-fixture/manifests/m-1.json"
 IMAGE = "registry.example.org/sample/app@sha256:" + "a" * 64
 
 
-def publish_evidence(directory, protocol="TCP"):
+def publish_evidence(directory, protocol="TCP", *, ports=(53,)):
     bucket = store.FileStore(directory)
     # The observed endpoints have independent namespace identities. The checker verifies
     # every same-zone conclusion and its source record before the manifest is stored.
-    observed = [("admission-blue", "reader", "admission-blue", "web", "TCP", "443"),
-                ("blue", "idp", "blue", "dns", protocol, "53"),
-                ("blue", "idp", "other", "dns", "TCP", "443")]
+    observed = [("admission-blue", "reader", "admission-blue", "web", "TCP", "443")]
+    observed.extend(("blue", "idp", "blue", "dns", protocol, str(port)) for port in ports)
+    observed.append(("blue", "idp", "other", "dns", "TCP", "443"))
     terms = ["?ns", "?source", "?destination", "?protocol", "?port"]
     premise = ["?ns", "?source", "?ns", "?destination", "?protocol", "?port"]
     rule = {"id": "same-zone", "stratum": 0,

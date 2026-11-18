@@ -1,0 +1,9 @@
+entry_tls_path:
+  - id: shop-identity
+    client: shop
+    provider: idp
+    function: identity
+    direct_port: 8443
+    entry: lb
+    tls_port: 443
+    backend_port: 8080

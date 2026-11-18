@@ -16,6 +16,11 @@ classes:
       service: {required: true}
       profile: {required: true}
       submitted_at: {required: true}
+      submitted_at_key: {range: integer, minimum_value: 0}
+      service_key: {range: integer, minimum_value: 0}
+      global_submitted_at_key: {range: integer, minimum_value: 0}
+      tenant_key: {range: integer, minimum_value: 0}
+      global_service_key: {range: integer, minimum_value: 0}
   TenantRequestItem:
     attributes:
       id: {identifier: true}

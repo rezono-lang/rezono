@@ -1,0 +1,64 @@
+id: value-withheld-optional
+source: docs/semantics/value-cases.yaml#withheld-optional
+status: settled
+input:
+  rows:
+  - kind: item
+    id: item-a
+    group: group-a
+    labels:
+    - first
+    - second
+    quantity:
+      state: unknown
+      reason: not_assigned
+    weight: 3
+  - kind: item
+    id: item-b
+    group: group-a
+    labels:
+    - first
+    weight: 3
+    quantity:
+      state: not_applicable
+  - kind: item
+    id: item-c
+    group: group-b
+    labels:
+    - second
+    quantity: 7
+  - kind: item
+    id: item-e
+    group: group-b
+    labels:
+    - second
+    quantity:
+      state: not_applicable
+  ask: ask Item where quantity = 7
+  role: summary
+  hidden:
+    relation: item__quantity
+    owner: item-a
+  second_world_omits:
+    relation: item__quantity
+    owner: item-a
+  reads_in_part:
+  - item.quantity
+expect:
+  value:
+    equal:
+    - publication_bytes
+    matching:
+    - item-c
+    not_applicable: '2'
+    undecided:
+    - subject: item-a
+      state: unknown
+      reason: not_read_in_full
+    hidden_reason_present: false
+  state: known
+  reason: null
+  witness: null
+unsupported:
+  compiler: Compilation does not filter or serialize a role publication.
+  feldera: Datalog output does not implement role-scoped publication completeness.

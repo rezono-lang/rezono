@@ -1,0 +1,23 @@
+// The platform reads standing from std-decision at the supplied reference date.
+.decl effective_platform_decision(decision: symbol, area: symbol, subject: symbol, value: symbol, on: symbol)
+effective_platform_decision(d, area, subject, value, r) :-
+    platform_decision_binding__decision(b, d), platform_decision_binding__area(b, area),
+    platform_decision_binding__subject(b, subject), platform_decision_binding__value(b, value),
+    in_force_on(d, r).
+
+// A superseded ground calls for review while the dependent decision is still in force.
+.decl review_required(decision: symbol, ground: symbol, successor: symbol, on: symbol)
+review_required(d, old, successor, r) :-
+    effective_platform_decision(d, _, _, _, r),
+    ground__decision(g, d), ground__rests_on(g, old), replaced(old, successor, r).
+
+// Both independently effective decisions remain visible when their conclusions conflict.
+.decl placement_exclusion(placement: symbol, exclusion: symbol, subject: symbol, value: symbol, on: symbol)
+placement_exclusion(placement, exclusion, subject, value, r) :-
+    platform_decision_binding__decision(p, placement), platform_decision_binding__area(p, "placement"),
+    platform_decision_binding__subject(p, subject), platform_decision_binding__value(p, value),
+    platform_decision_binding__decision(x, exclusion), platform_decision_binding__area(x, "exclusion"),
+    platform_decision_binding__subject(x, subject), platform_decision_binding__value(x, value),
+    in_force_on(placement, r), in_force_on(exclusion, r), placement != exclusion.
+
+.output effective_platform_decision, review_required, placement_exclusion

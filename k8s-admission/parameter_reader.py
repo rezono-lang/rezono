@@ -2,6 +2,8 @@
 
 import re
 
+from transport_rule import EXPLICIT_PROTOCOLS
+
 
 def read_parameters(namespace: str, resource: dict) -> dict:
     """Read typed policy inputs from a publication in the request namespace."""
@@ -63,7 +65,7 @@ def validate_transport_flows(rows: object) -> None:
         )
         if (not all(isinstance(endpoint, str) and 1 <= len(endpoint) <= 63
                     for endpoint in (source, destination))
-                or protocol not in ("UDP", "SCTP") or type(port) is not int or not 1 <= port <= 65535):
+                or protocol not in EXPLICIT_PROTOCOLS or type(port) is not int or not 1 <= port <= 65535):
             raise ValueError("transport flow entries require named endpoints, UDP or SCTP and a bounded integer port")
         identity = (source, destination, protocol, port)
         if identity in identities:

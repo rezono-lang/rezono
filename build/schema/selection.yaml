@@ -1,0 +1,92 @@
+id: https://rezono.org/build/selection
+name: build_selection
+description: Typed evidence for selecting checks from an exact repository observation.
+imports: [linkml:types, "std-loop:round_progress"]
+default_range: string
+annotations:
+  layer: facts
+
+types:
+  Commit:
+    typeof: string
+    pattern: "^[a-f0-9]{40}$"
+
+enums:
+  BuildEvent:
+    permissible_values:
+      pull_request:
+      merge_group:
+  SuiteKind:
+    permissible_values:
+      python:
+      node:
+      contracts:
+  ReaderKind:
+    permissible_values:
+      direct:
+      transitive:
+  PathCoverage:
+    permissible_values:
+      mapped:
+      unknown:
+  DependencyKind:
+    permissible_values:
+      manifest:
+      file_reader:
+
+classes:
+  BuildRun:
+    description: One timed selection input with pinned Git endpoints and engine.
+    attributes:
+      id: {identifier: true}
+      event: {range: BuildEvent, required: true}
+      base_sha: {range: Commit, required: true}
+      head_sha: {range: Commit, required: true}
+      engine_sha: {range: Commit, required: true}
+      observed_at: {range: integer, required: true}
+      receipt: {range: LoopSweepReceipt}
+  BuildComponent:
+    description: An observed selectable suite in this run.
+    attributes:
+      id: {identifier: true}
+      run: {range: BuildRun, required: true}
+      kind: {range: SuiteKind, required: true}
+      folder: {required: true}
+  BuildManifest:
+    description: The manifest blob that declared a package at one observed revision.
+    attributes:
+      id: {identifier: true}
+      component: {range: BuildComponent, required: true}
+      path: {required: true}
+      revision: {range: Commit, required: true}
+      blob: {range: Commit, required: true}
+  BuildTestFile:
+    description: A test file admitted to the observed suite inventory.
+    attributes:
+      id: {identifier: true}
+      component: {range: BuildComponent, required: true}
+      path: {required: true}
+  BuildDependency:
+    description: A sourced dependency from an observed component to its consumer.
+    attributes:
+      id: {identifier: true}
+      dependency: {range: BuildComponent, required: true}
+      consumer: {range: BuildComponent, required: true}
+      kind: {range: DependencyKind, required: true}
+      manifest: {range: BuildManifest}
+      source: {required: true}
+  BuildPath:
+    description: One changed path and the result of checking its reader mapping.
+    attributes:
+      id: {identifier: true}
+      run: {range: BuildRun, required: true}
+      path: {required: true}
+      coverage: {range: PathCoverage, required: true}
+  BuildPathReader:
+    description: An owning or reading suite and the scope of propagation for one changed path.
+    attributes:
+      id: {identifier: true}
+      path: {range: BuildPath, required: true}
+      component: {range: BuildComponent, required: true}
+      kind: {range: ReaderKind, required: true}
+      source: {required: true}

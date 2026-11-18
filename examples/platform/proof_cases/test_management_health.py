@@ -13,11 +13,11 @@ def inputs():
             {"id": "s3", "service": "quiet", "run": "now", "token": "check-3"},
         ],
         "health_probe": [
-            {"id": "bad", "service": "api", "run": "now", "token": "check-1", "status": "unhealthy"},
-            {"id": "good", "service": "database", "run": "now", "token": "check-2", "status": "healthy"},
-            {"id": "other-run", "service": "quiet", "run": "then", "token": "check-3", "status": "healthy"},
-            {"id": "other-token", "service": "quiet", "run": "now", "token": "old", "status": "healthy"},
-            {"id": "other-service", "service": "cache", "run": "now", "token": "check-3", "status": "healthy"},
+            {"id": "bad", "service": "api", "run": "now", "token": "check-1", "status": "unhealthy", "event_time": 20},
+            {"id": "good", "service": "database", "run": "now", "token": "check-2", "status": "healthy", "event_time": 23},
+            {"id": "other-run", "service": "quiet", "run": "then", "token": "check-3", "status": "healthy", "event_time": 25},
+            {"id": "other-token", "service": "quiet", "run": "now", "token": "old", "status": "healthy", "event_time": 28},
+            {"id": "other-service", "service": "cache", "run": "now", "token": "check-3", "status": "healthy", "event_time": 31},
         ],
     }
 
@@ -57,9 +57,6 @@ def test_management_health_readback():
     assert {e["channel"] for e in events if e["kind"] == "collector-delivery"} == {"metrics", "logs", "alerts"}
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError, reason=(
-    "Derive telemetry flows and crossed-zone firewall needs in rules/management_routes.dl and its schema. "
-    "Use the placement and ports in decisions/platform-management-health.md."))
 def test_management_observation_routes():
     from management_probes import compiled
 

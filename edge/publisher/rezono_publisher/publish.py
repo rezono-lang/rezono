@@ -104,6 +104,7 @@ class Epoch:
 PROOFS = "rezono:proofs"  # the check of the witnesses by the checker; not a relation name (no colon there)
 ACCESS_CHECK = "rezono:access"  # the read rules give a kind in full, and the data agrees
 ACCESS_SEMANTICS = 2  # the gate refuses a manifest without it
+PUBLICATION_REQUIRED = "publication_required"  # decisions/role-publication-requirements.md
 ASSETS = "rezono:assets"  # the images each role gets: exactly those its image cells name
 SOURCES = fact_sources.SOURCES  # the sources each role gets: exactly those of the base rows it reads
 
@@ -378,6 +379,19 @@ def role_objects(store, pack: str, manifest: str, role: str) -> dict[str, str]:
     return dict(sorted(out.items()))
 
 
+def check_publication_requirements(role: str, rows: dict, readable: dict, derived: set) -> None:
+    """Check required key prefixes against both the complete and the checked role snapshots."""
+    requirements = rows.get(PUBLICATION_REQUIRED, ())
+    if requirements and (PUBLICATION_REQUIRED not in derived or any(len(row) != 4 for row in requirements)):
+        raise Blocked(f"{PROOFS}: malformed publication requirements")
+    for reader, relation, first, second in requirements:
+        if reader != role:
+            continue
+        matching = [row for row in rows.get(relation, ()) if row[:2] == (first, second)]
+        if relation not in derived or len(matching) != 1 or matching[0] not in readable.get(relation, ()):
+            raise Blocked(f"{PROOFS}: role {role}: a required conclusion has no unique readable proof")
+
+
 def plan(e: Epoch, store, roles: dict[str, str], base: dict | None = None,
          reuse: dict | None = None) -> tuple[list[tuple[str, bytes]], dict]:
     """Every object of the publication, in write order, and the manifest: all computed and checked before
@@ -457,6 +471,7 @@ def plan(e: Epoch, store, roles: dict[str, str], base: dict | None = None,
             # R7, per role: its proofs against its snapshots
             checked(e, role, data, sees["witnesses"], full, calc_witnesses=sees.get("calc_witnesses"),
                     complete=complete, instances=instances)
+            check_publication_requirements(role, rows, readable, derived)
         else:
             raise ValueError(f"role {role}: unknown access {mode!r}")
         for rel in sorted(data):

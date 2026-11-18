@@ -1,0 +1,88 @@
+"""A full role still needs a verified source read to publish scoped absence."""
+
+import json
+from pathlib import Path
+import shutil
+
+import pytest
+
+from rezono_compiler.pack import CompileError
+from rezono_publisher import batch, publish, store
+
+
+MINIMAL = Path(__file__).resolve().parent / "fixtures/minimal"
+ROLES = {"checker": "complete", "whole": "may_read", "enumerator": "may_read"}
+GRANTS = """
+.decl may_read(role: symbol, kind: symbol, element: symbol)
+.decl may_read_full(role: symbol, kind: symbol)
+may_read_full("whole", "alpha") :- alpha("anchor").
+may_read("whole", "alpha", item) :- alpha(item).
+may_read("enumerator", "alpha", item) :- alpha(item).
+"""
+
+UNWITNESSED = """
+.decl in_scope_query(scope: symbol, key: symbol)
+in_scope_query("lookup", "missing") :- alpha("anchor").
+.decl registered_match(receipt: symbol, key: symbol)
+registered_match("unattested", item) :- alpha__title(item, "registered").
+.decl absent_checked(source: symbol, scope: symbol, cut: symbol, key: symbol, receipt: symbol)
+absent_checked("register", "lookup", "snapshot-17", key, "unattested") :-
+    in_scope_query("lookup", key), !registered_match("unattested", key).
+"""
+
+
+class UnwitnessedAbsenceReleased(AssertionError):
+    """The role obtained a checked absence from a read with no receipt."""
+
+
+def published(root, destination):
+    epoch = batch.epoch(root, epoch=1, knowledge_time="2026-01-01T00:00:00Z", sources=[])
+    bucket = store.FileStore(destination)
+    manifest = publish.publish(epoch, bucket, ROLES)
+    assert {"name": publish.PROOFS, "status": "green", "violations": 0} in manifest["checks"]
+    return epoch, bucket, manifest
+
+
+def objects(epoch, bucket, role):
+    return {name: json.loads(bucket.get(key)) for name, key in
+            publish.role_objects(bucket, epoch.pack, "m-1", role).items()}
+
+
+@pytest.mark.xfail(strict=True, raises=UnwitnessedAbsenceReleased,
+                   reason="Require both checked source coverage and full role-read authority for absence.")
+def test_absent_checked_requires_readable_coverage(tmp_path):
+    root = Path(shutil.copytree(MINIMAL, tmp_path / "pack"))
+    (root / "facts").mkdir()
+    (root / "facts/items.yaml").write_text("alpha: [{id: anchor, title: probe}]\n", encoding="utf-8")
+    (root / "rules").mkdir()
+    path = root / "rules/access.dl"
+    path.write_text(GRANTS, encoding="utf-8")
+
+    epoch, bucket, manifest = published(root, tmp_path / "control")
+    full = {item["role"]: item["full"] for item in manifest["snapshots"] if item["relation"] == "alpha"}
+    assert full == {"checker": True, "whole": True, "enumerator": False}
+    for role in ("whole", "enumerator"):
+        assert objects(epoch, bucket, role)["relations/alpha.json"] == [{"key": ["anchor"]}]
+
+    # This authored candidate claims the reserved conclusion from an empty lookup and element rights.
+    # It supplies neither a verified receipt nor a trusted input archive.
+    path.write_text(GRANTS + UNWITNESSED, encoding="utf-8")
+    try:
+        epoch, bucket, _ = published(root, tmp_path / "proposed")
+    except (CompileError, publish.Blocked) as error:
+        assert "absent_checked" in str(error) or "receipt" in str(error)
+        return
+
+    partial = objects(epoch, bucket, "enumerator")
+    assert partial.get("relations/absent_checked.json", []) == []
+    whole = objects(epoch, bucket, "whole")
+    rows = whole.get("relations/absent_checked.json", [])
+    if rows:
+        assert rows == [{"key": ["register", "lookup", "snapshot-17", "missing", "unattested"]}]
+        (counterexample,) = [w for w in whole["witnesses.json"]["witnesses"]
+                             if w["conclusion"]["relation"] == "absent_checked"]
+        assert {premise["row"]["relation"] for premise in counterexample["premises"]} == {
+            "in_scope_query", "registered_match",
+        }
+        raise UnwitnessedAbsenceReleased("full role received absent_checked without a verified read")
+    assert all(w["conclusion"]["relation"] != "absent_checked" for w in whole["witnesses.json"]["witnesses"])

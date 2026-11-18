@@ -56,9 +56,10 @@ def test_the_scan_sees_every_way_to_import():
     assert checker_imports(source) == {"rezono_checker.calc", "rezono_checker.access", "rezono_checker.calc.reads"}
 
 
-# Every calculation program in the repository: the compiled goldens of the example packs, the contract fixtures
-# and the example the checker's own tests are frozen on.
-PROGRAMS = sorted(p for base in ("examples", "contracts/fixtures", "checker/tests/fixtures", "compiler/tests/fixtures")
+# Compare the small hand-written programs and any recorded programs in the other components.
+FIXTURES = Path(__file__).resolve().parent / "fixtures" / "calculation-readings"
+PROGRAMS = sorted(p for base in ("examples", "contracts/fixtures", "checker/tests/fixtures", "compiler/tests/fixtures",
+                                FIXTURES.relative_to(ROOT))
                   for p in (ROOT / base).rglob("calc.json") if p.parent.name != "engine")
 
 
@@ -67,9 +68,22 @@ def program(path: Path) -> dict | None:
     return doc if isinstance(doc, dict) and doc.get("format") == "rezono.calc-ir/1" else None
 
 
-@pytest.mark.xfail(strict=True, reason="generated expected/compiled calc.json goldens are not stored in git")
 def test_there_are_programs_to_compare():
     assert sum(program(p) is not None for p in PROGRAMS) >= 3
+    expected = {
+        "direct": {"calc__measure": {"calc__as_of", "item__size"}},
+        "pinned": {
+            "calc__size": {"calc__as_of", "item__size"},
+            "calc__size__v1": {"calc__as_of", "item__size"},
+            "calc__prior_size": {"calc__as_of", "calc__size__v1"},
+        },
+    }
+    for name, sources in expected.items():
+        path = FIXTURES / name / "calc.json"
+        assert path in PROGRAMS
+        ir = program(path)
+        assert ir is not None
+        assert calc_scope.view_sources(ir) == checker_calc.sources(ir) == sources
 
 
 @pytest.mark.parametrize("path", PROGRAMS, ids=lambda p: p.relative_to(ROOT).as_posix())

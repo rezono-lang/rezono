@@ -1,0 +1,38 @@
+// Replace only a direct path that is allowed under recovery isolation.
+.decl entry_tls_selected_path(path: symbol, client: symbol, provider: symbol, function: symbol, port: number)
+entry_tls_selected_path(path, client, provider, f, port) :-
+    entry_tls_path__client(path, client), entry_tls_path__provider(path, provider),
+    entry_tls_path__function(path, f), entry_tls_path__direct_port(path, port),
+    recovery_isolated_flow(client, provider, f, port).
+
+.decl entry_tls_replaced_direct(source: symbol, target: symbol, function: symbol, port: number)
+entry_tls_replaced_direct(a, b, f, p) :- entry_tls_selected_path(_, a, b, f, p).
+
+.decl entry_tls_effective_flow(source: symbol, target: symbol, function: symbol, port: number)
+entry_tls_effective_flow(a, b, f, p) :-
+    recovery_isolated_flow(a, b, f, p), !entry_tls_replaced_direct(a, b, f, p).
+entry_tls_effective_flow(client, entry, f, p) :-
+    entry_tls_selected_path(path, client, _, f, _),
+    entry_tls_path__entry(path, entry), entry_tls_path__tls_port(path, p).
+entry_tls_effective_flow(entry, provider, f, p) :-
+    entry_tls_selected_path(path, _, provider, f, _),
+    entry_tls_path__entry(path, entry), entry_tls_path__backend_port(path, p).
+
+.decl entry_tls_flow_delta(change: symbol, source: symbol, target: symbol, function: symbol, port: number)
+entry_tls_flow_delta("removed", a, b, f, p) :-
+    recovery_isolated_flow(a, b, f, p), !entry_tls_effective_flow(a, b, f, p).
+entry_tls_flow_delta("added", a, b, f, p) :-
+    entry_tls_effective_flow(a, b, f, p), !recovery_isolated_flow(a, b, f, p).
+.output entry_tls_flow_delta
+
+// Project complete flow sets first so shared boundary rules survive a path replacement.
+.decl entry_tls_firewall_rule(source_zone: symbol, target_zone: symbol, port: number)
+entry_tls_firewall_rule(za, zb, p) :-
+    entry_tls_effective_flow(a, b, _, p), zone_of(a, za), zone_of(b, zb), za != zb.
+
+.decl entry_tls_firewall_delta(change: symbol, source_zone: symbol, target_zone: symbol, port: number)
+entry_tls_firewall_delta("removed", za, zb, p) :-
+    recovery_isolated_rule(za, zb, p), !entry_tls_firewall_rule(za, zb, p).
+entry_tls_firewall_delta("added", za, zb, p) :-
+    entry_tls_firewall_rule(za, zb, p), !recovery_isolated_rule(za, zb, p).
+.output entry_tls_firewall_delta

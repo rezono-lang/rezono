@@ -1,0 +1,19 @@
+id: https://rezono.org/examples/platform-entry-tls
+name: platform_entry_tls
+imports: [linkml:types, core]
+default_range: string
+annotations:
+  layer: facts
+
+classes:
+  EntryTlsPath:
+    description: A direct service path selected for TLS termination at an entry service.
+    attributes:
+      id: {identifier: true}
+      client: {range: Service, required: true}
+      provider: {range: Service, required: true}
+      function: {range: Function, required: true}
+      direct_port: {range: integer, minimum_value: 1, maximum_value: 65535, required: true}
+      entry: {range: Service, required: true}
+      tls_port: {range: integer, minimum_value: 1, maximum_value: 65535, required: true}
+      backend_port: {range: integer, minimum_value: 1, maximum_value: 65535, required: true}

@@ -65,9 +65,22 @@ class Admission(unittest.TestCase):
                                        "\n  compiler/tests/test_new_proof.py::test_roundtrip\n")
         self.assertTrue({n.split("::")[0] for n in gate.ORIGINAL} <= selected)
         self.assertTrue(gate.relevant("compiler/tests/test_new_proof.py", selected))
-        with patch.object(gate, "changed", return_value=["docs/feldera.md", "examples/platform/facts/core.yaml"]), \
+        with patch.object(gate, "changed", return_value=[
+                "docs/feldera.md", "examples/platform/facts/core.yaml", "udf/AGENTS.md"]), \
              patch.object(gate, "proof", side_effect=AssertionError("unexpected API access")):
             self.assertTrue(gate.review("base", HEAD, BRANCH, REPO))
+
+    def test_udf_inputs_require_proof_for_the_reviewed_revision(self):
+        for path in ("udf/udf.rs", "udf/udf.toml"):
+            with self.subTest(path=path), patch.object(gate, "changed", return_value=[path]), \
+                 patch.object(gate, "proof", return_value=None) as proof:
+                self.assertFalse(gate.review("base", HEAD, BRANCH, REPO))
+                proof.assert_called_once_with(HEAD, BRANCH, REPO)
+
+                proof.reset_mock()
+                proof.return_value = RUN
+                self.assertTrue(gate.review("base", HEAD, BRANCH, REPO))
+                proof.assert_called_once_with(HEAD, BRANCH, REPO)
 
     def test_only_the_requested_branch_dispatch_proves_this_revision(self):
         self.assertTrue(gate.matches(RUN, HEAD, BRANCH, REPO))
@@ -145,6 +158,131 @@ class Admission(unittest.TestCase):
             pr["head"]["sha"] = "c" * 40
             gate.resume(RUN)
             self.assertEqual(requests, [])
+
+    def test_only_a_daily_scheduler_replacement_can_skip_dispatch(self):
+        def git(*args, payload=None):
+            return subprocess.check_output(
+                ["git", "-c", "user.name=Fixture", "-c", "user.email=change@example.org", *args],
+                input=payload,
+            ).decode("utf-8").strip()
+
+        header = "name: Live Feldera oracle\n\n"
+        push = "on:\n  push:\n    branches: [main]\n  workflow_dispatch:\n\n"
+        nightly = ("on:\n  schedule:\n    - cron: '23 2 * * *'\n  workflow_dispatch:\n\n"
+                   "concurrency:\n  group: feldera-oracle-${{ github.ref }}\n  cancel-in-progress: false\n\n")
+        body = "permissions:\n  contents: read\n\njobs:\n  oracle:\n    steps:\n      - run: compare\n"
+        with tempfile.TemporaryDirectory() as tmp:
+            previous = Path.cwd()
+            try:
+                os.chdir(tmp)
+                git("init", "-q")
+                git("config", "core.filemode", "true")
+                flow = Path(gate.ORACLE)
+                flow.parent.mkdir(parents=True)
+
+                def put(workflow, mode="100644"):
+                    blob = git("hash-object", "-w", "--stdin", payload=workflow.encode("utf-8"))
+                    git("update-index", "--add", "--cacheinfo", f"{mode},{blob},{gate.ORACLE}")
+
+                def commit(workflow, mode="100644"):
+                    put(workflow, mode)
+                    git("commit", "--allow-empty", "-qm", "workflow revision")
+                    return git("rev-parse", "HEAD")
+
+                before = commit(header + push + body)
+                with patch.object(gate, "proof", return_value=None) as proof:
+                    expected = header + nightly + body
+                    replacement = commit(expected)
+                    self.assertTrue(gate.review(before, replacement, BRANCH, REPO))
+                    proof.assert_not_called()
+                    for description, workflow in {
+                        "minutes outside UTC clock": expected.replace("23 2", "60 2"),
+                        "hours outside UTC clock": expected.replace("23 2", "23 24"),
+                        "multiple runs per night": expected.replace("23 2", "23 2,3"),
+                        "twice repetitive hour": expected.replace("23 2", "23 *"),
+                        "additional cron": expected.replace("  workflow_dispatch:", "    - cron: '0 5 * * *'\n  workflow_dispatch:"),
+                        "push retained": expected.replace("  schedule:", "  push:\n  schedule:"),
+                        "dispatch removed": expected.replace("  workflow_dispatch:\n", ""),
+                        "dispatch changed": expected.replace("  workflow_dispatch:", "  workflow_dispatch: {}"),
+                        "other concurrency group": expected.replace("github.ref", "github.sha"),
+                        "cancels running workflow": expected.replace("false", "true"),
+                        "additional concurrency field": expected.replace("false\n", "false\n  extra: true\n"),
+                        "job changed": expected.replace("run: compare", "run: changed"),
+                        "permissions changed": expected.replace("contents: read", "contents: write"),
+                        "name changed": expected.replace("Live Feldera oracle", "Other oracle"),
+                        "duplicate top-level trigger": expected + "on:\n  push:\n",
+                    }.items():
+                        with self.subTest(description=description):
+                            self.assertFalse(gate.review(before, commit(workflow), BRANCH, REPO))
+                    self.assertFalse(gate.review(before, commit(expected, "100755"), BRANCH, REPO))
+                    self.assertFalse(gate.review(before, commit(expected, "120000"), BRANCH, REPO))
+                    put(expected)
+                    Path("unrelated.txt").write_text("also changed\n", encoding="utf-8")
+                    git("add", "unrelated.txt")
+                    git("commit", "-qm", "change also adds a path")
+                    self.assertFalse(gate.review(before, "HEAD", BRANCH, REPO))
+                    self.assertEqual(proof.call_count, 18)
+            finally:
+                os.chdir(previous)
+
+    def test_only_the_exact_schedule_assertions_can_skip_dispatch(self):
+        path = "compiler/tests/test_live_feldera_workflow.py"
+        before = (
+            b'    assert set(events) == {"push", "workflow_dispatch"}\n'
+            b'    assert events["push"]["branches"] == ["main"]\n'
+            b'    assert not ({"paths", "paths-ignore"} & events["push"].keys())\n'
+        )
+        after = (
+            b'    if set(events) == {"push", "workflow_dispatch"}:\n'
+            b'        assert events["push"] == {"branches": ["main"]}\n'
+            b'    else:\n'
+            b'        assert set(events) == {"schedule", "workflow_dispatch"}\n'
+            b'        assert events["schedule"] == [{"cron": "17 2 * * *"}]\n'
+            b'        assert job_file["concurrency"] == {\n'
+            b'            "group": "feldera-oracle-${{ github.ref }}",\n'
+            b'            "cancel-in-progress": "false",\n'
+            b'        }\n'
+        )
+        body = b'    assert (ROOT / "compiler/ci/run_feldera_oracle.sh").is_file()\n'
+        with tempfile.TemporaryDirectory() as folder, patch.object(gate, "proof", return_value=None) as proof:
+            previous = Path.cwd()
+            try:
+                os.chdir(folder)
+
+                def git(*args, payload=None):
+                    return subprocess.check_output(
+                        ["git", "-c", "user.name=Fixture", "-c", "user.email=change@example.org", *args],
+                        input=payload,
+                    ).decode("ascii").strip()
+
+                def commit(data, mode="100644", filename=path):
+                    blob = git("hash-object", "-w", "--stdin", payload=data)
+                    git("update-index", "--add", "--cacheinfo", f"{mode},{blob},{filename}")
+                    git("commit", "-qm", "fixture")
+                    return git("rev-parse", "HEAD")
+
+                git("init", "-q")
+                base = commit(before + body)
+                head = commit(after + body)
+                self.assertTrue(gate.review(base, head, BRANCH, REPO))
+                proof.assert_not_called()
+                for changed in (
+                    after.replace(b"17 2", b"18 2") + body,
+                    after.replace(b'"false"', b'"true"') + body,
+                    after.replace(b"workflow_dispatch", b"workflow_run") + body,
+                    after + body.replace(b".is_file()", b".exists()"),
+                    after + body + b"    assert True\n",
+                    b"import os\n" + after + body,
+                ):
+                    with self.subTest(changed=changed):
+                        self.assertFalse(gate.review(base, commit(changed), BRANCH, REPO))
+                self.assertFalse(gate.review(base, commit(after + body, "100755"), BRANCH, REPO))
+                self.assertFalse(gate.review(base, commit(after + body, "120000"), BRANCH, REPO))
+                commit(after + body)
+                self.assertFalse(gate.review(base, commit(b"extra", filename="README.md"), BRANCH, REPO))
+                self.assertEqual(proof.call_count, 9)
+            finally:
+                os.chdir(previous)
 
 
 if __name__ == "__main__":

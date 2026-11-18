@@ -118,12 +118,14 @@ service:
   - {id: restore, product: recovery-env, role: recovery, step: 2}
   - {id: restore-bad, product: app, role: recovery, step: 2}
 release:
+  - {id: distribution-3.0.0, product: registry, released_on_day: 1, stable: 'yes', version: 3.0.0}
   - {id: keycloak-25, product: keycloak, released_on_day: 100, stable: 'yes'}
-  - {id: keycloak-26, product: keycloak, released_on_day: 200, stable: 'yes'}
+  - {id: keycloak-26, product: keycloak, released_on_day: 200, stable: 'yes', version: 26.0.0}
   - {id: keycloak-27rc, product: keycloak, released_on_day: 250, stable: 'no'}
-  - {id: postgresql-16, product: postgresql, released_on_day: 50, stable: 'yes'}
-  - {id: postgresql-17, product: postgresql, released_on_day: 150, stable: 'yes'}
+  - {id: postgresql-16, product: postgresql, released_on_day: 50, stable: 'yes', series: '16'}
+  - {id: postgresql-17, product: postgresql, released_on_day: 150, stable: 'yes', series: '17'}
 pin:
+  - {id: pin-reg, service: reg, release: distribution-3.0.0}
   - {id: pin-db-git, service: db-git, release: postgresql-16}
 choice:
   - {id: c-idp-db, service: idp, function: database, provider: db-idp}

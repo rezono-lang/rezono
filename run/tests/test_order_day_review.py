@@ -20,7 +20,7 @@ def source(day, name, body):
 
 
 BEFORE = source("2032-05-01", "before", b'{"plans_metal":[{"id":"demo","hourly_cost":1.50}]}')
-AFTER = source(DAY, "after", b'{"plans_metal":[{"id":"demo","hourly_cost":1.75}]}')
+AFTER = source(DAY, "after", b'{"plans_metal":[{"id":"demo","hourly_cost":1.75},{"id":"other","hourly_cost":1.75}]}')
 RATE = source("2032-05-01", "rate", b'{"base":"USD","quote":"EUR","n":4,"d":5}')
 
 
@@ -31,7 +31,6 @@ def test_order_day_review_reference():
     assert datetime.fromisoformat(DAY).replace(tzinfo=timezone.utc) + timedelta(days=1) == datetime.fromisoformat(END)
 
 
-@pytest.mark.xfail(strict=True, reason="Read decisions/run-order-day-review.md. Implement the local plan and review boundaries in run/order_day_review.py. Waits for test_effective_currency and test_dispatch_policy.")
 def test_order_day_review():
     plan = implementation("order_day_review.py", "plan")
     review = implementation("order_day_review.py", "review")
@@ -47,7 +46,7 @@ def test_order_day_review():
     approval = {"plan_hash": old_hash, "decision": "approve", "budget_cents": 900,
                 "currency": "EUR", "expires_at": "2032-05-05T12:00:00Z"}
     quote = {"provider": "paper", "mode": "binding_quote", "total_usd": [11, 1], "includes_setup": True,
-             "expires_at": "2032-05-04T12:00:00Z", "reference": "paper-7"}
+             "expires_at": "2032-05-04T12:00:00Z", "reference": "paper-7", "plan_hash": new_hash}
 
     def check(consent, guarantee, now=NOW):
         return review(consent, now, DAY, LINES, prices, [RATE], guarantee)
@@ -72,3 +71,37 @@ def test_order_day_review():
     ]:
         rejected = check(consent, guarantee, moment)
         assert (rejected["reason"], rejected["request"]) == (reason, None)
+
+
+def test_binding_quote_matches_approved_order():
+    plan = implementation("order_day_review.py", "plan")
+    review = implementation("order_day_review.py", "review")
+    prices = [AFTER, BEFORE]
+    plans = [
+        plan(DAY, lines, prices, [RATE], "paper")
+        for lines in (LINES, [dict(LINES[0], sku="other")])
+    ]
+    assert [json.loads(raw)["usd"] for raw in plans] == [[11, 1], [11, 1]]
+    approved, other = [sha256(raw).hexdigest() for raw in plans]
+    assert approved != other
+
+    approval = {"plan_hash": approved, "decision": "approve", "budget_cents": 1100,
+                "currency": "USD", "expires_at": "2032-05-05T12:00:00Z"}
+    guarantee = {"provider": "paper", "mode": "binding_quote", "currency": "USD", "total_usd": [11, 1],
+                 "includes_setup": True, "expires_at": "2032-05-04T12:00:00Z", "reference": "paper-7"}
+
+    def check(provider_guarantee):
+        return review(approval, NOW, DAY, LINES, prices, [RATE], provider_guarantee)
+
+    refused = {"reason": "unbound_plan", "candidate_hash": approved, "request": None}
+    assert check(dict(guarantee, plan_hash=other, reference="paper-other")) == refused
+    assert check(guarantee) == refused
+    assert check(dict(guarantee, plan_hash=None)) == refused
+    result = check(dict(guarantee, plan_hash=approved))
+    assert (result["reason"], result["request"]["plan_hash"], result["request"]["reference"]) == (
+        "authorized", approved, "paper-7",
+    )
+
+    bounded = dict(guarantee, mode="reject_above")
+    assert check(bounded)["reason"] == "authorized"
+    assert check(dict(bounded, plan_hash=other)) == refused

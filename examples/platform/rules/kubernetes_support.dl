@@ -1,0 +1,19 @@
+// Both records must agree on the publisher's exact product, series, patch, date and source.
+.decl published_series_support(product: symbol, series: symbol, latest_patch: symbol, support_end: symbol, source_url: symbol, source_sha256: symbol)
+published_series_support(p, s, patch, end, url, sha) :-
+    product(p), series_support_evidence(e),
+    series_support_evidence__product(e, p),
+    series_support_evidence__series(e, s),
+    series_support_evidence__latest_patch(e, patch),
+    series_support_evidence__support_end(e, end),
+    series_support_evidence__source_url(e, url),
+    series_support_evidence__source_sha256(e, sha),
+    series_support_source(src),
+    series_support_source__product(src, p),
+    series_support_source__series(src, s),
+    series_support_source__latest_patch(src, patch),
+    series_support_source__support_end(src, end),
+    series_support_source__source_url(src, url),
+    series_support_source__source_sha256(src, sha).
+
+.output published_series_support

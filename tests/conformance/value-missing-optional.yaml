@@ -1,0 +1,25 @@
+id: value-missing-optional
+source: docs/semantics/value-cases.yaml#missing-optional
+status: settled
+input:
+  rows:
+  - kind: item
+    id: item-b
+    group: group-a
+    labels:
+    - first
+    weight: 3
+  slot: item.quantity
+  subject: item-b
+  cardinality: '?'
+  world: closed
+expect:
+  value: null
+  state: not_applicable
+  reason: null
+  witness:
+    complete: true
+    absent:
+      relation: item__quantity
+      key:
+      - item-b

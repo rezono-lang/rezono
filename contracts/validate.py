@@ -36,6 +36,14 @@ def validator(schema):
     return Validator(definition, validation_plugins=[JsonschemaValidationPlugin(closed=True)])
 
 
+def module_form_errors(document: object) -> list[str]:
+    """Check a module form against its closed LinkML shape and native literal supplement."""
+    from rezono_compiler.native_literals import native_literal_errors
+
+    report = validator("rezono-module.yaml").validate(document, "ModuleForm")
+    return [result.message for result in report.results] or native_literal_errors(document)
+
+
 def check(label, instance, schema, target_class):
     report = validator(schema).validate(instance, target_class)
     for result in report.results:

@@ -1,0 +1,27 @@
+id: https://rezono.org/examples/platform-core/management-backup-routes
+name: platform_management_backup_routes
+description: Declared backup site functions and the shared data-plane storage endpoint.
+in_language: en
+imports: [linkml:types]
+default_range: string
+annotations:
+  layer: facts
+
+enums:
+  BackupSiteFunction:
+    permissible_values:
+      producer:
+      recovery:
+      management:
+
+classes:
+  BackupSite:
+    description: A site placed in the backup scenario with one declared function.
+    attributes:
+      id: {identifier: true}
+      function: {range: BackupSiteFunction, required: true}
+  BackupStore:
+    description: An independent declaration of the scenario's shared backup storage.
+    attributes:
+      id: {identifier: true}
+      endpoint: {required: true}

@@ -32,6 +32,7 @@ import json
 import re
 import sys
 from fractions import Fraction
+from functools import cache, lru_cache
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -192,6 +193,69 @@ def _bound_rule(schema: dict, table: str, column: str, slot: dict, t: dict):
     return _rule("bounds", "conformity", query=_count(table, " OR ".join(broken)))
 
 
+@cache
+def _unicode_codepoints() -> str:
+    return "".join(map(chr, range(sys.maxunicode + 1)))
+
+
+@lru_cache(maxsize=32)
+def _quality_character_class(pattern: str, ignore_case: bool) -> str:
+    """Encode a single-character Python atom as a DuckDB character class."""
+    ranges = []
+    flags = re.IGNORECASE if ignore_case else 0
+    for match in re.finditer(f"(?:{pattern})+", _unicode_codepoints(), flags):
+        first, stop = match.span()
+        run = fr"\x{{{first:X}}}"
+        if stop > first + 1:
+            run += fr"-\x{{{stop - 1:X}}}"
+        ranges.append(run)
+    # The Python match has already applied case folding. RE2 must keep these ranges exact.
+    members = "".join(ranges) if ranges else r"^\x{0}-\x{10FFFF}"
+    return f"(?-i:[{members}])"
+
+
+def _quality_pattern(pattern: str) -> str:
+    """Keep the reader's Unicode word classes in DuckDB's whole-text match."""
+    escapes = re.compile(r"\\.", re.DOTALL)
+    word = r"\p{L}\p{N}_"
+    word_escapes = {r"\w", r"\W"}
+    has_complement = any(escape[0] == r"\W" for escape in escapes.finditer(pattern))
+    ignore_case = [False]
+
+    def translate(token: re.Match[str]) -> str:
+        if has_complement:
+            if token[0] in word_escapes or (token[0].startswith("[") and any(
+                escape[0] in word_escapes for escape in escapes.finditer(token[0])
+            )):
+                # RE2 cannot nest complemented classes and may use an older Unicode table.
+                return _quality_character_class(token[0], ignore_case[-1])
+            if token["flag_end"]:
+                enabled = "i" in token["enable"] or ignore_case[-1]
+                enabled = enabled and "i" not in (token["disable"] or "")
+                if token["flag_end"] == ":":
+                    ignore_case.append(enabled)
+                else:
+                    ignore_case[-1] = enabled
+            elif token[0] == "(":
+                ignore_case.append(ignore_case[-1])
+            elif token[0] == ")" and len(ignore_case) > 1:
+                ignore_case.pop()
+            return token[0]
+        if token[0] == r"\w":
+            return f"[{word}]"
+        if token[0].startswith("["):
+            return escapes.sub(lambda escape: word if escape[0] == r"\w" else escape[0], token[0])
+        return token[0]
+
+    # Read bracket expressions and escaped literals as units, and follow the scopes of shared inline flags.
+    tokens = (
+        r"\\.|\[\^?\]?(?:\\.|[^\\\]])*\]|"
+        r"\(\?(?P<enable>[ims]*)(?:-(?P<disable>[ims]+))?(?P<flag_end>[:)])|[()]"
+    )
+    translated = re.sub(tokens, translate, pattern, flags=re.DOTALL)
+    return f"^(?:{translated})$"
+
+
 def _value_rules(schema: dict, table: str, column: str, slot: dict) -> list:
     """What the type of a value or member column adds that its storage does not say."""
     if "ref" in slot:
@@ -202,7 +266,7 @@ def _value_rules(schema: dict, table: str, column: str, slot: dict) -> list:
     rules = []
     if t["of"] == "Text" and "pattern" in t:  # the reader matches the whole text
         rules.append(_rule("pattern", "conformity", metric="invalidValues",
-                           arguments={"pattern": f"^(?:{t['pattern']})$"}))
+                           arguments={"pattern": _quality_pattern(t["pattern"])}))
     elif t["of"] == "Enum":
         enum = schema["enums"][t["enum"]]
         if isinstance(enum, list):  # closed; an open enum may gain values, so its members are not a rule

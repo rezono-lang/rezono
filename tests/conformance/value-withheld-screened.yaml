@@ -1,0 +1,48 @@
+id: value-withheld-screened
+source: docs/semantics/value-cases.yaml#withheld-screened
+status: settled
+input:
+  rows:
+    - {kind: group, id: group-a}
+    - {kind: item, id: item-a, group: group-a, labels: [first], quantity: 7}
+    - {kind: link, id: link-hidden, tail: item-a, head: item-a}
+  role_worlds:
+    output: screened_result
+    clauses: |
+      .decl screened_result(item: symbol)
+      screened_result(i) :- item(i), link(l), link__tail(l, i).
+      screened_result(i) :- item(i), group("group-b").
+      .output screened_result
+    worlds:
+      - name: hidden-only
+        added_rows: []
+      - name: readable-alternative
+        added_rows:
+          - {kind: group, id: group-b}
+expect:
+  state: known
+  reason: null
+  value:
+    hidden-only: {summary: [], reader: [[item-a]]}
+    readable-alternative: {summary: [[item-a]], reader: [[item-a]]}
+  witness:
+    hidden-only:
+      summary: null
+      reader:
+        rule: screened_result_1
+        premises:
+          - {relation: item, key: [item-a]}
+          - {relation: link, key: [link-hidden]}
+          - {relation: link__tail, key: [link-hidden, item-a]}
+    readable-alternative:
+      summary:
+        rule: screened_result_2
+        premises:
+          - {relation: item, key: [item-a]}
+          - {relation: group, key: [group-b]}
+      reader:
+        rule: screened_result_1
+        premises:
+          - {relation: item, key: [item-a]}
+          - {relation: link, key: [link-hidden]}
+          - {relation: link__tail, key: [link-hidden, item-a]}

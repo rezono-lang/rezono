@@ -10,7 +10,6 @@ import yaml
 import linkml_schema
 
 
-@pytest.mark.xfail(strict=True, reason="Use POSIX import references in edge/plugins/connectors/linkml_schema.py independent of the host path library. Read the fixture linkml/schema/parts/whole.yaml.")
 def test_linkml_import_reference_uses_exchange_separators_on_windows(monkeypatch):
     # Exercise the actual Windows standard-library path behavior on Linux CI as well.
     monkeypatch.setattr(linkml_schema, "os", SimpleNamespace(path=ntpath))

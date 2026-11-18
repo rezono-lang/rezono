@@ -1,0 +1,14 @@
+// A scenario with no per-site target binding can use only one shared endpoint.
+.decl backup_route_store_conflict(endpoint: symbol)
+backup_route_store_conflict(endpoint) :-
+    backup_store__endpoint(_, endpoint), backup_store__endpoint(_, other), endpoint != other.
+
+.decl managed_backup_route(site: symbol, endpoint: symbol, access: symbol)
+managed_backup_route(site, endpoint, "write") :-
+    backup_site__function(site, "producer"), backup_store__endpoint(_, endpoint),
+    !backup_route_store_conflict(endpoint).
+managed_backup_route(site, endpoint, "read") :-
+    backup_site__function(site, "recovery"), backup_store__endpoint(_, endpoint),
+    !backup_route_store_conflict(endpoint).
+
+.output managed_backup_route

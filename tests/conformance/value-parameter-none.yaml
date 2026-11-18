@@ -1,0 +1,25 @@
+id: value-parameter-none
+source: docs/semantics/value-cases.yaml#parameter-none
+status: settled
+input:
+  rows:
+  - relation: quantity_parameter
+    id: late
+    valid_from: '2026-01-03'
+    known_from: '2026-01-01'
+    value: '7'
+    valid_until: '2027-01-01'
+  valid_at: '2026-01-02'
+  known_at: '2026-01-04'
+  expression: select quantity parameter
+expect:
+  value: null
+  state: unknown
+  reason: no_version_applies
+  witness: null
+unsupported:
+  compiler: The SQL calculation reports missing selection with a prose reason rather than this stable
+    code.
+  checker: The calculation checker reports missing selection with a prose reason rather than this stable
+    code.
+  feldera: The calculation result uses a prose reason rather than this stable code.

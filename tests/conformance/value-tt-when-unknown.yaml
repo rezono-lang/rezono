@@ -1,0 +1,27 @@
+id: value-tt-when-unknown
+source: docs/semantics/value-cases.yaml#tt-when-unknown
+status: settled
+input:
+  rows:
+  - kind: item
+    id: item-c
+    group: group-b
+    labels:
+    - second
+    quantity:
+      state: unknown
+      reason: not_assigned
+  expression: when quantity = 7 then 1 else 2
+  subject: item-c
+expect:
+  value: null
+  state: unknown
+  reason: not_assigned
+  witness:
+    relation: item__quantity
+    key:
+    - item-c
+unsupported:
+  compiler: The calculation condition can propagate unknown, but ordinary fact input cannot supply this
+    stored reason.
+  feldera: Ordinary integer fact columns cannot supply the stored reason for the unknown condition.

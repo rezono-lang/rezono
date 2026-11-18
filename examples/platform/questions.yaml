@@ -1,0 +1,304 @@
+format: rezono.questions/1
+acceptance:
+  - id: admission-outcomes-and-free-capacity
+    question: Which requests land, wait or are refused, and how much capacity is left at each trial?
+    tests:
+      - proof_cases/test_admission_threshold.py::test_first_threshold_is_between_two_real_assumptions
+  - id: alternative-providers
+    question: Which other eligible providers could supply a function currently served by a selected provider?
+    tests:
+      - acceptance/test_other_provider.py::test_other_provider
+  - id: backup-age-and-inventory
+    question: Which managed backups are current, too old, missing or still unknown for the checked inventory?
+    tests:
+      - proof_cases/test_management_backup.py::test_management_backup_age_and_absence
+  - id: backup-capture-and-readback
+    question: Does an independent recovery read match the exact captured backup, trial, run and target?
+    tests:
+      - proof_cases/test_management_backup.py::test_management_restore_matches_copy
+      - proof_cases/test_management_backup.py::test_management_backup_restore_readback
+      - proof_cases/test_restore_offline_dependencies.py::test_restore_offline_dependencies
+      - proof_cases/test_management_dataset_restored_offline.py::test_management_dataset_restored_offline
+  - id: backup-storage-routes
+    question: Which producers write to the backup store and which recovery clusters may read it?
+    tests:
+      - proof_cases/test_management_backup.py::test_management_backup_routes
+  - id: capacity-admission-threshold
+    question: Where does a change in pool capacity first change a request's admission outcome?
+    tests:
+      - proof_cases/test_admission_threshold.py::test_independent_first_change_and_no_change
+      - proof_cases/test_admission_threshold.py::test_first_threshold_is_between_two_real_assumptions
+  - id: catalog-entry-rendering
+    question: What Backstage catalog entity represents a tenant's service and selected profile?
+    tests:
+      - acceptance/test_catalog_entity.py::test_catalog_entity
+  - id: checked-network-policy-rendering
+    question: Which default-deny and narrowly scoped Kubernetes network policies render from the checked listener rows?
+    tests:
+      - proof_cases/test_network_policy_bundle.py::test_network_policy_bundle
+      - proof_cases/test_published_listener_port.py::test_render_published_listener_port
+  - id: cluster-fleet-membership
+    question: Which control endpoints and clusters belong to the fleet derived from the platform topology?
+    tests:
+      - proof_cases/test_cluster_fleet.py::test_cluster_fleet
+      - proof_cases/test_cluster_reference.py::test_complete_cluster_projection
+  - id: cluster-network-implementation
+    question: Which policy engine and network observer apply to each cluster when the declared implementation changes?
+    tests:
+      - proof_cases/test_cluster_network_layer.py::test_cluster_network_layer
+      - proof_cases/test_cluster_reference.py::test_complete_cluster_projection
+  - id: cluster-projection-completeness
+    question: Does the complete derived cluster projection agree with the independent topology oracle?
+    tests:
+      - proof_cases/test_cluster_reference.py::test_complete_cluster_projection
+  - id: cluster-required-flows
+    question: Which flows follow from the platform's placed services and their required functions?
+    tests:
+      - proof_cases/test_cluster_flow.py::test_cluster_flow
+      - proof_cases/test_cluster_reference.py::test_complete_cluster_projection
+  - id: cluster-service-placement
+    question: Where do services and endpoints belong, and what network zones follow from those placements?
+    tests:
+      - proof_cases/test_cluster_placement.py::test_cluster_placement
+      - proof_cases/test_cluster_reference.py::test_complete_cluster_projection
+      - proof_cases/test_cmdb_scope.py::test_fixture_matches_real_domain_placements_without_a_cmdb
+  - id: cluster-worker-machine-stack
+    question: Which host, operating system, Kubernetes release and bootstrap choice follow for each worker?
+    tests:
+      - proof_cases/test_cluster_machine_stack.py::test_cluster_machine_stack
+      - proof_cases/test_cluster_reference.py::test_complete_cluster_projection
+  - id: cluster-worker-network
+    question: Which host, interface and endpoint network does each worker's placement require?
+    tests:
+      - proof_cases/test_cluster_worker_network.py::test_cluster_worker_network
+      - proof_cases/test_cluster_reference.py::test_complete_cluster_projection
+  - id: cmdb-placement-authority
+    question: Can a mapped reference export report differences without changing authoritative service placements?
+    tests:
+      - proof_cases/test_cmdb_scope.py::test_fixture_matches_real_domain_placements_without_a_cmdb
+      - proof_cases/test_cmdb_scope.py::test_mapped_cmdb_scope_does_not_write_domain_placements
+      - proof_cases/test_cmdb_scope.py::test_cmdb_compares_placement_sets_with_per_export_scope
+  - id: cmdb-placement-drift
+    question: Which expected or extra placements differ from a scoped CMDB export, and which remain unknown?
+    tests:
+      - proof_cases/test_cmdb_scope.py::test_fixture_matches_real_domain_placements_without_a_cmdb
+      - proof_cases/test_cmdb_scope.py::test_mapped_cmdb_scope_does_not_write_domain_placements
+      - proof_cases/test_cmdb_scope.py::test_cmdb_compares_placement_sets_with_per_export_scope
+  - id: conflicting-placement-decisions
+    question: Which independently valid placement and exclusion decisions conflict at the reference date?
+    tests:
+      - proof_cases/test_decision_standing.py::test_platform_recalculates_and_retains_conflicting_placements
+  - id: cross-zone-firewall-rules
+    question: Which cross-zone router rules follow from the actual source range, destination and required flow?
+    tests:
+      - acceptance/test_firewall_witness.py::test_firewall_witness
+      - proof_cases/test_cluster_flow.py::test_cluster_flow
+      - proof_cases/test_cluster_reference.py::test_complete_cluster_projection
+  - id: current-service-health
+    question: What is the latest observed health, what can confirm completion, and which failures are witnessed?
+    tests:
+      - proof_cases/test_current_health.py::test_health_without_event_times
+      - proof_cases/test_current_health.py::test_current_health_and_witness
+      - proof_cases/test_management_health.py::test_management_health
+      - proof_cases/test_management_health.py::test_management_health_readback
+  - id: decision-review-after-replacement
+    question: When does an effective decision require review because one of its grounds was replaced?
+    tests:
+      - proof_cases/test_decision_standing.py::test_platform_recalculates_and_retains_conflicting_placements
+  - id: default-transport-publication-grounds
+    question: Which product, observation and pinned source must agree before a default transport can be published?
+    tests:
+      - acceptance/test_postgres_transport.py::test_unverified_transport_does_not_publish
+      - acceptance/test_postgres_transport.py::test_published_transport_requires_the_product_observation_and_pinned_source
+  - id: delivery-status-rendering
+    question: Which commit-status context, state and reason represent an observed tenant delivery step?
+    tests:
+      - acceptance/test_delivery_status.py::test_delivery_status
+  - id: dependency-order
+    question: Which platform steps must precede another step, and which ordered links prove it?
+    tests:
+      - proof_cases/test_standard_order.py::test_standard_order
+  - id: effective-decision-standing
+    question: Which platform decisions stand on a reference date, and how do expiry and withdrawal differ?
+    tests:
+      - proof_cases/test_decision_standing.py::test_standard_decision_distinguishes_expiry_from_withdrawal
+      - proof_cases/test_decision_standing.py::test_platform_recalculates_and_retains_conflicting_placements
+  - id: entry-tls-firewall-change
+    question: Which firewall rules change when TLS terminates at the selected entry without removing protection shared with other flows?
+    tests:
+      - acceptance/test_entry_tls.py::test_entry_tls_substitutes_only_the_selected_path
+  - id: entry-tls-flow-change
+    question: Which service flows change when TLS terminates at the selected entry?
+    tests:
+      - acceptance/test_entry_tls.py::test_entry_tls_substitutes_only_the_selected_path
+  - id: granted-listener-ports
+    question: Which listener ports have both a firewall allowance and service access, and how does a changed port affect the checked rows?
+    tests:
+      - proof_cases/test_listener_decisions.py::test_listener_decisions_after_all_grants
+      - proof_cases/test_published_listener_port.py::test_published_listener_port
+  - id: keycloak-release-evidence
+    question: Which Keycloak release and originating publisher reference are recorded for the selected source?
+    tests:
+      - acceptance/test_keycloak_release.py::test_keycloak_release
+      - acceptance/test_keycloak_release.py::test_published_release_requires_every_independent_ground
+  - id: kubernetes-series-support-evidence
+    question: Which Kubernetes patch and support end date are stated by the pinned release-series publication?
+    tests:
+      - acceptance/test_kubernetes_support.py::test_kubernetes_support
+      - acceptance/test_kubernetes_support.py::test_orphaned_support_slots_do_not_assert_support
+      - acceptance/test_kubernetes_support.py::test_support_requires_each_independent_ground
+      - acceptance/test_support_window.py::test_support_window_uses_explicit_inclusive_dates
+  - id: management-certificate-findings
+    question: Which managed TLS endpoints have incorrect, expiring or missing certificates, and which readings cannot decide?
+    tests:
+      - proof_cases/test_management_certificates.py::test_management_certificate_findings
+  - id: management-certificate-renewal
+    question: Does an independent client read the renewed leaf for the same server name and trusted chain?
+    tests:
+      - proof_cases/test_management_certificates.py::test_management_certificate_renewal_readback
+  - id: management-cluster-rights
+    question: Which organization member has a dated right to act on a particular cluster and target?
+    tests:
+      - proof_cases/test_management_access.py::test_management_cluster_rights
+  - id: management-membership-withdrawal
+    question: Does withdrawing membership remove the reconciled right while the former credential still authenticates?
+    tests:
+      - proof_cases/test_management_access.py::test_management_membership_withdrawal
+  - id: management-recorder-availability
+    question: Does an unavailable recorder remain missing while an authorization error remains a distinct error?
+    tests:
+      - proof_cases/test_management_health.py::test_missing_recorder_is_unavailable
+  - id: management-router-drift
+    question: Which managed router allowances are missing or extra, and what scope evidence supports that distinction?
+    tests:
+      - proof_cases/test_management_firewall.py::test_management_firewall_bidirectional
+      - proof_cases/test_management_firewall.py::test_management_firewall_readback
+  - id: management-telemetry-routes
+    question: Which metrics, logs and alerts reach their collectors, and which flows cross a boundary?
+    tests:
+      - proof_cases/test_management_health.py::test_management_observation_routes
+      - proof_cases/test_management_health.py::test_management_health_readback
+  - id: management-tenant-access-isolation
+    question: Can the same authenticated tenant credential read another tenant's fixture cluster?
+    tests:
+      - proof_cases/test_management_access.py::test_management_membership_withdrawal
+  - id: observation-event-time-validity
+    question: How do missing, malformed or tied source event times affect the health evidence?
+    tests:
+      - proof_cases/test_current_health.py::test_health_without_event_times
+      - proof_cases/test_current_health.py::test_current_health_and_witness
+      - proof_cases/test_current_health.py::test_invalid_source_event_time
+  - id: offline-management-dataset-restore
+    question: Which safe steps can restore and read the named management dataset in isolation while management stays offline throughout?
+    tests:
+      - proof_cases/test_restore_offline_dependencies.py::test_restore_offline_dependencies
+      - proof_cases/test_platform_safe_rounds_recorded.py::test_platform_safe_rounds_recorded
+      - proof_cases/test_management_backup.py::test_management_backup_restore_readback
+      - proof_cases/test_management_dataset_restored_offline.py::test_management_dataset_restored_offline
+  - id: postgresql-default-transport
+    question: Which default PostgreSQL client transport and port does the pinned product documentation declare?
+    tests:
+      - acceptance/test_postgres_transport.py::test_postgres_transport
+      - acceptance/test_postgres_transport.py::test_published_transport_requires_the_product_observation_and_pinned_source
+  - id: product-part-closure
+    question: Which enclosing delivery and catalog entry contain a component, and which part links prove it?
+    tests:
+      - proof_cases/test_standard_part.py::test_standard_part
+  - id: product-release-publication-grounds
+    question: Which records support an announced release, and when does its date differ from the platform register?
+    tests:
+      - acceptance/test_keycloak_release.py::test_observation_slots_alone_do_not_publish_a_release
+      - acceptance/test_keycloak_release.py::test_published_release_requires_every_independent_ground
+      - acceptance/test_keycloak_release.py::test_register_date_is_only_used_for_drift
+  - id: provider-selection-evidence
+    question: Was a provider selected explicitly or because it was the only provider, and what grounds support that choice?
+    tests:
+      - acceptance/test_choice_evidence.py::test_choice_evidence
+      - acceptance/test_unique_evidence.py::test_unique_evidence
+  - id: readable-publication-witnesses
+    question: Which tenant conclusions have a fully readable witness, and which must be withheld when a premise cannot be read?
+    tests:
+      - proof_cases/test_role_publication_fixture.py::test_role_publication_fixture
+      - proof_cases/test_standard_access.py::test_standard_access
+      - proof_cases/test_standard_access.py::test_standard_access_withholds_a_conclusion_with_an_unreadable_ground
+  - id: recovery-isolation-firewall-change
+    question: Which cross-zone firewall allowances change when the recovery isolation decision is relaxed?
+    tests:
+      - acceptance/test_recovery_rule_delta.py::test_recovery_rule_delta
+  - id: recovery-isolation-flow-change
+    question: Which service flows change when the recovery isolation decision is relaxed?
+    tests:
+      - acceptance/test_recovery_flow_delta.py::test_recovery_flow_delta
+  - id: reference-identity-conflicts
+    question: Can different source identifiers refer to the same entity, and which conflicting descriptions block publication?
+    tests:
+      - proof_cases/test_standard_identity.py::test_standard_identity
+  - id: registry-release-licence
+    question: Which registry release and licence are proved by the selected source, and when is only a reference release known?
+    tests:
+      - proof_cases/test_registry_release_licence.py::test_registry_selects_a_sourced_distribution_release
+      - proof_cases/test_registry_release_licence.py::test_registry_notice_with_a_different_release_or_without_a_selection
+  - id: role-and-zone-attribute-findings
+    question: Do isolation, boundary and software-origin findings keep their meaning if role and zone identifiers change?
+    tests:
+      - proof_cases/test_role_attributes.py::test_renaming_roles_and_zones_preserves_findings
+  - id: runtime-and-management-outage
+    question: Which services stop running and which can still run but cannot change after an upstream failure?
+    tests:
+      - proof_cases/test_outage_chain.py::test_management_and_runtime_frontiers
+      - proof_cases/test_outage_chain.py::test_recursive_outages_and_checked_need_chains
+  - id: safe-platform-startup
+    question: Which startup steps are safe from a verified empty scope, which can run together and what evidence confirms readiness?
+    tests:
+      - proof_cases/test_startup_transition_cases.py::test_startup_transition_cases
+      - proof_cases/test_platform_safe_rounds_recorded.py::test_platform_safe_rounds_recorded
+  - id: same-zone-network-policy
+    question: Which policies and flow witnesses allow required traffic that stays inside its zone?
+    tests:
+      - acceptance/test_in_zone_witness.py::test_in_zone_witness
+      - proof_cases/test_cluster_flow.py::test_cluster_flow
+      - proof_cases/test_cluster_reference.py::test_complete_cluster_projection
+  - id: service-release-licences
+    question: Which licence applies to a service's selected release and when is a selected release uncorroborated?
+    tests:
+      - proof_cases/test_product_licence.py::test_product_licence_follows_the_selected_release
+      - proof_cases/test_product_licence.py::test_product_licence_requires_corroborating_release
+      - proof_cases/test_registry_release_licence.py::test_registry_selects_a_sourced_distribution_release
+      - proof_cases/test_registry_release_licence.py::test_registry_notice_with_a_different_release_or_without_a_selection
+  - id: standard-pack-imports
+    question: Which pinned standard packs supply the platform's time, ordering, part, identity and access semantics?
+    tests:
+      - proof_cases/test_standard_imports.py::test_standard_imports
+  - id: successor-runtime-impacts
+    question: Which downstream services depend on a product that lacks a supported successor at handoff?
+    tests:
+      - proof_cases/test_successor_window.py::test_successor_on_the_first_day_without_support
+  - id: successor-support-window
+    question: Is the selected successor already supported on the first day after the old product loses support?
+    tests:
+      - proof_cases/test_successor_window.py::test_half_open_handoff_dates
+      - proof_cases/test_successor_window.py::test_successor_on_the_first_day_without_support
+  - id: support-ending-within-window
+    question: Which selected service release has a vendor support end inside the explicitly requested inclusive time window?
+    tests:
+      - acceptance/test_support_window.py::test_support_window_uses_explicit_inclusive_dates
+  - id: support-without-vendor-evidence
+    question: Which selected releases have unknown support because their vendor support statement is missing?
+    tests:
+      - acceptance/test_support_unknown.py::test_support_unknown
+  - id: tenant-publication-access
+    question: Which tenant data and conclusions remain visible after read access is withdrawn?
+    tests:
+      - proof_cases/test_standard_access.py::test_standard_access
+  - id: tenant-request-file
+    question: Which path and deterministic request body record a service request for a tenant?
+    tests:
+      - acceptance/test_request_file.py::test_request_file
+  - id: unknown-time-boundaries
+    question: Which time assessments remain unknown when a required support boundary was never recorded?
+    tests:
+      - proof_cases/test_standard_time.py::test_standard_time
+  - id: workload-address-ownership
+    question: Which allocated address belongs to each workload and what address range proves its ownership?
+    tests:
+      - proof_cases/test_address_ownership.py::test_address_ownership

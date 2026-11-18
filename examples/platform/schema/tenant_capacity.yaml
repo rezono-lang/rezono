@@ -1,0 +1,24 @@
+id: https://rezono.org/examples/platform-core/tenant-capacity
+name: platform_tenant_capacity
+description: The private pool and tenant capacity observations.
+in_language: en
+imports:
+  - linkml:types
+  - std-access:access
+default_range: string
+annotations:
+  layer: facts
+
+classes:
+  CapacityPool:
+    description: The platform's measured capacity for one period.
+    attributes:
+      id: {identifier: true}
+      cores: {range: integer, minimum_value: 0, required: true}
+  CapacityReading:
+    description: A participating tenant's measured use in one period.
+    attributes:
+      id: {identifier: true}
+      tenant: {range: Role, required: true}
+      period: {required: true}
+      cores: {range: integer, minimum_value: 0, required: true}

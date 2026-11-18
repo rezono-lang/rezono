@@ -1,0 +1,8 @@
+// A consumer supplies its clauses for the tenant summary through the checked import.
+// @extend
+.decl tenant_capacity_summary(tenant: symbol, period: symbol, free: number, used: number, own: number)
+
+.decl issued_capacity_notice(notice: symbol, period: symbol, free: number, used: number)
+issued_capacity_notice(d, p, free, used) :-
+    capacity_notice__issuer(d, "platform"), capacity_notice__origin(d, "decision"),
+    capacity_notice__period(d, p), capacity_notice__free_cores(d, free), capacity_notice__total_cores(d, used).

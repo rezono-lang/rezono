@@ -1,0 +1,59 @@
+.decl build_verified_cut(run: symbol)
+.decl build_full_selection(run: symbol, reason: symbol)
+.decl build_manifest_revision(manifest: symbol, run: symbol)
+.decl build_valid_dependency(edge: symbol, run: symbol, dependency: symbol, consumer: symbol)
+.decl build_path_read(reader: symbol, run: symbol, path: symbol, component: symbol, kind: symbol)
+.decl build_affected(run: symbol, component: symbol, path: symbol)
+.decl build_selected_job(run: symbol, component: symbol, reason: symbol)
+
+build_verified_cut(run) :- build_run__receipt(run, receipt), build_run__observed_at(run, tick),
+    loop_sweep_receipt__run(receipt, run), loop_sweep_receipt__event_time(receipt, tick),
+    build_run__base_sha(run, base), build_run__head_sha(run, head), build_run__engine_sha(run, engine).
+
+build_full_selection(run, "missing-observation-receipt") :- build_run(run), !build_verified_cut(run).
+build_full_selection(run, "unsupported-event-policy") :- build_run__event(run, "merge_group").
+build_full_selection(run, path) :- build_path__run(path, run), build_path__coverage(path, "unknown").
+
+// The collector can observe either diff endpoint; both manifest graphs contribute edges.
+build_manifest_revision(manifest, run) :- build_manifest__component(manifest, c), build_component__run(c, run),
+    build_manifest__revision(manifest, revision), build_run__base_sha(run, revision).
+build_manifest_revision(manifest, run) :- build_manifest__component(manifest, c), build_component__run(c, run),
+    build_manifest__revision(manifest, revision), build_run__head_sha(run, revision).
+
+build_valid_dependency(edge, run, dependency, consumer) :-
+    build_dependency__dependency(edge, dependency), build_dependency__consumer(edge, consumer),
+    build_component__run(dependency, run), build_component__run(consumer, run),
+    build_dependency__kind(edge, "manifest"), build_dependency__manifest(edge, manifest),
+    build_manifest__component(manifest, consumer), build_manifest_revision(manifest, run),
+    build_manifest__path(manifest, path), build_manifest__blob(manifest, blob),
+    build_dependency__source(edge, source), source != "".
+build_valid_dependency(edge, run, dependency, consumer) :-
+    build_dependency__dependency(edge, dependency), build_dependency__consumer(edge, consumer),
+    build_component__run(dependency, run), build_component__run(consumer, run),
+    build_dependency__kind(edge, "file_reader"), build_dependency__source(edge, source), source != "".
+
+build_full_selection(run, edge) :- build_dependency__dependency(edge, dependency),
+    build_dependency__consumer(edge, consumer), build_component__run(consumer, run),
+    !build_valid_dependency(edge, run, dependency, consumer).
+
+build_path_read(reader, run, path, component, kind) :- build_path__run(path, run), build_path__coverage(path, "mapped"),
+    build_path_reader__path(reader, path), build_path_reader__component(reader, component),
+    build_component__run(component, run), build_path_reader__kind(reader, kind),
+    build_path_reader__source(reader, source), source != "".
+
+build_full_selection(run, reader) :- build_path_reader__path(reader, path), build_path__run(path, run),
+    build_path__coverage(path, "mapped"), build_path_reader__component(reader, component),
+    build_path_reader__kind(reader, kind), !build_path_read(reader, run, path, component, kind).
+
+build_affected(run, component, path) :- build_path_read(reader, run, path, component, "transitive").
+build_affected(run, consumer, path) :- build_affected(run, dependency, path),
+    build_valid_dependency(edge, run, dependency, consumer).
+
+build_selected_job(run, component, path) :- build_verified_cut(run),
+    build_path_read(reader, run, path, component, "direct").
+build_selected_job(run, component, path) :- build_verified_cut(run), build_affected(run, component, path).
+build_selected_job(run, component, reason) :- build_full_selection(run, reason),
+    build_component__run(component, run).
+
+.output build_selected_job
+.output build_full_selection

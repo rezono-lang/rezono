@@ -1,0 +1,7 @@
+# Separately recorded terms for the alternative contracts considered by the sweep.
+guarantee:
+  - {id: amber-499, demand: pair, offer: amber, provider: amber-provider, currency: EUR, scope: whole_order, mode: binding_quote, quantity: 1, billed_periods: 2, period_price_minor: 499, setup_price_minor: 300, total_minor: 1298}
+  - {id: amber-500, demand: pair, offer: amber, provider: amber-provider, currency: EUR, scope: whole_order, mode: binding_quote, quantity: 1, billed_periods: 2, period_price_minor: 500, setup_price_minor: 300, total_minor: 1300}
+  - {id: amber-501, demand: pair, offer: amber, provider: amber-provider, currency: EUR, scope: whole_order, mode: binding_quote, quantity: 1, billed_periods: 2, period_price_minor: 501, setup_price_minor: 300, total_minor: 1302}
+  - {id: blue-600, demand: pair, offer: blue, provider: blue-provider, currency: EUR, scope: whole_order, mode: reject_above, quantity: 1, billed_periods: 2, period_price_minor: 600, setup_price_minor: 100, total_minor: 1300}
+  - {id: clear-binding-1, demand: pair, offer: clear, provider: clear-provider, currency: EUR, scope: whole_order, mode: binding_quote, quantity: 1, billed_periods: 2, period_price_minor: 1, setup_price_minor: 0, total_minor: 2}

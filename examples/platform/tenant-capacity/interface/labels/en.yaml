@@ -1,0 +1,7 @@
+capacity_notice: capacity notice
+capacity_notice.issuer: issuer
+capacity_notice.origin: origin
+capacity_notice.period: period
+capacity_notice.free_cores: free cores
+capacity_notice.total_cores: total used cores
+issued_capacity_notice: issued capacity notice

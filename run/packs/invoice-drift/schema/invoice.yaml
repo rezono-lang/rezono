@@ -1,0 +1,100 @@
+id: https://rezono.org/examples/run/invoice-drift
+name: invoice_drift
+in_language: en
+imports:
+  - linkml:types
+default_range: string
+annotations:
+  layer: facts
+
+types:
+  Digest:
+    typeof: string
+    pattern: '^[0-9a-f]{64}$'
+  CurrencyCode:
+    typeof: string
+    pattern: '^[A-Z]{3}$'
+
+enums:
+  LineRoundingMode:
+    permissible_values:
+      half_even:
+      half_up:
+
+  PriceSign:
+    permissible_values:
+      negative:
+      nonnegative:
+  ExactPart:
+    permissible_values:
+      numerator:
+      denominator:
+      remainder:
+      gap:
+  DigitEnd:
+    permissible_values:
+      more:
+      last:
+  WordPart:
+    permissible_values:
+      units:
+      floor:
+  RoundingEquation:
+    permissible_values:
+      division:
+      complement:
+
+classes:
+  ExpectedLine:
+    description: An exact priced item with a candidate signed floor to verify against its rounding terms.
+    attributes:
+      id: {identifier: true}
+      plan_hash: {range: Digest, required: true}
+      item: {required: true}
+      currency: {range: CurrencyCode, required: true}
+      sign: {range: PriceSign, required: true}
+      floor_minor: {range: integer, required: true}
+      rounding_sha256: {range: Digest, required: true}
+  InvoiceLine:
+    description: An observed billed amount with its recorded plan tag when present.
+    attributes:
+      id: {identifier: true}
+      plan_hash: {range: Digest}
+      item: {required: true}
+      currency: {range: CurrencyCode, required: true}
+      minor: {range: integer, required: true}
+  Rounding:
+    description: An observed billing term identified by its verified content digest.
+    attributes:
+      id: {identifier: true}
+      source_url: {required: true}
+      currency: {range: CurrencyCode, required: true}
+      boundary: {required: true}
+      mode: {range: LineRoundingMode, required: true}
+      minor_per_unit: {range: integer, minimum_value: 1, required: true}
+
+  RoundingDigit:
+    description: A decimal digit of an exact price magnitude or its proposed remainder or gap.
+    attributes:
+      id: {identifier: true}
+      line: {required: true}
+      part: {range: ExactPart, required: true}
+      position: {range: integer, minimum_value: 0, required: true}
+      digit: {range: integer, minimum_value: 0, maximum_value: 9, required: true}
+      last: {range: DigitEnd, required: true}
+  RoundingWord:
+    description: A suffix obtained by truncating a signed machine word at a decimal position.
+    attributes:
+      id: {identifier: true}
+      line: {required: true}
+      part: {range: WordPart, required: true}
+      position: {range: integer, minimum_value: 0, required: true}
+      remaining: {range: integer, required: true}
+  RoundingCarry:
+    description: A signed carry into a decimal position in a proposed arithmetic equality.
+    attributes:
+      id: {identifier: true}
+      line: {required: true}
+      equation: {range: RoundingEquation, required: true}
+      position: {range: integer, minimum_value: 0, required: true}
+      carry: {range: integer, required: true}

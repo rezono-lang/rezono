@@ -36,8 +36,6 @@ def test_fixture_matches_real_domain_placements_without_a_cmdb():
         "cluster_service_placement", ("idp","base"), state=(model,baseline))
 
 
-@pytest.mark.xfail(strict=True, raises=MissingReferenceImport,
-                   reason="Add the mapped CMDB reference intake, separate reference schema and scoped drift rules under examples/platform. Read decisions/platform-cmdb-scope.md.")
 def test_mapped_cmdb_scope_does_not_write_domain_placements(tmp_path):
     # The only inbound data is a source-system JSON export. The test never writes normalized reference rows.
     cli = ROOT / "portal" / "import_cmdb.py"
@@ -94,3 +92,97 @@ def test_mapped_cmdb_scope_does_not_write_domain_placements(tmp_path):
                 pointer = "/observations/1" if rel=="cmdb_mismatch" else "/complete_services/1"
                 assert any(src["name"]==path.name and src["revision"]==digest and src["position"]==pointer
                            for leaf in leaves if leaf[0]==ref for src in index[leaf])
+
+
+def test_cmdb_compares_placement_sets_with_per_export_scope(tmp_path):
+    dest = tmp_path / "examples" / "platform"
+    shutil.copytree(ROOT, dest)
+    shutil.copytree(ROOT.parents[1] / "packs", tmp_path / "packs")
+    (dest / "facts" / "synthetic-placement.yaml").write_text(
+        "service:\n"
+        "  - {id: svc, product: client, role: shared, step: 1}\n"
+        "cluster:\n"
+        "  - {id: east, role: base}\n"
+        "  - {id: west, role: base}\n"
+        "  - {id: south, role: base}\n"
+        "cluster_service_binding:\n"
+        "  - {id: svc-east, service: svc, cluster: east}\n"
+        "  - {id: svc-west, service: svc, cluster: west}\n",
+        encoding="utf-8",
+    )
+    exports = {
+        "spring": (["east", "west"], ["svc"]),
+        "extra": (["east", "west", "south"], ["svc"]),
+        "missing": (["east"], ["svc"]),
+        "changed": (["east", "south"], ["svc"]),
+        "partial": (["east", "south"], ["idp"]),
+        "empty": ([], ["svc"]),
+        "unscoped": ([], []),
+    }
+    paths = {}
+    for name, (reported, scope) in exports.items():
+        source = tmp_path / f"{name}.json"
+        paths[name] = source
+        source.write_text(json.dumps({
+            "export": name,
+            "observations": [{"workload": "svc", "location": cluster} for cluster in reported],
+            "complete_services": scope,
+        }), encoding="utf-8")
+        subprocess.run([
+            sys.executable, str(ROOT / "portal" / "import_cmdb.py"), "--pack", str(dest),
+            "--mapping", str(dest / "reference" / "cmdb-import.yaml"), "--source", str(source),
+        ], check=True)
+
+    model, _, (state,) = states(dest)
+    assert {row for row in state.derived["cluster_service_placement"] if row[0] == "svc"} == {
+        ("svc", "east"), ("svc", "west"),
+    }
+    assert {row for row in state.derived["cmdb_reported"] if row[:2] == ("spring", "svc")} == {
+        ("spring", "svc", "east"), ("spring", "svc", "west"),
+    }
+
+    def for_service(relation):
+        return {row for row in state.derived[relation] if row[1] == "svc"}
+
+    assert not for_service("cmdb_mismatch"), f"cmdb_mismatch={sorted(for_service('cmdb_mismatch'))}"
+    unexpected = {("extra", "svc", "south"), ("changed", "svc", "south"), ("partial", "svc", "south")}
+    missing = {("missing", "svc", "west"), ("changed", "svc", "west"),
+               ("empty", "svc", "east"), ("empty", "svc", "west")}
+    assert for_service("cmdb_unexpected_placement") == unexpected
+    assert for_service("cmdb_missing_placement") == missing
+    assert for_service("cmdb_missing") == {("empty", "svc")}
+    assert for_service("cmdb_unknown") == {("unscoped", "svc")}
+
+    index = {(entry["row"]["relation"], tuple(json.loads(entry["row"]["key"]))): entry["sources"]
+             for entry in sources.read(model, dest)}
+
+    def check_witness(relation, row, negative, reference_kind, pointer):
+        proof = state.proof(relation, row)
+        assert any(p["polarity"] == "negative"
+                   and (p["row"]["relation"], tuple(json.loads(p["row"]["key"]))) == negative
+                   for witness in proof["witnesses"] for p in witness["premises"])
+        leaves = verified(relation, row, state=(model, state))
+        source = paths[row[0]]
+        assert any(
+            item["name"] == source.name and item["revision"] == hashlib.sha256(source.read_bytes()).hexdigest()
+            and item["position"] == pointer
+            for leaf in leaves if leaf[0] == reference_kind for item in index[leaf]
+        )
+        return leaves
+
+    for row in sorted(unexpected):
+        name, service, cluster = row
+        observations, _ = exports[name]
+        leaves = check_witness("cmdb_unexpected_placement", row, ("cluster_service_placement", (service, cluster)),
+                               "cmdb_observation__cluster", f"/observations/{observations.index(cluster)}")
+        assert {("cluster_service_binding__service", ("svc-east", "svc")),
+                ("cluster_service_binding__service", ("svc-west", "svc"))} & leaves
+
+    for row in sorted(missing):
+        _, service, cluster = row
+        leaves = check_witness("cmdb_missing_placement", row, ("cmdb_reported", row),
+                               "cmdb_scope__service", "/complete_services/0")
+        binding = ("cluster_service_binding__cluster", (f"{service}-{cluster}", cluster))
+        assert binding in leaves
+        assert index[binding] == [{"kind": "pack", "name": "facts/synthetic-placement.yaml",
+                                   "position": {"east": "8", "west": "9"}[cluster]}]
