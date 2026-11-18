@@ -61,19 +61,21 @@ behind_newest(s, r) :- runs(s, r), release__product(r, p), release__released_on_
 
 // The checks: each row is a finding.
 .decl outside_reaches_inside(a: symbol, b: symbol)
-outside_reaches_inside(a, b) :- crossing(a, b, za, zb, _), za = "external", zb != "entry".
+outside_reaches_inside(a, b) :- crossing(a, b, za, zb, _), zone__outside(za, "yes"), zone__entry_boundary(zb, "no").
 .decl recovery_reached(a: symbol, b: symbol)
-recovery_reached(a, b) :- crossing(a, b, _, zb, _), zb = "recovery".
+recovery_reached(a, b) :- crossing(a, b, _, zb, _), zone__isolated_recovery(zb, "yes").
 .decl recovery_reaches_out(a: symbol, b: symbol, f: symbol)
-recovery_reaches_out(a, b, f) :- flow(a, b, f, _), zone_of(a, za), za = "recovery", zone_of(b, zb), zb != "recovery", function__recovery_allowed(f, ok), ok = "no".
+recovery_reaches_out(a, b, f) :- flow(a, b, f, _), zone_of(a, za), zone__isolated_recovery(za, "yes"),
+    zone_of(b, zb), zone__isolated_recovery(zb, "no"), function__recovery_allowed(f, ok), ok = "no".
 .decl authenticates(s: symbol)
 authenticates(s) :- asks(s, f), f = "identity".
 authenticates(s) :- provider(s, f), f = "identity".
 .decl unauthenticated_target(b: symbol, f: symbol)
 unauthenticated_target(b, f) :- crossing(_, b, _, _, p), provides(b, f, p), function__open_by_design(f, o), o = "no", !authenticates(b).
 .decl verified(s: symbol)
-verified(s) :- artifact__for_service(x, s), artifact__built_by(x, b), service__role(b, rb), rb = "build", artifact__signed(x, y), y = "yes".
+verified(s) :- artifact__for_service(x, s), artifact__built_by(x, b), service__role(b, rb), platform_role__build_authority(rb, "yes"), artifact__signed(x, y), y = "yes".
 .decl unverified_supply(s: symbol)
 unverified_supply(s) :- service__role(s, r), platform_role__runs_images(r, y), y = "yes", !verified(s).
 .decl build_reaches_tenant(a: symbol, b: symbol)
-build_reaches_tenant(a, b) :- flow(a, b, _, _), service__role(a, r), r = "build", zone_of(b, z), z = "tenant".
+build_reaches_tenant(a, b) :- flow(a, b, _, _), service__role(a, r), platform_role__build_authority(r, "yes"),
+    zone_of(b, z), zone__workload(z, "yes").
