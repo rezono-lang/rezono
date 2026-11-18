@@ -3,7 +3,6 @@ import pytest
 from offline_cases import implementation, case
 
 
-@pytest.mark.xfail(strict=True, reason="Read decisions/run-offline-acceptance.md. Implement run/inventory_chain.py.")
 def test_inventory_chain():
     traverse = implementation("inventory_chain.py", "resources")
     before, root, tail = case()["inventory"]
