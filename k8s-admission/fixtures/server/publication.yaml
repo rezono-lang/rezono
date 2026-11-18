@@ -4,7 +4,7 @@ metadata:
   name: admission-sample
   namespace: admission-blue
 spec:
-  digest: dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd
+  digest: 334d722c5cdc5e68a8cc9279f82b8968ab7a8c24ea82180832496fc62316036c
   images:
     - service: web
       image: registry.example.org/sample/app@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
