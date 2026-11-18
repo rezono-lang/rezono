@@ -1,8 +1,8 @@
 """Modules written in Rezono: the key `rezono` of pack.yaml, and the lowering of a module's declarations to the
 schema model (docs/rezono/publication.md §2, §3, §5.1, §5.2).
 
-The compiler does not parse Rezono. It reads the JSON form that `rezono/` writes of a module
-(contracts/rezono-module.yaml) and lowers its kinds, slots and enums to the LinkML schema that says the same, so
+The compiler uses the language reader in `rezono/` to build a module's JSON form from its authored text
+(contracts/rezono-module.yaml). It lowers the resulting kinds, slots and enums to the LinkML schema, so
 that every check after this one is the check a schema file gets. A module is a schema module of its pack, named
 by its path under `rezono/` without `.rezono`; pack.yaml names it with its form and the layer of its kinds.
 
@@ -14,10 +14,13 @@ in the module's file. The lowering is a pure function of the form: the same form
 from __future__ import annotations
 
 import json
+import os
 import re
+import subprocess
 from collections.abc import Iterator, Mapping, Set
 from dataclasses import dataclass, field
 from pathlib import Path
+from tempfile import TemporaryDirectory
 from typing import cast
 
 import yaml
@@ -28,8 +31,11 @@ from linkml_runtime.loaders.yaml_loader import YAMLLoader
 FORMAT = "rezono.module/1"
 FORMAT_V2 = "rezono.module/2"
 DIR = "rezono"
+PACKAGED_READER = Path(__file__).with_name("module_reader") / "src" / "write-form.js"
+CHECKOUT_READER = Path(__file__).resolve().parents[2] / DIR / "src" / "write-form.ts"
 KEY = "rezono"  # the key of pack.yaml (contract RezonoModule in contracts/pack.yaml)
 PAGE = "docs/rezono/publication.md"
+DATASET_FORMAT = "rezono.module/2"
 PATH = re.compile(r"^rezono/[a-z][a-z0-9_]*(/[a-z][a-z0-9_]*)*\.(rezono|json)$")
 # The built-in slot types (§5.1) and their LinkML ranges.
 TYPES = {"Bool": "boolean", "Date": "date", "Text": "string"}
@@ -66,11 +72,13 @@ class Lowered:
     """A module lowered: its LinkML schema, and the modules of its pack whose names it uses."""
     declared: Declared
     schema: dict
+    form: dict
     uses: list[str] = field(default_factory=list)  # module ids within the pack, sorted
 
 
-def declared(meta: dict, pack_dir: Path, errors: list[str], *, reject_undeclared: bool = True) -> list[Declared]:
-    """Check the declared paths and layers. Pack compilation also refuses files absent from the manifest."""
+def declared(meta: dict, pack_dir: Path, errors: list[str], *, reject_undeclared: bool = True,
+             include_datasets: bool = False) -> list[Declared]:
+    """Check declared paths and layers, then select modules for schema lowering or fact discovery."""
     from .pack import LAYERS  # pack imports modules, which imports this module
 
     where = f"{pack_dir.name}/pack.yaml: {KEY}"
@@ -103,8 +111,13 @@ def declared(meta: dict, pack_dir: Path, errors: list[str], *, reject_undeclared
         if layer not in LAYERS:
             errors.append(f"{at}: layer must be one of {LAYERS}, not {layer!r}")
             ok = False
-        if ok:
-            out.append(Declared(module, form, layer))
+        if not ok:
+            continue
+        if not include_datasets and is_dataset_form(pack_dir / form):
+            if meta.get("theory") is True:
+                errors.append(f"{pack_dir.name}/{form}: a theory pack cannot contain fact files")
+            continue
+        out.append(Declared(module, form, layer))
     if reject_undeclared and (pack_dir / DIR).is_dir():
         for p in sorted((pack_dir / DIR).rglob("*")):
             rel = p.relative_to(pack_dir).as_posix()
@@ -113,11 +126,13 @@ def declared(meta: dict, pack_dir: Path, errors: list[str], *, reject_undeclared
     return out
 
 
-def read_form(pack_dir: Path, d: Declared, errors: list[str]) -> dict | None:
+def read_form(pack_dir: Path, d: Declared, errors: list[str],
+              *, authored_output: Path | None = None) -> dict | None:
     """The form of a module, if it is one: format, module and spans, and nothing else."""
-    where = f"{pack_dir.name}/{d.form}"
+    path = authored_output if authored_output is not None else pack_dir / d.form
+    where = f"{pack_dir.name}/{d.module if authored_output is not None else d.form}"
     try:
-        doc = json.loads((pack_dir / d.form).read_bytes())
+        doc = json.loads(path.read_bytes())
     except (OSError, ValueError) as e:
         errors.append(f"{where}: not a JSON file ({e})")
         return None
@@ -130,6 +145,61 @@ def read_form(pack_dir: Path, d: Declared, errors: list[str]) -> dict | None:
                       "nonnegative start and end offsets in ascending order (contracts/rezono-module.yaml)")
         return None
     return doc
+
+
+def effective_form(pack_dir: Path, d: Declared, errors: list[str]) -> dict | None:
+    """Validate the submitted form, then use the authored declarations and their locations."""
+    submitted = read_form(pack_dir, d, errors)
+    if submitted is None:
+        return None
+    try:
+        data = (pack_dir / d.module).read_bytes()
+        source = data.decode("utf-8")
+    except (OSError, UnicodeError):
+        errors.append(f"{pack_dir.name}/{d.module}: cannot read the module as UTF-8")
+        return None
+    if legacy_header(source, submitted):
+        return submitted
+    return authored_form(pack_dir, d, data, errors)
+
+
+def legacy_header(source: str, form: dict) -> bool:
+    """Older form-only modules pair a matching source header with placeholder offsets."""
+    if any(place["start"] != "0" or place["end"] != "1" for place in form["spans"]):
+        return False
+    module = form["module"]
+    header = [f"rezono {module['rezono']}"] if "rezono" in module else []
+    header.append(f"pack {module['pack']}")
+    actual = [line for raw in source.splitlines() if (line := raw.partition("--")[0].strip())]
+    return actual == header
+
+
+def authored_form(pack_dir: Path, d: Declared, data: bytes, errors: list[str]) -> dict | None:
+    where = f"{pack_dir.name}/{d.module}"
+    reader = PACKAGED_READER if PACKAGED_READER.is_file() else CHECKOUT_READER
+    if not reader.is_file():
+        errors.append(f"{where}: the compiler installation does not include the module reader")
+        return None
+    hint = "use Node 24" if reader == PACKAGED_READER else "use Node 24 and run npm ci in rezono/"
+    node = os.environ.get("REZONO_NODE", "node")
+    env = {key: value for key, value in os.environ.items() if not key.upper().startswith("NODE_")}
+    try:
+        with TemporaryDirectory(prefix="rezono-module-") as directory:
+            source, target = Path(directory) / "source.rezono", Path(directory) / "form.json"
+            source.write_bytes(data)
+            result = subprocess.run(
+                [node, str(reader), source.name, target.name], cwd=directory,
+                capture_output=True, encoding="utf-8", env=env,
+            )
+            if result.returncode == 0:
+                return read_form(pack_dir, d, errors, authored_output=target)
+    except (OSError, UnicodeError):
+        errors.append(f"{where}: cannot run the module reader; {hint}")
+        return None
+    diagnostics = [f"{where}:{line.split(':', 1)[1]}" for line in result.stderr.splitlines()
+                   if line.startswith(f"{source.name}:")]
+    errors.extend(diagnostics or [f"{where}: the module reader failed; {hint}"])
+    return None
 
 
 def place_pointers(value: object, at: str = "", member: str = "") -> Iterator[str]:
@@ -173,6 +243,28 @@ def module_body(form: object, expected_format: str) -> dict | None:
     return module
 
 
+def named_dataset(module: dict) -> dict | None:
+    """Recognize the single named declaration handled by the fact loader."""
+    declarations = module["decls"]
+    if len(declarations) != 1 or not isinstance(declarations[0], dict):
+        return None
+    dataset = declarations[0]
+    if (dataset.keys() == {"dataset", "decls"} and isinstance(dataset["dataset"], str)
+            and dataset["dataset"] and isinstance(dataset["decls"], list)):
+        return dataset
+    return None
+
+
+def is_dataset_form(path: Path) -> bool:
+    """Dispatch only recognized dataset forms; leave other documents to ordinary schema validation."""
+    try:
+        doc = json.loads(path.read_bytes())
+    except (OSError, ValueError):
+        return False
+    module = module_body(doc, DATASET_FORMAT)
+    return module is not None and named_dataset(module) is not None
+
+
 def header_errors(module: dict, pack: str) -> Iterator[tuple[str, str, str]]:
     """Header refusals shared by schema lowering and dataset admission."""
     if module.get("rezono") != "0":
@@ -195,12 +287,16 @@ def lines(form: dict) -> dict[str, int]:
     return out
 
 
-def marks(module: Path, form: Path) -> dict[tuple, tuple[int, int]]:
+def marks(module: Path, form: Path | dict) -> dict[tuple, tuple[int, int]]:
     """The (line, column) of every kind and slot of a module, by the path of keys its lowered schema holds it at
     (`classes`, the class, then `attributes` and the slot), as `spans.marks` gives them for a schema file (MOD2).
     The place is the name as written: the form gives its offset in code points, the text the line it is on."""
-    text = module.read_text(encoding="utf-8")
-    doc = json.loads(form.read_bytes())
+    if isinstance(form, Path):
+        text = module.read_text(encoding="utf-8")
+        doc = json.loads(form.read_bytes())
+    else:
+        text = module.read_bytes().decode("utf-8")
+        doc = form
     start = {s["at"]: s["start"] for s in doc["spans"]}
     limit = str(len(text))
     out: dict[tuple, tuple[int, int]] = {}
@@ -270,7 +366,7 @@ def lower_pack(pack_dir: Path, meta: dict, pack: str, declared_by: Mapping[str, 
     """Lower every module of one pack. `pack` is the pack's name, `declared_by` the LinkML names each schema
     module of the pack declares, by module id within the pack, `imported` whether another pack imports it. Every
     refusal names the module's file and line."""
-    forms = {d: read_form(pack_dir, d, errors) for d in declared(meta, pack_dir, errors)}
+    forms = {d: effective_form(pack_dir, d, errors) for d in declared(meta, pack_dir, errors)}
     owners: dict[str, list[str]] = {}
     for mid, ns in sorted(declared_by.items()):
         for n in ns:
@@ -348,7 +444,7 @@ def lower(pack_dir: Path, d: Declared, form: dict, pack: str, owners: dict[str, 
     schema = {"id": f"https://rezono.org/rezono/{pack}/{d.id}", "name": d.id.replace("/", "_"),
               "imports": ["linkml:types"], "default_range": "string", "annotations": {"layer": d.layer},
               "enums": enums, "classes": classes}
-    return Lowered(d, schema, sorted(uses))
+    return Lowered(d, schema, form, sorted(uses))
 
 
 def kind(decl: dict, at: str, own: dict, owners: dict[str, list[str]], uses: set[str], refuse,
@@ -466,6 +562,6 @@ def class_slot_order(pack_dir: Path, rel: str) -> dict[str, list[str]]:
     """Read a compiled module's class and slot order from its form for the writer."""
     meta = yaml.safe_load((pack_dir / "pack.yaml").read_text(encoding="utf-8")) or {}
     d = next(d for d in declared(meta, pack_dir, []) if d.module == rel)
-    form = read_form(pack_dir, d, []) or {"module": {"decls": []}}
+    form = effective_form(pack_dir, d, []) or {"module": {"decls": []}}
     return {decl["kind"]: ["id", *(s["slot"] for s in decl.get("slots") or [])]
             for decl in form["module"]["decls"] if isinstance(decl, dict) and "kind" in decl}

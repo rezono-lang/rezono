@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import re
 
 from . import rezono_module, rules_dl
@@ -55,10 +54,8 @@ def sources(modules) -> tuple[rules_dl.Embedded, ...]:
     """Read the declared rule blocks of the root pack and its pinned imports."""
     result = []
     for module in modules:
-        if module.form is None:
-            continue
-        form = json.loads(module.form.read_bytes())  # validated by the module loader
-        if form["format"] != rezono_module.FORMAT_V2:
+        form = module.form
+        if form is None or form["format"] != rezono_module.FORMAT_V2:
             continue
         places = rezono_module.lines(form)
         blocks = {}

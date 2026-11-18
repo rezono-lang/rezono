@@ -720,8 +720,9 @@ def read(pack_dir: str | Path) -> Pack:
             errors.append(str(e))
     generated = []
     if not errors:
-        from . import rezono_relational, rezono_table  # the table lowering reads the pack's model
-        generated = rezono_table.lower_pack(pack, meta, Path(pack_dir), errors)
+        from . import rezono_relational, rezono_table  # table lowering reads the pack's model
+        forms = {m.rel: m.form for m in mods if m.pack_dir == pack_dir and m.form is not None}
+        generated = rezono_table.lower_pack(pack, meta, pack_dir, errors, forms=forms)
     if not errors:
         try:
             pack.rules, rule_warnings = rules_dl.read(pack, pack_dir, ordered, renames, calc_inputs=calc_inputs,

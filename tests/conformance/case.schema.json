@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Executable conformance case",
+  "type": "object",
+  "required": ["id", "source", "status", "input", "expect"],
+  "additionalProperties": false,
+  "properties": {
+    "id": {"type": "string"},
+    "source": {"type": "string"},
+    "status": {"const": "settled"},
+    "input": {
+      "type": "object",
+      "required": ["rows"],
+      "properties": {
+        "rows": {"type": "array", "items": {"type": "object"}}
+      }
+    },
+    "expect": {
+      "type": "object",
+      "required": ["value", "state", "reason", "witness"],
+      "additionalProperties": false,
+      "properties": {
+        "value": {},
+        "state": {"enum": ["known", "not_applicable", "unknown", "invalid"]},
+        "reason": {"type": ["string", "null"]},
+        "witness": {"type": ["object", "array", "null"]}
+      }
+    },
+    "unsupported": {
+      "type": "object",
+      "minProperties": 1,
+      "propertyNames": {"enum": ["compiler", "checker", "feldera", "language"]},
+      "additionalProperties": {"type": "string", "pattern": "\\S"}
+    }
+  }
+}
