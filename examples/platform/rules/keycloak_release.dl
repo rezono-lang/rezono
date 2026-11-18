@@ -1,10 +1,18 @@
 .decl published_release(product_id: symbol, version: symbol, published: symbol, source_url: symbol, source_sha256: symbol)
 
 published_release(product, version, published, url, digest) :-
+    product(product),
+    product_release_announcement(announcement),
     product_release_announcement__product(announcement, product),
     product_release_announcement__version(announcement, version),
     product_release_announcement__published(announcement, published),
     product_release_announcement__source_url(announcement, url),
-    product_release_announcement__source_sha256(announcement, digest).
+    product_release_announcement__source_sha256(announcement, digest),
+    product_release_source(source),
+    product_release_source__product(source, product),
+    product_release_source__version(source, version),
+    product_release_source__published(source, published),
+    product_release_source__source_url(source, url),
+    product_release_source__source_sha256(source, digest).
 
 .output published_release
