@@ -30,7 +30,6 @@ def check_file(body, record, name, expected):
     assert record["sha256"] == hashlib.sha256(body).hexdigest()
 
 
-@pytest.mark.xfail(strict=True, raises=ImportError, reason="Index the JSON-LD context in publication/rezono_publication/context_index.py. Read decisions/standard-export-index.md.")
 def test_context_type_uses_its_slot_type():
     context = rdf.context(SCHEMA)
     assert context["@context"]["Point"]["@context"]["label"]["@type"].endswith("string")
