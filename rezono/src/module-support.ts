@@ -48,6 +48,7 @@ export interface ModuleComponent {
 	actions: ActionDict<unknown>;
 	declarations?: Record<string, Declaration<object>>;
 	block?: BlockSyntax;
+	verbatimBlock?: { keyword: string; header: string; tag: string };
 }
 
 export function leafDeclaration<T extends object>(line: Logical, build: Build): T {

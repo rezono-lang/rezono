@@ -27,7 +27,7 @@ class Entry(TypedDict):
 
 
 class MissingConformanceCases(AssertionError):
-    """A source record has neither a case file nor a migration decision."""
+    """A source record still needs a case file or an explicit deferral."""
 
 
 def load_yaml(path: Path):
@@ -75,11 +75,15 @@ def test_inventory_matches_the_specification_records():
     assert actual == expected, f"missing: {list(expected - actual)}\nextra: {list(actual - expected)}"
 
 
-def check_decision(path: Path, source: str, heading: str) -> None:
+def check_decision(path: Path, source: str, *headings: str) -> str:
     text = path.read_text(encoding="utf-8")
     assert f"`{source}`" in text, f"{path.name} must cite {source}"
-    section = re.search(rf"^## {heading}[ \t]*$\n(.*?)(?=^## |\Z)", text, re.M | re.S)
-    assert section and section.group(1).strip(), f"{path.name} needs a {heading} explanation"
+    for heading in headings:
+        section = re.search(rf"^## {heading}[ \t]*$\n(.*?)(?=^## |\Z)", text, re.M | re.S)
+        if section:
+            assert section.group(1).strip(), f"{path.name} needs a {heading} explanation"
+            return heading
+    raise AssertionError(f"{path.name} needs a {' or '.join(headings)} explanation")
 
 
 @pytest.mark.xfail(
@@ -96,14 +100,17 @@ def test_every_inventory_source_has_a_case_or_decision():
         key, source = entry["id"], entry["source"]
         case_path = CORPUS / f"{key}.yaml"
         decision = ROOT / "decisions" / f"conformance-{key}.md"
+        needs_adoption = records[key][1] in {"open", "gap"}
         if case_path.is_file():
             case = load_yaml(case_path)
             schema.validate(case)
             assert (case["id"], case["source"]) == (key, source), case_path.name
-            if records[key][1] in {"open", "gap"}:
+            if needs_adoption:
                 check_decision(decision, source, "Adopted behavior")
         elif decision.is_file():
-            check_decision(decision, source, "Deferral")
+            headings = ("Deferral", "Adopted behavior") if needs_adoption else ("Deferral",)
+            if check_decision(decision, source, *headings) == "Adopted behavior":
+                missing.append(key)
         else:
             missing.append(key)
     if missing:

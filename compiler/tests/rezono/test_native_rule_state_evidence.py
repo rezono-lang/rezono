@@ -121,13 +121,6 @@ def check_epoch_with_states(projected, *, role=None, source_withheld=False, bad_
     return check_epoch(witnesses, manifest, rules, files.__getitem__, derived=derived_relations(IR, rules), full=full)
 
 
-@pytest.mark.xfail(
-    strict=True, raises=AssertionError,
-    reason="Read decisions/language-native-rules.md, lowering, diagnostics and open points. "
-           "In checker/rezono_checker, authenticate archived state projections against the authored Value and origin "
-           "through check_epoch. Refuse unsupported omission and role-withheld evidence. "
-           "The hand-authored snapshots and IR do not need a native parser.",
-)
 def test_native_rule_state_evidence():
     genuine = check_epoch_with_states(EXPECTED)
     assert genuine["valid"], genuine["findings"]
