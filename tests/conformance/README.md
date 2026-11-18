@@ -13,6 +13,13 @@ state, reason and witness. Use `null` for an absent value, reason or witness.
 When an engine cannot run a case, record its specific reason in `unsupported`
 under `compiler`, `checker`, `feldera` or `language`.
 
+For checker snapshot cases, put the accepted wire rows in `input.rows`.
+Select a cell by its `key` and `slot` in `input.snapshot` and include a
+`rejected` row for the counterexample. Record the checker's diagnostic
+prefix in `expect.refusal`. The checker replays the JSON snapshot reader,
+verifies that the accepted cells retain their wire fields, and checks
+canonical premise spelling for an integer selected from an amount cell.
+
 For an open or gap source, first record the adopted behavior and its rationale
 in `decisions/conformance-<id>.md`. If a source will stay outside this corpus,
 use the same decision path to record why it is deferred. Each decision cites

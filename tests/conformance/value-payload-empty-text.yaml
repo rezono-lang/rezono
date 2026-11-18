@@ -1,0 +1,24 @@
+id: value-payload-empty-text
+source: docs/semantics/value-cases.yaml#payload-empty-text
+status: settled
+input:
+  rows:
+    - key: [item-a]
+      values:
+        label: {state: unknown}
+    - key: [item-b]
+      values:
+        label: {state: known, value: ''}
+  snapshot:
+    key: [item-b]
+    slot: label
+    rejected:
+      key: [item-a]
+      values:
+        label: {state: unknown, value: ''}
+expect:
+  value: ''
+  state: known
+  reason: null
+  witness: null
+  refusal: unknown value with a payload
