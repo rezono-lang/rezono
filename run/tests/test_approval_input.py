@@ -3,7 +3,6 @@ import pytest
 from input_contract_cases import DIGEST, verify
 
 
-@pytest.mark.xfail(strict=True, reason="Implement run/schemas/approval.json from decisions/run-external-evidence.md.")
 def test_bounded_approval_shape():
     base = dict(plan_hash=DIGEST, budget_cents=0, currency="EUR",
                 expires_at="2030-01-01T00:00:00Z", decision="approve")

@@ -3,7 +3,6 @@ import pytest
 from input_contract_cases import DIGEST, verify
 
 
-@pytest.mark.xfail(strict=True, reason="Implement run/schemas/inventory-page.json from decisions/run-external-evidence.md.")
 def test_inventory_page_shape():
     resource = {"id": "disk-a", "plan_hash": DIGEST}
     base = dict(sweep_id="s", page_id="first", next_page_id=None, resources=[resource])

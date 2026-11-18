@@ -5,7 +5,6 @@ import pytest
 from loop_oracle import evaluate
 
 
-@pytest.mark.xfail(strict=True, reason="Read decisions/loop-design.md. Implement packs/std-loop/rules/drift.dl to derive findings with both evidence references.")
 def test_drift_witnesses():
     columns = {"desired": "run token value reason", "current": "run token state value reason"}
     facts = {

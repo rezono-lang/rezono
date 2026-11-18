@@ -1,0 +1,91 @@
+{
+  "teams": {
+    "elm": {
+      "key": "elm"
+    },
+    "reed": {
+      "key": "reed"
+    }
+  },
+  "profiles": {
+    "production": {
+      "zone": "stable",
+      "sizes": [
+        "medium"
+      ],
+      "unlisted": "review"
+    },
+    "development": {
+      "zone": "sandbox",
+      "sizes": [
+        "small"
+      ],
+      "unlisted": "denied"
+    }
+  },
+  "catalog": {
+    "cluster": {
+      "component": "guest-cluster",
+      "sizes": {
+        "small": [
+          2,
+          4,
+          20,
+          2495
+        ],
+        "medium": [
+          4,
+          8,
+          40,
+          4995
+        ]
+      },
+      "provisions": [
+        "guest-control",
+        "virtual-workers"
+      ]
+    },
+    "database": {
+      "component": "managed-database",
+      "sizes": {
+        "medium": [
+          2,
+          4,
+          30,
+          2510
+        ]
+      },
+      "provisions": [
+        "database-in-guest"
+      ]
+    }
+  },
+  "capacity": {
+    "guest-host": {
+      "cores": 9,
+      "memoryGiB": 18
+    },
+    "storage-pool": {
+      "storageGiB": 100
+    }
+  },
+  "zoneMatrix": [
+    [
+      "stable",
+      "shared",
+      443
+    ],
+    [
+      "sandbox",
+      "shared",
+      443
+    ]
+  ],
+  "decisions": [],
+  "bindings": {
+    "identity-organization": "tenant",
+    "secret-policy": "tenant",
+    "registry-project": "tenant",
+    "gitops-project": "tenant"
+  }
+}

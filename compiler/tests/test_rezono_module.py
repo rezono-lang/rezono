@@ -209,7 +209,7 @@ REFUSALS = {
     "a slot T*": ([slot(slot="many", type="Text", card="*")], 11, "a slot `Text*` is not lowered"),
     "an inverse": ([slot(slot="many", type="Beta", card="*", inverse="eta")], 11, "a slot with inverse is not lowered"),
     "world on a slot": ([slot(slot="note", type="Text", world="open")], 11, "a slot with world is not lowered"),
-    "a Bool slot": ([slot(slot="on", type="Bool")], 11, "Bool is not Date, Text, or an enum or a kind of this pack"),
+    "a DateTime slot": ([slot(slot="observed_at", type="DateTime")], 11, "DateTime is not Date, Text, or an enum or a kind of this pack"),
     "a Money slot": ([slot(slot="cost", type="Money<EUR>")], 11, "Money<EUR> is not Date, Text"),
     "a name the pack lacks": ([slot(slot="other", type="Omega")], 11, "Omega is not Date, Text"),
     "an open enum": ([{"enum": "Tone", "world": "open", "values": ["dim"]}], 10, "an open enum (`world open`) is refused"),

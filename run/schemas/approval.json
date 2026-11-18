@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Approval",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["plan_hash", "budget_cents", "currency", "expires_at", "decision"],
+  "properties": {
+    "plan_hash": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}(?![\\s\\S])"
+    },
+    "budget_cents": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "currency": {
+      "type": "string",
+      "pattern": "^[A-Z]{3}(?![\\s\\S])"
+    },
+    "expires_at": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "Z(?![\\s\\S])"
+    },
+    "decision": {
+      "enum": ["approve", "decline"]
+    }
+  }
+}
