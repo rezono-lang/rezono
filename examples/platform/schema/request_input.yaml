@@ -1,0 +1,40 @@
+id: https://rezono.org/examples/platform-core/request-input
+name: platform_request_input
+description: Typed input rows for the tenant request preview.
+in_language: en
+imports:
+  - linkml:types
+default_range: string
+annotations:
+  layer: facts
+
+classes:
+  TenantServiceRequest:
+    attributes:
+      id: {identifier: true}
+      tenant: {required: true}
+      service: {required: true}
+      profile: {required: true}
+      submitted_at: {required: true}
+  TenantRequestItem:
+    attributes:
+      id: {identifier: true}
+      tenant: {required: true}
+      service: {required: true}
+      item: {required: true}
+      size: {required: true}
+  TenantRequestConnection:
+    attributes:
+      id: {identifier: true}
+      tenant: {required: true}
+      service: {required: true}
+      target_zone: {required: true}
+      target: {required: true}
+      peer:
+      port: {range: integer, required: true, minimum_value: 1, maximum_value: 65535}
+  TenantCatalogOffer:
+    attributes:
+      id: {identifier: true}
+      item: {required: true}
+      size: {required: true}
+      monthly_cents: {range: integer, required: true, minimum_value: 0}

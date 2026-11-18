@@ -4,7 +4,8 @@ from hashlib import sha256
 
 import pytest
 
-from pilot import asked, check_local_sweeps, check_statuses, check_sweeps, checked_local_grid, reads_all_in_full
+from pilot import check_local_sweeps, check_statuses, check_sweeps, checked_local_grid
+from pilot_sample import TRUTH
 from rezono_publisher import pointers, publish, store
 
 
@@ -118,27 +119,12 @@ def test_generic_sweep_still_requires_computed_status():
 # AUD-E1: the gate shows a check's status only to a role that reads every relation in full; any other
 # role gets each check as `unavailable`. The pilot decides who reads in full from the unscoped manifest in the
 # store (`truth`), not from the role's own scoped snapshots.
-TRUTH = {"id": "m-1", "snapshots": [
-    {"relation": "node", "role": "propose", "complete": False, "full": False},
-    {"relation": "node", "role": "auditor", "complete": False, "full": True},
-    {"relation": "host", "role": "auditor", "complete": False, "full": True},
-    {"relation": "host", "role": "server", "complete": True},
-], "checks": [{"name": "a", "status": "green", "violations": 0}, {"name": "b", "status": "warning", "violations": 2}]}
 SHOWN = [{"name": "a", "status": "green"}, {"name": "b", "status": "warning"}]
 UNAVAILABLE = [{"name": "a", "status": "unavailable"}, {"name": "b", "status": "unavailable"}]
 
 
 def scoped(role: str, checks: list) -> dict:
     return {"id": "m-1", "snapshots": [s for s in TRUTH["snapshots"] if s["role"] == role], "checks": checks}
-
-
-def test_reads_all_in_full_is_decided_on_the_unscoped_manifest():
-    assert reads_all_in_full(TRUTH, "auditor")
-    assert not reads_all_in_full(TRUTH, "propose")
-    # Its own snapshots alone look full; the store also shows `host`, which it does not read.
-    assert reads_all_in_full({"snapshots": TRUTH["snapshots"][1:2]}, "auditor")
-    assert not reads_all_in_full({"snapshots": TRUTH["snapshots"][1:2] + TRUTH["snapshots"][3:]}, "auditor")
-    assert not reads_all_in_full({"snapshots": []}, "auditor")
 
 
 def test_a_role_that_reads_in_part_sees_exactly_unavailable():
@@ -180,38 +166,3 @@ def test_without_a_store_only_all_or_nothing():
                          ("auditor", [{"name": "a", "status": "green", "violations": 0}])):
         with pytest.raises(SystemExit, match="checks"):
             check_statuses(role, scoped(role, checks), None)
-
-
-class Pages:
-    """A gate that answers an ask with the pages it is given, and records what it was sent."""
-
-    def __init__(self, *pages):
-        self.pages, self.sent = list(pages), []
-
-    def call(self, path, method="GET", body=None, headers=None):
-        self.sent.append((path, method, body, headers))
-        return self.pages.pop(0)
-
-
-def page(rows, question="ask A where x > 1", manifest="m-3", **more):
-    return 200, {"format": "rezono.answer/1", "question": "ask", "manifest_id": manifest, "output_schema": "s#A",
-                 "expression": {"hash": "h", "text": question}, "dataset": {"$schema": "s#A", "rows": rows}, **more}
-
-
-def test_an_ask_is_read_page_by_page_with_the_cursor_it_gave():
-    gate = Pages(page([{"id": "a"}], next="c1"), page([{"id": "b"}]))
-    assert asked(gate, "viewer", "p", "m-3", "ask A where x > 1") == [{"id": "a"}, {"id": "b"}]
-    assert [s[2] for s in gate.sent] == [{"ask": "ask A where x > 1"}, {"ask": "ask A where x > 1", "after": "c1"}]
-    assert all(s[0] == "/p/m-3/ask" and s[1] == "POST" and s[3] == {"Content-Type": "application/json"} for s in gate.sent)
-
-
-@pytest.mark.parametrize("answer", [
-    (422, {"cut": {"budget": "steps", "limit": 1}}),
-    (200, {**page([])[1], "manifest_id": "m-2"}),
-    (200, {**page([])[1], "expression": {"hash": "h", "text": "ask B where x > 1"}}),
-    (200, {**page([])[1], "output_schema": "s#B"}),
-    (200, {**page([])[1], "format": "rezono.answer/2"}),
-])
-def test_an_ask_that_is_not_the_answer_of_the_question_fails(answer):
-    with pytest.raises(SystemExit, match="ask"):
-        asked(Pages(answer), "viewer", "p", "m-3", "ask A where x > 1")

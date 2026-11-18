@@ -5,7 +5,6 @@ import pytest
 from request_preview_case import ROOT, copy_requests, preview
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError, reason="Implement the public request preview adapter and typed input schema in examples/platform/request_preview.py and schema/request_input.yaml. Read decisions/platform-request-input.md.")
 def test_request_json_enters_compiler_base_tables(tmp_path):
     teams, catalog = copy_requests(tmp_path)
     baseline = preview(teams, catalog, "inputs")
