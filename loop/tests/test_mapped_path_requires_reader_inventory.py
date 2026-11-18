@@ -231,3 +231,40 @@ def test_mapped_path_requires_reader_inventory(tmp_path):
                            for premise in proof.get(ref, {}).get("premises", []) if premise["polarity"] == "positive")
     assert any(relation == "complete" and evidence[0]["id"] in json.loads(row)
                for relation, row in reached)
+
+
+def resealed_without_reader(evidence):
+    """Drop the mapped reader from the submitted receipt and recompute its digests over that subset."""
+    receipt, objects = evidence
+    objects = dict(objects)
+    content = deepcopy(objects["observations/submitted/content.json"])
+    for member in content:
+        if member["key"][:2] == ["path-readers", SOURCE]:
+            member["rows"] = []
+    objects["observations/submitted/content.json"] = content
+    body = {field: value for field, value in receipt.items() if field != "id"}
+    body["content"] = archived_json("observations/submitted/content.json", content)
+    resealed = {**body, "id": canonical_sha256(["rezono.completeness-receipt/1", body])}
+    objects["observations/submitted/receipt.json"] = resealed
+    return resealed, objects
+
+
+@pytest.mark.xfail(
+    strict=True, raises=AssertionError,
+    reason="A receipt whose digests are recomputed over the truncated submission still narrows the selection. "
+           "Admission must compare it with the independently retained inventory and content. Read "
+           "decisions/scoped-completeness.md §1 and §3. The implementation belongs to the trusted build "
+           "observation and publication adapter.",
+)
+def test_resealed_receipt_cannot_drop_mapped_reader(tmp_path):
+    source = tmp_path / "source"
+    base, head, _ = repository(source, SOURCE)
+    engine = pin_reader_map(source, base, head)
+    base, head, _ = components.pull_request_range(source, "main")
+    evidence = resealed_without_reader(observed_receipt(source, base, head, engine))
+    records = submission(source, base, head, engine, SOURCE, evidence)
+    records["build_path_reader"].clear()
+    rows, _ = published_selection(tmp_path / "resealed", source, records, evidence)
+    assert {component for _, component, _ in rows["build_selected_job"]} == set(SUITES)
+    assert rows["build_full_selection"]
+    assert not rows.get("build_readerless_path")
