@@ -13,7 +13,9 @@ description: >-
   the reader does not read and a construct that v0 reserves (a time selection on a value, `norm`) get a
   diagnostic at their span and no file, so this shape has no member for them and a form never has a part left
   out. A decision table on a derived value is the tree of docs/rezono/tables.md §2 (`Table`), as the text wrote
-  it: what its rows mean, and what is proven of them, is that text's and not this shape's. An absent member is
+  it: what its rows mean, and what is proven of them, is that text's and not this shape's. Schema identity and
+  its metadata use `rezono.module/2` (decisions/language-metadata.md), including a place for the schema name at
+  the empty pointer. An absent member is
   something the text did not write, never a value that is unknown: a
   value that is unknown, not applicable or invalid is the literal the text wrote (`unknown no_estimate`, `n/a`,
   `invalid r`). There is no `null`: canonical JSON refuses it. A reader refuses a member it does not know.
@@ -37,7 +39,7 @@ types:
   JsonPointer:
     typeof: string
     description: An RFC 6901 JSON pointer into `module`.
-    pattern: "^(/([^~/]|~[01])*)+$"
+    pattern: "^(/([^~/]|~[01])*)*$"
   Name:
     typeof: string
     pattern: "^[a-z][a-z0-9_]*$"
@@ -121,6 +123,14 @@ enums:
       total: {description: The value is proven known.}
 
 classes:
+  SchemaMetadata:
+    description: Metadata shared by schemas, kinds, slots, enums and enum members.
+    mixin: true
+    attributes:
+      description: &metadata_description {all_of: [{range: string}]}
+      exactMappings: &metadata_mappings {all_of: [{range: string, multivalued: true}], description: "Written IRIs or CURIEs, in written order."}
+      annotations: &metadata_annotations {all_of: [{range: AnnotationMap, inlined: true}]}
+
   ModuleForm:
     description: The form of one module.
     attributes:
@@ -137,6 +147,12 @@ classes:
             module:
               all_of:
                 - {range: Module, inlined: true}
+                - {range: ModuleWithoutMetadata, inlined: true}
+            spans:
+              all_of:
+                - range_expression:
+                    slot_conditions:
+                      at: {pattern: "^/"}
 
   Place:
     description: >-
@@ -144,8 +160,8 @@ classes:
       line and an assignment stand at their name (a rounding at what it rounds, a version at its number,
       `applies` at its slot), a check statement and an expression at their whole text, a decision table at
       `table <policy>`, a row of it at its whole line, a test and a value of it at their text. The module
-      itself, a clause of an `unless` and the range of a test have no place of their own: the two expressions
-      of a clause have, and so have the test and its ends.
+      itself stands at the name of its schema in version 2. A clause of an `unless` and the range of a test
+      have no place of their own: the two expressions of a clause have, and so have the test and its ends.
     attributes:
       at: {required: true, range: JsonPointer, description: "The node, as a pointer into `module`."}
       line: {required: true, range: DecimalText, pattern: "^[1-9][0-9]*$", description: The 1-based line of `start`.}
@@ -176,11 +192,18 @@ classes:
           - {range: ScalarAliasDecl, inlined: true}
 
   ModuleWithRules:
+    mixins: [SchemaMetadata]
     description: The header and declarations of a module, including relational rules, in the order of the text.
     attributes:
       rezono: {range: NumberText, description: "The language version of the `rezono` line (v0 §4b); absent when the text has no such line."}
       pack: {required: true, range: PackName}
       use: {required: true, range: Use, multivalued: true, inlined_as_list: true}
+      schema: {all_of: [{range: Name}], description: "The written schema name."}
+      iri: {all_of: [{range: string}], description: "The written schema IRI."}
+      language: {all_of: [{range: string}], description: "The written language tag."}
+      prefixes: {all_of: [{range: PrefixMap, inlined: true}]}
+      imports: {all_of: [{range: string, multivalued: true}], description: "The schema imports in written order."}
+      defaultRange: {all_of: [{range: TypeText}]}
       decls:
         required: true
         multivalued: true
@@ -228,10 +251,12 @@ classes:
       is: {required: true, description: "What stands after `=`, as written, without its comments and with one space for each run of white space: `money EUR`, `integer`, `1024 MiB`. A quantity is read as an expression, so what v0 reserves in it (a time selection) is an R015 and has no form."}
 
   EnumDecl:
+    mixins: [SchemaMetadata]
     attributes:
       enum: {required: true, range: TypeName}
       world: {range: World}
       values: {required: true, range: Name, multivalued: true, minimum_cardinality: 1}
+      memberMetadata: {all_of: [{range: EnumMemberMetadataMap, inlined: true}]}
 
   ReasonDecl:
     attributes:
@@ -261,6 +286,7 @@ classes:
       source: {description: "The source reference after `@`."}
 
   KindDecl:
+    mixins: [SchemaMetadata]
     attributes:
       kind: {required: true, range: TypeName}
       world: {range: World}
@@ -309,6 +335,10 @@ classes:
     attributes:
       slot: {required: true, range: Name}
       type: {required: true, range: TypeText}
+      slotUri: {all_of: [{range: string}], description: "The written slot IRI or CURIE."}
+      description: *metadata_description
+      exactMappings: *metadata_mappings
+      annotations: *metadata_annotations
       card: {range: Card}
       inverse: {range: Name}
       world: {range: World}
@@ -371,6 +401,79 @@ classes:
     attributes:
       extend: {required: true, range: TypeName}
       derived: {required: true, range: Derived, multivalued: true, inlined_as_list: true}
+
+  PrefixMap:
+    description: A map from written prefix names to their IRIs.
+    extra_slots:
+      range_expression: {range: string, required: true}
+
+  EnumMemberMetadataMap:
+    description: A map from written enum member names to their metadata.
+    extra_slots:
+      range_expression: {range: EnumMemberMetadata, inlined: true, required: true}
+
+  EnumMemberMetadata:
+    description: The metadata written under an enum member.
+    mixins: [SchemaMetadata]
+
+  AnnotationMap:
+    description: A map from annotation names to canonical JSON values, with decimal numbers represented as text.
+    extra_slots:
+      range_expression:
+        required: true
+        any_of:
+          - {range: string}
+          - {range: boolean}
+          - {range: AnnotationMap, inlined: true}
+          - multivalued: true
+            any_of:
+              - {range: string}
+              - {range: boolean}
+              - {range: AnnotationMap, inlined: true}
+              # The reader checks canonical values through arbitrarily nested arrays.
+              - {multivalued: true, any_of: [{required: true}]}
+
+  ModuleWithoutMetadata:
+    description: The metadata restriction applied to the otherwise validated version 1 module.
+    extra_slots: {allowed: true}
+    attributes:
+      decls:
+        required: true
+        multivalued: true
+        inlined_as_list: true
+        none_of:
+          - {range: ElementWithMetadata}
+          - {range: DeclarationWithMetadataSlots}
+    none_of:
+      - {slot_conditions: {schema: {value_presence: PRESENT}}}
+      - {slot_conditions: {iri: {value_presence: PRESENT}}}
+      - {slot_conditions: {language: {value_presence: PRESENT}}}
+      - {slot_conditions: {prefixes: {value_presence: PRESENT}}}
+      - {slot_conditions: {imports: {value_presence: PRESENT}}}
+      - {slot_conditions: {defaultRange: {value_presence: PRESENT}}}
+      - {is_a: ElementWithMetadata}
+
+  ElementWithMetadata:
+    description: Any object with at least one written declaration metadata field.
+    extra_slots: {allowed: true}
+    any_of:
+      - {slot_conditions: {description: {value_presence: PRESENT}}}
+      - {slot_conditions: {exactMappings: {value_presence: PRESENT}}}
+      - {slot_conditions: {annotations: {value_presence: PRESENT}}}
+      - {slot_conditions: {slotUri: {value_presence: PRESENT}}}
+      - {slot_conditions: {memberMetadata: {value_presence: PRESENT}}}
+
+  DeclarationWithMetadataSlots:
+    description: A declaration with at least one slot that has written metadata.
+    extra_slots: {allowed: true}
+    attributes:
+      slots:
+        required: true
+        range: Slot
+        multivalued: true
+        inlined_as_list: true
+        has_member:
+          range_expression: {is_a: ElementWithMetadata}
 
   Derived:
     description: "A derived value: its `=` with its `unless` clauses and its versions, or a decision table, which stands alone."
