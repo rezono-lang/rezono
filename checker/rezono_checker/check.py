@@ -17,7 +17,7 @@ from graphlib import CycleError, TopologicalSorter
 from rezono_canon import canonical_sha256, sha256_hex
 
 from . import calc, closure, metadata
-from .canon import INTEGER, encode_key, sha256_json, value_text
+from .canon import calc_value, encode_key, sha256_json, value_text
 from .evaluate import _arith, _fits, _fold, _holds, _value, cells
 from .snapshots import read_rows
 
@@ -493,6 +493,7 @@ def _check_graph(proof, rules, findings, calc_witnesses=(), calc_views=frozenset
         if w is None:
             continue
         ref = (w["conclusion"]["relation"], w["conclusion"]["key"])
+        rule = rules.get(w["rule_id"])
         graph.setdefault(ref, set())
         for p in w.get("premises", []):
             row = (p["row"]["relation"], p["row"]["key"])
@@ -501,8 +502,9 @@ def _check_graph(proof, rules, findings, calc_witnesses=(), calc_views=frozenset
             if row in calculated:
                 calc_witness = calculated[row]
                 value = calc_witness.get("value", "")
+                calc_type = (rule.calc_input_type(row[0]) if rule else None) or "integer"
                 if (calc_witness["state"] != "known" or calc_witness.get("reason", "")
-                        or not INTEGER.fullmatch(value)):
+                        or not calc_value(value, calc_type)):
                     findings.append({"reason": "bad_calc_premise", "witness": i, "relation": row[0], "key": row[1]})
             if row[0] in calc_views and row not in calculated:
                 findings.append({"reason": "unproven_premise", "witness": i, "relation": row[0], "key": row[1]})
