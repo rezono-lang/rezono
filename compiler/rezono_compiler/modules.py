@@ -27,10 +27,12 @@ from __future__ import annotations
 import datetime as dt
 import os
 import re
+from copy import deepcopy
 from dataclasses import dataclass, field
 from pathlib import Path
 
 import yaml
+from linkml_runtime.linkml_model import SchemaDefinition
 from .schemaview import SchemaView
 from rezono_canon import canonical_sha256, sha256_hex
 
@@ -71,6 +73,23 @@ class Imported:
     dir: Path
     meta: dict
     imports: list[str]  # names of the packs it imports itself
+
+
+class _LegacySchemaView(SchemaView):
+    """Resolve legacy relative imports from the directory of the importing schema."""
+
+    def __init__(self, source: Path, importmap: dict[str, str | dict],
+                 lowered_paths: dict[Path, SchemaDefinition]) -> None:
+        super().__init__(source, importmap=importmap)
+        self.lowered_paths = lowered_paths
+
+    def load_import(self, imp: str, from_schema: SchemaDefinition | None = None) -> SchemaDefinition:
+        source = (from_schema if from_schema is not None else self.schema).source_file
+        if self.lowered_paths and source and ":" not in imp:
+            path = (Path(source).parent / f"{imp}.yaml").resolve()
+            if path in self.lowered_paths:
+                return deepcopy(self.lowered_paths[path])
+        return super().load_import(imp, from_schema=from_schema)
 
 
 def pack_hash(pack_dir: str | Path) -> str:
@@ -211,21 +230,30 @@ def load(pack_dir: Path, meta: dict, errors: list[str]) -> tuple[list[Module], d
     sources = [(None, pack_dir, [p for p in packs if p in direct(meta)])] + \
               [(name, p.dir, p.imports) for name, p in packs.items()]
     modules: dict[str, Module] = {}
+    authored: dict[str | None, dict[str, dict]] = {}
+    lowered_paths: dict[Path, SchemaDefinition] = {}
+    views: list[tuple[dict[str, str | dict], list[str | None]]] = []
     for name, d, imports in sources:
-        importmap = {f"{n}:": str(packs[n].dir / "schema") for n in imports}
+        visible = dependency_order(packs, imports)
+        pack = name or meta["name"]
+        importmap: dict[str, str | dict] = {f"{n}:": str(packs[n].dir / "schema") for n in visible}
+        importmap[f"{pack}:"] = str((d / "schema").resolve())
+        views.append((importmap, [*visible, name]))
         own_meta = packs[name].meta if name else meta
         here: dict[Path, Module] = {}  # by the path a schema file of the module has, or would have, under schema/
         for f in sorted((d / "schema").rglob("*.yaml")):
             rel = f.relative_to(d / "schema").with_suffix("").as_posix()
             try:
-                sv = SchemaView(str(f), importmap=importmap)
+                sv = _LegacySchemaView(f, importmap, lowered_paths)
                 sv.schema  # noqa: B018 -- LinkML parses on first use; a parse error is a compile error
             except (TypeError, ValueError) as e:
                 errors.append(f"{f.relative_to(d).as_posix()}: LinkML cannot read it ({e}); an annotation whose value is "
                               "a mapping is written `tag: {value: {...}}`")
                 continue
-            here[f.relative_to(d / "schema")] = Module(module_id(name, rel), name or meta["name"], d, f, sv)
-        here |= rezono_modules(d, own_meta, name, name or meta["name"], here, importmap, errors)
+            here[f.relative_to(d / "schema")] = Module(module_id(name, rel), pack, d, f, sv)
+        lowered, authored[name] = rezono_modules(d, own_meta, name, pack, here, importmap, errors)
+        here |= lowered
+        lowered_paths.update({(d / "schema" / path).resolve(): m.sv.schema for path, m in lowered.items()})
         modules |= {m.id: m for _, m in sorted(here.items())}
         for rel, interface in interfaces(own_meta, d, errors).items():
             mid = module_id(name, rel)
@@ -260,11 +288,23 @@ def load(pack_dir: Path, meta: dict, errors: list[str]) -> tuple[list[Module], d
                 continue
             m.imports.append(target)
         m.imports.sort()
+    # A SchemaView can traverse another pack's imports. Make every lowered schema in
+    # that pinned closure available under its logical name before LinkML follows it.
+    for importmap, visible in views:
+        for name in visible:
+            importmap.update(authored[name])
+    if not errors:
+        for m in modules.values():
+            if m.form is not None:
+                try:
+                    m.sv.all_classes()
+                except (TypeError, ValueError, OSError) as e:
+                    errors.append(f"{m.pack_dir.name}/{m.rel}: LinkML cannot read its lowered schema ({e})")
     return list(modules.values()), packs
 
 
 def rezono_modules(d: Path, meta: dict, name: str | None, pack: str, schemas: dict[Path, Module], importmap: dict,
-                   errors: list[str]) -> dict[Path, Module]:
+                   errors: list[str]) -> tuple[dict[Path, Module], dict[str, dict]]:
     """The modules written in Rezono of one pack, lowered (`rezono_module`), each with the path a schema file of
     it would have, so that it takes its place among the pack's schema modules as that file would. A lowered
     module imports the modules of its pack whose names it uses: a schema file by `<pack>:<path>`, another
@@ -277,19 +317,19 @@ def rezono_modules(d: Path, meta: dict, name: str | None, pack: str, schemas: di
                                                  for low in lowered}
     for low in lowered:
         low.schema["imports"] += [key[x] for x in low.uses]
-    importmap = importmap | {f"{pack}:": str(d / "schema")} | {key[low.declared.id]: low.schema for low in lowered}
-    out = {}
+    out, authored = {}, {}
     for low in lowered:
         mid = low.declared.id
         try:
             sv = rezono_module.view(low.schema, importmap)
-            sv.all_classes()  # LinkML reads the imports on first use; that is where it fails
         except (TypeError, ValueError, OSError) as e:
             errors.append(f"{d.name}/{low.declared.module}: LinkML cannot read its lowered schema ({e})")
             continue
         out[Path(f"{mid}.yaml")] = Module(module_id(name, mid), pack, d, d / low.declared.module, sv,
                                           sorted(module_id(name, x) for x in low.uses), form=low.form)
-    return out
+        authored[key[mid]] = low.schema
+        authored[f"{pack}:{mid}"] = low.schema
+    return out, authored
 
 
 def interfaces(meta: dict, pack_dir: Path, errors: list[str]) -> dict[str, dict[str, str | None]]:

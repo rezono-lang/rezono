@@ -1,6 +1,6 @@
 # rezono
 
-Rezono is the language of Rezono's control plane ([docs/rezono](../docs/rezono/v0.md)). This directory is its implementation, one slice at a time. The first slice is the part that questions use, frozen in [docs/rezono/expressions.md](../docs/rezono/expressions.md) (P10.2a): expressions, `ask`, suppose lines and the JSON form. The first declarations are the check statements of [v0 §5](../docs/rezono/v0.md#checks-norms-and-requirements): `check`, `require` and `warn`, decided at publication (v0 §7b).
+Rezono is the language of Rezono's control plane. The [language reference](../docs/rezono/v0.md) describes its declarations. This directory implements the part that questions use, documented in the [expression specification](../docs/rezono/expressions.md). It also reads the `check`, `require` and `warn` declarations from [v0 §5](../docs/rezono/v0.md#checks-norms-and-requirements). The [publication specification](../docs/rezono/publication.md) explains how their results reach published data.
 
 It is plain TypeScript that Node 24 runs as it is, like the gate and the REPL, because those two and the tools for agents are what read a question. Nothing here knows a domain: no kind, unit, currency or label is named in the code.
 

@@ -74,11 +74,12 @@ def _usd_bound(value: object, total: list[int]) -> bool:
 
 
 def _authorized(
-    plan_hash: str, currency: str, cost_micros: int, approval: Mapping[str, str | int], observed: datetime,
+    plan_hash: str, quote_hash: str, currency: str, cost_micros: int,
+    approval: Mapping[str, str | int], observed: datetime,
 ) -> bool:
     sources = {
         "plan": {"plan_hash": plan_hash, "currency": currency},
-        "quote": {"plan_hash": plan_hash, "currency": currency, "cost_micros": cost_micros},
+        "quote": {"plan_hash": quote_hash, "currency": currency, "cost_micros": cost_micros},
         "approval": approval,
         "observation": {"event_us": (observed - EPOCH) // datetime.resolution},
     }
@@ -100,7 +101,7 @@ def review(
     approval: Mapping[str, object], instant: str, day: str, lines: Iterable[Mapping[str, object]],
     prices: Iterable[Edition], rates: Iterable[Edition], guarantee: Mapping[str, object],
 ) -> Review:
-    """Issue an offline request only for a still-approved and fully bounded total."""
+    """Review recorded provider terms offline against the approved plan and its total."""
     provider = guarantee.get("provider")
     if not isinstance(provider, str):
         raise ValueError("the guarantee requires a provider")
@@ -136,6 +137,11 @@ def review(
             or not reference.strip() or not _usd_bound(guarantee.get("total_usd"), candidate["usd"])):
         return refuse("unbound_total")
 
+    # A reject-above request supplies its own cap. A binding quote must carry the provider's plan digest.
+    quote_hash = guarantee.get("plan_hash", plan_hash if mode == "reject_above" else None)
+    if not isinstance(quote_hash, str) or quote_hash != plan_hash:
+        return refuse("unbound_plan")
+
     # Rounding upward preserves an exact comparison with a whole-micros cap.
     cost_micros = ceil(Fraction(*candidate[currency.lower()]) * 1_000_000)
     cap_micros = budget_cents * 10_000
@@ -148,7 +154,7 @@ def review(
         "cap_micros": min(cap_micros, pack.BIGINT[1]),
         "expires_us": (approval_end - EPOCH) // datetime.resolution,
     }
-    if not _authorized(plan_hash, currency, cost_micros, approval_facts, observed):
+    if not _authorized(plan_hash, quote_hash, currency, cost_micros, approval_facts, observed):
         return refuse("over_cap" if cost_micros > cap_micros else "not_authorized")
 
     return {"reason": "authorized", "candidate_hash": plan_hash, "request": {

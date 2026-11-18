@@ -23,3 +23,19 @@ def test_forgejo_read(monkeypatch):
         raise OSError("provider unavailable")
     with pytest.raises(OSError):
         read_status(broken_read, "example", "delivery", sha, context, page_size=2)
+
+
+@pytest.mark.parametrize("change_repeated_row", [False, True])
+def test_status_history_refuses_overlapping_pages(change_repeated_row):
+    from loop.forgejo_read import read_status
+
+    sha = "ab" * 20
+    context = "rezono/delivery/elm/elm-1/seed"
+    row = {"id": 1, "context": context, "status": "pending", "target_url": "https://example.org/rows/3"}
+    def request(method, path, *, query):
+        assert (method, path) == ("GET", f"/api/v1/repos/example/delivery/commits/{sha}/statuses")
+        if query["page"] == 1 or not change_repeated_row:
+            return [row]
+        return [{**row, "status": "success"}]
+    with pytest.raises(ValueError, match="did not advance|repeated provider ID"):
+        read_status(request, "example", "delivery", sha, context, blocks_write=lambda _: False)
