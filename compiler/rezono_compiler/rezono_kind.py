@@ -32,16 +32,23 @@ def parent_of(value: object, kind: str, at: str, own: dict[str, str],
 
 
 def lower(decl: dict, at: str, own: dict[str, str], owners: dict[str, list[str]],
-          declared: Set[str], uses: set[str], refuse: Refuse, *, extended: bool = False) -> dict | None:
+          declared: Set[str], uses: set[str], refuse: Refuse, *, extended_format: bool = False) -> dict | None:
     ok = True
-    allowed = MEMBERS | {"parent"} | rezono_metadata.FIELDS if extended else MEMBERS
+    allowed = MEMBERS | {"embedded", "parent"} | rezono_metadata.FIELDS if extended_format else MEMBERS
     if extra := set(decl) - allowed:
         refuse(at, f"a kind with {', '.join(sorted(extra))} is not lowered", "§5.1")
         ok = False
     if not rezono_metadata.valid(decl):
         refuse(at, "invalid kind metadata", "§5.1")
         ok = False
-    has_parent = extended and "parent" in decl
+    embedded = decl.get("embedded") is True
+    if extended_format and "embedded" in decl and not embedded:
+        refuse(at, "an embedded kind must be marked true", "§5.1")
+        ok = False
+    has_parent = extended_format and "parent" in decl
+    if embedded and has_parent:
+        refuse(at, "an embedded kind cannot inherit an identifier from a parent", "§5.1")
+        ok = False
     parent = parent_of(decl["parent"], decl["kind"], f"{at}/parent", own, owners, uses, refuse) if has_parent else None
     if has_parent and parent is None:
         ok = False
@@ -58,16 +65,20 @@ def lower(decl: dict, at: str, own: dict[str, str], owners: dict[str, list[str]]
         refuse_derived(f"{at}/derived/{index}", refuse)
         ok = False
     slots = decl.get("slots") or []
+    if embedded:
+        for index, slot in enumerate(slots):
+            if isinstance(slot, dict) and slot.get("identifier") is True:
+                refuse(f"{at}/slots/{index}", "an embedded kind cannot declare an identifier", "§5.1")
+                ok = False
     if has_parent and any(isinstance(slot, dict) and slot.get("identifier") is True for slot in slots):
         refuse(at, "a kind with a parent inherits its identifier and cannot declare its own", "§5.1")
         ok = False
     if rezono_slot.validate(
-        slots, decl["kind"], at, own, owners, uses, refuse, extended=extended
+        slots, decl["kind"], at, own, owners, uses, refuse, extended=extended_format
     ) and ok:
-        attributes = rezono_slot.lower(slots, declared)
+        attributes = rezono_slot.lower(slots, declared, implicit_identifier=not embedded and parent is None)
         result = {"attributes": attributes} | rezono_metadata.lower(decl)
         if parent is not None:
-            attributes.pop("id", None)
             result["is_a"] = parent
         return result
     return None
