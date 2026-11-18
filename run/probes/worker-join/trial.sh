@@ -118,5 +118,42 @@ jq -e '.metadata.labels["probe.rezono.org/role"] == "joined-worker" and
     (.status.nodeInfo.osImage | contains("Flatcar")) and
     (.status.nodeInfo.kubeletVersion | startswith("v1.36.6")) and
     any(.status.conditions[]; .type == "Ready" and .status == "True")' node.json >/dev/null
-control -n kube-node-lease get lease proof-worker -o json | jq -e '.spec.renewTime != null' >/dev/null
+# The kubelet normally heartbeats every 10 seconds. Allow two intervals.
+control -n kube-node-lease get lease proof-worker -o json > first-lease.json
+sleep 20
+control -n kube-node-lease get lease proof-worker -o json > second-lease.json
+lease_evidence=$(python3 - <<'PY'
+from datetime import datetime
+import json
+from pathlib import Path
+from uuid import UUID
+
+
+def sample(lease, node):
+    metadata, spec = lease["metadata"], lease["spec"]
+    if (metadata["namespace"] != "kube-node-lease" or
+            metadata["name"] != node["name"] or spec["holderIdentity"] != node["name"] or
+            not any(owner["kind"] == "Node" and owner["apiVersion"] == "v1" and
+                    owner["name"] == node["name"] and owner["uid"] == node["uid"]
+                    for owner in metadata["ownerReferences"])):
+        raise ValueError("lease does not belong to the Ready node")
+    # Kubernetes serializes MicroTime as UTC with six fractional digits.
+    renewed = datetime.strptime(spec["renewTime"], "%Y-%m-%dT%H:%M:%S.%fZ")
+    return UUID(metadata["uid"]), renewed
+
+
+def read(name):
+    return json.loads(Path(name).read_text())
+
+
+node = read("node.json")["metadata"]
+uid, first = sample(read("first-lease.json"), node)
+later_uid, second = sample(read("second-lease.json"), node)
+if uid != later_uid or second <= first:
+    raise SystemExit("expected a later renewal of the same Lease")
+print(f"lease_uid={uid} renew_time_first={first.isoformat(timespec='microseconds')}Z "
+      f"renew_time_second={second.isoformat(timespec='microseconds')}Z")
+PY
+)
+observe "$lease_evidence"
 observe "$(jq -r '"node=\(.metadata.name) uid=\(.metadata.uid) os=\(.status.nodeInfo.osImage) kubelet=\(.status.nodeInfo.kubeletVersion) ready=true lease=true"' node.json)"
