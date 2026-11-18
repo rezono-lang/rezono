@@ -80,5 +80,8 @@ def test_build_policy_date_follows_the_utc_calendar(tmp_path):
         if valid:
             expected.add((run, run))
 
+    data["build_policy_date"].append({
+        "id": "stale", "run": "at-epoch", "reference": "before-epoch", "observed_at": -1,
+    })
     rows = published(tmp_path, data)
     assert {tuple(row["key"]) for row in rows["build_policy_date_at_cut"]} == expected
