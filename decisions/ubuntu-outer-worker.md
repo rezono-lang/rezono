@@ -1,6 +1,8 @@
 # Ubuntu outer worker bootstrap and acceptance
 
-Use Ubuntu Server 24.04 LTS with NoCloud cloud-init for both disposable acceptance trials. The independent Flatcar run at `0bf39a85db9aaed5ea7a72156c6c7c36f03c15c5` observed the outer worker Ready and the same lease renew again 20.430698 seconds later. Its inner VMI was Ready and Running. The guest console returned exactly one matching marker in 575 lines over 37 reads. The libvirt-domain ownership check returned `vmi_uid_mismatch` before the first vCPU statistics sample. The console evidence stands; acceleration of that guest remains unproven. This concludes the Flatcar attempt series. Both Ubuntu live observations are pending. [Decisive host trial](https://github.com/rezono-lang/rezono/actions/runs/44280862282/job/134720875667)
+Select Ubuntu Server 24.04 LTS with NoCloud cloud-init and k0s for the outer worker. Both disposable Ubuntu acceptance trials passed on 2026-11-18.
+
+Three Flatcar attempts left the combined console and KVM proof incomplete. The independent final run at `0bf39a85db9aaed5ea7a72156c6c7c36f03c15c5` observed the outer worker Ready and the same lease renew again 20.430698 seconds later. Its inner VMI was Ready and Running. The guest console returned exactly one matching marker in 575 lines over 37 reads. The libvirt-domain ownership check returned `vmi_uid_mismatch` before the first vCPU statistics sample. The console evidence stands and acceleration of that guest remains unproven. [Final Flatcar trial](https://github.com/rezono-lang/rezono/actions/runs/44280862282/job/134720875667)
 
 ## Offline boot boundary
 
@@ -10,7 +12,10 @@ The Ubuntu path in the live trial calls the same outer-worker launcher that the 
 
 ## Live observations
 
-1. Start a fresh runner-local controller with no registered nodes and boot the outer Ubuntu worker with its seed. Require the expected Ubuntu OS, node UID and label, matching kubelet version, Ready, and two increasing renewal times on the same node lease.
-2. Use that Ubuntu host for KubeVirt. Bind the Ready, Running VMI to its node, active launcher and running compute container. Verify the guest's firmware identity on its serial console. On the same active KVM domain, require stable domain UUID and runtime ID, matching VMI ownership and two increasing live vCPU samples. Re-read the identities after sampling. A missing or mismatched identity leaves the trial unproven.
+The registration trial at `377a0a4fc54e1403135626e25a22164862f1f4f6` started a runner-local controller with zero registered nodes. The Ubuntu 24.04.5 LTS worker joined with kubelet `v1.36.6+k0s` and became Ready. The same node lease recorded two increasing renewal times, 20.453867 seconds apart. [Registration trial](https://github.com/rezono-lang/rezono/actions/runs/44318086986/job/134849456633)
 
-Keep the trials disposable and independent of provider credentials. Both live results are required before selecting Ubuntu for a provider deployment.
+The KubeVirt retry at `2ae5159fde63bcdc3dd00573b1423d83585e8454` used Ubuntu 24.04.5 LTS and reached KubeVirt Available with 1,000 allocatable KVM devices. The Ready, Running VMI was bound to its node and active launcher. Its console returned exactly one matching guest marker. The active KVM domain passed the stable identity checks and recorded a vCPU 0 increase of 2,180,000,000 ns. The launcher monitor's VMI UID and the domain's firmware UUID matched the same guest. The optional VMI UID in the domain XML was empty. QEMU stopped and the job cleanup completed successfully. [KubeVirt retry](https://github.com/rezono-lang/rezono/actions/runs/44337457984/job/134917930425)
+
+## Acceptance scope
+
+The evidence covers disposable CI workers. Repeat both live acceptance checks on the intended provider hardware before a provider deployment. Require the expected OS, node UID and label, matching kubelet version, Ready, and two increasing renewals of the same lease. For KubeVirt, require the Ready, Running VMI, its active launcher and running compute container, one matching console marker, and two increasing vCPU samples from the same active KVM domain. Verify its domain UUID, runtime ID and VMI ownership before and after sampling.
