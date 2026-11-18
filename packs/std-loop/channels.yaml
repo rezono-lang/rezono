@@ -10,6 +10,8 @@ kinds:
   - {kind: flow_sweep_window, shape: rect}
   - {kind: flow_expected_node, shape: rect}
   - {kind: flow_node_report, shape: rect}
+  - {kind: loop_sweep_receipt, shape: rect}
+  - {kind: loop_pending_operation, shape: rect}
 arrows:
   - {arrow: loop_completion.step, dash: none}
   - {arrow: loop_requirement.step, dash: none}

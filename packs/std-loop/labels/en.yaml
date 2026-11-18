@@ -1,3 +1,12 @@
+loop_sweep_receipt: complete observation round
+loop_sweep_receipt.run: observed run
+loop_sweep_receipt.event_time: sweep watermark
+loop_pending_operation: outstanding operation
+loop_pending_operation.run: operation run
+loop_pending_operation.token: prospective token
+structural_stuck: declared structural blocker
+possible_progress: remaining source of progress
+fixed_point: unresolved fixed point
 loop_step: plan step
 loop_active_run: active run
 loop_completion: completion declaration
