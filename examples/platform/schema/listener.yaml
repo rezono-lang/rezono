@@ -1,0 +1,39 @@
+id: https://rezono.org/examples/platform-listener
+name: platform_listener
+imports: [linkml:types]
+default_range: string
+annotations:
+  layer: facts
+
+classes:
+  ListenerCaseZone:
+    attributes:
+      id: {identifier: true}
+  ListenerCaseRange:
+    attributes:
+      id: {identifier: true}
+  ListenerCaseSource:
+    attributes:
+      id: {identifier: true}
+      zone: {range: ListenerCaseZone, required: true}
+      source_range: {range: ListenerCaseRange, required: true}
+  ListenerCaseDestination:
+    attributes:
+      id: {identifier: true}
+      zone: {range: ListenerCaseZone, required: true}
+  ListenerCaseListener:
+    attributes:
+      id: {identifier: true}
+      destination: {range: ListenerCaseDestination, required: true}
+      protocol: {required: true}
+      port: {range: integer, minimum_value: 1, maximum_value: 65535, required: true}
+  ListenerCaseFirewallGrant:
+    attributes:
+      id: {identifier: true}
+      source_range: {range: ListenerCaseRange, required: true}
+      listener: {range: ListenerCaseListener, required: true}
+  ListenerCaseServiceGrant:
+    attributes:
+      id: {identifier: true}
+      source: {range: ListenerCaseSource, required: true}
+      listener: {range: ListenerCaseListener, required: true}
