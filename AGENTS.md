@@ -1,6 +1,7 @@
 # Working rules
 
 Rezono is a domain-neutral, verifiable reasoning layer. These rules apply to people and agents alike.
+The [project vision](docs/vision.md) explains the reasoning behind these rules.
 
 ## What must stay true
 
