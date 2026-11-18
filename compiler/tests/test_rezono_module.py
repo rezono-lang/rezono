@@ -112,7 +112,9 @@ def test_compile_refuses_invalid_source_places(tmp_path, capsys):
         [{}, *rest], [None, *rest], [dict(first, at="/decls/unknown"), *rest],
         [dict(first, text="unexpected"), *rest], [dict(first, line="0"), *rest],
         [dict(first, line="01"), *rest], [dict(first, start="١"), *rest],
-        [dict(first, start=-1), *rest], [dict(first, end="0"), *rest],
+        [dict(first, line=True), *rest], [dict(first, start=True), *rest],
+        [dict(first, start=-1), *rest], [dict(first, start="-1"), *rest],
+        [dict(first, end="0"), *rest],
     ]
     output = tmp_path / "out"
     for changed in changes:
