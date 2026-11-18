@@ -212,6 +212,7 @@ jobs:
       - uses: ./.github/workflows/python-environment
         with:
           editable: ${{ needs.discover.outputs.python_editable }}
+          oracle: 'true'
       - name: Install the locked MCP dependencies
         run: npm ci --ignore-scripts --prefix tools/mcp
       - name: Verify role-scoped current, retained and sweep publications
