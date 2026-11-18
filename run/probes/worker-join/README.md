@@ -1,4 +1,4 @@
-# Flatcar worker registration
+# Disposable worker registration
 
 This disposable CI experiment starts a controller-only k0s cluster with no
 published network ports and verifies that its node list is initially empty.
@@ -17,6 +17,14 @@ is outside this experiment.
 The named trial PR performs the experiment once per head. Ordinary checks
 validate the shell fixture. The runner removes the temporary VM, controller,
 volume and machine document and restores device permissions on exit.
+
+Use `trial.sh --ubuntu` for the Noble worker and `trial.sh --ubuntu --kubevirt`
+for its nested guest trial. The launcher verifies the release image SHA-256,
+renders cloud-init with the pinned k0smotron provisioner and attaches a private
+NoCloud ISO labelled `cidata`. Its registration check requires Ubuntu 24.04.
+The same launcher is available for offline tests. Stage its renderer using
+`bash run/probes/worker-join/prepare-renderer.sh /absolute/path/rezono-worker-render`,
+set `REZONO_WORKER_RENDERER` to that executable and install libarchive's `bsdtar`.
 
 With `--kubevirt`, the trial binds the Ready VMI to its active launcher and
 running compute container. It reads the named domain through read-only
