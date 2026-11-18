@@ -256,7 +256,7 @@ jobs:
   check:
     name: check
     if: always()
-    needs: [discover, python, node, cluster_worker]
+    needs: [discover, python, node, light_checks, cluster_worker]
     permissions:
       contents: read
       actions: read
@@ -297,18 +297,25 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
       - name: Verify component jobs
         if: always()
+        shell: bash
         env:
           DISCOVER_RESULT: ${{ needs.discover.result }}
           PYTHON_RESULT: ${{ needs.python.result }}
           NODE_RESULT: ${{ needs.node.result }}
+          LIGHT_RESULT: ${{ needs.light_checks.result }}
           CLUSTER_RESULT: ${{ needs.cluster_worker.result }}
           CLUSTER_TASKS: ${{ needs.discover.outputs.cluster_tasks }}
         run: |
           set -euo pipefail
-          echo "discover=$DISCOVER_RESULT python=$PYTHON_RESULT node=$NODE_RESULT cluster=$CLUSTER_RESULT"
+          echo "discover=$DISCOVER_RESULT python=$PYTHON_RESULT node=$NODE_RESULT light=$LIGHT_RESULT cluster=$CLUSTER_RESULT"
           [ "$DISCOVER_RESULT" = "success" ]
           case "$PYTHON_RESULT" in success|skipped) ;; *) exit 1 ;; esac
           case "$NODE_RESULT" in success|skipped) ;; *) exit 1 ;; esac
+          case "$GITHUB_EVENT_NAME" in
+            pull_request|merge_group|push) [ "$LIGHT_RESULT" = success ] ;;
+            workflow_dispatch) [ "$LIGHT_RESULT" = skipped ] ;;
+            *) exit 1 ;;
+          esac
           case "$CLUSTER_TASKS" in
             ''|'[]') [ "$CLUSTER_RESULT" = skipped ] ;;
             *) [ "$CLUSTER_RESULT" = success ] ;;
