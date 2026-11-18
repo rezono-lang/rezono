@@ -1,5 +1,5 @@
 # Both namespaces are managed. Only blue has a parameter resource.
-publications: [blue-publication.yaml]
+publications: [blue-namespace-publication.yaml]
 namespaces: [blue, green]
 rule: in-zone-flow
 request:

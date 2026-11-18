@@ -6,7 +6,6 @@ from runpy import run_path
 import pytest
 
 
-@pytest.mark.xfail(strict=True, reason="Read decisions/loop-design.md. Implement loop/round_outcome.py. Differentiate clean completion, waiting, terminal drift and blocking evidence.")
 def test_round_outcome():
     outcome = run_path(str(Path(__file__).resolve().parents[1] / "round_outcome.py"))["outcome"]
     assert outcome(declared=[], done=[], stuck=[], drift=[]) == "success"

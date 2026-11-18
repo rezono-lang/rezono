@@ -9,8 +9,6 @@ import pytest
 from rezono_publication import rdf
 
 
-@pytest.mark.xfail(strict=True, raises=ImportError,
-                   reason="Add indexed RDF row identity in publication/rezono_publication/rdf_index.py; read decisions/standard-export-index.md.")
 def test_rdf_subject_lines_point_to_their_source_rows():
     from rezono_publication.rdf_index import indexed_view
 

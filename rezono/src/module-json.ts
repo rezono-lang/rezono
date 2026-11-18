@@ -26,6 +26,13 @@ import type { Diagnostic, Span } from './parse.ts';
 import { printModule } from './print.ts';
 
 export const MODULE_FORMAT = 'rezono.module/1';
+const EXTENDED_MODULE_FORMAT = 'rezono.module/2';
+
+function formatOf(module: Module): ModuleForm['format'] {
+	return module.decls.some((decl) => 'kind' in decl && decl.slots.some((slot) => slot.identifier))
+		? EXTENDED_MODULE_FORMAT
+		: MODULE_FORMAT;
+}
 
 /** The place of one node of `module`; the numbers are decimal text. */
 export interface Place {
@@ -35,7 +42,7 @@ export interface Place {
 	end: string;
 }
 export interface ModuleForm {
-	format: typeof MODULE_FORMAT;
+	format: typeof MODULE_FORMAT | typeof EXTENDED_MODULE_FORMAT;
 	module: Module;
 	spans: Place[];
 }
@@ -85,7 +92,7 @@ export function moduleForm(text: string): FormOf {
 	const again = parseModule(printModule(module));
 	if (!again.module || again.diagnostics.some(isError) || canonicalJson(again.module) !== canonicalJson(module))
 		throw new JsonFormError('the module is not the tree of its own printed text');
-	return { form: { format: MODULE_FORMAT, module, spans: places(module, spans, text) }, diagnostics };
+	return { form: { format: formatOf(module), module, spans: places(module, spans, text) }, diagnostics };
 }
 
 /** The bytes of a form: canonical JSON (RFC 8785), so the same text gives the same bytes. */
@@ -104,7 +111,8 @@ export function moduleFromJson(value: unknown): ModuleForm {
 	const not = (why: string) => new JsonFormError(`not the JSON form of a module: ${why}`);
 	if (typeof value !== 'object' || value === null || Array.isArray(value)) throw not('it is not an object');
 	const { format, module, spans, ...rest } = value as Record<string, unknown>;
-	if (format !== MODULE_FORMAT || Object.keys(rest).length) throw not(`its members are \`format\` (${MODULE_FORMAT}), \`module\` and \`spans\``);
+	if ((format !== MODULE_FORMAT && format !== EXTENDED_MODULE_FORMAT) || Object.keys(rest).length)
+		throw not('its members are a supported `format`, `module` and `spans`');
 	let canonical: string;
 	let text: string;
 	try {
@@ -117,6 +125,7 @@ export function moduleFromJson(value: unknown): ModuleForm {
 	const errors = own.diagnostics.filter(isError);
 	if (errors.length) throw not(`its text is refused: ${errors.map((d) => `${d.code} at \`${d.span.text}\``).join(', ')}`);
 	if (!own.module || canonicalJson(own.module) !== canonical) throw not('`module` is not the tree of its own text');
+	if (format !== formatOf(own.module)) throw not('`format` does not match the module tree');
 	const expected = places(own.module, own.spans, text);
 	const placed = (s: unknown, i: number): s is Place => {
 		if (typeof s !== 'object' || s === null || Object.keys(s).sort().join() !== 'at,end,line,start') return false;

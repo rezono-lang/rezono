@@ -6,7 +6,6 @@ from runpy import run_path
 import pytest
 
 
-@pytest.mark.xfail(strict=True, reason="Read decisions/loop-design.md. Implement loop/field_readback.py. Recover a typed knowledge field through its original render binding.")
 def test_field_readback():
     read_field = run_path(str(Path(__file__).resolve().parents[1] / "field_readback.py"))["read_field"]
     binding = {"origin": "knowledge", "pointer": "/spec/a~1b/0", "column": "count",

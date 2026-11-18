@@ -1,0 +1,15 @@
+{
+  "profile": "production",
+  "items": {
+    "cluster": "medium",
+    "database": "medium"
+  },
+  "connections": [
+    {
+      "targetZone": "external",
+      "target": "partner",
+      "port": 443
+    }
+  ],
+  "submittedAt": "2026-01-01T00:00:00Z"
+}

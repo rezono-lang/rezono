@@ -105,7 +105,7 @@ Rezono {
   AppliesLine = kw<"applies"> (at | during | in) ":" name
   SealedLine = kw<"sealed"> at ":" name
   DerivedLine = kw<"total">? kw<"derived"> name ":" Type Card? ("=" Expr)?
-  SlotLine = name ":" Type Card? (kw<"inverse"> name)? World?
+  SlotLine = name ":" Type Card? (kw<"inverse"> name)? World? kw<"identifier">?
   Type = typeName ("<" NonemptyListOf<Type, ","> ">")?
   Card = "?" | "*" | "+"
   VersionLine = kw<"version"> number ("," VContext)* ("=" Expr Src?)?

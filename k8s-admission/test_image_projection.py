@@ -3,7 +3,6 @@
 import pytest
 
 
-@pytest.mark.xfail(strict=True, reason="Implement project_images in k8s-admission/image_projection.py; read decisions/k8s-admission-publication.md.")
 def test_build_and_signature_witnesses_share_the_entire_key():
     from image_projection import project_images
 
