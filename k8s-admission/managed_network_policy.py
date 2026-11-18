@@ -3,7 +3,7 @@
 import re
 from itertools import product
 
-from flow import _port
+from transport_rule import DEFAULT_PROTOCOL, EXPLICIT_PROTOCOLS, published_identities
 
 
 _SERVICE_LABEL = "rezono.org/service"
@@ -22,29 +22,14 @@ def _service(selector):
 
 def _port_range(entry):
     if not isinstance(entry, dict) or entry.keys() - {"protocol", "port", "endPort"}:
-        raise ValueError("expected explicit numeric TCP ports")
-    start = _port({"protocol": entry.get("protocol", "TCP"), "port": entry.get("port")})
+        raise ValueError("expected explicit numeric ports")
+    protocol = entry.get("protocol", DEFAULT_PROTOCOL)
+    start = entry.get("port")
     end = entry.get("endPort", start)
-    if start is None or type(end) is not int or not start <= end <= 65535:
-        raise ValueError("expected a valid numeric TCP port or range")
-    return range(start, end + 1)
-
-
-def _published_flows(publication):
-    flows = publication.get("flows")
-    if not isinstance(flows, list):
-        raise ValueError("missing publication flow list")
-    tuples = set()
-    for flow in flows:
-        if not isinstance(flow, dict) or flow.keys() != {"source", "destination", "port"}:
-            raise ValueError("invalid published flow")
-        source, destination, port = flow["source"], flow["destination"], flow["port"]
-        if not all(isinstance(service, str) and service for service in (source, destination)):
-            raise ValueError("invalid published service")
-        if _port({"port": port}) is None:
-            raise ValueError("invalid published flow port")
-        tuples.add((source, destination, port))
-    return tuples
+    if (protocol not in (DEFAULT_PROTOCOL, *EXPLICIT_PROTOCOLS)
+            or type(start) is not int or type(end) is not int or not 1 <= start <= end <= 65535):
+        raise ValueError("expected a supported protocol and numeric port or range")
+    return protocol, range(start, end + 1)
 
 
 def _check_rules(rules, peer_key, local, allowed):
@@ -63,11 +48,11 @@ def _check_rules(rules, peer_key, local, allowed):
                 raise ValueError("missing or unsupported peer service label")
             services.append(service)
         ranges = [_port_range(port) for port in ports]
-        for peer, interval in product(services, ranges):
+        for peer, (protocol, interval) in product(services, ranges):
             source, destination = (peer, local) if peer_key == "from" else (local, peer)
             for port in interval:
-                if (source, destination, port) not in allowed:
-                    raise ValueError(f"unpublished flow {source} -> {destination}:{port}")
+                if (source, destination, protocol, port) not in allowed:
+                    raise ValueError(f"unpublished {protocol} flow {source} -> {destination}:{port}")
 
 
 def evaluate_network_policy(policy: dict, publication: dict) -> dict[str, bool | str]:
@@ -97,7 +82,7 @@ def evaluate_network_policy(policy: dict, publication: dict) -> dict[str, bool |
         ingress, egress = spec.get("ingress", []), spec.get("egress", [])
         if not isinstance(ingress, list) or not isinstance(egress, list):
             raise ValueError("expected ingress and egress rule lists")
-        allowed = _published_flows(publication)
+        allowed = published_identities(publication)
         selector = spec.get("podSelector")
         if selector == {}:
             if ingress or egress or set(policy_types) != set(_DIRECTIONS):
