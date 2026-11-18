@@ -17,6 +17,11 @@ export interface FactRow {
 	set: { slot: string; value: Expr; source?: string }[];
 }
 
+interface Dataset {
+	dataset: string;
+	decls: FactTable[];
+}
+
 function readFactTable(line: Logical, build: Build): FactTable {
 	const lines = line.block.filter((child) => child.read!.line === 'row' || (build.refuse(child, 'a row'), false));
 	const [head = [], ...rows] = lines.map((child) => child.read!.cells as (Expr | '-' | { out: Expr })[]);
@@ -46,9 +51,43 @@ function readFactRow(line: Logical, build: Build): FactRow {
 	return decl;
 }
 
+function readDataset(line: Logical, build: Build): Dataset {
+	if (!line.block.length) build.refuse(line, 'a dataset containing fact tables');
+	const dataset = build.strip<Dataset>(line.read!);
+	dataset.decls = line.block.flatMap((child) => {
+		if (child.read!.line !== 'facts') {
+			build.refuse(child, 'a fact table');
+			return [];
+		}
+		const table = readFactTable(child, build);
+		table.rows = table.rows.map((row) => row.map((cell) => datasetCell(cell, build)));
+		return [table];
+	});
+	return dataset;
+}
+
+// Fact table cells use bare identifiers and signed integers as literals, without expression name resolution.
+function datasetCell(cell: Expr, build: Build): Expr {
+	if (typeof cell !== 'object' || cell === null) return cell;
+	let literal: string | undefined;
+	if ('path' in cell && cell.path.length === 1) literal = cell.path[0];
+	if ('kind' in cell) literal = cell.kind;
+	if ('neg' in cell && 'lit' in cell.neg && /^\d+$/.test(cell.neg.lit)) literal = '-' + cell.neg.lit;
+	if (literal === undefined) return cell;
+	const value = { lit: literal };
+	build.spans.set(value, build.spans.get(cell)!);
+	return value;
+}
+
+function printFactTable(d: FactTable): string[] {
+	return block(`fact ${d.fact}`, d.columns.length || d.rows.length
+		? [printRow(d.columns), ...d.rows.map((cells) => printRow(cells.map(printExpr)))] : []);
+}
+
 export const facts = {
-	lineRules: ['RowLine', 'FactLine'],
+	lineRules: ['RowLine', 'FactLine', 'DatasetLine'],
 	grammar: String.raw`
+  DatasetLine = kw<"dataset"> name
   RowLine = "|" NonemptyListOf<Cell, "|"> "|"
   Cell = "->" Expr  -- out
        | dash       -- any
@@ -58,6 +97,7 @@ export const facts = {
   AssignLine = name "=" Expr Src?
   `,
 	actions: {
+		DatasetLine: (_k, n) => named(n, { line: 'dataset', dataset: n.sourceString }),
 		RowLine: (_open, cells, _close) => ({ line: 'row', cells: cells.asIteration().children.map((c: Node) => c.decl()) }),
 		Cell_out: (_arrow, e) => ({ out: e.tree() }),
 		Cell_any: (_dash) => '-',
@@ -72,9 +112,8 @@ export const facts = {
 	},
 	trailingRules: ['AssignLine'],
 	declarations: {
-		facts: declaration<FactTable>('columns', readFactTable, d => block(`fact ${d.fact}`,
-			d.columns.length || d.rows.length ? [printRow(d.columns), ...d.rows.map((cells) => printRow(cells.map(printExpr)))] : []
-		)),
+		dataset: declaration<Dataset>('dataset', readDataset, d => block(`dataset ${d.dataset}`, d.decls.flatMap(printFactTable))),
+		facts: declaration<FactTable>('columns', readFactTable, printFactTable),
 		fact: declaration<FactRow>('set', readFactRow, d => block(`fact ${d.fact} ${d.id}${printContexts(d)}`,
 			d.set.map((s) => `${s.slot} = ${printExpr(s.value)}${printSource(s.source)}`)
 		))

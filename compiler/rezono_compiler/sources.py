@@ -158,16 +158,24 @@ def file_entries(pack: Pack, path: Path, data: dict | None = None, *, metadata=U
     companion = path.with_suffix(".sources.yaml")
     if metadata is UNSET and companion.exists():
         metadata = yaml.safe_load(companion.read_text("utf-8"))
+    dataset = facts.dataset_at(path)
     return text_entries(pack, relative.as_posix() if relative is not None else path.name,
-                        path.read_text("utf-8"), data, metadata=metadata)
+                        "" if dataset is not None else path.read_text("utf-8"), data,
+                        metadata=metadata, dataset=dataset)
 
 
-def text_entries(pack: Pack, name: str, text: str, data: dict | None = None, *, metadata=UNSET) -> list[dict]:
+def text_entries(pack: Pack, name: str, text: str, data: dict | None = None, *, metadata=UNSET,
+                 dataset: facts.DatasetForm | None = None) -> list[dict]:
     """The same row/source reader on supplied text, without file or network access."""
     path = Path(name)
     judged = facts.schema(pack)
-    raw = (yaml.safe_load(text) or {}) if data is None or path.suffix == ".json" else data
+    raw = data
+    if dataset is not None:
+        raw = dataset.form
+    elif data is None or path.suffix == ".json":
+        raw = yaml.safe_load(text) or {}
     pointers = None
+    authored_lines = {span["at"]: span["line"] for span in dataset.form["spans"]} if dataset and dataset.source else {}
     if isinstance(raw, dict) and raw.get("format") == facts.DATASET_FORMAT:
         data, pointers = facts.located_scalar_dataset(judged, raw)
     elif data is None:
@@ -203,6 +211,9 @@ def text_entries(pack: Pack, name: str, text: str, data: dict | None = None, *, 
             if not explicit:
                 if pointers is None:
                     name, position = f"facts/{path.name}", str(nodes[i].start_mark.line + 1)
+                elif dataset is not None and dataset.source is not None:
+                    pointer = pointers[kind][i].removeprefix("/module")
+                    name, position = dataset.source, authored_lines[f"{pointer}/0"]
                 else:
                     name = path.as_posix() if path.parent.parts else f"rezono/{path.name}"
                     position = f"{name}#{pointers[kind][i]}"
