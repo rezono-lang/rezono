@@ -14,7 +14,7 @@ vars == <<now, generation, present, leaseUntil, openPR,
           observed, pending, removals, confirmed>>
 
 Init ==
-    /\ now = 0 /\ generation = 0 /\ ~present /\ leaseUntil = 0 /\ ~openPR
+    /\ now = 0 /\ generation = 0 /\ present = FALSE /\ leaseUntil = 0 /\ openPR = FALSE
     /\ observed = 0 /\ pending = 0 /\ removals = {} /\ confirmed = {}
 
 Tick ==
@@ -24,7 +24,7 @@ Tick ==
 
 Acquire ==
     /\ ~present /\ ~openPR /\ generation < MaxVersion
-    /\ present' /\ generation' = generation + 1 /\ leaseUntil' = now + 1
+    /\ present' = TRUE /\ generation' = generation + 1 /\ leaseUntil' = now + 1
     /\ UNCHANGED <<now, openPR, observed, pending, removals, confirmed>>
 
 Renew ==
@@ -34,12 +34,12 @@ Renew ==
 
 OpenPR ==
     /\ present /\ ~openPR
-    /\ openPR'
+    /\ openPR' = TRUE
     /\ UNCHANGED <<now, generation, present, leaseUntil, observed, pending, removals, confirmed>>
 
 ClosePR ==
     /\ openPR
-    /\ ~openPR'
+    /\ openPR' = FALSE
     /\ UNCHANGED <<now, generation, present, leaseUntil, observed, pending, removals, confirmed>>
 
 Observe ==
@@ -51,7 +51,7 @@ Delete ==
     /\ present /\ observed = generation /\ pending = 0
     /\ now >= leaseUntil
     /\ (~CheckOpenPR \/ ~openPR)
-    /\ ~present' /\ pending' = generation /\ observed' = 0
+    /\ present' = FALSE /\ pending' = generation /\ observed' = 0
     /\ removals' = removals \cup {[version |-> generation, tick |-> now,
                                   expiry |-> leaseUntil, pr |-> openPR]}
     /\ UNCHANGED <<now, generation, leaseUntil, openPR, confirmed>>
