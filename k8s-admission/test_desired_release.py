@@ -9,7 +9,6 @@ import yaml
 FIXTURES = Path(__file__).parent / "fixtures" / "server"
 
 
-@pytest.mark.xfail(strict=True, reason="Depends on the canonical parameter CRD, both policy renderers and binding renderer. Implement render_release in k8s-admission/admission_release.py; read decisions/k8s-admission-server-evidence.md.")
 def test_desired_admission_release_reuses_both_rule_renderers():
     from admission_release import render_release
     from bindings import render_binding
