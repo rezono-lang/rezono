@@ -1,0 +1,37 @@
+{
+  "cluster_control_service__service__reference": [
+    ["control-plane", "cp"]
+  ],
+  "cluster_flow_endpoint__endpoint__reference": [
+    ["agent-base", "agent-base"],
+    ["agent-build", "agent-build"],
+    ["agent-development", "agent-development"],
+    ["agent-edge", "agent-edge"],
+    ["agent-hub", "agent-hub"],
+    ["agent-management", "agent-management"],
+    ["agent-production", "agent-production"],
+    ["agent-recovery", "agent-recovery"],
+    ["agent-virtualization", "agent-virtualization"],
+    ["control-base", "control-base"],
+    ["control-build", "control-build"],
+    ["control-development", "control-development"],
+    ["control-edge", "control-edge"],
+    ["control-hub", "control-hub"],
+    ["control-management", "control-management"],
+    ["control-production", "control-production"],
+    ["control-recovery", "control-recovery"],
+    ["control-virtualization", "control-virtualization"],
+    ["disk-development", "disk-development"],
+    ["disk-production", "disk-production"],
+    ["fleet-hub", "fleet-hub"],
+    ["storage-data", "storage-data"],
+    ["workers-development", "workers-development"],
+    ["workers-production", "workers-production"]
+  ],
+  "cluster_storage_use__owner__reference": [
+    ["development-vm-disk", "development"],
+    ["development-volume", "development"],
+    ["production-vm-disk", "production"],
+    ["production-volume", "production"]
+  ]
+}

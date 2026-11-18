@@ -51,6 +51,9 @@ flow: flow
 crossing: crossing
 firewall_rule: firewall rule
 in_zone_policy: in zone policy
+cluster_flow: inherent cluster flow
+cluster_firewall_rule: cross-zone cluster rule
+cluster_in_zone_policy: within-zone cluster policy
 flow_from_step: flow from step
 stable_release: stable release
 has_stable: has stable
