@@ -47,3 +47,19 @@ flow_node_report.first: coverage start
 flow_node_report.last: coverage end
 flow_node_report.gaps: interior gaps
 flow_node_report.lost: lost events
+loop_status_observation: delivery status observation
+loop_status_observation.tenant: owning tenant
+loop_status_observation.delivery: delivery
+loop_status_observation.step: delivery step
+loop_status_observation.run: observed run
+loop_status_observation.relation: recorded state relation
+loop_status_observation.reason: source evidence
+loop_status_observation.at: original event time
+loop_status_observation.event_time: ordered event instant
+status_observation_state: observed commit status
+status_reading: scoped status reading
+status_latest: latest comparable status instant
+status_contender: current or undated status reading
+status_disagreement: contradictory status evidence
+status_conflict: conflicted delivery step
+current_delivery_status: current delivery status
