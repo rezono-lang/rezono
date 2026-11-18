@@ -170,10 +170,10 @@ fi
 fetch 'https://raw.githubusercontent.com/kubernetes-client/python/5b23a44aa06010ac6ffe423d7b0e090caf7882ff/kubernetes/utils/quantity.py' 3c568e71032e144568280cb21af64d78dc23c526f7a4e05d2e3f53cdd0315a5d quantity.py
 stage=operator
 diagnose() {
-    local status=$?
+    local status=${1:-$?}
     observe "failed_stage=$stage status=$status"
-    control -n kubevirt get pods -o wide || true
-    control get events -A --field-selector type=Warning -o custom-columns=Reason:.reason,Message:.message | tail -20 || true
+    control -n kubevirt get pods -o custom-columns=Pod:.metadata.name,Phase:.status.phase,Node:.spec.nodeName || true
+    control get events -A --field-selector type=Warning -o custom-columns=Kind:.involvedObject.kind,Reason:.reason | tail -20 || true
     exit "$status"
 }
 trap diagnose ERR
@@ -206,8 +206,23 @@ observe "kubevirt_available=true node=proof-worker kvm_capacity=$capacity"
 stage=guest-readiness
 apply "$sources/../flatcar/vmi.yaml"
 await_condition wait vmi/host-probe --for=condition=Ready --timeout=240s
-control get vmi host-probe -o json | jq -e '.status.phase == "Running" and .status.nodeName == "proof-worker"'
-pod=$(control get pods -l kubevirt.io/domain=host-probe -o jsonpath='{.items[0].metadata.name}')
+control get vmi host-probe -o json > vmi.json
+uid=$(jq -er 'select(.status.phase == "Running" and .status.nodeName == "proof-worker" and
+    any(.status.conditions[]; .type == "Ready" and .status == "True")) | .metadata.uid' vmi.json)
+observe "guest_uid=$uid ready=true phase=Running node=proof-worker"
+stage=launcher-identity
+identify_launcher() {
+    control get vmi host-probe -o json > vmi.json &&
+        control get pods -o json > pods.json &&
+        python3 "$sources/../flatcar/launcher.py" vmi.json pods.json "$uid" proof-worker
+}
+deadline=$((SECONDS + 90))
+until identity=$(identify_launcher); do
+    if (( SECONDS >= deadline )); then diagnose 1; fi
+    sleep 2
+done
+read -r pod pod_uid <<< "$identity"
+observe "launcher=$pod launcher_uid=$pod_uid"
 stage=guest-console
 for ((attempt=0; attempt<48; attempt++)); do
     control logs "$pod" -c guest-console-log > console.log && grep -Eq 'login:|Welcome to CirrOS' console.log && break
@@ -216,4 +231,5 @@ done
 grep -Eq 'login:|Welcome to CirrOS' console.log
 stage=live-kvm-vcpu
 control exec "$pod" -c compute -- sh -ec 'for fd in /proc/[0-9]*/fd/*; do case "$(readlink "$fd")" in *kvm-vcpu*) exit 0;; esac; done; exit 1'
-observe "guest_uid=$(control get vmi host-probe -o jsonpath='{.metadata.uid}') guest_console_ready=true kvm_vcpu=true"
+test "$(identify_launcher)" = "$identity"
+observe "guest_uid=$uid launcher_uid=$pod_uid guest_console_ready=true kvm_vcpu=true"
