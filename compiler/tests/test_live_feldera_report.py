@@ -15,8 +15,6 @@ CHOICE = "compiler/tests/test_calc.py::test_feldera_gives_what_duckdb_gives[choi
 PLATFORM = "examples/test_platform_incremental_proof.py::test_platform_incremental_delta_and_witnesses_match_batch"
 
 
-@pytest.mark.xfail(strict=True, raises=FileNotFoundError,
-                   reason="Implement compiler/ci/verify_feldera_run.py as specified in decisions/live-feldera-ci.md.")
 def test_live_report_accounts_for_every_selected_case(tmp_path):
     if not VERIFY.is_file():
         raise FileNotFoundError("missing live Feldera result verifier")
