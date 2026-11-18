@@ -7,7 +7,6 @@ def service(name):
     return {"matchLabels": {"app.kubernetes.io/name": name}}
 
 
-@pytest.mark.xfail(strict=True, reason="Implement flow preflight in k8s-admission/flow.py using the projected namespace publication; read decisions/k8s-admission-rules.md.")
 def test_ingress_matches_complete_flow_tuples():
     from flow import evaluate_ingress
 
