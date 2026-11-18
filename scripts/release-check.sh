@@ -21,7 +21,7 @@ rm library/facts/errors.yaml
 manifest=$(venv/bin/rezono-publish library --store "file://$work/store" --role reader=complete --epoch 1 --knowledge-time 2026-01-01T00:00:00Z)
 jq -e '.checks[] | select(.name == "rezono:proofs" and .status == "green" and .violations == 0)' "$work/store/library/manifests/$manifest.json"
 npm install --ignore-scripts --no-audit --no-fund "$out"/*.tgz
-node --input-type=module -e "import { parse, print } from 'rezono'; const q = 'ask Book'; if (print(parse(q).tree) !== q) throw Error('Language round trip failed')"
+node --input-type=module -e "import { parse, print } from 'rezono'; const q = 'ask Book where unknown title'; if (print(parse(q).tree) !== q) throw Error('Language round trip failed')"
 
 cd "$repo"
 python scripts/leak_check.py
