@@ -18,11 +18,11 @@ counts:
   - {relation: release, rows: 2}
   - {relation: site, rows: 2}
 snapshots:
-  - {relation: inspection, role: viewer, complete: false, uri: "s3://rede-fixtures/network/m-1/viewer/inspection.json", sha256: ca8df12ddd61fff316d36ddcfa3448165bf5966b70975a3fd4bf93cbac574add, format: json}
-  - {relation: lot, role: viewer, complete: true, uri: "s3://rede-fixtures/network/m-1/viewer/lot.json", sha256: abded1f3a42935df21c05ad7feb3290216b0ae5b8c5a0bb9ba6ea19e180bafd8, format: json}
-  - {relation: release, role: viewer, complete: true, uri: "s3://rede-fixtures/network/m-1/viewer/release.json", sha256: 9f53eb8458d94aa5f447d091c57ff19d655ed78990702a215d6a22bf716f9140, format: json}
-  - {relation: site, role: viewer, complete: true, uri: "s3://rede-fixtures/network/m-1/viewer/site.json", sha256: 29906a8c21ac5603b03c075b61dcd8d492df5c32d5c746ef1e723855d12c85ec, format: json}
-  - {relation: inspection, role: admin, complete: true, uri: "s3://rede-fixtures/network/m-1/admin/inspection.json", sha256: 8ebdcf991bec6555bfaaa8d9a6ad2eb262a5c51f3e8a9637c21c728150ff9f93, format: json}
-  - {relation: lot, role: admin, complete: true, uri: "s3://rede-fixtures/network/m-1/viewer/lot.json", sha256: abded1f3a42935df21c05ad7feb3290216b0ae5b8c5a0bb9ba6ea19e180bafd8, format: json}
-  - {relation: release, role: admin, complete: true, uri: "s3://rede-fixtures/network/m-1/viewer/release.json", sha256: 9f53eb8458d94aa5f447d091c57ff19d655ed78990702a215d6a22bf716f9140, format: json}
-  - {relation: site, role: admin, complete: true, uri: "s3://rede-fixtures/network/m-1/viewer/site.json", sha256: 29906a8c21ac5603b03c075b61dcd8d492df5c32d5c746ef1e723855d12c85ec, format: json}
+  - {relation: inspection, role: viewer, complete: false, uri: "s3://rezono-fixtures/network/m-1/viewer/inspection.json", sha256: ca8df12ddd61fff316d36ddcfa3448165bf5966b70975a3fd4bf93cbac574add, format: json}
+  - {relation: lot, role: viewer, complete: true, uri: "s3://rezono-fixtures/network/m-1/viewer/lot.json", sha256: abded1f3a42935df21c05ad7feb3290216b0ae5b8c5a0bb9ba6ea19e180bafd8, format: json}
+  - {relation: release, role: viewer, complete: true, uri: "s3://rezono-fixtures/network/m-1/viewer/release.json", sha256: 9f53eb8458d94aa5f447d091c57ff19d655ed78990702a215d6a22bf716f9140, format: json}
+  - {relation: site, role: viewer, complete: true, uri: "s3://rezono-fixtures/network/m-1/viewer/site.json", sha256: 29906a8c21ac5603b03c075b61dcd8d492df5c32d5c746ef1e723855d12c85ec, format: json}
+  - {relation: inspection, role: admin, complete: true, uri: "s3://rezono-fixtures/network/m-1/admin/inspection.json", sha256: 8ebdcf991bec6555bfaaa8d9a6ad2eb262a5c51f3e8a9637c21c728150ff9f93, format: json}
+  - {relation: lot, role: admin, complete: true, uri: "s3://rezono-fixtures/network/m-1/viewer/lot.json", sha256: abded1f3a42935df21c05ad7feb3290216b0ae5b8c5a0bb9ba6ea19e180bafd8, format: json}
+  - {relation: release, role: admin, complete: true, uri: "s3://rezono-fixtures/network/m-1/viewer/release.json", sha256: 9f53eb8458d94aa5f447d091c57ff19d655ed78990702a215d6a22bf716f9140, format: json}
+  - {relation: site, role: admin, complete: true, uri: "s3://rezono-fixtures/network/m-1/viewer/site.json", sha256: 29906a8c21ac5603b03c075b61dcd8d492df5c32d5c746ef1e723855d12c85ec, format: json}

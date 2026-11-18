@@ -1,9 +1,9 @@
-"""A counter with an explicit bound (#351 P6.2): what the unrolled rule computes, and what happens at the bound.
+"""A counter with an explicit bound: what the unrolled rule computes, and what happens at the bound.
 
 The shape is a depth from seeds along steps, on the domain-free fixture pack. The batch backend is compared
 with a plain fixpoint of the rules as written (always) and with Soufflé on the rule text as written (the
 oracle, as a set; skipped without `souffle`). Where the count reaches its bound the two differ on purpose:
-Soufflé stops there and keeps what it has, Rede raises. What is accepted and refused is in test_rules_dl.py."""
+Soufflé stops there and keeps what it has, Rezono raises. What is accepted and refused is in test_rules_dl.py."""
 
 import shutil
 from pathlib import Path
@@ -14,8 +14,8 @@ from hypothesis import strategies as st
 
 import souffle
 from support import FIXTURE
-from rede_compiler import batch, pack
-from rede_compiler import rules as ir
+from rezono_compiler import batch, pack
+from rezono_compiler import rules as ir
 
 SOUFFLE = pytest.mark.skipif(shutil.which("souffle") is None, reason="needs souffle (the oracle)")
 LAST = 2  # the counter is read while it is at most this: `n < 3`
@@ -117,15 +117,15 @@ def test_the_rules_as_written_equal_the_batch_backend_on_souffle_below_the_bound
 
 
 def test_the_check_view_on_feldera_holds_the_rows_past_the_bound(prog):
-    """RV-K18: on Feldera the engine SQL keeps the rows the counting rule would add past its bound in the
+    """On Feldera the engine SQL keeps the rows the counting rule would add past its bound in the
     materialized view `depth__exhausted`, which a reader takes as a red check (FELDERA_URL; the label `feldera`):
     two rows past the bound, and none once the count ends at it."""
     from feldera import URL, deploy, processed, push, query, stop
 
-    from rede_compiler import rules_sql
+    from rezono_compiler import rules_sql
     if not URL:
         pytest.skip("set FELDERA_URL to a running Feldera")
-    name = "rede-rules-bound"
+    name = "rezono-rules-bound"
     deploy(name, rules_sql.feldera(prog), profile="unoptimized", workers=2)
     columns = {n: [c.name for c in r.key + r.values] for n, r in prog.relations.items() if r.role == "base"}
 

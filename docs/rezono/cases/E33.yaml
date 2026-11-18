@@ -1,0 +1,15 @@
+id: E33
+status: settled
+mode: parse
+source: ask Plan where fits(host-b, it)
+expect:
+  diagnostics:
+  - code: R001
+    span:
+      text: it
+      start: 28
+      end: 30
+    hint: the question's row is `plan`
+note: '`it` exists only inside an aggregate, quantifier or filter (§5 rule 6).'
+sources:
+- rezono/src/check.ts

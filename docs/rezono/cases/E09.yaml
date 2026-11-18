@@ -1,0 +1,14 @@
+id: E09
+status: settled
+mode: parse
+source: ask Host where not Team.any(true)
+expect:
+  diagnostics:
+  - code: R004
+    span:
+      text: not Team.any(true)
+      start: 15
+      end: 33
+note: Team is open.
+sources:
+- rezono/src/check.ts

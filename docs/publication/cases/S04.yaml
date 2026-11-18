@@ -1,0 +1,19 @@
+id: S04
+class: invalid
+status: settled
+schema:
+  from: fixture.schema.json
+  merge:
+    kinds:
+      Host:
+        slots:
+          memory_need:
+            states:
+            - unknown
+            - known
+form: schema
+expect:
+  accept: false
+  error: not in code order
+sources:
+- publication/rezono_publication/l0.py, check_schema

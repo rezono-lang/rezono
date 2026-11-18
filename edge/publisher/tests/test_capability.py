@@ -13,9 +13,9 @@ written by hand; no role of any domain.
 import json
 
 import pytest
-from rede_checker import access as checker_access
-from rede_publisher import access
-from rede_publisher.publish import snapshot
+from rezono_checker import access as checker_access
+from rezono_publisher import access
+from rezono_publisher.publish import snapshot
 
 KINDS = {"node", "role"}
 COLUMNS = {"node": ("node",), "role": ("role",), "role__capability": ("role", None)}
@@ -36,7 +36,7 @@ def relation(name, role, arity):
 
 
 RULES = {
-    "format": "rede.rules/1",
+    "format": "rezono.rules/1",
     "relations": [relation("node", "base", 1), relation("role", "base", 1), relation("role__capability", "base", 2),
                   relation("may_read", "derived", 3), relation("size", "derived", 1)],
     "rules": [
@@ -88,7 +88,7 @@ def test_an_unmapped_role_gets_no_kind_through_a_capability():
 
 def test_a_capability_the_data_does_not_cover_is_red():
     """The mapping gives `viewer` the capability, and a may_read row of one node is missing: the read rules and
-    the data disagree, so the publication stops (`rede:access`) instead of calling a part complete."""
+    the data disagree, so the publication stops (`rezono:access`) instead of calling a part complete."""
     rows = world()
     rows["may_read"].remove(("viewer", "node", "n2"))
     with pytest.raises(access.Uncovered):

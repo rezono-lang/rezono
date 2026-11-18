@@ -10,4 +10,4 @@ produces: [gitops-files, output-index]
 freshness: {cadence: on_request}
 mapping_owner: steel-thread
 losses: []
-footprint: {makes: [probe_pod], plan_label: rede.dev/plan}
+footprint: {makes: [probe_pod], plan_label: rezono.org/plan}

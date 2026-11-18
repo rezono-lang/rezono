@@ -10,9 +10,9 @@ from pathlib import Path
 import pytest
 import yaml
 
-from rede_checker.difference import changes, check_difference
-from rede_publisher import proof
-from rede_publisher.difference import entries
+from rezono_checker.difference import changes, check_difference
+from rezono_publisher import proof
+from rezono_publisher.difference import entries
 
 LIMIT, FANOUT = 700, 3  # small, so a tree has several levels; a page still holds two children
 
@@ -93,18 +93,18 @@ def test_the_checker_refuses_what_is_not_the_change(spoil):
 
 
 def test_a_proof_tree_is_named_at_the_base_only_when_the_base_has_that_very_tree():
-    """RV-M24: the hash decides, and the place is the one the publisher works out itself: the same path under
+    """The hash decides, and the place is the one the publisher works out itself: the same path under
     the base's views for the same role. Anything else in the base's index keeps the variant's copy."""
-    from rede_publisher.difference import shared
+    from rezono_publisher.difference import shared
 
     class Store(dict):
         def uri(self, key):
-            return f"s3://rede/{key}"
+            return f"s3://rezono/{key}"
 
     at, there = "p/v-s-00-2/r/explain", "p/m-2/r/views"
 
     def root(prefix, rel="q", sha="a" * 64, levels=2):
-        return {"uri": f"s3://rede/{prefix}/proof/witness/{rel}/{levels - 1}/0.json", "sha256": sha, "levels": levels}
+        return {"uri": f"s3://rezono/{prefix}/proof/witness/{rel}/{levels - 1}/0.json", "sha256": sha, "levels": levels}
 
     layout = {"format": proof.INDEX, "piece": proof.PIECE, "fanout": proof.FANOUT}
     q = [(f"{at}/proof/witness/q/0/0.json", b"leaf"), (f"{at}/proof/witness/q/1/0.json", b"page")]
@@ -122,16 +122,16 @@ def test_a_proof_tree_is_named_at_the_base_only_when_the_base_has_that_very_tree
     assert pieces == made[2:] and named == part | {"trees": part["trees"] | {"witness": witness}}
     kept = (made, part)
     assert over(None) == kept and over({}) == kept  # no view index of the base, or one without a proof graph
-    assert over(theirs | {"piece": proof.PIECE // 2}) == kept and over(theirs | {"format": "rede.proof-index/2"}) == kept
+    assert over(theirs | {"piece": proof.PIECE // 2}) == kept and over(theirs | {"format": "rezono.proof-index/2"}) == kept
     for other in (root(there, sha="c" * 64), root(there, levels=3), root("p/m-1/r/views"), root("p/m-2/other/views"),
-                  root(there) | {"uri": f"s3://rede/{there}/proof/witness/q/../q/1/0.json"}):
+                  root(there) | {"uri": f"s3://rezono/{there}/proof/witness/q/../q/1/0.json"}):
         assert over(theirs | {"trees": {"witness": {"q": other}}}) == kept, other
 
 
 def test_a_delta_that_may_change_a_right_gets_no_difference_decided_without_data():
     """`may_read` is derived from facts. Whether a delta may change it is decided from the rules and the delta
-    alone, so it never depends on an element a role does not see (P1 review of #168)."""
-    from rede_publisher.difference import withheld
+    alone, so it never depends on an element a role does not see."""
+    from rezono_publisher.difference import withheld
 
     def atom(rel, *terms, polarity="positive"):
         return {"relation": rel, "terms": list(terms), "polarity": polarity}
@@ -164,7 +164,7 @@ def test_a_delta_that_may_change_a_right_gets_no_difference_decided_without_data
     assert not withheld(None, bundle, {"changes": [{"op": "set", "kind": "doc", "key": "d", "slot": "team"}]})  # no rules, no rights
 
 
-# RV-S04: the two base relations of the rules that are not schema tables, on fixture packs. A right that rests
+# The two base relations of the rules that are not schema tables, on fixture packs. A right that rests
 # on one of them changes with tables no rule body names.
 FIXTURES = Path(__file__).resolve().parents[3] / "compiler" / "tests" / "fixtures"
 READ = ".decl may_read(role: symbol, kind: symbol, element: symbol)\n"
@@ -175,7 +175,7 @@ SET_STATE = {"op": "set", "file": "facts/a.yaml", "kind": "beta", "key": "b1", "
 def sealed_pack(d: Path, rules: str) -> Path:
     """The neutral pack with Alpha sealed on `period`, Beta a part of it (docs/compiler.md#parts) and a kind
     Gamma outside the seal, with one covered Alpha and its part as facts."""
-    from rede_compiler import facts, pack
+    from rezono_compiler import facts, pack
 
     shutil.copytree(FIXTURES / "minimal", d)
     schema = yaml.safe_load((d / "schema" / "minimal.yaml").read_text())
@@ -201,7 +201,7 @@ def sealed_pack(d: Path, rules: str) -> Path:
 
 
 def compiled(d: Path):
-    from rede_compiler import emit, pack
+    from rezono_compiler import emit, pack
 
     files = emit.compile_pack(pack.read(d))
     return json.loads(files["ir/rules.json"]), json.loads(files["bundle/schema-bundle.json"])
@@ -209,8 +209,8 @@ def compiled(d: Path):
 
 def test_a_right_on_a_seal_withholds_a_change_to_anything_the_seal_reads(tmp_path):
     """`alpha__refused` follows from Alpha, its parts and the closes: an edited part refuses its element."""
-    pytest.importorskip("rede_compiler")
-    from rede_publisher.difference import withheld
+    pytest.importorskip("rezono_compiler")
+    from rezono_publisher.difference import withheld
 
     rules, bundle = compiled(sealed_pack(tmp_path / "on", ON_REFUSAL))
     held = lambda r, **change: withheld(r, bundle, {"changes": [change]})  # noqa: E731
@@ -237,7 +237,7 @@ def test_a_proposal_that_edits_a_part_gets_no_difference(tmp_path):
     """End to end: the viewer reads Beta, and Alpha only once it is refused. Its proposal on a Beta it reads
     refuses a1, so the proposal's snapshots hold a1 for the viewer; no difference may show them."""
     pytest.importorskip("duckdb")
-    from rede_publisher import batch, proposal, publish, store
+    from rezono_publisher import batch, proposal, publish, store
     from test_proposal import PACK, ROLES, sh
 
     repo = tmp_path / "repo"
@@ -249,7 +249,7 @@ def test_a_proposal_that_edits_a_part_gets_no_difference(tmp_path):
     base = sh("git", "rev-parse", "HEAD", cwd=repo)
     n, time = proposal.base_of(repo, base)
     main = publish.publish(batch.epoch(repo / PACK, epoch=n, knowledge_time=time, sources=[("rules", base)]), st, ROLES)
-    delta = json.dumps({"format": "rede.delta/1", "changes": [SET_STATE]})
+    delta = json.dumps({"format": "rezono.delta/1", "changes": [SET_STATE]})
     mid = proposal.publish_proposal(repo, PACK, "7", base, delta, st, ROLES)
     title = lambda m: json.loads(st.get(publish.role_objects(st, "minimal", m, "viewer")["relations/alpha__title.json"]))  # noqa: E731
     assert title(main["id"]) == [] and [r["key"] for r in title(mid)] == [["a1", "t"]]  # the right did change
@@ -259,9 +259,9 @@ def test_a_proposal_that_edits_a_part_gets_no_difference(tmp_path):
 def test_a_right_cannot_rest_on_a_calculated_value(tmp_path):
     """Refuted for calculations: no compiled pack has `may_read` downstream of a selection, directly or through
     a derived relation, so no delta to a calculation input changes a right. An IR that had it is withheld."""
-    pytest.importorskip("rede_compiler")
-    from rede_compiler import emit, pack
-    from rede_publisher.difference import withheld
+    pytest.importorskip("rezono_compiler")
+    from rezono_compiler import emit, pack
+    from rezono_publisher.difference import withheld
 
     big = '.decl big(item: symbol)\nbig(x) :- calc__total(x, c, "known", ""), c > 10.\n'
     for name, rules in (("direct", READ + 'may_read("viewer", "item", x) :- calc__total(x, c, "known", ""), c > 10.\n'),

@@ -1,5 +1,5 @@
-id: https://rede.dev/contracts/offload
-name: rede_offload
+id: https://rezono.org/contracts/offload
+name: rezono_offload
 title: Offloaded steps
 description: >-
   A step that the engine hands to a worker (a solver or planner as a job) and whose result comes
@@ -10,8 +10,8 @@ description: >-
   Every integer is decimal text.
 prefixes:
   linkml: https://w3id.org/linkml/
-  rede: https://rede.dev/contracts/
-default_prefix: rede
+  rezono: https://rezono.org/contracts/
+default_prefix: rezono
 default_range: string
 imports:
   - linkml:types

@@ -1,7 +1,7 @@
 # Proposals (POST /<pack>/proposals) on profile `kubernetes`: the gate dispatches the propose workflow with a token
 # that may only start workflows and read pull requests; the token that may push belongs to that workflow alone
-# (docs/operations.md#secrets-and-tokens). An overlay that lists this component sets REDE_PROPOSE_PACKS,
-# REDE_GIT_HOST, REDE_GIT_API, REDE_GIT_REPOSITORY and REDE_PROPOSE_ORIGINS in the ConfigMap `gate`
+# (docs/operations.md#secrets-and-tokens). An overlay that lists this component sets REZONO_PROPOSE_PACKS,
+# REZONO_GIT_HOST, REZONO_GIT_API, REZONO_GIT_REPOSITORY and REZONO_PROPOSE_ORIGINS in the ConfigMap `gate`
 # (edge/gate/src/config.ts, proposeFrom); without them the gate does not start (fail closed).
 apiVersion: kustomize.config.k8s.io/v1alpha1
 kind: Component

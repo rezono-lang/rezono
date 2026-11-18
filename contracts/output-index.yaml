@@ -1,8 +1,8 @@
-id: https://rede.dev/contracts/output-index
-name: rede_output_index
+id: https://rezono.org/contracts/output-index
+name: rezono_output_index
 title: Output index
 description: >-
-  The index of one render (issue 356 section 2, P7.11; seam S12): for every field of every generated file, where it is
+  The index of one render (seam S12): for every field of every generated file, where it is
   (a line, a JSON pointer or both) and where it came from. A field is `knowledge` (a published row, by the
   RowRef of the conclusion whose witness grounds it), `chart_default` (a value the template took from the
   chart's own values file) or `chart_constant` (text of a template). Generators, renderers, the Lens, the gate
@@ -11,8 +11,8 @@ description: >-
   emits it yet (B21); the render step (P7.10) and publication with each generated pull request (P7.11b) do.
 prefixes:
   linkml: https://w3id.org/linkml/
-  rede: https://rede.dev/contracts/
-default_prefix: rede
+  rezono: https://rezono.org/contracts/
+default_prefix: rezono
 default_range: string
 imports:
   - linkml:types
@@ -35,7 +35,7 @@ types:
 
 enums:
   FieldOrigin:
-    description: Where a field of a generated file came from (issue 356, P7.10d).
+    description: Where a field of a generated file came from.
     permissible_values:
       knowledge: {description: "A value of a published row: `witness` names the conclusion that grounds it."}
       chart_default: {description: "A value the template took from the chart's values file: `default` names the file and the pointer of the default in it."}
@@ -45,7 +45,7 @@ classes:
   OutputIndex:
     description: The index of one render of one manifest.
     attributes:
-      format: {required: true, equals_string: rede.output-index/1}
+      format: {required: true, equals_string: rezono.output-index/1}
       pack: {required: true, range: Name, description: The pack whose rows were rendered.}
       manifest: {required: true, description: "The manifest id whose rows were rendered; the index belongs to it and to no other."}
       render: {required: true, range: RenderStep, inlined: true}

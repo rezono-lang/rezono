@@ -1,0 +1,9 @@
+id: E55
+status: settled
+mode: parse
+source: ask Host where host.memory_need > 384 GiB
+expect:
+  print: ask Host where host.memory_need > 384 GiB
+note: The implicit binder can be named.
+sources:
+- rezono/src/print.ts

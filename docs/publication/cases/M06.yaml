@@ -1,0 +1,29 @@
+id: M06
+class: change
+status: settled
+schema:
+  from: fixture.schema.json
+  merge:
+    types:
+      Count:
+        of: Integer
+        min: '1'
+        max: '1000'
+    kinds:
+      Host:
+        slots:
+          count:
+            card: '1'
+            type: Count
+            states:
+            - known
+successor:
+  merge:
+    types:
+      Count:
+        max: '5000'
+form: schema
+expect:
+  change_class: minor
+sources:
+- publication/rezono_publication/l0.py, classify

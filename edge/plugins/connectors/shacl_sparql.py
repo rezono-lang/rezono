@@ -2,9 +2,9 @@
 
 Every invariant of the pack's rule IR (`ir/rules.json`, contracts/rules.yaml; `// @invariant`, a relation that
 must be empty at the end of an epoch) becomes one node shape with a `sh:sparql` constraint. The constraint
-recomputes the invariant from the base facts of the RDF view of a role (`reckon_data.rdf.to_graph` on the Reckon
-Data form of `reckon_data.publication`), never from the derived rows the view also carries: so a validator that
-knows SHACL and nothing of Rede repeats the check, and a difference with Rede's own result is a defect in one of
+recomputes the invariant from the base facts of the RDF view of a role (`rezono_publication.rdf.to_graph` on the publication
+form of `rezono_publication.publication`), never from the derived rows the view also carries: so a validator that
+knows SHACL and nothing of Rezono repeats the check, and a difference with Rezono's own result is a defect in one of
 the two. The shapes are generated from the rule IR alone; none is written by hand.
 
 The translation, one relation at a time (each call a subquery, so the variables of one rule never meet those of
@@ -12,7 +12,7 @@ another):
 
 - **a base relation** is read from the view: `k(id)` as the elements of the kind, `k__a(id, v)` as the known
   values of the slot (a state is a blank node and `rd:emptySet` is no member, so neither is a row); an enum and
-  a bound of a slot as their values (a union of `BIND`s); the seal's accepted and refused rows (decision E3) as
+  a bound of a slot as their values (a union of `BIND`s); the seal's accepted and refused rows as
   below;
 - **a value** is in one canonical form, so that a join is an equality of terms: an integer as an `xsd:integer`,
   a text as an element IRI spells an id (`rdf.spell`, §3.4), which for an element or a reference is the local
@@ -20,7 +20,7 @@ another):
   the shapes are made (the IR compares texts by equality only, so the spelling changes no answer);
 - **a derived relation** is the `UNION` of its rules, `DISTINCT`; a negative literal is `FILTER NOT EXISTS` on
   the variables it shares (all of them, as the IR requires); an aggregate is a grouped subquery joined on its
-  group, as `rede_compiler.rules_sql` does: `count` and `sum` over the rows and a zero for every group of the
+  group, as `rezono_compiler.rules_sql` does: `count` and `sum` over the rows and a zero for every group of the
   body, so an empty group is 0, and `min` and `max` by an inner join, so an empty group gives nothing; `div`
   truncates toward zero; a condition is a `FILTER`. No `MINUS`, `VALUES` or `SERVICE`: SHACL §5.3.1 forbids them
   in a constraint.
@@ -32,12 +32,12 @@ constraint of the same shape reports that the check cannot be decided from the v
 that the data conforms when they cannot know.
 
 **What is not translated** (and why) is a shape with `sh:deactivated true` and the reason as its `sh:message`:
-a recursive relation (SPARQL has no fixpoint), an outcome (W7), a calculation input
+a recursive relation (SPARQL has no fixpoint), an outcome, a calculation input
 and a base relation the view does not carry. `shacl-sparql.losses.yaml` lists these losses.
 
 A result names the invariant's relation in the view as its focus node (`<base><Relation>`, as the publication
 names a derived relation) and the violating row as its value: its columns in the canonical form, joined by `/`
-(which the encoding never leaves in a text). `report` writes Rede's own rows of the invariants as the SHACL
+(which the encoding never leaves in a text). `report` writes Rezono's own rows of the invariants as the SHACL
 validation report a validator writes through these constraints. pySHACL is the oracle in the tests and in
 `accept.py`, never a dependency of this module.
 
@@ -49,14 +49,14 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
-sys.path.insert(0, str(ROOT))  # reckon_data lives at the repository root
+sys.path.insert(0, str(ROOT / "publication"))
 
 from rdflib import Graph, Literal, Namespace, URIRef  # noqa: E402
 from rdflib.namespace import RDF, RDFS, SH, XSD  # noqa: E402
-from rede_canon import canonical_sha256  # noqa: E402
-from rede_compiler import rules as ir  # noqa: E402
+from rezono_canon import canonical_sha256  # noqa: E402
+from rezono_compiler import rules as ir  # noqa: E402
 
-from reckon_data import publication, rdf  # noqa: E402
+from rezono_publication import publication, rdf  # noqa: E402
 
 INTEGER = f"<{XSD.integer}>"
 COMPARE = {"eq": "=", "ne": "!=", "lt": "<", "le": "<=", "gt": ">", "ge": ">="}
@@ -154,11 +154,11 @@ class _Translator:
         if rel.role == "base":
             return self.base_columns(name, cols)
         if rel.outcome:
-            raise Refused(f"reads {name}, an outcome (W7), whose states are not rows of the view")
+            raise Refused(f"reads {name}, an outcome, whose states are not rows of the view")
         if self.prog.recursive(name) or name in self.prog.bounds:
             raise Refused(f"reads {name}, a recursive relation: SPARQL has no fixpoint")
         rules = self.prog.rules_for(name)
-        if not rules:  # S28: a relation nobody extends is the empty set
+        if not rules:  # a relation nobody extends is the empty set
             return "FILTER(false)"
         return "\nUNION\n".join("{\n" + self.rule(r, cols) + "\n}" for r in sorted(rules, key=lambda r: r.id))
 
@@ -363,9 +363,9 @@ def _seal_guard(g: Graph, ns: Namespace, t: _Translator, name: str):
 
 
 def report(bundle: dict, rules_doc: dict, derived: dict) -> Graph:
-    """Rede's own result as a SHACL validation report: one result per row of an invariant (`derived`: {relation:
+    """Rezono's own result as a SHACL validation report: one result per row of an invariant (`derived`: {relation:
     [row, ...]}, as the engine or the store holds them), named as a validator names it through `checks`, so the
-    two reports hold the same results. A row of a deactivated invariant is reported too: Rede checks it, a
+    two reports hold the same results. A row of a deactivated invariant is reported too: Rezono checks it, a
     validator cannot."""
     ns = Namespace(document_iri(bundle, rules_doc) + "#")
     doc, _ = publication.schema_document(bundle)

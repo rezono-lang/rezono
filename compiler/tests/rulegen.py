@@ -14,7 +14,7 @@ import json
 import random
 import sys
 
-from rede_compiler.rules import with_strata
+from rezono_compiler.rules import with_strata
 
 SHAPES = ("join", "filter", "constant", "union", "negation", "recursion", "count", "sum", "minmax",
           "threshold", "arithmetic")
@@ -90,7 +90,7 @@ def program(seed, n_derived, module_size=8, domain=1000, shapes=SHAPES):
                 if b.get(k):
                     rule[k] = b[k]
             rules.append(rule)
-    doc = {"format": "rede.rules/1", "pack": f"generated-{seed}-{n_derived}",
+    doc = {"format": "rezono.rules/1", "pack": f"generated-{seed}-{n_derived}",
            "relations": sorted(rels, key=lambda r: r["name"]), "rules": sorted(rules, key=lambda r: r["id"])}
     return with_strata(doc)
 
@@ -250,11 +250,11 @@ if __name__ == "__main__":
 
 
 def days_program():
-    """One rule with the reading `days`, as a view makes it (RV-C27): f(x, n) :- e(x), p(x, d), n = days(d).
+    """One rule with the reading `days`, as a view makes it: f(x, n) :- e(x), p(x, d), n = days(d).
     No rule file can write the operator, so the document is written here."""
     def atom(relation, *terms):
         return {"relation": relation, "terms": list(terms)}
-    return with_strata({"format": "rede.rules/1", "pack": "days", "relations": [
+    return with_strata({"format": "rezono.rules/1", "pack": "days", "relations": [
         {"name": "e", "role": "base", "key": _cols([STR])}, {"name": "p", "role": "base", "key": _cols([STR, STR])},
         {"name": "f", "role": "derived", "module": "days", "explain": "materialize", "key": _cols([STR, INT])}],
         "rules": [{"id": "f", "module": "days", "head": atom("f", "?x", "?n"),
@@ -287,7 +287,7 @@ def drift_program():
          "body": [lit("desired", ["?x", "?e"]), lit("seen", ["?x"], neg=True)],
          "origin": {"file": "rules/drift.dl", "line": "3"}},
     ]
-    return with_strata({"format": "rede.rules/1", "pack": "generated-drift", "relations": rels, "rules": rules})
+    return with_strata({"format": "rezono.rules/1", "pack": "generated-drift", "relations": rels, "rules": rules})
 
 
 def drift_facts(n, seed=1):

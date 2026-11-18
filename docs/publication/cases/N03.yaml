@@ -1,0 +1,28 @@
+id: N03
+class: valid
+status: settled
+schema:
+  from: fixture.schema.json
+  merge:
+    reasons:
+      no_spec:
+        label:
+          en: no specification
+        states:
+        - unknown
+form: row
+input:
+  $kind: Host
+  $id: host-a
+  memory_need:
+    $unknown: no_version_applies
+  owner:
+    $na: ''
+  tags:
+  - gpu
+  - lab
+expect:
+  accept: true
+note: A core code needs no declaration.
+sources:
+- publication/rezono_publication/l0.py, read_row

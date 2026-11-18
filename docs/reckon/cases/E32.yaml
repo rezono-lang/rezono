@@ -1,9 +1,0 @@
-id: E32
-status: settled
-mode: parse
-source: ask Plan where Plan.count() > 10
-expect:
-  print: ask Plan where Plan.count() > 10
-note: True for every row or for none.
-sources:
-- '#350 P10.2a §11'

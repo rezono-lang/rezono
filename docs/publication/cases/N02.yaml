@@ -1,0 +1,19 @@
+id: N02
+class: invalid
+status: settled
+schema:
+  from: fixture.schema.json
+  merge:
+    reasons:
+      no_spec:
+        label:
+          en: no specification
+        states:
+        - unknown
+form: collection
+input: 'R01: the collection of l0.md §3.1'
+expect:
+  accept: false
+  error: reason code `not_assigned` not declared
+sources:
+- publication/rezono_publication/l0.py, read_collection

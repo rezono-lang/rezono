@@ -1,7 +1,7 @@
-id: https://rede.example/subsidy/reference
+id: https://rezono.example/subsidy/reference
 name: subsidy_reference
 description: >-
-  The payment ledger of the finance department, as a reference source (decision R13): what another
+  The payment ledger of the finance department, as a reference source: what another
   system recorded, kept apart from the scheme. No award reads it. A calculation rule compares it with
   the awards the rules derive, and the difference is drift, shown to readers with its proof.
 in_language: en
@@ -31,7 +31,7 @@ classes:
   PeriodClose:
     description: >-
       The close of the ledger up to a date. Origin: a decision of the finance department. It names
-      every payment it closes with the hash of its row, as `rede_compiler close` writes it.
+      every payment it closes with the hash of its row, as `rezono_compiler close` writes it.
     attributes:
       id: {identifier: true}
       closed_until: {range: date, required: true, description: Every payment booked before this date is closed.}

@@ -7,10 +7,10 @@ import json
 
 import duckdb
 
-from rede_compiler import calc, calc_sql, emit, rules_sql, seal
-from rede_compiler import rules as ir
-from rede_compiler.calc import NUMBER, Program, derived_relations
-from rede_compiler.pack import Pack
+from rezono_compiler import calc, calc_sql, emit, rules_sql, seal
+from rezono_compiler import rules as ir
+from rezono_compiler.calc import NUMBER, Program, derived_relations
+from rezono_compiler.pack import Pack
 
 
 def connect(pack: Pack, prog: Program, rows: dict[str, list[tuple]]):
@@ -23,7 +23,7 @@ def connect(pack: Pack, prog: Program, rows: dict[str, list[tuple]]):
     for table, rs in sorted((params | rows).items()):
         if rs:
             db.executemany(f"INSERT INTO {emit.q(table)} VALUES ({', '.join('?' * len(rs[0]))})", rs)
-    for name, body in seal.views(pack):  # refused and accepted input (E3): the rules read `<kind>__accepted`
+    for name, body in seal.views(pack):  # refused and accepted input: the rules read `<kind>__accepted`
         db.execute(f"CREATE VIEW {emit.q(name)} AS {body}")
     rules = ir.load(pack.rules) if pack.rules else None
     selections = rules.calc_inputs() if rules else []
@@ -73,7 +73,7 @@ def run_both(pack: Pack, prog: Program, doc: dict, rows: dict[str, list[tuple]])
 
     db = connect(pack, prog, rows)
     oracle = Oracle(pack, doc, rows | derived_rows(db, pack), concept_types(prog))
-    assert witness_results(db, prog) == oracle.witnesses()  # the steps of every evaluation (W12)
+    assert witness_results(db, prog) == oracle.witnesses()  # the steps of every evaluation
     assert checked(db, prog) == []  # and the checker recomputes each of them on its own
     return results(db, prog), oracle.results()
 
@@ -92,8 +92,8 @@ def snapshots(db, prog: Program) -> dict[str, list[tuple]]:
 def checked(db, prog: Program, witnesses: list | None = None) -> list[dict]:
     """The checker's findings on every witness, against the database as complete snapshots (`snapshots`) and
     ir/calc.json as written."""
-    from rede_checker import calc as checker
-    from rede_checker.canon import encode_key
+    from rezono_checker import calc as checker
+    from rezono_checker.canon import encode_key
 
     snapshot = {name: {encode_key(parts): (parts, {}) for parts in rows} for name, rows in snapshots(db, prog).items()}
     ir_doc = json.loads(json.dumps(calc.to_doc(prog)))

@@ -1,5 +1,5 @@
-# A key is text: in canonical JSON a whole number is decimal text (W3).
-format: rede.delta/1
+# A key is text: in canonical JSON a whole number is decimal text.
+format: rezono.delta/1
 pack: library
 changes:
   - {op: delete, file: facts/valid.yaml, kind: copy, key: 1001}

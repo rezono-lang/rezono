@@ -1,0 +1,11 @@
+id: Y02
+class: answer
+status: open
+schema:
+  from: fixture.schema.json
+form: request
+input: an answer request without an access epoch, and one with a stale epoch
+expect:
+  refused: true
+note: The status code is Q15.
+sources: []

@@ -1,13 +1,13 @@
-id: https://rede.dev/contracts/plugin
-name: rede_plugin
+id: https://rezono.org/contracts/plugin
+name: rezono_plugin
 title: Plugin declarations
 description: >-
-  Deprecated alias for one wave (O12a): declare ports with contracts/port.yaml (PC1). A digest-pinned boundary plugin and the capabilities it declares (G2), and one invocation of it
+  Deprecated alias for one wave: declare ports with contracts/port.yaml (PC1). A digest-pinned boundary plugin and the capabilities it declares (G2), and one invocation of it
   identified by its input hash.
 prefixes:
   linkml: https://w3id.org/linkml/
-  rede: https://rede.dev/contracts/
-default_prefix: rede
+  rezono: https://rezono.org/contracts/
+default_prefix: rezono
 default_range: string
 imports:
   - linkml:types
@@ -34,7 +34,7 @@ types:
 
 classes:
   Plugin:
-    deprecated: "Deprecated alias for one wave (O12a): declare ports with contracts/port.yaml (PC1). Port, PortEffect and PortInvocation replace it."
+    deprecated: "Deprecated alias for one wave: declare ports with contracts/port.yaml (PC1). Port, PortEffect and PortInvocation replace it."
     tree_root: true
     description: The static declaration of a plugin. Each invocation carries its own input identity.
     attributes:
@@ -60,7 +60,7 @@ classes:
         postconditions: {slot_conditions: {effect: {value_presence: ABSENT}}}
 
   PluginEffect:
-    deprecated: "Deprecated alias for one wave (O12a): declare ports with contracts/port.yaml (PC1). Port, PortEffect and PortInvocation replace it."
+    deprecated: "Deprecated alias for one wave: declare ports with contracts/port.yaml (PC1). Port, PortEffect and PortInvocation replace it."
     description: The three capability names for a planned effect.
     attributes:
       plan: {range: DeclarationName, required: true, description: Produces the dry-run difference.}
@@ -68,7 +68,7 @@ classes:
       status: {range: DeclarationName, required: true, description: Reconciles the result of an attempt.}
 
   PluginInvocation:
-    deprecated: "Deprecated alias for one wave (O12a): declare ports with contracts/port.yaml (PC1). Port, PortEffect and PortInvocation replace it."
+    deprecated: "Deprecated alias for one wave: declare ports with contracts/port.yaml (PC1). Port, PortEffect and PortInvocation replace it."
     description: >-
       One call of a declared plugin. The input hash is required in every direction and, with the
       plugin image, operation and unit, identifies the attempt: what was called, on which unit, with

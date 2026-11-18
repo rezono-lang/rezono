@@ -1,23 +1,34 @@
-"""MOD2 on every example golden: each kind, slot, rule, sentence and channel binding of the schema bundle has an
-id and a span, and no two elements share a stable id. Light: it reads the goldens only."""
+"""Stable identifiers and source spans in the compiler output for every example pack."""
 
 import json
 from pathlib import Path
 
 import pytest
 
+from rezono_compiler import emit, pack
+
 ROOT = Path(__file__).resolve().parent
-BUNDLES = sorted(ROOT.glob("**/expected/compiled/bundle/schema-bundle.json"))
+PACKS = sorted(path.parent for path in ROOT.rglob("pack.yaml") if "expected" not in path.relative_to(ROOT).parts)
 
 
-@pytest.mark.xfail(strict=True, reason="generated expected/compiled goldens are not stored in git")
-def test_example_bundles_are_found():
-    assert BUNDLES
+def bundle(folder):
+    return json.loads(emit.compile_pack(pack.read(folder))["bundle/schema-bundle.json"])
 
 
-@pytest.mark.parametrize("path", BUNDLES, ids=lambda p: p.parents[3].relative_to(ROOT).as_posix())
-def test_every_element_has_an_id_and_a_span(path):
-    b = json.loads(path.read_text("utf-8"))
+def test_library_identifiers_follow_the_declared_module_classes_and_slots():
+    # schema/library.yaml declares the classes Copy and Work and these two attributes.
+    # Stable IDs compose the module and original class name, then the slot after '#'.
+    compiled = bundle(ROOT / "library")
+    kinds = {item["id"]: item["stable_id"] for item in compiled["kinds"]}
+    attributes = {(item["kind"], item["name"]): item["stable_id"] for item in compiled["attributes"]}
+    assert (kinds["copy"], kinds["work"]) == ("library/Copy", "library/Work")
+    assert attributes["copy", "reference_only"] == "library/Copy#reference_only"
+    assert attributes["work", "title"] == "library/Work#title"
+
+
+@pytest.mark.parametrize("folder", PACKS, ids=lambda p: p.relative_to(ROOT).as_posix())
+def test_every_element_has_an_id_and_a_span(folder):
+    b = bundle(folder)
     elements = [*b["kinds"], *b.get("arrows", []), *b.get("attributes", []), *b.get("rules", [])]
     sentences = [x["sentence"] for x in [*elements, *b.get("unique_keys", []), *b.get("path_equations", [])]
                  if "sentence" in x]

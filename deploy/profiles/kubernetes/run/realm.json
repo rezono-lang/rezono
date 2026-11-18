@@ -1,8 +1,8 @@
 {
-  "realm": "rede",
+  "realm": "rezono",
   "enabled": true,
   "sslRequired": "none",
-  "groups": [{ "name": "rede-readers" }],
+  "groups": [{ "name": "rezono-readers" }],
   "users": [
     {
       "username": "reader",
@@ -12,7 +12,7 @@
       "firstName": "A",
       "lastName": "Reader",
       "credentials": [{ "type": "password", "value": "@READER_PASSWORD@", "temporary": false }],
-      "groups": ["/rede-readers"]
+      "groups": ["/rezono-readers"]
     },
     {
       "username": "stranger",
@@ -26,14 +26,14 @@
   ],
   "clients": [
     {
-      "clientId": "rede",
+      "clientId": "rezono",
       "enabled": true,
       "protocol": "openid-connect",
       "publicClient": false,
       "secret": "@CLIENT_SECRET@",
       "standardFlowEnabled": true,
       "directAccessGrantsEnabled": false,
-      "redirectUris": ["https://rede.example.test/oauth2/callback"],
+      "redirectUris": ["https://rezono.example.test/oauth2/callback"],
       "protocolMappers": [
         {
           "name": "groups",

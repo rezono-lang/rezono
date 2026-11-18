@@ -1,6 +1,6 @@
 # The known questions (docs/gui.md, "Questions as data"): each a combination of the building blocks
 # trace and suppose. The term is the name in code; its label and sentence are in messages/<lang>.mf2.
-format: rede.questions/1
+format: rezono.questions/1
 questions:
   # The route from a value back to its sources.
   - term: grounds
@@ -48,7 +48,7 @@ questions:
       - suppose: given
     answer: series
     limit: 64
-  # For an outcome that is absent: what lacks support, and the rows that close it (`// @closes`, decision W14):
+  # For an outcome that is absent: what lacks support, and the rows that close it (`// @closes`):
   # each states for this key that no row holds, and its own grounds say why. Computed (contract rule 5).
   - term: contrast
     start: absent

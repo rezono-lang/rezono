@@ -7,8 +7,8 @@ from pathlib import Path
 import pytest
 import yaml
 
-from rede_canon import canonical_json
-from rede_compiler import facts, source_writer as sw, sources, writer
+from rezono_canon import canonical_json
+from rezono_compiler import facts, source_writer as sw, sources, writer
 from test_sources import fixture  # noqa: F401 (a pytest fixture)
 
 

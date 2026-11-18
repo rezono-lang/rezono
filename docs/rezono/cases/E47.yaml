@@ -1,0 +1,19 @@
+id: E47
+status: settled
+mode: evaluate
+source: ask Host where owner is n/a or not owner = team-platform
+data: appendix-b
+role: viewer
+expect:
+  answer:
+    rows:
+    - host-b
+    - host-d
+    undecided:
+    - binder: host-a
+      state: unknown
+      reason: not_assigned
+    not_applicable: 0
+note: The P10.2a table gives no not-applicable count; Appendix A gives 0.
+sources:
+- rezono/src/evaluate.ts

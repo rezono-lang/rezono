@@ -5,8 +5,8 @@ import json
 import pytest
 import yaml
 
-from rede_canon import canonical_json
-from rede_compiler import facts, pack, sources, writer
+from rezono_canon import canonical_json
+from rezono_compiler import facts, pack, sources, writer
 from test_sources import DEFAULT, by_row, entries, fixture, metadata  # noqa: F401 (a pytest fixture)
 
 

@@ -1,5 +1,5 @@
 # Negative integers are allowed; round(ratio(-1, 1, 2)) is round(-1/2) = -1 (half away from zero).
-format: rede.calc/1
+format: rezono.calc/1
 pack: fixture
 subject: purchase
 rules:

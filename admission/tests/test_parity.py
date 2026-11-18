@@ -1,5 +1,5 @@
 """Parity with the oracle (ruling 2 of 11-11-2026): admission against a pack's schema bundle gives what the
-compiler's loader (rede_compiler.facts) gives from the pack itself. The same rows, byte for byte, for every fact
+compiler's loader (rezono_compiler.facts) gives from the pack itself. The same rows, byte for byte, for every fact
 file of every example pack and compiler fixture; the same refusal, for every refused fixture of the loader's own
 tests and for a broken copy of the first record of every section (no identifier, a wrong identifier, an unknown
 slot, each slot with a value of the wrong type).
@@ -18,16 +18,16 @@ from pathlib import Path
 import pytest
 import yaml
 
-pytest.importorskip("rede_compiler")
+pytest.importorskip("rezono_compiler")
 
-from rede_compiler import emit, facts, pack  # noqa: E402
+from rezono_compiler import emit, facts, pack  # noqa: E402
 
-from rede_admission import CODES, Schema, rows  # noqa: E402
+from rezono_admission import CODES, Schema, rows  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[2]
 PACKS = sorted({p.parent for pattern in ("examples/**/pack.yaml", "packs/*/pack.yaml", "compiler/tests/fixtures/*/pack.yaml")
                 for p in ROOT.glob(pattern) if "node_modules" not in p.parts})
-SEALED = re.compile(r"__row_sha256$")  # decision E3's generated tables: not in the bundle yet (see rows.rows)
+SEALED = re.compile(r"__row_sha256$")  # generated tables: not in the bundle yet (see rows.rows)
 
 # The loader's messages, and the code admission gives for each.
 MESSAGES = [

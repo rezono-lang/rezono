@@ -9,7 +9,7 @@ from hypothesis import given, settings
 from hypothesis import strategies as st
 
 import genpack
-from rede_compiler import calc, pack, types
+from rezono_compiler import calc, pack, types
 
 ROOT = Path(__file__).resolve().parents[2]
 # The tables the compiler kept before B09, one per consumer: the reference these projections must equal.
@@ -115,7 +115,7 @@ def test_random_packs_keep_their_names(data):
 
 
 def test_the_semantic_type_writes_what_the_model_knows_and_nothing_else():
-    # B10: each case as the bundle writes it; a field without a value is left out, never null.
+    # each case as the bundle writes it; a field without a value is left out, never null.
     assert types.scalar(types.STRING, "string").semantic == {"case": "scalar", "base": "string", "range": "string"}
     assert types.money("EUR", "Cents").semantic == {"case": "money", "base": "integer", "range": "Cents", "currency": "EUR"}
     assert types.quantity("cents").semantic == {"case": "quantity", "base": "number", "unit": "cents"}
@@ -130,9 +130,9 @@ GOLDEN = Path("expected/compiled/bundle/schema-bundle.json")
 
 @pytest.mark.parametrize("pack_dir", [d for d in PACKS if (d / GOLDEN).exists()], ids=lambda d: str(d.relative_to(ROOT)))
 def test_every_published_slot_carries_its_semantic_type(pack_dir):
-    # B10: the bundle of every example names, per slot, the type the compiler holds; per calc view its result.
+    # the bundle of every example names, per slot, the type the compiler holds; per calc view its result.
     import json
-    from rede_compiler import emit
+    from rezono_compiler import emit
     published = json.loads((pack_dir / GOLDEN).read_text())
     p = pack.read(pack_dir)
     want = {s.element: s.type.semantic for k in p.kinds.values() for s in k.slots.values()}

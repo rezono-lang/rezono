@@ -1,0 +1,109 @@
+{
+  "endpoints": {
+    "sender": {
+      "zone": "client",
+      "address": 3221225985
+    },
+    "spare": {
+      "zone": "client",
+      "address": 3221225986
+    },
+    "echo": {
+      "zone": "server",
+      "address": 3221226001
+    },
+    "peer": {
+      "zone": "server",
+      "address": 3221226002
+    }
+  },
+  "rules": [
+    {
+      "source": "sender",
+      "destination": "echo",
+      "function": "echo",
+      "sourceFrom": 3221225985,
+      "sourceTo": 3221225986,
+      "destinationAddress": 3221226001,
+      "protocol": "TCP",
+      "fromPort": 8080,
+      "toPort": 8081
+    },
+    {
+      "source": "sender",
+      "destination": "peer",
+      "function": "peer",
+      "sourceFrom": 3221225985,
+      "sourceTo": 3221225985,
+      "destinationAddress": 3221226002,
+      "protocol": "TCP",
+      "fromPort": 8080,
+      "toPort": 8080
+    }
+  ],
+  "cases": [
+    {
+      "id": "echo",
+      "source": "sender",
+      "destination": "echo",
+      "protocol": "TCP",
+      "port": 8080,
+      "router": "allow",
+      "service": "allow"
+    },
+    {
+      "id": "upper",
+      "source": "sender",
+      "destination": "echo",
+      "protocol": "TCP",
+      "port": 8081,
+      "router": "allow",
+      "service": "allow"
+    },
+    {
+      "id": "outside",
+      "source": "sender",
+      "destination": "echo",
+      "protocol": "TCP",
+      "port": 8082,
+      "router": "deny",
+      "service": "deny"
+    },
+    {
+      "id": "overlap",
+      "source": "spare",
+      "destination": "echo",
+      "protocol": "TCP",
+      "port": 8080,
+      "router": "allow",
+      "service": "deny"
+    },
+    {
+      "id": "other-rule",
+      "source": "sender",
+      "destination": "peer",
+      "protocol": "TCP",
+      "port": 8080,
+      "router": "allow",
+      "service": "allow"
+    },
+    {
+      "id": "closed",
+      "source": "spare",
+      "destination": "peer",
+      "protocol": "TCP",
+      "port": 8080,
+      "router": "deny",
+      "service": "deny"
+    },
+    {
+      "id": "local",
+      "source": "echo",
+      "destination": "peer",
+      "protocol": "TCP",
+      "port": 8080,
+      "router": "inapplicable",
+      "service": "deny"
+    }
+  ]
+}

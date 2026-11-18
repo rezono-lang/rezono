@@ -8,8 +8,8 @@ from pathlib import Path
 
 import duckdb
 
-from rede_compiler import batch, emit, facts, pack, rules_split
-from rede_compiler import rules as ir
+from rezono_compiler import batch, emit, facts, pack, rules_split
+from rezono_compiler import rules as ir
 
 REPO = Path(__file__).resolve().parents[2]
 FIXTURE = Path(__file__).resolve().parent / "fixtures" / "minimal"
@@ -34,7 +34,7 @@ def example_copy(tmp_path: Path, example: Path, change) -> Path:
 
 def violations(files: dict[str, str], rows: dict[str, list[tuple]]) -> dict[str, set[tuple]]:
     """Load parameters and fact rows, then return every logical check with violations as its rows of
-    validation_result, (subject, value) as text (decision E11: one view per check kind)."""
+    validation_result, (subject, value) as text (one view per check kind)."""
     db = duckdb.connect()
     db.execute(emit.DUCKDB_FUNCTIONS)
     db.execute(files["engine/tables.sql"])

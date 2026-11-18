@@ -1,0 +1,16 @@
+id: M03
+class: change
+status: settled
+schema:
+  from: fixture.schema.json
+successor:
+  merge:
+    kinds:
+      Host:
+        slots:
+          tags: null
+form: schema
+expect:
+  change_class: major
+sources:
+- publication/rezono_publication/l0.py, classify

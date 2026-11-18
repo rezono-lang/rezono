@@ -1,0 +1,13 @@
+id: E03
+status: settled
+mode: parse
+source: ask Plan where fits(host-b, plan)
+expect:
+  print: ask Plan where fits(host-b, plan)
+  resolve:
+    host-b: Host
+    plan: binder
+note: '`plan` is the implicit binder (§5 rules 1 and 6).'
+sources:
+- rezono/src/print.ts
+- rezono/src/check.ts

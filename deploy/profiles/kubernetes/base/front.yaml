@@ -2,7 +2,7 @@
 # issuer) and passes the ID token on as `Authorization: Bearer`, which the viewer forwards and the gate verifies
 # itself (issuer, audience, asymmetric signature, expiry; edge/gate/README.md). The front decides no role: the
 # gate does, from the token. Its settings come from the ConfigMap `front` (the overlay's), its client secret and
-# cookie secret from the Secret `rede-front` (External Secrets, secrets.yaml).
+# cookie secret from the Secret `rezono-front` (External Secrets, secrets.yaml).
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -43,13 +43,13 @@ spec:
           env:
             - name: OAUTH2_PROXY_CLIENT_ID
               valueFrom:
-                secretKeyRef: { name: rede-front, key: client-id }
+                secretKeyRef: { name: rezono-front, key: client-id }
             - name: OAUTH2_PROXY_CLIENT_SECRET
               valueFrom:
-                secretKeyRef: { name: rede-front, key: client-secret }
+                secretKeyRef: { name: rezono-front, key: client-secret }
             - name: OAUTH2_PROXY_COOKIE_SECRET
               valueFrom:
-                secretKeyRef: { name: rede-front, key: cookie-secret }
+                secretKeyRef: { name: rezono-front, key: cookie-secret }
           ports:
             - { name: http, containerPort: 4180 }
           readinessProbe:

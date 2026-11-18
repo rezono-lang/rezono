@@ -230,7 +230,7 @@ def write_pack(spec: Spec, d: Path) -> None:
              for k in spec.kinds.values() for s in k.slots if len(s.patterns) > 1}
     (d / "schema").mkdir(parents=True)
     for m, other in (("m0", "m1"), ("m1", "m0")):  # two modules that import each other
-        schema = {"id": f"https://rede.example/generated/{m}", "name": f"generated_{m}", "in_language": "nl",
+        schema = {"id": f"https://rezono.example/generated/{m}", "name": f"generated_{m}", "in_language": "nl",
                   "imports": ["linkml:types", other], "default_range": "string",
                   "classes": {n: c for n, c in classes.items() if spec.kinds[n.lower()].module == m}}
         if m == "m0":

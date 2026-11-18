@@ -1,0 +1,8 @@
+id: E06
+status: settled
+mode: parse
+source: ask Host where clusters.count() > 2
+expect:
+  print: ask Host where clusters.count() > 2
+sources:
+- rezono/src/print.ts

@@ -18,7 +18,7 @@ tones:
   - {tone: unknown, color_role: status.unknown, glyph: "▨", label_message: tone.unknown}
 # V2 supplies nominal pigments; V1a accepts no unrendered pack colour bindings.
 hues: []
-# The legend of Rede: what is known about a value, the same in every pack and every theme
+# The legend of Rezono: what is known about a value, the same in every pack and every theme
 # (contracts/view.yaml, SignName). A sheet draws a sign only where the bundle provides its fact.
 # No sign depends on colour: drift is two lines, a supposed value stands beside its struck one.
 signs:
@@ -33,7 +33,7 @@ signs:
   - {sign: proposal, form: frame, glyph: "✎", dash: "4 3", label_message: sign.proposal}
   - {sign: sealed, form: stamp, label_message: sign.sealed}
   - {sign: supposed, form: replaced, accent: true, label_message: sign.supposed}
-# A difference (RV-C02): what a proposal, a supposition or an older manifest adds, removes or changes, drawn
+# A difference: what a proposal, a supposition or an older manifest adds, removes or changes, drawn
 # the same on every sheet that compares (`?compare=`). The sign says it, not only the colour.
 differences:
   - {change: added, glyph: "+", tone: caution, label_message: impact.added}

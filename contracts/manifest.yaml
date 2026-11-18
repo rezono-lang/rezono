@@ -1,5 +1,5 @@
-id: https://rede.dev/contracts/manifest
-name: rede_manifest
+id: https://rezono.org/contracts/manifest
+name: rezono_manifest
 title: Snapshot manifest
 description: >-
   The publication boundary. Only what a manifest lists is visible to the explainer,
@@ -7,8 +7,8 @@ description: >-
   the publisher writes a Diagnosis instead: diagnostic output, not a publication.
 prefixes:
   linkml: https://w3id.org/linkml/
-  rede: https://rede.dev/contracts/
-default_prefix: rede
+  rezono: https://rezono.org/contracts/
+default_prefix: rezono
 default_range: string
 imports:
   - linkml:types
@@ -40,10 +40,10 @@ classes:
       knowledge_time: {range: datetime, required: true, description: Knowledge time at which the epoch closed.}
       base_manifest: {description: Previous manifest id; empty for the first.}
       proposal: {description: "Proposal id when the proposal pipeline wrote this manifest (a what-if against base_manifest); empty on main."}
-      access_semantics: {range: integer, minimum_value: 2, maximum_value: 2, description: "Decision O8: what a role's files mean. 2: a role gets only rows derivable from what it may read, each with a proof chosen among those, and each snapshot says whether the role reads the relation in full. Absent: an older publisher; the access gate refuses such a manifest, also when it is the newest."}
+      access_semantics: {range: integer, minimum_value: 2, maximum_value: 2, description: "What a role's files mean. 2: a role gets only rows derivable from what it may read, each with a proof chosen among those, and each snapshot says whether the role reads the relation in full. Absent: an older publisher; the access gate refuses such a manifest, also when it is the newest."}
       pack_sha256: {required: true, description: "Hash of the pack that was compiled, its facts included. For the server side only: the access gate never passes it to a role, since a dictionary over it would find a hidden value."}
-      definition_sha256: {pattern: "^[0-9a-f]{64}$", description: "Hash of the pack's definition without facts or scenarios (pack.yaml, channels.yaml, schema/, rules/, labels/, messages/, icons/): the fingerprint a role may see, and the folder of the archived bundle (decision O8)."}
-      compiler_sha256: {required: true, description: "Hash of the compiler that compiled the pack: its source, rede-canon, the contracts it reads and the exact version of every library they use; part of the build record (docs/ci.md#8-pinned-versions)."}
+      definition_sha256: {pattern: "^[0-9a-f]{64}$", description: "Hash of the pack's definition without facts or scenarios (pack.yaml, channels.yaml, schema/, rules/, labels/, messages/, icons/): the fingerprint a role may see, and the folder of the archived bundle."}
+      compiler_sha256: {required: true, description: "Hash of the compiler that compiled the pack: its source, rezono-canon, the contracts it reads and the exact version of every library they use; part of the build record (docs/ci.md#8-pinned-versions)."}
       engine: {range: Component, required: true, inlined: true, description: The engine that computed the snapshot.}
       udf_sha256: {description: "Hash of the UDF build, if any."}
       schema_version: {required: true, description: Version of the pack schema.}
@@ -52,8 +52,8 @@ classes:
       counts: {multivalued: true, range: RelationCount, inlined_as_list: true, description: Row counts per relation.}
       snapshots: {multivalued: true, range: Snapshot, inlined_as_list: true, description: Snapshot files per relation and role.}
       witnesses: {multivalued: true, range: WitnessSet, inlined_as_list: true, description: "The witnesses each role may see, redacted on the server; the access gate builds Why and Uses from them."}
-      assets: {multivalued: true, range: AssetSet, inlined_as_list: true, description: "Per role the index of the images its image cells name (decision B10); absent when the pack binds no image."}
-      fact_sources: {multivalued: true, range: SourceSet, inlined_as_list: true, description: "Per role the file of SourceEntry (contracts/source.yaml) of exactly the base rows in its snapshots (S25), checked by `rede:sources`; not `sources`, which says where each source stood. Absent: a publisher before S25 or an epoch without source entries."}
+      assets: {multivalued: true, range: AssetSet, inlined_as_list: true, description: "Per role the index of the images its image cells name; absent when the pack binds no image."}
+      fact_sources: {multivalued: true, range: SourceSet, inlined_as_list: true, description: "Per role the file of SourceEntry (contracts/source.yaml) of exactly the base rows in its snapshots, checked by `rezono:sources`; not `sources`, which says where each source stood. Absent: a publisher without source-set support or an epoch without source entries."}
       compiled: {multivalued: true, range: ArchivedFile, inlined_as_list: true, description: "What was compiled for this epoch, archived with its hash: the schema bundle, and the rule IR if the pack has rules. With these and the inputs a publication can be made again and compared byte for byte."}
       build: {range: ArchivedFile, inlined: true, description: "The build record (build.json): the compiler, the publisher's source, every library with its exact version, Python, platform, the hashes of the locks and the effective profile. Its hash names the build; the same build and inputs give the same bytes (docs/ci.md#8-pinned-versions)."}
       pending: {multivalued: true, range: PendingInput, inlined_as_list: true, description: "Input that waits since this epoch, per source and per offloaded step (contracts/freshness.yaml). Read at publication; the cartouche shows it."}
@@ -61,7 +61,7 @@ classes:
 
   Diagnosis:
     description: >-
-      What the publisher writes after a red epoch instead of a manifest (decision B7). Diagnostic
+      What the publisher writes after a red epoch instead of a manifest. Diagnostic
       output, not a publication: nothing reads it as the current state, it is never a base_manifest,
       and exports ignore it. The viewer shows it as a notice on the last good manifest, clickable to
       the violations and their proofs.
@@ -81,7 +81,7 @@ classes:
       which removes them before it serves the variant. A role outside `readers` may not read the
       swept cell and does not get the sweep. A role in `readers` but not in `status_readers` sees
       every check of the variant as `unavailable`: its status is derived from rows the role cannot
-      read, as a derived row would be (decision O7).
+      read, as a derived row would be.
     attributes:
       sweep: {required: true, pattern: "^[a-z][a-z0-9]*(_[a-z0-9]+)*$", description: "The sweep's name in sweeps.yaml."}
       index: {range: integer, required: true, minimum_value: 0, maximum_value: 63, description: "The grid position, from 0 (min)."}
@@ -130,7 +130,7 @@ classes:
       relation: {required: true, description: Relation name.}
       role: {required: true, description: Role that may read the snapshot.}
       complete: {range: boolean, required: true, description: "True if the snapshot holds every row of the relation."}
-      full: {range: boolean, description: "True if the role reads every row of the relation by the shape of its read rules, whatever the data (decision O8); always true for a complete role. Negation and aggregates in the role's proofs range only over such relations. Absent: false."}
+      full: {range: boolean, description: "True if the role reads every row of the relation by the shape of its read rules, whatever the data; always true for a complete role. Negation and aggregates in the role's proofs range only over such relations. Absent: false."}
       uri: {required: true, description: S3 URI; resolved through the storage port.}
       sha256: {required: true, description: SHA-256 of the snapshot file bytes (docs/contracts.md#canonical-hash).}
       format: {range: SnapshotFormat, required: true, description: File format of the snapshot.}
@@ -139,7 +139,7 @@ classes:
     description: >-
       The witnesses (contracts/proof.yaml) chosen for one role, one per derived row it may read: a proof
       among those whose premises the role reads and whose negations and aggregates range over relations it
-      reads in full (decision O8). From access_semantics 2 on there are no screened steps (`hidden` is empty).
+      reads in full. From access_semantics 2 on there are no screened steps (`hidden` is empty).
     attributes:
       role: {required: true, description: Role that may read the file.}
       uri: {required: true, description: S3 URI; resolved through the storage port.}
@@ -147,8 +147,8 @@ classes:
 
   AssetSet:
     description: >-
-      The images one role gets (decision B10, docs/gui.md#icons-and-images): a file listing, as AssetEntry in file
-      order, exactly the files the image cells of that role's snapshots name. The checker checks it (`rede:assets`);
+      The images one role gets (docs/gui.md#icons-and-images): a file listing, as AssetEntry in file
+      order, exactly the files the image cells of that role's snapshots name. The checker checks it (`rezono:assets`);
       the gate serves an image only to a role whose rows of that manifest, as it reads them today, name it.
     attributes:
       role: {required: true, description: Role that may read the file.}

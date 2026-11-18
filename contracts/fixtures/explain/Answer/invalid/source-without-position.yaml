@@ -1,4 +1,4 @@
-format: rede.answer/1
+format: rezono.answer/1
 question: grounds
 manifest_id: m-1
 start: {relation: e, key: '["a","b"]'}

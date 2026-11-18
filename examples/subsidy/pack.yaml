@@ -1,12 +1,12 @@
 name: subsidy
-version: 0.1.0
+version: 0.1.2
 default_language: en
 imports:
-  - {name: std-access, path: ../../packs/std-access, sha256: b8cbee67f6645bb6d5fb4e45069249b24067f5f42d739231e5e4d759f6574ee2}
-  - {name: std-decision, path: ../../packs/std-decision, sha256: f4502d3b09ef4da50f93bf26cac9e9d7a64d8b3c821f813b7b0abc790bb00c56}
-  - {name: std-time, path: ../../packs/std-time, sha256: 15d55435025260b1e1692e12450574ddb11bc6808386fd661662e60d6eb5d51c}
-  - {name: std-explain, path: ../../packs/std-explain, sha256: a768cd5b70fe5e20d7f5a375634be456718ee32bf01a32cb1a43a6b8a971d155}
-  # The scheme's definition, fact-free (RV-X35): its kinds, rules, calculation, labels and messages.
-  - {name: subsidy-scheme, path: ../subsidy-scheme, sha256: 178e7a90f277360e323e8483d7a36879f97b960e13eb89bcc5b9044fbd766b44}
+  - {name: std-access, path: ../../packs/std-access, sha256: cc117210daed394ec6ebbf7b270215c95c418865dd5292091e8315f428f5ee70}
+  - {name: std-decision, path: ../../packs/std-decision, sha256: 2fd4cc60cc4f1c7dca42da2f5368a08a992de39df7cd7db205b9118dd1b8fe5a}
+  - {name: std-time, path: ../../packs/std-time, sha256: bb2863a03792228005fa6784ed1022c07ac82139cdbf0ff7914cd273b3e046a7}
+  - {name: std-explain, path: ../../packs/std-explain, sha256: 72e2897cd9baaa4962cf2235f83a332262b4da1e6d34e82d5f64d8335e27be0b}
+  # The scheme's definition, fact-free: its kinds, rules, calculation, labels and messages.
+  - {name: subsidy-scheme, path: ../subsidy-scheme, sha256: 1befdec55e46bee0ecd1f3fd142eed66320acd3cf73db13217401cda7cbe3a04}
 iri:
-  base: https://w3id.org/rede/example/subsidy/  # a synthetic example of the Rede project (docs/ring2/iris.md section 3)
+  base: https://rezono.org/example/subsidy/  # a synthetic example of the Rezono project (docs/ring2/iris.md section 3)

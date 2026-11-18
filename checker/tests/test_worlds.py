@@ -1,4 +1,4 @@
-"""AUD-C2: the checker holds the open and the closed world itself (decision W6), at negation and aggregation.
+"""AUD-C2: the checker holds the open and the closed world itself, at negation and aggregation.
 It derives each relation's world from the rule IR, so a proof that negates an open relation outside an
 `absence` relation is refused even when the compiler let it through."""
 
@@ -6,7 +6,7 @@ import copy
 
 import pytest
 
-from rede_checker.rules import check_worlds, load_rules
+from rezono_checker.rules import check_worlds, load_rules
 
 
 def relation(name, role, *columns, **flags):
@@ -24,7 +24,7 @@ BASE = [relation("host", "base", "id"), relation("owner", "base", "id", world="o
 
 
 def doc(*rules, derived=()):
-    return {"format": "rede.rules/1", "relations": BASE + list(derived), "rules": list(rules)}
+    return {"format": "rezono.rules/1", "relations": BASE + list(derived), "rules": list(rules)}
 
 
 ORPHAN = rule("orphan", "orphan", [("host", "positive", "0"), ("owner", "negative", "0")], stratum="1")
@@ -69,7 +69,7 @@ def test_absence_stops_open_and_is_only_on_derived_relations():
 
 
 def test_an_absence_label_must_be_earned():
-    """Review of #458: a plain copy of an open relation labelled absence would be closed, and negating it would
+    """A plain copy of an open relation labelled absence would be closed, and negating it would
     pass. Each rule of an absence relation negates an open relation, aggregates over one, or reads another
     absence relation."""
     copy_ = rule("copied_owner", "copied_owner", [("owner", "positive", "0")])

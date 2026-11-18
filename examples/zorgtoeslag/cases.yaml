@@ -1,20 +1,20 @@
-# Expected outcomes for the zorgtoeslag pack (zorgtoeslag.reckon, data in facts.reckon). #401 D28.
+# Expected outcomes for the zorgtoeslag pack (zorgtoeslag.rezono, data in facts.rezono).
 #
 # Each case asks one thing of the pack and gives the expected result:
-#   value     a derived value of one subject: `subject.slot`; expect `value` (Reckon literal) or `state` + `reason`
-#   ask       a question in the P10.2a slice (docs/reckon/expressions.md); expect rows, undecided, not_applicable
-#   publish   evaluate the pack's checks at their decision points (Reckon v0 §7b); expect the publication outcome
+#   value     a derived value of one subject: `subject.slot`; expect `value` (Rezono literal) or `state` + `reason`
+#   ask       a question in the P10.2a slice (docs/rezono/expressions.md); expect rows, undecided, not_applicable
+#   publish   evaluate the pack's checks at their decision points (Rezono v0 §7b); expect the publication outcome
 #   compile   the diagnostics the compiler reports for the pack as written: each code with the text at its span
 #             (`at`), in source order; an R015 spans its construct from its first keyword (expressions.md §1)
-#   form      which files have a JSON form, the form the compiler reads (contracts/reckon-module.yaml): the pack's
+#   form      which files have a JSON form, the form the compiler reads (contracts/rezono-module.yaml): the pack's
 #             own file first, then the others by name; a file with an error has none
 # `as_known` is the knowledge cut (v0 §5a rule 3); without it the cut is `knowledge` below.
 # `correction` is the correction row of a sealed month (v0 §5a): sealed value, current value, the version that
 # changed it. Its relation and form are v0 open point 4, so this field is provisional.
-# `uses` names the v0 constructs the case exercises (section numbers of the v0 reference on #350).
+# `uses` names the v0 constructs the case exercises (section numbers of the v0 reference).
 # `evidence` says what kind of claim a case makes:
 #   current   the outcome for the pack as written today. Z20: the pack does not compile in v0 (one R015, the
-#             time selection; its two decision tables are read since RV-C31); and Z22: so only the file of
+#             time selection; its two decision tables are read); and Z22: so only the file of
 #             facts has a JSON form.
 #   future    the outcome once the pack runs on a supported fixture. Not a conformance claim yet: `blocked_by`
 #             names the current case that prevents running it (Z20), and these cases stay design input until
@@ -222,8 +222,8 @@ cases:
     note: >-
       the one R015 is why this pack cannot compile in v0 as implemented first, and why Z01-Z19 and Z21 cannot run
       yet; README G2. Its two decision tables, `threshold_rate` (`unique`) and `grounds` (`collect`), are read
-      into the tree since RV-C31 and get no diagnostic from the reader (README G3, docs/reckon/tables.md); they
-      are checked and evaluated once the pack's kinds reach the check as a schema (RV-X46, RV-C36)
+      into the tree and get no diagnostic from the reader (README G3, docs/rezono/tables.md); they
+      are checked and evaluated once the pack's kinds reach the check as a schema
     uses: [§10 diagnostics, §13 reserved, §5c table]
 
   - id: Z21
@@ -243,11 +243,10 @@ cases:
     form: true
     expect:
       forms:
-        - {file: zorgtoeslag.reckon, written: false, note: the R015 of Z20; a reserved construct has no form}
-        - {file: facts.reckon, written: true, note: "fact tables with `n/a` and `unknown no_cover_report`, fact versions with `valid` and `known`"}
+        - {file: zorgtoeslag.rezono, written: false, note: the R015 of Z20; a reserved construct has no form}
+        - {file: facts.rezono, written: true, note: "fact tables with `n/a` and `unknown no_cover_report`, fact versions with `valid` and `known`"}
     note: >-
-      the JSON form is what the compiler reads of a module (contracts/reckon-module.yaml, RV-C32); a module with
-      an error has none, so nothing of `zorgtoeslag.reckon` reaches the compiler until its time selection is read
-      or the module is cut to what is (RV-X46). Its two decision tables no longer stand in the way: a table has
-      its form since RV-C31
+      the JSON form is what the compiler reads of a module (contracts/rezono-module.yaml); a module with
+      an error has none, so nothing of `zorgtoeslag.rezono` reaches the compiler until its time selection is read
+      or the module is limited to supported constructs. Both decision tables already have a JSON form
     uses: [§5 facts, §5a rule 5, §7b value states, §13 reserved]

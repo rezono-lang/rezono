@@ -1,4 +1,4 @@
-"""Reader questions (RV-C04; docs/gui.md, "Reader questions"): `reader:` in questions.yaml, every name checked
+"""Reader questions (docs/gui.md, "Reader questions"): `reader:` in questions.yaml, every name checked
 against the pack, the proof resolved, the messages required in every language, and the list in the bundle. The
 minimal fixture with std-explain imported."""
 
@@ -10,7 +10,7 @@ import pytest
 import yaml
 
 from support import FIXTURE, REPO
-from rede_compiler import emit, modules, pack
+from rezono_compiler import emit, modules, pack
 
 STD = REPO / "packs" / "std-explain"
 RULES = """
@@ -38,7 +38,7 @@ def fixture(tmp_path) -> Path:
 
 
 def reader(d: Path, *questions, messages=MESSAGES, doc=None) -> None:
-    (d / "questions.yaml").write_text(yaml.safe_dump(doc or {"format": "rede.questions/1", "reader": list(questions)},
+    (d / "questions.yaml").write_text(yaml.safe_dump(doc or {"format": "rezono.questions/1", "reader": list(questions)},
                                                      sort_keys=False))
     mf2 = d / "messages" / "nl.mf2"
     mf2.write_text(mf2.read_text() + "".join(f"{m} = {m}\n" for m in messages))
@@ -106,7 +106,7 @@ def test_an_id_once_and_a_file_with_something_in_it(fixture):
     reader(fixture, SIZED, SIZED)
     with pytest.raises(pack.CompileError, match="id how-big is used twice"):
         pack.read(fixture)
-    reader(fixture, doc={"format": "rede.questions/1"})
+    reader(fixture, doc={"format": "rezono.questions/1"})
     with pytest.raises(pack.CompileError, match="questions or reader"):
         pack.read(fixture)
 

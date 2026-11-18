@@ -22,6 +22,6 @@ explain.outside = Buiten je zicht
 explain.more = Verder vanaf hier
 explain.empty = {{Geen antwoord voor {$element}.}}
 explain.unpublished = {{Nog niet gepubliceerd: stel {$element} voor om het antwoord te krijgen.}}
-# For a computed answer (contrast, consequence): it says that Rede derived it (docs/explain/contract.md, rule 5).
-explain.computed = Berekend door Rede
+# For a computed answer (contrast, consequence): it says that Rezono derived it (docs/explain/contract.md, rule 5).
+explain.computed = Berekend door Rezono
 explain.not_computed.no_variant = {{Niet berekend: geen gepubliceerde variant trekt {$element} in.}}

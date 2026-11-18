@@ -1,0 +1,47 @@
+id: X01
+class: context
+status: settled
+schema:
+  from: fixture.schema.json
+  merge:
+    kinds:
+      Plan:
+        world: closed
+        id:
+          type: Text
+        versioned:
+          at: Date
+          known: Date
+        slots:
+          owner:
+            card: '?'
+            ref: Team
+            states:
+            - known
+            - not_applicable
+form: collection
+input:
+  $rows:
+  - $kind: Host
+    $id: host-a
+    memory_need: 400 GiB
+    owner:
+      $ref: team-platform
+    tags:
+    - gpu
+    - lab
+  - $kind: Plan
+    $id: p1
+    $valid:
+      at: 2026-01-01..
+    $known: '2025-09-16'
+    owner:
+      $ref: team-platform
+expect:
+  accept: true
+  expanded:
+    Host.owner: https://rezono.example/fixture/Host#owner
+    Plan.owner: https://rezono.example/fixture/Plan#owner
+note: JSON-LD 1.1 expansion with the published kind-scoped context (§5).
+sources:
+- publication/rezono_publication/rdf.py, context and expand

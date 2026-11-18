@@ -1,0 +1,13 @@
+id: E05
+status: settled
+mode: parse
+source: ask Host where clusters > 2
+expect:
+  diagnostics:
+  - code: R005
+    span:
+      text: clusters > 2
+      start: 15
+      end: 27
+sources:
+- rezono/src/check.ts

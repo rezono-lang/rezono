@@ -1,9 +1,9 @@
-"""The core holds no domain knowledge (AGENTS.md rule 1, decision S4).
+"""The core holds no domain knowledge (AGENTS.md rule 1).
 
 Names that only an example can give, such as a use case, a pack name with a hyphen, a compound kind name, or a
 compound id of a role the example's facts name (a domain role, which the core reaches only through the generic
 capabilities of std-access; roles in two layers, B19), must not appear in the code of the compiler, the checker, the viewer, the publisher or the gate, nor in
-the compiler's own tests: a test that fixes one example's names lives with that example (RV-M08). Single words
+the compiler's own tests: a test that fixes one example's names lives with that example. Single words
 such as `plan` or `rule` are also ordinary programming words, so they are not checked.
 """
 
@@ -12,14 +12,14 @@ from pathlib import Path
 
 import yaml
 
-from rede_compiler.pack import snake
+from rezono_compiler.pack import snake
 
 ROOT = Path(__file__).resolve().parents[2]
-CORE = [ROOT / "compiler" / "rede_compiler", ROOT / "checker" / "rede_checker", ROOT / "viewer" / "src",
-        ROOT / "edge" / "publisher" / "rede_publisher", ROOT / "edge" / "gate" / "src", ROOT / "compiler" / "tests"]
+CORE = [ROOT / "compiler" / "rezono_compiler", ROOT / "checker" / "rezono_checker", ROOT / "viewer" / "src",
+        ROOT / "edge" / "publisher" / "rezono_publisher", ROOT / "edge" / "gate" / "src", ROOT / "compiler" / "tests"]
 SUFFIXES = {".py", ".ts", ".svelte", ".js"}
 # Names the engine itself gives meaning to, so an example uses them by design: the closing fact of a seal
-# (decision E3, docs/compiler.md#design-m3-the-seal).
+# (docs/compiler.md#design-m3-the-seal).
 ENGINE = {"period_close"}
 # One line on purpose, by the start of its text: the Catlab oracle's one real pack (test_catlab.py reads it through
 # test_operate.py). catlab.yml runs compiler/tests/test_catlab.py alone with Julia, so the sample stays there

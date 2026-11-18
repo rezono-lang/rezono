@@ -1,4 +1,4 @@
-"""RV-K01: the closure pass. Every witness below is a correct proof, so only the missing row can refuse the epoch:
+"""The closure pass. Every witness below is a correct proof, so only the missing row can refuse the epoch:
 an engine that fails to derive a row leaves snapshots in which each negation and aggregate over it still checks.
 Hand-written rule IR, so nothing here depends on the compiler."""
 
@@ -8,10 +8,10 @@ from dataclasses import replace
 
 import pytest
 
-from rede_checker import closure
-from rede_checker.canon import encode_key
-from rede_checker.check import check_epoch
-from rede_checker.rules import derived_relations, load_rules
+from rezono_checker import closure
+from rezono_checker.canon import encode_key
+from rezono_checker.check import check_epoch
+from rezono_checker.rules import derived_relations, load_rules
 
 
 def relation(name, role, *columns, **flags):
@@ -39,7 +39,7 @@ def program(relations, *rules):
     for r in rules:
         for part in (*r["body"], *r.get("aggregates", ())):
             part["stratum"] = strata.get(part["relation"], "0")
-    return {"format": "rede.rules/1", "pack": "example", "relations": list(relations), "rules": list(rules)}
+    return {"format": "rezono.rules/1", "pack": "example", "relations": list(relations), "rules": list(rules)}
 
 
 def missing(doc, rows, read=(), values=None):
@@ -113,7 +113,7 @@ def test_an_invariant_the_engine_left_empty_does_not_pass():
 
 
 def test_an_outcome_cannot_hide_a_second_state():
-    """known and unknown for one element block (W7). Without the unknown row the outcome looks total and single."""
+    """known and unknown for one element block. Without the unknown row the outcome looks total and single."""
     doc = program([relation("host", "base", "id"), relation("ok", "base", "id"),
                    relation("state", "derived", "id", "state", "reason", outcome="host")],
                   rule("known", 0, ("state", "?x", "known", ""), ("host", "?x"), ("ok", "?x")),
@@ -134,7 +134,7 @@ def test_what_the_calculation_reads_is_covered():
     """A calculation reads a missing row as false or unknown (calc.reads), so its relations are covered."""
     doc = program([FLAG, relation("as_of", "base", "id"), relation("seen", "derived", "id")],
                   rule("seen", 0, ("seen", "?x"), ("flag", "?x")))
-    calc_ir = {"format": "rede.calc-ir/1", "as_of": "as_of", "facts": [{"id": "f", "reads": "presence", "table": "seen"}],
+    calc_ir = {"format": "rezono.calc-ir/1", "as_of": "as_of", "facts": [{"id": "f", "reads": "presence", "table": "seen"}],
                "rules": [], "versions": [{"id": "v@1", "view": "v__1", "definitions": [
                    {"when": {"fact": "f"}, "value": {"fact": "f"}}]}]}
     report = epoch(doc, {"flag": [["a"]], "as_of": [], "seen": []}, [], calc_ir=calc_ir)
@@ -142,7 +142,7 @@ def test_what_the_calculation_reads_is_covered():
 
 
 def test_a_role_is_not_held_to_closure():
-    """A role's snapshots are filtered (O8): what it reads in full is checked against the complete epoch."""
+    """A role's snapshots are filtered: what it reads in full is checked against the complete epoch."""
     rows = {"flag": [["a"]], "request": [["a"]], "blocked": [], "allowed": [["a"]]}
     assert epoch(GATE, rows, [witness(GATE, "allowed", x="a")], full=set(rows))["valid"]
 
@@ -169,7 +169,7 @@ def test_joins_follow_shared_variables_and_a_product_has_none():
 
 
 def test_a_filter_is_applied_before_the_next_join(monkeypatch):
-    """Review of #540 (P2): `a(x), b(y)` with a condition on x alone must not carry the whole product. Each
+    """`a(x), b(y)` with a condition on x alone must not carry the whole product. Each
     condition and negation is applied as soon as its variables are bound, so the join sees what is left."""
     doc = program([relation("left", "base", "id"), relation("right", "base", "id"), relation("off", "base", "id"),
                    relation("pair", "derived", "a", "b")],
@@ -318,7 +318,7 @@ def test_a_minimum_over_nothing_owes_no_row():
         ("flags", ["3"], "flags")]
 
 
-# --- a counter with an explicit bound (decision R16, RV-K18) ---------------------------------------
+# --- a counter with an explicit bound ---------------------------------------
 
 def counting(condition):
     """`depth(a, 0) :- seed(a).  depth(b, m) :- depth(a, n), <condition>, step(a, b), m = n + 1.`"""

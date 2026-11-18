@@ -1,4 +1,4 @@
-id: https://rede.example/std-decision/decision
+id: https://rezono.example/std-decision/decision
 name: std_decision
 description: >-
   The decision record. A decision is an origin of facts (S32, class decision): somebody decided it, on a day, and
@@ -50,7 +50,7 @@ classes:
         close_mappings: [prov:wasAttributedTo]
         description: >-
           Who took the decision: a person or a body, by the identifier the domain uses for its parties. Open
-          world (W6): a record that names nobody leaves unknown who decided.
+          world: a record that names nobody leaves unknown who decided.
         annotations:
           world: open
       decided_on:
@@ -97,7 +97,7 @@ classes:
         description: >-
           An earlier decision this one looked at again. A reassessment replaces nothing: the earlier decision
           stands as its own record says. A domain's rule reads it to say that a decision was looked at again
-          after one of its grounds stopped standing. Open world (W6): that no record reassesses a decision
+          after one of its grounds stopped standing. Open world: that no record reassesses a decision
           leaves unknown whether anybody looked at it again.
         annotations:
           world: open
@@ -108,8 +108,8 @@ classes:
         range: Principle
         multivalued: true
         description: >-
-          A principle the decision rests on: what makes it right (the warrant of an explanation). Open world
-          (W6): a record that names no principle leaves unknown what the decision rests on. No rule reads it.
+          A principle the decision rests on: what makes it right (the warrant of an explanation). Open world:
+          a record that names no principle leaves unknown what the decision rests on. No rule reads it.
         annotations:
           world: open
       owner:
@@ -117,7 +117,7 @@ classes:
         close_mappings: [schema:maintainer]
         description: >-
           Who answers for the decision today, by the identifier the domain uses for its parties. Not the
-          decider: the one who keeps it and is asked about it. Open world (W6), and no rule reads it.
+          decider: the one who keeps it and is asked about it. Open world, and no rule reads it.
         annotations:
           world: open
       review_on:
@@ -181,7 +181,7 @@ classes:
         unique_key_slots: [decision, rests_on]
 
   # The justification layer (EX9): why a decision is so, as recorded facts that point to it. An explanation
-  # shows them beside the proof; no rule reads these kinds. Each row has its own source (S25).
+  # shows them beside the proof; no rule reads these kinds. Each row has its own source.
   Purpose:
     description: >-
       Something a decision serves, and for whom: the purpose of an explanation. One row per thing served.
@@ -199,7 +199,7 @@ classes:
       served:
         multivalued: true
         description: >-
-          Who is served, by the identifier the domain uses for its parties. Open world (W6): a record that
+          Who is served, by the identifier the domain uses for its parties. Open world: a record that
           names nobody leaves unknown for whom.
         annotations:
           world: open
@@ -220,7 +220,7 @@ classes:
         range: Decision
         description: >-
           The decision that adopted the principle. Its state, decider and validity are the principle's. Open
-          world (W6): a principle whose record names no decision is of unknown standing, never of no standing.
+          world: a principle whose record names no decision is of unknown standing, never of no standing.
           A pack whose rules read a principle's standing makes this slot required for its own principles.
         annotations:
           world: open

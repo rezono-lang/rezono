@@ -1,6 +1,6 @@
 # A body of aggregates only: a count and a sum over a whole relation, and a maximum. No literal, so no group
 # key: each relation has one row at most (the maximum none, when there are no hours).
-format: rede.rules/1
+format: rezono.rules/1
 pack: fixture
 relations:
   - name: hours

@@ -1,10 +1,10 @@
-id: https://rede.example/std-order/order
+id: https://rezono.example/std-order/order
 name: std_order
 description: >-
   Order and rank. An ordered element may come before others (precedes), may carry a whole-number rank,
   and may lie on a named scale. The axioms are rule invariants (rules/order.dl): precedes is a strict
   partial order, and a rank never contradicts it. The mapping annotations compare with schema.org's
-  item lists (decision O12b); no rule reads them.
+  item lists; no rule reads them.
 in_language: en
 prefixes:
   linkml: https://w3id.org/linkml/

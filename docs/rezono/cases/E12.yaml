@@ -1,0 +1,9 @@
+id: E12
+status: settled
+mode: parse
+source: ask Plan where hourly_price <= € 0.20/h
+expect:
+  print: ask Plan where hourly_price <= € 0.20/h
+note: A literal keeps the scale it was written with.
+sources:
+- rezono/src/print.ts

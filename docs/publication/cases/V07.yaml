@@ -1,0 +1,29 @@
+id: V07
+class: invalid
+status: settled
+schema:
+  from: fixture.schema.json
+  merge:
+    kinds:
+      Plan:
+        world: closed
+        id:
+          type: Text
+        versioned:
+          at: Date
+          known: Date
+        slots:
+          owner:
+            card: '?'
+            ref: Team
+            states:
+            - known
+            - not_applicable
+form: schema
+expect:
+  accept: false
+  error: '`versioned` not supported by this reader'
+note: 'Only for a reader that does not implement versioned kinds: it rejects the schema, it does not ignore the
+  member.'
+sources:
+- publication/rezono_publication/l0.py, check_schema

@@ -1,5 +1,5 @@
 # unassigned is @absence, but its rule negates no open relation and reads no other @absence relation.
-format: rede.rules/1
+format: rezono.rules/1
 pack: fixture
 relations:
 - name: assigned

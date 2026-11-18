@@ -1,0 +1,24 @@
+id: T07
+status: settled
+mode: check-only
+source: |
+  enum Size = medium | large
+
+  extend Host
+    derived size: Size
+      table unique
+        | memory_need       | -> size |
+        | 300 GiB..<500 GiB | medium  |
+        | 500 GiB..         | large   |
+expect:
+  diagnostics:
+  - code: W112
+    span:
+      text: table unique
+      start: 65
+      end: 77
+note: Rows that do not cover the input (below 300 GiB) are W112 at the table, with an example input; R024 if the value is
+  `total`.
+sources:
+- docs/rezono/tables.md §3, §4
+- v0 §5c

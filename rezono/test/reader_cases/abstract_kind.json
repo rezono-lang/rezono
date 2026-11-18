@@ -1,0 +1,29 @@
+{
+  "source": "abstract kind Person\n  name: Text",
+  "declarations": [
+    {
+      "kind": "Person",
+      "slots": [
+        {
+          "slot": "name",
+          "type": "Text"
+        }
+      ],
+      "derived": [],
+      "abstract": true
+    }
+  ],
+  "knownDiagnostics": [
+    {
+      "code": "R000",
+      "span": {
+        "text": "kind",
+        "start": 30,
+        "end": 34
+      },
+      "args": [
+        "\"=\" or \":\""
+      ]
+    }
+  ]
+}

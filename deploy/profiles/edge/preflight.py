@@ -1,5 +1,5 @@
 """Check the keys of a CI job before it does anything, and fail loudly if one is missing, expired or
-revoked: a job without working keys must never pass quietly (decision P3, profile edge).
+revoked: a job without working keys must never pass quietly (profile edge).
 
   python deploy/profiles/edge/preflight.py s3    the R2 keys of environment publish: can they see the bucket?
   python deploy/profiles/edge/preflight.py git   the Git token of environment propose: may it read the repository?

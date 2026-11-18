@@ -1,6 +1,6 @@
-# An undo of a change in a fact file with a source companion (S25): the value goes back by its exact lines,
+# An undo of a change in a fact file with a source companion: the value goes back by its exact lines,
 # the companion by its exact text, and only on the bytes the hashes name.
-format: rede.delta/1
+format: rezono.delta/1
 pack: library
 changes:
   - op: set

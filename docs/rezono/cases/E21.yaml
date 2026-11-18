@@ -1,0 +1,8 @@
+id: E21
+status: settled
+mode: parse
+source: ask Host where when owner is known then memory_need > 400 GiB else false
+expect:
+  print: ask Host where when owner is known then memory_need > 400 GiB else false
+sources:
+- rezono/src/print.ts

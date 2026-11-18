@@ -17,8 +17,8 @@ from urllib.parse import unquote
 
 import pytest
 
-from rede_canon import canonical_bytes, canonical_sha256, sha256_hex
-from rede_publisher import batch, kept, kept_views, private_view_archive as candidates, publish, store, views
+from rezono_canon import canonical_bytes, canonical_sha256, sha256_hex
+from rezono_publisher import batch, kept, kept_views, private_view_archive as candidates, publish, store, views
 from test_kept_view_archive import inputs as view_inputs  # noqa: F401  (fixture of the fixture below)
 from test_private_view_archive import inputs  # noqa: F401  (fixture)
 
@@ -111,7 +111,7 @@ def test_a_view_publication_replays_byte_for_byte_from_its_private_candidate(cas
     def archived(tree, args, env=None):
         calls.append(("run", args[-1], env))
         # The verified base and every recorded view source, at the paths the archived publisher reads them.
-        assert (tree / "pack" / "pack.yaml").is_file() and (tree / "edge/publisher/rede_publisher/kept.py").is_file()
+        assert (tree / "pack" / "pack.yaml").is_file() and (tree / "edge/publisher/rezono_publisher/kept.py").is_file()
         for entry in record["views"]["files"]:
             assert sha256_hex((tree / entry["path"]).read_bytes()) == entry["sha256"]
         new = store.FileStore(tree.parent.parent / "store")
@@ -130,7 +130,7 @@ def test_a_view_publication_replays_byte_for_byte_from_its_private_candidate(cas
     monkeypatch.setattr(kept, "kept_dir", lambda _: case["kept_root"])
     assert kept.check(case["pack_dir"], view_archives={case["manifest_key"]: case["receipt"]}) == []
     assert [c[0] for c in calls] == ["python", "npm", "run"]
-    assert calls[1][2] == "/pinned/node" and calls[2] == ("run", "--views", {"REDE_NODE": "/pinned/node"})
+    assert calls[1][2] == "/pinned/node" and calls[2] == ("run", "--views", {"REZONO_NODE": "/pinned/node"})
 
 
 @pytest.mark.xfail(strict=True, reason="viewer/src/lib is not in the standalone repository")

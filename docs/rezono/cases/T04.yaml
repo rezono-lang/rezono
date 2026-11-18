@@ -1,0 +1,32 @@
+id: T04
+status: settled
+mode: evaluate
+declare: |
+  enum Tier = gold | silver | bronze
+
+  extend Host
+    derived tier: Tier
+      table priority
+        | memory_need | owner         | -> tier |
+        | 500 GiB..   | -             | gold    |
+        | 300 GiB..   | -             | silver  |
+        | -           | team-platform | bronze  |
+source: ask Host where tier = silver
+data: appendix-b
+expect:
+  answer:
+    rows:
+    - host-a
+    undecided:
+    - binder: host-b
+      state: unknown
+      reason: no_row_applies
+    - binder: host-d
+      state: unknown
+      reason: no_spec
+    not_applicable: 0
+note: 'priority: the applying output that comes first in the enum''s order; host-a''s undecided `bronze` row comes after `silver`
+  and cannot change the outcome.'
+sources:
+- docs/rezono/tables.md §3, §4
+- v0 §5c

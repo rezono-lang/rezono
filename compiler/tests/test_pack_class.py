@@ -1,5 +1,5 @@
 """SO-5: pack.yaml may say what the pack's data is (`class`); the compiler reads it as a name and nothing more.
-Which profile carries which class is rede_publisher.classes; the compiler knows no class by name."""
+Which profile carries which class is rezono_publisher.classes; the compiler knows no class by name."""
 
 import shutil
 from pathlib import Path
@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from rede_compiler import pack
+from rezono_compiler import pack
 
 FIXTURE = Path(__file__).parent / "fixtures" / "minimal"
 

@@ -1,9 +1,0 @@
-id: E11
-status: settled
-mode: parse
-source: ask Plan where memory = 0.5 TiB
-expect:
-  print: ask Plan where memory = 0.5 TiB
-note: 'Holds for rows with 512 GiB: literals convert exactly.'
-sources:
-- '#350 P10.2a §11'

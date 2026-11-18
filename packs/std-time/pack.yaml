@@ -1,8 +1,8 @@
-# Theory std-time: intervals of positions on an axis (#314 §5.2, work package T4). Neutral concepts, axioms
+# Theory std-time: intervals of positions on an axis. Neutral concepts, axioms
 # and rules, and no facts. A domain maps its own kinds and attributes onto it with a view
 # (docs/compiler.md, theories and views), or lets a kind of its own be an Interval.
 name: std-time
-version: 0.1.0
+version: 0.1.2
 default_language: en
 theory: true
 imports: []

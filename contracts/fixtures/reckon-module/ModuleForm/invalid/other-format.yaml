@@ -1,3 +1,0 @@
-format: rede.reckon-module/2
-module: {pack: lab, use: [], decls: []}
-spans: []

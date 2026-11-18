@@ -1,5 +1,5 @@
 {
-	"name": "rede-edge-tools",
+	"name": "rezono-edge-tools",
 	"private": true,
 	"description": "The deploy tooling of profile edge, locked: installed with --ignore-scripts before any credential is exposed",
 	"devDependencies": {

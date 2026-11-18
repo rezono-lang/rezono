@@ -6,9 +6,9 @@ import json
 import shutil
 
 import pytest
-from rede_canon import canonical_bytes
+from rezono_canon import canonical_bytes
 
-from rede_publisher import store, view_build, views
+from rezono_publisher import store, view_build, views
 
 
 class History:
@@ -42,7 +42,14 @@ def old_view(st, mid, role, layout):
 
 
 @pytest.fixture
-def identity(monkeypatch):
+def identity(monkeypatch, tmp_path):
+    tree = source_tree(tmp_path / "view-build")
+    inventory = view_build.inventory
+
+    def source_inventory(root=view_build.ROOT):
+        return inventory(tree if root == view_build.ROOT else root)
+
+    monkeypatch.setattr(view_build, "inventory", source_inventory)
     monkeypatch.setattr(view_build, "executable", lambda node=None: "/node")
     monkeypatch.setattr(view_build, "runtime", lambda node, expected=None: {"executable_sha256": "a" * 64,
                         "version": "v24.0.0", "platform": "linux", "architecture": "x64", "versions": []})
@@ -82,7 +89,6 @@ def renderer(monkeypatch, calls):
     monkeypatch.setattr(views, "_checked", checked)
 
 
-@pytest.mark.xfail(strict=True, reason="viewer/src/lib is not in the standalone repository")
 def test_render_uses_frozen_role_inputs_after_history_changes(identity, monkeypatch):
     st, calls = History(), []
     old_view(st, "m-1", "a", b'{"revoked":"a-secret"}')
@@ -108,7 +114,6 @@ def test_render_uses_frozen_role_inputs_after_history_changes(identity, monkeypa
     assert b"secret" not in prepared.component_bytes and b"capture" not in prepared.component_bytes
 
 
-@pytest.mark.xfail(strict=True, reason="viewer/src/lib is not in the standalone repository")
 def test_retry_keeps_the_first_choice_instead_of_a_newer_older_index(identity, monkeypatch):
     st, calls = History(), []
     old_view(st, "m-0", "a", b"first")
@@ -124,7 +129,6 @@ def test_retry_keeps_the_first_choice_instead_of_a_newer_older_index(identity, m
     assert st.data == immutable
 
 
-@pytest.mark.xfail(strict=True, reason="viewer/src/lib is not in the standalone repository")
 def test_missing_previous_is_an_explicit_capture_not_a_late_lookup(identity, monkeypatch):
     st, calls = History(), []
     prepared = views.prepare(st, "p", "m-2", ["a"])
@@ -137,7 +141,6 @@ def test_missing_previous_is_an_explicit_capture_not_a_late_lookup(identity, mon
     assert views.prepare(st, "p", "m-2", ["a"]).capture("a").previous == ""
 
 
-@pytest.mark.xfail(strict=True, reason="viewer/src/lib is not in the standalone repository")
 @pytest.mark.parametrize("wrong", ["index", "layout"])
 def test_capture_refuses_foreign_role_history(identity, wrong):
     st = History()
@@ -194,7 +197,6 @@ def test_changed_node_binary_is_refused_before_execution(tmp_path, monkeypatch):
         view_build.runtime(str(binary), {"executable_sha256": "0" * 64})
 
 
-@pytest.mark.xfail(strict=True, reason="viewer/src/lib is not in the standalone repository")
 def test_runtime_version_mismatch_blocks_render(identity, monkeypatch):
     st = History()
     prepared = views.prepare(st, "p", "m-2", ["a"])
@@ -206,7 +208,6 @@ def test_runtime_version_mismatch_blocks_render(identity, monkeypatch):
         views.publish(st, "p", "m-2", prepared=prepared)
 
 
-@pytest.mark.xfail(strict=True, reason="viewer/src/lib is not in the standalone repository")
 def test_no_foreign_or_missing_prepared_role_can_render(identity, monkeypatch):
     st = History()
     prepared = views.prepare(st, "p", "m-2", ["a"])
@@ -241,15 +242,15 @@ def test_legacy_views_without_build_identity_keep_the_existing_path(monkeypatch)
 
 @pytest.mark.parametrize(
     "with_views",
-    [False, pytest.param(True, marks=pytest.mark.xfail(strict=True, reason="viewer/src/lib is not in the standalone repository"))],
+    [False, True],
 )
 def test_cli_build_identity_is_final_before_manifest_and_viewless_needs_no_node(identity, monkeypatch, with_views):
-    from rede_publisher import __main__ as cli, batch
+    from rezono_publisher import __main__ as cli, batch
     from test_publish import epoch
 
     st, called = History(), []
     manifest = "p/manifests/m-2.json"
-    monkeypatch.setattr(batch, "epoch", lambda *a, **k: epoch(pack="p", epoch=2, build={"format": "rede.build/3"}))
+    monkeypatch.setattr(batch, "epoch", lambda *a, **k: epoch(pack="p", epoch=2, build={"format": "rezono.build/3"}))
     monkeypatch.setattr(cli.store, "open_store", lambda *a: st)
     write = st.put_new
 
@@ -281,7 +282,6 @@ def test_cli_build_identity_is_final_before_manifest_and_viewless_needs_no_node(
     assert called == (["views", "manifest"] if with_views else ["manifest"])
 
 
-@pytest.mark.xfail(strict=True, reason="viewer/src/lib is not in the standalone repository")
 def test_restart_after_fixed_manifest_keeps_frozen_none_despite_late_history(identity, monkeypatch):
     st, calls = History(), []
     prepared = views.prepare(st, "p", "m-2", ["a"])
@@ -297,7 +297,6 @@ def test_restart_after_fixed_manifest_keeps_frozen_none_despite_late_history(ide
     assert index["capture_sha256"] == original_hash and "previous" not in index
 
 
-@pytest.mark.xfail(strict=True, reason="viewer/src/lib is not in the standalone repository")
 @pytest.mark.parametrize("damage", ["missing", "json", "role", "mode", "payload"])
 def test_fixed_main_refuses_missing_or_damaged_private_checkpoint(identity, monkeypatch, damage):
     st = History()
@@ -324,7 +323,6 @@ def test_fixed_main_refuses_missing_or_damaged_private_checkpoint(identity, monk
         views.publish(st, "p", "m-2")
 
 
-@pytest.mark.xfail(strict=True, reason="viewer/src/lib is not in the standalone repository")
 def test_concurrent_preparer_uses_first_committed_capture(identity, monkeypatch):
     st = History()
     old_view(st, "m-1", "a", b"candidate")
@@ -344,10 +342,9 @@ def test_concurrent_preparer_uses_first_committed_capture(identity, monkeypatch)
     assert json.loads(st.data[views.checkpoint_key("p", "m-2", "a")])["capture"]["layouts"] == []
 
 
-@pytest.mark.xfail(strict=True, reason="viewer/src/lib is not in the standalone repository")
 @pytest.mark.parametrize("failure", ["check", "index", "manifest", "head"])
 def test_cli_restart_recovers_frozen_checkpoint(identity, monkeypatch, failure):
-    from rede_publisher import __main__ as cli, batch, pointers, publish
+    from rezono_publisher import __main__ as cli, batch, pointers, publish
     from test_publish import epoch
 
     st, calls = History(), []
@@ -359,7 +356,7 @@ def test_cli_restart_recovers_frozen_checkpoint(identity, monkeypatch, failure):
     head = pointers.head_key("p", 2)
     target = {"index": index, "manifest": manifest, "head": head}.get(failure)
     stopped = True
-    monkeypatch.setattr(batch, "epoch", lambda *a, **k: epoch(pack="p", epoch=2, build={"format": "rede.build/3"}))
+    monkeypatch.setattr(batch, "epoch", lambda *a, **k: epoch(pack="p", epoch=2, build={"format": "rezono.build/3"}))
     monkeypatch.setattr(cli.store, "open_store", lambda *a: st)
 
     def layout(st, pack, mid, raw, bundle, role, mine, snapshots, layouts, node):
@@ -410,8 +407,8 @@ def test_cli_restart_recovers_frozen_checkpoint(identity, monkeypatch, failure):
                     reason="needs Node and the viewer's locked dependencies")
 def test_real_node_and_checker_remove_a_revoked_node_while_using_captured_previous_layout(monkeypatch):
     """Three authored nodes, then two: exercise views.ts and every real view checker, without an engine."""
-    from rede_compiler import emit, pack
-    from rede_publisher.publish import snapshot
+    from rezono_compiler import emit, pack
+    from rezono_publisher.publish import snapshot
 
     model = pack.read(view_build.ROOT / "compiler/tests/fixtures/minimal")
     bundle = emit.compile_pack(model)["bundle/schema-bundle.json"].encode()

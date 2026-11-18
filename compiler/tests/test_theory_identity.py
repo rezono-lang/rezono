@@ -1,10 +1,10 @@
-"""Theory std-identity (#314 §5.2, T5; lane G, G02): its axioms and rules against independent oracles.
+"""Theory std-identity: its axioms and rules against independent oracles.
 
 Three evaluations must agree as sets: an exact Python reference written from the definitions (union-find over the
 same_as claims, not a join), the DuckDB batch backend on the compiled IR, and Soufflé on the same program (when
 present, as in CI). The values a class compares come from a domain's own rules (the theory's @extend relations), so
 every case runs through a small neutral domain: by kind (`is_a: Referent`), and by a view with other names that
-executes through the bounded profile of RV-C27. No domain: the elements are letters.
+executes through the bounded execution profile. No domain: the elements are letters.
 """
 
 import shutil
@@ -14,8 +14,8 @@ import pytest
 import yaml
 from hypothesis import given, settings, strategies as st
 
-from rede_compiler import batch, emit, modules, pack
-from rede_compiler import rules as ir
+from rezono_compiler import batch, emit, modules, pack
+from rezono_compiler import rules as ir
 from support import typed
 import souffle
 
@@ -94,7 +94,7 @@ def domain(tmp_path, view=None):
     else:
         item = {"is_a": "Referent", "attributes": {"label": {}, "size": {"range": "integer"}}}
         imports = ["linkml:types", "std-identity:identity"]
-    write(d / "schema" / "domain.yaml", {"id": "https://rede.example/domain", "name": "domain",
+    write(d / "schema" / "domain.yaml", {"id": "https://rezono.example/domain", "name": "domain",
           "prefixes": {"linkml": "https://w3id.org/linkml/"}, "imports": imports, "default_range": "string",
           "annotations": {"layer": "facts"}, "classes": {"Item": item}})
     write(d / "labels" / "en.yaml", {"item": "item", "item.label": "label", "item.size": "size"}
@@ -102,7 +102,7 @@ def domain(tmp_path, view=None):
     write(d / "channels.yaml", {"kinds": [{"kind": "item", "shape": "rect"}]})
     (d / "rules" / "values.dl").write_text(VALUES, encoding="utf-8", newline="\n")
     if view:
-        write(d / "views.yaml", {"format": "rede.views/1", "views": [view]})
+        write(d / "views.yaml", {"format": "rezono.views/1", "views": [view]})
     return d
 
 

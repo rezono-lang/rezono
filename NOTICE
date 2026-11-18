@@ -1,0 +1,40 @@
+Rezono, by Vleer Doing and the Rezono contributors
+Copyright 2026 Vleer Doing and the Rezono contributors
+
+Licence by path:
+
+- Apache License 2.0 (Apache-2.0) — code, tests, build configuration, and scripts:
+  - .basedpyright/
+  - .github/
+  - .gitignore
+  - admission/
+  - canon/
+  - checker/
+  - compiler/
+  - contracts/check.py
+  - contracts/check.sh
+  - contracts/gen-types.sh
+  - contracts/python/
+  - deploy/
+  - edge/
+  - examples/**/*.py
+  - pyrightconfig.json
+  - requirements/
+  - rezono/
+  - publication/
+  - ruff.toml
+  - scripts/
+  - udf/
+  - viewer/
+
+- Creative Commons CC0 1.0 Universal (CC0-1.0) — schemas and theories:
+  - contracts/*.yaml
+  - contracts/fixtures/
+  - packs/
+
+- Creative Commons Attribution 4.0 International (CC-BY-4.0) — documentation and example content:
+  - blocked/
+  - docs/
+  - examples/ (except *.py)
+  - to-port/
+  - **/README.md

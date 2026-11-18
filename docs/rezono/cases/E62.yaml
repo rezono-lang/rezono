@@ -1,0 +1,24 @@
+id: E62
+status: settled
+mode: evaluate
+source: ask HostCluster where spec.nodes > 1
+data: appendix-b
+role: viewer
+given:
+- + x1.spec = small
+expect:
+  answer:
+    rows: []
+    undecided:
+    - binder: x1
+      state: unknown
+      reason: open_world
+      cause:
+        relation: cluster_spec__nodes
+        key:
+        - small
+    not_applicable: 0
+note: ClusterSpec is open and `small` has no row. Nothing is known of that element, so every slot of it is unknown,
+  whatever its cardinality; the cause is the row that would hold the value.
+sources:
+- expressions.md §7 (sets and absence)

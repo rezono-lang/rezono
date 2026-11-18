@@ -8,8 +8,8 @@ import shutil
 import tarfile
 
 import pytest
-from rede_canon import canonical_bytes, sha256_hex
-from rede_publisher import kept, kept_views, publish, view_build, views
+from rezono_canon import canonical_bytes, sha256_hex
+from rezono_publisher import kept, kept_views, publish, view_build, views
 from test_view_build import History, old_view
 
 

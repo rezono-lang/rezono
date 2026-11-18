@@ -1,4 +1,4 @@
-"""The issues of job `forms` of promote.yml (RV-K16 revised; decision A11): per pack one issue while its forms are
+"""The issues of job `forms` of promote.yml: per pack one issue while its forms are
 red, refused, in error or stopped (a timeout), and one for a run that failed before it named any pack.
 
   python deploy/profiles/edge/forms_issue.py
@@ -61,8 +61,8 @@ def main() -> int:
     for what, pack, r in todo:
         issue = next((i for i in issues if i["title"] == title(pack) and "pull_request" not in i), None)
         if what == "open":
-            body = (f"The Reckon Data forms of {pack or 'the packs'} ({r.get('manifest', 'no manifest')}, commit {sha}) "
-                    f"ended `{r['outcome']}` in {run}. The publication stands; the gate answers \"no Reckon Data form "
+            body = (f"The publication forms of {pack or 'the packs'} ({r.get('manifest', 'no manifest')}, commit {sha}) "
+                    f"ended `{r['outcome']}` in {run}. The publication stands; the gate answers \"no publication form "
                     "yet\" for the roles without an index, and seal and lake passed the pack over.")
             if issue:
                 ci.api(f"/repos/{repo}/issues/{issue['number']}/comments", {"body": body})

@@ -1,11 +1,11 @@
-"""THV1 (#401): a strong axiom of a theory blocks publication when the violation reaches the theory only through a view.
+"""THV1: a strong axiom of a theory blocks publication when the violation reaches the theory only through a view.
 
 Each case is a small domain that imports one standard theory pack as it is (std-order, std-part, std-time) and maps
-its own kinds onto it with a view (RV-C27, docs/compiler.md, "Views that execute").
+its own kinds onto it with a view (docs/compiler.md, "Views that execute").
 The lowering binds every rule that read a theory table to one relation that holds both the table and the view's
 rows, the `@invariant`s included (`view_rules.bind`).
 A row in an invariant relation is a red check and blocks publication, as the publisher counts it
-(edge/publisher/rede_publisher/batch.py); `red` below is that count.
+(edge/publisher/rezono_publisher/batch.py); `red` below is that count.
 
 Per axiom: a violation through the view gives the invariant's rows and blocks; the same rows in the theory's own
 tables give the same rows; a control on the same view gives no row, while the view demonstrably supplied rows.
@@ -19,7 +19,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from rede_compiler import batch, modules, pack, rules as ir
+from rezono_compiler import batch, modules, pack, rules as ir
 from support import typed
 
 pytest.importorskip("duckdb")
@@ -70,7 +70,7 @@ def domain_pack(root, case):
     name = case['view']['theory']
     theory = Path(shutil.copytree(REPO / 'packs' / name, root / name))
     domain = Path(shutil.copytree(FIXTURE, root / 'domain'))
-    write(domain / 'schema/minimal.yaml', {'id': f'https://rede.example/thv1-{name}', 'name': 'domain',
+    write(domain / 'schema/minimal.yaml', {'id': f'https://rezono.example/thv1-{name}', 'name': 'domain',
           'imports': ['linkml:types'], 'default_range': 'string', 'annotations': {'layer': 'facts'},
           'classes': case['classes']})
     write(domain / 'pack.yaml', {'name': 'domain', 'version': '0', 'default_language': 'nl',
@@ -78,7 +78,7 @@ def domain_pack(root, case):
     write(domain / 'channels.yaml', {'kinds': [{'kind': k, 'shape': 'rect'} for k in case['kinds']],
           'arrows': [{'arrow': a, 'dash': 'none'} for a in case['arrows']]})
     write(domain / 'labels/nl.yaml', {})
-    write(domain / 'views.yaml', {'format': 'rede.views/1', 'views': [json.loads(json.dumps(case['view']))]})
+    write(domain / 'views.yaml', {'format': 'rezono.views/1', 'views': [json.loads(json.dumps(case['view']))]})
     return domain
 
 

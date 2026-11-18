@@ -1,0 +1,17 @@
+id: E30
+status: settled
+mode: parse
+source: ask Host where memory_need > 384 GiB at 2026-11-01
+expect:
+  print: ask Host where memory_need > 384 GiB at 2026-11-01
+  diagnostics:
+  - code: R015
+    span:
+      text: at 2026-11-01
+      start: 37
+      end: 50
+    hint: to set the date of the question, write `ask Host at 2026-11-01 where …`
+note: 'Grammar valid: `at 2026-11-01` is a time selection on `384 GiB`, not the question''s date (§4).'
+sources:
+- rezono/src/print.ts
+- rezono/src/parse.ts

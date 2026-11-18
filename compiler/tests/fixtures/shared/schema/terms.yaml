@@ -1,5 +1,5 @@
 # A pack that another pack imports: one kind and one enum. Neutral names; it describes no domain.
-id: https://rede.example/shared-terms
+id: https://rezono.example/shared-terms
 name: shared_terms
 in_language: nl
 imports:

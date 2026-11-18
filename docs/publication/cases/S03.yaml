@@ -1,0 +1,15 @@
+id: S03
+class: invalid
+status: settled
+schema:
+  from: fixture.schema.json
+  merge:
+    types:
+      GiB:
+        scale: 2
+form: schema
+expect:
+  accept: false
+  error: integer must be text
+sources:
+- publication/rezono_publication/l0.py, check_schema

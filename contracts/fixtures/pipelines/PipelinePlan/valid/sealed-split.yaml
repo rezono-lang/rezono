@@ -1,6 +1,6 @@
 # A sealed pack above the limit with calculation rules: integrity forwards the accepted and refused rows,
 # the parts forward what the calculation reads, and the calculation is the last pipeline.
-format: rede.pipelines/1
+format: rezono.pipelines/1
 max_views: "4"
 pipelines:
   - {name: integrity, sql: [engine/tables.sql, engine/integrity.sql, engine/integrity-export.sql], modules: [], views: [], tables: [alpha, alpha__row_sha256, alpha__size], imports: [], exports: [alpha__accepted, alpha__refused]}

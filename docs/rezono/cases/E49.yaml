@@ -1,0 +1,30 @@
+id: E49
+status: settled
+mode: evaluate
+source: ask Host where memory_need > 300 GiB
+role: viewer
+limit: 1
+worlds:
+- name: a
+  data: appendix-b
+- name: b
+  data: appendix-b
+  given:
+  - + host-e.memory_need = 600 GiB
+  hidden:
+  - host-e
+expect:
+  identical_worlds: true
+  answer:
+    rows:
+    - host-a
+    - host-c
+    undecided:
+    - binder: host-d
+      state: unknown
+      reason: no_spec
+    not_applicable: 0
+note: 'Pages, cursors, counts and the dataset hash are byte-identical in both worlds: host-e is not readable by
+  `viewer` and no readable row depends on it.'
+sources:
+- rezono/src/evaluate.ts

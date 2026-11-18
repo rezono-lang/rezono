@@ -1,0 +1,12 @@
+id: S01
+class: valid
+status: settled
+schema:
+  from: fixture.schema.json
+form: schema
+expect:
+  accept: true
+  schema_id: s-27edc0ea5ccdaa8c2c73c5a51b3e2ed44d5399b2199d6993c03a031b07a7562a
+note: The fixture itself.
+sources:
+- publication/rezono_publication/l0.py, check_schema

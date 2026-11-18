@@ -1,0 +1,42 @@
+{
+  "source": "kind Category\n  parent: Category?\n  name: Text\n  unique name_within_parent = parent, name",
+  "declarations": [
+    {
+      "kind": "Category",
+      "slots": [
+        {
+          "slot": "parent",
+          "type": "Category",
+          "card": "?"
+        },
+        {
+          "slot": "name",
+          "type": "Text"
+        }
+      ],
+      "derived": [],
+      "keys": [
+        {
+          "unique": "name_within_parent",
+          "slots": [
+            "parent",
+            "name"
+          ]
+        }
+      ]
+    }
+  ],
+  "knownDiagnostics": [
+    {
+      "code": "R000",
+      "span": {
+        "text": "name_within_parent",
+        "start": 77,
+        "end": 95
+      },
+      "args": [
+        "\"=\" or \":\""
+      ]
+    }
+  ]
+}

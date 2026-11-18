@@ -13,4 +13,4 @@ mapping_owner: lab
 losses: []
 secrets: []
 requires: [may_execute]
-footprint: {makes: [probe_pod], plan_label: rede.dev/plan}
+footprint: {makes: [probe_pod], plan_label: rezono.org/plan}

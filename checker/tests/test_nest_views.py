@@ -1,4 +1,4 @@
-"""A Nest sheet (`nest.<id>`, one per binding) is checked like any sheet (rede_checker.views, check_view), plus its
+"""A Nest sheet (`nest.<id>`, one per binding) is checked like any sheet (rezono_checker.views, check_view), plus its
 binding in the compiled bundle (`channels.nests`): its nodes are exactly the parts the role's rows give (every element
 of the first level the role reads, every element whose container is a part, and every element whose container is
 unknown, apart with its own parts; an element known to have no container is on no sheet); a part's container is the
@@ -8,7 +8,7 @@ and without a row "none" or unknown, whichever holds. Negative cases first."""
 import copy
 import json
 
-from rede_checker.views import Role, check_view
+from rezono_checker.views import Role, check_view
 
 STATE = {"channel": "tone", "slot": "state", "level": "ordered", "meaning_message": "s"}
 # A binding as the compiler writes it into the bundle: an arrow by its element id, a column by its name.
@@ -64,7 +64,7 @@ def problems(nodes=NODES, edges=(), rows=ROWS, sheet=SHEET, bundle=BUNDLE, full=
     snapshots = {r: json.dumps([{"key": k} for k in keys]).encode() for r, keys in rows.items()}
     layout = {"nodes": {n["id"]: [n["x"], n["y"], n["width"], n["height"]] for n in nodes},
               "edges": {e["id"]: {"source": e["source"], "target": e["target"], "points": e["points"]} for e in edges}}
-    tile = {"format": "rede.tile/1", "sheet": sheet, "level": 0, "x": 0, "y": 0, "box": [0, 0, TILE, TILE],
+    tile = {"format": "rezono.tile/1", "sheet": sheet, "level": 0, "x": 0, "y": 0, "box": [0, 0, TILE, TILE],
             "nodes": nodes, "edges": list(edges)}
     path = f"{sheet}/0/0_0.json"
     return check_view(sheet, snapshots, json.dumps(layout).encode(), {path: json.dumps(tile).encode()}, path, TILE, 4, 1, bundle,
@@ -143,7 +143,7 @@ def test_a_state_the_role_s_rows_do_not_give_is_found():
 
 
 def test_a_part_known_to_have_no_container_is_on_no_sheet_and_an_unknown_one_stands_apart():
-    """The arbiter, 11-11-2026: without a container row a part stands apart where its container is unknown (a
+    """Without a container row a part stands apart where its container is unknown (a
     required arrow, an open relation, or one the role does not read in full). Where the arrow is optional, its
     relation closed and read in full, the element is known to have none: a part of nothing, on no sheet."""
     plain = [{k: v for k, v in n.items() if k != "states"} for n in NODES]
@@ -180,7 +180,7 @@ def test_a_part_with_two_containers_is_no_part():
 
 def test_two_elements_of_one_level_with_one_id_are_refused():
     """A container is named by its id alone: with a renewal and a transfer both `a3`, a line in `a3` would lie
-    in one of two. The viewer stops on it too (RV-V29)."""
+    in one of two. The viewer stops on it too."""
     rows = ROWS | {"transfer": [["a3"]]}
     found("renewal/a3 and transfer/a3 are two elements of level application with one id", rows=rows)
 

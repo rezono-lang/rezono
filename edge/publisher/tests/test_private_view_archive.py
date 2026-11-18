@@ -8,8 +8,8 @@ import subprocess
 
 import pytest
 
-from rede_canon import canonical_sha256, sha256_hex
-from rede_publisher import batch, kept, kept_views, private_view_archive as candidates, publish
+from rezono_canon import canonical_sha256, sha256_hex
+from rezono_publisher import batch, kept, kept_views, private_view_archive as candidates, publish
 from test_kept_view_archive import inputs as view_inputs  # noqa: F401 (a pytest fixture)
 
 
@@ -112,7 +112,7 @@ def test_both_existing_verifications_finish_before_any_candidate_output(inputs, 
         digest = sha256_hex(body)
         key = f"p/builds/{digest}.json"
         inputs["target"][key] = body
-        manifest["build"] = {"uri": f"s3://rede/{key}", "sha256": digest}
+        manifest["build"] = {"uri": f"s3://rezono/{key}", "sha256": digest}
         inputs["target"][inputs["manifest_key"]] = publish.canonical(manifest)
     with pytest.raises(kept_views.ArchiveError):
         candidates.commit_archive(**inputs)

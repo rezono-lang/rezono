@@ -5,7 +5,7 @@ import json
 
 import pytest
 
-from rede_checker.views import _node
+from rezono_checker.views import _node
 from test_views import BUNDLE, BOXES, LINES, PAYLOAD, SNAPSHOTS, STUB, STUB_SHOWS, problems, view
 
 

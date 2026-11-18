@@ -1,0 +1,16 @@
+id: E31
+status: settled
+mode: parse
+source: 'ask h: Host, p: Plan where fits(h, p)'
+expect:
+  print: 'ask h: Host, p: Plan where fits(h, p)'
+  diagnostics:
+  - code: R015
+    span:
+      text: ', p: Plan'
+      start: 11
+      end: 20
+note: Several binders are reserved.
+sources:
+- rezono/src/print.ts
+- rezono/src/parse.ts

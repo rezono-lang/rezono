@@ -1,0 +1,21 @@
+id: E42
+status: settled
+mode: evaluate
+source: ask Host where owner = team-platform
+data: appendix-b
+role: viewer
+expect:
+  answer:
+    rows:
+    - host-c
+    undecided:
+    - binder: host-a
+      state: unknown
+      reason: not_assigned
+      cause:
+        relation: host__owner
+        key:
+        - host-a
+    not_applicable: 2
+sources:
+- rezono/src/evaluate.ts

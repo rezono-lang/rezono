@@ -1,0 +1,15 @@
+id: E38
+status: settled
+mode: parse
+source: ask Plan where hourly_price as known 2026-10-26 <= € 0.20/h
+expect:
+  print: ask Plan where hourly_price as known 2026-10-26 <= € 0.20/h
+  diagnostics:
+  - code: R015
+    span:
+      text: as known 2026-10-26
+      start: 28
+      end: 47
+sources:
+- rezono/src/print.ts
+- rezono/src/parse.ts

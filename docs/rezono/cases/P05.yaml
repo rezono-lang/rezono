@@ -1,0 +1,18 @@
+id: P05
+status: settled
+mode: publish
+source: warn host.memory_need <= 450 GiB
+data: appendix-b
+expect:
+  publication:
+    outcome: publishes
+    violations:
+    - host-c
+    undecided:
+    - binder: host-d
+      state: unknown
+      reason: no_spec
+    blocking: []
+note: '`warn` never blocks; its rows are warnings.'
+sources:
+- rezono/README.md, What a check statement decides

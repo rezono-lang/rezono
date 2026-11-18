@@ -1,4 +1,4 @@
-"""Explanation questions as data (decision R10; docs/gui.md, "Questions as data"): std-explain imported and
+"""Explanation questions as data (docs/gui.md, "Questions as data"): std-explain imported and
 pinned, a pack's own questions.yaml after it, every name checked, messages merged. The minimal fixture."""
 
 import json
@@ -9,7 +9,7 @@ import pytest
 import yaml
 
 from support import FIXTURE, REPO
-from rede_compiler import emit, modules, pack
+from rezono_compiler import emit, modules, pack
 
 STD = REPO / "packs" / "std-explain"
 RULES = """
@@ -32,7 +32,7 @@ def fixture(tmp_path) -> Path:
 
 
 def own(d: Path, *questions, messages=("sources",)) -> None:
-    (d / "questions.yaml").write_text(yaml.safe_dump({"format": "rede.questions/1", "questions": list(questions)},
+    (d / "questions.yaml").write_text(yaml.safe_dump({"format": "rezono.questions/1", "questions": list(questions)},
                                                      sort_keys=False))
     mf2 = d / "messages" / "nl.mf2"
     mf2.write_text(mf2.read_text() + "".join(f"explain.{t} = {t}\nexplain.{t}.question = {{{{{t} {{$element}}}}}}\n"
@@ -118,7 +118,7 @@ def test_rules_without_questions_warn(tmp_path):
 
 
 def test_the_computed_questions_contrast_and_consequence(fixture):
-    """X5 (RV-X24): contrast walks back through the rules from an absent conclusion, without candidates (its
+    """X5: contrast walks back through the rules from an absent conclusion, without candidates (its
     closing rows come from `closes` in the bundle); consequence supposes the start row away (the published
     variant that deletes it) and walks forward. Both are in every pack that imports std-explain, in each language."""
     own(fixture, OWN)

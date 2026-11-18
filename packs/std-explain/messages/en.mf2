@@ -22,6 +22,6 @@ explain.outside = Outside your view
 explain.more = More from here
 explain.empty = {{No answer for {$element}.}}
 explain.unpublished = {{Not published yet: propose {$element} to get the answer.}}
-# For a computed answer (contrast, consequence): it says that Rede derived it (docs/explain/contract.md, rule 5).
-explain.computed = Computed by Rede
+# For a computed answer (contrast, consequence): it says that Rezono derived it (docs/explain/contract.md, rule 5).
+explain.computed = Computed by Rezono
 explain.not_computed.no_variant = {{Not computed: no published variant withdraws {$element}.}}

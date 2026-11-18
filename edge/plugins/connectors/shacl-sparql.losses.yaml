@@ -1,6 +1,6 @@
 # A pack's invariants as SHACL-SPARQL constraints (shacl_sparql.py; M08, second half), read by a SHACL validator
-# with SPARQL-based constraints: what it does not get of Rede's checks. The constraints are plain SHACL and
-# SPARQL 1.1: no extension. test_shacl_sparql.py holds the translation to Rede's own result on a fixture pack.
+# with SPARQL-based constraints: what it does not get of Rezono's checks. The constraints are plain SHACL and
+# SPARQL 1.1: no extension. test_shacl_sparql.py holds the translation to Rezono's own result on a fixture pack.
 connector: shacl-sparql-out
 standard: SHACL
 standard_version: "2017-07-20"
@@ -14,13 +14,13 @@ losses:
     carried_by: ["sh:deactivated", "sh:message"]
   - subject: check
     what: >-
-      An invariant that reads an outcome (W7), a calculation input or a relation the view does not carry.
+      An invariant that reads an outcome, a calculation input or a relation the view does not carry.
       Its shape is deactivated with the reason, as for recursion.
     fate: weakened
     carried_by: ["sh:deactivated", "sh:message"]
   - subject: check
     what: >-
-      The seal (E3) once a close is in the view. Whether a row is refused depends on its row hash, which the
+      The seal once a close is in the view. Whether a row is refused depends on its row hash, which the
       view does not carry, so an invariant that reads accepted rows is decided only while no close is there.
       With a close the shape reports that it cannot decide, never that the data conforms.
     fate: weakened

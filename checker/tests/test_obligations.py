@@ -1,5 +1,5 @@
 """AUD-C3: the checker holds an epoch's own obligations against the complete snapshots, not on the compiler's or
-the publisher's word: an invariant relation is empty, and an outcome (W7) gives every element of its kind exactly
+the publisher's word: an invariant relation is empty, and an outcome gives every element of its kind exactly
 one state. Each witness below is a correct proof, so only the obligation itself can refuse the epoch."""
 
 import hashlib
@@ -7,9 +7,9 @@ import json
 
 import pytest
 
-from rede_checker.canon import encode_key
-from rede_checker.check import check_epoch
-from rede_checker.rules import derived_relations, load_rules
+from rezono_checker.canon import encode_key
+from rezono_checker.check import check_epoch
+from rezono_checker.rules import derived_relations, load_rules
 
 
 def relation(name, role, *columns, **flags):
@@ -23,7 +23,7 @@ def rule(rid, head, terms, body):
 
 def epoch(relations, rules, rows):
     """Every row of every derived relation with its correct witness, checked as one complete epoch."""
-    doc = {"format": "rede.rules/1", "relations": relations, "rules": rules}
+    doc = {"format": "rezono.rules/1", "relations": relations, "rules": rules}
     loaded = load_rules(doc)
     snaps = {r: json.dumps([{"key": k} for k in rs]).encode() for r, rs in rows.items()}
     manifest = {"id": "m-1", "snapshots": [{"relation": r, "role": "all", "complete": True, "uri": r, "format": "json",
@@ -101,7 +101,7 @@ def test_several_reasons_for_unknown_publish():
 
 
 def test_an_outcome_over_no_kind_is_refused():
-    """Review of #465: an outcome that names an empty derived relation would make totality vacuous."""
+    """An outcome that names an empty derived relation would make totality vacuous."""
     decoy = relation("decoy", "derived", "id")
     for target in ("decoy", "owned_pair", "missing"):
         state = {**STATE, "outcome": target}
@@ -115,7 +115,7 @@ def test_an_outcome_over_no_kind_is_refused():
 
 
 def test_an_outcome_row_without_three_parts_is_a_finding_not_a_crash():
-    """Review of #465: a row {"key": []} is reported before any part of it is read."""
+    """A row {"key": []} is reported before any part of it is read."""
     rows = {"host": [["h1"]], "owned": [["h1"]], "state": [[], ["h1", "known", ""]]}
     report = epoch([HOST, OWNED, STATE], [KNOWN], rows)
     assert errors(report) == [("outcome_state", "state", encode_key([])), ("unproven_row", "state", encode_key([]))]

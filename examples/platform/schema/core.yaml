@@ -1,0 +1,79 @@
+id: https://rezono.org/examples/platform-core
+name: platform_core
+description: >-
+  A trial: the smallest core of a reference platform. Services with a product, a role and a step; what a product
+  offers and asks; everything else is derived.
+in_language: en
+imports:
+  - linkml:types
+default_range: string
+annotations:
+  layer: facts
+
+enums:
+  YesNo:
+    permissible_values:
+      "yes":
+      "no":
+
+classes:
+  Zone:
+    attributes:
+      id: {identifier: true}
+  ClusterClass:
+    attributes:
+      id: {identifier: true}
+  PlatformRole:
+    attributes:
+      id: {identifier: true}
+      zone: {range: Zone, required: true}
+      cluster_class: {range: ClusterClass, required: true}
+      runs_images: {range: YesNo, required: true}
+  Function:
+    attributes:
+      id: {identifier: true}
+      recovery_allowed: {range: YesNo, required: true}
+      open_by_design: {range: YesNo, required: true}
+  Product:
+    attributes:
+      id: {identifier: true}
+  Offer:
+    attributes:
+      id: {identifier: true}
+      product: {range: Product, required: true}
+      function: {range: Function, required: true}
+      port: {range: integer, required: true}
+  Demand:
+    attributes:
+      id: {identifier: true}
+      product: {range: Product, required: true}
+      function: {range: Function, required: true}
+  Service:
+    attributes:
+      id: {identifier: true}
+      product: {range: Product, required: true}
+      role: {range: PlatformRole, required: true}
+      step: {range: integer, required: true}
+  Release:
+    attributes:
+      id: {identifier: true}
+      product: {range: Product, required: true}
+      released_on_day: {range: integer, required: true}
+      stable: {range: YesNo, required: true}
+  Pin:
+    attributes:
+      id: {identifier: true}
+      service: {range: Service, required: true}
+      release: {range: Release, required: true}
+  Choice:
+    attributes:
+      id: {identifier: true}
+      service: {range: Service, required: true}
+      function: {range: Function, required: true}
+      provider: {range: Service, required: true}
+  Artifact:
+    attributes:
+      id: {identifier: true}
+      for_service: {range: Service, required: true}
+      built_by: {range: Service, required: true}
+      signed: {range: YesNo, required: true}

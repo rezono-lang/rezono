@@ -1,4 +1,4 @@
-"""The satisfaction test (M3 of #314; docs/theories.md, step 4), per theory, on a neutral domain.
+"""The satisfaction test (docs/theories.md, step 4), per theory, on a neutral domain.
 
 Each case is a small domain with words of its own that imports a standard theory pack as it is and reads it through
 a view (docs/compiler/schema-operations.md, "Views that execute"). A case gives a strategy for the domain's
@@ -22,8 +22,8 @@ import satisfaction
 import yaml
 from hypothesis import given, settings
 from hypothesis import strategies as st
-from rede_compiler import modules, pack
-from rede_compiler import rules as ir
+from rezono_compiler import modules, pack
+from rezono_compiler import rules as ir
 from test_theory_order import reference as order_reference
 
 pytest.importorskip("duckdb")
@@ -114,7 +114,7 @@ def domain_pack(root, case, view=None):
     through the view of `case`, or `view`."""
     theory = Path(shutil.copytree(REPO / 'packs' / case.theory, root / case.theory))
     domain = Path(shutil.copytree(FIXTURE, root / 'domain'))
-    write(domain / 'schema/minimal.yaml', {'id': f'https://rede.example/m3-{case.theory}', 'name': 'domain',
+    write(domain / 'schema/minimal.yaml', {'id': f'https://rezono.example/m3-{case.theory}', 'name': 'domain',
           'imports': ['linkml:types'], 'default_range': 'string', 'annotations': {'layer': 'facts'},
           'classes': case.classes})
     write(domain / 'pack.yaml', {'name': 'domain', 'version': '0', 'default_language': 'nl',
@@ -122,7 +122,7 @@ def domain_pack(root, case, view=None):
     write(domain / 'channels.yaml', {'kinds': [{'kind': k, 'shape': 'rect'} for k in case.kinds],
           'arrows': [{'arrow': a, 'dash': 'none'} for a in case.arrows]})
     write(domain / 'labels/nl.yaml', {})
-    write(domain / 'views.yaml', {'format': 'rede.views/1', 'views': [json.loads(json.dumps(view or case.view))]})
+    write(domain / 'views.yaml', {'format': 'rezono.views/1', 'views': [json.loads(json.dumps(view or case.view))]})
     return domain
 
 

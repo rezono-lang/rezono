@@ -1,0 +1,26 @@
+id: R12
+class: invalid
+status: settled
+schema:
+  from: fixture.schema.json
+form: collection
+input:
+  $rows:
+  - $kind: Host
+    $id: host-a
+    memory_need: 400 GiB
+    owner: &id001
+      $unknown: not_assigned
+    tags:
+    - gpu
+    - lab
+  - $kind: Host
+    $id: host-a
+    memory_need: 400 GiB
+    owner: *id001
+    tags: []
+expect:
+  accept: false
+  error: two rows `Host`/`host-a`
+sources:
+- publication/rezono_publication/l0.py, read_collection

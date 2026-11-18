@@ -1,4 +1,4 @@
-"""The published views of a manifest (rede_publisher.views), over every example pack.
+"""The published views of a manifest (rezono_publisher.views), over every example pack.
 
 Generic: no pack is named. Per filtered role: a view index that names the manifest and exactly the role's
 snapshots, pieces that the checker accepts, the same bytes when made again, and positions that stay from
@@ -13,9 +13,9 @@ from pathlib import Path
 import pytest
 
 pytest.importorskip("duckdb")
-pytest.importorskip("rede_compiler")
+pytest.importorskip("rezono_compiler")
 
-from rede_publisher import batch, publish, store, views  # noqa: E402
+from rezono_publisher import batch, publish, store, views  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[3]
 PACKS = sorted(p.parent for p in (ROOT / "examples").rglob("pack.yaml")
@@ -44,7 +44,7 @@ def test_views_of_two_manifests(pack_dir, tmp_path):
     mine = sorted((s for s in m["snapshots"] if s["role"] == "viewer"), key=lambda s: s["relation"])
     assert index["sources"] == [{"relation": s["relation"], "sha256": s["sha256"]} for s in mine]
     assert (index["manifest"], index["role"], index["relayout"], "previous" in index) == (first, "viewer", False, False)
-    # The role's source entries by row (S25), for the set the manifest names; none before S25.
+    # The role's source entries by row, for the set the manifest names; none in manifests without source-set support.
     sets = [x["sha256"] for x in m.get("fact_sources", []) if x["role"] == "viewer"]
     assert [index["fact_sources"]["set"]] == sets if sets else "fact_sources" not in index
     # The overview by meaning: island levels from level 0, and a Map per island, each named by sha256. Level 0
@@ -65,7 +65,7 @@ def test_views_of_two_manifests(pack_dir, tmp_path):
         assert views.sha256(st.get(views.key_of(n["uri"]))) == n["sha256"]
     if "root" in index["islands"]:
         root = json.loads(st.get(views.key_of(index["islands"]["root"]["uri"])))
-        assert root["format"] == "rede.islands/1" and bool(root["islands"]) == reads
+        assert root["format"] == "rezono.islands/1" and bool(root["islands"]) == reads
     # Made again: the same bytes (put_new refuses other bytes under a written key).
     assert views.publish(st, pack, first) == keys
 
@@ -152,7 +152,7 @@ def test_the_page_index_lists_what_the_role_reads(pack_dir, tmp_path):
     [key] = views.publish(st, pack, first)
     index = json.loads(st.get(key))
     page = json.loads(st.get(views.key_of(index["page"]["uri"])))
-    assert page["format"] == "rede.page/2" and page["title"] and page["sheets"] == sorted(["map", *(k for k in index["sheets"] if k.startswith(("flow.", "matrix.")))])
+    assert page["format"] == "rezono.page/2" and page["title"] and page["sheets"] == sorted(["map", *(k for k in index["sheets"] if k.startswith(("flow.", "matrix.")))])
     for k in page["kinds"]:
         ids = [r["id"] for r in k["first"]]
         assert ids == sorted(ids) and len(ids) <= min(k["count"], 25)
@@ -162,8 +162,8 @@ def test_order_metric_measures_actual_compiler_snapshot_flow_enum_order(tmp_path
     """Actual producers and raw cells: independently measured compiled enum order."""
     from dataclasses import replace
     import yaml
-    from rede_checker.semiotic_order import lane_order
-    from rede_checker.views import Role
+    from rezono_checker.semiotic_order import lane_order
+    from rezono_checker.views import Role
 
     target = tmp_path / "minimal"
     shutil.copytree(ROOT / "compiler/tests/fixtures/minimal", target)
@@ -205,7 +205,7 @@ def test_order_metric_measures_actual_compiler_snapshot_flow_enum_order(tmp_path
     prefix = "minimal/m-1/viewer/views/"
     root_key, layout_key = (views.key_of(sheet[k]["uri"]) for k in ("root", "layout"))
     tiles = {k.removeprefix(prefix): st.get(k) for k in st.list(prefix + "flow.enum_order/") if k != layout_key}
-    # A sheet with lanes has a level above its nodes, also when it fits one tile (RV-U08; docs/gui.md, "Overview
+    # A sheet with lanes has a level above its nodes, also when it fits one tile (docs/gui.md, "Overview
     # by lane"): the root tile holds the overview by lane, and the nodes are on the last level.
     root = json.loads(st.get(root_key))
     assert sheet["levels"] == 2 and "nodes" not in root

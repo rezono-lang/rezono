@@ -8,7 +8,7 @@ import pytest
 
 from feldera import URL, deploy, processed, push, query, stop
 from support import compile_dir, expected, load
-from rede_compiler import facts, pack
+from rezono_compiler import facts, pack
 from test_examples import EXAMPLES, name
 
 # The insert-retract cycle needs a valid and an errors fact file.
@@ -18,7 +18,7 @@ pytestmark = pytest.mark.skipif(not URL, reason="set FELDERA_URL to a running Fe
 
 
 def read(name):
-    """The violations per logical check, as (subject, value): decision E11 keeps one view per check kind."""
+    """The violations per logical check, as (subject, value): one view is kept per check kind."""
     out = {}
     for r in query(name, "SELECT info, subject, value FROM validation_result"):
         out.setdefault(r["info"], set()).add((r["subject"], r["value"]))
@@ -29,7 +29,7 @@ def read(name):
 def test_feldera_accepts_the_sql_and_finds_the_errors(example, tmp_path):
     files = compile_dir(example, tmp_path)
     model = pack.read(example)
-    name = f"rede-{example.name}"
+    name = f"rezono-{example.name}"
     deploy(name, files["engine/tables.sql"] + files["engine/integrity.sql"])
     params = {t: [{"insert": r} for r in rows] for t, rows in json.loads(files["engine/parameters.json"]).items()}
     valid = load(example, example / "facts" / "valid.yaml")

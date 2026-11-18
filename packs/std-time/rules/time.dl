@@ -1,4 +1,4 @@
-// Rules of std-time (#314 §5.2, T4; rulings RV-C13 and RV-C18), in the Datalog subset, so Soufflé is the oracle.
+// Rules of std-time, in the Datalog subset, so Soufflé is the oracle.
 // The base relations are the theory's tables: interval__on_axis(i, l), interval__start(i, s),
 // interval__end(i, e), interval__unbounded(i, side), interval__extension_end(i, x), interval__known_from(i, k),
 // interval__in_series(i, q), reference_point__on_axis(r, l), reference_point__position(r, p) and
@@ -7,9 +7,9 @@
 // A position is a whole number on an axis. An interval is half-open: it covers start <= p < end. Positions are
 // compared only on one axis.
 //
-// A bound has three states (RV-C13). It is stated: a row in start or end. It is stated to be absent: a row in
+// A bound has three states. It is stated: a row in start or end. It is stated to be absent: a row in
 // unbounded ("start" or "end"), a claim with an origin of its own. Or nobody recorded it: neither row, and
-// then it is unknown. start and end are open (W6), so a rule says something about a bound only from a row
+// then it is unknown. start and end are open, so a rule says something about a bound only from a row
 // that is there; no rule reads a missing row as "it has no bound", and no rule puts a number in its place.
 
 .decl start_stated(interval: symbol)
@@ -35,7 +35,7 @@ start_not_recorded(i) :- interval__on_axis(i, l), !start_stated(i), !interval__u
 .decl end_not_recorded(interval: symbol)
 end_not_recorded(i) :- interval__on_axis(i, l), !end_stated(i), !interval__unbounded(i, "end").
 
-// Nobody recorded from which position interval i is known (RV-C18). Whether it was known at a reference is
+// Nobody recorded from which position interval i is known. Whether it was known at a reference is
 // then unknown: known_at has no row for it.
 // @absence
 .decl known_from_not_recorded(interval: symbol)
@@ -95,13 +95,13 @@ holds_at(i, r) :- begun_at(i, r), reference_point__position(r, p), interval__unb
 in_extension(i, r) :- ended_at(i, r), reference_point__position(r, p), interval__extension_end(i, x), p < x.
 
 // known_at: at reference r interval i is known: its stated known_from has come. An interval whose
-// known_from nobody recorded has no row (RV-C18): known_from_not_recorded names it. Knowledge is apart from
+// known_from nobody recorded has no row: known_from_not_recorded names it. Knowledge is apart from
 // what the interval covers: a domain reads holds_at at one reference and known_at at another.
 .decl known_at(interval: symbol, at: symbol)
 known_at(i, r) :- interval__on_axis(i, l), reference_point__on_axis(r, l), reference_point__position(r, p),
     interval__known_from(i, k), k <= p.
 
-// judgement: how interval i stands at reference r, and why (RV-C18). Exactly one row per interval and
+// judgement: how interval i stands at reference r, and why. Exactly one row per interval and
 // reference on one axis, decided in this order:
 //   1. the end has come: negative (ended, extension_ended) or attention (in_extension), whatever the start;
 //   2. else a stated start lies ahead: not_begun (start_ahead), whatever the end;

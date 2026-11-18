@@ -10,8 +10,8 @@ from hashlib import sha256
 import pytest
 import yaml
 
-from rede_canon import canonical_json
-from rede_compiler import pack, source_writer as sw, sources, writer
+from rezono_canon import canonical_json
+from rezono_compiler import pack, source_writer as sw, sources, writer
 from test_sources import DEFAULT, fixture  # noqa: F401 (a pytest fixture)
 
 DATA, COMPANION = "facts/data.yaml", "facts/data.sources.yaml"
@@ -297,7 +297,7 @@ STATED = {"kind": "person", "name": "user-123", "position": "2026-11-10T21:03:11
 
 
 def test_who_states_a_delta_is_the_origin_of_every_row_it_writes(checked_out):
-    """RV-M17: the propose path names the proposer once; a step with an origin of its own keeps that one."""
+    """The propose path names the proposer once; a step with an origin of its own keeps that one."""
     assert PROPOSER == {"sources": [STATED]}
     before = files(checked_out)
     steps = delta({"op": "set", "slot": "size", "value": 2}, {"op": "insert", "file": DATA, "key": "b", "values": {"title": "Beta"}},

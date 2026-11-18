@@ -1,0 +1,25 @@
+id: Y01
+class: answer
+status: pending
+schema:
+  from: fixture.schema.json
+form: answer
+input: 'P10.2a E51 (docs/rezono/cases/E51.yaml)'
+expect:
+  kinds:
+  - Answer
+  - Undecided
+  answer_slots:
+  - binder
+  - c1
+  - c2
+  undecided_slots:
+  - binder
+  - state
+  - reason
+  - cause_relation
+  - cause_key
+  schema_member_is_output_schema_id: true
+note: Runs with the ask endpoint (D22).
+sources:
+- docs/rezono/cases/E51.yaml

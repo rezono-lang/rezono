@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from rede_compiler import emit, modules, pack, rules
+from rezono_compiler import emit, modules, pack, rules
 
 FIXTURE = Path(__file__).parent / "fixtures" / "minimal"
 SHARED = FIXTURE.parent / "shared"

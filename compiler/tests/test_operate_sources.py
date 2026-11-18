@@ -16,32 +16,12 @@ import yaml
 from hypothesis import HealthCheck, assume, given, settings, strategies as st
 
 import genpack
-from rede_canon import canonical_json
-from rede_compiler import operate, sources, writer
-from rede_compiler import pack as packs
-from support import REPO
-from test_operate import COMBINE, DROPS, LIBRARY, MOVES, RENAMES, SPLIT, checkout, combine_ops, files, move_ops, run, \
+from rezono_canon import canonical_json
+from rezono_compiler import operate, sources, writer
+from rezono_compiler import pack as packs
+from operation_source_support import companion, library, origin, per_record  # noqa: F401
+from test_operate import COMBINE, DROPS, MOVES, RENAMES, SPLIT, combine_ops, files, move_ops, run, \
     split_ops
-
-
-def origin(name: str) -> dict:
-    return {"kind": "person", "name": "register", "position": name}
-
-
-def companion(d: Path, fname: str = "valid.yaml", of=lambda ref, n: [origin(f"row-{n}")]) -> bytes:
-    """Write an exact-row companion for a fact file: `of(ref, n)` gives the sources of its n-th row."""
-    p = packs.read(d)
-    path = d / "facts" / fname
-    refs = [(e["row"]["relation"], e["row"]["key"]) for e in sources.text_entries(p, fname, path.read_text("utf-8"))]
-    entries = [{"row": {"relation": t, "key": k}, "sources": of((t, k), n)} for n, (t, k) in enumerate(refs)]
-    text = sources.canonical_sidecar(p, path, entries)
-    path.with_name(fname.removesuffix(".yaml") + ".sources.yaml").write_bytes(text.encode("utf-8"))
-    return text.encode("utf-8")
-
-
-def per_record(ref, n) -> list[dict]:
-    """One origin per record of the file: an inlined element (its id derived from its owner's) shares it."""
-    return [origin(f"record-{yaml.safe_load(ref[1])[0].split('/')[0]}")]
 
 
 def by_ref(d: Path, fname: str = "valid.yaml") -> dict:
@@ -51,15 +31,6 @@ def by_ref(d: Path, fname: str = "valid.yaml") -> dict:
 
 def origins(entries: dict) -> Counter:
     return Counter(canonical_json(e["sources"]) for e in entries.values())
-
-
-@pytest.fixture
-def library():
-    work = writer.work_dir()
-    d = checkout(work, LIBRARY)
-    (d / "facts" / "errors.yaml").unlink()  # its violations make sources differ; test_operate covers those
-    yield d
-    shutil.rmtree(work, ignore_errors=True)
 
 
 def test_a_pack_without_companions_runs_as_before(library, tmp_path):
@@ -187,15 +158,6 @@ def test_a_combine_that_would_drop_the_own_origin_of_an_absorbed_element_refuses
     with pytest.raises(operate.OperationError, match=r'branch__address \["centrum".*an origin only routed'):
         run(library, [COMBINE], tmp_path)
     assert files(library) == before
-
-
-def test_the_worked_example_carries_its_sources_through_every_step(library, tmp_path):
-    companion(library, of=per_record)
-    fixture = REPO / "contracts" / "fixtures" / "operation" / "OperationSet" / "valid" / "library.yaml"
-    impact = operate.operate(library, fixture, tmp_path / "out")
-    assert [o["sources"]["companions"] for o in impact["operations"]] == [["facts/valid.sources.yaml"]] * 5
-    assert {x["relation"] for x in impact["operations"][4]["sources"]["lost"]} == {"item__reference_only"}
-    assert sources.read(packs.read(library), library)  # loads against the facts after every step
 
 
 def test_a_companion_that_does_not_load_blocks_before_any_change(library, tmp_path):

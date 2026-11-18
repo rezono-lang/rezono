@@ -1,5 +1,5 @@
 # The writer only writes fact files; a schema change is a migration (M6).
-format: rede.delta/1
+format: rezono.delta/1
 pack: library
 changes:
   - {op: delete, file: ../schema/library.yaml, kind: loan, key: l2}

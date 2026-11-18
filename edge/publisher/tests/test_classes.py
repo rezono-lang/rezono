@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from rede_publisher import __main__ as cli, classes
+from rezono_publisher import __main__ as cli, classes
 
 ROOT = Path(__file__).resolve().parents[3]
 PROFILES = sorted((ROOT / "deploy" / "profiles").glob("*.yaml"))
@@ -80,5 +80,5 @@ def test_the_publisher_refuses_before_it_opens_the_store(tmp_path, capsys):
 
 
 def test_the_code_names_no_class_but_unclassified():
-    source = (ROOT / "edge" / "publisher" / "rede_publisher" / "classes.py").read_text(encoding="utf-8")
+    source = (ROOT / "edge" / "publisher" / "rezono_publisher" / "classes.py").read_text(encoding="utf-8")
     assert "security" not in source

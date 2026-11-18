@@ -1,0 +1,27 @@
+id: E57
+status: settled
+mode: evaluate
+source: ask Host where owner in Team
+data: appendix-b
+role: viewer
+given:
+- '- Team team-platform'
+expect:
+  answer:
+    rows: []
+    undecided:
+    - binder: host-a
+      state: unknown
+      reason: not_assigned
+      cause:
+        relation: host__owner
+        key:
+        - host-a
+    - binder: host-c
+      state: unknown
+      reason: open_world
+    not_applicable: 2
+note: host-c's owner is not among the teams listed, and Team is open, so `in` is unknown, not false. host-a's owner is
+  unknown by its own row; host-b and host-d have no owner.
+sources:
+- expressions.md §7 (sets and absence), formerly §13 point 13

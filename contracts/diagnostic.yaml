@@ -1,17 +1,17 @@
-id: https://rede.dev/contracts/diagnostic
-name: rede_diagnostic
+id: https://rezono.org/contracts/diagnostic
+name: rezono_diagnostic
 title: Diagnostics
 description: >-
-  One error model for every component that judges what an author wrote (D15, #394 A6; milestone MOD
-  principle 5): the compiler, admission, and later the Reckon parser, the checker, the gate's model check
+  One error model for every component that judges what an author wrote (D15; milestone MOD
+  principle 5): the compiler, admission, and later the Rezono parser, the checker, the gate's model check
   (MOD6), the REPL and a language server. A diagnostic is a code, a severity, where it was found (a logical
   place and, where the text is known, a span in the form of the schema bundle's MOD2 spans) and a hint.
   The code names the diagnostic; its sentence for a reader comes from the message files where it has one,
   and `message` is the component's own English sentence.
 prefixes:
   linkml: https://w3id.org/linkml/
-  rede: https://rede.dev/contracts/
-default_prefix: rede
+  rezono: https://rezono.org/contracts/
+default_prefix: rezono
 default_range: string
 imports:
   - linkml:types
@@ -20,9 +20,9 @@ types:
   DiagnosticCode:
     typeof: string
     description: >-
-      A snake_case code of the compiler or admission (admission's refusal codes, in the form of Reckon
-      Data L0), or a Reckon code: R and three digits for an error, W and three digits for a warning
-      (docs/reckon/v0.md §10).
+      A snake_case code of the compiler or admission (admission's refusal codes, in the form of publication
+      L0), or a Rezono code: R and three digits for an error, W and three digits for a warning
+      (docs/rezono/v0.md §10).
     pattern: "^([a-z][a-z0-9_]*|[RW][0-9]{3})$"
   Position:
     typeof: string

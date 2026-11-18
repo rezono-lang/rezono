@@ -9,7 +9,7 @@ import pytest
 import yaml
 
 from support import FIXTURE, REPO, compile_dir, text, violations
-from rede_compiler import emit, facts, pack
+from rezono_compiler import emit, facts, pack
 
 
 def tree(d: Path) -> dict[str, bytes]:
@@ -41,13 +41,13 @@ def test_two_compiles_give_identical_bytes(tmp_path):
 
 
 def test_every_sql_writer_quotes_and_escapes_through_one_definition():
-    """RV-M01: one `q` and one `literal`; the rule translator's own `q` left a `"` in a name unescaped."""
-    from rede_compiler import batch, calc_sql, checks, rules_split, rules_sql, seal, sqltext
+    """One `q` and one `literal`; the rule translator's own `q` left a `"` in a name unescaped."""
+    from rezono_compiler import batch, calc_sql, checks, rules_split, rules_sql, seal, sqltext
     assert {m.q for m in (batch, calc_sql, checks, emit, rules_split, rules_sql, seal)} == {sqltext.q}
     assert {m.literal for m in (calc_sql, checks, emit, rules_sql)} == {sqltext.literal}
     assert sqltext.q('a"b') == '"a""b"' and sqltext.literal("it's") == "'it''s'"
     assert rules_sql.lit_sql("it's", "string") == "'it''s'"
-    from rede_compiler import calc, names, rules, views, writer
+    from rezono_compiler import calc, names, rules, views, writer
     assert {m.NAME for m in (pack, rules, views)} == {names.NAME}
     assert {m.ISO_DATE for m in (calc, rules, writer)} == {names.ISO_DATE}
 
@@ -93,7 +93,7 @@ def second_language(d: Path) -> None:
     ("messages/en.mf2", "{$parent}", "{$kind}", "messages/en.mf2: 'is_a' names kind; in language 'nl' it names kind, parent"),
 ])
 def test_a_pack_carries_a_language_whole(fixture, file, old, new, message):
-    """RV-A25: a pack with two languages has the same labels and the same messages in both, and a message names
+    """A pack with two languages has the same labels and the same messages in both, and a message names
     the same variables in both; a `_gender` companion is not compared. A planted difference stops the compile
     and names the file, the key and the language that has it."""
     second_language(fixture)
@@ -197,7 +197,7 @@ def test_names_that_become_engine_names_are_validated(fixture, change, message):
 def test_an_enum_defined_in_two_schema_files_is_qualified_by_its_module(fixture):
     """Two modules that do not import each other may use one name; each keeps its own (docs/compiler.md)."""
     (fixture / "schema" / "second.yaml").write_text(yaml.safe_dump({
-        "id": "https://rede.example/second", "name": "second", "in_language": "nl",
+        "id": "https://rezono.example/second", "name": "second", "in_language": "nl",
         "imports": ["linkml:types"], "default_range": "string", "annotations": {"layer": "facts"},
         "enums": {"State": {"permissible_values": {"low": {}}}}}))
     (fixture / "labels" / "nl.yaml").write_text("alpha: alfa\n")
@@ -255,7 +255,7 @@ def with_icon(fixture, svg, sources=None):
 
 
 def test_an_icon_reaches_the_bundle_as_a_tree_of_safe_elements(fixture):
-    """Decision B10: the kind sign names the icon by hash; the bundle carries it as elements, never SVG text."""
+    """The kind sign names the icon by hash; the bundle carries it as elements, never SVG text."""
     with_icon(fixture, ICON)
     bundle = json.loads(emit.compile_pack(pack.read(fixture))["bundle/schema-bundle.json"])
     digest = hashlib.sha256(ICON).hexdigest()
@@ -283,7 +283,7 @@ def test_an_icon_off_the_safe_list_or_without_source_blocks(fixture, svg, source
     refused(fixture, message)
 
 def test_an_image_binding_reaches_the_bundle_by_element_id(fixture):
-    """Decision B10: a text slot becomes an image by the channel table's binding; its meaning is the pack's."""
+    """A text slot becomes an image by the channel table's binding; its meaning is the pack's."""
     with (fixture / "channels.yaml").open("a") as f:
         f.write("images:\n  - {kind: alpha, slot: alpha.title}\n")
     bundle = json.loads(emit.compile_pack(pack.read(fixture))["bundle/schema-bundle.json"])
@@ -502,8 +502,8 @@ ORDERED = FLOW.replace("slot: beta.state, level: nominal", "slot: beta.alpha, le
 
 
 def test_a_flow_without_a_lane_order_is_refused(fixture):
-    """A lane bound as ordered says that the place of a lane means something, so its order is declared (decision
-    B12): there is no alphabetical fallback. The target kind of the lane's arrow has no order here."""
+    """A lane bound as ordered says that the place of a lane means something, so its order is declared:
+    there is no alphabetical fallback. The target kind of the lane's arrow has no order here."""
     with (fixture / "channels.yaml").open("a") as f:
         f.write(ORDERED)
     refused(fixture, "flow chain: lane 'beta.alpha' of beta is bound as ordered, but alpha has no order: "
@@ -715,7 +715,7 @@ def test_embedded_ids_are_injective(fixture, tmp_path):
 
 def test_check_reads_the_pack_and_every_fact_file(fixture, capsys):
     """`check` is the quick test for a pack author: no compile, but the schema, labels, messages and facts."""
-    from rede_compiler.__main__ import main
+    from rezono_compiler.__main__ import main
     (fixture / "facts").mkdir()
     (fixture / "facts" / "good.yaml").write_text("alpha: [{id: a, title: t}]\n")
     assert main(["check", str(fixture)]) == 0
@@ -771,7 +771,7 @@ def test_a_wrong_report_waterfall_is_refused(fixture, part, message):
     refused(fixture, message)
 
 
-# A comparison (RV-U19): `alike` ends in a verdict per alpha; `echo` writes a variable where a verdict would stand.
+# A comparison: `alike` ends in a verdict per alpha; `echo` writes a variable where a verdict would stand.
 COMPARISON_RULES = (
     ".decl alike(a: symbol, verdict: symbol)\n"
     "alike(a, \"same\") :- alpha(a), beta__alpha(_, a).\n"
@@ -837,7 +837,7 @@ def test_report_matrix_refuses_selectors_and_unknown_sheet(fixture, part, messag
     refused(fixture, message)
 
 
-# A Timeline and a Nest (RV-C15) on the fixture: alpha gets dates and a state, beta is a part of its alpha.
+# A Timeline and a Nest on the fixture: alpha gets dates and a state, beta is a part of its alpha.
 TIMELINE = (
     "timelines:\n"
     "  - id: validity\n"
@@ -1010,7 +1010,7 @@ def test_a_part_of_arrow_to_many_is_no_tree(fixture):
 
 
 def test_an_installed_compiler_reads_the_contracts_it_carries(tmp_path):
-    """RV-M12: a non-editable install of the compiler, built from a copy of compiler/ and contracts/ and run from a
+    """A non-editable install of the compiler, built from a copy of compiler/ and contracts/ and run from a
     directory outside any checkout, carries contracts/*.yaml byte for byte as package data, reads them from there,
     and compiles a pack given by path to the same bytes as the compiler of this checkout."""
     import os
@@ -1021,7 +1021,7 @@ def test_an_installed_compiler_reads_the_contracts_it_carries(tmp_path):
     (src / "contracts").mkdir(parents=True)
     for p in pack.CONTRACTS.glob("*.yaml"):
         shutil.copy(p, src / "contracts" / p.name)
-    shutil.copytree(repo / "compiler" / "rede_compiler", src / "compiler" / "rede_compiler",
+    shutil.copytree(repo / "compiler" / "rezono_compiler", src / "compiler" / "rezono_compiler",
                     ignore=shutil.ignore_patterns("__pycache__"))
     for name in ("pyproject.toml", "setup.py"):
         shutil.copy(repo / "compiler" / name, src / "compiler" / name)
@@ -1029,16 +1029,16 @@ def test_an_installed_compiler_reads_the_contracts_it_carries(tmp_path):
     work.mkdir()
     subprocess.run([sys.executable, "-m", "pip", "install", "-q", "--no-deps", "--no-build-isolation", "--no-index",
                     "--target", str(site), str(src / "compiler")], cwd=work, check=True)
-    shipped = site / "rede_compiler" / "contracts"
+    shipped = site / "rezono_compiler" / "contracts"
     assert tree(shipped) == {p.name: p.read_bytes() for p in sorted(pack.CONTRACTS.glob("*.yaml"))}
     # The installed copy first; the dependencies from this interpreter's path, without the checkout's compiler.
     own = Path(pack.__file__).resolve().parents[1]
     path = [str(site)] + [p for p in sys.path if p and Path(p).resolve() != own]
     env = {**os.environ, "PYTHONPATH": os.pathsep.join(path)}
-    probe = "from rede_compiler import pack; print(pack.__file__); print(pack.contract_dir())"
+    probe = "from rezono_compiler import pack; print(pack.__file__); print(pack.contract_dir())"
     where = subprocess.run([sys.executable, "-c", probe], cwd=work, env=env, capture_output=True, text=True, check=True)
-    assert [Path(line).resolve() for line in where.stdout.splitlines()] == [site / "rede_compiler" / "pack.py", shipped]
-    subprocess.run([sys.executable, "-m", "rede_compiler", "compile", str(FIXTURE), str(work / "out")], cwd=work, env=env,
+    assert [Path(line).resolve() for line in where.stdout.splitlines()] == [site / "rezono_compiler" / "pack.py", shipped]
+    subprocess.run([sys.executable, "-m", "rezono_compiler", "compile", str(FIXTURE), str(work / "out")], cwd=work, env=env,
                    check=True)
     expected, out = tmp_path / "expected", tree(work / "out")
     compile_dir(FIXTURE, expected)  # the CLI writes generated/sources.json beside these
@@ -1052,7 +1052,7 @@ def test_missing_contracts_are_an_error_that_names_where_it_looked(tmp_path, mon
 
 
 def test_the_golden_form_keeps_the_bundle_in_full():
-    """Decision A8: a compiled file above the bound is in the golden by its hash, except a file named in FULL
+    """A compiled file above the bound is in the golden by its hash, except a file named in FULL
     (the schema bundle), which other tools read back from the golden."""
     import golden
 
@@ -1090,7 +1090,7 @@ def test_a_failed_golden_explains_itself_in_a_few_lines():
 @pytest.mark.xfail(strict=True, reason="generated expected/compiled goldens are not stored in git")
 def test_no_committed_manifest_hashes_an_always_full_file():
     """A committed large-files.json never lists a file of FULL: such a file is read back from the golden, so a
-    regeneration under an older golden.py must not leave it as a hash (decision A8). Reads the goldens only."""
+    regeneration under an older golden.py must not leave it as a hash. Reads the goldens only."""
     import golden
 
     examples = REPO / "examples"

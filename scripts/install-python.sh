@@ -1,20 +1,20 @@
 #!/usr/bin/env bash
-# Install Rede's Python packages exactly as locked, into a fresh virtualenv (docs/ci.md#8-pinned-versions).
+# Install Rezono's Python packages exactly as locked, into a fresh virtualenv (docs/ci.md#8-pinned-versions).
 #   scripts/install-python.sh requirements/run.txt admission canon compiler edge/publisher
 # Every distribution is checked against its SHA-256 in the lock; this repository's own packages are
 # installed from source without dependencies, so nothing outside the lock gets in. Then pip check and
 # scripts/check-pinned.py must pass. The same command works in CI, on a runner or a workstation, and
-# rede_publisher.kept uses it for a replay. PYTHON names the runtime (default python3), VENV the
+# rezono_publisher.kept uses it for a replay. PYTHON names the runtime (default python3), VENV the
 # virtualenv (default .venv). In CI the virtualenv goes first on PATH for the next steps (GITHUB_PATH,
 # also on Forgejo Actions).
-# With REDE_VENV_REUSE=1 an existing VENV counts as a cache restored by CI (.github/actions/python): it
+# With REZONO_VENV_REUSE=1 an existing VENV counts as a cache restored by CI (.github/actions/python): it
 # moves aside, a fresh virtualenv is made as always, and scripts/venv-reuse.py moves in only the locked
 # distributions whose every file matches its RECORD; anything else in it is dropped, and if anything fails
 # to verify the install starts fresh. The lock install, pip check and check-pinned.py run either way.
 # With --only NAME just the one stanza NAME of the lock goes in, with the lock's hashes, as a wheel only
 # (--only-binary :all:, so nothing is built and no build requirement comes from the index), without this
 # repository's packages and without a cached virtualenv:
-#   scripts/install-python.sh --only pyyaml requirements/run.txt   (the promotion gates, RV-S08)
+#   scripts/install-python.sh --only pyyaml requirements/run.txt   (the promotion gates)
 set -euo pipefail
 only=
 if [ "${1:-}" = --only ]; then only=$2; shift 2; fi
@@ -49,7 +49,7 @@ if [ "$have" != "$want" ]; then
   exit 1
 fi
 rm -rf "$venv.reuse"
-if [ "${REDE_VENV_REUSE:-}" = 1 ] && [ -z "$only" ] && [ -d "$venv" ]; then mv "$venv" "$venv.reuse"; fi
+if [ "${REZONO_VENV_REUSE:-}" = 1 ] && [ -z "$only" ] && [ -d "$venv" ]; then mv "$venv" "$venv.reuse"; fi
 rm -rf "$venv"
 # -S: no site hooks of the runtime's own site-packages run while the virtualenv is made.
 "$py0" -I -S -m venv "$venv"

@@ -1,0 +1,13 @@
+id: E16
+status: settled
+mode: parse
+source: ask Host where 1 < memory_need < 2
+expect:
+  diagnostics:
+  - code: R016
+    span:
+      text: 1 < memory_need < 2
+      start: 15
+      end: 34
+sources:
+- rezono/src/parse.ts

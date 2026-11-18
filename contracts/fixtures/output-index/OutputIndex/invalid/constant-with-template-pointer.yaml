@@ -1,5 +1,5 @@
-# A chart constant is a template line, not a pointer (review on #444).
-format: rede.output-index/1
+# A chart constant is a template line, not a pointer.
+format: rezono.output-index/1
 pack: platform
 manifest: m-42
 render:

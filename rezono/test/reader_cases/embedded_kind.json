@@ -1,0 +1,29 @@
+{
+  "source": "embedded kind Address\n  street: Text",
+  "declarations": [
+    {
+      "kind": "Address",
+      "slots": [
+        {
+          "slot": "street",
+          "type": "Text"
+        }
+      ],
+      "derived": [],
+      "embedded": true
+    }
+  ],
+  "knownDiagnostics": [
+    {
+      "code": "R000",
+      "span": {
+        "text": "kind",
+        "start": 30,
+        "end": 34
+      },
+      "args": [
+        "\"=\" or \":\""
+      ]
+    }
+  ]
+}

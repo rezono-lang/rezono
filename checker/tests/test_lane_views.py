@@ -1,4 +1,4 @@
-"""A sheet with lanes and lines of relations (a Flow) is checked like any sheet (rede_checker.views, check_view):
+"""A sheet with lanes and lines of relations (a Flow) is checked like any sheet (rezono_checker.views, check_view):
 a line is rows the role reads of its sign, a lane or a group is a cell of a row the role reads (or an unknown
 lane), and every node lies inside its lane and its group. No binding is needed. Negative cases first."""
 
@@ -6,7 +6,7 @@ import copy
 import hashlib
 import json
 
-from rede_checker.views import _edge, check_view
+from rezono_checker.views import _edge, check_view
 
 # As the compiled bundle names them: kind relations and slot tables.
 BUNDLE = {
@@ -73,7 +73,7 @@ def problems(nodes=NODES, edges=EDGES, bands=BANDS, rows=ROWS, groups=GROUPS, wa
     snapshots = {r: json.dumps([{"key": k} for k in keys]).encode() for r, keys in rows.items()}
     layout = {"nodes": {n["id"]: [n["x"], n["y"], n["width"], n["height"]] for n in nodes},
               "edges": {e["id"]: {"source": e["source"], "target": e["target"], "points": e["points"]} for e in edges}}
-    tile = {"format": "rede.tile/1", "sheet": SHEET, "level": 0, "x": 0, "y": 0, "box": [0, 0, TILE, TILE],
+    tile = {"format": "rezono.tile/1", "sheet": SHEET, "level": 0, "x": 0, "y": 0, "box": [0, 0, TILE, TILE],
             "nodes": nodes, "edges": edges, "bands": bands, "groups": groups}
     path = f"{SHEET}/0/0_0.json"
     return check_view(SHEET, snapshots, json.dumps(layout).encode(), {path: json.dumps(tile).encode()}, path, TILE, 4, 1, bundle,
@@ -137,9 +137,9 @@ def test_a_node_above_the_last_level_is_found():
     snapshots = {r: json.dumps([{"key": k} for k in keys]).encode() for r, keys in ROWS.items()}
     layout = {"nodes": {n["id"]: [n["x"], n["y"], n["width"], n["height"]] for n in bad},
               "edges": {e["id"]: {"source": e["source"], "target": e["target"], "points": e["points"]} for e in EDGES}}
-    root = {"format": "rede.tile/1", "sheet": SHEET, "level": 0, "x": 0, "y": 0, "box": [0, 0, TILE * 4, TILE * 4],
+    root = {"format": "rezono.tile/1", "sheet": SHEET, "level": 0, "x": 0, "y": 0, "box": [0, 0, TILE * 4, TILE * 4],
             "nodes": bad, "edges": EDGES, "clusters": []}
-    leaf = {"format": "rede.tile/1", "sheet": SHEET, "level": 1, "x": 0, "y": 0, "box": [0, 0, TILE, TILE],
+    leaf = {"format": "rezono.tile/1", "sheet": SHEET, "level": 1, "x": 0, "y": 0, "box": [0, 0, TILE, TILE],
             "nodes": NODES, "edges": EDGES, "bands": BANDS, "groups": GROUPS}
     data = json.dumps(leaf).encode()
     root["clusters"] = [{"x": 0, "y": 0, "count": 5, "statuses": [{"status": "valid", "count": 5}],
@@ -214,7 +214,7 @@ def test_a_sheet_of_lanes_and_relation_lines_the_role_reads_passes():
 
 
 def test_a_quantity_on_a_line_to_a_stub_an_unknown_or_a_screened_end_is_found():
-    """P1 of #216: a line to a placeholder has no rows behind both ends, so it carries no quantity or width; the
+    """A line to a placeholder has no rows behind both ends, so it carries no quantity or width; the
     checker refuses one instead of passing it unchecked."""
     q = {"slot": "signed", "value": "999999"}
     found("yet shows a quantity or a width", edges=with_(EDGES, 2, quantity=q))
@@ -231,7 +231,7 @@ def test_a_quantity_on_a_line_to_a_stub_an_unknown_or_a_screened_end_is_found():
 
 
 def test_a_count_and_a_sum_from_two_pairs_of_columns_are_found():
-    """P1 of #216: the number of rows and the quantity hold in the same pair of columns. Here p1 and a1 stand
+    """The number of rows and the quantity hold in the same pair of columns. Here p1 and a1 stand
     twice as (posting, account), summing 12, and once as (period, posting), summing 100: 2 rows with 100 is
     neither."""
     rows = dict(ROWS, period_line=[*ROWS["period_line"], ["p1", "a1", "x", "100"]])

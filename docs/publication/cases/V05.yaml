@@ -1,0 +1,34 @@
+id: V05
+class: invalid
+status: settled
+schema:
+  from: fixture.schema.json
+  merge:
+    kinds:
+      Plan:
+        world: closed
+        id:
+          type: Text
+        versioned:
+          at: Date
+          known: Date
+        slots:
+          owner:
+            card: '?'
+            ref: Team
+            states:
+            - known
+            - not_applicable
+form: row
+input:
+  $kind: Plan
+  $id: p1
+  $valid: {}
+  $known: '2025-09-16'
+  owner:
+    $na: ''
+expect:
+  accept: false
+  error: empty `$valid` must be omitted
+sources:
+- publication/rezono_publication/l0.py, read_row

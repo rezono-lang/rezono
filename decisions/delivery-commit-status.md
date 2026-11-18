@@ -1,0 +1,15 @@
+# Delivery status at the proposal commit
+
+A delivery is identified by a tenant and a stable delivery ID. Use the ordered tenant request history from the platform example. An accepted request pins the full proposal commit object ID. Each delivery step publishes one logical Git commit status under that commit and context `rezono/delivery/<tenant>/<delivery>/<step>`. These three context segments are stable lower-case ASCII slugs containing letters, digits or internal hyphens. A branch name or the repository's current head cannot substitute for the pinned commit.
+
+Derive pending from a planned or waiting step, success from a matching current-run completion observation, and failure from a stuck step with evidence. Planned and applied are insufficient for success. Publish only for a proposal accepted for reconciliation. The context and commit identify the logical status. Keep the run ID and source row references in the evidence record, so the status can point back to a reproducible decision. Waiting time is the elapsed observation event time since entering that state. Publish completion time only from a matching completion observation. Never synthesize timestamps from the request, the local clock, or a previous run.
+
+For a given commit and context, compare the latest published state and its evidence reference before writing. An identical projection is a no-op. Retrying after an uncertain write first reads the remote status. Serialize updates to the same logical key and ignore superseded observations. Different tenants, deliveries, steps and proposal commits have separate keys. The status port receives an injected reader and writer so offline tests can model retries without external credentials.
+
+The example tenants Elm and Reed may use the same step names. Their status contexts are distinct. Permit each tenant to see only its own evidence rows. The platform example consumes these rows and their event times for its observed delivery view. A proposal-only preview may display requests and desired steps before any observations exist.
+
+A single mutable status on the branch would allow a later proposal or a different tenant to overwrite the evidence. A fresh context per run would hide retry duplicates and fragment the step's history.
+
+## Forgejo status port
+
+Read the latest matching context through Forgejo's commit statuses endpoint, GET /api/v1/repos/{owner}/{repo}/commits/{sha}/statuses. Follow pages until the context is found or the list is exhausted. On the write side, POST /api/v1/repos/{owner}/{repo}/statuses/{sha} with context, state and the evidence link as target_url. Bind owner and repository from the configured port and the full SHA from the accepted proposal. The status command takes the accepted proposal, scoped step and observations, then composes target selection, evidence projection, context construction and retry-safe publication. A read error aborts the attempt. Use the injected transport in offline tests. A provider acknowledgment is evidence of publication, separate from evidence of step completion.

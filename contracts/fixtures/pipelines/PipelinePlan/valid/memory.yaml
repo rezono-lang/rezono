@@ -1,5 +1,5 @@
-# A budget in build memory (decision E6): the estimate per pipeline, no view count.
-format: rede.pipelines/1
+# A budget in build memory: the estimate per pipeline, no view count.
+format: rezono.pipelines/1
 build_memory_mb: "6000"
 pipelines:
   - {name: integrity, sql: [engine/tables.sql, engine/integrity.sql], modules: [], views: [], tables: [alpha, beta__alpha], imports: [], exports: [], build_mb: "1800"}

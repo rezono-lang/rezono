@@ -1,0 +1,15 @@
+id: E20
+status: settled
+mode: parse
+source: ask Host where clusters.sum(count * nodes) > 0
+expect:
+  diagnostics:
+  - code: R001
+    span:
+      text: nodes
+      start: 36
+      end: 41
+    suggest:
+    - spec.nodes
+sources:
+- rezono/src/check.ts

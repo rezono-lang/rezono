@@ -5,7 +5,7 @@ says `not_readable`; and they do not count as read in full."""
 
 import json
 
-from rede_checker.access import check_role
+from rezono_checker.access import check_role
 
 SEAL = {"kind": "run", "period": "run__month", "row_sha256": "run__row_sha256", "tables": ["run__month"],
         "closed_until": "period_close__closed_until", "covers": "period_close__covers",
@@ -24,7 +24,7 @@ def grant(rid, who, kind, body):
     return {"id": rid, "head": {"relation": "may_read", "terms": [who, kind, "?x"]}, "body": body}
 
 
-DOC = {"format": "rede.rules/1", "pack": "toy", "seals": [SEAL],
+DOC = {"format": "rezono.rules/1", "pack": "toy", "seals": [SEAL],
        "relations": [{"name": "may_read", "role": "derived", "key": []}],
        "rules": [grant("r-run", "?r", "run", [atom("role", "?r"), atom("run", "?x")]),
                  grant("r-role", "?r", "role", [atom("role", "?r"), atom("role", "?x")]),

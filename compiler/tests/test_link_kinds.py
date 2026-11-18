@@ -4,7 +4,7 @@ import json
 
 import pytest
 
-from rede_compiler import emit, pack
+from rezono_compiler import emit, pack
 from test_compiler import edit_schema, fixture, named, refused  # fixture shared with the minimal pack tests  # noqa: F401 (a pytest fixture)
 
 

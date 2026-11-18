@@ -1,4 +1,4 @@
-"""RV-C20 on the minimal, domain-free fixture pack: the bundle says once per rule what each aggregate folds, as
+"""On the minimal, domain-free fixture pack: the bundle says once per rule what each aggregate folds, as
 the rule IR does, and a column of a derived relation carries a currency where the rules determine it."""
 
 import json
@@ -9,7 +9,7 @@ import pytest
 import yaml
 
 from support import FIXTURE
-from rede_compiler import emit, pack
+from rezono_compiler import emit, pack
 
 
 @pytest.fixture

@@ -1,9 +1,9 @@
 # not_applicable is left out and counted, never an undecided row.
-format: rede.answer/1
+format: rezono.answer/1
 question: ask
 manifest_id: m-1
 nodes: []
-output_schema: s-e60191303ae97ad776d3b3c7136793c24ef83be5862327865b412399f5c9ac72
+output_schema: s-27edc0ea5ccdaa8c2c73c5a51b3e2ed44d5399b2199d6993c03a031b07a7562a
 counts: {rows: 0, undecided: 1, not_applicable: 0}
 undecided:
   - {binder: host-b, state: not_applicable}

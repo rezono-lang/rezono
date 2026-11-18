@@ -7,8 +7,8 @@ import json
 from functools import lru_cache
 from pathlib import Path
 
-from rede_compiler import batch, calc, checks, explain, pack, scenarios, seal
-from rede_compiler import rules as ir
+from rezono_compiler import batch, calc, checks, explain, pack, scenarios, seal
+from rezono_compiler import rules as ir
 
 ROOT = Path(__file__).parent
 # Every example pack, at any depth, with rules and facts.
@@ -23,12 +23,12 @@ def name(p: Path) -> str:
 class State:
     """One fact state of a pack, computed on the batch backend (DuckDB), with the calculation in its phase
     when a rule reads a selection. `base` is what the rules read: the tables and the selections. With a
-    calculation, `calc_witnesses` are its witnesses (decision W12) and `tables` the rows of every table and
+    calculation, `calc_witnesses` are its witnesses and `tables` the rows of every table and
     calculation view as a publication holds them (`batch.calculate`), so an epoch check recomputes them."""
 
     def __init__(self, model, prog, label, rows, calculation=None):
         self.label, self.prog = label, prog
-        # refused and accepted input of a seal (decision E3): base relations the compiler makes
+        # refused and accepted input of a seal: base relations the compiler makes
         self.seal = {r: {tuple(str(x) for x in row) for row in rs} for r, rs in seal.rows(model, rows).items()}
         con, self.calc_witnesses, calculated = batch.run(model, prog, rows, calculation)
         selections = {n: sorted(rs) for n, rs in batch.read(con, prog, prog.calc_inputs()).items()}

@@ -1,4 +1,4 @@
-id: https://rede.example/linkml-fixture/base
+id: https://rezono.example/linkml-fixture/base
 name: linkml_fixture_base
 description: The kinds the other module builds on.
 in_language: en

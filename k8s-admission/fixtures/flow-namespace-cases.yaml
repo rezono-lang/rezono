@@ -1,0 +1,26 @@
+# Both namespaces are managed. Only blue has a parameter resource.
+publications: [blue-namespace-publication.yaml]
+namespaces: [blue, green]
+rule: in-zone-flow
+request:
+  apiVersion: networking.k8s.io/v1
+  kind: NetworkPolicy
+  metadata:
+    name: reader-to-web
+  spec:
+    policyTypes: [Ingress]
+    podSelector:
+      matchLabels: {app.kubernetes.io/name: web}
+    ingress:
+      - from:
+          - podSelector:
+              matchLabels: {app.kubernetes.io/name: reader}
+        ports:
+          - {protocol: TCP, port: 443}
+# Set metadata.namespace to the case namespace before evaluating each request.
+cases:
+  - namespace: blue
+    expected: Allow
+  - namespace: green
+    expected: Deny
+    reason: MissingPublication

@@ -1,4 +1,4 @@
-"""DV1: a pack says which kinds hold decided values (`plane: control`, decision O13; Reckon Data L0 §3.7). The
+"""DV1: a pack says which kinds hold decided values (`plane: control`; publication L0 §3.7). The
 compiler reads the marker and its owner, refuses a control kind that cannot name its decision, writes both into
 the schema bundle, and its loader refuses a decided value without its decision. A kind that says nothing is a
 data-plane kind and its bundle entry is unchanged."""
@@ -12,7 +12,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from rede_compiler import emit, facts, pack
+from rezono_compiler import emit, facts, pack
 
 from support import FIXTURE
 
@@ -77,7 +77,7 @@ REFUSED = {
     "many": (control("Alpha", {"required": True, "multivalued": True}), "required, single-valued slot decision"),
     "enum": (control("Alpha", {"required": True, "range": "State"}), "required, single-valued slot decision"),
     "number": (control("Alpha", {"required": True, "range": "integer"}), "required, single-valued slot decision"),
-    # REVIEW-ENGINE-B on #799: below a data-plane parent it would share the parent's tables, unreviewed.
+    # Below a data-plane parent it would share the parent's tables, unreviewed.
     "below-data": (lambda s: s["classes"].update(Gamma={"is_a": "Alpha", "annotations": {
         "plane": "control", "owner": "board"}, "attributes": {"decision": {"required": True}}}),
         "not below a data-plane kind"),

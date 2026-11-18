@@ -3,9 +3,9 @@
 # The inputs come from rules/assessment.dl; the amounts and rates are the scheme parameters, rows of the
 # pack that imports this one. A leaf names a parameter by its name, and the row valid on the evaluation date
 # is chosen (W13), so the partial rate before 1 July 2026 differs from the one after. The evaluation date is
-# not part of the definition: the importing pack states it (as_of, decision W10).
+# not part of the definition: the importing pack states it (as_of).
 # Numbers are exact fractions; the only rounding is `round`, half away from zero, once per cost share.
-format: rede.calc/1
+format: rezono.calc/1
 pack: subsidy-scheme
 subject: application
 parameters: scheme_parameter.value

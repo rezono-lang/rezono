@@ -1,7 +1,7 @@
-"""The ODCS data contract of a Reckon Data schema (docs/reckon-data/l0.md §2.5; lane M, M09).
+"""The ODCS data contract of a publication schema (docs/publication/l0.md §2.5; lane M, M09).
 
 The contract describes the columnar form of a view (§4): what a reader of the Parquet files may rely on. It is
-made from the schema document alone, through the library's own writer (`reckon_data.arrow.to_arrow` on no rows),
+made from the schema document alone, through the library's own writer (`rezono_publication.arrow.to_arrow` on no rows),
 so a table, a column, its storage and whether it may be null are never restated here. What ODCS cannot say is in
 `odcs.losses.yaml`.
 
@@ -17,13 +17,13 @@ so a table, a column, its storage and whether it may be null are never restated 
 - **A reference** inside the pack is a `foreignKey` relationship to the target's `$id` (not to a kind with
   subkinds, whose elements are spread over its table and theirs); a relation table points
   at its owner the same way.
-- **What ODCS has no member for** goes in `customProperties`: `reckonTable` and `reckonField` (the Arrow metadata
-  of §4.2, with the schema id and the pins), `reckonExtension` (§4.5: unit, money, a reference with its pins) and
-  `reckonWorld` (open or closed). A `map` entry of the schema is an authoritative definition.
+- **What ODCS has no member for** goes in `customProperties`: `rezonoTable` and `rezonoField` (the Arrow metadata
+  of §4.2, with the schema id and the pins), `rezonoExtension` (§4.5: unit, money, a reference with its pins) and
+  `rezonoWorld` (open or closed). A `map` entry of the schema is an authoritative definition.
 - `version` is the schema id with the pins it was given (§6.4): `s-…`, `s-…@d-…` or `s-…@m-…@d-…`. `id` is the
   schema's `base`: it stays the same for every schema of a lineage.
 
-The ODCS version is one constant. Which version and which field mapping Rede settles on is open (Q12).
+The ODCS version is one constant. Which version and which field mapping Rezono settles on is open (Q12).
 
     python edge/plugins/connectors/odcs.py <schema.json>   # prints the contract as YAML
 """
@@ -35,16 +35,16 @@ from fractions import Fraction
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
-sys.path.insert(0, str(ROOT))  # reckon_data lives at the repository root
+sys.path.insert(0, str(ROOT / "publication"))
 
 import pyarrow as pa  # noqa: E402
 import yaml  # noqa: E402
 
-from reckon_data import arrow, l0  # noqa: E402
+from rezono_publication import arrow, l0  # noqa: E402
 
 ODCS_VERSION = "v3.2.0"  # Q12: the one place that names it
 REASON_CODE = "^([a-z][a-z0-9_]*)?$"  # §2.3: empty, or a reason code
-CUSTOM = ("reckonTable", "reckonField", "reckonExtension", "reckonWorld")
+CUSTOM = ("rezonoTable", "rezonoField", "rezonoExtension", "rezonoWorld")
 
 
 class OdcsError(l0.L0Error):
@@ -243,19 +243,19 @@ def contract(schema: dict, pin: dict | None = None) -> dict:
     objects = {}
     for name, table in tables.items():
         _check_ids(name, table.schema.names)
-        meta = json.loads(table.schema.metadata[b"reckon"])
+        meta = json.loads(table.schema.metadata[b"rezono"])
         columns = {}
         for f in table.schema:
             column = _column(f)
             md = f.metadata or {}
-            extra = {"reckonField": json.loads(md[b"reckon"])}
+            extra = {"rezonoField": json.loads(md[b"rezono"])}
             if b"ARROW:extension:name" in md:
-                extra["reckonExtension"] = {"name": md[b"ARROW:extension:name"].decode("utf-8"),
+                extra["rezonoExtension"] = {"name": md[b"ARROW:extension:name"].decode("utf-8"),
                                             "metadata": json.loads(md[b"ARROW:extension:metadata"])}
             column["customProperties"] = _custom(**extra)
             columns[f.name] = column
         objects[name] = {"id": stable_id(name), "name": name, "physicalType": "table", "logicalType": "object",
-                         "properties": columns, "customProperties": _custom(reckonTable=meta)}
+                         "properties": columns, "customProperties": _custom(rezonoTable=meta)}
 
     def add(table: str, column: str | None, member: str, item: dict):
         target = objects[table] if column is None else objects[table]["properties"][column]
@@ -263,7 +263,7 @@ def contract(schema: dict, pin: dict | None = None) -> dict:
 
     for name, kind in schema["kinds"].items():
         keys = ["$id"] + [f.name for f in arrow._version_fields(kind)]
-        objects[name]["customProperties"] += _custom(reckonWorld=kind["world"])
+        objects[name]["customProperties"] += _custom(rezonoWorld=kind["world"])
         objects[name].update(_definitions(schema, name))
         for position, key in enumerate(keys, start=1):
             objects[name]["properties"][key].update(primaryKey=True, primaryKeyPosition=position)
@@ -281,7 +281,7 @@ def contract(schema: dict, pin: dict | None = None) -> dict:
                 add(home, slot_name, "quality", rule)
             # A foreign key names one row of one table. A versioned target has a row per version, a target in
             # another pack is not in this contract, and an element of a kind with subkinds is a row of that
-            # kind's table or of a subkind's (§4.1): `reckonExtension` carries the target, and the loss list
+            # kind's table or of a subkind's (§4.1): `rezonoExtension` carries the target, and the loss list
             # says so.
             if ("ref" in slot and "." not in slot["ref"] and "versioned" not in schema["kinds"][slot["ref"]]
                     and not any(k.get("parent") == slot["ref"] for k in schema["kinds"].values())):
@@ -300,7 +300,7 @@ def contract(schema: dict, pin: dict | None = None) -> dict:
                     name, f"({value} IS NULL AND {state} = 0) OR ({value} IS NOT NULL AND {state} <> 0)")))
             if not many:
                 continue
-            objects[home]["customProperties"] += _custom(reckonWorld=slot.get("world", "closed"))
+            objects[home]["customProperties"] += _custom(rezonoWorld=slot.get("world", "closed"))
             for position, key in enumerate([*keys, slot_name], start=1):  # a set: the whole row is the key
                 objects[home]["properties"][key].update(primaryKey=True, primaryKeyPosition=position)
             add(home, None, "relationships",

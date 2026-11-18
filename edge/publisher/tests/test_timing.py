@@ -1,11 +1,11 @@
-"""Time per phase (rede_publisher.timing): every moment counts toward one phase, a lent phase is taken out of
+"""Time per phase (rezono_publisher.timing): every moment counts toward one phase, a lent phase is taken out of
 the one around it, and the report goes to the log and the step summary only."""
 
 import io
 
 import pytest
 
-from rede_publisher import timing
+from rezono_publisher import timing
 
 
 @pytest.fixture
@@ -61,9 +61,9 @@ def test_without_a_summary_only_the_log(clock, monkeypatch):
 
 
 def test_publish_sh_reads_the_same_lines_for_its_budget(clock, monkeypatch, tmp_path):
-    # RV-Z11: deploy/profiles/edge/publish.sh names the slowest pack's largest phase from these lines.
+    # Deploy/profiles/edge/publish.sh names the slowest pack's largest phase from these lines.
     times = tmp_path / "times"
-    monkeypatch.setenv("REDE_TIMES_FILE", str(times))
+    monkeypatch.setenv("REZONO_TIMES_FILE", str(times))
     for pack in ("a", "b"):
         timing.switch("upload")
         clock[0] += 2.0

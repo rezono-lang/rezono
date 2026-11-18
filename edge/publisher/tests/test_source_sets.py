@@ -14,11 +14,11 @@ import pytest
 import yaml
 
 pytest.importorskip("duckdb")
-pytest.importorskip("rede_compiler")
+pytest.importorskip("rezono_compiler")
 
-from rede_canon import canonical_json, sha256_hex  # noqa: E402
-from rede_publisher import batch, publish, store, views  # noqa: E402
-from rede_publisher import sources as fact_sources  # noqa: E402
+from rezono_canon import canonical_json, sha256_hex  # noqa: E402
+from rezono_publisher import batch, publish, store, views  # noqa: E402
+from rezono_publisher import sources as fact_sources  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[3]
 MINIMAL = ROOT / "compiler" / "tests" / "fixtures" / "minimal"
@@ -88,7 +88,7 @@ def role_sources(s, m: dict, role: str) -> list:
 
 def test_each_role_gets_the_sources_of_exactly_the_rows_it_reads(tmp_path):
     s, m = published(tmp_path, epoch(pack(tmp_path)))
-    assert {"name": "rede:sources", "status": "green", "violations": 0} in m["checks"]
+    assert {"name": "rezono:sources", "status": "green", "violations": 0} in m["checks"]
     assert [x["role"] for x in m["fact_sources"]] == ["checker", "viewer"]
     assert m["sources"] == [{"source_id": "rules", "position": "test"}], "where each source stood, unchanged"
     for role in ROLES:
@@ -130,7 +130,7 @@ def lookup(pieces: dict, root: dict, key: list):
 
 
 def test_the_views_carry_each_roles_sources_as_trees_by_row(tmp_path):
-    """S25 step 6a for O(page) (#345): beside the proof pieces, the view index lists the role's source entries
+    """S25 step 6a for O(page): beside the proof pieces, the view index lists the role's source entries
     as key-range trees by row, checked against the set the manifest names, so the gate reads one row's sources
     with one lookup and never the whole set. A manifest without a source set (before S25) gets no trees."""
     side = {"default": GIT, "records": [{"of": {"kind": "beta", "id": "b1"}, "position": "rows.json#/1"}]}
@@ -164,7 +164,7 @@ def viewer_sources(tmp: Path, **world) -> tuple[bytes, dict]:
 
 
 def test_hidden_rows_change_no_byte_of_a_roles_sources(tmp_path):
-    """S25 made precise by the owner (08-11-2026, #329): a source follows its readable row as a declared unit.
+    """S25: a source follows its readable row as a declared unit.
     Adding a hidden gamma 3 and a hidden alpha x, or removing the hidden alpha s1, changes nothing the viewer
     gets: not its source bytes, not their hash, not whether they are published. A line 3 is not the element
     gamma/3, and equal text is no access relation."""
@@ -189,7 +189,7 @@ def test_an_invalid_source_blocks_before_any_write(tmp_path):
     with pytest.raises(publish.Blocked) as err:
         publish.publish(dataclasses.replace(e, fact_sources=broken), s, ROLES)
     assert s.list("") == [], "no publication write"
-    assert str(err.value) == 'rede:sources: role checker: source_fields (first: source_fields beta ["b1"] revision)'
+    assert str(err.value) == 'rezono:sources: role checker: source_fields (first: source_fields beta ["b1"] revision)'
 
 
 @pytest.mark.parametrize("change", ["missing", "stale", "unsorted_is_fixed"])
@@ -208,7 +208,7 @@ def test_a_wrong_entry_blocks_before_any_write(tmp_path, change):
         b, _ = published(tmp_path / "b", dataclasses.replace(e, fact_sources=entries))
         assert all(a.get(k) == b.get(k) for k in a.list("")) and a.list("") == b.list("")
         return
-    with pytest.raises(publish.Blocked, match="rede:sources"):
+    with pytest.raises(publish.Blocked, match="rezono:sources"):
         publish.publish(dataclasses.replace(e, fact_sources=entries), s, ROLES)
     assert s.list("") == []
 
@@ -238,11 +238,11 @@ def test_a_later_epoch_names_the_base_source_set_when_its_bytes_are_the_same(tmp
 
 
 def test_an_epoch_without_source_entries_publishes_as_before(tmp_path):
-    """An older caller supplies none: no source set and no `rede:sources` check, the rest unchanged."""
+    """An older caller supplies none: no source set and no `rezono:sources` check, the rest unchanged."""
     e = epoch(pack(tmp_path))
     _, m = published(tmp_path / "with", e)
     _, old = published(tmp_path / "without", dataclasses.replace(e, fact_sources=None))
-    assert "fact_sources" not in old and all(c["name"] != "rede:sources" for c in old["checks"])
+    assert "fact_sources" not in old and all(c["name"] != "rezono:sources" for c in old["checks"])
     same = lambda x: {k: v for k, v in x.items() if k not in ("fact_sources", "checks")}
     assert same(old) == same(m)
 

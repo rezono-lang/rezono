@@ -1,4 +1,4 @@
-"""RV-K04: the calculation check (rede_checker/calc.py, decision W12) on planted faults, without the compiler.
+"""The calculation check (rezono_checker/calc.py) on planted faults, without the compiler.
 
 The example is one compiled calculation program, frozen as data in tests/fixtures/calc: `calc.json` (ir/calc.json),
 `snapshots.json` (every table as its rows; a calculation view as subject, value, state, reason) and
@@ -6,7 +6,7 @@ The example is one compiled calculation program, frozen as data in tests/fixture
 these files (compiler/tests/test_calc.py), so the checker is tested here on what the compiler really gives, and
 this file imports nothing of it. Each case changes the witnesses as a wrong engine would, and names the reason.
 
-RV-K09: the rows themselves are held too (calc.total). A wrong engine that leaves out a row and its witness leaves
+The rows themselves are held too (calc.total). A wrong engine that leaves out a row and its witness leaves
 nothing wrong behind; only the count of rows per subject refuses it.
 """
 
@@ -18,10 +18,10 @@ from pathlib import Path
 
 import pytest
 
-from rede_checker import calc
-from rede_checker.canon import encode_key
-from rede_checker.check import check_epoch
-from rede_checker.rules import load_rules
+from rezono_checker import calc
+from rezono_checker.canon import encode_key
+from rezono_checker.check import check_epoch
+from rezono_checker.rules import load_rules
 
 HERE = Path(__file__).parent / "fixtures" / "calc"
 
@@ -79,13 +79,13 @@ def zero(by):  # x0 is missing for i1, and was taken as 0: 0 + 1
     w.update(value="1", state="known", reason="")
 
 
-def wrapped(by):  # 2^63 - 1 + 1 beyond W8's bound, given as the value a 64-bit sum wraps to (RV-K12)
+def wrapped(by):  # 2^63 - 1 + 1 beyond the numeric bound, given as the value a 64-bit sum wraps to
     w = by["calc__overflow", "i0"]
     step(w, "base/value").update(value="-9223372036854775808", state="known", reason="")
     w.update(value="-9223372036854775808", state="known", reason="")
 
 
-def guessed(by):  # pow(2, 64) beyond the bound, given as its exact value: known is still not what W8 says
+def guessed(by):  # pow(2, 64) beyond the bound, given as its exact value: the result must still be unknown
     w = by["calc__too_big", "i0"]
     step(w, "base/value").update(value=str(2**64), state="known", reason="")
     w.update(value=str(2**64), state="known", reason="")
@@ -115,7 +115,7 @@ def premise(by):  # uses reads rate, whose witness is gone
     by["calc__rate", "i0"]["keep"] = False
 
 
-# Witnesses a wrong engine could write consistently, row and all (review of #139).
+# Witnesses a wrong engine could write consistently, row and all.
 
 def unreadable(by):  # a condition that is no canonical value decides nothing; never a silent pass
     step(by["calc__prefer", "i0"], "special/when")["value"] = "yes"
@@ -149,7 +149,7 @@ def stranger(witnesses, snapshots):  # a row and a witness for a subject that is
     snapshots["calc__negative_half"].append(["i9", *snapshots["calc__negative_half"][0][1:]])
 
 
-# Rows a wrong engine could leave out or add, every witness it kept still right (RV-K09).
+# Rows a wrong engine could leave out or add, every witness it kept still right.
 
 def absent(witnesses, snapshots):  # i1 has no amount: its half is unknown, which is a row, never no row
     snapshots["calc__half"] = [r for r in snapshots["calc__half"] if r[0] != "i1"]
@@ -212,15 +212,15 @@ def epoch(forge=None, full=None) -> set[str]:
     manifest = {"id": "m-1", "snapshots": [
         {"relation": name, "role": "all", "complete": True, "uri": name, "format": "json",
          "sha256": hashlib.sha256(data).hexdigest()} for name, data in files.items()]}
-    rules = load_rules({"format": "rede.rules/1", "relations": [], "rules": []})
+    rules = load_rules({"format": "rezono.rules/1", "relations": [], "rules": []})
     report = check_epoch([], manifest, rules, files.__getitem__, derived=set(), full=full,
                          calc_witnesses=witnesses, calc_ir=IR)
     return {f["reason"] for f in report["findings"]}
 
 
 def test_a_missing_calculated_row_refuses_the_complete_epoch_and_no_role():
-    """The complete epoch owes every subject its row. A role may read a subject and not see its calculated row
-    (decision O8), so its filtered snapshots get no such check. The example's own `invalid` results never
+    """The complete epoch owes every subject its row. A role may read a subject and not see its calculated row,
+    so its filtered snapshots get no such check. The example's own `invalid` results never
     publish (`calc_invalid`); that is all an epoch of it is refused for."""
     everything = set(frozen("snapshots.json"))
     assert epoch() == epoch(full=everything) == {"calc_invalid"}
@@ -238,10 +238,10 @@ def test_no_test_of_the_checker_imports_the_compiler():
     """The checker's suite runs with the checker alone: no test file here has an import of the compiler."""
     tests = sorted(Path(__file__).parent.glob("*.py"))
     assert tests
-    assert [t.name for t in tests if re.search(r"^\s*(from|import)\s+rede_compiler", t.read_text(encoding="utf-8"), re.M)] == []
+    assert [t.name for t in tests if re.search(r"^\s*(from|import)\s+rezono_compiler", t.read_text(encoding="utf-8"), re.M)] == []
 
 
-# --- RV-K08: the cost follows the witnesses, not the snapshots ------------------------------------------------
+# --- The cost follows the witnesses, not the snapshots ------------------------------------------------
 
 SUBJECT = re.compile(r"(?<![\w-])([ie][0-9])(?![\w-])")  # the example's items i0..i2 and entries e0, e1
 

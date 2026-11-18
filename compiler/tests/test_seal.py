@@ -1,4 +1,4 @@
-"""The seal (decision E3, docs/compiler.md#design-m3-the-seal) on the neutral fixture pack: the shape checks,
+"""The seal (docs/compiler.md#design-m3-the-seal) on the neutral fixture pack: the shape checks,
 the rule check, the row hash, the close command, and refused and accepted input equal in SQL, in the
 batch rows and in the definition written out."""
 
@@ -12,11 +12,11 @@ import pytest
 import yaml
 from hypothesis import given, settings
 from hypothesis import strategies as st
-from rede_canon import canonical_sha256
+from rezono_canon import canonical_sha256
 
 from support import FIXTURE, run_split, violations
-from rede_compiler import batch, emit, facts, pack, scenarios, seal
-from rede_compiler import rules as ir
+from rezono_compiler import batch, emit, facts, pack, scenarios, seal
+from rezono_compiler import rules as ir
 
 DAY = datetime.date(2026, 10, 1)
 OTHER = "0" * 64  # a hash no row has: the row was edited after the close
@@ -157,7 +157,7 @@ def test_a_later_close_does_not_lift_an_earlier_refusal(compiled):
     assert both(compiled, rows) == {"alpha__refused": {("a0", "c0"), ("a1", "c0")}, "alpha__accepted": set()}
 
 
-# Above the budget (decision E6): counted and kept read the accepted rows in different parts, late the
+# Above the budget: counted and kept read the accepted rows in different parts, late the
 # refused rows. kept needs small, which needs counted, so the three never fit in one part of 4 views.
 SPLIT_RULES = RULES + """
 .decl small(a: symbol)
@@ -257,7 +257,7 @@ def test_a_calculation_cannot_take_a_sealed_kind_as_input(tmp_path):
 
 
 def test_a_calculation_cannot_take_its_parameters_from_a_sealed_kind(tmp_path):
-    # Audit 07-11 (E3): a refused row of the parameter kind would set a parameter; refused like the inputs.
+    # Audit 07-11: a refused row of the parameter kind would set a parameter; refused like the inputs.
     d = Path(shutil.copytree(FIXTURE.parent / "calc", tmp_path / "calc"))
     path = d / "schema" / "calc.yaml"
     schema = yaml.safe_load(path.read_text())
@@ -405,8 +405,8 @@ def closed(model, now: dict, then: dict, until: int, covered) -> dict:
 
 def check_seal(model, rows) -> list:
     """What the independent checker finds, from the rows as snapshots give them (all text)."""
-    from rede_checker.check import _check_seal
-    from rede_checker.rules import load_seals
+    from rezono_checker.check import _check_seal
+    from rezono_checker.rules import load_seals
 
     [doc] = load_seals({"seals": json.loads(emit.compile_pack(model)["ir/rules.json"])["seals"]})
     findings = []
@@ -552,7 +552,7 @@ def test_a_cycle_of_parts_or_two_wholes_is_refused(tmp_path):
     refused(d, "class Gamma: sealed_with names the element it is part of: one required, single arrow")
 
 
-# Above the budget (decision E6) with parts: integrity forwards every part's accepted relation too.
+# Above the budget with parts: integrity forwards every part's accepted relation too.
 SPLIT_PART_RULES = PART_RULES + """
 .decl small(a: symbol)
 small(a) :- counted(a, n), n < 3.
@@ -642,5 +642,5 @@ def calc_with_a_part(tmp: Path, part: str, inputs: str | None = None) -> Path:
     ("Setting", None, "parameters: kind 'setting' is a sealed kind or a part of one"),
 ])
 def test_a_calculation_cannot_read_a_part_of_a_sealed_kind(tmp_path, part, inputs, message):
-    # Review P1 of #232: a part counts only when its element is accepted, so the calculation refusal covers it.
+    # A part counts only when its element is accepted, so the calculation refusal covers it.
     refused(calc_with_a_part(tmp_path, part, inputs), message)

@@ -7,11 +7,11 @@ from pathlib import Path
 
 import pytest
 import yaml
-from rede_admission import Refusal
-from rede_compiler import diagnostics, facts, pack
+from rezono_admission import Refusal
+from rezono_compiler import diagnostics, facts, pack
 
 FIXTURE = Path(__file__).parent / 'fixtures' / 'minimal'
-contract = pytest.importorskip('rede_contracts.diagnostic')
+contract = pytest.importorskip('rezono_contracts.diagnostic')
 
 
 def test_an_error_raised_as_a_sentence_is_one_compile_error_per_line():

@@ -1,4 +1,4 @@
-"""Standard pack std-decision (RV-C03): its rules and axioms against independent oracles.
+"""Standard pack std-decision: its rules and axioms against independent oracles.
 
 Three evaluations must agree as sets: an exact Python reference written from the definitions, the DuckDB
 batch backend on the compiled IR, and Soufflé on rules/decision.dl as written (when present, as in CI). The
@@ -16,8 +16,8 @@ import yaml
 from hypothesis import given, settings, strategies as st
 
 from support import FIXTURE, REPO, violations
-from rede_compiler import emit, facts, modules, pack
-from rede_compiler import rules as ir
+from rezono_compiler import emit, facts, modules, pack
+from rezono_compiler import rules as ir
 
 STD = REPO / "packs" / "std-decision"
 BASE = ("decision", "decision__state", "decision__supersedes", "decision__decider", "decision__valid_from_day",
@@ -77,7 +77,7 @@ def program():
 
 
 def batch_eval(prog, data):
-    from rede_compiler import batch
+    from rezono_compiler import batch
     con = batch.connect(prog, {k: sorted(data.get(k, ())) for k in BASE})
     batch.compute(con, prog)
     return batch.read(con, prog)
@@ -221,7 +221,7 @@ def test_must_fail_a_cycle_of_superseded_decisions(tmp_path):
 
 
 def test_must_fail_a_cycle_of_grounds(tmp_path):
-    """RV-A31: the grounds have no cycle, whatever the state of the decisions; a chain is no cycle."""
+    """The grounds have no cycle, whatever the state of the decisions; a chain is no cycle."""
     two = records(("a", "in_force", 20240301, None, [], ["p"]), ("b", "proposed", None, None, [], []),
                   ("c", "in_force", 20240301, None, [], ["p"]), ("d", "in_force", 20240301, None, [], ["p"]),
                   grounds=[("a", "b"), ("b", "a"), ("c", "a"), ("d", "c")])
@@ -237,7 +237,7 @@ def test_must_fail_a_cycle_of_grounds(tmp_path):
 
 
 def test_a_withdrawn_record_without_a_first_day_is_a_finding_and_one_with_days_is_read_by_its_days(tmp_path):
-    """RV-A31: time comes from the days. A withdrawn record that names its days is in force until its last day;
+    """Time comes from the days. A withdrawn record that names its days is in force until its last day;
     one that names none is in force on no reference date, and the finding says so. A proposal is neither."""
     got = evaluate(records(("a", "withdrawn", None, None, [], ["p"]),
                            ("b", "withdrawn", 20240301, 20270101, [], ["p"]),
@@ -286,7 +286,7 @@ def test_must_fail_the_schema_rules(tmp_path):
 
 def test_a_ground_is_a_link_between_two_decisions_and_a_reassessment_an_arrow(tmp_path):
     """S27: Ground is a relation kind named by its ends, the decision and the one it rests on, and a second row
-    for the same pair breaks its key. What a decision looked at again is an arrow on it, and open (W6): no
+    for the same pair breaks its key. What a decision looked at again is an arrow on it, and open: no
     record of a reassessment leaves unknown whether there was one. The pack follows the grounds and holds them to
     one axiom (ground_cycle); no rule of the pack reads a reassessment (README, "What a decision rests on")."""
     model = pack.read(STD)

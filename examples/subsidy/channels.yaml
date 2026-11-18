@@ -17,3 +17,6 @@ arrows:
   - {arrow: credential_claim.credential, dash: none}
   - {arrow: status_lookup.credential, dash: "2 2"}
   - {arrow: status_lookup.statement, dash: "2 2"}
+
+home:
+  claim: [scheme_evaluation_day]

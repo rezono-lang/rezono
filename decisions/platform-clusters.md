@@ -1,0 +1,35 @@
+# Cluster placement and fleet management
+
+## Size at the tenant design checkpoint
+
+The original fact file contains 121 authored rows and its Datalog module contains 34 rule clauses. The cluster scenario adds 10 cluster rows, nine role-zone mappings, 19 service assignments, two storage-use rows and five synthetic transport entries. The tenant model adds 14 catalog and policy entries (one per top-level table member), two request files and one additional request for the capacity comparison. At this checkpoint the baseline, cluster and tenant reference programs contain 157, 75 and 104 nonblank, non-comment Python lines respectively. These figures count the independent reference separately from pack rules. A new tenant changes the team table and request files. A new catalog item changes the catalog table.
+
+The cluster scenario replaces the baseline's shared control endpoint with one endpoint per Kubernetes cluster. Cluster identity, role and service placement are authored intent. Neither network reachability nor a product name establishes ownership. Use these inputs to explain reachability and to project firewall boundaries. Keep the original service example as a reproducible baseline.
+
+| Role | Instance | Control host | Worker host |
+| --- | --- | --- | --- |
+| Fleet hub | hub | self | own machines |
+| Shared services | base | self | own machines |
+| Hosted control | management | self | own machines |
+| VM infrastructure | virtualization | self | own machines |
+| Application | production, development | management | virtualization |
+| External storage | storage | none | storage machines |
+| Build | build | self | own machines |
+| Edge | edge | self | own machines |
+| Recovery | recovery | self | own machines |
+
+Separate build and edge clusters keep their workloads outside application and management hosts. Recovery owns its control plane and workers so loss of either host for application clusters does not prevent recovery. It remains a fleet member, with only its declared fleet connections. Ceph provides external storage and has no Kubernetes control plane or fleet agent. The example client is a simulated probe placed on edge with the external trust label.
+
+Open Cluster Management and Argo CD are the candidate hub products. Cluster API and k0smotron provide hosted control, KubeVirt and its Cluster API provider supply virtual workers, and k0s supplies the application clusters. Keycloak and the other shared services occupy base. Products are inventory choices. Hosting and fleet rules use roles, with no product names in their conditions. Product capabilities and real port ranges require release-specific evidence. The transport table in the scenario contains synthetic test inputs only.
+
+Each Kubernetes cluster owns one control endpoint. Its placement is physical hosting, distinct from ownership. A per-cluster agent on the workers registers with the hub, and the hub applies to that cluster's own control endpoint. Application workers contact their own hosted control. VM disks originate on the VM infrastructure. Persistent volumes originate with their owning workers. Both use the external storage endpoint. Endpoint trust follows the hosting infrastructure for hosted control and VM disks. Workload endpoints retain their logical tenant zone. Network allowances are projections of directional flows, with a separate set for same-zone traffic.
+
+The fixture declares cluster rows, role-based service placement, storage use and synthetic transports. Standalone calculation derives endpoint placement, fleet membership and flows by joining these inputs. A service-level request for the control-plane function resolves to its own cluster. For the old shared control service, the management cluster's control endpoint takes its place. Every other service keeps its own identity. The baseline service facts and their original expectations stay available for comparison.
+
+A future product substitution can be compared after both products have sourced capabilities. Comparing observed placement with desired placement requires a recorded run of this scenario with evidence for each discrepancy.
+
+## Guest networking and machine bootstrap
+
+Every Kubernetes cluster has a Cilium policy layer and Hubble flow observation. Every modeled Kubernetes machine runs k0s on Flatcar Container Linux, with one machine-specific Ignition input derived from desired state. The minimal scenario has one machine per cluster. Each application worker is a VM. A secondary network gives its interface an address from its own cluster and zone. A packet from that interface retains the application source network at the boundary. The virtualization pod network would translate the source and give the firewall the wrong identity. VM disk traffic belongs to the virtualization host. Hosted control still uses the management network.
+
+The compatibility of k0smotron worker bootstrap with Flatcar Ignition and KubeVirt hosting on Flatcar are two open questions. Record each result from an independent run. Ubuntu LTS with cloud-init is the candidate fallback if a trial establishes incompatibility. The placement oracle models desired machine inputs and network identities without treating either trial as successful.

@@ -1,0 +1,15 @@
+id: E40
+status: settled
+mode: parse
+source: ask Host in niveau1 where memory_need > 384 GiB
+expect:
+  print: ask Host in niveau1 where memory_need > 384 GiB
+  diagnostics:
+  - code: R015
+    span:
+      text: in niveau1
+      start: 9
+      end: 19
+sources:
+- rezono/src/print.ts
+- rezono/src/parse.ts

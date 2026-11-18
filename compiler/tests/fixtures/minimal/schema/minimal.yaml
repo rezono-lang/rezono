@@ -1,6 +1,6 @@
 # The smallest pack that exercises the compiler: two kinds, an arrow, an enum, a derived type
 # and bounds. Neutral names on purpose; it describes no domain.
-id: https://rede.example/minimal
+id: https://rezono.example/minimal
 name: minimal
 in_language: nl
 imports:

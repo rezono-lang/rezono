@@ -1,4 +1,4 @@
-"""A view with attribute maps executes, for the bounded profile of RV-C27 (docs/compiler.md, "Views that execute").
+"""A view with attribute maps executes, for the bounded execution profile (docs/compiler.md, "Views that execute").
 
 A neutral theory (`spans`: a span covers a mark on its line) with rules of its own, and a domain whose terms have
 dates and whose readings have a day written YYYYMMDD. The expectations are written here in Python, from the dates
@@ -14,9 +14,9 @@ import pytest
 import yaml
 from hypothesis import example, given, settings, strategies as st
 
-from rede_checker.check import check
-from rede_checker.rules import load_rules
-from rede_compiler import batch, explain, modules, pack, rules as ir
+from rezono_checker.check import check
+from rezono_checker.rules import load_rules
+from rezono_compiler import batch, explain, modules, pack, rules as ir
 from support import typed
 import souffle
 
@@ -58,7 +58,7 @@ def packs(tmp_path, view=VIEW, change=None, theory_change=None):
         'Mark': {'attributes': {'id': {'identifier': True}, 'on': {'range': 'Line'}, 'at': {'range': 'integer'}}}}
     if theory_change:
         theory_change(classes)
-    write(theory / 'schema/minimal.yaml', {'id': 'https://rede.example/spans', 'name': 'spans',
+    write(theory / 'schema/minimal.yaml', {'id': 'https://rezono.example/spans', 'name': 'spans',
           'imports': ['linkml:types'], 'default_range': 'string', 'annotations': {'layer': 'facts'}, 'classes': classes})
     write(theory / 'pack.yaml', {'name': 'spans', 'version': '0', 'default_language': 'nl', 'theory': True})
     write(theory / 'channels.yaml', {'kinds': [{'kind': k, 'shape': 'rect'} for k in ('span', 'line', 'mark')],
@@ -66,7 +66,7 @@ def packs(tmp_path, view=VIEW, change=None, theory_change=None):
     write(theory / 'labels/nl.yaml', {})
     (theory / 'rules').mkdir()
     (theory / 'rules/spans.dl').write_text(RULES, encoding='utf-8', newline='\n')
-    write(domain / 'schema/minimal.yaml', {'id': 'https://rede.example/domain', 'name': 'domain',
+    write(domain / 'schema/minimal.yaml', {'id': 'https://rezono.example/domain', 'name': 'domain',
           'imports': ['linkml:types'], 'default_range': 'string', 'annotations': {'layer': 'facts'}, 'classes': {
         'Term': {'attributes': {'id': {'identifier': True}, 'starts': {'range': 'date'}, 'ends': {'range': 'date'},
                                 'calendar': {'range': 'Calendar'}}},
@@ -82,7 +82,7 @@ def packs(tmp_path, view=VIEW, change=None, theory_change=None):
         view = json.loads(json.dumps(view))
         if change:
             change(view)
-        write(domain / 'views.yaml', {'format': 'rede.views/1', 'views': [view]})
+        write(domain / 'views.yaml', {'format': 'rezono.views/1', 'views': [view]})
     return domain, theory
 
 
@@ -235,8 +235,8 @@ def test_the_theory_table_itself_and_the_view_meet_in_one_relation(shared):
 def test_a_role_that_may_not_read_the_fact_gets_no_row_and_no_proof_through_the_view(model, shared):
     """O8 for the view's rows as for any derived row: the publisher's filter, on the engine's own witnesses.
     The grants are stated here; in a pack the read rules derive them (std-access)."""
-    from rede_publisher import access
-    from rede_publisher.batch import columns
+    from rezono_publisher import access
+    from rezono_publisher.batch import columns
     day = datetime.date(2024, 2, 1)
     terms = [('seen', day, day + datetime.timedelta(days=30)), ('t-secret', day, day + datetime.timedelta(days=30))]
     rows, witnesses = run(shared, facts(terms, [('r1', 20240215)]))
@@ -268,10 +268,10 @@ may_read("half", "calendar", x) :- calendar(x).
 def test_a_read_rule_names_the_elements_of_the_theory_kind_so_a_role_reads_it_in_full(tmp_path):
     """An access rule names elements, and the view retypes none: `span(x)` under a head that grants x as a span
     stays the kind's own table, while the theory's rules read the view's relation. So the kind is read in full by
-    the shape of the rule (O8), and the role may read what rests on the absence of a row; a role without that
+    the shape of the rule, and the role may read what rests on the absence of a row; a role without that
     grant gets no row from the absence, though it reads every term."""
-    from rede_publisher import access
-    from rede_publisher.batch import columns
+    from rezono_publisher import access
+    from rezono_publisher.batch import columns
     domain, _ = packs(tmp_path)
     (domain / 'rules').mkdir()
     (domain / 'rules/access.dl').write_text(READ_RULES, encoding='utf-8', newline='\n')
@@ -302,7 +302,7 @@ def test_the_same_input_gives_the_same_bytes(tmp_path):
 
 # What VIEW says, in another order and layout, so that no entry stands where its index would put it.
 LINED = '''# line 1: a comment
-format: rede.views/1
+format: rezono.views/1
 views:
   - kinds:
       - name: span
@@ -389,7 +389,7 @@ def test_a_constraint_the_view_does_not_hold_is_refused(tmp_path, theory_change)
 
 def test_a_view_in_an_imported_pack_is_refused(tmp_path):
     domain, theory = packs(tmp_path, view=None)
-    write(theory / 'views.yaml', {'format': 'rede.views/1', 'views': [VIEW]})
+    write(theory / 'views.yaml', {'format': 'rezono.views/1', 'views': [VIEW]})
     write(domain / 'pack.yaml', {'name': 'domain', 'version': '0', 'default_language': 'nl',
           'imports': [{'name': 'spans', 'path': '../theory', 'sha256': modules.pack_hash(theory)}]})
     with pytest.raises(pack.CompileError, match='view execution is not supported here'):

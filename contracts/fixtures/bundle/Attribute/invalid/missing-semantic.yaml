@@ -1,4 +1,4 @@
-# Every slot says what its value means (B10).
+# Every slot says what its value means.
 id: posting.amount
 stable_id: "Posting#amount"
 span: {file: schema/core.yaml, line: "4", column: "3"}

@@ -19,11 +19,11 @@ from hypothesis import strategies as st
 
 import rulegen as gen
 import souffle
-from rede_compiler import batch as duck
-from rede_compiler import explain
-from rede_compiler import rules as ir
-from rede_compiler import rules_sql as sql
-from rede_compiler import rules_split
+from rezono_compiler import batch as duck
+from rezono_compiler import explain
+from rezono_compiler import rules as ir
+from rezono_compiler import rules_sql as sql
+from rezono_compiler import rules_split
 from support import part_program, typed
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -174,8 +174,8 @@ def small_program(relations, rules):
        pick=st.randoms(use_true_random=False))
 def test_every_proof_is_valid_and_acyclic(seed, n, rows, degree, pick):
     """The explainer's proof of a derived row passes the independent checker (which also rejects cycles)."""
-    from rede_checker.check import check
-    from rede_checker.rules import load_rules
+    from rezono_checker.check import check
+    from rezono_checker.rules import load_rules
 
     doc = gen.program(seed, n, shapes=gen.ALL_SHAPES)
     prog = ir.load(doc)
@@ -198,7 +198,7 @@ def test_every_proof_is_valid_and_acyclic(seed, n, rows, degree, pick):
 
 
 def check_partition(prog, parts, budget):
-    """Decision E6: every relation once, a recursive core whole, within budget, and only earlier parts read.
+    """Every relation once, a recursive core whole, within budget, and only earlier parts read.
     A part above the budget holds one relation that is not recursive, and is what `over_budget` reports.
     A part may be empty only in the middle (a place kept from a previous partition)."""
     assert sorted(x for p in parts for x in p) == sorted(prog.derived())
@@ -292,7 +292,7 @@ def test_a_small_change_moves_no_view_given_the_previous_cut(seed, n, budget, da
 @settings(max_examples=min(settings().max_examples, 25))
 @given(seed=st.integers(0, 10**6), n=st.integers(4, 30), budget=st.integers(3, 10), steps=st.integers(1, 6))
 def test_changes_cross_parts_through_the_export_stream(seed, n, budget, steps):
-    """Review of #34: the real data path between parts. Each part runs on its own (DuckDB); after every
+    """The real data path between parts. Each part runs on its own (DuckDB); after every
     change the generated export query of a producing part is read as the relay reads it: deletes and
     inserts since the previous epoch, decoded and applied to the import tables of its readers. A delete
     that crosses a boundary can bring a count to 0 or switch a negation on. The parts together must
@@ -349,9 +349,9 @@ def test_changes_cross_parts_through_the_export_stream(seed, n, budget, steps):
 
 
 def test_count_and_sum_over_one_group_have_their_own_evidence():
-    """Review of #13: two aggregates over the same relation and group are told apart by position."""
-    from rede_checker.check import check
-    from rede_checker.rules import load_rules
+    """Two aggregates over the same relation and group are told apart by position."""
+    from rezono_checker.check import check
+    from rezono_checker.rules import load_rules
 
     doc = small_program(
         [{"name": "entry", "role": "base", "key": [{"name": "id", "type": "string"}]},
@@ -464,7 +464,7 @@ def test_feldera_runs_generated_programs_as_duckdb_does(pick, tmp_path):
     """E10: Feldera is the reference. A generated program with every shape, integer division with negative
     operands and a body of aggregates only among them, on a running Feldera (FELDERA_URL; the label `feldera`), with a witness view per rule
     (the explain SQL): after the facts and after each single-fact change, every relation and every witness
-    equals the batch backend (DuckDB, which divides with rede_quotient), and Soufflé where it is installed."""
+    equals the batch backend (DuckDB, which divides with rezono_quotient), and Soufflé where it is installed."""
     from feldera import URL, deploy, processed, push, query, stop
     if not URL:
         pytest.skip("set FELDERA_URL to a running Feldera")
@@ -474,7 +474,7 @@ def test_feldera_runs_generated_programs_as_duckdb_does(pick, tmp_path):
     prog = ir.load(doc)
     data = gen.facts(doc, seed, 60, domain=20)
     columns = {n: [c.name for c in r.key + r.values] for n, r in prog.relations.items() if r.role == "base"}
-    name = f"rede-rules-generated-{pick}"
+    name = f"rezono-rules-generated-{pick}"
     deploy(name, sql.feldera(prog, witnesses=True), profile="unoptimized", workers=2)
 
     def send(rows, op):

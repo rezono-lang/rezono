@@ -1,4 +1,4 @@
-"""Closed view definitions are readable/hashable; outside the profile that executes (RV-C27) they are refused."""
+"""Closed view definitions are readable/hashable; outside the profile that executes they are refused."""
 
 import copy
 import json
@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from rede_compiler import emit, modules, pack, views
+from rezono_compiler import emit, modules, pack, views
 
 FIXTURES = Path(__file__).parent / "fixtures"
 STRUCTURAL = FIXTURES / "views" / "structural.yaml"
@@ -95,7 +95,7 @@ def test_duplicate_declarations_do_not_pick_a_branch(tmp_path, key):
 
 def test_duplicate_yaml_field_is_not_silently_overridden(tmp_path):
     path = tmp_path / "views.yaml"
-    path.write_text("format: rede.views/1\nformat: ignored\nviews: []\n", encoding="utf-8")
+    path.write_text("format: rezono.views/1\nformat: ignored\nviews: []\n", encoding="utf-8")
     with pytest.raises(views.ViewError, match="duplicate field 'format'"):
         views.read(path)
 
@@ -138,7 +138,7 @@ def test_expr_is_not_executed_or_accepted_as_structural_data(tmp_path):
     assert not marker.exists()
 
 
-@pytest.mark.parametrize("body", ["", "[]", "format: wrong\nviews: []", "format: [rede.views/1]\nviews: []", "format: rede.views/1\nviews: ["])
+@pytest.mark.parametrize("body", ["", "[]", "format: wrong\nviews: []", "format: [rezono.views/1]\nviews: []", "format: rezono.views/1\nviews: ["])
 def test_invalid_document_is_not_an_absent_view(tmp_path, body):
     path = tmp_path / "views.yaml"; path.write_text(body, encoding="utf-8")
     with pytest.raises(views.ViewError, match="views.yaml:"):
@@ -167,7 +167,7 @@ def test_pack_and_source_publication_refuse_valid_unlowered_views(tmp_path, monk
     with pytest.raises(pack.CompileError, match=r"views.yaml: .*view execution is not supported (for|here)"):
         pack.read(target)
     import duckdb
-    from rede_publisher.batch import epoch
+    from rezono_publisher.batch import epoch
     monkeypatch.setattr(duckdb, "connect", forbidden)
     with pytest.raises(pack.CompileError, match=r"views.yaml: .*view execution is not supported (for|here)"):
         epoch(target, epoch=1, knowledge_time="2026-01-01T00:00:00Z", sources=[])
@@ -181,7 +181,7 @@ def test_metadata_boundary_also_refuses_the_main_view_file(tmp_path):
 
 def test_view_bytes_change_definition_and_import_pins(tmp_path):
     target = Path(shutil.copytree(FIXTURES / "minimal", tmp_path / "main"))
-    from rede_publisher.batch import definition_sha256
+    from rezono_publisher.batch import definition_sha256
     old = modules.pack_hash(target), definition_sha256(target)
     path = write(target / "views.yaml", fixture())
     new = modules.pack_hash(target), definition_sha256(target)

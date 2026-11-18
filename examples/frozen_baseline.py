@@ -1,5 +1,5 @@
 """Frozen baseline acceptance: a replacement model must derive exactly the rows that today's packs derive
-(seam S5 of #351, C1 of #394; tests only, never in production).
+(tests only, never in production).
 
 The baseline is frozen as content. Every row set (one relation, in one fact state, of one pack) is a file
 `sets/<sha256>.json` holding its canonical JSON, and `index.json` names the hash of each relation's set per
@@ -10,7 +10,7 @@ changes only through `freeze` with the changed states named, and that shows as a
 A replacement (a merged model, an import step) is compared through an `Adapter`: which baseline states each of
 its states stands for (several packs at once), and which relation and kind names it renamed. Missing rows and
 extra rows in a frozen relation both fail; relations the baseline does not have are new and not compared.
-`may_read` is compared per role, as the typed elements (kind, id) the role may read (decision O8).
+`may_read` is compared per role, as the typed elements (kind, id) the role may read.
 
 Nothing here knows a domain: the packs, states, relations and roles come from the index and the adapter.
 
@@ -28,9 +28,9 @@ import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from rede_canon import canonical_bytes
+from rezono_canon import canonical_bytes
 
-FORMAT = "rede-frozen-baseline/1"
+FORMAT = "rezono-frozen-baseline/1"
 ACCESS = "may_read"  # std-access: may_read(role, kind, id)
 CALC = "calc:"  # a calculation result: calc:<rule>, rows (subject, value or state when not known)
 ROOT = Path(__file__).resolve().parent
@@ -51,7 +51,7 @@ def observe(pack_dir: Path) -> States:
                              for r, rows in (s.derived | s.seal).items()} for s in run}
     if (pack_dir / "calc").is_dir():
         from calcsupport import run as calc_run
-        from rede_compiler import calc, calc_sql, scenarios
+        from rezono_compiler import calc, calc_sql, scenarios
 
         prog = calc.build(model, model.calc)
         for label, rows in scenarios.states(model, pack_dir):
@@ -150,7 +150,7 @@ class Adapter:
     kinds: dict[str, dict[str, str]] = field(default_factory=dict)
 
     def __post_init__(self):
-        # Access is always compared, per role: an adapter may not rename or retire it (decision O8).
+        # Access is always compared, per role: an adapter may not rename or retire it.
         if ACCESS in self.relations or ACCESS in self.relations.values():
             raise ValueError(f"an adapter may not rename or retire {ACCESS}")
         packs = {pack for composed in self.states.values() for pack in composed}
@@ -209,7 +209,7 @@ def differences(want: States, have: States) -> list[tuple]:
     (state, "may_read[<role>]", ..., (kind, id)). Empty when the replacement is accepted.
 
     Every state the replacement derives must be one the adapter maps, and `may_read` is compared wherever
-    either side has it, so a grant in an unmapped state or an unexpected `may_read` is never ignored (O8).
+    either side has it, so a grant in an unmapped state or an unexpected `may_read` is never ignored.
     Other relations the replacement adds are its own and are not compared."""
     out: list[tuple] = []
     for state in sorted(set(want) | set(have)):

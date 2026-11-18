@@ -1,4 +1,4 @@
-"""Theory std-order (#314 §5.2, T1): its axioms and rules against independent oracles.
+"""Theory std-order: its axioms and rules against independent oracles.
 
 Three evaluations must agree as sets: an exact Python reference written from the definitions, the DuckDB
 batch backend on the compiled IR, and Soufflé on rules/order.dl as written (when present, as in CI). The
@@ -12,17 +12,17 @@ from pathlib import Path
 import pytest
 from hypothesis import given, settings, strategies as st
 
-from rede_compiler import emit, pack
-from rede_compiler import rules as ir
+from rezono_compiler import emit, pack
+from rezono_compiler import rules as ir
 
 THEORY = Path(__file__).resolve().parents[2] / "packs" / "std-order"
 pytest.importorskip("duckdb")
 
 
 def reference(precedes, rank):
-    """The definitions of #314 §5.2, by fixpoint: before is the transitive closure of precedes; comparable
+    """Compute the order relations by fixpoint: before is the transitive closure of precedes; comparable
     is before in either direction; order_cycle is what comes before itself; rank_conflict is a pair in
-    that closure whose ranks do not increase (#314 §5.2: if a comes before b and both have a rank)."""
+    that closure whose ranks do not increase (if a comes before b and both have a rank)."""
     before = set(precedes)
     while True:
         more = {(a, d) for a, b in before for c, d in precedes if b == c} - before
@@ -45,7 +45,7 @@ def program():
 
 
 def batch_eval(prog, precedes, rank):
-    from rede_compiler import batch
+    from rezono_compiler import batch
     con = batch.connect(prog, {"ordered__precedes": sorted(precedes), "ordered__rank": sorted(rank)})
     batch.compute(con, prog)
     return batch.read(con, prog)
@@ -150,7 +150,7 @@ def test_a_domain_kind_that_is_ordered_gets_the_theory_through_the_ordinary_comp
     of its own is Ordered (is_a). Its elements are in the theory's tables, so the rules and axioms hold for
     them through the ordinary compiler. A view with other names waits for the lowering."""
     import yaml
-    from rede_compiler import batch, modules, scenarios
+    from rezono_compiler import batch, modules, scenarios
 
     domain = tmp_path / "bound"
     for folder in ("schema", "labels", "facts"):
@@ -159,7 +159,7 @@ def test_a_domain_kind_that_is_ordered_gets_the_theory_through_the_ordinary_comp
         "name": "bound", "version": "0.1.0", "default_language": "en",
         "imports": [{"name": "std-order", "path": str(THEORY), "sha256": modules.pack_hash(THEORY)}]}), "utf-8")
     (domain / "schema" / "bound.yaml").write_text(yaml.safe_dump({
-        "id": "https://rede.example/bound", "name": "bound", "prefixes": {"linkml": "https://w3id.org/linkml/"},
+        "id": "https://rezono.example/bound", "name": "bound", "prefixes": {"linkml": "https://w3id.org/linkml/"},
         "imports": ["linkml:types", "std-order:order"], "default_range": "string", "annotations": {"layer": "facts"},
         "classes": {"Step": {"is_a": "Ordered", "attributes": {"title": {}}}}}), "utf-8")
     (domain / "labels" / "en.yaml").write_text("step: step\nstep.title: title\n", "utf-8")

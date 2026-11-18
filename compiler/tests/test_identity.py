@@ -1,4 +1,4 @@
-"""B11 (S4): an element is its root kind plus its id. Equal ids of different kinds never collapse; along
+"""B11: an element is its root kind plus its id. Equal ids of different kinds never collapse; along
 inheritance an element keeps one identity; a union's injection is deterministic and invertible."""
 
 import shutil
@@ -9,7 +9,7 @@ import yaml
 
 import souffle
 from support import FIXTURE, typed
-from rede_compiler import batch, identity, pack, rules as ir
+from rezono_compiler import batch, identity, pack, rules as ir
 
 
 def edited(tmp_path, change=None) -> pack.Pack:

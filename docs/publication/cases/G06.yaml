@@ -1,0 +1,45 @@
+id: G06
+class: admission
+status: settled
+schema:
+  from: fixture.schema.json
+  merge:
+    kinds:
+      Decision:
+        world: closed
+        id:
+          type: Text
+        slots: {}
+      ZoneRule:
+        world: closed
+        id:
+          type: Text
+        plane: control
+        owner: network
+        slots:
+          decision:
+            card: '1'
+            ref: Decision
+            states:
+            - known
+          allowed:
+            card: '1'
+            type: Bool
+            states:
+            - known
+form: delta
+input:
+  reviewed:
+  - prop-412
+  delta:
+  - $kind: ZoneRule
+    $id: dmz-to-core
+    decision:
+      $ref: prop-412
+    allowed: true
+expect:
+  accept: true
+note: 'A `decision` may be a reference to the row that records the decision; `reviewed` is asked about the target id of the reference (§3.4), never the text of `$ref`.'
+sources:
+- l0.md §3.7 (O13, O14)
+- DV1

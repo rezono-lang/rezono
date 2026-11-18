@@ -1,4 +1,4 @@
-"""RV-K10: the Soufflé oracle on a pack's source reads the import closure (tests/souffle.py, decision S28).
+"""The Soufflé oracle on a pack's source reads the import closure (tests/souffle.py).
 
 An imported pack brings its rules, and the program is the union over the import closure. So the oracle's
 program is the rule text as written, of the pack and of every pack it imports, the imported text under the
@@ -14,9 +14,9 @@ import pytest
 import yaml
 
 import souffle
-from rede_compiler import batch, pack
-from rede_compiler import rules as ir
-from rede_compiler.rules_dl import parse_file, remap_statement
+from rezono_compiler import batch, pack
+from rezono_compiler import rules as ir
+from rezono_compiler.rules_dl import parse_file, remap_statement
 from test_rule_imports import imported, pin, program, write_rules  # noqa: F401 (imported is a fixture)
 
 REGISTERED = "registered(x) :- party(x)."  # the rule of the imported pack (the fixture `imported`)
@@ -35,7 +35,7 @@ def test_the_source_is_the_union_over_the_import_closure(imported):
     text = souffle.pack_source(prog, consumer)
     assert REGISTERED in text and "missing(x) :- alpha(x), !registered(x)." in text
     assert sorted(decls(text)) == sorted(prog.relations), "every relation of the program is declared once"
-    # What RV-K10 found: the pack's own files alone leave the imported relation without a declaration.
+    # The pack's own files alone leave the imported relation without a declaration.
     assert "registered" not in decls(souffle.source(prog, [(consumer / "rules" / "core.dl").read_text()]))
 
 
@@ -45,7 +45,7 @@ def test_a_pack_reached_twice_brings_its_rules_once(imported, tmp_path):
     (middle / "schema").mkdir(parents=True)
     (middle / "pack.yaml").write_text("name: middle\nversion: 0.1.0\ndefault_language: nl\n")
     (middle / "schema" / "empty.yaml").write_text(
-        "id: https://rede.example/empty\nname: empty\nimports: [linkml:types]\n")
+        "id: https://rezono.example/empty\nname: empty\nimports: [linkml:types]\n")
     write_rules(middle, ".decl known(x: symbol)\nknown(x) :- registered(x).\n")
     pin(middle, owner)
     pin(consumer, middle, owner)

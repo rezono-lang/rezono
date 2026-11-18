@@ -10,7 +10,7 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[3]
 FIXTURES = ROOT / "contracts" / "fixtures"
-GENERATED = sorted(p.stem for p in (ROOT / "contracts" / "python" / "rede_contracts").glob("*.py") if p.stem != "__init__")
+GENERATED = sorted(p.stem for p in (ROOT / "contracts" / "python" / "rezono_contracts").glob("*.py") if p.stem != "__init__")
 
 
 def fixtures(schema):
@@ -41,7 +41,7 @@ def test_every_contract_has_data_to_load(schema):
 @pytest.mark.parametrize("schema,cls,path,doc", [(s, *c) for s in GENERATED for c in CASES[s]],
                          ids=lambda x: x.relative_to(ROOT).as_posix() if isinstance(x, Path) else None)
 def test_loads_into_generated_type(schema, cls, path, doc):
-    getattr(importlib.import_module(f"rede_contracts.{schema}"), cls).model_validate(doc)
+    getattr(importlib.import_module(f"rezono_contracts.{schema}"), cls).model_validate(doc)
 
 
 def _nulls(v, at="$"):

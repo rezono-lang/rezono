@@ -1,7 +1,7 @@
 # Profile `kubernetes` (docs/operations.md#profiles): the viewer and the access gate as Node containers, an OIDC
 # front that turns a login into a bearer token, and nothing else of our own. Storage (S3 API with conditional put),
 # the identity provider (Keycloak or another OIDC issuer), the secret store behind External Secrets and the Gateway
-# are the platform's. Plain Kubernetes only (decision X4): Deployments, Services, NetworkPolicies and a Gateway API
+# are the platform's. Plain Kubernetes only: Deployments, Services, NetworkPolicies and a Gateway API
 # HTTPRoute; one CRD of an operator the platform runs, ExternalSecret, because no secret value lives in Git.
 #
 # An overlay chooses the images (by digest), the hostnames, the issuer and the store: overlays/example is one.
@@ -9,10 +9,10 @@
 # to the policies in policy/ (conftest).
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
-namespace: rede
+namespace: rezono
 labels:
   - pairs:
-      app.kubernetes.io/part-of: rede
+      app.kubernetes.io/part-of: rezono
     includeSelectors: false
 resources:
   - namespace.yaml

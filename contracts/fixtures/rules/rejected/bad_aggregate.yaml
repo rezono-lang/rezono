@@ -1,5 +1,5 @@
 # sum is over an integer value column; task is a key column.
-format: rede.rules/1
+format: rezono.rules/1
 pack: fixture
 relations:
 - name: busy_member

@@ -3,7 +3,7 @@ library directory when it holds its libpython (a runtime unpacked away from the 
 
 import sys
 
-from rede_publisher import kept
+from rezono_publisher import kept
 
 
 def runtime_in(tmp_path, with_lib: bool) -> str:

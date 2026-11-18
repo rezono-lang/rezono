@@ -1,16 +1,16 @@
-"""AUD-C1: an evaluated `invalid` calculation result blocks the publication (values.md §3.3, owner on #350:
-`invalid` means the model contradicts itself, which is ours to fix). The proof of it stays in the report."""
+"""AUD-C1: an evaluated `invalid` calculation result blocks publication because
+the model contradicts itself. The proof of it stays in the report."""
 
 import hashlib
 import json
 
-from rede_checker.canon import encode_key
-from rede_checker.check import check_epoch
-from rede_checker.rules import load_rules
+from rezono_checker.canon import encode_key
+from rezono_checker.check import check_epoch
+from rezono_checker.rules import load_rules
 
 DATE = "2026-11-01"
 REASON = "division by zero in ratio"
-RULES = {"format": "rede.rules/1", "relations": [], "rules": []}
+RULES = {"format": "rezono.rules/1", "relations": [], "rules": []}
 CALC = {
     "subject": "Entry", "subject_table": "entry", "as_of": "calc__as_of",
     "facts": [{"id": "total", "type": "number", "reads": "column", "table": "entry_total", "index": 1}],

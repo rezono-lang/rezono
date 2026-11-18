@@ -1,0 +1,67 @@
+name: Review test evidence
+run-name: policy ${{ github.event_name }} ${{ github.event.pull_request.number || 0 }} ${{ github.event.pull_request.head.sha || github.event.merge_group.head_sha }} ${{ contains(github.event.pull_request.labels.*.name, 'planner') }}
+on:
+  pull_request_target:
+    branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review, labeled, unlabeled]
+  merge_group:
+    types: [checks_requested]
+permissions:
+  contents: read
+  pull-requests: read
+jobs:
+  review:
+    name: Inspect test evidence
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Confirm PR policy review for the merge group
+        if: github.event_name == 'merge_group'
+        run: echo "Test evidence is reviewed on each pull request. The check job tests the combined candidate."
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: github.event_name == 'pull_request_target'
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify policy examples
+        if: github.event_name == 'pull_request_target'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -I scripts/test_red_guard.py
+      - name: Review the current head and planner label
+        if: github.event_name == 'pull_request_target'
+        shell: bash
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+          PR: ${{ github.event.pull_request.number }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin "refs/pull/$PR/head"
+          [[ "$(git rev-parse FETCH_HEAD)" == "$HEAD" ]]
+          base=$(git merge-base "$BASE" "$HEAD")
+          current_state() {
+            gh api "repos/$GITHUB_REPOSITORY/pulls/$PR" \
+              --jq '[.head.sha, any(.labels[]; .name == "planner")] | @tsv'
+          }
+          for attempt in 1 2 3; do
+            state=$(current_state)
+            IFS=$'\t' read -r sha planner <<< "$state"
+            [[ "$sha" == "$HEAD" ]]
+            result=0
+            case "$planner" in
+              true) echo "Planner review authorizes protected changes." ;;
+              false) python -I scripts/red_guard.py "$base" "$HEAD" || result=$? ;;
+              *) exit 1 ;;
+            esac
+            latest=$(current_state)
+            if [[ "$state" == "$latest" ]]; then
+              exit "$result"
+            fi
+            echo "PR state changed during review; checking again."
+          done
+          echo "ERROR PR state kept changing during review."
+          exit 1

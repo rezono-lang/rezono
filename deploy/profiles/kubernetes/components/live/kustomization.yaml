@@ -1,11 +1,11 @@
-# Live `suppose` (decision E12) on profile `kubernetes`: the engine of deploy/engine runs as a second container in
+# Live `suppose` on profile `kubernetes`: the engine of deploy/engine runs as a second container in
 # the gate's pod and listens on loopback only, so nothing but its own gate reaches it and no certificate is needed
 # (the gate accepts a loopback address, or https with a token; edge/gate/src/live.ts). The site does not depend
 # on it: without this component the gate answers "live supposing is not available".
 #
-# An overlay that wants it lists this component and names the packs (REDE_LIVE_PACKS in the ConfigMap `gate`) and
-# the engine's settings (the ConfigMap `engine`: REDE_LIVE_PROFILE, the profile with `live.packs` and the roles;
-# REDE_LIVE_REPOSITORY, REDE_STORE, REDE_S3_ENDPOINT; deploy/engine/engine.env.example).
+# An overlay that wants it lists this component and names the packs (REZONO_LIVE_PACKS in the ConfigMap `gate`) and
+# the engine's settings (the ConfigMap `engine`: REZONO_LIVE_PROFILE, the profile with `live.packs` and the roles;
+# REZONO_LIVE_REPOSITORY, REZONO_STORE, REZONO_S3_ENDPOINT; deploy/engine/engine.env.example).
 apiVersion: kustomize.config.k8s.io/v1alpha1
 kind: Component
 resources:

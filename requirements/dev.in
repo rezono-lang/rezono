@@ -1,8 +1,8 @@
-# Everything CI installs for tests: run.in plus test tools, LinkML, a local S3 API, Arrow (Reckon Data forms),
+# Everything CI installs for tests: run.in plus test tools, LinkML, a local S3 API, Arrow (publication forms),
 # pySHACL (the independent validator of the SHACL shapes) and the ODCS standard's own JSON Schema and model
 # (the oracle of the ODCS contract), both for edge/plugins/connectors, and cryptography (Ed25519) for the credential in
 # port (edge/plugins/credential-in); and the linters of scripts/lint.sh (ruff, shellcheck, basedpyright with the Node
-# it runs on; RV-I05).
+# it runs on).
 -e ./admission
 -e ./canon[test]
 -e ./compiler[test,batch]

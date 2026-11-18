@@ -1,5 +1,5 @@
-id: https://rede.dev/contracts/value
-name: rede_value
+id: https://rezono.org/contracts/value
+name: rezono_value
 title: Values with an explicit state
 description: >-
   Every derived value carries its state and, when one is given, its reason. Unknown is never
@@ -9,8 +9,8 @@ description: >-
   §7 K1, K2, K11).
 prefixes:
   linkml: https://w3id.org/linkml/
-  rede: https://rede.dev/contracts/
-default_prefix: rede
+  rezono: https://rezono.org/contracts/
+default_prefix: rezono
 default_range: string
 imports:
   - linkml:types
@@ -30,7 +30,7 @@ enums:
     description: >-
       The four states of a value. Their codes 0 known, 1 not_applicable, 2 unknown, 3 invalid are
       also the precedence order: a result derived from several states takes the highest
-      (Reckon v0 §7b; docs/semantics/values.md §3).
+      (Rezono v0 §7b; docs/semantics/values.md §3).
     permissible_values:
       known: {description: "Code 0. The value is present and valid."}
       unknown: {description: "Code 2. The value should exist but is missing. Never treated as zero."}

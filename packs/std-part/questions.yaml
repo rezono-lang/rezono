@@ -1,7 +1,7 @@
 # The explanation questions of std-part, built only from the generic building blocks of std-explain
 # (docs/gui.md, "Questions as data"). They narrow the generic grounds and reach to part and whole: a domain
 # that imports std-explain keeps those too. The label and sentence are in messages/<lang>.mf2.
-format: rede.questions/1
+format: rezono.questions/1
 questions:
   # What is this part of? The chain of part_of steps behind a within conclusion, and for an outermost
   # conclusion also what the outermost whole is itself a part of: nothing.

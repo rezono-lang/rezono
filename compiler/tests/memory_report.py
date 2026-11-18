@@ -3,7 +3,7 @@
 A runner capped at 8 GiB that runs out of memory is killed with its pod: the job says only that the runner lost
 communication, and no log or report is kept (nightly `compiler`, 15-11-2026). This plugin samples the resident
 memory of the test process while each test runs and ends the session with the tests that took the most: the peak
-during the test and what the test left behind. With REDE_MEMORY_LIMIT_GIB set, a process that crosses the limit
+during the test and what the test left behind. With REZONO_MEMORY_LIMIT_GIB set, a process that crosses the limit
 prints an ERROR line naming the running test and that table, and exits with code 3, before the kernel or the
 pool kills it.
 
@@ -79,7 +79,7 @@ class Watch:
         with self.lock:
             rows = self.rows + [(test, now, now - self.start, time.monotonic() - self.t0)]
         # pytest's form of an error, so the nightly issue names the test (scripts/ci-tier.py, failing_cases).
-        lines = [f"ERROR {test} - memory_report: {now // MIB} MiB is over REDE_MEMORY_LIMIT_GIB "
+        lines = [f"ERROR {test} - memory_report: {now // MIB} MiB is over REZONO_MEMORY_LIMIT_GIB "
                  f"({self.limit // MIB} MiB); the test process stops with exit code {EXIT}", *table(rows)]
         os.write(STDERR, ("\n".join(lines) + "\n").encode("utf-8"))
         os._exit(EXIT)
@@ -108,7 +108,7 @@ def pytest_configure(config) -> None:
     global _watch
     if resident() is None or _watch is not None:
         return
-    gib = os.environ.get("REDE_MEMORY_LIMIT_GIB")
+    gib = os.environ.get("REZONO_MEMORY_LIMIT_GIB")
     _watch = Watch(int(float(gib) * 1024 * MIB) if gib else None)
     threading.Thread(target=_watch.loop, daemon=True, name="memory_report").start()
 

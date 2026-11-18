@@ -131,7 +131,7 @@ test_data_from_makes_any_key if {
 
 test_a_secret_in_a_config_map_is_refused if refused(render([namespace, deny_all, external_secret, deployment(pod_spec), {"apiVersion": "v1", "kind": "ConfigMap", "metadata": {"name": "m"}, "data": {"API_TOKEN": "x"}}]), "looks like a secret")
 
-test_a_literal_secret_is_refused if refused(with_container(object.union(container, {"env": [{"name": "REDE_LIVE_TOKEN", "value": "x"}]})), "literal value")
+test_a_literal_secret_is_refused if refused(with_container(object.union(container, {"env": [{"name": "REZONO_LIVE_TOKEN", "value": "x"}]})), "literal value")
 
 test_no_default_deny_is_refused if refused(render([namespace, external_secret, deployment(pod_spec)]), "denies all ingress and egress")
 
@@ -184,7 +184,7 @@ test_a_secrets_store_csi_volume_is_refused if refused(with_pod(put(pod_spec, "vo
 templated(entries) := object.union(external_secret, {"spec": object.union(external_secret.spec, {"target": {"name": "s", "template": {"data": entries}}})})
 
 test_a_template_from_the_store_passes if {
-	msgs := deny with input as render([namespace, deny_all, templated({"DB_PASSWORD": "{{ .password }}", "url": "postgres://db:5432/rede"}), deployment(pod_spec)])
+	msgs := deny with input as render([namespace, deny_all, templated({"DB_PASSWORD": "{{ .password }}", "url": "postgres://db:5432/rezono"}), deployment(pod_spec)])
 	count(msgs) == 0
 }
 

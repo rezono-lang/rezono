@@ -1,15 +1,15 @@
-"""The DCAT entry of a published epoch (decision O12a; lane M, M10): one `dcat:Dataset` per epoch and role.
+"""The DCAT entry of a published epoch (lane M, M10): one `dcat:Dataset` per epoch and role.
 
 A catalogue entry points at the data; it holds none. It is made from the schema document, the pins of the epoch
 and the addresses the publisher gives its files, and it says four things:
 
-- **which dataset:** its IRI is the epoch's own name, `rede:m/m-<epoch>@d-<64 hex>`, the same resource the PROV-O
-  export calls a bundle (`reckon_data.rdf.witness_to_prov`); `dct:identifier` is the full pin in the order of
-  docs/reckon-data/l0.md §6.4, `<pack>@s-…@m-…@d-…`, and `dcat:version` is the manifest id;
+- **which dataset:** its IRI is the epoch's own name, `rezono:m/m-<epoch>@d-<64 hex>`, the same resource the PROV-O
+  export calls a bundle (`rezono_publication.rdf.witness_to_prov`); `dct:identifier` is the full pin in the order of
+  docs/publication/l0.md §6.4, `<pack>@s-…@m-…@d-…`, and `dcat:version` is the manifest id;
 - **under which schema:** `dct:conformsTo` the schema id's own space, `<base>s-<hex>/` (§5);
 - **in which forms:** a `dcat:Distribution` per form the publisher wrote (§7), with its address and media type; an
   address is absolute, or relative to the entry's own address, as the publisher writes it beside a role's form
-  (`rede_publisher.forms`), so a reader resolves it against wherever it fetched the entry;
+  (`rezono_publisher.forms`), so a reader resolves it against wherever it fetched the entry;
 - **what each form holds to:** `dct:conformsTo` the profile of row JSON, the JSON-LD context, the SHACL shapes
   (shacl.py) and the ODCS contract (odcs.py), each beside the schema id (`descriptors`).
 
@@ -27,12 +27,12 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
-sys.path.insert(0, str(ROOT))  # reckon_data lives at the repository root
+sys.path.insert(0, str(ROOT / "publication"))
 
 from rdflib import Graph, Literal, Namespace, URIRef  # noqa: E402
 from rdflib.namespace import DCTERMS, RDF  # noqa: E402
 
-from reckon_data import l0, rdf  # noqa: E402
+from rezono_publication import l0, rdf  # noqa: E402
 
 DCAT = Namespace("http://www.w3.org/ns/dcat#")  # rdflib's own is closed on DCAT 2: it has no `version`
 MEDIA = "https://www.iana.org/assignments/media-types/"
@@ -46,7 +46,7 @@ FORMS = {
 }
 _IRI = re.compile(r"[a-z][a-z0-9+.-]*://\S+")
 # A relative reference to a file beside the entry (the publisher's form index names each by its file name): no
-# scheme, no host, no dot segment, so the same entry is the same bytes whatever site serves it (RV-K20).
+# scheme, no host, no dot segment, so the same entry is the same bytes whatever site serves it.
 _RELATIVE = re.compile(r"(?!\.\.?(/|$))[A-Za-z0-9_~-][A-Za-z0-9._~%-]*(/(?!\.\.?(/|$))[A-Za-z0-9._~%-]+)*")
 
 
@@ -67,13 +67,13 @@ def descriptors(schema: dict) -> dict:
 
 
 def dataset_iri(pin: dict) -> URIRef:
-    """The epoch's name, as the PROV-O export writes it: `rede:m/m-<epoch>@d-<64 hex>`."""
+    """The epoch's name, as the PROV-O export writes it: `rezono:m/m-<epoch>@d-<64 hex>`."""
     if not isinstance(pin, dict) or set(pin) != {"manifest", "dataset"}:
         _fail("pin", "an epoch is pinned by `manifest` and `dataset`, and nothing else")
     if not (isinstance(pin["manifest"], str) and l0._MID.fullmatch(pin["manifest"])
             and isinstance(pin["dataset"], str) and l0._DID.fullmatch(pin["dataset"])):
         _fail("pin", "an epoch is `m-<epoch>` with its hash pin `d-<64 hex>` (§6.4)")
-    return URIRef(f"{rdf.REDE}m/{pin['manifest']}@{pin['dataset']}")
+    return URIRef(f"{rdf.REZONO}m/{pin['manifest']}@{pin['dataset']}")
 
 
 def identifier(schema: dict, pin: dict) -> str:
@@ -124,7 +124,7 @@ def read(g: Graph) -> dict:
     if len(datasets) != 1:
         _fail("graph", "an entry describes exactly one dataset")
     dataset = datasets[0]
-    m = re.fullmatch(re.escape(rdf.REDE) + r"m/(m-[0-9]+)@(d-[0-9a-f]{64})", str(dataset))
+    m = re.fullmatch(re.escape(rdf.REZONO) + r"m/(m-[0-9]+)@(d-[0-9a-f]{64})", str(dataset))
     if not m:
         _fail(str(dataset), "not the name of an epoch")
     media = {MEDIA + kind: form for form, (kind, _) in FORMS.items()}

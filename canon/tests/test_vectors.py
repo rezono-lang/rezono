@@ -6,7 +6,7 @@ import json
 
 import pytest
 from decode import VECTORS, decode
-from rede_canon import CanonError, canonical_bytes, canonical_json, canonical_sha256
+from rezono_canon import CanonError, canonical_bytes, canonical_json, canonical_sha256
 
 DOC = json.loads(VECTORS.read_text("utf-8"))
 VALID = [v for v in DOC["valid"] if v.get("only", "python") == "python"]

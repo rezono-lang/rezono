@@ -10,14 +10,14 @@ status.absent = afwezig, gecontroleerd
 # The value states a calculation step names (contracts/value.yaml) that are no status of their own.
 status.known = bekend
 status.invalid = ongeldig
-# Shown in place of a text the pack does not give: never a message id (RV-U01).
+# Shown in place of a text the pack does not give: never a message id.
 text.missing = (tekst ontbreekt)
 tone.positive = positief
 tone.neutral = neutraal
 tone.caution = let op
 tone.negative = negatief
 tone.unknown = onbekend
-# De legenda van Rede: wat er over een waarde bekend is, in elk pack en elk thema hetzelfde teken.
+# De legenda van Rezono: wat er over een waarde bekend is, in elk pack en elk thema hetzelfde teken.
 sign.origin_decision = herkomst: besluit
 sign.origin_vendor = herkomst: leverancier of wet
 sign.origin_design = herkomst: ontwerp
@@ -31,14 +31,14 @@ sign.sealed = verzegeld
 sign.supposed = verondersteld
 
 lens.questions = Vragen
-# The row page (RV-U05): what Rede concludes first, then the facts, then the relations to other elements.
-row.conclusions = Wat Rede concludeert
+# The row page: what Rezono concludes first, then the facts, then the relations to other elements.
+row.conclusions = Wat Rezono concludeert
 row.conclusions_more = {{Er zijn er meer bij: {$relations}.}}
 row.calculations = Berekend
 calc.stop = ← hier stopt de berekening
 row.facts = Feiten
 row.relations = Relaties
-# The lead of a row page (RV-U05): the conclusion, why it holds here, under which conditions, what the reader can do next.
+# The lead of a row page: the conclusion, why it holds here, under which conditions, what the reader can do next.
 lead.title = De conclusie in het kort
 lead.conclusion = Geconcludeerd
 lead.grounds = Waarom het hier geldt
@@ -90,7 +90,7 @@ sheet.kind = {{{$kind} {$id}}}
 name.separator = {{ · }}
 value.separator = {{, }}
 value.reason = {{{$value} ({$reason})}}
-# MOD18: een slot zonder rij in een gesloten wereld (W6); onbekend blijft `status.unknown`.
+# MOD18: een slot zonder rij in een gesloten wereld; onbekend blijft `status.unknown`.
 value.none = geen waarde
 # Getaltypografie (docs/gui.md, Number typography): het echte minteken, het teken voor afgerond (exact heeft geen teken) en de breuk.
 number.minus = −
@@ -167,7 +167,7 @@ outcome.known = bekend
 outcome.absent = niet afgeleid
 
 waterfall.not_closed = De som sluit niet.
-# De bijdragen van een aggregaat in een antwoord (RV-V30): wat elke rij geeft, en de brug van een som.
+# De bijdragen van een aggregaat in een antwoord: wat elke rij geeft, en de brug van een som.
 waterfall.steps = {{Bijdragen van {$relation}}}
 waterfall.sum = {{Som van {$relation}}}
 waterfall.rest = .input {$count :number} .match $count one {{De rest ({$count} rij)}} * {{De rest ({$count} rijen)}}
@@ -310,8 +310,8 @@ islands.count = Elementen
 islands.lines = Lijnen naar andere groepen
 islands.line = {{{$from} → {$to} ({$arrow}): {$count}}}
 islands.line_label = {{{$arrow} {$count}}}
-app.name = Rede
-# Navigation (RV-U03): the trail to a page, and the pack's declared views.
+app.name = Rezono
+# Navigation: the trail to a page, and the pack's declared views.
 nav.trail = Pad
 nav.views = Weergaven
 nav.schema = Schema en elementen
@@ -395,7 +395,7 @@ search.absent = Voor deze rol is nog geen zoekindex gepubliceerd.
 
 # Het specimen (docs/gui.md, The specimen): elk teken van std-view in gebruik, op vaste, verzonnen gegevens.
 specimen.title = Specimen van de beeldtaal
-specimen.intro = Elk teken, elke toestand, elke lijn, elk getal en elke letter die Rede gebruikt, in gebruik getoond. Dit blad is gemaakt uit std-view; de voorbeelden zijn verzonnen.
+specimen.intro = Elk teken, elke toestand, elke lijn, elk getal en elke letter die Rezono gebruikt, in gebruik getoond. Dit blad is gemaakt uit std-view; de voorbeelden zijn verzonnen.
 specimen.end = Een teken op een blad dat niet op dit blad staat, is een fout.
 specimen.column.sign = Teken
 specimen.column.meaning = Betekenis
@@ -403,7 +403,7 @@ specimen.column.use = In gebruik
 specimen.column.token = In std-view
 specimen.column.case = Geval
 specimen.column.shown = Getoond als
-specimen.legend = De legenda van Rede
+specimen.legend = De legenda van Rezono
 specimen.legend.note = Deze tekens betekenen in elk pack en elk thema hetzelfde. Wat we weten gaat voor het domein.
 specimen.states = Toestanden
 specimen.states.note = Elke toestand is drie dingen tegelijk: een toon, een teken en een woord. Valt er één weg, dan blijft de toestand leesbaar.
@@ -478,7 +478,7 @@ verb.suppose = Wat als
 verb.compare = Vergelijk
 verb.propose = Stel voor
 
-# De startpagina van een pack (RV-U04 op de kaart en de zes zones): de claim is één zin uit de aandachtskaarten.
+# De startpagina van een pack (de kaart en haar zes zones): de claim is één zin uit de aandachtskaarten.
 home.eyebrow = {{Startpagina · {$pack}}}
 home.claim = .input {$count :number} .match $count one {{Eén ding vraagt je aandacht: {$asks}.}} * {{{$count} dingen vragen je aandacht: {$asks}.}}
 home.ask.red = .input {$count :number} .match $count one {{{$count} controle niet gehaald}} * {{{$count} controles niet gehaald}}
@@ -495,8 +495,8 @@ row.twin.name = Kenmerk
 row.twin.value = Waarde
 row.twin.state = Toestand
 
-# Your own Reckon Data form on the home of a pack (RV-V50): the schema id and the dataset hash in full, and each file.
-home.form.title = Je gegevens in Reckon Data-vorm
+# Your own publication form on the home of a pack: the schema id and the dataset hash in full, and each file.
+home.form.title = Je gegevens in publicatievorm
 home.form.schema = schema-id
 home.form.dataset = datasethash
 home.form.files = bestanden

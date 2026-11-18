@@ -1,0 +1,22 @@
+id: M02
+class: change
+status: settled
+schema:
+  from: fixture.schema.json
+successor:
+  merge:
+    kinds:
+      Host:
+        slots:
+          zone:
+            card: '?'
+            type: Text
+            states:
+            - known
+            - not_applicable
+form: schema
+expect:
+  change_class: invalid_successor
+  error: added slot without `backfill`
+sources:
+- publication/rezono_publication/l0.py, classify

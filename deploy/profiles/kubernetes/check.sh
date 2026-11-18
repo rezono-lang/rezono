@@ -4,7 +4,7 @@
 #   2. validate the render with kubeconform --strict against the schemas of one Kubernetes version and of the CRDs
 #      it uses, both read from a pinned commit (an unknown or invalid field fails);
 #   3. hold it to the policies in policy/ with conftest (deny fails; warn fails too with --live);
-#   4. require that its gate serves exactly the packs the profile publishes (REDE_PACKS, policy/packs.rego);
+#   4. require that its gate serves exactly the packs the profile publishes (REZONO_PACKS, policy/packs.rego);
 # and run the policies' own unit tests (conftest verify), hold the images' Containerfiles (deploy/*/Containerfile) to
 # their policy, and require that profile kubernetes-gate is profile kubernetes plus a gate. Pure and repeatable: it reads the overlays and writes only
 # under its work directory; it applies nothing to a cluster.
@@ -14,8 +14,8 @@
 # An overlay is a name under overlays/, or a directory with a kustomization.yaml (an argument with a slash): an
 # installation's own overlay outside this repository, or the one run/kind.sh makes with the digests it built.
 #
-# The tools are pinned by version and SHA-256 and downloaded once into REDE_K8S_TOOLS (default
-# ~/.cache/rede-k8s-tools) on linux-amd64. KUSTOMIZE, KUBECONFORM and CONFTEST name binaries to use instead (for
+# The tools are pinned by version and SHA-256 and downloaded once into REZONO_K8S_TOOLS (default
+# ~/.cache/rezono-k8s-tools) on linux-amd64. KUSTOMIZE, KUBECONFORM and CONFTEST name binaries to use instead (for
 # another platform; then the version is the caller's responsibility and the check says which ran).
 set -euo pipefail
 shopt -s inherit_errexit
@@ -46,7 +46,7 @@ if [ ${#overlays[@]} -eq 0 ]; then
 	for d in "$here"/overlays/*/; do overlays+=("$(basename "$d")"); done
 fi
 
-tools=${REDE_K8S_TOOLS:-$HOME/.cache/rede-k8s-tools}
+tools=${REZONO_K8S_TOOLS:-$HOME/.cache/rezono-k8s-tools}
 # fetch <name> <url> <sha256> <member>: download a release archive, check its SHA-256, unpack one binary, and only
 # then move it into the cache under a directory named by that hash. Every step fails the function on its own,
 # because it runs inside $( ), where bash does not apply -e: an archive that does not match never reaches the
@@ -86,7 +86,7 @@ if [ -n "${CONFTEST:-}" ]; then conftest=$CONFTEST; else
 fi
 echo "tools: kustomize $("$kustomize" version 2>/dev/null | head -1), kubeconform $("$kubeconform" -v), $("$conftest" --version | head -1)"
 
-work=$(mktemp -d "${RUNNER_TEMP:-${TMPDIR:-/tmp}}/rede-k8s-check.XXXXXX")
+work=$(mktemp -d "${RUNNER_TEMP:-${TMPDIR:-/tmp}}/rezono-k8s-check.XXXXXX")
 trap 'rm -rf "$work"' EXIT
 mkdir -p "$work/schemas"
 
@@ -119,8 +119,8 @@ for overlay in "${overlays[@]}"; do
 		echo "FAIL $overlay: two renders of the same tree differ"; failed=1; continue
 	fi
 	echo "rendered: $(grep -c '^kind:' "$work/$overlay.yaml") objects, sha256 $(sha256sum "$work/$overlay.yaml" | cut -d' ' -f1)"
-	# REDE_K8S_RENDERS names a directory that gets each render, so a caller applies the bytes that were checked.
-	if [ -n "${REDE_K8S_RENDERS:-}" ]; then cp "$work/$overlay.yaml" "$REDE_K8S_RENDERS/$overlay.yaml"; fi
+	# REZONO_K8S_RENDERS names a directory that gets each render, so a caller applies the bytes that were checked.
+	if [ -n "${REZONO_K8S_RENDERS:-}" ]; then cp "$work/$overlay.yaml" "$REZONO_K8S_RENDERS/$overlay.yaml"; fi
 	"$kubeconform" -strict -summary -cache "$work/schemas" -kubernetes-version "$KUBERNETES_VERSION" \
 		-schema-location "$K8S_SCHEMAS/{{.NormalizedKubernetesVersion}}-standalone{{.StrictSuffix}}/{{.ResourceKind}}{{.KindSuffix}}.json" \
 		-schema-location "$CRD_SCHEMAS/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json" \
@@ -128,7 +128,7 @@ for overlay in "${overlays[@]}"; do
 	flags=(--no-color --combine --policy "$here/policy")
 	[ $live -eq 1 ] && flags+=(--fail-on-warn)
 	"$conftest" test "${flags[@]}" "$work/$overlay.yaml" || failed=1
-	# The gate of this render serves the packs the profile publishes (policy/packs.rego, RV-S15).
+	# The gate of this render serves the packs the profile publishes (policy/packs.rego).
 	"$conftest" test --no-color --combine --namespace packs --policy "$here/policy" 		"$work/$overlay.yaml" "$root/deploy/profiles/kubernetes.yaml" "${pack_files[@]}" || failed=1
 done
 

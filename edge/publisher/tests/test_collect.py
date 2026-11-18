@@ -1,4 +1,4 @@
-"""The collector (RV-Z01): it deletes what no retained manifest needs, in an order no reader can trip over, and every
+"""The collector: it deletes what no retained manifest needs, in an order no reader can trip over, and every
 retained manifest still has every object it names, with its hash."""
 
 import json
@@ -7,7 +7,7 @@ import time
 
 import pytest
 
-from rede_publisher import collect, kept, pointers, publish, store
+from rezono_publisher import collect, kept, pointers, publish, store
 from test_publish import ROLES, epoch
 
 OLD = time.time() - 3 * collect.DAY
@@ -54,7 +54,7 @@ def test_only_the_newest_main_is_kept_when_no_proposal_is_open(lab):
     assert publish.newest_main(lab, "toy")["id"] == "m-3"
     assert lab.list("toy/m-1/") == lab.list("toy/m-2/") == [] and lab.list("toy/m-3/guest/views/")
     assert lab.list("toy/bases/") == lab.list("toy/epochs/2/") == []
-    # Content keys: what m-3 shares with the others stays, the stray object goes (RV-Z01 part 2).
+    # Content keys: what m-3 shares with the others stays, the stray object goes.
     named = {u[len(lab.uri("")):] for u in publish.named(json.loads(lab.get("toy/manifests/m-3.json")))}
     assert set(lab.list("toy/objects/")) == {k for k in named if k.startswith("toy/objects/")}
     # A diagnosis is kept with its pointer when its last good manifest is kept or it is not older than it.

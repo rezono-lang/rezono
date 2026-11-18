@@ -1,0 +1,15 @@
+id: E19
+status: settled
+mode: parse
+source: ask Host where memory_ned > 0 GiB
+expect:
+  diagnostics:
+  - code: R001
+    span:
+      text: memory_ned
+      start: 15
+      end: 25
+    suggest:
+    - memory_need
+sources:
+- rezono/src/check.ts

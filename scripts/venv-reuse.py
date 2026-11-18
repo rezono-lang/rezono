@@ -8,7 +8,7 @@ pinned runtime, LOCK the lock it must follow. scripts/install-python.sh calls th
 FRESH away and installs everything as before.
 
 Only distributions the lock pins at exactly their installed version move, never this repository's own
-(rede-*, installed from source again) or pip (FRESH has its own). For each, every file its dist-info RECORD
+(rezono-*, installed from source again) or pip (FRESH has its own). For each, every file its dist-info RECORD
 lists must exist inside CACHED as a regular file with the recorded size and SHA-256; only RECORD itself (and
 its signature files) may go without a hash. A compiled `__pycache__/*.pyc` that RECORD lists without a hash (the
 wheel format allows it; SPARQLWrapper 2.0.0 does it) is not moved: Python compiles it again from the source,
@@ -28,7 +28,7 @@ import re
 import sys
 from pathlib import Path
 
-OWN = re.compile(r"^rede-")
+OWN = re.compile(r"^rezono-")
 TOOLING = {"pip"}
 
 

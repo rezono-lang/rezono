@@ -1,0 +1,15 @@
+id: E15
+status: settled
+mode: parse
+source: ask Host where memory_need > 384 GiB order by memory_need
+expect:
+  print: ask Host where memory_need > 384 GiB order by memory_need
+  diagnostics:
+  - code: R015
+    span:
+      text: order by memory_need
+      start: 37
+      end: 57
+sources:
+- rezono/src/print.ts
+- rezono/src/parse.ts

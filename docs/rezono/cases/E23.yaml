@@ -1,0 +1,9 @@
+id: E23
+status: settled
+mode: parse
+source: ask Plan where memory in 256 GiB..<512 GiB
+expect:
+  print: ask Plan where memory in 256 GiB..<512 GiB
+note: 512 GiB is excluded.
+sources:
+- rezono/src/print.ts

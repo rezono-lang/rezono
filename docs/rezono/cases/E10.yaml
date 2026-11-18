@@ -1,0 +1,13 @@
+id: E10
+status: settled
+mode: parse
+source: ask Host where memory_need + € 1 > 0 GiB
+expect:
+  diagnostics:
+  - code: R003
+    span:
+      text: memory_need + € 1
+      start: 15
+      end: 32
+sources:
+- rezono/src/check.ts

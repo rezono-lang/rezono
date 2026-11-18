@@ -1,4 +1,4 @@
-# Per role the sources of exactly the base rows it reads (S25), beside its snapshots and witnesses;
+# Per role the sources of exactly the base rows it reads, beside its snapshots and witnesses;
 # `sources` stays where each source stood.
 id: m-1
 epoch: 1
@@ -16,11 +16,11 @@ checks:
 counts:
   - {relation: node, rows: 3}
 snapshots:
-  - {relation: node, role: checker, complete: true, full: true, uri: "s3://rede/toy/m-1/checker/relations/node.json", sha256: "4444444444444444444444444444444444444444444444444444444444444444", format: json}
-  - {relation: node, role: guest, complete: false, full: false, uri: "s3://rede/toy/m-1/guest/relations/node.json", sha256: "5555555555555555555555555555555555555555555555555555555555555555", format: json}
+  - {relation: node, role: checker, complete: true, full: true, uri: "s3://rezono/toy/m-1/checker/relations/node.json", sha256: "4444444444444444444444444444444444444444444444444444444444444444", format: json}
+  - {relation: node, role: guest, complete: false, full: false, uri: "s3://rezono/toy/m-1/guest/relations/node.json", sha256: "5555555555555555555555555555555555555555555555555555555555555555", format: json}
 witnesses:
-  - {role: checker, uri: "s3://rede/toy/m-1/checker/witnesses.json", sha256: "6666666666666666666666666666666666666666666666666666666666666666"}
-  - {role: guest, uri: "s3://rede/toy/m-1/guest/witnesses.json", sha256: "7777777777777777777777777777777777777777777777777777777777777777"}
+  - {role: checker, uri: "s3://rezono/toy/m-1/checker/witnesses.json", sha256: "6666666666666666666666666666666666666666666666666666666666666666"}
+  - {role: guest, uri: "s3://rezono/toy/m-1/guest/witnesses.json", sha256: "7777777777777777777777777777777777777777777777777777777777777777"}
 fact_sources:
-  - {role: checker, uri: "s3://rede/toy/m-1/checker/sources.json", sha256: "9999999999999999999999999999999999999999999999999999999999999999"}
-  - {role: guest, uri: "s3://rede/toy/m-1/guest/sources.json", sha256: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}
+  - {role: checker, uri: "s3://rezono/toy/m-1/checker/sources.json", sha256: "9999999999999999999999999999999999999999999999999999999999999999"}
+  - {role: guest, uri: "s3://rezono/toy/m-1/guest/sources.json", sha256: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}

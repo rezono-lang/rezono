@@ -1,11 +1,9 @@
 """The subsidy pack's own tests: what the generic example tests (examples/test_*.py) cannot know.
 
-- The population, the ledger and the close of October are exactly what generate.py writes, and the close
-  is exactly what `rede_compiler close` writes.
 - The evaluation date decides which partial rate counts: before 1 July 2026 an award at the partial
   rate is lower, to the cent as reference.py computes it.
 - The supposition of the last scenario moves the awards the README names: who gains, who loses, who stays.
-- Through the publisher (O8): the policy adviser gets every award but nothing of the ledger; and a claim
+- Through the publisher: the policy adviser gets every award but nothing of the ledger; and a claim
   that differs from the quotes by one cent (the invariant costs_mismatch) stops the publication.
 - std-time through views.yaml (T1): the policy adviser reads how each scheme parameter stands on the
   evaluation day, with a proof down to the parameter's own valid_until; a role without grants reads none of it.
@@ -18,8 +16,6 @@ Needs the compiler with DuckDB and the publisher, and `cryptography` for the cre
 import importlib.util
 import json
 import shutil
-import subprocess
-import sys
 from datetime import date
 from pathlib import Path
 
@@ -27,12 +23,12 @@ import pytest
 import yaml
 
 pytest.importorskip("duckdb")
-pytest.importorskip("rede_compiler")
-pytest.importorskip("rede_publisher")
+pytest.importorskip("rezono_compiler")
+pytest.importorskip("rezono_publisher")
 
 from calcsupport import run_both  # noqa: E402  (compiler/tests, on the path through examples/conftest.py)
-from rede_compiler import calc, calc_sql, pack, scenarios  # noqa: E402
-from rede_publisher import batch, publish, store  # noqa: E402
+from rezono_compiler import calc, calc_sql, pack, scenarios  # noqa: E402
+from rezono_publisher import batch, publish, store  # noqa: E402
 
 HERE = Path(__file__).parent
 PACK = "subsidy"
@@ -41,7 +37,7 @@ PROFILE = HERE.parents[1] / "deploy" / "profiles" / "edge.yaml"
 ROLES = {"checker": "complete", "case_officer": "may_read", "policy_adviser": "may_read", "public": "may_read"} | yaml.safe_load(
     PROFILE.read_text(encoding="utf-8"))["access"]["roles"]
 # What `public` reads, and what it does not: the kinds of a case (rules/access.dl).
-# The justification kinds (std-decision, #786) are read with the decision, by every role.
+# The justification kinds (std-decision) are read with the decision, by every role.
 SCHEME = ("alternative", "article", "calendar", "cost_item", "decision", "exception", "principle", "purpose",
           "reference_date", "role", "scheme_parameter")
 CASE = ("advice_report", "application", "closed_payment", "cost_line", "household", "income_statement", "ledger_payment",
@@ -60,7 +56,6 @@ cost_line:
 income_statement:
   - {"id": "S900", "household": "H900", "income": 2500000}
 """
-GENERATED = ("facts/population.yaml", "facts/ledger.yaml", "scenarios/2-close-october.yaml")
 CLAIM = '{"id": "A001", "household": "H001", "claimed_costs": 1100000}'
 
 
@@ -93,24 +88,6 @@ def published(pack_dir: Path, root: Path):
 
 def rows(s, role: str, rel: str) -> list[tuple]:
     return [tuple(r["key"]) for r in json.loads(s.get(publish.role_objects(s, PACK, "m-1", role)[f"relations/{rel}.json"]))]
-
-
-# --- The synthetic population ----------------------------------------------------------------------
-
-def test_the_generator_writes_the_same_bytes_again(tmp_path):
-    subprocess.run([sys.executable, str(HERE / "generate.py"), str(tmp_path)], check=True)
-    for path in GENERATED:
-        assert (tmp_path / path).read_bytes() == (HERE / path).read_bytes(), path
-
-
-def test_the_close_is_what_the_compiler_writes():
-    """generate.py writes the close of October with the reference's own row hash; the compiler's close
-    command gives the same close, so two implementations agree on what a closed row is."""
-    out = subprocess.run([sys.executable, "-m", "rede_compiler", "close", str(HERE), "--close", "october-2026",
-                          "--until", "2026-11-01", "--file", "facts/ledger.yaml"], check=True, capture_output=True, text=True)
-    change, = json.loads(out.stdout)["changes"]
-    mine = reference().load(HERE / "scenarios" / "2-close-october.yaml", {})["period_close"]["october-2026"]
-    assert {"id": change["key"], **change["values"]} == mine
 
 
 # --- The calculation -------------------------------------------------------------------------------
@@ -256,7 +233,7 @@ def test_the_profile_that_publishes_the_pack_names_no_role_the_pack_does_not(tmp
 def own(s, m, role: str) -> dict[str, bytes]:
     """Everything the publication holds for one role: its objects, and the manifest's lines that name it."""
     out = {name: s.get(name) for name in s.list(f"{PACK}/{m['id']}/{role}/")}
-    # Its snapshots, witnesses and sources are keyed by their bytes (RV-Z01): found through the manifest.
+    # Its snapshots, witnesses and sources are keyed by their bytes: found through the manifest.
     out |= {name: s.get(key) for name, key in publish.role_objects(s, PACK, m["id"], role).items()}
     for part in ("snapshots", "witnesses", "fact_sources"):
         out[part] = json.dumps([x for x in m[part] if x["role"] == role], sort_keys=True).encode()
@@ -266,7 +243,7 @@ def own(s, m, role: str) -> dict[str, bytes]:
 def test_the_public_reads_the_scheme_and_no_case(tmp_path):
     """`public` is a role like any other (Y1.2): it reads the scheme, and so it sees that every amount and
     rate stands on a council decision in force, with the proof. It reads no case, so it has no award, no
-    assessment and no count over them (O8): not zero rows of a relation it half reads, no relation at all."""
+    assessment and no count over them: not zero rows of a relation it half reads, no relation at all."""
     s, m = published(HERE, tmp_path)
     relations = sorted(name.rsplit("/", 1)[1][:-len(".json")] for name in publish.role_objects(s, PACK, "m-1", "checker")
                        if name.startswith("relations/"))

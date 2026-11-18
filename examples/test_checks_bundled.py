@@ -1,4 +1,4 @@
-"""Decision E11: the bundled checks (one view per check kind) on every example pack and fact state.
+"""The bundled checks (one view per check kind) on every example pack and fact state.
 
 For every example pack and every fact state (the facts, each scenario, each diagnostic), and for each state
 again with planted violations of every generic check made from the IR, the compiled `engine/integrity.sql`
@@ -15,7 +15,7 @@ from collections import Counter
 import duckdb
 import pytest
 
-from rede_compiler import checks, emit, pack, scenarios
+from rezono_compiler import checks, emit, pack, scenarios
 from support import REPO
 
 PACKS = sorted(p.parent for p in (REPO / "examples").glob("**/pack.yaml")

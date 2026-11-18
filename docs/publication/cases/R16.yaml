@@ -1,0 +1,21 @@
+id: R16
+class: invalid
+status: settled
+schema:
+  from: fixture.schema.json
+form: row
+input:
+  $kind: Host
+  $id: host-a
+  memory_need: 400 GiB
+  owner:
+    $unknown: not_assigned
+  tags:
+  - gpu
+  - lab
+  $version: '1'
+expect:
+  accept: false
+  error: undefined $-member `$version`
+sources:
+- publication/rezono_publication/l0.py, read_row

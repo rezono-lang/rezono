@@ -1,0 +1,34 @@
+{
+  "source": "kind Address\n  postcode: Text?\n    pattern \"^[0-9]+$\"",
+  "declarations": [
+    {
+      "kind": "Address",
+      "slots": [
+        {
+          "slot": "postcode",
+          "type": "Text",
+          "card": "?",
+          "constraints": [
+            {
+              "pattern": "^[0-9]+$"
+            }
+          ]
+        }
+      ],
+      "derived": []
+    }
+  ],
+  "knownDiagnostics": [
+    {
+      "code": "R000",
+      "span": {
+        "text": "\"",
+        "start": 64,
+        "end": 65
+      },
+      "args": [
+        "\"=\" or \":\""
+      ]
+    }
+  ]
+}

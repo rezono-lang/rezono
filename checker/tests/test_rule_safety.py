@@ -1,4 +1,4 @@
-"""RV-K02: the checker holds rule safety itself. Its loader refuses a rule IR the compiler would refuse wherever a
+"""The checker holds rule safety itself. Its loader refuses a rule IR the compiler would refuse wherever a
 proof could otherwise pass that proves nothing, and the rest is named here as taken on trust (README, "Trusted
 base"). The rejected fixtures are the compiler's (contracts/fixtures/rules/rejected); the compiler is not imported."""
 
@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from rede_checker.rules import derived_relations, load_rules
+from rezono_checker.rules import derived_relations, load_rules
 
 RULES = Path(__file__).resolve().parents[2] / "contracts" / "fixtures" / "rules"
 
@@ -57,7 +57,7 @@ def literal(relation, *terms, polarity="positive", stratum="0"):
     return {"relation": relation, "terms": list(terms), "polarity": polarity, "stratum": stratum}
 
 
-BASE = {"format": "rede.rules/1", "pack": "example", "relations": [
+BASE = {"format": "rezono.rules/1", "pack": "example", "relations": [
     {"name": "request", "role": "base", "key": [column("id")]},
     {"name": "pair", "role": "base", "key": [column("a"), column("b")]},
     {"name": "size", "role": "base", "key": [column("id"), column("n", "integer")]},
@@ -135,7 +135,7 @@ def test_an_unsafe_rule_is_refused(doc, message):
     ({"assignments": [{"var": 3, "op": "add", "left": "?n", "right": "1"}]}, "names its result"),
 ])
 def test_a_term_that_is_no_text_is_refused_as_bad_input(part, message):
-    """Review of #549 (P2): a JSON number as a term, or an assignment without a result, is a ValueError like
+    """A JSON number as a term, or an assignment without a result, is a ValueError like
     every other refusal, so the publisher reports it as rule definitions the checker refuses."""
     with pytest.raises(ValueError, match=message):
         load_rules(program(("sized", "?x", "?n"), [literal("size", "?x", "?n")], **part))

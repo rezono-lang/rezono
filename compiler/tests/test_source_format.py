@@ -1,5 +1,5 @@
 """The source-format edit boundary (B13): the canonical writer, the source writer and the schema operations edit
-fact, rule and calc files through `source_format`, and a second format fits the same interface (the Reckon stub,
+fact, rule and calc files through `source_format`, and a second format fits the same interface (the Rezono stub,
 tested with one fact edit)."""
 
 from __future__ import annotations
@@ -10,16 +10,16 @@ from pathlib import Path
 
 import pytest
 
-from rede_compiler import source_format, writer
+from rezono_compiler import source_format, writer
 
 REPO = Path(__file__).resolve().parents[2]
 PACKS = sorted(p.parent for p in (REPO / "examples").rglob("pack.yaml") if "expected" not in p.parts)
 FMT = source_format.YAML_DATALOG
-operate_model = importlib.import_module("rede_compiler.operate.model")  # the package names a function `model`
+operate_model = importlib.import_module("rezono_compiler.operate.model")  # the package names a function `model`
 
 
 def test_every_format_implements_the_whole_interface():
-    for fmt in (source_format.YAML_DATALOG, source_format.RECKON_STUB):
+    for fmt in (source_format.YAML_DATALOG, source_format.REZONO_STUB):
         assert isinstance(fmt, source_format.SourceFormat)
         assert not inspect.isabstract(type(fmt))
     assert source_format.FORMATS == (source_format.YAML_DATALOG,)  # the stub writes no pack
@@ -27,7 +27,7 @@ def test_every_format_implements_the_whole_interface():
 
 def test_a_fact_file_has_its_format_and_another_path_is_refused():
     assert source_format.of("facts/items.yaml") is FMT
-    for rel in ("facts/items.sources.yaml", "rules/main.dl", "reckon/items.reckon", "../facts/items.yaml"):
+    for rel in ("facts/items.sources.yaml", "rules/main.dl", "rezono/items.rezono", "../facts/items.yaml"):
         with pytest.raises(writer.WriteError, match="no source format"):
             source_format.of(rel)
 
@@ -70,10 +70,10 @@ def test_the_yaml_implementation_is_the_canonical_writer():
     assert records == writer.parse(text)[2]
 
 
-# --- The Reckon stub ----------------------------------------------------------------------------------------
+# --- The Rezono stub ----------------------------------------------------------------------------------------
 
 MODULE = """\
-reckon 0
+rezono 0
 pack sample
 
 kind Item
@@ -86,9 +86,9 @@ fact Item
 """
 
 
-def test_the_reckon_stub_makes_one_fact_edit_and_its_undo_gives_the_same_bytes():
-    stub = source_format.RECKON_STUB
-    change = {"op": "set", "file": "reckon/sample.reckon", "kind": "item", "key": "a1", "slot": "since",
+def test_the_rezono_stub_makes_one_fact_edit_and_its_undo_gives_the_same_bytes():
+    stub = source_format.REZONO_STUB
+    change = {"op": "set", "file": "rezono/sample.rezono", "kind": "item", "key": "a1", "slot": "since",
               "value": "2021-03-01"}
     text, undo = stub.edit_fact(None, MODULE, change)  # type: ignore[arg-type]  # the stub needs no layout
     assert text == MODULE.replace("| a1 | 2020-01-01 |", "| a1 | 2021-03-01 |")
@@ -96,7 +96,7 @@ def test_the_reckon_stub_makes_one_fact_edit_and_its_undo_gives_the_same_bytes()
     assert stub.fact_records(text) == {"Item": [{"id": "a1", "since": "2021-03-01"}, {"id": "a2", "since": "n/a"}]}
     back, _ = stub.edit_fact(None, text, undo)  # type: ignore[arg-type]
     assert back.encode("utf-8") == MODULE.encode("utf-8")
-    assert stub.fact_file("reckon/sample.reckon") and not stub.fact_file("facts/sample.yaml")
+    assert stub.fact_file("rezono/sample.rezono") and not stub.fact_file("facts/sample.yaml")
 
 
 @pytest.mark.parametrize("change,message", [
@@ -107,18 +107,18 @@ def test_the_reckon_stub_makes_one_fact_edit_and_its_undo_gives_the_same_bytes()
     ({"op": "set", "kind": "item", "key": "a9", "slot": "since", "value": "2020-01-01"}, "not found"),
     ({"op": "set", "kind": "other", "key": "a1", "slot": "since", "value": "2020-01-01"}, "no fact table"),
 ])
-def test_the_reckon_stub_refuses_what_it_does_not_build(change, message):
+def test_the_rezono_stub_refuses_what_it_does_not_build(change, message):
     with pytest.raises(writer.WriteError, match=message):
-        source_format.RECKON_STUB.edit_fact(None, MODULE, change)  # type: ignore[arg-type]
+        source_format.REZONO_STUB.edit_fact(None, MODULE, change)  # type: ignore[arg-type]
 
 
-def test_the_reckon_stub_finds_module_files_and_refuses_rules(tmp_path):
-    (tmp_path / "reckon" / "part").mkdir(parents=True)
-    (tmp_path / "reckon" / "part" / "sample.reckon").write_text(MODULE, "utf-8")
-    (tmp_path / "reckon" / "part" / "sample.json").write_text("{}", "utf-8")
-    stub = source_format.RECKON_STUB
-    assert [rel for rel, _ in stub.fact_files(tmp_path)] == ["reckon/part/sample.reckon"]
+def test_the_rezono_stub_finds_module_files_and_refuses_rules(tmp_path):
+    (tmp_path / "rezono" / "part").mkdir(parents=True)
+    (tmp_path / "rezono" / "part" / "sample.rezono").write_text(MODULE, "utf-8")
+    (tmp_path / "rezono" / "part" / "sample.json").write_text("{}", "utf-8")
+    stub = source_format.REZONO_STUB
+    assert [rel for rel, _ in stub.fact_files(tmp_path)] == ["rezono/part/sample.rezono"]
     assert stub.fact_files(tmp_path, ("scenarios",)) == []
     assert stub.rule_files(tmp_path) == [] and stub.calc_files(tmp_path) == []
     with pytest.raises(writer.WriteError, match="stub"):
-        stub.rule_tokens("a(x).", "reckon/part/sample.reckon")
+        stub.rule_tokens("a(x).", "rezono/part/sample.rezono")

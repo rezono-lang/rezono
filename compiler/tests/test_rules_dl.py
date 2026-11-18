@@ -9,8 +9,8 @@ import pytest
 import yaml
 
 from support import FIXTURE
-from rede_compiler import emit, fold, modules, pack, rules_sql, view_rules
-from rede_compiler import rules as ir
+from rezono_compiler import emit, fold, modules, pack, rules_sql, view_rules
+from rezono_compiler import rules as ir
 
 PROGRAM = """
 // A neutral program over the fixture's tables: alpha(id), alpha__size(id, v), beta__alpha(id, v).
@@ -170,7 +170,7 @@ paired(a) :- pair(a, b).
 
 
 def test_above_the_budget_the_compiler_cuts_by_recursive_core(fixture):
-    """Decision E6: modules do not bind the cut; few parts in a row, then few relations between parts."""
+    """Modules do not bind the cut; few parts in a row, then few relations between parts."""
     files = emit.compile_pack(pack.read(with_rules(fixture, **SPLIT)), max_views=4)
     plan = json.loads(files["engine/pipelines.json"])
     assert [p["name"] for p in plan["pipelines"]] == ["integrity", "rules-1", "rules-2"]
@@ -192,7 +192,7 @@ def test_the_previous_cut_is_kept(fixture):
 
 
 def test_a_recursive_core_above_the_budget_blocks(fixture):
-    """Only a recursive core that is on its own too big for the profile stops the compile (decision E6);
+    """Only a recursive core that is on its own too big for the profile stops the compile;
     one relation that reads itself is such a core."""
     with_rules(fixture, core="""
 // @explain materialize
@@ -223,7 +223,7 @@ other(a) :- beta(a).
 
 
 def test_a_relation_above_the_budget_that_is_not_recursive_gets_a_part_of_its_own(fixture, capsys):
-    """Decision E6: exceeding the budget is a warning. `wide` costs 4 views (itself and a witness per
+    """Exceeding the budget is a warning. `wide` costs 4 views (itself and a witness per
     rule) against a budget of 2: no other relation shares its part, and the compile says so."""
     model = pack.read(with_rules(fixture, core=WIDE))
     capsys.readouterr()
@@ -285,7 +285,7 @@ def memory(build_mb, **cost):
 
 
 def test_a_build_memory_weighs_every_kind_of_view(fixture, capsys):
-    """Decision E6: weighed in build memory, main also holds the integrity checks; the plan records the
+    """Weighed in build memory, main also holds the integrity checks; the plan records the
     estimate per pipeline, and every rule part stays within the memory."""
     model = pack.read(with_rules(fixture, **SPLIT))
     rules = sum(rules_sql.views(ir.load(model.rules), n) for n in ir.load(model.rules).derived())
@@ -299,7 +299,7 @@ def test_a_build_memory_weighs_every_kind_of_view(fixture, capsys):
     plan = json.loads(emit.compile_pack(model, budget)["engine/pipelines.json"])
     assert plan["pipelines"][0]["name"] == "integrity" and len(plan["pipelines"]) >= 2
     integrity = emit.compile_pack(model)["engine/integrity.sql"]
-    # one view per check kind, the union and the local relations they read (decision E11)
+    # one view per check kind, the union and the local relations they read
     checks = integrity.count("CREATE MATERIALIZED VIEW") + integrity.count("CREATE LOCAL VIEW")
     assert plan["pipelines"][0]["build_mb"] == str(100 + checks)
     for p in plan["pipelines"][1:]:
@@ -307,7 +307,7 @@ def test_a_build_memory_weighs_every_kind_of_view(fixture, capsys):
         assert int(p["build_mb"]) == 100 + 10 * sum(rules_sql.views(ir.load(model.rules), n) for n in p["views"]) \
             + (5 if p["exports"] else 0)
     # a part holds 10 MB here: a relation with a witness (20 MB) is above it and none is recursive, so
-    # each gets a part of its own with a warning (decision E6)
+    # each gets a part of its own with a warning
     capsys.readouterr()
     tight = json.loads(emit.compile_pack(model, memory(100, base=90, relation=10, witness=10))["engine/pipelines.json"])
     warned = capsys.readouterr().err
@@ -336,21 +336,21 @@ REFUSED = {
     "type": (".decl p(x: symbol)\np(x) :- alpha__size(_, x).", "type_mismatch"),
     "qualifier": (".decl p(x: symbol) btree\np(x) :- alpha(x).", "qualifiers"),
     "io-args": (".decl p(x: symbol)\np(x) :- alpha(x).\n.input alpha(IO=file)", "facts come from facts/"),
-    # Review of #13: a group key computed by arithmetic would silently become local to the aggregate.
+    # a group key computed by arithmetic would silently become local to the aggregate.
     "computed-group-key": (".decl p(a: symbol, m: number)\n"
                            "p(a, m) :- alpha__size(a, n), z = n + 1, m = count : { alpha__size(_, z) }.",
                            "z in the aggregate over alpha__size is not bound by a positive literal"),
     "result-as-group-key": (".decl p(a: symbol, m: number)\n"
                             "p(a, m) :- alpha(a), k = count : { beta__alpha(_, a) }, m = count : { alpha__size(_, k) }.",
                             "k in the aggregate over alpha__size is not bound"),
-    # Review of #13: a constant keeps its own type; "2" < "10" is text, not a number.
+    # a constant keeps its own type; "2" < "10" is text, not a number.
     "text-order": (".decl p(a: symbol)\np(a) :- alpha(a), \"2\" < \"10\".", "order comparison needs whole numbers"),
     "text-in-integer-column": (".decl p(a: symbol)\np(a) :- alpha__size(a, \"5\").", 'is string, but column 2 of alpha__size'),
     "number-in-text-column": (".decl p(a: symbol)\np(a) :- beta__alpha(a, 5).", "is integer, but column 2 of beta__alpha"),
     "text-arithmetic": (".decl p(a: symbol, n: number)\np(a, n) :- alpha__title(a, t), n = t + 1.",
                         "arithmetic needs whole numbers"),
     "text-equals-number": (".decl p(a: symbol)\np(a) :- alpha__size(a, s), s = \"5\".", "have different types"),
-    # Second review of #13: '_' in a comparison is a clear error, not a crash.
+    # '_' in a comparison is a clear error, not a crash.
     "wildcard-in-comparison": (".decl p(x: symbol)\np(x) :- alpha(x), _ < \"x\".", "'_' only inside an aggregate"),
     "wildcard-in-arithmetic": (".decl p(x: symbol, n: number)\np(x, n) :- alpha__size(x, s), n = s + _.",
                                "'_' only inside an aggregate"),
@@ -358,12 +358,12 @@ REFUSED = {
     "division-by-zero": (".decl p(a: symbol, n: number)\np(a, n) :- alpha__size(a, s), n = s / 0.", "division_by_zero"),
     "divisor-not-constant": (".decl p(a: symbol, n: number)\np(a, n) :- alpha__size(a, s), n = 60 / s.",
                              "divisor_not_constant"),
-    # Review of #208: a constant outside BIGINT is no value on any engine (SQL casts it to BIGINT).
+    # a constant outside BIGINT is no value on any engine (SQL casts it to BIGINT).
     "constant-out-of-range": (".decl p(a: symbol, n: number)\np(a, n) :- alpha__size(a, s), n = 9223372036854775808 - 1.",
                               "constant_out_of_range"),
     "constant-out-of-range-in-a-literal": (".decl p(a: symbol)\np(a) :- alpha__size(a, -9223372036854775809).",
                                            "constant_out_of_range"),
-    # Review of #13: a relation without columns would give SELECT DISTINCT FROM.
+    # a relation without columns would give SELECT DISTINCT FROM.
     "no-columns": (".decl p()\np() :- alpha(\"a\").", "at least one column"),
     # A body of aggregates only is a rule; a body of negations only, also beside aggregates, is not.
     "negations-only": (".decl p(x: symbol)\np(\"a\") :- !alpha(\"a\").", "no_positive_literal"),
@@ -390,7 +390,7 @@ def test_a_rule_belongs_in_the_module_of_its_relation(fixture):
 
 def test_mutual_recursion_is_refused_by_the_batch_backend_only(fixture, capsys):
     """E10: Feldera takes mutual recursion, DuckDB does not. The refusal is the batch script's alone, and the
-    compiler warns of it with a stable code (RV-M07): nobody has to run the script to learn it will fail."""
+    compiler warns of it with a stable code: nobody has to run the script to learn it will fail."""
     model = pack.read(with_rules(fixture, core="""
 .decl a(x: symbol)
 .decl b(x: symbol)
@@ -451,7 +451,7 @@ late(a) :- third(a), beta(a).
 def test_the_source_as_written_equals_the_batch_backend_on_souffle(fixture, tmp_path):
     """Soufflé runs the .dl text itself, not the IR the parser made of it: a parser error shows here."""
     import souffle
-    from rede_compiler import batch
+    from rezono_compiler import batch
 
     prog = ir.load(pack.read(with_rules(fixture, core=PROGRAM)).rules)
     data = {"alpha": [("a1",), ("a2",), ("a3",)], "alpha__size": [("a1", 7), ("a2", 3), ("a3", 7)],
@@ -471,13 +471,13 @@ part(a, d, q) :- alpha__size(a, s), d = s - 30, q = d / -7.
 def test_division_truncates_toward_zero_on_every_engine(fixture, tmp_path):
     """`div` is Feldera's `/` on BIGINT: truncation toward zero, also with negative operands. Floor division
     would give -1 for 1 / -7 and -5 for 29 / -7. Feldera's SQL divides with `/`, DuckDB's with the macro
-    rede_quotient; Soufflé, where present, reads the text as written."""
+    rezono_quotient; Soufflé, where present, reads the text as written."""
     pytest.importorskip("duckdb")
-    from rede_compiler import batch
+    from rezono_compiler import batch
 
     files = emit.compile_pack(pack.read(with_rules(fixture, core=DIVISION)))
-    assert "/ CAST(-7 AS BIGINT)" in files["engine/rules.sql"] and "rede_quotient" not in files["engine/rules.sql"]
-    assert files["batch/rules.sql"].count("rede_quotient(") == 2  # the macro and the rule (s is projected: on demand)
+    assert "/ CAST(-7 AS BIGINT)" in files["engine/rules.sql"] and "rezono_quotient" not in files["engine/rules.sql"]
+    assert files["batch/rules.sql"].count("rezono_quotient(") == 2  # the macro and the rule (s is projected: on demand)
     prog = ir.load(pack.read(fixture).rules)
     assert "/ CAST(-7 AS BIGINT)" in rules_sql.witness_select(prog, prog.rules["part"])   # the witness query is engine SQL
     sizes = [0, 23, 29, 30, 31, 37, 59]
@@ -489,8 +489,8 @@ def test_division_truncates_toward_zero_on_every_engine(fixture, tmp_path):
     assert batch.read(con, prog)["part"] == want
     assert len(batch.witnesses(con, prog)["part"]) == len(sizes)
     # At the edge of BIGINT: abs(-2^63) fits only because the macro works on 128 bits.
-    edge = "SELECT rede_quotient(CAST(-9223372036854775808 AS BIGINT), CAST(60 AS BIGINT)), " \
-           "rede_quotient(CAST(9223372036854775807 AS BIGINT), CAST(-60 AS BIGINT))"
+    edge = "SELECT rezono_quotient(CAST(-9223372036854775808 AS BIGINT), CAST(60 AS BIGINT)), " \
+           "rezono_quotient(CAST(9223372036854775807 AS BIGINT), CAST(-60 AS BIGINT))"
     assert con.execute(edge).fetchone() == (-153722867280912930, -153722867280912930)
     if shutil.which("souffle"):
         import souffle
@@ -505,7 +505,7 @@ def on_demand(**rules):
 
 @pytest.mark.parametrize("names", [("a", "b", "c", "d", "e"), ("a", "b", "z", "d", "e")], ids=["c-first", "d-first"])
 def test_a_new_part_when_it_keeps_the_chain_shorter(fixture, names):
-    """Review of #34: budget 2, one view each, c reads a and e reads d. Two parts in a row, not three,
+    """Budget 2, one view each, c reads a and e reads d. Two parts in a row, not three,
     whichever of c and d comes first."""
     a, b, c, d, e = names
     with_rules(fixture, core=on_demand(**{a: "alpha(x)", b: "beta(x)", c: f"{a}(x)", d: "alpha__title(x, _)", e: f"{d}(x)"}))
@@ -519,7 +519,7 @@ def test_a_new_part_when_it_keeps_the_chain_shorter(fixture, names):
 
 
 def test_a_part_keeps_its_name_when_an_earlier_part_empties(fixture):
-    """Review of #34: budget 1, parts a, b and c; without b, c stays rules-3 (the cache of its pipeline)."""
+    """Budget 1, parts a, b and c; without b, c stays rules-3 (the cache of its pipeline)."""
     with_rules(fixture, core=on_demand(a="alpha(x)", b="beta(x)", c="alpha__title(x, _)"))
     first = json.loads(emit.compile_pack(pack.read(fixture), max_views=1)["engine/pipelines.json"])
     assert [(p["name"], p["views"]) for p in first["pipelines"][1:]] == [("rules-1", ["a"]), ("rules-2", ["b"]), ("rules-3", ["c"])]
@@ -531,7 +531,7 @@ def test_a_part_keeps_its_name_when_an_earlier_part_empties(fixture):
     assert emit.previous_parts(second) == [["a"], [], ["c"]]
 
 
-# ---- decision W6: what a missing row means, per relation ----
+# ---- what a missing row means, per relation ----
 
 
 WORLDS = """
@@ -615,7 +615,7 @@ OPEN_REFUSED = {
     "negation-over-open": (".decl paired(a: symbol)\npaired(a) :- beta__alpha(_, a).\n"
                            ".decl lonely(a: symbol)\nlonely(a) :- alpha(a), !paired(a).", "negation_over_open"),
     "negation-over-open-table": (".decl lonely(a: symbol)\nlonely(a) :- alpha(a), !beta(a).", "negation_over_open"),
-    # Review of #63: a count over an open relation is what is recorded; n = 0 is no evidence of none.
+    # a count over an open relation is what is recorded; n = 0 is no evidence of none.
     "count-zero-over-open": (".decl alone(a: symbol)\nalone(a) :- alpha(a), n = count : { beta__alpha(_, a) }, n = 0.",
                              "aggregate_over_open"),
     # W6 is the same without a group key: the number of rows recorded is no number of what exists.
@@ -655,7 +655,7 @@ def schema_with(d: Path, edit) -> Path:
 
 
 WORLD_PLACES = {
-    # Review of #63: an open subkind would share closed tables with its parent.
+    # an open subkind would share closed tables with its parent.
     "subkind": (lambda s: s["classes"].update(Gamma={"is_a": "Alpha", "annotations": {"world": "open"}}),
                 "world goes on the root kind"),
     "identifier": (lambda s: s["classes"]["Alpha"]["attributes"]["id"].update(annotations={"world": "open"}),
@@ -686,7 +686,7 @@ def test_a_declared_world_must_agree_with_the_rules(fixture):
         ir.load(doc)
 
 
-# ---- decision W7: a named outcome, with a state and a reason per element ----
+# ---- a named outcome, with a state and a reason per element ----
 
 OUTCOME = WORLDS + """
 // @absence
@@ -714,7 +714,7 @@ def test_an_outcome_has_a_kind_a_state_and_a_reason(fixture):
     prog = ir.load(model.rules)
     assert prog.relations["pairing"].outcome == "alpha" and prog.relations["pairing"].world == "closed"
     # partner reads an open relation behind the known row of an outcome: complete for known elements only,
-    # so it stays open (review of #67), and only an @absence relation may negate it
+    # so it stays open, and only an @absence relation may negate it
     assert prog.relations["partner"].world == "open"
     files = emit.compile_pack(model)
     rel = {r["id"]: r for r in json.loads(files["bundle/schema-bundle.json"])["relations"]}["pairing"]
@@ -741,8 +741,8 @@ OUTCOME_REFUSED = {
                         'o(a, "unknown", r) :- alpha__title(a, r).', "the reason is a constant"),
     "open": ('// @outcome alpha\n.decl o(a: symbol, state: symbol, reason: symbol)\n'
              'o(a, "known", "") :- beta__alpha(_, a).', "must be closed"),
-    # Review of #67: the known row of a1 says nothing about a2; seen(x) stays open, so !seen(x) is refused.
-    # Review of #67: d is complete only where pairing is known; for an unknown element d is missing because
+    # the known row of a1 says nothing about a2; seen(x) stays open, so !seen(x) is refused.
+    # d is complete only where pairing is known; for an unknown element d is missing because
     # the guard failed, so !d(v) would conclude too much.
     "negation-over-a-guarded-relation": (OUTCOME + '.decl d(v: symbol)\nd(v) :- pairing(v, "known", _), beta__alpha(_, v).\n'
                                          '.decl r(v: symbol)\nr(v) :- alpha(v), !d(v).', "negation_over_open"),
@@ -760,7 +760,7 @@ def test_outcome_refusals(fixture, case):
 
 def test_the_outcome_checks_find_a_missing_row_and_two_states(fixture):
     pytest.importorskip("duckdb")
-    from rede_compiler import batch
+    from rezono_compiler import batch
 
     with_reason(fixture, "small")
 
@@ -778,12 +778,12 @@ def test_the_outcome_checks_find_a_missing_row_and_two_states(fixture):
     assert run(head + small + known) == {"sizing__total": [], "sizing__state": []}
     assert run(head + small) == {"sizing__total": ["a2"], "sizing__state": []}
     assert run(head + small + known + spare) == {"sizing__total": [], "sizing__state": ["a1"]}
-    # Review of #67: a row for an element that is not there is caught too.
+    # a row for an element that is not there is caught too.
     ghost = 'sizing("ghost", "unknown", "small") :- alpha(a).\n'
     assert run(head + small + known + ghost) == {"sizing__total": ["ghost"], "sizing__state": []}
 
 
-# A body of aggregates only (RV-M23): a count, a sum, a minimum or a maximum over a whole relation. No literal,
+# A body of aggregates only: a count, a sum, a minimum or a maximum over a whole relation. No literal,
 # so no group key, and each relation has one row at most.
 WHOLE = """
 .decl sizes(n: number, t: number)
@@ -879,9 +879,9 @@ def test_a_body_of_aggregates_only_on_the_batch_backend_the_checker_and_souffle(
     pytest.importorskip("duckdb")
     import hashlib
 
-    from rede_checker.check import check, check_epoch
-    from rede_checker.rules import derived_relations, load_rules
-    from rede_compiler import batch, explain
+    from rezono_checker.check import check, check_epoch
+    from rezono_checker.rules import derived_relations, load_rules
+    from rezono_compiler import batch, explain
 
     data, want = WHOLE_WANT[case]
     model = pack.read(with_rules(fixture, core=WHOLE))
@@ -949,7 +949,7 @@ def test_generated_bodies_of_aggregates_only_equal_souffle_as_sets(seed, tmp_pat
     pytest.importorskip("duckdb")
     import rulegen
     import souffle
-    from rede_compiler import batch
+    from rezono_compiler import batch
 
     doc = rulegen.program(seed, 6, shapes=("total", "count", "sum", "negation", "union"))
     prog = ir.load(doc)
@@ -959,7 +959,7 @@ def test_generated_bodies_of_aggregates_only_equal_souffle_as_sets(seed, tmp_pat
     assert batch.read(con, prog) == souffle.run(prog, data, tmp_path)
 
 
-# A counter with an explicit bound (#351 P6.2): the shape of a depth from seeds along steps. What it computes,
+# A counter with an explicit bound: the shape of a depth from seeds along steps. What it computes,
 # against a reference and Soufflé, is in test_bound.py.
 COUNTER = """
 .decl step(a: symbol, b: symbol)
@@ -1023,7 +1023,7 @@ def test_arithmetic_in_recursion_is_refused_unless_it_is_a_bounded_counter(fixtu
         pack.read(with_rules(fixture, core=text))
 
 
-# Fold marks (RV-C29): display only, and only on a helper.
+# Fold marks: display only, and only on a helper.
 MARK = "// @explain fold\n"
 FOLDED = """
 // ends: the join between an alpha and a state; `opposite` alone reads it.
@@ -1071,7 +1071,6 @@ def test_a_fold_mark_goes_into_the_bundle_and_nowhere_else(fixture):
     assert after == before
 
 
-@pytest.mark.xfail(strict=True, reason="tools/explain-lint/explain_lint.py is not in the standalone repository yet")
 def test_the_explanation_lint_and_the_compiler_fold_the_same(fixture, tmp_path):
     """What the lint's class B asks to fold is what the compiler lets a pack fold, and with those marks both
     read the same folded set: the lint from the sources, the compiler in its bundle."""
@@ -1136,7 +1135,7 @@ def test_a_relation_that_a_channel_names_is_no_helper(fixture):
     assert len(errors) == 1 and "and ends is none" in errors[0]
 
 
-# A folded kind read through a view (RV-C49): the relation the view makes to hold the kind's table is the kind
+# A folded kind read through a view: the relation the view makes to hold the kind's table is the kind
 # under another name, and only the clause the compiler lowered for it is that.
 THEORY_RULES = """
 // joined: the two points a link joins; the link itself is the join between them.
@@ -1158,7 +1157,7 @@ def viewed(tmp: Path, view: bool = True, **files: str) -> Path:
         path.write_text(yaml.safe_dump(value, sort_keys=False), encoding="utf-8", newline="\n")
 
     def schema(name, classes):
-        return {"id": f"https://rede.example/{name}", "name": name, "imports": ["linkml:types"],
+        return {"id": f"https://rezono.example/{name}", "name": name, "imports": ["linkml:types"],
                 "default_range": "string", "annotations": {"layer": "facts"}, "classes": classes}
 
     theory, domain = (Path(shutil.copytree(FIXTURE, tmp / n)) for n in ("theory", "domain"))
@@ -1183,7 +1182,7 @@ def viewed(tmp: Path, view: bool = True, **files: str) -> Path:
     if files:
         with_rules(domain, **files)
     if view:
-        write(domain / "views.yaml", {"format": "rede.views/1", "views": [VIEWED]})
+        write(domain / "views.yaml", {"format": "rezono.views/1", "views": [VIEWED]})
     return domain
 
 

@@ -1,9 +1,9 @@
-"""The DCAT entry of a published epoch (M10, decision O12a): what it says, back and forth, and what it leaves out.
+"""The DCAT entry of a published epoch (M10): what it says, back and forth, and what it leaves out.
 
 There is no validator of plain DCAT to hold it against, and the DCAT-AP shapes are not in the repository, so
 the entry is checked four ways: the exact triples for one input; a round trip through Turtle that gives the
 input back; the names it shares with the other exports (the PROV-O bundle of the epoch, the shapes document,
-the media types of docs/reckon-data/l0.md §7); and its terms against the vocabularies rdflib ships, which know
+the media types of docs/publication/l0.md §7); and its terms against the vocabularies rdflib ships, which know
 DCAT and Dublin Core and nothing of this entry.
 """
 
@@ -16,14 +16,14 @@ import pytest
 import yaml
 
 ROOT = Path(__file__).resolve().parents[3]
-sys.path.insert(0, str(ROOT))  # reckon_data is a directory of the repository, not an installed package
+sys.path.insert(0, str(ROOT))  # Shared publication test fixtures.
 
 from linkml.validator import validate as linkml_validate  # noqa: E402
 from rdflib import BNode, Graph, Literal, URIRef  # noqa: E402
 from rdflib.namespace import DCTERMS, RDF  # noqa: E402
 
-from reckon_data import l0, rdf  # noqa: E402
-from reckon_data.tests.test_l0 import FIXTURE, TYPES, merge  # noqa: E402
+from rezono_publication import l0, rdf  # noqa: E402
+from publication.tests.test_l0 import FIXTURE, TYPES, merge  # noqa: E402
 
 import dcat  # noqa: E402  (this directory)
 import shacl  # noqa: E402
@@ -35,14 +35,14 @@ AT = "https://data.example/fixture/m-12/reader/"
 FILES = {"row-json": AT + "rows.json", "json-ld": AT + "rows.jsonld", "turtle": AT + "rows.ttl",
          "parquet": AT + "parquet/"}
 SID = l0.schema_id(FIXTURE)
-SPACE = f"https://rede.example/fixture/{SID}/"
-EPOCH = URIRef(f"rede:m/m-12@{PIN['dataset']}")
+SPACE = f"https://rezono.example/fixture/{SID}/"
+EPOCH = URIRef(f"rezono:m/m-12@{PIN['dataset']}")
 IANA = "https://www.iana.org/assignments/media-types/"
 
 
 def test_the_entry_of_an_epoch_is_these_triples_and_no_other():
     d, c = dcat.DCAT, DCTERMS.conformsTo
-    profile = URIRef("https://rede.dev/reckon-data/1.0")
+    profile = URIRef("https://rezono.org/publication/1.0")
     context, shapes, contract = (URIRef(SPACE + name) for name in ("context.jsonld", "shapes.ttl", "contract.odcs.yaml"))
     row, ld, ttl, parquet = (URIRef(f"{EPOCH}#{form}") for form in ("row-json", "json-ld", "turtle", "parquet"))
     expected = {
@@ -78,7 +78,7 @@ def test_out_and_back_through_turtle_gives_the_input(schema, forms):
 
 
 def test_a_relative_address_is_read_against_the_entry_s_own_address():
-    """As the publisher writes it beside a role's form (RV-K20): no host in the bytes, the reader's site resolves."""
+    """As the publisher writes it beside a role's form: no host in the bytes, the reader's site resolves."""
     files = {"row-json": "rows.json", "turtle": "view.ttl"}
     text = dcat.to_turtle(FIXTURE, PIN, files)
     assert "https://data.example" not in text and "<rows.json>" in text
@@ -101,10 +101,10 @@ def test_the_documents_a_form_holds_to_are_beside_the_schema_id():
     assert all(held[d].startswith(rdf.schema_iri(FIXTURE)) for d in ("context", "shapes", "contract"))
 
 
-@pytest.mark.xfail(strict=True, reason="docs/reckon-data/l0.md is not in the standalone repository yet")
+@pytest.mark.xfail(strict=True, reason="Restore section 7 of docs/publication/l0.md from the publication specification. The test needs its media-type table as an independent reference for the DCAT connector.")
 def test_the_media_types_are_those_of_the_specification():
-    """§7 of docs/reckon-data/l0.md is the one place that names them."""
-    text = (ROOT / "docs" / "reckon-data" / "l0.md").read_text(encoding="utf-8")
+    """§7 of docs/publication/l0.md is the one place that names them."""
+    text = (ROOT / "docs" / "publication" / "l0.md").read_text(encoding="utf-8")
     table = dict(re.findall(r"^\| ([A-Za-z -]+?) (?:view )?\| `([a-z.+/-]+)`", text, flags=re.M))
     named = {"row-json": "Row JSON", "json-ld": "JSON-LD", "turtle": "Turtle", "parquet": "Parquet"}
     assert {form: table[row] for form, row in named.items()} == {form: media for form, (media, _) in dcat.FORMS.items()}

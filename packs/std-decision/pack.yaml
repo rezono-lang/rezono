@@ -1,7 +1,7 @@
-# Standard pack std-decision (RV-C03): the decision record as an origin of facts. A kind Decision with who, when,
+# Standard pack std-decision: the decision record as an origin of facts. A kind Decision with who, when,
 # state and what it supersedes, the rules for "in force on a date", and the questions who decided and what it
 # replaced. No facts of its own: a domain imports it and its decisions are rows of this kind.
 name: std-decision
-version: 0.1.0
+version: 0.1.1
 default_language: en
 imports: []

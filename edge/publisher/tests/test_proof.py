@@ -1,6 +1,6 @@
-"""The proof graph of a role as key-range pieces (rede_publisher.proof, decision R10).
+"""The proof graph of a role as key-range pieces (rezono_publisher.proof).
 
-Each tree the publisher makes is checked by the independent checker (rede_checker.proof): a neutral,
+Each tree the publisher makes is checked by the independent checker (rezono_checker.proof): a neutral,
 hand-made graph cut into small pieces so that trees get several levels, and every example pack as published
 (that part needs DuckDB). Generic: no pack is named."""
 
@@ -9,12 +9,12 @@ from pathlib import Path
 
 import pytest
 
-from rede_canon import canonical_json
-from rede_checker.proof import check_indexes, check_proof, check_rows, check_sources
-from rede_compiler import gap, rules_dl
-from rede_compiler import rules as ir
-from rede_compiler.explain import key_text
-from rede_publisher import proof
+from rezono_canon import canonical_json
+from rezono_checker.proof import check_indexes, check_proof, check_rows, check_sources
+from rezono_compiler import gap, rules_dl
+from rezono_compiler import rules as ir
+from rezono_compiler.explain import key_text
+from rezono_publisher import proof
 
 ROOT = Path(__file__).resolve().parents[3]
 
@@ -55,7 +55,7 @@ def graph():
 
 
 def calc(relation, subject, value, premises=()):
-    """A calculation witness (W12) as the trees carry it: unchanged, its premises in order."""
+    """A calculation witness as the trees carry it: unchanged, its premises in order."""
     return {"conclusion": {"relation": relation, "key": k(subject, value, "known", "")}, "rule": relation.removeprefix("c__"),
             "version": "1", "definition": "d", "value": value, "state": "known", "reason": "", "reads": ["e"],
             "premises": list(premises), "steps": [{"path": "d/value", "value": value, "state": "known", "reason": ""}]}
@@ -144,7 +144,7 @@ PACKS = sorted(p.parent for p in (ROOT / "examples").rglob("pack.yaml")
 @pytest.mark.parametrize("pack_dir", PACKS, ids=lambda p: p.relative_to(ROOT / "examples").as_posix())
 def test_the_proof_pieces_of_every_example_pass(pack_dir, tmp_path):
     pytest.importorskip("duckdb")
-    from rede_publisher import batch, publish, store, views
+    from rezono_publisher import batch, publish, store, views
 
     st = store.FileStore(tmp_path / "store")
     e = batch.epoch(pack_dir, epoch=1, knowledge_time="2026-01-01T00:00:00Z", sources=[("rules", "test")])
@@ -163,7 +163,7 @@ def test_the_proof_pieces_of_every_example_pass(pack_dir, tmp_path):
     sees = json.loads(st.get(views.key_of(w["uri"])))
     concluded = {x["conclusion"]["relation"] for x in sees["witnesses"] + sees.get("calc_witnesses", [])}
     assert set(part["trees"]["witness"]) == concluded
-    assert part["format"] == "rede.proof-index/3"
+    assert part["format"] == "rezono.proof-index/3"
     for by in part["trees"].values():
         for named in by.values():
             assert proof.sha256(st.get(views.key_of(named["uri"])) or dict(made)[views.key_of(named["uri"])]) == named["sha256"]
@@ -207,7 +207,7 @@ def test_row_trees_of_every_size_pass_the_independent_check(limit, fanout):
 
 
 def source_entries():
-    """A role's source entries (rede_publisher.sources): one per edge, and texts ordered by their UTF-8 bytes."""
+    """A role's source entries (rezono_publisher.sources): one per edge, and texts ordered by their UTF-8 bytes."""
     out = [{"row": {"relation": "e", "key": canonical_json([a, b])},
             "sources": [{"kind": "pack", "name": "facts/e.yaml", "position": str(i)}]} for i, (a, b) in enumerate(EDGES)]
     for key in [["😀"], ["￿"], ["a b"], ["a", "b"], ["a"]]:
@@ -218,7 +218,7 @@ def source_entries():
 
 @pytest.mark.parametrize("limit,fanout", [(proof.PIECE, proof.FANOUT), (400, 2)])
 def test_source_trees_of_every_size_pass_the_independent_check(limit, fanout):
-    """S25 by row (#345): per relation a tree of the role's entries without their row reference, by key, so the
+    """S25 by row: per relation a tree of the role's entries without their row reference, by key, so the
     sources of one row are one lookup. The checker rebuilds the rows from the entries on its own."""
     entries = source_entries()
     made, roots = proof.sources_plan(entries, "p/m/r/views", limit, fanout)
@@ -292,7 +292,7 @@ deg(x, n) :- v(x), n = count : { w(x, _, _) }.
 
 
 def test_a_contributes_row_of_a_sum_carries_its_value_and_a_changed_one_is_refused():
-    """RV-C09: the row of a sum's contributor ends in what it contributes, in both trees; a count's row and a
+    """The row of a sum's contributor ends in what it contributes, in both trees; a count's row and a
     premise's do not. The independent check reads the value from the snapshot itself: one changed is refused."""
     doc = rules_dl.read_program(WEIGHED, "test.dl", {"v": [("x", "string")],
                                                      "w": [("x", "string"), ("y", "string"), ("w", "integer")]}, "test")
@@ -329,7 +329,7 @@ def test_a_contributes_row_of_a_sum_carries_its_value_and_a_changed_one_is_refus
 def test_a_snapshot_cell_that_is_missing_or_not_known_is_none_for_the_engine_rows():
     """A relation with a value column (none in a compiled pack today): a known cell is its text, a record
     without the column or with another state gives None, which `trace.steps` refuses to state as a value."""
-    prog = ir.load({"format": "rede.rules/1", "rules": [], "relations": [
+    prog = ir.load({"format": "rezono.rules/1", "rules": [], "relations": [
         {"name": "m", "role": "base", "key": [{"name": "x", "type": "string"}], "values": [{"name": "amount", "type": "integer"}]}]})
     records = [{"key": ["a"], "values": {"amount": {"state": "known", "value": "7"}}},
                {"key": ["b"], "values": {"amount": {"state": "unknown"}}}, {"key": ["c"]}]

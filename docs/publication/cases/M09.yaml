@@ -1,0 +1,20 @@
+id: M09
+class: change
+status: settled
+schema:
+  from: fixture.schema.json
+successor:
+  merge:
+    reasons:
+      not_assigned:
+        label:
+          en: not assigned
+        states:
+        - unknown
+form: schema
+input: 'datasets published under A: R01, the collection of l0.md §3.1 (uses `not_assigned`)'
+expect:
+  change_class: minor
+note: Introducing `reasons` is minor only because it lists every code the lineage's datasets use (l0.md §2.3).
+sources:
+- publication/rezono_publication/l0.py, classify

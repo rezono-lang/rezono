@@ -12,10 +12,10 @@ import pytest
 import yaml
 
 from support import FIXTURE, compile_dir, row_text, text, violations
-from rede_compiler import facts, modules, pack, regex
+from rezono_compiler import facts, modules, pack, regex
 
 SHARED = FIXTURE.parent / "shared"
-SCHEMA = {"id": "https://rede.example/x", "name": "x", "in_language": "nl", "imports": ["linkml:types"],
+SCHEMA = {"id": "https://rezono.example/x", "name": "x", "in_language": "nl", "imports": ["linkml:types"],
           "default_range": "string", "annotations": {"layer": "facts"}}
 
 
@@ -32,7 +32,7 @@ def edit(d: Path, change, name="minimal") -> None:
 
 
 def module(d: Path, name: str, classes: dict, imports=()) -> None:
-    body = dict(SCHEMA, id=f"https://rede.example/{name}", name=name.replace("/", "_"),
+    body = dict(SCHEMA, id=f"https://rezono.example/{name}", name=name.replace("/", "_"),
                 imports=["linkml:types", *imports], classes=classes)
     (d / "schema" / f"{name}.yaml").parent.mkdir(parents=True, exist_ok=True)
     (d / "schema" / f"{name}.yaml").write_text(yaml.safe_dump(body, sort_keys=False))
@@ -109,7 +109,7 @@ def test_an_imported_pack_adds_its_modules_labels_and_signs(tmp_path):
     b = bundle(d, tmp_path)
     assert b["imports"] == [{"name": "shared-terms", "version": "0.1.0", "sha256": modules.pack_hash(SHARED)}]
     assert {"module": "shared-terms:terms", "pack": "shared-terms", "file": "schema/terms.yaml",
-            "name": "shared_terms", "id": "https://rede.example/shared-terms"} in b["schemas"]
+            "name": "shared_terms", "id": "https://rezono.example/shared-terms"} in b["schemas"]
     assert {"element": "party.grade", "lang": "nl", "text": "klasse"} in b["labels"]
     assert {"kind": "party", "shape": "ellipse"} in b["channels"]["kinds"]
     got = run(d, tmp_path, "alpha: [{id: a, title: t}]\nparty: [{id: p, grade: odd}]\n"
@@ -166,8 +166,8 @@ def test_a_multivalued_slot_is_a_link_kind_without_functionality(fixture, tmp_pa
     files = compile_dir(fixture, tmp_path / "out")
     assert "beta__state__functionality" not in files["engine/integrity.sql"]
     params = json.loads(files["engine/parameters.json"])
-    assert params["rede__maximum_cardinality"] == [{"kind": "beta", "slot": "state", "v": 2}]
-    assert "beta__state__maximum_cardinality" not in params  # no rule reads it (E11)
+    assert params["rezono__maximum_cardinality"] == [{"kind": "beta", "slot": "state", "v": 2}]
+    assert "beta__state__maximum_cardinality" not in params  # no rule reads it
     got = run(fixture, tmp_path, "alpha: [{id: a, title: t}]\nbeta:\n  - {id: ok, alpha: a, state: [low, high]}\n"
                                  "  - {id: none, alpha: a}\n  - {id: same, alpha: a, state: [low, low]}\n")
     assert got == text({"beta__state__cardinality": {("none", 0)}})
@@ -194,7 +194,7 @@ def test_cardinalities_are_validated(fixture, facet, message):
 @pytest.mark.parametrize("beside", [{}, {"minimum_cardinality": 1}, {"maximum_cardinality": 3},
                                     {"minimum_cardinality": 2, "maximum_cardinality": 2}])
 def test_an_exact_cardinality_holds_beside_limits_it_meets(fixture, beside):
-    """Every cardinality given holds (RV-M05): an exact count within the minimum and maximum is that count; one
+    """Every cardinality given holds: an exact count within the minimum and maximum is that count; one
     outside them is refused above, never an override."""
     edit(fixture, lambda s: s["classes"]["Beta"]["attributes"]["state"].update(
         multivalued=True, exact_cardinality=2, **beside))
@@ -298,7 +298,7 @@ def test_constants_are_parameters_checked_as_a_value_range(fixture, tmp_path):
     edit(fixture, change)
     files = compile_dir(fixture, tmp_path / "out")
     params = json.loads(files["engine/parameters.json"])
-    assert params["rede__constant"] == [{"kind": "alpha", "slot": "size", "v": "4"},
+    assert params["rezono__constant"] == [{"kind": "alpha", "slot": "size", "v": "4"},
                                         {"kind": "beta", "slot": "state", "v": "low"}]
     got = run(fixture, tmp_path, "alpha: [{id: a, title: t, size: 5}]\nbeta: [{id: b, alpha: a, state: high}]\n")
     assert got == text({"alpha__size__value_range": {("a", 5)}, "beta__state__value_range": {("b", "high")}})
@@ -355,7 +355,7 @@ def test_an_identifier_is_checked_like_any_slot(fixture, facet, message):
 
 @pytest.mark.parametrize("name", ["a__b", "Id", "is_a"])
 def test_an_identifier_has_a_valid_slot_name(fixture, name):
-    """RV-M05: the name of an identifier is held to the rule for every slot name."""
+    """The name of an identifier is held to the rule for every slot name."""
     def change(s):
         attributes = s["classes"]["Alpha"]["attributes"]
         s["classes"]["Alpha"]["attributes"] = {name if k == "id" else k: v for k, v in attributes.items()}
@@ -364,14 +364,14 @@ def test_an_identifier_has_a_valid_slot_name(fixture, name):
 
 
 def test_an_unknown_annotation_on_an_identifier_warns(fixture):
-    """RV-M05: an annotation the compiler does not read warns on an identifier as on any slot."""
+    """An annotation the compiler does not read warns on an identifier as on any slot."""
     before = pack.read(fixture).warnings
     edit(fixture, lambda s: s["classes"]["Alpha"]["attributes"]["id"].update(annotations={"colour": "red"}))
     assert [w for w in pack.read(fixture).warnings if w not in before] == ["Alpha.id: unknown annotation 'colour'"]
 
 
 def test_linkml_any_is_an_open_value_also_without_the_prefix():
-    from rede_compiler.pack import open_value
+    from rezono_compiler.pack import open_value
 
     class View:  # a schema that declares no linkml prefix: expanding gives the CURIE back unchanged
         def get_class(self, name):
@@ -481,8 +481,8 @@ def test_an_accepted_pattern_means_the_same_in_python_and_duckdb(pattern, text, 
     """Both engines search; shorthand classes are ASCII (Feldera's Rust regex follows the written-out form)."""
     import re
     import duckdb
-    from rede_compiler import emit
-    from rede_compiler.regex import portable
+    from rezono_compiler import emit
+    from rezono_compiler.regex import portable
     p = portable(pattern)
     db = duckdb.connect()
     db.execute(emit.DUCKDB_FUNCTIONS)
@@ -609,7 +609,7 @@ def test_an_imported_packs_interface_holds_for_the_pack_that_imports_it(tmp_path
     assert "beta" in pack.read(d).kinds
 
 
-# ---- pack.yaml `iri:` (RV-X30; docs/ring2/iris.md section 4) ----
+# ---- pack.yaml `iri:` (docs/ring2/iris.md section 4) ----
 
 NS = "https://w3id.org/example-publisher/"
 
