@@ -1,0 +1,69 @@
+// Read the stance on the first day the originating support period no longer covers.
+.decl successor_handoff(product: symbol, at: symbol)
+successor_handoff(product, at) :-
+    product_stance__product(stance, product), product_stance__stance(stance, "phase_out"),
+    product_stance__decision(stance, decision), in_force_on(decision, at),
+    product_stance__period(stance, period), platform_support_period(period),
+    ended_at(period, at), interval__end(period, first), reference_point__position(at, first).
+
+.decl successor_recorded(product: symbol)
+successor_recorded(product) :- product_successor__old(_, product).
+
+.decl successor_link_at(product: symbol, link: symbol, period: symbol, at: symbol)
+successor_link_at(product, link, period, at) :-
+    successor_handoff(product, at), product_successor__old(link, product),
+    product_successor__new(link, replacement), replacement != product,
+    product_successor__decision(link, decision), in_force_on(decision, at),
+    product_successor__period(link, period).
+
+.decl successor_coverage(product: symbol, link: symbol, at: symbol, status: symbol)
+successor_coverage(product, link, at, "covered") :-
+    successor_link_at(product, link, period, at), platform_support_period(period), holds_at(period, at).
+successor_coverage(product, link, at, "gap") :-
+    successor_link_at(product, link, period, at), platform_support_period(period), ended_at(period, at).
+successor_coverage(product, link, at, "gap") :-
+    successor_link_at(product, link, period, at), platform_support_period(period),
+    judgement(period, at, "not_begun", "start_ahead").
+
+.decl successor_coverage_known(product: symbol, link: symbol, at: symbol)
+successor_coverage_known(product, link, at) :- successor_coverage(product, link, at, _).
+
+.decl successor_covered(product: symbol, at: symbol)
+successor_covered(product, at) :- successor_coverage(product, _, at, "covered").
+
+// @absence
+.decl successor_unresolved(product: symbol, at: symbol)
+successor_unresolved(product, at) :-
+    successor_link_at(product, link, _, at), !successor_coverage_known(product, link, at).
+
+// @absence
+.decl successor_uncovered_at(product: symbol, at: symbol)
+successor_uncovered_at(product, at) :-
+    successor_handoff(product, at), !successor_covered(product, at), !successor_unresolved(product, at).
+
+// The missing link is a finding about these records. A recorded but unresolved link gives no gap.
+.decl successor_finding(product: symbol, reason: symbol)
+successor_finding(product, "missing_successor") :- successor_handoff(product, _), !successor_recorded(product).
+successor_finding(product, "support_gap") :-
+    successor_coverage(product, _, at, "gap"), successor_uncovered_at(product, at).
+
+.decl successor_affected_use(product: symbol, service: symbol)
+successor_affected_use(product, service) :-
+    successor_finding(product, _), service_product_use__product(use, product),
+    service_product_use__service(use, service).
+
+.decl successor_run_need(consumer: symbol, provider: symbol)
+successor_run_need(consumer, provider) :-
+    service_need__consumer(need, consumer), service_need__provider(need, provider),
+    service_need__mode(need, "run").
+
+.decl successor_impact(product: symbol, service: symbol)
+successor_impact(product, service) :- successor_affected_use(product, service).
+successor_impact(product, consumer) :-
+    successor_affected_use(product, service), successor_run_need(consumer, service).
+successor_impact(product, consumer) :-
+    successor_affected_use(product, service), successor_run_need(intermediate, service),
+    successor_run_need(consumer, intermediate).
+
+.output successor_finding
+.output successor_impact

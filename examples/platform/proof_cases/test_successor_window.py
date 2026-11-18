@@ -34,8 +34,6 @@ def decision(key):
             "valid_from": "2026-03-01", "valid_from_day": 20260301}
 
 
-@pytest.mark.xfail(strict=True, raises=MissingPlatformRule,
-                   reason="Add successor findings and affected services in examples/platform/schema and rules; use the support-period binding from #234 and std-decision. Read decisions/platform-successor-window.md.")
 def test_successor_on_the_first_day_without_support():
     model = pack.read(ROOT)
     program = rules.load(model.rules)
