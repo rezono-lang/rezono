@@ -23,12 +23,15 @@ class FileInputs:
         directory.chmod(0o755)
         self.paths = {}
         self.expected = {}
+        self.stream_names = {}
         for index, name in enumerate(sorted(tables)):
             path = directory / f"{index}.ndjson"
             path.touch(exist_ok=False)
             path.chmod(0o644)
             self.paths[name] = path
-            self.expected[feldera_names.physical(name)] = 0
+            physical = feldera_names.physical(name)
+            self.expected[physical] = 0
+            self.stream_names[feldera_names.quoted(name)] = physical
 
     def connect(self, program):
         clauses = {}
@@ -69,7 +72,10 @@ class FileInputs:
             stats = call("GET", f"/v0/pipelines/{pipeline}/stats")
             received = {}
             for endpoint in stats["inputs"]:
-                table = endpoint["config"]["stream"]
+                stream = endpoint["config"]["stream"]
+                # Configured file endpoints report the SQL identifier from CREATE TABLE.
+                # Keep accepting a physical name from clients that already decoded it.
+                table = self.stream_names.get(stream, stream)
                 if table not in self.expected:
                     continue
                 metrics = endpoint["metrics"]
@@ -83,5 +89,14 @@ class FileInputs:
                     and global_metrics["total_completed_records"] >= global_metrics["total_input_records"]):
                 return
             if time.monotonic() >= deadline:
-                raise TimeoutError(f"{pipeline}: file inputs did not reach their completed record counts")
+                missing = sorted(self.expected.keys() - received.keys())
+                lagging = sorted((name, count, self.expected[name]) for name, count in received.items()
+                                 if count < self.expected[name])
+                raise TimeoutError(
+                    f"{pipeline}: file inputs did not reach their completed record counts: "
+                    f"missing={len(missing)} {missing[:4]}, lagging={len(lagging)} {lagging[:4]}, "
+                    f"accepted/expected={sum(received.values())}/{sum(self.expected.values())}, "
+                    f"global completed/input={global_metrics['total_completed_records']}/"
+                    f"{global_metrics['total_input_records']}"
+                )
             time.sleep(0.1)

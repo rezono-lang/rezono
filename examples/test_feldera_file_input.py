@@ -4,6 +4,7 @@ import json
 import re
 from collections import Counter
 from pathlib import PurePosixPath
+from types import SimpleNamespace
 
 import pytest
 
@@ -12,7 +13,7 @@ from rezono_compiler import feldera_names
 
 
 def test_wide_signed_updates_preserve_every_event_and_wait_for_completion(tmp_path, monkeypatch):
-    tables = ["interval", *(f"sample_{i}" for i in range(120))]
+    tables = ["interval", "trust_entry__title", 'mixed"Case', *(f"sample_{i}" for i in range(118))]
     feed = transport.FileInputs(tmp_path / "part", tables)
     source = "\n".join(f'CREATE TABLE {feldera_names.quoted(name)} ("id" VARCHAR, "v" BIGINT);' for name in tables)
     source += '\nCREATE MATERIALIZED VIEW "kept" AS SELECT * FROM "__rezono_interval";\n'
@@ -20,13 +21,15 @@ def test_wide_signed_updates_preserve_every_event_and_wait_for_completion(tmp_pa
     assert re.sub(r" WITH \('connectors' = '[^']*'\);", ";", connected) == source
     attached = {}
     for sql in connected.splitlines()[:-1]:
-        match = re.fullmatch(r'''CREATE TABLE "([^"]+)" .* WITH \('connectors' = '(.*)'\);''', sql)
+        match = re.fullmatch(r'''CREATE TABLE ("(?:[^"]|"")+") .* WITH \('connectors' = '(.*)'\);''', sql)
         [connector] = json.loads(match[2])
         assert connector["format"]["config"] == {"update_format": "insert_delete", "array": False, "lines": "single"}
         assert connector["transport"]["name"] == "file_input" and connector["transport"]["config"]["follow"] is True
         filename = PurePosixPath(connector["transport"]["config"]["path"])
         assert filename.parent == transport.MOUNT / tmp_path.name / "part"
         attached[match[1]] = tmp_path / "part" / filename.name
+    # Native endpoint configuration retains SQL identifier quoting in its stream field.
+    assert {'"trust_entry__title"', '"mixed""Case"', '"__rezono_interval"'} <= attached.keys()
 
     requests = []
 
@@ -39,8 +42,8 @@ def test_wide_signed_updates_preserve_every_event_and_wait_for_completion(tmp_pa
         total = sum(counts.values())
         phase = len(requests) % 3
         requests.append((phase, total))
-        if phase == 0 and counts["sample_0"]:
-            counts["sample_0"] -= 1
+        if phase == 0 and counts['"sample_0"']:
+            counts['"sample_0"'] -= 1
         completed = total - 1 if phase == 1 else total
         return {
             "inputs": [{"config": {"stream": name}, "metrics": {
@@ -50,7 +53,8 @@ def test_wide_signed_updates_preserve_every_event_and_wait_for_completion(tmp_pa
         }
 
     monkeypatch.setattr(transport, "call", stats)
-    monkeypatch.setattr(transport.time, "sleep", lambda _: None)
+    ticks = iter(range(0, 1000, 40))
+    monkeypatch.setattr(transport, "time", SimpleNamespace(monotonic=lambda: next(ticks), sleep=lambda _: None))
     row = {"id": "quote' and\nline", "v": None}
     other = {"id": "other", "v": -13}
     plus, minus = {"insert": row}, {"delete": row}
@@ -83,3 +87,18 @@ def test_file_input_requires_the_declared_tables_and_healthy_metrics(tmp_path, m
     })
     with pytest.raises(RuntimeError, match="file input failed"):
         feed.send("example", {"expected": [{"insert": {"id": 1}}]})
+
+
+def test_timeout_counts_missing_and_lagging_streams(tmp_path, monkeypatch):
+    feed = transport.FileInputs(tmp_path / "part", ["missing", "pending"])
+    ticks = iter((0, 120))
+    monkeypatch.setattr(transport, "time", SimpleNamespace(monotonic=lambda: next(ticks)))
+    monkeypatch.setattr(transport, "call", lambda *_: {
+        "inputs": [{"config": {"stream": '"pending"'}, "metrics": {
+            "total_records": 0, "num_parse_errors": 0, "num_transport_errors": 0}}],
+        "global_metrics": {"total_input_records": 1, "total_completed_records": 0},
+    })
+    with pytest.raises(TimeoutError) as failure:
+        feed.send("example", {name: [{"insert": {"id": 1}}] for name in feed.paths})
+    assert "missing=1 ['missing'], lagging=1 [('pending', 0, 1)]" in str(failure.value)
+    assert "accepted/expected=0/2, global completed/input=0/1" in str(failure.value)
