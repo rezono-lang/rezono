@@ -5,6 +5,7 @@ import { enumeration } from './module-enum.ts';
 import { facts } from './module-facts.ts';
 import { header } from './module-header.ts';
 import { kind } from './module-kind.ts';
+import { metadata } from './module-metadata.ts';
 import { parameter } from './module-parameter.ts';
 import { reason } from './module-reason.ts';
 import { rounding } from './module-rounding.ts';
@@ -17,7 +18,7 @@ import { version } from './module-version.ts';
 import type { BlockSyntax, Declaration, ModuleComponent } from './module-support.ts';
 
 // Ohm tries these alternatives in order. Generic assignments stand after slots and specific statements.
-const components = [header, rounding, reason, unit, enumeration, parameter, kind, derived, version, unless, table, facts, check, rules, slot] as const;
+const components = [header, metadata, rounding, reason, unit, enumeration, parameter, kind, derived, version, unless, table, facts, check, rules, slot] as const;
 const registered: readonly ModuleComponent[] = components;
 
 type DeclOf<T> = T extends { declarations: infer Entries } ? Entries[keyof Entries] extends Declaration<infer D> ? D : never : never;
