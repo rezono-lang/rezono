@@ -21,6 +21,9 @@ def test_fixture_api(): pass
     live = command([*args, "--rezono-cluster", "-m", "cluster"], tmp_path, env)
     assert live.returncode == 0, live.stderr
     assert "::test_fixture_api" in live.stdout and "::test_ordinary" not in live.stdout
-    path.write_text("import pytest\n@pytest.mark.clustre\ndef test_typo(): pass\n", encoding="utf-8")
+    path.write_text("""import pytest
+@pytest.mark.clustre
+def test_typo(): pass
+""", encoding="utf-8")
     typo = command(args, tmp_path, env)
     assert typo.returncode != 0 and "clustre" in (typo.stdout + typo.stderr)
