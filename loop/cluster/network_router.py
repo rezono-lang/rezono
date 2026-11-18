@@ -2,6 +2,7 @@
 
 from collections.abc import Callable, Iterator
 from contextlib import ExitStack, contextmanager
+import hashlib
 from ipaddress import IPv4Address, IPv4Network
 import json
 import subprocess
@@ -59,7 +60,16 @@ def _rules(matrix: dict, destinations: dict[str, str]) -> str:
         {**rule, "destinationAddress": synthetic[rule["destinationAddress"]]}
         for rule in matrix["rules"]
     ]
-    text = render(actual_rules).decode().replace(" accept comment", " counter accept comment")
+    # The offline artifact keeps the logical witness as JSON. Use a simple
+    # nftables comment here because nft's scanner cannot read its escaped quotes.
+    lines = []
+    for line in render(actual_rules).decode().split("\n"):
+        expression, separator, witness = line.partition(" accept comment ")
+        if separator:
+            identity = hashlib.sha256(witness.encode()).hexdigest()
+            line = f'{expression} counter accept comment "rezono-allow-{identity}"'
+        lines.append(line)
+    text = "\n".join(lines)
     route = "        type filter hook forward priority filter; policy drop;"
     text = text.replace(route, route + "\n        ct state { established, related } accept", 1)
     text = text.replace("\n    }\n}", f'\n        counter drop comment "{DENY}"\n    }}\n}}', 1)
