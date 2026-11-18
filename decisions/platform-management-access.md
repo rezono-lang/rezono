@@ -1,0 +1,7 @@
+# Derive cluster access from current organizational membership
+
+Put the organization login service on the shared identity tier and apply its bindings on each application cluster. A tenant membership, tenant role and access decision jointly grant an identity one verb on one resource in one namespace on the named cluster. Membership and time-limited emergency decisions are valid from their start up to the end date. Publication read rights remain a separate concern of the access pack. Roles use functions and scopes, with identity providers and enforcement implementations chosen through sourced product facts.
+
+A terminating membership withdraws only its own right. The signed difference is minus one and refers to the membership and the previous publication's right witness. Generate the binding with the publication digest, read the applied binding back, and after expiry remove it and confirm absence under the same managed scope. The other tenant's right persists. Emergency authority also expires at its own end date.
+
+The disposable trial performs an ordinary read of a harmless marker using the tenant identity, repeats that identical read after expiry, and records the credential reference and expiry without recording its value. The successful response changes to Forbidden while authentication still succeeds. Cross-tenant access is denied. The final probe repeats the read against the designated local fixture API. An impersonation or an authorization prediction supplies no observation of this read.
