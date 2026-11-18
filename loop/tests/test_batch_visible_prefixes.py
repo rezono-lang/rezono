@@ -23,16 +23,6 @@ def oracle(priorities, variant_valid, width, effects):
     return eligible, min(eligible, key=lambda members: (-len(members), sorted(priorities[m] for m in members)))
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason=(
-        "Read decisions/safe-step-rounds.md. Use the width-bounded relational comparison in std-loop and expose "
-        "it through loop.batch_selection.select_batch. The supplied prefix verdicts are independent, and the "
-        "result must retain the certified batch domain and the chosen member identities. "
-        "This test can start with hand-authored variants."
-    ),
-)
 def test_batch_visible_prefixes():
     cases = [
         ({"protect": 1, "expose": 0}, lambda prefix: "expose" not in prefix or "protect" in prefix,
