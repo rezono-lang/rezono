@@ -4,6 +4,8 @@ import json
 from pathlib import Path
 from typing import TypedDict
 
+from loop.typed_recording import TypedRecording, typed_recording
+
 
 class Recording(TypedDict):
     run: str
@@ -37,14 +39,18 @@ def validate_evidence(rows, label, run=None):
             raise ValueError(f"{label} observation belongs to a different run")
 
 
-def load_recording(path: str | Path) -> Recording:
+def load_recording(path: str | Path) -> Recording | TypedRecording:
     """Validate a trace without evaluating it or changing its recorded order."""
-    data = json.loads(Path(path).read_text(encoding="utf-8"), object_pairs_hook=unique_object)
-    if not isinstance(data, dict) or set(data) != set(Recording.__annotations__):
+    path = Path(path)
+    data = json.loads(path.read_text(encoding="utf-8"), object_pairs_hook=unique_object)
+    typed_keys = {"run", "limit", "ports", "pack", "records", "initial", "sweeps"}
+    if not isinstance(data, dict) or set(data) not in (typed_keys, set(Recording.__annotations__)):
         raise ValueError("recording must contain run, limit, requirements, completion, initial and sweeps")
     run, limit = data["run"], data["limit"]
     if not nonempty_text(run) or type(limit) is not int or limit <= 0:
         raise ValueError("recording requires a run ID and a positive integer round limit")
+    if "pack" in data:
+        return typed_recording(path.parent, data)
 
     requirements, completion = data["requirements"], data["completion"]
     if not isinstance(requirements, dict) or not isinstance(completion, dict) or requirements.keys() != completion.keys():
