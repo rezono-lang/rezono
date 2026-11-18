@@ -1,0 +1,9 @@
+# Boolean observations in rules
+
+An optional boolean slot supplies a row when an observation exists. Its value can be true or false. An absent slot supplies no row. A rule that requires a completed observation and a rule that requires an explicitly incomplete observation must therefore both leave an unobserved record undecided.
+
+The rule column type is `boolean`. A schema boolean, a rule variable of that type and a derived boolean column retain the native SQL `BOOLEAN` type in DuckDB and Feldera. The rule source spells boolean constants `TRUE` and `FALSE`. Uppercase terms were outside the variable grammar, so existing lowercase variable names and quoted text keep their meaning. Within a typed boolean column the rule IR represents the two constants with canonical lexical values `true` and `false`, consistent with its string-valued term representation. A quoted string and a number remain different source types. Equality and inequality compare booleans. Arithmetic and ordered comparisons continue to require integers.
+
+The evidence for each conclusion identifies the record and the observed truth value. Deleting a false observation removes its conclusion and its witness. The record still exists. Encoding false as an absent row loses that distinction. Encoding observations as a second text or numeric fact would give one observation two sources of truth.
+
+The acceptance case in `compiler/tests/test_boolean_rule_inputs.py` starts with one true observation, one false observation and one unobserved record. It removes the false observation from the same facts and compares the remaining conclusions and witnesses. The implementation updates `contracts/rules.yaml` and the rule compiler together. With the marker removed, include this case in the isolated Feldera oracle's selectors in `compiler/ci/run_feldera_oracle.sh`. The same case then checks the native input, both processing barriers and the exact witness rows on the pinned engine.
