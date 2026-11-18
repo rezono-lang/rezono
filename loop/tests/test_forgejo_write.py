@@ -5,7 +5,6 @@ import pytest
 from wire_fixtures import entry
 
 
-@pytest.mark.xfail(strict=True, reason="Read decisions/delivery-commit-status.md. Implement loop/forgejo_write.py. Address the status write to the supplied proposal commit.")
 def test_forgejo_write(monkeypatch):
     write_status = entry(monkeypatch, "forgejo_write", "write_status")
     sha = "ba" * 20

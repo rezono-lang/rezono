@@ -19,8 +19,6 @@ def page(rows, question="ask A where x > 1", manifest="m-3", **more):
                  "expression": {"hash": "h", "text": question}, "dataset": {"$schema": "s#A", "rows": rows}, **more}
 
 
-@pytest.mark.xfail(strict=True, raises=ImportError,
-                   reason="Implement asked in deploy/profiles/edge/pilot.py: follow the supplied cursor and validate every response against its question. Read this test.")
 def test_ask_pages_keep_the_question_manifest_and_schema():
     from pilot import asked
 

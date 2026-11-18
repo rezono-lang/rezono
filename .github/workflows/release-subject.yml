@@ -10,8 +10,12 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
+          ref: ${{ github.event.pull_request.head.sha }}
           persist-credentials: false
-      - name: Check the squash commit subject
+      - name: Check the pull request title
         env:
           SUBJECT: ${{ github.event.pull_request.title }}
         run: python scripts/release-notes.py --subject "$SUBJECT"
+      - name: Check the single commit used as the squash subject
+        if: github.event.pull_request.commits == 1
+        run: python scripts/release-notes.py --subject "$(git log -1 --format=%s)"

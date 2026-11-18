@@ -3,7 +3,6 @@
 import pytest
 
 
-@pytest.mark.xfail(strict=True, reason="Implement the verified-supply policy in k8s-admission/supply_policy.py and expose it through the shared render_policy entry point when the flow renderer lands. Read decisions/k8s-admission-oracles.md.")
 def test_supply_policy_covers_pods_and_ephemeral_container_updates():
     from supply_policy import render_supply_policy
 

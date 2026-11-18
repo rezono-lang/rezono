@@ -1,0 +1,20 @@
+loop_step: plan step
+loop_active_run: active run
+loop_completion: completion declaration
+loop_completion.run: run
+loop_completion.step: step
+loop_completion.token: completion token
+loop_completion.reason: declaration evidence
+loop_expectation: expectation
+loop_expectation.value: expected value
+loop_observation: observation
+loop_observation.run: observed run
+loop_observation.token: observed token
+loop_observation.event_time: recorded event time
+loop_observation.state: observed state
+loop_observation.value: observed value
+loop_observation.reason: observation evidence
+active: selected run
+completion: step completion declaration
+expectation: expected token value
+observed: recorded token observation

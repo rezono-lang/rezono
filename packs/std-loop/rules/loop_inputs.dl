@@ -1,0 +1,17 @@
+// Join the admitted slots of a single record before projecting the fragment input.
+.decl active(run: symbol)
+active(run) :- loop_active_run(run).
+
+.decl completion(run: symbol, step: symbol, token: symbol, reason: symbol)
+completion(run, step, token, reason) :-
+    loop_completion__run(record, run), loop_completion__step(record, step),
+    loop_completion__token(record, token), loop_completion__reason(record, reason).
+
+.decl expectation(token: symbol, value: symbol)
+expectation(token, value) :- loop_expectation__value(token, value).
+
+.decl observed(run: symbol, token: symbol, event_time: number, event: symbol, state: symbol, value: symbol, reason: symbol)
+observed(run, token, time, event, state, value, reason) :-
+    loop_observation__run(event, run), loop_observation__token(event, token),
+    loop_observation__event_time(event, time), loop_observation__state(event, state),
+    loop_observation__value(event, value), loop_observation__reason(event, reason).

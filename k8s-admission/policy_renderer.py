@@ -2,6 +2,8 @@
 
 import re
 
+from supply_policy import render_supply_policy
+
 
 _LABEL = "'rezono.org/service'"
 
@@ -35,6 +37,8 @@ def _direction(field: str, peer_field: str, source: str, destination: str) -> st
 
 def render_policy(*, rule: str, digest: str) -> dict:
     """Build a fail-closed Kubernetes policy for one verified publication release."""
+    if rule == "verified-supply":
+        return render_supply_policy(digest=digest)
     if rule != "in-zone-flow":
         raise ValueError(f"Unsupported admission rule: {rule}")
     if not re.fullmatch(r"[0-9a-f]{64}", digest):

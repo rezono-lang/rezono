@@ -5,7 +5,6 @@ import pytest
 from wire_fixtures import entry, fixture
 
 
-@pytest.mark.xfail(strict=True, reason="Read decisions/loop-fixture-evidence.md. Implement loop/recording_input.py. Validate the recording before executing effects.")
 def test_recording_input(monkeypatch, tmp_path):
     load_recording = entry(monkeypatch, "recording_input", "load_recording")
     import json

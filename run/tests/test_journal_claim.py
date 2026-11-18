@@ -6,7 +6,6 @@ import pytest
 from offline_cases import implementation, PLAN_HASH
 
 
-@pytest.mark.xfail(strict=True, reason="Read decisions/run-offline-acceptance.md. Implement run/journal_claim.py.")
 def test_journal_claim(tmp_path):
     claim = implementation("journal_claim.py", "claim_once")
     db = tmp_path / "journal.sqlite"

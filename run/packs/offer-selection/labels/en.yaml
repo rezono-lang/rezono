@@ -1,0 +1,16 @@
+offer: offer
+offer.price_micros: unit price in millionths
+offer.tie_rank: source tie rank
+offer.stock: available quantity
+offer.free_disks: unallocated disks
+offer.virtualization: virtualization evidence
+offer.boot: supported boot method
+offer.currency: offer currency
+demand: demand
+demand.quantity: required quantity
+demand.boot: required boot method
+demand.currency: required currency
+eligible: eligible offer
+outranked: outranked offer
+rank_conflict: duplicate price and rank
+selected: selected offer

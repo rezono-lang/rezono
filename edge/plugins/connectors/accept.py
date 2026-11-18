@@ -246,6 +246,9 @@ def published(objects: dict, at: str) -> dict:
         errors = [e.message for e in jsonschema.Draft201909Validator(_OFFICIAL).iter_errors(document)]
         if errors:
             raise NotAccepted(f"not valid ODCS: {errors[:5]}")
+        expected_version = "@".join((l0.schema_id(schema), pin["manifest"], pin["dataset"]))
+        if document.get("version") != expected_version:
+            raise NotAccepted("the contract version does not match schema.json and the role index epoch")
         con = duckdb.connect()
         for name, table in arrow.to_arrow(schema, rows, pin).items():
             con.register(name, table)

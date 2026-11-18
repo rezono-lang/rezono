@@ -77,3 +77,13 @@ classes:
       for_service: {range: Service, required: true}
       built_by: {range: Service, required: true}
       signed: {range: YesNo, required: true}
+
+  VendorSupportStatement:
+    description: A support end date for one release and channel, backed by vendor source bytes.
+    attributes:
+      id: {identifier: true}
+      release: {range: Release, required: true}
+      channel: {required: true}
+      support_end: {range: date, required: true}
+      source_url: {required: true, pattern: '^https?://[^ ]+$'}
+      source_sha256: {required: true, pattern: '^[0-9a-f]{64}$'}

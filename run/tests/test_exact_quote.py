@@ -5,7 +5,6 @@ import pytest
 from offline_cases import implementation
 
 
-@pytest.mark.xfail(strict=True, reason="Read decisions/run-offline-acceptance.md. Implement run/exact_quote.py.")
 def test_exact_quote():
     quote = implementation("exact_quote.py", "total_micros")
     def line(count, periods, price, setup=0, currency="USD"):

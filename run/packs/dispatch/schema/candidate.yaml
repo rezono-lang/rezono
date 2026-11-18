@@ -1,0 +1,37 @@
+id: https://rezono.org/examples/run/dispatch
+name: dispatch
+in_language: en
+imports:
+  - linkml:types
+default_range: string
+annotations:
+  layer: facts
+
+types:
+  PlanDigest:
+    typeof: string
+    pattern: '^[0-9a-f]{64}$'
+  CurrencyCode:
+    typeof: string
+    pattern: '^[A-Z]{3}$'
+
+enums:
+  ApprovalDecision:
+    permissible_values:
+      approve:
+      decline:
+
+classes:
+  Candidate:
+    description: One proposed plan with separately observed approval, payable amount and event time.
+    attributes:
+      id: {identifier: true}
+      plan_hash: {range: PlanDigest}
+      approval_hash: {range: PlanDigest}
+      currency: {range: CurrencyCode}
+      approval_currency: {range: CurrencyCode}
+      decision: {range: ApprovalDecision}
+      cost_micros: {range: integer, minimum_value: 0}
+      cap_micros: {range: integer, minimum_value: 0}
+      event_us: {range: integer}
+      expires_us: {range: integer}

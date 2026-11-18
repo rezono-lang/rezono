@@ -1,0 +1,13 @@
+// A matching resource only establishes presence in the sweep that observed it.
+.decl matching_resource(sweep: symbol, plan: symbol)
+matching_resource(s, p) :- resource__sweep(r, s), resource__plan_hash(r, p).
+
+.decl conflicting_sweep(sweep: symbol)
+conflicting_sweep(s) :- sweep__coverage(s, a), sweep__coverage(s, b), a != b.
+conflicting_sweep(s) :- sweep__plan_hash(s, a), sweep__plan_hash(s, b), a != b.
+
+.decl cleaned(sweep: symbol)
+cleaned(s) :- sweep(s), sweep__plan_hash(s, p), sweep__coverage(s, "complete"),
+    !conflicting_sweep(s), !matching_resource(s, p).
+
+.output cleaned

@@ -5,7 +5,6 @@ import pytest
 from wire_fixtures import entry, fixture
 
 
-@pytest.mark.xfail(strict=True, reason="Read decisions/loop-fixture-evidence.md. Implement loop/router_render.py. Render deterministic router bytes while retaining distinct logical rule witnesses.")
 def test_router_render(monkeypatch):
     render = entry(monkeypatch, "router_render", "render")
     net = fixture("network")

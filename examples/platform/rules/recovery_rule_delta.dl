@@ -1,0 +1,11 @@
+// Project the flows still allowed under recovery isolation to boundary rules.
+.decl recovery_isolated_rule(source_zone: symbol, target_zone: symbol, port: number)
+recovery_isolated_rule(za, zb, p) :-
+    flow(a, b, f, p), !recovery_reaches_out(a, b, f),
+    zone_of(a, za), zone_of(b, zb), za != zb.
+
+// Relaxing isolation restores flows, so the projected rule set can only grow.
+.decl recovery_rule_delta(change: symbol, source_zone: symbol, target_zone: symbol, port: number)
+recovery_rule_delta("added", za, zb, p) :-
+    firewall_rule(za, zb, p), !recovery_isolated_rule(za, zb, p).
+.output recovery_rule_delta

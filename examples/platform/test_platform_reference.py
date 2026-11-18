@@ -75,7 +75,6 @@ def test_control_host_is_derived_by_the_pack():
     _, _, fact_states = states(HERE)
     assert fact_states[0].derived.get("cluster_control_host") == set(map(tuple, expected))
 
-@pytest.mark.xfail(strict=True, raises=AssertionError, reason="Depends on test_request_json_enters_compiler_base_tables. Implement exact tenant_monthly_cost through the platform pack rules or calculation, using the request and catalog base tables. Read decisions/platform-request-input.md.")
 def test_monthly_cost_is_derived_by_the_pack(tmp_path):
     from request_preview_case import copy_requests, preview
 

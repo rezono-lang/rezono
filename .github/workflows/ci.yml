@@ -23,7 +23,7 @@ permissions:
 jobs:
   discover:
     runs-on: ubuntu-24.04
-    timeout-minutes: 5
+    timeout-minutes: 12
     outputs:
       python: ${{ steps.matrix.outputs.python }}
       has_python: ${{ steps.matrix.outputs.has_python }}
@@ -39,8 +39,40 @@ jobs:
       - id: matrix
         env:
           GITHUB_BASE_REF: ${{ github.base_ref }}
+          MERGE_GROUP_BASE_SHA: ${{ github.event.merge_group.base_sha }}
+          MERGE_GROUP_HEAD_SHA: ${{ github.event.merge_group.head_sha }}
           GITHUB_EVENT_BEFORE: ${{ github.event.before }}
         run: python3 scripts/components.py ci-matrix
+      - uses: ./.github/workflows/python-environment
+        if: steps.matrix.outputs.has_python == 'true'
+        with:
+          editable: ${{ steps.matrix.outputs.python_editable }}
+          oracle: ${{ contains(fromJSON(steps.matrix.outputs.python).*.folder, 'compiler') || contains(fromJSON(steps.matrix.outputs.python).*.folder, 'examples') }}
+          save-cache: 'true'
+      - name: Test candidate selection and exact-once evidence
+        if: steps.matrix.outputs.has_python == 'true'
+        run: python -I .github/workflows/tests/test_components.py
+      - name: Collect each selected Python component once
+        if: steps.matrix.outputs.has_python == 'true'
+        env:
+          PYTHON_MATRIX: ${{ steps.matrix.outputs.python }}
+          PYTHONHASHSEED: '0'
+          REZONO_HYPOTHESIS_PROFILE: ci
+        run: |
+          set -euo pipefail
+          python scripts/components.py inventory "$RUNNER_TEMP/inventory"
+          while IFS= read -r -d '' report; do
+            python scripts/red_list.py --skips "$report" | tee -a "$GITHUB_STEP_SUMMARY"
+          done < <(find "$RUNNER_TEMP/inventory" -name collection.xml -print0)
+      - name: Save the independent pytest inventory
+        if: always() && steps.matrix.outputs.has_python == 'true'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: pytest-inventory
+          path: ${{ runner.temp }}/inventory
+          if-no-files-found: error
+          overwrite: true
+          retention-days: 2
 
   python:
     needs: discover
@@ -54,88 +86,19 @@ jobs:
         component: ${{ fromJson(needs.discover.outputs.python) }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
-      - name: Cache locked Python environment
-        id: environment
-        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830  # v4.3.0
+      - uses: ./.github/workflows/python-environment
         with:
-          path: .venv
-          key: python-env-v2-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('requirements/.python-version', 'requirements/dev.txt') }}
-      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0  # v7.1.0
+          editable: ${{ needs.discover.outputs.python_editable }}
+          oracle: ${{ matrix.component.folder == 'compiler' || matrix.component.folder == 'examples' }}
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
-          python-version-file: requirements/.python-version
-          cache: ${{ steps.environment.outputs.cache-hit != 'true' && 'pip' || '' }}
-          cache-dependency-path: requirements/dev.txt
-      - name: Install from lockfile
-        env:
-          CACHE_HIT: ${{ steps.environment.outputs.cache-hit }}
-        run: |
-          set -euo pipefail
-          if [[ "$CACHE_HIT" != true ]]; then
-            python -m venv .venv
-            .venv/bin/python -m pip install -q --no-deps --require-hashes -r requirements/dev.txt
-          fi
-      - name: Save locked environment before installing local packages
-        if: steps.environment.outputs.cache-hit != 'true' && strategy.job-index == 0
-        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830  # v4.3.0
-        with:
-          path: .venv
-          key: ${{ steps.environment.outputs.cache-primary-key }}
-      - name: Install repository packages
-        run: |
-          set -euo pipefail
-          export PATH="$PWD/.venv/bin:$PATH"
-          echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
-          python -m pip install -q --no-deps --no-build-isolation ${{ needs.discover.outputs.python_editable }}
-          python scripts/check-pinned.py requirements/dev.txt
-      - name: Cache generated contract types
-        id: types
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830  # v4.3.0
-        with:
-          path: |
-            contracts/python/rezono_contracts/*.py
-            contracts/python/rezono_contracts/*.schema.json
-            viewer/src/lib/contract/generated
-          key: contract-types-v1-${{ runner.os }}-${{ hashFiles('requirements/.python-version', 'requirements/dev.txt', 'contracts/*.yaml', 'contracts/gen-types.sh', 'contracts/python/rezono_contracts/**', 'viewer/package.json', 'viewer/src/lib/contract/generated/**') }}
-      - name: Cache the pinned oracle and its distribution packages
-        if: matrix.component.folder == 'compiler' || matrix.component.folder == 'examples'
-        id: oracle
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830  # v4.3.0
-        with:
-          path: |
-            ${{ runner.temp }}/oracle-debs/*.deb
-            ${{ runner.temp }}/oracle-debs/SHA256SUMS
-          key: oracle-ubuntu-24.04-${{ runner.arch }}-${{ hashFiles('scripts/install-souffle.sh') }}
-      - name: Install the pinned Souffle oracle
-        if: matrix.component.folder == 'compiler' || matrix.component.folder == 'examples'
-        env:
-          CACHE_HIT: ${{ steps.oracle.outputs.cache-hit }}
-        run: |
-          set -euo pipefail
-          packages="$RUNNER_TEMP/oracle-debs"
-          mkdir -p "$packages"
-          if [[ "$CACHE_HIT" == true ]]; then
-            (cd "$packages" && sha256sum --check SHA256SUMS)
-            if sudo dpkg --install "$packages"/*.deb; then
-              souffle --version
-              exit 0
-            fi
-          fi
-          # The apt download user can traverse /var/tmp on hosted runners.
-          archives=$(mktemp -d /var/tmp/rezono-oracle.XXXXXX)
-          chmod 0755 "$archives"
-          printf 'Dir::Cache::archives "%s";\nAPT::Keep-Downloaded-Packages "true";\n' "$archives" |
-            sudo tee /etc/apt/apt.conf.d/99-rezono-oracle-cache > /dev/null
-          bash scripts/install-souffle.sh
-          find "$archives" -maxdepth 1 -type f -name '*.deb' -exec cp -t "$packages" -- {} +
-          cp "$RUNNER_TEMP"/*souffle*.deb "$packages/"
-          (cd "$packages" && sha256sum ./*.deb > SHA256SUMS)
-      - name: Generate contract types
-        if: steps.types.outputs.cache-hit != 'true'
-        run: contracts/gen-types.sh
+          name: pytest-inventory
+          path: ${{ runner.temp }}/inventory
       - name: Check ${{ matrix.component.folder }}
         shell: bash
         env:
           REZONO_HYPOTHESIS_PROFILE: ci
+          PYTHONHASHSEED: '0'
           COMPONENT: ${{ matrix.component.folder }}
           KIND: ${{ matrix.component.kind }}
           SHARD: ${{ matrix.component.shard }}
@@ -147,20 +110,18 @@ jobs:
             python scripts/components.py check-contracts
             folder="$COMPONENT/python"
           fi
-          rc=0
-          if [[ "$COMPONENT" == examples ]]; then
-            echo "Available cores: $(nproc)"
-            cat /proc/pressure/cpu
-          fi
-          /usr/bin/time -f 'Runner wall=%e s user=%U s system=%S s CPU=%P peak RSS=%M KiB' python scripts/components.py run-shard "$folder" "$SHARD" "$TOTAL" "$RUNNER_TEMP/reports" || rc=$?
-          if [[ "$COMPONENT" == examples ]]; then
-            cat /proc/pressure/cpu
-          fi
-          if [[ "$rc" == 5 && "$KIND" != contracts ]]; then
-            python scripts/red_list.py --all-tests-blocked "$COMPONENT"
-          else
-            exit "$rc"
-          fi
+          /usr/bin/time -f 'Runner wall=%e s user=%U s system=%S s CPU=%P peak RSS=%M KiB' \
+            python scripts/components.py run-shard "$folder" "$SHARD" "$TOTAL" \
+              "$RUNNER_TEMP/inventory" "$RUNNER_TEMP/reports" "$RUNNER_TEMP/receipts"
+      - name: Save execution evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: pytest-execution-${{ strategy.job-index }}
+          path: ${{ runner.temp }}/receipts
+          if-no-files-found: error
+          overwrite: true
+          retention-days: 2
       - name: Report actual skips
         if: always() && hashFiles('scripts/red_list.py') != ''
         run: |
@@ -212,10 +173,46 @@ jobs:
     name: check
     if: always()
     needs: [discover, python, node]
+    permissions:
+      contents: read
+      actions: read
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        if: needs.discover.outputs.has_python == 'true'
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        if: always() && needs.discover.outputs.has_python == 'true'
+        with:
+          name: pytest-inventory
+          path: ${{ runner.temp }}/inventory
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        if: always() && needs.discover.outputs.has_python == 'true'
+        with:
+          pattern: pytest-execution-*
+          path: ${{ runner.temp }}/receipts
+          merge-multiple: true
+      - name: Verify every inventoried test started and finished exactly once
+        if: always() && needs.discover.outputs.has_python == 'true'
+        env:
+          PYTHON_MATRIX: ${{ needs.discover.outputs.python }}
+        run: python3 scripts/components.py verify-execution "$RUNNER_TEMP/inventory" "$RUNNER_TEMP/receipts"
+      - name: Record runner wait separately from execution
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          {
+            echo '| Job | Runner wait (s) | Execution (s) |'
+            echo '| --- | ---: | ---: |'
+            gh api --paginate "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/attempts/$GITHUB_RUN_ATTEMPT/jobs?per_page=100" \
+              --jq '.jobs[] | select(.runner_id > 0 and .started_at) | (.started_at | fromdateiso8601) as $start | "| \(.name) | \($start - (.created_at | fromdateiso8601)) | \(if .completed_at then (.completed_at | fromdateiso8601) - $start else "running" end) |"'
+          } >> "$GITHUB_STEP_SUMMARY"
       - name: Verify component jobs
+        if: always()
         env:
           DISCOVER_RESULT: ${{ needs.discover.result }}
           PYTHON_RESULT: ${{ needs.python.result }}

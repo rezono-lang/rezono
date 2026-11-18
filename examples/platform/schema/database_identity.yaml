@@ -1,0 +1,27 @@
+id: https://rezono.org/examples/platform-core/database-identity
+name: platform_database_identity
+description: Source descriptions of a database and explicit identity evidence.
+in_language: en
+imports:
+  - linkml:types
+  - std-identity:identity
+default_range: string
+annotations:
+  layer: facts
+
+enums:
+  DatabaseTextSlot:
+    permissible_values:
+      edition:
+      engine:
+
+classes:
+  DatabaseReference:
+    is_a: Referent
+  DatabaseTextStatement:
+    description: A source's text claim about one attribute of its database reference.
+    attributes:
+      id: {identifier: true}
+      referent: {range: DatabaseReference, required: true}
+      slot: {range: DatabaseTextSlot, required: true}
+      value: {required: true}

@@ -3,7 +3,6 @@ import pytest
 from case_support import engine, imported, verified
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError, reason='Depends on test_standard_imports. Supply the access case through examples/platform platform bindings in schema, facts, views or rules using a separate access module. Read decisions/platform-derivation-acceptance.md.')
 def test_standard_access():
     imported("std-access")
     state = engine()[1]

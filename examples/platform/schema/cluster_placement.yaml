@@ -1,0 +1,43 @@
+id: https://rezono.org/examples/platform-core/cluster-placement
+name: platform_cluster_placement
+description: Service placement, endpoint ownership and network attachment in the cluster scenario.
+in_language: en
+imports: [linkml:types, core, placement]
+default_range: string
+annotations:
+  layer: facts
+
+enums:
+  ServiceEndpointZone:
+    permissible_values:
+      cluster:
+      service:
+  EndpointHosting:
+    permissible_values:
+      local:
+      control:
+      workforce:
+  EndpointNetwork:
+    permissible_values:
+      host:
+      owner:
+
+classes:
+  ClusterPlacementPolicy:
+    attributes:
+      id: {identifier: true}
+      role: {range: ClusterRole, required: true}
+      zone: {range: Zone, required: true}
+      worker_host_role: {range: ClusterRole}
+  ClusterServiceBinding:
+    attributes:
+      id: {identifier: true}
+      service: {range: Service, required: true}
+      cluster: {range: Cluster, required: true}
+      endpoint_zone: {range: ServiceEndpointZone}
+  ClusterOwnedEndpoint:
+    attributes:
+      id: {identifier: true}
+      owner: {range: Cluster, required: true}
+      hosting: {range: EndpointHosting, required: true}
+      network: {range: EndpointNetwork, required: true}
