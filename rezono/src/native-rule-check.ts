@@ -9,7 +9,7 @@ type Expression =
 	| { cmp: [string, Expression, Expression] } | { arith: [string, Expression, Expression] }
 	| { agg: [string, Expression] | [string, Expression, Expression] }
 	| { in: [Expression, Expression] } | { is: [Expression, State] }
-	| { neg: Expression };
+	| { neg: Expression } | { filter: [Expression, Expression] };
 
 type Column = { name: string; type: string };
 type Declaration = { rule: string; locals?: Column[]; when?: Expression } &
@@ -365,8 +365,12 @@ class ClauseCheck {
 
 	private aggregate([operator, domain, measure]: [string, Expression] | [string, Expression, Expression],
 		at: string, flow: Flow): string {
-		if (!['count', 'sum', 'min', 'max'].includes(operator) || !('call' in domain)) refuse('R044', at, operator);
-		const signature = this.row(domain.call, at + '/agg/1', flow, 'aggregate', at);
+		const filtered = 'filter' in domain;
+		const source = filtered ? domain.filter[0] : domain;
+		if (!['count', 'sum', 'min', 'max'].includes(operator) || !('call' in source)) refuse('R044', at, operator);
+		const sourceAt = at + '/agg/1' + (filtered ? '/filter/0' : '');
+		const signature = this.row(source.call, sourceAt, flow, 'aggregate', at);
+		if (filtered) this.fixedColumns(domain.filter[1], at + '/agg/1/filter/1', source.call[1], signature, flow);
 		if (operator === 'count') {
 			if (measure) refuse('R044', at + '/agg/2', operator);
 			return 'Int';
@@ -376,10 +380,42 @@ class ClauseCheck {
 			? signature.columns.findIndex(column => column.name === names[1])
 			: -1;
 		const column = signature.columns[index];
-		if (!column || !this.whole(column.type) || !('wildcard' in domain.call[1][index])) {
+		if (!column || !this.whole(column.type) || !('wildcard' in source.call[1][index])) {
 			refuse('R044', measure ? at + '/agg/2' : at, operator);
 		}
 		return column.type;
+	}
+
+	/**
+	 * A filter the single-relation IR can fix: a conjunction of `it.column = term` equalities, in either
+	 * orientation, over distinct wildcard columns. Each term is a typed constant or an already bound name.
+	 */
+	private fixedColumns(predicate: Expression, at: string, terms: Expression[], signature: Signature,
+		flow: Flow): void {
+		if ('and' in predicate) {
+			const fixed = new Set<number>();
+			predicate.and.forEach((term, index) => this.fixedColumn(term, at + '/and/' + index, terms, signature, flow, fixed));
+			return;
+		}
+		this.fixedColumn(predicate, at, terms, signature, flow, new Set());
+	}
+
+	private fixedColumn(term: Expression, at: string, terms: Expression[], signature: Signature, flow: Flow,
+		fixed: Set<number>): void {
+		if (!('cmp' in term) || term.cmp[0] !== '=') refuse('R044', at, 'filter');
+		const [, left, right] = term.cmp;
+		const member = (side: Expression): string | undefined =>
+			'path' in side && side.path.length === 2 && side.path[0] === 'it' ? side.path[1] : undefined;
+		const leftMember = member(left), rightMember = member(right);
+		if ((leftMember === undefined) === (rightMember === undefined)) refuse('R044', at, 'filter');
+		const [name, other, otherAt] = leftMember !== undefined
+			? [leftMember, right, at + '/cmp/2'] : [rightMember!, left, at + '/cmp/1'];
+		const index = signature.columns.findIndex(column => column.name === name);
+		if (index < 0) refuse('R001', at + (leftMember !== undefined ? '/cmp/1' : '/cmp/2'), name);
+		if (fixed.has(index) || !('wildcard' in terms[index])) refuse('R044', at, 'filter');
+		fixed.add(index);
+		const expected = signature.columns[index].type;
+		this.requireType(this.scalar(other, otherAt, flow, expected).type, expected, otherAt);
 	}
 
 	private scalar(expr: Expression, at: string, flow: Flow, expected?: string): Value {
