@@ -14,6 +14,7 @@ permissions:
 
 jobs:
   compare:
+    needs: seed
     strategy:
       fail-fast: false
       matrix:
@@ -24,7 +25,8 @@ jobs:
       run:
         shell: bash
     steps:
-      - name: Reserve disk space on the disposable runner
+      - &reserve-disk
+        name: Reserve disk space on the disposable runner
         run: |
           set -euo pipefail
           docker_root=$(docker info --format '{{.DockerRootDir}}')
@@ -44,10 +46,12 @@ jobs:
             echo "::error::Feldera needs 80 GiB of free space for the runner and Docker filesystems."
             exit 1
           fi
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      - &oracle-checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0  # v7.1.0
+      - &oracle-python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0  # v7.1.0
         with:
           python-version-file: requirements/.python-version
           cache: ''
@@ -73,9 +77,16 @@ jobs:
           fi
           trap - EXIT
           echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
+      - name: Download same-attempt Feldera dependencies
+        if: matrix.shard == 'platform' || matrix.shard == 'subsidy'
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093  # v4.3.0
+        with:
+          name: feldera-dependencies-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/feldera-dependencies/
       - name: Run the assigned Feldera comparisons
         env:
           FELDERA_SHARD: ${{ matrix.shard }}
+          FELDERA_DEPENDENCY_PROVENANCE: ${{ needs.seed.outputs.provenance }}
         run: bash compiler/ci/run_feldera_oracle.sh
       - name: Retain the shard's original reports
         if: always()
@@ -85,6 +96,30 @@ jobs:
           path: ${{ runner.temp }}/feldera-oracle/
           if-no-files-found: warn
           retention-days: 7
+
+  seed:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash
+    outputs:
+      provenance: ${{ steps.seed.outputs.provenance }}
+    steps:
+      - *reserve-disk
+      - *oracle-checkout
+      - *oracle-python
+      - name: Compile the stock Feldera dependencies
+        id: seed
+        run: bash compiler/ci/run_feldera_oracle.sh --seed-dependencies
+      - name: Transfer verified dependency artifacts within this attempt
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.6.2
+        with:
+          name: feldera-dependencies-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/feldera-dependencies/
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 1
 
   oracle:
     needs: compare

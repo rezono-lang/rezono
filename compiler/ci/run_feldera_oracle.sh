@@ -2,13 +2,18 @@
 set -euo pipefail
 
 cd "$(dirname "$0")/../.."
+source compiler/ci/feldera_dependencies.sh
 # Official v0.383.0 Linux amd64 image. The release includes the SQL compiler and Rust build cache.
 image=images.feldera.com/feldera/pipeline-manager@sha256:7e1580efd340af0f6267386bd5da57aa10ef5b46572855245108209baf24bb5f
 if [[ "${1:-}" == --pull ]]; then
   exec docker pull "$image"
 fi
+if [[ "${1:-}" == --seed-dependencies ]]; then
+  feldera_seed_dependencies "$image"
+  exit
+fi
 if (( $# != 0 )); then
-  echo "Usage: $0 [--pull]" >&2
+  echo "Usage: $0 [--pull | --seed-dependencies]" >&2
   exit 2
 fi
 reports="${RUNNER_TEMP:?}/feldera-oracle"
@@ -39,6 +44,9 @@ cleanup() {
   fi
   if docker container inspect "$container" >/dev/null 2>&1; then
     copy_rust_trace || true
+    case "$shard" in
+      platform|subsidy) feldera_dependency_activity "$container" > "$reports/dependency-build.json" || true ;;
+    esac
     if (( status != 0 )); then
       docker logs --tail 250 "$container" > "$reports/engine.log" 2>&1 || true
     fi
@@ -70,6 +78,11 @@ docker run --detach --name "$container" --network none "${compiler_env[@]}" \
   --mount "type=bind,src=$PWD/compiler/ci/measure_feldera_rustc.sh,dst=/tmp/rezono-measure-feldera-rustc,readonly" \
   --mount "type=bind,src=$original,dst=/tmp/rezono-feldera-original-wrapper,readonly" \
   --mount "type=bind,src=$inputs,dst=/tmp/rezono-oracle-input,readonly" "$image"
+case "$shard" in
+  platform|subsidy)
+    feldera_restore_dependencies "$image" "$container" | tee "$reports/dependency-restore.log"
+    ;;
+esac
 pid=$(docker inspect --format '{{.State.Pid}}' "$container")
 # Only loopback exists here. Enter the service network, then drop back to the runner user.
 export FELDERA_URL=http://127.0.0.1:8080

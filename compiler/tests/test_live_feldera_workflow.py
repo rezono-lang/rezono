@@ -28,11 +28,23 @@ def test_live_oracle_workflow_runs_the_compiler_entrypoint():
         "compiler-calc", "compiler-bound", "compiler-rules",
     ]
     assert job["strategy"]["fail-fast"] == "false"
-    assert any(step.get("env") == {"FELDERA_SHARD": "${{ matrix.shard }}"} for step in job["steps"])
+    assert job["needs"] == "seed"
     assert job["steps"][0]["name"] == "Reserve disk space on the disposable runner"
     assert "RUNNER_ENVIRONMENT" in job["steps"][0]["run"]
     comparison, = (step for step in job["steps"] if step.get("run") == entry)
     assert "timeout-minutes" not in comparison
+    assert comparison["env"] == {
+        "FELDERA_SHARD": "${{ matrix.shard }}",
+        "FELDERA_DEPENDENCY_PROVENANCE": "${{ needs.seed.outputs.provenance }}",
+    }
+    seed = job_file["jobs"]["seed"]
+    assert seed["runs-on"] == job["runs-on"] and int(seed["timeout-minutes"]) < 30
+    stock_build = next(step for step in seed["steps"] if step.get("id") == "seed")
+    assert stock_build["run"] == entry + " --seed-dependencies"
+    archive = seed["steps"][-1]["with"]
+    download = next(step for step in job["steps"] if step.get("name") == "Download same-attempt Feldera dependencies")
+    assert download["if"] == "matrix.shard == 'platform' || matrix.shard == 'subsidy'"
+    assert download["with"]["name"] == archive["name"] == "feldera-dependencies-${{ github.run_id }}-${{ github.run_attempt }}"
     setup, = [step["run"] for step in job["steps"] if "--pull" in step.get("run", "")]
     assert setup.index("bash compiler/ci/run_feldera_oracle.sh --pull") < setup.index("python -m venv")
     assert setup.index("python -m venv") < setup.index('wait "$pull_pid"', setup.index("python -m venv"))
