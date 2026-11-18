@@ -2,8 +2,9 @@
 
 import json
 import re
-from pathlib import Path
 from collections import Counter
+from datetime import datetime
+from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 DIMENSIONS = ("cores", "memoryGiB", "storageGiB")
@@ -36,6 +37,20 @@ def landed_usage(model):
     return usage
 
 
+def _submission_time(timestamp: str) -> tuple[datetime, str]:
+    match = re.fullmatch(
+        r"([0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2})"
+        r"(?:\.([0-9]+))?(Z|[+-](?:[01][0-9]|2[0-3]):[0-5][0-9])",
+        timestamp,
+    )
+    if match is None:
+        raise ValueError("Submission time must be an ISO timestamp with an explicit offset")
+    second, fraction, offset = match.groups()
+    # Aware whole seconds compare by instant. Trim zeroes so equal fractions
+    # tie, while retaining every significant digit beyond datetime precision.
+    return datetime.fromisoformat(second + offset), (fraction or "").rstrip("0")
+
+
 def calculate(model, requests):
     capacities = model["capacity"]
     matrix = {tuple(row) for row in model["zoneMatrix"]}
@@ -54,7 +69,9 @@ def calculate(model, requests):
     resources = {}
     sequence = Counter()
     identities = set()
-    for request in sorted(requests, key=lambda r: (r["submittedAt"], r["team"], r["service"])):
+    for request in sorted(
+        requests, key=lambda r: (_submission_time(r["submittedAt"]), r["team"], r["service"])
+    ):
         team = request["team"]
         identity = (team, request["service"])
         if identity in identities:
