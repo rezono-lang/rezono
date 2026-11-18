@@ -60,7 +60,7 @@ def test_private_variants_and_the_masked_gate_view(sweep):
 
 
 def test_a_role_that_reads_all_in_full_sees_each_variant_status(sweep):
-    """#593 gave `propose` every relation of the lab in full: the gate shows it the computed grid."""
+    """The fixture gives `propose` every relation of the lab in full: the gate shows it the computed grid."""
     local, manifest, _, variants = sweep
     manifest({**variants[1], "checks": [{"name": "check", "status": "warning", "violations": 1}]})
     grids = checked_local_grid(local, "example", "a" * 40, 3, 64)
@@ -115,7 +115,7 @@ def test_generic_sweep_still_requires_computed_status():
         check_sweeps(None, "viewer", "example", [{"name": "size", "cells": [{"status": "unavailable"}]}])
 
 
-# AUD-E1 (#446): the gate shows a check's status only to a role that reads every relation in full; any other
+# AUD-E1: the gate shows a check's status only to a role that reads every relation in full; any other
 # role gets each check as `unavailable`. The pilot decides who reads in full from the unscoped manifest in the
 # store (`truth`), not from the role's own scoped snapshots.
 TRUTH = {"id": "m-1", "snapshots": [

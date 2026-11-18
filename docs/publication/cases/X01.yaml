@@ -44,4 +44,4 @@ expect:
     Plan.owner: https://rezono.example/fixture/Plan#owner
 note: JSON-LD 1.1 expansion with the published kind-scoped context (§5).
 sources:
-- '#369 L0 rev 2 §8'
+- publication/rezono_publication/rdf.py, context and expand

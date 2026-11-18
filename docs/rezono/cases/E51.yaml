@@ -44,11 +44,13 @@ expect:
         type: Text
     answer_schema_is_id: true
 alternatives:
-- by: '#350 P10.2a §11 table (no diagnostic; W105 not provisional)'
+- by: 'Alternative reading (no diagnostic; W105 not provisional)'
   expect:
     print: 'ask h: Host where memory_need > 300 GiB show h.memory_need, owner'
     diagnostics: []
-note: 'Per-slot states are not listed: they follow from typing (§8a). W105 at `owner` as in E27; the P10.2a table
-  lists no diagnostic here, which `alternatives` keeps (expressions.md §13 point 9).'
+note: 'Per-slot states are not listed: they follow from typing (§8a). W105 at `owner` as in E27; the alternative reading
+  gives no diagnostic here, which `alternatives` keeps (expressions.md §13 point 9).'
 sources:
-- '#350 P10.2a §11'
+- rezono/src/print.ts
+- rezono/src/check.ts
+- rezono/README.md, Choices this slice makes

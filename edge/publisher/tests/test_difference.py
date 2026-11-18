@@ -130,7 +130,7 @@ def test_a_proof_tree_is_named_at_the_base_only_when_the_base_has_that_very_tree
 
 def test_a_delta_that_may_change_a_right_gets_no_difference_decided_without_data():
     """`may_read` is derived from facts. Whether a delta may change it is decided from the rules and the delta
-    alone, so it never depends on an element a role does not see (P1 review of #168)."""
+    alone, so it never depends on an element a role does not see."""
     from rezono_publisher.difference import withheld
 
     def atom(rel, *terms, polarity="positive"):

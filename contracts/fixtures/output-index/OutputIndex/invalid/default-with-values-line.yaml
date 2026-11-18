@@ -1,4 +1,4 @@
-# A chart default is a pointer into the values file, not a line (review on #444).
+# A chart default is a pointer into the values file, not a line.
 format: rezono.output-index/1
 pack: platform
 manifest: m-42

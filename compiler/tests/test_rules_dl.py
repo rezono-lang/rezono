@@ -336,21 +336,21 @@ REFUSED = {
     "type": (".decl p(x: symbol)\np(x) :- alpha__size(_, x).", "type_mismatch"),
     "qualifier": (".decl p(x: symbol) btree\np(x) :- alpha(x).", "qualifiers"),
     "io-args": (".decl p(x: symbol)\np(x) :- alpha(x).\n.input alpha(IO=file)", "facts come from facts/"),
-    # Review of #13: a group key computed by arithmetic would silently become local to the aggregate.
+    # a group key computed by arithmetic would silently become local to the aggregate.
     "computed-group-key": (".decl p(a: symbol, m: number)\n"
                            "p(a, m) :- alpha__size(a, n), z = n + 1, m = count : { alpha__size(_, z) }.",
                            "z in the aggregate over alpha__size is not bound by a positive literal"),
     "result-as-group-key": (".decl p(a: symbol, m: number)\n"
                             "p(a, m) :- alpha(a), k = count : { beta__alpha(_, a) }, m = count : { alpha__size(_, k) }.",
                             "k in the aggregate over alpha__size is not bound"),
-    # Review of #13: a constant keeps its own type; "2" < "10" is text, not a number.
+    # a constant keeps its own type; "2" < "10" is text, not a number.
     "text-order": (".decl p(a: symbol)\np(a) :- alpha(a), \"2\" < \"10\".", "order comparison needs whole numbers"),
     "text-in-integer-column": (".decl p(a: symbol)\np(a) :- alpha__size(a, \"5\").", 'is string, but column 2 of alpha__size'),
     "number-in-text-column": (".decl p(a: symbol)\np(a) :- beta__alpha(a, 5).", "is integer, but column 2 of beta__alpha"),
     "text-arithmetic": (".decl p(a: symbol, n: number)\np(a, n) :- alpha__title(a, t), n = t + 1.",
                         "arithmetic needs whole numbers"),
     "text-equals-number": (".decl p(a: symbol)\np(a) :- alpha__size(a, s), s = \"5\".", "have different types"),
-    # Second review of #13: '_' in a comparison is a clear error, not a crash.
+    # '_' in a comparison is a clear error, not a crash.
     "wildcard-in-comparison": (".decl p(x: symbol)\np(x) :- alpha(x), _ < \"x\".", "'_' only inside an aggregate"),
     "wildcard-in-arithmetic": (".decl p(x: symbol, n: number)\np(x, n) :- alpha__size(x, s), n = s + _.",
                                "'_' only inside an aggregate"),
@@ -358,12 +358,12 @@ REFUSED = {
     "division-by-zero": (".decl p(a: symbol, n: number)\np(a, n) :- alpha__size(a, s), n = s / 0.", "division_by_zero"),
     "divisor-not-constant": (".decl p(a: symbol, n: number)\np(a, n) :- alpha__size(a, s), n = 60 / s.",
                              "divisor_not_constant"),
-    # Review of #208: a constant outside BIGINT is no value on any engine (SQL casts it to BIGINT).
+    # a constant outside BIGINT is no value on any engine (SQL casts it to BIGINT).
     "constant-out-of-range": (".decl p(a: symbol, n: number)\np(a, n) :- alpha__size(a, s), n = 9223372036854775808 - 1.",
                               "constant_out_of_range"),
     "constant-out-of-range-in-a-literal": (".decl p(a: symbol)\np(a) :- alpha__size(a, -9223372036854775809).",
                                            "constant_out_of_range"),
-    # Review of #13: a relation without columns would give SELECT DISTINCT FROM.
+    # a relation without columns would give SELECT DISTINCT FROM.
     "no-columns": (".decl p()\np() :- alpha(\"a\").", "at least one column"),
     # A body of aggregates only is a rule; a body of negations only, also beside aggregates, is not.
     "negations-only": (".decl p(x: symbol)\np(\"a\") :- !alpha(\"a\").", "no_positive_literal"),
@@ -505,7 +505,7 @@ def on_demand(**rules):
 
 @pytest.mark.parametrize("names", [("a", "b", "c", "d", "e"), ("a", "b", "z", "d", "e")], ids=["c-first", "d-first"])
 def test_a_new_part_when_it_keeps_the_chain_shorter(fixture, names):
-    """Review of #34: budget 2, one view each, c reads a and e reads d. Two parts in a row, not three,
+    """Budget 2, one view each, c reads a and e reads d. Two parts in a row, not three,
     whichever of c and d comes first."""
     a, b, c, d, e = names
     with_rules(fixture, core=on_demand(**{a: "alpha(x)", b: "beta(x)", c: f"{a}(x)", d: "alpha__title(x, _)", e: f"{d}(x)"}))
@@ -519,7 +519,7 @@ def test_a_new_part_when_it_keeps_the_chain_shorter(fixture, names):
 
 
 def test_a_part_keeps_its_name_when_an_earlier_part_empties(fixture):
-    """Review of #34: budget 1, parts a, b and c; without b, c stays rules-3 (the cache of its pipeline)."""
+    """Budget 1, parts a, b and c; without b, c stays rules-3 (the cache of its pipeline)."""
     with_rules(fixture, core=on_demand(a="alpha(x)", b="beta(x)", c="alpha__title(x, _)"))
     first = json.loads(emit.compile_pack(pack.read(fixture), max_views=1)["engine/pipelines.json"])
     assert [(p["name"], p["views"]) for p in first["pipelines"][1:]] == [("rules-1", ["a"]), ("rules-2", ["b"]), ("rules-3", ["c"])]
@@ -615,7 +615,7 @@ OPEN_REFUSED = {
     "negation-over-open": (".decl paired(a: symbol)\npaired(a) :- beta__alpha(_, a).\n"
                            ".decl lonely(a: symbol)\nlonely(a) :- alpha(a), !paired(a).", "negation_over_open"),
     "negation-over-open-table": (".decl lonely(a: symbol)\nlonely(a) :- alpha(a), !beta(a).", "negation_over_open"),
-    # Review of #63: a count over an open relation is what is recorded; n = 0 is no evidence of none.
+    # a count over an open relation is what is recorded; n = 0 is no evidence of none.
     "count-zero-over-open": (".decl alone(a: symbol)\nalone(a) :- alpha(a), n = count : { beta__alpha(_, a) }, n = 0.",
                              "aggregate_over_open"),
     # W6 is the same without a group key: the number of rows recorded is no number of what exists.
@@ -655,7 +655,7 @@ def schema_with(d: Path, edit) -> Path:
 
 
 WORLD_PLACES = {
-    # Review of #63: an open subkind would share closed tables with its parent.
+    # an open subkind would share closed tables with its parent.
     "subkind": (lambda s: s["classes"].update(Gamma={"is_a": "Alpha", "annotations": {"world": "open"}}),
                 "world goes on the root kind"),
     "identifier": (lambda s: s["classes"]["Alpha"]["attributes"]["id"].update(annotations={"world": "open"}),
@@ -714,7 +714,7 @@ def test_an_outcome_has_a_kind_a_state_and_a_reason(fixture):
     prog = ir.load(model.rules)
     assert prog.relations["pairing"].outcome == "alpha" and prog.relations["pairing"].world == "closed"
     # partner reads an open relation behind the known row of an outcome: complete for known elements only,
-    # so it stays open (review of #67), and only an @absence relation may negate it
+    # so it stays open, and only an @absence relation may negate it
     assert prog.relations["partner"].world == "open"
     files = emit.compile_pack(model)
     rel = {r["id"]: r for r in json.loads(files["bundle/schema-bundle.json"])["relations"]}["pairing"]
@@ -741,8 +741,8 @@ OUTCOME_REFUSED = {
                         'o(a, "unknown", r) :- alpha__title(a, r).', "the reason is a constant"),
     "open": ('// @outcome alpha\n.decl o(a: symbol, state: symbol, reason: symbol)\n'
              'o(a, "known", "") :- beta__alpha(_, a).', "must be closed"),
-    # Review of #67: the known row of a1 says nothing about a2; seen(x) stays open, so !seen(x) is refused.
-    # Review of #67: d is complete only where pairing is known; for an unknown element d is missing because
+    # the known row of a1 says nothing about a2; seen(x) stays open, so !seen(x) is refused.
+    # d is complete only where pairing is known; for an unknown element d is missing because
     # the guard failed, so !d(v) would conclude too much.
     "negation-over-a-guarded-relation": (OUTCOME + '.decl d(v: symbol)\nd(v) :- pairing(v, "known", _), beta__alpha(_, v).\n'
                                          '.decl r(v: symbol)\nr(v) :- alpha(v), !d(v).', "negation_over_open"),
@@ -778,7 +778,7 @@ def test_the_outcome_checks_find_a_missing_row_and_two_states(fixture):
     assert run(head + small + known) == {"sizing__total": [], "sizing__state": []}
     assert run(head + small) == {"sizing__total": ["a2"], "sizing__state": []}
     assert run(head + small + known + spare) == {"sizing__total": [], "sizing__state": ["a1"]}
-    # Review of #67: a row for an element that is not there is caught too.
+    # a row for an element that is not there is caught too.
     ghost = 'sizing("ghost", "unknown", "small") :- alpha(a).\n'
     assert run(head + small + known + ghost) == {"sizing__total": ["ghost"], "sizing__state": []}
 
@@ -959,7 +959,7 @@ def test_generated_bodies_of_aggregates_only_equal_souffle_as_sets(seed, tmp_pat
     assert batch.read(con, prog) == souffle.run(prog, data, tmp_path)
 
 
-# A counter with an explicit bound (#351 P6.2): the shape of a depth from seeds along steps. What it computes,
+# A counter with an explicit bound: the shape of a depth from seeds along steps. What it computes,
 # against a reference and Soufflé, is in test_bound.py.
 COUNTER = """
 .decl step(a: symbol, b: symbol)

@@ -22,4 +22,5 @@ expect:
   same_hash_as: E02
 note: E02 in the JSON form of §4a; the question hash is the SHA-256 of canonical JSON (RFC 8785).
 sources:
-- '#350 P10.2a §11'
+- rezono/src/print.ts
+- rezono/src/normal.ts

@@ -6,7 +6,7 @@
 #   id         a stable slug; values.md refers to it
 #   topic      the section of values.md it tests
 #   input      what is evaluated: a slot, a row set, an expression or a document
-#   status     settled  decided: by a decision, an owner decision, or #350/#369 specs that agree;
+#   status     settled  decided: by a decision, an owner decision, or language and publication specifications that agree;
 #                       where main does not do it yet, `current` says what it does instead,
 #                       and a settled case without `agree` is not built yet;
 #              open     they disagree (values.md §8.2), so the case is a proposal;
@@ -17,11 +17,11 @@
 #   current    what main at `commit` gives instead, per place (code, contract, fixture or a doc on
 #              main), as {at, gives}; always on open and gap cases, and on settled cases not built
 #              yet. The places are those of `commit`; B06 verifies them again on its own base.
-#   conflicts  open and gap cases: specs not yet in code (#350, #369) that say something else
+#   conflicts  open and gap cases: specs not yet in code that say something else
 #   agree      places on main that already give the expected or proposed result
 #   sources    where the expected or proposed result comes from
 #
-# Unless a case says otherwise, the schema is the P10.2a fixture (#350 comment 6746174497, §2)
+# Unless a case says otherwise, the schema comes from rezono/test/fixture.schema.json
 # and the data its Appendix B: host-a owner unknown not_assigned, memory_need 400 GiB; host-b owner
 # n/a, 200 GiB; host-c owner team-platform, 512 GiB; host-d owner n/a, memory_need unknown no_spec.
 # Truth values: T true, F false, N n/a, U unknown, I invalid.
@@ -105,7 +105,7 @@ cases:
     topic: "§6 rule 8"
     input: {slot: "Host.owner (optional)", rows: "no host__owner row for host-b", reader: viewer}
     proposed: {state: not_applicable, reason: "", display: "n/a label, not hatched"}
-    sources: [W1, "#351 F3"]
+    sources: [W1]
     agree: ["contracts/calc.yaml:52"]
     current:
       - {at: "viewer/src/lib/data/gate.ts:287", gives: "no cell for a missing row"}
@@ -162,7 +162,7 @@ cases:
     topic: "§2.3, K1"
     input: {value: "owner of host-a", stored: "unknown, reason not_assigned"}
     proposed: {state: unknown, reason: not_assigned, wire: '{"state": "unknown", "reason": "not_assigned"}'}
-    sources: ["JSON-LS L0 §3.3", "#394 report A §13 point 2"]
+    sources: ["JSON-LS L0 §3.3"]
     current:
       - {at: "contracts/value.yaml:28", gives: "Value has no reason member"}
       - {at: "checker/rezono_checker/snapshots.py:40", gives: "extra members refused, so a reason cannot travel"}
@@ -253,7 +253,7 @@ cases:
     sources: [W6]
     agree: ["compiler/rezono_compiler/pack.py:290", "contracts/bundle.yaml:129"]
     conflicts:
-      - {at: "Rezono v0 §5 (#350)", gives: "default world open"}
+      - {at: "Rezono v0 §5", gives: "default world open"}
     status: open
 
   - id: world-closed-absent
@@ -408,7 +408,7 @@ cases:
     topic: "§3.3"
     input: {check: "check Host: owner = team-platform", data: "Appendix B"}
     expect: {violations: [], undecided: [{binder: host-a, state: unknown, reason: not_assigned}], counted: "per role, in the manifest summary and on the attention strip", publication: "not blocked"}
-    sources: ["owner decision on Rezono v0 open point 3 (#350 comment 6751612214)", "Rezono v0 §7b"]
+    sources: ["rezono/README.md, What a check statement decides", "Rezono v0 §7b"]
     note: "host-b and host-d are n/a: the check does not apply to them. A check over total inputs is never undecided (Rezono v0 §5d)."
     current:
       - {at: "docs/compiler.md:112", gives: "a check is a violation view: a row is a violation (invalid), no row passes; there is no undecided violation"}
@@ -418,7 +418,7 @@ cases:
     topic: "§3.3"
     input: {require: "require Host: owner = team-platform", data: "Appendix B"}
     expect: {undecided: [{binder: host-a, state: unknown, reason: not_assigned}], publication: "blocked (fail-closed)"}
-    sources: ["owner decision on Rezono v0 open point 3 (#350 comment 6751612214)"]
+    sources: ["rezono/README.md, What a check statement decides"]
     current:
       - {at: "docs/compiler.md:112", gives: "no require; a violation view has no undecided result"}
     status: settled
@@ -427,7 +427,7 @@ cases:
     topic: "§3.3"
     input: {check: "a check whose condition reads a rule value with two versions valid on valid_at, known on the same date"}
     expect: {state: invalid, reason: versions_overlap, publication: "blocked"}
-    sources: ["owner decision on Rezono v0 open point 3 (#350 comment 6751612214)", "Rezono v0 §5a"]
+    sources: ["rezono/README.md, What a check statement decides", "Rezono v0 §5a"]
     note: "Whether two versions give invalid versions_overlap is itself still open (case version-overlap); given that value, the check blocks."
     current:
       - {at: "docs/decisions.md W10", gives: "one version wins by order, so the check sees a known value"}
@@ -437,7 +437,7 @@ cases:
     topic: "§3.3"
     input: {warn: "warn Host: owner = team-platform", data: "Appendix B, and host-x owner invalid"}
     expect: {publication: "never blocked, for false, unknown or invalid"}
-    sources: ["owner decision on Rezono v0 open point 3 (#350 comment 6751612214)"]
+    sources: ["rezono/README.md, What a check statement decides"]
     current:
       - {at: "docs/compiler.md:112", gives: "no warn or norm; every violation row is invalid"}
     status: settled
@@ -555,7 +555,7 @@ cases:
     topic: "§4 effective world, K4, K6"
     input: {ask: "ask Host where owner = team-platform", role: viewer, worlds: ["host__owner row of host-a hidden from viewer", "that row absent"], read_rules: "viewer does not read host__owner in full"}
     expect: {both_worlds: "byte-identical; rows host-c; undecided host-a (unknown, not_read_in_full); not applicable 2; not_assigned appears in neither"}
-    sources: ["values.md §4 (effective world)", "P10.2a §7a rule 1, E50", "#351 P1.8"]
+    sources: ["values.md §4 (effective world)", "P10.2a §7a rule 1, E50"]
     agree: ["rezono/src/evaluate.ts:353", "publication/rezono_publication/publication.py:178", "edge/gate/src/expr.ts:247"]
     status: settled
 
@@ -563,7 +563,7 @@ cases:
     topic: "§4 effective world, K6"
     input: {outcome: "an @outcome over a relation the role does not read in full"}
     proposed: {state: unknown, reason: not_read_in_full}
-    sources: ["values.md §4 (gap)", "#351 P1.8", "#394 report C rank 6"]
+    sources: ["values.md §4 (gap)"]
     current:
       - {at: "docs/compiler.md 'Named outcomes', Access", gives: "no state for that element at all, not unknown"}
       - {at: "viewer/src/lib/outcome.ts:66", gives: "an absent outcome displays as n/a"}
@@ -573,7 +573,7 @@ cases:
     topic: "§4 effective world, K4, K6"
     input: {expr: "the sum of invoice_cents over the runs of one month", role: "finance role that reads only some runs"}
     proposed: {state: unknown, reason: not_read_in_full}
-    sources: ["#351 P1.8", "values.md §4 (gap)"]
+    sources: ["values.md §4 (gap)"]
     current:
       - {at: "edge/publisher/rezono_publisher/access.py:172", gives: "an aggregate needs a full read, so the total is withheld: the role sees nothing, not unknown with a reason"}
     status: gap
@@ -620,7 +620,7 @@ cases:
     topic: "§5"
     input: {view: "a sheet that hides the owner column"}
     proposed: {cells: "every shown cell keeps its RowRef, cardinality, state and reason; the hidden column is not shown as blank or unknown"}
-    sources: ["#351 F3"]
+    sources: []
     current:
       - {at: "viewer/src/lib/data/gate.ts:287", gives: "flat cells without RowRef or reason; a missing cell becomes unknown"}
     status: open

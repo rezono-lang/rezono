@@ -1,4 +1,4 @@
-# Version 1 of the predicate has no place for previous, not even an empty one (ruling on #886, condition (b)).
+# Version 1 of the predicate has no place for previous, not even an empty one.
 _type: https://in-toto.io/Statement/v1
 predicate:
   annotation: 03d2c1cfcc17ed2b25088eb6b527dbb8cc3b9de5becadf58acaf0dc5a9f0b8b2

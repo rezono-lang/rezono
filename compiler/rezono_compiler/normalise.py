@@ -1,4 +1,4 @@
-"""The semantic normal form of the rule IR, and its hash (D08; #351 P10.3, #394 A5).
+"""The semantic normal form of the rule IR, and its hash (D08).
 
 Two rules that say the same thing in other words get one normal form, so one semantic hash. This hash answers
 another question than the hashes of the sources: the definition hash (`modules.pack_hash`) pins the bytes of a

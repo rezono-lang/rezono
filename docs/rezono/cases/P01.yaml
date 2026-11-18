@@ -14,5 +14,4 @@ expect:
     blocking: []
 note: An unknown check publishes one undecided violation row, counted.
 sources:
-- '#350/6751612214 owner settlement, point 3'
-- '#350 v0 §5, §7b'
+- rezono/README.md, What a check statement decides

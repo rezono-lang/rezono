@@ -25,4 +25,4 @@ expect:
   accept: false
   error: JSON-LD processing error `protected term redefinition`
 sources:
-- '#369 L0 rev 2 §8'
+- publication/rezono_publication/rdf.py, expand

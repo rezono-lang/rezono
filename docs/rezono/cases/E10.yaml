@@ -10,4 +10,4 @@ expect:
       start: 15
       end: 32
 sources:
-- '#350 P10.2a §11'
+- rezono/src/check.ts

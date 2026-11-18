@@ -169,7 +169,7 @@ def test_joins_follow_shared_variables_and_a_product_has_none():
 
 
 def test_a_filter_is_applied_before_the_next_join(monkeypatch):
-    """Review of #540 (P2): `a(x), b(y)` with a condition on x alone must not carry the whole product. Each
+    """`a(x), b(y)` with a condition on x alone must not carry the whole product. Each
     condition and negation is applied as soon as its variables are bound, so the join sees what is left."""
     doc = program([relation("left", "base", "id"), relation("right", "base", "id"), relation("off", "base", "id"),
                    relation("pair", "derived", "a", "b")],

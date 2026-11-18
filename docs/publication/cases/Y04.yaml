@@ -12,5 +12,4 @@ expect:
   - epoch
   - hash
 note: Runs with subscriptions (P10.10, tier 3).
-sources:
-- '#369 L0 rev 2 §8'
+sources: []

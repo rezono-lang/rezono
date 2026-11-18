@@ -46,4 +46,4 @@ expect:
     - '{"at":"2026-01-01.."}'
     - '2025-09-16'
 sources:
-- '#369 L0 rev 2 §8'
+- publication/rezono_publication/l0.py, read_rows

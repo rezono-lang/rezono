@@ -6,4 +6,5 @@ expect:
   print: ask Host where memory_need > 384 GiB or owner is unknown and provider = cherry
   grouping: (memory_need > 384 GiB) or ((owner is unknown) and (provider = cherry))
 sources:
-- '#350 P10.2a §11'
+- rezono/src/print.ts
+- rezono/src/grammar.ts
