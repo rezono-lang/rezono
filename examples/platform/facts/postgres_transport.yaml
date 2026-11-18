@@ -1,0 +1,8 @@
+vendor_default_transport:
+  - id: postgresql-17
+    product: postgresql
+    series: '17'
+    protocol: TCP
+    port: 5432
+    source_url: https://www.postgresql.org/docs/17/runtime-config-connection.html
+    source_sha256: 3a2e5620073f7cbdd2f8e5e31c42e8e68945d040a2a8a9597e919f7f648dfb28
