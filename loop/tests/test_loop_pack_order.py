@@ -9,7 +9,6 @@ import yaml
 from pack_records import LOOP, ORDER, evaluate, records
 
 
-@pytest.mark.xfail(strict=True, reason="Read decisions/loop-design.md. Depends on test_loop_pack_inputs and the six public relation fragments (needed, known, waiting, ready, done, stuck). Finish production assembly in packs/std-loop/pack.yaml and its schema/adapter for every loaded rule including drift. Pin the current std-order bytes, including its latest reviewed definition. Preserve each fragment's existing behavior.")
 def test_loop_pack_order():
     from rezono_compiler import modules, pack
 
