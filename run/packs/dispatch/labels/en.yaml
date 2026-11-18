@@ -1,0 +1,15 @@
+candidate: dispatch candidate
+candidate.plan_hash: plan digest
+candidate.approval_hash: approved plan digest
+candidate.currency: plan currency
+candidate.approval_currency: approval currency
+candidate.decision: approval decision
+candidate.cost_micros: payable amount in millionths
+candidate.cap_micros: approved ceiling in millionths
+candidate.event_us: recorded time in microseconds
+candidate.expires_us: approval expiry in microseconds
+approval_decision: approval decision
+approval_decision.approve: approve
+approval_decision.decline: decline
+conflicting_input: conflicting candidate evidence
+authorized: authorized candidate
