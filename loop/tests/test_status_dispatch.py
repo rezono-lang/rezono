@@ -131,6 +131,41 @@ def test_status_uses_the_grounded_instant_and_keeps_other_runs_independent():
     assert [state for state, _ in provider.published(sha)] == ["success", "failure", "success"]
 
 
+def test_separate_reports_for_the_same_instant_require_complete_conflict_evidence():
+    from loop.status_dispatch import report_step
+
+    sha = "ac" * 20
+    proposal = {"commit": sha, "accepted": True}
+    step, done, stuck = dated_observations()
+    stuck = {**stuck, "at": "2026-01-01T01:02:00+01:00"}
+    provider = CommitStatuses()
+    proof_url = "https://example.org/status-evidence/complete"
+
+    report_step(provider.client(), "example", "delivery", proposal, step, [done])
+    report_step(provider.client(), "example", "delivery", proposal, step, [stuck],
+                publish_evidence=lambda _: stuck["reason"])
+    assert provider.published(sha) == [("success", done["reason"])]
+
+    # Two agreeing waiting sources contain no evidence of the previous completion.
+    waiting = [{**row, "relation": "waiting"} for row in (done, stuck)]
+    report_step(provider.client(), "example", "delivery", proposal, step, waiting,
+                publish_evidence=lambda _: "https://example.org/status-evidence/waiting")
+    unrelated = {**done, "reason": "https://example.org/unrelated"}
+    report_step(provider.client(), "example", "delivery", proposal, step, [unrelated, stuck],
+                publish_evidence=lambda _: "https://example.org/status-evidence/unrelated")
+    assert provider.published(sha) == [("success", done["reason"])]
+
+    def publish_evidence(projection):
+        assert projection.reasons == {done["reason"], stuck["reason"]}
+        assert len(projection.proofs) == 2
+        return proof_url
+
+    report_step(provider.client(), "example", "delivery", proposal, step, [done, stuck],
+                publish_evidence=publish_evidence)
+    report_step(provider.client(), "example", "delivery", proposal, step, [done])
+    assert provider.published(sha) == [("success", done["reason"]), ("pending", proof_url)]
+
+
 def test_conflicting_status_requires_a_link_to_the_complete_proof():
     from loop.status_dispatch import report_step
 

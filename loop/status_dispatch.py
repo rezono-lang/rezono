@@ -45,7 +45,9 @@ def report_step(
     prefix = f"Rezono event {canonical_sha256(step['run'])} "
     at = instant(projection.latest_at) if projection.latest_at else None
     if at is not None:
-        value["description"] = prefix + projection.latest_at
+        # A source fingerprint identifies the earlier ground when a conflict is reported later.
+        source = "-" if projection.conflicts else canonical_sha256(min(projection.reasons))
+        value["description"] = f"{prefix}{projection.latest_at} {source}"
 
     def read(key: StatusKey) -> Status | None:
         return read_status(request, owner, repo, *key)
@@ -57,8 +59,15 @@ def report_step(
         description = latest.get("description", "")
         if not description.startswith(prefix):
             return False
-        previous_at = instant(description[len(prefix):])
-        return (at is None or previous_at > at
-                or (previous_at == at and latest["state"] == value["state"] and latest["evidence"] == evidence))
+        timestamp, _, source = description[len(prefix):].partition(" ")
+        previous_at = instant(timestamp)
+        if at is None or previous_at > at:
+            return True
+        if previous_at < at:
+            return False
+        return publish_evidence is None or not any(
+            state == latest["state"] and canonical_sha256(reason) == source
+            for state, reason in projection.conflicts
+        )
 
     publish(key, value, read, write, supersedes=supersedes)
