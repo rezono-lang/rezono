@@ -3,7 +3,6 @@ import pytest
 from offline_cases import relation
 
 
-@pytest.mark.xfail(strict=True, reason="Read decisions/run-offline-acceptance.md. Implement run/packs/cleanup-deadline.")
 def test_cleanup_deadline():
     facts = {"attempt": [(x,) for x in ("late", "early", "clean", "planned", "unknown")],
              "attempt__state": [("late", "applied"), ("early", "applied"), ("clean", "cleaned"),
