@@ -76,10 +76,11 @@ def test_a_confirmed_disagreement_requires_complete_comparison_evidence(tmp_path
         "from feldera import comparing\n\ndef test_difference():\n"
         "    with comparing():\n        assert {'expected'} == {'observed'}\n", encoding="utf-8")
     report = tmp_path / "results.xml"
-    env = {**os.environ, "PYTHONPATH": os.pathsep.join(sys.path)}
+    env = {**os.environ, "PYTHONPATH": os.pathsep.join(str(Path(path).resolve()) for path in sys.path),
+           "PYTEST_DISABLE_PLUGIN_AUTOLOAD": "1"}
     run = subprocess.run([sys.executable, "-m", "pytest", "-q", str(source), f"--junitxml={report}"],
-                         env=env, capture_output=True, timeout=30)
-    assert run.returncode == 1
+                         cwd=tmp_path, env=env, capture_output=True, text=True, timeout=30)
+    assert run.returncode == 1, run.stdout + run.stderr
     message = ET.parse(report).find(".//failure").attrib["message"]
     assert incident.disagreements(*records({CASES[0]: message})) == [junit_key(CASES[0])[1]]
 
