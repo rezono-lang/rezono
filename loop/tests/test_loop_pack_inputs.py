@@ -8,7 +8,6 @@ import yaml
 from pack_records import LOOP, ORDER, evaluate, records
 
 
-@pytest.mark.xfail(strict=True, reason="Read decisions/loop-design.md. Implement packs/std-loop/schema, its labels/channels and packs/std-loop/rules/loop_inputs.dl. Adapt typed fact rows to the existing fragment signatures. This isolated loading test can start before the other fragments land.")
 def test_loop_pack_inputs(tmp_path):
     from rezono_compiler import modules, pack
 

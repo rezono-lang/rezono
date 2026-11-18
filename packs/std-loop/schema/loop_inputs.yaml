@@ -1,0 +1,39 @@
+id: https://rezono.org/std-loop/inputs
+name: std_loop_inputs
+description: Run-scoped declarations and observations for an immutable reconciliation plan.
+imports: [linkml:types, std-order:order]
+default_range: string
+annotations:
+  layer: facts
+
+classes:
+  LoopStep:
+    is_a: Ordered
+    description: A step in the plan, with precedence inherited from std-order.
+  LoopActiveRun:
+    description: The run selected for evaluation. Historical events keep their own run identifiers.
+    attributes:
+      id: {identifier: true}
+  LoopCompletion:
+    description: A source declaration naming the token that confirms completion of a step.
+    attributes:
+      id: {identifier: true}
+      run: {required: true}
+      step: {range: LoopStep, required: true}
+      token: {required: true}
+      reason: {required: true}
+  LoopExpectation:
+    description: The expected comparison value identified by its token.
+    attributes:
+      id: {identifier: true}
+      value: {required: true}
+  LoopObservation:
+    description: A recorded event with its normalized value state and separate evidence reference.
+    attributes:
+      id: {identifier: true}
+      run: {required: true}
+      token: {required: true}
+      event_time: {range: integer, required: true}
+      state: {required: true}
+      value: {required: true}
+      reason: {required: true}
