@@ -19,6 +19,21 @@ Declare cluster identity, cluster role, control hosting policy, worker hosting p
 
 CI must compare the complete portable relation inventory and each relation's complete tuple set between the independently calculated reference and the engine. Cover cluster ownership and hosts, guest network identity, network layer, machine inputs, endpoint addresses, flows, both rule projections, positive and negative cases, excess-access evidence and findings. Treat an absent relation, unexpected relation or extra row as a failure, including for empty expected sets. Compare typed values and report the first differing relation with one missing or unexpected tuple. Test both the original fixture and the renamed fixture. Re-running the independent writer alone cannot establish engine agreement.
 
+### Network and machine selections
+
+The operator selects policy and observation products once in a `NetworkStackChoice` fact
+(`policy`, `observation`), and an operating system and Kubernetes distribution once in a
+`MachineStackChoice` fact (`os`, `distribution`). These choices originate in the scenario's
+network and machine stack declarations. Cluster placement alone cannot determine a product.
+
+The network module joins the selected pair to the owner in each derived `cluster_control_host`
+row. Its inputs are available independently of worker placement. The machine module consumes
+the worker-network module's machine identities and actual `cluster_worker_host` rows.
+A machine-stack result retains the node, owner, physical worker host and bootstrap artifact.
+Changing either selection updates the products for every eligible row. Each module owns its
+own rule, schema and fact fragment. The stack fragments describe valid selections and local
+artifact metadata, with zero standalone integrity violations.
+
 ## Compute negative cases from all applicable permissions
 
 A candidate consists of source, listening destination, protocol and port. Keep the listener inventory independent of permissions. First union all applicable firewall allowances. A cross-zone candidate outside that union has a firewall-denial witness. For remaining candidates, evaluate the applicable service-isolation policies, including same-zone traffic. A denied candidate at this stage has a service-isolation witness. Report a positive case only if every applicable layer permits it. Keep excess firewall reachability visible even when service isolation blocks the final connection.
