@@ -1,0 +1,2 @@
+network_stack_choice:
+  - {id: selected, policy: Cilium, observation: Hubble}
