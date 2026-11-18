@@ -39,15 +39,16 @@ def case_file(case_id):
     return case
 
 
-def cases(engine):
+def cases(engine, route="rules"):
     runnable = []
     for path in sorted(DIRECTORY.glob("*.yaml")):
         if path.name != "sources.yaml":
             case = case_file(path.stem)
             payload = case["input"]
-            if "rules" not in payload:
+            if route not in payload:
                 continue
-            assert "select" in payload, f"{case['id']}: a rule replay needs its selected subject"
+            if route == "rules":
+                assert "select" in payload, f"{case['id']}: a rule replay needs its selected subject"
             reason = case.get("unsupported", {}).get(engine)
             runnable.append(pytest.param(case, id=case["id"], marks=pytest.mark.skip(reason=reason)) if reason
                             else pytest.param(case, id=case["id"]))

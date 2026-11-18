@@ -1,0 +1,21 @@
+id: value-value-reason
+source: docs/semantics/value-cases.yaml#value-reason
+status: settled
+input:
+  rows:
+    - key: [item-a]
+      values:
+        label: {state: unknown, reason: not_assigned}
+  snapshot:
+    key: [item-a]
+    slot: label
+    rejected:
+      key: [item-a]
+      values:
+        label: {state: unknown, reason: owner not assigned}
+expect:
+  value: null
+  state: unknown
+  reason: not_assigned
+  witness: null
+  refusal: reason is not a reason code
