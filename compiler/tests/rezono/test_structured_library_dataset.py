@@ -16,7 +16,6 @@ def literal(value):
     return {"lit": json.dumps(value)}
 
 
-@pytest.mark.xfail(strict=True, raises=(AssertionError, facts.LoadError), reason="Decode structured and omitted dataset cells via facts.document and facts.load in compiler/rezono_compiler/facts.py. Read decisions/language-library-datasets.md. Waits for test_named_dataset_discovery and test_scalar_dataset_rows (shared facts.py).")
 def test_structured_library_dataset(tmp_path):
     omitted = {"boundary": "omitted"}
     works = {"fact": "Work", "columns": ["id", "title", "category", "year", "authors"], "rows": [

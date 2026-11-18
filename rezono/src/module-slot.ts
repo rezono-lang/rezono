@@ -1,9 +1,8 @@
+import { printMetadata, readMetadataLine, type Metadata } from './module-metadata.ts';
 import { printSlotPattern, slotPattern, type PatternConstraint } from './module-slot-pattern.ts';
 import { block, named, opt, printWorld, typeOf, type Build, type Card, type Line, type Logical, type World, type ModuleComponent } from './module-support.ts';
 
-type SlotConstraint = PatternConstraint;
-
-export interface SlotDecl {
+export interface SlotDecl extends Metadata {
 	slot: string;
 	type: string;
 	card?: Card;
@@ -11,29 +10,35 @@ export interface SlotDecl {
 	world?: World;
 	identifier?: true;
 	embedded?: true;
-	constraints?: SlotConstraint[];
+	slotUri?: string;
+	constraints?: PatternConstraint[];
 }
 
 export function readSlot(line: Logical, build: Build): SlotDecl {
-	const decl = build.strip<SlotDecl>(line.read!);
+	const slot = build.strip<SlotDecl>(line.read!);
 	for (const child of line.block) {
-		if (child.read!.line !== 'slot-pattern') {
-			build.refuse(child, 'no line under this one');
-			continue;
+		if (readMetadataLine(slot, child, build)) continue;
+		if (child.read!.line === 'slot-pattern') {
+			build.leaf(child);
+			if (slot.constraints?.some(constraint => 'pattern' in constraint)) build.refuse(child, 'one pattern constraint per slot');
+			else (slot.constraints ??= []).push(build.strip<PatternConstraint>(child.read!));
+		} else if (child.read!.line !== 'iri') build.refuse(child, 'no line under this one');
+		else {
+			build.leaf(child);
+			if (slot.slotUri !== undefined) build.refuse(child, 'one slot IRI');
+			else if (typeof child.read!.value !== 'string') build.refuse(child, 'a JSON string');
+			else slot.slotUri = child.read!.value;
 		}
-		build.leaf(child);
-		if (decl.constraints) {
-			build.refuse(child, 'one pattern constraint per slot');
-			continue;
-		}
-		decl.constraints = [build.strip<PatternConstraint>(child.read!)];
 	}
-	return decl;
+	return slot;
 }
 
 export function printSlot(s: SlotDecl): string[] {
-	const head = `${s.slot}: ${s.type}${s.card ?? ''}${s.inverse !== undefined ? ` inverse ${s.inverse}` : ''}${printWorld(s.world)}${s.identifier ? ' identifier' : ''}${s.embedded ? ' embedded' : ''}`;
-	return block(head, (s.constraints ?? []).map(printSlotPattern));
+	return block(`${s.slot}: ${s.type}${s.card ?? ''}${s.inverse !== undefined ? ` inverse ${s.inverse}` : ''}${printWorld(s.world)}${s.identifier ? ' identifier' : ''}${s.embedded ? ' embedded' : ''}`, [
+		...(s.slotUri === undefined ? [] : [`iri ${JSON.stringify(s.slotUri)}`]),
+		...printMetadata(s),
+		...(s.constraints ?? []).map(printSlotPattern)
+	]);
 }
 
 export const slot = {
