@@ -122,3 +122,7 @@ starts with a fresh disk, cluster state and bootstrap material. Keep the
 existing host acceptance criteria. The operator has no action for this CI
 verification; the real provider run remains gated on separate approval.
 [Host trial and acceptance assertions](https://github.com/rezono-lang/rezono/pull/88)
+
+The [concluding host trial and Ubuntu decision](ubuntu-outer-worker.md) selects
+the next worker image for both disposable acceptance trials and records the
+remaining live evidence.
