@@ -55,7 +55,7 @@ def main():
         "python_requires": ">=3.11", "install_requires": dependencies,
         "extras_require": {"s3": ["boto3>=1.35.10"]},
         "packages": ["rezono_canon"], "package_dir": {"rezono_canon": "canon/rezono_canon"}, "cmdclass": {"build_py": Build},
-        "license_files": ["LICENSE", "NOTICE", "LICENSES/*.txt"],
+        "license_files": ["LICENSE", "NOTICE", *(f.as_posix() for f in sorted(Path("LICENSES").glob("*.txt")))],
         "entry_points": {"console_scripts": [
             "rezono=rezono_compiler.__main__:main", "rezono-checker=rezono_checker.__main__:main",
             "rezono-publish=rezono_publisher.__main__:main",
