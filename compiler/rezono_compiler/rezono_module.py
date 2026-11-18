@@ -35,6 +35,7 @@ PACKAGED_READER = Path(__file__).with_name("module_reader") / "src" / "write-for
 CHECKOUT_READER = Path(__file__).resolve().parents[2] / DIR / "src" / "write-form.ts"
 KEY = "rezono"  # the key of pack.yaml (contract RezonoModule in contracts/pack.yaml)
 PAGE = "docs/rezono/publication.md"
+DATASET_FORMAT = "rezono.module/2"
 PATH = re.compile(r"^rezono/[a-z][a-z0-9_]*(/[a-z][a-z0-9_]*)*\.(rezono|json)$")
 # The built-in slot types (§5.1) and their LinkML ranges.
 TYPES = {"Bool": "boolean", "Date": "date", "Text": "string"}
@@ -75,8 +76,9 @@ class Lowered:
     uses: list[str] = field(default_factory=list)  # module ids within the pack, sorted
 
 
-def declared(meta: dict, pack_dir: Path, errors: list[str], *, reject_undeclared: bool = True) -> list[Declared]:
-    """Check the declared paths and layers. Pack compilation also refuses files absent from the manifest."""
+def declared(meta: dict, pack_dir: Path, errors: list[str], *, reject_undeclared: bool = True,
+             include_datasets: bool = False) -> list[Declared]:
+    """Check declared paths and layers, then select modules for schema lowering or fact discovery."""
     from .pack import LAYERS  # pack imports modules, which imports this module
 
     where = f"{pack_dir.name}/pack.yaml: {KEY}"
@@ -109,8 +111,13 @@ def declared(meta: dict, pack_dir: Path, errors: list[str], *, reject_undeclared
         if layer not in LAYERS:
             errors.append(f"{at}: layer must be one of {LAYERS}, not {layer!r}")
             ok = False
-        if ok:
-            out.append(Declared(module, form, layer))
+        if not ok:
+            continue
+        if not include_datasets and is_dataset_form(pack_dir / form):
+            if meta.get("theory") is True:
+                errors.append(f"{pack_dir.name}/{form}: a theory pack cannot contain fact files")
+            continue
+        out.append(Declared(module, form, layer))
     if reject_undeclared and (pack_dir / DIR).is_dir():
         for p in sorted((pack_dir / DIR).rglob("*")):
             rel = p.relative_to(pack_dir).as_posix()
@@ -234,6 +241,28 @@ def module_body(form: object, expected_format: str) -> dict | None:
             or not module.keys() <= {"rezono", "pack", "use", "decls"}):
         return None
     return module
+
+
+def named_dataset(module: dict) -> dict | None:
+    """Recognize the single named declaration handled by the fact loader."""
+    declarations = module["decls"]
+    if len(declarations) != 1 or not isinstance(declarations[0], dict):
+        return None
+    dataset = declarations[0]
+    if (dataset.keys() == {"dataset", "decls"} and isinstance(dataset["dataset"], str)
+            and dataset["dataset"] and isinstance(dataset["decls"], list)):
+        return dataset
+    return None
+
+
+def is_dataset_form(path: Path) -> bool:
+    """Dispatch only recognized dataset forms; leave other documents to ordinary schema validation."""
+    try:
+        doc = json.loads(path.read_bytes())
+    except (OSError, ValueError):
+        return False
+    module = module_body(doc, DATASET_FORMAT)
+    return module is not None and named_dataset(module) is not None
 
 
 def header_errors(module: dict, pack: str) -> Iterator[tuple[str, str, str]]:
