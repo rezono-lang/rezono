@@ -29,7 +29,10 @@ def junit_key(node: str) -> tuple[str, str]:
 
 
 def verify(selection: Path, report: Path) -> list[str]:
-    nodes = selection.read_text(encoding="utf-8").splitlines()
+    return check_cases(selection.read_text(encoding="utf-8").splitlines(), ET.parse(report).getroot())
+
+
+def check_cases(nodes: list[str], root: ET.Element) -> list[str]:
     if PLATFORM_TEST not in nodes or LIVE_COMPILER_TESTS.isdisjoint(node.partition("[")[0] for node in nodes):
         raise ValueError("selection needs the platform delta test and a live compiler case")
 
@@ -40,7 +43,6 @@ def verify(selection: Path, report: Path) -> list[str]:
             raise ValueError(f"duplicate collected case: {node!r}")
         expected[key] = node
 
-    root = ET.parse(report).getroot()
     if root.tag not in {"testsuites", "testsuite"}:
         raise ValueError(f"invalid JUnit report root: {root.tag!r}")
 

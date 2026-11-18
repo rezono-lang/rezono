@@ -6,7 +6,7 @@ import json
 
 import pytest
 
-from feldera import URL, deploy, processed, push, query, stop
+from feldera import URL, comparing, deploy, processed, push, query, stop
 from support import compile_dir, expected, load
 from rezono_compiler import facts, pack
 from test_examples import EXAMPLES, name
@@ -41,7 +41,8 @@ def test_feldera_accepts_the_sql_and_finds_the_errors(example, tmp_path):
     ]
     for label, updates, want in steps:
         processed(name, push(name, updates))
-        assert read(name) == (expected(example / "expected" / "violations" / want) if want else {}), label
+        with comparing():
+            assert read(name) == (expected(example / "expected" / "violations" / want) if want else {}), label
     stop(name)
 
 

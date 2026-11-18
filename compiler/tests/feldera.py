@@ -1,13 +1,29 @@
 """A small client for the Feldera HTTP API, for engine tests and measurements (FELDERA_URL)."""
 
+from contextlib import contextmanager
 import json
 import os
+import shutil
 import time
 import urllib.parse
 import urllib.request
 from pathlib import Path
 
+from rezono_compiler import feldera_names
+
 URL = os.environ.get("FELDERA_URL")
+
+
+class OracleMismatch(AssertionError):
+    """A comparison of independently obtained records or witnesses failed."""
+
+
+@contextmanager
+def comparing():
+    try:
+        yield
+    except AssertionError as error:
+        raise OracleMismatch("Feldera comparison differs from its reference") from error
 
 
 def call(method, path, body=None, raw=False):
@@ -53,24 +69,37 @@ def deploy(name, program, profile=None, workers=4, udf_rust="", udf_toml=""):
     compiled = time.time() - start
     call("POST", f"/v0/pipelines/{name}/start")
     wait(name, "deployment_status", {"Running"})
+    record_storage(name, f"compile_seconds={compiled:.2f} start_seconds={time.time() - start - compiled:.2f}")
     return compiled
 
 
-def stop(name):
+def stop(name, *, delete=False):
     call("POST", f"/v0/pipelines/{name}/stop?force=true")
     wait(name, "deployment_status", {"Stopped"})
     call("POST", f"/v0/pipelines/{name}/clear")
     wait(name, "storage_status", {"Cleared"})
+    if delete or os.environ.get("FELDERA_ORACLE_REPORTS"):
+        # The job keeps the isolated compiler and its dependencies warm across programs.
+        # Retire this pipeline's catalog and state before compiling the next one.
+        call("DELETE", f"/v0/pipelines/{name}")
+        record_storage(name, "retired")
+
+
+def record_storage(name, phase):
+    if reports := os.environ.get("FELDERA_ORACLE_REPORTS"):
+        with (Path(reports) / "storage.log").open("a", encoding="utf-8") as log:
+            print(f"{name}: {phase} runner_free_bytes={shutil.disk_usage(reports).free}", file=log)
 
 
 def push(name, updates, chunk=100_000):
     """Send {table: [{"insert"|"delete": row}]} and return the completion tokens."""
     tokens = []
     for table, rows in updates.items():
+        endpoint = urllib.parse.quote(feldera_names.physical(table))
         for k in range(0, len(rows), chunk):
             q = urllib.parse.urlencode({"format": "json", "update_format": "insert_delete", "array": "true"})
             body = json.dumps(rows[k:k + chunk]).encode()
-            tokens.append(call("POST", f"/v0/pipelines/{name}/ingress/{urllib.parse.quote(table)}?{q}", body)["token"])
+            tokens.append(call("POST", f"/v0/pipelines/{name}/ingress/{endpoint}?{q}", body)["token"])
     return tokens
 
 
@@ -84,3 +113,7 @@ def processed(name, tokens):
 def query(name, sql):
     q = urllib.parse.urlencode({"sql": sql, "format": "json"})
     return [json.loads(x) for x in call("GET", f"/v0/pipelines/{name}/query?{q}", raw=True).splitlines() if x]
+
+
+def read_relation(name, relation):
+    return query(name, f"SELECT * FROM {feldera_names.quoted(relation)}")
