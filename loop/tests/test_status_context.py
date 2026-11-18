@@ -6,7 +6,6 @@ from runpy import run_path
 import pytest
 
 
-@pytest.mark.xfail(strict=True, reason="Read decisions/delivery-commit-status.md. Implement loop/status_context.py. Separate tenant and commit status histories.")
 def test_status_context():
     context = run_path(str(Path(__file__).resolve().parents[1] / "status_context.py"))["context"]
     commit = "a" * 40
