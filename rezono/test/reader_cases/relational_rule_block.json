@@ -9,5 +9,51 @@
         ".output listed"
       ]
     }
+  ],
+  "knownDiagnostics": [
+    {
+      "code": "R000",
+      "span": {
+        "text": "eligibility",
+        "start": 27,
+        "end": 38
+      },
+      "args": [
+        "\"=\" or \":\""
+      ]
+    },
+    {
+      "code": "R000",
+      "span": {
+        "text": ".",
+        "start": 43,
+        "end": 44
+      },
+      "args": [
+        "a word, a name, a kind name, an id, \"(\", a value, \"-\", \"not\", \"when\", or \"->\""
+      ]
+    },
+    {
+      "code": "R000",
+      "span": {
+        "text": ":",
+        "start": 84,
+        "end": 85
+      },
+      "args": [
+        "\"|\", \"or\", \"and\", \"where\", \"as\", \"at\", \".\", \"/\", \"*\", \"..\", \"..<\", \"-\", \"+\", \"is\", \"in\", \">\", \"<\", \"=\", \"!=\", \">=\", \"<=\", or \"=>\""
+      ]
+    },
+    {
+      "code": "R000",
+      "span": {
+        "text": ".",
+        "start": 101,
+        "end": 102
+      },
+      "args": [
+        "a word, a name, a kind name, an id, \"(\", a value, \"-\", \"not\", \"when\", or \"->\""
+      ]
+    }
   ]
 }
