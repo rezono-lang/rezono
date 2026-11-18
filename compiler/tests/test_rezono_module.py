@@ -190,6 +190,33 @@ def slot(**s) -> dict:
     return eta(slots=[s])
 
 
+@pytest.mark.parametrize("declaration", ["forward", "another_module", "none"])
+def test_a_bool_slot_prefers_a_declared_kind(tmp_path, declaration):
+    d = Path(shutil.copytree(FIXTURE, tmp_path / "minimal"))
+    source = slot(slot="linked", type="Bool")
+    target = eta(kind="Bool")
+    if declaration == "forward":
+        module(d, [source, target])
+    else:
+        module(d, [source])
+        if declaration == "another_module":
+            module(d, [target], name="target")
+    linked = pack.read(d).slot("eta", "linked")
+    if declaration == "none":
+        assert not linked.arrow
+        assert linked.sql_type == "BOOLEAN"
+    else:
+        assert linked.arrow
+        assert linked.range == "bool"
+
+
+def test_an_unknown_slot_type_lists_builtin_bool(tmp_path):
+    d = Path(shutil.copytree(FIXTURE, tmp_path / "minimal"))
+    module(d, [slot(slot="linked", type="Omega")])
+    with pytest.raises(pack.CompileError, match="Built-in Bool"):
+        pack.read(d)
+
+
 BOOL = {"derived": "ok", "type": "Bool", "value": {"lit": "true"}}
 REFUSALS = {
     "an open kind": ([eta(world="open")], 10, "an open kind is refused"),
