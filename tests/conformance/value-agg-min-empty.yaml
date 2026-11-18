@@ -1,0 +1,19 @@
+id: value-agg-min-empty
+source: docs/semantics/value-cases.yaml#agg-min-empty
+status: settled
+input:
+  rows:
+    - {$kind: Group, $id: group-a}
+    - {$kind: Group, $id: group-b}
+    - {$kind: Item, $id: item-b, group: {$ref: group-b}, labels: [first], quantity: "7"}
+  select: {kind: Group, id: group-a}
+  language: "ask g: Group where true show (Item where group = g).min(quantity)"
+expect:
+  value: null
+  state: not_applicable
+  reason: empty
+  witness: null
+unsupported:
+  compiler: The relational minimum has no row for this empty group, and the batch replay cannot emit the reason-bearing scalar minimum.
+  checker: There is no minimum conclusion or contributing row for an empty group to check as a rule witness.
+  feldera: The ordinary relational minimum does not materialize a scalar not_applicable value with reason empty for an empty group.

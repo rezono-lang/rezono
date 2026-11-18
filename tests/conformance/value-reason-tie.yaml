@@ -1,0 +1,18 @@
+id: value-reason-tie
+source: docs/semantics/value-cases.yaml#reason-tie
+status: settled
+input:
+  rows:
+    - {$kind: Group, $id: group-a}
+    - {$kind: Item, $id: item-a, group: {$ref: group-a}, labels: [first], weight: {$unknown: zz_late}}
+  select: {kind: Item, id: item-a}
+  language: "ask Item where true show weight + (unknown aa_early)"
+expect:
+  value: null
+  state: unknown
+  reason: aa_early
+  witness: null
+unsupported:
+  compiler: The neutral batch fact path has no integer column that admits an explicit per-cell unknown reason.
+  checker: The shown arithmetic state does not produce a materialized rule witness in the shared checker replay.
+  feldera: The Datalog integer addition does not carry reason codes for its operands.
