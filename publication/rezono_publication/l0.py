@@ -71,7 +71,8 @@ _TYPE_MEMBERS = {
     "Period": {"over", "range"},
     "Enum": {"enum"},
 }
-_KIND_MEMBERS = {"world", "id", "slots", "iri", "parent", "versioned", "applies", "plane", "owner"}
+_KIND_MEMBERS = {"world", "id", "slots", "iri", "parent", "versioned", "applies", "plane", "owner",
+                 "tuple_key"}
 _SLOT_MEMBERS = {"type", "ref", "card", "states", "world", "derived", "inverse", "min", "max", "backfill",
                  "versions", "expr"}
 _TOP_MEMBERS = {"rezono", "pack", "base", "kinds", "types", "enums", "imports", "map", "reasons", "follows"}
@@ -456,6 +457,11 @@ def check_schema(doc: dict, *, versioned: bool = True, allow_legacy: bool = Fals
             if slot_name.startswith(("$", "@")):
                 _fail(f"{name}.{slot_name}", "a slot name cannot start with `$` or `@`")
             _check_slot(doc, name, slot_name, slot)
+        if "tuple_key" in kind:
+            key = kind["tuple_key"]
+            if not (isinstance(key, list) and all(_is_text(c) for c in key) and len(set(key)) == len(key)
+                    and set(key) == set(kind["slots"])):
+                _fail(name, "`tuple_key` lists each slot of the kind once")
         if "versioned" in kind:
             if not versioned:
                 _fail(name, "`versioned` not supported by this reader")
@@ -921,6 +927,11 @@ def read_row(schema: dict, row: dict) -> tuple:
                 _fail(sw, f"duplicate member {key!r}")
             seen.add(key)
 
+    if "tuple_key" in kind:  # the id of a row of an ordered tuple is its cells, in the key's order
+        cells = [row[c]["$ref"] if isinstance(row[c], dict) and "$ref" in row[c] else row[c]
+                 for c in kind["tuple_key"]]
+        if _cj(cells) != rid:
+            _fail(where, "`$id` is not the canonical JSON of the cells named by `tuple_key`")
     _side(schema, kind, row, where)
     valid = _cj(row.get("$valid", {})) if versioned is not None else ""
     return (name, rid, valid, row.get("$known", ""))

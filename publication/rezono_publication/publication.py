@@ -160,8 +160,12 @@ def schema_document(bundle: dict, full=None) -> tuple[dict, dict]:
         if name in kinds:
             raise FormError(f"derived relation {r['id']} collides with kind {name}")
         cols = [c["name"] for c in r["columns"]]
+        slots = {}
+        for c in r["columns"]:
+            slot = _column_slot(r["id"], c, by_id, cls)
+            slots[c["name"]] = {**slot, "card": "1", "states": ["known"], "derived": True}
         kinds[name] = {"world": "open" if partial(r["id"]) else r["world"], "id": {"type": "Text"},
-                       "slots": {c: {"type": "Text", "card": "1", "states": ["known"], "derived": True} for c in cols}}
+                       "slots": slots, "tuple_key": cols}
         plan["derived"][r["id"]] = (name, cols)
     doc = {"rezono": "1.0", "pack": pack, "base": base, "kinds": kinds}
     if types:
@@ -169,6 +173,20 @@ def schema_document(bundle: dict, full=None) -> tuple[dict, dict]:
     if enums:
         doc["enums"] = enums
     return doc, plan
+
+
+def _column_slot(relation: str, column: dict, by_id: dict, cls: dict) -> dict:
+    """The type of one column of a derived relation: its checked semantic type when the bundle declares one, else
+    what its storage type says. A reference names a kind of the bundle and is stored as the text of its id."""
+    where = f"{relation}.{column['name']}"
+    semantic = column.get("semantic")
+    if semantic and semantic.get("case") == "ref":
+        if semantic.get("target") not in by_id:
+            raise FormError(f"{where}: the reference targets unknown kind {semantic.get('target')!r}")
+        if column.get("type") != semantic.get("base"):
+            raise FormError(f"{where}: stored as {column.get('type')}, but its reference is stored as {semantic.get('base')}")
+        return {"ref": cls[semantic["target"]]}
+    return {"type": "Integer" if column.get("type") == "integer" else "Text"}
 
 
 # --- rows ------------------------------------------------------------------------------------------------------
@@ -254,7 +272,10 @@ def row_json(doc: dict, plan: dict, epoch: dict) -> list[dict]:
     for rel, (name, cols) in plan["derived"].items():
         for parts in epoch["rows"].get(rel, []):
             i = canonical_json(list(parts))
-            elems[name, i] = {"$kind": name, "$id": i, **dict(zip(cols, parts))}
+            elems[name, i] = {"$kind": name, "$id": i}
+            for c, v in zip(cols, parts):
+                slot = doc["kinds"][name]["slots"][c]
+                elems[name, i][c] = {"$ref": v} if "ref" in slot else str(v) if slot["type"] == "Integer" else v
     for w in epoch["witnesses"]:
         rel = w["conclusion"]["relation"]
         if rel in plan["derived"]:
@@ -307,7 +328,7 @@ def relations(doc: dict, plan: dict, rows: list[dict]) -> dict[str, set]:
         name, i = r["$kind"], r["$id"]
         if name in derived_table:
             t, cols = derived_table[name]
-            out[t].add(_key([r[c] for c in cols]))
+            out[t].add(_key([r[c]["$ref"] if isinstance(r[c], dict) else r[c] for c in cols]))
             continue
         for kind in l0.chain(doc, name):  # an element of a subkind is an element of every kind above it
             out[kind_table[kind]].add(_key([i]))

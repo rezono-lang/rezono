@@ -300,7 +300,10 @@ def verify(data: dict[str, bytes], form: dict, given: dict, bundle: dict, full) 
         raise Blocked("the bytes do not read back to the form")
     if sid != want["schema"] or want != form["hashes"]:
         raise Blocked("the hashes are not those of the schema and rows")
-    _, plan = rd.schema_document(bundle, full)
+    expected, plan = rd.schema_document(bundle, full)
+    for _, (name, _cols) in sorted(plan["derived"].items()):
+        if schema["kinds"].get(name) != expected["kinds"][name]:
+            raise Blocked(f"{name}: its tuple_key or column types differ from the definition bundle")
     problems = rd.differences(schema, plan, rows, given)
     if problems:
         raise Blocked(f"{len(problems)} difference(s) from the role's rows (first: {'; '.join(problems[:3])})")
