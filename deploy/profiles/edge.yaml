@@ -1,4 +1,13 @@
-# Role settings for the public subsidy publication example.
+# Public settings for the subsidy edge example. Operators supply the store
+# explicitly when publishing outside the local proposal-path test.
+profile: edge
+engine:
+  view_budget: 64
+storage:
+  endpoint_env: REZONO_S3_ENDPOINT
+publish:
+  packs:
+    - examples/subsidy
 access:
   roles:
     checker: complete
