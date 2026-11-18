@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { test } from 'node:test';
+import { rolePublication } from '../../../examples/platform/proof_cases/role-publication-cases.ts';
 import type { Bundle } from '../../../contracts/typescript/generated/bundle.ts';
 import type { Manifest } from '../../../contracts/typescript/generated/manifest.ts';
 import { catalogueKindsQuestion, catalogueSchemaQuestion } from '../../../edge/gate/src/catalogue-questions.ts';
@@ -15,11 +16,8 @@ const store = process.env.REZONO_REPL_TEST_STORE;
 const retained = process.env.REZONO_REPL_RETAINED_STORE;
 if (!store || !retained) throw new Error('REZONO_REPL_TEST_STORE and REZONO_REPL_RETAINED_STORE must name the published two-role platform stores');
 
-const pack = 'platform-core';
-const manifest = 'm-1';
-const ask = 'ask Request where true show cores';
-const hiddenKind = 'backup_capture';
-const absentKind = 'unused_kind';
+const { pack, manifest, retainedManifest, hiddenKind, absentKind, groundRelation, roles,
+	replQuestion: ask } = rolePublication;
 const published = JSON.parse(await readFile(join(store, pack, 'manifests', `${manifest}.json`), 'utf8')) as Manifest;
 const bundleRef = published.compiled?.find(({ file }) => file === 'bundle/schema-bundle.json');
 assert.ok(bundleRef?.uri);
@@ -27,7 +25,7 @@ const bundle = JSON.parse(await readFile(join(store, new URL(bundleRef.uri).path
 assert.ok(bundle.kinds.some(({ id }) => id === hiddenKind));
 assert.ok(!bundle.kinds.some(({ id }) => id === absentKind));
 
-for (const [role, peer] of [['elm', 'reed'], ['reed', 'elm']]) {
+for (const [role, peer] of roles) {
 	test(`published ${role} session replays bytewise and sees only its own rows and grounds`, async () => {
 		const connection = local(store);
 		const session = new Session(connection, role, { pack, manifest }, { pageSize: 1 });
@@ -46,10 +44,10 @@ for (const [role, peer] of [['elm', 'reed'], ['reed', 'elm']]) {
 		assert.deepEqual(await session.search('request', `${peer}-`), await session.search('request', 'absent-'));
 		assert.deepEqual(await recorder.exec(`:complete :row request ${role}-`), [`${role}-request`, `${role}-second-request`]);
 
-		const own = `:grounds tenant_capacity_fits ${role} ${role}-request ${role}-quota`;
-		assert.match((await recorder.exec(own)).join('\n'), /tenant_capacity_fits/);
-		const hidden = await recorder.exec(`:grounds tenant_capacity_fits ${peer} ${peer}-request ${peer}-quota`);
-		const absent = await recorder.exec(':grounds tenant_capacity_fits absent absent-request absent-quota');
+		const own = `:grounds ${groundRelation} ${role} ${role}-request ${role}-quota`;
+		assert.match((await recorder.exec(own)).join('\n'), new RegExp(groundRelation));
+		const hidden = await recorder.exec(`:grounds ${groundRelation} ${peer} ${peer}-request ${peer}-quota`);
+		const absent = await recorder.exec(`:grounds ${groundRelation} absent absent-request absent-quota`);
 		assert.deepEqual(hidden, ['error: not found (or outside your view)']);
 		assert.deepEqual(hidden, absent);
 
@@ -100,7 +98,7 @@ for (const [role, peer] of [['elm', 'reed'], ['reed', 'elm']]) {
 		assert.equal(result.same, true, JSON.stringify(result));
 		const archived = local(retained);
 		const latest = await new Session(archived, role).use(pack, 'latest');
-		assert.equal(latest.manifest, 'm-2');
+		assert.equal(latest.manifest, retainedManifest);
 		const historical = await replay(recorder.text(), new Session(archived, role, { pack, manifest }, { pageSize: 1 }));
 		assert.equal(historical.same, true, JSON.stringify(historical));
 	});

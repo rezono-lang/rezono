@@ -3,6 +3,7 @@ import { test, type TestContext } from 'node:test';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { z } from 'zod';
+import { rolePublication } from '../../../examples/platform/proof_cases/role-publication-cases.ts';
 import { catalogueKindsQuestion, catalogueSchemaQuestion } from '../../../edge/gate/src/catalogue-questions.ts';
 import { openLocalGate } from '../../../edge/gate/src/local.ts';
 import { rowQuestion, type RowSelection } from '../../../edge/gate/src/row-query.ts';
@@ -16,10 +17,9 @@ const store = process.env.REZONO_REPL_TEST_STORE;
 const retained = process.env.REZONO_REPL_RETAINED_STORE;
 if (!store || !retained) throw new Error('REZONO_REPL_TEST_STORE and REZONO_REPL_RETAINED_STORE must name the published two-role platform stores');
 
-const pack = 'platform-core';
-const manifest = 'm-1';
+const { pack, manifest, retainedManifest, hiddenKind, absentKind, groundRelation, roles,
+	mcpQuestion: source } = rolePublication;
 const pin = { pack, manifest };
-const source = 'ask Request where request.cores > 0 show request.cores';
 type Query = { after?: string; scope?: 'catalogue' | 'row'; row?: RowSelection };
 const rowDataset = z.object({
 	rows: z.array(z.object({
@@ -47,7 +47,7 @@ async function connect(t: TestContext, role: string, publication: string) {
 	return client;
 }
 
-for (const [role, peer] of [['elm', 'reed'], ['reed', 'elm']]) {
+for (const [role, peer] of roles) {
 	test(`${role} sees only its published rows and replays the shared answers`, async (t) => {
 		const gate = await openLocalGate(store, role);
 		function request(question: string, query: Query) {
@@ -85,9 +85,9 @@ for (const [role, peer] of [['elm', 'reed'], ['reed', 'elm']]) {
 		const calls: Call[] = [
 			{ tool: 'ask', args: { pack, text: source } },
 			{ tool: 'more', args: {} },
-			{ tool: 'grounds', args: { pack, target: ['tenant_capacity_fits', role, `${role}-request`, `${role}-quota`] } },
-			{ tool: 'grounds', args: { pack, target: ['tenant_capacity_fits', peer, `${peer}-request`, `${peer}-quota`] } },
-			{ tool: 'grounds', args: { pack, target: ['tenant_capacity_fits', role, 'unused-request', `${role}-quota`] } },
+			{ tool: 'grounds', args: { pack, target: [groundRelation, role, `${role}-request`, `${role}-quota`] } },
+			{ tool: 'grounds', args: { pack, target: [groundRelation, peer, `${peer}-request`, `${peer}-quota`] } },
+			{ tool: 'grounds', args: { pack, target: [groundRelation, role, 'unused-request', `${role}-quota`] } },
 			{ tool: 'search', args: { pack, kind: 'request', prefix: role } },
 			{ tool: 'search', args: { pack, kind: 'request', prefix: peer } },
 			{ tool: 'search', args: { pack, kind: 'request', prefix: 'unused' } },
@@ -97,8 +97,6 @@ for (const [role, peer] of [['elm', 'reed'], ['reed', 'elm']]) {
 		const schema = await ask(requestSchema, { scope: 'catalogue' });
 		assert.ok(kinds.next && schema.next);
 		assert.deepEqual(schema.nodes.map(node => node.key), ['["kind/request"]']);
-		const hiddenKind = 'backup_capture';
-		const absentKind = 'unused_kind';
 		const hidden = await ask(catalogueSchemaQuestion(hiddenKind), { scope: 'catalogue' });
 		const absent = await ask(catalogueSchemaQuestion(absentKind), { scope: 'catalogue' });
 		assert.equal(hidden.counts?.rows, 0);
@@ -149,7 +147,7 @@ for (const [role, peer] of [['elm', 'reed'], ['reed', 'elm']]) {
 		assert.equal(results[0].text, replFirst.join('\n'));
 		assert.equal(results[1].text, replSecond.join('\n'));
 		assert.equal(results[2].error, false);
-		assert.match(results[2].text, /tenant_capacity_fits/);
+		assert.match(results[2].text, new RegExp(groundRelation));
 		assert.equal(results[3].error, true);
 		assert.equal(results[3].text, results[4].text);
 		assert.equal(results[5].text, (await repl.exec(`:complete :row request ${role}`)).join('\n'));
@@ -176,7 +174,7 @@ for (const [role, peer] of [['elm', 'reed'], ['reed', 'elm']]) {
 		const newer = await openLocalGate(retained, role);
 		const head = await newer(new Request(`http://rezono.local/${pack}/head`));
 		assert.equal(head.status, 200);
-		assert.equal((await head.json()).id, 'm-2');
+		assert.equal((await head.json()).id, retainedManifest);
 		assert.deepEqual(compare(results, await run(await connect(t, role, retained), allCalls)), []);
 	});
 }
