@@ -13,8 +13,11 @@ export const header = {
 	lineRules: ['RezonoLine', 'PackLine', 'UseLine'],
 	grammar: String.raw`
   RezonoLine = kw<"rezono"> number
-  PackLine = kw<"pack"> name
-  UseLine = kw<"use"> NonemptyListOf<name, "."> (as name)?
+  PackLine = kw<"pack"> packName
+  UseLine = kw<"use"> NonemptyListOf<packName, "."> (as name)?
+
+  packName (a name) = hyphenatedPackName | name
+  hyphenatedPackName = az (az | d)* ("-" (az | d)+)+ ~wordChar
   `,
 	actions: {
 		RezonoLine: (_k, n) => ({ line: 'rezono', rezono: n.sourceString }),
