@@ -40,3 +40,18 @@ Keep the host installation provisional. The trial now uses the Kubernetes
 Python client quantity parser pinned by commit and SHA-256. A future manual run should reach VMI submission,
 then verify placement, Ready and Running, the CirrOS login banner, and a live
 KVM vCPU. Those guest observations are still outstanding.
+
+The subsequent trial observed two renewals of the same Lease 20.467573 seconds
+apart, KubeVirt Available, 1000 allocatable KVM devices, and a Ready, Running
+VMI on `proof-worker`. The domain label query then returned an empty pod list.
+No console or live vCPU check ran. [Trial job](https://github.com/rezono-lang/rezono/actions/runs/44244406887/job/134599763328)
+
+The corrected lookup uses the VMI's active pod UID for its node, the pod's
+controlling VMI owner reference, namespace, node, Running phase and container
+names. It checks the same identities again after observing the console and
+vCPU. KubeVirt documents the active map as pod UID to node name, creates the
+launcher with a VMI controller reference and creates the console logger as a
+restartable sidecar.
+[KubeVirt VMI status](https://github.com/kubevirt/kubevirt/blob/c3d19093f9c7b843b3879b18dc088911c081c39e/staging/src/kubevirt.io/api/core/v1/types.go#L304-L306),
+[launcher template](https://github.com/kubevirt/kubevirt/blob/c3d19093f9c7b843b3879b18dc088911c081c39e/pkg/virt-controller/services/template.go#L718-L724),
+[serial console sidecar](https://github.com/kubevirt/kubevirt/blob/c3d19093f9c7b843b3879b18dc088911c081c39e/pkg/virt-controller/services/serialconsolelog.go).
