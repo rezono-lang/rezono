@@ -1,0 +1,30 @@
+.decl listener_case_candidate(source: symbol, destination: symbol, protocol: symbol, port: number)
+listener_case_candidate(s, d, proto, port) :-
+    listener_case_source__zone(s, _),
+    listener_case_listener__destination(l, d),
+    listener_case_listener__protocol(l, proto),
+    listener_case_listener__port(l, port).
+
+.decl listener_case_firewall_permitted(source: symbol, destination: symbol, protocol: symbol, port: number)
+listener_case_firewall_permitted(s, d, proto, port) :-
+    listener_case_candidate(s, d, proto, port),
+    listener_case_source__zone(s, z), listener_case_destination__zone(d, z).
+listener_case_firewall_permitted(s, d, proto, port) :-
+    listener_case_source__source_range(s, r),
+    listener_case_firewall_grant__source_range(g, r), listener_case_firewall_grant__listener(g, l),
+    listener_case_listener__destination(l, d), listener_case_listener__protocol(l, proto),
+    listener_case_listener__port(l, port).
+
+.decl listener_case_service_permitted(source: symbol, destination: symbol, protocol: symbol, port: number)
+listener_case_service_permitted(s, d, proto, port) :-
+    listener_case_service_grant__source(g, s), listener_case_service_grant__listener(g, l),
+    listener_case_listener__destination(l, d), listener_case_listener__protocol(l, proto),
+    listener_case_listener__port(l, port).
+
+.decl listener_case_decision(source: symbol, destination: symbol, protocol: symbol, port: number, decision: symbol)
+listener_case_decision(s, d, proto, port, "firewall") :-
+    listener_case_candidate(s, d, proto, port), !listener_case_firewall_permitted(s, d, proto, port).
+listener_case_decision(s, d, proto, port, "service-isolation") :-
+    listener_case_firewall_permitted(s, d, proto, port), !listener_case_service_permitted(s, d, proto, port).
+listener_case_decision(s, d, proto, port, "allowed") :-
+    listener_case_firewall_permitted(s, d, proto, port), listener_case_service_permitted(s, d, proto, port).
