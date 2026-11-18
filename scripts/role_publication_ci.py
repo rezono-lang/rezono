@@ -10,7 +10,9 @@ import sys
 import tempfile
 from xml.etree import ElementTree
 
-from components import ROOT, component_owner, discover_components, git_output, shared_readers
+from components import (
+    ROOT, component_owner, discover_components, git_output, language_coverage_only, shared_readers,
+)
 
 
 READ_TREES = (
@@ -68,6 +70,12 @@ def required(event: str, base: str) -> bool:
         return True
     paths = [os.fsdecode(path) for path in raw.split(b"\0") if path]
     folders = {component.folder for component in discover_components(ROOT, keep_invalid_node=True)}
+    if event == "pull_request":
+        try:
+            if language_coverage_only(ROOT, start, "HEAD", paths, folders):
+                return False
+        except (OSError, ValueError, subprocess.CalledProcessError):
+            return True
     return affected(paths, folders)
 
 

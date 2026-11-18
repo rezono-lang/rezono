@@ -250,6 +250,22 @@ PR_TEST_LEAVES = frozenset({
     "compiler/tests/rezono/neutral-answer-cases.mjs",
     "compiler/tests/rezono/test_neutral_answer_cases.py",
 })
+LANGUAGE_COVERAGE_LEAVES = (
+    "compiler/tests/rezono/language_usage.py",
+    "compiler/tests/rezono/test_language_usage.py",
+)
+LANGUAGE_COVERAGE_REPORT = "docs/rezono/language-coverage.md"
+LANGUAGE_COVERAGE_COMMAND = (
+    "Run `python compiler/tests/rezono/language_usage.py` from the repository root for the current inventory."
+)
+
+# The generated command and the link targets in three documentation pages.
+LANGUAGE_COVERAGE_MANUAL_REFERENCES = {
+    LANGUAGE_COVERAGE_REPORT: LANGUAGE_COVERAGE_COMMAND,
+    "docs/README.md": "(rezono/language-coverage.md)",
+    "docs/compiler/rules.md": "(../rezono/language-coverage.md)",
+    "docs/formal.md": "(rezono/language-coverage.md)",
+}
 PACK_READERS = ("admission", "checker", "compiler", "edge/plugins/connectors", "edge/publisher", "examples",
                 "k8s-admission", "loop", "publication", "rezono", "run")
 SHARED_READERS = {
@@ -321,16 +337,37 @@ def git_output(root: Path, *args: str) -> bytes:
     return subprocess.check_output(["git", *args], cwd=root, stderr=subprocess.PIPE)
 
 
-def independent_test_leaves(root: Path, revision: str, leaves: dict[str, list[str]], folders: set[str]) -> bool:
+def independent_test_leaves(root: Path, revision: str, leaves: dict[str, list[str]], folders: set[str],
+                            *, manual_references: dict[str, str] | None = None) -> bool:
     """Refuse a narrowed test selection if either tree names an outside reader."""
-    entries = git_output(root, "ls-tree", "-z", revision, "--", *(path for paths in leaves.values() for path in paths))
-    if any(entry.split(b" ", 1)[0] not in {b"100644", b"100755"} for entry in entries.split(b"\0") if entry):
+    leaf_paths = {path for paths in leaves.values() for path in paths}
+    tracked = sorted(leaf_paths | (manual_references or {}).keys())
+    raw = git_output(root, "ls-tree", "-z", revision, "--", *tracked)
+    entries = [entry for entry in raw.split(b"\0") if entry]
+    if any(entry.split(b" ", 1)[0] not in {b"100644", b"100755"} for entry in entries):
+        return False
+    if manual_references is not None and len(entries) != len(tracked):
         return False
     for owner, paths in leaves.items():
         # Search the basename without its extension as well, so Python imports,
         # run_path calls and subprocess filenames all count as readers.
         # The selector and its matrix regression run as the discovery step.
-        patterns = [arg for path in paths for arg in ("-e", Path(path).stem)]
+        names = [Path(path).name if Path(path).suffix == ".md" else Path(path).stem for path in paths]
+        for page, expected in (manual_references or {}).items():
+            document = git_output(root, "show", f"{revision}:{page}").decode("utf-8")
+            if "\0" in document:
+                return False
+            if page in leaf_paths:
+                references = [line for line in document.splitlines() if any(name in line for name in names)]
+                if references != [expected]:
+                    return False
+                continue
+            link = re.search(r"\[[^\]\r\n]+\]" + re.escape(expected), document)
+            if link is None or document.count(expected) != 1:
+                return False
+            if any(name in document.replace(expected, "", 1) for name in names):
+                return False
+        patterns = [arg for name in names for arg in ("-e", name)]
         result = subprocess.run(
             ["git", "grep", "-F", "-I", "-l", "-z", *patterns, revision, "--", ".",
              ":(exclude,top)scripts/components.py", ":(exclude,top).github/workflows/tests/test_components.py"],
@@ -342,9 +379,27 @@ def independent_test_leaves(root: Path, revision: str, leaves: dict[str, list[st
         for item in result.stdout.split(b"\0"):
             if item:
                 entry = os.fsdecode(item)
-                if not entry.startswith(prefix) or component_owner(entry[len(prefix):], folders) != owner:
+                if not entry.startswith(prefix):
+                    return False
+                name = entry[len(prefix):]
+                if component_owner(name, folders) == owner:
+                    continue
+                if name not in (manual_references or {}):
                     return False
     return True
+
+
+def language_coverage_only(root: Path, base: str, head: str, changed: list[str], folders: set[str]) -> bool | None:
+    """Return None outside the coverage-only scope and verify both trees within it."""
+    changes = set(changed)
+    leaves = set(LANGUAGE_COVERAGE_LEAVES)
+    if changes.isdisjoint(leaves) or not changes <= leaves | {LANGUAGE_COVERAGE_REPORT}:
+        return None
+    return "compiler" in folders and all(
+        independent_test_leaves(root, revision, {"compiler": [*LANGUAGE_COVERAGE_LEAVES, LANGUAGE_COVERAGE_REPORT]}, folders,
+                                manual_references=LANGUAGE_COVERAGE_MANUAL_REFERENCES)
+        for revision in (base, head)
+    )
 
 
 def pull_request_range(root: Path, base_ref: str) -> tuple[str, str, list[str]]:
@@ -479,6 +534,11 @@ def pull_request_components(components: list[Component], root: Path, base_ref: s
     leaves: dict[str, list[str]] = {}
     try:
         base, head, changed = pull_request_range(root, base_ref)
+        coverage = language_coverage_only(root, base, head, changed, folders)
+        if coverage is False:
+            return list(components)
+        if coverage:
+            return [component for component in components if component.folder == "compiler"]
         for path in changed:
             owner = component_owner(path, folders)
             readers = shared_readers(path)
