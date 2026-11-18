@@ -2,7 +2,7 @@
 
 from collections.abc import Mapping, Set
 
-from . import rezono_cardinality
+from . import rezono_cardinality, rezono_numeric_limits
 from .rezono_lowering import Refuse
 
 
@@ -11,11 +11,30 @@ BUILTIN_RANGES = {"Bool": "boolean", "Date": "date", "Text": "string"}
 LIST_CARDS = ("*", "+")
 
 
-def builtin_range(name: str, declared: bool) -> str | None:
+def builtin_range(name: str, declared: bool, *, extended_form: bool = False) -> str | None:
     # Bool became a built-in after modules could already declare it as a pack name.
     if name == "Bool" and declared:
         return None
+    if name == "Int":
+        return "integer" if extended_form and not declared else None
     return BUILTIN_RANGES.get(name)
+
+
+def constraint_facets(slot: dict, range_name: str | None) -> dict[str, int | bool]:
+    """Resolve the authored bounds for a list or a single integer value."""
+    card = slot.get("card", "?")
+    explicit = slot.get("identifier") is True
+    constraints = slot["constraints"]
+    if isinstance(constraints, list) and any(
+        isinstance(constraint, dict) and "cardinality" in constraint for constraint in constraints
+    ):
+        facets = rezono_cardinality.bounded_list(card, constraints)
+        if explicit:
+            raise ValueError("a bounded list cannot be an identifier")
+        return facets
+    if range_name != "integer" or explicit or card != "?":
+        raise ValueError("integer limits need an Int slot that is single-valued and is not an identifier")
+    return rezono_numeric_limits.lower(constraints)
 
 
 def lower(slots: list[dict], declared: Set[str]) -> dict[str, dict]:
@@ -23,9 +42,11 @@ def lower(slots: list[dict], declared: Set[str]) -> dict[str, dict]:
     out: dict[str, dict] = {} if any(slot.get("identifier") is True for slot in slots) else {"id": {"identifier": True}}
     for slot in slots:
         name = slot["type"]
-        attribute: dict[str, object] = {"range": builtin_range(name, name in declared) or name}
+        # Validation has already checked whether this version admits the built-in range.
+        range_name = builtin_range(name, name in declared, extended_form=True) or name
+        attribute: dict[str, object] = {"range": range_name}
         if "constraints" in slot:
-            attribute.update(rezono_cardinality.bounded_list(slot.get("card"), slot["constraints"]))
+            attribute.update(constraint_facets(slot, range_name))
         if slot.get("identifier") is True:
             attribute["identifier"] = True
         elif "card" not in slot or slot["card"] == "+":
@@ -42,7 +63,7 @@ def validate(slots: list, kind: str, at: str, own: Mapping[str, str], owners: Ma
     ok = True
     seen: set[str] = set()
     identifier_seen = False
-    # Explicit identifiers and bounded slots both belong to the extended module form.
+    # The extended module form also carries slot constraints.
     allowed = MEMBERS | {"identifier", "constraints"} if explicit_identifiers else MEMBERS
     for index, slot in enumerate(slots):
         here = f"{at}/slots/{index}"
@@ -69,22 +90,22 @@ def validate(slots: list, kind: str, at: str, own: Mapping[str, str], owners: Ma
             refuse(here, "a slot named `id` is refused: `id` identifies the elements of a kind", "§5.1")
             ok = False
         card = slot.get("card", "?")
-        if "constraints" in slot:
-            try:
-                rezono_cardinality.bounded_list(slot.get("card"), slot["constraints"])
-                if explicit:
-                    raise ValueError("a bounded list cannot be an identifier")
-            except ValueError as error:
-                refuse(here, str(error), "§5.1")
-                ok = False
-        elif explicit and card in LIST_CARDS:
+        has_constraints = "constraints" in slot
+        if not has_constraints and explicit and card in LIST_CARDS:
             refuse(here, "an identifier cannot be multivalued", "§5.1")
             ok = False
         elif card not in ("?", *LIST_CARDS):
             refuse(here, f"a slot `{slot['type']}{slot['card']}` is not lowered (no ticket yet)")
             ok = False
         name, found = slot["type"], owners.get(slot["type"], [])
-        if name in own or builtin_range(name, bool(found)) is not None:
+        range_name = builtin_range(name, name in own or bool(found), extended_form=explicit_identifiers)
+        if has_constraints:
+            try:
+                constraint_facets(slot, range_name)
+            except ValueError as error:
+                refuse(here, str(error), "§5.1")
+                ok = False
+        if name in own or range_name is not None:
             continue
         if len(found) == 1:
             uses.add(found[0])
