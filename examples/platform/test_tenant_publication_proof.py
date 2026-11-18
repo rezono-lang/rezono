@@ -141,8 +141,6 @@ def declaration(period, free, used):
             [("free_cores", free), ("total_cores", used), ("origin", "decision"), ("issuer", "platform")]}
 
 
-@pytest.mark.xfail(strict=True, raises=MissingCapacityPublication,
-                   reason="Implement the notice and its private basis in examples/platform/schema and rules, and enforce the required tenant conclusions at publish. Read decisions/platform-tenant-proof-boundary.md.")
 def test_complete_tenant_publication_or_no_manifest(tmp_path):
     model = pack.read(ROOT)
     if not {BASIS, SUMMARY} <= set(rules.load(model.rules).derived()):

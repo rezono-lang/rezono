@@ -1,0 +1,26 @@
+.decl capacity_period_reading(period: symbol, reading: symbol, cores: number)
+capacity_period_reading(p, r, n) :- capacity_reading__period(r, p), capacity_reading__cores(r, n).
+
+// The complete platform publication can trace this aggregate back to every reading.
+.decl platform_capacity_basis(period: symbol, free: number, used: number)
+platform_capacity_basis(p, free, used) :-
+    capacity_pool__cores(p, limit), capacity_period_reading(p, _, _),
+    used = sum n : { capacity_period_reading(p, _, n) }, free = limit - used.
+
+tenant_capacity_summary(t, p, free, used, own) :-
+    capacity_reading__tenant(r, t), capacity_reading__period(r, p), capacity_reading__cores(r, own),
+    capacity_notice__issuer(d, "platform"), capacity_notice__origin(d, "decision"),
+    capacity_notice__period(d, p), capacity_notice__free_cores(d, free), capacity_notice__total_cores(d, used).
+
+may_read(t, "capacity_reading", r) :- capacity_reading__tenant(r, t).
+may_read(t, "role", t) :- capacity_reading__tenant(_, t).
+may_read(t, "capacity_notice", d) :-
+    capacity_reading__tenant(_, t), capacity_notice__issuer(d, "platform"), capacity_notice__origin(d, "decision").
+
+// The expected periods come from the pool records, independently of the notices and summary proofs.
+.decl publication_required(role: symbol, relation: symbol, first: symbol, second: symbol)
+publication_required(t, "tenant_capacity_summary", t, p) :- capacity_reading__tenant(_, t), capacity_pool(p).
+
+.output platform_capacity_basis
+.output tenant_capacity_summary
+.output publication_required
