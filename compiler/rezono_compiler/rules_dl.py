@@ -431,6 +431,9 @@ def read(pack, pack_dir: Path, imports=None, renames=None, *, calc_inputs=None, 
                for source, f in files]
     entries += [(item.pack, item.stem, item.file if item.pack == root else f"{item.pack}:{item.file}",
                  item.text, None) for item in embedded]
+    # Process dependency packs first so their relations can be extended by importers.
+    source_order = {owner: index for index, (owner, _) in enumerate(sources)}
+    entries.sort(key=lambda entry: (source_order[entry[0]], entry[1]))
     entries += [(root, g.stem, g.module, g.text, g.at) for g in generated or []]
     if not entries:
         return None, []
