@@ -34,14 +34,17 @@ func evaluator(ctx context.Context, bundle *release) (*validating.Plugin, error)
 		runtime.NewScheme(), bundle.listKinds, bundle.parameters...,
 	)
 	factory := informers.NewSharedInformerFactory(client, 0)
-	plugin := validating.NewPlugin(nil)
+	plugin, err := validating.NewPlugin(nil)
+	if err != nil {
+		return nil, err
+	}
 	plugin.SetEnabled(true)
 	plugin.SetExternalKubeClientSet(client)
 	plugin.SetExternalKubeInformerFactory(factory)
 	plugin.SetDynamicClient(parameters)
 	plugin.SetRESTMapper(bundle.mapper)
 	plugin.SetDrainedNotification(ctx.Done())
-	plugin.SetAuthorizer(authorizer.AuthorizerFunc(func(context.Context, authorizer.Attributes) (authorizer.Decision, string, error) {
+	plugin.SetUnconditionalAuthorizer(authorizer.AuthorizerFunc(func(context.Context, authorizer.Attributes) (authorizer.Decision, string, error) {
 		return authorizer.DecisionDeny, "no external authorization in the offline oracle", nil
 	}))
 	if err := plugin.ValidateInitialization(); err != nil {

@@ -68,8 +68,9 @@ runs:
         path: |
           contracts/python/rezono_contracts/*.py
           contracts/python/rezono_contracts/*.schema.json
+          contracts/typescript/generated
           viewer/src/lib/contract/generated
-        key: contract-types-v1-${{ runner.os }}-${{ hashFiles('requirements/.python-version', 'requirements/dev.txt', 'contracts/*.yaml', 'contracts/gen-types.sh', 'contracts/python/rezono_contracts/**', 'viewer/package.json', 'viewer/src/lib/contract/generated/**') }}
+        key: contract-types-v2-${{ runner.os }}-${{ hashFiles('requirements/.python-version', 'requirements/dev.txt', 'contracts/*.yaml', 'contracts/gen-types.sh', 'contracts/python/rezono_contracts/**', 'viewer/package.json', 'viewer/src/lib/contract/generated/**') }}
     - name: Cache the pinned oracle and its distribution packages
       if: inputs.oracle == 'true'
       id: oracle

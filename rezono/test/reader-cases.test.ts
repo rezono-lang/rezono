@@ -28,9 +28,21 @@ for (const file of readdirSync(cases).filter(file => file.endsWith('.json')).sor
     test(name, t => assertCase(name, mismatch(new URL(file, cases)), t));
 }
 
-test('native_rule_safe_body', t => {
-    const probe = fileURLToPath(new URL('./native-rule-safe-body.mts', import.meta.url));
+for (const [name, file] of [
+    ['native_rule_safe_body', 'native-rule-safe-body.mts'],
+    ['expression_ts_negated_call', 'expression-negated-call.mts'],
+]) {
+    test(name, t => {
+        const probe = fileURLToPath(new URL(file, import.meta.url));
+        const report: unknown = JSON.parse(execFileSync(process.execPath, [probe], { encoding: 'utf8' }));
+        assert.ok(Array.isArray(report), 'The native rule probe must report a list of differences.');
+        assertCase(name, report.length ? JSON.stringify(report, null, 2) : null, t);
+    });
+}
+
+test('expression_ts_filtered_count', t => {
+    const probe = fileURLToPath(new URL('./expression-filtered-count.mts', import.meta.url));
     const report: unknown = JSON.parse(execFileSync(process.execPath, [probe], { encoding: 'utf8' }));
-    assert.ok(Array.isArray(report), 'The native rule probe must report a list of differences.');
-    assertCase('native_rule_safe_body', report.length ? JSON.stringify(report, null, 2) : null, t);
+    assert.ok(report === null || typeof report === 'string', 'The filtered group probe must report a difference or null.');
+    assertCase('expression_ts_filtered_count', report, t);
 });

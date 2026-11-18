@@ -1,0 +1,44 @@
+id: https://rezono.org/std-loop/batch-selection
+name: std_loop_batch_selection
+description: The width, member order and independent verdicts for one finite batch comparison.
+imports: [linkml:types]
+default_range: string
+annotations:
+  layer: facts
+enums:
+  LoopBatchVerdict:
+    permissible_values:
+      proved: {}
+      refuted: {}
+      unknown: {}
+classes:
+  LoopBatchDomain:
+    attributes:
+      id: {identifier: true}
+      width: {range: integer, required: true, minimum_value: 1}
+  LoopBatchCandidate:
+    attributes:
+      id: {identifier: true}
+      domain: {range: LoopBatchDomain, required: true}
+      size: {range: integer, required: true, minimum_value: 0}
+      verdict: {range: LoopBatchVerdict}
+  LoopBatchStep:
+    attributes:
+      id: {identifier: true}
+      priority: {range: integer, required: true}
+  LoopBatchVisible:
+    attributes:
+      id: {identifier: true}
+      batch: {range: LoopBatchCandidate, required: true}
+      subset: {range: LoopBatchCandidate, required: true}
+  LoopBatchWrite:
+    attributes:
+      id: {identifier: true}
+      step: {range: LoopBatchStep, required: true}
+      target: {required: true}
+  LoopBatchMember:
+    attributes:
+      id: {identifier: true}
+      batch: {range: LoopBatchCandidate, required: true}
+      step: {range: LoopBatchStep, required: true}
+      position: {range: integer, required: true, minimum_value: 0}
