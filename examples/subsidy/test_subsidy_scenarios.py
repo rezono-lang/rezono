@@ -42,6 +42,7 @@ def final_states():
     program = calc.build(model, model.calc)
     as_of = {table: [tuple(row.values()) for row in rows] for table, rows in calc_sql.rows(program).items()}
     facts = dict(scenarios.states(model, HERE))
+    assert list(facts)[-2:] == ["3-late-payment", "4-family-threshold"]
     ref = reference()
     states = {}
     for name, inputs in ref.states():

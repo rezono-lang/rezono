@@ -23,7 +23,7 @@ pytest.importorskip("rezono_publisher")
 
 from rezono_publisher import batch, publish, store  # noqa: E402
 
-from subsidy_test_support import HERE, PACK, ROLES, published, reference, rows
+from subsidy_test_support import HERE, PACK, publication_roles, published, reference, rows
 
 # What `public` reads, and what it does not: the kinds of a case (rules/access.dl).
 # The justification kinds (std-decision) are read with the decision, by every role.
@@ -101,7 +101,7 @@ def test_a_role_reads_how_each_parameter_stands_on_the_evaluation_day_down_to_it
     nothing (it names no such role) reads no judgement, no day count and no proof of it."""
     e = batch.epoch(HERE, epoch=1, knowledge_time="2026-11-10T00:00:00Z", sources=[("rules", "test")])
     s = store.FileStore(tmp_path)
-    publish.publish(e, s, ROLES | {"outsider": "may_read"})
+    publish.publish(e, s, publication_roles() | {"outsider": "may_read"})
     ref = reference()
     state, inputs = next(ref.states())
     assert state == "0-applications"
