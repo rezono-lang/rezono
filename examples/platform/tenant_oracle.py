@@ -18,9 +18,14 @@ def load_requests(directory):
 
 
 def landed_usage(model):
-    """Trusted resource snapshots of the deliveries already merged into the base."""
+    """Return trusted landed usage, or None when the inventory is unmeasured."""
+    if "landedDeliveries" not in model:
+        return None
+    receipts = model["landedDeliveries"]
+    if not isinstance(receipts, list):
+        raise ValueError("landedDeliveries must be a list")
     usage = {}
-    for receipt in model.get("landedDeliveries", []):
+    for receipt in receipts:
         ident = receipt["request"]
         if ident in usage or not re.fullmatch(r"[0-9a-f]{40}", receipt["revision"]):
             raise ValueError("Expected a unique delivery with a pinned landing revision")
@@ -38,7 +43,8 @@ def calculate(model, requests):
     rows = {key: [] for key in ("capacity", "shortages", "monthlyCost", "deliveries",
                                 "connections", "isolationFindings", "catalog", "proposal", "scope", "placements", "applicationTargets")}
     charged = landed_usage(model)
-    totals = {dim: sum(row[dim] for row in charged.values()) for dim in DIMENSIONS}
+    totals = {dim: None if charged is None else sum(row[dim] for row in charged.values())
+              for dim in DIMENSIONS}
     projected = totals.copy()
     requirements = {}
     shortages = Counter()
@@ -104,19 +110,22 @@ def calculate(model, requests):
                     rows["isolationFindings"].append([team, key, target, port, reciprocal, approved])
             states.add(status)
             rows["connections"].append([team, key, target, port, status, reason])
-        ident = f"{team}/{request['service']}"
-        existing = charged.get(ident, {})
-        candidate = {dim: projected[dim] - existing.get(dim, 0) + requirements[key][dim] for dim in DIMENSIONS}
         outcome = "denied" if "denied" in states else "review" if "review" in states else "standard"
-        if outcome != "denied":
+        if outcome != "denied" and charged is None:
+            outcome = "unknown"
+        elif outcome != "denied":
+            ident = f"{team}/{request['service']}"
+            existing = charged.get(ident, {})
+            candidate = {dim: projected[dim] - existing.get(dim, 0) + requirements[key][dim]
+                         for dim in DIMENSIONS}
             for pool, limits in capacities.items():
                 for dim, limit in limits.items():
                     excess = candidate[dim] - limit
                     if excess > 0:
                         shortages[pool, dim] = max(shortages[pool, dim], excess)
                         outcome = "denied"
-        if outcome == "standard":
-            projected = candidate
+            if outcome == "standard":
+                projected = candidate
         rows["proposal"].append([team, key, outcome])
         entity = {"apiVersion": "backstage.io/v1alpha1", "kind": "Component",
                   "metadata": {"namespace": team, "name": request["service"]},
