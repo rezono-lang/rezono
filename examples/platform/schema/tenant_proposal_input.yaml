@@ -1,0 +1,58 @@
+id: https://rezono.org/examples/platform-core/tenant-proposal-input
+name: platform_tenant_proposal_input
+description: Catalog and landed delivery facts supplied independently of tenant requests.
+in_language: en
+imports:
+  - linkml:types
+default_range: string
+annotations:
+  layer: facts
+
+classes:
+  TenantLandedDelivery:
+    attributes:
+      id: {identifier: true}
+      revision: {required: true}
+      cores: {range: integer, required: true, minimum_value: 0}
+      memory_gib: {range: integer, required: true, minimum_value: 0}
+      storage_gib: {range: integer, required: true, minimum_value: 0}
+  TenantCatalogItem:
+    attributes:
+      id: {identifier: true}
+      component: {required: true}
+      provision: {multivalued: true}
+  TenantProfile:
+    attributes:
+      id: {identifier: true}
+      zone: {required: true}
+      unlisted: {required: true}
+      size: {multivalued: true}
+  TenantPoolLimit:
+    attributes:
+      id: {identifier: true}
+      pool: {required: true}
+      dimension: {required: true}
+      amount: {range: integer, required: true, minimum_value: 0}
+  TenantZoneLink:
+    attributes:
+      id: {identifier: true}
+      source: {required: true}
+      target: {required: true}
+      port: {range: integer, required: true, minimum_value: 1, maximum_value: 65535}
+  TenantReviewer:
+    attributes:
+      id: {identifier: true}
+      action: {multivalued: true}
+  TenantReviewDecision:
+    attributes:
+      id: {identifier: true}
+      reviewer: {required: true}
+      source_delivery: {required: true}
+      target: {required: true}
+      port: {range: integer, required: true, minimum_value: 1, maximum_value: 65535}
+  TenantQuota:
+    attributes:
+      id: {identifier: true}
+      owner: {required: true}
+      dimension: {required: true}
+      amount: {range: integer, required: true, minimum_value: 0}
