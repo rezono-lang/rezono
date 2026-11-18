@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import json
 import re
-from collections.abc import Mapping, Set
+from collections.abc import Iterator, Mapping, Set
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import cast
@@ -121,14 +121,34 @@ def read_form(pack_dir: Path, d: Declared, errors: list[str]) -> dict | None:
     except (OSError, ValueError) as e:
         errors.append(f"{where}: not a JSON file ({e})")
         return None
-    module = doc.get("module") if isinstance(doc, dict) else None
-    if not (isinstance(doc, dict) and set(doc) == {"format", "module", "spans"} and doc["format"] == FORMAT
-            and isinstance(doc["spans"], list) and isinstance(module, dict) and isinstance(module.get("pack"), str)
-            and isinstance(module.get("use"), list) and isinstance(module.get("decls"), list)
-            and set(module) <= {"rezono", "pack", "use", "decls"}):
+    if module_body(doc, FORMAT) is None:
         errors.append(f"{where}: not the form of a module ({FORMAT}, contracts/rezono-module.yaml)")
         return None
     return doc
+
+
+def module_body(form: object, expected_format: str) -> dict | None:
+    """Check the envelope and header shape before interpreting a module's declarations."""
+    if not isinstance(form, dict) or form.keys() != {"format", "module", "spans"}:
+        return None
+    module = form["module"]
+    if (form["format"] != expected_format or not isinstance(form["spans"], list)
+            or not isinstance(module, dict) or not isinstance(module.get("pack"), str)
+            or not isinstance(module.get("use"), list) or not isinstance(module.get("decls"), list)
+            or not module.keys() <= {"rezono", "pack", "use", "decls"}):
+        return None
+    return module
+
+
+def header_errors(module: dict, pack: str) -> Iterator[tuple[str, str, str]]:
+    """Header refusals shared by schema lowering and dataset admission."""
+    if module.get("rezono") != "0":
+        yield "rezono", f"the `rezono` line says 0, not {module.get('rezono', 'nothing')}", "§3"
+    if module["pack"] != pack:
+        yield "pack", f"the `pack` line names {module['pack']}, not this pack, {pack}", "§3"
+    for i in range(len(module["use"])):
+        yield f"/use/{i}", "a `use` line is not lowered", "§6"
+
 
 
 def lines(form: dict) -> dict[str, int]:
@@ -236,13 +256,9 @@ def lower(pack_dir: Path, d: Declared, form: dict, pack: str, owners: dict[str, 
         n = at if isinstance(at, int) else line.get(at) or line.get("/".join(at.split("/")[:3])) or 1
         errors.append(f"{where}:{n}: {what} ({PAGE} {section})")
 
-    if module.get("rezono") != "0":
-        refuse(header_line(pack_dir, d, "rezono"), f"the `rezono` line says 0, not {module.get('rezono', 'nothing')}",
-               "§3")
-    if module["pack"] != pack:
-        refuse(header_line(pack_dir, d, "pack"), f"the `pack` line names {module['pack']}, not this pack, {pack}", "§3")
-    for i, _ in enumerate(module["use"]):
-        refuse(f"/use/{i}", "a `use` line is not lowered")
+    for key, message, section in header_errors(module, pack):
+        place = key if key.startswith("/") else header_line(pack_dir, d, key)
+        refuse(place, message, section)
     own = names(form)
     declared_names = own.keys() | owners.keys()
     uses: set[str] = set()

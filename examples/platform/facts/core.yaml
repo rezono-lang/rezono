@@ -1,11 +1,11 @@
 zone:
-  - {id: external}
-  - {id: entry}
-  - {id: platform}
-  - {id: tenant}
-  - {id: management}
-  - {id: storage}
-  - {id: recovery}
+  - {id: external, outside: 'yes', entry_boundary: 'no', isolated_recovery: 'no', workload: 'no'}
+  - {id: entry, outside: 'no', entry_boundary: 'yes', isolated_recovery: 'no', workload: 'no'}
+  - {id: platform, outside: 'no', entry_boundary: 'no', isolated_recovery: 'no', workload: 'no'}
+  - {id: tenant, outside: 'no', entry_boundary: 'no', isolated_recovery: 'no', workload: 'yes'}
+  - {id: management, outside: 'no', entry_boundary: 'no', isolated_recovery: 'no', workload: 'no'}
+  - {id: storage, outside: 'no', entry_boundary: 'no', isolated_recovery: 'no', workload: 'no'}
+  - {id: recovery, outside: 'no', entry_boundary: 'no', isolated_recovery: 'yes', workload: 'no'}
 cluster_class:
   - {id: none}
   - {id: edge}
@@ -17,15 +17,15 @@ cluster_class:
   - {id: recovery}
   - {id: build}
 platform_role:
-  - {id: outside, zone: external, cluster_class: none, runs_images: 'no'}
-  - {id: entry, zone: entry, cluster_class: edge, runs_images: 'no'}
-  - {id: shared, zone: platform, cluster_class: base, runs_images: 'no'}
-  - {id: control, zone: platform, cluster_class: control, runs_images: 'no'}
-  - {id: build, zone: platform, cluster_class: build, runs_images: 'no'}
-  - {id: workload-prod, zone: tenant, cluster_class: app-prod, runs_images: 'yes'}
-  - {id: workload-dev, zone: tenant, cluster_class: app-dev, runs_images: 'yes'}
-  - {id: storage, zone: storage, cluster_class: storage, runs_images: 'no'}
-  - {id: recovery, zone: recovery, cluster_class: recovery, runs_images: 'yes'}
+  - {id: outside, zone: external, cluster_class: none, runs_images: 'no', build_authority: 'no'}
+  - {id: entry, zone: entry, cluster_class: edge, runs_images: 'no', build_authority: 'no'}
+  - {id: shared, zone: platform, cluster_class: base, runs_images: 'no', build_authority: 'no'}
+  - {id: control, zone: platform, cluster_class: control, runs_images: 'no', build_authority: 'no'}
+  - {id: build, zone: platform, cluster_class: build, runs_images: 'no', build_authority: 'yes'}
+  - {id: workload-prod, zone: tenant, cluster_class: app-prod, runs_images: 'yes', build_authority: 'no'}
+  - {id: workload-dev, zone: tenant, cluster_class: app-dev, runs_images: 'yes', build_authority: 'no'}
+  - {id: storage, zone: storage, cluster_class: storage, runs_images: 'no', build_authority: 'no'}
+  - {id: recovery, zone: recovery, cluster_class: recovery, runs_images: 'yes', build_authority: 'no'}
 function:
   - {id: ingress, recovery_allowed: 'no', open_by_design: 'yes'}
   - {id: identity, recovery_allowed: 'no', open_by_design: 'no'}

@@ -1,6 +1,7 @@
 """Reference calculation for file-based tenant requests. Prices are integer EUR cents."""
 
 import json
+import re
 from pathlib import Path
 from collections import Counter
 
@@ -16,21 +17,43 @@ def load_requests(directory):
     return requests
 
 
+def landed_usage(model):
+    """Trusted resource snapshots of the deliveries already merged into the base."""
+    usage = {}
+    for receipt in model.get("landedDeliveries", []):
+        ident = receipt["request"]
+        if ident in usage or not re.fullmatch(r"[0-9a-f]{40}", receipt["revision"]):
+            raise ValueError("Expected a unique delivery with a pinned landing revision")
+        amounts = {dim: receipt[dim] for dim in DIMENSIONS}
+        if any(type(value) is not int or value < 0 for value in amounts.values()):
+            raise ValueError("Landed quantities must be nonnegative integers")
+        usage[ident] = amounts
+    return usage
+
+
 def calculate(model, requests):
     capacities = model["capacity"]
     matrix = {tuple(row) for row in model["zoneMatrix"]}
     decisions = {tuple(row) for row in model["decisions"]}
     rows = {key: [] for key in ("capacity", "shortages", "monthlyCost", "deliveries",
                                 "connections", "isolationFindings", "catalog", "proposal", "scope", "placements", "applicationTargets")}
-    totals = dict.fromkeys(DIMENSIONS, 0)
+    charged = landed_usage(model)
+    totals = {dim: sum(row[dim] for row in charged.values()) for dim in DIMENSIONS}
+    projected = totals.copy()
+    requirements = {}
+    shortages = Counter()
     costs = dict.fromkeys(model["teams"], 0)
-    oversubscribed = set()
     orders = {}
     links = set()
     resources = {}
     sequence = Counter()
+    identities = set()
     for request in sorted(requests, key=lambda r: (r["submittedAt"], r["team"], r["service"])):
         team = request["team"]
+        identity = (team, request["service"])
+        if identity in identities:
+            raise ValueError("More than one proposal for the same request")
+        identities.add(identity)
         profile = model["profiles"][request["profile"]]
         sequence[team] += 1
         seq = sequence[team]
@@ -38,6 +61,8 @@ def calculate(model, requests):
         if key in orders:
             raise ValueError("Repeated delivery identity")
         orders[key] = request
+        amounts_by_dimension = dict.fromkeys(DIMENSIONS, 0)
+        requirements[key] = amounts_by_dimension
         for item, size in request["items"].items():
             if size not in profile["sizes"]:
                 raise ValueError("Size unavailable in selected profile")
@@ -46,15 +71,13 @@ def calculate(model, requests):
             if any(type(n) is not int or n < 0 for n in [*amounts, cents]):
                 raise ValueError("Catalog quantities and cents must be nonnegative integers")
             for dimension, amount in zip(DIMENSIONS, amounts, strict=True):
-                totals[dimension] += amount
+                amounts_by_dimension[dimension] += amount
             costs[team] += cents
             component = product["component"]
             resources[f"{key}/{component}"] = (team, profile["zone"])
             rows["deliveries"].append([team, key, component, item, size])
             for resource in product["provisions"]:
                 rows["placements"].append([team, key, resource, component])
-        if any(totals[dim] > limit for limits in capacities.values() for dim, limit in limits.items()):
-            oversubscribed.add(key)
         for artifact, scope in model["bindings"].items():
             rows["scope"].append([team, artifact, team if scope == "tenant" else key])
         rows["applicationTargets"].append([team, key])
@@ -81,8 +104,20 @@ def calculate(model, requests):
                     rows["isolationFindings"].append([team, key, target, port, reciprocal, approved])
             states.add(status)
             rows["connections"].append([team, key, target, port, status, reason])
-        rows["proposal"].append([team, key, "denied" if "denied" in states or key in oversubscribed else
-                                 "review" if "review" in states else "standard"])
+        ident = f"{team}/{request['service']}"
+        existing = charged.get(ident, {})
+        candidate = {dim: projected[dim] - existing.get(dim, 0) + requirements[key][dim] for dim in DIMENSIONS}
+        outcome = "denied" if "denied" in states else "review" if "review" in states else "standard"
+        if outcome != "denied":
+            for pool, limits in capacities.items():
+                for dim, limit in limits.items():
+                    excess = candidate[dim] - limit
+                    if excess > 0:
+                        shortages[pool, dim] = max(shortages[pool, dim], excess)
+                        outcome = "denied"
+        if outcome == "standard":
+            projected = candidate
+        rows["proposal"].append([team, key, outcome])
         entity = {"apiVersion": "backstage.io/v1alpha1", "kind": "Component",
                   "metadata": {"namespace": team, "name": request["service"]},
                   "spec": {"type": "service", "owner": f"group:{team}/{team}",
@@ -90,10 +125,8 @@ def calculate(model, requests):
         rows["catalog"].append([team, key, entity])
     for pool, limits in capacities.items():
         for dimension, limit in limits.items():
-            demand = totals[dimension]
-            rows["capacity"].append([pool, dimension, demand, limit])
-            if demand > limit:
-                rows["shortages"].append([pool, dimension, demand - limit])
+            rows["capacity"].append([pool, dimension, totals[dimension], limit])
+    rows["shortages"] = [[pool, dim, amount] for (pool, dim), amount in shortages.items()]
     rows["monthlyCost"] = [[team, amount, "EUR-cent"] for team, amount in costs.items()]
     rows["scope"] = [list(row) for row in set(map(tuple, rows["scope"]))]
     return {name: sorted(relation) for name, relation in rows.items()}

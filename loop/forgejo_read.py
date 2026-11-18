@@ -2,13 +2,14 @@
 
 from collections.abc import Mapping
 from itertools import count
-import re
 from urllib.parse import quote
+
+from loop.status_target import is_commit_sha
 
 
 def read_status(request, owner: str, repo: str, sha: str, context: str, *, page_size: int = 50) -> dict | None:
     """Return the first matching status from the provider's newest-first pages."""
-    if not isinstance(sha, str) or not re.fullmatch(r"[0-9a-f]{40}", sha):
+    if not is_commit_sha(sha):
         raise ValueError("commit must be a full SHA")
     if type(page_size) is not int or page_size <= 0:
         raise ValueError("page size must be a positive integer")
