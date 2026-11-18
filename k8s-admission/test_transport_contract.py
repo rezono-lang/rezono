@@ -22,7 +22,6 @@ def publication(protocol):
     return resource
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError, reason="Depends on the canonical publication reader. Extend k8s-admission/resources/publication-crd.yaml and parameter_reader.py together per decisions/k8s-admission-transport.md.")
 def test_transport_publication_interchange():
     from parameter_reader import read_parameters
 

@@ -15,7 +15,8 @@ def read_parameters(namespace: str, resource: dict) -> dict:
         raise ValueError("publication namespace must match the request namespace")
 
     spec = resource.get("spec")
-    if not isinstance(spec, dict) or set(spec) != {"digest", "images", "flows"}:
+    required = {"digest", "images", "flows"}
+    if not isinstance(spec, dict) or not required <= spec.keys() <= required | {"transportFlows"}:
         raise ValueError("publication spec must contain digest, images and flows")
     digest, images, flows = spec["digest"], spec["images"], spec["flows"]
     if not isinstance(digest, str) or not re.fullmatch(r"[0-9a-f]{64}", digest):
@@ -42,4 +43,29 @@ def read_parameters(namespace: str, resource: dict) -> dict:
     if len({(entry["source"], entry["destination"], entry["port"]) for entry in flows}) != len(flows):
         raise ValueError("publication contains duplicate flow entries")
 
-    return {"namespace": namespace, "digest": digest, "images": images, "flows": flows}
+    result = {"namespace": namespace, "digest": digest, "images": images, "flows": flows}
+    if "transportFlows" in spec:
+        transport_flows = spec["transportFlows"]
+        validate_transport_flows(transport_flows)
+        result["transportFlows"] = transport_flows
+    return result
+
+
+def validate_transport_flows(rows: object) -> None:
+    if not isinstance(rows, list) or len(rows) > 256:
+        raise ValueError("publication transportFlows must be a list of at most 256 entries")
+    identities = set()
+    for row in rows:
+        if not isinstance(row, dict) or set(row) != {"source", "destination", "protocol", "port"}:
+            raise ValueError("transport flow entries require source, destination, protocol and port")
+        source, destination, protocol, port = (
+            row["source"], row["destination"], row["protocol"], row["port"]
+        )
+        if (not all(isinstance(endpoint, str) and 1 <= len(endpoint) <= 63
+                    for endpoint in (source, destination))
+                or protocol not in ("UDP", "SCTP") or type(port) is not int or not 1 <= port <= 65535):
+            raise ValueError("transport flow entries require named endpoints, UDP or SCTP and a bounded integer port")
+        identity = (source, destination, protocol, port)
+        if identity in identities:
+            raise ValueError("publication contains duplicate transport flow entries")
+        identities.add(identity)
