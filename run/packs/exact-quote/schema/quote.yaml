@@ -1,0 +1,38 @@
+id: https://rezono.org/examples/run/exact-quote
+name: exact_quote
+in_language: en
+imports:
+  - linkml:types
+default_range: string
+annotations:
+  layer: facts
+
+classes:
+  RecordedQuote:
+    attributes:
+      id: {identifier: true}
+  RecordedLine:
+    attributes:
+      id: {identifier: true}
+      quote: {range: RecordedQuote, required: true}
+  QuoteDigit:
+    attributes:
+      id: {identifier: true}
+      line: {range: RecordedLine, required: true}
+      operand: {range: QuoteOperand, required: true}
+      position: {range: integer, minimum_value: 0, required: true}
+      value: {range: integer, minimum_value: 0, maximum_value: 9, required: true}
+  QuoteCarry:
+    attributes:
+      id: {identifier: true}
+      amount: {required: true}
+      position: {range: integer, minimum_value: 0, required: true}
+      value: {range: integer, minimum_value: 0, required: true}
+
+enums:
+  QuoteOperand:
+    permissible_values:
+      quantity:
+      billed_periods:
+      period_price_micros:
+      setup_price_micros:
