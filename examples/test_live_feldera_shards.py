@@ -8,7 +8,7 @@ import xml.etree.ElementTree as ET
 import pytest
 
 
-CI = Path(__file__).resolve().parents[1] / "ci"
+CI = Path(__file__).resolve().parents[1] / "compiler" / "ci"
 EXPECTED = {
     "library": ["examples/test_feldera.py::test_feldera_accepts_the_sql_and_finds_the_errors[library]"],
     "projects": ["examples/test_feldera.py::test_feldera_accepts_the_sql_and_finds_the_errors[projects]"],

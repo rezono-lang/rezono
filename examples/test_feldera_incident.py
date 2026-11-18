@@ -10,7 +10,8 @@ import xml.etree.ElementTree as ET
 import pytest
 import yaml
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "ci"))
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "compiler" / "ci"))
 import feldera
 import feldera_incident as incident
 from feldera_shards import SHARDS, selection
@@ -205,8 +206,7 @@ def test_no_green_revision_and_no_issue_for_infrastructure_dispatch_or_other_ref
 
 
 def test_only_the_serial_main_reporter_can_write_issues():
-    root = Path(__file__).resolve().parents[2]
-    workflow = yaml.load((root / incident.WORKFLOW).read_text(encoding="utf-8"), Loader=yaml.BaseLoader)
+    workflow = yaml.load((ROOT / incident.WORKFLOW).read_text(encoding="utf-8"), Loader=yaml.BaseLoader)
     assert workflow["concurrency"] == {"group": "feldera-oracle-${{ github.ref }}", "cancel-in-progress": "false"}
     assert workflow["permissions"] == {"contents": "read"}
     oracle = workflow["jobs"]["oracle"]
