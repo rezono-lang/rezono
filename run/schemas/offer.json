@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Offer price line",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "sku",
+    "currency",
+    "period_seconds",
+    "period_price_micros",
+    "setup_price_micros",
+    "source_sha256"
+  ],
+  "properties": {
+    "sku": {"type": "string", "minLength": 1},
+    "currency": {"type": "string", "pattern": "^[A-Z]{3}(?![\\s\\S])"},
+    "period_seconds": {"type": "integer", "minimum": 1},
+    "period_price_micros": {"type": "integer", "minimum": 0},
+    "setup_price_micros": {"type": "integer", "minimum": 0},
+    "source_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}(?![\\s\\S])"}
+  }
+}
