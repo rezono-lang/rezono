@@ -13,6 +13,7 @@ export type Path = { path: string[] };
 
 export type Expr =
 	| { lit: string }
+	| { wildcard: true }
 	| Path
 	| { dot: [Expr, string] }
 	| { kind: string }
