@@ -1,0 +1,57 @@
+id: witness-alternative-through-its-own-row
+source: docs/semantics/witness-alternatives-cases.yaml#alternative-through-its-own-row
+status: settled
+input:
+  rows:
+  - relation: edge
+    key:
+    - item-a
+    - item-b
+  - relation: edge
+    key:
+    - item-b
+    - item-a
+  rules:
+  - 'reach_edge: reach(x, y) :- edge(x, y).'
+  - 'reach_step: reach(x, z) :- reach(x, y), edge(y, z).'
+  subjects:
+  - relation: reach
+    key:
+    - item-a
+    - item-a
+  - relation: reach
+    key:
+    - item-a
+    - item-b
+expect:
+  value:
+    supported:
+    - relation: reach
+      key:
+      - item-a
+      - item-a
+    - relation: reach
+      key:
+      - item-a
+      - item-b
+  state: known
+  reason: null
+  witness:
+    reach(item-a,item-a):
+      height: 2
+      chosen: reach_step(item-a,item-b,item-a)
+      founded:
+      - reach_step(item-a,item-b,item-a)
+      cyclic: []
+    reach(item-a,item-b):
+      height: 1
+      chosen: reach_edge(item-a,item-b)
+      founded:
+      - reach_edge(item-a,item-b)
+      cyclic:
+      - reach_step(item-a,item-a,item-b)
+unsupported:
+  checker: Each selected proof is checkable. The proof wire format does not carry the complete alternative
+    list.
+  feldera: The materialized rule output does not give the ranked founded and cyclic alternatives.
+  language: The language evaluator has no ranked alternative-proof query.

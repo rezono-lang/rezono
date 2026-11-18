@@ -1,0 +1,15 @@
+id: value-print-literal-scale
+source: docs/semantics/value-cases.yaml#print-literal-scale
+status: settled
+input:
+  rows: []
+  expression: ask Item where rate <= € 0.20/h
+expect:
+  value:
+    literal: € 0.20/h
+    computed_scale: type_scale
+  state: known
+  reason: null
+  witness: null
+unsupported:
+  feldera: Source printing is performed by the language reader and printer.

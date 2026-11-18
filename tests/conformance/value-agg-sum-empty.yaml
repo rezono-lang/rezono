@@ -1,0 +1,25 @@
+id: value-agg-sum-empty
+source: docs/semantics/value-cases.yaml#agg-sum-empty
+status: settled
+input:
+  rows:
+  - kind: item
+    id: item-x
+    group: group-a
+    labels: []
+  - kind: item
+    id: item-a
+    group: group-a
+    quantity: 7
+  expression: sum item__quantity for item-x
+  subject: item-x
+  world: closed
+expect:
+  value: '0'
+  state: known
+  reason: null
+  witness:
+    relation: item__quantity
+    owner: item-x
+    complete: true
+    contributors: []

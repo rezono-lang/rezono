@@ -1,0 +1,63 @@
+id: witness-finite-alternatives-on-a-cycle
+source: docs/semantics/witness-alternatives-cases.yaml#finite-alternatives-on-a-cycle
+status: settled
+input:
+  rows:
+  - relation: edge
+    key:
+    - item-a
+    - item-a
+  - relation: edge
+    key:
+    - item-a
+    - item-b
+  - relation: edge
+    key:
+    - item-b
+    - item-a
+  rules:
+  - 'reach_edge: reach(x, y) :- edge(x, y).'
+  - 'reach_step: reach(x, z) :- reach(x, y), edge(y, z).'
+  subjects:
+  - relation: reach
+    key:
+    - item-a
+    - item-a
+  - relation: reach
+    key:
+    - item-a
+    - item-b
+expect:
+  value:
+    supported:
+    - relation: reach
+      key:
+      - item-a
+      - item-a
+    - relation: reach
+      key:
+      - item-a
+      - item-b
+  state: known
+  reason: null
+  witness:
+    reach(item-a,item-a):
+      height: 1
+      chosen: reach_edge(item-a,item-a)
+      founded:
+      - reach_edge(item-a,item-a)
+      - reach_step(item-a,item-b,item-a)
+      cyclic:
+      - reach_step(item-a,item-a,item-a)
+    reach(item-a,item-b):
+      height: 1
+      chosen: reach_edge(item-a,item-b)
+      founded:
+      - reach_edge(item-a,item-b)
+      - reach_step(item-a,item-a,item-b)
+      cyclic: []
+unsupported:
+  checker: Each selected proof is checkable. The proof wire format does not carry the complete alternative
+    list.
+  feldera: The materialized rule output does not give the ranked founded and cyclic alternatives.
+  language: The language evaluator has no ranked alternative-proof query.

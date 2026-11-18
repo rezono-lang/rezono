@@ -1,0 +1,26 @@
+id: value-hash-na-name
+source: docs/semantics/value-cases.yaml#hash-na-name
+status: settled
+input:
+  rows:
+  - kind: item
+    id: item-b
+    group: group-a
+    labels:
+    - first
+    weight: 3
+  slot: item.quantity
+  subject: item-b
+expect:
+  value:
+    hash_form:
+      $reason: ''
+      $state: not_applicable
+    forbidden_state_encodings:
+    - n/a
+    - '1'
+  state: not_applicable
+  reason: null
+  witness: null
+unsupported:
+  feldera: Canonical row encodings and hashes are constructed outside the SQL engine.

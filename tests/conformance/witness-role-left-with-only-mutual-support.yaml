@@ -1,0 +1,43 @@
+id: witness-role-left-with-only-mutual-support
+source: docs/semantics/witness-alternatives-cases.yaml#role-left-with-only-mutual-support
+status: settled
+input:
+  rows:
+  - relation: left
+    key:
+    - item-a
+  - relation: right
+    key:
+    - item-a
+  rules:
+  - 'p_left: p(x) :- left(x).'
+  - 'p_q: p(x) :- q(x).'
+  - 'q_right: q(x) :- right(x).'
+  - 'q_p: q(x) :- p(x).'
+  subjects:
+  - relation: p
+    key:
+    - item-a
+  - relation: q
+    key:
+    - item-a
+  readable_facts: []
+expect:
+  value:
+    supported: []
+  state: known
+  reason: null
+  witness:
+    p(item-a):
+      founded: []
+      cyclic:
+      - p_q(item-a)
+    q(item-a):
+      founded: []
+      cyclic:
+      - q_p(item-a)
+unsupported:
+  checker: Each selected proof is checkable. The proof wire format does not carry the complete alternative
+    list.
+  feldera: The materialized rule output does not give the ranked founded and cyclic alternatives.
+  language: The language evaluator has no ranked alternative-proof query.

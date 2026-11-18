@@ -1,0 +1,33 @@
+id: value-two-values-single
+source: docs/semantics/value-cases.yaml#two-values-single
+status: settled
+input:
+  rows:
+  - kind: item
+    id: item-a
+    group: group-a
+    labels:
+    - first
+    - second
+    quantity: 7
+    weight: 3
+  - kind: item
+    id: item-a
+    quantity: 9
+  slot: item.quantity
+  subject: item-a
+  cardinality: '?'
+expect:
+  value: null
+  state: invalid
+  reason: null
+  witness:
+    rows:
+    - relation: item__quantity
+      key:
+      - item-a
+      - '7'
+    - relation: item__quantity
+      key:
+      - item-a
+      - '9'

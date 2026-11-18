@@ -1,0 +1,43 @@
+id: witness-and-or-two-rules
+source: docs/semantics/witness-alternatives-cases.yaml#and-or-two-rules
+status: settled
+input:
+  rows:
+  - relation: edge
+    key:
+    - item-a
+    - item-b
+  - relation: edge
+    key:
+    - item-b
+    - item-a
+  rules:
+  - 'near_out: near(a, b) :- edge(a, b).'
+  - 'near_in: near(a, b) :- edge(b, a).'
+  subjects:
+  - relation: near
+    key:
+    - item-a
+    - item-b
+expect:
+  value:
+    supported:
+    - relation: near
+      key:
+      - item-a
+      - item-b
+  state: known
+  reason: null
+  witness:
+    near(item-a,item-b):
+      height: 1
+      chosen: near_in(item-a,item-b)
+      founded:
+      - near_in(item-a,item-b)
+      - near_out(item-a,item-b)
+      cyclic: []
+unsupported:
+  checker: Each selected proof is checkable. The proof wire format does not carry the complete alternative
+    list.
+  feldera: The materialized rule output does not give the ranked founded and cyclic alternatives.
+  language: The language evaluator has no ranked alternative-proof query.
