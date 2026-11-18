@@ -274,18 +274,28 @@ def collect_component(folder: str, directory: Path) -> int:
     dest.parent.mkdir(parents=True, exist_ok=True)
     collection_report = dest.with_name("collection.xml")
     items: list[str] = []
+    cluster: list[str] = []
+    deselected: list[str] = []
     config_path = None
 
     class Inventory:
+        def pytest_deselected(self, items):
+            deselected.extend(item.nodeid for item in items)
+
         def pytest_collection_finish(self, session):
             nonlocal config_path
             items.extend(item.nodeid for item in session.items)
+            cluster.extend(item.nodeid for item in session.items if item.get_closest_marker("cluster"))
             config_path = str(session.config.inipath.relative_to(ROOT)) if session.config.inipath else None
 
     result = pytest.main(
-        [folder, "--collect-only", "-qq", "--rootdir", str(ROOT), f"--junitxml={collection_report}"],
+        [folder, "--collect-only", "--rezono-cluster", "-qq", "--rootdir", str(ROOT),
+         f"--junitxml={collection_report}"],
         plugins=[Inventory()],
     )
+    if deselected:
+        print(f"{folder}: tests deselected during full inventory: {deselected}", file=sys.stderr)
+        return 1
     if result == pytest.ExitCode.NO_TESTS_COLLECTED:
         # A component without tests is valid only with the original blocked-file evidence.
         if folder == "contracts/python" or subprocess.call(
@@ -297,7 +307,8 @@ def collect_component(folder: str, directory: Path) -> int:
     if len(items) != len(set(items)):
         raise ValueError(f"{folder}: duplicate pytest node IDs in the inventory")
     files = sorted(set(test_files(folder)) | {i.split("::", 1)[0] for i in items})
-    dest.write_text(json.dumps({"items": items, "files": files, "config": config_path}), encoding="utf-8")
+    dest.write_text(json.dumps({"items": items, "cluster": cluster, "files": files, "config": config_path}),
+                    encoding="utf-8")
     print(f"{folder}: inventoried {len(items)} node IDs from {len(files)} test files", flush=True)
     return 0
 
@@ -334,6 +345,9 @@ def weighted_workers(items: list[str], workers: int, weights: dict[str, int], de
     return groups
 
 
+FORMS_MODULE = "examples/subsidy/test_subsidy_forms.py"
+
+
 def worker_items(folder: str, items: list[str], workers: int) -> list[list[str]]:
     if folder == "compiler" and workers > 1:
         # The profile records calls at or above its threshold from each compiler worker's
@@ -344,7 +358,7 @@ def worker_items(folder: str, items: list[str], workers: int) -> list[list[str]]
     if folder != "examples" or workers == 1:
         return [items[n::workers] for n in range(workers)]
     # Keep the examples' file-scoped accumulation and the two independent immutable readers.
-    forms = "examples/subsidy/test_subsidy_forms.py"
+    forms = FORMS_MODULE
     readers = sorted(i for i in items if i.split("::", 1)[0] == forms)
     groups = [[] for _ in range(workers)]
     offset = 2 if readers and workers > 2 else 0
@@ -383,14 +397,34 @@ def execute_worker(assignment: Path, journal: Path, report: Path) -> int:
             def pytest_runtest_logstart(self, nodeid, location):
                 print(json.dumps(["start", nodeid]), file=evidence)
 
+            @pytest.hookimpl(wrapper=True, tryfirst=True)
+            def pytest_runtest_makereport(self, item, call):
+                from rezono_cluster import CLUSTER_SKIP_REASON
+
+                result = yield
+                if (item.get_closest_marker("cluster") and call.when == "setup" and result.skipped
+                        and call.excinfo and isinstance(call.excinfo.value, pytest.skip.Exception)
+                        and str(call.excinfo.value) == CLUSTER_SKIP_REASON):
+                    print(json.dumps(["cluster-skip", item.nodeid]), file=evidence)
+                    print(f"{item.nodeid}: {CLUSTER_SKIP_REASON}")
+                return result
+
             def pytest_runtest_logfinish(self, nodeid, location):
                 print(json.dumps(["finish", nodeid]), file=evidence)
 
-        args = ["-q", "--durations=5", "--rootdir", str(ROOT), f"--junitxml={report}"]
+        args = ["-q", "--rezono-report-cluster", "--durations=5", "--rootdir", str(ROOT), f"--junitxml={report}"]
         if data["config"]:
             args.extend(["-c", data["config"]])
         # Pytest resolves only assigned IDs, without walking the component again.
-        return int(pytest.main([*args, "--", *expected], plugins=[Evidence()]))
+        plugins = [Evidence()]
+        if "publication" in data:
+            sys.path.insert(0, str(ROOT / ".github/workflows"))
+            from publication_fixture import PublicationProducer, PublicationReader
+
+            share = data["publication"]
+            plugin = PublicationProducer if share["producer"] else PublicationReader
+            plugins.append(plugin(Path(share["directory"]), ROOT / FORMS_MODULE))
+        return int(pytest.main([*args, "--", *expected], plugins=plugins))
 
 
 def run_shard(folder: str, shard: int, total: int, plans: Path, reports: Path, receipts: Path) -> int:
@@ -403,17 +437,34 @@ def run_shard(folder: str, shard: int, total: int, plans: Path, reports: Path, r
     if Counter(i for group in groups for i in group) != Counter(selected):
         raise ValueError("Worker assignments differ from the shard inventory")
     print(f"{folder} shard {shard+1}/{total}: {len(selected)} test IDs", flush=True)
+    paired_readers = (folder == "examples" and len(groups) > 2 and
+                      all(group and all(node.partition("::")[0] == FORMS_MODULE for node in group)
+                          for group in groups[:2]))
+
     def execute(pair):
         index, nodes = pair
         assignment = reports / f"assignment-{index}.json"
-        assignment.write_text(json.dumps({"items": nodes, "config": plan["config"]}), encoding="utf-8")
-        return subprocess.call([
-            sys.executable, __file__, "execute-worker", str(assignment),
-            str(evidence / f"{shard}-{index}.jsonl"), str(reports / f"pytest-{index}.xml"),
-        ])
-    with ThreadPoolExecutor(max_workers=len(groups)) as pool:
-        statuses = list(pool.map(execute, enumerate(groups)))
+        data = {"items": nodes, "config": plan["config"]}
+        share = paired_readers and index < 2
+        if share:
+            data["publication"] = {"directory": directory, "producer": index == 0}
+        try:
+            assignment.write_text(json.dumps(data), encoding="utf-8")
+            return subprocess.call([
+                sys.executable, __file__, "execute-worker", str(assignment),
+                str(evidence / f"{shard}-{index}.jsonl"), str(reports / f"pytest-{index}.xml"),
+            ])
+        finally:
+            if share and index == 0:
+                (Path(directory) / "producer-finished").touch()
+    with tempfile.TemporaryDirectory(prefix="pytest-fixture-") as directory:
+        with ThreadPoolExecutor(max_workers=len(groups)) as pool:
+            statuses = list(pool.map(execute, enumerate(groups)))
         status = next((code for code in statuses if code), 0)
+        if paired_readers and not status:
+            for role in ("producer", "reader"):
+                timing = (Path(directory) / f"{role}.json").read_text(encoding="utf-8")
+                print(f"Current publication fixture {role}: {timing}", flush=True)
     # Write the expected number of journals even on failure, for diagnosis.
     (evidence / f"{shard}.json").write_text(json.dumps(len(groups)), encoding="utf-8")
     return status
@@ -424,12 +475,15 @@ def verify_execution(matrix: list[dict], plans: Path, receipts: Path) -> int:
     for folder in sorted({pytest_folder(c) for c in matrix}):
         rows = [c for c in matrix if pytest_folder(c) == folder]
         plan = json.loads(inventory_path(plans, folder).read_text(encoding="utf-8"))
-        observed = {"start": Counter(), "finish": Counter()}
+        all_items = Counter(plan["items"])
+        cluster = Counter(plan["cluster"])
+        expected_events = {"start": all_items, "finish": all_items, "cluster-skip": cluster}
+        observed = {event: Counter() for event in expected_events}
         for row in rows:
             shard, total = row["shard"], row["total"]
             directory = receipts / folder
             expected = Counter(shard_items(plan, shard, total))
-            shard_counts = {"start": Counter(), "finish": Counter()}
+            shard_counts = {event: Counter() for event in expected_events}
             try:
                 workers = json.loads((directory / f"{shard}.json").read_text(encoding="utf-8"))
                 for index in range(workers):
@@ -442,16 +496,17 @@ def verify_execution(matrix: list[dict], plans: Path, receipts: Path) -> int:
                 success = False
             for event, counts in shard_counts.items():
                 observed[event].update(counts)
-                if counts != expected:
-                    print(f"{folder} shard {shard+1} {event}: missing {list((expected-counts).elements())}, "
-                          f"extra {list((counts-expected).elements())}", file=sys.stderr)
+                required = expected & expected_events[event]
+                if counts != required:
+                    print(f"{folder} shard {shard+1} {event}: missing {list((required-counts).elements())}, "
+                          f"extra {list((counts-required).elements())}", file=sys.stderr)
                     success = False
         for event, counts in observed.items():
-            if counts != Counter(plan["items"]):
+            if counts != expected_events[event]:
                 print(f"{folder}: {event} differs from full component inventory", file=sys.stderr)
                 success = False
         print(f"{folder}: inventoried {len(plan['items'])}, started {observed['start'].total()}, "
-              f"finished {observed['finish'].total()}")
+              f"finished {observed['finish'].total()}, disposable cluster required {observed['cluster-skip'].total()}")
     return 0 if success else 1
 
 

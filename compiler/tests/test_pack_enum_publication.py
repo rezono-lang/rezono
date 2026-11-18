@@ -18,10 +18,6 @@ def published_orders(folder):
     return enum["values"], schema["enums"]["state"]
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError, reason=(
-    "Preserve the source enum order in compiler/rezono_compiler/pack.py through the published schema. "
-    "Read contracts/view.yaml (the board's columns). Independent of layout."
-))
 def test_pack_enum_reordering_changes_the_published_order(tmp_path):
     folder = shutil.copytree(FIXTURE, tmp_path / "pack")
     schema = folder / "schema" / "minimal.yaml"

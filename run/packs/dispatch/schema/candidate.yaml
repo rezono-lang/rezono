@@ -23,15 +23,33 @@ enums:
 
 classes:
   Candidate:
-    description: One proposed plan with separately observed approval, payable amount and event time.
+    description: A proposed dispatch attempt.
     attributes:
       id: {identifier: true}
+  Plan:
+    attributes:
+      id: {identifier: true}
+      candidate: {range: Candidate, required: true}
       plan_hash: {range: PlanDigest}
-      approval_hash: {range: PlanDigest}
       currency: {range: CurrencyCode}
-      approval_currency: {range: CurrencyCode}
-      decision: {range: ApprovalDecision}
+  Quote:
+    attributes:
+      id: {identifier: true}
+      candidate: {range: Candidate, required: true}
+      plan_hash: {range: PlanDigest}
+      currency: {range: CurrencyCode}
       cost_micros: {range: integer, minimum_value: 0}
+  Approval:
+    attributes:
+      id: {identifier: true}
+      candidate: {range: Candidate, required: true}
+      plan_hash: {range: PlanDigest}
+      currency: {range: CurrencyCode}
+      decision: {range: ApprovalDecision}
       cap_micros: {range: integer, minimum_value: 0}
-      event_us: {range: integer}
       expires_us: {range: integer}
+  Observation:
+    attributes:
+      id: {identifier: true}
+      candidate: {range: Candidate, required: true}
+      event_us: {range: integer}

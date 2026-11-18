@@ -11,6 +11,7 @@ import tokenize
 
 POLICY = {
     ".github/workflows/red-policy.yml",
+    ".github/workflows/resume-feldera-review.yml", "scripts/feldera_admission.py",
     "scripts/red_guard.py", "scripts/test_red_guard.py",
 }
 EVIDENCE_DIRS = {

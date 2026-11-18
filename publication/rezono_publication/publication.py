@@ -127,14 +127,17 @@ def schema_document(bundle: dict, full=None) -> tuple[dict, dict]:
                 slot["type"] = "Text"
         else:
             raise FormError(f"{a['id']}: type {a['type']} is not written as a publication yet")
-        # A missing value is a state (§3.3): unknown for a required slot, not_applicable for an optional one.
-        slot["states"] = ["known"] if a["multivalued"] else ["known", "unknown" if a["required"] else "not_applicable"]
         world = a["world"]
         if partial(a["table"]):  # what the role cannot read in full is never closed over
             plan["partial"].add(a["table"])
             world = "open"
-            if not a["multivalued"] and "unknown" not in slot["states"]:
-                slot["states"] = ["known", "not_applicable", "unknown"]
+        slot["states"] = ["known"]
+        if not a["multivalued"]:
+            if not a["required"]:
+                slot["states"].append("not_applicable")
+            # Only a closed, optional slot read in full can establish absence from a missing row (§3.3).
+            if a["required"] or world == "open":
+                slot["states"].append("unknown")
         for name in plan["family"][cls[a["kind"]]]:  # the kind that declares it, and each kind below restates it
             if a["name"] in kinds[name]["slots"]:
                 raise FormError(f"{a['id']}: {name} has two slots `{a['name']}`")

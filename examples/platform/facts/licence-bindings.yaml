@@ -1,0 +1,13 @@
+licence_release_binding:
+  - {id: bind-keycloak-26, selected_release: keycloak-26, notice: keycloak-26.0.0, basis: exact-scenario-release}
+  - {id: bind-postgresql-16, selected_release: postgresql-16, notice: postgresql-16.0, basis: example-of-selected-series}
+  - {id: bind-postgresql-17, selected_release: postgresql-17, notice: postgresql-17.0, basis: example-of-selected-series}
+product_licence_gap:
+  - {id: app, product: app, reason: unknown-implementation}
+  - {id: builder, product: builder, reason: unknown-implementation}
+  - {id: client, product: client, reason: unknown-implementation}
+  - {id: forgejo, product: forgejo, reason: unknown-unverified-source}
+  - {id: loadbalancer, product: loadbalancer, reason: unknown-implementation}
+  - {id: recovery-env, product: recovery-env, reason: unknown-implementation}
+  - {id: registry, product: registry, reason: unknown-implementation}
+  - {id: signer, product: signer, reason: unknown-implementation}

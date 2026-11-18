@@ -1,0 +1,32 @@
+id: https://rezono.org/examples/platform-core/management-health
+name: platform_management_health
+description: Service health steps and probe readings identified by run and observation token.
+in_language: en
+imports: [linkml:types]
+default_range: string
+annotations:
+  layer: facts
+
+enums:
+  HealthProbeStatus:
+    permissible_values:
+      healthy:
+      unhealthy:
+      unknown:
+
+classes:
+  HealthStep:
+    description: A service observation requested in a particular run.
+    attributes:
+      id: {identifier: true}
+      service: {required: true}
+      run: {required: true}
+      token: {required: true}
+  HealthProbe:
+    description: An observed service state and the token to which it responds.
+    attributes:
+      id: {identifier: true}
+      service: {required: true}
+      run: {required: true}
+      token: {required: true}
+      status: {range: HealthProbeStatus, required: true}

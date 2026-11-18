@@ -1,5 +1,10 @@
 kinds:
   - {kind: sweep, shape: rect}
   - {kind: resource, shape: rect}
+  - {kind: page, shape: rect}
+  - {kind: attempt, shape: rect}
 arrows:
   - {arrow: resource.sweep, dash: none}
+  - {arrow: resource.page, dash: none}
+  - {arrow: page.sweep, dash: none}
+  - {arrow: sweep.attempt, dash: none}

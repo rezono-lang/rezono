@@ -1,15 +1,25 @@
 candidate: dispatch candidate
-candidate.plan_hash: plan digest
-candidate.approval_hash: approved plan digest
-candidate.currency: plan currency
-candidate.approval_currency: approval currency
-candidate.decision: approval decision
-candidate.cost_micros: payable amount in millionths
-candidate.cap_micros: approved ceiling in millionths
-candidate.event_us: recorded time in microseconds
-candidate.expires_us: approval expiry in microseconds
+plan: recorded plan
+plan.candidate: dispatch candidate
+plan.plan_hash: plan digest
+plan.currency: plan currency
+quote: payable quote
+quote.candidate: dispatch candidate
+quote.plan_hash: quoted plan digest
+quote.currency: quote currency
+quote.cost_micros: payable amount in millionths
+approval: recorded approval
+approval.candidate: dispatch candidate
+approval.plan_hash: approved plan digest
+approval.currency: approval currency
+approval.decision: approval decision
+approval.cap_micros: approved ceiling in millionths
+approval.expires_us: approval expiry in microseconds
+observation: recorded clock observation
+observation.candidate: dispatch candidate
+observation.event_us: observed time in microseconds
 approval_decision: approval decision
 approval_decision.approve: approve
 approval_decision.decline: decline
-conflicting_input: conflicting candidate evidence
+conflicting_input: conflicting dispatch evidence
 authorized: authorized candidate

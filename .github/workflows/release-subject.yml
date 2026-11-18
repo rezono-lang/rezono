@@ -13,9 +13,17 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
           persist-credentials: false
+      - name: Warn about new literals outside packs
+        shell: bash
+        env:
+          POLICY: ${{ github.event.pull_request.base.sha || github.sha }}
+          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+          HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          git show "$POLICY:scripts/pack_warnings.py" | python -I - "$BASE" "$HEAD"
       - name: Check the pull request title
         if: github.event_name == 'pull_request'
         env:
@@ -23,13 +31,8 @@ jobs:
         run: python scripts/release-notes.py --subject "$SUBJECT"
       - name: Check the single commit used as the squash subject
         if: github.event_name == 'pull_request' && github.event.pull_request.commits == 1
-        run: python scripts/release-notes.py --subject "$(git log -1 --format=%s)"
-      - name: Warn about new literals outside packs
-        shell: bash
         env:
-          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
-          HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
-        run: |
-          set -euo pipefail
-          python -I scripts/test_pack_warnings.py
-          python -I scripts/pack_warnings.py "$BASE" "$HEAD"
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: python scripts/release-notes.py --subject "$(git log -1 --format=%s "$HEAD")"
+      - name: Test the candidate pack warning rules
+        run: python -I scripts/test_pack_warnings.py

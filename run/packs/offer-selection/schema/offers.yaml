@@ -12,6 +12,8 @@ classes:
     attributes:
       id: {identifier: true}
       price_micros: {range: integer, minimum_value: 0, required: true}
+      setup_price_micros: {range: integer, minimum_value: 0}
+      provider: {}
       tie_rank: {range: integer, required: true}
       stock: {range: integer, minimum_value: 0, required: true}
       free_disks: {range: integer, minimum_value: 0, required: true}
@@ -22,5 +24,17 @@ classes:
     attributes:
       id: {identifier: true}
       quantity: {range: integer, minimum_value: 1, required: true}
+      billed_periods: {range: integer, minimum_value: 1}
       boot: {required: true}
       currency: {required: true}
+  Guarantee:
+    description: A provider record covering a particular offer for a particular order.
+    attributes:
+      id: {identifier: true}
+      demand: {range: Demand, required: true}
+      offer: {range: Offer, required: true}
+      provider: {required: true}
+      currency: {required: true}
+      scope: {required: true}
+      mode: {required: true}
+      total_micros: {range: integer, minimum_value: 0}

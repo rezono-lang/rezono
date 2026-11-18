@@ -1,2 +1,6 @@
 kinds:
   - {kind: candidate, shape: rect}
+  - {kind: plan, shape: rect}
+  - {kind: quote, shape: rect}
+  - {kind: approval, shape: rect}
+  - {kind: observation, shape: rect}

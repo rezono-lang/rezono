@@ -43,28 +43,138 @@ def name(value, label):
     return value
 
 
-def offers(catalog):
-    rows = []
+DIMENSIONS = ("cores", "memoryGiB", "storageGiB")
+RESOURCE_FIELDS = ("cores", "memory_gib", "storage_gib")
+
+
+def sequence(value, label):
+    if not isinstance(value, list):
+        raise ValueError(f"{label} must be a list")
+    return value
+
+
+def quantity(value):
+    if type(value) is not int or value < 0:
+        raise ValueError("resource amounts must be nonnegative integers")
+    return value
+
+
+def dimension(value):
+    if value not in DIMENSIONS:
+        raise ValueError(f"unknown resource dimension {value!r}")
+    return value
+
+
+def port_number(value):
+    if type(value) is not int or not 1 <= value <= 65535:
+        raise ValueError("connection port must be an integer from 1 to 65535")
+    return value
+
+
+def target_text(value):
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError("connection target must be nonempty text")
+    return value
+
+
+def catalog_rows(catalog):
+    rows = defaultdict(list)
     for item, value in mapping(catalog["catalog"], "catalog items").items():
         name(item, "item")
         entry = fields(value, "catalog item", ("component", "sizes", "provisions"))
-        name(entry["component"], "component")
-        if not isinstance(entry["provisions"], list):
-            raise ValueError("catalog provisions must be a list")
-        for provision in entry["provisions"]:
-            name(provision, "provision")
+        rows["tenant_catalog_item"].append({
+            "id": item, "component": name(entry["component"], "component"),
+            "provision": [name(p, "provision") for p in sequence(entry["provisions"], "catalog provisions")],
+        })
         for size, quantities in mapping(entry["sizes"], "catalog sizes").items():
             name(size, "size")
             if (not isinstance(quantities, list) or len(quantities) != 4
                     or any(type(n) is not int or n < 0 for n in quantities)):
                 raise ValueError("a catalog size requires four nonnegative integer quantities")
-            rows.append({"id": f"{item}/{size}", "item": item, "size": size, "monthly_cents": quantities[3]})
+            rows["tenant_catalog_offer"].append({
+                "id": f"{item}/{size}", "item": item, "size": size, "monthly_cents": quantities[3],
+                **dict(zip(RESOURCE_FIELDS, quantities[:3], strict=True)),
+            })
+    for pool, limits in mapping(catalog.get("capacity", {}), "capacity").items():
+        name(pool, "capacity pool")
+        for key, amount in mapping(limits, "pool capacity").items():
+            rows["tenant_pool_limit"].append({
+                "id": f"{pool}/{key}", "pool": pool, "dimension": dimension(key), "amount": quantity(amount),
+            })
+    for link in sequence(catalog.get("zoneMatrix", []), "zone matrix"):
+        if not isinstance(link, list) or len(link) != 3:
+            raise ValueError("a zone matrix entry requires source, target and port")
+        source, target, port = name(link[0], "source zone"), name(link[1], "target zone"), port_number(link[2])
+        rows["tenant_zone_link"].append({
+            "id": f"{source}/{target}/{port}", "source": source, "target": target, "port": port,
+        })
+    rows["tenant_landed_delivery"] = landed_deliveries(catalog.get("landedDeliveries", []))
+    add_review_inputs(rows, catalog)
+    rows["tenant_quota"] = readable_quotas(catalog)
+    return rows
+
+
+def landed_deliveries(values):
+    rows = []
+    seen = set()
+    for value in sequence(values, "landed deliveries"):
+        receipt = fields(value, "landed delivery", ("request", "revision", *DIMENSIONS))
+        request, revision = receipt["request"], receipt["revision"]
+        if not isinstance(request, str) or len(request.split("/")) != 2:
+            raise ValueError("landed delivery requires a team/service request identifier")
+        for part in request.split("/"):
+            name(part, "landed request identifier")
+        if request in seen or not isinstance(revision, str) or not re.fullmatch(r"[0-9a-f]{40}", revision):
+            raise ValueError("landed deliveries require unique requests and full merge revisions")
+        seen.add(request)
+        rows.append({
+            "id": request, "revision": revision,
+            **{field: quantity(receipt[key]) for field, key in zip(RESOURCE_FIELDS, DIMENSIONS, strict=True)},
+        })
+    return rows
+
+
+def add_review_inputs(rows, catalog):
+    grants = defaultdict(list)
+    for grant in sequence(catalog.get("reviewGrants", []), "review grants"):
+        if not isinstance(grant, list) or len(grant) != 2:
+            raise ValueError("a review grant requires a reviewer and an action")
+        grants[name(grant[0], "reviewer")].append(name(grant[1], "review action"))
+    rows["tenant_reviewer"] = [{"id": reviewer, "action": actions} for reviewer, actions in grants.items()]
+    for value in sequence(catalog.get("decisionsByReviewer", []), "review decisions"):
+        decision = fields(value, "review decision", ("reviewer", "sourceDelivery", "target", "port"))
+        reviewer = name(decision["reviewer"], "reviewer")
+        delivery = name(decision["sourceDelivery"], "source delivery")
+        target, port = target_text(decision["target"]), port_number(decision["port"])
+        rows["tenant_review_decision"].append({
+            "id": f"{reviewer}/{delivery}/{port}/{target}", "reviewer": reviewer,
+            "source_delivery": delivery, "target": target, "port": port,
+        })
+
+
+def readable_quotas(catalog):
+    rows = []
+    seen = set()
+    for value in sequence(catalog.get("readableQuotas", []), "readable quotas"):
+        quota = fields(value, "readable quota", ("id", "owner", "dimension", "amount"))
+        identifier = name(quota["id"], "quota identifier")
+        if identifier in seen:
+            raise ValueError(f"duplicate quota identifier {identifier!r}")
+        seen.add(identifier)
+        owner = name(quota["owner"], "quota owner")
+        if owner not in catalog["teams"]:
+            raise ValueError(f"unknown quota owner {owner!r}")
+        rows.append({
+            "id": identifier, "owner": owner,
+            "dimension": dimension(quota["dimension"]), "amount": quantity(quota["amount"]),
+        })
     return rows
 
 
 def request_rows(teams_path, catalog):
     teams = mapping(catalog["teams"], "teams")
     profiles = mapping(catalog["profiles"], "profiles")
+    records = catalog_rows(catalog)
     for tenant, value in teams.items():
         name(tenant, "catalog tenant")
         entry = fields(value, "catalog team", ("key",))
@@ -73,15 +183,12 @@ def request_rows(teams_path, catalog):
     for profile, value in profiles.items():
         name(profile, "catalog profile")
         entry = fields(value, "catalog profile", ("zone", "sizes", "unlisted"))
-        name(entry["zone"], "profile zone")
-        if not isinstance(entry["sizes"], list):
-            raise ValueError("profile sizes must be a list")
-        for size in entry["sizes"]:
-            name(size, "profile size")
         if entry["unlisted"] not in ("review", "denied"):
             raise ValueError("profile decision must be review or denied")
-    records = defaultdict(list)
-    records["tenant_catalog_offer"] = offers(catalog)
+        records["tenant_profile"].append({
+            "id": profile, "zone": name(entry["zone"], "profile zone"), "unlisted": entry["unlisted"],
+            "size": [name(size, "profile size") for size in sequence(entry["sizes"], "profile sizes")],
+        })
     available = {(row["item"], row["size"]) for row in records["tenant_catalog_offer"]}
     for path in sorted(teams_path.rglob("request.json")):
         parts = path.relative_to(teams_path).parts
@@ -117,12 +224,8 @@ def request_rows(teams_path, catalog):
         for index, value in enumerate(request["connections"], 1):
             connection = fields(value, "connection", ("targetZone", "target", "port"), ("peer",))
             target_zone = name(connection["targetZone"], "target zone")
-            target = connection["target"]
-            if not isinstance(target, str) or not target.strip():
-                raise ValueError("connection target must be nonempty text")
-            port = connection["port"]
-            if type(port) is not int or not 1 <= port <= 65535:
-                raise ValueError("connection port must be an integer from 1 to 65535")
+            target = target_text(connection["target"])
+            port = port_number(connection["port"])
             row = {"id": f"{request_id}/{index}", **scope, "target_zone": target_zone,
                    "target": target, "port": port}
             if "peer" in connection:
@@ -138,7 +241,8 @@ def preview_inputs(model, pack_path, teams_path, catalog_path):
     if not teams_path.is_dir():
         raise ValueError("teams must be a directory")
     catalog = fields(read_json(catalog_path), "catalog", ("teams", "profiles", "catalog"),
-                     ("capacity", "zoneMatrix", "decisions", "bindings"))
+                     ("capacity", "zoneMatrix", "decisions", "bindings", "landedDeliveries",
+                      "reviewGrants", "decisionsByReviewer", "readableQuotas"))
     inputs = facts.rows_of(model, request_rows(teams_path, catalog))
     states = scenarios.states(model, pack_path)
     base = states[0][1] if states else {}

@@ -1,3 +1,4 @@
 kinds:
   - {kind: offer, shape: rect}
   - {kind: demand, shape: rect}
+  - {kind: guarantee, shape: rect}

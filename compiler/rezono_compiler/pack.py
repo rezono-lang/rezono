@@ -584,7 +584,7 @@ def read(pack_dir: str | Path) -> Pack:
                 errors.append(f"enum {ename}: name '{e}' is not a valid name")
             if e in enums:
                 errors.append(f"enum {ename}: defined twice")
-            enums[e] = sorted(sv.get_enum(ename).permissible_values or {})
+            enums[e] = list(sv.get_enum(ename).permissible_values or {})
     declared = units(mods, placed, errors)
 
     for k, kind in kinds.items():  # the root kind has the world; a subkind shares its tables, so its world too
@@ -1751,15 +1751,8 @@ def order_slot(pack: Pack, kind: str) -> Slot | None:
 
 
 def ordered_lane(pack: Pack, s: Slot, what: str, where: str, errors: list[str]) -> None:
-    """A lane bound at level `ordered` says that the place of a lane means something, so its order is declared and
-    never the alphabet. On an arrow it is the order of the target kind (`order_slot`): without one
-    the binding is refused. On an enum it is the order in which the schema lists the values, which this compiler
-    does not keep yet (`read` holds an enum's values by name, and so does the bundle): that warns, and names what is
-    drawn, until the bundle carries the schema's order."""
-    if s.enum:
-        pack.warnings.append(f"{where}: {what} is bound as ordered, but its lanes stand in name order: the compiler does "
-                             f"not keep the order in which the schema lists the values of {s.enum} yet")
-    elif order_slot(pack, s.range) is None:
+    """Enum lanes follow the declared value order. An arrow takes its order from the target kind."""
+    if not s.enum and order_slot(pack, s.range) is None:
         errors.append(f"{where}: {what} is bound as ordered, but {s.range} has no order: give it a whole-number slot "
                       "with slot_uri schema:position, or bind the lane at level nominal")
 

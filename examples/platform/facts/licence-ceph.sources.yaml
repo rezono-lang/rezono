@@ -1,0 +1,8 @@
+records:
+  - of: {kind: vendor_licence_notice, id: ceph-19.2.0}
+    kind: tool
+    name: Release notice inspection
+    revision: "19.2.0"
+    position: "L1 (first nonempty line, including its original terminator)"
+    url: https://raw.githubusercontent.com/ceph/ceph/v19.2.0/COPYING
+    fragment_sha256: "85acea58a65130bf66bdca2028f99eb61b172d91780941f33f45efab28c96f46"

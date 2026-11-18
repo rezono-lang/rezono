@@ -115,7 +115,7 @@ def ground_ids(program, explainer, relation, row):
     return ids
 
 
-@pytest.mark.xfail(strict=True, reason="Read decisions/quiet-observation-rounds.md. Waits for test_loop_pack_order. Admit dated sweeps, pending operations, deadlines and declared expected differences in packs/std-loop. Derive ready, stuck and round_outcome with their evidence.")
+@pytest.mark.xfail(strict=True, reason="Read decisions/quiet-observation-rounds.md. Waits for test_loop_pack_order. Admit dated sweeps, pending operations, deadlines and declared expected differences in packs/std-loop. Derive ready, stuck and round_outcome with their evidence. Waits for typed boolean fact inputs in rules: LoopSweep.complete admits true and false, but neither text nor integer rule columns accept them. Keep false distinct from a missing completion flag.")
 def test_quiet_round_rules():
     from rezono_compiler import pack
 

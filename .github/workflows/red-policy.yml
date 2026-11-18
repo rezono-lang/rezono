@@ -7,6 +7,7 @@ on:
   merge_group:
     types: [checks_requested]
 permissions:
+  actions: read
   contents: read
   pull-requests: read
 jobs:
@@ -65,3 +66,16 @@ jobs:
           done
           echo "ERROR PR state kept changing during review."
           exit 1
+      - name: Require live Feldera evidence for backend changes
+        if: github.event_name == 'pull_request_target'
+        shell: bash
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          base=$(git merge-base "$BASE" "$HEAD")
+          python -I scripts/feldera_admission.py review "$base" "$HEAD" "$HEAD_REF" "$HEAD_REPO"

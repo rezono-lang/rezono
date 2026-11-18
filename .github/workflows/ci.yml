@@ -35,7 +35,11 @@ jobs:
         with:
           fetch-depth: 0
       - name: Run policy regression examples
-        run: python -I scripts/test_red_guard.py
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -I scripts/test_red_guard.py
+          python -I scripts/test_feldera_admission.py
       - id: matrix
         env:
           GITHUB_BASE_REF: ${{ github.base_ref }}
@@ -90,6 +94,20 @@ jobs:
         with:
           editable: ${{ needs.discover.outputs.python_editable }}
           oracle: ${{ matrix.component.folder == 'compiler' || matrix.component.folder == 'examples' }}
+      - name: Prepare the Ubuntu worker seed tools
+        if: matrix.component.folder == 'run'
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! command -v bsdtar >/dev/null; then
+            sudo apt-get -o Acquire::Retries=3 update -qq
+            sudo apt-get -o Acquire::Retries=3 install -y --no-install-recommends libarchive-tools
+          fi
+          bsdtar --version
+          renderer="$RUNNER_TEMP/rezono-worker-render"
+          bash run/probes/worker-join/prepare-renderer.sh "$renderer"
+          test -x "$renderer"
+          printf 'REZONO_WORKER_RENDERER=%s\n' "$renderer" >> "$GITHUB_ENV"
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
           name: pytest-inventory

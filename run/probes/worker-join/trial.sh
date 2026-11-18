@@ -2,8 +2,13 @@
 set -Eeuo pipefail
 umask 077
 
+worker_os=Flatcar
+if [[ ${1:-} == --ubuntu ]]; then
+    worker_os=Ubuntu
+    shift
+fi
 if (( $# > 1 )) || [[ $# == 1 && ${1:-} != --kubevirt ]]; then
-    echo "usage: trial.sh [--kubevirt]" >&2
+    echo "usage: trial.sh [--ubuntu] [--kubevirt]" >&2
     exit 2
 fi
 
@@ -45,24 +50,21 @@ ready_api() {
     return 1
 }
 controller_image='docker.io/k0sproject/k0s@sha256:8ad1df78508f82b82891009bb6c75865be57cd20cfede64cd924c891a3a61b17'
-source_revision=c23391b08842d8b824e40e1324267f08b923f743
 observe "stage=bootstrap-inputs"
-fetch 'https://stable.release.flatcar-linux.net/amd64-usr/4757.2.3/flatcar_production_qemu_image.img.bz2' \
-    9a9858f45d9c00774f865f38cba856e866f937a49cebaae8a69c4849275dc347edb51499dd145a8a9ac49098ced8ff6f2b66f65242f8b85cb06910c3b9c38e4f host.img.bz2 sha512sum
 fetch 'https://helm.cilium.io/cilium-1.20.5.tgz' \
     0c7592eb75179ecf46dd3ec22145916f0164c4401214ea15afb5b230b1d11a21 cilium.tgz
-git init -q renderer
-git -C renderer fetch -q --depth=1 https://github.com/k0sproject/k0smotron.git "$source_revision"
-test "$(git -C renderer rev-parse FETCH_HEAD)" = "$source_revision"
-git -C renderer checkout -q --detach FETCH_HEAD
-cp "$sources/render.go" renderer/probe.go
-(cd renderer && go build -mod=readonly -o "$scratch/render" probe.go)
-if ! command -v qemu-system-x86_64 >/dev/null || ! command -v getfacl >/dev/null; then
+bash "$sources/prepare-renderer.sh" "$scratch/render"
+if ! command -v qemu-system-x86_64 >/dev/null || ! command -v getfacl >/dev/null ||
+   { [[ $worker_os == Ubuntu ]] && ! command -v bsdtar >/dev/null; }; then
     sudo -n apt-get update -qq
-    sudo -n apt-get install -y -qq --no-install-recommends acl qemu-system-x86 qemu-utils
+    sudo -n apt-get install -y -qq --no-install-recommends acl qemu-system-x86 qemu-utils libarchive-tools
 fi
-bzip2 -dc host.img.bz2 > host.img
-qemu-img resize host.img 20G
+if [[ $worker_os == Flatcar ]]; then
+    fetch 'https://stable.release.flatcar-linux.net/amd64-usr/4757.2.3/flatcar_production_qemu_image.img.bz2' \
+        9a9858f45d9c00774f865f38cba856e866f937a49cebaae8a69c4849275dc347edb51499dd145a8a9ac49098ced8ff6f2b66f65242f8b85cb06910c3b9c38e4f host.img.bz2 sha512sum
+    bzip2 -dc host.img.bz2 > host.img
+    qemu-img resize host.img 20G
+fi
 if [[ ! -w /dev/kvm ]]; then
     getfacl -p /dev/kvm > kvm.acl
     sudo -n setfacl -m "u:$(id -u):rw" /dev/kvm
@@ -84,13 +86,19 @@ helm template cilium cilium.tgz --namespace kube-system --kube-version 1.36.6 \
 docker exec -i "$name" k0s kubectl apply --server-side -f - < cilium.yaml >/dev/null
 # The bootstrap capability exists only for this temporary controller. Pipe it
 # directly into the renderer; the private machine document is removed on exit.
-docker exec "$name" k0s token create --role worker --expiry 12m | ./render "$@" > worker.ign
-observe "ignition_rendered=true"
-qemu-system-x86_64 -machine q35,accel=kvm -cpu host -m 7G -smp 3 \
-    -display none -monitor none -no-reboot -serial "file:$scratch/serial.log" \
-    -drive "file=$scratch/host.img,if=virtio,format=qcow2" \
-    -netdev user,id=net -device virtio-net-pci,netdev=net \
-    -fw_cfg "name=opt/org.flatcar-linux/config,file=$scratch/worker.ign" &
+if [[ $worker_os == Ubuntu ]]; then
+    export REZONO_WORKER_RENDERER="$scratch/render"
+    docker exec "$name" k0s token create --role worker --expiry 12m |
+        python3 "$sources/ubuntu_worker.py" "$scratch" proof-worker "$@" &
+else
+    docker exec "$name" k0s token create --role worker --expiry 12m | ./render "$@" > worker.ign
+    observe "ignition_rendered=true"
+    qemu-system-x86_64 -machine q35,accel=kvm -cpu host -m 7G -smp 3 \
+        -display none -monitor none -no-reboot -serial "file:$scratch/serial.log" \
+        -drive "file=$scratch/host.img,if=virtio,format=qcow2" \
+        -netdev user,id=net -device virtio-net-pci,netdev=net \
+        -fw_cfg "name=opt/org.flatcar-linux/config,file=$scratch/worker.ign" &
+fi
 vm_pid=$!
 registered=false
 last_stage=
@@ -119,8 +127,8 @@ if ! jq -e 'any(.status.conditions[]; .type == "Ready" and .status == "True")' n
         jq -r '.items[] | "pod=\(.metadata.name) phase=\(.status.phase) waiting=\([.status.containerStatuses[]?.state.waiting.reason // empty]|join(","))"' |
         while read -r row; do observe "$row"; done
 fi
-jq -e '.metadata.labels["probe.rezono.org/role"] == "joined-worker" and
-    (.status.nodeInfo.osImage | contains("Flatcar")) and
+jq -e --arg os "$worker_os" '.metadata.labels["probe.rezono.org/role"] == "joined-worker" and
+    (.status.nodeInfo.osImage | if $os == "Ubuntu" then startswith("Ubuntu 24.04") else contains("Flatcar") end) and
     (.status.nodeInfo.kubeletVersion | startswith("v1.36.6")) and
     any(.status.conditions[]; .type == "Ready" and .status == "True")' node.json >/dev/null
 # The kubelet normally heartbeats every 10 seconds. Allow two intervals.

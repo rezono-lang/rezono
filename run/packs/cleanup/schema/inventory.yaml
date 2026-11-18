@@ -13,6 +13,9 @@ types:
     pattern: '^[0-9a-f]{64}$'
 
 enums:
+  ObservedTagState:
+    permissible_values:
+      untagged:
   InventoryCoverage:
     permissible_values:
       complete:
@@ -24,9 +27,34 @@ classes:
     attributes:
       id: {identifier: true}
       plan_hash: {range: PlanDigest}
-      coverage: {range: InventoryCoverage}
+      coverage: {range: InventoryCoverage, description: Optional legacy coverage report.}
+      run: {description: Run in which inventory was requested.}
+      scope: {description: Provider inventory scope.}
+      attempt: {range: Attempt}
+      started_us: {range: integer, description: Event time when the first page was requested.}
+      root_token: {description: Token requested for the first page.}
+  Attempt:
+    description: A journal record of a dispatched operation.
+    attributes:
+      id: {identifier: true}
+      operation: {required: true}
+      run: {required: true}
+      scope: {required: true}
+      plan_hash: {range: PlanDigest, required: true}
+      dispatched_us: {range: integer, required: true}
+  Page:
+    description: An individual observed page response, independent of its pagination token.
+    attributes:
+      id: {identifier: true}
+      sweep: {range: Sweep, required: true}
+      token: {required: true}
+      next_token: {required: true, description: An empty string records an explicit null successor.}
+      item_count: {range: integer, minimum_value: 0, required: true}
   Resource:
     attributes:
       id: {identifier: true}
       sweep: {range: Sweep, required: true}
       plan_hash: {range: PlanDigest}
+      page: {range: Page}
+      tag_state: {range: ObservedTagState}
+      provider_id: {description: The resource identifier in the original page.}

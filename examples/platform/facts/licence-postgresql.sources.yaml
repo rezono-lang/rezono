@@ -1,0 +1,15 @@
+records:
+  - of: {kind: vendor_licence_notice, id: postgresql-16.0}
+    kind: tool
+    name: Release notice inspection
+    revision: "16.0"
+    position: "L1 (first nonempty line, including its original terminator)"
+    url: https://raw.githubusercontent.com/postgres/postgres/REL_16_0/COPYRIGHT
+    fragment_sha256: "fd4179f03d1929bc5f2a2899da10dc86ac9df0407763d3d629b200cdde204903"
+  - of: {kind: vendor_licence_notice, id: postgresql-17.0}
+    kind: tool
+    name: Release notice inspection
+    revision: "17.0"
+    position: "L1 (first nonempty line, including its original terminator)"
+    url: https://raw.githubusercontent.com/postgres/postgres/REL_17_0/COPYRIGHT
+    fragment_sha256: "fd4179f03d1929bc5f2a2899da10dc86ac9df0407763d3d629b200cdde204903"

@@ -1,0 +1,8 @@
+records:
+  - of: {kind: vendor_licence_notice, id: keycloak-26.0.0}
+    kind: tool
+    name: Release notice inspection
+    revision: "26.0.0"
+    position: "L2 (first nonempty line, including its original terminator)"
+    url: https://raw.githubusercontent.com/keycloak/keycloak/26.0.0/LICENSE.txt
+    fragment_sha256: "0de3c4af0f678b866d34d71a3c0ba36b3d2cb521239b51fc57a8089d616f5857"

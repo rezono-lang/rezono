@@ -4,12 +4,13 @@ from pathlib import Path
 
 import pytest
 import yaml
+from checked_release_fixture import MANIFEST_KEY, publish_evidence
 
 
 FIXTURES = Path(__file__).parent / "fixtures" / "server"
 
 
-def test_desired_admission_release_reuses_both_rule_renderers():
+def test_desired_admission_release_reuses_both_rule_renderers(tmp_path):
     from admission_release import render_release
     from bindings import render_binding
     from policy_renderer import render_policy
@@ -25,7 +26,8 @@ def test_desired_admission_release_reuses_both_rule_renderers():
         digest = publication["spec"]["digest"]
         wanted.append(render_policy(rule=rule, digest=digest))
         wanted.append(render_binding(rule=rule, digest=digest, parameter_name=publication["metadata"]["name"]))
-    rendered = list(render_release(namespaces, [publication]))
+    store = publish_evidence(tmp_path)
+    rendered = render_release(namespaces, [publication], store=store, manifest_key=MANIFEST_KEY)
     assert len(rendered) == len(wanted)
     assert all(obj in rendered for obj in wanted)
-    assert rendered == list(render_release(list(reversed(namespaces)), [publication]))
+    assert rendered == render_release(reversed(namespaces), [publication], store=store, manifest_key=MANIFEST_KEY)

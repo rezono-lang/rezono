@@ -3,6 +3,7 @@
 import re
 
 from supply_policy import render_supply_policy
+from transport_rule import cel_range_coverage
 
 
 _LABEL = "'rezono.org/service'"
@@ -26,12 +27,10 @@ def _direction(field: str, peer_field: str, source: str, destination: str) -> st
         f"has({peer}) && size({peer}) > 0 && has(rule.ports) && size(rule.ports) > 0 && "
         f"{peer}.all(peer, has(peer.podSelector) && !has(peer.namespaceSelector) && !has(peer.ipBlock) && "
         f"{_exact_selector('peer.podSelector')} && rule.ports.all(p, "
-        "(!has(p.protocol) || p.protocol == 'TCP') && has(p.port) && type(p.port) == int && "
+        "has(p.port) && type(p.port) == int && "
         "int(p.port) >= 1 && int(p.port) <= 65535 && "
         "(!has(p.endPort) || (p.endPort >= int(p.port) && p.endPort <= 65535)) && "
-        f"size(params.spec.flows.filter(f, f.source == {source} && f.destination == {destination} && "
-        "f.port >= int(p.port) && f.port <= (has(p.endPort) ? p.endPort : int(p.port)))) "
-        "== (has(p.endPort) ? p.endPort - int(p.port) + 1 : 1)))))"
+        f"{cel_range_coverage(source, destination)}))))"
     )
 
 
@@ -76,7 +75,7 @@ def render_policy(*, rule: str, digest: str) -> dict:
         ),
         (
             f"!variables.validTarget || variables.baseline || (({ingress}) && ({egress}))",
-            "grant exceeds published same-namespace TCP flows",
+            "grant exceeds published same-namespace transport flows",
         ),
     ]
     return {

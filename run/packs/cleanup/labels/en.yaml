@@ -11,3 +11,35 @@ inventory_coverage.unknown: unknown
 matching_resource: matching resource
 conflicting_sweep: conflicting sweep evidence
 cleaned: cleaned
+sweep.run: sweep run
+sweep.scope: inventory scope
+sweep.attempt: deletion attempt
+sweep.started_us: sweep start in microseconds
+sweep.root_token: requested root token
+attempt: dispatched operation
+attempt.run: attempt run
+attempt.scope: attempt scope
+attempt.plan_hash: target plan digest
+attempt.operation: dispatched operation name
+attempt.dispatched_us: dispatch time in microseconds
+page: observed inventory page
+page.sweep: source sweep
+page.token: requested token
+page.next_token: recorded successor
+page.item_count: number of listed resources
+resource.page: source page
+resource.tag_state: observed tag state
+resource.provider_id: provider resource identifier
+observed_tag_state: observed plan tag state
+observed_tag_state.untagged: explicitly untagged
+recorded_page: recorded page link
+reached_page: page reached from the root
+observed_item: observed resource on a page
+recorded_token: observed pagination token
+counted_page: page with a resource count
+located_item: resource tied to its source sweep
+invalid_pages: contradictory or incomplete inventory
+complete_inventory: complete inventory and terminal page
+conflicting_attempt: contradictory dispatch evidence
+cleanup_evidence: deletion attempt and terminal page
+cleanup_page_evidence: page supporting cleanup

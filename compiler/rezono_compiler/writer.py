@@ -14,9 +14,9 @@ record is written the way its section, or else the file, already writes records.
 ISO text.
 
 Rows are kept in identifier order (numbers by value, text in natural order), sections in schema
-order. Removing the last row of a section removes the section. Comment lines directly above a row or
-a section belong to it. Every change is checked: the new text must read back as the old facts with
-the change applied, or the writer stops.
+order. Removing the last row removes its section and leaves `{}` if it was the last section.
+Comment lines directly above a row or a section belong to it. Every change is checked: the new text
+must read back as the old facts with the change applied, or the writer stops.
 
 A fact file with a source companion (`facts/<file>.sources.yaml`, S25) is written together with it
 (`source_writer`): the real origin of a written row comes from the caller, never from the delta.
@@ -419,6 +419,8 @@ def parse(text: str) -> tuple[list[str], list[Section], dict]:
         loader.dispose()
     if root is None:
         return lines, [], {}
+    if isinstance(root, yaml.MappingNode) and not root.value and root.start_mark.line == root.end_mark.line:
+        return lines, [], {}
     if not isinstance(root, yaml.MappingNode) or root.flow_style:
         raise WriteError("a fact file is a block mapping from kind to records")
     sections: list[Section] = []
@@ -623,6 +625,14 @@ def apply_change(lay: Layout, text: str, ch: dict) -> tuple[str, dict]:
         edit = (t.at(at), t.at(at), lead + "".join(new))
         if sec is not None and sec.empty:  # 'kind: []' becomes 'kind:' with the record below; a comment after it stays
             edit = (t.at(sec.line, sec.empty[0]), t.at(at), lines[sec.line][sec.empty[1]:] + edit[2])
+        elif not sections and lines:
+            empty = yaml.compose(text, Loader=Loader)
+            if empty is not None:  # Replace the explicit empty mapping at its location, keeping its comments.
+                line = empty.start_mark.line
+                prefix = lines[line][:empty.start_mark.column].strip()
+                tail = lines[line][empty.end_mark.column:].rstrip("\r\n")
+                head = (prefix + nl if prefix else "") + kind + ":" + tail + nl
+                edit = (t.at(line), t.at(line + 1), head + "".join(new[1:]))
         inverse = {**base, "op": "delete"}
     else:
         if len(hits) != 1:
@@ -631,7 +641,8 @@ def apply_change(lay: Layout, text: str, ch: dict) -> tuple[str, dict]:
         row, old = sec.rows[i], records[i]
         if op == "delete":
             if len(sec.rows) == 1:
-                edit = (t.at(sec.start), t.at(sec.end + 1), "")
+                # The last section leaves an explicit empty document for the fact loader.
+                edit = (t.at(sec.start), t.at(sec.end + 1), "{}" + nl if len(sections) == 1 else "")
                 del expected[kind]
             else:
                 edit = (t.at(row.start), t.at(row.end + 1), "")
@@ -655,8 +666,6 @@ def apply_change(lay: Layout, text: str, ch: dict) -> tuple[str, dict]:
             expected[kind] = records[:i] + [rec] + records[i + 1:]
 
     out = text[:edit[0]] + edit[2] + text[edit[1]:]
-    if op == "delete" and not out:
-        out = nl
     exact = restored(lines, ch.get("restore"))
     if exact is not None:
         out = exact
