@@ -109,9 +109,6 @@ def test_public_corpus_has_at_least_three_graph_cases():
     assert len(graph_cases) >= 3, sorted(graph_cases)
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError, reason=(
-    "Needs a fifth settled valid row, rows or collection case in docs/publication/cases. "
-    "The public P01 imported-reference case would count as a Q20 refusal."))
 def test_public_corpus_has_at_least_five_rdf_comparisons():
     assert len(SETTLED_ROWS) >= 5, SETTLED_ROWS
 

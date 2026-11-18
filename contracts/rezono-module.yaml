@@ -179,7 +179,12 @@ classes:
     description: An embedded relational rules block (decisions/language-rules.md).
     attributes:
       rules: {required: true, range: Name}
-      lines: {required: true, range: string, multivalued: true, description: "The ordered rule lines as written, including empty lines and comments."}
+      lines:
+        required: true
+        range: string
+        multivalued: true
+        pattern: '^(?![\s\S]*[\r\n])'
+        description: "The ordered rule lines as written, including empty lines and comments."
 
   Use:
     attributes:

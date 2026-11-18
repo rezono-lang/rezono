@@ -19,6 +19,7 @@
 // A decision table (docs/rezono/tables.md §2) has its own two rules, `TableHead` and `TableRow`: module.ts reads
 // the lines under a `table` line with them. A value of a table is a literal, an id or a bare word, never a state.
 import * as ohm from 'ohm-js';
+import { moduleGrammar } from './module-components.ts';
 
 const source = String.raw`
 Rezono {
@@ -85,56 +86,10 @@ Rezono {
   // One logical line of a module (v0 §5, §11). module.ts splits a file into lines by their indentation (the
   // layout tokens of §11) and reads each with this rule; which line may stand under which is module.ts's.
   // What v0 reserves still parses, so that it is reported as R015 at its span (norm, a time selection).
-  Line = RezonoLine | PackLine | UseLine | RoundingLine | ReasonLine | UnitLine | EnumLine | ParamLine
-       | KindLine | ExtendLine | AppliesLine | SealedLine | DerivedLine | VersionLine | UnlessLine | WhenLine
-       | TableLine | RowLine | FactLine | Check | SlotLine | AssignLine
-  RezonoLine = kw<"rezono"> number
-  PackLine = kw<"pack"> name
-  UseLine = kw<"use"> NonemptyListOf<name, "."> (as name)?
-  RoundingLine = kw<"rounding"> (kw<"date"> | kw<"money">) name
-  ReasonLine = kw<"reason"> name "=" text
-  UnitLine = kw<"unit"> typeName "=" UnitBody
-  UnitBody = kw<"money"> kw<"minor">? typeName (kw<"per"> name)?  -- money
-           | kw<"integer">                                         -- integer
-           | Expr                                                   -- quantity
-  EnumLine = kw<"enum"> typeName World? "=" NonemptyListOf<name, "|">
+${moduleGrammar}
   World = kw<"world"> (kw<"open"> | kw<"closed">)
-  ParamLine = kw<"param"> name ":" Type (kw<"per"> typeName)? ("=" Expr)?
-  KindLine = (kw<"embedded"> | kw<"abstract">)? kw<"kind"> typeName World?
-  ExtendLine = kw<"extend"> typeName
-  AppliesLine = kw<"applies"> (at | during | in) ":" name
-  SealedLine = kw<"sealed"> at ":" name
-  DerivedLine = kw<"total">? kw<"derived"> name ":" Type Card? ("=" Expr)?
-  SlotLine = name ":" Type Card? (kw<"inverse"> name)? World? kw<"identifier">? kw<"embedded">?
   Type = typeName ("<" NonemptyListOf<Type, ","> ">")?
   Card = "?" | "*" | "+"
-  VersionLine = kw<"version"> number ("," VContext)* ("=" Expr Src?)?
-  VContext = kw<"valid"> date "..<" date    -- closed
-           | kw<"valid"> date ".."           -- open
-           | known date                      -- known
-  UnlessLine = kw<"unless"> (Expr then Expr Src?)?
-  WhenLine = when Expr then Expr Src?
-  TableLine = kw<"table"> (kw<"unique"> | kw<"first"> | kw<"priority"> | kw<"collect">)
-  // The header and a row of a decision table (tables.md §2). The last cell of a row is its output: a cell is
-  // one of the tests only while something follows its closing bar.
-  TableHead = "|" (Expr "|")+ "->" name "|"
-  TableRow = "|" (TCell "|" &rowValue)+ TValue "|"
-  TCell = dash                         -- any
-        | NonemptyListOf<TTest, ",">  -- tests
-  TTest = TValue rangeOp TValue  -- between
-        | TValue rangeOp         -- from
-        | rangeOp TValue         -- to
-        | TValue
-  // A value is also a keyword written as a bare word (tables.md §7 point 1): an enum of the schema may have
-  // the value valid or open, and a cell is the only place it is written. true and false stay Bool.
-  TValue = ~stateLit literal | idTok | typeName | name | oddWord | valueWord
-  RowLine = "|" NonemptyListOf<Cell, "|"> "|"
-  Cell = "->" Expr  -- out
-       | dash       -- any
-       | Expr       -- test
-  FactLine = kw<"fact"> typeName                    -- table
-           | kw<"fact"> name rowId ("," VContext)*  -- row
-  AssignLine = name "=" Expr Src?
   Src = "@" sourceRef
 
   // Tokens.
