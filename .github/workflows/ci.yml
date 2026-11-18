@@ -4,7 +4,7 @@ on:
   push:
     branches: [main]
   pull_request:
-    types: [opened, synchronize, reopened, ready_for_review, labeled, unlabeled]
+    types: [opened, synchronize, reopened, ready_for_review]
   merge_group:
     types: [checks_requested]
   workflow_dispatch:
@@ -45,7 +45,7 @@ jobs:
   python:
     needs: discover
     if: needs.discover.outputs.has_python == 'true'
-    name: python (${{ matrix.component.folder }})
+    name: python (${{ matrix.component.label }})
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     strategy:
@@ -54,50 +54,123 @@ jobs:
         component: ${{ fromJson(needs.discover.outputs.python) }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      - name: Cache locked Python environment
+        id: environment
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830  # v4.3.0
+        with:
+          path: .venv
+          key: python-env-v2-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('requirements/.python-version', 'requirements/dev.txt') }}
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0  # v7.1.0
         with:
           python-version-file: requirements/.python-version
-          cache: pip
+          cache: ${{ steps.environment.outputs.cache-hit != 'true' && 'pip' || '' }}
           cache-dependency-path: requirements/dev.txt
       - name: Install from lockfile
+        env:
+          CACHE_HIT: ${{ steps.environment.outputs.cache-hit }}
         run: |
           set -euo pipefail
-          python -m pip install -q --no-deps --require-hashes -r requirements/dev.txt
+          if [[ "$CACHE_HIT" != true ]]; then
+            python -m venv .venv
+            .venv/bin/python -m pip install -q --no-deps --require-hashes -r requirements/dev.txt
+          fi
+      - name: Save locked environment before installing local packages
+        if: steps.environment.outputs.cache-hit != 'true' && strategy.job-index == 0
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830  # v4.3.0
+        with:
+          path: .venv
+          key: ${{ steps.environment.outputs.cache-primary-key }}
+      - name: Install repository packages
+        run: |
+          set -euo pipefail
+          export PATH="$PWD/.venv/bin:$PATH"
+          echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
           python -m pip install -q --no-deps --no-build-isolation ${{ needs.discover.outputs.python_editable }}
           python scripts/check-pinned.py requirements/dev.txt
+      - name: Cache generated contract types
+        id: types
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830  # v4.3.0
+        with:
+          path: |
+            contracts/python/rezono_contracts/*.py
+            contracts/python/rezono_contracts/*.schema.json
+            viewer/src/lib/contract/generated
+          key: contract-types-v1-${{ runner.os }}-${{ hashFiles('requirements/.python-version', 'requirements/dev.txt', 'contracts/*.yaml', 'contracts/gen-types.sh', 'contracts/python/rezono_contracts/**', 'viewer/package.json', 'viewer/src/lib/contract/generated/**') }}
+      - name: Cache the pinned oracle and its distribution packages
+        if: matrix.component.folder == 'compiler' || matrix.component.folder == 'examples'
+        id: oracle
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830  # v4.3.0
+        with:
+          path: |
+            ${{ runner.temp }}/oracle-debs/*.deb
+            ${{ runner.temp }}/oracle-debs/SHA256SUMS
+          key: oracle-ubuntu-24.04-${{ runner.arch }}-${{ hashFiles('scripts/install-souffle.sh') }}
       - name: Install the pinned Souffle oracle
         if: matrix.component.folder == 'compiler' || matrix.component.folder == 'examples'
-        run: bash scripts/install-souffle.sh
+        env:
+          CACHE_HIT: ${{ steps.oracle.outputs.cache-hit }}
+        run: |
+          set -euo pipefail
+          packages="$RUNNER_TEMP/oracle-debs"
+          mkdir -p "$packages"
+          if [[ "$CACHE_HIT" == true ]]; then
+            (cd "$packages" && sha256sum --check SHA256SUMS)
+            if sudo dpkg --install "$packages"/*.deb; then
+              souffle --version
+              exit 0
+            fi
+          fi
+          # The apt download user can traverse /var/tmp on hosted runners.
+          archives=$(mktemp -d /var/tmp/rezono-oracle.XXXXXX)
+          chmod 0755 "$archives"
+          printf 'Dir::Cache::archives "%s";\nAPT::Keep-Downloaded-Packages "true";\n' "$archives" |
+            sudo tee /etc/apt/apt.conf.d/99-rezono-oracle-cache > /dev/null
+          bash scripts/install-souffle.sh
+          find "$archives" -maxdepth 1 -type f -name '*.deb' -exec cp -t "$packages" -- {} +
+          cp "$RUNNER_TEMP"/*souffle*.deb "$packages/"
+          (cd "$packages" && sha256sum ./*.deb > SHA256SUMS)
       - name: Generate contract types
+        if: steps.types.outputs.cache-hit != 'true'
         run: contracts/gen-types.sh
       - name: Check ${{ matrix.component.folder }}
         shell: bash
         env:
           REZONO_HYPOTHESIS_PROFILE: ci
+          COMPONENT: ${{ matrix.component.folder }}
+          KIND: ${{ matrix.component.kind }}
+          SHARD: ${{ matrix.component.shard }}
+          TOTAL: ${{ matrix.component.total }}
         run: |
           set -euo pipefail
-          if [ "${{ matrix.component.kind }}" = "contracts" ]; then
-            contracts/check.sh
-            python -m pytest -q --junitxml="$RUNNER_TEMP/pytest.xml" contracts/python
-          else
-            rc=0
-            python -m pytest -q --junitxml="$RUNNER_TEMP/pytest.xml" "${{ matrix.component.folder }}" || rc=$?
-            if [[ "$rc" == 5 ]]; then
-              python scripts/red_list.py --all-tests-blocked "${{ matrix.component.folder }}"
-            else
-              exit "$rc"
-            fi
+          folder="$COMPONENT"
+          if [[ "$KIND" == contracts ]]; then
+            python scripts/components.py check-contracts
+            folder="$COMPONENT/python"
           fi
-
+          rc=0
+          if [[ "$COMPONENT" == examples ]]; then
+            echo "Available cores: $(nproc)"
+            cat /proc/pressure/cpu
+          fi
+          /usr/bin/time -f 'Runner wall=%e s user=%U s system=%S s CPU=%P peak RSS=%M KiB' python scripts/components.py run-shard "$folder" "$SHARD" "$TOTAL" "$RUNNER_TEMP/reports" || rc=$?
+          if [[ "$COMPONENT" == examples ]]; then
+            cat /proc/pressure/cpu
+          fi
+          if [[ "$rc" == 5 && "$KIND" != contracts ]]; then
+            python scripts/red_list.py --all-tests-blocked "$COMPONENT"
+          else
+            exit "$rc"
+          fi
       - name: Report actual skips
         if: always() && hashFiles('scripts/red_list.py') != ''
         run: |
           set -euo pipefail
-          if [[ -f "$RUNNER_TEMP/pytest.xml" ]]; then
-            python scripts/red_list.py --skips "$RUNNER_TEMP/pytest.xml" | tee -a "$GITHUB_STEP_SUMMARY"
-          fi
+          shopt -s nullglob
+          for report in "$RUNNER_TEMP"/reports/*.xml; do
+            python scripts/red_list.py --skips "$report" | tee -a "$GITHUB_STEP_SUMMARY"
+          done
       - name: Measure the worker check
-        if: startsWith(github.head_ref, 'task/')
+        if: startsWith(github.head_ref, 'task/') && matrix.component.shard == 0
         env:
           BRANCH: ${{ github.head_ref }}
           COMPONENT: ${{ matrix.component.folder }}
