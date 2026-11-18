@@ -126,9 +126,13 @@ def report(store: PublicationReader, decision: CloseDecision, observations: Iter
 
     by_id: dict[str, Observation] = {}
     for observation in observations:
-        existing = by_id.setdefault(observation["id"], observation)
+        identity = observation["id"]
+        plan_hash = observation.get("plan_hash")
+        if not isinstance(plan_hash, str) or re.fullmatch(r"[0-9a-f]{64}", plan_hash) is None:
+            raise ValueError(f"missing or invalid plan hash for billing observation {identity}")
+        existing = by_id.setdefault(identity, observation)
         if existing != observation:
-            raise ValueError(f"conflicting billing observations for {observation['id']}")
+            raise ValueError(f"conflicting billing observations for {identity}")
 
     total = Fraction()
     lines = {}

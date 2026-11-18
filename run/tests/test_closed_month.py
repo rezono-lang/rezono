@@ -74,3 +74,34 @@ def test_closed_month(tmp_path):
 
     with pytest.raises(ValueError):
         report(CorruptRead(), decision, timely)
+
+
+@pytest.mark.parametrize(
+    "plan_fields",
+    [
+        pytest.param({}, id="missing"),
+        pytest.param({"plan_hash": None}, id="null"),
+        pytest.param({"plan_hash": ""}, id="empty"),
+        pytest.param({"plan_hash": "plan"}, id="not-a-digest"),
+        pytest.param({"plan_hash": "A" * 64}, id="not-canonical"),
+    ],
+)
+def test_close_rejects_receipts_without_a_plan_digest(plan_fields):
+    report = implementation("closed_month.py", "report")
+    digest = sha256(FIRST).hexdigest()
+    decision = {"id": "close-apr", "month": "2032-04", "closed_at": CUT, "publication_sha256": digest}
+    receipt = {key: value for key, value in PERIOD.items() if key != "plan_hash"} | plan_fields
+
+    with pytest.raises(ValueError, match="plan hash for billing observation rental"):
+        report({digest: FIRST}, decision, [FEE, receipt])
+
+
+def test_close_distinguishes_a_retry_from_a_change_of_plan():
+    report = implementation("closed_month.py", "report")
+    digest = sha256(FIRST).hexdigest()
+    decision = {"id": "close-apr", "month": "2032-04", "closed_at": CUT, "publication_sha256": digest}
+
+    assert report({digest: FIRST}, decision, [PERIOD, PERIOD.copy()])["total_eur"] == [91, 60]
+    other_plan = dict(PERIOD, plan_hash=sha256(b"another order").hexdigest())
+    with pytest.raises(ValueError, match="conflicting billing observations for rental"):
+        report({digest: FIRST}, decision, [PERIOD, other_plan])
