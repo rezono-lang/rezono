@@ -1,0 +1,1 @@
+edge/gate: indexed viewer sheets, island tiles, inverse row lookup, and gap or contrast proofs need checked view row trees and range plans. The local publisher lacks the viewer layout entry point.

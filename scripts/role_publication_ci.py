@@ -175,8 +175,13 @@ def stdio_proof(work: Path, store: Path, retained: Path, role: str, peer: str) -
         raise ValueError(f"Missing or changed stdio calls for {role}")
     ask, search, foreign_search, empty_search, grounds, foreign_grounds, missing_grounds = results[:7]
     row, next_row, foreign_row, missing_row = results[7:]
-    if [item["error"] for item in results] != [False, False, False, False, False, True, True, False, False, True, True]:
-        raise ValueError(f"Wrong stdio result polarity for {role}")
+    expected_errors = [
+        False, False, False, False, False, True, True,  # ask, search, grounds
+        False, True, True, True,  # row, exhausted page, foreign row, absent row
+    ]
+    if [item["error"] for item in results] != expected_errors:
+        verdicts = [(item["tool"], item["error"]) for item in results]
+        raise ValueError(f"Wrong stdio results for {role}: {verdicts}")
     own = {f"{role}-request", f"{role}-second-request"}
     if not all(item in ask["text"] for item in own) or f"{peer}-" in ask["text"]:
         raise ValueError(f"Unexpected ask visibility for {role}")
@@ -185,8 +190,9 @@ def stdio_proof(work: Path, store: Path, retained: Path, role: str, peer: str) -
     refusal = "error: not found (or outside your view)"
     if "tenant_capacity_fits" not in grounds["text"] or foreign_grounds["text"] != refusal or missing_grounds["text"] != refusal:
         raise ValueError(f"Unexpected grounds visibility for {role}")
-    if "cores" not in row["text"] or "owner" not in next_row["text"] or foreign_row["text"] != missing_row["text"]:
-        raise ValueError(f"Unexpected row visibility or continuation for {role}")
+    if ("cores" not in row["text"] or "owner" not in row["text"] or next_row["text"] != "error: no further page"
+            or foreign_row["text"] != refusal or missing_row["text"] != refusal):
+        raise ValueError(f"Unexpected row visibility or page exhaustion for {role}")
     for publication in (store, retained):
         subprocess.run([*process, "replay", str(recording), "--store", publication.as_uri()],
                        cwd=ROOT, check=True, timeout=45)
