@@ -6,6 +6,8 @@ Keep `registry` as the inventory product key. Give the selected supplier release
 
 A service pinned to a different registry release needs its own matching notice. Without a selected release the catalogue may show the notice as a reference. The existing model represents these cases with `release`, `pin`, `licence_release_binding` and `vendor_licence_notice`. The release-order day is a scenario input, as are the registry's port, storage and identity requirements.
 
+The pin also includes `reg` and `distribution-3.0.0` in the running-release inventory used by the support query. The supplier's LICENSE establishes the source licence. The example contains no vendor support statement for this release, so its support state is `unknown` under the [support-window decision](platform-support-window.md).
+
 ## Remaining inventory decisions
 
 | Inventory key | Evidence to obtain |
