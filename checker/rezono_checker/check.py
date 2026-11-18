@@ -20,6 +20,7 @@ from . import calc, closure, metadata
 from .canon import calc_value, encode_key, sha256_json, value_text
 from .evaluate import _arith, _fits, _fold, _holds, _value, cells
 from .snapshots import read_rows
+from .state_projections import check as check_state_projections
 
 # A role snapshot never decides validity: a bad one is reported, as a warning.
 WARNINGS = {"unreachable_witness", "role_snapshot_hash_mismatch", "role_malformed_snapshot"}  # every other reason blocks
@@ -96,6 +97,7 @@ def check_epoch(witnesses: list, manifest: dict, rules: dict, read_bytes, *, der
     proof = {"manifest_id": manifest["id"], "root": None, "witnesses": witnesses}
     if snapshots is None:
         return _report(proof, None, set(), findings)
+    findings.extend(check_state_projections(manifest, read_bytes, snapshots))
     rows, groups = _rows(snapshots, findings), {}
     for s in seals:
         _check_seal(s, rows, findings)
