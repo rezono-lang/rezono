@@ -16,11 +16,14 @@ import re
 import shutil
 import subprocess
 import tempfile
-from typing import TypedDict
+from typing import TYPE_CHECKING, TypedDict
 
 import yaml
 
 from rezono_compiler import modules, pack, rules_dl
+
+if TYPE_CHECKING:
+    from rezono_publisher.publish import Epoch
 
 
 READER = Path(__file__).resolve().parents[1] / "rezono/src/write-form.ts"
@@ -43,6 +46,15 @@ class ConversionError(ValueError):
 class Source:
     layer: str
     lines: list[str]
+
+
+@dataclass(frozen=True)
+class PublicationMeaning:
+    rows: dict
+    columns: tuple
+    grounds: dict
+    visible: dict
+    messages: tuple
 
 
 def mapping(node: object, where: str) -> dict:
@@ -239,13 +251,6 @@ def kind_meaning(kind: pack.Kind) -> pack.Kind:
     return replace(kind, slots=slots, span=None, spans={})
 
 
-def rule_meaning(doc: dict | None) -> dict | None:
-    if doc is None:
-        return None
-    return {**doc, "rules": [{key: value for key, value in rule.items() if key not in {"origin", "span"}}
-                              for rule in doc["rules"]]}
-
-
 def compare_imported(consumer: Path, original: Path, candidate: Path, identity: str) -> None:
     """Check a candidate library through the same pinned consumer as its baseline."""
     consumer = consumer.resolve()
@@ -271,11 +276,125 @@ def compare(baseline: pack.Pack, trial: pack.Pack) -> None:
     if (list(map(kind_meaning, baseline.kinds.values())) != list(map(kind_meaning, trial.kinds.values()))
             or list(baseline.enums.items()) != list(trial.enums.items())):
         raise ConversionError("the candidate changed the typed schema")
-    if (rule_meaning(baseline.rules) != rule_meaning(trial.rules)
-            or baseline.rule_bodies != trial.rule_bodies):
-        raise ConversionError("the candidate changed the rule IR beyond authored source locations")
-    if (baseline.labels, baseline.messages, baseline.channels) != (trial.labels, trial.messages, trial.channels):
+    if (baseline.labels, baseline.channels) != (trial.labels, trial.channels):
         raise ConversionError("the candidate changed presentation metadata")
+
+
+def columns_in(epoch: Epoch, rules: dict, bundle: dict) -> tuple:
+    """Typed column names and order, including columns of relations with no rows."""
+    return (
+        epoch.columns,
+        {r["name"]: r.get("key", []) for r in rules["relations"]},
+        {r["id"]: r["columns"] for r in bundle.get("relations", ())},
+        [(kind["id"], kind.get("id_type")) for kind in bundle.get("kinds", ())],
+        [(a["id"], a.get("semantic")) for a in bundle.get("attributes", ())],
+        [(a["id"], a.get("semantic")) for a in bundle.get("arrows", ())],
+        bundle.get("pages", ()),
+    )
+
+
+def message_entries(bundle: dict) -> dict:
+    return {locale["lang"]: {key: value.split("=", 1)[1].strip() for key, value in pack.entries(locale["resource"])}
+            for locale in bundle.get("messages", ())}
+
+
+def message_meaning(template: str, bindings: dict[str, str]) -> tuple:
+    parts = pack.VARIABLE.split(template)
+    return tuple(("text", part) if i % 2 == 0 else
+                 ("binding", bindings[part]) if part in bindings else ("argument", part)
+                 for i, part in enumerate(parts))
+
+
+def role_form(bucket, pack_name: str, manifest: str, role: str) -> tuple | None:
+    """Read visible rows and ordered columns through the published form's index."""
+    from pyarrow import ipc
+    from rezono_publisher import forms
+
+    current = bucket.get(forms.index_key(pack_name, manifest, role))
+    if current is None:
+        return None
+    entries = {entry["name"]: entry["sha256"] for entry in json.loads(current)["objects"]}
+    prefix = forms.prefix(pack_name, manifest, role)
+
+    def read(name: str) -> bytes:
+        return forms._named(prefix + name, bucket.get(prefix + name), entries[name])
+
+    collection = json.loads(read("rows.json"))
+    rows = {(row["$kind"], row["$id"]): {key: value for key, value in row.items() if key not in {"$src", "$why"}}
+            for row in collection["$rows"]}
+    columns = {name: ipc.open_file(read(name)).schema.names for name in entries
+               if name.startswith("table.") and not name.startswith("table._") and name.endswith(".arrow")}
+    return rows, columns
+
+
+def read_publication(epoch: Epoch, directory: Path, roles: dict[str, str]) -> PublicationMeaning:
+    """Read the exact snapshots the ordinary checked publisher makes for each role."""
+    from rezono_checker.grounds import checked_grounds, reference
+    from rezono_publisher import publish, store
+
+    bucket = store.FileStore(directory)
+    requested = dict(roles)
+    complete_role = next((role for role, mode in roles.items() if mode == "complete"), None)
+    if complete_role is None:
+        complete_role = "conversion_checker"
+        while complete_role in requested:
+            complete_role += "_check"
+        requested[complete_role] = "complete"
+    with_forms = bool(epoch.bundle and not epoch.proposal and not epoch.variant and "may_read" in roles.values())
+    manifest = publish.publish(epoch, bucket, requested, forms=with_forms)
+    rows, witnesses = publish.frozen(epoch)
+    rules_doc, rules, _ = publish.rule_ir(epoch)
+    bundle = json.loads(epoch.bundle) if epoch.bundle else {}
+    complete = {"id": manifest["id"], "snapshots": [s for s in manifest["snapshots"] if s["role"] == complete_role]}
+    prefix = bucket.uri("")
+    grounds = checked_grounds(witnesses, complete, rules, lambda uri: bucket.get(uri.removeprefix(prefix)),
+                              calc_ir=publish.calc_ir(epoch), calc_witnesses=epoch.calc_witnesses)
+
+    resources = message_entries(bundle)
+    messages = {rule["id"]: rule.get("message") for rule in bundle.get("rules", ())}
+    rule_messages = set(messages.values())
+    static = {lang: {key: value for key, value in entries.items()
+                     if key not in rule_messages and not key.startswith("rule.")}
+              for lang, entries in resources.items()}
+    visible = {}
+    for role in roles:
+        objects = publish.role_objects(bucket, epoch.pack, manifest["id"], role)
+        snapshots = {path: bucket.get(key) for path, key in objects.items() if path.startswith("relations/")}
+        full = {entry["relation"] for entry in manifest["snapshots"] if entry["role"] == role and entry["full"]}
+        sees = json.loads(bucket.get(objects["witnesses.json"]))
+        dynamic = {}
+        for witness in sees["witnesses"]:
+            message = messages.get(witness["rule_id"])
+            bindings = {pair["variable"].removeprefix("?"): pair["value"] for pair in witness.get("bindings", ())}
+            body = {lang: message_meaning(entries[message], bindings)
+                    for lang, entries in resources.items() if message in entries}
+            if body:
+                dynamic[reference(witness["conclusion"])] = body
+        form = role_form(bucket, epoch.pack, manifest["id"], role) if with_forms and roles[role] == "may_read" else None
+        visible[role] = (snapshots, full, dynamic, form)
+    presentation = (static, bundle.get("labels"), bundle.get("channels"))
+    return PublicationMeaning(rows, columns_in(epoch, rules_doc, bundle), grounds, visible, presentation)
+
+
+def compare_publications(baseline: Epoch, trial: Epoch, roles: dict[str, str]) -> None:
+    """Compare checked facts, conclusions, role views and the union of verified grounds."""
+    from rezono_publisher.publish import Blocked
+
+    with tempfile.TemporaryDirectory(prefix="rezono-comparison-") as temporary:
+        root = Path(temporary)
+        try:
+            left = read_publication(baseline, root / "original", roles)
+            right = read_publication(trial, root / "candidate", roles)
+        except (Blocked, ValueError) as error:
+            raise ConversionError(f"publication evidence is invalid: {error}") from error
+    if (left.rows, left.columns) != (right.rows, right.columns):
+        raise ConversionError("the candidate changed the facts, conclusions or typed columns")
+    if left.grounds != right.grounds:
+        changed = min(key for key in left.grounds.keys() | right.grounds.keys()
+                      if left.grounds.get(key) != right.grounds.get(key))
+        raise ConversionError(f"the candidate changed the grounds for {changed[0]} {changed[1]}")
+    if (left.visible, left.messages) != (right.visible, right.messages):
+        raise ConversionError("the candidate changed role rows or presentation")
 
 
 def candidate(original: Path, destination: Path, node: str, consumer: Path | None = None) -> None:
