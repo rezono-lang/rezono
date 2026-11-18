@@ -61,6 +61,18 @@ class RuleError(ValueError):
     pass
 
 
+@dataclass(frozen=True)
+class NativeSource:
+    """Authored rule statements with their resolved names and head positions."""
+
+    pack: str
+    stem: str
+    file: str
+    text: str
+    statements: tuple[tuple, ...]
+    columns: tuple[int, ...]
+
+
 @dataclass
 class Tok:
     kind: str
@@ -393,7 +405,7 @@ def module_of(source: str, root: str, stem: str) -> str:
 
 def read(pack, pack_dir: Path, imports=None, renames=None, *, calc_inputs=None, calc_parts=None,
          folds: dict | None = None, bodies: dict | None = None, spans: dict | None = None,
-         generated: list | None = None) -> tuple[dict | None, list[str]]:
+         generated: list | None = None, native: tuple[NativeSource, ...] = ()) -> tuple[dict | None, list[str]]:
     """The IR of the pinned rule closure (None when every rules/ is empty), and warnings. Raises RuleError.
 
     `calc_parts` is each imported pack's part of the calculation (`calc.read_closure`): a rule reads a
@@ -403,7 +415,8 @@ def read(pack, pack_dir: Path, imports=None, renames=None, *, calc_inputs=None, 
     publishes the body as written (MOD14). `spans` receives, per rule id, its (file, line, column): of its head,
     or for a rule `@closes` generates, of the `.decl` that has the mark (MOD2). `generated` is the rule text of the
     decision tables of the pack's modules written in Rezono (rezono_table.Generated): each is read as a rule file
-    of the pack is, its module the module's id, its file and lines the module's (docs/rezono/publication.md §9.1)."""
+    of the pack is, its module the module's id, its file and lines the module's (docs/rezono/publication.md §9.1).
+    `native` holds checked statements from authored Rezono rule modules."""
     from .calc import selection_name  # calc reads this module, so it is imported here
 
     imports, renames = imports or {}, renames or {}
@@ -417,7 +430,12 @@ def read(pack, pack_dir: Path, imports=None, renames=None, *, calc_inputs=None, 
     sources = [(p.name, p.dir) for p in imports.values()] + [(root, Path(pack_dir))]
     files = [(owner, f) for owner, at in sources for f in sorted((at / "rules").glob("*.dl"))]
     entries = [(source, f.stem, f"rules/{f.name}" if source == root else f"{source}:rules/{f.name}", f, None)
-               for source, f in files] + [(root, g.stem, g.module, None, g) for g in generated or []]
+               for source, f in files]
+    if native:
+        entries.extend((n.pack, n.stem, n.file, None, n) for n in native)
+        order = {owner: index for index, (owner, _) in enumerate(sources)}
+        entries.sort(key=lambda entry: (order[entry[0]], entry[1]))
+    entries.extend((root, g.stem, g.module, None, g) for g in generated or [])
     if not entries:
         return None, []
     tables = base_tables(pack)
@@ -440,10 +458,13 @@ def read(pack, pack_dir: Path, imports=None, renames=None, *, calc_inputs=None, 
             errors.append(f"{where}: module {module} collides with {module_sources[module]}")
             continue
         try:
-            text, starts = f.read_text(encoding="utf-8") if g is None else g.text, []
-            stmts = [remap_statement(s, renames.get(source, {})) for s in parse_file(text, where, starts)]
-            if g is not None:  # at the module's lines; a column of the generated text is no place in it
-                stmts, starts = [at_line(s, g.at) for s in stmts], [1] * len(starts)
+            if isinstance(g, NativeSource):
+                text, stmts, starts = g.text, g.statements, list(g.columns)
+            else:
+                text, starts = f.read_text(encoding="utf-8") if g is None else g.text, []
+                stmts = [remap_statement(s, renames.get(source, {})) for s in parse_file(text, where, starts)]
+                if g is not None:  # generated text has the module's lines, but its columns have no source place
+                    stmts, starts = [at_line(s, g.at) for s in stmts], [1] * len(starts)
             texts[where] = text
         except RuleError as e:
             errors.append(str(e))

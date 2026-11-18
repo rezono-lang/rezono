@@ -105,7 +105,8 @@ def _declared_dataset(pack_dir: Path, meta: dict, declared: rezono_module.Declar
         submitted = json.loads(path.read_bytes())
     except (OSError, ValueError) as error:
         raise LoadError(f"{declared.form}: cannot read module form ({error})") from error
-    if rezono_module.module_body(submitted, rezono_module.FORMAT) is not None:
+    if any(rezono_module.module_body(submitted, version) is not None
+           for version in (rezono_module.FORMAT, rezono_module.NATIVE_FORMAT)):
         return None
     module = rezono_module.module_body(submitted, DATASET_FORMAT)
     if module is None:

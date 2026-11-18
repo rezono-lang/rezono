@@ -34,14 +34,6 @@ def example(tmp_path, spelling):
     return directory
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=(pack.CompileError, AssertionError),
-    reason="Lower the authored listed rule through normal pack compilation with legacy rule identity and the native "
-           "head span. Read decisions/language-native-rules.md §§5, 7, 11. Only change implementation under "
-           "compiler/rezono_compiler/. Waits for native-rule-form-contract and for rezono.module/3 to be admitted "
-           "at the normal compiler entry point. The hand-authored form has no reader dependency.",
-)
 def test_native_rule_ir_listed(tmp_path):
     legacy = compile_dir(example(tmp_path, "datalog"), tmp_path / "legacy-output")
     [old_rule] = json.loads(legacy["bundle/schema-bundle.json"])["rules"]
