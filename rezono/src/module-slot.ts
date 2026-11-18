@@ -1,8 +1,9 @@
+import { printMetadata, readMetadataLine, type Metadata } from './module-metadata.ts';
 import { block, named, opt, printWorld, typeOf, type Build, type Card, type Line, type Logical, type World, type ModuleComponent } from './module-support.ts';
 
 type CardinalityConstraint = { cardinality: [minimum: string, maximum: string] };
 
-export interface SlotDecl {
+export interface SlotDecl extends Metadata {
 	slot: string;
 	type: string;
 	card?: Card;
@@ -10,35 +11,38 @@ export interface SlotDecl {
 	world?: World;
 	identifier?: true;
 	embedded?: true;
+	slotUri?: string;
 	constraints?: CardinalityConstraint[];
 }
 
 export function readSlot(line: Logical, build: Build): SlotDecl {
-	const decl = build.strip<SlotDecl>(line.read!);
+	const slot = build.strip<SlotDecl>(line.read!);
 	for (const child of line.block) {
-		if (child.read!.line !== 'slot-cardinality') {
-			build.refuse(child, 'no line under this one');
-			continue;
-		}
-		build.leaf(child);
-		if (decl.constraints) {
-			build.refuse(child, 'one cardinality constraint per slot');
-			continue;
-		}
-		const constraint = build.strip<CardinalityConstraint>(child.read!);
-		const [minimum, maximum] = constraint.cardinality;
-		if (BigInt(minimum) > BigInt(maximum)) {
-			build.refuse(child, 'a cardinality with a minimum no larger than its maximum');
-			continue;
-		}
-		decl.constraints = [constraint];
+		if (readMetadataLine(slot, child, build)) continue;
+		const property = child.read!;
+		if (property.line === 'iri') {
+			build.leaf(child);
+			if (slot.slotUri !== undefined) build.refuse(child, 'one slot IRI');
+			else if (typeof property.value !== 'string') build.refuse(child, 'a JSON string');
+			else slot.slotUri = property.value;
+		} else if (property.line === 'slot-cardinality') {
+			build.leaf(child);
+			const constraint = build.strip<CardinalityConstraint>(property);
+			const [minimum, maximum] = constraint.cardinality;
+			if (slot.constraints !== undefined) build.refuse(child, 'one cardinality constraint per slot');
+			else if (BigInt(minimum) > BigInt(maximum)) build.refuse(child, 'a cardinality with a minimum no larger than its maximum');
+			else slot.constraints = [constraint];
+		} else build.refuse(child, 'no line under this one');
 	}
-	return decl;
+	return slot;
 }
 
 export function printSlot(s: SlotDecl): string[] {
-	const head = `${s.slot}: ${s.type}${s.card ?? ''}${s.inverse !== undefined ? ` inverse ${s.inverse}` : ''}${printWorld(s.world)}${s.identifier ? ' identifier' : ''}${s.embedded ? ' embedded' : ''}`;
-	return block(head, (s.constraints ?? []).map(({ cardinality: [minimum, maximum] }) => `cardinality ${minimum}..${maximum}`));
+	return block(`${s.slot}: ${s.type}${s.card ?? ''}${s.inverse !== undefined ? ` inverse ${s.inverse}` : ''}${printWorld(s.world)}${s.identifier ? ' identifier' : ''}${s.embedded ? ' embedded' : ''}`, [
+		...(s.slotUri === undefined ? [] : [`iri ${JSON.stringify(s.slotUri)}`]),
+		...printMetadata(s),
+		...(s.constraints ?? []).map(({ cardinality: [minimum, maximum] }) => `cardinality ${minimum}..${maximum}`)
+	]);
 }
 
 export const slot = {
@@ -61,6 +65,6 @@ export const slot = {
 		},
 		CardinalityLine(keyword, minimum, _range, maximum) {
 			return named(keyword, { line: 'slot-cardinality', cardinality: [minimum.sourceString, maximum.sourceString] });
-		},
+		}
 	},
 } satisfies ModuleComponent;
