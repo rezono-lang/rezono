@@ -1,0 +1,14 @@
+item: item
+item.group: group
+item.labels: label
+item.quantity: quantity
+item.weight: weight
+group: group
+link: link
+link.tail: tail
+link.head: head
+outgoing_link: outgoing link
+recorded_weight: recorded weight
+may_read: may read
+role: role
+role.title: title
