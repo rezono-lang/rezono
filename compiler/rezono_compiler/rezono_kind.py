@@ -78,3 +78,12 @@ def lower(decl: dict, at: str, own: dict[str, str], owners: dict[str, list[str]]
             return {"is_a": parent, "attributes": attributes}
         return {"attributes": attributes}
     return None
+
+
+def lower_abstract(decl: dict, at: str, refuse: Refuse) -> tuple[dict, dict[str, bool]] | None:
+    """Lower the abstract modifier separately from the kind's slots and other properties."""
+    if decl["abstract"] is not True:
+        refuse(f"{at}/abstract", "an abstract kind must be marked true", "§5.1")
+        return None
+    kind = {member: value for member, value in decl.items() if member != "abstract"}
+    return kind, {"abstract": True}
