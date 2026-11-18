@@ -3,8 +3,8 @@
 Use one Ignition document per Flatcar machine. Install k0s under the writable
 `/opt/bin`. Keep virtual workers in a separate network zone. Use the same OS
 and distribution on hosts and guests if both compatibility gates pass. Keep
-Ubuntu LTS with cloud-init as the alternative after a demonstrated
-incompatibility. Missing infrastructure leaves the choice provisional.
+Ubuntu LTS with cloud-init as the fallback trial if compatibility fails or
+the bounded trial exhausts its attempts. Installation remains provisional.
 
 ## Worker boot data
 
