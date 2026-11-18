@@ -54,9 +54,18 @@ feldera_seed_dependencies() (
     test -n "$target"
     cargo metadata --offline --locked --format-version 1 --filter-platform "$target" \
       > /tmp/feldera-dependency-metadata.json
+    touch /tmp/feldera-dependency-ready
+    exec sleep infinity
   ' feldera-dependencies "$nil"
-  docker start --attach "$seed"
-  test "$(docker container inspect --format '{{.State.ExitCode}}' "$seed")" = 0
+  docker start "$seed" >/dev/null
+  until docker exec "$seed" test -f /tmp/feldera-dependency-ready; do
+    if [[ "$(docker container inspect --format '{{.State.Running}}' "$seed")" != true ]]; then
+      docker logs "$seed" >&2
+      exit 1
+    fi
+    sleep 3
+  done
+  docker logs "$seed"
   docker cp "$seed:/tmp/feldera-dependency-toolchain.txt" "$cache/toolchain.txt"
   engine_home=$(feldera_dependency_home)
   workspace="$engine_home/.feldera/compiler/rust-compilation"
@@ -64,7 +73,8 @@ feldera_seed_dependencies() (
   docker cp "$seed:/tmp/feldera-dependency-metadata.json" "$staging/metadata.json"
   docker cp "$seed:$workspace/crates/$nil/stdout.log" "$staging/cargo.log"
   feldera_dependency_identity "$image" > "$cache/identity.txt"
-  docker cp "$seed:$workspace/target/unoptimized/." - |
+  # Preserve Cargo's timestamps and materialize both names of each build-script executable.
+  docker exec "$seed" tar --format=pax --hard-dereference -cf - -C "$workspace/target/unoptimized" . |
     python compiler/ci/export_feldera_dependencies.py export "$engine_home" "$staging/Cargo.lock" "$staging/metadata.json" "$staging/cargo.log" |
     zstd -q -T0 -3 -o "$cache/dependencies.tar.zst"
   digest=$(cd "$cache" && sha256sum dependencies.tar.zst identity.txt toolchain.txt)

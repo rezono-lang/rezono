@@ -10,6 +10,7 @@ from collections import Counter
 from pathlib import Path, PurePosixPath
 
 SAFE_NAME = re.compile(r"[A-Za-z0-9_-]+")
+PAX_MTIME = re.compile(r"-?[0-9]{1,15}(?:\.[0-9]{1,9})?")
 HASHED_UNIT = re.compile(r"(?P<name>[A-Za-z0-9_-]+)-[0-9a-f]{16}")
 DEP_OUTPUT = re.compile(r"(?P<name>[A-Za-z0-9_]+)-[0-9a-f]{16}\.(?:d|rmeta|rlib|a|so)")
 
@@ -110,7 +111,11 @@ def transfer(packages: set[str] | None = None, libraries: set[str] | None = None
                     continue
                 member.name = str(PurePosixPath(member.name))
                 member.mode &= 0o755
-                member.pax_headers = {}
+                timestamp = member.pax_headers.get("mtime")
+                if timestamp is not None and not PAX_MTIME.fullmatch(timestamp):
+                    raise ValueError(f"Invalid dependency modification time: {member.name}")
+                # Cargo compares nanosecond timestamps across its artifact graph.
+                member.pax_headers = {"mtime": timestamp} if timestamp is not None else {}
                 if member.name in seen:
                     raise ValueError(f"Duplicate dependency artifact: {member.name}")
                 seen.add(member.name)

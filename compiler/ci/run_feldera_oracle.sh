@@ -96,6 +96,10 @@ if [[ "$shard" == platform ]]; then
   (
     while docker container inspect "$container" >/dev/null 2>&1; do
       copy_rust_trace || true
+      if [[ -s "$reports/storage.log" && ! -s "$reports/dependency-build.json" ]] &&
+         grep -q 'compiled compile_seconds=' "$reports/storage.log"; then
+        feldera_dependency_activity "$container" > "$reports/dependency-build.json" || true
+      fi
       sleep 5
     done
   ) &

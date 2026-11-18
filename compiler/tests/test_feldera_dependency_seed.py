@@ -25,7 +25,7 @@ def archive(*entries):
     with tarfile.open(fileobj=stream, mode="w") as target:
         for entry in entries:
             if isinstance(entry, tarfile.TarInfo):
-                target.addfile(entry)
+                target.addfile(entry, io.BytesIO(b"test") if entry.isfile() else None)
             else:
                 item = tarfile.TarInfo(entry)
                 item.size = 4
@@ -97,3 +97,22 @@ def test_restore_rejects_incomplete_or_linked_dependencies():
 @pytest.mark.parametrize("home", ["", "relative", "/", "/workspace/../outside"])
 def test_seed_rejects_invalid_container_home(home):
     assert execute(["export", home, "lock", "metadata", "messages"], b"").returncode == 2
+
+
+def test_restore_preserves_exact_cargo_mtime_and_build_executable_names():
+    timestamp = "1795035060.615562254"
+    compiled = f"build/libc-{UNIT}/build_script_build-{UNIT}"
+    paths = [DBSP, f"build/libc-{UNIT}/build-script-build", compiled]
+    source = []
+    for path in paths:
+        member = tarfile.TarInfo(path)
+        member.size = 4
+        member.pax_headers = {"mtime": timestamp, "atime": timestamp, "comment": "discard"}
+        source.append(member)
+    result = execute(["verify"], archive(*source))
+    assert result.returncode == 0, result.stderr.decode()
+    with tarfile.open(fileobj=io.BytesIO(result.stdout), mode="r:") as restored:
+        assert restored.getnames() == paths
+        assert all(member.pax_headers == {"mtime": timestamp} for member in restored)
+    source[-1].pax_headers["mtime"] = "1795035060.6155622541"
+    assert execute(["verify"], archive(*source)).returncode != 0
