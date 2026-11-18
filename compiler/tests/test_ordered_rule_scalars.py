@@ -73,9 +73,6 @@ def manifest(snapshots):
     ]}
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError, reason=(
-    "Requires Condition.compare_as in contracts/rules.yaml and ordinary batch lowering with typed operand checks. "
-    "Read decisions/ordered-rule-scalars.md."))
 def test_ordered_rule_scalars_compiler_preserves_exact_values():
     doc = program()
     errors = validator("rules.yaml").validate(doc, "RuleProgram").results

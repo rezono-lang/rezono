@@ -21,7 +21,7 @@ The compiler derives three things the gate needs and must not work out again:
 
 from __future__ import annotations
 
-from .rules import Atom, const_type, days, is_var
+from .rules import Atom, const_type, days, is_var, untyped_conditions
 
 FORMAT = "rezono.gap/1"
 KINDS = ("positive", "negative", "condition", "assignment", "aggregate")
@@ -242,7 +242,7 @@ def _item_text(prog, rule, kind, index, types):
         if s.op == "days":   # a view's reading of a date
             return f"{_term(s.var, 'integer')} = {days_text(_term(s.left, 'string'))} - {days_text(_term(s.right, 'string'))}"
         return f"{_term(s.var, 'integer')} = {_term(s.left, 'integer')} {OPS[s.op]} {_term(s.right, 'integer')}"
-    c = rule.conditions[index]
+    c = untyped_conditions(rule, "gap")[index]
     t = types.get(c.left) or types.get(c.right) or const_type(c.left)
     return f"{_term(c.left, t)} {OPS[c.op]} {_term(c.right, t)}"
 
@@ -364,7 +364,7 @@ def _extend(prog, rule, kind, index, theta, rows, types):
         atom = rule.body[index].atom
         return [] if any(_match(prog, atom, r, theta, types) is not None for r in rows.get(atom.relation, ())) else [theta]
     if kind == "condition":
-        c = rule.conditions[index]
+        c = untyped_conditions(rule, "gap")[index]
         t = types.get(c.left) or types.get(c.right) or const_type(c.left)
         return [theta] if _compare(c.op, val(c.left, t), val(c.right, t)) else []
     if kind == "assignment":

@@ -576,7 +576,7 @@ def rule_body(prog, rule, order: tuple[str, ...] | None) -> tuple[dict, list[dic
         return rule_term(t, types[source] if source else ir.const_type(t))
 
     parts = {"atom": list(rule.body), "aggregate": list(enumerate(rule.aggregates)),
-             "assignment": list(rule.assignments), "comparison": list(rule.conditions)}
+             "assignment": list(rule.assignments), "comparison": list(ir.untyped_conditions(rule, "the bundle"))}
     if order is None:
         order = tuple(k for k in LITERAL_ORDER for _ in parts[k])
     if sorted(order) != sorted(k for k in LITERAL_ORDER for _ in parts[k]):
