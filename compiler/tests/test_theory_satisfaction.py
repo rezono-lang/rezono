@@ -1,4 +1,4 @@
-"""The satisfaction test (M3 of #314; docs/theories.md, step 4), per theory, on a neutral domain.
+"""The satisfaction test (docs/theories.md, step 4), per theory, on a neutral domain.
 
 Each case is a small domain with words of its own that imports a standard theory pack as it is and reads it through
 a view (docs/compiler/schema-operations.md, "Views that execute"). A case gives a strategy for the domain's

@@ -1,4 +1,4 @@
-// Rules of std-identity (#314 §5.2, T5), in the Datalog subset, so Soufflé is the oracle.
+// Rules of std-identity, in the Datalog subset, so Soufflé is the oracle.
 // The base relations are the theory's tables: referent(x), referent__same_as(a, b) and
 // referent__represented_by(x, r). The values a domain compares come from its own rules, in the two relations it
 // extends: stated_text(x, slot, value) and stated_number(x, slot, value).
