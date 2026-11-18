@@ -1,0 +1,23 @@
+.decl managed_health_reading(step: symbol, status: symbol, probe: symbol)
+managed_health_reading(step, status, probe) :-
+    health_step__service(step, service), health_probe__service(probe, service),
+    health_step__run(step, run), health_probe__run(probe, run),
+    health_step__token(step, token), health_probe__token(probe, token),
+    health_probe__status(probe, status), health_probe_status(status).
+
+.decl managed_health_observed(step: symbol)
+managed_health_observed(step) :- managed_health_reading(step, _, _).
+
+.decl managed_health(step: symbol, status: symbol, evidence: symbol)
+managed_health(step, status, probe) :- managed_health_reading(step, status, probe).
+managed_health(step, "unknown", step) :- health_step(step), !managed_health_observed(step).
+
+.decl managed_health_complete(step: symbol, probe: symbol)
+managed_health_complete(step, probe) :- managed_health_reading(step, "healthy", probe).
+
+.decl managed_health_finding(step: symbol, probe: symbol)
+managed_health_finding(step, probe) :- managed_health_reading(step, "unhealthy", probe).
+
+.output managed_health
+.output managed_health_complete
+.output managed_health_finding
