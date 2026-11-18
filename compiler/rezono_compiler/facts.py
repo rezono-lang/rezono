@@ -28,7 +28,7 @@ PLACE = re.compile(r"([^.\[\]]+)|\[([0-9]+)\]")  # admission's place: names, and
 PYTHON_TYPES = {"VARCHAR": str, "BIGINT": int, "BOOLEAN": bool, "DATE": datetime.date}
 SQL_TYPES = {"text": "VARCHAR", "enum": "VARCHAR", "integer": "BIGINT", "boolean": "BOOLEAN", "date": "DATE"}
 FORMAT = "rezono.schema-bundle/1"
-DATASET_FORMAT = "rezono.module/2"
+DATASET_FORMAT = rezono_module.DATASET_FORMAT
 # A schema without kinds: what admission refuses of a document against it, beside its unknown kinds, is the
 # document's own shape (sections).
 SHAPE = Schema({"format": FORMAT, "pack": {"id": ""}, "kinds": []})
@@ -76,7 +76,7 @@ def _named_datasets(pack_dir: Path) -> list[Path]:
         raise LoadError("pack.yaml: expected a mapping of pack metadata")
 
     errors: list[str] = []
-    modules = rezono_module.declared(meta, pack_dir, errors, reject_undeclared=False)
+    modules = rezono_module.declared(meta, pack_dir, errors, reject_undeclared=False, include_datasets=True)
     if errors:
         raise LoadError("\n".join(errors))
     source_dir = pack_dir.resolve() / rezono_module.DIR
@@ -160,19 +160,20 @@ def load(pack: Pack, path: str | Path) -> dict[str, list[tuple]]:
 
 
 def _named_dataset(module: dict) -> dict:
-    declarations = module["decls"]
-    if len(declarations) != 1 or not isinstance(declarations[0], dict):
-        raise LoadError("expected one named dataset in the module form")
-    dataset = declarations[0]
-    tables = dataset.get("decls")
-    if (dataset.keys() != {"dataset", "decls"} or not isinstance(dataset["dataset"], str)
-            or not dataset["dataset"] or not isinstance(tables, list)):
+    dataset = rezono_module.named_dataset(module)
+    if dataset is None:
         raise LoadError("expected one named dataset in the module form")
     return dataset
 
 
 def scalar_dataset(judged: Schema, form: dict) -> dict[str, list]:
     """Decode a named module dataset into the records used by ordinary admission."""
+    records, _ = located_scalar_dataset(judged, form)
+    return records
+
+
+def located_scalar_dataset(judged: Schema, form: dict) -> tuple[dict[str, list], dict[str, list[str]]]:
+    """Decode each record with its JSON pointer for publication provenance."""
     module = rezono_module.module_body(form, DATASET_FORMAT)
     if module is None:
         raise LoadError(f"expected {DATASET_FORMAT} with a module header and spans")
@@ -182,7 +183,8 @@ def scalar_dataset(judged: Schema, form: dict) -> dict[str, list]:
     tables = _named_dataset(module)["decls"]
 
     records: dict[str, list] = {}
-    for table in tables:
+    pointers: dict[str, list[str]] = {}
+    for table_index, table in enumerate(tables):
         if not isinstance(table, dict) or table.keys() != {"fact", "columns", "rows"}:
             raise LoadError("scalar datasets require fact tables")
         if not isinstance(table["fact"], str):
@@ -210,13 +212,15 @@ def scalar_dataset(judged: Schema, form: dict) -> dict[str, list]:
             column_types.append(slot.type)
 
         output = records.setdefault(kind, [])
-        for row in rows:
+        places = pointers.setdefault(kind, [])
+        for row_index, row in enumerate(rows):
             where = f"{kind}[{len(output) + 1}]"
             if not isinstance(row, list) or len(row) != len(columns):
                 raise LoadError(f"{where}: row width does not match the fact table header")
             output.append({column: scalar_cell(cell, SQL_TYPES[type_], f"{where}.{column}")
                            for column, cell, type_ in zip(columns, row, column_types, strict=True)})
-    return records
+            places.append(f"/module/decls/0/decls/{table_index}/rows/{row_index}")
+    return records, pointers
 
 
 def scalar_cell(cell, sql_type: str, where: str):
