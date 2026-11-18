@@ -5,7 +5,6 @@ import pytest
 from wire_fixtures import entry
 
 
-@pytest.mark.xfail(strict=True, reason="Read decisions/loop-design.md. Implement loop/readback_identity.py. Require the indexed manifest and exact rendered Kubernetes object identity.")
 def test_readback_identity(monkeypatch):
     verify_identity = entry(monkeypatch, "readback_identity", "verify_identity")
     ref = {"manifest": "m-a", "apiVersion": "v1", "kind": "ConfigMap", "namespace": "fixture", "name": "echo"}
