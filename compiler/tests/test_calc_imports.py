@@ -329,7 +329,7 @@ HASHED = ("pack.yaml", "channels.yaml", "schema/**/*.yaml", "rezono/**/*.rezono"
           "views.yaml", "icons/*.svg", "icons/sources.yaml")
 
 
-@pytest.mark.xfail(strict=True, reason="docs/compiler/pack.md is not in the standalone repository yet")
+@pytest.mark.xfail(strict=True, reason="The standalone repository lacks docs/compiler/pack.md and contains only six import pins across packs and examples. Adding the hash documentation reaches the assertion requiring more than ten pins; additional public pack definitions with genuine imports are needed.")
 def test_the_definition_hash_of_every_pack_is_what_it_was():
     """Importing calculations changes no hash: the hash covers the files it covered (calc/*.yaml was among
     them), the page that says what it covers names each of them, and every pin a pack of this repository
