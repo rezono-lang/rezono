@@ -1,0 +1,45 @@
+id: https://rezono.org/build/tasks
+name: build_tasks
+description: Observed tasks, queue readings and the decisions governing build placement.
+imports: [linkml:types, selection, "std-loop:loop_inputs", "std-decision:decision"]
+default_range: string
+annotations:
+  layer: facts
+
+classes:
+  BuildTask:
+    description: A task observed by the scanner and linked to its reconciliation step.
+    attributes:
+      id: {identifier: true}
+      run: {range: BuildRun, required: true}
+      step: {range: LoopStep, required: true}
+      track: {required: true}
+      source: {required: true}
+  BuildPolicyDate:
+    description: The reference day derived from the recorded observation cut.
+    attributes:
+      id: {identifier: true}
+      run: {range: BuildRun, required: true}
+      reference: {range: ReferenceDate, required: true}
+      observed_at: {range: integer, required: true}
+  BuildTrackRank:
+    description: The priority an effective decision assigns to a track.
+    attributes:
+      id: {identifier: true}
+      decision: {range: Decision, required: true}
+      track: {required: true}
+      rank: {range: integer, minimum_value: 0, required: true}
+  BuildQueueLimit:
+    description: The planner threshold established by a build policy decision.
+    attributes:
+      id: {identifier: true}
+      decision: {range: Decision, required: true}
+      limit: {range: integer, minimum_value: 0, required: true}
+  BuildQueueReading:
+    description: A count from the queue reader at this observation cut.
+    attributes:
+      id: {identifier: true}
+      run: {range: BuildRun, required: true}
+      observed_at: {range: integer, required: true}
+      count: {range: integer, minimum_value: 0, required: true}
+      source: {required: true}
