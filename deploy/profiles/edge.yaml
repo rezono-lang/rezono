@@ -6,6 +6,8 @@ engine:
 storage:
   endpoint_env: REZONO_S3_ENDPOINT
 publish:
+  classes:
+    - unclassified
   packs:
     - examples/subsidy
 access:
