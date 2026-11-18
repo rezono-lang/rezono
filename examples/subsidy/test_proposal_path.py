@@ -127,8 +127,6 @@ def check(root: Path, made: dict) -> None:
     assert not [rel for rel in counts["viewer"] if rel.startswith(LEDGER)], counts["viewer"]
 
 
-@pytest.mark.xfail(strict=True, raises=MissingEdgeProfile,
-                   reason="Supply the public deploy/profiles/edge.yaml profile for the subsidy pack: checker complete; propose and viewer may_read. See examples/subsidy/facts/roles.yaml.")
 def test_the_path_of_a_proposal_ends_in_the_difference_each_role_reads(tmp_path):
     root = tmp_path / "store"
     check(root, build(tmp_path, root))

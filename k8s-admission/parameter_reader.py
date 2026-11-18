@@ -4,9 +4,11 @@ import re
 
 
 def read_parameters(namespace: str, resource: dict) -> dict:
-    """Read typed policy inputs from an AdmissionPublication in the request namespace."""
-    if resource.get("apiVersion") != "admission.rezono.org/v1alpha1" or resource.get("kind") != "AdmissionPublication":
-        raise ValueError("expected an admission.rezono.org/v1alpha1 AdmissionPublication")
+    """Read typed policy inputs from a publication in the request namespace."""
+    # The old spelling remains valid only for offline input.
+    if (resource.get("apiVersion") != "admission.rezono.org/v1alpha1"
+            or resource.get("kind") not in ("NamespacePublication", "AdmissionPublication")):
+        raise ValueError("expected an admission.rezono.org/v1alpha1 NamespacePublication")
 
     metadata = resource.get("metadata")
     if not namespace or not isinstance(metadata, dict) or metadata.get("namespace") != namespace:
