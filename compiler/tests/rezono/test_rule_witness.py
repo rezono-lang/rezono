@@ -70,6 +70,5 @@ def test_authored_rule_proves_listed_item(tmp_path):
     check_meaning_and_origin(write_example(tmp_path, "datalog"), "rules/eligibility.dl")
 
 
-@pytest.mark.xfail(strict=True, raises=(pack.CompileError, AssertionError), reason="Publish relational rule blocks with authored clause positions in compiler/rezono_compiler. Read decisions/language-rules.md. Waits for contracts/rezono-module.yaml to admit module/2 rule blocks. The independent hand-authored form allows work before reader completion.")
 def test_rezono_rule_proves_listed_item(tmp_path):
     check_meaning_and_origin(write_example(tmp_path, "rezono"), "rezono/eligibility.rezono")

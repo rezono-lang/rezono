@@ -742,7 +742,7 @@ def read(pack_dir: str | Path) -> Pack:
             errors.append(str(e))
     generated = []
     if not errors:
-        from . import rezono_table  # it reads the pack's model, so it runs once the model is read
+        from . import rezono_relational, rezono_table  # table lowering reads the pack's model
         forms = {m.rel: m.form for m in mods if m.pack_dir == pack_dir and m.form is not None}
         generated = rezono_table.lower_pack(pack, meta, pack_dir, errors, forms=forms)
     if not errors:
@@ -750,7 +750,7 @@ def read(pack_dir: str | Path) -> Pack:
             pack.rules, rule_warnings = rules_dl.read(pack, pack_dir, ordered, renames, calc_inputs=calc_inputs,
                                                       calc_parts=calc_parts, folds=pack.folds,
                                                       bodies=pack.rule_bodies, spans=pack.rule_spans,
-                                                      generated=generated)
+                                                      generated=generated, embedded=rezono_relational.sources(mods))
             pack.warnings += rule_warnings
             if pack.rules:   # a variable or a column that joins two currencies is an error
                 amounts.columns(pack.rules, amounts.tables(pack))
