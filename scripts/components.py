@@ -233,7 +233,8 @@ PR_FILE_CONSUMERS = {
     "canon": ("edge/plugins/connectors", "examples", "k8s-admission", "loop"),
     "checker": ("compiler", "examples", "k8s-admission", "loop", "run"),
     "compiler": ("admission", "checker", "edge/plugins/connectors", "examples", "loop", "publication", "run"),
-    "contracts": ("admission", "compiler", "rezono"),
+    "edge/plugins/connectors": ("examples",),
+    "contracts": ("admission", "canon", "checker", "compiler", "edge/plugins/connectors", "loop", "publication", "rezono"),
     "edge/publisher": ("compiler", "deploy/profiles/edge", "edge/plugins/connectors", "examples", "k8s-admission", "run"),
     "loop": ("examples",),
     "publication": ("checker", "compiler", "edge/plugins/connectors", "edge/publisher", "examples"),
@@ -447,7 +448,11 @@ def pull_request_components(components: list[Component], root: Path, base_ref: s
                 if path == "viewer/src/lib/canon.ts":
                     pending.update(readers & folders)
             if owner:
-                if owner == "loop" and not outside_cluster_plugin(Path(path), root / "loop/pyproject.toml"):
+                source = Path(path)
+                # The converter regression parses every tracked non-fixture Datalog file.
+                if source.suffix == ".dl" and "fixtures" not in source.parts:
+                    direct.add("compiler")
+                if owner == "loop" and not outside_cluster_plugin(source, root / "loop/pyproject.toml"):
                     return list(components)  # the shipped plugin runs in every pytest process
                 pending.add(owner)
             elif readers is None or path.startswith("edge/plugins/"):

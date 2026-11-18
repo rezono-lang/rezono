@@ -193,6 +193,30 @@ class PullRequestSelectorTests(unittest.TestCase):
             self.commit(root)
             self.assertEqual(self.matrix(root, "pull_request", base), {"compiler", "downstream", "idle", "rezono"})
 
+    def test_connector_source_selects_examples_that_load_it_by_path(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root, base = self.repository(directory, {
+                "edge/plugins/connectors/accept.py": "FORMAT = 'first'\n",
+                "edge/plugins/connectors/test_accept.py": "def test_accept(): pass\n",
+                "examples/test_exports.py": "def test_exports(): pass\n",
+                "idle/pyproject.toml": '[project]\nname = "idle"\n',
+            })
+            self.write(root, {"edge/plugins/connectors/accept.py": "FORMAT = 'second'\n"})
+            self.commit(root)
+            self.assertEqual(self.matrix(root, "pull_request", base), {"edge/plugins/connectors", "examples"})
+
+    def test_owned_datalog_selects_the_compiler_inventory(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root, base = self.repository(directory, {
+                "compiler/pyproject.toml": '[project]\nname = "rezono-compiler"\n',
+                "run/tests/test_dispatch.py": "def test_dispatch(): pass\n",
+                "idle/pyproject.toml": '[project]\nname = "idle"\n',
+            })
+            self.write(root, {"run/packs/dispatch/rules/authorization.dl": ".decl grant(item: symbol)\n"})
+            self.commit(root)
+            self.assertEqual(self.matrix(root, "pull_request", base), {"compiler", "run"})
+            self.assertEqual(self.matrix(root, "merge_group", base), {"run"})
+
     def test_malformed_manifest_keeps_the_full_matrix(self):
         with tempfile.TemporaryDirectory() as directory:
             root, base = self.repository(directory, {
@@ -242,7 +266,7 @@ def source_paths(text, extension):
             contained.update(id(part) for child in ast.iter_child_nodes(node) for part in ast.walk(child))
     for node in ast.walk(tree):
         if id(node) not in contained and (path := path_expression(node)):
-            rooted = any(isinstance(part, ast.Name) and part.id in {"ROOT", "REPO", "__file__"}
+            rooted = any(isinstance(part, ast.Name) and part.id in {"HERE", "ROOT", "REPO", "__file__"}
                          for part in ast.walk(node))
             yield path, rooted
 
@@ -252,10 +276,15 @@ class SharedReaderTests(unittest.TestCase):
         components = ci.discover_components(ROOT)
         folders = {c.folder for c in components}
         files = subprocess.check_output(["git", "ls-files", "-z"], cwd=ROOT).split(b"\0")
+        paths = {os.fsdecode(path) for path in files if path}
+        revision = ci.git_output(ROOT, "rev-parse", "HEAD").decode().strip()
+        edges = ci.declared_dependents(ROOT, revision, folders, {})
+        for graph in (ci.FILE_CONSUMERS, ci.PR_FILE_CONSUMERS):
+            for dependency, consumers in graph.items():
+                edges.setdefault(dependency, set()).update(consumers)
         missing = set()
         observed = set()
-        for raw in filter(None, files):
-            relative = os.fsdecode(raw)
+        for relative in sorted(paths):
             file = ROOT / relative
             owner = ci.component_owner(relative, folders)
             test_source = (any(part in {"test", "tests", "proof_cases"} for part in Path(relative).parts)
@@ -266,9 +295,19 @@ class SharedReaderTests(unittest.TestCase):
             if not file.is_file():
                 self.fail(f"Tracked test source is missing: {relative}")
             for hint, rooted in source_paths(file.read_text(encoding="utf-8"), file.suffix):
-                if not SHARED_PATH.match(hint) or not re.fullmatch(r"[a-zA-Z0-9_./*?\[\]-]+", hint):
+                if not re.fullmatch(r"[a-zA-Z0-9_./*?\[\]-]+", hint):
                     continue
                 path = re.sub(r"^(?:\.\./|\./)+", "", hint).rstrip("/")
+                if rooted and path in paths and ci.shared_readers(path) is None:
+                    provider = ci.component_owner(path, folders)
+                    if provider:
+                        if owner != provider and owner not in edges.get(provider, set()):
+                            missing.add((relative, path, owner))
+                        else:
+                            observed.add((path, owner))
+                        continue
+                if not SHARED_PATH.match(hint):
+                    continue
                 if "/" not in path and not rooted:
                     continue  # a role name such as "viewer" is not a repository read
                 # Bare paths can also refer to temporary fixture files. Match known
@@ -290,7 +329,8 @@ class SharedReaderTests(unittest.TestCase):
         for citation in (("docs/compiler/pack.md", "compiler"), ("docs/semantics/value-cases.yaml", "rezono"),
                          ("docs/publication/cases", "publication"), ("decisions/publication-case-pins.md", "compiler"),
                          ("decisions/conformance-*.md", "compiler"), ("tests/conformance", "compiler"),
-                         ("viewer/src/lib/canon.ts", "rezono"), ("edge/plugins/*/plugin.yaml", "contracts")):
+                         ("viewer/src/lib/canon.ts", "rezono"), ("edge/plugins/*/plugin.yaml", "contracts"),
+                         ("edge/plugins/connectors/accept.py", "examples")):
             self.assertIn(citation, observed)
 
 
