@@ -24,6 +24,13 @@ REDIS_IMAGE = (
 )
 MIRRORED_PATH = "/rezono.git"
 PLUGIN = "rezono-admission-fixture"
+ADMISSION_WAVES = {
+    "CustomResourceDefinition": "-2",
+    "Namespace": "-2",
+    "NamespacePublication": "-1",
+    "ValidatingAdmissionPolicy": "0",
+    "ValidatingAdmissionPolicyBinding": "1",
+}
 
 
 def render_release() -> bytes:
@@ -35,6 +42,11 @@ def render_release() -> bytes:
         store = publish_evidence(Path(directory))
         objects = compose(["admission-blue", "admission-green"], [publication], store=store,
                           manifest_key=MANIFEST_KEY)
+    # The API server type-checks a policy when it first observes that generation.
+    # Publish the parameter API and an actual record before the policies exist.
+    for obj in objects:
+        annotations = obj["metadata"].setdefault("annotations", {})
+        annotations["argocd.argoproj.io/sync-wave"] = ADMISSION_WAVES[obj["kind"]]
     return yaml.safe_dump_all(objects, sort_keys=False).encode("utf-8")
 
 
