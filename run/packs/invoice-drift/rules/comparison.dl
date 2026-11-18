@@ -15,7 +15,7 @@ bound_invoice(invoice_ref) :- invoice_binding(invoice_ref, _, _, _, _).
     rounding_ref: symbol, expected_minor: number, observed_minor: number)
 amount_difference(plan, item, expected_ref, invoice_ref, rounding_ref, expected_minor, observed_minor) :-
     invoice_binding(invoice_ref, expected_ref, plan, item, currency),
-    expected_line__minor(expected_ref, expected_minor), invoice_line__minor(invoice_ref, observed_minor),
+    verified_rounding(expected_ref, rounding_ref, expected_minor), invoice_line__minor(invoice_ref, observed_minor),
     expected_line__rounding_sha256(expected_ref, rounding_ref),
     rounding(rounding_ref), rounding__currency(rounding_ref, currency),
     rounding__source_url(rounding_ref, _), rounding__boundary(rounding_ref, "line"),
