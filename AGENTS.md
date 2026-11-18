@@ -10,7 +10,7 @@ The [project vision](docs/vision.md) explains the reasoning behind these rules.
 3. **Deterministic.** The same input gives the same bytes: no floating point for money or ratios, no randomness without a fixed seed, no clock time in the output, a fixed order everywhere.
 4. **Unknown is explicit.** A missing value is never read as "no".
 5. **Correctness blocks, taste warns.**
-6. **Two kinds of comparison, never mixed.** An oracle checks that Rezono computes correctly; a difference is a bug. A reference source checks that the world and another system agree; a difference is drift, a finding with a proof.
+6. **Two kinds of comparison.** An independent test oracle checks computation against the semantics. An oracle mismatch blocks until it is resolved against those semantics. A reference source compares derived results with observations or another system's records and reports drift with a proof. Keep the comparisons separate. The [formal foundations](docs/formal.md#11-independent-oracles) record the oracle coverage and execution paths.
 7. **Small.** Prefer an existing open-source component to code of our own.
 8. **Portable.** Only plain Kubernetes features.
 9. **Model the need, not the source.** A new kind has an origin, cannot be derived by a rule, does not describe how another system stored it, and answers an acceptance question.
