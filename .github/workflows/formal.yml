@@ -1,0 +1,69 @@
+name: Formal models
+
+on:
+  pull_request:
+    paths:
+      - 'formal/**'
+      - '.github/workflows/formal.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: formal-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  tlc:
+    name: TLC model checks
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: formal
+        shell: bash
+    env:
+      TESTED_HEAD: ${{ github.event.pull_request.head.sha }}
+      TLA_URL: https://github.com/tlaplus/tlaplus/releases/download/v1.7.4/tla2tools.jar
+      TLA_SHA256: 936a262061c914694dfd669a543be24573c45d5aa0ff20a8b96b23d01e050e88
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - uses: actions/setup-java@77dd5b2ce225ea11469928ac317850245a74ae78  # v6.2.0
+        with:
+          distribution: temurin
+          java-version: '21.0.13'
+      - name: Verify the checkout and pinned TLC tool
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$TESTED_HEAD"
+          printf 'Testing pull request head %s\n' "$TESTED_HEAD"
+          jar="$RUNNER_TEMP/tla2tools.jar"
+          curl --proto '=https' --proto-redir '=https' --fail --silent --show-error \
+            --location --retry 3 --max-time 120 --output "$jar" "$TLA_URL"
+          printf '%s  %s\n' "$TLA_SHA256" "$jar" | sha256sum --check
+          printf 'TLA_JAR=%s\n' "$jar" >> "$GITHUB_ENV"
+
+      - name: Check the safe configurations
+        run: |
+          set -euo pipefail
+          check() {
+            local config=$1 module=$2
+            printf '\nChecking %s\n' "$config"
+            java -XX:+UseParallelGC -cp "$TLA_JAR" tlc2.TLC -workers 2 \
+              -metadir "$RUNNER_TEMP/tlc-${config%.cfg}" -config "$config" "$module"
+          }
+          check Epochs.cfg MCEpochs.tla
+          check EpochsTxn.cfg MCEpochs.tla
+          check Effect.cfg Effect.tla
+          check Claims.cfg Claims.tla
+
+      - name: Check the expected invariant violations
+        run: |
+          set -euo pipefail
+          bash must-fail.sh EpochsNoWait.cfg MCEpochs.tla
+          bash must-fail.sh EpochsTxnAtRow.cfg MCEpochs.tla
+          bash must-fail.sh EffectNoLock.cfg Effect.tla
+          bash must-fail.sh ClaimsNoOpenPRCheck.cfg Claims.tla

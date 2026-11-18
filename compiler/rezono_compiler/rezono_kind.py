@@ -32,13 +32,20 @@ def parent_of(value: object, kind: str, at: str, own: dict[str, str],
 
 
 def lower(decl: dict, at: str, own: dict[str, str], owners: dict[str, list[str]],
-          declared: Set[str], uses: set[str], refuse: Refuse, *, explicit_identifiers: bool = False) -> dict | None:
+          declared: Set[str], uses: set[str], refuse: Refuse, *, extended_format: bool = False) -> dict | None:
     ok = True
-    allowed = MEMBERS | {"parent", "equations"} if explicit_identifiers else MEMBERS
+    allowed = MEMBERS | {"embedded", "equations", "parent"} if extended_format else MEMBERS
     if extra := set(decl) - allowed:
         refuse(at, f"a kind with {', '.join(sorted(extra))} is not lowered", "§5.1")
         ok = False
-    has_parent = explicit_identifiers and "parent" in decl
+    embedded = decl.get("embedded") is True
+    if extended_format and "embedded" in decl and not embedded:
+        refuse(at, "an embedded kind must be marked true", "§5.1")
+        ok = False
+    has_parent = extended_format and "parent" in decl
+    if embedded and has_parent:
+        refuse(at, "an embedded kind cannot inherit an identifier from a parent", "§5.1")
+        ok = False
     parent = parent_of(decl["parent"], decl["kind"], f"{at}/parent", own, owners, uses, refuse) if has_parent else None
     if has_parent and parent is None:
         ok = False
@@ -54,17 +61,20 @@ def lower(decl: dict, at: str, own: dict[str, str], owners: dict[str, list[str]]
     for index, _ in enumerate(decl.get("derived") or []):
         refuse_derived(f"{at}/derived/{index}", refuse)
         ok = False
-    equations = rezono_equation.lower(decl.get("equations", []), f"{at}/equations", refuse) if explicit_identifiers else []
+    equations = rezono_equation.lower(decl.get("equations", []), f"{at}/equations", refuse) if extended_format else []
     slots = decl.get("slots") or []
+    if embedded:
+        for index, slot in enumerate(slots):
+            if isinstance(slot, dict) and slot.get("identifier") is True:
+                refuse(f"{at}/slots/{index}", "an embedded kind cannot declare an identifier", "§5.1")
+                ok = False
     if has_parent and any(isinstance(slot, dict) and slot.get("identifier") is True for slot in slots):
         refuse(at, "a kind with a parent inherits its identifier and cannot declare its own", "§5.1")
         ok = False
     if rezono_slot.validate(
-        slots, decl["kind"], at, own, owners, uses, refuse, explicit_identifiers=explicit_identifiers
+        slots, decl["kind"], at, own, owners, uses, refuse, explicit_identifiers=extended_format
     ) and ok and equations is not None:
-        attributes = rezono_slot.lower(slots, declared)
-        if parent is not None:
-            attributes.pop("id", None)
+        attributes = rezono_slot.lower(slots, declared, implicit_identifier=not embedded and parent is None)
         kind = {"is_a": parent, "attributes": attributes} if parent is not None else {"attributes": attributes}
         if equations:
             kind.setdefault("annotations", {})["path_equations"] = equations
