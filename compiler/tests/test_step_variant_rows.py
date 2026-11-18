@@ -73,9 +73,6 @@ def verify_incremental(model, program, rule, base):
         feldera.call("DELETE", f"/v0/pipelines/{name}")
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError,
-                   reason="Implement typed step variants in compiler/rezono_compiler/step_variants.py. "
-                          "Read decisions/safe-step-rounds.md. Preserve observation bytes and check exact old rows.")
 def test_step_variant_rows():
     model = pack.read(NEUTRAL)
     program = rules.load(model.rules)
