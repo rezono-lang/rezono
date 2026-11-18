@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-set -euo pipefail
+set -Eeuo pipefail
 umask 077
 
 sources=$(cd "$(dirname "$0")" && pwd)
@@ -136,8 +136,18 @@ fetch "$base/kubevirt-cr.yaml" 43106136dbce3312bdbfdeae612aacafc6c12da518d233f90
 apply() { docker exec -i "$name" k0s kubectl apply --server-side -f - < "$1"; }
 await_condition() { docker exec "$name" k0s kubectl "$@"; }
 apply operator.yaml
+# The disposable controller runs outside Kubernetes and has no node object.
+# Place infrastructure on the only enrolled worker using its verified label.
+control -n kubevirt patch deployment virt-operator --type=json -p     '[{"op":"replace","path":"/spec/template/spec/affinity/nodeAffinity/requiredDuringSchedulingIgnoredDuringExecution/nodeSelectorTerms","value":[{"matchExpressions":[{"key":"probe.rezono.org/role","operator":"In","values":["joined-worker"]}]}]}]'
 await_condition -n kubevirt rollout status deployment/virt-operator --timeout=240s
 stage=kubevirt-availability
+cat >> cr.yaml <<'YAML'
+  infra:
+    replicas: 1
+    nodePlacement:
+      nodeSelector:
+        probe.rezono.org/role: joined-worker
+YAML
 apply cr.yaml
 await_condition -n kubevirt wait kubevirt/kubevirt --for=condition=Available --timeout=360s
 stage=kvm-allocation
