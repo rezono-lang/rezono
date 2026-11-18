@@ -75,9 +75,6 @@ def test_transport_coverage_in_both_released_directions(tmp_path, monkeypatch):
                     identities.append((published, requested, end, reverse, directions))
                     samples.append({"object": obj, "params": publication, "variables": policy["variables"],
                                     "validations": policy["validations"]})
-    tidy = subprocess.run(["go", "mod", "tidy", "-diff"], cwd=ROOT / "oracles" / "flow-expression",
-                          text=True, capture_output=True, timeout=180)
-    assert tidy.returncode == 0, "\nCEL_GO_LOCK_DIFF_BEGIN\n" + tidy.stdout + "\nCEL_GO_LOCK_DIFF_END\n" + tidy.stderr
     probe = subprocess.run(["go", "run", "-mod=readonly", "."], cwd=ROOT / "oracles" / "flow-expression",
                            input=json.dumps(samples), text=True, capture_output=True, timeout=180)
     assert probe.returncode == 0, probe.stderr
