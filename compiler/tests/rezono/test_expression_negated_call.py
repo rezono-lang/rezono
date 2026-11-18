@@ -89,13 +89,6 @@ def closure(tmp_path, vector):
     return consumer, forms
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=PartialityMismatch,
-    reason="Link and retain possible predicate states and source causes across wrappers, positive recursion "
-           "and authorized extensions. Use native_rule_signatures.link and the shared expression-negated-call "
-           "vector for decisions/language-expression-semantics.md §2. No consumer or lowering dependency.",
-)
 def test_expression_link_partiality(closure, vector):
     directory, forms = closure
     linked = native_rule_signatures.link(directory, forms)
