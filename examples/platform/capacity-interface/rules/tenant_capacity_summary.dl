@@ -1,3 +1,0 @@
-// A consumer supplies its clauses for the tenant summary through the checked import.
-// @extend
-.decl tenant_capacity_summary(tenant: symbol, period: symbol, free: number, used: number, own: number)

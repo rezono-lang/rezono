@@ -7,4 +7,4 @@ imports:
   - {name: std-identity, path: ../../packs/std-identity, sha256: 129e5321602dea3b58ea5220103c4d313237d0dbf5e640c677b24fc98e5d265b}
   - {name: std-time, path: ../../packs/std-time, sha256: bb2863a03792228005fa6784ed1022c07ac82139cdbf0ff7914cd273b3e046a7}
   - {name: std-access, path: ../../packs/std-access, sha256: cc117210daed394ec6ebbf7b270215c95c418865dd5292091e8315f428f5ee70}
-  - {name: platform-capacity-interface, path: capacity-interface, sha256: b9cbf868c0297678fd9d430aef3a63535b0dcb7c30494fff7f614a408d63f644}
+  - {name: platform-capacity-interface, path: tenant-capacity/interface, sha256: 70f4ddbc8cebdcd40f5deb95ddb90165e964012bc04d5225998e49f65014befb}

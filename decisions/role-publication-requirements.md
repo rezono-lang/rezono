@@ -6,4 +6,4 @@ The publisher checks requirements before writing any objects. The normal proof c
 
 The platform example derives its requirements from participation and measured pool periods. Withdrawing a notice leaves the requirement in place. Deriving requirements from the notices or the conclusions would lose the requirement when its source disappeared. Requiring every row of a relation would also block on other tenants' conclusions.
 
-The platform imports an explicitly extensible declaration for the tenant summary. This allows an alternate proof in a separate rule file under the same module ownership checks as other extensions.
+The platform imports a standalone interface pack with the public notice schema, its issuance rule and an explicitly extensible declaration for the tenant summary. This allows an alternate proof in a separate rule file under the same module ownership checks as other extensions. The private readings and their calculation stay in the platform pack.
