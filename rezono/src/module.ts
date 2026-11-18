@@ -33,6 +33,7 @@
 // As in a question, an R000, R014, R016 or R018 leaves no module and no other diagnostic.
 import { blockSyntax, declarationActions, declarations, type Decl } from './module-components.ts';
 import { layout, only, type Logical } from './module-layout.ts';
+import { readSchema, type SchemaMetadata } from './module-metadata.ts';
 import type { BlockSyntax, Build, Line } from './module-support.ts';
 import { versionGaps } from './module-version.ts';
 import { inOrder, points, readRule, semantics, torn, tornAt, type Diagnostic, type Span } from './parse.ts';
@@ -50,7 +51,7 @@ export type { Valid, VersionDecl } from './module-version.ts';
 
 semantics.addOperation<unknown>('decl', declarationActions);
 
-export interface Module {
+export interface Module extends SchemaMetadata {
 	rezono?: string;
 	pack: string;
 	use: { use: string; as?: string }[];
@@ -157,6 +158,11 @@ function readModule(text: string, bare: boolean): ParsedModule {
 		if (r.line === 'use' && stage === 1) {
 			build.leaf(line);
 			module.use.push(build.strip(r));
+			continue;
+		}
+		if (r.line === 'schema' && stage === 1) {
+			if (module.schema !== undefined) build.refuse(line, 'one schema identity');
+			else readSchema(module, line, build);
 			continue;
 		}
 		const declaration = declarations.get(r.line);

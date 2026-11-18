@@ -21,6 +21,7 @@
 import { canonicalJson } from '../../viewer/src/lib/canon.ts';
 import { isError } from './check.ts';
 import { JsonFormError } from './json.ts';
+import { hasMetadata } from './module-metadata.ts';
 import { parseModule, type Module } from './module.ts';
 import type { Diagnostic, Span } from './parse.ts';
 import { printModule } from './print.ts';
@@ -29,10 +30,15 @@ export const MODULE_FORMAT = 'rezono.module/1';
 const EXTENDED_MODULE_FORMAT = 'rezono.module/2';
 
 function formatOf(module: Module): ModuleForm['format'] {
-	if (module.decls.some((decl) => 'dataset' in decl)) return EXTENDED_MODULE_FORMAT;
-	return module.decls.some((decl) => 'kind' in decl && (decl.abstract || decl.embedded || decl.slots.some((slot) => slot.identifier || slot.embedded)))
-		? EXTENDED_MODULE_FORMAT
-		: MODULE_FORMAT;
+	const extended = module.schema !== undefined || module.decls.some(decl => {
+		if ('dataset' in decl) return true;
+		if ('kind' in decl) {
+			return decl.abstract || decl.embedded || hasMetadata(decl)
+				|| decl.slots.some(slot => slot.identifier || slot.embedded || slot.slotUri !== undefined || hasMetadata(slot));
+		}
+		return 'enum' in decl && (decl.memberMetadata !== undefined || hasMetadata(decl));
+	});
+	return extended ? EXTENDED_MODULE_FORMAT : MODULE_FORMAT;
 }
 
 /** The place of one node of `module`; the numbers are decimal text. */
