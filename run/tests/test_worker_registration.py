@@ -2,6 +2,7 @@
 
 import os
 from pathlib import Path
+import shutil
 import subprocess
 
 import pytest
@@ -12,7 +13,10 @@ TRIAL = Path(__file__).resolve().parents[1] / "probes" / "worker-join" / "trial.
 def test_worker_registration_script_syntax():
     with TRIAL.open(encoding="ascii") as source:
         assert source.readline().strip() == "#!/usr/bin/env bash"
-    subprocess.run(["bash", "-n", str(TRIAL)], check=True)
+    bash = shutil.which("bash")
+    if bash is None:
+        pytest.skip("Bash is required to check the worker trial script syntax")
+    subprocess.run([bash, "-n", str(TRIAL)], check=True)
 
 
 def test_flatcar_worker_registration(capfd):
