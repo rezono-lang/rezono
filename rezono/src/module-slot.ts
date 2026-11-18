@@ -1,8 +1,10 @@
 import { printMetadata, readMetadataLine, type Metadata } from './module-metadata.ts';
+import { printNumericSlotBound, readNumericSlotBound, type NumericSlotBound } from './module-slot-numeric.ts';
 import { printSlotPattern, slotPattern, type PatternConstraint } from './module-slot-pattern.ts';
 import { block, named, opt, printWorld, typeOf, type Build, type Card, type Line, type Logical, type World, type ModuleComponent } from './module-support.ts';
 
 type CardinalityConstraint = { cardinality: [minimum: string, maximum: string] };
+export type SlotConstraint = CardinalityConstraint | NumericSlotBound | PatternConstraint;
 
 export interface SlotDecl extends Metadata {
 	slot: string;
@@ -13,7 +15,7 @@ export interface SlotDecl extends Metadata {
 	identifier?: true;
 	embedded?: true;
 	slotUri?: string;
-	constraints?: (PatternConstraint | CardinalityConstraint)[];
+	constraints?: SlotConstraint[];
 }
 
 export function readSlot(line: Logical, build: Build): SlotDecl {
@@ -37,18 +39,27 @@ export function readSlot(line: Logical, build: Build): SlotDecl {
 			build.leaf(child);
 			if (slot.constraints?.some(constraint => 'pattern' in constraint)) build.refuse(child, 'one pattern constraint per slot');
 			else (slot.constraints ??= []).push(build.strip<PatternConstraint>(property));
+		} else if (property.line === 'slot-numeric-bound') {
+			readNumericSlotBound(child, build, slot.constraints ??= []);
 		} else build.refuse(child, 'no line under this one');
 	}
 	return slot;
+}
+
+function printConstraint(constraint: SlotConstraint): string {
+	if ('pattern' in constraint) return printSlotPattern(constraint);
+	if ('cardinality' in constraint) {
+		const [minimum, maximum] = constraint.cardinality;
+		return `cardinality ${minimum}..${maximum}`;
+	}
+	return printNumericSlotBound(constraint);
 }
 
 export function printSlot(s: SlotDecl): string[] {
 	return block(`${s.slot}: ${s.type}${s.card ?? ''}${s.inverse !== undefined ? ` inverse ${s.inverse}` : ''}${printWorld(s.world)}${s.identifier ? ' identifier' : ''}${s.embedded ? ' embedded' : ''}`, [
 		...(s.slotUri === undefined ? [] : [`iri ${JSON.stringify(s.slotUri)}`]),
 		...printMetadata(s),
-		...(s.constraints ?? []).map(constraint => 'pattern' in constraint
-			? printSlotPattern(constraint)
-			: `cardinality ${constraint.cardinality[0]}..${constraint.cardinality[1]}`)
+		...(s.constraints ?? []).map(printConstraint)
 	]);
 }
 

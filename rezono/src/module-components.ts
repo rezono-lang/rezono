@@ -13,6 +13,7 @@ import { rounding } from './module-rounding.ts';
 import { rules } from './module-rules.ts';
 import { scalarAlias } from './module-scalar-alias.ts';
 import { slot } from './module-slot.ts';
+import { numericSlotBounds } from './module-slot-numeric.ts';
 import { table } from './module-table.ts';
 import { unit } from './module-unit.ts';
 import { unless } from './module-unless.ts';
@@ -20,7 +21,7 @@ import { version } from './module-version.ts';
 import type { BlockSyntax, Declaration, ModuleComponent } from './module-support.ts';
 
 // Ohm tries these alternatives in order. Generic assignments stand after slots and specific statements.
-const components = [header, metadata, rounding, reason, unit, enumeration, parameter, kind, derived, version, unless, table, facts, check, rules, slot] as const;
+const components = [header, metadata, rounding, reason, unit, enumeration, parameter, kind, derived, version, unless, table, facts, check, rules, slot, numericSlotBounds] as const;
 // Native signatures have columns, so their printer must precede the fact table printer.
 const registered: readonly ModuleComponent[] = [nativeRule, scalarAlias, ...components];
 
