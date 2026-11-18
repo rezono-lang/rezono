@@ -251,9 +251,11 @@ def builtin_range(name: str, declared: bool) -> str | None:
 
 
 def attributes(decl: dict, declared: Set[str]) -> dict[str, dict]:
-    """Lower slots in written order, using an implicit `id` only when no slot identifies the kind (§5.1)."""
+    """Lower slots in written order. Only a non-embedded kind gets an implicit identifier (§5.1)."""
     slots = decl.get("slots") or []
-    out: dict[str, dict] = {} if any(s.get("identifier") is True for s in slots) else {"id": {"identifier": True}}
+    out: dict[str, dict] = {}
+    if decl.get("embedded") is not True and not any(s.get("identifier") is True for s in slots):
+        out["id"] = {"identifier": True}
     for s in slots:
         name = s["type"]
         slot: dict[str, object] = {"range": builtin_range(name, name in declared) or name}
@@ -350,8 +352,13 @@ def kind(decl: dict, at: str, own: dict, owners: dict[str, list[str]], uses: set
          *, explicit_identifiers: bool = False) -> bool:
     """Check a kind against §5.1; True when it lowers. A slot's type resolves in the module, else in the pack."""
     ok = True
-    if set(decl) - KIND:
-        refuse(at, f"a kind with {', '.join(sorted(set(decl) - KIND))} is not lowered", "§5.1")
+    members = KIND | {"embedded"} if explicit_identifiers else KIND
+    if extra := set(decl) - members:
+        refuse(at, f"a kind with {', '.join(sorted(extra))} is not lowered", "§5.1")
+        ok = False
+    embedded = decl.get("embedded") is True
+    if explicit_identifiers and "embedded" in decl and not embedded:
+        refuse(at, "an embedded kind must be marked true", "§5.1")
         ok = False
     if decl.get("world") != "closed":
         refuse(at, "an open kind is refused: a kind says `world closed`", "§5.1")
@@ -385,7 +392,10 @@ def kind(decl: dict, at: str, own: dict, owners: dict[str, list[str]], uses: set
             refuse(here, "an explicit identifier must be marked true", "§5.1")
             ok = False
         if explicit:
-            if identifier_seen:
+            if embedded:
+                refuse(here, "an embedded kind cannot declare an identifier", "§5.1")
+                ok = False
+            elif identifier_seen:
                 refuse(here, f"kind {decl['kind']} has more than one identifier", "§5.1")
                 ok = False
             identifier_seen = True
@@ -462,5 +472,6 @@ def class_slot_order(pack_dir: Path, rel: str) -> dict[str, list[str]]:
     meta = yaml.safe_load((pack_dir / "pack.yaml").read_text(encoding="utf-8")) or {}
     d = next(d for d in declared(meta, pack_dir, []) if d.module == rel)
     form = read_form(pack_dir, d, []) or {"module": {"decls": []}}
-    return {decl["kind"]: ["id", *(s["slot"] for s in decl.get("slots") or [])]
+    return {decl["kind"]: ([] if decl.get("embedded") is True else ["id"])
+            + [s["slot"] for s in decl.get("slots") or []]
             for decl in form["module"]["decls"] if isinstance(decl, dict) and "kind" in decl}
