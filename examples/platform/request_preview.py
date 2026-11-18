@@ -115,6 +115,10 @@ def catalog_rows(catalog):
     }]
     add_review_inputs(rows, catalog)
     rows["tenant_quota"] = readable_quotas(catalog)
+    for artifact, scope in mapping(catalog.get("bindings", {}), "catalog bindings").items():
+        if scope not in ("tenant", "delivery"):
+            raise ValueError("catalog binding scope must be tenant or delivery")
+        rows["tenant_binding"].append({"id": name(artifact, "binding artifact"), "scope": scope})
     return rows
 
 
@@ -283,7 +287,13 @@ def relation_rows(model, rows, name):
     calculation = calc.build(model, model.calc) if program.calc_inputs() else None
     connection, _, _ = batch.run(model, program, rows, calculation)
     with closing(connection):
-        return sorted(connection.execute(f"SELECT * FROM {q(name)}").fetchall())
+        result = connection.execute(f"SELECT * FROM {q(name)}").fetchall()
+    if name == "tenant_delivery_scope":
+        result = [
+            (tenant, artifact, tenant if number == 0 else f"{tenant}-{number}")
+            for tenant, artifact, number in result
+        ]
+    return sorted(result)
 
 
 def main(argv=None):
