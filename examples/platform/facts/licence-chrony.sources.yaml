@@ -1,0 +1,8 @@
+records:
+  - of: {kind: vendor_licence_notice, id: chrony-4.6}
+    kind: tool
+    name: Release notice inspection
+    revision: "4.6"
+    position: "L1 (first nonempty line, including its original terminator)"
+    url: https://gitlab.com/chrony/chrony/-/raw/4.6/COPYING
+    fragment_sha256: "d410d1fa11951fc8187b63b8c17b0ee128845c21926b24991f73c75c41131da6"

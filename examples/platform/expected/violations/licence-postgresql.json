@@ -1,0 +1,6 @@
+{
+  "vendor_licence_notice__product__reference": [
+    ["postgresql-16.0", "postgresql"],
+    ["postgresql-17.0", "postgresql"]
+  ]
+}

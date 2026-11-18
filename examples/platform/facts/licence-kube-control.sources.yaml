@@ -1,0 +1,8 @@
+records:
+  - of: {kind: vendor_licence_notice, id: kube-control-1.32.13}
+    kind: tool
+    name: Release notice inspection
+    revision: "1.32.13"
+    position: "L2 (first nonempty line, including its original terminator)"
+    url: https://raw.githubusercontent.com/kubernetes/kubernetes/v1.32.13/LICENSE
+    fragment_sha256: "0de3c4af0f678b866d34d71a3c0ba36b3d2cb521239b51fc57a8089d616f5857"
