@@ -31,9 +31,27 @@ cleanup() {
 trap cleanup EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
-# The compiled pipelines run the same unoptimized code without generating debug information.
-docker run --detach --name "$container" --network none --env CARGO_NET_OFFLINE=true \
-  --env CARGO_PROFILE_DEV_DEBUG=0 --env CARGO_PROFILE_UNOPTIMIZED_DEBUG=0 \
+trace="$reports/rustc.log"
+touch "$trace"
+chmod 666 "$trace"
+if ! docker image inspect "$image" >/dev/null 2>&1; then
+  docker pull "$image"
+fi
+original="$inputs/original-wrapper"
+docker image inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "$image" |
+  sed -n 's/^RUSTC_WRAPPER=//p' > "$original"
+chmod 644 "$original"
+compiler_env=(--env CARGO_NET_OFFLINE=true --env RUSTC_WRAPPER=/tmp/rezono-measure-feldera-rustc
+              --env CARGO_PROFILE_DEV_DEBUG=0 --env CARGO_PROFILE_UNOPTIMIZED_DEBUG=0)
+# Each part of the largest comparison builds a distinct program. The dependency cache remains
+# available without retaining per-program incremental state.
+if [[ "${FELDERA_SHARD:-}" == platform ]]; then
+  compiler_env+=(--env CARGO_INCREMENTAL=0)
+fi
+docker run --detach --name "$container" --network none "${compiler_env[@]}" \
+  --mount "type=bind,src=$PWD/compiler/ci/measure_feldera_rustc.sh,dst=/tmp/rezono-measure-feldera-rustc,readonly" \
+  --mount "type=bind,src=$trace,dst=/tmp/rezono-feldera-rustc.log" \
+  --mount "type=bind,src=$original,dst=/tmp/rezono-feldera-original-wrapper,readonly" \
   --mount "type=bind,src=$inputs,dst=/tmp/rezono-oracle-input,readonly" "$image"
 pid=$(docker inspect --format '{{.State.Pid}}' "$container")
 # Only loopback exists here. Enter the service network, then drop back to the runner user.
@@ -45,6 +63,13 @@ inside=(sudo nsenter --target "$pid" --net -- sudo -H -u "$(id -un)" --
   --retry-delay 2 --retry-max-time 95 --max-time 5 "$FELDERA_URL/healthz"
 docker image inspect --format 'pinned image bytes={{.Size}}' "$image" > "$reports/storage.log"
 df -h "$reports" >> "$reports/storage.log"
+printf 'runner cpus=%s architecture=%s\n' "$(nproc)" "$(uname -m)" >> "$reports/storage.log"
+awk '/^(MemTotal|SwapTotal):/ { print }' /proc/meminfo >> "$reports/storage.log"
+for control in cpu.max memory.max; do
+  if [[ -r "/sys/fs/cgroup/$control" ]]; then
+    printf 'runner cgroup %s=%s\n' "$control" "$(cat "/sys/fs/cgroup/$control")" >> "$reports/storage.log"
+  fi
+done
 
 selectors=(
   compiler/tests/test_calc.py::test_feldera_gives_what_duckdb_gives
