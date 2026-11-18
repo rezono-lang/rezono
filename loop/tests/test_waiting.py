@@ -10,6 +10,7 @@ def test_waiting_evidence():
         "needed": "run step token reason",
         "known": "run token reason",
         "done": "run step reason",
+        "step_safety_blocker": "run step cut obligation reason",
     }
     facts = {
         "needed": [
