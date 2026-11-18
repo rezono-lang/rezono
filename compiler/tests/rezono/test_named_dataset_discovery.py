@@ -8,7 +8,6 @@ import yaml
 from rezono_compiler import facts
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError, reason="Discover declared datasets through facts.files in compiler/rezono_compiler/facts.py. Read decisions/language-library-datasets.md. Waits for test_scalar_dataset_rows (shared facts.py).")
 def test_named_dataset_discovery(tmp_path):
     source = tmp_path / "rezono"
     source.mkdir()
