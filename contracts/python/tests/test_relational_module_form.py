@@ -25,7 +25,6 @@ def test_version_one_preserves_the_original_module_shape():
     assert errors(form(1, [BLOCK]))
 
 
-@pytest.mark.xfail(strict=True, reason="Extend contracts/rezono-module.yaml for the versioned rules block in decisions/language-rules.md. Keep version one strict.")
 def test_version_two_accepts_only_the_typed_rules_declaration():
     assert errors(form(2, [BLOCK])) == []
     for invalid in ({"rules": "inventory"}, {"lines": BLOCK["lines"]},

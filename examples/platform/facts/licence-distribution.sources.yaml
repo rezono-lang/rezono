@@ -1,0 +1,8 @@
+records:
+  - of: {kind: vendor_licence_notice, id: distribution-3.0.0}
+    kind: tool
+    name: Release notice inspection
+    revision: "3.0.0"
+    position: "L1 (first nonempty line, including its original terminator)"
+    url: https://raw.githubusercontent.com/distribution/distribution/v3.0.0/LICENSE
+    fragment_sha256: "15ef3a45b062d92684bcdd84d53f8e1120101dd6294ab9af94c5338bf5b5065f"

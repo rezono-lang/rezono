@@ -3,12 +3,20 @@ name: Disposable cluster
 on:
   pull_request:
   workflow_dispatch:
+  workflow_call:
+    inputs:
+      tasks:
+        type: string
+        required: true
+      base:
+        type: string
+        required: true
 
 permissions:
   contents: read
 
 concurrency:
-  group: disposable-cluster-${{ github.event.pull_request.number || github.ref }}
+  group: disposable-cluster-${{ github.event.pull_request.number || github.ref }}-${{ inputs.tasks != '' && 'worker' || 'suite' }}
   cancel-in-progress: true
 
 jobs:
@@ -25,6 +33,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
+          fetch-depth: 0
           persist-credentials: false
       - name: Install pinned cluster tools
         shell: bash
@@ -98,14 +107,33 @@ jobs:
           retry kubectl wait --for=condition=Ready --timeout=60s node/rezono-fixture-control-plane
           kubectl get storageclass standard
       - name: Select and run the repository's cluster tests
+        if: inputs.tasks == ''
         shell: bash
         env:
           PYTEST_ADDOPTS: -rA
         run: |
           set -euo pipefail
+          export REZONO_CLUSTER_KUBECONFIG="$KUBECONFIG"
           selector=loop/cluster/select_tests.py
           python "$selector" --collect-only
           python "$selector"
+      - name: Run the assigned fast checks in the fixture
+        if: inputs.tasks != ''
+        shell: bash
+        env:
+          TASKS: ${{ inputs.tasks }}
+          TASK_BASE: ${{ inputs.base }}
+          PYTEST_ADDOPTS: --rezono-cluster
+        run: |
+          set -euo pipefail
+          export REZONO_CLUSTER_KUBECONFIG="$KUBECONFIG"
+          echo "Testing checkout $(git rev-parse HEAD)"
+          assigned=$(jq -er '.[]' <<< "$TASKS")
+          while IFS= read -r task; do
+            start=$SECONDS
+            python scripts/fast_check.py "$task" --base "$TASK_BASE" | tee "$RUNNER_TEMP/fast.txt"
+            echo "Fast check took $((SECONDS-start)) seconds and printed $(wc -l < "$RUNNER_TEMP/fast.txt") lines" | tee -a "$GITHUB_STEP_SUMMARY"
+          done <<< "$assigned"
       - name: Remove the named cluster and verify cleanup
         if: always()
         shell: bash

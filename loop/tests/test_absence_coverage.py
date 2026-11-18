@@ -12,12 +12,12 @@ TOKEN, EVENT, REASON = "widget", "item-reading", "inventory/lookup"
 DRIFT = (RUN, TOKEN, TOKEN, REASON)
 
 
-def receipt(run=RUN, scope=SCOPE, sweep=SWEEP, lost=0):
+def receipt(run=RUN, scope=SCOPE, sweep=SWEEP, lost=0, *, start=0, stop=2):
     key = {"run": run, "collector": scope, "window": sweep}
     return {
-        "flow_sweep_window": [dict(key, id="coverage", start=0, stop=2)],
+        "flow_sweep_window": [dict(key, id="coverage", start=start, stop=stop)],
         "flow_expected_node": [dict(key, id="node-inventory", node="observer")],
-        "flow_node_report": [dict(key, id="node-final", node="observer", first=0, last=2, gaps=0, lost=lost)],
+        "flow_node_report": [dict(key, id="node-final", node="observer", first=start, last=stop, gaps=0, lost=lost)],
     }
 
 
@@ -74,4 +74,42 @@ def test_scope_and_sweep_belong_to_one_observation():
     partial, = data["loop_observation"]
     data["loop_observation"].append({**partial, "id": "elsewhere", "scope": "other-reader", "sweep": SWEEP})
     _, rows, _ = evaluate(pack.read(LOOP), data)
+    assert not rows["current"] and not rows["drift"]
+
+
+@pytest.mark.parametrize(("time", "expected"), [
+    pytest.param(9, False, id="before-start"),
+    pytest.param(10, True, id="at-start"),
+    pytest.param(11, True, id="before-stop"),
+    pytest.param(12, False, id="at-stop"),
+    pytest.param(100, False, id="after-stop"),
+])
+def test_absence_is_only_proven_inside_the_complete_window(time, expected):
+    from rezono_compiler import pack
+
+    data = recording(receipt(start=10, stop=12), scope=SCOPE, sweep=SWEEP, event_time=time)
+    _, rows, explainer = evaluate(pack.read(LOOP), data)
+    assert rows["current"] == ({(RUN, TOKEN, "absent", "", REASON)} if expected else set())
+    assert rows["drift"] == ({DRIFT} if expected else set())
+    if expected:
+        proof = explainer.proof("drift", DRIFT, "snapshot")
+        positives = {(p["row"]["relation"], tuple(json.loads(p["row"]["key"])))
+                     for witness in proof["witnesses"] for p in witness["premises"] if p["polarity"] == "positive"}
+        assert {
+            ("loop_observation__event_time", (EVENT, str(time))),
+            ("sweep_window", (RUN, SCOPE, SWEEP, "10", "12", "coverage")),
+            ("flow_sweep_window__start", ("coverage", "10")),
+            ("flow_sweep_window__stop", ("coverage", "12")),
+        } <= positives
+
+
+def test_incomplete_window_cannot_lend_bounds_to_the_complete_window():
+    from rezono_compiler import pack
+
+    coverage = receipt(start=10, stop=12)
+    complete, = coverage["flow_sweep_window"]
+    coverage["flow_sweep_window"].append({**complete, "id": "uncovered", "start": 8})
+    data = recording(coverage, scope=SCOPE, sweep=SWEEP, event_time=9)
+    _, rows, _ = evaluate(pack.read(LOOP), data)
+    assert rows["complete_sweep"] == {(RUN, SCOPE, SWEEP, "coverage")}
     assert not rows["current"] and not rows["drift"]

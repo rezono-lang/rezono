@@ -16,6 +16,8 @@ def publish(
     value: Status,
     read: Callable[[StatusKey], Status | None],
     write: Callable[[StatusKey, Status], None],
+    *,
+    supersedes: Callable[[Status], bool] | None = None,
 ) -> None:
     """Read before writing, including after a write with an uncertain outcome."""
     with _locks_guard:
@@ -23,8 +25,7 @@ def publish(
 
     with key_lock:
         latest = read(key)
-        if (latest is not None
-                and latest.get("state") == value["state"]
-                and latest.get("evidence") == value["evidence"]):
+        if latest is not None and (all(latest.get(field) == item for field, item in value.items())
+                                   or (supersedes is not None and supersedes(latest))):
             return
         write(key, value)
