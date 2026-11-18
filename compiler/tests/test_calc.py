@@ -639,7 +639,7 @@ def test_above_the_budget_the_calculation_gets_the_last_pipeline():
     assert read and read <= set(pipe["tables"]) | set(pipe["imports"]) | own   # nothing it reads is left out
     derived, _ = run_split(PACK, files, item_rows())
     db = duckdb.connect()
-    db.execute(files["engine/tables.sql"])
+    db.execute(emit.duckdb(files["engine/tables.sql"]))
     db.execute(files["engine/calc-imports.sql"])
     db.execute(calc_sql.duckdb_prelude())
     params = {t: [tuple(r.values()) for r in rs] for t, rs in emit.parameters(PACK).items()}

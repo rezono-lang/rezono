@@ -7,6 +7,8 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 
+from rezono_compiler import feldera_names
+
 URL = os.environ.get("FELDERA_URL")
 
 
@@ -67,10 +69,11 @@ def push(name, updates, chunk=100_000):
     """Send {table: [{"insert"|"delete": row}]} and return the completion tokens."""
     tokens = []
     for table, rows in updates.items():
+        endpoint = urllib.parse.quote(feldera_names.physical(table))
         for k in range(0, len(rows), chunk):
             q = urllib.parse.urlencode({"format": "json", "update_format": "insert_delete", "array": "true"})
             body = json.dumps(rows[k:k + chunk]).encode()
-            tokens.append(call("POST", f"/v0/pipelines/{name}/ingress/{urllib.parse.quote(table)}?{q}", body)["token"])
+            tokens.append(call("POST", f"/v0/pipelines/{name}/ingress/{endpoint}?{q}", body)["token"])
     return tokens
 
 
@@ -82,5 +85,5 @@ def processed(name, tokens):
 
 
 def query(name, sql):
-    q = urllib.parse.urlencode({"sql": sql, "format": "json"})
+    q = urllib.parse.urlencode({"sql": feldera_names.render(sql), "format": "json"})
     return [json.loads(x) for x in call("GET", f"/v0/pipelines/{name}/query?{q}", raw=True).splitlines() if x]
