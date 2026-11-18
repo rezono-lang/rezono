@@ -88,13 +88,6 @@ def _tracked_datalog() -> list[str]:
     return sorted(path for path in tracked.decode().split("\0") if path and "fixtures" not in Path(path).parts)
 
 
-@pytest.mark.xfail(
-    strict=True, raises=AssertionError,
-    reason=(
-        "Convert Datalog to native rule trees in compiler/rezono_compiler/native_rule_dl.py. "
-        "Read compiler/tests/rezono/native-rule-dl-converter.md. No native reader dependency."
-    ),
-)
 def test_native_rule_dl_converter():
     tracked = _tracked_datalog()
     assert tracked

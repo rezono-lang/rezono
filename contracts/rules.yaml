@@ -49,12 +49,13 @@ enums:
   RelationRole:
     permissible_values:
       base: {description: "An input table: a kind, an arrow or attribute table, a parameter table or an imported relation."}
-      calc: {description: "An open input from a calculation selection, read positively with a known whole-number value."}
+      calc: {description: "An open input from a calculation selection, read positively with a known value and empty reason. The value column is integer or rational."}
       derived: {description: Defined by rules; a set.}
   ColumnType:
     permissible_values:
       string: {}
       integer: {description: BIGINT in the engine; decimal text in JSON.}
+      rational: {description: "An exact calculation value or its copy in a derived key. Canonical text: an integer, or a reduced fraction with a positive denominator greater than one."}
   Polarity:
     permissible_values:
       positive: {}

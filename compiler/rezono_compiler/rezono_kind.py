@@ -2,7 +2,7 @@
 
 from collections.abc import Set
 
-from . import rezono_metadata, rezono_slot
+from . import rezono_equation, rezono_metadata, rezono_slot
 from .rezono_extend import refuse_derived
 from .rezono_lowering import Refuse
 
@@ -34,7 +34,8 @@ def parent_of(value: object, kind: str, at: str, own: dict[str, str],
 def lower(decl: dict, at: str, own: dict[str, str], owners: dict[str, list[str]],
           declared: Set[str], uses: set[str], refuse: Refuse, *, extended_format: bool = False) -> dict | None:
     ok = True
-    allowed = MEMBERS | {"embedded", "parent"} | rezono_metadata.FIELDS if extended_format else MEMBERS
+    allowed = (MEMBERS | {"embedded", "equations", "parent"} | rezono_metadata.FIELDS
+               if extended_format else MEMBERS)
     if extra := set(decl) - allowed:
         refuse(at, f"a kind with {', '.join(sorted(extra))} is not lowered", "§5.1")
         ok = False
@@ -64,6 +65,7 @@ def lower(decl: dict, at: str, own: dict[str, str], owners: dict[str, list[str]]
     for index, _ in enumerate(decl.get("derived") or []):
         refuse_derived(f"{at}/derived/{index}", refuse)
         ok = False
+    equations = rezono_equation.lower(decl.get("equations", []), f"{at}/equations", refuse) if extended_format else []
     slots = decl.get("slots") or []
     if embedded:
         for index, slot in enumerate(slots):
@@ -75,11 +77,13 @@ def lower(decl: dict, at: str, own: dict[str, str], owners: dict[str, list[str]]
         ok = False
     if rezono_slot.validate(
         slots, decl["kind"], at, own, owners, uses, refuse, extended=extended_format
-    ) and ok:
+    ) and ok and equations is not None:
         attributes = rezono_slot.lower(slots, declared, implicit_identifier=not embedded and parent is None)
         result = {"attributes": attributes} | rezono_metadata.lower(decl)
         if parent is not None:
             result["is_a"] = parent
+        if equations:
+            result.setdefault("annotations", {})["path_equations"] = equations
         return result
     return None
 
