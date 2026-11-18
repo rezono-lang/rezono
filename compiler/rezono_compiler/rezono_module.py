@@ -25,6 +25,8 @@ from .schemaview import SchemaView
 from linkml_runtime.linkml_model import SchemaDefinition
 from linkml_runtime.loaders.yaml_loader import YAMLLoader
 
+from . import rezono_alias
+
 FORMAT = "rezono.module/1"
 IDENTIFIER_FORMAT = "rezono.module/2"
 DIR = "rezono"
@@ -233,11 +235,16 @@ def header_line(pack_dir: Path, d: Declared, word: str) -> int:
     return 1
 
 
+def declaration_name(decl: dict) -> str | None:
+    name = decl.get("kind", decl.get("enum", decl.get("type") if "base" in decl else None))
+    return name if isinstance(name, str) else None
+
+
 def names(form: dict) -> dict[str, str]:
-    """The kinds and enums a form declares: LinkML name -> the pointer of its first declaration."""
+    """The schema names a form declares and the pointer of each first declaration."""
     out: dict[str, str] = {}
     for i, decl in enumerate(form["module"]["decls"]):
-        name = decl.get("kind", decl.get("enum")) if isinstance(decl, dict) else None
+        name = declaration_name(decl) if isinstance(decl, dict) else None
         if isinstance(name, str):
             out.setdefault(name, f"/decls/{i}")
     return out
@@ -302,13 +309,14 @@ def lower(pack_dir: Path, d: Declared, form: dict, pack: str, owners: dict[str, 
     uses: set[str] = set()
     enums: dict[str, dict] = {}
     classes: dict[str, dict] = {}
+    aliases: dict[str, dict] = {}
     for i, decl in enumerate(module["decls"]):
         at = f"/decls/{i}"
         if not isinstance(decl, dict):
             refuse(at, "not a declaration of the form")
             continue
-        name = decl.get("kind", decl.get("enum"))
-        if isinstance(name, str):
+        name = declaration_name(decl)
+        if name is not None:
             elsewhere = [o for o in owners.get(name, []) if o != d.id]
             if own[name] != at:
                 refuse(at, f"{name} is declared twice in this module", "§3")
@@ -338,11 +346,18 @@ def lower(pack_dir: Path, d: Declared, form: dict, pack: str, owners: dict[str, 
                 refuse(at, "a fact table is not lowered yet", "§5.3")
             else:
                 refuse(at, "a fact row is not lowered (no ticket yet)")
+        elif "type" in decl and "base" in decl:
+            if form["format"] != IDENTIFIER_FORMAT:
+                refuse(at, "a scalar alias requires rezono.module/2", "§5.1")
+            elif alias := rezono_alias.lower(decl, at, refuse):
+                aliases[decl["type"]] = alias
         else:
             refuse(at, *next((REFUSED[k] for k in REFUSED if k in decl), ("not a declaration this compiler reads",)))
     schema = {"id": f"https://rezono.org/rezono/{pack}/{d.id}", "name": d.id.replace("/", "_"),
               "imports": ["linkml:types"], "default_range": "string", "annotations": {"layer": d.layer},
               "enums": enums, "classes": classes}
+    if aliases:
+        schema["types"] = aliases
     return Lowered(d, schema, sorted(uses))
 
 
