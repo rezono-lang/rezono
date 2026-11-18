@@ -36,10 +36,6 @@ def test_full_reader_of_a_closed_optional_relation_can_establish_absence(closed_
     assert published_cell(closed_pack) == {"$na": ""}
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError, reason=(
-    "Derive the published missing-cell state from the relation world, optionality and role completeness "
-    "in publication/rezono_publication/publication.py. Read docs/vision.md, Unknown is explicit."
-))
 def test_opening_only_the_relation_changes_the_published_missing_cell(closed_pack):
     before = published_cell(closed_pack)
     path = closed_pack / "schema/minimal.yaml"
