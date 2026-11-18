@@ -8,10 +8,9 @@ import json
 import os
 from pathlib import Path
 import subprocess
+from tempfile import TemporaryDirectory
 from time import sleep, time_ns
 from urllib.parse import urlsplit
-
-import yaml
 
 from network_hubble import Hubble
 from network_router import Router, transit
@@ -21,25 +20,12 @@ ROOT = Path(__file__).resolve().parents[2]
 CONTEXT = "kind-rezono-fixture"
 NAMESPACE = "rezono-probes"
 FIXTURE = ROOT / "loop/tests/fixtures/network.json"
-LISTENER = """for port; do
-  socat "TCP4-LISTEN:$port,fork,reuseaddr" EXEC:/bin/cat &
-done
-wait -n
-"""
-CONNECT = ["/bin/bash", "-uc", """
-timeout 2s bash -c 'exec 3<>"/dev/tcp/$1/$2"' _ "$1" "$2"
-status=$?
-case $status in
-  0|1|124) printf '%s\n' "$status" ;;
-  *) exit "$status" ;;
-esac
-""", "_"]
 MARKER_PORT = 8090
 
 
-def run(*args: str, data: str | None = None, limit: int = 25) -> str:
+def run(*args: str, data: str | None = None, limit: int = 25, env: dict | None = None) -> str:
     return subprocess.run(args, input=data, check=True, text=True, encoding="utf-8",
-                          stdout=subprocess.PIPE, timeout=limit).stdout
+                          stdout=subprocess.PIPE, timeout=limit, env=env).stdout
 
 
 class Cluster:
@@ -65,10 +51,7 @@ class Cluster:
         if len(kind_nodes) != 1 or {node["metadata"]["name"] for node in nodes} != set(kind_nodes):
             raise RuntimeError("The recorder requires the single pinned local kind node")
         self.node, = kind_nodes
-        self.base_image = yaml.safe_load((ROOT / "loop/cluster/kind.yaml").read_text(encoding="utf-8"))["nodes"][0]["image"]
-        if "@sha256:" not in self.base_image:
-            raise RuntimeError("The fixture node image is not pinned")
-        self.image = "rezono-network-fixture:local"
+        self.image = "docker.io/library/rezono-network-fixture:local"
         self.cilium = self._cilium()
 
     def namespaced(self, namespace: str, *args: str) -> list[str]:
@@ -131,7 +114,7 @@ class Cluster:
                     "restartPolicy": "Never", "automountServiceAccountToken": False,
                     "containers": [{
                         "name": "recorder", "image": self.image, "imagePullPolicy": "Never",
-                        "command": ["/bin/cat", "/evidence/observed.jsonl"],
+                        "command": ["/network-probe", "record", "/evidence/observed.jsonl"],
                         "volumeMounts": [{"name": "observations", "mountPath": "/evidence", "readOnly": True}],
                     }],
                     "volumes": [{"name": "observations", "configMap": {"name": config}}],
@@ -143,12 +126,7 @@ class Cluster:
 
 
 def start_services(cluster: Cluster, matrix: dict) -> dict[str, str]:
-    cluster.apply({"apiVersion": "v1", "kind": "Namespace", "metadata": {"name": NAMESPACE}})
-    run("docker", "tag", cluster.base_image, cluster.image)
-    try:
-        run("kind", "load", "docker-image", cluster.image, "--name", "rezono-fixture", limit=120)
-    finally:
-        run("docker", "image", "rm", "--no-prune", cluster.image)
+
     ports = {}
     for case in matrix["cases"]:
         if case["protocol"] != "TCP":
@@ -163,7 +141,7 @@ def start_services(cluster: Cluster, matrix: dict) -> dict[str, str]:
                 "nodeName": cluster.node, "automountServiceAccountToken": False, "restartPolicy": "Never",
                 "containers": [{
                     "name": "listener", "image": cluster.image, "imagePullPolicy": "Never",
-                    "command": ["/bin/bash", "-euc", LISTENER, "_", *(str(port) for port in sorted(listened))],
+                    "command": ["/network-probe", "serve", *(str(port) for port in sorted(listened))],
                     "readinessProbe": {"tcpSocket": {"port": min(listened)}, "periodSeconds": 1},
                 }],
             },
@@ -227,7 +205,7 @@ def connected(command: list[str]) -> tuple[bool, int]:
 
 
 def pod_probe(cluster: Cluster, name: str, addr: str, port: int) -> tuple[bool, int]:
-    return connected(cluster.namespaced(NAMESPACE, "exec", name, "--", *CONNECT, addr, str(port)))
+    return connected(cluster.namespaced(NAMESPACE, "exec", name, "--", "/network-probe", "probe", addr, str(port)))
 
 
 def event(cluster: Cluster, phase: str, kind: str, tick: int, **fields) -> dict:
@@ -241,7 +219,7 @@ def event(cluster: Cluster, phase: str, kind: str, tick: int, **fields) -> dict:
 
 
 def sweep(cluster: Cluster, router: Router, hubble: Hubble, matrix: dict, targets: dict[str, str],
-          phase: str, documents: list[dict]) -> list[dict]:
+          phase: str, documents: list[dict], probe: Path) -> list[dict]:
     policy_tick = time_ns()
     result = [event(cluster, phase, "policy", policy_tick, **policy_observation(matrix, documents))]
     before = hubble.heartbeat(targets["echo"], targets["peer"], MARKER_PORT, policy_tick,
@@ -256,7 +234,7 @@ def sweep(cluster: Cluster, router: Router, hubble: Hubble, matrix: dict, target
             addr = str(IPv4Address(matrix["endpoints"][destination]["address"]))
             counters = router.counters()
             answered, status = connected(
-                ["sudo", "-n", "ip", "netns", "exec", router.clients[source], *CONNECT, addr, str(port)]
+                ["sudo", "-n", "ip", "netns", "exec", router.clients[source], str(probe), "probe", addr, str(port)]
             )
             verdict, rule, prior, current = router.verdict(counters)
             result.append(event(cluster, phase, "router", time_ns(), **pair, outcome=verdict,
@@ -290,22 +268,57 @@ def sweep(cluster: Cluster, router: Router, hubble: Hubble, matrix: dict, target
     ]
 
 
+def build_probe(cluster: Cluster, directory: Path) -> Path:
+    probe = directory / "network-probe"
+    env = {**os.environ, "CGO_ENABLED": "0", "GOOS": "linux", "GOARCH": "amd64",
+           "GOTOOLCHAIN": "local", "GO111MODULE": "off"}
+    print(run("go", "version", env=env).strip(), flush=True)
+    run("go", "build", "-trimpath", "-buildvcs=false", "-ldflags=-buildid=", "-o", str(probe),
+        str(ROOT / "loop/cluster/network_probe.go"), limit=110, env=env)
+    (directory / "Dockerfile").write_text(
+        "FROM scratch\nCOPY network-probe /network-probe\nUSER 65534:65534\n", encoding="utf-8",
+    )
+    run("docker", "build", "--network=none", "--tag", cluster.image, str(directory), limit=80)
+    try:
+        run("kind", "load", "docker-image", cluster.image, "--name", "rezono-fixture", limit=90)
+    finally:
+        run("docker", "image", "rm", "--no-prune", cluster.image)
+    return probe
+
+
+def report_workloads(cluster: Cluster) -> None:
+    for pod in cluster.read("get", "pods", namespace=NAMESPACE)["items"]:
+        name = pod["metadata"]["name"]
+        status = pod["status"]
+        print(f"Fixture pod {name}: {json.dumps(status, sort_keys=True)}", flush=True)
+        result = subprocess.run(cluster.namespaced(NAMESPACE, "logs", name), capture_output=True,
+                                text=True, timeout=20)
+        if result.stdout:
+            print(result.stdout, flush=True)
+
+
 def main() -> None:
     matrix = json.loads(FIXTURE.read_text(encoding="utf-8"))
     cluster = Cluster(os.environ)
     prefix = f"rznet-{cluster.run}-{cluster.attempt}"
-    try:
-        targets = start_services(cluster, matrix)
-        with transit(prefix, cluster.node, matrix, targets, cluster.node_pid) as router, cluster.hubble() as hubble:
-            records = []
-            for phase, removed in (("baseline", None), ("changed", "echo")):
-                readback = policies(cluster, matrix, targets, removed)
-                sleep(3)
-                records.extend(sweep(cluster, router, hubble, matrix, targets, phase, readback))
-        cluster.record(records)
-        print(f"Recorded {len(records)} actual observations in {cluster.job}")
-    finally:
-        cluster.clean_workloads()
+    cluster.apply({"apiVersion": "v1", "kind": "Namespace", "metadata": {"name": NAMESPACE}})
+    with TemporaryDirectory(prefix="rezono-network-") as directory:
+        probe = build_probe(cluster, Path(directory))
+        try:
+            targets = start_services(cluster, matrix)
+            with transit(prefix, cluster.node, matrix, targets, cluster.node_pid) as router, cluster.hubble() as hubble:
+                records = []
+                for phase, removed in (("baseline", None), ("changed", "echo")):
+                    readback = policies(cluster, matrix, targets, removed)
+                    sleep(3)
+                    records.extend(sweep(cluster, router, hubble, matrix, targets, phase, readback, probe))
+            cluster.record(records)
+            print(f"Recorded {len(records)} actual observations in {cluster.job}")
+        except Exception:
+            report_workloads(cluster)
+            raise
+        finally:
+            cluster.clean_workloads()
 
 
 if __name__ == "__main__":
