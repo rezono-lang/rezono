@@ -11,7 +11,7 @@ input:
     key:
     - item-b
     - item-a
-  rules:
+  proof_rules:
   - 'near_out: near(a, b) :- edge(a, b).'
   - 'near_in: near(a, b) :- edge(b, a).'
   subjects:

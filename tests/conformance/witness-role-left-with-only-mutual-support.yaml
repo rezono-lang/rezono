@@ -9,7 +9,7 @@ input:
   - relation: right
     key:
     - item-a
-  rules:
+  proof_rules:
   - 'p_left: p(x) :- left(x).'
   - 'p_q: p(x) :- q(x).'
   - 'q_right: q(x) :- right(x).'

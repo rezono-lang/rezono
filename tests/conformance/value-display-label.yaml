@@ -13,7 +13,7 @@ input:
       reason: not_assigned
   slot: item.quantity
   subject: item-c
-  language: en
+  locale: en
   labels:
     reason.not_assigned: Pending assignment
 expect:

@@ -15,7 +15,7 @@ input:
     key:
     - item-b
     - item-a
-  rules:
+  proof_rules:
   - 'reach_edge: reach(x, y) :- edge(x, y).'
   - 'reach_step: reach(x, z) :- reach(x, y), edge(y, z).'
   subjects:
