@@ -4,7 +4,6 @@ on:
   push:
     branches:
       - main
-      - 'task/compiler/tests/test_catlab_workflow.py--test_catlab_workflow_runs_the_real_multiset_comparison'
     paths:
       - 'admission/**'
       - 'compiler/**'
@@ -29,6 +28,7 @@ jobs:
     timeout-minutes: 30
     env:
       JULIA_VERSION: '1.11.9'
+      JULIA_ARCHIVE_SHA256: b36363356d7a05eaf8b7b9e7a91c710f6bd3d2940be4d4e6d14b9a9f2927de35
       JULIA_LOAD_PATH: '@:@stdlib'
     defaults:
       run:
@@ -47,12 +47,8 @@ jobs:
           release=https://julialang-s3.julialang.org/bin
           archive="julia-$JULIA_VERSION-linux-x86_64.tar.gz"
           cd "$RUNNER_TEMP"
-          "${download[@]}" "$release/checksums/julia-$JULIA_VERSION.sha256" -o julia-checksums
-          awk -v archive="$archive" '$2 == archive { print; matched++ } END { exit matched != 1 }' \
-            julia-checksums > julia-checksum
           "${download[@]}" "$release/linux/x64/${JULIA_VERSION%.*}/$archive" -o "$archive"
-          sha256sum --strict --check julia-checksum
-          cat julia-checksum
+          printf '%s  %s\n' "$JULIA_ARCHIVE_SHA256" "$archive" | sha256sum --strict --check
           mkdir julia
           tar --extract --gzip --file "$archive" --directory julia --strip-components=1
           echo "$RUNNER_TEMP/julia/bin" >> "$GITHUB_PATH"
