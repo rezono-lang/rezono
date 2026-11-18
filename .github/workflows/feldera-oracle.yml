@@ -5,11 +5,19 @@ on:
     branches: [main]
   workflow_dispatch:
 
+concurrency:
+  group: feldera-oracle-${{ github.ref }}
+  cancel-in-progress: false
+
 permissions:
   contents: read
 
 jobs:
-  oracle:
+  compare:
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [compiler-and-examples, platform, subsidy]
     runs-on: ubuntu-24.04
     timeout-minutes: 120
     defaults:
@@ -36,9 +44,51 @@ jobs:
           bash contracts/gen-types.sh
           bash scripts/install-souffle.sh
           echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
-      - name: Compare compiler and example results with Feldera
-        timeout-minutes: 100
+      - name: Run the assigned Feldera comparisons
+        timeout-minutes: ${{ matrix.shard == 'subsidy' && 110 || 100 }}
+        env:
+          FELDERA_SHARD: ${{ matrix.shard }}
         run: bash compiler/ci/run_feldera_oracle.sh
+      - name: Retain the shard's original reports
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.6.2
+        with:
+          name: feldera-shard-${{ github.run_attempt }}-${{ matrix.shard }}
+          path: ${{ runner.temp }}/feldera-oracle/
+          if-no-files-found: warn
+          retention-days: 7
+
+  oracle:
+    needs: compare
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0  # v7.1.0
+        with:
+          python-version-file: requirements/.python-version
+          cache: ''
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093  # v4.3.0
+        with:
+          pattern: feldera-shard-${{ github.run_attempt }}-*
+          path: ${{ runner.temp }}/feldera-shards/
+      - name: Compare compiler and example results with Feldera
+        id: compare
+        env:
+          COMPARE_RESULT: ${{ needs.compare.result }}
+        run: |
+          set -euo pipefail
+          inputs="$RUNNER_TEMP/feldera-shards"
+          reports="$RUNNER_TEMP/feldera-oracle"
+          python compiler/ci/feldera_shards.py merge "$inputs" "$reports" "$GITHUB_RUN_ATTEMPT"
+          python compiler/ci/verify_feldera_run.py "$reports/collected.txt" "$reports/results.xml"
+          test "$COMPARE_RESULT" = success
       - name: Retain collected cases and test results
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.6.2
@@ -46,4 +96,5 @@ jobs:
           name: feldera-oracle
           path: ${{ runner.temp }}/feldera-oracle/
           if-no-files-found: warn
+          overwrite: true
           retention-days: 7
