@@ -10,9 +10,12 @@ from cluster_scenarios import WORKFLOW
 
 def test_cluster_workflow():
     config = yaml.load(WORKFLOW.read_text(encoding="utf-8"), Loader=yaml.BaseLoader)
-    assert "pull_request" in config["on"] and "workflow_dispatch" in config["on"]
-    assert "pull_request_target" not in config["on"]
+    assert set(config["on"]) == {"workflow_dispatch", "workflow_call"}
     assert config["permissions"] == {"contents": "read"}
+    ci = yaml.load(WORKFLOW.with_name("ci.yml").read_text(encoding="utf-8"), Loader=yaml.BaseLoader)
+    [caller] = [job for job in ci["jobs"].values() if job.get("uses") == "./.github/workflows/disposable-cluster.yml"]
+    assert "cluster_mode == 'tasks'" in caller["if"] and "cluster_mode == 'suite'" in caller["if"]
+    assert caller["with"]["tasks"] == "${{ needs.discover.outputs.cluster_tasks }}"
     jobs = list(config["jobs"].values())
     owners = [job for job in jobs if any("kind create cluster" in s.get("run", "") for s in job["steps"])]
     assert len(owners) == 1
