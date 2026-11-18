@@ -82,6 +82,7 @@ export interface SlotDecl {
 	inverse?: string;
 	world?: World;
 	identifier?: true;
+	embedded?: true;
 }
 export interface DerivedDecl {
 	derived: string;
@@ -206,12 +207,13 @@ semantics.addOperation<unknown>('decl', {
 		if (value.numChildren) decl.value = optTree(value);
 		return named(n, decl);
 	},
-	SlotLine(n, _c, type, card, _inverse, inverse, world, identifier) {
+	SlotLine(n, _c, type, card, _inverse, inverse, world, identifier, embedded) {
 		const decl: Line = { line: 'slot', slot: n.sourceString, type: typeOf(type) };
 		if (card.numChildren) decl.card = opt(card);
 		if (inverse.numChildren) decl.inverse = opt(inverse);
 		if (world.numChildren) decl.world = world.child(0).decl();
 		if (identifier.numChildren) decl.identifier = true;
+		if (embedded.numChildren) decl.embedded = true;
 		return named(n, decl);
 	},
 	VersionLine(_k, n, _commas, ctxs, _eq, value, src) {

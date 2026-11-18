@@ -159,7 +159,7 @@ function decl(d: Decl): string[] {
 		return block(`${d.embedded ? 'embedded ' : ''}kind ${d.kind}${world(d.world)}`, [
 			...(d.applies ? [`applies ${d.applies.axis}: ${d.applies.slot}`] : []),
 			...(d.sealed !== undefined ? [`sealed at: ${d.sealed}`] : []),
-			...d.slots.map((s) => `${s.slot}: ${s.type}${s.card ?? ''}${s.inverse !== undefined ? ` inverse ${s.inverse}` : ''}${world(s.world)}${s.identifier ? ' identifier' : ''}`),
+			...d.slots.map((s) => `${s.slot}: ${s.type}${s.card ?? ''}${s.inverse !== undefined ? ` inverse ${s.inverse}` : ''}${world(s.world)}${s.identifier ? ' identifier' : ''}${s.embedded ? ' embedded' : ''}`),
 			...d.derived.flatMap(derived)
 		]);
 	if ('extend' in d) return block(`extend ${d.extend}`, d.derived.flatMap(derived));
