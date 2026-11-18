@@ -205,10 +205,11 @@ acceptance:
     tests:
       - proof_cases/test_standard_part.py::test_standard_part
   - id: product-release-publication-grounds
-    question: Which independently sourced grounds must agree before an announced product release can be published?
+    question: Which records support an announced release, and when does its date differ from the platform register?
     tests:
-      - acceptance/test_keycloak_release.py::test_announcement_slots_alone_do_not_publish_a_release
+      - acceptance/test_keycloak_release.py::test_observation_slots_alone_do_not_publish_a_release
       - acceptance/test_keycloak_release.py::test_published_release_requires_every_independent_ground
+      - acceptance/test_keycloak_release.py::test_register_date_is_only_used_for_drift
   - id: provider-selection-evidence
     question: Was a provider selected explicitly or because it was the only provider, and what grounds support that choice?
     tests:
