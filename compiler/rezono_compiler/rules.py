@@ -22,7 +22,8 @@ ARITHMETIC = ("add", "sub", "mul", "div")
 # variable), in the proleptic Gregorian calendar. Only a view's reading makes it: no rule file can
 # write it, so hand-written rules still read text and whole numbers (R4).
 DAYS = "days"
-TYPES = ("string", "integer")
+TYPES = ("string", "integer", "boolean")
+BOOLEAN = {"true": True, "false": False}
 WORLDS = ("closed", "open")
 # The states of a named outcome; invalid comes from the violation views.
 STATES = ("known", "unknown", "not_applicable")
@@ -128,6 +129,10 @@ class Condition:
     op: str
     left: str
     right: str
+    type: str | None = None
+
+    def operand_type(self, variables):
+        return variables.get(self.left) or variables.get(self.right) or self.type or const_type(self.left)
 
 
 @dataclass(frozen=True)
@@ -428,7 +433,8 @@ def load(doc, require_witness=True):
             body=tuple(Literal(_atom(b, rid), b["polarity"], _nat(b["stratum"], rid)) for b in d.get("body", [])),
             aggregates=tuple(Aggregate(_atom(a, rid), a["function"], a.get("over"), a["as"], _nat(a["stratum"], rid))
                              for a in d.get("aggregates", [])),
-            conditions=tuple(Condition(c["op"], c["left"], c["right"]) for c in d.get("conditions", [])),
+            conditions=tuple(Condition(c["op"], c["left"], c["right"], c.get("type"))
+                             for c in d.get("conditions", [])),
             assignments=tuple(Assignment(s["var"], s["op"], s["left"], s["right"]) for s in d.get("assignments", [])),
             origin=(d["origin"]["file"], _nat(d["origin"]["line"], rid)),
         )
@@ -511,6 +517,8 @@ def _check_rule(rule, relations):
             raise IRError("bad_constant", f"{rule.id}: {t!r} is not an integer")
         if col.type == "integer":
             fits(t)
+        if col.type == "boolean" and t not in BOOLEAN:
+            raise IRError("bad_constant", f"{rule.id}: {t!r} is not a boolean")
 
     def fits(t):
         if not BIGINT[0] <= int(t) <= BIGINT[1]:
@@ -602,13 +610,19 @@ def _check_rule(rule, relations):
             if is_var(t) and t not in bound:
                 raise IRError("unsafe_variable", f"{rule.id}: {t} in a condition is not bound")
         kinds = {types[t] for t in (c.left, c.right) if is_var(t)}
-        if not kinds:  # two constants: typed by their own form
+        if c.type is not None:
+            if kinds or c.type != "boolean":
+                raise IRError("bad_condition", f"{rule.id}: only a comparison of two boolean constants names its type")
+            kinds = {c.type}
+        elif not kinds:  # two unannotated constants: typed by their own form
             kinds = {const_type(t) for t in (c.left, c.right)}
         if c.op not in ("eq", "ne") and kinds != {"integer"}:
             raise IRError("bad_condition", f"{rule.id}: order comparisons need integers")
         if len(kinds) > 1:
             raise IRError("type_mismatch", f"{rule.id}: {c.left} and {c.right} have different types")
         for t in (c.left, c.right):
+            if not is_var(t) and kinds == {"boolean"} and t not in BOOLEAN:
+                raise IRError("bad_constant", f"{rule.id}: {t!r} is compared with a boolean")
             if not is_var(t) and kinds == {"integer"} and not INT.match(t):
                 raise IRError("bad_constant", f"{rule.id}: {t!r} is compared with an integer")
             if not is_var(t) and kinds == {"integer"}:
@@ -798,7 +812,8 @@ def to_doc(prog):
                                                   ("as", a.var), ("stratum", str(a.stratum))) if v is not None}
                                for a in r.aggregates]
         if r.conditions:
-            d["conditions"] = [{"op": c.op, "left": c.left, "right": c.right} for c in r.conditions]
+            d["conditions"] = [{"op": c.op, "left": c.left, "right": c.right,
+                                **({"type": c.type} if c.type else {})} for c in r.conditions]
         if r.assignments:
             d["assignments"] = [{"var": s.var, "op": s.op, "left": s.left, "right": s.right} for s in r.assignments]
         d["witness"] = {"relation": r.witness_relation, "variables": list(r.variables)}

@@ -58,7 +58,8 @@ def readings(rule: ir.Rule) -> list[list[tuple[tuple[str, ...], tuple[str, ...]]
             out.append([((CONDITION, CONVERSE[c.op]), (c.right, c.left))])
         else:
             ways = [(c.left, c.right)] + ([(c.right, c.left)] if c.op in SYMMETRIC else [])
-            out.append([((CONDITION, c.op), t) for t in ways])
+            fixed = (CONDITION, c.op, c.type) if c.type else (CONDITION, c.op)
+            out.append([(fixed, t) for t in ways])
     seen, unique = set(), []
     for lit in out:
         if not seen & set(lit):
@@ -182,7 +183,8 @@ def rule_doc(rule: ir.Rule) -> dict:
         elif rank == ASSIGNMENT:
             assignments.append({"var": terms[0], "op": fixed[1], "left": terms[1], "right": terms[2]})
         else:
-            doc["conditions"].append({"op": fixed[1], "left": terms[0], "right": terms[1]})
+            doc["conditions"].append({"op": fixed[1], "left": terms[0], "right": terms[1],
+                                      **({"type": fixed[2]} if len(fixed) == 3 else {})})
     results = {s["var"] for s in assignments}
     placed: set[str] = set()
     while assignments:  # canonical order, each after the assignments it reads (acyclic in a valid rule)

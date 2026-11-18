@@ -55,6 +55,7 @@ enums:
     permissible_values:
       string: {}
       integer: {description: BIGINT in the engine; decimal text in JSON.}
+      boolean: {description: BOOLEAN in the engine; the canonical text true or false in a term.}
   Polarity:
     permissible_values:
       positive: {}
@@ -194,6 +195,7 @@ classes:
       op: {range: ComparisonOperator, required: true}
       left: {range: Term, required: true}
       right: {range: Term, required: true}
+      type: {range: ColumnType, description: Type of a comparison between two boolean constants without a column.}
 
   Assignment:
     attributes:

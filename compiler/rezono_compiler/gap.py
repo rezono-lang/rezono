@@ -26,7 +26,8 @@ from .rules import Atom, const_type, days, is_var
 FORMAT = "rezono.gap/1"
 KINDS = ("positive", "negative", "condition", "assignment", "aggregate")
 OPS = {"eq": "=", "ne": "!=", "lt": "<", "le": "<=", "gt": ">", "ge": ">=", "add": "+", "sub": "-", "mul": "*", "div": "/"}
-TYPE = {"string": "symbol", "integer": "number"}
+# Soufflé has no boolean column. The reference uses the two canonical symbols.
+TYPE = {"string": "symbol", "integer": "number", "boolean": "symbol"}
 
 
 def _vars(terms) -> set[str]:
@@ -243,7 +244,7 @@ def _item_text(prog, rule, kind, index, types):
             return f"{_term(s.var, 'integer')} = {days_text(_term(s.left, 'string'))} - {days_text(_term(s.right, 'string'))}"
         return f"{_term(s.var, 'integer')} = {_term(s.left, 'integer')} {OPS[s.op]} {_term(s.right, 'integer')}"
     c = rule.conditions[index]
-    t = types.get(c.left) or types.get(c.right) or const_type(c.left)
+    t = c.operand_type(types)
     return f"{_term(c.left, t)} {OPS[c.op]} {_term(c.right, t)}"
 
 
@@ -292,6 +293,8 @@ def prefix_program(prog, relation, bound) -> str:
 # --- the reference: the same answer in plain Python ---
 
 def _value(v, typ):
+    if typ == "boolean" and type(v) is bool:
+        return "true" if v else "false"
     return int(v) if typ == "integer" else str(v)
 
 
@@ -365,7 +368,7 @@ def _extend(prog, rule, kind, index, theta, rows, types):
         return [] if any(_match(prog, atom, r, theta, types) is not None for r in rows.get(atom.relation, ())) else [theta]
     if kind == "condition":
         c = rule.conditions[index]
-        t = types.get(c.left) or types.get(c.right) or const_type(c.left)
+        t = c.operand_type(types)
         return [theta] if _compare(c.op, val(c.left, t), val(c.right, t)) else []
     if kind == "assignment":
         s = rule.assignments[index]

@@ -571,9 +571,8 @@ def rule_body(prog, rule, order: tuple[str, ...] | None) -> tuple[dict, list[dic
     def atom(a):
         return [rule_term(t, c.type) for t, c in zip(a.terms, prog.relations[a.relation].key)]
 
-    def typed(t, beside=None):
-        source = t if ir.is_var(t) else beside if beside is not None and ir.is_var(beside) else None
-        return rule_term(t, types[source] if source else ir.const_type(t))
+    def typed(t):
+        return rule_term(t, types[t] if ir.is_var(t) else ir.const_type(t))
 
     parts = {"atom": list(rule.body), "aggregate": list(enumerate(rule.aggregates)),
              "assignment": list(rule.assignments), "comparison": list(rule.conditions)}
@@ -597,7 +596,9 @@ def rule_body(prog, rule, order: tuple[str, ...] | None) -> tuple[dict, list[dic
             lit |= {"polarity": "positive", "op": x.op, "terms": [typed(x.left), typed(x.right)],
                     "result": rule_term(x.var, "integer")}
         else:
-            lit |= {"polarity": "positive", "op": x.op, "terms": [typed(x.left, x.right), typed(x.right, x.left)]}
+            typ = x.operand_type(types)
+            lit |= {"polarity": "positive", "op": x.op,
+                    "terms": [rule_term(t, typ) for t in (x.left, x.right)]}
         body.append(lit)
     return {"relation": rule.head.relation, "terms": atom(rule.head)}, body
 
