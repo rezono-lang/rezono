@@ -81,6 +81,7 @@ export interface SlotDecl {
 	card?: Card;
 	inverse?: string;
 	world?: World;
+	identifier?: true;
 }
 export interface DerivedDecl {
 	derived: string;
@@ -204,11 +205,12 @@ semantics.addOperation<unknown>('decl', {
 		if (value.numChildren) decl.value = optTree(value);
 		return named(n, decl);
 	},
-	SlotLine(n, _c, type, card, _inverse, inverse, world) {
+	SlotLine(n, _c, type, card, _inverse, inverse, world, identifier) {
 		const decl: Line = { line: 'slot', slot: n.sourceString, type: typeOf(type) };
 		if (card.numChildren) decl.card = opt(card);
 		if (inverse.numChildren) decl.inverse = opt(inverse);
 		if (world.numChildren) decl.world = world.child(0).decl();
+		if (identifier.numChildren) decl.identifier = true;
 		return named(n, decl);
 	},
 	VersionLine(_k, n, _commas, ctxs, _eq, value, src) {
@@ -533,7 +535,10 @@ function readModule(text: string, bare: boolean): ParsedModule {
 					else if (k.line === 'sealed' ? decl.sealed !== undefined : k.line === 'applies' && decl.applies) refuse(c, `one \`${k.line}\``);
 					else {
 						leaf(c);
-						if (k.line === 'slot') decl.slots.push(strip(k));
+						if (k.line === 'slot') {
+							if (k.identifier && decl.slots.some((slot) => slot.identifier)) refuse(c, 'one identifier per kind');
+							else decl.slots.push(strip(k));
+						}
 						else if (k.line === 'sealed') decl.sealed = k.slot as string;
 						else decl.applies = strip<NonNullable<KindDecl['applies']>>(k);
 					}
