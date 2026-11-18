@@ -24,7 +24,7 @@ from tempfile import TemporaryDirectory
 from typing import cast
 
 import yaml
-from . import rezono_alias, rezono_enum, rezono_extend, rezono_key, rezono_kind
+from . import rezono_alias, rezono_enum, rezono_extend, rezono_key, rezono_kind, rezono_metadata, rezono_slot
 from .native_literals import NATIVE_FORMAT, native_literal_errors
 from .schemaview import SchemaView
 from linkml_runtime.linkml_model import SchemaDefinition
@@ -142,7 +142,11 @@ def read_form(pack_dir: Path, d: Declared, errors: list[str],
     if findings:
         errors.extend(f"{where}: {finding}" for finding in findings)
         return None
-    if not valid_places(module, doc["spans"]):
+    spans = doc["spans"]
+    if not valid_places(module, spans) and not (
+        "schema" in module and valid_places(module, spans, legacy_metadata=True)
+        and authored_output is None and form_only_source(pack_dir / d.module, doc)
+    ):
         errors.append(f"{where}: spans must place each module node once, in order, with a positive line and "
                       "nonnegative start and end offsets in ascending order (contracts/rezono-module.yaml)")
         return None
@@ -220,21 +224,37 @@ def authored_form(pack_dir: Path, d: Declared, data: bytes, errors: list[str]) -
     return None
 
 
-def place_pointers(value: object, at: str = "", member: str = "") -> Iterator[str]:
-    """Canonical pointers in span order. The module, unless clauses and range bodies have no own place."""
+def form_only_source(path: Path, form: dict) -> bool:
+    try:
+        return legacy_header(path.read_text(encoding="utf-8"), form)
+    except (OSError, UnicodeError):
+        return False
+
+
+def place_pointers(value: object, at: str = "", member: str = "", *, legacy_metadata: bool = False) -> Iterator[str]:
+    """Canonical pointers in span order. Metadata containers have no place of their own."""
     if isinstance(value, dict):
-        if at and member not in ("unless", "between"):
+        excluded = {"unless", "between"} if legacy_metadata else {"unless", "between", "memberMetadata"}
+        if (at and member not in excluded) or (not at and "schema" in value and not legacy_metadata):
             yield at
         for key in sorted(value, key=lambda s: s.encode("utf-16-be", "surrogatepass")):
             escaped = key.replace("~", "~0").replace("/", "~1")
-            yield from place_pointers(value[key], f"{at}/{escaped}", key)
+            child = value[key]
+            pointer = f"{at}/{escaped}"
+            if legacy_metadata:
+                yield from place_pointers(child, pointer, key, legacy_metadata=True)
+            elif member == "memberMetadata":
+                if isinstance(child, dict):
+                    yield pointer
+            elif key not in ("annotations", "prefixes"):
+                yield from place_pointers(child, pointer, key)
     elif isinstance(value, list):
         for i, item in enumerate(value):
-            yield from place_pointers(item, f"{at}/{i}", member)
+            yield from place_pointers(item, f"{at}/{i}", member, legacy_metadata=legacy_metadata)
 
 
-def valid_places(module: dict, spans: list) -> bool:
-    expected = place_pointers(module)
+def valid_places(module: dict, spans: list, *, legacy_metadata: bool = False) -> bool:
+    expected = place_pointers(module, legacy_metadata=legacy_metadata)
     for place in spans:
         if not isinstance(place, dict) or place.keys() != {"at", "line", "start", "end"}:
             return False
@@ -253,10 +273,13 @@ def module_body(form: object, expected_format: str) -> dict | None:
     if not isinstance(form, dict) or form.keys() != {"format", "module", "spans"}:
         return None
     module = form["module"]
+    header = {"rezono", "pack", "use", "decls"}
+    if expected_format == IDENTIFIER_FORMAT:
+        header |= rezono_metadata.HEADER
     if (form["format"] != expected_format or not isinstance(form["spans"], list)
             or not isinstance(module, dict) or not isinstance(module.get("pack"), str)
             or not isinstance(module.get("use"), list) or not isinstance(module.get("decls"), list)
-            or not module.keys() <= {"rezono", "pack", "use", "decls"}):
+            or not module.keys() <= header or not rezono_metadata.valid_header(module)):
         return None
     return module
 
@@ -283,14 +306,15 @@ def is_dataset_form(path: Path) -> bool:
     return module is not None and named_dataset(module) is not None
 
 
-def header_errors(module: dict, pack: str) -> Iterator[tuple[str, str, str]]:
+def header_errors(module: dict, pack: str, *, native_rules: bool = False) -> Iterator[tuple[str, str, str]]:
     """Header refusals shared by schema lowering and dataset admission."""
     if module.get("rezono") != "0":
         yield "rezono", f"the `rezono` line says 0, not {module.get('rezono', 'nothing')}", "§3"
     if module["pack"] != pack:
         yield "pack", f"the `pack` line names {module['pack']}, not this pack, {pack}", "§3"
-    for i in range(len(module["use"])):
-        yield f"/use/{i}", "a `use` line is not lowered", "§6"
+    if not native_rules:
+        for i in range(len(module["use"])):
+            yield f"/use/{i}", "a `use` line is not lowered", "§6"
 
 
 
@@ -392,12 +416,15 @@ def lower(pack_dir: Path, d: Declared, form: dict, pack: str, owners: dict[str, 
     adds nothing to the schema: its tables are rules, which rezono_table writes once the pack's model is read
     (§9.1)."""
     where, line, module = f"{pack_dir.name}/{d.module}", lines(form), form["module"]
+    metadata_format = form["format"] == IDENTIFIER_FORMAT
 
     def refuse(at: str | int, what: str, section: str = "§6") -> None:
         n = at if isinstance(at, int) else line.get(at) or line.get("/".join(at.split("/")[:3])) or 1
         errors.append(f"{where}:{n}: {what} ({PAGE} {section})")
 
-    for key, message, section in header_errors(module, pack):
+    native_rules = form["format"] == NATIVE_FORMAT
+    extended_format = form["format"] in (IDENTIFIER_FORMAT, NATIVE_FORMAT)
+    for key, message, section in header_errors(module, pack, native_rules=native_rules):
         place = key if key.startswith("/") else header_line(pack_dir, d, key)
         refuse(place, message, section)
     own = names(form)
@@ -423,28 +450,30 @@ def lower(pack_dir: Path, d: Declared, form: dict, pack: str, owners: dict[str, 
                 continue
         if "kind" in decl:
             kind_fields = {}
-            if form["format"] == IDENTIFIER_FORMAT and "abstract" in decl:
+            if extended_format and "abstract" in decl:
                 abstract = rezono_kind.lower_abstract(decl, at, refuse)
                 if abstract is None:
                     continue
                 decl, kind_fields = abstract
             keys = {}
-            if form["format"] == IDENTIFIER_FORMAT and "keys" in decl:
+            if extended_format and "keys" in decl:
                 decl = decl.copy()
                 if (keys := rezono_key.lower(decl.pop("keys"), f"{at}/keys", refuse)) is None:
                     continue
             lowered_kind = rezono_kind.lower(
                 decl, at, own, owners, declared_names, uses, refuse,
-                extended_format=form["format"] == IDENTIFIER_FORMAT,
+                extended_format=extended_format,
             )
             if lowered_kind is not None:
                 if keys:
                     lowered_kind["unique_keys"] = keys
                 classes[decl["kind"]] = lowered_kind | kind_fields
         elif "enum" in decl:
-            lowered_enum = rezono_enum.lower(decl, at, refuse)
+            lowered_enum = rezono_enum.lower(decl, at, refuse, extended=metadata_format)
             if lowered_enum is not None:
                 enums[decl["enum"]] = lowered_enum
+        elif "rule" in decl and native_rules:
+            continue  # The rule assembler needs the checked schema and pinned imports.
         elif "extend" in decl:
             rezono_extend.validate(decl, at, imported, refuse)
         elif "rules" in decl and form["format"] == IDENTIFIER_FORMAT:
@@ -458,7 +487,7 @@ def lower(pack_dir: Path, d: Declared, form: dict, pack: str, owners: dict[str, 
             else:
                 refuse(at, "a fact row is not lowered (no ticket yet)")
         elif "type" in decl and "base" in decl:
-            if form["format"] != IDENTIFIER_FORMAT:
+            if not extended_format:
                 refuse(at, "a scalar alias requires rezono.module/2", "§5.1")
             elif alias := rezono_alias.lower(decl, at, refuse):
                 aliases[decl["type"]] = alias
@@ -469,6 +498,12 @@ def lower(pack_dir: Path, d: Declared, form: dict, pack: str, owners: dict[str, 
               "enums": enums, "classes": classes}
     if aliases:
         schema["types"] = aliases
+    if metadata_format and "schema" in module:
+        range_name = module.get("defaultRange", "Text")
+        schema = rezono_metadata.header(
+            module, schema, d.layer,
+            rezono_slot.builtin_range(range_name, range_name in declared_names, extended_form=True), refuse,
+        )
     return Lowered(d, schema, form, sorted(uses))
 
 

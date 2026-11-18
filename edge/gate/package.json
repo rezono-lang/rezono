@@ -1,0 +1,14 @@
+{
+	"name": "rezono-local-gate",
+	"private": true,
+	"type": "module",
+	"engines": {
+		"node": ">=24"
+	},
+	"scripts": {
+		"test": "npm ci --ignore-scripts --prefix ../../rezono && node --test test/*.test.ts"
+	},
+	"dependencies": {
+		"rezono": "file:../../rezono"
+	}
+}

@@ -1,0 +1,1 @@
+edge/gate: scenario, impact and supposition queries need authenticated role-specific difference indexes. The published sweep exposes checked grid statuses to authorized roles. Difference counts are withheld until the sidecar has a manifest digest.

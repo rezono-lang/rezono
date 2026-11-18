@@ -1,0 +1,81 @@
+id: expression-negated-call
+source: decisions/language-expression-semantics.md#2-linking-partial-predicates
+status: settled
+input:
+  rows: []
+  schema: |
+    id: https://example.org/gauge
+    name: gauge
+    imports: [linkml:types]
+    annotations: {layer: facts}
+    classes:
+      Gauge:
+        attributes:
+          id: {identifier: true, range: string}
+          level: {range: integer, required: true}
+  owner: |
+    rezono 0
+    pack gauge-core
+    rule active(g: Gauge) extend when g in Gauge and false
+    rule live(g: Gauge) extend
+  closure: |
+    rezono 0
+    pack gauge-case
+    use gauge-core as core
+    rule zero_level(g: core.Gauge) when g in core.Gauge and g.level = 0
+    rule wrap(g: core.Gauge) when zero_level(g)
+    rule ring_a(g: core.Gauge) when wrap(g) or ring_b(g)
+    rule ring_b(g: core.Gauge) when ring_a(g)
+    rule core.active(g) when ring_b(g)
+    rule settled(g: core.Gauge) when g in core.Gauge and (false and zero_level(g))
+  consumer: |
+    rezono 0
+    pack gauge-case
+    use gauge-core
+    rule marker(g: Gauge) when g in Gauge and GUARD
+  cases:
+    - {id: partial, relation: active, guard: 'not active(g)', summary: active, error: R047}
+    - {id: total, relation: settled, guard: 'not settled(g)', summary: settled, polarity: negative}
+    - {id: positive, relation: active, guard: 'active(g)', summary: active, polarity: positive}
+    - {id: open, relation: live, guard: 'not live(g)', summary: live, error: R004}
+    - {id: unchecked, relation: active, guard: 'not active(g)', error: R047, lowering_only: true}
+    - {id: forged, relation: active, guard: 'not active(g)', summary: settled, error: R047, lowering_only: true}
+expect:
+  state: known
+  reason: null
+  value:
+    partial: [zero_level, wrap, ring_a, ring_b, active]
+    total: settled
+    summaries:
+      active:
+        relation: active
+        owner: gauge-core
+        columns: &columns [{name: g, logical: gauge, physical: string}]
+        world: closed
+        stratum: 0
+        states: [known, unknown]
+        reads: [gauge, gauge__level]
+      settled:
+        relation: settled
+        owner: gauge-case
+        columns: *columns
+        world: closed
+        stratum: 0
+        states: [known]
+        reads: [gauge]
+      live:
+        relation: live
+        owner: gauge-core
+        columns: *columns
+        world: open
+        stratum: 0
+        states: [known]
+        reads: [gauge]
+  witness:
+    primary: {file: rezono/consumer.rezono, at: /decls/0/when/and/1, line: '4', column: '43'}
+    related:
+      - {file: rezono/closure.rezono, at: /decls/0/when/and/1, line: '4', column: '57', text: 'g.level = 0'}
+      - {file: 'gauge-core:schema/gauge.yaml', at: /classes/Gauge/attributes/level, line: '9', column: '7', text: level}
+unsupported:
+  checker: This vector checks rule admission and lowering before any witness exists to replay.
+  feldera: This vector checks source diagnostics before emitting a rule program.

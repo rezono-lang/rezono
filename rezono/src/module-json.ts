@@ -39,7 +39,7 @@ function formatOf(module: Module): ModuleForm['format'] {
 			return decl.abstract || decl.embedded || decl.keys?.length || hasMetadata(decl)
 				|| decl.slots.some(slot => slot.identifier || slot.embedded || slot.slotUri !== undefined
 					|| slot.constraints !== undefined || hasMetadata(slot))
-				|| decl.equations?.length;
+				|| decl.equations?.length || decl.checks?.length;
 		}
 		if ('base' in decl) return true;
 		return 'enum' in decl && (decl.memberMetadata !== undefined || hasMetadata(decl));
