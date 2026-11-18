@@ -9,14 +9,21 @@ import tomllib
 from collections import Counter
 from pathlib import Path, PurePosixPath
 
-FELDERA_CRATES = PurePosixPath("/home/ubuntu/feldera/crates")
-CARGO_HOME = PurePosixPath("/home/ubuntu/.cargo")
 SAFE_NAME = re.compile(r"[A-Za-z0-9_-]+")
 HASHED_UNIT = re.compile(r"(?P<name>[A-Za-z0-9_-]+)-[0-9a-f]{16}")
 DEP_OUTPUT = re.compile(r"(?P<name>[A-Za-z0-9_]+)-[0-9a-f]{16}\.(?:d|rmeta|rlib|a|so)")
 
 
-def locked_packages(lock: Path, metadata: Path) -> dict[str, str]:
+def container_home(value: str) -> PurePosixPath:
+    home = PurePosixPath(value)
+    if not home.is_absolute() or len(home.parts) < 2 or ".." in home.parts:
+        raise argparse.ArgumentTypeError(f"Invalid Feldera container home: {value!r}")
+    return home
+
+
+def locked_packages(home: PurePosixPath, lock: Path, metadata: Path) -> dict[str, str]:
+    feldera_crates = home / "feldera" / "crates"
+    cargo_home = home / ".cargo"
     packages = {}
     for package in tomllib.loads(lock.read_text(encoding="utf-8"))["package"]:
         identity = package["name"], package["version"], package.get("source")
@@ -32,13 +39,13 @@ def locked_packages(lock: Path, metadata: Path) -> dict[str, str]:
         if entry is None or not manifest.is_absolute() or ".." in manifest.parts:
             continue
         if source is None:
-            approved = manifest.is_relative_to(FELDERA_CRATES)
+            approved = manifest.is_relative_to(feldera_crates)
         elif source.startswith("registry+"):
             checksum = entry.get("checksum", "")
-            approved = (manifest.is_relative_to(CARGO_HOME / "registry" / "src")
+            approved = (manifest.is_relative_to(cargo_home / "registry" / "src")
                         and re.fullmatch(r"[0-9a-f]{64}", checksum))
         elif source.startswith("git+"):
-            approved = (manifest.is_relative_to(CARGO_HOME / "git" / "checkouts")
+            approved = (manifest.is_relative_to(cargo_home / "git" / "checkouts")
                         and re.fullmatch(r"[0-9a-f]{40}", source.rsplit("#", 1)[-1]))
         else:
             approved = False
@@ -114,7 +121,9 @@ def transfer(packages: set[str] | None = None, libraries: set[str] | None = None
     print(f"Verified {len(seen)} Feldera dependency entries", file=sys.stderr)
 
 
-def summarize_activity() -> None:
+def summarize_activity(home: PurePosixPath) -> None:
+    feldera_crates = home / "feldera" / "crates"
+    cargo_home = home / ".cargo"
     counts = Counter()
     for line in sys.stdin:
         if not line.startswith("{"):
@@ -126,9 +135,9 @@ def summarize_activity() -> None:
         manifest = PurePosixPath(message["manifest_path"])
         if re.fullmatch(r"feldera_pipe_operator_[0-9a-f]{16}", target):
             kind = "generated_operators"
-        elif target == "dbsp" and manifest.is_relative_to(FELDERA_CRATES):
+        elif target == "dbsp" and manifest.is_relative_to(feldera_crates):
             kind = "dbsp"
-        elif manifest.is_relative_to(FELDERA_CRATES) or manifest.is_relative_to(CARGO_HOME):
+        elif manifest.is_relative_to(feldera_crates) or manifest.is_relative_to(cargo_home):
             kind = "other_dependencies"
         else:
             continue
@@ -142,15 +151,17 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     subcommands = parser.add_subparsers(dest="operation", required=True)
     produce = subcommands.add_parser("export")
+    produce.add_argument("home", type=container_home)
     produce.add_argument("lock", type=Path)
     produce.add_argument("metadata", type=Path)
     produce.add_argument("messages", type=Path)
     subcommands.add_parser("verify")
-    subcommands.add_parser("activity")
+    activity = subcommands.add_parser("activity")
+    activity.add_argument("home", type=container_home)
     options = parser.parse_args()
     if options.operation == "export":
-        transfer(*compiled_packages(options.messages, locked_packages(options.lock, options.metadata)))
+        transfer(*compiled_packages(options.messages, locked_packages(options.home, options.lock, options.metadata)))
     elif options.operation == "verify":
         transfer()
     else:
-        summarize_activity()
+        summarize_activity(options.home)

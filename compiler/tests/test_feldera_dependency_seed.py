@@ -17,6 +17,7 @@ NATIVE = f"build/libc-{UNIT}/out/config.h"
 FINGERPRINT = f".fingerprint/libc-{UNIT}/lib-libc.json"
 OPERATOR = f"deps/libfeldera_pipe_operator_{UNIT}-{UNIT}.rlib"
 MAIN = "feldera_pipe_pipeline_nil_main"
+CONTAINER_HOME = "/fixture/user"
 
 
 def archive(*entries):
@@ -44,11 +45,11 @@ def members(source):
 def test_seed_selects_only_successful_lock_owned_dependencies(tmp_path):
     registry = "registry+https://github.com/rust-lang/crates.io-index"
     packages = [
-        ("dbsp", None, "/home/ubuntu/feldera/crates/dbsp/Cargo.toml"),
-        ("libc", registry, "/home/ubuntu/.cargo/registry/src/cache/libc-1.0.0/Cargo.toml"),
-        (MAIN, None, f"/home/ubuntu/.feldera/compiler/rust-compilation/crates/{MAIN}/Cargo.toml"),
-        ("wrong_manifest", None, "/home/ubuntu/untrusted/wrong_manifest/Cargo.toml"),
-        ("unlocked", None, "/home/ubuntu/feldera/crates/unlocked/Cargo.toml"),
+        ("dbsp", None, f"{CONTAINER_HOME}/feldera/crates/dbsp/Cargo.toml"),
+        ("libc", registry, f"{CONTAINER_HOME}/.cargo/registry/src/cache/libc-1.0.0/Cargo.toml"),
+        (MAIN, None, f"{CONTAINER_HOME}/.feldera/compiler/rust-compilation/crates/{MAIN}/Cargo.toml"),
+        ("wrong_manifest", None, "/external/wrong_manifest/Cargo.toml"),
+        ("unlocked", None, f"{CONTAINER_HOME}/feldera/crates/unlocked/Cargo.toml"),
     ]
     lock = tmp_path / "Cargo.lock"
     registry_fields = f'source = "{registry}"\nchecksum = "{"a" * 64}"\n'
@@ -70,14 +71,14 @@ def test_seed_selects_only_successful_lock_owned_dependencies(tmp_path):
                      OPERATOR, MAIN, f".fingerprint/{MAIN}-{UNIT}/info",
                      f"deps/libwrong_manifest-{UNIT}.rlib", f"deps/libunlocked-{UNIT}.rlib",
                      "compiled.sql", "results.xml", "collection.txt", "pipeline-binaries/work")
-    result = execute(["export", lock, metadata, messages], source)
+    result = execute(["export", CONTAINER_HOME, lock, metadata, messages], source)
     assert result.returncode == 0, result.stderr.decode()
     assert set(members(result.stdout)) == {DBSP, NATIVE, FINGERPRINT, f"deps/liblibc-{UNIT}.rlib", f"deps/libc-{UNIT}.d"}
     result = execute(["verify"], result.stdout)
     assert result.returncode == 0, result.stderr.decode()
     events[-1]["success"] = False
     messages.write_text("\n".join(map(json.dumps, events)), encoding="utf-8")
-    assert execute(["export", lock, metadata, messages], source).returncode != 0
+    assert execute(["export", CONTAINER_HOME, lock, metadata, messages], source).returncode != 0
 
 
 @pytest.mark.parametrize("extra", [DBSP, OPERATOR, MAIN, "/etc/passwd", f"build/libc-{UNIT}/../../receipt",
@@ -92,3 +93,7 @@ def test_restore_rejects_incomplete_or_linked_dependencies():
     link.type = tarfile.SYMTYPE
     link.linkname = "../../../../outside"
     assert execute(["verify"], archive(DBSP, link)).returncode != 0
+
+@pytest.mark.parametrize("home", ["", "relative", "/", "/workspace/../outside"])
+def test_seed_rejects_invalid_container_home(home):
+    assert execute(["export", home, "lock", "metadata", "messages"], b"").returncode == 2

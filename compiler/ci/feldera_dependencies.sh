@@ -4,6 +4,13 @@ feldera_dependencies_dir() {
   printf '%s\n' "${RUNNER_TEMP:?}/feldera-dependencies"
 }
 
+feldera_dependency_home() {
+  local home
+  home=$(sed -n 's/^HOME=//p' "$(feldera_dependencies_dir)/toolchain.txt") || return
+  [[ "$home" =~ ^/([a-zA-Z0-9_.-]+/)*[a-zA-Z0-9_.-]+$ && "$home/" != */../* && "$home/" != */./* ]] || return 1
+  printf '%s\n' "$home"
+}
+
 feldera_dependency_identity() {
   local image=$1
   printf '%s\n' "$image" "${GITHUB_SHA:?}" "${GITHUB_RUN_ID:?}" "${GITHUB_RUN_ATTEMPT:?}" unoptimized
@@ -41,7 +48,7 @@ feldera_seed_dependencies() (
       sha256sum "$HOME/feldera/Cargo.lock"
       rustc -vV
       cargo -V
-      printf "RUSTFLAGS=%s\nCARGO_BUILD_TARGET=%s\n" "${RUSTFLAGS:-}" "${CARGO_BUILD_TARGET:-}"
+      printf "HOME=%s\nRUSTFLAGS=%s\nCARGO_BUILD_TARGET=%s\n" "$HOME" "${RUSTFLAGS:-}" "${CARGO_BUILD_TARGET:-}"
     } > /tmp/feldera-dependency-toolchain.txt
     target=$(awk '"'"'$1 == "host:" {print $2}'"'"' /tmp/feldera-dependency-toolchain.txt)
     test -n "$target"
@@ -50,14 +57,15 @@ feldera_seed_dependencies() (
   ' feldera-dependencies "$nil"
   docker start --attach "$seed"
   test "$(docker container inspect --format '{{.State.ExitCode}}' "$seed")" = 0
-  workspace=/home/ubuntu/.feldera/compiler/rust-compilation
-  docker cp "$seed:/home/ubuntu/feldera/Cargo.lock" "$staging/Cargo.lock"
+  docker cp "$seed:/tmp/feldera-dependency-toolchain.txt" "$cache/toolchain.txt"
+  engine_home=$(feldera_dependency_home)
+  workspace="$engine_home/.feldera/compiler/rust-compilation"
+  docker cp "$seed:$engine_home/feldera/Cargo.lock" "$staging/Cargo.lock"
   docker cp "$seed:/tmp/feldera-dependency-metadata.json" "$staging/metadata.json"
   docker cp "$seed:$workspace/crates/$nil/stdout.log" "$staging/cargo.log"
-  docker cp "$seed:/tmp/feldera-dependency-toolchain.txt" "$cache/toolchain.txt"
   feldera_dependency_identity "$image" > "$cache/identity.txt"
   docker cp "$seed:$workspace/target/unoptimized/." - |
-    python compiler/ci/export_feldera_dependencies.py export "$staging/Cargo.lock" "$staging/metadata.json" "$staging/cargo.log" |
+    python compiler/ci/export_feldera_dependencies.py export "$engine_home" "$staging/Cargo.lock" "$staging/metadata.json" "$staging/cargo.log" |
     zstd -q -T0 -3 -o "$cache/dependencies.tar.zst"
   digest=$(cd "$cache" && sha256sum dependencies.tar.zst identity.txt toolchain.txt)
   printf '%s\n' "$digest" > "$cache/checksums.txt"
@@ -86,7 +94,7 @@ feldera_restore_dependencies() (
     sha256sum "$HOME/feldera/Cargo.lock"
     rustc -vV
     cargo -V
-    printf "RUSTFLAGS=%s\nCARGO_BUILD_TARGET=%s\n" "${RUSTFLAGS:-}" "${CARGO_BUILD_TARGET:-}"
+    printf "HOME=%s\nRUSTFLAGS=%s\nCARGO_BUILD_TARGET=%s\n" "$HOME" "${RUSTFLAGS:-}" "${CARGO_BUILD_TARGET:-}"
   ' | cmp - toolchain.txt
   zstd -q -d -c dependencies.tar.zst |
     python "$verifier" verify |
@@ -100,7 +108,8 @@ feldera_restore_dependencies() (
 )
 
 feldera_dependency_activity() {
-  local container=$1
+  local container=$1 engine_home
+  engine_home=$(feldera_dependency_home) || return
   docker exec "$container" bash -euo pipefail -c '
     crates="$HOME/.feldera/compiler/rust-compilation/crates"
     nil=feldera_pipe_pipeline_00000000_0000_0000_0000_000000000000_main
@@ -109,5 +118,5 @@ feldera_dependency_activity() {
     oldest=${logs%%$'"'"'\n'"'"'*}
     test -n "$oldest"
     cat -- "${oldest#* }"
-  ' | python compiler/ci/export_feldera_dependencies.py activity
+  ' | python compiler/ci/export_feldera_dependencies.py activity "$engine_home"
 }
