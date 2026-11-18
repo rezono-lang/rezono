@@ -45,6 +45,14 @@ examples/*/views.yaml pack-definition
 examples/*/icons/*.svg pack-definition
 examples/*/icons/sources.yaml pack-definition
 
+# The nested capacity interface is also a digest-pinned pack.
+examples/platform/tenant-capacity/interface/pack.yaml pack-definition
+examples/platform/tenant-capacity/interface/channels.yaml pack-definition
+examples/platform/tenant-capacity/interface/schema/**/*.yaml pack-definition
+examples/platform/tenant-capacity/interface/labels/*.yaml pack-definition
+examples/platform/tenant-capacity/interface/messages/*.mf2 pack-definition
+examples/platform/tenant-capacity/interface/rules/*.dl pack-definition
+
 compiler/tests/fixtures/*/pack.yaml pack-definition
 compiler/tests/fixtures/*/channels.yaml pack-definition
 compiler/tests/fixtures/*/schema/**/*.yaml pack-definition

@@ -30,12 +30,6 @@ def test_authored_slot_types_in_the_original_bundle(tmp_path):
     }
 
 
-@pytest.mark.xfail(
-    strict=True, raises=AssertionError,
-    reason="Read decisions/language-semantic-publication.md. Generate the module form from its authored source "
-           "during compilation in compiler/rezono_compiler/rezono_module.py. The existing reader and compiler "
-           "already support the slot types used here.",
-)
 def test_compile_uses_the_authored_slot_type_after_an_edit(tmp_path):
     directory = written(tmp_path, "module")
     source = directory / "rezono/kinds.rezono"
