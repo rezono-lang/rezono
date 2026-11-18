@@ -3,7 +3,6 @@ import pytest
 from query_fixture import check_relation, evidence
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError, reason="Implement general TLS path substitution and both effective deltas in the scope of schema, facts and rules modules named tls_path. Read decisions/platform-source-and-scenario-cases.md.")
 def test_entry_tls_substitutes_only_the_selected_path():
     rows, _ = evidence()
     forbidden = {tuple(row) for row in rows["recovery_reaches_out"]}

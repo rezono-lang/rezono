@@ -1,0 +1,14 @@
+{
+  "entry_tls_path__client__reference": [
+    ["shop-identity", "shop"]
+  ],
+  "entry_tls_path__entry__reference": [
+    ["shop-identity", "lb"]
+  ],
+  "entry_tls_path__function__reference": [
+    ["shop-identity", "identity"]
+  ],
+  "entry_tls_path__provider__reference": [
+    ["shop-identity", "idp"]
+  ]
+}
