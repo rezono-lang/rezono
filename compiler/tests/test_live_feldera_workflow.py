@@ -9,11 +9,6 @@ import yaml
 ROOT = Path(__file__).resolve().parents[2]
 
 
-@pytest.mark.xfail(strict=True, raises=FileNotFoundError, reason=(
-    "Wait for test_live_report_accounts_for_every_selected_case and the platform live delta test. "
-    "The CI builder owns .github/workflows/feldera-oracle.yml and compiler/ci/run_feldera_oracle.sh; "
-    "run a successful dispatch as specified in decisions/live-feldera-ci.md."
-))
 def test_live_oracle_workflow_runs_the_compiler_entrypoint():
     path = ROOT / ".github/workflows/feldera-oracle.yml"
     job_file = yaml.load(path.read_text(encoding="utf-8"), Loader=yaml.BaseLoader)

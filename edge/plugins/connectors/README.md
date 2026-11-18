@@ -1,6 +1,6 @@
 # connectors
 
-Connectors to standards (lane M of #401): what a connector is, the checklist it meets and each standard with its state are in [docs/standards.md](../../../docs/standards.md). This directory holds the connectors that are not part of the publication library, and every loss list.
+Connectors to standards: what a connector is, the checklist it meets and each standard with its state are in [docs/standards.md](../../../docs/standards.md). This directory holds the connectors that are not part of the publication library, and every loss list.
 
 | File | What |
 |---|---|

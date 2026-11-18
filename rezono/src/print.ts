@@ -156,7 +156,7 @@ function decl(d: Decl): string[] {
 	if ('rounding' in d) return [`rounding ${d.rounding} ${d.mode}`];
 	if ('param' in d) return block(`param ${d.param}: ${d.type}${d.per !== undefined ? ` per ${d.per}` : ''}${is(d.value)}`, (d.versions ?? []).map(version));
 	if ('kind' in d)
-		return block(`kind ${d.kind}${world(d.world)}`, [
+		return block(`${d.embedded ? 'embedded ' : ''}kind ${d.kind}${world(d.world)}`, [
 			...(d.applies ? [`applies ${d.applies.axis}: ${d.applies.slot}`] : []),
 			...(d.sealed !== undefined ? [`sealed at: ${d.sealed}`] : []),
 			...d.slots.map((s) => `${s.slot}: ${s.type}${s.card ?? ''}${s.inverse !== undefined ? ` inverse ${s.inverse}` : ''}${world(s.world)}${s.identifier ? ' identifier' : ''}`),

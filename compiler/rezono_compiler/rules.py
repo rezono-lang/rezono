@@ -173,7 +173,7 @@ class Rule:
 
 @dataclass(frozen=True)
 class Bound:
-    """A recursive rule that counts to an explicit bound (#351 P6.2). The rule reads its own relation once,
+    """A recursive rule that counts to an explicit bound. The rule reads its own relation once,
     adds `step` to the counter in key column `column` and fires while the counter it reads is at most `last`;
     every other rule of the relation starts the counter at a constant, `start` the least. So the rule is
     applied `levels` times at most, on every input, and the recursion unrolls into that many strata."""
@@ -676,7 +676,7 @@ def upper(condition, var):
 
 
 def _bound(prog, r):
-    """The bound of a recursive rule with arithmetic (#351 P6.2). Arithmetic in recursion need not terminate,
+    """The bound of a recursive rule with arithmetic. Arithmetic in recursion need not terminate,
     so one shape only is taken: a counter. The rule reads its own relation once and nothing else that depends
     on it; one key column of that row is a variable the rule adds a positive constant to, the sum is the same
     column of the head, and a condition bounds what is read from above by a constant; every other rule of the

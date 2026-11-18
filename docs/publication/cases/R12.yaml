@@ -23,4 +23,4 @@ expect:
   accept: false
   error: two rows `Host`/`host-a`
 sources:
-- '#369 L0 rev 2 §8'
+- publication/rezono_publication/l0.py, read_collection

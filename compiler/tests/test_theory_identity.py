@@ -1,4 +1,4 @@
-"""Theory std-identity (#314 §5.2, T5; lane G, G02): its axioms and rules against independent oracles.
+"""Theory std-identity: its axioms and rules against independent oracles.
 
 Three evaluations must agree as sets: an exact Python reference written from the definitions (union-find over the
 same_as claims, not a join), the DuckDB batch backend on the compiled IR, and Soufflé on the same program (when

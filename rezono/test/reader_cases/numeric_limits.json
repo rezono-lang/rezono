@@ -20,5 +20,29 @@
       ],
       "derived": []
     }
+  ],
+  "knownDiagnostics": [
+    {
+      "code": "R000",
+      "span": {
+        "text": "1",
+        "start": 60,
+        "end": 61
+      },
+      "args": [
+        "\"=\" or \":\""
+      ]
+    },
+    {
+      "code": "R000",
+      "span": {
+        "text": "200",
+        "start": 74,
+        "end": 77
+      },
+      "args": [
+        "\"=\" or \":\""
+      ]
+    }
   ]
 }

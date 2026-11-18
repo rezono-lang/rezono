@@ -6,4 +6,4 @@ expect:
   print: ask Host where owner = team-platform
 note: Rows with an unknown owner are undecided; evaluated in E42.
 sources:
-- '#350 P10.2a §11'
+- rezono/src/print.ts

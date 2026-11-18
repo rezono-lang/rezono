@@ -1,0 +1,23 @@
+listener_case_zone:
+  - {id: origin}
+  - {id: receiving}
+listener_case_range:
+  - {id: shared}
+listener_case_source:
+  - {id: a, zone: origin, source_range: shared}
+  - {id: b, zone: origin, source_range: shared}
+listener_case_destination:
+  - {id: x, zone: receiving}
+  - {id: y, zone: receiving}
+  - {id: z, zone: receiving}
+  - {id: q, zone: receiving}
+listener_case_listener:
+  - {id: x-tcp, destination: x, protocol: TCP, port: 443}
+  - {id: y-tcp, destination: y, protocol: TCP, port: 443}
+  - {id: z-tcp, destination: z, protocol: TCP, port: 443}
+listener_case_firewall_grant:
+  - {id: r1, source_range: shared, listener: x-tcp}
+  - {id: r2, source_range: shared, listener: y-tcp}
+listener_case_service_grant:
+  - {id: ax, source: a, listener: x-tcp}
+  - {id: ay, source: a, listener: y-tcp}

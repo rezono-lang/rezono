@@ -1,4 +1,4 @@
-"""The satisfaction test of a theory read through a view (M3 of #314; docs/theories.md, step 4). Tests only.
+"""The satisfaction test of a theory read through a view (docs/theories.md, step 4). Tests only.
 
 A view is satisfied when the theory concludes through it what it concludes on the domain's instance translated
 by hand. The translation is written per case from the view's own words, as a join over the domain's rows; it does

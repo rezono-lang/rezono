@@ -7,4 +7,5 @@ expect:
   grouping: ((memory_need > 384 GiB) or (owner is unknown)) and (provider = cherry)
 note: Parentheses are kept because precedence needs them.
 sources:
-- '#350 P10.2a §11'
+- rezono/src/print.ts
+- rezono/src/grammar.ts

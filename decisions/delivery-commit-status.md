@@ -9,3 +9,7 @@ For a given commit and context, compare the latest published state and its evide
 The example tenants Elm and Reed may use the same step names. Their status contexts are distinct. Permit each tenant to see only its own evidence rows. The platform example consumes these rows and their event times for its observed delivery view. A proposal-only preview may display requests and desired steps before any observations exist.
 
 A single mutable status on the branch would allow a later proposal or a different tenant to overwrite the evidence. A fresh context per run would hide retry duplicates and fragment the step's history.
+
+## Forgejo status port
+
+Read the latest matching context through Forgejo's commit statuses endpoint, GET /api/v1/repos/{owner}/{repo}/commits/{sha}/statuses. Follow pages until the context is found or the list is exhausted. On the write side, POST /api/v1/repos/{owner}/{repo}/statuses/{sha} with context, state and the evidence link as target_url. Bind owner and repository from the configured port and the full SHA from the accepted proposal. The status command takes the accepted proposal, scoped step and observations, then composes target selection, evidence projection, context construction and retry-safe publication. A read error aborts the attempt. Use the injected transport in offline tests. A provider acknowledgment is evidence of publication, separate from evidence of step completion.

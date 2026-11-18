@@ -12,4 +12,4 @@ expect:
     suggest:
     - spec.nodes
 sources:
-- '#350 P10.2a §11'
+- rezono/src/check.ts

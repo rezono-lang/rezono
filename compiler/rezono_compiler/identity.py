@@ -1,4 +1,4 @@
-"""Typed element identity (B11, S4; #394 A2): an element is its root kind and its id, never its id alone.
+"""Typed element identity (B11, S4): an element is its root kind and its id, never its id alone.
 
 Two elements of unrelated kinds may have equal ids: the zone "x" and the server "x" are two elements. Wherever
 views and mappings see elements, they see the pair (root kind, id), so equal ids never collapse. Along

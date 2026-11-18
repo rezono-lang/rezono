@@ -12,5 +12,18 @@
       "derived": [],
       "parent": "Person"
     }
+  ],
+  "knownDiagnostics": [
+    {
+      "code": "R000",
+      "span": {
+        "text": "is",
+        "start": 32,
+        "end": 34
+      },
+      "args": [
+        "end of input or \"world\""
+      ]
+    }
   ]
 }

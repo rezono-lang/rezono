@@ -1,0 +1,13 @@
+{
+  "job": "https://github.com/rezono-lang/rezono/actions/runs/44220706584/job/134524226560",
+  "revision": "5356874ff2410bda36c0f4a7b8452a2e47a53c11",
+  "observations": [
+    {"time": "2026-11-18T02:19:54.2925391Z", "event": "controller_ready", "nodes": 0},
+    {"time": "2026-11-18T02:19:57.4765346Z", "event": "ignition_rendered"},
+    {"time": "2026-11-18T02:20:18.0784087Z", "event": "first_boot"},
+    {"time": "2026-11-18T02:20:26.2898957Z", "event": "worker_installed"},
+    {"time": "2026-11-18T02:20:30.5064975Z", "event": "node_registered", "name": "proof-worker"},
+    {"time": "2026-11-18T02:21:03.4363186Z", "event": "node_condition", "type": "Ready", "status": "True", "reason": "KubeletReady"},
+    {"time": "2026-11-18T02:21:03.5662414Z", "event": "node_identity", "name": "proof-worker", "uid": "d6a4ca6a-efd0-4c74-a148-84be32b56319", "os": "Flatcar Container Linux by Kinvolk 4757.2.3", "kubelet": "v1.36.6+k0s", "ready": true, "lease_renew_time_present": true}
+  ]
+}

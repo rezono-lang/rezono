@@ -3,7 +3,6 @@ import pytest
 from case_support import ROOT, engine, imported
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError, reason='Declare all five digest-pinned imports in examples/platform/pack.yaml and verify normal pack loading. Read decisions/platform-derivation-acceptance.md.')
 def test_standard_imports():
     import re
     import yaml

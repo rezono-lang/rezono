@@ -1,4 +1,4 @@
-"""contracts/yaml_keys.py: a value a YAML flow map split on its comma is refused, every contract passes (#1020)."""
+"""contracts/yaml_keys.py: a value a YAML flow map split on its comma is refused, every contract passes."""
 
 import importlib.util
 from pathlib import Path
@@ -11,7 +11,7 @@ spec.loader.exec_module(yaml_keys)
 
 
 def test_text_cut_at_a_comma_is_refused():
-    # #1020's two lines before its fix.
+    # Two malformed flow mappings.
     cut = yaml_keys.findings(
         "classes:\n  KindIndex:\n    attributes:\n"
         "      fanout: {range: integer, required: true, minimum_value: 2, description: Children per page, at most.}\n"

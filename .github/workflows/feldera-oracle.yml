@@ -1,0 +1,49 @@
+name: Live Feldera oracle
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  oracle:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0  # v7.1.0
+        with:
+          python-version-file: requirements/.python-version
+          cache: ''
+      - name: Install the locked dependencies and generate contract types
+        run: |
+          set -euo pipefail
+          python -m venv .venv
+          source .venv/bin/activate
+          python -m pip install --no-deps --require-hashes -r requirements/dev.txt
+          packages=$(python scripts/components.py python-packages)
+          for package in $packages; do
+            python -m pip install --no-deps --no-build-isolation -e "$package"
+          done
+          bash contracts/gen-types.sh
+          bash scripts/install-souffle.sh
+          echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
+      - name: Compare compiler and example results with Feldera
+        timeout-minutes: 100
+        run: bash compiler/ci/run_feldera_oracle.sh
+      - name: Retain collected cases and test results
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.6.2
+        with:
+          name: feldera-oracle
+          path: ${{ runner.temp }}/feldera-oracle/
+          if-no-files-found: warn
+          retention-days: 7

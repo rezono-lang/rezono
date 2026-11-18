@@ -1,0 +1,84 @@
+{
+  "plan_file": "plan.json",
+  "price_file": "price-facts.json",
+  "approval": {
+    "plan_hash": "e919be970648421f6374c599bcec647bfc62fe9f1df92e0346e2f40c89b41c0f",
+    "budget_cents": 162,
+    "currency": "USD",
+    "expires_at": "2030-01-02T00:00:00Z",
+    "decision": "approve"
+  },
+  "clock": "2030-01-01T12:00:00Z",
+  "order_receipt": {
+    "id": "order-one",
+    "plan_hash": "e919be970648421f6374c599bcec647bfc62fe9f1df92e0346e2f40c89b41c0f"
+  },
+  "machine_observations": [
+    {
+      "id": "machine-1",
+      "address": "192.0.2.1",
+      "boot_disk": "boot-1",
+      "data_disk": "data-1"
+    },
+    {
+      "id": "machine-2",
+      "address": "192.0.2.2",
+      "boot_disk": "boot-2",
+      "data_disk": "data-2"
+    },
+    {
+      "id": "machine-3",
+      "address": "192.0.2.3",
+      "boot_disk": "boot-3",
+      "data_disk": "data-3"
+    }
+  ],
+  "installation": {
+    "request_id": "sample",
+    "ready": true
+  },
+  "inventory": [
+    {
+      "sweep_id": "before",
+      "page_id": "root",
+      "next_page_id": null,
+      "resources": [
+        {
+          "id": "machine-1",
+          "plan_hash": "e919be970648421f6374c599bcec647bfc62fe9f1df92e0346e2f40c89b41c0f"
+        }
+      ]
+    },
+    {
+      "sweep_id": "after",
+      "page_id": "root",
+      "next_page_id": "tail",
+      "resources": [
+        {
+          "id": "unrelated",
+          "plan_hash": null
+        }
+      ]
+    },
+    {
+      "sweep_id": "after",
+      "page_id": "tail",
+      "next_page_id": null,
+      "resources": []
+    }
+  ],
+  "request_file": "request.json",
+  "request_sha256": "1fe104148c6ba837e80ef717e4946a44ed4b761170adff5c01573db192e913c9",
+  "delete_receipt": {
+    "accepted": true,
+    "id": "order-one"
+  },
+  "operations": [
+    "submit_order",
+    "observe_machines",
+    "apply_installation",
+    "observe_delivery",
+    "delete_resources",
+    "list_inventory"
+  ]
+}

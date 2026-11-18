@@ -37,7 +37,7 @@ artifact.signed: signed
 provides: provides
 provider: provider
 asks: asks
-chosen: chosen
+provider_chosen: provider chosen
 providers: providers
 needs: needs
 ambiguous_provider: ambiguous provider

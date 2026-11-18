@@ -22,10 +22,10 @@ def exact(name, rows):
     assert snapshot.derived[name] == {tuple(map(str, row)) for row in rows}, name
 
 
-def verified(name, key):
+def verified(name, key, *, state=None):
     from rezono_checker.check import check
     from rezono_checker.rules import load_rules
-    model, snapshot = engine()
+    model, snapshot = engine() if state is None else state
     assert key in snapshot.derived.get(name, ()), (name, key)
     proof = snapshot.proof(name, key)
     manifest, read = snapshot.manifest()

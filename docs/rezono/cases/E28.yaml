@@ -7,4 +7,5 @@ expect:
   class: transacts
 note: A suppose line.
 sources:
-- '#350 P10.2a §11'
+- rezono/src/print.ts
+- rezono/src/grammar.ts

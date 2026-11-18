@@ -5,7 +5,6 @@ import pytest
 from loop_oracle import evaluate
 
 
-@pytest.mark.xfail(strict=True, reason="Read decisions/loop-design.md. Implement packs/std-loop/rules/waiting.dl. Report each missing prerequisite of an unfinished step with its witness.")
 def test_waiting_evidence():
     columns = {
         "needed": "run step token reason",

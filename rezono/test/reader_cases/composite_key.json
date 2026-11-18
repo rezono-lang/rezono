@@ -25,5 +25,18 @@
         }
       ]
     }
+  ],
+  "knownDiagnostics": [
+    {
+      "code": "R000",
+      "span": {
+        "text": "name_within_parent",
+        "start": 77,
+        "end": 95
+      },
+      "args": [
+        "\"=\" or \":\""
+      ]
+    }
   ]
 }
