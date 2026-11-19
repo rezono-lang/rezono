@@ -564,8 +564,9 @@ def plan(e: Epoch, store, roles: dict[str, str], base: dict | None = None,
 def candidates(e: Epoch) -> dict:
     """The candidate references the epoch's admission step read from the submitted index, for the complete
     manifest (decisions/admission-transport.md, section 2): `completeness_receipts` and `rounds`, each only when
-    it lists one. The trusted context confers the authority and is never listed; the access gate gives a role's
-    manifest neither list."""
+    it lists one. The trusted context confers the authority and its bytes are never published; `evidence` names it
+    and the submitted index by hash, so a later replay of the publication rebuilds the Evidence and admits again
+    (retained_calculation). The access gate gives a role's manifest none of these."""
     if e.evidence is None:
         return {}
     from rezono_checker import evidence as admission
@@ -574,7 +575,10 @@ def candidates(e: Epoch) -> dict:
         references = admission.admit(e.evidence).references
     except ValueError as err:
         raise Blocked(f"rezono:evidence: {err}") from err
-    return {field: references[field] for field in admission.INDEX_FIELDS if references[field]}
+    named = {"context": e.evidence.context}
+    if e.evidence.candidates is not None:
+        named["index"] = e.evidence.candidates
+    return {field: references[field] for field in admission.INDEX_FIELDS if references[field]} | {"evidence": named}
 
 
 def build_bytes(build: dict, roles: dict[str, str]) -> bytes:
