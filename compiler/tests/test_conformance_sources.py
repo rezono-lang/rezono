@@ -90,7 +90,9 @@ def check_decision(path: Path, source: str, *headings: str) -> str:
     strict=True,
     raises=MissingConformanceCases,
     reason="Migrate each record in tests/conformance/sources.yaml to a neutral case or an explicit "
-           "decision under decisions/. Read tests/conformance/README.md. Update only the corpus and decisions.",
+           "decision under decisions/. Read tests/conformance/README.md. Update only the corpus and decisions. "
+           "Only value-hash-bool-key is left: it needs tests/conformance/value-hash-bool-key.yaml (its decision exists), "
+           "and the red guard requires a planner label for that path.",
 )
 def test_every_inventory_source_has_a_case_or_decision():
     records = source_records()

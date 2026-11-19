@@ -21,12 +21,64 @@ permissions:
   contents: read
 
 jobs:
+  # The merge queue tests the exact commit that later lands on main, and its
+  # merge-group run selects every component, as a push run does. When that run
+  # passed, the push run only refreshes the caches that pull requests restore
+  # from main (discover and the node installs). A push without such evidence,
+  # or a failed lookup, gets the full check.
+  queue_evidence:
+    name: Merge-queue evidence
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    permissions:
+      actions: read
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      tested: ${{ steps.find.outputs.tested }}
+    steps:
+      - id: find
+        name: Find a passing merge-group check for this commit
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          tested=false
+          for attempt in 1 2 3; do
+            if runs=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?event=merge_group&head_sha=$SHA&per_page=20" \
+                --jq '.workflow_runs[].id'); then
+              for run in $runs; do
+                if passed=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run/jobs?filter=latest&per_page=100" \
+                    --jq '[.jobs[] | select(.name == "check" and .conclusion == "success")] | length') &&
+                   [[ "$passed" -gt 0 ]]; then
+                  tested=true
+                  echo "Merge-group run $run passed the check job for $SHA."
+                  break
+                fi
+              done
+              break
+            fi
+            echo "Listing merge-group runs failed (attempt $attempt); retrying." >&2
+            sleep $((attempt * 10))
+          done
+          if [[ "$tested" == true ]]; then
+            summary="The merge queue already passed $SHA; this push run only refreshes the shared caches."
+          else
+            summary="No passing merge-group check found for $SHA; this push run runs the full check."
+          fi
+          echo "$summary" | tee -a "$GITHUB_STEP_SUMMARY"
+          echo "tested=$tested" >> "$GITHUB_OUTPUT"
+
   light_checks:
     name: Light checks
+    needs: queue_evidence
     if: >-
-      github.event_name == 'pull_request' ||
-      github.event_name == 'merge_group' ||
-      (github.event_name == 'push' && github.ref == 'refs/heads/main')
+      !cancelled() && (
+        github.event_name == 'pull_request' ||
+        github.event_name == 'merge_group' ||
+        (github.event_name == 'push' && github.ref == 'refs/heads/main' &&
+         needs.queue_evidence.outputs.tested != 'true'))
     permissions:
       contents: read
     runs-on: ubuntu-24.04
@@ -120,7 +172,10 @@ jobs:
         with:
           source-directory: release-source
 
+  # A draft pull request gets only the light checks; marking it ready for review
+  # starts a run with the full check.
   discover:
+    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     runs-on: ubuntu-24.04
     timeout-minutes: 12
     outputs:
@@ -199,8 +254,11 @@ jobs:
             --base "$TASK_BASE" --diff-base "$CANDIDATE_BASE" --pull-head "$PULL_HEAD" >> "$GITHUB_OUTPUT"
 
   cluster_worker:
-    needs: discover
-    if: needs.discover.outputs.cluster_mode == 'tasks' || needs.discover.outputs.cluster_mode == 'suite'
+    needs: [discover, queue_evidence]
+    if: >-
+      !cancelled() && needs.discover.result == 'success' &&
+      needs.queue_evidence.outputs.tested != 'true' &&
+      (needs.discover.outputs.cluster_mode == 'tasks' || needs.discover.outputs.cluster_mode == 'suite')
     uses: ./.github/workflows/disposable-cluster.yml
     with:
       tasks: ${{ needs.discover.outputs.cluster_tasks }}
@@ -208,8 +266,11 @@ jobs:
 
   role_publication:
     name: Published role tools
-    needs: discover
-    if: needs.discover.outputs.role_publication == 'true'
+    needs: [discover, queue_evidence]
+    if: >-
+      !cancelled() && needs.discover.result == 'success' &&
+      needs.queue_evidence.outputs.tested != 'true' &&
+      needs.discover.outputs.role_publication == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 12
     steps:
@@ -226,8 +287,11 @@ jobs:
         run: python scripts/role_publication_ci.py run
 
   python:
-    needs: discover
-    if: needs.discover.outputs.has_python == 'true'
+    needs: [discover, queue_evidence]
+    if: >-
+      !cancelled() && needs.discover.result == 'success' &&
+      needs.queue_evidence.outputs.tested != 'true' &&
+      needs.discover.outputs.has_python == 'true'
     name: python (${{ matrix.component.label }})
     runs-on: ubuntu-24.04
     timeout-minutes: 20
@@ -310,9 +374,13 @@ jobs:
             echo "Fast check took $((SECONDS-start)) seconds and printed $(wc -l < "$RUNNER_TEMP/fast.txt") lines" | tee -a "$GITHUB_STEP_SUMMARY"
           fi
 
+  # On a push that the merge queue already passed, the node jobs only install,
+  # which refreshes the npm caches that pull requests restore from main.
   node:
-    needs: discover
-    if: needs.discover.outputs.has_node == 'true'
+    needs: [discover, queue_evidence]
+    if: >-
+      !cancelled() && needs.discover.result == 'success' &&
+      needs.discover.outputs.has_node == 'true'
     name: node (${{ matrix.component.folder }})
     runs-on: ubuntu-24.04
     timeout-minutes: 10
@@ -331,13 +399,14 @@ jobs:
         working-directory: ${{ matrix.component.folder }}
         run: npm ci
       - name: Test ${{ matrix.component.folder }}
+        if: needs.queue_evidence.outputs.tested != 'true'
         working-directory: ${{ matrix.component.folder }}
         run: npm test
 
   check:
     name: check
     if: always()
-    needs: [discover, python, node, light_checks, cluster_worker, role_publication]
+    needs: [queue_evidence, discover, python, node, light_checks, cluster_worker, role_publication]
     permissions:
       contents: read
       actions: read
@@ -345,22 +414,22 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        if: needs.discover.outputs.has_python == 'true'
+        if: needs.discover.outputs.has_python == 'true' && needs.queue_evidence.outputs.tested != 'true'
         with:
           persist-credentials: false
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
-        if: always() && needs.discover.outputs.has_python == 'true'
+        if: always() && needs.discover.outputs.has_python == 'true' && needs.queue_evidence.outputs.tested != 'true'
         with:
           name: pytest-inventory
           path: ${{ runner.temp }}/inventory
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
-        if: always() && needs.discover.outputs.has_python == 'true'
+        if: always() && needs.discover.outputs.has_python == 'true' && needs.queue_evidence.outputs.tested != 'true'
         with:
           pattern: pytest-execution-*
           path: ${{ runner.temp }}/receipts
           merge-multiple: true
       - name: Verify every inventoried test started and finished exactly once
-        if: always() && needs.discover.outputs.has_python == 'true'
+        if: always() && needs.discover.outputs.has_python == 'true' && needs.queue_evidence.outputs.tested != 'true'
         env:
           PYTHON_MATRIX: ${{ needs.discover.outputs.python }}
         run: python3 scripts/components.py verify-execution "$RUNNER_TEMP/inventory" "$RUNNER_TEMP/receipts"
@@ -388,9 +457,28 @@ jobs:
           CLUSTER_MODE: ${{ needs.discover.outputs.cluster_mode }}
           ROLE_PUBLICATION_REQUIRED: ${{ needs.discover.outputs.role_publication }}
           ROLE_PUBLICATION_RESULT: ${{ needs.role_publication.result }}
+          DRAFT: ${{ github.event_name == 'pull_request' && github.event.pull_request.draft }}
+          QUEUE_TESTED: ${{ github.event_name == 'push' && needs.queue_evidence.outputs.tested == 'true' }}
         run: |
           set -euo pipefail
-          echo "discover=$DISCOVER_RESULT python=$PYTHON_RESULT node=$NODE_RESULT light=$LIGHT_RESULT cluster=$CLUSTER_RESULT role_publication=$ROLE_PUBLICATION_RESULT"
+          echo "discover=$DISCOVER_RESULT python=$PYTHON_RESULT node=$NODE_RESULT light=$LIGHT_RESULT cluster=$CLUSTER_RESULT role_publication=$ROLE_PUBLICATION_RESULT draft=$DRAFT queue_tested=$QUEUE_TESTED"
+          if [[ "$DRAFT" == true ]]; then
+            # A draft gets only the light checks; ready_for_review starts the full check.
+            [ "$LIGHT_RESULT" = success ]
+            for result in "$DISCOVER_RESULT" "$PYTHON_RESULT" "$NODE_RESULT" "$CLUSTER_RESULT" "$ROLE_PUBLICATION_RESULT"; do
+              [ "$result" = skipped ]
+            done
+            exit 0
+          fi
+          if [[ "$QUEUE_TESTED" == true ]]; then
+            # The merge queue passed this commit; only the cache refresh ran.
+            [ "$DISCOVER_RESULT" = success ]
+            case "$NODE_RESULT" in success|skipped) ;; *) exit 1 ;; esac
+            for result in "$LIGHT_RESULT" "$PYTHON_RESULT" "$CLUSTER_RESULT" "$ROLE_PUBLICATION_RESULT"; do
+              [ "$result" = skipped ]
+            done
+            exit 0
+          fi
           [ "$DISCOVER_RESULT" = "success" ]
           case "$PYTHON_RESULT" in success|skipped) ;; *) exit 1 ;; esac
           case "$NODE_RESULT" in success|skipped) ;; *) exit 1 ;; esac

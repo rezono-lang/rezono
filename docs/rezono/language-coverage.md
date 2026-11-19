@@ -9,28 +9,28 @@ Native conversion requires reader, form, IR, signature and publication evidence.
 
 | Feature | Files | Reader and lowering |
 | --- | ---: | --- |
-| relational-rule | 80 | Supported ([reader](../../rezono/test/test_relational_rule_block.py), [lowering](../../compiler/tests/rezono/test_rule_witness.py)) |
-| kind | 58 | Supported ([reader](../../rezono/test/module-json.test.ts), [lowering](../../compiler/tests/test_rezono_module.py)) |
-| schema-metadata | 56 | Pending ([reader](../../rezono/test/test_schema_metadata.py), [reader](../../rezono/test/test_schema_mappings.py), [lowering](../../compiler/tests/rezono/test_lower_schema_metadata.py), [lowering](../../compiler/tests/rezono/test_lower_schema_mappings.py), [lowering](../../compiler/tests/rezono/test_lower_schema_annotations.py)) |
-| slot | 54 | Supported ([reader](../../rezono/test/module-json.test.ts), [lowering](../../compiler/tests/test_rezono_module.py)) |
+| relational-rule | 85 | Supported ([reader](../../rezono/test/test_relational_rule_block.py), [lowering](../../compiler/tests/rezono/test_rule_witness.py)) |
+| kind | 62 | Supported ([reader](../../rezono/test/module-json.test.ts), [lowering](../../compiler/tests/test_rezono_module.py)) |
+| schema-metadata | 60 | Pending ([reader](../../rezono/test/test_schema_metadata.py), [reader](../../rezono/test/test_schema_mappings.py), [lowering](../../compiler/tests/rezono/test_lower_schema_metadata.py), [lowering](../../compiler/tests/rezono/test_lower_schema_mappings.py), [lowering](../../compiler/tests/rezono/test_lower_schema_annotations.py)) |
+| slot | 58 | Supported ([reader](../../rezono/test/module-json.test.ts), [lowering](../../compiler/tests/test_rezono_module.py)) |
 | fact-table | 44 | Pending ([reader](../../rezono/test/module-json.test.ts), [lowering](../../compiler/tests/rezono/test_lower_fact_table.py)) |
 | named-dataset | 43 | Supported ([reader](../../rezono/test/test_named_dataset.py), [lowering](../../compiler/tests/rezono/test_named_dataset_discovery.py)) |
-| reference | 36 | Supported ([reader](../../rezono/test/module-json.test.ts), [lowering](../../compiler/tests/test_rezono_module.py)) |
-| extended-scalar | 33 | Pending ([reader](../../rezono/test/module-json.test.ts), [lowering](../../compiler/tests/rezono/test_lower_extended_scalar.py)) |
-| enum | 29 | Supported ([reader](../../rezono/test/module-json.test.ts), [lowering](../../compiler/tests/test_rezono_module.py)) |
-| optional-slot | 26 | Supported ([reader](../../rezono/test/module-json.test.ts), [lowering](../../compiler/tests/test_rezono_module.py)) |
-| numeric-limit | 23 | Supported ([reader](../../rezono/test/test_numeric_limits.py), [lowering](../../compiler/tests/rezono/test_lower_numeric_limits.py)) |
+| reference | 39 | Supported ([reader](../../rezono/test/module-json.test.ts), [lowering](../../compiler/tests/test_rezono_module.py)) |
+| extended-scalar | 35 | Pending ([reader](../../rezono/test/module-json.test.ts), [lowering](../../compiler/tests/rezono/test_lower_extended_scalar.py)) |
+| enum | 31 | Supported ([reader](../../rezono/test/module-json.test.ts), [lowering](../../compiler/tests/test_rezono_module.py)) |
+| optional-slot | 28 | Supported ([reader](../../rezono/test/module-json.test.ts), [lowering](../../compiler/tests/test_rezono_module.py)) |
+| numeric-limit | 25 | Supported ([reader](../../rezono/test/test_numeric_limits.py), [lowering](../../compiler/tests/rezono/test_lower_numeric_limits.py)) |
 | fact-provenance | 13 | Pending ([reader](../../rezono/test/test_fact_provenance.py), [lowering](../../compiler/tests/rezono/test_lower_fact_provenance.py)) |
+| repeated-slot | 12 | Supported ([reader](../../rezono/test/module-json.test.ts), [lowering](../../compiler/tests/test_rezono_module.py)) |
+| enum-metadata | 11 | Supported ([reader](../../rezono/test/test_schema_metadata.py), [lowering](../../compiler/tests/rezono/test_lower_enum_metadata.py)) |
 | conditional-check | 10 | Supported ([reader](../../rezono/test/test_conditional_check.py), [lowering](../../compiler/tests/rezono/test_lower_conditional_check.py)) |
-| enum-metadata | 9 | Supported ([reader](../../rezono/test/test_schema_metadata.py), [lowering](../../compiler/tests/rezono/test_lower_enum_metadata.py)) |
-| repeated-slot | 9 | Supported ([reader](../../rezono/test/module-json.test.ts), [lowering](../../compiler/tests/test_rezono_module.py)) |
-| parent-kind | 8 | Supported ([reader](../../rezono/test/test_parent_kind.py), [lowering](../../compiler/tests/rezono/test_lower_parent_kind.py)) |
+| parent-kind | 10 | Supported ([reader](../../rezono/test/test_parent_kind.py), [lowering](../../compiler/tests/rezono/test_lower_parent_kind.py)) |
 | scalar-alias | 8 | Supported ([reader](../../rezono/test/test_scalar_alias.py), [lowering](../../compiler/tests/rezono/test_lower_scalar_alias.py)) |
 | slot-pattern | 8 | Supported ([reader](../../rezono/test/test_slot_pattern.py), [lowering](../../compiler/tests/rezono/test_lower_slot_pattern.py)) |
 | structured-fact | 7 | Pending ([reader](../../rezono/test/test_structured_fact.py), [lowering](../../compiler/tests/rezono/test_structured_library_dataset.py)) |
 | abstract-kind | 6 | Supported ([reader](../../rezono/test/test_abstract_kind.py), [lowering](../../compiler/tests/rezono/test_lower_abstract_kind.py)) |
+| open-world | 5 | Pending ([reader](../../rezono/test/module-json.test.ts), [lowering](../../compiler/tests/rezono/test_lower_open_world.py)) |
 | calculation | 4 | Pending ([reader](../../rezono/test/test_calculation.py), [lowering](../../compiler/tests/rezono/test_lower_calculation.py)) |
-| open-world | 4 | Pending ([reader](../../rezono/test/module-json.test.ts), [lowering](../../compiler/tests/rezono/test_lower_open_world.py)) |
 | time-policy | 4 | Pending ([reader](../../rezono/test/module-json.test.ts), [reader](../../rezono/test/test_time_policy.py), [lowering](../../compiler/tests/rezono/test_lower_time_policy.py)) |
 | composite-key | 3 | Supported ([reader](../../rezono/test/test_composite_key.py), [lowering](../../compiler/tests/rezono/test_lower_composite_key.py)) |
 | rule-metadata | 3 | Supported ([reader](../../rezono/test/test_rule_metadata.py), [lowering](../../compiler/tests/rezono/test_lower_rule_metadata.py)) |
@@ -72,13 +72,14 @@ Native conversion requires reader, form, IR, signature and publication evidence.
 | run/packs/cleanup-deadline | enum, extended-scalar, kind, optional-slot, relational-rule, schema-metadata, slot | — | extended-scalar, schema-metadata | Pending: extended-scalar, schema-metadata | Pending: extended-scalar, native-rule-publication-parity, schema-metadata |
 | run/packs/dispatch | enum, extended-scalar, kind, numeric-limit, optional-slot, reference, relational-rule, scalar-alias, schema-metadata, slot | — | extended-scalar, schema-metadata | Pending: extended-scalar, schema-metadata | Pending: extended-scalar, native-rule-publication-parity, schema-metadata |
 | run/packs/exact-quote | enum, extended-scalar, kind, numeric-limit, reference, relational-rule, slot | — | extended-scalar | Pending: extended-scalar | Pending: extended-scalar, native-rule-publication-parity |
-| run/packs/invoice-drift | enum, extended-scalar, kind, numeric-limit, optional-slot, relational-rule, scalar-alias, schema-metadata, slot | — | extended-scalar, schema-metadata | Pending: extended-scalar, schema-metadata | Pending: extended-scalar, native-rule-publication-parity, schema-metadata |
-| run/packs/offer-selection | enum, extended-scalar, fact-table, kind, named-dataset, numeric-limit, optional-slot, reference, relational-rule, schema-metadata, slot | — | extended-scalar, fact-table, schema-metadata | Pending: extended-scalar, fact-table, schema-metadata | Pending: extended-scalar, fact-table, native-rule-publication-parity, schema-metadata |
+| run/packs/invoice-drift | enum, extended-scalar, kind, numeric-limit, open-world, optional-slot, parent-kind, reference, relational-rule, repeated-slot, scalar-alias, schema-metadata, slot | abstract-kind, composite-key, conditional-check, enum, enum-metadata, extended-scalar, kind, numeric-limit, open-world, optional-slot, reference, relational-rule, relationship-kind, repeated-slot, rule-metadata, schema-metadata, slot | extended-scalar, open-world, relationship-kind, schema-metadata | Pending: extended-scalar, open-world, relationship-kind, schema-metadata | Pending: extended-scalar, native-rule-publication-parity, open-world, relationship-kind, schema-metadata |
+| run/packs/offer-selection | enum, enum-metadata, extended-scalar, fact-table, kind, named-dataset, numeric-limit, optional-slot, reference, relational-rule, repeated-slot, schema-metadata, slot | — | extended-scalar, fact-table, schema-metadata | Pending: extended-scalar, fact-table, schema-metadata | Pending: extended-scalar, fact-table, native-rule-publication-parity, schema-metadata |
+| run/packs/probe-profiles | enum, enum-metadata, extended-scalar, kind, numeric-limit, optional-slot, parent-kind, reference, relational-rule, repeated-slot, schema-metadata, slot | abstract-kind, composite-key, conditional-check, enum, enum-metadata, extended-scalar, kind, numeric-limit, open-world, optional-slot, reference, relational-rule, relationship-kind, repeated-slot, schema-metadata, slot | extended-scalar, open-world, relationship-kind, schema-metadata | Pending: extended-scalar, open-world, relationship-kind, schema-metadata | Pending: extended-scalar, native-rule-publication-parity, open-world, relationship-kind, schema-metadata |
 
 ## Native rules in module form 3
 
 The expression syntax and migration are specified in the language decision. [Native rules decision](../../decisions/language-native-rules.md)
-The rule census includes 80 distinct source files, with 80 using Datalog or interim pipes and 0 using native rules.
+The rule census includes 85 distinct source files, with 85 using Datalog or interim pipes and 0 using native rules.
 A mixed file counts once in the total and in each spelling it uses.
 Native reader, form and IR proof gate: **Supported** ([reader](../../rezono/test/test_native_rule_reader_roundtrip.py), [form](../../compiler/tests/rezono/test_native_rule_form_contract.py), [IR and witness](../../compiler/tests/rezono/test_native_rule_ir_listed.py)).
 This gate covers initial integration. Whole-pack migration also requires [signature linking](../../compiler/tests/rezono/test_native_rule_signatures.py) and [publication parity](../../compiler/tests/rezono/test_native_rule_publication_parity.py).
@@ -89,7 +90,7 @@ No pack has a confirmed general state blocker in this census.
 
 | Pack or source directory | Direct legacy files | Direct native files | General state evidence |
 | --- | ---: | ---: | --- |
-| examples/platform | 38 | 0 | Unknown until legacy conversion |
+| examples/platform | 40 | 0 | Unknown until legacy conversion |
 | examples/platform/tenant-capacity/interface | 1 | 0 | Unknown until legacy conversion |
 | examples/subsidy | 4 | 0 | Unknown until legacy conversion |
 | examples/subsidy-scheme | 4 | 0 | Unknown until legacy conversion |
@@ -104,5 +105,6 @@ No pack has a confirmed general state blocker in this census.
 | run/packs/cleanup-deadline | 1 | 0 | Unknown until legacy conversion |
 | run/packs/dispatch | 1 | 0 | Unknown until legacy conversion |
 | run/packs/exact-quote | 1 | 0 | Unknown until legacy conversion |
-| run/packs/invoice-drift | 2 | 0 | Unknown until legacy conversion |
-| run/packs/offer-selection | 2 | 0 | Unknown until legacy conversion |
+| run/packs/invoice-drift | 3 | 0 | Unknown until legacy conversion |
+| run/packs/offer-selection | 3 | 0 | Unknown until legacy conversion |
+| run/packs/probe-profiles | 1 | 0 | Unknown until legacy conversion |

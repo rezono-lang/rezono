@@ -89,3 +89,107 @@ word_part: Signed machine-word operand
 word_part.floor: Proposed signed floor
 word_part.units: Minor units per billing unit
 word_step: One checked constant-division step
+
+activity_count: Activity count
+billed_line: Billed line
+billed_line_count: Billed line count
+billed_total: Billed total
+bound_line: Bound line
+bound_line_count: Bound line count
+bound_registry: Bound registry
+cap_basis: Cap basis
+cap_basis.billed: Billed
+cap_basis.rated: Rated
+ceiling_count: Ceiling count
+ceiling_match: Ceiling match
+deployed: Deployed
+deployed_count: Deployed count
+forecast_line: Forecast line
+forecast_line_count: Forecast line count
+forecast_total: Forecast total
+has_billed_line: Has billed line
+has_cap_result: Has cap result
+has_forecast_line: Has forecast line
+has_usage_charge: Has usage charge
+plan_hours: Plan hours
+plan_seconds: Plan seconds
+planned_line_count: Planned line count
+quote_count: Quote count
+quote_match: Quote match
+rated_total: Rated total
+reconciliation_activity: Reconciliation activity
+reconciliation_activity.resource: Resource
+reconciliation_activity.run: Run
+reconciliation_cap_overrun: Reconciliation cap overrun
+reconciliation_cap_result: Reconciliation cap result
+reconciliation_ceiling: Reconciliation ceiling
+reconciliation_ceiling.basis: Basis
+reconciliation_ceiling.currency: Currency
+reconciliation_ceiling.decision: Decision
+reconciliation_ceiling.minor: Minor
+reconciliation_ceiling.run: Run
+reconciliation_charge_terms: Reconciliation charge terms
+reconciliation_charge_terms.basis: Basis
+reconciliation_charge_terms.decision: Decision
+reconciliation_charge_terms.fee_minor: Fee minor
+reconciliation_charge_terms.run: Run
+reconciliation_charge_terms.unit: Unit
+reconciliation_deployment: Reconciliation deployment
+reconciliation_deployment.resource: Resource
+reconciliation_deployment.run: Run
+reconciliation_deployment.supplier_plan: Supplier plan
+reconciliation_deployment_difference: Reconciliation deployment difference
+reconciliation_duration: Reconciliation duration
+reconciliation_invoice_coverage: Reconciliation invoice coverage
+reconciliation_invoice_coverage.lines: Lines
+reconciliation_invoice_coverage.run: Run
+reconciliation_invoice_coverage.sha256: Sha256
+reconciliation_plan: Reconciliation plan
+reconciliation_plan.profile: Profile
+reconciliation_plan.reference_date: Reference date
+reconciliation_plan.sha256: Sha256
+reconciliation_plan.window: Window
+reconciliation_plan_difference: Reconciliation plan difference
+reconciliation_plan_window: Reconciliation plan window
+reconciliation_planned_line: Reconciliation planned line
+reconciliation_planned_line.plan: Plan
+reconciliation_planned_line.quantity: Quantity
+reconciliation_planned_line.slot: Slot
+reconciliation_planned_line.supplier_plan: Supplier plan
+reconciliation_quote: Reconciliation quote
+reconciliation_quote.currency: Currency
+reconciliation_quote.hourly_minor: Hourly minor
+reconciliation_quote.reference_date: Reference date
+reconciliation_quote.supplier_plan: Supplier plan
+reconciliation_rate_difference: Reconciliation rate difference
+reconciliation_registry: Reconciliation registry
+reconciliation_registry.captured_at: Captured at
+reconciliation_registry.plan_hash: Plan hash
+reconciliation_registry.run: Run
+reconciliation_registry.sha256: Sha256
+reconciliation_registry_coverage: Reconciliation registry coverage
+reconciliation_registry_coverage.registry: Registry
+reconciliation_registry_line: Reconciliation registry line
+reconciliation_registry_line.currency: Currency
+reconciliation_registry_line.hourly_minor: Hourly minor
+reconciliation_registry_line.quantity: Quantity
+reconciliation_registry_line.registry: Registry
+reconciliation_registry_line.resource: Resource
+reconciliation_registry_line.slot: Slot
+reconciliation_registry_line.supplier_plan: Supplier plan
+reconciliation_run: Reconciliation run
+reconciliation_run.plan: Plan
+reconciliation_run.profile: Profile
+reconciliation_run.window: Window
+reconciliation_run_coverage: Reconciliation run coverage
+reconciliation_run_coverage.run: Run
+reconciliation_run_window: Reconciliation run window
+reconciliation_status: Reconciliation status
+reconciliation_total: Reconciliation total
+reconciliation_usage_charge: Reconciliation usage charge
+registry_line_count: Registry line count
+registry_resource_line: Registry resource line
+run_activity: Run activity
+run_scope: Run scope
+run_seconds: Run seconds
+usage_charge_count: Usage charge count

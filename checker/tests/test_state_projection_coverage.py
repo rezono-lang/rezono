@@ -8,8 +8,6 @@ separately from the engine snapshots and witnesses supplied to the checker.
 import json
 from pathlib import Path
 
-import pytest
-
 from rezono_canon import sha256_hex
 from rezono_checker.access import check_role
 from rezono_checker.canon import encode_key
@@ -128,10 +126,6 @@ def check_scope(whole, partial):
                       instances=instances, witnesses=witnesses)
 
 
-@pytest.mark.xfail(
-    strict=True, raises=UnprovenProjectionAccepted,
-    reason="Replay the required state projection from independent same-cut Values and authorized role scope.",
-)
 def test_state_projection_rejects_omitted_row(tmp_path):
     case = json.loads(CASE.read_bytes())
     source = case["source"]

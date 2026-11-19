@@ -1,0 +1,43 @@
+# How one Pod is read as pod_image rows, and verified_image rows become publication images.
+# Format: decisions/k8s-admission-translator.md. Rule: decisions/k8s-admission-rules.md.
+format: rezono.admission-binding/1
+rule: verified-supply
+output: allow_image
+match:
+  - apiGroups: [""]
+    apiVersions: [v1]
+    operations: [CREATE, UPDATE]
+    resources: [pods]
+    scope: Namespaced
+  - apiGroups: [""]
+    apiVersions: [v1]
+    operations: [UPDATE]
+    resources: [pods/ephemeralcontainers]
+    scope: Namespaced
+request:
+  - relation: pod_image
+    each:
+      - {name: container, path: [object, spec, containers]}
+    columns:
+      namespace: {path: [request, namespace]}
+      service: {path: [object, metadata, labels, app.kubernetes.io/name]}
+      image: {path: [container, image]}
+  - relation: pod_image
+    each:
+      - {name: container, path: [object, spec, initContainers], optional: true}
+    columns:
+      namespace: {path: [request, namespace]}
+      service: {path: [object, metadata, labels, app.kubernetes.io/name]}
+      image: {path: [container, image]}
+  - relation: pod_image
+    each:
+      - {name: container, path: [object, spec, ephemeralContainers], optional: true}
+    columns:
+      namespace: {path: [request, namespace]}
+      service: {path: [object, metadata, labels, app.kubernetes.io/name]}
+      image: {path: [container, image]}
+parameters:
+  verified_image:
+    scope: namespace
+    lists:
+      - {field: images, columns: [service, image]}
