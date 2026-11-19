@@ -466,7 +466,6 @@ REFUSALS = {
     "extend": ([{"extend": "Beta", "derived": [BOOL]}], 15, "a derived value is not lowered yet"),
     "a fact table": ([{"fact": "Beta", "columns": ["id"], "rows": [[{"lit": "b"}]]}], 10, "a fact table is not lowered"),
     "a fact row": ([{"fact": "beta", "id": "b", "set": []}], 10, "a fact row is not lowered"),
-    "a unit": ([{"unit": "Gi", "is": "integer"}], 10, "a unit is not lowered yet"),
     "a rounding": ([{"rounding": "money", "mode": "half_even"}], 10, "a rounding is not lowered yet"),
     "a parameter": ([{"param": "p", "type": "Date"}], 10, "a parameter is not lowered yet"),
     "a check": ([{"check": "warn", "cond": {"lit": "true"}}], 10, "a check statement is not lowered yet"),

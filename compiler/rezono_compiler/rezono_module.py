@@ -24,7 +24,7 @@ from tempfile import TemporaryDirectory
 from typing import cast
 
 import yaml
-from . import rezono_alias, rezono_enum, rezono_extend, rezono_key, rezono_kind, rezono_metadata, rezono_slot
+from . import rezono_alias, rezono_enum, rezono_extend, rezono_key, rezono_kind, rezono_metadata, rezono_slot, rezono_unit
 from .native_literals import NATIVE_FORMAT, native_literal_errors
 from .schemaview import SchemaView
 from linkml_runtime.linkml_model import SchemaDefinition
@@ -41,7 +41,6 @@ DATASET_FORMAT = "rezono.module/2"
 PATH = re.compile(r"^rezono/[a-z][a-z0-9_]*(/[a-z][a-z0-9_]*)*\.(rezono|json)$")
 # Declarations this slice does not lower, by the member that names them: what, and where the page says so.
 REFUSED = {
-    "unit": ("a unit is not lowered yet", "§6"),
     "rounding": ("a rounding is not lowered yet", "§6"),
     "param": ("a parameter is not lowered yet", "§6"),
     "reason": ("a reason declaration is not lowered (no ticket yet)", "§6"),
@@ -378,7 +377,7 @@ def header_line(pack_dir: Path, d: Declared, word: str) -> int:
 
 
 def declaration_name(decl: dict) -> str | None:
-    name = decl.get("kind", decl.get("enum", decl.get("type") if "base" in decl else None))
+    name = decl.get("kind", decl.get("enum", decl.get("type") if "base" in decl else decl.get("unit")))
     return name if isinstance(name, str) else None
 
 
@@ -432,7 +431,7 @@ def lower(pack_dir: Path, d: Declared, form: dict, pack: str, owners: dict[str, 
     uses: set[str] = set()
     enums: dict[str, dict] = {}
     classes: dict[str, dict] = {}
-    aliases: dict[str, dict[str, str]] = {}
+    aliases: dict[str, dict] = {}
     for i, decl in enumerate(module["decls"]):
         at = f"/decls/{i}"
         if not isinstance(decl, dict):
@@ -486,6 +485,9 @@ def lower(pack_dir: Path, d: Declared, form: dict, pack: str, owners: dict[str, 
                 refuse(at, "a fact table is not lowered yet", "§5.3")
             else:
                 refuse(at, "a fact row is not lowered (no ticket yet)")
+        elif "unit" in decl:
+            if unit := rezono_unit.lower(decl, at, refuse):
+                aliases[decl["unit"]] = unit
         elif "type" in decl and "base" in decl:
             if not extended_format:
                 refuse(at, "a scalar alias requires rezono.module/2", "§5.1")

@@ -21,15 +21,6 @@ def legacy(tmp_path: Path) -> Path:
     return d
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=pack.CompileError,
-    reason="Lower a unit declaration to a LinkML type of whole numbers with the annotation the compiler reads for a "
-           "unit, in a new compiler/rezono_compiler/rezono_unit.py called from rezono_module.lower, and drop unit from "
-           "REFUSED there. Refuse the major-unit form money EUR at its line, naming the minor form. Read "
-           "decisions/language-units.md, section Lowering. Remove the case 'a unit' from REFUSALS in "
-           "compiler/tests/test_rezono_module.py, which this task may change. No reader dependency.",
-)
 def test_lower_units(tmp_path):
     expected = pack.read(legacy(tmp_path)).units
     assert expected["Cents"].currency == "EUR"
