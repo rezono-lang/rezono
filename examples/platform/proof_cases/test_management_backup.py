@@ -103,7 +103,7 @@ def test_management_restore_matches_copy(kind, changes):
 
 @pytest.mark.cluster
 @pytest.mark.xfail(strict=True, raises=AssertionError, reason=(
-    "Depends on the recorded disposable recovery cluster and test_management_restore_matches_copy. "
+    "M2: Depends on the recorded disposable recovery cluster and test_management_restore_matches_copy. "
     "Restore a fresh marker while management stays down per decisions/platform-management-backup.md."))
 def test_management_backup_restore_readback():
     from management_probes import live_events

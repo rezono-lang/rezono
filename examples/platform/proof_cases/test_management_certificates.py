@@ -50,7 +50,7 @@ def test_management_certificate_findings():
 
 @pytest.mark.cluster
 @pytest.mark.xfail(strict=True, raises=AssertionError, reason=(
-    "Depends on the disposable issuer, ordinary client TLS readback and test_management_certificate_findings. "
+    "M2: Depends on the disposable issuer, ordinary client TLS readback and test_management_certificate_findings. "
     "Record a real handshake before and after renewal per decisions/platform-management-certificates.md."))
 def test_management_certificate_renewal_readback():
     from management_probes import live_events
