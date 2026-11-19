@@ -264,6 +264,18 @@ function fromJson(schema: Schema, ty: Ty, json: unknown, cause: RowRef): V {
 	throw new TypeError(`${cause.relation} ${canonicalJson(cause.key)}: ${JSON.stringify(json)} is not a value of its slot`);
 }
 const relationOf = (kind: string, slot: string): string => `${snake(kind)}__${slot}`;
+/** Whether two values a row gives for one slot are the same value, or the same state with the same reason. */
+const sameValue = (a: V, b: V): boolean =>
+	a.s === 'known' && b.s === 'known' ? order(a.v, b.v) === 0 : a.s === b.s && (a as Stated).reason === (b as Stated).reason;
+/**
+ * What two rows of one element give together for a slot: the members of both for a set, and one value when they
+ * agree. Two different values of a single-valued slot are invalid, with no reason (§7, conflicting scalar rows).
+ */
+function merged(before: Cell, cell: Cell): Cell {
+	if (Array.isArray(before) && Array.isArray(cell)) return [...before, ...cell.filter((v) => !before.some((w) => sameValue(v, w)))];
+	if (!Array.isArray(before) && !Array.isArray(cell) && sameValue(before, cell)) return before;
+	return { s: 'invalid', reason: '' };
+}
 
 /**
  * Reads rows of Row JSON (`$kind`, `$id` and the slots) into what evaluation reads. A slot a row does not give
@@ -284,15 +296,19 @@ export function load(
 		const def = schema.kinds[kind];
 		// A kind the role's schema does not have is not the role's to read.
 		if (!def) continue;
-		const cells = new Map<string, Cell>();
+		if (!data.kinds.has(kind)) data.kinds.set(kind, new Map());
+		const elements = data.kinds.get(kind)!;
+		// Rows with the same id give values of one element: they are read together, not one over the other.
+		const cells = elements.get(id) ?? new Map<string, Cell>();
 		for (const [name, slot] of Object.entries(def.slots)) {
 			const json = row[name];
 			if (json === undefined || slot.inverse !== undefined) continue;
 			const one = (j: unknown) => fromJson(schema, slotType(schema, slot), j, { relation: relationOf(kind, name), key: [id] });
-			cells.set(name, Array.isArray(json) ? json.map(one) : one(json));
+			const cell = Array.isArray(json) ? json.map(one) : one(json);
+			const before = cells.get(name);
+			cells.set(name, before === undefined ? cell : merged(before, cell));
 		}
-		if (!data.kinds.has(kind)) data.kinds.set(kind, new Map());
-		data.kinds.get(kind)!.set(id, cells);
+		elements.set(id, cells);
 	}
 	for (const [rule, lists] of Object.entries(more.rules ?? {})) data.rules.set(rule, new Set(lists.map((ids) => canonicalJson(ids))));
 	for (const [rule, list] of Object.entries(more.outcomes ?? {})) {
