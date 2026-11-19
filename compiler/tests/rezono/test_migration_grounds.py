@@ -65,11 +65,6 @@ def rejection(baseline, trial):
     return str(caught.value)
 
 
-@pytest.mark.xfail(strict=True, raises=GroupScopeNotCompared, reason=(
-    "Make the semantic grounds comparator record the group scope (relation and fixed terms) of every "
-    "non-empty aggregate next to its contributor keys, in aggregate_grounds in "
-    "checker/rezono_checker/grounds.py; read decisions/language-expression-semantics.md section 4."
-))
 def test_migration_ground_union(tmp_path):
     baseline = build(tmp_path, "baseline")
     renamed = build(tmp_path, "renamed")
