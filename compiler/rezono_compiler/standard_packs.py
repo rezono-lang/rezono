@@ -8,6 +8,9 @@ pack means regenerating TABLE in the same change.
 from __future__ import annotations
 
 import sys
+from collections.abc import Iterator
+from contextlib import contextmanager
+from contextvars import ContextVar
 from pathlib import Path
 
 PREFIX = "std-"
@@ -17,12 +20,30 @@ TABLE: dict[str, str] = {
     "std-decision": "2fd4cc60cc4f1c7dca42da2f5368a08a992de39df7cd7db205b9118dd1b8fe5a",
     "std-explain": "72e2897cd9baaa4962cf2235f83a332262b4da1e6d34e82d5f64d8335e27be0b",
     "std-identity": "129e5321602dea3b58ea5220103c4d313237d0dbf5e640c677b24fc98e5d265b",
-    "std-loop": "18b53e82962bbff0b87a64550f469af774fddda23686a9122fc4132759219232",
+    "std-loop": "cf313a7022101bc880b13feef9cbfc04e62167233293d1964ae78c7977d3f295",
     "std-order": "4d119b21fa769b810dae065d4fc4ab5aaa1c2ada76b042052a4e4fcdd1031557",
     "std-part": "207f4f097f68e6dade792b714754e0f279ce2c948be8adce82108a3abc18cca9",
     "std-time": "bb2863a03792228005fa6784ed1022c07ac82139cdbf0ff7914cd273b3e046a7",
     "std-view": "5ba1203e936a3ed63cef58e6939bb2d5e519552cb5237afd019f8ee58e3599af",
 }
+
+# Candidate bytes admitted under a standard name while a converter compares them with that standard pack.
+_TRIALS: ContextVar[dict[str, str]] = ContextVar("standard_pack_trials", default={})
+
+
+@contextmanager
+def trial(name: str, digest: str) -> Iterator[None]:
+    """Admit `digest` under the standard name `name` within this block, for a conversion trial only.
+
+    A converted standard pack has new bytes before the table is regenerated with them. The converter
+    compiles it beside the standard pack to prove the meaning is unchanged; nothing outside the block
+    sees the candidate as standard.
+    """
+    token = _TRIALS.set({**_TRIALS.get(), name: digest})
+    try:
+        yield
+    finally:
+        _TRIALS.reset(token)
 
 
 def is_standard_name(name: str) -> bool:
@@ -35,7 +56,7 @@ def refusal(name: str, digest: str) -> str | None:
         return None
     if name not in TABLE:
         return f"{name} is not a standard pack: the name std-* is reserved for the standard packs"
-    if TABLE[name] != digest:
+    if TABLE[name] != digest and _TRIALS.get().get(name) != digest:
         return (f"{name} is reserved for the standard pack with hash {TABLE[name]}, "
                 f"but these files hash to {digest}")
     return None
