@@ -1,13 +1,13 @@
 """Decision tables of modules written in Rezono, lowered to rules (docs/rezono/publication.md §9.1).
 
-A derived value with `table unique` or `table first` under `extend K` lowers to the rules a rule file could state:
-a named outcome of K with one state for every element and the relation of its value; for `unique` also an invariant
-that two rows never apply to one element. The rules are written as the text of a rule file and `rules_dl.read` reads them as it
-reads `rules/*.dl`, so every check, engine, proof and oracle holds for them unchanged; each rule's origin is the
-module's file and the line of the part of the table it comes from. Nothing is evaluated here, and nothing is
-approximated: what this slice does not lower is refused at its line.
+A derived value with `table unique`, `table first` or `table collect` under `extend K` lowers to the rules a rule
+file could state: a named outcome of K with one state for every element and the relation of its value; for `unique`
+also an invariant that two rows never apply to one element. The rules are written as the text of a rule file and
+`rules_dl.read` reads them as it reads `rules/*.dl`, so every check, engine, proof and oracle holds for them
+unchanged; each rule's origin is the module's file and the line of the part of the table it comes from. Nothing is
+evaluated here, and nothing is approximated: what this slice does not lower is refused at its line.
 
-The meaning is that of docs/rezono/tables.md §3 for `unique` and `first`, over inputs that are slots of K:
+The meaning is that of docs/rezono/tables.md §3 for `unique`, `first` and `collect`, over inputs that are slots of K:
 
 - a cell is true when the input's value passes one of its tests, false when the input has a value that passes
   none, `n/a` when an optional input has no value, and unknown when a required one has none (publication.md §4);
@@ -18,7 +18,10 @@ The meaning is that of docs/rezono/tables.md §3 for `unique` and `first`, over 
   is `unknown no_row_applies`;
 - under `first` the first row that applies wins and two rows that apply are no conflict, so there is no invariant;
   an undecided row above it whose output differs holds the value at `unknown no_value`
-  (decisions/language-tables.md, "Lowering a first table").
+  (decisions/language-tables.md, "Lowering a first table");
+- under `collect` on a derived value `T*` the set is known for every element, the output of each row that applies
+  is a known member, and an output that only undecided rows give is a member whose membership is
+  `unknown no_value`, in `<k>_<d>_undecided_member` (decisions/language-tables.md, "Lowering a collect table").
 """
 
 from __future__ import annotations
@@ -100,7 +103,7 @@ def lower(pack, pack_dir: Path, d, form: dict, gen: Generated, errors: list[str]
 
 
 def table(pack, k: str, slots: dict, dv: dict, at: str, place, refuse, gen: Generated) -> None:
-    """One derived value with `table unique` or `table first` (rezono_extend refuses every other form), as rules."""
+    """One derived value with `table unique`, `first` or `collect` (rezono_extend refuses the others), as rules."""
     from .pack import snake
     from .rules_dl import SQL
 
@@ -151,6 +154,9 @@ def table(pack, k: str, slots: dict, dv: dict, at: str, place, refuse, gen: Gene
     unknown = [j for j, s in enumerate(inputs) if s.required and any(row[j] for row in cells)]
     first = t["table"] == "first"
     outs = [row["value"]["lit"] for row in t["rows"]]
+    if t["table"] == "collect":
+        collect(k, name, inputs, cells, unknown, outs, at, place, gen)
+        return
     # Under `first`: the undecided rows m above a row r with another output, which hold the value when r wins.
     can_open = {r for r, conds in enumerate(cells, 1) if any(conds[j] for j in unknown)}
     holds = [(m, r) for r in range(1, len(cells) + 1) for m in range(1, r)
@@ -220,6 +226,49 @@ def table(pack, k: str, slots: dict, dv: dict, at: str, place, refuse, gen: Gene
         gen.add(head, f'{name}(x, "unknown", "{NO_ROW_APPLIES}") :- {k}(x), !{name}_applies(x), !{name}_undecided(x).')
     else:
         gen.add(head, f'{name}(x, "unknown", "{NO_ROW_APPLIES}") :- {k}(x), !{name}_applies(x).')
+
+
+def collect(k: str, name: str, inputs: list, cells: list, unknown: list[int], outs: list[str], at: str, place,
+            gen: Generated) -> None:
+    """A `table collect` on a derived value `T*`: the set is known for every element, its known members are the
+    outputs of the rows that apply, and an output that only undecided rows give is a member whose membership is
+    `unknown no_value` (decisions/language-tables.md, "Lowering a collect table"). When no row tests an input that
+    can be unknown, no membership can be undecided and the relation of undecided members is not declared: a declared
+    relation needs a rule."""
+    head = place(at)
+    gen.add(head, f"// @outcome {k}")
+    gen.add(head, f".decl {name}({k}: symbol, state: symbol, reason: symbol)")
+    gen.add(head, f".decl {name}_value({k}: symbol, value: symbol)")
+    gen.add(head, f".decl {name}_row({k}: symbol, row: number)")
+    gen.add(head, f".decl {name}_cell({k}: symbol, row: number, column: number)")
+    if unknown:
+        gen.add(head, f".decl {name}_undecided_member({k}: symbol, value: symbol, state: symbol, reason: symbol)")
+        gen.add(head, f".decl {name}_has({k}: symbol, column: number)")
+        gen.add(head, f".decl {name}_missing({k}: symbol, column: number)")
+        gen.add(head, f".decl {name}_false({k}: symbol, row: number)")
+        gen.add(head, f".decl {name}_open({k}: symbol, row: number)")
+    for r, conds in enumerate(cells, 1):
+        rline = place(f"{at}/table/rows/{r - 1}")
+        tested = [j for j, alts in enumerate(conds) if alts]
+        for j in tested:
+            for c, here in conds[j]:
+                gen.add(place(here), f"{name}_cell(x, {r}, {j + 1}) :- {c}.")
+        body = ", ".join([f"{k}(x)"] + [f"{name}_cell(x, {r}, {j + 1})" for j in tested])
+        gen.add(rline, f"{name}_row(x, {r}) :- {body}.")
+        gen.add(rline, f'{name}_value(x, "{outs[r - 1]}") :- {name}_row(x, {r}).')
+        if unknown and any(j in unknown for j in tested):
+            for j in tested:
+                gen.add(rline, f"{name}_false(x, {r}) :- {inputs[j].table}(x, _), !{name}_cell(x, {r}, {j + 1}).")
+            for j in tested:
+                if j in unknown:
+                    gen.add(rline, f"{name}_open(x, {r}) :- {name}_missing(x, {j + 1}), !{name}_false(x, {r}).")
+            gen.add(rline, f'{name}_undecided_member(x, "{outs[r - 1]}", "unknown", "{NO_VALUE}") :- '
+                           f'{name}_open(x, {r}), !{name}_value(x, "{outs[r - 1]}").')
+    for j in unknown:
+        iline = place(f"{at}/table/inputs/{j}")
+        gen.add(iline, f"{name}_has(x, {j + 1}) :- {inputs[j].table}(x, _).")
+        gen.add(iline, f"{name}_missing(x, {j + 1}) :- {k}(x), !{name}_has(x, {j + 1}).")
+    gen.add(head, f'{name}(x, "known", "") :- {k}(x).')
 
 
 def condition(pack, s, test, at: str, refuse) -> str | None:

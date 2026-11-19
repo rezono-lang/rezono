@@ -43,8 +43,8 @@ jobs:
           [[ "$(git rev-parse FETCH_HEAD)" == "$HEAD" ]]
           base=$(git merge-base "$BASE" "$HEAD")
           # Labels are read live, not from the event, so the review sees the labels the pull
-          # request carries now. The guard needs the label p1-read-<first seven characters of
-          # the head> for a change to the checker or read access; a `labeled` event reruns it.
+          # request carries now. The guard needs the label p1-read-<full head commit id> for a
+          # change to the checker or read access; a `labeled` event reruns it.
           current_state() {
             gh api "repos/$GITHUB_REPOSITORY/pulls/$PR" \
               --jq '{sha: .head.sha, labels: [.labels[].name]} | tojson'

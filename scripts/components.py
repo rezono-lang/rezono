@@ -205,6 +205,10 @@ def affected_components(
             return list(components)
         selected.add(owner.folder)
         source = Path(path)
+        # What a pull request routes a file to as its reader runs in the queue as well.
+        selected.update(reader for reader in shared_readers(path) or () if reader in by_folder)
+        if source.suffix == ".dl" and "fixtures" not in source.parts and "compiler" in by_folder:
+            selected.add("compiler")
         manifest = ROOT / owner.folder / "pyproject.toml"
         if (owner.kind == "contracts" or source.name in {"pyproject.toml", "package.json", "conftest.py"}
                 or (manifest.exists() and not (owner.folder == "loop" and outside_cluster_plugin(source, manifest)))):
@@ -254,6 +258,11 @@ PR_FILE_CONSUMERS = {
     # examples/test_slip_claims.py draws the slip with the helpers of tests/slip (decisions/viewer-slip.md).
     "tests/slip": ("examples",),
 }
+# A pull request runs these components only when it changes them itself, a path it
+# changes is read by them, or the selection falls back to everything. As dependents
+# of another component they run in the merge queue (decisions/pr-deferred-dependents.md).
+# The empty set restores them as pull request dependents.
+PR_DEFERRED_DEPENDENTS = frozenset({"loop", "run"})
 # These are test entry points and a private subprocess helper, rather than inputs to
 # the installed packages. Their shared corpus is still routed by SHARED_READERS.
 PR_TEST_LEAVES = frozenset({
@@ -308,6 +317,16 @@ SHARED_READERS = {
     "edge/plugins/*/plugin.yaml": ("contracts",),
     "contracts/output-index.yaml": ("edge/publisher",),
     "viewer/src/lib/canon.ts": ("compiler", "edge/publisher", "rezono"),
+    # Directories of one component that another component's tests read as data.
+    # rezono/test/test_message_catalogue.py reads the compiler's sources for the codes they report.
+    "compiler/rezono_compiler/": ("rezono",),
+    "run/packs/": ("compiler",),
+    "contracts/fixtures/": ("edge/publisher", "examples"),
+    # compiler/tests/test_domain_free.py scans the readers' sources and tests for domain words.
+    "edge/gate/": ("compiler",),
+    "tests/slip/": ("compiler",),
+    "tools/mcp/": ("compiler",),
+    "tools/repl/": ("compiler",),
     # The build pack: the loop tests read its schema and rules, and the converter
     # regression parses every tracked Datalog file.
     "build/": ("compiler", "loop"),
@@ -495,6 +514,58 @@ def area_readers(root: Path, revisions: tuple[str, ...], path: str, folders: set
     return readers
 
 
+GENERIC_STEMS = frozenset({"__init__", "__main__", "conftest", "index", "package", "package-lock", "pyproject",
+                           "README", "setup"})
+
+
+def reference_patterns(path: str, owner: str | None) -> list[re.Pattern[str]]:
+    """How another file names a changed file: its file name, its module, or an import of it.
+
+    None of them for an entry point or a manifest, which nothing names this way."""
+    source = Path(path)
+    if source.stem in GENERIC_STEMS:
+        return []
+    stem = re.escape(source.stem)
+    patterns = [rf"(?<![\w.-]){re.escape(source.name)}\b", rf"/{stem}(?:\.\w+)?['\x22`]",
+                # The last segment of a joined path, as in ROOT / "loop" / "replay".
+                rf"/\s*['\x22]{stem}['\x22]"]
+    if source.suffix == ".py" and owner:
+        module = ".".join(Path(path[len(owner) + 1:]).with_suffix("").parts)
+        package, _, name = module.rpartition(".")
+        if package:
+            # A dotted module, or an import from its package on one line or in parentheses over several.
+            patterns += [rf"(?<!\w){re.escape(module)}\b",
+                         rf"\bfrom\s+{re.escape(package)}\s+import\s[^\n(]*\b{re.escape(name)}\b",
+                         rf"\bfrom\s+{re.escape(package)}\s+import\s*\([^)]*\b{re.escape(name)}\b"]
+        else:
+            patterns.append(rf"^\s*(?:from\s+{stem}\s+import\b|import\s+{stem}\b)")
+    return [re.compile(pattern, re.MULTILINE) for pattern in patterns]
+
+
+def names_file(root: Path, revisions: tuple[str, ...], path: str, owner: str | None, area: str) -> bool:
+    """Whether a file under area names the changed path, in either tree."""
+    patterns = reference_patterns(path, owner)
+    if not patterns:
+        return False
+    for revision in revisions:
+        for candidate in sorted(files_naming(root, revision, {Path(path).stem}, area)):
+            text = git_output(root, "show", f"{revision}:{candidate}").decode("utf-8", "replace")
+            if any(pattern.search(text) for pattern in patterns):
+                return True
+    return False
+
+
+def own_readers(path: str) -> set[str]:
+    """The shared readers of a file inside a component, apart from the pack readers of examples/."""
+    readers: set[str] = set()
+    for pattern, owners in SHARED_READERS.items():
+        if pattern == "examples/":
+            continue
+        if path.startswith(pattern) if pattern.endswith("/") else fnmatchcase(path, pattern):
+            readers.update(owners)
+    return readers
+
+
 def independent_test_file(root: Path, revisions: tuple[str, ...], path: str, owner: str, folders: set[str]) -> bool:
     """A test file that nothing outside its component names in either tree."""
     return all(independent_test_leaves(root, revision, {owner: [path]}, folders) for revision in revisions)
@@ -679,6 +750,8 @@ def pull_request_selection(components: list[Component], root: Path,
                     and not (owner == "loop" and not outside_cluster_plugin(source, root / "loop/pyproject.toml"))
                     and independent_test_file(root, revisions, path, owner, folders)):
                 add(direct, owner, path, ", a test file named only inside its component")
+                for reader in sorted(own_readers(path) & folders - {owner}):
+                    add(direct, reader, path, ", which it reads")
                 continue
             if readers is not None:
                 for reader in sorted(readers & folders):
@@ -724,17 +797,39 @@ def pull_request_selection(components: list[Component], root: Path,
                 edges.setdefault(source, set()).update(set(consumers) & folders)
     except (OSError, ValueError, AttributeError, KeyError, TypeError, subprocess.CalledProcessError) as error:
         return everything(f"the selection failed ({type(error).__name__})")
-    affected = set()
+    def names_a_change(folder: str) -> str | None:
+        """A changed file of another component that the deferred component names, in either tree."""
+        for path in changed:
+            owner = component_owner(path, folders)
+            if owner != folder and names_file(root, revisions, path, owner, folder + "/"):
+                return path
+        return None
+
+    # A deferred dependent is still traversed, so what depends on it runs. It runs
+    # itself when its files name a changed file: then it reads that file directly.
+    touched = direct | pending
+    affected, deferred = set(), set()
     queue = sorted(pending)
-    while queue:
-        folder = queue.pop(0)
-        if folder not in affected:
-            affected.add(folder)
+    try:
+        while queue:
+            folder = queue.pop(0)
+            if folder in affected or folder in deferred:
+                continue
+            if folder in PR_DEFERRED_DEPENDENTS and folder not in touched:
+                if (path := names_a_change(folder)) is not None:
+                    reasons[folder], origins[folder] = f"`{path}`, which it names", path
+                    affected.add(folder)
+                else:
+                    deferred.add(folder)
+            else:
+                affected.add(folder)
             for consumer in sorted(edges.get(folder, ())):
                 if consumer not in reasons:
                     reasons[consumer] = f"`{origins[folder]}` through `{folder}`"
                     origins[consumer] = origins[folder]
                 queue.append(consumer)
+    except (OSError, ValueError, subprocess.CalledProcessError) as error:
+        return everything(f"the selection failed ({type(error).__name__})")
     return [c for c in components if c.folder in direct | affected], reasons
 
 

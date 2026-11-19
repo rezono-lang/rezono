@@ -47,7 +47,8 @@ def workflow_cases():
     """The workflows that define required checks, and what they run to decide, need the label."""
     deciders = (".github/workflows/python-environment/action.yml", "loop/rezono_cluster.py",
                 "scripts/cluster_worker_tasks.py", "scripts/role_publication_ci.py",
-                "scripts/components.py")
+                "scripts/components.py", "scripts/fast_check.py", "loop/cluster/select_tests.py",
+                "scripts/red_list.py")
     for path in deciders:
         # Protected, yet still source: red_before.py runs added tests against the base copy.
         if not (protected(path) and source(path)):
@@ -70,7 +71,10 @@ def workflow_cases():
 def read_cases(function):
     """A change to the checker or read access needs the read label for its head commit."""
     head = "0123456789abcdef" * 2 + "01234567"
-    current, stale = "p1-read-0123456", "p1-read-fedcba9"
+    current, stale = "p1-read-" + head, "p1-read-" + "fedcba98" * 5
+    prefix = "p1-read-" + head[:7]
+    # Another commit that shares the first seven characters must not inherit the label.
+    twin = head[:7] + "f" * 33
     checker = [Change("checker/rezono_checker/proof.py", "M", None, None)]
     lifted = function.split(b"\n", 1)[1]
 
@@ -86,6 +90,12 @@ def read_cases(function):
     run("checker change labelled for an earlier commit", checker, ["planner", stale], True)
     run("checker change labelled for its head commit", checker, ["planner", current], False)
     run("checker change with a read label but a malformed head", checker, [current], True, at=head[:7])
+    run("checker change labelled with only the prefix of its head", checker, ["planner", prefix], True)
+    run("checker change at another commit with the same prefix", checker, ["planner", current], True,
+        at=twin)
+    canon = [Change("canon/rezono_canon/__init__.py", "M", None, None)]
+    run("canonical encoding change without a label", canon, ["planner"], True)
+    run("canonical encoding change labelled for its head commit", canon, ["planner", current], False)
     run("only marks lifted in tests under the read paths", [
         Change("checker/rezono_checker/tests/test_proof.py", "M", function, lifted),
         Change("packs/std-access/tests/test_access.py", "M", function, lifted),
@@ -96,10 +106,17 @@ def read_cases(function):
     ], ["planner"], False)
     for path in ("checker/rezono_checker/proof.py", "packs/std-access/rules/access.dl",
                  "edge/gate/src/ask.ts", "edge/publisher/rezono_publisher/access.py",
-                 "contracts/proof.yaml", "checker/rezono_checker/fixtures.py"):
+                 "contracts/proof.yaml", "checker/rezono_checker/fixtures.py",
+                 *(f"edge/publisher/rezono_publisher/{name}.py" for name in (
+                     "calc_scope", "sources", "sweep", "difference", "batch", "publish", "proof", "views"))):
         for status in ("M", "A", "D"):
             run(f"{status} {path} without a read label", [Change(path, status, None, None)],
                 ["planner"], True)
+    sweep = [Change("edge/publisher/rezono_publisher/sweep.py", "M", None, None)]
+    run("sweep change in the publisher with only the planner label", sweep, ["planner"], True)
+    run("sweep change in the publisher labelled for its head commit", sweep, ["planner", current], False)
+    run("other publisher change without a read label",
+        [Change("edge/publisher/rezono_publisher/store.py", "M", None, None)], [], False, planner=False)
     run("other contracts change without a read label",
         [Change("contracts/facts.yaml", "M", None, None)], [], False, planner=False)
     errors, _ = review(checker, planner=True)

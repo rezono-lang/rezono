@@ -20,16 +20,17 @@ type Declaration = { rule: string; locals?: Column[]; when?: Expression } &
  * the places that explain partiality.
  */
 export interface PredicateSummary {
-	relation?: string;
-	owner?: string;
+	relation: string;
+	owner: string;
 	states: readonly string[];
 	related?: readonly Place[];
 }
 
+// A derived relation names the owner it was linked for, so its predicate summary can be matched against it.
 type Signature = {
-	columns: Column[]; world: World; role: 'input' | 'derived'; absence?: true; owner?: string;
+	columns: Column[]; world: World; absence?: true;
 	predicate?: PredicateSummary;
-};
+} & ({ role: 'input'; owner?: string } | { role: 'derived'; owner: string });
 
 export interface NativeRuleEnvironment {
 	schema: Schema;
@@ -235,16 +236,17 @@ class ClauseCheck {
 
 	// A negation or group needs a decided answer. A derived predicate that can be undecided is refused, and so
 	// is one without linked states, because nothing then proves it two-valued. A summary linked for another
-	// relation or owner proves nothing about this one, so it is refused without explaining places.
+	// relation or owner proves nothing about this one, and neither does one that leaves out its relation or owner
+	// or whose signature leaves out its owner, so each is refused without explaining places.
 	private requireTotal(name: string, signature: Signature, at: string): void {
 		const { predicate } = signature;
 		if (!predicate) {
 			if (signature.role === 'derived') throw new RuleFault('R047', at, [name]);
 			return;
 		}
-		const otherRelation = predicate.relation !== undefined && predicate.relation !== name;
-		const otherOwner = signature.owner !== undefined && predicate.owner !== signature.owner;
-		if (otherRelation || otherOwner) throw new RuleFault('R047', at, [name]);
+		const linked = predicate.relation === name && signature.owner !== undefined
+			&& predicate.owner === signature.owner;
+		if (!linked) throw new RuleFault('R047', at, [name]);
 		if (predicate.states.every(state => state === 'known')) return;
 		throw new RuleFault('R047', at, [name], predicate.related ?? []);
 	}

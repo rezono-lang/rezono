@@ -115,6 +115,10 @@ export function print(q: Question): string {
 	if (isCheck(q)) return `${q.check} ${q.name !== undefined ? `${q.name}: ` : ''}${whole(q.cond)}`;
 	if ('set' in q) return `+ ${q.set[0].path.join('.')} = ${expr(q.set[1], UNARY, true)}`;
 	if ('retract' in q) return `- ${q.retract.path.join('.')}`;
+	if ('insert_row' in q) {
+		const { kind, key, slots } = q.insert_row;
+		return `+ ${kind} ${key} {${slots.map((s) => `${s.name} = ${whole(s.value)}`).join(', ')}}`;
+	}
 	return `- ${q.retract_row[0]} ${q.retract_row[1]}`;
 }
 

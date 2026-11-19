@@ -18,16 +18,6 @@ class MissingSupposeInsertRow(AssertionError):
     """The question reader did not read or print a whole-record insertion as the decision gives it."""
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=MissingSupposeInsertRow,
-    reason="extra: decisions/language-safe-steps.md: Read `+ Kind key {slot = value, ...}` as a suppose line "
-           "{insert_row: {kind, key, slots: [{name, value}]}} in the Suppose rule of rezono/src/grammar.ts and "
-           "rezono/src/parse.ts, add it to the Suppose type of rezono/src/tree.ts, and print it in "
-           "rezono/src/print-expression.ts with one space around each = and after each comma, the fields in "
-           "authored order. Read section 1, Insert a complete record with suppose. Checking it against the schema "
-           "and applying it are not part of this test.",
-)
 def test_suppose_insert_row():
     # Counter-case: the existing suppose forms keep their trees, before and after.
     kept = read_questions("- Policy policy-a", '+ policy-a.mode = "audit"', "- policy-a.mode")

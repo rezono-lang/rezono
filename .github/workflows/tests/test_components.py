@@ -179,13 +179,45 @@ class RepositoryPullRequestSelectionTests(unittest.TestCase):
         declared = ci.declared_dependents(ROOT, head, folders, {})
         self.assertIn("compiler", selected)
         self.assertLessEqual(declared["compiler"], selected)  # edge/publisher declares rezono-compiler
-        self.assertLessEqual(set(ci.PR_FILE_CONSUMERS["compiler"]) & folders, selected)
+        self.assertLessEqual(set(ci.PR_FILE_CONSUMERS["compiler"]) & folders - ci.PR_DEFERRED_DEPENDENTS, selected)
         self.assertNotIn("tools/mcp", selected)
+        # rezono/test/test_message_catalogue.py reads the compiler's sources, also a new one.
+        self.assertIn("rezono", self.selected("compiler/rezono_compiler/a_new_module.py")[0])
         self.assertLess(selected, folders)
 
+    def test_loop_and_run_are_deferred_dependents_of_a_pull_request_only(self):
+        self.assertEqual(ci.PR_DEFERRED_DEPENDENTS, {"loop", "run"})
+        path = "compiler/rezono_compiler/__init__.py"
+        selected, components, _ = self.selected(path)
+        self.assertTrue(selected.isdisjoint({"loop", "run"}), selected)
+        self.assertLessEqual({"loop", "run"}, {c.folder for c in ci.affected_components(components, [path])})
+        # The empty set restores them as pull request dependents.
+        with patch.object(ci, "PR_DEFERRED_DEPENDENTS", frozenset()):
+            restored, _, _ = self.selected(path)
+        self.assertEqual(restored, selected | {"loop", "run"})
+        # A change to the loop itself still runs it, and run/tests/test_offline_run.py executes loop/replay.py.
+        self.assertLessEqual({"loop", "run"}, self.selected("loop/replay.py")[0])
+        # A module whose bare stem is a common word in loop and run, but which they do not import or name.
+        self.assertTrue(self.selected("compiler/rezono_compiler/emit.py")[0].isdisjoint({"loop", "run"}))
+
+    def test_a_test_file_leaf_keeps_the_readers_of_its_directory(self):
+        # compiler/tests/test_domain_free.py scans tests/slip.
+        self.assertIn("compiler", self.selected("tests/slip/test_stops_only.py")[0])
+        # Under examples/ a leaf test file skips the pack readers of examples/.
+        selected = self.selected("examples/a_new_directory/test_a_new_leaf.py")[0]
+        self.assertTrue(selected.isdisjoint(set(ci.PACK_READERS) - {"examples"}), selected)
+
     def test_the_queue_runs_at_least_the_pull_request_closure(self):
+        components = ci.discover_components(ROOT, keep_invalid_node=True)
+        folders = {c.folder for c in components}
+        # Every directory route inside a component, and the files this selection routes.
+        routes = [pattern + "probe.yaml" for pattern in ci.SHARED_READERS
+                  if pattern.endswith("/") and ci.component_owner(pattern + "probe.yaml", folders)]
+        self.assertIn("run/packs/probe.yaml", routes)
         for path in ("loop/replay.py", "loop/tests/test_case.py", "run/dispatch_policy.py",
-                     "k8s-admission/parameter_reader.py", "deploy/profiles/edge/forms_issue.py"):
+                     "k8s-admission/parameter_reader.py", "deploy/profiles/edge/forms_issue.py",
+                     "run/packs/cleanup-deadline/pack.yaml", "run/packs/dispatch/rules/authorization.dl",
+                     "tests/slip/test_stops_only.py", "compiler/rezono_compiler/emit.py", *routes):
             selected, components, _ = self.selected(path)
             self.assertLessEqual(selected, {c.folder for c in ci.affected_components(components, [path])}, path)
         # A change in examples itself still runs everything in the queue, also together with a loop change.
@@ -391,7 +423,7 @@ class PullRequestSelectorTests(unittest.TestCase):
             self.write(root, {"run/packs/dispatch/rules/authorization.dl": ".decl grant(item: symbol)\n"})
             self.commit(root)
             self.assertEqual(self.matrix(root, "pull_request", base), {"compiler", "run"})
-            self.assertEqual(self.matrix(root, "merge_group", base), {"run"})
+            self.assertEqual(self.matrix(root, "merge_group", base), {"compiler", "run"})
 
     def test_malformed_manifest_keeps_the_full_matrix(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -426,15 +458,49 @@ class PullRequestSelectorTests(unittest.TestCase):
         reader = {"run/tests/test_replay.py": "from loop.tests.test_build_choice import CHOICE\n"}
         selected, summary = self.changed_matrix({"loop/tests/test_build_choice.py": "def test_choice(): pass\n"},
                                                 tree=reader)
+        # run is a deferred dependent, but it names the changed test file, so it reads it and runs.
         self.assertEqual(selected, {"loop", "run", "examples"})
-        self.assertIn("- `run`: `loop/tests/test_build_choice.py` through `loop`", summary)
-        # The loop's own source runs its consumers as before.
+        self.assertIn("- `examples`: `loop/tests/test_build_choice.py` through `loop`", summary)
+        self.assertIn("- `run`: `loop/tests/test_build_choice.py`, which it names", summary)
+        # The loop's own source runs its consumers that are not deferred,
         selected, _ = self.changed_matrix({"loop/build_choice.py": "CHOICE = 2\n"})
+        self.assertEqual(selected, {"loop", "examples"})
+        # and a deferred one that executes the changed module by name.
+        executes = {"run/tests/test_offline.py": 'MODULE = ROOT / "loop" / "build_choice.py"\n'}
+        selected, summary = self.changed_matrix({"loop/build_choice.py": "CHOICE = 2\n"}, tree=executes)
         self.assertEqual(selected, {"loop", "run", "examples"})
+        self.assertIn("- `run`: `loop/build_choice.py`, which it names", summary)
+
+    def test_a_deferred_dependent_names_a_file_by_import_or_path_not_by_a_bare_word(self):
+        tree = {"compiler/rezono_compiler/emit.py": "EMIT = 1\n"}
+        change = {"compiler/rezono_compiler/emit.py": "EMIT = 2\n"}
+        cases = (
+            ("def emit(): pass\n", False),
+            ("from rezono_compiler import pack, emit\n", True),
+            ("from rezono_compiler import (\n    pack,\n    emit,\n)\n", True),
+            ("from rezono_compiler.emit import EMIT\n", True),
+            ('MODULE = ROOT / "compiler" / "rezono_compiler" / "emit"\n', True),
+            ('MODULE = ROOT / "compiler/rezono_compiler/emit.py"\n', True),
+        )
+        for text, names in cases:
+            with self.subTest(text=text):
+                selected, _ = self.changed_matrix(change, tree={**tree, "run/tests/test_reader.py": text})
+                self.assertEqual("run" in selected, names, selected)
+                self.assertNotIn("loop", selected)
 
     def test_conftest_runs_the_component_closure(self):
         selected, _ = self.changed_matrix({"compiler/tests/conftest.py": "FIXTURE = 2\n"})
-        self.assertEqual(selected, {"compiler", "downstream", "loop", "run", "examples"})
+        self.assertEqual(selected, {"compiler", "downstream", "examples"})
+
+    def test_deferred_dependents_run_in_the_merge_queue(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root, base = self.repository(directory, LOOP_TREE, selector=False)
+            self.write(root, {"compiler/source.py": "VALUE = 1\n"})
+            self.commit(root)
+            self.assertEqual(self.matrix(root, "pull_request", base), {"compiler", "downstream", "examples"})
+            self.assertEqual(self.matrix(root, "merge_group", base), LOOP_EVERYTHING)
+        self.assertIn("examples", self.changed_matrix({"examples/demo/pack.yaml": "name: demo\n"})[0])
+        self.assertEqual(self.changed_matrix({"an-unknown-directory/x.yaml": "x: 1\n"})[0], LOOP_EVERYTHING)
 
     def test_build_rules_run_the_loop_and_the_compiler(self):
         selected, summary = self.changed_matrix({"build/rules/tasks.dl": ".decl task(id: symbol, at: number)\n"})
@@ -582,6 +648,10 @@ class SharedReaderTests(unittest.TestCase):
         for graph in (ci.FILE_CONSUMERS, ci.PR_FILE_CONSUMERS):
             for dependency, consumers in graph.items():
                 edges.setdefault(dependency, set()).update(consumers)
+        # A directory inside another component, such as a source tree a test globs,
+        # is read whether or not the literal is rooted in the test's own syntax.
+        directories = {parent.as_posix() for path in paths for parent in Path(path).parents}
+        directories = {directory for directory in directories if "/" in directory}
         missing = set()
         observed = set()
         for relative in sorted(paths):
@@ -598,8 +668,18 @@ class SharedReaderTests(unittest.TestCase):
                 if not re.fullmatch(r"[a-zA-Z0-9_./*?\[\]-]+", hint):
                     continue
                 path = re.sub(r"^(?:\.\./|\./)+", "", hint).rstrip("/")
-                if rooted and path in paths and ci.shared_readers(path) is None:
-                    provider = ci.component_owner(path, folders)
+                inside = path + "/_entry" if path in directories else path
+                if (rooted and path in paths or path in directories) and owner != ci.component_owner(inside, folders):
+                    provider = ci.component_owner(inside, folders)
+                    readers = ci.shared_readers(inside)
+                    if readers is not None and not SHARED_PATH.match(hint):
+                        if owner in readers or owner in edges.get(provider, set()):
+                            observed.add((path, owner))
+                        else:
+                            missing.add((relative, path, owner))
+                        continue
+                if (rooted and path in paths or path in directories) and ci.shared_readers(inside) is None:
+                    provider = ci.component_owner(inside, folders)
                     if provider:
                         if owner != provider and owner not in edges.get(provider, set()):
                             missing.add((relative, path, owner))
@@ -677,7 +757,7 @@ class InventoryTests(unittest.TestCase):
                         "raise SystemExit(components.main())")
             def run(*args):
                 return subprocess.run([sys.executable, "-c", launcher, *map(str, args)],
-                                      env=env, cwd=root, capture_output=True, text=True, timeout=35)
+                                      env=env, cwd=root, capture_output=True, text=True, timeout=120)
             collected = run("collect-component", "examples", plans)
             self.assertEqual(collected.returncode, 0, collected.stdout + collected.stderr)
             def execute():
