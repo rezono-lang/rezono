@@ -37,6 +37,21 @@ def main():
             raise AssertionError(f"{label}: expected {expected}, got {actual}")
         print(f"{'ALLOW' if actual else 'DENY'} without planner: {label}")
     planner_cases(reason, function)
+    workflow_cases()
+
+
+def workflow_cases():
+    """The workflows that define required checks need the planner label to change."""
+    for path in (".github/workflows/ci.yml", ".github/workflows/disposable-cluster.yml"):
+        for status, after in (("M", b"jobs: {}\n"), ("D", None)):
+            change = Change(path, status, b"jobs: {check: {}}\n", after)
+            errors, notes = review([change], planner=False)
+            if errors != [f"ERROR planner label required for {ascii(path)}"]:
+                raise AssertionError(f"{status} {path} without planner: errors {errors}")
+            errors, notes = review([change], planner=True)
+            if errors or (path.endswith("ci.yml") and f"CHANGED {path}" not in notes):
+                raise AssertionError(f"{status} {path} with planner: errors {errors}, notes {notes}")
+            print(f"DENY without planner, ALLOW with planner: {status} {path}")
 
 
 def planner_cases(reason, function):

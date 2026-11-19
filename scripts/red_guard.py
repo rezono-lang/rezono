@@ -15,8 +15,12 @@ import sys
 import tokenize
 
 
+# The merge queue runs a candidate's own workflow files, so the workflows that define the
+# required checks (`check` and `Light checks` in ci.yml, and the reusable cluster workflow
+# that `check` aggregates) are policy as much as the guard that reviews them.
 POLICY = {
     ".github/workflows/red-policy.yml",
+    ".github/workflows/ci.yml", ".github/workflows/disposable-cluster.yml",
     ".github/workflows/resume-feldera-review.yml", "scripts/feldera_admission.py",
     "scripts/red_guard.py", "scripts/test_red_guard.py",
     "scripts/red_before.py", "scripts/test_red_before.py",
