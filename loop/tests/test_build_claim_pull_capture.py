@@ -26,16 +26,6 @@ ANSWERS = {
 }
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason=(
-        "Read decisions/build-claim-release.md section 1. Add loop/build_claim_pull_capture.py with "
-        "pull_rows(claims, answers, *, observed_at, source) returning BuildClaimPullReading records. An answer "
-        "that is missing, unreadable or does not match the open-pull query for that head yields no row. "
-        "Write only in that file."
-    ),
-)
 def test_build_claim_pull_capture():
     assert find_spec("loop.build_claim_pull_capture") is not None, "The pull reading adapter is missing"
     from loop.build_claim_pull_capture import pull_rows
