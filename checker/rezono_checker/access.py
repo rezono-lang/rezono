@@ -137,11 +137,11 @@ def withheld_seals(doc: dict, kinds_full: set) -> frozenset[str]:
     return frozenset(out)
 
 
-def withheld_admission(doc: dict) -> frozenset[str]:
-    """The protected admission inputs the rule IR declares (decisions/admission-transport.md, section 6), named
-    by the checker's own list, never by the publisher's columns: a role reads none of their rows until a decision
-    gives them a read rule or element columns."""
-    return frozenset(r["name"] for r in doc.get("relations", ()) if r.get("name") in PROTECTED)
+def withheld_admission() -> frozenset[str]:
+    """Every protected admission input (decisions/admission-transport.md, section 6), by the checker's own list,
+    whatever the rule IR declares and never by the publisher's columns: a role reads none of their rows until a
+    decision gives them a read rule or element columns. A rule IR that leaves one out withholds it all the same."""
+    return frozenset(PROTECTED)
 
 
 def full_relations(doc: dict, columns: dict, kinds_full: set, relations: set, withheld=frozenset(),
@@ -400,7 +400,7 @@ def check_role(role: str, complete: dict, snapshots: dict, claimed_full, columns
         kinds_full = {k for k, chain in chains.items() if (granted - rejected).intersection(chain)}
     if claimed_evidence is not None:
         findings += check_evidence(claimed_evidence, evidence)
-    withheld = withheld_seals(doc, kinds_full) | withheld_admission(doc)
+    withheld = withheld_seals(doc, kinds_full) | withheld_admission()
     for rel in sorted((set(every) | set(mine)) - derived):
         if rel not in columns:
             findings.append({"reason": "no_columns", "relation": rel})

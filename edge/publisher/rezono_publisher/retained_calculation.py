@@ -8,6 +8,7 @@ from typing import Protocol
 from rezono_canon import sha256_hex
 from rezono_checker.canon import INTEGER
 from rezono_checker.check import check_epoch
+from rezono_checker.evidence import Evidence
 from rezono_checker.rules import check_calc_bindings, derived_relations, load_rules, load_seals
 from rezono_checker.snapshots import read_rows
 
@@ -16,6 +17,10 @@ from . import pointers
 
 SEGMENT = re.compile(r"[A-Za-z0-9_-][A-Za-z0-9_.-]*")
 SHA256 = re.compile(r"[0-9a-f]{64}")
+# Where the protected caller keeps what admission read (decisions/admission-transport.md, section 3): the trusted
+# context and what it pins, and the submitted index with its candidates. A replay reads evidence nowhere else.
+RETAINED = "observations/retained/"
+SUBMITTED = "observations/submitted/"
 
 
 class StoreReader(Protocol):
@@ -46,29 +51,34 @@ class NativeCostDefinition:
     currency_relation: str
 
 
-def resolve(st: StoreReader, pin: PinnedSelection) -> int:
+def resolve(st: StoreReader, pin: PinnedSelection, *, context_sha256: str | None = None) -> int:
     """Replay one immutable main epoch and return its exact known integer.
 
     The caller must obtain the pin from a trusted plan. This reads the complete
     checker publication, so the result needs a separate access check before it
     can be returned to any role.
+
+    `context_sha256` is the hash of the trusted context the epoch was admitted with, which the protected
+    caller pins beside the selection (decisions/admission-transport.md, section 4). The manifest only names
+    that context and confers no authority: a manifest that names a context needs this hash, and the two
+    must agree.
     """
-    return _resolve(st, pin)
+    return _resolve(st, pin, context_sha256=context_sha256)
 
 
 def resolve_native_cost(st: StoreReader, pin: PinnedSelection, *, definition: NativeCostDefinition,
-                        provider: str, currency: str) -> int:
+                        provider: str, currency: str, context_sha256: str | None = None) -> int:
     """Resolve a cost from a trusted plan and an independently reviewed definition.
 
     The caller supplies the definition separately from the plan and archive.
-    The result has the same server-only access boundary as resolve.
+    The result has the same server-only access boundary as resolve, and takes the context hash as it does.
     """
     if (pin.pack, pin.relation) != (definition.pack, definition.relation):
         raise ValueError("selection does not match the native cost definition")
-    return _resolve(st, pin, native_cost=(definition, provider, currency))
+    return _resolve(st, pin, native_cost=(definition, provider, currency), context_sha256=context_sha256)
 
 
-def _resolve(st: StoreReader, pin: PinnedSelection, *,
+def _resolve(st: StoreReader, pin: PinnedSelection, *, context_sha256: str | None = None,
              native_cost: tuple[NativeCostDefinition, str, str] | None = None) -> int:
     if (not SEGMENT.fullmatch(pin.pack) or type(pin.epoch) is not int
             or not SHA256.fullmatch(pin.manifest_sha256)):
@@ -89,6 +99,21 @@ def _resolve(st: StoreReader, pin: PinnedSelection, *,
         if not all(SEGMENT.fullmatch(part) for part in suffix.split("/")):
             raise ValueError("invalid retained object key")
         return read(f"{pin.pack}/{suffix}")
+
+    root = st.uri("")
+
+    def evidence_key(uri: str, places=(RETAINED, SUBMITTED)) -> str:
+        """The key of an object admission read: in the pinned store, under the retained or submitted
+        observations only."""
+        key = uri[len(root):] if uri.startswith(root) else ""
+        if not key.startswith(places):
+            raise ValueError("retained evidence leaves the retained observations")
+        if not all(SEGMENT.fullmatch(part) for part in key.split("/")):
+            raise ValueError("invalid retained object key")
+        return key
+
+    def read_evidence(uri: str) -> bytes:
+        return read(evidence_key(uri))
 
     def verified_bytes(entry: dict) -> bytes:
         body = read_uri(entry["uri"])
@@ -129,10 +154,31 @@ def _resolve(st: StoreReader, pin: PinnedSelection, *,
     proof = json.loads(verified_bytes(entry))
     rules = load_rules(rule_doc)
     check_calc_bindings(rule_doc, rules, calc_doc)
+    # The manifest names the trusted context and the index its epoch was admitted with; the authority is the
+    # caller's own pin of the context hash. They must agree, and the context must be a retained observation:
+    # the checker then admits again from exactly those bytes. Without them nothing is admitted, and a protected
+    # row fails.
+    named = manifest.get("evidence")
+    if named is not None and not (isinstance(named, dict) and isinstance(named.get("context"), dict)
+                                  and set(named) <= {"context", "index"}):
+        raise ValueError("malformed retained evidence")
+    if context_sha256 is not None and not (isinstance(context_sha256, str) and SHA256.fullmatch(context_sha256)):
+        raise ValueError("invalid evidence context pin")
+    if named is None:
+        if context_sha256 is not None:
+            raise ValueError("the retained manifest names no evidence context")
+        evidence = None
+    else:
+        if context_sha256 is None:
+            raise ValueError("the retained manifest names an evidence context the caller did not pin")
+        if named["context"].get("sha256") != context_sha256:
+            raise ValueError("the retained evidence context does not match the caller's pin")
+        evidence_key(str(named["context"].get("uri")), (RETAINED,))
+        evidence = Evidence(named["context"], named.get("index"), read_evidence)
     report = check_epoch(
         proof["witnesses"], {**manifest, "snapshots": snapshots}, rules, read_uri,
         derived=derived_relations(rule_doc, rules), seals=load_seals(rule_doc),
-        calc_ir=calc_doc, calc_witnesses=proof["calc_witnesses"],
+        calc_ir=calc_doc, calc_witnesses=proof["calc_witnesses"], evidence=evidence,
     )
     if not report["valid"]:
         reasons = sorted({f["reason"] for f in report["findings"] if f["severity"] == "error"})

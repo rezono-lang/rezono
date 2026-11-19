@@ -61,15 +61,6 @@ def release_records(records):
     return records
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason=(
-        "extra: Read decisions/build-claim-release.md sections 1 and 3. Declare BuildClaimDelete and BuildClaimRefRead "
-        "in a new build/schema/claim_release.yaml and derive build_claim_released, build_claim_release_discarded "
-        "and build_claim_release_pending in a new build/rules/claim_release.dl. Write only in those two build files."
-    ),
-)
 def test_build_claim_release_confirmation(tmp_path):
     assert KINDS <= declared_kinds(), f"The build schema lacks {sorted(KINDS - declared_kinds())}"
     source = tmp_path / "source"
