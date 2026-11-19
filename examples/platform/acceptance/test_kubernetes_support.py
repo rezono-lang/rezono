@@ -2,10 +2,12 @@ from copy import deepcopy
 import json
 from pathlib import Path
 
+import pytest
+
 from rezono_checker.check import check
 from rezono_checker.rules import load_rules
-from rezono_compiler import batch, pack, rules, sources
-from rules_support import states
+from rezono_compiler import batch, calc, pack, rules, scenarios, sources
+from rules_support import State, states
 
 from query_fixture import ROOT, check_relation
 
@@ -37,33 +39,36 @@ def test_kubernetes_support():
 
 def test_orphaned_support_slots_do_not_assert_support():
     _, *support = _published_support()
-    rows = _slots("series_support_evidence", "unregistered-announcement", ("unregistered-product", *support))
+    rows = _slots("series_support_source", "unregistered-announcement", ("unregistered-product", *support))
     program = rules.load(pack.read(ROOT).rules)
     assert _supported(program, rows) == set()
 
 
+class SupportStatementRecordedTwice(AssertionError):
+    pass
+
+
+@pytest.mark.xfail(strict=True, raises=SupportStatementRecordedTwice, reason=(
+    "M2: decisions/platform-vendor-support-statement.md: Publish published_series_support in "
+    "examples/platform/rules/kubernetes_support.dl from the registered product and the pinned series_support_source "
+    "statement alone. Remove the series_support_evidence rows from facts/kubernetes_support.yaml and the class from "
+    "schema/kubernetes_support.yaml, and give facts/kubernetes_support_source.sources.yaml a source that carries the "
+    "statement's page URL instead of acceptance/product-evidence.json."))
 def test_support_requires_each_independent_ground():
     model, program, (state,) = states(ROOT)
     support = _published_support()
     product, series, *_ = support
-    evidence = f"{product}-{series}"
-    source = f"{evidence}-source"
+    source = f"{product}-{series}-source"
     required = {
         "product": [(product,)],
-        "series_support_evidence": [(evidence,)],
         "series_support_source": [(source,)],
-        **_slots("series_support_evidence", evidence, support),
         **_slots("series_support_source", source, support),
     }
-    assert _supported(program, required) == {support}
+    if _supported(program, required) != {support} or state.base.get("series_support_evidence"):
+        raise SupportStatementRecordedTwice("support needs a second record of the same statement")
     for relation in required:
         without = {name: records for name, records in required.items() if name != relation}
         assert _supported(program, without) == set(), relation
-
-    other_source = json.loads(ORACLE.read_text(encoding="utf-8"))["keycloak"]
-    other = ("keycloak", "26.0", other_source["release"], other_source["published"], other_source["url"], other_source["sha256"])
-    for relation, row in _slots("series_support_source", source, other).items():
-        assert _supported(program, required | {relation: row}) == set(), relation
 
     proof = state.proof(PUBLISHED, support)
     manifest, read = state.manifest()
@@ -74,18 +79,68 @@ def test_support_requires_each_independent_ground():
                 for witness in proof["witnesses"] for item in witness["premises"]}
     assert premises == {(relation, row) for relation, records in required.items() for row in records}
 
-    for relation in ("product", "series_support_evidence", "series_support_source", "series_support_source__source_sha256"):
+    for relation in ("product", "series_support_source", "series_support_source__source_sha256"):
         damaged = deepcopy(proof)
         for witness in damaged["witnesses"]:
             witness["premises"] = [item for item in witness["premises"] if item["row"]["relation"] != relation]
         report = check(damaged, manifest, checker_rules, read)
         assert not report["valid"] and any(f["reason"] == "premise_mismatch" for f in report["findings"]), relation
 
+    # The statement cites the maker's page, never the expectations of these tests.
     entries = sources.file_entries(model, ROOT / "facts/kubernetes_support_source.yaml")
     assert len(entries) == 7
-    assert all(entry["sources"] == [{
-        "kind": "git",
-        "name": "rezono-lang/rezono",
-        "revision": "90b056e6ef1d1034bb53ccac8620961150545b0f",
-        "position": "examples/platform/acceptance/product-evidence.json#/kubernetes",
-    }] for entry in entries)
+    for entry in entries:
+        assert not any("acceptance/" in value for item in entry["sources"] for value in item.values()), entry
+        assert support[4] in {item.get("url") for item in entry["sources"]}, entry
+
+
+class MissingSupportDrift(AssertionError):
+    pass
+
+
+DRIFT = "series_support_end_drift"
+REFERENCE = "kubernetes-1.32-register"
+
+
+@pytest.mark.xfail(strict=True, raises=MissingSupportDrift, reason=(
+    "M2: decisions/platform-vendor-support-statement.md: Waits for test_support_requires_each_independent_ground. "
+    "Add the series_support_reference class (product, series, support_end) to schema/kubernetes_support.yaml, one "
+    "register row kubernetes-1.32-register in facts/kubernetes_support.yaml, and derive "
+    "series_support_end_drift(reference, source, product, series, expected, observed) in "
+    "examples/platform/rules/kubernetes_support.dl when the register and the statement differ."))
+def test_register_difference_is_support_drift():
+    model, program, (state,) = states(ROOT)
+    if DRIFT not in program.derived() or not state.base.get("series_support_reference"):
+        raise MissingSupportDrift(f"no {DRIFT} over a separate register row")
+    support = _published_support()
+    product, series, _, end, *_ = support
+    source = f"{product}-{series}-source"
+    assert state.derived[DRIFT] == set()
+    assert state.derived[PUBLISHED] == {support}
+    assert set(state.base["series_support_reference__support_end"]) == {(REFERENCE, end)}
+
+    (_, rows), = scenarios.states(model, ROOT)
+    calculation = calc.build(model, model.calc) if program.calc_inputs() else None
+    for missing in ("series_support_reference", "series_support_reference__support_end"):
+        without = {name: records for name, records in rows.items() if name != missing}
+        unregistered = State(model, program, "without-register", without, calculation)
+        assert unregistered.derived[DRIFT] == set(), missing
+        assert unregistered.derived[PUBLISHED] == {support}, missing
+
+    changed = rows | {"series_support_reference__support_end": [(REFERENCE, "2026-03-31")]}
+    drift = State(model, program, "changed-support-register", changed, calculation)
+    finding = (REFERENCE, source, product, series, "2026-03-31", end)
+    assert drift.derived[DRIFT] == {finding}
+    assert drift.derived[PUBLISHED] == {support}
+
+    proof = drift.proof(DRIFT, finding)
+    manifest, read = drift.manifest()
+    report = check(proof, manifest, load_rules(model.rules), read)
+    assert report["valid"] and not report["findings"], report["findings"]
+    premises = {item["row"]["relation"] for witness in proof["witnesses"] for item in witness["premises"]}
+    assert {"series_support_reference__support_end", "series_support_source__support_end"} <= premises
+
+    entries = sources.file_entries(model, ROOT / "facts/kubernetes_support.yaml")
+    register = [entry for entry in entries if "series_support_reference" in json.dumps(entry)]
+    assert register and all(item["kind"] == "pack" and item["name"] == "facts/kubernetes_support.yaml"
+                            for entry in register for item in entry["sources"])

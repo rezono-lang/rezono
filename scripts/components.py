@@ -283,6 +283,7 @@ SHARED_READERS = {
     "docs/semantics/witness-alternatives-cases.yaml": ("checker", "compiler"),
     "docs/formal.md": ("examples",),
     "docs/tutorial.md": ("examples",),
+    "rezono/README.md": ("examples",),
     "decisions/language-native-rules.md": ("compiler",),
     "decisions/publication-case-pins.md": ("compiler",),
     "decisions/conformance-*.md": ("compiler",),
