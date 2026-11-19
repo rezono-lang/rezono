@@ -42,6 +42,7 @@ function formatOf(module: Module): ModuleForm['format'] {
 				|| decl.equations?.length || decl.checks?.length;
 		}
 		if ('base' in decl) return true;
+		if ('derived' in decl && Array.isArray(decl.derived) && decl.derived.some(d => d.output !== undefined || d.definitions !== undefined)) return true;
 		return 'enum' in decl && (decl.memberMetadata !== undefined || hasMetadata(decl));
 	});
 	return extended ? EXTENDED_MODULE_FORMAT : MODULE_FORMAT;
