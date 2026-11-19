@@ -31,8 +31,12 @@ const EXTENDED_MODULE_FORMAT = 'rezono.module/2';
 const NATIVE_RULE_MODULE_FORMAT = 'rezono.module/3';
 const SAFE_STEP_MODULE_FORMAT = 'rezono.module/4';
 
+function hasIntermediateInvariant(decl: Module['decls'][number]): boolean {
+	return 'rule' in decl && (decl.options?.some(option => 'invariant' in option && option.invariant === 'intermediate') ?? false);
+}
+
 function formatOf(module: Module): ModuleForm['format'] {
-	if (module.decls.some(decl => 'step' in decl)) return SAFE_STEP_MODULE_FORMAT;
+	if (module.decls.some(decl => 'step' in decl || hasIntermediateInvariant(decl))) return SAFE_STEP_MODULE_FORMAT;
 	if (module.decls.some(decl => 'rule' in decl)) return NATIVE_RULE_MODULE_FORMAT;
 	const extended = module.schema !== undefined || module.decls.some(decl => {
 		if ('dataset' in decl || 'rules' in decl || ('source' in decl && 'fields' in decl)) return true;
