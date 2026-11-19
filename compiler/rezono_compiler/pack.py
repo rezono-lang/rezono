@@ -522,7 +522,8 @@ def read(pack_dir: str | Path) -> Pack:
         raise CompileError(f"{pack_dir}/schema: no schema files, and pack.yaml names no module written in Rezono")
     if standard_packs.is_standard_name(str(meta["name"])) and (
             why := standard_packs.refusal(str(meta["name"]), modules.pack_hash(pack_dir))):
-        raise CompileError(f"{pack_dir}/pack.yaml: {why}")
+        refused = f"{pack_dir}/pack.yaml: {why}"
+        raise CompileError(refused, diagnostics.of_text(refused, "reserved_standard_name"))
     is_theory = theory_meta(meta, pack_dir, errors)
     if errors:
         raise CompileError("\n".join(errors))
