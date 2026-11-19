@@ -57,6 +57,7 @@ classes:
       compiled: {multivalued: true, range: ArchivedFile, inlined_as_list: true, description: "What was compiled for this epoch, archived with its hash: the schema bundle, and the rule IR if the pack has rules. With these and the inputs a publication can be made again and compared byte for byte."}
       build: {range: ArchivedFile, inlined: true, description: "The build record (build.json): the compiler, the publisher's source, every library with its exact version, Python, platform, the hashes of the locks and the effective profile. Its hash names the build; the same build and inputs give the same bytes (docs/ci.md#8-pinned-versions)."}
       pending: {multivalued: true, range: PendingInput, inlined_as_list: true, description: "Input that waits since this epoch, per source and per offloaded step (contracts/freshness.yaml). Read at publication; the cartouche shows it."}
+      completeness_receipts: {multivalued: true, range: ArchivedFile, inlined_as_list: true, description: "Optional pinned candidate completeness receipts (decisions/scoped-completeness.md). Candidates only: they confer no authority and stay on the complete verification side, never in a role's manifest."}
       variant: {range: Variant, inlined: true, description: "Set on a variant manifest (id v-<sweep>-<index>-<epoch>): base_manifest is the main manifest it varies. Never the current state of main."}
 
   Diagnosis:
