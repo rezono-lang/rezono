@@ -7,6 +7,11 @@ permissions:
   contents: read
 jobs:
   packages:
+    # A newer push to main supersedes the rehearsal of an older one. A release
+    # calls this workflow under its own event and is never cancelled here.
+    concurrency:
+      group: release-rehearsal-${{ github.event_name }}-${{ github.ref }}
+      cancel-in-progress: ${{ github.event_name == 'push' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 12
     steps:
