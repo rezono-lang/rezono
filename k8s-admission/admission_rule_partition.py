@@ -48,7 +48,8 @@ def partition_rule(
         raise ValueError("an incoming object must bind base relations")
     objects = {request_objects[name] for name in request_inputs}
     if len(objects) != 1 or not all(objects):
-        raise ValueError(f"{output}: admission requires one incoming object")
+        reads = ", ".join(f"{name} ({request_objects[name]})" for name in sorted(request_inputs)) or "none"
+        raise ValueError(f"{output}: admission requires one incoming object; it reads {reads}")
 
     request = relevant.intersection(request_inputs | program.downstream(request_inputs))
     parameters = set().union(*(program.deps(name) for name in request)) - request
