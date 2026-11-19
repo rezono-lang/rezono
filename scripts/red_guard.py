@@ -13,8 +13,8 @@ or vectors/), if it changes nothing else. red_before.py
 then shows that the test is red on the base and green with the new evidence.
 
 A pull request that changes the checker or read access in a file that is not a test is
-read before it lands: it needs the label `p1-read-` plus the first seven characters of its
-head commit, whatever other labels it carries. A new push therefore needs a new label.
+read before it lands: it needs the label `p1-read-` plus the full id of its head commit
+(40 hex characters), whatever other labels it carries. A new push therefore needs a new label.
 In the merge queue no labels are read and this rule does not apply.
 """
 import argparse
@@ -38,6 +38,10 @@ import tokenize
 SOURCE_POLICY = {
     ".github/workflows/python-environment/action.yml", "loop/rezono_cluster.py",
     "scripts/cluster_worker_tasks.py", "scripts/role_publication_ci.py", "scripts/components.py",
+    # The cluster task split imports fast_check.py, and the cluster workflow runs it for a
+    # task; for a suite, select_tests.py chooses the cluster tests and nothing counts them.
+    # ci.yml runs red_list.py to decide whether the milestones and skips hold.
+    "scripts/fast_check.py", "loop/cluster/select_tests.py", "scripts/red_list.py",
 }
 POLICY = SOURCE_POLICY | {
     ".github/workflows/red-policy.yml",
@@ -80,9 +84,16 @@ def protected(path):
 
 
 # Changes here decide whether a proof is accepted or what a role may see. Nothing downstream
-# catches a mistake in them, so a reviewer reads them before they land.
-READ_FIRST_DIRS = ("checker/rezono_checker/", "packs/std-access/", "edge/gate/src/")
-READ_FIRST_FILES = {"edge/publisher/rezono_publisher/access.py", "contracts/proof.yaml"}
+# catches a mistake in them, so a reviewer reads them before they land. The checker hashes
+# and encodes through rezono_canon, so that package decides as much as the checker itself.
+READ_FIRST_DIRS = ("checker/rezono_checker/", "packs/std-access/", "edge/gate/src/",
+                   "canon/rezono_canon/")
+# In the publisher, these decide what a role reads or what the checker is handed to check
+# it by; decisions/checker-and-access-review.md says what each decides.
+PUBLISHER = "edge/publisher/rezono_publisher/"
+READ_FIRST_FILES = {"contracts/proof.yaml", *(PUBLISHER + name for name in (
+    "access.py", "calc_scope.py", "sources.py", "sweep.py", "difference.py", "batch.py",
+    "publish.py", "proof.py", "views.py"))}
 TEST_DIRS = {"test", "tests", "__tests__"}
 READ_LABEL = "p1-read-"
 
@@ -112,7 +123,8 @@ def read_label(head):
     if not (isinstance(head, str) and len(head) == 40
             and all(ch in "0123456789abcdef" for ch in head)):
         return None
-    return READ_LABEL + head[:7]
+    # The full id: a prefix is cheap to match with another commit, which would inherit the label.
+    return READ_LABEL + head
 
 
 def is_red(node):
