@@ -20,11 +20,10 @@ def values(annotations):
            "Waits for test_lower_schema_mappings while it owns rezono_metadata.py.",
 )
 def test_lower_schema_annotations(tmp_path):
-    parameter = schema_file("examples/subsidy-scheme/schema/subsidy.yaml")["classes"]["SchemeParameter"]
-    declaration = kind("SchemeParameter", slot("name", "Text"),
-                       annotations={"plane": "control", "owner": "policy_adviser"})
-    actual = lower_declarations(tmp_path, "subsidy-scheme", [declaration])["classes"]["SchemeParameter"]
-    assert values(actual.get("annotations")) == values(parameter["annotations"])
+    axis = schema_file("packs/std-time/schema/time.yaml")["classes"]["Axis"]
+    declaration = kind("Axis", annotations={"explain": "fold"})
+    actual = lower_declarations(tmp_path, "std-time", [declaration])["classes"]["Axis"]
+    assert values(actual.get("annotations")) == values(axis["annotations"])
 
     offer = schema_file("run/packs/offer-selection/schema/offers.yaml")["classes"]["Offer"]
     # The module form writes numbers as exact decimal text (decisions/language-metadata.md).

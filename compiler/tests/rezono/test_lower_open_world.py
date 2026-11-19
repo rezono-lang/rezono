@@ -1,6 +1,7 @@
 """An open kind and an open slot must lower to the `world: open` annotations of the public schemas."""
 
 import pytest
+import yaml
 
 from model_parity import kind, lower_declarations, schema_file, slot
 
@@ -18,10 +19,10 @@ def world(definition):
            "while it owns rezono_kind.py and for test_lower_extended_scalar while it owns rezono_slot.py.",
 )
 def test_lower_open_world(tmp_path):
-    statement = schema_file("examples/subsidy-scheme/schema/subsidy.yaml")["classes"]["IncomeStatement"]
-    declaration = kind("IncomeStatement", slot("household", "Household"), slot("income", "Cents"), world="open")
-    actual = lower_declarations(tmp_path, "subsidy-scheme", [declaration],
-                                external=["Household", "Cents"])["classes"]["IncomeStatement"]
+    # The LinkML spelling of an open kind, as the compiler reads it (docs/compiler/rules.md, world).
+    statement = yaml.safe_load("{annotations: {world: open}, attributes: {holder: {range: Holder, required: true}}}")
+    declaration = kind("Statement", slot("holder", "Holder"), world="open")
+    actual = lower_declarations(tmp_path, "sample", [declaration], external=["Holder"])["classes"]["Statement"]
     assert world(actual) == world(statement) == "open"
 
     decision = schema_file("packs/std-decision/schema/decision.yaml")["classes"]["Decision"]["attributes"]
