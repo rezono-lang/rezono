@@ -29,7 +29,7 @@ kind Item world closed
 @pytest.mark.xfail(
     strict=True,
     raises=MissingSchemaHeaderClassification,
-    reason="M3: decisions/language-metadata.md: compiler/tests/rezono/language_usage.py classifies the "
+    reason="M3: decisions/language-metadata.md: scripts/language_usage.py classifies the "
            "`schema <name>` header with its indented fields, which scripts/convert_pack.py writes for every "
            "schema with its own identity. It now reports the header as unclassified-authored-syntax, so a "
            "converted pack never counts as converted.",
