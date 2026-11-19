@@ -57,6 +57,7 @@ EXTEND = re.compile(r"^//\s*@extend\s*$")
 CHECKED_ABSENCE = "absent_checked"  # reserved conclusion of decisions/scoped-completeness.md
 RECEIPT_INPUT = "verified_receipt"  # protected: only admission fills it (decisions/admission-transport.md)
 RECEIPT_LOOKUP = "registered_match"  # the lookup over the contents of one receipt
+RECEIPT_MEMBER = "verified_member"  # protected: the admitted member keys of one receipt
 CLOSES = re.compile(r"^//\s*@closes\s+(\S+)\s*$")
 
 
@@ -606,7 +607,8 @@ def read(pack, pack_dir: Path, imports=None, renames=None, *, calc_inputs=None, 
         if rel == CHECKED_ABSENCE and not checked_absence(head, body, rules_src):
             errors.append(f"{where}:{line}: {rel} needs a positive premise from the verified receipt "
                           f"({RECEIPT_INPUT}, or a projection of it such as complete) with the head's source, "
-                          f"scope, cut and receipt, and a negative {RECEIPT_LOOKUP} on that same receipt; "
+                          f"scope, cut and receipt, and a negative {RECEIPT_LOOKUP}(receipt, key) of the head that only "
+                          f"projects {RECEIPT_MEMBER} of that same receipt; "
                           "a lookup alone proves no absence")
             continue
         accessible = set(renames.get(source, {}).values())
@@ -732,10 +734,30 @@ def checked_absence(head, body, rules_src) -> bool:
         return False
     bound = (*terms[:3], terms[4])
     verified = any(s[:2] == ("lit", "positive") and receipt_binding(s[2], rules_src) == bound for s in body)
-    lookups = [s[2] for s in body if s[0] == "lit" and s[2][0] == RECEIPT_LOOKUP]
-    return verified and bool(lookups) and all(
-        s[:2] == ("lit", "negative") and s[2][1] and s[2][1][0] == terms[4]
-        for s in body if s[0] == "lit" and s[2][0] == RECEIPT_LOOKUP)
+    lookups = [s for s in body if s[0] == "lit" and s[2][0] == RECEIPT_LOOKUP]
+    return verified and bool(lookups) and member_lookup(rules_src) and all(
+        s[1] == "negative" and list(s[2][1]) == [terms[4], terms[3]] for s in lookups)
+
+
+def member_lookup(rules_src) -> bool:
+    """registered_match(receipt, key) reads the admitted contents of that receipt and nothing else.
+
+    Every clause has the single premise verified_member(receipt, ...) with the head's receipt and key,
+    so the pack cannot narrow the lookup until it never matches (decisions/scoped-completeness.md,
+    section 2; decisions/admission-transport.md).
+    """
+    clauses = [(h, b) for _, _, h, b, *_ in rules_src if h[0] == RECEIPT_LOOKUP]
+    for clause_head, clause_body in clauses:
+        args = list(clause_head[1])
+        if len(args) != 2 or ("wild",) in args or len(clause_body) != 1:
+            return False
+        premise = clause_body[0]
+        if premise[:2] != ("lit", "positive") or premise[2][0] != RECEIPT_MEMBER or len(premise[2][1]) != 4:
+            return False
+        member = list(premise[2][1])
+        if member[0] != args[0] or args[1] not in (member[1], member[3]):
+            return False
+    return bool(clauses)
 
 
 def _terms(item):
