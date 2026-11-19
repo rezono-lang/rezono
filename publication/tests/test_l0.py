@@ -174,9 +174,6 @@ def test_every_case_file_is_a_valid_case():
     assert not validator.is_valid({**case, "expect": {"accept": "true"}})
 
 
-@pytest.mark.xfail(strict=True, raises=MissingCase, reason=(
-    "Needs settled S05, R13, P02 and P04 in docs/publication/cases. See decisions/publication-case-pins.md."
-))
 def test_every_settled_case_runs_here_or_is_named():
     runnable = {"valid", "invalid", "change", "hash", "context", "admission"}
     assert {i for i in SETTLED if FILES[i]["class"] not in runnable} == set()
