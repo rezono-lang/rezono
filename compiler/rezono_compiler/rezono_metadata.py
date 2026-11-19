@@ -8,6 +8,7 @@ MAPPINGS = (("exactMappings", "exact_mappings"), ("closeMappings", "close_mappin
 FIELDS = {"description", "annotations"} | {written for written, _ in MAPPINGS}
 HEADER = FIELDS | {"schema", "iri", "language", "prefixes", "imports", "defaultRange"}
 NAME = re.compile(r"[a-z][a-z0-9_]*")
+DECIMAL = re.compile(r"-?(0|[1-9][0-9]*)(\.[0-9]+)?")
 
 
 def name(value: object) -> bool:
@@ -24,6 +25,17 @@ def annotation_value(value: object) -> bool:
     if isinstance(value, dict):
         return all(annotation_value(item) for item in value.values())
     return isinstance(value, (str, bool))
+
+
+def annotation_literal(value: object) -> object:
+    """The module form writes numbers as exact decimal text; LinkML holds them as numbers, a whole one as an integer."""
+    if isinstance(value, list):
+        return [annotation_literal(item) for item in value]
+    if isinstance(value, dict):
+        return {key: annotation_literal(item) for key, item in value.items()}
+    if isinstance(value, str) and DECIMAL.fullmatch(value):
+        return float(value) if "." in value else int(value)
+    return value
 
 
 def valid(body: dict) -> bool:
@@ -64,7 +76,7 @@ def lower(body: dict) -> dict:
         if written in body:
             metadata[target] = list(body[written])
     if "annotations" in body:
-        metadata["annotations"] = {tag: {"value": value} for tag, value in body["annotations"].items()}
+        metadata["annotations"] = {tag: {"value": annotation_literal(value)} for tag, value in body["annotations"].items()}
     return metadata
 
 
