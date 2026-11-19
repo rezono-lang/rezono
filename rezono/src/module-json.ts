@@ -33,7 +33,7 @@ const NATIVE_RULE_MODULE_FORMAT = 'rezono.module/3';
 function formatOf(module: Module): ModuleForm['format'] {
 	if (module.decls.some(decl => 'rule' in decl)) return NATIVE_RULE_MODULE_FORMAT;
 	const extended = module.schema !== undefined || module.decls.some(decl => {
-		if ('dataset' in decl || 'rules' in decl) return true;
+		if ('dataset' in decl || 'rules' in decl || ('source' in decl && 'fields' in decl)) return true;
 		if ('kind' in decl) {
 			if (decl.parent !== undefined) return true;
 			return decl.abstract || decl.embedded || decl.keys?.length || hasMetadata(decl)
