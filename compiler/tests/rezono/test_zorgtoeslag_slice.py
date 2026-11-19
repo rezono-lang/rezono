@@ -1,5 +1,5 @@
-"""The first slice of the healthcare allowance: its independent oracle and the constructs its module uses
-(decisions/language-healthcare-allowance-slice.md)."""
+"""The first slice of the healthcare allowance: the constructs its module uses, and its published allowance
+against the independent oracle reference.py (decisions/language-healthcare-allowance-slice.md)."""
 
 import ast
 import datetime
@@ -21,6 +21,7 @@ ROOT = Path(__file__).resolve().parents[3]
 SLICE = ROOT / "examples/zorgtoeslag-slice"
 ORACLE = SLICE / "reference.py"
 MODULE = SLICE / "rezono/allowance.rezono"
+PACK = SLICE / "pack.yaml"
 # What the first slice may use, as scripts/language_usage.py names the constructs of a module.
 SLICE_FEATURES = {"kind", "slot", "boolean-slot", "extended-scalar", "units", "parameters", "calculation",
                   "exceptions"}
@@ -36,7 +37,7 @@ LEFT_OUT = {
 COMMENTS = re.compile(r"--[^\n]*")
 
 
-class MissingSliceOracle(AssertionError):
+class MissingSlicePublication(AssertionError):
     pass
 
 
@@ -54,13 +55,11 @@ def expected(case):
 
 
 def load_oracle():
-    if not ORACLE.is_file():
-        raise MissingSliceOracle(f"{ORACLE.relative_to(ROOT).as_posix()} does not exist")
+    assert ORACLE.is_file(), f"{ORACLE.relative_to(ROOT).as_posix()} does not exist"
     spec = importlib.util.spec_from_file_location("zorgtoeslag_slice_reference", ORACLE)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
-    if not callable(getattr(module, "allowance", None)):
-        raise MissingSliceOracle("reference.py has no function allowance(facts, household, as_of, known)")
+    assert callable(getattr(module, "allowance", None)),         "reference.py has no function allowance(facts, household, as_of, known)"
     return module
 
 
@@ -77,15 +76,9 @@ def imported_modules(path):
     return names
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=MissingSliceOracle,
-    reason="extra: decisions/language-healthcare-allowance-slice.md: Write examples/zorgtoeslag-slice/reference.py, "
-           "the independent oracle of the slice, with the standard library only: allowance(facts, household, "
-           "as_of, known) reads the fact rows of facts.rezono itself and states the parameter versions of the "
-           "decision itself, and returns the monthly allowance in whole cents, or the pair (state, reason)",
-)
-def test_slice_oracle_gives_the_cases(tmp_path):
+def checked_oracle(tmp_path):
+    """The oracle, checked before the publication is compared with it: with the standard library only it gives
+    every case of allowance-cases.yaml, and it follows a change in the facts it reads."""
     oracle = load_oracle()
     foreign = imported_modules(ORACLE) - set(sys.stdlib_module_names)
     assert not foreign, f"the oracle shares code with the compiler or a library: {sorted(foreign)}"
@@ -101,6 +94,44 @@ def test_slice_oracle_gives_the_cases(tmp_path):
     edited = tmp_path / "facts.rezono"
     edited.write_text("".join(lines[:at] + lines[at + 2:]), encoding="utf-8", newline="\n")
     assert oracle.allowance(edited, "gus", datetime.date(2026, 1, 1), datetime.date(2026, 5, 1)) == 13600
+    return oracle
+
+
+def published_allowance(model, program, rows, case):
+    """The allowance the published pack gives the household of `case`, evaluated on its `as of` day: whole cents,
+    or the pair (state, reason) as the oracle gives it. Both evaluators of the calculation must agree."""
+    from calcsupport import run_both
+    from rezono_compiler import calc_sql
+
+    day = {calc_sql.AS_OF: [("as_of", str(case["as_of"]), str(case["known"]))]}
+    got, reference = run_both(model, program, model.calc, rows | day)
+    assert got == reference, case["id"]
+    state, value, reason, *_ = got["allowance"][case["household"]]
+    return int(value) if state == "known" else (state, reason)
+
+
+@pytest.mark.xfail(
+    strict=True,
+    raises=MissingSlicePublication,
+    reason="later: decisions/language-healthcare-allowance-slice.md: Give examples/zorgtoeslag-slice its pack.yaml "
+           "once inline parameter versions, ordered exceptions and dated facts lower and publish, in the order "
+           "of that decision. Then the module rezono/allowance.rezono publishes with facts.rezono, and for every "
+           "case of allowance-cases.yaml the published allowance on its as-of day equals the independent oracle "
+           "examples/zorgtoeslag-slice/reference.py",
+)
+def test_published_slice_gives_the_oracle(tmp_path):
+    oracle = checked_oracle(tmp_path)
+    if not PACK.is_file():
+        raise MissingSlicePublication(f"{PACK.relative_to(ROOT).as_posix()} does not exist")
+    from rezono_compiler import calc, pack, scenarios
+
+    model = pack.read(SLICE)
+    program = calc.build(model, model.calc)
+    (_, rows), *_ = scenarios.states(model, SLICE)
+    facts = SLICE / "facts.rezono"
+    got = {case["id"]: published_allowance(model, program, rows, case) for case in cases()}
+    assert got == {case["id"]: oracle.allowance(facts, case["household"], case["as_of"], case["known"])
+                   for case in cases()}
 
 
 def read_form(path, tmp_path):
