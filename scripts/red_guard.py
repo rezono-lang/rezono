@@ -87,7 +87,8 @@ def protected(path):
             or p.name.endswith(("_test.py", "_support.py", ".test.ts", ".spec.ts",
                                 ".test.js", ".spec.js", ".snap", ".golden"))
             or p.name in {"frozen_baseline.py", "reference.py", "pytest.ini"} | STARTUP | EXPECTATIONS
-            or p.suffix == ".pth"
+            or p.suffix == ".pth" or p.name == "entry_points.txt"
+            or any(part.endswith((".dist-info", ".egg-info")) for part in p.parts[:-1])
             or "fixture" in p.stem or p.stem.endswith(("-cases", "_cases", "-vectors", "_vectors"))
             or p.parts[0] == "blocked")
 

@@ -84,7 +84,10 @@ def plugin_cases(function):
             raise AssertionError(f"{label} beside a lifted mark: errors {errors}")
         print(f"{'DENY' if expected else 'ALLOW'} without planner and beside a lifted mark: {label}")
     # Python runs these before pytest starts; setup.py stays source as well.
-    for path in ("compiler/sitecustomize.py", "src/usercustomize.py", "compiler/rezono.pth", "compiler/setup.py"):
+    # Package metadata on sys.path registers plugins too, such as a *.dist-info in scripts/.
+    for path in ("compiler/sitecustomize.py", "src/usercustomize.py", "compiler/rezono.pth", "compiler/setup.py",
+                 "scripts/tidy-1.0.dist-info/entry_points.txt", "scripts/tidy-1.0.dist-info/METADATA",
+                 "compiler/tidy.egg-info/PKG-INFO", "loop/entry_points.txt"):
         errors, _ = review([Change(path, "A", None, b"import tidy\n")], planner=False)
         if errors != [f"ERROR planner label required for {ascii(path)}"]:
             raise AssertionError(f"{path} without planner: errors {errors}")
