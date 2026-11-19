@@ -164,10 +164,12 @@ FILE_CONSUMERS = {
     "k8s-admission": ("loop",),
     # A pull request also runs examples for a loop change (PR_FILE_CONSUMERS), so the queue does too.
     "loop": ("run", "examples"),
-    "examples": (),
     "run": (),
     "deploy/profiles/edge": ("edge/publisher",),
 }
+# Consumers that end a closure they are reached by. A change in such a component
+# itself still runs everything, since it is not in FILE_CONSUMERS.
+TERMINAL_CONSUMERS = frozenset({"examples"})
 
 
 def outside_cluster_plugin(path: Path, manifest: Path) -> bool:
@@ -213,11 +215,14 @@ def affected_components(
         # entry points and for production inputs.
         pending.append(owner.folder)
     visited: set[str] = set()
+    changed_owners = set(pending)
     while pending:
         folder = pending.pop()
         if folder in visited:
             continue
         visited.add(folder)
+        if folder in TERMINAL_CONSUMERS and folder not in changed_owners:
+            continue
         if folder not in FILE_CONSUMERS:
             return list(components)
         for consumer in FILE_CONSUMERS[folder]:

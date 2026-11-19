@@ -153,6 +153,11 @@ class RepositoryPullRequestSelectionTests(unittest.TestCase):
                      "k8s-admission/parameter_reader.py", "deploy/profiles/edge/forms_issue.py"):
             selected, components, _ = self.selected(path)
             self.assertLessEqual(selected, {c.folder for c in ci.affected_components(components, [path])}, path)
+        # A change in examples itself still runs everything in the queue, also together with a loop change.
+        for changed in (["examples/subsidy/pack.yaml"], ["examples/test_rules.py"],
+                        ["loop/replay.py", "examples/test_rules.py"]):
+            _, components, _ = self.selected(*changed)
+            self.assertEqual(ci.affected_components(components, changed), components, changed)
 
     def test_unknown_path_selects_every_component(self):
         selected, components, _ = self.selected("an-unknown-directory/resource.yaml")
