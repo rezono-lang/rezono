@@ -36,43 +36,56 @@ def lower_source(module: modules.Module, form: dict, root: str,
     except (OSError, UnicodeError) as error:
         raise CompileError(f"{where}: cannot read the native rule positions") from error
     offsets = {place["at"]: place["start"] for place in form["spans"]}
-    statements, columns = [], []
+    statements, columns, refused = [], [], []
     site = Site(where, text, offsets)
     for at, declaration in declarations:
-        start = offsets[at]
-        if len(start) > len(str(len(text))) or int(start) >= len(text):
-            refuse(where, at, 1, 1, "A rule head needs a position in its authored source")
-        offset = int(start)
-        line = text.count("\n", 0, offset) + 1
-        column = offset - text.rfind("\n", 0, offset)
-        options = declaration.get("options")
-        if set(declaration) - {"rule", "columns", "args", "when", "options"} or (
-            options is not None and
-            (len(options) != 1 or options[0].keys() != {"extend"} or options[0]["extend"] is not True)
-        ):
-            refuse(where, at, line, column, "Rule options and locals are not lowered yet")
-        if "columns" in declaration:
-            name = declaration["rule"]
-            signature = linked.signatures[name]
-            key = [(col, storage) for col, _, storage in signature.key]
-            statements.append(("decl", name, key, line, None, False, False, None, signature.extend, None, False))
-        if "when" in declaration:
-            clause = linked.clauses[module.pack, module.rel, at]
-            signature = linked.signatures[clause.relation]
-            head = declaration.get("args", [{"path": [name]} for name, _, _ in signature.key])
-            guard = declaration["when"]
-            members = guard["and"] if set(guard) == {"and"} and guard["and"] else [guard]
-            first = f"{at}/when/and/0" if members[0] is not guard else f"{at}/when"
-            variable, table = membership(where, at, line, column, members[0], head, clause, first)
-            terms = [("var", variable)]
-            atom = (clause.relation, terms, line)
-            body = [("lit", "positive", (table, terms, line))]
-            for index, node in enumerate(members[1:], 1):
-                pointer = f"{at}/when/and/{index}"
-                body.append(premise(site, linked, clause, pointer, node, variable))
-            statements.append(("rule", atom, body, line))
-            columns.append(column)
+        # Every declaration is checked, so a refusal in one does not hide the refusal of another; a module with
+        # any refusal lowers no rule at all.
+        try:
+            lower_declaration(site, linked, module, at, declaration, statements, columns)
+        except CompileError as error:
+            refused.extend(error.diagnostics)
+    if refused:
+        raise CompileError("\n".join(str(diagnostic) for diagnostic in refused), refused)
     return rules_dl.NativeSource(module.pack, module.file.stem, where, text, tuple(statements), tuple(columns))
+
+
+def lower_declaration(site: Site, linked: native_rule_signatures.Linked, module: modules.Module, at: str,
+                      declaration: dict, statements: list, columns: list) -> None:
+    where, text, offsets = site.file, site.text, site.offsets
+    start = offsets[at]
+    if len(start) > len(str(len(text))) or int(start) >= len(text):
+        refuse(where, at, 1, 1, "A rule head needs a position in its authored source")
+    offset = int(start)
+    line = text.count("\n", 0, offset) + 1
+    column = offset - text.rfind("\n", 0, offset)
+    options = declaration.get("options")
+    if set(declaration) - {"rule", "columns", "args", "when", "options"} or (
+        options is not None and
+        (len(options) != 1 or options[0].keys() != {"extend"} or options[0]["extend"] is not True)
+    ):
+        refuse(where, at, line, column, "Rule options and locals are not lowered yet")
+    if "columns" in declaration:
+        name = declaration["rule"]
+        signature = linked.signatures[name]
+        key = [(col, storage) for col, _, storage in signature.key]
+        statements.append(("decl", name, key, line, None, False, False, None, signature.extend, None, False))
+    if "when" in declaration:
+        clause = linked.clauses[module.pack, module.rel, at]
+        signature = linked.signatures[clause.relation]
+        head = declaration.get("args", [{"path": [name]} for name, _, _ in signature.key])
+        guard = declaration["when"]
+        members = guard["and"] if set(guard) == {"and"} and guard["and"] else [guard]
+        first = f"{at}/when/and/0" if members[0] is not guard else f"{at}/when"
+        variable, table = membership(where, at, line, column, members[0], head, clause, first)
+        terms = [("var", variable)]
+        atom = (clause.relation, terms, line)
+        body = [("lit", "positive", (table, terms, line))]
+        for index, node in enumerate(members[1:], 1):
+            pointer = f"{at}/when/and/{index}"
+            body.append(premise(site, linked, clause, pointer, node, variable))
+        statements.append(("rule", atom, body, line))
+        columns.append(column)
 
 
 def membership(where: str, at: str, line: int, column: int, guard: dict,
