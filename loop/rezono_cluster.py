@@ -34,3 +34,26 @@ def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item
     if cluster:
         items[:] = ordinary
         config.hook.pytest_deselected(items=cluster)
+
+
+CLUSTER_SKIP_FAILURE = "Skipped cluster test: "
+
+
+def _skip_reason(report: pytest.TestReport) -> str:
+    longrepr = report.longrepr
+    if isinstance(longrepr, tuple) and len(longrepr) == 3:
+        message = str(longrepr[2])
+    else:
+        message = str(longrepr)
+    return message.removeprefix("Skipped: ")
+
+
+@pytest.hookimpl(hookwrapper=True)
+def pytest_runtest_makereport(item: pytest.Item, call: pytest.CallInfo):  # noqa: ARG001
+    outcome = yield
+    if not item.config.getoption("--rezono-cluster") or item.get_closest_marker("cluster") is None:
+        return
+    report = outcome.get_result()
+    if report.skipped and not hasattr(report, "wasxfail"):
+        report.outcome = "failed"
+        report.longrepr = CLUSTER_SKIP_FAILURE + _skip_reason(report)

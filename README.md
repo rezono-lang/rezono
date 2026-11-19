@@ -20,6 +20,13 @@ jq -e '.checks[] | select(.name == "rezono:proofs" and .status == "green" and .v
 
 The final command prints the recorded proof check. Open the same manifest to see the snapshot hashes and witness references. Explore other [examples](examples/) or read the [language guide](rezono/README.md).
 
+On any other machine with Docker, build an image from the checkout with the same Ubuntu, Python and jq, start a shell in it, and run the commands above there. The image stays on your machine; it is never published.
+
+```sh
+docker build --tag rezono-quickstart .
+docker run --rm -it rezono-quickstart
+```
+
 ## Compile an authored Rezono pack
 
 The released Python wheel includes the module reader. Put Node 24 on PATH or set `REZONO_NODE` to its
@@ -38,7 +45,7 @@ the same shell.
 
 Code, tests and build scripts use Apache-2.0. Schemas and theories use CC0-1.0. Documentation and example content use CC-BY-4.0. See [LICENSE](LICENSE), the [licence texts](LICENSES/) and the [path-by-path attribution notice](NOTICE).
 
-Read [AGENTS.md](AGENTS.md) and the component's working instructions before making a change. Contributors select one expected failure from `python scripts/red_list.py` and follow [the worker card](WORKER.md).
+Read [CONTRIBUTING.md](CONTRIBUTING.md) for how to report a bug and contribute from a fork. Read [AGENTS.md](AGENTS.md) and the component's working instructions before making a change. Contributors select one expected failure from `python scripts/red_list.py` and follow [the worker card](WORKER.md).
 
 Pull requests require `check`, `Light checks` and `Inspect test evidence`. A read-only workflow from the base revision checks proposed Git objects. GitHub attaches the read-only check directly to the reviewed commit. Builders and maintainers who need to move or edit tests, fixtures, recorded outcomes, test helpers or the policy itself, including the workflows that define the required checks (`.github/workflows/ci.yml`, `.github/workflows/disposable-cluster.yml` and `.github/workflows/red-policy.yml`), must apply the `planner` label and explain why in the pull request. The label does not switch the review off: a pull request that lifts a red mark changes no other protected path, and every new or changed red mark sets `strict=True` without `run=False`. The review lists removed protected files and test functions, and changed evidence, as `REMOVED` and `CHANGED` lines in its log and job summary; these lines do not block. In the merge queue, `Inspect test evidence` reviews the queued change again against the commit it lands on, with the policy from that commit and the pull request's current label, so a pull request reviewed against an older base cannot land under an older policy. The merge queue runs every discovered component against the combined changes. The compiler and example suites require the pinned Soufflé 2.5 oracle in CI. Job summaries report actual skips by reason, including Feldera comparisons that need an endpoint. Run `python scripts/red_list.py --skips report.xml` on a pytest JUnit report to reproduce a summary. Inactive task claims without an open pull request expire after four hours.
 

@@ -1,0 +1,45 @@
+name: Quickstart image
+
+# The Dockerfile at the root runs the README.md quickstart on any machine (decisions/front-door.md). Building it
+# takes minutes, and only the readme, the Dockerfile and the pinned requirements can break it, so this runs only
+# when one of them changes. The image stays on the runner: it is never pushed.
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - README.md
+      - Dockerfile
+      - .dockerignore
+      - requirements/**
+      - .github/workflows/quickstart-image.yml
+  push:
+    branches: [main]
+    paths:
+      - README.md
+      - Dockerfile
+      - .dockerignore
+      - requirements/**
+      - .github/workflows/quickstart-image.yml
+
+concurrency:
+  group: quickstart-image-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+permissions:
+  contents: read
+
+jobs:
+  quickstart:
+    name: Quickstart in the image
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Build the image
+        shell: bash
+        run: docker build --progress=plain --tag rezono-quickstart .
+      - name: Run the README quickstart in the image
+        shell: bash
+        run: docker run --rm --env RUNNER_TEMP=/tmp rezono-quickstart bash scripts/check-quickstart.sh

@@ -128,3 +128,17 @@ def test_restore_offline_requires_every_readback_on_target():
         r["restore_dependency_reading"][0]["cluster"] = "elsewhere"
 
     assert results(elsewhere) == {(run, trial, backup, "unknown", "foreign-control-plane", "recovery-api")}
+
+
+def test_restore_offline_dependent_trial_without_every_binding_only_waits():
+    """A trial whose only binding is a control plane on an unavailable cluster waits; it is not also unknown."""
+    run, trial, backup, recovery = "restore-run", "restore-trial", "chosen-copy", "recovery"
+    records = {
+        "backup_trial": [{"id": trial, "backup": backup, "cluster": recovery, "run": run}],
+        "restore_dependency_binding": [{"id": "control", "trial": trial, "function": "control",
+                                        "provider": "recovery-api", "cluster": "management"}],
+        "failure_observation": [{"id": "management"}],
+    }
+    _, state = compiled(records)
+    assert state.derived["restore_offline_result"] == {
+        (run, trial, backup, "waiting", "management-dependent", "recovery-api")}

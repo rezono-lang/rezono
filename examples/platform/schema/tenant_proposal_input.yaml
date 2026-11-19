@@ -63,6 +63,8 @@ classes:
       source_delivery: {required: true}
       target: {required: true}
       port: {range: integer, required: true, minimum_value: 1, maximum_value: 65535}
+      source_tenant:
+      source_number: {range: integer, minimum_value: 1}
   TenantQuota:
     attributes:
       id: {identifier: true}
