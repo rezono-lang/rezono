@@ -19,6 +19,7 @@ POLICY = {
     ".github/workflows/red-policy.yml",
     ".github/workflows/resume-feldera-review.yml", "scripts/feldera_admission.py",
     "scripts/red_guard.py", "scripts/test_red_guard.py",
+    "scripts/red_before.py", "scripts/test_red_before.py",
 }
 EVIDENCE_DIRS = {
     "test", "tests", "__tests__", "__snapshots__", "fixture", "fixtures",
