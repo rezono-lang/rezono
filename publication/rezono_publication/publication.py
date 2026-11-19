@@ -163,7 +163,7 @@ def schema_document(bundle: dict, full=None) -> tuple[dict, dict]:
         column_types = {}
         for c in r["columns"]:
             column_types[c["name"]] = "Text"
-            if c["type"] == "integer":  # an integer column keeps its type: no text that is not an integer
+            if c.get("type") == "integer":  # an integer column keeps its type: no text that is not an integer
                 column_types[c["name"]] = f"{name}{pascal(c['name'])}"
                 types[column_types[c["name"]]] = {"of": "Integer", "min": BIGINT[0], "max": BIGINT[1]}
         kinds[name] = {"world": "open" if partial(r["id"]) else r["world"], "id": {"type": "Text"},
