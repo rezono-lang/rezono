@@ -16,17 +16,15 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
-      - name: Confirm PR policy review for the merge group
-        if: github.event_name == 'merge_group'
-        run: echo "Test evidence is reviewed on each pull request. The check job tests the combined candidate."
+      # The policy always comes from the base. In the merge queue that is the commit the
+      # queued change lands on, so a change reviewed against an older base is reviewed
+      # again by the current policy.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        if: github.event_name == 'pull_request_target'
         with:
-          ref: ${{ github.event.pull_request.base.sha }}
-          fetch-depth: 0
+          ref: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
+          fetch-depth: ${{ github.event_name == 'merge_group' && 1 || 0 }}
           persist-credentials: false
       - name: Verify policy examples
-        if: github.event_name == 'pull_request_target'
         shell: bash
         run: |
           set -euo pipefail
@@ -84,6 +82,56 @@ jobs:
           done
           echo "ERROR PR state kept changing during review."
           exit 1
+      - name: Review the queued change against its merge base
+        if: github.event_name == 'merge_group'
+        shell: bash
+        env:
+          BASE: ${{ github.event.merge_group.base_sha }}
+          HEAD: ${{ github.event.merge_group.head_sha }}
+          HEAD_REF: ${{ github.event.merge_group.head_ref }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          echo "Merge group $HEAD_REF: base $BASE, head $HEAD"
+          if [[ ! "$HEAD_REF" =~ ^refs/heads/gh-readonly-queue/[^[:space:]]+/pr-([0-9]+)-[0-9a-f]{40}$ ]]; then
+            echo "ERROR cannot read the pull request number from $HEAD_REF."
+            exit 1
+          fi
+          pr=${BASH_REMATCH[1]}
+          for attempt in 1 2 3; do
+            if git fetch --no-tags --depth=1 origin "$HEAD_REF"; then
+              break
+            fi
+            [[ "$attempt" -lt 3 ]] || exit 1
+            sleep 5
+          done
+          [[ "$(git rev-parse FETCH_HEAD)" == "$HEAD" ]]
+          planner=$(gh api "repos/$GITHUB_REPOSITORY/pulls/$pr"             --jq 'any(.labels[]; .name == "planner")')
+          label=()
+          case "$planner" in
+            true)
+              label=(--planner)
+              echo "Planner label on #$pr: protected paths may change; red marks are still reviewed."
+              ;;
+            false) ;;
+            *) exit 1 ;;
+          esac
+          report="$RUNNER_TEMP/test-evidence.txt"
+          result=0
+          python -I scripts/red_guard.py "${label[@]}" "$BASE" "$HEAD" > "$report" || result=$?
+          cat "$report"
+          {
+            echo "### Test evidence in the merge queue (#$pr, planner label: $planner)"
+            echo
+            if [[ -s "$report" ]]; then
+              echo '```text'
+              cat "$report"
+              echo '```'
+            else
+              echo "No protected evidence was removed or changed."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit "$result"
       - name: Require live Feldera evidence for backend changes
         if: github.event_name == 'pull_request_target'
         shell: bash
