@@ -1,0 +1,57 @@
+{
+  "source": "kind Decision world closed\n  title: Text\nrelationship kind Ground world closed\n  decision: Decision\n  rests_on: Decision",
+  "module": {
+    "rezono": "0",
+    "pack": "sample",
+    "use": [],
+    "decls": [
+      {
+        "kind": "Decision",
+        "world": "closed",
+        "slots": [
+          {
+            "slot": "title",
+            "type": "Text"
+          }
+        ],
+        "derived": []
+      },
+      {
+        "kind": "Ground",
+        "world": "closed",
+        "relationship": true,
+        "slots": [
+          {
+            "slot": "decision",
+            "type": "Decision"
+          },
+          {
+            "slot": "rests_on",
+            "type": "Decision"
+          }
+        ],
+        "derived": []
+      }
+    ]
+  },
+  "spanNames": {
+    "/decls/1": "Ground",
+    "/decls/1/slots/1": "rests_on"
+  },
+  "rejections": [
+    {
+      "from": "relationship kind Ground",
+      "to": "embedded relationship kind Ground"
+    }
+  ],
+  "knownDiagnostics": [
+    {
+      "code": "R000",
+      "span": {
+        "text": "kind",
+        "start": 75,
+        "end": 79
+      }
+    }
+  ]
+}

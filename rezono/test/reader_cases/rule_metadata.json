@@ -1,0 +1,30 @@
+{
+  "source": "rules identity\n  | // @explain fold\n  | .decl has_chosen(referent: symbol)\n  | has_chosen(a) :- chosen(a, r).\n  | // @explain on_demand\n  | .decl rank_conflict(a: symbol, b: symbol)\n  | rank_conflict(a, b) :- before(a, b), rank(a, x), rank(b, y), x >= y.",
+  "module": {
+    "rezono": "0",
+    "pack": "sample",
+    "use": [],
+    "decls": [
+      {
+        "rules": "identity",
+        "lines": [
+          "// @explain fold",
+          ".decl has_chosen(referent: symbol)",
+          "has_chosen(a) :- chosen(a, r).",
+          "// @explain on_demand",
+          ".decl rank_conflict(a: symbol, b: symbol)",
+          "rank_conflict(a, b) :- before(a, b), rank(a, x), rank(b, y), x >= y."
+        ]
+      }
+    ]
+  },
+  "spanNames": {
+    "/decls/0": "identity"
+  },
+  "rejections": [
+    {
+      "from": "  | // @explain fold",
+      "to": "  |// @explain fold"
+    }
+  ]
+}
