@@ -9,6 +9,7 @@ from importlib.util import find_spec
 import pytest
 
 T = 1_800_000_000
+GUIDE = "AGENTS.md"  # the folder guide of the fixture tree, which is no decision
 
 
 class MissingDecisionHeadCapture(AssertionError):
@@ -111,7 +112,7 @@ def test_decision_head_gives_one_decision_row(tmp_path):
     capture = capture_module(MissingDecisionHeadCapture)
 
     write(tmp_path / "one", {
-        "decisions/saturday.md": SATURDAY, "decisions/plain.md": PLAIN, "decisions/AGENTS.md": "# Working here\n",
+        "decisions/saturday.md": SATURDAY, "decisions/plain.md": PLAIN, f"decisions/{GUIDE}": "# Working here\n",
     })
     assert capture.decision_rows(tmp_path / "one") == {
         "decision": [SATURDAY_ROW], "subject": [{"id": "opening-hours", "title": "opening-hours"}],
@@ -145,11 +146,11 @@ TREE = {
     "decisions/saturday.md": NEW,
     "decisions/weekdays.md": OLD,
     "decisions/plain.md": PLAIN + "\nSee [the Saturday hours](saturday.md).\n",
-    "docs/guide.md": "Read [the old hours](../decisions/weekdays.md#why).\n",
-    "docs/other.md": "A link outside decisions/ is not relative to it: [x](saturday.md).\n",
+    "handbook/hours.md": "Read [the old hours](../decisions/weekdays.md#why).\n",
+    "handbook/other.md": "A link outside the decisions folder is not relative to it: [x](saturday.md).\n",
     "scripts/tool.py": "# decisions/plain.md has no head, so it has no row.\n",
     "loop/tests/test_hours.py": 'REASON = "extra: decisions/weekdays.md: section 1."\n',
-    "docs/picture.png": b"\x89PNG\r\n\x1a\n\x00\xff decisions/saturday.md",
+    "handbook/picture.png": b"\x89PNG\r\n\x1a\n\x00\xff decisions/saturday.md",
     "notes.md": "An untracked file names decisions/saturday.md.\n",
 }
 TRACKED = sorted(set(TREE) - {"notes.md"})
@@ -196,7 +197,7 @@ def test_decision_citations_name_each_file(tmp_path):
     assert sorted((row["path"], row["decision"]) for row in rows["build_decision_citation"]) == [
         ("decisions/plain.md", "saturday"),
         ("decisions/saturday.md", "weekdays"),
-        ("docs/guide.md", "weekdays"),
+        ("handbook/hours.md", "weekdays"),
         ("loop/tests/test_hours.py", "weekdays"),
     ]
     assert sorted((row["test"], row["decision"]) for row in rows["build_red_citation"]) == [

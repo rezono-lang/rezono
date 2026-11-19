@@ -114,7 +114,7 @@ def test_uncited_decision_in_force_is_a_warning(tmp_path):
         raise MissingUncitedDecisionRule(f"build/schema lacks {sorted(kinds - declared_kinds())}")
     decisions = [*DECISIONS, decision("lone-rule", "20260301", "in_force"),
                  decision("named-earlier", "20260301", "in_force")]
-    citations = [("at-cut", "docs/guide.md", "new-rule"), ("earlier", "docs/guide.md", "named-earlier")]
+    citations = [("at-cut", "handbook/hours.md", "new-rule"), ("earlier", "handbook/hours.md", "named-earlier")]
     rows = observations(tmp_path / "scanned", decisions, {"at-cut": OBSERVED_AT, "earlier": OBSERVED_AT - 1},
                         citations=citations)
     if WARNING not in rows:
