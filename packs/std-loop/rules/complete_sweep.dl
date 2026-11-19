@@ -1,3 +1,8 @@
+// Protected admission inputs (decisions/admission-transport.md, section 6): only admission fills them.
+.decl verified_receipt(receipt: symbol, source: symbol, scope: symbol, cut: symbol, inventory: symbol, content: symbol)
+.decl verified_member(receipt: symbol, member: symbol, part: number, value: symbol)
+.decl verified_sweep_node(run: symbol, collector: symbol, window: symbol, node: symbol)
+.decl unverified_expected_node(run: symbol, collector: symbol, window: symbol)
 .decl sweep_node_report_count(run: symbol, collector: symbol, window: symbol, node: symbol, variants: number)
 .decl covered_sweep_node(run: symbol, collector: symbol, window: symbol, start: number, stop: number, node: symbol)
 .decl sweep_node_counts(run: symbol, collector: symbol, window: symbol, start: number, stop: number, expected: number, covered: number)
@@ -5,9 +10,21 @@
 .decl complete_sweep_interval(run: symbol, collector: symbol, window: symbol, start: number, stop: number)
 .decl complete_sweep(run: symbol, collector: symbol, window: symbol, ref: symbol)
 
+verified_sweep_node(run, collector, window, node) :-
+    verified_receipt(receipt, _, _, _, _, _),
+    verified_member(receipt, member, 0, "sweep-node"),
+    verified_member(receipt, member, 1, run),
+    verified_member(receipt, member, 2, collector),
+    verified_member(receipt, member, 3, window),
+    verified_member(receipt, member, 4, node).
+
+unverified_expected_node(run, collector, window) :-
+    expected_node(run, collector, window, node),
+    !verified_sweep_node(run, collector, window, node).
+
 // Identical final reports agree. Distinct coverage tuples cannot both be final.
 sweep_node_report_count(run, collector, window, node, variants) :-
-    expected_node(run, collector, window, node),
+    verified_sweep_node(run, collector, window, node),
     variants = count : { node_report(run, collector, window, node, _, _, _, _) }.
 
 covered_sweep_node(run, collector, window, start, stop, node) :-
@@ -19,12 +36,13 @@ covered_sweep_node(run, collector, window, start, stop, node) :-
 // The two counts retain a contributor digest for each set of nodes.
 sweep_node_counts(run, collector, window, start, stop, expected, covered) :-
     sweep_window(run, collector, window, start, stop, _),
-    expected = count : { expected_node(run, collector, window, _) },
+    expected = count : { verified_sweep_node(run, collector, window, _) },
     covered = count : { covered_sweep_node(run, collector, window, start, stop, _) }.
 
-// Covered nodes are drawn exclusively from the inventory in this scope.
+// Covered nodes are drawn exclusively from the verified inventory in this scope, with no extra recorded node.
 covered_sweep_interval(run, collector, window, start, stop) :-
-    sweep_node_counts(run, collector, window, start, stop, total, total), total > 0.
+    sweep_node_counts(run, collector, window, start, stop, total, total), total > 0,
+    !unverified_expected_node(run, collector, window).
 
 // Equal bounds agree even when their source references differ.
 complete_sweep_interval(run, collector, window, start, stop) :-
