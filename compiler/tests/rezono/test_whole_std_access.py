@@ -5,8 +5,14 @@ consumer here. It is published twice: once over std-access with its existing sch
 the oracle in fixtures/std-access-legacy, and once over std-access as the repository holds it. The two
 publications must agree on files, bundle (places and the pin of std-access aside) and the relations each role
 sees (decisions/language-semantic-publication.md, decisions/language-first-packs.md). Each publication's pin of
-std-access is checked against its own bytes before it is set aside."""
+std-access is checked against its own bytes before it is set aside.
 
+The legacy form is not the standard pack: its bytes differ, so the name std-access is reserved against them
+(decisions/standard-pack-names.md). It is published inside a conversion trial, the one place where candidate
+bytes are compared under a standard name, and the test checks that they are refused outside it. The form the
+repository holds needs no trial: it is the standard pack."""
+
+from contextlib import nullcontext
 from pathlib import Path
 import json
 import shutil
@@ -14,7 +20,7 @@ import shutil
 import pytest
 import yaml
 
-from rezono_compiler import emit, modules, pack
+from rezono_compiler import emit, modules, pack, standard_packs
 from rezono_publisher import batch, publish, store
 from calc_packs import SCHEME
 
@@ -52,12 +58,18 @@ def published(tmp_path, form):
             entry["sha256"] = modules.pack_hash(access)
     (consumer / "pack.yaml").write_text(yaml.safe_dump(consumer_meta, sort_keys=False), encoding="utf-8")
     pin = modules.pack_hash(access)
-    files = emit.compile_pack(pack.read(consumer))
-    epoch = batch.epoch(consumer, epoch=1, knowledge_time="2026-11-10T00:00:00Z", sources=[("rules", "test")])
-    bucket = store.FileStore(tmp_path / f"{form}-store")
-    roles = {"checker": "complete"} | {str(row["id"]): "may_read" for row in
-                                       yaml.safe_load((consumer / "facts/roles.yaml").read_bytes())["role"]}
-    publish.publish(epoch, bucket, roles)
+    if form == "legacy":
+        assert standard_packs.refusal("std-access", pin), "the legacy form must not pass as the standard pack"
+        admitted = standard_packs.trial("std-access", pin)
+    else:
+        admitted = nullcontext()
+    with admitted:
+        files = emit.compile_pack(pack.read(consumer))
+        epoch = batch.epoch(consumer, epoch=1, knowledge_time="2026-11-10T00:00:00Z", sources=[("rules", "test")])
+        bucket = store.FileStore(tmp_path / f"{form}-store")
+        roles = {"checker": "complete"} | {str(row["id"]): "may_read" for row in
+                                           yaml.safe_load((consumer / "facts/roles.yaml").read_bytes())["role"]}
+        publish.publish(epoch, bucket, roles)
     seen = {}
     for role in roles:
         objects = publish.role_objects(bucket, "subsidy", "m-1", role)
