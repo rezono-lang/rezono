@@ -920,7 +920,9 @@ def run_shard(folder: str, shard: int, total: int, plans: Path, reports: Path, r
         raise ValueError("Worker assignments differ from the shard inventory")
     print(f"{folder} shard {shard+1}/{total}: {len(selected)} test IDs", flush=True)
     producer, reader = forms_pair(selected) if folder == "examples" and len(groups) > 2 else ([], [])
-    paired_readers = bool(producer) and set(groups[0]) == set(producer) and set(reader) <= set(groups[1])
+    paired_readers = bool(producer) and set(producer) <= set(groups[0]) and set(reader) <= set(groups[1])
+    if producer and not paired_readers:
+        print("The form tests are not paired: each of their processes publishes the world itself", flush=True)
 
     def execute(pair):
         index, nodes = pair
