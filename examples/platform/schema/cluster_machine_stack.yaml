@@ -1,0 +1,20 @@
+id: https://rezono.org/examples/platform-core/cluster-machine-stack
+name: platform_cluster_machine_stack
+description: The operating system and Kubernetes distribution selected for the cluster scenario, and each worker node's bootstrap artifact.
+in_language: en
+imports: [linkml:types]
+default_range: string
+annotations:
+  layer: facts
+
+classes:
+  MachineStackChoice:
+    attributes:
+      id: {identifier: true}
+      os: {required: true}
+      distribution: {required: true}
+  MachineBootstrap:
+    description: The bootstrap artifact written for the worker node with this identifier.
+    attributes:
+      id: {identifier: true}
+      artifact: {required: true}
