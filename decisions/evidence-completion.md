@@ -17,12 +17,22 @@ that its test reads. This is an evidence completion. It applies when all of thes
 
 - Exactly one red mark goes, in one test file. That file changes only by the lift, and
   every other mark in it stays exactly as it was, reason included.
-- At least one test function turns from red to green through that lift.
-- Every other changed path is added or changed evidence data: a protected file that is not
-  policy (`POLICY` in `red_guard.py`) and whose suffix is a data format, such as
-  `examples/*/expected/**/*.json` or `tests/conformance/*.yaml`.
+- At least one test function that pytest collects turns from red to green through that lift.
+- Every other path is a new evidence file: added, not changed, so that no expectation the
+  test already holds can be weakened. It is a regular file (Git mode 100644, no symbolic
+  link, not executable), in a directory named `expected/`, `snapshots/` or `vectors/`,
+  with a data suffix (`.json`, `.yaml`, `.csv` and the like), such as
+  `examples/*/expected/calc/*.json`.
+- Nothing else counts as evidence, even inside those directories: no fixture, no
+  `*.schema.json`, no `pack.yaml`, no `not-yet.json`, nothing under `blocked/`,
+  `contracts/` or `.github/`. These configure what runs or what is accepted.
 - Nothing else changes: no source, no other test file, no other mark, no test helper or
-  `conftest.py`, no workflow, no removed file.
+  `conftest.py`, no workflow, no changed or removed file.
+- The evidence comes from a source independent of the engine: worked by hand, computed
+  by an oracle or another implementation, or taken from a published reference, never
+  written from the engine's own output. The pull request says how it was made, and the
+  planner who reviews it checks that. The guard cannot see this; it is a condition for the
+  reviewer, not for the script.
 
 The guard reports such a pull request as `COMPLETED <path>::<test>`. Without the label, or
 with anything else in the pull request, the refusal stands.
@@ -38,7 +48,8 @@ The guard reads only Git objects, so it cannot tell whether the test reads the n
 3. `run` must see at least one of them fail there, with the mark lifted and without the
    new evidence. If they all pass, the evidence was not what made the test red.
 4. `green` lays the evidence over the base too. Since nothing else changes, that tree is
-   the head. Every selected test must then pass, and at least one must run.
+   the head. Every selected case must then pass: none may fail, skip or xfail, and at
+   least one must run. A skipped case would say nothing about the evidence.
 
 Both scripts run from the base revision, so the exception applies to pull requests after
 the one that introduces it lands.

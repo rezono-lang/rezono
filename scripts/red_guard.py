@@ -8,7 +8,8 @@ the label, a changed reason may move its mark to an earlier milestone but not to
 Removed and changed evidence is reported either way.
 
 One exception lets a planner complete evidence: with the label, a pull request may lift one
-red mark beside the evidence data that test reads, if it changes nothing else. red_before.py
+red mark beside new evidence data that test reads (added files under expected/, snapshots/
+or vectors/), if it changes nothing else. red_before.py
 then shows that the test is red on the base and green with the new evidence.
 
 A pull request that changes the checker or read access in a file that is not a test is
@@ -52,8 +53,14 @@ EVIDENCE_DIRS = {
 # Expectations recorded by hand outside an evidence directory, such as the slip an example
 # must render.
 EXPECTATIONS = {"slip.yaml"}
-# Evidence data that completes a red test: recorded outcomes, cases and vectors, not code.
+# Evidence data that completes a red test: a new recorded outcome, snapshot or vector, not
+# code and not configuration. Only these directories hold it; a fixture, a conformance case,
+# a schema, a pack, a contract or a list of what is blocked or not yet supported does not.
 EVIDENCE_DATA = {".json", ".jsonl", ".yaml", ".yml", ".csv", ".txt", ".ttl", ".xml", ".snap", ".golden"}
+COMPLETION_DIRS = {"expected", "snapshots", "vectors"}
+NOT_EVIDENCE_DIRS = {"fixture", "fixtures", "contracts", ".github"}
+NOT_EVIDENCE_TOP = {"blocked", "contracts", ".github"}
+NOT_EVIDENCE_NAMES = {"not-yet.json", "pack.yaml"}
 
 
 def protected(path):
@@ -73,6 +80,12 @@ READ_FIRST_DIRS = ("checker/rezono_checker/", "packs/std-access/", "edge/gate/sr
 READ_FIRST_FILES = {"edge/publisher/rezono_publisher/access.py", "contracts/proof.yaml"}
 TEST_DIRS = {"test", "tests", "__tests__"}
 READ_LABEL = "p1-read-"
+
+
+def collectable(name):
+    """A qualified name that pytest collects by default: test functions in Test classes."""
+    *classes, function = name.split("::")
+    return function.startswith("test") and all(c.startswith("Test") for c in classes)
 
 
 def is_test(path):
@@ -368,23 +381,38 @@ def lifted_tests(before, after):
                         if not red and old.tests.get(name, (None, False))[1]))
 
 
+def new_evidence(change):
+    """An added regular file of evidence data under expected/, snapshots/ or vectors/.
+
+    Only an added file: a changed one could weaken an expectation the test already holds.
+    `after` is None unless Git records a regular, non-executable file (mode 100644) of
+    readable size, so a symbolic link or an executable never counts.
+    """
+    p = PurePosixPath(change.path.lower())
+    return (change.status == "A" and change.after is not None
+            and protected(change.path) and change.path not in POLICY
+            and p.suffix in EVIDENCE_DATA and not p.name.endswith(".schema.json")
+            and p.name not in NOT_EVIDENCE_NAMES and p.parts[0] not in NOT_EVIDENCE_TOP
+            and bool(COMPLETION_DIRS.intersection(p.parts[:-1]))
+            and not NOT_EVIDENCE_DIRS.intersection(p.parts[:-1]))
+
+
 def completion(changes):
     """The (test file, test names) that a pull request completes with evidence data, or None.
 
     It lifts exactly one red mark, in one test file whose change is only that lift, and that
-    turns at least one test green. Every other path is added or changed evidence data: a
-    protected file that is not policy and not code. Anything else, such as source, another
-    test file, another mark or a removed file, means it is not an evidence completion.
+    turns at least one test that pytest collects green. Every other path is new evidence data
+    (`new_evidence`). Anything else, such as source, another test file, another mark, a
+    changed or removed file, means it is not an evidence completion.
     """
     test, evidence = None, 0
     for c in changes:
         if (c.status == "M" and c.path.endswith(".py") and protected(c.path) and c.path not in POLICY
                 and test is None and c.before is not None and c.after is not None
                 and allowed(c.path, c.before, c.after)
-                and (names := lifted_tests(c.before, c.after))):
+                and (names := tuple(n for n in lifted_tests(c.before, c.after) if collectable(n)))):
             test = (c.path, names)
-        elif (c.status in "AM" and protected(c.path) and c.path not in POLICY
-              and PurePosixPath(c.path.lower()).suffix in EVIDENCE_DATA):
+        elif new_evidence(c):
             evidence += 1
         else:
             return None
@@ -466,7 +494,7 @@ def review(changes, planner=False, head=None, labels=()):
     elif lifted and other:
         errors.append(f"ERROR red marks are lifted in {', '.join(lifted)} while protected paths "
                       f"also change: {', '.join(other)}. Lift marks in a pull request of their own, or, with the "
-                      "planner label, lift one mark beside only the evidence data its test reads.")
+                      "planner label, lift one mark beside only new evidence data under expected/, snapshots/ or vectors/.")
     if head is not None and unread:
         label = read_label(head)
         if label is None:

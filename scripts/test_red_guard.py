@@ -177,13 +177,13 @@ def planner_cases(reason, function):
         raise AssertionError(f"a lifted mark is not a change: errors {errors}, notes {notes}")
     print("ALLOW without planner: lifted mark is not reported as a change")
     milestone_cases(edit, other)
-    completion_cases(edit, function, lifted, other)
+    completion_cases(edit, function, lifted, other, reason)
 
 
-def completion_cases(edit, function, lifted, other):
-    """With the label, one lifted mark may come with the evidence data its test reads."""
-    outcome = edit("examples/demo/expected/rows.json", b"[2]", b"[3]")
-    case = Change("tests/conformance/count.yaml", "A", None, b"count: 2\n")
+def completion_cases(edit, function, lifted, other, reason):
+    """With the label, one lifted mark may come with new evidence data its test reads."""
+    outcome = Change("examples/demo/expected/rows.json", "A", None, b"[3]")
+    case = Change("examples/demo/snapshots/count.json", "A", None, b"{\"count\": 2}\n")
     lift = edit("tests/test_count.py", function, lifted)
     refusal = "Lift marks in a pull request of their own"
 
@@ -214,6 +214,24 @@ def completion_cases(edit, function, lifted, other):
         [lift, outcome, edit(".github/workflows/ci.yml", b"a", b"b")], True, True)
     run("one lifted mark beside a changed conftest",
         [lift, edit("tests/conftest.py", b"value = 2\n", b"value = 3\n")], True, True)
+    # A changed outcome could weaken what the test already expects; only added files count.
+    run("one lifted mark beside changed evidence data",
+        [lift, edit("examples/demo/expected/rows.json", b"[2]", b"[3]")], True, True)
+    # Data outside expected/, snapshots/ and vectors/ configures what runs or is accepted.
+    for path in ("blocked/tests.txt", "tests/fixtures/rows.json", "tests/conformance/count.yaml",
+                 "examples/demo/expected/rows.schema.json", "examples/demo/expected/pack.yaml",
+                 "rezono/test/expected/not-yet.json", "contracts/expected/proof.json",
+                 "examples/demo/expected/fixtures/rows.json", "examples/demo/expected/rows.py"):
+        run(f"one lifted mark beside {path}",
+            [lift, outcome, Change(path, "A", None, b"tests/test_count.py\n")], True, True)
+    # Without readable bytes, Git recorded no regular file: a symbolic link or an executable.
+    run("one lifted mark beside an added symbolic link",
+        [lift, Change("examples/demo/expected/rows.json", "A", None, None)], True, True)
+    # pytest collects no test in a class whose name does not start with Test.
+    hidden = b"class Helper:\n    @" + reason + b"\n    def test_count(self):\n        assert count() == 2\n"
+    bare = b"class Helper:\n    def test_count(self):\n        assert count() == 2\n"
+    run("one lifted mark on a test that pytest does not collect",
+        [edit("tests/test_count.py", hidden, bare), outcome], True, True)
 
 
 def milestone_cases(edit, other):

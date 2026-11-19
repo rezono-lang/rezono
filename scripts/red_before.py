@@ -37,18 +37,12 @@ import xml.etree.ElementTree as ET
 
 # Read the guard beside this file, which in CI is the base copy of both.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from red_guard import EMPTY, UNREADABLE, changes, completion, git, inventory, protected, source
+from red_guard import EMPTY, UNREADABLE, changes, collectable, completion, git, inventory, protected, source
 
 
 def pytest_file(path):
     name = PurePosixPath(path).name
     return (name.startswith("test_") and name.endswith(".py")) or name.endswith("_test.py")
-
-
-def collectable(name):
-    """A qualified name that pytest collects by default: test functions in Test classes."""
-    *classes, function = name.split("::")
-    return function.startswith("test") and all(c.startswith("Test") for c in classes)
 
 
 def added_tests(records):
@@ -281,9 +275,11 @@ def green(base, head, selection):
         raise SystemExit("ERROR the selection does not name the completed test")
     pathspecs("checkout", head, paths=[c.path for c in records])
     failed, passed, skipped, _ = execute(completed, "the new evidence")
-    if failed or not passed:
-        verdict = (f"ERROR the completed test does not pass with the new evidence ({passed} passed, "
-                   f"{skipped} skipped, failures in {', '.join(failed) or 'none'}).")
+    # Every selected case must pass: a skipped or xfailed case shows nothing about the evidence.
+    if failed or skipped or not passed:
+        verdict = (f"ERROR the completed test does not pass in every case with the new evidence "
+                   f"({passed} passed, {skipped} skipped or xfailed, "
+                   f"failures in {', '.join(failed) or 'none'}).")
         status = 1
     else:
         verdict = (f"The completed test is red on the base and passes with the new evidence "

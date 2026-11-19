@@ -151,21 +151,33 @@ def selection_cases():
 READS_CASE = (b"import json\nfrom pathlib import Path\n\nimport pytest\n\nfrom pkg.calc import double\n\n\n"
               b"@pytest.mark.xfail(strict=True, raises=FileNotFoundError, reason=\"M1: needs the case\")\n"
               b"def test_double_case():\n"
-              b"    expected = json.loads((Path(__file__).parent / 'cases/double.json').read_text())\n"
+              b"    expected = json.loads((Path(__file__).parent / 'expected/double.json').read_text())\n"
               b"    assert double(2) == expected[0]\n")
 
 
-def completion(label, test, case, run_code, green_code, verdict):
+PARAM_MARK = b'pytest.mark.xfail(strict=True, raises=FileNotFoundError, reason="M1: needs the case")'
+# A smoke case that passes anywhere, and a red case that reads the evidence.
+PARAM_CASE = (b"import json\nfrom pathlib import Path\n\nimport pytest\n\nfrom pkg.calc import double\n\n\n"
+              b'@pytest.mark.parametrize("case", ["smoke", pytest.param("case", marks=' + PARAM_MARK + b")])\n"
+              b"def test_double_case(case):\n"
+              b"    if case == 'smoke':\n"
+              b"        assert double(1) == 2\n"
+              b"        return\n"
+              b"    expected = json.loads((Path(__file__).parent / 'expected/double.json').read_text())\n"
+              b"    assert double(2) == expected[0]\n")
+
+
+def completion(label, test, case, run_code, green_code, verdict, lifted=None):
     """One lifted mark beside only the evidence data its test reads: red on the base, green after."""
-    lifted = test.replace(b'@pytest.mark.xfail(strict=True, raises=FileNotFoundError, '
-                          b'reason="M1: needs the case")\n', b"")
+    if lifted is None:
+        lifted = test.replace(b"@" + PARAM_MARK + b"\n", b"")
     with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as directory:
         repo = Path(directory)
         git(repo, "init", "-q")
         git(repo, "config", "core.autocrlf", "false")
         base = commit(repo, {"pytest.ini": b"[pytest]\n", "conftest.py": CONFTEST, "pkg/__init__.py": b"",
                              "pkg/calc.py": FIXED, "tests/test_calc.py": test})
-        head = commit(repo, {"tests/test_calc.py": lifted, "tests/cases/double.json": case})
+        head = commit(repo, {"tests/test_calc.py": lifted, "tests/expected/double.json": case})
         found = script(repo, "discover", base, head)
         if found.returncode or found.stdout.decode().strip() != "required=true":
             raise AssertionError(f"{label}: discover gave {found.stdout!r} {found.stderr!r}")
@@ -174,7 +186,7 @@ def completion(label, test, case, run_code, green_code, verdict):
             prepared = script(repo, "prepare", base, head, str(selection))
             if prepared.returncode or selection.read_text() != "tests/test_calc.py::test_double_case\n":
                 raise AssertionError(f"{label}: prepare failed: {prepared.stderr!r}")
-            if (repo / "tests/test_calc.py").read_bytes() != lifted or (repo / "tests/cases/double.json").exists():
+            if (repo / "tests/test_calc.py").read_bytes() != lifted or (repo / "tests/expected/double.json").exists():
                 raise AssertionError(f"{label}: prepare did not lay only the lifted test over the base")
             ran = script(repo, "run", str(selection))
             done = script(repo, "green", base, head, str(selection)) if not ran.returncode else ran
@@ -193,7 +205,15 @@ def main():
     completion("evidence completion: red on the base, green with the new evidence", READS_CASE, b"[4]\n",
                0, 0, "The completed test is red on the base and passes with the new evidence")
     completion("evidence completion whose evidence does not make the test pass", READS_CASE, b"[5]\n",
-               0, 1, "ERROR the completed test does not pass with the new evidence")
+               0, 1, "ERROR the completed test does not pass in every case with the new evidence")
+    # Another case passes, but the case that reads the evidence skips or xfails with it: that
+    # shows nothing about the evidence.
+    for outcome in (b"skip", b"xfail"):
+        test = PARAM_CASE.replace(b"    assert double(2) == expected[0]\n",
+                                  b"    pytest." + outcome + b"('evidence present')\n")
+        completion(f"evidence completion whose case calls pytest.{outcome.decode()} with the evidence",
+                   test, b"[4]\n", 0, 1, "ERROR the completed test does not pass in every case with the new evidence",
+                   lifted=test.replace(b'pytest.param("case", marks=' + PARAM_MARK + b")", b'pytest.param("case")'))
     completion("evidence completion whose test passes on the base without the evidence",
                READS_CASE.replace(b"    expected = json.loads", b"    return\n    expected = json.loads"),
                b"[4]\n", 1, 1, "pass on the base source")
