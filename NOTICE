@@ -47,6 +47,7 @@ Licence by path:
 - Creative Commons Attribution 4.0 International (CC-BY-4.0) — documentation and example content:
   - blocked/
   - CHANGELOG.md
+  - CONTRIBUTING.md
   - decisions/
   - docs/
   - examples/ (except *.py)
