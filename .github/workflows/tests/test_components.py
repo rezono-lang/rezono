@@ -78,6 +78,18 @@ class WorkflowEnvironmentTests(unittest.TestCase):
         self.assertEqual(checkout["with"]["sparse-checkout"], "scripts")
         self.assertIn("python3 scripts/components.py verify-execution", steps[verify]["run"])
 
+    def test_a_hanging_claim_cleanup_cannot_hold_its_queue_for_hours(self):
+        # One concurrency group: without a limit a hung job blocks every later run for up to six hours.
+        workflow = yaml.safe_load((ROOT / ".github/workflows/cleanup.yml").read_text(encoding="utf-8"))
+        self.assertIsInstance(workflow["concurrency"], str)
+        schedule, = workflow[True]["schedule"]  # PyYAML reads the key `on` as True
+        minutes = sorted(int(minute) for minute in schedule["cron"].split()[0].split(","))
+        interval = min(b - a for a, b in zip(minutes, [*minutes[1:], minutes[0] + 60]))
+        self.assertEqual(set(workflow["jobs"]), {"release", "standstill"})
+        for name, job in workflow["jobs"].items():
+            self.assertIn("timeout-minutes", job, name)
+            self.assertLessEqual(job["timeout-minutes"], interval, name)
+
 
 class SelectorTests(unittest.TestCase):
     def test_shared_and_transitive_inputs(self):
