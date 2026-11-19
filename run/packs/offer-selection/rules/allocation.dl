@@ -29,22 +29,8 @@ alloc_unplaced(k, m) :- allocation_candidate__workload(k, w), allocation_member_
 alloc_double(k, m) :- allocation_assignment__candidate(a, k), allocation_assignment__member(a, m),
     allocation_assignment__candidate(b, k), allocation_assignment__member(b, m), a != b.
 
-// Decisions in force on a reference day: taken, begun, not ended and not replaced by a successor that took effect.
-.decl took_effect(decision: symbol, on: symbol)
-took_effect(d, r) :- decision(d), reference_date__day(r, n), decision__valid_from_day(d, f), f <= n,
-    !decision__state(d, "proposed").
-
-.decl ended(decision: symbol, on: symbol)
-ended(d, r) :- reference_date__day(r, n), decision__valid_until_day(d, u), u <= n.
-
-.decl replaced(decision: symbol, by: symbol, on: symbol)
-replaced(d, s, r) :- decision__supersedes(s, d), took_effect(s, r).
-
-.decl was_replaced(decision: symbol, on: symbol)
-was_replaced(d, r) :- replaced(d, _, r).
-
-.decl in_force_on(decision: symbol, on: symbol)
-in_force_on(d, r) :- took_effect(d, r), !ended(d, r), !was_replaced(d, r).
+// Which decision is in force on a reference day comes from std-decision: took_effect, ended, replaced and
+// in_force_on, with its checks on the decision records.
 
 // What each member demands of its host, one row per member and resource.
 .decl alloc_demand(candidate: symbol, host: symbol, member: symbol, resource: symbol, amount: number)
@@ -120,12 +106,32 @@ alloc_charge_amount(k, g, cur, total) :- allocation_charge__candidate(g, k), all
     allocation_charge__recurring_minor(g, rate), allocation_charge__periods(g, p),
     allocation_charge__setup_minor(g, once), usage = rate * p, total = usage + once.
 
-.decl allocation_payable_total(workload: symbol, scope: symbol, candidate: symbol, currency: symbol, total: number)
-allocation_payable_total(w, s, k, cur, t) :- alloc_comparison(c, w, s, _), alloc_candidate(c, k),
-    alloc_charge_amount(k, _, cur, _), t = sum x : { alloc_charge_amount(k, _, cur, x) }.
+// A charge covers the host it names; a charge that names no host covers the whole candidate.
+.decl alloc_charge_on_host(charge: symbol)
+alloc_charge_on_host(g) :- allocation_charge__host(g, _).
 
+.decl alloc_whole_charge(candidate: symbol)
+alloc_whole_charge(k) :- alloc_charge_amount(k, g, _, _), !alloc_charge_on_host(g).
+
+.decl alloc_host_charged(candidate: symbol, host: symbol)
+alloc_host_charged(k, h) :- alloc_charge_amount(k, g, _, _), allocation_charge__host(g, h).
+
+// A host the candidate occupies that no charge covers: its price is unknown, never zero.
+.decl alloc_uncharged_host(candidate: symbol, host: symbol)
+alloc_uncharged_host(k, h) :- allocation_assignment__candidate(a, k), allocation_assignment__host(a, h),
+    !alloc_host_charged(k, h), !alloc_whole_charge(k).
+
+.decl alloc_has_uncharged_host(candidate: symbol)
+alloc_has_uncharged_host(k) :- alloc_uncharged_host(k, _).
+
+// A candidate is priced when it has a charge and every host it occupies is covered by one.
 .decl alloc_priced(candidate: symbol)
-alloc_priced(k) :- alloc_charge_amount(k, _, _, _).
+alloc_priced(k) :- alloc_charge_amount(k, _, _, _), !alloc_has_uncharged_host(k).
+
+// The payable total only of a candidate whose full price is known.
+.decl allocation_payable_total(workload: symbol, scope: symbol, candidate: symbol, currency: symbol, total: number)
+allocation_payable_total(w, s, k, cur, t) :- alloc_comparison(c, w, s, _), alloc_candidate(c, k), alloc_priced(k),
+    alloc_charge_amount(k, _, cur, _), t = sum x : { alloc_charge_amount(k, _, cur, x) }.
 
 .decl alloc_mixed_currency(candidate: symbol)
 alloc_mixed_currency(k) :- alloc_charge_amount(k, _, a, _), alloc_charge_amount(k, _, b, _), a != b.
@@ -178,15 +184,30 @@ alloc_preference_covered(c) :- alloc_comparison(c, w, s, r), allocation_preferen
     allocation_preference_coverage__scope(p, s), allocation_preference_coverage__reference_date(p, r),
     allocation_preference_coverage__authority(p, _).
 
-// A preference applies when its decision is in force on the day. It is replaced when the decided,
-// authorized successor for the same workload and scope has taken effect.
-.decl alloc_pref_disposition(comparison: symbol, preference: symbol, standing: symbol)
-alloc_pref_disposition(c, p, "applies") :- alloc_comparison(c, w, s, r), allocation_preference__workload(p, w),
-    allocation_preference__scope(p, s), allocation_preference__decision(p, d), in_force_on(d, r).
-alloc_pref_disposition(c, p, "replaced") :- alloc_comparison(c, w, s, r), allocation_preference__workload(p, w),
-    allocation_preference__scope(p, s), allocation_preference__decision(p, d), replaced(d, next, r),
+.decl alloc_preference_of(comparison: symbol, preference: symbol, decision: symbol)
+alloc_preference_of(c, p, d) :- alloc_comparison(c, w, s, _), allocation_preference__workload(p, w),
+    allocation_preference__scope(p, s), allocation_preference__decision(p, d).
+
+// A replacement counts for the preference only when the successor that took effect is itself a decision on a
+// preference for the same workload and scope. A successor about anything else replaces nothing here.
+.decl alloc_pref_replaced(comparison: symbol, preference: symbol)
+alloc_pref_replaced(c, p) :- alloc_preference_of(c, p, d), alloc_comparison(c, w, s, r), replaced(d, next, r),
     allocation_preference__decision(q, next), allocation_preference__workload(q, w),
     allocation_preference__scope(q, s).
+
+// A preference applies when its decision is in force on the day (std-decision's in_force_on). It is replaced
+// when such a successor for the same workload and scope has taken effect. A decision that is not in force
+// only because a successor about something else took effect is unsettled: the evidence does not
+// say whether the preference still stands, so a tie it could decide stays unknown.
+.decl alloc_pref_disposition(comparison: symbol, preference: symbol, standing: symbol)
+alloc_pref_disposition(c, p, "applies") :- alloc_preference_of(c, p, d), alloc_comparison(c, _, _, r),
+    in_force_on(d, r).
+alloc_pref_disposition(c, p, "replaced") :- alloc_pref_replaced(c, p).
+alloc_pref_disposition(c, p, "unsettled") :- alloc_preference_of(c, p, d), alloc_comparison(c, _, _, r),
+    took_effect(d, r), !ended(d, r), was_replaced(d, r), !alloc_pref_replaced(c, p).
+
+.decl alloc_has_unsettled(comparison: symbol)
+alloc_has_unsettled(c) :- alloc_pref_disposition(c, _, "unsettled").
 
 .decl alloc_applicable(comparison: symbol, preference: symbol)
 alloc_applicable(c, p) :- alloc_pref_disposition(c, p, "applies").
@@ -217,7 +238,8 @@ alloc_vote_n(c, n) :- alloc_vote(c, _), n = count : { alloc_vote(c, _) }.
 .decl allocation_choice(workload: symbol, scope: symbol, candidate: symbol)
 allocation_choice(w, s, k) :- alloc_comparison(c, w, s, _), alloc_lowest(c, k), alloc_lowest_n(c, 1).
 allocation_choice(w, s, k) :- alloc_comparison(c, w, s, _), alloc_lowest_n(c, n), n > 1,
-    alloc_preference_covered(c), alloc_vote(c, k), alloc_vote_n(c, 1), !alloc_has_unclear(c),
+    alloc_preference_covered(c), !alloc_has_unsettled(c), alloc_vote(c, k), alloc_vote_n(c, 1),
+    !alloc_has_unclear(c),
     standing = count : { alloc_pref_disposition(c, _, _) }, standing >= 1.
 
 // Why no candidate is chosen.
@@ -225,8 +247,10 @@ allocation_choice(w, s, k) :- alloc_comparison(c, w, s, _), alloc_lowest_n(c, n)
 allocation_comparison_status(w, s, "unknown") :- alloc_comparison(c, w, s, _), alloc_unknown(c).
 allocation_comparison_status(w, s, "unknown") :- alloc_comparison(c, w, s, _), alloc_lowest_n(c, n), n > 1,
     !alloc_preference_covered(c).
+allocation_comparison_status(w, s, "unknown") :- alloc_comparison(c, w, s, _), alloc_lowest_n(c, n), n > 1,
+    alloc_preference_covered(c), alloc_has_unsettled(c).
 allocation_comparison_status(w, s, "missing_preference") :- alloc_comparison(c, w, s, _), alloc_lowest_n(c, n),
-    n > 1, alloc_preference_covered(c), !alloc_has_applicable(c).
+    n > 1, alloc_preference_covered(c), !alloc_has_applicable(c), !alloc_has_unsettled(c).
 allocation_comparison_status(w, s, "ambiguous_preference") :- alloc_comparison(c, w, s, _), alloc_lowest_n(c, n),
     n > 1, alloc_preference_covered(c), alloc_pref_unclear(c, _).
 allocation_comparison_status(w, s, "ambiguous_preference") :- alloc_comparison(c, w, s, _), alloc_lowest_n(c, n),
