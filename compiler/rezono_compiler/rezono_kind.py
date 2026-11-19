@@ -1,6 +1,6 @@
 """Lower a closed or open Rezono kind using the slot component."""
 
-from collections.abc import Set
+from collections.abc import Mapping, Set
 
 from . import rezono_equation, rezono_metadata, rezono_slot
 from .names import NAME
@@ -81,7 +81,9 @@ def parent_of(value: object, kind: str, at: str, own: dict[str, str],
 
 
 def lower(decl: dict, at: str, own: dict[str, str], owners: dict[str, list[str]],
-          declared: Set[str], uses: set[str], refuse: Refuse, *, extended_format: bool = False) -> dict | None:
+          declared: Set[str], uses: set[str], refuse: Refuse, *, extended_format: bool = False,
+          kinds: Mapping[str, list] | None = None) -> dict | None:
+    """`kinds` holds the slots of each kind of the module, which an inverse slot reads."""
     ok = True
     allowed = (MEMBERS | {"checks", "embedded", "equations", "parent", "relationship"} | rezono_metadata.FIELDS
                if extended_format else MEMBERS)
@@ -141,7 +143,8 @@ def lower(decl: dict, at: str, own: dict[str, str], owners: dict[str, list[str]]
         refuse(at, "a kind with a parent inherits its identifier and cannot declare its own", "§5.1")
         ok = False
     if rezono_slot.validate(
-        slots, decl["kind"], at, own, owners, uses, refuse, extended=extended_format, open_kind=world == "open"
+        slots, decl["kind"], at, own, owners, uses, refuse, extended=extended_format, open_kind=world == "open",
+        kinds=kinds,
     ) and ok and equations is not None and rules is not None:
         attributes = rezono_slot.lower(slots, declared, implicit_identifier=not embedded and parent is None)
         result = {"attributes": attributes} | rezono_metadata.lower(decl)
