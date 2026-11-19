@@ -276,6 +276,7 @@ SHARED_READERS = {
     "docs/rezono/cases/": ("compiler", "rezono"),
     "docs/semantics/value-cases.yaml": ("compiler", "rezono"),
     "docs/semantics/witness-alternatives-cases.yaml": ("checker", "compiler"),
+    "docs/formal.md": ("examples",),
     "docs/tutorial.md": ("examples",),
     "decisions/language-native-rules.md": ("compiler",),
     "decisions/publication-case-pins.md": ("compiler",),
