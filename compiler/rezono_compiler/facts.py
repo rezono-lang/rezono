@@ -20,7 +20,7 @@ import yaml
 from rezono_admission import Schema
 from rezono_admission import rows as admit
 
-from . import rezono_module, seal, spans, types
+from . import rezono_module, seal, spans, strict_yaml, types
 from .diagnostics import Diagnosed, Diagnostic
 from .pack import Pack, snake
 
@@ -77,7 +77,7 @@ def _module_entries(pack_dir: Path) -> tuple[dict, list[rezono_module.Declared]]
     if not manifest.exists():
         return {}, []
     try:
-        meta = yaml.safe_load(manifest.read_text(encoding="utf-8"))
+        meta = strict_yaml.read(manifest)
     except (OSError, yaml.YAMLError) as error:
         raise LoadError(f"pack.yaml: cannot read dataset declarations ({error})") from error
     if not isinstance(meta, dict):
@@ -184,7 +184,7 @@ def document(path: Path, pack: Pack | None = None) -> dict[str, list]:
     A null document or section is refused. Use {} for an empty document or [] for an empty relation.
     """
     dataset = dataset_at(path)
-    data = dataset.form if dataset is not None else yaml.safe_load(path.read_text(encoding="utf-8"))
+    data = dataset.form if dataset is not None else strict_yaml.read(path)
     if isinstance(data, dict) and data.get("format") == DATASET_FORMAT:
         data = scalar_dataset(schema(pack), data) if pack is not None else untyped_dataset(data)
     return sections(data)

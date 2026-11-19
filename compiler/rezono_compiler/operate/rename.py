@@ -8,6 +8,7 @@ from dataclasses import dataclass, field
 import yaml
 
 from .. import pack as packs
+from .. import strict_yaml
 
 from .spec import CONDITIONS, CLASS_NAME, OperationError
 from .model import Model, resolve
@@ -175,7 +176,7 @@ def shared_slot(m: Model, mid: str, name: str) -> dict:
     """The definition of a slot that class module `mid` declares under the top-level `slots:` of itself or a
     module it imports, with its range made explicit (the declaring module's default_range otherwise)."""
     for owner in [mid] + [o for o in m.names.closures[mid] if o != mid]:
-        doc = yaml.safe_load(m.mods[owner].file.read_text("utf-8")) or {}
+        doc = strict_yaml.read(m.mods[owner].file) or {}
         slots = doc.get("slots") or {}
         if name in slots:
             d = {k: v for k, v in (slots[name] or {}).items() if k not in ("domain", "domain_of")}
