@@ -29,12 +29,23 @@ probe_terms_certified(p, s, c) :- probe_membership_complete(p, s), probe_term_co
 .decl has_certified_terms(profile: symbol)
 has_certified_terms(p) :- probe_terms_certified(p, _, _).
 
-// Physical requirement: the decision of the term is in force on the reference day of a snapshot of the profile.
+// The governing snapshot of a profile is its latest recorded planning snapshot, complete or partial: its reference
+// day is the evaluation time of every term. An earlier snapshot is history; a term that ended since then is not in force.
+.decl probe_earlier_snapshot(snapshot: symbol)
+probe_earlier_snapshot(s) :- probe_snapshot__profile(s, p), probe_snapshot__reference_date(s, r),
+    reference_date__day(r, n), probe_snapshot__profile(t, p), probe_snapshot__reference_date(t, q),
+    reference_date__day(q, m), n < m.
+
+.decl probe_governing_day(profile: symbol, snapshot: symbol, on: symbol)
+probe_governing_day(p, s, r) :- probe_snapshot__profile(s, p), probe_snapshot__reference_date(s, r),
+    !probe_earlier_snapshot(s).
+
+// Physical requirement: the decision of the term is in force on the reference day of the governing snapshot.
 .decl effective_physical(profile: symbol, cell: symbol, requirement: symbol, term: symbol)
 effective_physical(p, c, req, t) :- probe_physical_requirement__profile(t, p),
     probe_physical_requirement__cell(t, c), probe_physical_requirement__requirement(t, req),
     probe_physical_requirement__decision(t, d), probe_cell_of(p, c),
-    probe_snapshot__profile(s, p), probe_snapshot__reference_date(s, r), in_force_on(d, r).
+    probe_governing_day(p, _, r), in_force_on(d, r).
 
 .decl physical_conflict(profile: symbol, cell: symbol)
 physical_conflict(p, c) :- effective_physical(p, c, a, _), effective_physical(p, c, b, _), a != b.
@@ -51,12 +62,13 @@ probe_physical_status(p, c, "missing_requirement") :- probe_cell_of(p, c), !has_
 probe_physical_status(p, c, "unknown") :- probe_cell_of(p, c), !has_physical(p, c), !has_certified_terms(p).
 probe_physical_status(p, c, "unknown") :- physical_conflict(p, c).
 
-// Phase budget: profile, variant and phase all match, and the decision of the term is in force.
+// Phase budget: profile, variant and phase all match, and the decision of the term is in force on the reference
+// day of the governing snapshot.
 .decl effective_budget(profile: symbol, variant: symbol, phase: symbol, seconds: number, term: symbol)
 effective_budget(p, v, ph, n, t) :- probe_phase_budget__profile(t, p), probe_phase_budget__variant(t, v),
     probe_phase_budget__phase(t, ph), probe_phase_budget__seconds(t, n), probe_phase_budget__decision(t, d),
     probe_storage_variant(v), probe_phase(ph),
-    probe_snapshot__profile(s, p), probe_snapshot__reference_date(s, r), in_force_on(d, r).
+    probe_governing_day(p, _, r), in_force_on(d, r).
 
 .decl budget_conflict(profile: symbol, variant: symbol, phase: symbol)
 budget_conflict(p, v, ph) :- effective_budget(p, v, ph, a, _), effective_budget(p, v, ph, b, _), a != b.
