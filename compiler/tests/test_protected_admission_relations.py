@@ -106,13 +106,16 @@ def test_a_kind_may_not_take_a_protected_name(tmp_path, cls):
     # checker still said valid. The name is reserved, with or without rules that read it.
     table = "".join(f"_{c.lower()}" if c.isupper() else c for c in cls).lstrip("_")
     schema = CLASH + f"  {cls}:\n    attributes:\n      id: {{identifier: true}}\n"
-    with pytest.raises(CompileError, match=f"{table} .*protected admission input.*reserved"):
+    with pytest.raises(CompileError, match=f"{table} .*protected admission input.*reserved") as read_error:
         packs.read(clash(tmp_path, "read", schema, f".decl seen(x: symbol)\nseen(x) :- {table}(x).\n"))
-    with pytest.raises(CompileError, match=f"{table} .*reserved"):
+    assert [d.code for d in read_error.value.diagnostics] == ["schema_table_protected"]
+    with pytest.raises(CompileError, match=f"{table} .*reserved") as unread_error:
         packs.read(clash(tmp_path, "unread", schema, ".decl seen(x: symbol)\nseen(x) :- item(x).\n"))
+    assert [d.code for d in unread_error.value.diagnostics] == ["schema_table_protected"]
 
 
 def test_an_enum_may_not_take_a_protected_name(tmp_path):
     schema = CLASH + "enums:\n  VerifiedRound:\n    permissible_values:\n      low: {}\n"
-    with pytest.raises(CompileError, match="verified_round .*reserved"):
+    with pytest.raises(CompileError, match="verified_round .*reserved") as error:
         packs.read(clash(tmp_path, "enum", schema, ".decl seen(x: symbol)\nseen(x) :- verified_round(x).\n"))
+    assert [d.code for d in error.value.diagnostics] == ["schema_table_protected"]

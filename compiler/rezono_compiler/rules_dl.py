@@ -34,6 +34,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from . import rules as ir
+from .diagnostics import Diagnosed, Diagnostic
 
 TOKEN = re.compile(r"""
     (?P<ws>[ \t\r]+) | (?P<nl>\n) | (?P<line>//[^\n]*) | (?P<block>/\*.*?\*/) |
@@ -74,6 +75,15 @@ CLOSES = re.compile(r"^//\s*@closes\s+(\S+)\s*$")
 
 class RuleError(ValueError):
     pass
+
+
+class ProtectedTable(RuleError, Diagnosed):
+    """A schema table (kind, slot or enum) under the name of a protected admission input (PROTECTED). Only
+    admission fills such a relation (decisions/admission-transport.md, section 6), so the name is reserved."""
+    CODE = "schema_table_protected"
+
+    def __init__(self, messages: list[str]):
+        Diagnosed.__init__(self, "\n".join(messages), tuple(Diagnostic(self.CODE, message) for message in messages))
 
 
 @dataclass(frozen=True)
@@ -496,7 +506,7 @@ def read(pack, pack_dir: Path, imports=None, renames=None, *, calc_inputs=None, 
     calc_inputs = calc_inputs or {}
     root = pack.meta["name"]
     if clash := reserved(pack):  # before any rule is read: also a pack without rules may not take the name
-        raise RuleError("\n".join(clash))
+        raise ProtectedTable(clash)
     givers = {}  # selection -> the packs whose calc files give its rule; any other is the root's own
     for name, doc in (calc_parts or {}).items():
         for version in doc.get("rules") or []:
