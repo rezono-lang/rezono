@@ -47,12 +47,6 @@ def refused(root) -> str:
     return ""
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError,
-                   reason="Reserve std-* pack names for the standard packs of packs/ at the compiler's revision, "
-                          "identified by pack hash, as decisions/standard-pack-names.md fixes: refuse a pack that "
-                          "calls itself std-*, and an import named std-* whose pin is not that standard pack's hash. "
-                          "Compiler only. The protected relations themselves are "
-                          "compiler/tests/test_verified_receipt_input.py and test_protected_admission_relations.py.")
 def test_std_names_are_reserved_for_the_pinned_standard_packs(tmp_path):
     # Controls: the unchanged standard pack is accepted wherever it lies, and changed content under an
     # ordinary name is an ordinary pack.

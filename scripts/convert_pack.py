@@ -20,7 +20,7 @@ from typing import TYPE_CHECKING, TypedDict
 
 import yaml
 
-from rezono_compiler import modules, pack, rules_dl
+from rezono_compiler import modules, pack, rules_dl, standard_packs
 
 if TYPE_CHECKING:
     from rezono_publisher.publish import Epoch
@@ -266,7 +266,9 @@ def compare_imported(consumer: Path, original: Path, candidate: Path, identity: 
         matches[0]["path"] = Path(os.path.relpath(candidate, copy)).as_posix()
         matches[0]["sha256"] = modules.pack_hash(candidate)
         (copy / "pack.yaml").write_bytes(yaml.safe_dump(meta, sort_keys=False).encode("utf-8"))
-        compare(baseline, pack.read(copy))
+        with standard_packs.trial(identity, matches[0]["sha256"]):
+            trial = pack.read(copy)
+        compare(baseline, trial)
 
 
 def compare(baseline: pack.Pack, trial: pack.Pack) -> None:
@@ -438,7 +440,9 @@ def candidate(original: Path, destination: Path, node: str, consumer: Path | Non
         meta["rezono"] = entries
         (stage / "pack.yaml").write_bytes(yaml.safe_dump(meta, sort_keys=False).encode("utf-8"))
         if consumer is None:
-            compare(pack.read(original), pack.read(stage))
+            with standard_packs.trial(identity, modules.pack_hash(stage)):
+                trial = pack.read(stage)
+            compare(pack.read(original), trial)
         else:
             compare_imported(consumer, original, stage, identity)
         stage.rename(destination)

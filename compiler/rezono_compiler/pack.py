@@ -14,7 +14,7 @@ from rezono_admission.schema import INPUT_FORMATS
 
 from .schemaview import SchemaView
 
-from . import amounts, diagnostics, fold, icons as icon_files, modules, rezono_module, rules_dl, spans, strict_yaml, types, views
+from . import amounts, diagnostics, fold, icons as icon_files, modules, rezono_module, rules_dl, spans, standard_packs, strict_yaml, types, views
 from .diagnostics import Diagnosed
 from .names import NAME
 from .regex import PatternError, portable
@@ -520,6 +520,10 @@ def read(pack_dir: str | Path) -> Pack:
     meta = read_meta(pack_dir)
     if not list((pack_dir / "schema").rglob("*.yaml")) and not meta.get("rezono"):
         raise CompileError(f"{pack_dir}/schema: no schema files, and pack.yaml names no module written in Rezono")
+    if standard_packs.is_standard_name(str(meta["name"])) and (
+            why := standard_packs.refusal(str(meta["name"]), modules.pack_hash(pack_dir))):
+        refused = f"{pack_dir}/pack.yaml: {why}"
+        raise CompileError(refused, diagnostics.of_text(refused, "reserved_standard_name"))
     is_theory = theory_meta(meta, pack_dir, errors)
     if errors:
         raise CompileError("\n".join(errors))
