@@ -382,18 +382,19 @@ def dataset_record(entries, where: str, judged: FactSchema | None = None, kind: 
                 raise LoadError(f"{field}: n/a requires an optional slot")
             continue
         if slot is not None:
-            record[name] = dataset_cell(cell, field, SQL_TYPES[slot.type], slot.multivalued,
-                                        judged, slot.target if slot.inlined else None)
+            record[name] = dataset_cell(cell, field, SQL_TYPES[slot.type], judged, slot.target if slot.inlined else None)
         else:
             sql_type = SQL_TYPES[identity.id_type] if identity is not None else None
             record[name] = dataset_cell(cell, field, sql_type)
     return record
 
 
-def dataset_cell(cell, where: str, sql_type: str | None = None, repeated: bool = False,
+def dataset_cell(cell, where: str, sql_type: str | None = None,
                  judged: FactSchema | None = None, target: str | None = None):
+    # A list in a single-valued slot is admitted as a legacy document admits it: the typed rows then
+    # carry each value, and the slot's functionality check reports the second one.
     if isinstance(cell, dict) and cell.keys() == {"list"}:
-        if (sql_type is not None and not repeated) or not isinstance(cell["list"], list):
+        if not isinstance(cell["list"], list):
             raise LoadError(f"{where}: expected a value of the declared slot")
         return [dataset_cell(item, f"{where}[{index}]", sql_type, judged=judged, target=target)
                 for index, item in enumerate(cell["list"], 1)]

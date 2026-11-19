@@ -7,6 +7,7 @@ permissions: {}
 concurrency: task-claim-cleanup
 jobs:
   release:
+    timeout-minutes: 10
     runs-on: ubuntu-24.04
     permissions:
       contents: write
@@ -21,6 +22,7 @@ jobs:
           set -euo pipefail
           python scripts/release_claims.py
   standstill:
+    timeout-minutes: 10
     runs-on: ubuntu-24.04
     permissions:
       contents: read
