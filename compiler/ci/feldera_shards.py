@@ -13,6 +13,7 @@ EXAMPLE = "examples/test_feldera.py::test_feldera_accepts_the_sql_and_finds_the_
 CALC = "compiler/tests/test_calc.py::test_feldera_gives_what_duckdb_gives"
 GENERATED = "compiler/tests/test_rules_properties.py::test_feldera_runs_generated_programs_as_duckdb_does"
 INTERFACE = f"{INCREMENTAL}[platform/tenant-capacity/interface]"
+BOOLEAN = "compiler/tests/test_boolean_rule_inputs.py::test_native_boolean_rule_inputs"
 SHARDS = {
     "library": (f"{EXAMPLE}[library]",),
     "projects": (f"{EXAMPLE}[projects]",),
@@ -20,11 +21,12 @@ SHARDS = {
     "tenant-capacity-interface": (INTERFACE,),
     "subsidy": (f"{INCREMENTAL}[subsidy]",),
     "compiler-calc": (f"{CALC}[full]", f"{CALC}[choice]"),
-    "compiler-bound": ("compiler/tests/test_bound.py::test_the_check_view_on_feldera_holds_the_rows_past_the_bound",),
+    "compiler-bound": ("compiler/tests/test_bound.py::test_the_check_view_on_feldera_holds_the_rows_past_the_bound",
+                       BOOLEAN),
     "compiler-rules": (f"{GENERATED}[0]", f"{GENERATED}[1]"),
 }
 EXPECTED = {node for group in SHARDS.values() for node in group}
-ORIGINAL = EXPECTED - {INTERFACE}
+ORIGINAL = EXPECTED - {INTERFACE, BOOLEAN}
 
 
 def collection(path: Path) -> list[str]:

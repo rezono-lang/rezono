@@ -2,14 +2,14 @@
 
 The file is Soufflé syntax, so Soufflé can serve as the oracle. What it may contain:
 
-    .decl relies_on(a: symbol, b: symbol)        derived relation: columns and types (symbol, number)
+    .decl relies_on(a: symbol, b: symbol)        derived relation: columns and types (symbol, number, boolean)
     .input k, k__a  /  .output relies_on         accepted; .input names a table, .output a derived relation
     head(x, y) :- p(x, z), !q(z), n = count : { r(x, _) }, s = sum v : { t(x, _, v) }, n > 1, m = n + 1.
 
 Base predicates are the tables of the schema (M1): `k(id)` per kind and `k__a(id, v)` per arrow or
 attribute, plus the parameter tables (enum values, bounds). A rule reads them by name; a `.decl` for a
-table is optional and must agree with the schema. Columns are text or whole numbers; a rule cannot
-read a boolean or date table yet.
+table is optional and must agree with the schema. Columns can hold text, whole numbers or booleans.
+A rule cannot read a date table yet.
 
 A variable inside an aggregate that no positive literal binds is local to the aggregate: it ranges over
 the group, like '_'. The variable after `sum`, `min` or `max` names the column that is aggregated.
@@ -41,9 +41,10 @@ TOKEN = re.compile(r"""
     (?P<ident>[A-Za-z_][A-Za-z0-9_]*) |
     (?P<op>:-|!=|<=|>=|[(),.:{}!=<>+\-*;|&^%/\[\]$@#])
 """, re.X | re.S)
-TYPES = {"symbol": "string", "number": "integer"}
+TYPES = {"symbol": "string", "number": "integer", "boolean": "boolean"}
 SYMBOLS = {t: s for s, t in TYPES.items()}
-SQL = {"VARCHAR": "string", "BIGINT": "integer"}
+SQL = {"VARCHAR": "string", "BIGINT": "integer", "BOOLEAN": "boolean"}
+BOOLEAN_LITERALS = {"TRUE": "true", "FALSE": "false"}
 COMPARE = {"=": "eq", "!=": "ne", "<": "lt", "<=": "le", ">": "gt", ">=": "ge"}
 COMPARE_AS = ir.COMPARE_AS  # `binary_text(x) < binary_text(y)`: a comparison type, written on both operands
 ARITH = {"+": "add", "-": "sub", "*": "mul", "/": "div"}
@@ -162,6 +163,8 @@ def term(p: Parser):
             p.fail(f"the constant {t.text} cannot be written in the rule IR (it starts with '?' or is '_')", t)
         return ("const", text, "string")
     if t.kind == "ident":
+        if t.text in BOOLEAN_LITERALS:
+            return ("const", BOOLEAN_LITERALS[t.text], "boolean")
         if t.text == "_":
             return ("wild",)
         if not VARIABLE.match(t.text):
@@ -266,7 +269,7 @@ def parse_file(text: str, where: str, columns: list | None = None):
                     p.take(":")
                     ty = p.take(kind="ident").text
                     if ty not in TYPES:
-                        p.fail(f"{name}.{c}: type '{ty}' is not supported (symbol or number)")
+                        p.fail(f"{name}.{c}: type '{ty}' is not supported (symbol, number or boolean)")
                     cols.append((c, TYPES[ty]))
                     if not p.at(")"):
                         p.take(",")
@@ -692,7 +695,8 @@ def read(pack, pack_dir: Path, imports=None, renames=None, *, calc_inputs=None, 
             continue
         bad = [c for c, t in tables[name] if t is None]
         if bad:
-            errors.append(f"rules: {name} has a column that is not text or a whole number; rules cannot read it yet")
+            errors.append(f"rules: {name} has a column that is not text, a whole number or a boolean; "
+                          "rules cannot read it yet")
             continue
         relations[name] = {"name": name, "role": "base", "key": [{"name": c, "type": t} for c, t in tables[name]],
                            "world": worlds.get(name, "closed")}
@@ -829,6 +833,8 @@ def to_rule(rid, module, where, head, body, line, columns=lambda name: None) -> 
     def show(t):
         if t[0] == "wild":
             return "_"
+        if t[0] == "const" and t[2] == "boolean":
+            return t[1].upper()
         return '"' + t[1] + '"' if t[0] == "const" and t[2] == "string" else t[1]
 
     # Types: a constant has its own; a variable the column of its positive literal, or integer as a result.
@@ -863,7 +869,7 @@ def to_rule(rid, module, where, head, body, line, columns=lambda name: None) -> 
         elif b[0] == "arith":
             for t in (b[3], b[4]):
                 if typ(t) not in (None, "integer"):
-                    fail(f"{b[1]} = …: arithmetic needs whole numbers, and {show(t)} is text")
+                    fail(f"{b[1]} = …: arithmetic needs whole numbers, and {show(t)} is {typ(t)}")
 
     positive = {t[1] for kind, *rest in body if kind == "lit" and rest[0] == "positive"
                 for t in rest[1][1] if t[0] == "var"}

@@ -118,6 +118,7 @@ done
 selectors=(
   compiler/tests/test_calc.py::test_feldera_gives_what_duckdb_gives
   compiler/tests/test_bound.py::test_the_check_view_on_feldera_holds_the_rows_past_the_bound
+  compiler/tests/test_boolean_rule_inputs.py::test_native_boolean_rule_inputs
   compiler/tests/test_rules_properties.py::test_feldera_runs_generated_programs_as_duckdb_does
   examples/test_feldera.py::test_feldera_accepts_the_sql_and_finds_the_errors
   examples/test_feldera_rules.py::test_incremental_on_feldera_equals_batch
