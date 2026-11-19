@@ -246,7 +246,7 @@ def admitted_rows(evidence) -> dict[str, list[tuple]]:
 def epoch(pack_dir, *, epoch: int, knowledge_time: str, sources, proposal: str = "",
           base_manifest: str = "", evidence=None) -> Epoch:
     import duckdb
-    from rezono_compiler import batch, calc, emit, explain, scenarios, seal
+    from rezono_compiler import batch, calc, emit, explain, rules_dl, scenarios, seal
     from rezono_compiler import checks as check_meta
     from rezono_compiler import facts as fact_files
     from rezono_compiler import pack as packs
@@ -306,6 +306,13 @@ def epoch(pack_dir, *, epoch: int, knowledge_time: str, sources, proposal: str =
         # The protected relations the pack declares take the admitted rows as base rows, and appear in the
         # snapshots like any other base relation; admitted rows for an undeclared one are not inserted.
         protected = {n: admitted.get(n, []) for n in sorted(PROTECTED) if n in prog.relations}
+        # Only a `.decl` with the fixed signature makes a protected relation. A table of the schema under that
+        # name (the compiler refuses it) would lose its own facts to the admitted rows, without a finding.
+        for name in protected:
+            key = [(c.name, c.type) for c in prog.relations[name].key]
+            if name in rules_dl.base_tables(model) or name in rows or key != PROTECTED[name]:
+                raise Blocked(f"rezono:evidence: {name} is a protected admission input, but the pack has it "
+                              "as a table of its own; only `.decl` with the fixed signature declares it")
         for name, rs in protected.items():
             rows[name] = sorted({tuple(text(v) for v in r) for r in rs})
         con = batch.connect(prog, scenarios.rule_rows(model, prog, facts | protected))
