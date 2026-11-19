@@ -66,7 +66,8 @@ export function printSlot(s: SlotDecl): string[] {
 export const slot = {
 	lineRules: ['SlotLine', 'CardinalityLine', ...slotPattern.lineRules],
 	grammar: String.raw`
-  SlotLine = name ":" Type Card? (kw<"inverse"> name)? World? kw<"identifier">? kw<"embedded">?
+  SlotLine = name ":" SlotType Card? (kw<"inverse"> name)? World? kw<"identifier">? kw<"embedded">?
+  SlotType = (name ".")? Type
   CardinalityLine = kw<"cardinality"> cardinalityBound ".." cardinalityBound
   cardinalityBound = "0"             -- zero
                    | ("1".."9") digit* -- positive
