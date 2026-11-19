@@ -95,11 +95,13 @@ def check_epoch(query, witnesses, *, json_dates=False):
     "extra: Read decisions/independent-date-equality.md. Admit DATE equality in contracts/rules.yaml and "
     "compiler/rezono_compiler. Select this test in compiler/ci/run_feldera_oracle.sh, add it to the "
     "compiler-bound shard in compiler/ci/feldera_shards.py and leave it out of ORIGINAL there "
-    "(ORIGINAL = EXPECTED - {INTERFACE, <this test>}; recorded main runs before it stay complete evidence; "
-    "scripts/feldera_admission.py stays unchanged). Lift this mark together with the two strict marks on "
+    "(ORIGINAL = EXPECTED - {INTERFACE, ..., <this test>}; recorded main runs before it stay complete evidence; "
+    "scripts/feldera_admission.py stays unchanged). Lift this mark. If "
+    "compiler/tests/test_ordered_rule_scalars_engines.py::test_feldera_orders_typed_values is already routed "
+    "on main, also lift the strict marks on "
     "examples/test_live_feldera_shards.py::test_merge_preserves_all_live_cases_and_outcomes and "
-    "examples/test_feldera_incident.py::test_classifier_uses_complete_reports_from_the_parallel_comparison, "
-    "and verify the exact implementation revision on hosted Feldera before queue admission."))
+    "examples/test_feldera_incident.py::test_classifier_uses_complete_reports_from_the_parallel_comparison; "
+    "otherwise leave them. Verify the exact implementation revision on hosted Feldera before queue admission."))
 def test_independent_date_equality(dated_records):
     folder, initial = dated_records
     (folder / "rules").mkdir()
