@@ -34,7 +34,7 @@ rule floating(x: Stage, y: Stage) when x.rank = 0
 @pytest.mark.xfail(
     strict=True,
     raises=PathBindingMismatch,
-    reason="Lower single-premise path and slot-call guards in compiler/rezono_compiler/native_rule_lowering.py: "
+    reason="M3: Lower single-premise path and slot-call guards in compiler/rezono_compiler/native_rule_lowering.py: "
            "x.rank = 0 is the positive slot row stage__rank(?x, 0); y in x.next and Stage.next(x, y) are the "
            "forward row stage__next(?x, ?y); no membership premise is invented, and an unbound typed head "
            "column is R042. Read decisions/language-expression-semantics.md §1. "

@@ -208,6 +208,7 @@ jobs:
           python -I scripts/test_feldera_admission.py
           python -I scripts/test_cluster_worker_tasks.py
           python -I scripts/test_role_publication_ci.py
+          python -I scripts/test_standstill.py
       - id: matrix
         env:
           GITHUB_BASE_REF: ${{ github.base_ref }}
@@ -279,6 +280,14 @@ jobs:
           if-no-files-found: error
           overwrite: true
           retention-days: 2
+      # Reads pack sources and test files only. The coverage page keeps no copy of this output.
+      - name: Report language coverage
+        if: steps.matrix.outputs.has_pytest == 'true'
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -I compiler/tests/rezono/language_usage.py | tee -a "$GITHUB_STEP_SUMMARY"
       - name: Route the disposable cluster from the candidate
         id: cluster
         env:

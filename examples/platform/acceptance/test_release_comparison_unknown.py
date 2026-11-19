@@ -34,7 +34,7 @@ def _without(rows, *relations):
 
 
 @pytest.mark.xfail(strict=True, raises=AssertionError, reason=(
-    "Derive product_release_date_comparison_unknown(reference, product_id, version, reason) in "
+    "extra: Derive product_release_date_comparison_unknown(reference, product_id, version, reason) in "
     "rules/keycloak_release.dl: 'register-date-missing' for a register reference without a published date, "
     "'observation-missing' for one with no observed release of the same product and version. "
     "Read decisions/platform-release-comparison-unknown.md."))

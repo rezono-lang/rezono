@@ -11,14 +11,6 @@ def values(annotations):
             for name, value in (annotations or {}).items()}
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason="Lower decimal-text annotation values to the numbers the equivalent LinkML schema holds "
-           "(a whole decimal becomes an integer) in compiler/rezono_compiler/rezono_metadata.py. "
-           "Read decisions/language-metadata.md. Kind annotations with text values already lower. "
-           "Waits for test_lower_schema_mappings while it owns rezono_metadata.py.",
-)
 def test_lower_schema_annotations(tmp_path):
     axis = schema_file("packs/std-time/schema/time.yaml")["classes"]["Axis"]
     declaration = kind("Axis", annotations={"explain": "fold"})
