@@ -1,4 +1,4 @@
-"""Lower a closed Rezono kind using the slot component."""
+"""Lower a closed or open Rezono kind using the slot component."""
 
 from collections.abc import Set
 
@@ -83,7 +83,7 @@ def parent_of(value: object, kind: str, at: str, own: dict[str, str],
 def lower(decl: dict, at: str, own: dict[str, str], owners: dict[str, list[str]],
           declared: Set[str], uses: set[str], refuse: Refuse, *, extended_format: bool = False) -> dict | None:
     ok = True
-    allowed = (MEMBERS | {"checks", "embedded", "equations", "parent"} | rezono_metadata.FIELDS
+    allowed = (MEMBERS | {"checks", "embedded", "equations", "parent", "relationship"} | rezono_metadata.FIELDS
                if extended_format else MEMBERS)
     if extra := set(decl) - allowed:
         refuse(at, f"a kind with {', '.join(sorted(extra))} is not lowered", "§5.1")
@@ -95,6 +95,13 @@ def lower(decl: dict, at: str, own: dict[str, str], owners: dict[str, list[str]]
     if extended_format and "embedded" in decl and not embedded:
         refuse(at, "an embedded kind must be marked true", "§5.1")
         ok = False
+    relationship = decl.get("relationship") is True
+    if extended_format and "relationship" in decl and not relationship:
+        refuse(at, "a relationship kind must be marked true", "§5.1")
+        ok = False
+    if embedded and relationship:
+        refuse(at, "an embedded kind cannot be a relationship: it has no identity of its own", "§5.1")
+        ok = False
     has_parent = extended_format and "parent" in decl
     if embedded and has_parent:
         refuse(at, "an embedded kind cannot inherit an identifier from a parent", "§5.1")
@@ -102,14 +109,22 @@ def lower(decl: dict, at: str, own: dict[str, str], owners: dict[str, list[str]]
     parent = parent_of(decl["parent"], decl["kind"], f"{at}/parent", own, owners, uses, refuse) if has_parent else None
     if has_parent and parent is None:
         ok = False
-    if decl.get("world") != "closed" and not (has_parent and "world" not in decl):
+    world = decl.get("world")
+    if has_parent and world == "open":
+        refuse(at, "a kind with a parent has the world of its root kind", "§5.1")
+        ok = False
+    elif not (world == "closed" or (extended_format and world == "open") or (has_parent and "world" not in decl)):
         refuse(at, "an open kind is refused: a kind says `world closed`", "§5.1")
         ok = False
     if "applies" in decl:
         refuse(f"{at}/applies", "`applies` is not lowered yet")
         ok = False
-    if "sealed" in decl:
+    sealed = decl.get("sealed")
+    if "sealed" in decl and not extended_format:
         refuse(f"{at}/sealed", "`sealed at` is not lowered yet")
+        ok = False
+    elif "sealed" in decl and not (isinstance(sealed, str) and NAME.fullmatch(sealed)):
+        refuse(f"{at}/sealed", "`sealed at` names the period slot of the kind", "§5a")
         ok = False
     for index, _ in enumerate(decl.get("derived") or []):
         refuse_derived(f"{at}/derived/{index}", refuse)
@@ -126,12 +141,18 @@ def lower(decl: dict, at: str, own: dict[str, str], owners: dict[str, list[str]]
         refuse(at, "a kind with a parent inherits its identifier and cannot declare its own", "§5.1")
         ok = False
     if rezono_slot.validate(
-        slots, decl["kind"], at, own, owners, uses, refuse, extended=extended_format
+        slots, decl["kind"], at, own, owners, uses, refuse, extended=extended_format, open_kind=world == "open"
     ) and ok and equations is not None and rules is not None:
         attributes = rezono_slot.lower(slots, declared, implicit_identifier=not embedded and parent is None)
         result = {"attributes": attributes} | rezono_metadata.lower(decl)
+        if world == "open":
+            result.setdefault("annotations", {})["world"] = "open"
         if parent is not None:
             result["is_a"] = parent
+        if relationship:
+            result["represents_relationship"] = True
+        if "sealed" in decl:
+            result.setdefault("annotations", {})["seal"] = sealed
         if equations:
             result.setdefault("annotations", {})["path_equations"] = equations
         if rules:

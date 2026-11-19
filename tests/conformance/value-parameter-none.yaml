@@ -23,3 +23,4 @@ unsupported:
   checker: The calculation checker reports missing selection with a prose reason rather than this stable
     code.
   feldera: The calculation result uses a prose reason rather than this stable code.
+  language: "The shared runner checks questions against the neutral fixture, which declares no versioned parameter, and a question cannot declare one. Version choice by valid and known date belongs to calculation binding; the question evaluator reads a version state only as a stored value."

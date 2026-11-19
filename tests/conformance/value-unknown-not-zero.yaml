@@ -3,15 +3,10 @@ source: docs/semantics/value-cases.yaml#unknown-not-zero
 status: settled
 input:
   rows:
-  - kind: item
-    id: item-c
-    group: group-b
-    labels:
-    - second
-    quantity: 7
-    weight:
-      state: unknown
-      reason: no_spec
+    - {$kind: Group, $id: group-b}
+    - {$kind: Item, $id: item-c, group: {$ref: group-b}, labels: [second], quantity: "7", weight: {$unknown: no_spec}}
+  select: {kind: Item, id: item-c}
+  language: "ask Item where true show weight + 10"
   expression: weight + 10
   subject: item-c
 expect:

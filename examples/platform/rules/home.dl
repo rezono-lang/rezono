@@ -1,0 +1,5 @@
+// The home's claim: how many services the platform runs, counted over every written service.
+.decl platform_service_count(n: number)
+platform_service_count(n) :- n = count : { service(_) }.
+
+.output platform_service_count

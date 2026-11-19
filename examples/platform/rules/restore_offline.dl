@@ -1,6 +1,7 @@
 // A matching restore copy and the independent operational prerequisites of a restore trial are separate grounds.
 // Precedence per trial: a prerequisite that depends on an unavailable cluster, then a prerequisite without a
-// current matching reading, then the copy itself.
+// current matching reading, with a contradicting reading or with a control plane outside the recovery target,
+// then the copy itself.
 .decl restore_trial_run(run: symbol, trial: symbol, backup: symbol, cluster: symbol)
 restore_trial_run(run, trial, backup, cluster) :-
     backup_trial__run(trial, run),
@@ -26,8 +27,8 @@ restore_dependent(trial, provider) :-
 .decl restore_trial_dependent(trial: symbol)
 restore_trial_dependent(trial) :- restore_dependent(trial, provider).
 
-.decl restore_read(binding: symbol, trial: symbol)
-restore_read(binding, trial) :-
+.decl restore_reading_of(binding: symbol, trial: symbol, value: symbol)
+restore_reading_of(binding, trial, value) :-
     restore_dependency_binding__trial(binding, trial),
     restore_dependency_binding__provider(binding, provider),
     restore_dependency_binding__cluster(binding, cluster),
@@ -36,7 +37,10 @@ restore_read(binding, trial) :-
     restore_dependency_reading__run(reading, run),
     restore_dependency_reading__provider(reading, provider),
     restore_dependency_reading__cluster(reading, cluster),
-    restore_dependency_reading__value(reading, "available").
+    restore_dependency_reading__value(reading, value).
+
+.decl restore_read(binding: symbol, trial: symbol)
+restore_read(binding, trial) :- restore_reading_of(binding, trial, "available").
 
 .decl restore_unread(trial: symbol, provider: symbol)
 restore_unread(trial, provider) :-
@@ -59,6 +63,27 @@ restore_trial_read(trial) :-
     restore_function(trial, "credentials", credentials), restore_read(credentials, trial),
     restore_function(trial, "storage", storage), restore_read(storage, trial).
 
+// A current reading that contradicts an available one leaves the prerequisite undecided.
+.decl restore_conflict(trial: symbol, provider: symbol)
+restore_conflict(trial, provider) :-
+    restore_read(binding, trial),
+    restore_reading_of(binding, trial, value), value != "available",
+    restore_dependency_binding__provider(binding, provider).
+
+// The control plane must run in the trial's own recovery cluster.
+.decl restore_foreign_control(trial: symbol, provider: symbol)
+restore_foreign_control(trial, provider) :-
+    restore_function(trial, "control", binding),
+    restore_dependency_binding__provider(binding, provider),
+    restore_dependency_binding__cluster(binding, cluster),
+    backup_trial__cluster(trial, target), cluster != target.
+
+// Restored only when every bound prerequisite was read, consistently, and the control plane is the target's own.
+.decl restore_trial_undecided(trial: symbol)
+restore_trial_undecided(trial) :- restore_trial_unread(trial).
+restore_trial_undecided(trial) :- restore_conflict(trial, provider).
+restore_trial_undecided(trial) :- restore_foreign_control(trial, provider).
+
 .decl restore_offline_result(run: symbol, trial: symbol, backup: symbol, status: symbol, reason: symbol, subject: symbol)
 restore_offline_result(run, trial, backup, "waiting", "management-dependent", provider) :-
     restore_trial_run(run, trial, backup, cluster),
@@ -67,20 +92,30 @@ restore_offline_result(run, trial, backup, "unknown", "missing-dependency-readba
     restore_trial_run(run, trial, backup, cluster),
     restore_unread(trial, provider),
     !restore_trial_dependent(trial).
+restore_offline_result(run, trial, backup, "unknown", "conflicting-dependency-readback", provider) :-
+    restore_trial_run(run, trial, backup, cluster),
+    restore_conflict(trial, provider),
+    !restore_trial_dependent(trial).
+restore_offline_result(run, trial, backup, "unknown", "foreign-control-plane", provider) :-
+    restore_trial_run(run, trial, backup, cluster),
+    restore_foreign_control(trial, provider),
+    !restore_trial_dependent(trial).
 restore_offline_result(run, trial, backup, "unknown", "missing-dependency-binding", cluster) :-
     restore_trial_run(run, trial, backup, cluster),
-    !restore_trial_bound(trial).
+    !restore_trial_bound(trial),
+    !restore_trial_dependent(trial).
 restore_offline_result(run, trial, backup, "waiting", "missing-matching-readback", cluster) :-
     restore_trial_run(run, trial, backup, cluster),
     restore_trial_bound(trial),
     !restore_trial_dependent(trial),
-    !restore_trial_unread(trial),
+    !restore_trial_undecided(trial),
     !managed_backup_restored(backup, trial).
 restore_offline_result(run, trial, backup, "restored", "matching-copy", cluster) :-
     restore_trial_run(run, trial, backup, cluster),
     restore_trial_bound(trial),
     !restore_trial_dependent(trial),
     restore_trial_read(trial),
+    !restore_trial_undecided(trial),
     managed_backup_restored(backup, trial).
 
 .output restore_offline_result

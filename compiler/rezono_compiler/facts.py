@@ -20,7 +20,7 @@ import yaml
 from rezono_admission import Schema
 from rezono_admission import rows as admit
 
-from . import rezono_module, seal, spans, types
+from . import rezono_module, seal, spans, strict_yaml, types
 from .diagnostics import Diagnosed, Diagnostic
 from .pack import Pack, snake
 
@@ -47,6 +47,7 @@ TEXT = {
     "unknown_slot": "{where}: unknown slot '{name}'",
     "dictionary_value_not_record": "{where}: in the dictionary form, the value must be a record",
     "wrong_type": "{where}: is not a {type}",
+    "invalid_sha256": "{where}: invalid SHA-256 digest",
     "decision_missing": "{where}: a decided value names its decision (plane: control)",
 }
 
@@ -76,7 +77,7 @@ def _module_entries(pack_dir: Path) -> tuple[dict, list[rezono_module.Declared]]
     if not manifest.exists():
         return {}, []
     try:
-        meta = yaml.safe_load(manifest.read_text(encoding="utf-8"))
+        meta = strict_yaml.read(manifest)
     except (OSError, yaml.YAMLError) as error:
         raise LoadError(f"pack.yaml: cannot read dataset declarations ({error})") from error
     if not isinstance(meta, dict):
@@ -105,6 +106,10 @@ def _declared_dataset(pack_dir: Path, meta: dict, declared: rezono_module.Declar
         submitted = json.loads(path.read_bytes())
     except (OSError, ValueError) as error:
         raise LoadError(f"{declared.form}: cannot read module form ({error})") from error
+    plain = rezono_module.module_body(submitted, rezono_module.FORMAT)
+    if (plain is not None and rezono_module.fact_tables_only(plain)
+            and not rezono_module.form_only_source(pack_dir / declared.module, submitted)):
+        return _fact_tables(pack_dir, meta, declared, submitted)
     if any(rezono_module.module_body(submitted, version) is not None
            for version in (rezono_module.FORMAT, rezono_module.NATIVE_FORMAT)):
         return None
@@ -140,6 +145,23 @@ def _declared_dataset(pack_dir: Path, meta: dict, declared: rezono_module.Declar
     return DatasetForm(effective, declared.module)
 
 
+def _fact_tables(pack_dir: Path, meta: dict, declared: rezono_module.Declared, submitted: dict) -> DatasetForm:
+    """A module of fact tables, read from its authored source, as the named dataset of its file name."""
+    errors: list[str] = []
+    effective = rezono_module.source_form(pack_dir, declared, submitted, errors, lambda source: False)
+    if effective is None:
+        raise LoadError("\n".join(errors))
+    authored = rezono_module.module_body(effective, rezono_module.FORMAT)
+    if authored is None or not rezono_module.fact_tables_only(authored):
+        raise LoadError(f"{declared.module}: a module of fact tables declares nothing else")
+    problems = [message for _, message, _ in rezono_module.header_errors(authored, str(meta.get("name", "")))]
+    if problems:
+        raise LoadError(f"{declared.module}: " + "; ".join(problems))
+    spans = [span | {"at": re.sub(r"^/decls/", "/decls/0/decls/", span["at"])} for span in effective["spans"]]
+    module = authored | {"decls": [{"dataset": Path(declared.module).stem, "decls": authored["decls"]}]}
+    return DatasetForm({"format": DATASET_FORMAT, "module": module, "spans": spans}, declared.module)
+
+
 def dataset_at(path: Path) -> DatasetForm | None:
     """Resolve a declared dataset's authored source while retaining standalone JSON forms."""
     if path.suffix != ".json":
@@ -162,7 +184,7 @@ def document(path: Path, pack: Pack | None = None) -> dict[str, list]:
     A null document or section is refused. Use {} for an empty document or [] for an empty relation.
     """
     dataset = dataset_at(path)
-    data = dataset.form if dataset is not None else yaml.safe_load(path.read_text(encoding="utf-8"))
+    data = dataset.form if dataset is not None else strict_yaml.read(path)
     if isinstance(data, dict) and data.get("format") == DATASET_FORMAT:
         data = scalar_dataset(schema(pack), data) if pack is not None else untyped_dataset(data)
     return sections(data)
@@ -204,7 +226,7 @@ def schema(pack: Pack) -> FactSchema:
             if s.arrow:
                 arrows.append(common | {"target": s.range, "inlined": s.inlined})
             else:
-                attributes.append(common | {"type": s.type.bundle})
+                attributes.append(common | present({"type": s.type.bundle, "input_format": s.input_format}))
     return FactSchema({"format": FORMAT, "pack": {"id": pack.meta["name"]}, "kinds": kinds,
                        "attributes": attributes, "arrows": arrows}, optional_slots)
 
@@ -229,6 +251,14 @@ def _named_dataset(module: dict) -> dict:
     return dataset
 
 
+def named_dataset_decls(form: dict) -> list:
+    """The fact tables and source declarations of the named dataset of a module form, in source order."""
+    module = rezono_module.module_body(form, DATASET_FORMAT)
+    if module is None:
+        raise LoadError(f"expected {DATASET_FORMAT} with a module header and spans")
+    return _named_dataset(module)["decls"]
+
+
 def scalar_dataset(judged: FactSchema, form: dict) -> dict[str, list]:
     """Decode a named module dataset into the records used by ordinary admission."""
     records, _ = located_scalar_dataset(judged, form)
@@ -248,7 +278,9 @@ def located_scalar_dataset(judged: FactSchema, form: dict) -> tuple[dict[str, li
     records: dict[str, list] = {}
     pointers: dict[str, list[str]] = {}
     for table_index, table in enumerate(tables):
-        kind, columns, rows = dataset_table(table)
+        if source_decl(table):
+            continue
+        kind, columns, rows, cited = dataset_table(table)
         if kind not in judged.kinds:
             raise LoadError(f"unknown kind '{kind}'")
         identifier = judged.kinds[judged.root(kind)].identifier
@@ -263,9 +295,9 @@ def located_scalar_dataset(judged: FactSchema, form: dict) -> tuple[dict[str, li
         places = pointers.setdefault(kind, [])
         for row_index, row in enumerate(rows):
             where = f"{kind}[{len(output) + 1}]"
-            if not isinstance(row, list) or len(row) != len(columns):
+            if not isinstance(row, list) or len(row) != len(columns) + len(cited):
                 raise LoadError(f"{where}: row width does not match the fact table header")
-            output.append(dataset_record(zip(columns, row, strict=True), where, judged, kind))
+            output.append(dataset_record(zip(columns, row[:len(columns)], strict=True), where, judged, kind))
             places.append(f"/module/decls/0/decls/{table_index}/rows/{row_index}")
     return records, pointers
 
@@ -281,18 +313,28 @@ def untyped_dataset(form: dict) -> dict[str, list]:
 
     records: dict[str, list] = {}
     for table in _named_dataset(module)["decls"]:
-        kind, columns, rows = dataset_table(table)
+        if source_decl(table):
+            continue
+        kind, columns, rows, cited = dataset_table(table)
         output = records.setdefault(kind, [])
         for row in rows:
             where = f"{kind}[{len(output) + 1}]"
-            if not isinstance(row, list) or len(row) != len(columns):
+            if not isinstance(row, list) or len(row) != len(columns) + len(cited):
                 raise LoadError(f"{where}: row width does not match the fact table header")
-            output.append(dataset_record(zip(columns, row, strict=True), where))
+            output.append(dataset_record(zip(columns, row[:len(columns)], strict=True), where))
     return records
 
 
-def dataset_table(table) -> tuple[str, list[str], list]:
-    if not isinstance(table, dict) or table.keys() != {"fact", "columns", "rows"}:
+def source_decl(decl) -> bool:
+    """A source declaration of a dataset (decisions/language-fact-provenance.md); sources.py reads its fields."""
+    return isinstance(decl, dict) and decl.keys() == {"source", "fields"}
+
+
+def dataset_table(table) -> tuple[str, list[str], list, list[str]]:
+    """The kind, slot columns and rows of a fact table, and the source fields of its `@` columns, which follow
+    the slot columns in each row."""
+    if (not isinstance(table, dict) or not {"fact", "columns", "rows"} <= table.keys()
+            or table.keys() - {"fact", "columns", "rows", "source", "sourceColumns"}):
         raise LoadError("datasets require fact tables")
     if not isinstance(table["fact"], str):
         raise LoadError("invalid dataset fact kind")
@@ -305,7 +347,15 @@ def dataset_table(table) -> tuple[str, list[str], list]:
         raise LoadError(f"{kind}: expected unique columns beginning with the identifier")
     if not isinstance(rows, list):
         raise LoadError(f"{kind}: expected fact table rows")
-    return kind, columns, rows
+    if "source" in table and not isinstance(table["source"], str):
+        raise LoadError(f"{kind}: invalid source citation")
+    cited = table.get("sourceColumns", [])
+    if "sourceColumns" in table and "source" not in table:
+        raise LoadError(f"{kind}: a source column needs a source citation `@ name` after the fact kind")
+    if (not isinstance(cited, list) or ("sourceColumns" in table and not cited)
+            or not all(isinstance(c, str) and c for c in cited) or len(set(cited)) != len(cited)):
+        raise LoadError(f"{kind}: expected each source field once after the slot columns")
+    return kind, columns, rows, cited
 
 
 def dataset_record(entries, where: str, judged: FactSchema | None = None, kind: str | None = None) -> dict:
@@ -332,18 +382,19 @@ def dataset_record(entries, where: str, judged: FactSchema | None = None, kind: 
                 raise LoadError(f"{field}: n/a requires an optional slot")
             continue
         if slot is not None:
-            record[name] = dataset_cell(cell, field, SQL_TYPES[slot.type], slot.multivalued,
-                                        judged, slot.target if slot.inlined else None)
+            record[name] = dataset_cell(cell, field, SQL_TYPES[slot.type], judged, slot.target if slot.inlined else None)
         else:
             sql_type = SQL_TYPES[identity.id_type] if identity is not None else None
             record[name] = dataset_cell(cell, field, sql_type)
     return record
 
 
-def dataset_cell(cell, where: str, sql_type: str | None = None, repeated: bool = False,
+def dataset_cell(cell, where: str, sql_type: str | None = None,
                  judged: FactSchema | None = None, target: str | None = None):
+    # A list in a single-valued slot is admitted as a legacy document admits it: the typed rows then
+    # carry each value, and the slot's functionality check reports the second one.
     if isinstance(cell, dict) and cell.keys() == {"list"}:
-        if (sql_type is not None and not repeated) or not isinstance(cell["list"], list):
+        if not isinstance(cell["list"], list):
             raise LoadError(f"{where}: expected a value of the declared slot")
         return [dataset_cell(item, f"{where}[{index}]", sql_type, judged=judged, target=target)
                 for index, item in enumerate(cell["list"], 1)]

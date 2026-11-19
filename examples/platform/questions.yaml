@@ -84,6 +84,10 @@ acceptance:
       - proof_cases/test_cmdb_scope.py::test_fixture_matches_real_domain_placements_without_a_cmdb
       - proof_cases/test_cmdb_scope.py::test_mapped_cmdb_scope_does_not_write_domain_placements
       - proof_cases/test_cmdb_scope.py::test_cmdb_compares_placement_sets_with_per_export_scope
+  - id: comparison-report
+    question: Which placements agree with the CMDB export, which differ, and which cannot be compared, with both source keys?
+    tests:
+      - proof_cases/test_comparison_publication.py::test_comparison_publication
   - id: conflicting-placement-decisions
     question: Which independently valid placement and exclusion decisions conflict at the reference date?
     tests:
@@ -106,14 +110,18 @@ acceptance:
     tests:
       - proof_cases/test_decision_standing.py::test_platform_recalculates_and_retains_conflicting_placements
   - id: default-transport-publication-grounds
-    question: Which product, observation and pinned source must agree before a default transport can be published?
+    question: Which registered product and pinned vendor statement must ground a default transport before it is published?
     tests:
       - acceptance/test_postgres_transport.py::test_unverified_transport_does_not_publish
-      - acceptance/test_postgres_transport.py::test_published_transport_requires_the_product_observation_and_pinned_source
+      - acceptance/test_postgres_transport.py::test_published_transport_requires_the_product_and_pinned_source
   - id: delivery-status-rendering
     question: Which commit-status context, state and reason represent an observed tenant delivery step?
     tests:
       - acceptance/test_delivery_status.py::test_delivery_status
+  - id: dependency-gaps
+    question: Which needed functions lack a solution or placement, and which does the loss of one cluster leave unserved?
+    tests:
+      - proof_cases/test_dependency_gaps.py::test_dependency_gaps
   - id: dependency-order
     question: Which platform steps must precede another step, and which ordered links prove it?
     tests:
@@ -182,6 +190,14 @@ acceptance:
     question: Can the same authenticated tenant credential read another tenant's fixture cluster?
     tests:
       - proof_cases/test_management_access.py::test_management_membership_withdrawal
+  - id: network-policy-origins
+    question: Which decisions govern each declared flow, how do they stand, were they applied, and does the matrix agree?
+    tests:
+      - proof_cases/test_network_policy_provenance.py::test_network_policy_provenance
+  - id: norm-standing
+    question: How does each norm stand on the reference date, and is every valid ruling in the register?
+    tests:
+      - proof_cases/test_norm_standing.py::test_norm_standing
   - id: observation-event-time-validity
     question: How do missing, malformed or tied source event times affect the health evidence?
     tests:
@@ -199,7 +215,7 @@ acceptance:
     question: Which default PostgreSQL client transport and port does the pinned product documentation declare?
     tests:
       - acceptance/test_postgres_transport.py::test_postgres_transport
-      - acceptance/test_postgres_transport.py::test_published_transport_requires_the_product_observation_and_pinned_source
+      - acceptance/test_postgres_transport.py::test_published_transport_requires_the_product_and_pinned_source
   - id: product-part-closure
     question: Which enclosing delivery and catalog entry contain a component, and which part links prove it?
     tests:
@@ -298,6 +314,10 @@ acceptance:
     question: Which time assessments remain unknown when a required support boundary was never recorded?
     tests:
       - proof_cases/test_standard_time.py::test_standard_time
+  - id: version-support
+    question: How severe is the support state of each pinned version under the policy in force, and does the register agree?
+    tests:
+      - proof_cases/test_support_version_policy.py::test_support_version_policy
   - id: workload-address-ownership
     question: Which allocated address belongs to each workload and what address range proves its ownership?
     tests:

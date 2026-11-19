@@ -5,36 +5,56 @@ Licence by path:
 
 - Apache License 2.0 (Apache-2.0) — code, tests, build configuration, and scripts:
   - .basedpyright/
+  - .dockerignore
+  - .gitattributes
   - .github/
   - .gitignore
+  - .node-version
   - admission/
+  - build/
   - canon/
   - checker/
   - compiler/
+  - contracts/*.py
   - contracts/check.py
   - contracts/check.sh
   - contracts/gen-types.sh
   - contracts/python/
   - deploy/
+  - Dockerfile
   - edge/
   - examples/**/*.py
+  - formal/
+  - k8s-admission/
+  - loop/
+  - probes/
   - pyrightconfig.json
   - requirements/
   - rezono/
   - publication/
   - ruff.toml
+  - run/
   - scripts/
+  - tests/
+  - tools/
   - udf/
   - viewer/
 
 - Creative Commons CC0 1.0 Universal (CC0-1.0) — schemas and theories:
+  - contracts/*.schema.json
   - contracts/*.yaml
   - contracts/fixtures/
   - packs/
 
 - Creative Commons Attribution 4.0 International (CC-BY-4.0) — documentation and example content:
   - blocked/
+  - CHANGELOG.md
+  - CONTRIBUTING.md
+  - decisions/
   - docs/
   - examples/ (except *.py)
+  - SECURITY.md
   - to-port/
+  - WORKER.md
+  - **/AGENTS.md
   - **/README.md

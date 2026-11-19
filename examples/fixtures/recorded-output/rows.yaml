@@ -1,0 +1,3 @@
+alpha:
+  - {id: inside, title: At the inclusive upper bound, size: 9}
+  - {id: outside, title: Above the upper bound, size: 10}

@@ -53,3 +53,4 @@ expect:
 unsupported:
   compiler: The compiler builds the rule, while role filtering happens at publication.
   feldera: The full engine may derive a row; role filtering is applied outside Datalog evaluation.
+  language: "Proof visibility per role is decided by the publisher; the language answers one question over one dataset."

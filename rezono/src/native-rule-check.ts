@@ -15,14 +15,19 @@ type Column = { name: string; type: string };
 type Declaration = { rule: string; locals?: Column[]; when?: Expression } &
 	({ args: Expression[] } | { columns: Column[] });
 
-/** Linked evidence for a derived predicate: the states it can take and the places that explain partiality. */
+/**
+ * Linked evidence for a derived predicate: the relation and owner it was linked for, the states it can take and
+ * the places that explain partiality.
+ */
 export interface PredicateSummary {
+	relation?: string;
+	owner?: string;
 	states: readonly string[];
 	related?: readonly Place[];
 }
 
 type Signature = {
-	columns: Column[]; world: World; role: 'input' | 'derived'; absence?: true;
+	columns: Column[]; world: World; role: 'input' | 'derived'; absence?: true; owner?: string;
 	predicate?: PredicateSummary;
 };
 
@@ -228,10 +233,19 @@ class ClauseCheck {
 		if (signature.world === 'open' && !this.absence) refuse('R004', at, name);
 	}
 
-	// A negation or group needs a decided answer, so a predicate that can be undecided is refused.
+	// A negation or group needs a decided answer. A derived predicate that can be undecided is refused, and so
+	// is one without linked states, because nothing then proves it two-valued. A summary linked for another
+	// relation or owner proves nothing about this one, so it is refused without explaining places.
 	private requireTotal(name: string, signature: Signature, at: string): void {
 		const { predicate } = signature;
-		if (!predicate || predicate.states.every(state => state === 'known')) return;
+		if (!predicate) {
+			if (signature.role === 'derived') throw new RuleFault('R047', at, [name]);
+			return;
+		}
+		const otherRelation = predicate.relation !== undefined && predicate.relation !== name;
+		const otherOwner = signature.owner !== undefined && predicate.owner !== signature.owner;
+		if (otherRelation || otherOwner) throw new RuleFault('R047', at, [name]);
+		if (predicate.states.every(state => state === 'known')) return;
 		throw new RuleFault('R047', at, [name], predicate.related ?? []);
 	}
 

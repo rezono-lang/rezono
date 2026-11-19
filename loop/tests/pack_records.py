@@ -27,12 +27,15 @@ def records(link=True):
     }
 
 
-def evaluate(model, data):
+def evaluate(model, data, verified=None):
+    """`verified` gives the rows that admission fills into the protected relations, such as
+    verified_receipt and verified_member (decisions/admission-transport.md section 5). A program
+    that does not declare a relation leaves its rows out."""
     from rezono_compiler import batch, explain, facts, rules, scenarios
 
     program = rules.load(model.rules)
     admitted = facts.rows_of(model, data)
-    inputs = scenarios.rule_rows(model, program, admitted)
+    inputs = {**scenarios.rule_rows(model, program, admitted), **(verified or {})}
     with batch.connect(program, inputs) as con:
         batch.compute(con, program)
         rows = batch.read(con, program, [*program.base_used(), *program.derived()])

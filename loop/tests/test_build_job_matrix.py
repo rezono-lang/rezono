@@ -21,16 +21,6 @@ def rows(*keys):
     return [{"key": list(key)} for key in keys]
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason=(
-        "Read decisions/build-reconciliation.md, section Selection and publication. Add "
-        "loop/build_job_matrix.py with job_matrix(*, run, selected, full, suites) that expands the verified "
-        "build_selected_job and build_full_selection rows to the python and node matrix items of the ci-matrix "
-        "command. Write only in that file."
-    ),
-)
 def test_build_job_matrix():
     assert find_spec("loop.build_job_matrix") is not None, "The build job matrix glue is missing"
     from loop.build_job_matrix import job_matrix

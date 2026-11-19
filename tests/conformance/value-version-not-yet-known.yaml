@@ -17,3 +17,5 @@ expect:
   state: unknown
   reason: null
   witness: null
+unsupported:
+  language: "The shared runner checks questions against the neutral fixture, which declares no versioned relation, and a question cannot declare one. Version choice by valid and known date belongs to calculation binding; the question evaluator reads a version state only as a stored value."

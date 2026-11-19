@@ -31,14 +31,15 @@ def _batch_records():
     strict=True,
     raises=AssertionError,
     reason=(
-        "Read decisions/loop-certificate-admission.md sections 1 and 2. A supplied proved verdict in "
-        "loop_step_safety_check or loop_batch_candidate is a claim: it must not derive safe_alone, "
-        "loop_certified_batch, loop_selected_batch or ready, while a supplied refutation still yields its waiting "
-        "row. Derive them from the protected loop_certified_step and loop_certified_member inputs instead, and keep "
-        "loop/tests/test_batch_visible_prefixes.py green by having loop/batch_selection.py supply those inputs to "
-        "its own speculative evaluation. Write in packs/std-loop and loop/batch_selection.py. Waits for a core "
-        "red test that reserves loop_certified_step and loop_certified_member as protected inputs, as "
-        "compiler/tests/test_verified_receipt_input.py does for verified_receipt (not yet written)."
+        "M2: Read decisions/loop-certificate-admission.md sections 1 and 2 and decisions/admission-transport.md "
+        "section 8. A supplied proved verdict in loop_step_safety_check or loop_batch_candidate is a claim: it "
+        "must not derive safe_alone, loop_certified_batch, loop_selected_batch or ready, while a supplied "
+        "refutation still yields its waiting row. Keep only the derivations from the protected inputs "
+        "verified_round and verified_round_member, and keep loop/tests/test_batch_visible_prefixes.py green by "
+        "moving the verdict-based selection into the speculative evaluation of loop/batch_selection.py under "
+        "internal names. Write in packs/std-loop and loop/batch_selection.py. Waits for "
+        "test_verified_round_authorizes_steps and test_ready_requires_checked_batch_member (same std-loop "
+        "files; ready takes its certified meaning there)."
     ),
 )
 def test_supplied_verdicts_authorize_nothing(tmp_path):

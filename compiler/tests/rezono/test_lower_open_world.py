@@ -10,14 +10,6 @@ def world(definition):
     return (definition.get("annotations") or {}).get("world", "closed")
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason="Lower world open on a kind and on a slot to the LinkML annotation world: open instead of refusing it, "
-           "in compiler/rezono_compiler/rezono_kind.py and rezono_slot.py, and update docs/rezono/publication.md 5.1. "
-           "Read decisions/language-relations.md and docs/rezono/v0.md (world open). Waits for test_lower_time_policy "
-           "while it owns rezono_kind.py and for test_lower_extended_scalar while it owns rezono_slot.py.",
-)
 def test_lower_open_world(tmp_path):
     # The LinkML spelling of an open kind, as the compiler reads it (docs/compiler/rules.md, world).
     statement = yaml.safe_load("{annotations: {world: open}, attributes: {holder: {range: Holder, required: true}}}")

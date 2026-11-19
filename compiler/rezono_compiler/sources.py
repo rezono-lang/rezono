@@ -7,18 +7,19 @@ from __future__ import annotations
 
 from functools import lru_cache
 from datetime import datetime
+import json
 from pathlib import Path
 import re
 
 import yaml
 from rezono_canon import canonical_json
 
-from . import facts
+from . import facts, strict_yaml
 from .pack import Pack, contract_dir
 
 @lru_cache(None)
 def contract() -> dict:
-    return yaml.safe_load((contract_dir() / "source.yaml").read_text("utf-8"))
+    return strict_yaml.read(contract_dir() / "source.yaml")
 
 
 FIELDS = set(contract()["classes"]["Source"]["attributes"])
@@ -134,6 +135,45 @@ def sidecar(pack: Pack, path: Path, doc) -> tuple[dict | None, dict, dict]:
     return default, entries, {(e["row"]["relation"], e["row"]["key"]): e for e in exact}
 
 
+def cited(form: dict, where: str) -> dict[tuple[str, int], dict]:
+    """The source of each row of a fact table that cites a source declaration (decisions/language-fact-provenance.md),
+    by kind and record index in the order of facts.located_scalar_dataset: the declaration's fields overridden by
+    the row's source cells, validated as a sidecar default and a record of that row would be."""
+    tables = facts.named_dataset_decls(form)
+    declared = {}
+    for decl in filter(facts.source_decl, tables):
+        name, fields, at = decl["source"], decl["fields"], f"{where} source {decl['source']}"
+        if not isinstance(name, str) or name in declared or not isinstance(fields, dict):
+            raise facts.LoadError(f"{at}: a source is declared once, with its fields")
+        declared[name] = source(fields, at)
+    out, counts = {}, {}
+    for decl in tables:
+        if facts.source_decl(decl):
+            continue
+        kind, columns, rows, fields = facts.dataset_table(decl)
+        start = counts.get(kind, 0)
+        counts[kind] = start + len(rows)
+        if "source" not in decl:
+            continue
+        if decl["source"] not in declared:
+            raise facts.LoadError(f"{where}: {kind} cites {decl['source']!r}, which is no source of its dataset")
+        for i, row in enumerate(rows):
+            at = f"{where} {kind}[{start + i + 1}]"
+            override = {}
+            for field, cell in zip(fields, row[len(columns):], strict=True):
+                if cell == {"boundary": "omitted"}:
+                    continue
+                if (not isinstance(cell, dict) or cell.keys() != {"lit"} or not isinstance(cell["lit"], str)
+                        or not cell["lit"].startswith('"')):
+                    raise facts.LoadError(f"{at}.@{field}: a source cell is a text literal or a dash")
+                try:
+                    override[field] = json.loads(cell["lit"])
+                except ValueError:
+                    raise facts.LoadError(f"{at}.@{field}: invalid quoted text literal") from None
+            out[(kind, start + i)] = locator(declared[decl["source"]], override, at)
+    return out
+
+
 def collected(entries) -> list[dict]:
     """One entry per RowRef, sources in canonical order without duplicates; conflicting reasons block."""
     rows = {}
@@ -157,7 +197,7 @@ def file_entries(pack: Pack, path: Path, data: dict | None = None, *, metadata=U
                  relative: Path | None = None) -> list[dict]:
     companion = path.with_suffix(".sources.yaml")
     if metadata is UNSET and companion.exists():
-        metadata = yaml.safe_load(companion.read_text("utf-8"))
+        metadata = strict_yaml.read(companion)
     dataset = facts.dataset_at(path)
     return text_entries(pack, relative.as_posix() if relative is not None else path.name,
                         "" if dataset is not None else path.read_text("utf-8"), data,
@@ -173,11 +213,13 @@ def text_entries(pack: Pack, name: str, text: str, data: dict | None = None, *, 
     if dataset is not None:
         raw = dataset.form
     elif data is None or path.suffix == ".json":
-        raw = yaml.safe_load(text) or {}
+        raw = strict_yaml.load(text, name) or {}
     pointers = None
     authored_lines = {span["at"]: span["line"] for span in dataset.form["spans"]} if dataset and dataset.source else {}
+    own_sources = {}
     if isinstance(raw, dict) and raw.get("format") == facts.DATASET_FORMAT:
         data, pointers = facts.located_scalar_dataset(judged, raw)
+        own_sources = cited(raw, path.name)
     elif data is None:
         data = raw
     if not isinstance(data, dict):
@@ -200,6 +242,10 @@ def text_entries(pack: Pack, name: str, text: str, data: dict | None = None, *, 
                     selected = overrides[candidate]
         return selected
 
+    def both(kind, index):
+        return facts.LoadError(f"{companion.name}: {kind} record {index + 1} has a source from both its "
+                               "fact table's citation and the sidecar")
+
     for kind, records in data.items():
         if kind not in pack.kinds or not isinstance(records or [], list):
             raise facts.LoadError(f"{path.name}: unknown kind or non-list records {kind!r}")
@@ -218,14 +264,24 @@ def text_entries(pack: Pack, name: str, text: str, data: dict | None = None, *, 
                     name = path.as_posix() if path.parent.parts else f"rezono/{path.name}"
                     position = f"{name}#{pointers[kind][i]}"
                 fallback = [([{"kind": "pack", "name": name, "position": position}], None)]
+            own = own_sources.get((kind, i))
+            if own is not None:
+                if default:
+                    raise both(kind, i)
+                fallback = [([own], None)]
 
             def record_context(row_kind, row_key, parent):
-                return choices(row_kind, row_key, None) or parent
+                selected = choices(row_kind, row_key, None)
+                if selected and own is not None:
+                    raise both(kind, i)
+                return selected or parent
 
             def row(table, values, row_kind, row_key, slot, context):
                 ref = {"relation": table, "key": canonical_json(values)}
                 exact_key = (table, ref["key"])
                 if exact_key in exact:
+                    if own is not None:
+                        raise both(kind, i)
                     matched_rows.add(exact_key)
                     out.append(exact[exact_key])
                     # A cell selector can still name this fact even when exact rows override it.
@@ -233,6 +289,8 @@ def text_entries(pack: Pack, name: str, text: str, data: dict | None = None, *, 
                         choices(row_kind, row_key, slot)
                     return
                 selected = choices(row_kind, row_key, slot) if slot is not None else None
+                if selected and own is not None:
+                    raise both(kind, i)
                 selected = selected or context
                 if not selected:
                     raise facts.LoadError(f"{companion.name}: no source for {row_kind} {row_key!r}")

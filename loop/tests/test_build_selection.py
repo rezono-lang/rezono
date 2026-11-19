@@ -100,12 +100,18 @@ def published(tmp, records):
     return rows
 
 
-@pytest.mark.parametrize(("path", "wanted", "fallback"), [
-    ("alpha/engine.py", {"alpha", "beta", "gamma"}, set()),
-    ("decisions/note.md", set(), set()),
-    ("unmapped.txt", set(SUITES), {"change"}),
+class MissingSelectionReceipt(AssertionError):
+    """The build publication narrows the selection without an admitted build-selection receipt."""
+
+
+# Without an admitted receipt the publication selects full checks, while the Python selector still narrows;
+# with a verified receipt the two agree in loop/tests/test_mapped_path_requires_reader_inventory.py.
+@pytest.mark.parametrize(("path", "legacy_wanted", "fallback"), [
+    ("alpha/engine.py", {"alpha", "beta", "gamma"}, {"missing-selection-receipt"}),
+    ("decisions/note.md", set(), {"missing-selection-receipt"}),
+    ("unmapped.txt", set(SUITES), {"change", "missing-selection-receipt"}),
 ])
-def test_build_selection_matches_python(tmp_path, path, wanted, fallback):
+def test_build_selection_matches_python(tmp_path, path, legacy_wanted, fallback):
     source = tmp_path / "source"
     base, head, paths = repository(source, path)
     assert paths == [path]
@@ -115,9 +121,12 @@ def test_build_selection_matches_python(tmp_path, path, wanted, fallback):
     universe = [components.Component(name, "python") for name in SUITES]
     legacy = {component.folder for component in components.pull_request_components(universe, source, "main")}
     chosen = {row["key"][1] for row in rows["build_selected_job"]}
-    assert chosen == legacy == wanted
-    assert {row["key"][1] for row in rows["build_full_selection"]} == fallback
-    assert all(row["key"][0] == "current" and row["key"][2] == "change" for row in rows["build_selected_job"])
+    assert legacy == legacy_wanted
+    reasons = {row["key"][2] for row in rows["build_selected_job"]}
+    full = {row["key"][1] for row in rows["build_full_selection"]}
+    if chosen != set(SUITES) or full != fallback or reasons != fallback:
+        raise MissingSelectionReceipt(f"{path}: selected {sorted(chosen)}, full {rows['build_full_selection']}")
+    assert all(row["key"][0] == "current" for row in rows["build_selected_job"])
 
 
 def test_build_selection_requires_matching_receipt(tmp_path):

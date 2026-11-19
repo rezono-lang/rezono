@@ -23,7 +23,7 @@ def validate(decl: dict, at: str, imported: bool, refuse: Refuse) -> None:
         table = derived.get("table") if isinstance(derived, dict) else None
         if not isinstance(table, dict):
             refuse_derived(here, refuse)
-        elif table.get("table") != "unique":
+        elif table.get("table") not in ("unique", "first"):
             refuse(here, f"a table `{table.get('table')}` is not lowered yet", "§9.1")
         elif "totality" in derived:
             refuse(here, "`total` on a table is not lowered: its proof is the check of `rezono/` (tables.md §7, "

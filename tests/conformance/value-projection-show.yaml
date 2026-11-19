@@ -3,16 +3,8 @@ source: docs/semantics/value-cases.yaml#projection-show
 status: settled
 input:
   rows:
-  - kind: item
-    id: item-a
-    group: group-a
-    labels:
-    - first
-    - second
-    quantity: 7
-    weight: 3
-  - kind: group
-    id: group-a
+    - {$kind: Group, $id: group-a}
+    - {$kind: Item, $id: item-a, group: {$ref: group-a}, labels: [first], quantity: "7", weight: "3"}
   ask: 'ask i: Item where weight > 2 show i.weight, group'
 expect:
   value:

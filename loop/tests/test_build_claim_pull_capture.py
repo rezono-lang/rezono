@@ -26,24 +26,34 @@ ANSWERS = {
 }
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason=(
-        "Read decisions/build-claim-release.md section 1. Add loop/build_claim_pull_capture.py with "
-        "pull_rows(claims, answers, *, observed_at, source) returning BuildClaimPullReading records. An answer "
-        "that is missing, unreadable or does not match the open-pull query for that head yields no row. "
-        "Write only in that file."
-    ),
-)
+RECEIPT = {"id": "pull-round", "run": "current", "event_time": T}
+
+
 def test_build_claim_pull_capture():
     assert find_spec("loop.build_claim_pull_capture") is not None, "The pull reading adapter is missing"
     from loop.build_claim_pull_capture import pull_rows
 
-    rows = pull_rows(CLAIMS, ANSWERS, observed_at=T, source="pull-query")
+    rows = pull_rows(CLAIMS, ANSWERS, observed_at=T, source="pull-query", receipt=RECEIPT)
     assert rows == [
-        {"id": f"task/none@{T}", "claim": "task/none", "observed_at": T, "state": "none", "source": "pull-query"},
+        {"id": f"task/none@{T}", "claim": "task/none", "observed_at": T, "state": "none", "source": "pull-query",
+         "receipt": "pull-round"},
         {"id": f"task/open@{T}", "claim": "task/open", "observed_at": T, "state": "open", "source": "pull-query"},
     ], f"Only a matching open answer or a complete empty answer is a reading: {rows}"
     assert pull_rows(list(reversed(CLAIMS)), dict(reversed(list(ANSWERS.items()))), observed_at=T,
-                     source="pull-query") == rows
+                     source="pull-query", receipt=RECEIPT) == rows
+
+
+@pytest.mark.parametrize("receipt", [
+    None,
+    dict(RECEIPT, run="other"),
+    dict(RECEIPT, event_time=T - 1),
+    dict(RECEIPT, id=""),
+], ids=["missing", "other-run", "other-tick", "unnamed"])
+def test_build_claim_pull_capture_needs_completeness(receipt):
+    """An empty answer is evidence of no pull request only with a receipt of the complete read at this cut."""
+    from loop.build_claim_pull_capture import pull_rows
+
+    rows = pull_rows(CLAIMS, ANSWERS, observed_at=T, source="pull-query", receipt=receipt)
+    assert rows == [
+        {"id": f"task/open@{T}", "claim": "task/open", "observed_at": T, "state": "open", "source": "pull-query"},
+    ], f"An empty answer without a matching completeness receipt must stay unknown: {rows}"

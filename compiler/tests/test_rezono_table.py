@@ -168,9 +168,6 @@ alpha_size_band(x, "unknown", "no_row_applies") :- alpha(x), !alpha_size_band_ap
 
 
 REFUSALS = {
-    "first": ([LEVEL, TONE, STANDING, ETA, {"extend": "Eta", "derived": [table(["level"], ([lit("valid")], "good"),
-                                                                         policy="first")]}],
-              55, "a table `first` is not lowered yet"),
     "total": ([LEVEL, TONE, STANDING, ETA, {"extend": "Eta", "derived": [STANDING_TABLE | {"totality": "total"}]}],
               55, "`total` on a table is not lowered"),
     "a value without a table": ([{"extend": "Alpha", "derived": [{"derived": "ok", "type": "Bool",

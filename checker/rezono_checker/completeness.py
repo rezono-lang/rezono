@@ -21,7 +21,8 @@ nothing. Anything missing, unreadable or mismatched leaves coverage unknown: the
 
 Only an admitted receipt supplies a row of the protected relation `verified_receipt`
 (Receipt, Source, Scope, Cut, InventoryHash, ContentHash): the receipt id, the source name, the canonical
-hashes of scope and cut, and the hashes of the trusted inventory and contents. `admit` gives those rows;
+hashes of scope (its definition as the hash of the bytes it pins: `scope_digest`) and cut, and the hashes of the
+trusted inventory and contents. `admit` gives those rows;
 `check` holds the published `verified_receipt` snapshot against them.
 """
 
@@ -46,6 +47,13 @@ class Unverified(Exception):
 def receipt_id(body: dict) -> str:
     """The id of a receipt body: SHA-256 of the canonical ["rezono.completeness-receipt/1", body]."""
     return canonical_sha256([FORMAT, body])
+
+
+def scope_digest(scope: dict) -> str:
+    """The `Scope` of a `verified_receipt` row: the canonical SHA-256 of the bound scope with its definition as
+    the hash of the bytes it pins, not as the reference to a stored copy. The same scope stored elsewhere gives the
+    same digest, as admission compares it (`_by_hash`)."""
+    return canonical_sha256(_by_hash("scope", scope))
 
 
 def verify(reference, authorities, read_bytes) -> tuple[str, ...]:
@@ -83,8 +91,9 @@ def verify(reference, authorities, read_bytes) -> tuple[str, ...]:
     changed = sorted(key for key in expected if submitted[key] != trusted[key])
     if changed:
         raise Unverified("receipt_content_mismatch", "members " + ", ".join(changed))
-    return (receipt["id"], body["source"]["name"], canonical_sha256(body["scope"]), canonical_sha256(body["cut"]),
-            authority["inventory"]["sha256"], authority["content"]["sha256"])
+    # The scope and cut as the trusted context binds them: a candidate's own references confer nothing.
+    return (receipt["id"], body["source"]["name"], scope_digest(authority["scope"]),
+            canonical_sha256(authority["cut"]), authority["inventory"]["sha256"], authority["content"]["sha256"])
 
 
 def admit(references, authorities, read_bytes) -> tuple[dict, list]:
@@ -180,6 +189,22 @@ def _shape(body, what) -> None:
         raise Unverified(f"{what}_malformed", ", ".join(bad))
 
 
+# The archived-file references inside the bound fields, by field and key: the only places a candidate and its
+# trusted context may cite different stored copies of the same bytes. Everything else compares exactly.
+PINNED = {"issuer": "authorization", "scope": "definition"}
+
+
+def _by_hash(field, value):
+    """The bound `field` with its one fixed archived-file reference (`PINNED`) reduced to the hash of the bytes
+    it pins. The candidate and the trusted context each cite their own stored copy
+    (decisions/admission-transport.md, section 3); where a copy is stored does not change what it pins, and only
+    the trusted context's copy is read. `_shape` has made sure the reference is one."""
+    key = PINNED.get(field)
+    if key is None:
+        return value
+    return value | {key: value[key]["sha256"]}
+
+
 def _authority(body, authorities) -> dict:
     """The one trusted context that allows this source, scope, cut and issuer."""
     for authority in authorities:
@@ -188,7 +213,7 @@ def _authority(body, authorities) -> dict:
         _shape(authority, "authority")
 
     def same(authority, *fields):
-        return all(canonical_json(authority[f]) == canonical_json(body[f]) for f in fields)
+        return all(canonical_json(_by_hash(f, authority[f])) == canonical_json(_by_hash(f, body[f])) for f in fields)
 
     scoped = [a for a in authorities if same(a, "source", "scope")]
     if not scoped:

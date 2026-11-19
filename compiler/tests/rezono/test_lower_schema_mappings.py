@@ -12,13 +12,6 @@ def mappings(definition):
     return {name: definition.get(name, []) for name in MAPPINGS}
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason="Admit closeMappings and broadMappings beside exactMappings in the module/2 contract "
-           "(contracts/rezono-module.yaml) and lower them in compiler/rezono_compiler/rezono_metadata.py. "
-           "Read decisions/language-metadata.md, section Close and broad mappings. No reader dependency.",
-)
 def test_lower_schema_mappings(tmp_path):
     oracle = schema_file("packs/std-time/schema/time.yaml")["classes"]["ReferencePoint"]
     declaration = kind(

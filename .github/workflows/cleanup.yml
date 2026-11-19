@@ -1,15 +1,17 @@
 name: Release inactive task claims
 on:
   schedule:
-    - cron: '17 * * * *'
+    - cron: '7,22,37,52 * * * *'
   workflow_dispatch:
-permissions:
-  contents: write
-  pull-requests: read
+permissions: {}
 concurrency: task-claim-cleanup
 jobs:
   release:
+    timeout-minutes: 10
     runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+      pull-requests: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Release inactive claims
@@ -19,3 +21,21 @@ jobs:
         run: |
           set -euo pipefail
           python scripts/release_claims.py
+  standstill:
+    timeout-minutes: 10
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Report a standstill
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python3 -I scripts/standstill.py --now "$(date -u +%Y-%m-%dT%H:%M:%SZ)"

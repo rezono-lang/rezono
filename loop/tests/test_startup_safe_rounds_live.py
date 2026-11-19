@@ -13,7 +13,7 @@ import pytest
     strict=True,
     raises=AssertionError,
     reason=(
-        "Read decisions/safe-step-rounds.md. Run the startup through the shared disposable cluster's "
+        "M2: Read decisions/safe-step-rounds.md. Run the startup through the shared disposable cluster's "
         "normal recorded path and compare live scoped readback after every visible transition. Waits for "
         "test_startup_transition_cases and the platform startup bindings, test_certified_round_replay, "
         "scoped policy/readback and the live recorder. "

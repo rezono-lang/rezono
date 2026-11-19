@@ -13,7 +13,7 @@ import odcs
 import shacl
 
 
-SCHEMA = {"rezono": "1.0", "pack": "atlas", "base": "https://example.org/atlas/",
+SCHEMA = {"rezono": "1.0", "pack": "sample", "base": "https://example.org/sample/",
           "kinds": {"Point": {"id": {"type": "Text"}, "world": "closed",
                               "slots": {"label": {"type": "Text", "card": "1", "states": ["known"]}}}}}
 
@@ -52,7 +52,7 @@ def test_shape_name_uses_its_slot_declaration():
 
 def test_contract_name_uses_schema_pack():
     text = odcs.to_yaml(SCHEMA)
-    assert yaml.safe_load(text)["name"] == "atlas"
+    assert yaml.safe_load(text)["name"] == "sample"
     from odcs_index import indexed_contract
 
     body, record = indexed_contract(SCHEMA)
@@ -66,10 +66,10 @@ def test_distribution_uses_its_matching_listed_object():
 
     pin = {"manifest": "m-7", "dataset": "d-" + "b" * 64}
     files = {"row-json": "rows.json"}
-    objects = [{"name": name, "uri": f"https://example.org/atlas/m-7/reader/publication/{name}",
+    objects = [{"name": name, "uri": f"https://example.org/sample/m-7/reader/publication/{name}",
                 "bytes": len(raw), "sha256": hashlib.sha256(raw).hexdigest()}
                for name, raw in [("schema.json", canonical_json(SCHEMA).encode()), ("rows.json", b"[]")]]
-    listing = {"format": "rezono.publication-form/1", "pack": "atlas", "role": "reader", **pin,
+    listing = {"format": "rezono.publication-form/1", "pack": "sample", "role": "reader", **pin,
                "schema": l0.schema_id(SCHEMA), "sources": [], "objects": objects}
     raw = json.dumps(listing, indent=2).encode()
     text = dcat.to_turtle(SCHEMA, pin, files)

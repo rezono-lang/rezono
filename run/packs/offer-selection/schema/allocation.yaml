@@ -4,11 +4,12 @@ description: >-
   Complete physical and nested allocations of one workload for one purchase scope, with the capacities,
   reserves, limits and charges that decide which allocation is supported. Origin of each kind: the workload
   design, a recorded allocation proposal, supplier publications and binding quotes, and dated decisions of
-  the accountable run authority (decisions/run-physical-nested-allocation.md). The pack carries its own small
-  decision record, so that it compiles on its own like the other Run packs.
+  the accountable run authority (decisions/run-physical-nested-allocation.md). Decisions and reference dates
+  are the kinds of std-decision, whose rules say which decision is in force on a day.
 in_language: en
 imports:
   - linkml:types
+  - std-decision:decision
 default_range: string
 annotations:
   layer: facts
@@ -26,38 +27,7 @@ enums:
       memory: {}
       disk: {}
 
-  DecisionState:
-    description: What the decision record says about its standing.
-    permissible_values:
-      proposed: {}
-      in_force: {}
-      superseded: {}
-      withdrawn: {}
-
 classes:
-  Decision:
-    description: >-
-      A decision of the accountable run authority: who took it, from which day it applies and which earlier
-      decision it replaces. Time follows from the validity days and supersedes, never from the state.
-    attributes:
-      id: {identifier: true}
-      title: {required: true}
-      decider: {multivalued: true}
-      decided_on: {range: date}
-      valid_from: {range: date}
-      valid_until: {range: date}
-      valid_from_day: {range: integer, minimum_value: 19000101, maximum_value: 99991231}
-      valid_until_day: {range: integer, minimum_value: 19000101, maximum_value: 99991231}
-      state: {range: DecisionState, required: true}
-      supersedes: {range: Decision, multivalued: true}
-
-  ReferenceDate:
-    description: A day for which the decisions are read. A fact, never the clock.
-    attributes:
-      id: {identifier: true}
-      title: {required: true}
-      day: {range: integer, minimum_value: 19000101, maximum_value: 99991231, required: true}
-
   AllocationWorkload:
     description: A workload whose members are placed together. Origin, an approved probe design.
     attributes:

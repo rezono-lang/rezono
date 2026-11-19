@@ -10,9 +10,11 @@ from pathlib import Path
 from typing import TypedDict
 
 import yaml
+from rezono_admission.schema import INPUT_FORMATS
+
 from .schemaview import SchemaView
 
-from . import amounts, diagnostics, fold, icons as icon_files, modules, rezono_module, rules_dl, spans, types, views
+from . import amounts, diagnostics, fold, icons as icon_files, modules, rezono_module, rules_dl, spans, strict_yaml, types, views
 from .diagnostics import Diagnosed
 from .names import NAME
 from .regex import PatternError, portable
@@ -20,7 +22,7 @@ from .regex import PatternError, portable
 LAYERS = ("source", "facts", "conclusions", "plan", "output", "observation")
 # Annotations the compiler reads now, or in a later milestone (then ignored without warning).
 ANNOTATIONS = {"layer", "path_equations", "outcome", "explain", "invariants", "seal", "sealed_with", "world", "explore",
-               "currency", "plane", "owner", "renamed_from"}
+               "currency", "plane", "owner", "renamed_from", "input_format"}
 CURRENCY = re.compile(r"^[A-Z]{3}$")  # ISO 4217
 CLASS = re.compile(r"[a-z][a-z0-9]*(-[a-z0-9]+)*")  # a pack's class (pack.yaml, SO-5), as contracts/pack.yaml says
 # What a missing row means: closed, not true; open, unknown.
@@ -99,6 +101,7 @@ class Slot:
     minimum_cardinality: int | None = None
     maximum_cardinality: int | None = None
     patterns: list[str] = field(default_factory=list)  # portable regular expressions (regex.portable)
+    input_format: str | None = None
     constant: object = None  # equals_string or equals_number
     world: str = "closed"  # open if the slot or its kind is open
     explore: tuple[int, int, int] | None = None  # (min, max, step) of a sweep on this slot
@@ -364,7 +367,7 @@ def read_meta(pack_dir: str | Path) -> dict:
     """Read metadata and refuse unsupported views, without loading schemas or pack code."""
     path = Path(pack_dir) / "pack.yaml"
     try:
-        meta = yaml.safe_load(path.read_text(encoding="utf-8"))
+        meta = strict_yaml.read(path)
     except (OSError, yaml.YAMLError) as error:
         raise CompileError(f"{path}: cannot read pack metadata ({error})") from error
     if not isinstance(meta, dict) or not all(meta.get(k) for k in ("name", "version", "default_language")):
@@ -634,6 +637,8 @@ def read(pack_dir: str | Path) -> Pack:
                 errors.append(f"{where}: a subkind inherits the identifier of {kind.parent}; it cannot declare its own")
             if s.identifier and "world" in tags(s):
                 errors.append(f"{where}: world goes on the class, not on its identifier")
+            if s.identifier and "input_format" in tags(s):
+                errors.append(f"{where}: input_format goes on a text attribute, not on an identifier")
             if s.identifier and "explore" in tags(s):
                 errors.append(f"{where}: explore goes on a slot of whole numbers, not on an identifier")
             if s.name not in inherited:  # an inherited slot is checked where it is declared
@@ -680,6 +685,14 @@ def read(pack_dir: str | Path) -> Pack:
                 if slot.currency and slot.sql_type != "BIGINT":
                     errors.append(f"{where}: a currency goes on whole numbers (minor units), not on {rng}")
                 slot.unit = slot_unit(sv, rng, declared) if isinstance(rng, str) else None
+            if "input_format" in tags(s):
+                form = ann(s, "input_format")
+                if not isinstance(form, str) or form not in INPUT_FORMATS:
+                    errors.append(f"{where}: unknown input_format {form!r}")
+                elif slot.type.bundle != "text" or slot.arrow:
+                    errors.append(f"{where}: input_format goes on a text attribute")
+                else:
+                    slot.input_format = form
             cardinality(slot, s, where, errors)
             constant(slot, s, where, errors)
             slot.role = slot_role(sv, s)
@@ -772,7 +785,7 @@ def read(pack_dir: str | Path) -> Pack:
                 raise views.ViewError(f"{pack_dir / 'views.yaml'}: views[{missing[0]}].theory: expected a pinned import")
             theories = {v.theory: read(packs[v.theory].dir) for v in view_file.views}
             found = spans.marks(pack_dir / "views.yaml")
-            written = (yaml.safe_load((pack_dir / "views.yaml").read_text("utf-8")) or {}).get("views") or []
+            written = (strict_yaml.read(pack_dir / "views.yaml") or {}).get("views") or []
             for view in view_typing.resolve(view_file, pack, theories, source=pack_dir / "views.yaml").views:
                 before = {r["id"] for r in (pack.rules or {}).get("rules", [])}
                 pack.rules = view_rules.bind(pack.rules, view, pack, theories[view.theory], renames[view.theory],
@@ -1296,7 +1309,7 @@ def sweeps(pack: Pack, pack_dir: Path, errors: list[str]) -> list[dict]:
     path = pack_dir / "sweeps.yaml"
     if not path.exists():
         return []
-    doc = yaml.safe_load(path.read_text("utf-8"))
+    doc = strict_yaml.read(path)
     if not isinstance(doc, dict) or set(doc) != {"sweeps"} or not isinstance(doc["sweeps"], list):
         errors.append("sweeps.yaml: must be a mapping with one key, sweeps, a list")
         return []
@@ -1348,7 +1361,7 @@ def fact_files(pack: Pack, pack_dir: Path, kind: str, key: str) -> list[str]:
     found = []
     from .facts import files
     for f in files(pack_dir):
-        data = yaml.safe_load(f.read_text("utf-8")) or {}
+        data = strict_yaml.read(f) or {}
         records = data.get(kind) if isinstance(data, dict) else None
         if any(isinstance(r, dict) and ident in r and not isinstance(r[ident], bool) and str(r[ident]) == key
                for r in records or []):
@@ -1491,7 +1504,7 @@ def channels(pack: Pack, pack_dir: Path, packs: dict, renames: dict, errors: lis
     for source, names, owner in sources:
         if not source.exists():
             continue
-        data = yaml.safe_load(source.read_text(encoding="utf-8")) or {}
+        data = strict_yaml.read(source) or {}
         where = "channels.yaml" if source == path else f"{source.parent.name}/channels.yaml"
         found, file = spans.marks(source), spans.where(owner, pack.meta["name"], "channels.yaml")
         for section in ("relief", "home", "house_style"):
@@ -2288,7 +2301,7 @@ def questions(pack: Pack, pack_dir: Path, packs: dict, errors: list[str]) -> lis
     for path, where in sources:
         if not path.exists():
             continue
-        doc = yaml.safe_load(path.read_text("utf-8"))
+        doc = strict_yaml.read(path)
         if not isinstance(doc, dict) or doc.get("format") != "rezono.questions/1" \
                 or not {"format"} < set(doc) <= {"format", *sections} \
                 or not all(isinstance(doc.get(k, []), list) for k in sections):
@@ -2602,7 +2615,7 @@ def language(pack: Pack, pack_dir: Path, packs: dict, renames: dict, errors: lis
             if not source.exists():
                 continue
             where = f"labels/{lang}.yaml" if source == lp else f"{source.parents[1].name}/labels/{lang}.yaml"
-            for element, value in sorted((yaml.safe_load(source.read_text("utf-8")) or {}).items()):
+            for element, value in sorted((strict_yaml.read(source) or {}).items()):
                 element = renamed(str(element), names)
                 if element not in elements:
                     errors.append(f"{where}: unknown element '{element}'")

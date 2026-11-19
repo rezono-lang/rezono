@@ -1,0 +1,32 @@
+{
+  "rezono__arrow": [
+    {"kind": "beta", "slot": "alpha", "target": "alpha"}
+  ],
+  "rezono__constant": [],
+  "rezono__enum": [
+    {"kind": "beta", "slot": "state", "enumeration": "state"}
+  ],
+  "rezono__is_a": [],
+  "rezono__maximum": [
+    {"kind": "alpha", "slot": "size", "v": 9}
+  ],
+  "rezono__maximum_cardinality": [],
+  "rezono__minimum": [
+    {"kind": "alpha", "slot": "size", "v": 0}
+  ],
+  "rezono__minimum_cardinality": [],
+  "rezono__required": [
+    {"kind": "alpha", "slot": "title"},
+    {"kind": "beta", "slot": "alpha"}
+  ],
+  "rezono__single": [
+    {"kind": "alpha", "slot": "size"},
+    {"kind": "alpha", "slot": "title"},
+    {"kind": "beta", "slot": "alpha"},
+    {"kind": "beta", "slot": "state"}
+  ],
+  "state": [
+    {"id": "low"},
+    {"id": "high"}
+  ]
+}

@@ -45,7 +45,8 @@ def relation(name, role, columns):
             "key": [{"name": column, "type": "string"} for column in columns]}
 
 
-def asserted_complete(bucket, evidence, source, scope, cut, inventory, content, *, trusted_relation=False):
+def asserted_complete(bucket, evidence, source, scope, cut, inventory, content, *, trusted_relation=False,
+                      authority=()):
     # Same ordinary proof shape for a valid positive past read or a purported admission.
     base = "recorded_read" if trusted_relation else "verified_receipt"
     result = "recorded_scope" if trusted_relation else "complete"
@@ -70,7 +71,7 @@ def asserted_complete(bucket, evidence, source, scope, cut, inventory, content, 
     if not trusted_relation:
         manifest["completeness_receipts"] = [pin(bucket, "receipt.json", evidence)]
     return check_epoch([witness], manifest, load_rules(document), lambda uri: bucket.get(key_of(uri)),
-                       derived={result})
+                       derived={result}, completeness_authority=authority)
 
 
 def test_completeness_receipt_exact_inventory(tmp_path):
@@ -85,12 +86,14 @@ def test_completeness_receipt_exact_inventory(tmp_path):
     scope = {"definition": definition, "query": "partitions", "bindings": [
         {"name": "register", "type": "Text", "value": "example-register"},
     ]}
+    # The scope digest names its definition by the hash of the bytes it pins, not by where a copy is stored.
+    scope_digest = canonical_sha256({**scope, "definition": definition["sha256"]})
     cut = {"frontier": {"source_id": "example-register", "position": "snapshot-17"}}
     initial = {"source": SOURCE, "issuer": {"id": "reader", "authorization": authorization},
                "scope": scope, "cut": cut, "inventory": trusted_inventory, "content": trusted_content}
     first = initial | {"id": canonical_sha256(["rezono.completeness-receipt/1", initial])}
     assert asserted_complete(
-        bucket, first, SOURCE["name"], canonical_sha256(scope), canonical_sha256(cut),
+        bucket, first, SOURCE["name"], scope_digest, canonical_sha256(cut),
         trusted_inventory["sha256"], trusted_content["sha256"], trusted_relation=True,
     )["valid"]
 
@@ -106,20 +109,36 @@ def test_completeness_receipt_exact_inventory(tmp_path):
     empty = pin(bucket, "empty.json", [])
     assert empty["sha256"] != trusted_inventory["sha256"]
 
-    accepted = set()
-    for name, change in (
-        ("member substitution", {"content": pin(bucket, "substituted.json", substitution)}),
-        ("row dropped within member", {"content": pin(bucket, "truncated.json", dropped)}),
-        ("wrong cut", {"cut": {"frontier": {"source_id": "example-register", "position": "snapshot-18"}}}),
-        ("unauthorized issuer", {"issuer": {"id": "unrelated-reader", "authorization": authorization}}),
-        ("unattested empty inventory", {"inventory": empty, "content": empty}),
+    # The trusted context is the protected caller's: the exact read is admitted against it, and each mutation
+    # below is refused for its own reason, not for a missing authority.
+    authority = [initial]
+    admitted = asserted_complete(bucket, first, SOURCE["name"], scope_digest, canonical_sha256(cut),
+                                 trusted_inventory["sha256"], trusted_content["sha256"], authority=authority)
+    assert admitted == {**admitted, "valid": True, "findings": []}, admitted["findings"]
+    unauthorized = asserted_complete(bucket, first, SOURCE["name"], scope_digest, canonical_sha256(cut),
+                                     trusted_inventory["sha256"], trusted_content["sha256"])
+    assert not unauthorized["valid"]
+
+    accepted, misread = set(), {}
+    for name, change, code in (
+        ("member substitution", {"content": pin(bucket, "substituted.json", substitution)}, "receipt_member_mismatch"),
+        ("row dropped within member", {"content": pin(bucket, "truncated.json", dropped)}, "receipt_content_mismatch"),
+        ("wrong cut", {"cut": {"frontier": {"source_id": "example-register", "position": "snapshot-18"}}},
+         "receipt_cut_mismatch"),
+        ("unauthorized issuer", {"issuer": {"id": "unrelated-reader", "authorization": authorization}},
+         "receipt_issuer_unauthorized"),
+        ("unattested empty inventory", {"inventory": empty, "content": empty}, "receipt_inventory_mismatch"),
     ):
         body = initial | change
         receipt = body | {"id": canonical_sha256(["rezono.completeness-receipt/1", body])}
-        checked = asserted_complete(bucket, receipt, SOURCE["name"], canonical_sha256(scope),
+        checked = asserted_complete(bucket, receipt, SOURCE["name"], scope_digest,
                                     canonical_sha256(body["cut"]), body["inventory"]["sha256"],
-                                    body["content"]["sha256"])
+                                    body["content"]["sha256"], authority=authority)
         if checked["valid"]:
             accepted.add(name)
+        details = [f.get("detail", "") for f in checked["findings"] if f["reason"] == "receipt_unverified"]
+        if not any(f": {code}:" in detail for detail in details):
+            misread[name] = details
     if accepted:
         raise UnverifiedReceiptAccepted(f"checker accepted {', '.join(sorted(accepted))}")
+    assert not misread, misread

@@ -21,7 +21,10 @@ type NativeForm = {
 	module: { rezono: '0'; pack: 'sample'; use: []; decls: Rule[] };
 	spans: Place[];
 };
-type Signature = { columns: Column[]; world: World; role: 'input' | 'derived'; absence?: true };
+type Signature = {
+	columns: Column[]; world: World; role: 'input' | 'derived'; absence?: true; owner: string;
+	predicate?: { relation: string; owner: string; states: readonly string[] };
+};
 type SignatureEnvironment = { schema: Schema; relations: Record<string, Signature> };
 type Diagnosis = { code: string; args: string[]; span: Place; related?: Place[] };
 
@@ -145,18 +148,25 @@ const schema: Schema = {
 		},
 	},
 };
+// Every relation of these samples is owned by the sample pack itself.
+const owner = 'sample';
 const input = (columns: Fragment<Column>[], world: World = 'closed'): Signature =>
-	({ columns: columns.map(col => col.tree), role: 'input', world });
-const derived = (columns: Fragment<Column>[], absence = false): Signature =>
-	({ columns: columns.map(col => col.tree), role: 'derived', world: 'closed', ...(absence ? { absence: true } : {}) });
+	({ columns: columns.map(col => col.tree), role: 'input', world, owner });
+const derived = (relation: string, columns: Fragment<Column>[], absence = false): Signature =>
+	({
+		columns: columns.map(col => col.tree), role: 'derived', world: 'closed', owner,
+		// Linked evidence that the predicate is two-valued, which a negation or group of it needs, for the
+		// relation and owner it was linked for.
+		predicate: { relation, owner, states: ['known'] }, ...(absence ? { absence: true } : {}),
+	});
 const environment: SignatureEnvironment = {
 	schema,
 	relations: {
 		item: input([item]),
 		amount: input([item, result]),
 		blocked: input([item]),
-		selected: derived([item, result]),
-		ready: derived([item]),
+		selected: derived('selected', [item, result]),
+		ready: derived('ready', [item]),
 	},
 };
 
@@ -282,7 +292,7 @@ const pairs: Pair[] = [
 	{
 		name: 'an absence rule can report what the open register records',
 		safe: sample('ready', [x], and(itemRow, not(call('blocked', x))), [], {
-			...environment, relations: { ...withWorld('blocked', 'open').relations, ready: derived([item], true) },
+			...environment, relations: { ...withWorld('blocked', 'open').relations, ready: derived('ready', [item], true) },
 		}),
 		unsafe: sample('ready', [x], and(itemRow, not(call('blocked', x))), [], withWorld('blocked', 'open')),
 		finding: { code: 'R004', at: '/decls/1/when/and/1', token: 'not blocked(x)' },

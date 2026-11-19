@@ -70,7 +70,7 @@ types:
     description: The name of a kind, a unit or an enum (v0 §3).
   TypeText:
     typeof: string
-    pattern: "^[A-Z][A-Za-z0-9]*(<[A-Za-z0-9<>,]+>)?$"
+    pattern: "^([a-z][a-z0-9_]*[.])?[A-Z][A-Za-z0-9]*(<[A-Za-z0-9<>,]+>)?$"
     description: A type as written, without white space, such as `Money<EUR>`.
   Date:
     typeof: string
@@ -145,6 +145,8 @@ classes:
     attributes:
       description: &metadata_description {all_of: [{range: string}]}
       exactMappings: &metadata_mappings {all_of: [{range: string, multivalued: true}], description: "Written IRIs or CURIEs, in written order."}
+      closeMappings: *metadata_mappings
+      broadMappings: *metadata_mappings
       annotations: &metadata_annotations {all_of: [{range: AnnotationMap, inlined: true}]}
 
   ModuleForm:
@@ -228,6 +230,7 @@ classes:
           - {range: RulesDecl, inlined: true}
           - {range: ScalarAliasDecl, inlined: true}
           - {range: DatasetDecl, inlined: true}
+          - {range: SourceDecl, inlined: true}
 
   ModuleHeader:
     abstract: true
@@ -267,12 +270,36 @@ classes:
           - range: RulesDecl
           - &scalar_alias {range: ScalarAliasDecl}
           - range: DatasetDecl
+          - &source_decl {range: SourceDecl}
 
   DatasetDecl:
-    description: A named fact dataset with its tables in source order.
+    description: A named fact dataset with its fact tables and source declarations in source order.
     attributes:
       dataset: {required: true, range: Name}
-      decls: {required: true, range: FactTable, multivalued: true, inlined_as_list: true}
+      decls:
+        required: true
+        multivalued: true
+        inlined_as_list: true
+        any_of:
+          - *fact_table
+          - *source_decl
+
+  SourceDecl:
+    description: >-
+      The shared fields of the sources of the fact tables that cite it with `@`
+      (decisions/language-fact-provenance.md). It stands in the module or the dataset of those tables.
+    attributes:
+      source: {required: true, range: Name}
+      fields:
+        required: true
+        range: SourceFields
+        inlined: true
+        description: "The fields of the source contract (contracts/source.yaml, class `Source`) as text, keyed by their names."
+
+  SourceFields:
+    description: A map from source field names to their text.
+    extra_slots:
+      range_expression: {range: string, required: true}
 
   NativeRuleModule:
     is_a: ModuleHeader
@@ -498,6 +525,7 @@ classes:
     description: One version of a parameter or a derived value (v0 §5a).
     attributes:
       version: {required: true, range: NumberText}
+      replaces: {range: NumberText, description: "The number of the version this one replaces, from `version N replaces M`; precedence (a) of v0 §5a, rule 4."}
       valid: {range: Date, multivalued: true, minimum_cardinality: 1, maximum_cardinality: 2, description: "The first day, and the day after the last one; one date for a range without an end."}
       known: {range: Date}
       value: {range: Expr, inlined: true}
@@ -510,6 +538,7 @@ classes:
       world: {range: World}
       applies: {range: Applies, inlined: true}
       sealed: {range: Name, description: "The slot of `sealed at`. It has no place of its own: its kind's stands for it."}
+      relationship: {range: boolean, description: "`true` for a relationship kind; absent otherwise (decisions/language-relationship-kinds.md)."}
       slots:
         required: true
         multivalued: true
@@ -556,6 +585,8 @@ classes:
       slotUri: {all_of: [{range: string}], description: "The written slot IRI or CURIE."}
       description: *metadata_description
       exactMappings: *metadata_mappings
+      closeMappings: *metadata_mappings
+      broadMappings: *metadata_mappings
       annotations: *metadata_annotations
       card: {range: Card}
       inverse: {range: Name}
@@ -677,6 +708,8 @@ classes:
     any_of:
       - {slot_conditions: {description: {value_presence: PRESENT}}}
       - {slot_conditions: {exactMappings: {value_presence: PRESENT}}}
+      - {slot_conditions: {closeMappings: {value_presence: PRESENT}}}
+      - {slot_conditions: {broadMappings: {value_presence: PRESENT}}}
       - {slot_conditions: {annotations: {value_presence: PRESENT}}}
       - {slot_conditions: {slotUri: {value_presence: PRESENT}}}
       - {slot_conditions: {memberMetadata: {value_presence: PRESENT}}}
@@ -704,6 +737,8 @@ classes:
       unless: {range: Clause, array: {dimensions: [{alias: unless}, {alias: clause}]}, description: "Each `unless`, in the order of the text: its one clause, or the clauses of its block (v0 §5b)."}
       versions: {range: Version, multivalued: true, inlined_as_list: true, minimum_cardinality: 1}
       table: {range: Table, inlined: true}
+      output: {range: DerivedOutput, inlined: true}
+      definitions: {range: Definition, multivalued: true, inlined_as_list: true, minimum_cardinality: 1}
 
   Table:
     description: >-
@@ -748,6 +783,19 @@ classes:
     attributes:
       lit: {required: true, description: "A literal, an id or a value of an enum as a bare word, as the text wrote it; never a state."}
 
+  DerivedOutput:
+    description: "The explicit output of a calculation: `output relation.slot`."
+    attributes:
+      relation: {required: true, range: Name}
+      slot: {required: true, range: Name}
+
+  Definition:
+    description: "One named definition of a calculation: `definition name when condition then expression`."
+    attributes:
+      name: {required: true, range: Name}
+      when: {required: true, range: Expr, inlined: true}
+      value: {required: true, range: Expr, inlined: true}
+
   Clause:
     attributes:
       when: {required: true, range: Expr, inlined: true}
@@ -764,8 +812,25 @@ classes:
     description: Facts as a table. Every row has one value for each column; the first column is the id.
     attributes:
       fact: {required: true, range: TypeName}
+      source: {range: Name, description: "The source declaration the table cites with `@` (decisions/language-fact-provenance.md)."}
       columns: {required: true, range: Word, multivalued: true, description: "The header: a name for each column, or a path as the text wrote it."}
-      rows: {required: true, range: Expr, array: {dimensions: [{alias: row}, {alias: cell}]}}
+      sourceColumns:
+        range: Name
+        multivalued: true
+        minimum_cardinality: 1
+        description: "The source fields of the `@` columns, which follow the slot columns in each row; only with `source`."
+      rows:
+        required: true
+        any_of:
+          - {range: Expr}
+          - {range: OmittedCell}
+        array: {dimensions: [{alias: row}, {alias: cell}]}
+        description: "Each row holds the slot cells, then the source cells: a text literal, or the omitted cell for the declaration's value."
+
+  OmittedCell:
+    description: "A dash in a source column: the value of the cited source declaration."
+    attributes:
+      boundary: {required: true, equals_string: omitted}
 
   FactRow:
     description: Facts of one element, with the contexts they hold in (v0 §5a rule 5).
@@ -773,8 +838,25 @@ classes:
       fact: {required: true, range: Name}
       id: {required: true}
       valid: {range: Date, multivalued: true, minimum_cardinality: 1, maximum_cardinality: 2}
+      during:
+        description: The stages the facts hold for, one stage or a range from a stage (decisions/language-dated-facts.md).
+        exactly_one_of:
+          - range: StageContext
+          - range: StageRange
+      in: {multivalued: true, minimum_cardinality: 1, description: "The setups the facts hold in, in the order written."}
       known: {range: Date}
       set: {required: true, range: Assignment, multivalued: true, inlined_as_list: true}
+
+  StageContext:
+    description: One stage, as a stage context.
+    attributes:
+      stage: {required: true}
+
+  StageRange:
+    description: A range of stages from one stage, closed at an exclusive end stage or open.
+    attributes:
+      from: {required: true}
+      until: {}
 
   Assignment:
     attributes:

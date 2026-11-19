@@ -92,7 +92,7 @@ def check_epoch(query, witnesses, *, json_dates=False):
 
 @pytest.mark.xfail(strict=True, raises=pytest.RaisesExc(
     pack.CompileError, match=r"(alpha__expected|beta__observed) has a column"), reason=(
-    "Read decisions/independent-date-equality.md. Admit DATE equality in contracts/rules.yaml and "
+    "extra: Read decisions/independent-date-equality.md. Admit DATE equality in contracts/rules.yaml and "
     "compiler/rezono_compiler. Select this test in compiler/ci/run_feldera_oracle.sh and verify "
     "the exact implementation revision on hosted Feldera before queue admission."))
 def test_independent_date_equality(dated_records):

@@ -9,16 +9,6 @@ from rezono_publisher import store
 PLAN, OTHER = "c" * 64, "d" * 64
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason=(
-        "Read formal/Rounds.tla (Claim, AtMostOneSubmitPerNonrepeatableHash) and decisions/safe-step-rounds.md "
-        "section 2 (Dispatch, readback and fixed point). Add loop/round_claim.py with claim_attempt(archive, *, "
-        "plan_hash, run, cut, worker) that durably claims one nonrepeatable plan hash with the archive's "
-        "conditional put_new and returns the claim only to its holder at that run and cut. Write in loop/."
-    ),
-)
 def test_round_claim_is_durable_and_exclusive(tmp_path):
     assert find_spec("loop.round_claim") is not None, "The durable attempt claim is not wired"
     from loop.round_claim import claim_attempt
