@@ -3,7 +3,7 @@
 # of this checkout. The quickstart then installs the locked packages from that copy, as on Ubuntu itself.
 # The image is a local tool and is never published; README.md gives the commands that build and start it, and
 # .github/workflows/quickstart-image.yml runs scripts/check-quickstart.sh in it.
-FROM --platform=linux/amd64 buildpack-deps:24.04-scm@sha256:94ed690dd634b8b2f531eaa742fde9b1264077cd8ea695a3b960bd104ae4c481
+FROM --platform=linux/amd64 buildpack-deps:26.10-scm@sha256:b3ce51612b50e583887ee360498db78e6e4bd3d5703131c9d165b59f8db20245
 
 RUN apt-get -o Acquire::Retries=5 update \
  && DEBIAN_FRONTEND=noninteractive apt-get -o Acquire::Retries=5 install -y --no-install-recommends jq \
