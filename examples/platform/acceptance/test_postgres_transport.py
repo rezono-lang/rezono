@@ -62,10 +62,12 @@ def test_published_transport_requires_the_product_and_pinned_source():
     for relation in rows:
         incomplete = {name: records for name, records in rows.items() if name != relation}
         assert _published(program, incomplete) == set(), relation
-    # One pinned statement: a changed value changes the published row, and the acceptance pin catches it.
+    # One pinned statement: a forged product publishes nothing, any other forged value publishes exactly that value.
     forged_slots = _slots(SOURCE, source_id, UNVERIFIED)
-    for relation, forged in forged_slots.items():
-        assert conclusion not in _published(program, rows | {relation: forged}), relation
+    for index, (relation, forged) in enumerate(forged_slots.items()):
+        changed = (*conclusion[:index], str(UNVERIFIED[index]), *conclusion[index + 1:])
+        want = set() if FIELDS[index] == "product" else {changed}
+        assert _published(program, rows | {relation: forged}) == want, relation
 
     proof = state.proof(RELATION, conclusion)
     manifest, read = state.manifest()
