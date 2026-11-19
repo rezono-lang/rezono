@@ -5,6 +5,10 @@
 .decl step_safety_blocker(run: symbol, step: symbol, cut: symbol, obligation: symbol, reason: symbol)
 .decl step_safety_blocked(run: symbol, step: symbol, cut: symbol)
 .decl safe_alone(run: symbol, step: symbol, cut: symbol)
+// Protected admission inputs (decisions/admission-transport.md, section 6): only admission fills them.
+.decl verified_round(round: symbol, run: symbol, cut: symbol, batch: symbol)
+.decl verified_round_member(round: symbol, step: symbol)
+.decl current_verified_round(round: symbol, run: symbol, cut: symbol, batch: symbol)
 
 step_safety_receipt(run, cut, time) :-
     loop_sweep_receipt__run(cut, run), loop_sweep_receipt__event_time(cut, time).
@@ -33,3 +37,13 @@ step_safety_blocked(run, step, cut) :- step_safety_blocker(run, step, cut, _, _)
 // This is individual safety from supplied checks. Batch selection remains separate.
 safe_alone(run, step, cut) :-
     current_step_safety_check(run, step, cut, _, "proved", _), !step_safety_blocked(run, step, cut).
+
+// A verified round of the current run and cut. A round for an earlier cut authorizes nothing.
+current_verified_round(round, run, cut, batch) :-
+    step_safety_current_cut(run, cut), verified_round(round, run, cut, batch).
+
+// A step is safe on its own when an admitted round of the current cut has exactly that one member.
+safe_alone(run, step, cut) :-
+    current_verified_round(round, run, cut, _), verified_round_member(round, step),
+    members = count : { verified_round_member(round, _) },
+    members = 1.
