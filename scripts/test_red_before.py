@@ -103,9 +103,10 @@ def not_mixed():
         ("added tests beside documentation only",
          {"pkg/calc.py": BUGGY, "tests/test_calc.py": TESTS},
          {"docs/calc.md": b"# Calc\n", "tests/test_calc.py": FAILS_ON_BASE}),
-        ("lifted mark beside an added evidence file",
-         {"pkg/calc.py": FIXED, "tests/test_calc.py": b"import pytest\n" + red},
-         {"tests/test_calc.py": b"import pytest\n" + TESTS, "tests/cases/double.json": b"[4]\n"}),
+        ("lifted mark beside an added evidence file and source",
+         {"pkg/calc.py": BUGGY, "tests/test_calc.py": b"import pytest\n" + red},
+         {"pkg/calc.py": FIXED, "tests/test_calc.py": b"import pytest\n" + TESTS,
+          "tests/cases/double.json": b"[4]\n"}),
     ]
     for label, before, after in cases:
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as directory:
@@ -146,9 +147,56 @@ def selection_cases():
         print(f"SELECT {len(actual)}: {label}")
 
 
+# Reads its expectation from evidence data that the base does not have yet.
+READS_CASE = (b"import json\nfrom pathlib import Path\n\nimport pytest\n\nfrom pkg.calc import double\n\n\n"
+              b"@pytest.mark.xfail(strict=True, raises=FileNotFoundError, reason=\"M1: needs the case\")\n"
+              b"def test_double_case():\n"
+              b"    expected = json.loads((Path(__file__).parent / 'cases/double.json').read_text())\n"
+              b"    assert double(2) == expected[0]\n")
+
+
+def completion(label, test, case, run_code, green_code, verdict):
+    """One lifted mark beside only the evidence data its test reads: red on the base, green after."""
+    lifted = test.replace(b'@pytest.mark.xfail(strict=True, raises=FileNotFoundError, '
+                          b'reason="M1: needs the case")\n', b"")
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as directory:
+        repo = Path(directory)
+        git(repo, "init", "-q")
+        git(repo, "config", "core.autocrlf", "false")
+        base = commit(repo, {"pytest.ini": b"[pytest]\n", "conftest.py": CONFTEST, "pkg/__init__.py": b"",
+                             "pkg/calc.py": FIXED, "tests/test_calc.py": test})
+        head = commit(repo, {"tests/test_calc.py": lifted, "tests/cases/double.json": case})
+        found = script(repo, "discover", base, head)
+        if found.returncode or found.stdout.decode().strip() != "required=true":
+            raise AssertionError(f"{label}: discover gave {found.stdout!r} {found.stderr!r}")
+        selection = repo.parent / f"{repo.name}-selection.txt"
+        try:
+            prepared = script(repo, "prepare", base, head, str(selection))
+            if prepared.returncode or selection.read_text() != "tests/test_calc.py::test_double_case\n":
+                raise AssertionError(f"{label}: prepare failed: {prepared.stderr!r}")
+            if (repo / "tests/test_calc.py").read_bytes() != lifted or (repo / "tests/cases/double.json").exists():
+                raise AssertionError(f"{label}: prepare did not lay only the lifted test over the base")
+            ran = script(repo, "run", str(selection))
+            done = script(repo, "green", base, head, str(selection)) if not ran.returncode else ran
+        finally:
+            selection.unlink(missing_ok=True)
+        output = ran.stdout.decode() + done.stdout.decode()
+        if ran.returncode != run_code or done.returncode != green_code or verdict not in output:
+            raise AssertionError(f"{label}: run exited {ran.returncode}, green exited {done.returncode}\n"
+                                 f"{output}{ran.stderr.decode()}{done.stderr.decode()}")
+        print(f"{'RED' if run_code or green_code else 'GREEN'}: {label}")
+
+
 def main():
     selection_cases()
     not_mixed()
+    completion("evidence completion: red on the base, green with the new evidence", READS_CASE, b"[4]\n",
+               0, 0, "The completed test is red on the base and passes with the new evidence")
+    completion("evidence completion whose evidence does not make the test pass", READS_CASE, b"[5]\n",
+               0, 1, "ERROR the completed test does not pass with the new evidence")
+    completion("evidence completion whose test passes on the base without the evidence",
+               READS_CASE.replace(b"    expected = json.loads", b"    return\n    expected = json.loads"),
+               b"[4]\n", 1, 1, "pass on the base source")
     end_to_end("source fix with an added test that also passes on the base", STILL_PASSES, 1,
                "pass on the base source")
     end_to_end("source fix with an added test that fails on the base", FAILS_ON_BASE, 0,

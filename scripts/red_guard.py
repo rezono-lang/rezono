@@ -7,6 +7,10 @@ literal text that starts with a milestone, and a changed reason keeps a mileston
 the label, a changed reason may move its mark to an earlier milestone but not to a later one.
 Removed and changed evidence is reported either way.
 
+One exception lets a planner complete evidence: with the label, a pull request may lift one
+red mark beside the evidence data that test reads, if it changes nothing else. red_before.py
+then shows that the test is red on the base and green with the new evidence.
+
 A pull request that changes the checker or read access in a file that is not a test is
 read before it lands: it needs the label `p1-read-` plus the first seven characters of its
 head commit, whatever other labels it carries. A new push therefore needs a new label.
@@ -48,6 +52,8 @@ EVIDENCE_DIRS = {
 # Expectations recorded by hand outside an evidence directory, such as the slip an example
 # must render.
 EXPECTATIONS = {"slip.yaml"}
+# Evidence data that completes a red test: recorded outcomes, cases and vectors, not code.
+EVIDENCE_DATA = {".json", ".jsonl", ".yaml", ".yml", ".csv", ".txt", ".ttl", ".xml", ".snap", ".golden"}
 
 
 def protected(path):
@@ -348,12 +354,50 @@ def postponed(old, new):
     return sorted(moved)
 
 
+def lifted_tests(before, after):
+    """The test functions that a lift of red marks alone turns from red to green."""
+    try:
+        old, new = inventory(before), inventory(after)
+    except UNREADABLE:
+        return ()
+    marks = lambda inv: Counter((owner, ast.dump(mark)) for owner, mark in inv.marks)
+    gone, added = marks(old) - marks(new), marks(new) - marks(old)
+    if sum(gone.values()) != 1 or added:
+        return ()  # Exactly one mark goes, and every other mark stays as it was.
+    return tuple(sorted(name for name, (_, red) in new.tests.items()
+                        if not red and old.tests.get(name, (None, False))[1]))
+
+
+def completion(changes):
+    """The (test file, test names) that a pull request completes with evidence data, or None.
+
+    It lifts exactly one red mark, in one test file whose change is only that lift, and that
+    turns at least one test green. Every other path is added or changed evidence data: a
+    protected file that is not policy and not code. Anything else, such as source, another
+    test file, another mark or a removed file, means it is not an evidence completion.
+    """
+    test, evidence = None, 0
+    for c in changes:
+        if (c.status == "M" and c.path.endswith(".py") and protected(c.path) and c.path not in POLICY
+                and test is None and c.before is not None and c.after is not None
+                and allowed(c.path, c.before, c.after)
+                and (names := lifted_tests(c.before, c.after))):
+            test = (c.path, names)
+        elif (c.status in "AM" and protected(c.path) and c.path not in POLICY
+              and PurePosixPath(c.path.lower()).suffix in EVIDENCE_DATA):
+            evidence += 1
+        else:
+            return None
+    return test if test and evidence else None
+
+
 def review(changes, planner=False, head=None, labels=()):
     """Return (errors, notes) for a sequence of Change records.
 
     `head` and `labels` describe a pull request. Without `head`, as in the merge queue,
     labels are not read and changes to the checker or read access are not refused.
     """
+    changes = list(changes)
     errors, notes, lifted, other, unread = [], [], [], [], []
     for c in changes:
         if read_first(c.path):
@@ -415,9 +459,14 @@ def review(changes, planner=False, head=None, labels=()):
         # weakening an expectation on its own is the change a reviewer most needs to see.
         notes.extend(f"CHANGED {c.path}::{name}" for name, (shape, red) in new.tests.items()
                      if name in old.tests and not red and old.tests[name][0] != shape)
-    if lifted and other:
+    completed = completion(changes) if planner and lifted and other else None
+    if completed:
+        path, names = completed
+        notes.extend(f"COMPLETED {path}::{name}" for name in names)
+    elif lifted and other:
         errors.append(f"ERROR red marks are lifted in {', '.join(lifted)} while protected paths "
-                      f"also change: {', '.join(other)}. Lift marks in a pull request of their own.")
+                      f"also change: {', '.join(other)}. Lift marks in a pull request of their own, or, with the "
+                      "planner label, lift one mark beside only the evidence data its test reads.")
     if head is not None and unread:
         label = read_label(head)
         if label is None:

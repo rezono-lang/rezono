@@ -134,9 +134,10 @@ def planner_cases(reason, function):
     run("lifted mark and changed expectation in one file", [
         edit("tests/test_count.py", function, lifted.replace(b"== 2", b"== 3")),
     ], True)
-    run("lifted mark beside a changed recorded outcome", [
+    run("lifted mark beside a changed recorded outcome and a test helper", [
         edit("tests/test_count.py", function, lifted),
         edit("examples/demo/expected/rows.json", b"[2]", b"[3]"),
+        edit("tests/support.py", b"value = 2\n", b"value = 3\n"),
     ], True)
     run("lifted mark alone", [edit("tests/test_count.py", function, lifted)], False)
     strictly = "needs strict=True"
@@ -176,6 +177,43 @@ def planner_cases(reason, function):
         raise AssertionError(f"a lifted mark is not a change: errors {errors}, notes {notes}")
     print("ALLOW without planner: lifted mark is not reported as a change")
     milestone_cases(edit, other)
+    completion_cases(edit, function, lifted, other)
+
+
+def completion_cases(edit, function, lifted, other):
+    """With the label, one lifted mark may come with the evidence data its test reads."""
+    outcome = edit("examples/demo/expected/rows.json", b"[2]", b"[3]")
+    case = Change("tests/conformance/count.yaml", "A", None, b"count: 2\n")
+    lift = edit("tests/test_count.py", function, lifted)
+    refusal = "Lift marks in a pull request of their own"
+
+    def run(label, changes, planner, expected):
+        errors, notes = review(changes, planner=planner)
+        refused = any(refusal in e for e in errors)
+        completed = "COMPLETED tests/test_count.py::test_count" in notes
+        if refused != expected or completed == expected or (not expected and errors):
+            raise AssertionError(f"{label}: errors {errors}, notes {notes}")
+        print(f"{'DENY' if expected else 'ALLOW'} {'with' if planner else 'without'} planner: {label}")
+
+    run("one lifted mark beside evidence data only", [lift, outcome, case], True, False)
+    run("one lifted mark beside evidence data, without the label", [lift, outcome], False, True)
+    run("one lifted mark beside evidence data and another protected path",
+        [lift, outcome, edit("tests/support.py", b"value = 2\n", b"value = 3\n")], True, True)
+    marked = b"@pytest.mark.xfail(strict=True, reason=\"M2: pending\")\n" + other
+    run("one lifted mark beside evidence data and a mark of another test",
+        [lift, outcome, edit("tests/test_total.py", marked, other)], True, True)
+    pair = function + b"\n" + marked
+    run("one lifted mark beside evidence data and an explained mark of another test",
+        [edit("tests/test_count.py", pair, lifted + b"\n" + marked.replace(b"pending", b"waiting")), outcome],
+        True, True)
+    run("one lifted mark beside evidence data and source",
+        [lift, outcome, edit("src/count.py", b"", b"x = 1\n")], True, True)
+    run("one lifted mark beside removed evidence data",
+        [lift, Change("examples/demo/expected/rows.json", "D", b"[2]", None)], True, True)
+    run("one lifted mark beside a changed policy workflow",
+        [lift, outcome, edit(".github/workflows/ci.yml", b"a", b"b")], True, True)
+    run("one lifted mark beside a changed conftest",
+        [lift, edit("tests/conftest.py", b"value = 2\n", b"value = 3\n")], True, True)
 
 
 def milestone_cases(edit, other):
