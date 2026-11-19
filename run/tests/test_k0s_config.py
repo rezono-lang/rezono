@@ -14,7 +14,6 @@ def canonical(document):
     return (json.dumps(document, sort_keys=True, separators=(",", ":")) + "\n").encode()
 
 
-@pytest.mark.xfail(strict=True, reason="Read decisions/run-cluster-shape.md, section Converters. Implement render in run/k0s_config.py.")
 def test_k0s_config():
     render = implementation("k0s_config.py", "render")
     expected = canonical({
