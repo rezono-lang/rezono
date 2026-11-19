@@ -5,20 +5,22 @@ from rezono_canon import canonical_bytes, canonical_sha256, sha256_hex
 from round_visibility_publication import checked_loop_publication, observation_reference
 
 
-def _receipt(scope, nodes, finals, retained):
-    def source(position):
-        return {"kind": "tool", "name": "inventory-observer", "position": position}
+def _source(position):
+    return {"kind": "tool", "name": "inventory-observer", "position": position}
 
-    artifacts = {
-        "inventory": canonical_bytes([[node] for node in nodes]),
-        "content": canonical_bytes([
-            {"key": [node], "terminal": source(f"final/{node}"),
-             "rows": [{"key": [final["id"]], "values": final, "source": source(final["id"])}]}
-            for node, final in zip(nodes, finals, strict=True)
-        ]),
-    }
-    body = {
-        "source": source("flow-window/20"),
+
+def _content(nodes, finals):
+    return canonical_bytes([
+        {"key": [node], "terminal": _source(f"final/{node}"),
+         "rows": [{"key": [final["id"]], "values": final, "source": _source(final["id"])}]}
+        for node, final in zip(nodes, finals, strict=True)
+    ])
+
+
+def _context(scope, retained):
+    """The read binding that the protected caller pins, independent of any submitted candidate."""
+    return {
+        "source": _source("flow-window/20"),
         "issuer": {
             "id": "inventory-observer",
             "authorization": observation_reference("retained", "collector-authority", retained["collector-authority"]),
@@ -29,25 +31,41 @@ def _receipt(scope, nodes, finals, retained):
             "bindings": [{"name": name, "type": "string", "value": value} for name, value in scope.items()],
         },
         "cut": {"frontier": {"source_id": "inventory-observer", "position": "20"}},
+    }
+
+
+def _authority(scope, retained):
+    return {**_context(scope, retained),
+            "inventory": observation_reference("retained", "flow-node-inventory", retained["flow-node-inventory"]),
+            "content": observation_reference("retained", "flow-node-content", retained["flow-node-content"])}
+
+
+def _receipt(scope, nodes, finals, retained):
+    artifacts = {"inventory": canonical_bytes([[node] for node in nodes]), "content": _content(nodes, finals)}
+    body = {
+        **_context(scope, retained),
         **{name: observation_reference("submitted", name, data) for name, data in artifacts.items()},
     }
     receipt = canonical_bytes({"id": canonical_sha256(["rezono.completeness-receipt/1", body]), **body})
-    return {
-        **artifacts, "receipt": receipt,
-        "admission": canonical_bytes({"completeness_receipts": [observation_reference("submitted", "receipt", receipt)]}),
-    }
+    return {**artifacts, "receipt": receipt}
+
+
+def _admission(evidence, scope, retained):
+    return {"completeness_receipts": [observation_reference("submitted", "receipt", evidence["receipt"])],
+            "completeness_authority": [_authority(scope, retained)]}
 
 
 @pytest.mark.xfail(
     strict=True,
-    raises=AssertionError,
+    raises=(AssertionError, TypeError),
     reason=(
-        "Read decisions/scoped-completeness.md sections 1 and 3. Verify the expected nodes "
-        "against the independently pinned source inventory before publishing complete_sweep. "
-        "Keep the interval, terminal reports, gap and loss requirements. Write in the Loop observation path. "
-        "Blocked: the shortened case passes only the retained source name and digest to batch.epoch, which has "
-        "no archive and no admitted receipt input, and publish.publish receives an Epoch whose rows are already derived, so no "
-        "implementation path lets the pinned inventory reach complete_sweep. The planner must say how admission supplies verified_receipt."
+        "Read decisions/scoped-completeness.md sections 1 and 3. Derive complete_sweep only with a verified "
+        "receipt for the sweep scope, so the pinned two-node inventory decides coverage. Keep the interval, "
+        "terminal reports, gap and loss requirements. Write in packs/std-loop (complete_sweep.dl) and its "
+        "schema. Waits for edge/publisher/tests/test_completeness_publish.py--"
+        "test_publisher_admits_receipts_only_with_a_trusted_context (the batch boundary admits the receipt and "
+        "fills verified_receipt) and for test_absent_checked_requires_readable_coverage (std-completeness "
+        "supplies complete). Today batch.epoch rejects the admission keywords with TypeError."
     ),
 )
 def test_sweep_cannot_drop_expected_node(tmp_path):
@@ -60,6 +78,7 @@ def test_sweep_cannot_drop_expected_node(tmp_path):
         "flow-node-finals": canonical_bytes(finals),
         "scope-definition": canonical_bytes({"query": "expected-sweep-nodes", "scope": scope, "bounds": [10, 20]}),
         "collector-authority": canonical_bytes({"issuer": "inventory-observer", "query": "expected-sweep-nodes"}),
+        "flow-node-content": _content(nodes, finals),
     }
     records = {
         "flow_sweep_window": [dict(scope, id="sweep", start=10, stop=20)],
@@ -70,6 +89,7 @@ def test_sweep_cannot_drop_expected_node(tmp_path):
     complete_evidence = _receipt(scope, nodes, finals, retained)
     manifest, rows, _ = checked_loop_publication(
         tmp_path / "full", records, retained=retained, submitted=complete_evidence,
+        admission=_admission(complete_evidence, scope, retained),
     )
     assert rows("complete_sweep") == completed
     assert {entry["source_id"]: entry["position"] for entry in manifest["sources"]} == {
@@ -81,6 +101,7 @@ def test_sweep_cannot_drop_expected_node(tmp_path):
     assert shortened_evidence["receipt"] != complete_evidence["receipt"]
     _, rows, _ = checked_loop_publication(
         tmp_path / "truncated", truncated, retained=retained, submitted=shortened_evidence,
+        admission=_admission(shortened_evidence, scope, retained),
     )
     assert rows("complete_sweep") == set(), (
         f"The published sweep trusts a shortened submission over the pinned two-node inventory: {rows('complete_sweep')}"
