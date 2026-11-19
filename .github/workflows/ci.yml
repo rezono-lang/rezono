@@ -189,6 +189,8 @@ jobs:
       has_python: ${{ steps.matrix.outputs.has_python }}
       node: ${{ steps.matrix.outputs.node }}
       has_node: ${{ steps.matrix.outputs.has_node }}
+      pytest: ${{ steps.matrix.outputs.pytest }}
+      has_pytest: ${{ steps.matrix.outputs.has_pytest }}
       python_editable: ${{ steps.matrix.outputs.python_editable }}
       cluster_mode: ${{ steps.cluster.outputs.mode }}
       cluster_tasks: ${{ steps.cluster.outputs.tasks }}
@@ -244,22 +246,22 @@ jobs:
             python3 -I "$policy/red_before.py" discover "$BASE" "$HEAD" | tee -a "$GITHUB_OUTPUT"
           fi
       - uses: ./.github/workflows/python-environment
-        if: steps.matrix.outputs.has_python == 'true'
+        if: steps.matrix.outputs.has_pytest == 'true'
         with:
           editable: ${{ steps.matrix.outputs.python_editable }}
           oracle: ${{ contains(fromJSON(steps.matrix.outputs.python).*.folder, 'compiler') || contains(fromJSON(steps.matrix.outputs.python).*.folder, 'examples') }}
           save-cache: 'true'
       - name: Test candidate selection and exact-once evidence
-        if: steps.matrix.outputs.has_python == 'true'
+        if: steps.matrix.outputs.has_pytest == 'true'
         run: python -I .github/workflows/tests/test_components.py
       # These examples run pytest, so they wait for the locked environment.
       - name: Test the candidate rules for added tests on the base source
-        if: steps.matrix.outputs.has_python == 'true'
+        if: steps.matrix.outputs.has_pytest == 'true'
         run: python -I scripts/test_red_before.py
       - name: Collect each selected Python component once
-        if: steps.matrix.outputs.has_python == 'true'
+        if: steps.matrix.outputs.has_pytest == 'true'
         env:
-          PYTHON_MATRIX: ${{ steps.matrix.outputs.python }}
+          PYTHON_MATRIX: ${{ steps.matrix.outputs.pytest }}
           PYTHONHASHSEED: '0'
           REZONO_HYPOTHESIS_PROFILE: ci
         run: |
@@ -269,7 +271,7 @@ jobs:
             python scripts/red_list.py --skips "$report" | tee -a "$GITHUB_STEP_SUMMARY"
           done < <(find "$RUNNER_TEMP/inventory" -name collection.xml -print0)
       - name: Save the independent pytest inventory
-        if: always() && steps.matrix.outputs.has_python == 'true'
+        if: always() && steps.matrix.outputs.has_pytest == 'true'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: pytest-inventory
@@ -485,7 +487,7 @@ jobs:
       needs.discover.outputs.has_node == 'true'
     name: node (${{ matrix.component.folder }})
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
@@ -504,6 +506,45 @@ jobs:
         if: needs.queue_evidence.outputs.tested != 'true'
         working-directory: ${{ matrix.component.folder }}
         run: npm test
+      # The component's pytest files run here, beside its installed packages,
+      # and count in the exact-once inventory that the check job verifies.
+      - uses: ./.github/workflows/python-environment
+        if: matrix.component.pytest && needs.queue_evidence.outputs.tested != 'true'
+        with:
+          editable: ${{ needs.discover.outputs.python_editable }}
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        if: matrix.component.pytest && needs.queue_evidence.outputs.tested != 'true'
+        with:
+          name: pytest-inventory
+          path: ${{ runner.temp }}/inventory
+      - name: Check the pytest files of ${{ matrix.component.folder }}
+        if: matrix.component.pytest && needs.queue_evidence.outputs.tested != 'true'
+        shell: bash
+        env:
+          REZONO_HYPOTHESIS_PROFILE: ci
+          PYTHONHASHSEED: '0'
+          COMPONENT: ${{ matrix.component.folder }}
+        run: |
+          set -euo pipefail
+          python scripts/components.py run-shard "$COMPONENT" 0 1             "$RUNNER_TEMP/inventory" "$RUNNER_TEMP/reports" "$RUNNER_TEMP/receipts"
+      - name: Save execution evidence
+        if: always() && matrix.component.pytest && needs.queue_evidence.outputs.tested != 'true'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: pytest-execution-node-${{ strategy.job-index }}
+          path: ${{ runner.temp }}/receipts
+          if-no-files-found: error
+          overwrite: true
+          retention-days: 2
+      - name: Report actual skips
+        if: always() && matrix.component.pytest && needs.queue_evidence.outputs.tested != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          for report in "$RUNNER_TEMP"/reports/*.xml; do
+            python scripts/red_list.py --skips "$report" | tee -a "$GITHUB_STEP_SUMMARY"
+          done
 
   check:
     name: check
@@ -516,24 +557,24 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        if: needs.discover.outputs.has_python == 'true' && needs.queue_evidence.outputs.tested != 'true'
+        if: needs.discover.outputs.has_pytest == 'true' && needs.queue_evidence.outputs.tested != 'true'
         with:
           persist-credentials: false
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
-        if: always() && needs.discover.outputs.has_python == 'true' && needs.queue_evidence.outputs.tested != 'true'
+        if: always() && needs.discover.outputs.has_pytest == 'true' && needs.queue_evidence.outputs.tested != 'true'
         with:
           name: pytest-inventory
           path: ${{ runner.temp }}/inventory
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
-        if: always() && needs.discover.outputs.has_python == 'true' && needs.queue_evidence.outputs.tested != 'true'
+        if: always() && needs.discover.outputs.has_pytest == 'true' && needs.queue_evidence.outputs.tested != 'true'
         with:
           pattern: pytest-execution-*
           path: ${{ runner.temp }}/receipts
           merge-multiple: true
       - name: Verify every inventoried test started and finished exactly once
-        if: always() && needs.discover.outputs.has_python == 'true' && needs.queue_evidence.outputs.tested != 'true'
+        if: always() && needs.discover.outputs.has_pytest == 'true' && needs.queue_evidence.outputs.tested != 'true'
         env:
-          PYTHON_MATRIX: ${{ needs.discover.outputs.python }}
+          PYTHON_MATRIX: ${{ needs.discover.outputs.pytest }}
         run: python3 scripts/components.py verify-execution "$RUNNER_TEMP/inventory" "$RUNNER_TEMP/receipts"
       - name: Record runner wait separately from execution
         if: always()
