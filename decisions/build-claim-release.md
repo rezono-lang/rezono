@@ -11,7 +11,7 @@ Every row belongs to one verified `BuildRun` cut. Times are integer Unix seconds
 | `BuildClaim` | The ref listing under `refs/heads/task/` at the cut. Which claim branch existed, at which generation? The generation is the full commit ID of the ref tip. |
 | `BuildClaimActivity` | The server's activity record for the latest push to that ref. When did the push that produced this generation happen? The record supplies a lease start only when its resulting commit equals the observed generation. |
 | `BuildClaimLease` | A `std-decision` decision states the lease duration in seconds. Which duration is in force on the policy date of the cut? The first decision sets four hours. |
-| `BuildClaimPullReading` | A query for pull requests whose head is the claim branch, at the cut. Is a pull request open for this claim, or did the complete answer contain none? An unreadable or mismatched answer produces no row. |
+| `BuildClaimPullReading` | A query for pull requests whose head is the claim branch, at the cut. Is a pull request open for this claim, or did the complete answer contain none? A `none` reading names the `LoopSweepReceipt` of its run and cut that attests the complete read. An empty answer without that receipt, an unreadable answer and a mismatched answer produce no row. |
 | `BuildClaimDelete` | The conditional delete adapter's record of one attempt. Which generation of which branch did it try to delete, when, and was the answer `sent`, `refused` or `unknown`? It names the branch, not a `BuildClaim` row, because the release and its readback concern the ref. |
 | `BuildClaimRefRead` | A complete ref listing after the delete, bound to a `LoopSweepReceipt` of the same run and time. Was the branch `absent`, or `present` at which generation? |
 
@@ -39,7 +39,7 @@ The delete adapter rechecks the pull requests for the branch immediately before 
 
 ## 4. Queue reading
 
-The planner queue in [build reconciliation](build-reconciliation.md#task-and-queue-observations) counts the open pull requests against the default branch that are not drafts. Read it from a complete listing. An incomplete listing produces no `BuildQueueReading`, so the existing rules report `queue-evidence-unknown`.
+The planner queue in [build reconciliation](build-reconciliation.md#task-and-queue-observations) counts the open pull requests against the default branch that are not drafts. Read it from a complete listing. The reading names the `LoopSweepReceipt` of its run and cut that attests the complete listing, and the rules count it only with that receipt. An incomplete listing, or a pull request whose number, state, draft flag or base is missing, produces no `BuildQueueReading`, so the existing rules report `queue-evidence-unknown`.
 
 ## 5. Acceptance
 
@@ -48,9 +48,9 @@ The planner queue in [build reconciliation](build-reconciliation.md#task-and-que
 | `test_build_claim_release_plan` | Hand-worked lease arithmetic and the guards of `Delete` in the claim model. Only the claim whose lease ended at or before the cut, with a matching push record and a complete empty pull reading, gets a plan. Each other claim fails on exactly its own missing ground. |
 | `test_build_claim_release_confirmation` | The `Confirm` and `DiscardConfirmation` actions of the claim model. A same-run absent read after the delete confirms; a replacement, a refusal, an earlier read, a foreign run or a missing receipt do not. |
 | `test_build_claim_capture` | Hand-written ref listing and activity answers in GitHub's documented JSON shape. Only task refs become claims; a stale activity record gives no lease start. |
-| `test_build_claim_pull_capture` | Hand-written pull answers. An open pull request, an empty answer, an unreadable answer and an answer for another head each give their own reading or none. |
+| `test_build_claim_pull_capture` | Hand-written pull answers. An open pull request, an empty answer, an unreadable answer and an answer for another head each give their own reading or none. An empty answer without a receipt of the same run and cut gives none. |
 | `test_build_claim_delete` | A recorded fake Git runner. The adapter issues exactly the conditional delete, skips it on an open or unreadable recheck, and records `sent`, `refused` and `unknown` as defined above. |
-| `test_build_queue_capture` | A hand-written pull listing. Drafts, other base branches and closed pull requests do not count; an incomplete listing gives no reading. |
+| `test_build_queue_capture` | A hand-written pull listing. Drafts, other base branches and closed pull requests do not count; an incomplete listing, a listing without a receipt of the same run and cut, and a pull request with a missing field give no reading. |
 
 ## Alternatives
 

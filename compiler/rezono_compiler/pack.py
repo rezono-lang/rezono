@@ -10,6 +10,8 @@ from pathlib import Path
 from typing import TypedDict
 
 import yaml
+from rezono_admission.schema import INPUT_FORMATS
+
 from .schemaview import SchemaView
 
 from . import amounts, diagnostics, fold, icons as icon_files, modules, rezono_module, rules_dl, spans, types, views
@@ -20,7 +22,7 @@ from .regex import PatternError, portable
 LAYERS = ("source", "facts", "conclusions", "plan", "output", "observation")
 # Annotations the compiler reads now, or in a later milestone (then ignored without warning).
 ANNOTATIONS = {"layer", "path_equations", "outcome", "explain", "invariants", "seal", "sealed_with", "world", "explore",
-               "currency", "plane", "owner", "renamed_from"}
+               "currency", "plane", "owner", "renamed_from", "input_format"}
 CURRENCY = re.compile(r"^[A-Z]{3}$")  # ISO 4217
 CLASS = re.compile(r"[a-z][a-z0-9]*(-[a-z0-9]+)*")  # a pack's class (pack.yaml, SO-5), as contracts/pack.yaml says
 # What a missing row means: closed, not true; open, unknown.
@@ -99,6 +101,7 @@ class Slot:
     minimum_cardinality: int | None = None
     maximum_cardinality: int | None = None
     patterns: list[str] = field(default_factory=list)  # portable regular expressions (regex.portable)
+    input_format: str | None = None
     constant: object = None  # equals_string or equals_number
     world: str = "closed"  # open if the slot or its kind is open
     explore: tuple[int, int, int] | None = None  # (min, max, step) of a sweep on this slot
@@ -634,6 +637,8 @@ def read(pack_dir: str | Path) -> Pack:
                 errors.append(f"{where}: a subkind inherits the identifier of {kind.parent}; it cannot declare its own")
             if s.identifier and "world" in tags(s):
                 errors.append(f"{where}: world goes on the class, not on its identifier")
+            if s.identifier and "input_format" in tags(s):
+                errors.append(f"{where}: input_format goes on a text attribute, not on an identifier")
             if s.identifier and "explore" in tags(s):
                 errors.append(f"{where}: explore goes on a slot of whole numbers, not on an identifier")
             if s.name not in inherited:  # an inherited slot is checked where it is declared
@@ -680,6 +685,14 @@ def read(pack_dir: str | Path) -> Pack:
                 if slot.currency and slot.sql_type != "BIGINT":
                     errors.append(f"{where}: a currency goes on whole numbers (minor units), not on {rng}")
                 slot.unit = slot_unit(sv, rng, declared) if isinstance(rng, str) else None
+            if "input_format" in tags(s):
+                form = ann(s, "input_format")
+                if not isinstance(form, str) or form not in INPUT_FORMATS:
+                    errors.append(f"{where}: unknown input_format {form!r}")
+                elif slot.type.bundle != "text" or slot.arrow:
+                    errors.append(f"{where}: input_format goes on a text attribute")
+                else:
+                    slot.input_format = form
             cardinality(slot, s, where, errors)
             constant(slot, s, where, errors)
             slot.role = slot_role(sv, s)
