@@ -83,8 +83,9 @@ def verify(reference, authorities, read_bytes) -> tuple[str, ...]:
     changed = sorted(key for key in expected if submitted[key] != trusted[key])
     if changed:
         raise Unverified("receipt_content_mismatch", "members " + ", ".join(changed))
-    return (receipt["id"], body["source"]["name"], canonical_sha256(body["scope"]), canonical_sha256(body["cut"]),
-            authority["inventory"]["sha256"], authority["content"]["sha256"])
+    # The scope and cut as the trusted context binds them: a candidate's own references confer nothing.
+    return (receipt["id"], body["source"]["name"], canonical_sha256(authority["scope"]),
+            canonical_sha256(authority["cut"]), authority["inventory"]["sha256"], authority["content"]["sha256"])
 
 
 def admit(references, authorities, read_bytes) -> tuple[dict, list]:
@@ -180,6 +181,19 @@ def _shape(body, what) -> None:
         raise Unverified(f"{what}_malformed", ", ".join(bad))
 
 
+def _by_hash(value):
+    """`value` with each archived-file reference in it reduced to the hash of the bytes it pins. The candidate
+    and the trusted context each cite their own stored copy (decisions/admission-transport.md, section 3);
+    where a copy is stored does not change what it pins, and only the trusted context's copy is read."""
+    if _reference(value):
+        return value["sha256"]
+    if isinstance(value, dict):
+        return {k: _by_hash(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_by_hash(v) for v in value]
+    return value
+
+
 def _authority(body, authorities) -> dict:
     """The one trusted context that allows this source, scope, cut and issuer."""
     for authority in authorities:
@@ -188,7 +202,7 @@ def _authority(body, authorities) -> dict:
         _shape(authority, "authority")
 
     def same(authority, *fields):
-        return all(canonical_json(authority[f]) == canonical_json(body[f]) for f in fields)
+        return all(canonical_json(_by_hash(authority[f])) == canonical_json(_by_hash(body[f])) for f in fields)
 
     scoped = [a for a in authorities if same(a, "source", "scope")]
     if not scoped:

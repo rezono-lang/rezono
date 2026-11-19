@@ -61,13 +61,6 @@ def archived(step="replace-link-a"):
     return (context, index, archive.__getitem__), claim
 
 
-@pytest.mark.xfail(strict=True, raises=(ImportError, CompileError, TypeError),
-                   reason="Waits for checker/tests/test_evidence_admission.py--test_evidence_admits_rounds_after_"
-                          "receipts, edge/publisher/tests/test_evidence_batch.py--test_batch_admits_evidence_before_"
-                          "the_rules (same batch code) and compiler/tests/test_protected_admission_relations.py--"
-                          "test_admission_relations_are_protected_inputs. Then insert the admitted verified_round and "
-                          "verified_round_member rows before the rules, as decisions/admission-transport.md sections "
-                          "5, 6 and 8 fix. Publisher batch only.")
 def test_batch_admits_certified_rounds_before_the_rules(tmp_path):
     from rezono_checker.evidence import Evidence
 
