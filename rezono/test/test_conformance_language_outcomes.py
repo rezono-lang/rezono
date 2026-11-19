@@ -120,15 +120,6 @@ def test_language_compares_expression_cases():
     check(expression_cases(corpus()))
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=MissingLanguageOutcome,
-    reason="extra: decisions/language-expression-semantics.md: value-two-values-single gives two rows for item-a with "
-           "quantity 7 and 9; load in rezono/src/evaluate.ts replaces the first row by the second and the question "
-           "shows 9. Merge rows with the same $id in load, and make two different values of a single-valued slot "
-           "invalid, with no reason and no cause, as section 1 says for conflicting single values. The shared "
-           "runner already compares the case while this test is red: change only rezono/src and lift this mark.",
-)
 def test_language_compares_slot_read_cases():
     cases = corpus()
     check({case_id: cases[case_id] for case_id in SLOT_READS})
