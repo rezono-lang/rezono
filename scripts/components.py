@@ -347,6 +347,7 @@ FULL_SELECTION_PATHS = (
 # What scripts/components.py itself reads while it runs one component's shards.
 JOB_INPUTS = {
     ".github/workflows/compiler-duration-profile.json": ("compiler",),
+    ".github/workflows/examples-duration-profile.json": ("examples",),
     ".github/workflows/publication_fixture.py": ("examples",),
 }
 # Scripts, other workflows and actions select the components that name them, directly
@@ -826,9 +827,8 @@ def pull_request_selection(components: list[Component], root: Path,
     return [c for c in components if c.folder in direct | affected], reasons
 
 
-# Files are assigned to jobs round-robin, the examples by their measured seconds.
-# Within a job pytest items share the runner's cores, so one large parametrized
-# file can use more than one core.
+# Files are assigned to jobs round-robin. Within a job pytest items share the
+# runner's cores, so one large parametrized file can use more than one core.
 FORMS_MODULE = "examples/subsidy/test_subsidy_forms.py"
 INDEPENDENT_PUBLICATIONS = "examples/subsidy/test_subsidy.py"
 FORMS_READER = ("test_a_ledger_payment_does_not_change_the_policy_adviser_s_form",
@@ -836,9 +836,6 @@ FORMS_READER = ("test_a_ledger_payment_does_not_change_the_policy_adviser_s_form
 SHARDS = {"compiler": 3, "edge/publisher": 2}
 PARALLEL = {"compiler", "examples", "edge/publisher"}
 EXAMPLE_PROFILE = ROOT / ".github/workflows/examples-duration-profile.json"
-# The processes of an examples shard: runner_cores() on a hosted runner. Fixed, so that the
-# verification job, on any runner, finds the same shards.
-EXAMPLE_WORKERS = 4
 
 
 def test_files(folder: str) -> list[str]:
@@ -853,9 +850,7 @@ def test_files(folder: str) -> list[str]:
 
 def shard_count(folder: str) -> int:
     files = test_files(folder)
-    if folder != "examples":
-        return min(SHARDS.get(folder, 1), max(1, len(files)))
-    return min(example_profile()["shards"], max(1, len(files)))
+    return min(SHARDS.get(folder, 1), max(1, len(files)))
 
 
 def example_profile() -> dict:
@@ -1040,12 +1035,7 @@ def collect_matrix(matrix: list[dict], directory: Path) -> int:
         return next((code for code in statuses if code), 0)
 
 
-def shard_items(folder: str, plan: dict, shard: int, total: int) -> list[str]:
-    if folder == "examples":
-        # Each shard gets EXAMPLE_WORKERS processes' worth of the profile, the form tests on the first.
-        slots = example_slots(plan["items"], total * EXAMPLE_WORKERS, EXAMPLE_WORKERS)
-        return [node for slot in range(shard * EXAMPLE_WORKERS, (shard + 1) * EXAMPLE_WORKERS)
-                for node in slots[slot]]
+def shard_items(plan: dict, shard: int, total: int) -> list[str]:
     files = set(plan["files"][shard::total])
     return [node for node in plan["items"] if node.split("::", 1)[0] in files]
 
@@ -1146,7 +1136,7 @@ def run_shard(folder: str, shard: int, total: int, plans: Path, reports: Path, r
     reports.mkdir(parents=True, exist_ok=True)
     evidence = receipts / folder
     evidence.mkdir(parents=True, exist_ok=True)
-    selected = shard_items(folder, plan, shard, total)
+    selected = shard_items(plan, shard, total)
     groups = worker_items(folder, selected, runner_cores() if folder in PARALLEL else 1)
     if Counter(i for group in groups for i in group) != Counter(selected):
         raise ValueError("Worker assignments differ from the shard inventory")
@@ -1211,7 +1201,7 @@ def verify_execution(matrix: list[dict], plans: Path, receipts: Path) -> int:
         for row in rows:
             shard, total = row["shard"], row["total"]
             directory = receipts / folder
-            expected = Counter(shard_items(folder, plan, shard, total))
+            expected = Counter(shard_items(plan, shard, total))
             shard_counts = {event: Counter() for event in expected_events}
             try:
                 workers = json.loads((directory / f"{shard}.json").read_text(encoding="utf-8"))
