@@ -1,0 +1,15 @@
+vendor_default_transport_source:
+  - id: ceph-19.2.0-transport-3300-source
+    product: ceph
+    series: 19.2.0
+    protocol: TCP
+    port: 3300
+    source_url: 'https://raw.githubusercontent.com/ceph/ceph/v19.2.0/doc/rados/configuration/network-config-ref.rst'
+    source_sha256: 371d11209372fa02869d578a29c1c17aa897e00764c1e80d3bcc5e372abac943
+  - id: ceph-19.2.0-transport-6789-source
+    product: ceph
+    series: 19.2.0
+    protocol: TCP
+    port: 6789
+    source_url: 'https://raw.githubusercontent.com/ceph/ceph/v19.2.0/doc/rados/configuration/network-config-ref.rst'
+    source_sha256: 371d11209372fa02869d578a29c1c17aa897e00764c1e80d3bcc5e372abac943

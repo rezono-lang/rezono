@@ -1,0 +1,7 @@
+default:
+  kind: tool
+  name: Vendor transport inspection
+  revision: v19.2.0
+  position: L80
+  url: https://raw.githubusercontent.com/ceph/ceph/v19.2.0/doc/rados/configuration/network-config-ref.rst
+  fragment_sha256: "21121ed1c9220a71af96f62cee89006427725b5eab88327c34dab7b47ef1f188"
