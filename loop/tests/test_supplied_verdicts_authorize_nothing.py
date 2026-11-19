@@ -31,7 +31,7 @@ def _batch_records():
     strict=True,
     raises=AssertionError,
     reason=(
-        "Read decisions/loop-certificate-admission.md sections 1 and 2 and decisions/admission-transport.md "
+        "M2: Read decisions/loop-certificate-admission.md sections 1 and 2 and decisions/admission-transport.md "
         "section 8. A supplied proved verdict in loop_step_safety_check or loop_batch_candidate is a claim: it "
         "must not derive safe_alone, loop_certified_batch, loop_selected_batch or ready, while a supplied "
         "refutation still yields its waiting row. Keep only the derivations from the protected inputs "

@@ -81,7 +81,7 @@ def claim_records(leases):
     strict=True,
     raises=AssertionError,
     reason=(
-        "Read decisions/build-claim-release.md sections 1 and 2. Declare the claim kinds in a new "
+        "extra: Read decisions/build-claim-release.md sections 1 and 2. Declare the claim kinds in a new "
         "build/schema/claims.yaml and derive build_claim_release_plan and build_claim_held in a new "
         "build/rules/claims.dl, using the verified cut, the policy date and std-decision. A none reading counts "
         "only with its receipt: a LoopSweepReceipt of the claim's run at the reading's tick. Write only in those "

@@ -19,7 +19,7 @@ from round_visibility_publication import (
     strict=True,
     raises=(AssertionError, ImportError, TypeError),
     reason=(
-        "Read decisions/admission-transport.md sections 3 and 7 and decisions/loop-certificate-admission.md. "
+        "M2: Read decisions/admission-transport.md sections 3 and 7 and decisions/loop-certificate-admission.md. "
         "The round verifier rebuilds all nine visible boundaries of the two ordered steps from the plan hashes "
         "in the retained domain and refuses the claim, because the violating boundary has no certificate even "
         "though every submitted pair checks. So no verified_round row is admitted and nothing is ready. "

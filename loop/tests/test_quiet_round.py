@@ -115,7 +115,7 @@ def ground_ids(program, explainer, relation, row):
     return ids
 
 
-@pytest.mark.xfail(strict=True, reason="Read decisions/quiet-observation-rounds.md. Admit dated sweeps, pending operations, deadlines and declared expected differences in packs/std-loop. Derive ready, stuck and round_outcome with their evidence. Waits for compiler/tests/test_boolean_rule_inputs.py--test_native_boolean_rule_inputs: LoopSweep.complete admits true and false, but neither text nor integer rule columns accept them. Keep false distinct from a missing completion flag.")
+@pytest.mark.xfail(strict=True, reason="M2: Read decisions/quiet-observation-rounds.md. Admit dated sweeps, pending operations, deadlines and declared expected differences in packs/std-loop. Derive ready, stuck and round_outcome with their evidence. Waits for compiler/tests/test_boolean_rule_inputs.py--test_native_boolean_rule_inputs: LoopSweep.complete admits true and false, but neither text nor integer rule columns accept them. Keep false distinct from a missing completion flag.")
 def test_quiet_round_rules():
     from rezono_compiler import pack
 
@@ -136,7 +136,7 @@ def test_quiet_round_rules():
             assert any({"probe", "probe-reading"} <= ground_ids(program, explainer, "drift", row) for row in findings)
 
 
-@pytest.mark.xfail(strict=True, reason="Read decisions/quiet-observation-rounds.md. Waits for test_quiet_round_rules and test_recorded_correction. Extend loop/recording_input.py and the shared executor to preserve empty dated sweeps and use the admitted theory for each round.")
+@pytest.mark.xfail(strict=True, reason="M2: Read decisions/quiet-observation-rounds.md. Waits for test_quiet_round_rules and test_recorded_correction. Extend loop/recording_input.py and the shared executor to preserve empty dated sweeps and use the admitted theory for each round.")
 def test_quiet_round_recording(monkeypatch, tmp_path, capsys):
     from rezono_compiler import batch, modules
 

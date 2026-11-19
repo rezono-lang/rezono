@@ -45,7 +45,7 @@ def latest_push_records():
     strict=True,
     raises=AssertionError,
     reason=(
-        "Read decisions/build-claim-release.md sections 1 and 2. build_claim_activity holds every push record of "
+        "extra: Read decisions/build-claim-release.md sections 1 and 2. build_claim_activity holds every push record of "
         "a claim. Take the latest push per claim by pushed_at; two equally recent pushes with different commits "
         "leave it undecided. The latest push supplies the lease start only when its after "
         "equals the observed generation. An older matching push never starts a lease. Write in "
