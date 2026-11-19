@@ -1,0 +1,43 @@
+{
+  "source": "kind Party world closed\n  holder: Holder\nkind Holder world closed\n  parties: Party+ inverse holder",
+  "format": "rezono.module/1",
+  "declarations": [
+    {
+      "kind": "Party",
+      "world": "closed",
+      "slots": [
+        {
+          "slot": "holder",
+          "type": "Holder"
+        }
+      ],
+      "derived": []
+    },
+    {
+      "kind": "Holder",
+      "world": "closed",
+      "slots": [
+        {
+          "slot": "parties",
+          "type": "Party",
+          "card": "+",
+          "inverse": "holder"
+        }
+      ],
+      "derived": []
+    }
+  ],
+  "spanNames": {
+    "/decls/1": "Holder"
+  },
+  "rejections": [
+    {
+      "from": "inverse holder",
+      "to": "inverse"
+    },
+    {
+      "from": "inverse holder",
+      "to": "inverse Holder"
+    }
+  ]
+}
