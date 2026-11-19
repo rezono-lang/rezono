@@ -17,13 +17,28 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass
 
-from . import rules as ir, rules_dl, view_typing, views
+from . import rules as ir
+from . import rules_dl, view_typing, views
+from .diagnostics import Diagnosed, Diagnostic
 from .pack import ACCESS, Pack
 from .view_typing import TypedView
 
 
 class ViewRuleError(ValueError):
     """The requested fragment cannot be lowered without a wider reviewed boundary."""
+
+
+class ProtectedRelation(ViewRuleError, Diagnosed):
+    """A relation the view would make under the name of a protected admission input (rules_dl.PROTECTED). Only
+    admission fills such a relation (decisions/admission-transport.md, section 6), so the name is reserved."""
+    CODE = 'view_relation_protected'
+
+    def __init__(self, source: str, theory: str, name: str):
+        where = f'views[{theory}]'
+        message = (f'{source}: {where}: the generated relation {name} has the name of a protected admission input; '
+                   'that name is reserved')
+        hint = 'rename the theory or its kind or slot, so the view makes another relation'
+        Diagnosed.__init__(self, message, (Diagnostic(self.CODE, message, where, hint=hint),))
 
 
 # The origin file of every rule `bind` lowers when pack.read binds a view; a rule file's origin is rules/<module>.dl
@@ -297,6 +312,8 @@ def bind(doc: dict | None, view: TypedView, domain: Pack, theory: Pack, names: M
     rebound, made = {}, {}   # theory table -> its relation; relation -> its rules, in order
 
     def fresh(name):
+        if name in rules_dl.PROTECTED:  # read after rules_dl.read refused the tables, so refused here
+            raise ProtectedRelation(source, view.theory, name)
         if not ir.NAME.fullmatch(name) or name in taken or name in made:
             raise ViewRuleError(f'{source}: views[{view.theory}]: the generated relation {name} collides with an '
                                 'existing relation, rule or table')

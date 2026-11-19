@@ -22,3 +22,6 @@ classes:
       tenant: {range: Role, required: true}
       period: {required: true}
       cores: {range: integer, minimum_value: 0, required: true}
+    unique_keys:
+      tenant_period:
+        unique_key_slots: [tenant, period]

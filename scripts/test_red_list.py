@@ -101,5 +101,58 @@ def test_new():
         ])
 
 
+WAITING_SOURCE = '''import pytest
+
+
+def test_done():
+    pass
+
+
+@pytest.mark.xfail(strict=True, reason="M1: not yet")
+def test_pending():
+    pass
+'''
+
+
+class WaitStatus(unittest.TestCase):
+    def index(self):
+        sources = {"demo/tests/test_waiting.py": WAITING_SOURCE}
+        red = collect("demo/tests/test_waiting.py", WAITING_SOURCE)
+        return red_list.KnownTests.from_sources(sources, red)
+
+    def test_reason_naming_only_a_green_test_is_ready(self):
+        for reason in (
+            "M1: Waits for test_done while it owns the module.",
+            "M1: Depends on demo/tests/test_waiting.py--test_done.",
+        ):
+            self.assertEqual(red_list.wait_status(reason, self.index()), {"ready": True})
+
+    def test_reason_naming_a_red_test_waits_for_it(self):
+        reason = "M1: Waits for test_done and test_pending, which add the module."
+        self.assertEqual(red_list.wait_status(reason, self.index()), {"waits": ["test_pending"]})
+        # A file is green only while none of its tests is red.
+        reason = "M1: Depends on demo/tests/test_waiting."
+        self.assertEqual(red_list.wait_status(reason, self.index()),
+                         {"waits": ["demo/tests/test_waiting"]})
+
+    def test_names_after_a_parenthetical_are_still_waited_for(self):
+        reason = ("M1: Waits for demo/tests/test_waiting.py--test_done (the reader) and "
+                  "demo/tests/test_waiting.py--test_pending (the lowering). Then lower it.")
+        self.assertEqual(red_list.wait_status(reason, self.index()),
+                         {"waits": ["demo/tests/test_waiting.py--test_pending"]})
+        reason = "M1: Waits for test_done (#718): then lower it."
+        self.assertEqual(red_list.wait_status(reason, self.index()), {"ready": True})
+
+    def test_reason_waiting_for_something_else_waits_without_a_name(self):
+        for reason in (
+            "M1: Waits for PR #702 (fix/some-branch).",
+            "M1: Waits for test_done and the live recorder.",
+        ):
+            self.assertEqual(red_list.wait_status(reason, self.index()), {"waits": []})
+
+    def test_reason_without_a_wait_is_ready(self):
+        self.assertEqual(red_list.wait_status("M1: Lower it.", self.index()), {"ready": True})
+
+
 if __name__ == "__main__":
     unittest.main()

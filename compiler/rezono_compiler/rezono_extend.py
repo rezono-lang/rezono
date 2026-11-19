@@ -23,10 +23,13 @@ def validate(decl: dict, at: str, imported: bool, refuse: Refuse) -> None:
         table = derived.get("table") if isinstance(derived, dict) else None
         if not isinstance(table, dict):
             refuse_derived(here, refuse)
-        elif table.get("table") != "unique":
+        elif table.get("table") not in ("unique", "first", "collect"):
             refuse(here, f"a table `{table.get('table')}` is not lowered yet", "§9.1")
         elif "totality" in derived:
             refuse(here, "`total` on a table is not lowered: its proof is the check of `rezono/` (tables.md §7, "
                          "point 3)", "§9.1")
-        elif "card" in derived:
+        elif table["table"] == "collect" and derived.get("card") != "*":
+            refuse(here, f"a table `collect` gives a set: its derived value is a `{derived['type']}*` (tables.md §2)",
+                   "§9.1")
+        elif table["table"] != "collect" and "card" in derived:
             refuse(here, f"a derived value `{derived['type']}{derived['card']}` is not lowered yet", "§9.1")

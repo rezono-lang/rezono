@@ -172,6 +172,12 @@ def delivery_reference(text, catalog):
     return (tenants[0], int(number)) if len(tenants) == 1 else None
 
 
+def names_tenant(text, catalog):
+    """A target segment that is a tenant's catalog key, or begins with one and a hyphen, refers to that tenant."""
+    keys = {entry.get("key") for entry in mapping(catalog["teams"], "teams").values() if isinstance(entry, dict)}
+    return any(isinstance(key, str) and (text == key or text.startswith(key + "-")) for key in keys)
+
+
 def readable_quotas(catalog):
     rows = []
     seen = set()
@@ -248,8 +254,10 @@ def request_rows(teams_path, catalog):
             port = port_number(connection["port"])
             row = {"id": f"{request_id}/{index}", **scope, "target_zone": target_zone,
                    "target": target, "port": port}
-            delivery, separator, component = target.partition("/")
-            owner = delivery_reference(delivery, catalog) if separator else None
+            delivery, _, component = target.partition("/")
+            if names_tenant(delivery, catalog):
+                row["target_reference"] = delivery
+            owner = delivery_reference(delivery, catalog)
             if owner is not None:
                 row["target_tenant"], row["target_number"] = owner
                 if component:

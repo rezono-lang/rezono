@@ -1,0 +1,8 @@
+vendor_default_transport_source:
+  - id: registry-3.0.0-transport-source
+    product: registry
+    series: 3.0.0
+    protocol: TCP
+    port: 5000
+    source_url: 'https://raw.githubusercontent.com/distribution/distribution/v3.0.0/docs/content/about/configuration.md'
+    source_sha256: 195d82641e9d305a0208ce7dd51ec2203d110e512c43f2b065cfe0fcd30c4ff5

@@ -341,6 +341,150 @@ def format_milestones(counts: dict[str, dict[str, int]]) -> str:
     return "\n".join(lines)
 
 
+WAIT_START = re.compile(r"\b(?:waits for|depends on)\s+", re.IGNORECASE)
+CLAUSE_END = re.compile(r"[:;(]|\.(?:\s|$)")
+PARENTHETICAL = re.compile(r"\s*\([^()]*\)")
+TEST_NAME = re.compile(r"(?:[\w.-]+/)*test_\w*(?:\.py)?(?:(?:::|--)\w+)*")
+FUNCTION_IN_LAST_FILE = re.compile(r"(?:::|--)test_\w*")
+LIST_SEPARATOR =re.compile(r",|\s+and\s+")
+LEADING_WORDS = frozenset({"and", "for", "or", "on", "both", "also"})
+QUALIFIER_WORDS = frozenset({
+    "which", "whose", "while", "that", "who", "where", "because", "so", "as",
+    "until", "once", "when", "since",
+})
+
+
+def _wait_clauses(reason: str) -> list[str]:
+    """Return the text after each "Waits for" or "Depends on", up to the end of its sentence.
+
+    A closed parenthetical, such as "(compare_as in the rule IR)" after a test name, is left
+    out, so the list goes on after it; an unclosed one ends the clause.
+    """
+    starts = list(WAIT_START.finditer(reason))
+    clauses: list[str] = []
+    for index, match in enumerate(starts):
+        stop = starts[index + 1].start() if index + 1 < len(starts) else len(reason)
+        rest = reason[match.end():stop]
+        while (stripped := PARENTHETICAL.sub("", rest)) != rest:
+            rest = stripped
+        end = CLAUSE_END.search(rest)
+        clauses.append(rest[: end.start()] if end else rest)
+    return clauses
+
+
+def wait_names(reason: str) -> tuple[list[str], bool]:
+    """Return the test names a reason waits for, and whether it also waits for something else.
+
+    A clause lists its prerequisites separated by commas and "and". An item that starts
+    with a test function or test file name names a test; words after the name qualify it.
+    An item that starts with a relative word ("which", "while", ...) ends the list. Any
+    other item names a prerequisite that is not a test.
+    """
+    names: list[str] = []
+    other = False
+    for clause in _wait_clauses(reason):
+        for item in LIST_SEPARATOR.split(clause):
+            words = item.replace("`", "").split()
+            while words and words[0].lower() in LEADING_WORDS:
+                words.pop(0)
+            if not words:
+                continue
+            if words[0].lower() in QUALIFIER_WORDS:
+                break
+            token = words[0].rstrip(".,")
+            last_file = re.split(r"::|--", names[-1], maxsplit=1)[0] if names else ""
+            if FUNCTION_IN_LAST_FILE.fullmatch(token) and ("/" in last_file or last_file.endswith(".py")):
+                # "a/test_x.py--test_one, --test_two" names test_two in the same file.
+                token = last_file + token
+            if TEST_NAME.fullmatch(token):
+                if token not in names:
+                    names.append(token)
+            else:
+                other = True
+    return names, other
+
+
+def functions_from_source(source: str, relpath: str) -> set[str]:
+    """Return the names of the test functions a test file defines, also inside classes."""
+    names: set[str] = set()
+
+    def visit(stmts: list[ast.stmt]) -> None:
+        for stmt in stmts:
+            if isinstance(stmt, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                if stmt.name.startswith("test"):
+                    names.add(stmt.name)
+            elif isinstance(stmt, ast.ClassDef):
+                visit(stmt.body)
+
+    visit(ast.parse(source, filename=relpath).body)
+    return names
+
+
+@dataclass(frozen=True)
+class KnownTests:
+    """The discoverable test files and functions, and which of them are red."""
+
+    files: frozenset[str]
+    tests: frozenset[tuple[str, str]]
+    red: frozenset[tuple[str, str]]
+
+    @classmethod
+    def from_sources(cls, sources: dict[str, str], red_items: list[RedTest]) -> KnownTests:
+        tests = {
+            (relpath, name)
+            for relpath, source in sources.items()
+            for name in functions_from_source(source, relpath)
+        }
+        red = {(item.file, item.func.rsplit("::", 1)[-1]) for item in red_items}
+        return cls(frozenset(sources), frozenset(tests), frozenset(red))
+
+    def is_green(self, name: str) -> bool:
+        """A named test is green when it exists and is not red; a file when none of its tests is red.
+
+        A name with a slash or a ``.py`` suffix is a file path; a bare name is a test function
+        or the stem of a test file. A path may name one function after ``::`` or, as in the id
+        this script prints, after ``--``. A name that matches nothing is not green.
+        """
+        path, *parts = re.split(r"::|--", name)
+        funcs = [part for part in parts if part.startswith("test")]
+        func = funcs[-1] if funcs else ""
+        if "/" in path or path.endswith(".py"):
+            target = path if path.endswith(".py") else f"{path}.py"
+            if func:
+                files: set[str] = set()
+                tests = {test for test in self.tests if test == (target, func)}
+            else:
+                files = {target} & self.files
+                tests = set()
+        else:
+            files = {f for f in self.files if f.rsplit("/", 1)[-1] == f"{path}.py"}
+            tests = {test for test in self.tests if test[1] == path}
+        if not files and not tests:
+            return False
+        if any(test in self.red for test in tests):
+            return False
+        return not any(red_file in files for red_file, _ in self.red)
+
+
+def wait_status(reason: str, index: KnownTests) -> dict[str, object]:
+    """Return ``{"ready": True}``, or ``{"waits": [...]}`` with the named tests that are not green.
+
+    ``waits`` without a name means the reason waits for something that is not a test.
+    """
+    names, other = wait_names(reason)
+    waiting = [name for name in names if not index.is_green(name)]
+    if waiting or other:
+        return {"waits": waiting}
+    return {"ready": True}
+
+
+def load_test_sources(root: Path = ROOT) -> dict[str, str]:
+    return {
+        path.relative_to(root).as_posix(): path.read_text(encoding="utf-8")
+        for path in iter_python_test_files(root)
+    }
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -429,7 +573,10 @@ def main() -> int:
 
     items = collect_red_tests()
     if args.json:
-        print(json.dumps([asdict(item) for item in items], indent=2))
+        index = KnownTests.from_sources(load_test_sources(), items)
+        print(json.dumps(
+            [asdict(item) | wait_status(item.reason, index) for item in items], indent=2
+        ))
         return 0
     for item in items:
         print(f"{item.id}\t{item.reason}\t{item.run_command}")

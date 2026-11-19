@@ -102,7 +102,8 @@ restore_offline_result(run, trial, backup, "unknown", "foreign-control-plane", p
     !restore_trial_dependent(trial).
 restore_offline_result(run, trial, backup, "unknown", "missing-dependency-binding", cluster) :-
     restore_trial_run(run, trial, backup, cluster),
-    !restore_trial_bound(trial).
+    !restore_trial_bound(trial),
+    !restore_trial_dependent(trial).
 restore_offline_result(run, trial, backup, "waiting", "missing-matching-readback", cluster) :-
     restore_trial_run(run, trial, backup, cluster),
     restore_trial_bound(trial),

@@ -1,0 +1,54 @@
+.decl build_claim_delete_attempt(run: symbol, branch: symbol, generation: symbol, sent: number, outcome: symbol)
+.decl build_claim_delete_effective(run: symbol, branch: symbol, generation: symbol, sent: number)
+.decl build_claim_ref_absent(run: symbol, branch: symbol, tick: number)
+.decl build_claim_ref_present(run: symbol, branch: symbol, tick: number, generation: symbol)
+.decl build_claim_ref_present_at(run: symbol, branch: symbol, tick: number)
+.decl build_claim_released(run: symbol, branch: symbol, generation: symbol, reason: symbol)
+.decl build_claim_release_discarded(run: symbol, branch: symbol, reason: symbol)
+.decl build_claim_release_settled(run: symbol, branch: symbol)
+.decl build_claim_still_present(run: symbol, branch: symbol)
+.decl build_claim_release_pending(run: symbol, branch: symbol, reason: symbol)
+
+// A delete attempt counts only in the verified run that recorded it.
+build_claim_delete_attempt(run, branch, generation, sent, outcome) :- build_verified_cut(run),
+    build_claim_delete__run(delete, run), build_claim_delete__branch(delete, branch),
+    build_claim_delete__generation(delete, generation), build_claim_delete__sent_at(delete, sent),
+    build_claim_delete__outcome(delete, outcome), build_claim_delete__source(delete, source), source != "".
+// A sent or unknown answer may have deleted the ref, so only a readback can settle it.
+build_claim_delete_effective(run, branch, generation, sent) :- build_claim_delete_attempt(run, branch, generation, sent, "sent").
+build_claim_delete_effective(run, branch, generation, sent) :-
+    build_claim_delete_attempt(run, branch, generation, sent, "unknown").
+
+// A ref read counts only with the receipt of its complete listing, in its own run at its own tick.
+build_claim_ref_absent(run, branch, tick) :- build_claim_ref_read__run(read, run),
+    build_claim_ref_read__branch(read, branch), build_claim_ref_read__observed_at(read, tick),
+    build_claim_ref_read__state(read, "absent"), build_claim_ref_read__source(read, source), source != "",
+    build_claim_ref_read__receipt(read, receipt), loop_sweep_receipt__run(receipt, run),
+    loop_sweep_receipt__event_time(receipt, tick).
+build_claim_ref_present(run, branch, tick, generation) :- build_claim_ref_read__run(read, run),
+    build_claim_ref_read__branch(read, branch), build_claim_ref_read__observed_at(read, tick),
+    build_claim_ref_read__state(read, "present"), build_claim_ref_read__generation(read, generation),
+    build_claim_ref_read__source(read, source), source != "",
+    build_claim_ref_read__receipt(read, receipt), loop_sweep_receipt__run(receipt, run),
+    loop_sweep_receipt__event_time(receipt, tick).
+build_claim_ref_present_at(run, branch, tick) :- build_claim_ref_present(run, branch, tick, _).
+
+// The model's Confirm: a later absent read of the same run, with no present read at that tick.
+build_claim_released(run, branch, generation, "absent-after-delete") :-
+    build_claim_delete_effective(run, branch, generation, sent), build_claim_ref_absent(run, branch, tick), tick > sent,
+    !build_claim_ref_present_at(run, branch, tick).
+
+// The model's DiscardConfirmation: a later read shows the branch at another generation.
+build_claim_release_discarded(run, branch, "replaced") :- build_claim_delete_effective(run, branch, generation, sent),
+    build_claim_ref_present(run, branch, tick, other), tick > sent, other != generation.
+build_claim_release_discarded(run, branch, "delete-refused") :- build_claim_delete_attempt(run, branch, _, _, "refused").
+
+build_claim_release_settled(run, branch) :- build_claim_released(run, branch, _, _).
+build_claim_release_settled(run, branch) :- build_claim_release_discarded(run, branch, _).
+
+build_claim_still_present(run, branch) :- build_claim_delete_effective(run, branch, generation, sent),
+    build_claim_ref_present(run, branch, tick, generation), tick > sent.
+build_claim_release_pending(run, branch, "still-present") :- build_claim_delete_effective(run, branch, _, _),
+    !build_claim_release_settled(run, branch), build_claim_still_present(run, branch).
+build_claim_release_pending(run, branch, "readback-missing") :- build_claim_delete_effective(run, branch, _, _),
+    !build_claim_release_settled(run, branch), !build_claim_still_present(run, branch).

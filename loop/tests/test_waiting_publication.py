@@ -88,16 +88,6 @@ def _receipt_grounds(witnesses, row):
     return receipts
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason=(
-        "M2: Read decisions/safe-step-rounds.md sections 1 to 3. Expose a waiting reason when the latest same-run "
-        "safety cut is ambiguous, with both receipt identities as grounds in the ordinary publication. "
-        "Keep unrelated steps and earlier or foreign cuts out of this result. Write in packs/std-loop "
-        "and refresh its dependent Build pin."
-    ),
-)
 def test_waiting_publication_explains_ambiguous_safety_cut(tmp_path):
     # A supplied "proved" verdict is a claim, not authority (decisions/loop-certificate-admission.md), so the
     # unique case only shows that the superseded refutation at the earlier cut leaves nothing waiting.
