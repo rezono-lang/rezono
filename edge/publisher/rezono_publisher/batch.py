@@ -252,6 +252,7 @@ def epoch(pack_dir, *, epoch: int, knowledge_time: str, sources, proposal: str =
     from rezono_compiler import pack as packs
     from rezono_compiler import rules as ir
     from rezono_compiler import sources as provenance
+    from rezono_compiler import rules_dl
     from rezono_compiler.rules_dl import PROTECTED
 
     timing.switch("compile")
@@ -306,6 +307,13 @@ def epoch(pack_dir, *, epoch: int, knowledge_time: str, sources, proposal: str =
         # The protected relations the pack declares take the admitted rows as base rows, and appear in the
         # snapshots like any other base relation; admitted rows for an undeclared one are not inserted.
         protected = {n: admitted.get(n, []) for n in sorted(PROTECTED) if n in prog.relations}
+        # Only a `.decl` with the fixed signature makes a protected relation. A table of the schema under that
+        # name (the compiler refuses it) would lose its own facts to the admitted rows, without a finding.
+        for name in protected:
+            key = [(c.name, c.type) for c in prog.relations[name].key]
+            if name in rules_dl.base_tables(model) or name in rows or key != PROTECTED[name]:
+                raise Blocked(f"rezono:evidence: {name} is a protected admission input, but the pack has it "
+                              "as a table of its own; only `.decl` with the fixed signature declares it")
         for name, rs in protected.items():
             rows[name] = sorted({tuple(text(v) for v in r) for r in rs})
         con = batch.connect(prog, scenarios.rule_rows(model, prog, facts | protected))

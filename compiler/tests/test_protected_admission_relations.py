@@ -78,3 +78,41 @@ def test_admission_relations_are_protected_inputs(tmp_path):
 
     # A name that only starts like the reserved ones stays an ordinary derived relation.
     packs.read(pack(tmp_path, "ordinary", '.decl verified_supply(item: symbol)\nverified_supply(i) :- item(i).\n'))
+
+
+CLASH = """id: https://rezono.example/clash
+name: clash
+in_language: en
+imports: [linkml:types]
+default_range: string
+annotations: {layer: facts}
+classes:
+  Item:
+    attributes:
+      id: {identifier: true}
+"""
+
+
+def clash(tmp_path, name, schema, rules):
+    root = pack(tmp_path, name, rules)
+    (root / "schema/admitted.yaml").write_text(schema, encoding="utf-8")
+    return root
+
+
+@pytest.mark.parametrize("cls", ["VerifiedMember", "VerifiedReceipt", "VerifiedRound", "VerifiedRoundMember"])
+def test_a_kind_may_not_take_a_protected_name(tmp_path, cls):
+    # Counterexample of #816: the kind VerifiedMember made the table verified_member, which batch.epoch then
+    # filled with the admitted rows (none without evidence), so every fact of the kind was lost and the
+    # checker still said valid. The name is reserved, with or without rules that read it.
+    table = "".join(f"_{c.lower()}" if c.isupper() else c for c in cls).lstrip("_")
+    schema = CLASH + f"  {cls}:\n    attributes:\n      id: {{identifier: true}}\n"
+    with pytest.raises(CompileError, match=f"{table} .*protected admission input.*reserved"):
+        packs.read(clash(tmp_path, "read", schema, f".decl seen(x: symbol)\nseen(x) :- {table}(x).\n"))
+    with pytest.raises(CompileError, match=f"{table} .*reserved"):
+        packs.read(clash(tmp_path, "unread", schema, ".decl seen(x: symbol)\nseen(x) :- item(x).\n"))
+
+
+def test_an_enum_may_not_take_a_protected_name(tmp_path):
+    schema = CLASH + "enums:\n  VerifiedRound:\n    permissible_values:\n      low: {}\n"
+    with pytest.raises(CompileError, match="verified_round .*reserved"):
+        packs.read(clash(tmp_path, "enum", schema, ".decl seen(x: symbol)\nseen(x) :- verified_round(x).\n"))
