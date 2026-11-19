@@ -9,7 +9,7 @@ Every row belongs to one verified `BuildRun` cut. Times are integer Unix seconds
 | Kind | Independent origin and acceptance question |
 | --- | --- |
 | `BuildClaim` | The ref listing under `refs/heads/task/` at the cut. Which claim branch existed, at which generation? The generation is the full commit ID of the ref tip. |
-| `BuildClaimActivity` | The server's activity record for the latest push to that ref. When did the push that produced this generation happen? The record supplies a lease start only when its resulting commit equals the observed generation. |
+| `BuildClaimActivity` | The server's activity records for the pushes to that ref, one row per push with the activity answer as its source and the exact whole-second push time. When did the push that produced this generation happen? The rules take the latest push, and it supplies a lease start only when its resulting commit equals the observed generation. |
 | `BuildClaimLease` | A `std-decision` decision states the lease duration in seconds. Which duration is in force on the policy date of the cut? The first decision sets four hours. |
 | `BuildClaimPullReading` | A query for pull requests whose head is the claim branch, at the cut. Is a pull request open for this claim, or did the complete answer contain none? An unreadable or mismatched answer produces no row. |
 | `BuildClaimDelete` | The conditional delete adapter's record of one attempt. Which generation of which branch did it try to delete, when, and was the answer `sent`, `refused` or `unknown`? It names the branch, not a `BuildClaim` row, because the release and its readback concern the ref. |
@@ -27,7 +27,7 @@ The fields are those of the acceptance tests in section 4. Use string enumeratio
 - the lease start plus that duration is at most the cut tick, as in the model's `now >= leaseUntil`;
 - a pull reading for the claim at the cut tick says `none`, and no reading at that tick says `open`.
 
-Otherwise the claim is held. `build_claim_held(run, claim, reason)` names each failing ground with one of `lease-active`, `lease-unknown` (no activity record for this generation), `lease-policy-unknown`, `pull-request-open` (some reading at the cut tick says `open`) and `pull-request-unknown` (no reading at the cut tick). A claim listed only at an earlier tick is not at the cut and gets neither row. A claim with a release plan has no held row. A renewed claim has a new generation and a new push, so an old activity record cannot release it. Missing or contradictory evidence never yields a plan.
+Otherwise the claim is held. `build_claim_held(run, claim, reason)` names each failing ground with one of `lease-active`, `lease-unknown` (the latest push record of the claim did not make this generation, or there is none), `lease-policy-unknown`, `pull-request-open` (some reading at the cut tick says `open`) and `pull-request-unknown` (no reading at the cut tick). A claim listed only at an earlier tick is not at the cut and gets neither row. A claim with a release plan has no held row. A renewed claim has a new generation and a new push, so an old activity record cannot release it. Missing or contradictory evidence never yields a plan.
 
 A plan is not a release. Eligibility alone yields only the plan, as the build decision requires.
 
@@ -46,6 +46,7 @@ The planner queue in [build reconciliation](build-reconciliation.md#task-and-que
 | Test | Independent expectation |
 | --- | --- |
 | `test_build_claim_release_plan` | Hand-worked lease arithmetic and the guards of `Delete` in the claim model. Only the claim whose lease ended at or before the cut, with a matching push record and a complete empty pull reading, gets a plan. Each other claim fails on exactly its own missing ground. |
+| `test_build_claim_latest_push` | Hand-worked lease arithmetic over several push records per claim. Only the latest push starts a lease, and only when it made the observed generation. |
 | `test_build_claim_release_confirmation` | The `Confirm` and `DiscardConfirmation` actions of the claim model. A same-run absent read after the delete confirms; a replacement, a refusal, an earlier read, a foreign run or a missing receipt do not. |
 | `test_build_claim_capture` | Hand-written ref listing and activity answers in GitHub's documented JSON shape. Only task refs become claims; a stale activity record gives no lease start. |
 | `test_build_claim_pull_capture` | Hand-written pull answers. An open pull request, an empty answer, an unreadable answer and an answer for another head each give their own reading or none. |
