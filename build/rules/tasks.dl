@@ -31,8 +31,11 @@ build_rank_conflict(run, task) :- build_ready_rank(run, task, a, _), build_ready
 build_task_precedes(run, first, second) :- build_ready_rank(run, first, a, _), build_ready_rank(run, second, b, _),
     a < b, !build_rank_conflict(run, first), !build_rank_conflict(run, second).
 
+// A count stands only with the receipt of its complete listing, read in this run at this cut.
 build_queue_at_cut(run, count, reading) :- build_verified_cut(run), build_run__observed_at(run, tick),
     build_queue_reading__run(reading, run), build_queue_reading__observed_at(reading, tick),
+    build_queue_reading__receipt(reading, receipt), loop_sweep_receipt__run(receipt, run),
+    loop_sweep_receipt__event_time(receipt, tick),
     build_queue_reading__count(reading, count), build_queue_reading__source(reading, source), source != "".
 build_queue_conflict(run) :- build_queue_at_cut(run, a, _), build_queue_at_cut(run, b, _), a != b.
 build_queue_known(run, count, reading) :- build_queue_at_cut(run, count, reading), !build_queue_conflict(run).

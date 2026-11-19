@@ -29,3 +29,5 @@ expect:
     owner: item-x
     complete: true
     contributors: []
+unsupported:
+  language: "The expectation holds three results, any, all and none, in one record, while a language case compares one shown value. rezono/test/evaluate.test.ts compares each fold over a known empty closed set."

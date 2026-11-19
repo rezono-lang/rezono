@@ -2,7 +2,11 @@ id: value-tt-and-false-unknown
 source: docs/semantics/value-cases.yaml#tt-and-false-unknown
 status: settled
 input:
-  rows: []
+  rows:
+    - {$kind: Group, $id: group-a}
+    - {$kind: Item, $id: item-a, group: {$ref: group-a}, labels: [first], weight: {$unknown: ""}}
+  select: {kind: Item, id: item-a}
+  language: "ask Item where true show false and weight = 1"
   expression: left and right
   bindings:
     left: false

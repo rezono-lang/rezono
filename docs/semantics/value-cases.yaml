@@ -183,8 +183,9 @@ cases:
   - id: set-open-empty
     topic: "§2.2, K7"
     input: {slot: "a many-valued slot of an open relation", rows: "no rows for the owner"}
-    expect: {completeness: "not known complete", count: "refused at compile time (R004, W6)", any: F, membership: "F only for members known absent: none"}
-    sources: [W6, "publication L0 §3.3 and §4.1"]
+    expect: {completeness: "not known complete", count: "refused at compile time (R004, W6)", any: "unknown, reason open_world", membership: "F only for members known absent: none"}
+    sources: [W6, "publication L0 §3.3 and §4.1", "decisions/conformance-value-set-open-empty.md"]
+    note: "Earlier versions said any: F. An open scan without a match cannot establish F (decisions/language-expression-semantics.md §1)."
     agree: ["compiler/rezono_compiler/rules.py:598", "compiler/rezono_compiler/calc.py:547"]
     status: settled
 

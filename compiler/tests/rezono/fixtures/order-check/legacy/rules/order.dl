@@ -1,0 +1,9 @@
+// The legacy representation of the acceptance rules, authored independently of any converter.
+.decl edge(pred: symbol, succ: symbol)
+edge(pred, succ) :- ordered__precedes(pred, succ).
+.decl zero(x: symbol)
+zero(x) :- stage(x), ordered__rank(x, 0).
+.decl nonzero(x: symbol)
+nonzero(x) :- stage(x), ordered__rank(x, r), r != 0.
+.decl successors(x: symbol, n: number)
+successors(x, n) :- stage(x), n = count : { edge(x, _) }.

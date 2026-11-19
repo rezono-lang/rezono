@@ -30,6 +30,7 @@ from .canon import INTEGER, CalcColumnType
 
 FUNCTIONS = ("count", "sum", "min", "max")
 COMPARISONS = ("eq", "ne", "lt", "le", "gt", "ge")
+COMPARE_AS = ("binary_text", "utc_instant")  # Condition.compare_as: how two bound text operands are ordered
 OPERATORS = ("add", "sub", "mul", "div", "days")  # days: a view's reading of an ISO date (evaluate._arith)
 
 
@@ -63,6 +64,7 @@ class Calculation:
     left: str
     right: str
     var: str | None = None
+    compare_as: str | None = None  # a condition's typed comparison (decisions/ordered-rule-scalars.md)
 
 
 @dataclass(frozen=True)
@@ -273,7 +275,8 @@ def load_rules(doc: dict) -> dict:
                 AggregateSpec(_atom(a), a["function"], a.get("over"), a.get("as"), int(a["stratum"]), _over_key(a, keys))
                 for a in r.get("aggregates", [])
             ),
-            conditions=tuple(Calculation(c["op"], c["left"], c["right"]) for c in r.get("conditions", [])) if ir else (),
+            conditions=tuple(Calculation(c["op"], c["left"], c["right"], compare_as=c.get("compare_as"))
+                             for c in r.get("conditions", [])) if ir else (),
             assignments=tuple(Calculation(c["op"], c["left"], c["right"], c.get("var"))
                               for c in r.get("assignments", [])) if ir else (),
             bare_values=ir,
@@ -289,6 +292,10 @@ def load_rules(doc: dict) -> dict:
                 raise ValueError(f"{rule.id}: an operator and its terms are text: {c}")
             if c.op not in (OPERATORS if c.var else COMPARISONS):
                 raise ValueError(f"{rule.id}: unknown operator {c.op}")
+            if c.compare_as is not None and c.compare_as not in COMPARE_AS:
+                raise ValueError(f"{rule.id}: unknown comparison type {c.compare_as}")
+            if c.compare_as is not None and not (c.left.startswith("?") and c.right.startswith("?")):
+                raise ValueError(f"{rule.id}: a typed comparison needs two bound operands: {c}")
         if rule.id in rules:
             raise ValueError(f"duplicate rule id {rule.id}")
         if rule.head.relation in calc_relations:

@@ -466,14 +466,24 @@ REFUSALS = {
     "extend": ([{"extend": "Beta", "derived": [BOOL]}], 15, "a derived value is not lowered yet"),
     "a fact table": ([{"fact": "Beta", "columns": ["id"], "rows": [[{"lit": "b"}]]}], 10, "a fact table is not lowered"),
     "a fact row": ([{"fact": "beta", "id": "b", "set": []}], 10, "a fact row is not lowered"),
-    "a unit": ([{"unit": "Gi", "is": "integer"}], 10, "a unit is not lowered yet"),
     "a rounding": ([{"rounding": "money", "mode": "half_even"}], 10, "a rounding is not lowered yet"),
     "a parameter": ([{"param": "p", "type": "Date"}], 10, "a parameter is not lowered yet"),
     "a check": ([{"check": "warn", "cond": {"lit": "true"}}], 10, "a check statement is not lowered yet"),
     "a reason": ([{"reason": "r", "text": '"r"'}], 10, "a reason declaration is not lowered"),
     "a slot named id": ([slot(slot="id", type="Text")], 11, "a slot named `id` is refused"),
     "an unknown slot suffix": ([slot(slot="many", type="Text", card="**")], 11, "a slot `Text**` is not lowered"),
-    "an inverse": ([slot(slot="many", type="Beta", card="*", inverse="eta")], 11, "a slot with inverse is not lowered"),
+    # decisions/language-inverse-references.md: the forward slot must exist on the kind the type names; Zeta has
+    # no slot eta, so the inverse is refused at its own line.
+    "an inverse without its forward slot": pytest.param(
+        [slot(slot="many", type="Zeta", card="*", inverse="eta"), eta(kind="Zeta")], 11,
+        "the inverse eta is not a slot of Zeta",
+        marks=pytest.mark.xfail(
+            strict=True,
+            raises=AssertionError,
+            reason="Refuses every inverse with 'a slot with inverse is not lowered' today. Goes green with "
+                   "compiler/tests/rezono/test_lower_inverse_reference.py::test_lower_inverse_reference; the worker "
+                   "of that task removes this mark too.",
+        )),
     "world on a slot": ([slot(slot="note", type="Text", world="open")], 11, "a slot with world is not lowered"),
     "a DateTime slot": ([slot(slot="observed_at", type="DateTime")], 11, "DateTime is not Date, Text, or an enum or a kind of this pack"),
     "a Money slot": ([slot(slot="cost", type="Money<EUR>")], 11, "Money<EUR> is not Date, Text"),
@@ -499,8 +509,7 @@ def test_what_the_slice_does_not_lower_is_refused_at_its_line(tmp_path, decls, l
 @pytest.mark.parametrize("header, line, message", [
     ({"pack": "other"}, 2, "the `pack` line names other, not this pack, minimal"),
     ({"rezono": "1"}, 1, "the `rezono` line says 0, not 1"),
-    ({"use": ["std.money"]}, 3, "a `use` line is not lowered"),
-], ids=["another pack", "another language version", "use"])
+], ids=["another pack", "another language version"])
 def test_a_header_line_is_refused_at_its_line(tmp_path, header, line, message):
     d = Path(shutil.copytree(FIXTURE, tmp_path / "minimal"))
     module(d, [eta()], **header)

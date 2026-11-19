@@ -28,6 +28,8 @@ manifest names under the role), the role-neutral schema bundle, and which relati
   <pack>/<manifest>/<role>/publication/<export>      the standards exports made from that form: view.ttl,
                                                 context.jsonld, prov.ttl, shapes.ttl, contract.odcs.yaml,
                                                 dcat.ttl, and the loss list of each (*.losses.yaml)
+  <pack>/<manifest>/<role>/publication/exports.index.json  the output index of those exports
+                                                (`export_index`, decisions/export-output-index.md)
   <pack>/<manifest>/<role>/publication/table.<t>.arrow  each table of the columnar form (§4), one Arrow IPC file and
   <pack>/<manifest>/<role>/publication/table.<t>.parquet  one Parquet file per table, `$` written `_` (l0.md §4.6)
   <pack>/<manifest>/<role>/publication/statement.json  the role's epoch statement (`rezono_publication.statement`):
@@ -84,8 +86,8 @@ from rdflib import Graph, URIRef
 from rdflib.namespace import PROV, RDF
 from rezono_canon import canonical_json
 
+from . import export_index, timing
 from . import store as stores
-from . import timing
 
 ROOT = Path(__file__).resolve().parents[3]
 if str(ROOT / "publication") not in sys.path:
@@ -168,10 +170,15 @@ def _why_ids(rows: list[dict]) -> set[str]:
     return out
 
 
-def exports(schema: dict, rows: list[dict], dataset: str, manifest: str, witnesses: list[dict]) -> dict[str, bytes]:
+def exports(schema: dict, rows: list[dict], dataset: str, manifest: str, witnesses: list[dict],
+            trace: dict | None = None) -> dict[str, bytes]:
     """The standards exports of one role's form, from the form alone: its schema document, its rows, its dataset
     hash and manifest id, and the witnesses its rows name (the role's own; one the form does not name is not
     exported, one it names and the role's files lack is an error). Pure: the same form gives the same bytes.
+
+    With `trace`, the RDF view and PROV-O are written by the serializer that notes the line of each term
+    (`export_index.lines`, the same text), and `trace` gets per export what its output index is made from: the
+    view's graph and notes, and PROV-O's notes with, per triple, the conclusions whose witness states it.
 
     A connector that refuses the schema for an open question (a versioned kind, Q13; a reference into another
     pack, Q20) leaves its export out, with a note: it refuses and never guesses (docs/standards.md)."""
@@ -188,13 +195,33 @@ def exports(schema: dict, rows: list[dict], dataset: str, manifest: str, witness
         g.bind("prov", PROV)
         g.bind("rd", rdf.RD)
         g.add((bundle, RDF.type, PROV.Bundle))
+        owners: dict[tuple, set] = {}
         for i in sorted(named):
-            g += rdf.witness_to_prov(by_id[i], manifest, dataset)
-        return rdf.turtle(rdf.bind_namespaces(g))  # rdflib's Turtle, in linear time
+            one = rdf.witness_to_prov(by_id[i], manifest, dataset)
+            g += one
+            if trace is not None:
+                ref = (by_id[i]["conclusion"]["relation"], by_id[i]["conclusion"]["key"])
+                for t in one:
+                    if t != (bundle, RDF.type, PROV.Bundle):
+                        owners.setdefault(t, set()).add(ref)
+        g = rdf.bind_namespaces(g)
+        if trace is None:
+            return rdf.turtle(g)  # rdflib's Turtle, in linear time
+        text, notes = export_index.lines(g)
+        trace["prov.ttl"] = {"notes": notes, "owners": owners, "bundle": bundle}
+        return text
+
+    def view() -> str:
+        if trace is None:
+            return rdf.to_turtle(schema, rows)
+        g = rdf.to_graph(schema, rows)
+        text, notes = export_index.lines(g)
+        trace["view.ttl"] = {"graph": g, "notes": notes}
+        return text
 
     make = {
         "context.jsonld": lambda: json.dumps(rdf.context(schema), sort_keys=True, ensure_ascii=False, indent=1),
-        "view.ttl": lambda: rdf.to_turtle(schema, rows),
+        "view.ttl": view,
         "prov.ttl": prov,
         "shapes.ttl": lambda: shacl.to_turtle(schema),
         "contract.odcs.yaml": lambda: odcs.to_yaml(schema, pin),
@@ -284,8 +311,8 @@ def objects(form: dict) -> dict[str, bytes]:
 
 
 def verify(data: dict[str, bytes], form: dict, given: dict, bundle: dict, full) -> tuple[dict, dict]:
-    """A form read back from its bytes alone, as a reader of the role's prefix would, and held against the role's
-    own rows. Returns its hashes and what was read back (`schema`, `rows`: what the exports are made from); raises
+    """A form read back from its bytes alone, as a reader of the role's prefix would, and held against the schema
+    the definition gives the role and against the role's own rows. Returns its hashes and what was read back (`schema`, `rows`: what the exports are made from); raises
     Blocked with what differs. The hashes were computed from the form's
     schema and rows (`rezono_publication.hash`, deterministic); the bytes must read back to exactly those, so the hashes
     follow from the bytes too without computing them a second time."""
@@ -300,14 +327,17 @@ def verify(data: dict[str, bytes], form: dict, given: dict, bundle: dict, full) 
         raise Blocked("the bytes do not read back to the form")
     if sid != want["schema"] or want != form["hashes"]:
         raise Blocked("the hashes are not those of the schema and rows")
-    _, plan = rd.schema_document(bundle, full)
+    defined, plan = rd.schema_document(bundle, full)
+    if schema != defined:
+        raise Blocked("the schema is not the one the definition gives the role (its bundle)")
     problems = rd.differences(schema, plan, rows, given)
     if problems:
         raise Blocked(f"{len(problems)} difference(s) from the role's rows (first: {'; '.join(problems[:3])})")
     return want, {"schema": schema, "rows": rows}
 
 
-def verified_exports(back: dict, h: dict, manifest: str, witnesses: list[dict]) -> dict[str, bytes]:
+def verified_exports(back: dict, h: dict, manifest: str, witnesses: list[dict],
+                     trace: dict | None = None) -> dict[str, bytes]:
     """The standards exports of a verified form, made once from what `verify` read back from its bytes
     (`back`): the exports of the bytes a reader fetches, in their order (the exporters follow the order of rows and
     keys). A second build would only repeat a pure function on the same input, at some 40% of the forms phase of
@@ -315,9 +345,39 @@ def verified_exports(back: dict, h: dict, manifest: str, witnesses: list[dict]) 
     The standards' own readers (pySHACL, the ODCS schema, rdflib) are oracles and run in the tests on a published
     store (`edge/plugins/connectors/accept.py`), never here."""
     try:
-        return exports(back["schema"], back["rows"], h["dataset"], manifest, witnesses)
+        return exports(back["schema"], back["rows"], h["dataset"], manifest, witnesses, trace)
     except l0.L0Error as err:
         raise Blocked(f"standards exports: {err}") from err
+
+
+def exports_index(pack: str, manifest: str, back: dict, h: dict, data: dict[str, bytes], made: dict[str, bytes],
+                  trace: dict, given: dict) -> bytes:
+    """`exports.index.json`, the output index of a role's verified exports (`export_index`,
+    decisions/export-output-index.md): made after the exports, from what `verify` read back, the role's own rows
+    and the notes the exporters left in `trace`, and read back against the exports. Raises Blocked with what
+    differs."""
+    schema = back["schema"]
+    digest = sha256(data["schema.json"])
+    fields = {}
+    try:
+        if "view.ttl" in made:
+            _, plan = rd.schema_document(given["bundle"], given["full"])
+            stated = export_index.view_rows(schema, plan, given["rows"], back["rows"])
+            view = trace["view.ttl"]
+            fields["view.ttl"] = export_index.view_fields(schema, view["graph"], view["notes"], stated)
+        if "prov.ttl" in made:
+            prov = trace["prov.ttl"]
+            fields["prov.ttl"] = export_index.prov_fields(prov["notes"], prov["owners"], prov["bundle"])
+        if "context.jsonld" in made:
+            fields["context.jsonld"] = export_index.context_fields(schema, made["context.jsonld"], digest)
+        if "shapes.ttl" in made:
+            fields["shapes.ttl"] = export_index.shapes_fields(_connector("shacl"), schema, made["shapes.ttl"], digest)
+        if "contract.odcs.yaml" in made:
+            fields["contract.odcs.yaml"] = export_index.contract_fields(schema, made["contract.odcs.yaml"], digest)
+        return export_index.index(pack, manifest, h["dataset"], component()["connectors"], data["schema.json"],
+                                  data["rows.json"], made, fields)
+    except export_index.Blocked as err:
+        raise Blocked(f"output index: {err}") from err
 
 
 def verified_tables(data: dict[str, bytes], form: dict, h: dict) -> dict[str, bytes]:
@@ -424,7 +484,8 @@ class _phases:
 def role_files(st, pack: str, m: dict, bundle: bytes, role: str) -> list[tuple[str, bytes]]:
     """One filtered role's form: its objects, then its index, each verified before anything is returned. Raises
     Blocked (or rd.FormError) with what is wrong. The time of each step counts toward a phase of its own
-    (`<role> form`, `<role> verify`, `<role> export <name>`, `<role> tables`, `<role> statement`)."""
+    (`<role> form`, `<role> verify`, `<role> export <name>`, `<role> export index`, `<role> tables`,
+    `<role> statement`)."""
     manifest = m["id"]
     timing.switch(f"{role} inputs")
     given = inputs(st, m, role, bundle)
@@ -433,18 +494,22 @@ def role_files(st, pack: str, m: dict, bundle: bytes, role: str) -> list[tuple[s
     data = objects(form)
     timing.switch(f"{role} verify")
     h, back = verify(data, form, given["rows"], given["bundle"], given["full"])
+    trace: dict = {}
     with _phases(f"{role} export "):
-        made = verified_exports(back, h, manifest, given["witnesses"])
+        made = verified_exports(back, h, manifest, given["witnesses"], trace)
+    timing.switch(f"{role} export index")
+    indexed = {export_index.NAME: exports_index(pack, manifest, back, h, data, made, trace, given)}
+    del trace
     timing.switch(f"{role} tables")
     tables = verified_tables(data, form, h)
-    names = [*OBJECTS, *made, *losses(made), *tables]
+    names = [*OBJECTS, *made, *indexed, *losses(made), *tables]
     count = len(names) + 1  # the statement is named in the index too
     print(f"forms {pack} {manifest} {role}: {count} objects of the {FORM_OBJECTS} a listing may name", file=sys.stderr)
     if count > FORM_OBJECTS // 2:
         print(f"warning: {pack} {manifest} {role}: {count} objects, more than half the {FORM_OBJECTS} a form listing "
               "may name", file=sys.stderr)
     listable([*names, statements.NAME])
-    data |= made | losses(made) | tables
+    data |= made | indexed | losses(made) | tables
     base = prefix(pack, manifest, role)
     # The statement's subjects are every object of the role's form, the tables among them: made last.
     sources = sources_of(m, role)

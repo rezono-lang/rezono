@@ -53,8 +53,50 @@ def _arith(op, left, right):
     return str({"add": a + b, "sub": a - b, "mul": a * b}[op])
 
 
-def _holds(op, left, right):
-    """A comparison of two canonical values: equality as text, order only between integers."""
+UTC_INSTANT = re.compile(r"([0-9]{4})-([0-9]{2})-([0-9]{2})T([0-9]{2}):([0-9]{2}):([0-9]{2})(?:\.([0-9]+))?Z")
+
+
+def _utc_key(text):
+    """The bytes that order a UTC instant written YYYY-MM-DDTHH:mm:ss[.digits]Z, else None.
+
+    The date is a Gregorian day in the years 0001 to 9999 and the time has seconds 00 to 59. The key drops the
+    terminal Z and the fraction's trailing zeros, and the separator if no digit remains: the fixed-width whole
+    second decides first, then the fraction as exact decimal digits, at any precision."""
+    match = UTC_INSTANT.fullmatch(text) if isinstance(text, str) else None
+    if match is None:
+        return None
+    year, month, day, hour, minute, second, fraction = match.groups()
+    try:
+        datetime.date(int(year), int(month), int(day))
+    except ValueError:
+        return None
+    if int(hour) > 23 or int(minute) > 59 or int(second) > 59:
+        return None
+    whole = text[:19]
+    fraction = (fraction or "").rstrip("0")
+    return (f"{whole}.{fraction}" if fraction else whole).encode("ascii")
+
+
+def _text_key(text):
+    """The UTF-8 bytes of Unicode scalar text, else None (a lone surrogate is no scalar value)."""
+    try:
+        return text.encode("utf-8") if isinstance(text, str) else None
+    except UnicodeEncodeError:
+        return None
+
+
+TYPED_KEYS = {"binary_text": _text_key, "utc_instant": _utc_key}
+
+
+def _holds(op, left, right, compare_as=None):
+    """A comparison of two canonical values: equality as text, order only between integers. With `compare_as`
+    (decisions/ordered-rule-scalars.md) both operands are read as that type and compared as bytes; an operand
+    that is not of the type decides no comparison, not even `ne`."""
+    if compare_as is not None:
+        a, b = TYPED_KEYS[compare_as](left), TYPED_KEYS[compare_as](right)
+        if a is None or b is None:
+            return False
+        return {"eq": a == b, "ne": a != b, "lt": a < b, "le": a <= b, "gt": a > b, "ge": a >= b}[op]
     if op in ("eq", "ne"):
         return (left == right) == (op == "eq")
     a, b = _int(left), _int(right)

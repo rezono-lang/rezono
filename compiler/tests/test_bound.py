@@ -120,7 +120,7 @@ def test_the_check_view_on_feldera_holds_the_rows_past_the_bound(prog):
     """On Feldera the engine SQL keeps the rows the counting rule would add past its bound in the
     materialized view `depth__exhausted`, which a reader takes as a red check (FELDERA_URL; the label `feldera`):
     two rows past the bound, and none once the count ends at it."""
-    from feldera import URL, deploy, processed, push, query, stop
+    from feldera import URL, comparing, deploy, processed, push, query, stop
 
     from rezono_compiler import rules_sql
     if not URL:
@@ -138,8 +138,10 @@ def test_the_check_view_on_feldera_holds_the_rows_past_the_bound(prog):
     try:
         chain = [("s", "a"), ("a", "b"), ("b", "c")]
         send(facts(["s"], [], chain + [("c", "d"), ("c", "e")]), "insert")
-        assert beyond() == {("d", "4"), ("e", "4")}
+        with comparing():
+            assert beyond() == {("d", "4"), ("e", "4")}
         send({"beta__alpha": [("c", "d"), ("c", "e")]}, "delete")
-        assert beyond() == set()
+        with comparing():
+            assert beyond() == set()
     finally:
         stop(name)

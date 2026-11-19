@@ -64,8 +64,8 @@ def _checked(view: TypedView, domain: Pack, theory: Pack) -> TypedView:
     _profile(theory)
     if view.obligations or domain.seals:
         raise ViewRuleError('unsupported pending obligations or sealed source profile')
-    if any(len(k.union) != 1 for k in view.kinds) or any(len(a.paths) != 1 for a in view.arrows):
-        raise ViewRuleError('unsupported union: one source branch and one path only')
+    if any(len(a.paths) != 1 for a in view.arrows):
+        raise ViewRuleError('unsupported union: one path per arrow only')
     if {k.name for k in view.kinds} != set(theory.kinds):
         raise ViewRuleError('incomplete theory kind map')
     declared = {s.table for k in theory.kinds.values() for s in k.slots.values() if s.arrow}
@@ -87,7 +87,8 @@ def _checked(view: TypedView, domain: Pack, theory: Pack) -> TypedView:
         raise ViewRuleError('unsupported endpoint identity: expected one canonical source root')
     root = next(iter(roots))
     id_type = domain.kinds[root].id_type
-    if id_type not in rules_dl.SQL or any(theory.kinds[theory.root(k.name)].id_type != id_type for k in view.kinds):
+    if (id_type not in rules_dl.SQL or any(theory.kinds[theory.root(k.name)].id_type != id_type for k in view.kinds)
+            or any(domain.kinds[domain.root(b.name)].id_type != id_type for k in view.kinds for b in k.union)):
         raise ViewRuleError('unsupported endpoint ID types; no conversion or encoder is selected')
     return checked
 
@@ -118,9 +119,22 @@ def lower(view: TypedView, domain: Pack, theory: Pack, program: ir.Program,
     reserved = set(tables) | set(program.relations) | set(program.rules) | {r.witness_relation for r in program.rules.values()}
     if set(values) & reserved:
         raise ViewRuleError('derived relation map collides with an existing/base/witness name')
-    rule_ids = [f'{namespace}_m_{i}' for i, _ in enumerate(view.kinds)] + [f'{namespace}_a_{i}' for i, _ in enumerate(view.arrows)]
+    # A kind with one branch has one rule `m_<kind>`; a kind with several has `m_<kind>_<branch>` per branch and
+    # `u_<kind>_<i>_<j>` per pair of branches into the invariant relation `<namespace>_disjoint_<kind>`.
+    def branch_ids(i, mapped):
+        n = len(mapped.union)
+        return [f'{namespace}_m_{i}' if n == 1 else f'{namespace}_m_{i}_{b}' for b in range(n)]
+
+    def pair_ids(i, mapped):
+        n = len(mapped.union)
+        return [f'{namespace}_u_{i}_{a}_{b}' for a in range(n) for b in range(a + 1, n)]
+
+    rule_ids = ([r for i, k in enumerate(view.kinds) for r in branch_ids(i, k) + pair_ids(i, k)]
+                + [f'{namespace}_a_{i}' for i, _ in enumerate(view.arrows)])
+    disjoint = {i: f'{namespace}_disjoint_{i}' for i, k in enumerate(view.kinds) if len(k.union) > 1}
     added = rule_ids + [f'{r}__witness' for r in rule_ids]
-    if len(set(added)) != len(added) or set(added) & (reserved | set(values)):
+    if (len(set(added)) != len(added) or set(added) & (reserved | set(values))
+            or set(disjoint.values()) & (reserved | set(values) | set(added))):
         raise ViewRuleError('generated rule/witness namespace collides')
     relations = {r['name']: r for r in doc['relations']}
 
@@ -152,10 +166,19 @@ def lower(view: TypedView, domain: Pack, theory: Pack, program: ir.Program,
 
     theory_tables = rules_dl.base_tables(theory)
     for i, mapped in enumerate(view.kinds):
-        branch = mapped.union[0].name
-        need(branch)
         derived(kinds[mapped.name], theory_tables[mapped.name])
-        rule(f'{namespace}_m_{i}', kinds[mapped.name], ('?v0',), [(branch, ('?v0',))], mapped.line)
+        for rid, branch in zip(branch_ids(i, mapped), mapped.union):
+            need(branch.name)
+            rule(rid, kinds[mapped.name], ('?v0',), [(branch.name, ('?v0',))], mapped.line)
+        if i in disjoint:
+            # An identifier in two branches would make two domain elements one theory element: a violation.
+            relations[disjoint[i]] = {'name': disjoint[i], 'role': 'derived', 'module': namespace, 'invariant': True,
+                                      'explain': 'on_demand', 'key': [{'name': n, 'type': t}
+                                                                      for n, t in theory_tables[mapped.name]]}
+            pairs = [(a, b) for a in range(len(mapped.union)) for b in range(a + 1, len(mapped.union))]
+            for rid, (a, b) in zip(pair_ids(i, mapped), pairs):
+                rule(rid, disjoint[i], ('?v0',), [(mapped.union[a].name, ('?v0',)), (mapped.union[b].name, ('?v0',))],
+                     mapped.line)
     for i, mapped in enumerate(view.arrows):
         path = mapped.paths[0]
         variables = tuple(f'?v{n}' for n in range(len(path.steps) + 1))

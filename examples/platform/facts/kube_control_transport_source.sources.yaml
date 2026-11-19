@@ -1,0 +1,7 @@
+default:
+  kind: tool
+  name: Vendor transport inspection
+  revision: release-1.32
+  position: L16
+  url: 'https://raw.githubusercontent.com/kubernetes/website/release-1.32/content/en/docs/reference/networking/ports-and-protocols.md'
+  fragment_sha256: 74bd31966edb891128c4e7cd6dbcc6799d1250c8eb919a18042e1876e78607f2

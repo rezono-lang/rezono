@@ -1,0 +1,60 @@
+{
+  "source": "use lib as terms\nkind Holder world closed\n  party: terms.Party\n  others: terms.Party*",
+  "format": "rezono.module/1",
+  "module": {
+    "rezono": "0",
+    "pack": "sample",
+    "use": [
+      {
+        "use": "lib",
+        "as": "terms"
+      }
+    ],
+    "decls": [
+      {
+        "kind": "Holder",
+        "world": "closed",
+        "slots": [
+          {
+            "slot": "party",
+            "type": "terms.Party"
+          },
+          {
+            "slot": "others",
+            "type": "terms.Party",
+            "card": "*"
+          }
+        ],
+        "derived": []
+      }
+    ]
+  },
+  "rejections": [
+    {
+      "from": "party: terms.Party",
+      "to": "party: Terms.Party"
+    },
+    {
+      "from": "party: terms.Party",
+      "to": "party: terms.party"
+    }
+  ],
+  "knownDiagnostics": [
+    {
+      "code": "R000",
+      "span": {
+        "text": "terms",
+        "start": 72,
+        "end": 77
+      }
+    },
+    {
+      "code": "R000",
+      "span": {
+        "text": "terms",
+        "start": 94,
+        "end": 99
+      }
+    }
+  ]
+}

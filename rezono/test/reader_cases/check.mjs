@@ -57,10 +57,12 @@ export function mismatch(file) {
     const source = 'rezono 0\npack sample\n' + fixture.source + '\n';
     const { form, diagnostics } = moduleForm(source);
     if (!form) {
-        assert.deepEqual(diagnostics, fixture.knownDiagnostics, 'The reader returned a different diagnostic.');
-        return JSON.stringify(diagnostics);
+        // Compare the code and place only: the list of expected tokens grows with every new construct.
+        assert.deepEqual(diagnosticPlaces(diagnostics), diagnosticPlaces(fixture.knownDiagnostics),
+            'The reader returned a different diagnostic.');
+        return JSON.stringify(diagnosticPlaces(diagnostics));
     }
-    assert.equal(form.format, 'rezono.module/2');
+    assert.equal(form.format, fixture.format ?? 'rezono.module/2');
     if (fixture.module) {
         assert.deepEqual(form.module, fixture.module);
         assert.deepEqual(moduleFromJson(JSON.parse(moduleToJson(form))), form);
@@ -72,9 +74,12 @@ export function mismatch(file) {
         assert.ok(place, `Missing authored span at ${at}.`);
         assert.equal([...source].slice(Number(place.start), Number(place.end)).join(''), name);
     }
-    for (const { from, to } of fixture.rejections ?? []) {
+    for (const { from, to, diagnostics } of fixture.rejections ?? []) {
         assert.ok(source.includes(from), `No source to replace: ${from}`);
-        assert.equal(moduleForm(source.replace(from, to)).form, undefined, `Accepted ${to}`);
+        const refused = moduleForm(source.replace(from, to));
+        assert.equal(refused.form, undefined, `Accepted ${to}`);
+        // A rejection that records its diagnostics fixes their code and place in the replaced source.
+        if (diagnostics) assert.deepEqual(diagnosticPlaces(refused.diagnostics), diagnostics, `Refused ${to} differently`);
     }
     return null;
 }

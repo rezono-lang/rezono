@@ -14,9 +14,11 @@ from test_replay_fixed_point import boundary, execute, setup_recording
     raises=AssertionError,
     reason=(
         "Read decisions/safe-step-rounds.md. Extend the ordinary typed recording and replay path for certified "
-        "rounds. Waits for test_step_variant_rows, test_transition_certificate, test_step_safety_reasons "
-        "and test_batch_visible_prefixes. Preserve the selected frontier, durable attempt identity, "
-        "stale-cut refusal and latest observation precedence."
+        "rounds. Check each recorded certificate with rezono_checker.transition and supply only admitted ones "
+        "as loop_certified_step and loop_certified_member (decisions/loop-certificate-admission.md). Preserve "
+        "the selected frontier, durable attempt identity, stale-cut refusal and latest observation precedence. "
+        "Waits for test_supplied_verdicts_authorize_nothing, test_round_claim_is_durable_and_exclusive and "
+        "test_round_submit_follows_the_certified_claim."
     ),
 )
 def test_certified_round_replay(tmp_path, capsys):

@@ -74,11 +74,6 @@ def recorded_design(*, automatic_term=True, covered=True, physical=True):
     return {"profile-design.yaml": records, "profile-decisions.yaml": approved, "profile-grants.yaml": access}
 
 
-@pytest.mark.xfail(strict=True, raises=MissingReaderQuestion, reason=(
-    "Provide probe-profiles and publish probe-profile-budgets reader metadata and grounds. "
-    "Compile membership counts, phase/variant budgets, effective physical decisions and complete-scope "
-    "findings. Read decisions/run-probe-profile-budgets.md. Write in run/packs/probe-profiles/."
-))
 def test_probe_profile_budgets(tmp_path):
     registered(QUESTION, __file__, "test_probe_profile_budgets")
     checked(PACK, tmp_path / "plain").question(QUESTION)
@@ -107,3 +102,54 @@ def test_probe_profile_budgets(tmp_path):
     withdrawn = checked(PACK, tmp_path / "withdrawn", recorded_design(physical=False))
     assert withdrawn.rows("probe_physical") == set()
     assert withdrawn.rows(budgets) == EXPECTED_BUDGETS
+
+
+def test_probe_profile_terms_follow_the_governing_snapshot(tmp_path):
+    # An older partial snapshot of the same profile, on a day when the physical requirement and the assisted
+    # install budget were still in force. Both end on the planning day, so neither may be published.
+    design = recorded_design(physical=False)
+    records, approved = design["profile-design.yaml"], design["profile-decisions.yaml"]
+    records["reference_date"].append({"id": "earlier-day", "title": "2026-01-10", "day": 20260110})
+    records["probe_snapshot"].append({"id": "earlier-cut", "profile": PROFILE, "reference_date": "earlier-day",
+                                      "membership_complete": "partial"})
+    assisted = next(row for row in approved["decision"] if row["id"] == "decide-assisted-install")
+    assisted.update(decided_on="2026-01-01", valid_from="2026-01-01", valid_from_day=20260101,
+                    state="withdrawn", valid_until=DAY, valid_until_day=20260115)
+    current = checked(PACK, tmp_path / "two-snapshots", design)
+    assert current.rows("probe_physical") == set()
+    assert current.rows("probe_physical_status") == {(PROFILE, "cell-one", "missing_requirement")}
+    assert current.rows("probe_budget") == EXPECTED_BUDGETS - {(PROFILE, "assisted", "install", "900")}
+    assert current.rows("probe_budget_status") == {(PROFILE, "assisted", "install", "missing_budget")}
+
+
+def test_probe_profile_counts_and_findings_follow_the_governing_snapshot(tmp_path):
+    # An older snapshot certified the membership and the terms; the governing snapshot after it is partial and
+    # has no coverage. Counts and missing-term findings may rest only on the governing snapshot.
+    design = recorded_design(automatic_term=False)
+    records = design["profile-design.yaml"]
+    records["reference_date"].append({"id": "later-day", "title": "2026-01-20", "day": 20260120})
+    records["probe_snapshot"].append({"id": "later-cut", "profile": PROFILE, "reference_date": "later-day",
+                                      "membership_complete": "partial"})
+    current = checked(PACK, tmp_path / "later-partial", design)
+    assert current.rows("probe_cluster_size") == set()
+    assert current.rows("probe_profile_total") == set()
+    assert current.rows("probe_budget") == EXPECTED_BUDGETS - {(PROFILE, "automatic", "install", "420")}
+    assert current.rows("probe_budget_status") == {(PROFILE, "automatic", "install", "unknown")}
+    assert current.rows("probe_physical") == {(PROFILE, "cell-one", "required")}
+    assert current.rows("probe_physical_status") == set()
+
+
+def test_probe_profile_tie_on_the_latest_day_certifies_nothing(tmp_path):
+    # A complete and a partial snapshot of the same profile share the latest day. Neither governs alone, so the
+    # membership is not certified: no counts, and a missing term is unknown rather than absent.
+    design = recorded_design(automatic_term=False)
+    design["profile-design.yaml"]["probe_snapshot"].append(
+        {"id": "planning-partial", "profile": PROFILE, "reference_date": "planning-day",
+         "membership_complete": "partial"})
+    current = checked(PACK, tmp_path / "tied-snapshots", design)
+    assert current.rows("probe_cluster_size") == set()
+    assert current.rows("probe_profile_total") == set()
+    assert current.rows("probe_budget") == EXPECTED_BUDGETS - {(PROFILE, "automatic", "install", "420")}
+    assert current.rows("probe_budget_status") == {(PROFILE, "automatic", "install", "unknown")}
+    assert current.rows("probe_physical") == {(PROFILE, "cell-one", "required")}
+    assert current.rows("probe_physical_status") == set()

@@ -1,0 +1,36 @@
+id: P04
+class: invalid
+status: settled
+schema:
+  from: fixture.schema.json
+  merge:
+    imports:
+      r:
+        pack: regions
+        schema: s-3737373737373737373737373737373737373737373737373737373737373737
+        manifest: m-7
+        dataset: d-a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9
+    kinds:
+      Host:
+        slots:
+          zone:
+            card: '1'
+            ref: r.Zone
+            states:
+            - known
+form: row
+input:
+  $kind: Host
+  $id: h7
+  memory_need: 1 GiB
+  owner:
+    $na: ''
+  tags: []
+  zone:
+    $ref: regions@s-3737373737373737373737373737373737373737373737373737373737373737@m-7@d-b4b4b4b4b4b4b4b4b4b4b4b4b4b4b4b4b4b4b4b4b4b4b4b4b4b4b4b4b4b4b4b4:Zone/dmz
+expect:
+  accept: false
+  error: hash pin differs from the import
+note: Only the dataset hash of the reference differs from the import; it is well formed.
+sources:
+- publication/rezono_publication/l0.py, _reference

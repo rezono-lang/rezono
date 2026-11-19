@@ -7,7 +7,7 @@ from rezono_compiler import operate
 
 
 def write_change(tmp_path, **extra):
-    doc = {"format": "rezono.operations/1", "pack": "atlas",
+    doc = {"format": "rezono.operations/1", "pack": "sample",
            "operations": [{"op": "rename", "kind": "Point", "to": "Mark"}], **extra}
     path = tmp_path / "change.yaml"
     path.write_text(yaml.safe_dump(doc), encoding="utf-8")

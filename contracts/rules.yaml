@@ -74,6 +74,13 @@ enums:
       le: {}
       gt: {}
       ge: {}
+  CompareAs:
+    description: >-
+      The declared comparison type of a condition (decisions/ordered-rule-scalars.md). Both operands are text
+      variables bound by positive literals; the operator applies to the resulting order.
+    permissible_values:
+      binary_text: {description: "The UTF-8 bytes of the text: the first differing byte decides, a proper prefix sorts first. No locale, no normalization."}
+      utc_instant: {description: "YYYY-MM-DDTHH:mm:ss[.digits]Z on a Gregorian day in years 0001 to 9999, seconds 00 to 59. Ordered by the bytes without the Z and without trailing fraction zeros (and the separator of an empty fraction). A malformed value satisfies no operator, ne included."}
   ArithmeticOperator:
     description: >-
       Bounded integer arithmetic. In a recursive rule only as a counter with an explicit bound:
@@ -195,6 +202,7 @@ classes:
       op: {range: ComparisonOperator, required: true}
       left: {range: Term, required: true}
       right: {range: Term, required: true}
+      compare_as: {range: CompareAs, description: "Absent: the untyped comparison (equality of text, order of integers)."}
 
   Assignment:
     attributes:

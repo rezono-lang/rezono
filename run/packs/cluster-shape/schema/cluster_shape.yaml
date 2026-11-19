@@ -1,0 +1,37 @@
+id: https://rezono.org/run/cluster-shape
+name: cluster_shape
+description: Demand and observed machines from which the shape of a run cluster is derived.
+in_language: en
+imports: [linkml:types]
+default_range: string
+annotations:
+  layer: facts
+
+enums:
+  ClusterRole:
+    permissible_values:
+      controller:
+      worker:
+
+classes:
+  Cluster:
+    attributes:
+      id: {identifier: true}
+      plan_hash: {}
+  Line:
+    description: The cluster's demand for one SKU in one role.
+    attributes:
+      id: {identifier: true}
+      cluster: {range: Cluster, required: true}
+      sku: {}
+      role: {range: ClusterRole}
+      quantity: {range: integer, minimum_value: 0}
+  Machine:
+    description: A machine observed after the order, with the disks it reports.
+    attributes:
+      id: {identifier: true}
+      plan_hash: {}
+      sku: {}
+      address: {}
+      boot_disk: {}
+      data_disk: {}

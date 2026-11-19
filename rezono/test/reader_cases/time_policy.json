@@ -1,0 +1,47 @@
+{
+  "source": "as of 2026-11-10 known 2026-11-12",
+  "module": {
+    "rezono": "0",
+    "pack": "sample",
+    "use": [],
+    "decls": [
+      {
+        "asOf": "2026-11-10",
+        "known": "2026-11-12"
+      }
+    ]
+  },
+  "spanNames": {
+    "/decls/0": "as of"
+  },
+  "rejections": [
+    {
+      "from": "as of 2026-11-10 known 2026-11-12",
+      "to": "as of 2026-11-10 known 2026-11-12\nas of 2026-11-11 known 2026-11-12"
+    },
+    {
+      "from": "2026-11-10",
+      "to": "2026-02-30",
+      "diagnostics": [
+        {
+          "code": "R012",
+          "span": {
+            "text": "2026-02-30",
+            "start": 27,
+            "end": 37
+          }
+        }
+      ]
+    }
+  ],
+  "knownDiagnostics": [
+    {
+      "code": "R000",
+      "span": {
+        "text": "as",
+        "start": 21,
+        "end": 23
+      }
+    }
+  ]
+}

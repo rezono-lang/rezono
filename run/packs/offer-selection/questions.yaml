@@ -1,0 +1,22 @@
+# The explanation question every answer rests on, and the reader question of the physical and nested
+# allocation example. The pack does not import std-explain, so it states the grounds question
+# itself, as std-explain does.
+format: rezono.questions/1
+questions:
+  - term: grounds
+    start: present
+    applies_to: {derivation: conclusion}
+    steps:
+      - trace: {direction: back, depth: all}
+    answer: route
+    limit: 200
+reader:
+  - id: physical-or-nested
+    title_message: reader.physical_or_nested
+    about_message: reader.physical_or_nested.about
+    relation: allocation_choice
+    proof: grounds
+    columns:
+      - {column: workload, message: reader.physical_or_nested.workload, element: allocation_workload}
+      - {column: scope, message: reader.physical_or_nested.scope, element: allocation_scope}
+      - {column: candidate, message: reader.physical_or_nested.candidate, element: allocation_candidate}

@@ -1,0 +1,7 @@
+default:
+  kind: tool
+  name: Vendor transport inspection
+  revision: 26.0.0
+  position: L51
+  url: 'https://raw.githubusercontent.com/keycloak/keycloak/26.0.0/docs/guides/server/enabletls.adoc'
+  fragment_sha256: 581ee2b53cc3cdf69c6b2b7fb6c81016a252b274ee9ead37ba83497400e75867
