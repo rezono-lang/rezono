@@ -1,0 +1,14 @@
+@locale en
+---
+arrow.total = {{Every {$kind} has exactly one {$arrow}.}}
+arrow.partial = {{Every {$kind} has at most one {$arrow}.}}
+attribute.total = {{Every {$kind} has exactly one {$attribute}.}}
+attribute.partial = {{Every {$kind} has at most one {$attribute}.}}
+is_a = {{Every {$kind} is a {$parent}.}}
+unique_key = {{{$key} belongs to at most one {$kind}.}}
+path_equation = {{For every {$kind}: {$equation}.}}
+rule.mid = {{This item is open.}}
+rule.other = {{This item is open as well.}}
+rule.tagged = {{This item belongs to the left cohort.}}
+rule.unmarked = {{This item is not open.}}
+rule.total = {{This is the size of the left cohort.}}

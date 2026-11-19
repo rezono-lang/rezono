@@ -1,0 +1,153 @@
+{
+  "source": "kind Application world closed\n  income: Int\nextend Application\n  derived income_limit: Int = income + 1\n    output income_limit.cents\n  derived cost_share: Int\n    output cost_share.cents\n    definition full_rate when income <= 100 then income * 2\n    definition above_the_limit when income > 100 then 0",
+  "module": {
+    "rezono": "0",
+    "pack": "sample",
+    "use": [],
+    "decls": [
+      {
+        "kind": "Application",
+        "world": "closed",
+        "slots": [
+          {
+            "slot": "income",
+            "type": "Int"
+          }
+        ],
+        "derived": []
+      },
+      {
+        "extend": "Application",
+        "derived": [
+          {
+            "derived": "income_limit",
+            "type": "Int",
+            "value": {
+              "arith": [
+                "+",
+                {
+                  "path": [
+                    "income"
+                  ]
+                },
+                {
+                  "lit": "1"
+                }
+              ]
+            },
+            "output": {
+              "relation": "income_limit",
+              "slot": "cents"
+            }
+          },
+          {
+            "derived": "cost_share",
+            "type": "Int",
+            "output": {
+              "relation": "cost_share",
+              "slot": "cents"
+            },
+            "definitions": [
+              {
+                "name": "full_rate",
+                "when": {
+                  "cmp": [
+                    "<=",
+                    {
+                      "path": [
+                        "income"
+                      ]
+                    },
+                    {
+                      "lit": "100"
+                    }
+                  ]
+                },
+                "value": {
+                  "arith": [
+                    "*",
+                    {
+                      "path": [
+                        "income"
+                      ]
+                    },
+                    {
+                      "lit": "2"
+                    }
+                  ]
+                }
+              },
+              {
+                "name": "above_the_limit",
+                "when": {
+                  "cmp": [
+                    ">",
+                    {
+                      "path": [
+                        "income"
+                      ]
+                    },
+                    {
+                      "lit": "100"
+                    }
+                  ]
+                },
+                "value": {
+                  "lit": "0"
+                }
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "spanNames": {
+    "/decls/1/derived/1": "cost_share",
+    "/decls/1/derived/1/definitions/1": "above_the_limit"
+  },
+  "rejections": [
+    {
+      "from": "    output income_limit.cents",
+      "to": "    output income_limit"
+    },
+    {
+      "from": "    definition above_the_limit when income > 100 then 0",
+      "to": "    definition full_rate when income > 100 then 0"
+    }
+  ],
+  "knownDiagnostics": [
+    {
+      "code": "R000",
+      "span": {
+        "text": "income_limit",
+        "start": 136,
+        "end": 148
+      }
+    },
+    {
+      "code": "R000",
+      "span": {
+        "text": "cost_share",
+        "start": 192,
+        "end": 202
+      }
+    },
+    {
+      "code": "R000",
+      "span": {
+        "text": "full_rate",
+        "start": 224,
+        "end": 233
+      }
+    },
+    {
+      "code": "R000",
+      "span": {
+        "text": "above_the_limit",
+        "start": 284,
+        "end": 299
+      }
+    }
+  ]
+}

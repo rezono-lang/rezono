@@ -1,13 +1,29 @@
 """A small client for the Feldera HTTP API, for engine tests and measurements (FELDERA_URL)."""
 
+from contextlib import contextmanager
 import json
 import os
+import shutil
 import time
 import urllib.parse
 import urllib.request
 from pathlib import Path
 
+from rezono_compiler import feldera_names
+
 URL = os.environ.get("FELDERA_URL")
+
+
+class OracleMismatch(AssertionError):
+    """A comparison of independently obtained records or witnesses failed."""
+
+
+@contextmanager
+def comparing():
+    try:
+        yield
+    except AssertionError as error:
+        raise OracleMismatch("Feldera comparison differs from its reference") from error
 
 
 def call(method, path, body=None, raw=False):
@@ -18,11 +34,16 @@ def call(method, path, body=None, raw=False):
     return text if raw else (json.loads(text) if text.strip() else None)
 
 
-def wait(name, field, done, timeout=3600):
-    end = time.time() + timeout
-    while time.time() < end:
+def wait(name, field, done, timeout=3600, *, telemetry=False):
+    started = time.monotonic()
+    last = None
+    while time.monotonic() < started + timeout:
         p = call("GET", f"/v0/pipelines/{name}")
-        if p[field] in done:
+        state = p[field]
+        if telemetry and state != last:
+            record_storage(name, f"{field}={state} wait_seconds={time.monotonic() - started:.2f}")
+            last = state
+        if state in done:
             return p
         if p.get("program_status", "").endswith("Error"):
             raise RuntimeError(json.dumps(p.get("program_error"))[:4000])
@@ -46,31 +67,49 @@ def deploy(name, program, profile=None, workers=4, udf_rust="", udf_toml=""):
         call("DELETE", f"/v0/pipelines/{name}")
     except urllib.error.HTTPError:
         pass
-    start = time.time()
+    start = time.monotonic()
+    record_storage(name, f"submit_sql bytes={len(program.encode('utf-8'))}")
     call("PUT", f"/v0/pipelines/{name}", {"name": name, "program_code": program, "runtime_config": {"workers": workers},
                                           "program_config": {"profile": profile}, "udf_rust": udf_rust, "udf_toml": udf_toml})
-    wait(name, "program_status", {"Success"})
-    compiled = time.time() - start
+    wait(name, "program_status", {"Success"}, telemetry=True)
+    compiled = time.monotonic() - start
+    record_storage(name, f"compiled compile_seconds={compiled:.2f}")
+    start = time.monotonic()
     call("POST", f"/v0/pipelines/{name}/start")
-    wait(name, "deployment_status", {"Running"})
+    wait(name, "deployment_status", {"Running"}, telemetry=True)
+    record_storage(name, f"running start_seconds={time.monotonic() - start:.2f}")
     return compiled
 
 
-def stop(name):
+def stop(name, *, delete=False):
     call("POST", f"/v0/pipelines/{name}/stop?force=true")
     wait(name, "deployment_status", {"Stopped"})
     call("POST", f"/v0/pipelines/{name}/clear")
     wait(name, "storage_status", {"Cleared"})
+    if delete or os.environ.get("FELDERA_ORACLE_REPORTS"):
+        # The job keeps the isolated compiler and its dependencies warm across programs.
+        # Retire this pipeline's catalog and state before compiling the next one.
+        call("DELETE", f"/v0/pipelines/{name}")
+        record_storage(name, "retired")
+
+
+def record_storage(name, phase):
+    if reports := os.environ.get("FELDERA_ORACLE_REPORTS"):
+        message = f"{name}: {phase} runner_free_bytes={shutil.disk_usage(reports).free}"
+        print(message, flush=True)
+        with (Path(reports) / "storage.log").open("a", encoding="utf-8") as log:
+            print(message, file=log)
 
 
 def push(name, updates, chunk=100_000):
     """Send {table: [{"insert"|"delete": row}]} and return the completion tokens."""
     tokens = []
     for table, rows in updates.items():
+        endpoint = urllib.parse.quote(feldera_names.physical(table))
         for k in range(0, len(rows), chunk):
             q = urllib.parse.urlencode({"format": "json", "update_format": "insert_delete", "array": "true"})
             body = json.dumps(rows[k:k + chunk]).encode()
-            tokens.append(call("POST", f"/v0/pipelines/{name}/ingress/{urllib.parse.quote(table)}?{q}", body)["token"])
+            tokens.append(call("POST", f"/v0/pipelines/{name}/ingress/{endpoint}?{q}", body)["token"])
     return tokens
 
 
@@ -84,3 +123,7 @@ def processed(name, tokens):
 def query(name, sql):
     q = urllib.parse.urlencode({"sql": sql, "format": "json"})
     return [json.loads(x) for x in call("GET", f"/v0/pipelines/{name}/query?{q}", raw=True).splitlines() if x]
+
+
+def read_relation(name, relation):
+    return query(name, f"SELECT * FROM {feldera_names.quoted(relation)}")

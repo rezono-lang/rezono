@@ -284,8 +284,8 @@ def objects(form: dict) -> dict[str, bytes]:
 
 
 def verify(data: dict[str, bytes], form: dict, given: dict, bundle: dict, full) -> tuple[dict, dict]:
-    """A form read back from its bytes alone, as a reader of the role's prefix would, and held against the role's
-    own rows. Returns its hashes and what was read back (`schema`, `rows`: what the exports are made from); raises
+    """A form read back from its bytes alone, as a reader of the role's prefix would, and held against the schema
+    the definition gives the role and against the role's own rows. Returns its hashes and what was read back (`schema`, `rows`: what the exports are made from); raises
     Blocked with what differs. The hashes were computed from the form's
     schema and rows (`rezono_publication.hash`, deterministic); the bytes must read back to exactly those, so the hashes
     follow from the bytes too without computing them a second time."""
@@ -300,7 +300,9 @@ def verify(data: dict[str, bytes], form: dict, given: dict, bundle: dict, full) 
         raise Blocked("the bytes do not read back to the form")
     if sid != want["schema"] or want != form["hashes"]:
         raise Blocked("the hashes are not those of the schema and rows")
-    _, plan = rd.schema_document(bundle, full)
+    defined, plan = rd.schema_document(bundle, full)
+    if schema != defined:
+        raise Blocked("the schema is not the one the definition gives the role (its bundle)")
     problems = rd.differences(schema, plan, rows, given)
     if problems:
         raise Blocked(f"{len(problems)} difference(s) from the role's rows (first: {'; '.join(problems[:3])})")

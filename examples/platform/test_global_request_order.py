@@ -16,9 +16,19 @@ REQUESTS = (
     ("reed/alpha", "00.00000010Z"),
 )
 EXPECTED = {"reed/zulu": 1, "elm/alpha": 2, "elm/zulu": 3, "reed/alpha": 4}
+# Whole-number ranks that the adapter computes from the whole request set; they are not source values.
+ADAPTER_KEYS = {
+    "tenant_service_request__global_submitted_at_key": {"reed/zulu": "elm/alpha", "elm/alpha": "reed/zulu"},
+    "tenant_service_request__tenant_key": {"elm/alpha": "reed/alpha", "reed/alpha": "elm/alpha"},
+    "tenant_service_request__global_service_key": {"elm/alpha": "elm/zulu", "elm/zulu": "elm/alpha"},
+}
 
 
 class MissingGlobalRequestOrdinal(AssertionError):
+    pass
+
+
+class AdapterKeyDecidesOrder(AssertionError):
     pass
 
 
@@ -27,8 +37,7 @@ def assert_ordinals(rows, expected):
     assert sorted(map(tuple, rows)) == sorted(expected.items())
 
 
-def test_global_request_ordinals_use_exact_time_tenant_and_service(tmp_path):
-    teams = tmp_path / "teams"
+def write_requests(teams):
     for request, second in reversed(REQUESTS):
         path = teams / request / "request.json"
         path.parent.mkdir(parents=True)
@@ -36,6 +45,11 @@ def test_global_request_ordinals_use_exact_time_tenant_and_service(tmp_path):
             "profile": "development", "items": {"cluster": "small"}, "connections": [],
             "submittedAt": "2026-01-02T00:00:" + second,
         }), encoding="utf-8")
+
+
+def test_global_request_ordinals_use_exact_time_tenant_and_service(tmp_path):
+    teams = tmp_path / "teams"
+    write_requests(teams)
     catalog = ROOT / "tenant-catalog.json"
     try:
         rows = preview(teams, catalog, "relation", "request_ordinal")
@@ -70,3 +84,32 @@ def test_global_request_ordinals_use_exact_time_tenant_and_service(tmp_path):
     path.write_text(json.dumps(changed), encoding="utf-8")
     assert_ordinals(preview(teams, with_receipt, "relation", "request_ordinal"),
                     {"elm/alpha": 1, "elm/zulu": 2, "reed/alpha": 3, "reed/zulu": 4})
+
+
+@pytest.mark.xfail(strict=True, raises=AdapterKeyDecidesOrder, reason=(
+    "Order request_ordinal in examples/platform/rules/request_ordinal.dl on the source submission instant, "
+    "tenant and service, not on adapter rank keys. Depends on test_ordered_rule_scalars_compiler_preserves_exact_values "
+    "and test_ordered_rule_scalars_checker_recomputes_raw_operands (Condition.compare_as for utc_instant and "
+    "binary_text). Read decisions/ordered-rule-scalars.md."))
+def test_adapter_rank_keys_do_not_decide_the_global_request_order(tmp_path):
+    teams = tmp_path / "teams"
+    write_requests(teams)
+    model = pack.read(ROOT)
+    inputs = preview_inputs(model, ROOT, teams, ROOT / "tenant-catalog.json")
+    assert_ordinals(relation_rows(model, inputs, "request_ordinal"), EXPECTED)
+
+    # Each case changes only adapter keys; every submission instant, tenant and service stays as submitted.
+    cases = {}
+    for relation, swap in ADAPTER_KEYS.items():
+        keys = {row[0]: row[1] for row in inputs[relation]}
+        mutated = [(request, keys[swap.get(request, request)]) for request, _ in inputs[relation]]
+        assert sorted(mutated) != sorted(map(tuple, inputs[relation])), relation
+        cases[f"swapped {relation}"] = inputs | {relation: mutated}
+    cases["without adapter keys"] = {name: rows for name, rows in inputs.items() if name not in ADAPTER_KEYS}
+    changed = {}
+    for case, rows in cases.items():
+        ordinals = dict(map(tuple, relation_rows(model, rows, "request_ordinal")))
+        if ordinals != EXPECTED:
+            changed[case] = ordinals
+    if changed:
+        raise AdapterKeyDecidesOrder(f"adapter keys changed the request order: {changed}")

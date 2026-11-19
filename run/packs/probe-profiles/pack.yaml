@@ -1,0 +1,8 @@
+name: probe-profiles
+version: 0.1.0
+default_language: en
+imports:
+  - {name: std-explain, path: ../../../packs/std-explain, sha256: 72e2897cd9baaa4962cf2235f83a332262b4da1e6d34e82d5f64d8335e27be0b}
+  - {name: std-part, path: ../../../packs/std-part, sha256: 207f4f097f68e6dade792b714754e0f279ce2c948be8adce82108a3abc18cca9}
+  - {name: std-access, path: ../../../packs/std-access, sha256: cc117210daed394ec6ebbf7b270215c95c418865dd5292091e8315f428f5ee70}
+  - {name: std-decision, path: ../../../packs/std-decision, sha256: 2fd4cc60cc4f1c7dca42da2f5368a08a992de39df7cd7db205b9118dd1b8fe5a}

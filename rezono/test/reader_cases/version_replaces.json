@@ -1,0 +1,53 @@
+{
+  "source": "param quota: Int\n  version 1, valid 2026-01-01.., known 2025-09-16 = 5\n  version 2 replaces 1, valid 2026-01-01.., known 2025-09-16 = 6",
+  "format": "rezono.module/1",
+  "declarations": [
+    {
+      "param": "quota",
+      "type": "Int",
+      "versions": [
+        {
+          "version": "1",
+          "valid": [
+            "2026-01-01"
+          ],
+          "known": "2025-09-16",
+          "value": {
+            "lit": "5"
+          }
+        },
+        {
+          "version": "2",
+          "replaces": "1",
+          "valid": [
+            "2026-01-01"
+          ],
+          "known": "2025-09-16",
+          "value": {
+            "lit": "6"
+          }
+        }
+      ]
+    }
+  ],
+  "rejections": [
+    {
+      "from": "replaces 1",
+      "to": "replaces"
+    },
+    {
+      "from": "replaces 1",
+      "to": "replaces one"
+    }
+  ],
+  "knownDiagnostics": [
+    {
+      "code": "R000",
+      "span": {
+        "text": "replaces",
+        "start": 104,
+        "end": 112
+      }
+    }
+  ]
+}
