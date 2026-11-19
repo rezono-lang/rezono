@@ -1,0 +1,88 @@
+id: https://rezono.org/run/probe-profiles/design
+name: probe_profiles
+description: >-
+  The approved probe design and its approved terms: a profile, its cells, the planned clusters and members of each cell, the phases
+  and the storage variants. Identities only; no machine inventory or provider request is described here.
+in_language: en
+prefixes:
+  linkml: https://w3id.org/linkml/
+imports:
+  - linkml:types
+  - std-part:part
+  - std-decision:decision
+  - std-access:access
+default_range: string
+annotations:
+  layer: facts
+
+enums:
+  MembershipCoverage:
+    description: Whether the snapshot certifies that the profile membership is complete.
+    permissible_values:
+      complete: {description: "Every planned cell, cluster and member of the profile is recorded."}
+      partial: {description: "Some planned members may be missing from the records."}
+  PhysicalRequirement:
+    description: What a decision says about physical machines for a cell.
+    permissible_values:
+      required: {description: The cell runs on physical machines.}
+      optional: {description: Physical machines are explicitly permitted but not required.}
+
+classes:
+  ProbeProfile:
+    is_a: Constituent
+    description: A probe profile, the whole that its cells are part of.
+  ProbeCell:
+    is_a: Constituent
+    description: A cell of a profile. Its part_of is the profile.
+  ProbeCluster:
+    is_a: Constituent
+    description: A planned cluster of a cell. Its part_of is the cell.
+  ProbeMember:
+    is_a: Constituent
+    description: A planned member of a cluster. Its part_of is the cluster.
+  ProbePhase:
+    description: A phase of a probe. A phase keeps its identity when a variant sets another budget for it.
+    attributes:
+      id: {identifier: true}
+      precedes: {range: ProbePhase, multivalued: true, description: The phase that directly follows.}
+  ProbeStorageVariant:
+    description: A storage variant with its own installation method.
+    attributes:
+      id: {identifier: true}
+      storage: {required: true}
+      installation: {required: true}
+  ProbeSnapshot:
+    description: A recorded planning snapshot, with its reference day and the completeness of the membership.
+    attributes:
+      id: {identifier: true}
+      profile: {range: ProbeProfile, required: true}
+      reference_date: {range: ReferenceDate, required: true}
+      membership_complete: {range: MembershipCoverage, required: true}
+  ProbePhaseBudget:
+    description: The approved duration of one phase for one storage variant of one profile.
+    attributes:
+      id: {identifier: true}
+      profile: {range: ProbeProfile, required: true}
+      variant: {range: ProbeStorageVariant, required: true}
+      phase: {range: ProbePhase, required: true}
+      decision: {range: Decision, required: true}
+      seconds: {range: integer, minimum_value: 0, required: true}
+  ProbePhysicalRequirement:
+    description: A dated requirement about physical machines for one cell of a profile.
+    attributes:
+      id: {identifier: true}
+      profile: {range: ProbeProfile, required: true}
+      cell: {range: ProbeCell, required: true}
+      decision: {range: Decision, required: true}
+      requirement: {range: PhysicalRequirement, required: true}
+  ProbeTermCoverage:
+    description: A certification that the decision terms are complete for the scope of a snapshot.
+    attributes:
+      id: {identifier: true}
+      snapshot: {range: ProbeSnapshot, required: true}
+  ProbeBudgetReadGrant:
+    description: A role may read one phase budget, and the evidence it rests on.
+    attributes:
+      id: {identifier: true}
+      role: {range: Role, required: true}
+      budget: {range: ProbePhaseBudget, required: true}

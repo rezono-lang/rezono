@@ -20,7 +20,9 @@ from round_visibility_publication import checked_loop_publication
         "Read decisions/scoped-completeness.md sections 3 and 4. Reconstruct all nine visible "
         "boundaries from the retained effect declarations. Refuse overlapping withdrawals even when "
         "every submitted pair checks and the violating boundary was left out. Preserve observed "
-        "old rows and residual effects. Write in the Loop round admission path."
+        "old rows and residual effects. Write in the Loop round admission path. "
+        "Waits for test_completeness_receipt_exact_inventory: ready needs the std-completeness admission that "
+        "checks submitted evidence against the retained context and only then supplies a protected rule input."
     ),
 )
 def test_overlapping_withdrawals_break_availability(tmp_path):
