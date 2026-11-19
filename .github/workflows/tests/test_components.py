@@ -178,9 +178,22 @@ class RepositoryPullRequestSelectionTests(unittest.TestCase):
         declared = ci.declared_dependents(ROOT, head, folders, {})
         self.assertIn("compiler", selected)
         self.assertLessEqual(declared["compiler"], selected)  # edge/publisher declares rezono-compiler
-        self.assertLessEqual(set(ci.PR_FILE_CONSUMERS["compiler"]) & folders, selected)
+        self.assertLessEqual(set(ci.PR_FILE_CONSUMERS["compiler"]) & folders - ci.PR_DEFERRED_DEPENDENTS, selected)
         self.assertNotIn("tools/mcp", selected)
         self.assertLess(selected, folders)
+
+    def test_loop_and_run_are_deferred_dependents_of_a_pull_request_only(self):
+        self.assertEqual(ci.PR_DEFERRED_DEPENDENTS, {"loop", "run"})
+        path = "compiler/rezono_compiler/__init__.py"
+        selected, components, _ = self.selected(path)
+        self.assertTrue(selected.isdisjoint({"loop", "run"}), selected)
+        self.assertLessEqual({"loop", "run"}, {c.folder for c in ci.affected_components(components, [path])})
+        # The empty set restores them as pull request dependents.
+        with patch.object(ci, "PR_DEFERRED_DEPENDENTS", frozenset()):
+            restored, _, _ = self.selected(path)
+        self.assertEqual(restored, selected | {"loop", "run"})
+        # A change to the loop itself still runs it.
+        self.assertIn("loop", self.selected("loop/replay.py")[0])
 
     def test_the_queue_runs_at_least_the_pull_request_closure(self):
         for path in ("loop/replay.py", "loop/tests/test_case.py", "run/dispatch_policy.py",
@@ -425,15 +438,25 @@ class PullRequestSelectorTests(unittest.TestCase):
         reader = {"run/tests/test_replay.py": "from loop.tests.test_build_choice import CHOICE\n"}
         selected, summary = self.changed_matrix({"loop/tests/test_build_choice.py": "def test_choice(): pass\n"},
                                                 tree=reader)
-        self.assertEqual(selected, {"loop", "run", "examples"})
-        self.assertIn("- `run`: `loop/tests/test_build_choice.py` through `loop`", summary)
-        # The loop's own source runs its consumers as before.
+        self.assertEqual(selected, {"loop", "examples"})  # run is a deferred dependent
+        self.assertIn("- `examples`: `loop/tests/test_build_choice.py` through `loop`", summary)
+        # The loop's own source runs its consumers that are not deferred.
         selected, _ = self.changed_matrix({"loop/build_choice.py": "CHOICE = 2\n"})
-        self.assertEqual(selected, {"loop", "run", "examples"})
+        self.assertEqual(selected, {"loop", "examples"})
 
     def test_conftest_runs_the_component_closure(self):
         selected, _ = self.changed_matrix({"compiler/tests/conftest.py": "FIXTURE = 2\n"})
-        self.assertEqual(selected, {"compiler", "downstream", "loop", "run", "examples"})
+        self.assertEqual(selected, {"compiler", "downstream", "examples"})
+
+    def test_deferred_dependents_run_in_the_merge_queue(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root, base = self.repository(directory, LOOP_TREE, selector=False)
+            self.write(root, {"compiler/source.py": "VALUE = 1\n"})
+            self.commit(root)
+            self.assertEqual(self.matrix(root, "pull_request", base), {"compiler", "downstream", "examples"})
+            self.assertEqual(self.matrix(root, "merge_group", base), LOOP_EVERYTHING)
+        self.assertIn("examples", self.changed_matrix({"examples/demo/pack.yaml": "name: demo\n"})[0])
+        self.assertEqual(self.changed_matrix({"an-unknown-directory/x.yaml": "x: 1\n"})[0], LOOP_EVERYTHING)
 
     def test_build_rules_run_the_loop_and_the_compiler(self):
         selected, summary = self.changed_matrix({"build/rules/tasks.dl": ".decl task(id: symbol, at: number)\n"})

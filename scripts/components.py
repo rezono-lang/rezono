@@ -254,6 +254,11 @@ PR_FILE_CONSUMERS = {
     # examples/test_slip_claims.py draws the slip with the helpers of tests/slip (decisions/viewer-slip.md).
     "tests/slip": ("examples",),
 }
+# A pull request runs these components only when it changes them itself, a path it
+# changes is read by them, or the selection falls back to everything. As dependents
+# of another component they run in the merge queue (decisions/pr-deferred-dependents.md).
+# The empty set restores them as pull request dependents.
+PR_DEFERRED_DEPENDENTS = frozenset({"loop", "run"})
 # These are test entry points and a private subprocess helper, rather than inputs to
 # the installed packages. Their shared corpus is still routed by SHARED_READERS.
 PR_TEST_LEAVES = frozenset({
@@ -721,17 +726,23 @@ def pull_request_selection(components: list[Component], root: Path,
                 edges.setdefault(source, set()).update(set(consumers) & folders)
     except (OSError, ValueError, AttributeError, KeyError, TypeError, subprocess.CalledProcessError) as error:
         return everything(f"the selection failed ({type(error).__name__})")
-    affected = set()
+    # A deferred dependent is still traversed, so what depends on it runs.
+    touched = direct | pending
+    affected, deferred = set(), set()
     queue = sorted(pending)
     while queue:
         folder = queue.pop(0)
-        if folder not in affected:
+        if folder in affected or folder in deferred:
+            continue
+        if folder in PR_DEFERRED_DEPENDENTS and folder not in touched:
+            deferred.add(folder)
+        else:
             affected.add(folder)
-            for consumer in sorted(edges.get(folder, ())):
-                if consumer not in reasons:
-                    reasons[consumer] = f"`{origins[folder]}` through `{folder}`"
-                    origins[consumer] = origins[folder]
-                queue.append(consumer)
+        for consumer in sorted(edges.get(folder, ())):
+            if consumer not in reasons:
+                reasons[consumer] = f"`{origins[folder]}` through `{folder}`"
+                origins[consumer] = origins[folder]
+            queue.append(consumer)
     return [c for c in components if c.folder in direct | affected], reasons
 
 
