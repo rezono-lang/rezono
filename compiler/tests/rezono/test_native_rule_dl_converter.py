@@ -109,15 +109,19 @@ def test_native_rule_dl_converter():
     owner = _input("base", "rules/summary.dl", OWNER)
     extension = _input("client", "rules/extra.dl", EXTENSION)
     plan = converter.convert_modules([owner, extension], SCHEMA, {"client": {"policy": "base"}})
+    # Clause IDs are the converter's own deterministic choice (decisions/language-expression-semantics.md §4):
+    # they must be distinct, while ownership and each clause's local origin are fixed.
+    ids = [clause.pop("id") for clause in plan["clauses"]]
+    assert len(set(ids)) == len(ids) and all(isinstance(identifier, str) and identifier for identifier in ids)
     assert plan == {
         "modules": [
             {"pack": "base", "stem": "summary", "decls": [SIGNATURE, TALLY]},
             {"pack": "client", "stem": "extra", "decls": [EXTRA]},
         ],
         "clauses": [
-            {"id": "tally_1", "owner_pack": "base", "owner_module": "summary",
+            {"owner_pack": "base", "owner_module": "summary",
              "file": "rules/summary.dl", "line": 7, "column": 3},
-            {"id": "tally_2", "owner_pack": "base", "owner_module": "summary",
+            {"owner_pack": "base", "owner_module": "summary",
              "file": "rules/extra.dl", "line": 2, "column": 1},
         ],
         "issues": [],
