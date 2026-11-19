@@ -67,7 +67,12 @@ def _evidence(evidence, scope, retained):
         "for edge/publisher/tests/test_completeness_publish.py--"
         "test_publisher_admits_receipts_only_with_a_trusted_context (the batch boundary admits the receipt and "
         "the checker admits it again) and for test_absent_checked_requires_readable_coverage (std-completeness "
-        "supplies complete). Today rezono_checker.evidence is missing (ImportError)."
+        "supplies complete). Both waits are green now. Requiring verified_receipt and verified_member in "
+        "complete_sweep.dl turns this test green but breaks 26 green records-only cases in "
+        "loop/tests/test_flow_drift_sweep.py, test_absence_coverage.py and test_flow_drift_rows.py, which "
+        "expect complete_sweep without a receipt; a planner must first give them verified receipts. The one-part "
+        "[node] member key cannot tie a receipt to run, collector and window; only equality with the recorded "
+        "inventory can."
     ),
 )
 def test_sweep_cannot_drop_expected_node(tmp_path):
