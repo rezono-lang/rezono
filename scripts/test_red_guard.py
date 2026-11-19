@@ -58,14 +58,17 @@ def planner_cases(reason, function):
     """The planner label allows protected changes; the guard still runs."""
     lifted = function.split(b"\n", 1)[1]
     other = b"def test_total():\n    assert total() == 4\n"
-    loose = b"@pytest.mark.xfail(reason=\"pending\")\n" + other
-    unrun = b"@pytest.mark.xfail(strict=True, run=False)\n" + other
+    # These marks carry a milestone, so that only strictness can refuse them.
+    loose = b"@pytest.mark.xfail(reason=\"M2: pending\")\n" + other
+    unrun = b"@pytest.mark.xfail(strict=True, run=False, reason=\"M2: pending\")\n" + other
     marked = b"@" + reason.replace(b"pending", b"M2: pending") + b"\n" + other
+    milestone = function.replace(b"pending", b"M2: pending")
     pair = function + b"\n" + other
 
-    def run(label, changes, expected, notes=()):
+    def run(label, changes, expected, notes=(), cause=None):
         errors, actual_notes = review(changes, planner=True)
-        if bool(errors) != expected or any(n not in actual_notes for n in notes):
+        if (bool(errors) != expected or any(n not in actual_notes for n in notes)
+                or (cause and not all(cause in e for e in errors))):
             raise AssertionError(f"{label}: errors {errors}, notes {actual_notes}")
         print(f"{'DENY' if errors else 'ALLOW'} with planner: {label}")
 
@@ -82,10 +85,12 @@ def planner_cases(reason, function):
         edit("examples/demo/expected/rows.json", b"[2]", b"[3]"),
     ], True)
     run("lifted mark alone", [edit("tests/test_count.py", function, lifted)], False)
-    run("new mark without strict=True", [edit("tests/test_total.py", other, loose)], True)
-    run("new mark with run=False", [edit("tests/test_total.py", other, unrun)], True)
-    run("strict mark loosened", [edit("tests/test_count.py", function, function.replace(b"strict=True, ", b""))], True)
-    run("new test file with a loose mark", [Change("tests/test_new.py", "A", None, loose)], True)
+    strictly = "needs strict=True"
+    run("new mark without strict=True", [edit("tests/test_total.py", other, loose)], True, cause=strictly)
+    run("new mark with run=False", [edit("tests/test_total.py", other, unrun)], True, cause=strictly)
+    run("strict mark loosened", [edit("tests/test_count.py", milestone, milestone.replace(b"strict=True, ", b""))],
+        True, cause=strictly)
+    run("new test file with a loose mark", [Change("tests/test_new.py", "A", None, loose)], True, cause=strictly)
     run("new strict mark with a new expectation", [
         edit("tests/test_total.py", other, marked.replace(b"== 4", b"== 5")),
     ], False)
