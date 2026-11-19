@@ -83,16 +83,6 @@ class MissingMaintainerMove(AssertionError):
     pass
 
 
-@pytest.mark.xfail(strict=True, raises=MissingReadmeLayout, reason=(
-    "extra: decisions/front-door.md: Waits for examples/test_front_door.py--test_contributing_says_what_holds_now "
-    "and examples/test_readme_layout.py--test_the_quickstart_check_compares_the_shown_output. Then rewrite "
-    "README.md in at most 150 lines and seven parts, in this order: # Rezono with one sentence of at most 25 words "
-    "that says what the repository's About says; ## What you get, at most five lines; ## Example; ## Try it; "
-    "## Read further, linking docs/tutorial.md, rezono/README.md, examples/ and docs/vision.md; ## Status, with "
-    "\"There is no release yet.\"; ## Licences and contributing, two lines linking NOTICE and CONTRIBUTING.md. "
-    "Make examples/test_front_door.py--test_the_second_step_shows_a_derived_row_and_its_witness and "
-    "examples/test_front_door.py--test_the_readme_names_no_release_that_is_not_there green in the same pull "
-    "request. README.md only."))
 def test_the_readme_has_seven_parts_in_one_screen():
     text = readme()
     parts = sections(text)
@@ -116,13 +106,6 @@ def test_the_readme_has_seven_parts_in_one_screen():
     assert "(NOTICE)" in closing[0] and "(CONTRIBUTING.md)" in closing[1], closing
 
 
-@pytest.mark.xfail(strict=True, raises=MissingReadmeExample, reason=(
-    "extra: decisions/front-door.md: Waits for examples/test_readme_layout.py--"
-    "test_the_readme_has_seven_parts_in_one_screen. Then, under ## Example of README.md and before the first "
-    "bash block, put three blocks from examples/subsidy: a yaml block with a few facts whose lines are lines of "
-    "examples/subsidy/facts; one rule copied from a rule file of examples/subsidy or examples/subsidy-scheme; a "
-    "text block with the answer and its witness, without a hash or a path, that appears word for word in the "
-    "text block under the second bash block. README.md only."))
 def test_the_example_answers_what_the_second_step_prints():
     text = readme()
     example = dict(sections(text)).get("Example", "")
@@ -204,12 +187,6 @@ def test_the_quickstart_check_compares_the_shown_output(tmp_path):
     assert "other" in shown and "first" in shown, shown
 
 
-@pytest.mark.xfail(strict=True, raises=MissingMaintainerMove, reason=(
-    "extra: decisions/front-door.md: Waits for examples/test_front_door.py--test_contributing_says_what_holds_now. "
-    "Then move the wheel build from README.md to rezono/README.md without naming a release, the required checks "
-    "to CONTRIBUTING.md, and the Dependabot policy to SECURITY.md, so that README.md has no heading Compile an "
-    "authored Rezono pack and no heading Dependency updates. README.md, rezono/README.md, CONTRIBUTING.md and "
-    "SECURITY.md only."))
 def test_maintainer_sections_live_beside_their_readers():
     text = readme()
     if re.search(r"^#+ (Compile an authored Rezono pack|Dependency updates)\s*$", text, re.M):
