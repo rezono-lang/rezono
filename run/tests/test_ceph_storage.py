@@ -35,7 +35,6 @@ def expected(nodes, monitors):
     })
 
 
-@pytest.mark.xfail(strict=True, reason="Read decisions/run-cluster-shape.md, section Converters. Implement render in run/ceph_storage.py.")
 def test_ceph_storage():
     render = implementation("ceph_storage.py", "render")
     assert render("run-one", "rook-ceph", IMAGE, DEVICES) == expected(["m-a", "m-b", "m-c"], 3)
