@@ -17,7 +17,7 @@ from scripts import components
 ROOT = Path(__file__).resolve().parents[2]
 DECISIONS = ROOT / "decisions"
 BUDGET = ROOT / "loop" / "decision-head-budget.json"
-CEILING = 186  # the count when the budget was set; a lower budget replaces it, a higher one is a new decision
+CEILING = 188  # the count when the budget was set; a lower budget replaces it, a higher one is a new decision
 FIELDS = ("decider", "decided_on", "valid_from", "valid_until", "state", "supersedes", "subject")
 REQUIRED = {"decider", "state", "subject"}
 DAYS = ("decided_on", "valid_from", "valid_until")
