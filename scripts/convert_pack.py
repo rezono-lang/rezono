@@ -194,7 +194,8 @@ def schema_source(path: Path, identity: str, module: str) -> Source:
         lines.extend(metadata_lines(body, place, "  "))
         for member, definition in members.items():
             member_where = f"{place}.{member}"
-            metadata = supported(definition, {"description", "exact_mappings"}, member_where)
+            metadata = supported({} if definition is None else definition, {"description", "exact_mappings"},
+                                 member_where)
             if annotations := metadata_lines(metadata, member_where, "    "):
                 lines.extend([f"  value {member}", *annotations])
         lines.append("")
