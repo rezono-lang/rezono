@@ -246,13 +246,12 @@ def admitted_rows(evidence) -> dict[str, list[tuple]]:
 def epoch(pack_dir, *, epoch: int, knowledge_time: str, sources, proposal: str = "",
           base_manifest: str = "", evidence=None) -> Epoch:
     import duckdb
-    from rezono_compiler import batch, calc, emit, explain, scenarios, seal
+    from rezono_compiler import batch, calc, emit, explain, rules_dl, scenarios, seal
     from rezono_compiler import checks as check_meta
     from rezono_compiler import facts as fact_files
     from rezono_compiler import pack as packs
     from rezono_compiler import rules as ir
     from rezono_compiler import sources as provenance
-    from rezono_compiler import rules_dl
     from rezono_compiler.rules_dl import PROTECTED
 
     timing.switch("compile")
