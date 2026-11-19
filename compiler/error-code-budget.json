@@ -1,0 +1,125 @@
+{
+  "compiler/rezono_compiler/amounts.py": {
+    "RuleError": 1
+  },
+  "compiler/rezono_compiler/calc.py": {
+    "CompileError": 56,
+    "collected": 17
+  },
+  "compiler/rezono_compiler/emit.py": {
+    "CompileError": 11
+  },
+  "compiler/rezono_compiler/facts.py": {
+    "LoadError": 47
+  },
+  "compiler/rezono_compiler/fold.py": {
+    "collected": 2
+  },
+  "compiler/rezono_compiler/icons.py": {
+    "collected": 12
+  },
+  "compiler/rezono_compiler/identity.py": {
+    "IdentityError": 6
+  },
+  "compiler/rezono_compiler/modules.py": {
+    "collected": 24
+  },
+  "compiler/rezono_compiler/native_rule_groups.py": {
+    "RuleError": 1
+  },
+  "compiler/rezono_compiler/native_rule_lowering.py": {
+    "CompileError": 1
+  },
+  "compiler/rezono_compiler/native_rule_signatures.py": {
+    "collected": 8
+  },
+  "compiler/rezono_compiler/operate/checks.py": {
+    "OperationError": 2
+  },
+  "compiler/rezono_compiler/operate/combine.py": {
+    "OperationError": 15
+  },
+  "compiler/rezono_compiler/operate/datalog.py": {
+    "OperationError": 2,
+    "collected": 14
+  },
+  "compiler/rezono_compiler/operate/drop.py": {
+    "OperationError": 4
+  },
+  "compiler/rezono_compiler/operate/execution.py": {
+    "OperationError": 13
+  },
+  "compiler/rezono_compiler/operate/maps.py": {
+    "OperationError": 1
+  },
+  "compiler/rezono_compiler/operate/model.py": {
+    "OperationError": 6
+  },
+  "compiler/rezono_compiler/operate/move.py": {
+    "OperationError": 18
+  },
+  "compiler/rezono_compiler/operate/rename.py": {
+    "OperationError": 16
+  },
+  "compiler/rezono_compiler/operate/spec.py": {
+    "OperationError": 4,
+    "collected": 20
+  },
+  "compiler/rezono_compiler/operate/split_by.py": {
+    "OperationError": 5
+  },
+  "compiler/rezono_compiler/operate/text.py": {
+    "OperationError": 4
+  },
+  "compiler/rezono_compiler/pack.py": {
+    "CompileError": 11,
+    "ViewError": 1,
+    "collected": 300
+  },
+  "compiler/rezono_compiler/regex.py": {
+    "PatternError": 14
+  },
+  "compiler/rezono_compiler/rezono_module.py": {
+    "collected": 16
+  },
+  "compiler/rezono_compiler/rezono_relational.py": {
+    "RuleError": 6
+  },
+  "compiler/rezono_compiler/rezono_table.py": {
+    "collected": 1
+  },
+  "compiler/rezono_compiler/rules_dl.py": {
+    "RuleError": 9,
+    "collected": 33
+  },
+  "compiler/rezono_compiler/scenarios.py": {
+    "LoadError": 2
+  },
+  "compiler/rezono_compiler/seal.py": {
+    "CompileError": 1,
+    "collected": 2
+  },
+  "compiler/rezono_compiler/selection.py": {
+    "OperationError": 12,
+    "collected": 7
+  },
+  "compiler/rezono_compiler/source_format.py": {
+    "WriteError": 11
+  },
+  "compiler/rezono_compiler/source_writer.py": {
+    "WriteError": 35
+  },
+  "compiler/rezono_compiler/sources.py": {
+    "LoadError": 24,
+    "Unmatched": 1
+  },
+  "compiler/rezono_compiler/view_rules.py": {
+    "ViewRuleError": 29
+  },
+  "compiler/rezono_compiler/views.py": {
+    "ViewError": 4
+  },
+  "compiler/rezono_compiler/writer.py": {
+    "WriteError": 40
+  }
+}
