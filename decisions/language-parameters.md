@@ -41,4 +41,15 @@ The corresponding JSON fragment is the second version:
 }
 ```
 
-A replacement under a condition (`replaces 1 unless c`) is a later step. A number that names no version of the same declaration is R021.
+A replacement under a condition (`replaces 1 unless c`) is a later step.
+
+### R021: a replacement that names no version, or a cycle
+
+The reader checks replacements within one declaration, because every version of a declaration is written in the same place. It refuses the module, as it does a context axis given twice (R018):
+
+- A number after `replaces` that names no version of the same declaration is R021, at that number. `version 2 replaces 4` beside versions 1 and 2 is refused at `4`.
+- `replaces` lines that form a cycle are R021, at the number after `replaces` of the first version of the cycle in source order. `version 2 replaces 2` is the shortest cycle.
+
+Both refusals have the same arguments: the version that replaces, the number it names and the declaration name, in that order. One sentence covers both cases. It is in `rezono/messages/en.json` and `rezono/messages/nl.json` like every other code.
+
+Leaving the check to the compiler was considered. It would let a module that cannot have a meaning read, print and round-trip, and the reader already knows each version number of the declaration.

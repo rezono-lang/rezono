@@ -17,15 +17,6 @@ FIRST = table(["level", "tone"],
               policy="first")
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=pack.CompileError,
-    reason="Lower a table first to the named outcome and value relations of a unique table, without the conflict "
-           "invariant, in compiler/rezono_compiler/rezono_table.py and rezono_extend.py. Read docs/rezono/tables.md "
-           "section 3 and decisions/language-tables.md, section Lowering a first table. Ready for a worker: the refusal "
-           "of a first table is gone from compiler/tests/test_rezono_table.py, so only this mark goes. No reader "
-           "dependency.",
-)
 def test_lower_table_first(tmp_path):
     d = written(tmp_path, LEVEL, TONE, STANDING, ETA, {"extend": "Eta", "derived": [FIRST]})
     db = run(d, {"eta": [(e,) for e in ("e1", "e2", "e3", "e4", "e5", "e6", "e7")],

@@ -159,7 +159,7 @@ def test_authored_library_has_expected_states(tmp_path):
     check_example(isolated(tmp_path, "legacy"), "legacy")
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError, reason="Migrate the complete library pack in examples/library/rezono. Read decisions/language-library-acceptance.md. Waits for library schema lowering, named typed datasets, source validation and discovery, and the conditional-rule and metadata constructs.")
+@pytest.mark.xfail(strict=True, raises=AssertionError, reason="M3: Migrate the complete library pack in examples/library/rezono. Read decisions/language-library-acceptance.md. Waits for library schema lowering, named typed datasets, source validation and discovery, and the conditional-rule and metadata constructs. Blocked: any file under examples/library/rezono/ makes pack.read(examples/library) fail with 'pack.yaml names no module or form at this path (rezono)' (rezono_module.declared, covered by compiler/tests/test_rezono_module.py), so a planner must choose where the candidate is staged or decide how a pack tolerates it; the authored modules also need a quoted dataset name (valid is a keyword), placed list and record cells, and a list cell in a single-valued slot.")
 def test_whole_library_has_the_same_meaning(tmp_path):
     expected = check_example(isolated(tmp_path, "legacy"), "legacy")
     actual = check_example(isolated(tmp_path, "rezono"), "rezono")

@@ -84,10 +84,7 @@ PENDING_PLATFORM = {
 
 @pytest.mark.parametrize("example, pending", [
     *(pytest.param(p, set(), id=name(p)) for p in RULED if p != PLATFORM),
-    pytest.param(PLATFORM, PENDING_PLATFORM, id="platform", marks=pytest.mark.xfail(
-        strict=True, raises=MissingPlatformRelations,
-        reason="Waits for the platform cluster projection tasks in examples/platform/proof_cases. "
-               "Read decisions/platform-derivation-acceptance.md. Every implemented relation must already agree.")),
+    pytest.param(PLATFORM, PENDING_PLATFORM, id="platform"),
 ])
 def test_same_as_the_pack_reference(example, pending):
     """Compare every named row and both sides of every seal, including expected empty relations."""

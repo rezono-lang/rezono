@@ -24,7 +24,7 @@ class WorkflowEnvironmentTests(unittest.TestCase):
     def test_python_collection_and_execution_get_the_locked_module_reader(self):
         workflow = ROOT / ".github/workflows"
         jobs = yaml.safe_load((workflow / "ci.yml").read_text(encoding="utf-8"))["jobs"]
-        for job, command in (("discover", "scripts/components.py inventory"),
+        for job, command in (("discover", ".build-base/components.py inventory"),
                              ("python", "scripts/components.py run-shard")):
             steps = jobs[job]["steps"]
             environment, = [i for i, step in enumerate(steps)
@@ -46,6 +46,37 @@ class WorkflowEnvironmentTests(unittest.TestCase):
         for step in (runtime, steps[installation]):
             self.assertNotIn("if", step)
             self.assertNotIn("continue-on-error", step)
+
+    def test_the_base_decides_what_runs_and_counts_what_ran(self):
+        # A candidate's scripts/components.py, environment action or pytest
+        # options must not drop tests from both its inventory and its run.
+        jobs = yaml.safe_load((ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8"))["jobs"]
+        base = ("${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha "
+                "|| github.sha }}")
+
+        steps = jobs["discover"]["steps"]
+        runs = [step.get("run", "") for step in steps]
+        source, = [i for i, run in enumerate(runs) if "git archive" in run]
+        self.assertEqual(steps[source]["env"]["POLICY"], base)
+        self.assertIn('git archive "$POLICY" scripts | tar -x -C .build-base --strip-components=1', runs[source])
+        for command in ("components.py ci-matrix", "components.py inventory"):
+            uses, = [i for i, run in enumerate(runs) if command in run]
+            self.assertIn(".build-base/" + command, runs[uses])
+            self.assertNotIn("scripts/" + command, runs[uses])
+            self.assertLess(source, uses, command)
+        inventory, = [run for run in runs if "components.py inventory" in run]
+        self.assertLess(inventory.index("unset PYTEST_ADDOPTS PYTEST_PLUGINS"),
+                        inventory.index("components.py inventory"))
+
+        steps = jobs["check"]["steps"]
+        verify, = [i for i, step in enumerate(steps) if "components.py verify-execution" in step.get("run", "")]
+        checkouts = [i for i, step in enumerate(steps) if step.get("uses", "").startswith("actions/checkout@")]
+        self.assertEqual(len(checkouts), 1)
+        checkout = steps[checkouts[0]]
+        self.assertLess(checkouts[0], verify)
+        self.assertEqual(checkout["with"]["ref"], base)
+        self.assertEqual(checkout["with"]["sparse-checkout"], "scripts")
+        self.assertIn("python3 scripts/components.py verify-execution", steps[verify]["run"])
 
 
 class SelectorTests(unittest.TestCase):
@@ -92,6 +123,34 @@ class SelectorTests(unittest.TestCase):
                     self.assertIsNone(ci._git_changed_files(ROOT, None, None))
             with patch.dict(os.environ, MERGE_GROUP_BASE_SHA="1" * 40):
                 self.assertIsNone(ci._git_changed_files(ROOT, None, None))
+
+
+class RepositoryPullRequestSelectionTests(unittest.TestCase):
+    """The pull request selection on this repository's own dependency graph."""
+
+    def selected(self, *changed):
+        components = ci.discover_components(ROOT, keep_invalid_node=True)
+        head = ci.git_output(ROOT, "rev-parse", "HEAD").decode().strip()
+        with patch.object(ci, "pull_request_range", return_value=(head, head, list(changed))):
+            return {c.folder for c in ci.pull_request_components(components, ROOT, "main")}, components, head
+
+    def test_decision_only_change_selects_no_component_job(self):
+        selected, _, _ = self.selected("decisions/a-new-decision.md", "docs/a-new-page.md")
+        self.assertEqual(selected, set())
+
+    def test_compiler_change_selects_the_compiler_and_its_dependents_only(self):
+        selected, components, head = self.selected("compiler/rezono_compiler/__init__.py")
+        folders = {c.folder for c in components}
+        declared = ci.declared_dependents(ROOT, head, folders, {})
+        self.assertIn("compiler", selected)
+        self.assertLessEqual(declared["compiler"], selected)  # edge/publisher declares rezono-compiler
+        self.assertLessEqual(set(ci.PR_FILE_CONSUMERS["compiler"]) & folders, selected)
+        self.assertNotIn("tools/mcp", selected)
+        self.assertLess(selected, folders)
+
+    def test_unknown_path_selects_every_component(self):
+        selected, components, _ = self.selected("an-unknown-directory/resource.yaml")
+        self.assertEqual(selected, {c.folder for c in components})
 
 
 class PullRequestSelectorTests(unittest.TestCase):
@@ -549,6 +608,41 @@ class InventoryTests(unittest.TestCase):
             filtered = run("inventory", plans)
             self.assertNotEqual(filtered.returncode, 0)
             self.assertIn("tests deselected during full inventory", filtered.stdout)
+
+    def test_a_configured_ignore_cannot_drop_a_file_without_a_blocked_record(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "scripts").mkdir()
+            for name in ("components.py", "red_list.py"):
+                shutil.copyfile(ROOT / "scripts" / name, root / "scripts" / name)
+            component = root / "probe"
+            component.mkdir()
+            (component / "test_kept.py").write_text("def test_kept(): pass\n", encoding="utf-8")
+            (component / "test_dropped.py").write_text("def test_dropped(): pass\n", encoding="utf-8")
+            (component / "test_optional.py").write_text(
+                "import pytest\npytest.skip('optional module', allow_module_level=True)\n", encoding="utf-8")
+            env = dict(os.environ, PYTEST_DISABLE_PLUGIN_AUTOLOAD="1", PYTEST_PLUGINS="rezono_cluster",
+                       PYTHONPATH=str(ROOT / "loop"))
+            env.pop("PYTEST_ADDOPTS", None)
+            def collect():
+                return subprocess.run([sys.executable, str(root / "scripts/components.py"), "collect-component",
+                                       "probe", str(root / "plans")], cwd=root, env=env,
+                                      stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+            self.assertEqual(collect().returncode, 0)
+            for option in ("--ignore=probe/test_dropped.py", "--ignore-glob=*/test_drop*.py"):
+                (component / "pyproject.toml").write_text(
+                    f'[tool.pytest.ini_options]\naddopts = "{option}"\n', encoding="utf-8")
+                dropped = collect()
+                self.assertNotEqual(dropped.returncode, 0, option)
+                self.assertIn("test files without a collected item or a blocked/ record: "
+                              "['probe/test_dropped.py']", dropped.stdout)
+            (root / "blocked").mkdir()
+            (root / "blocked/probe-dropped.txt").write_text(
+                "probe/test_dropped.py: needs a capability the probe lacks\n", encoding="utf-8")
+            recorded = collect()
+            self.assertEqual(recorded.returncode, 0, recorded.stdout)
+            inventory = json.loads((root / "plans/probe/items.json").read_text(encoding="utf-8"))
+            self.assertEqual(inventory["items"], ["probe/test_kept.py::test_kept"])
 
 
 if __name__ == "__main__":

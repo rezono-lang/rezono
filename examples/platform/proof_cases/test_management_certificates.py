@@ -29,8 +29,8 @@ def certificate_inputs():
 
 
 @pytest.mark.xfail(strict=True, raises=AssertionError, reason=(
-    "Implement caller-bound certificate findings over actual presentation, trust paths and dates in "
-    "schema/management_certificates.yaml and rules/management_certificates.dl. Read decisions/platform-management-certificates.md. Waits for test_native_boolean_rule_inputs: a missing certificate requires an explicitly complete read, and the rule compiler cannot yet consume the observed boolean."))
+    "M2: Implement caller-bound certificate findings over actual presentation, trust paths and dates in "
+    "schema/management_certificates.yaml and rules/management_certificates.dl. Read decisions/platform-management-certificates.md. Waits for compiler/tests/test_boolean_rule_inputs.py--test_native_boolean_rule_inputs (track kern): a missing certificate requires an explicitly complete read, and the rule compiler cannot yet consume the observed boolean."))
 def test_management_certificate_findings():
     from management_probes import compiled
 
@@ -50,7 +50,7 @@ def test_management_certificate_findings():
 
 @pytest.mark.cluster
 @pytest.mark.xfail(strict=True, raises=AssertionError, reason=(
-    "Depends on the disposable issuer, ordinary client TLS readback and test_management_certificate_findings. "
+    "M2: Depends on the disposable issuer, ordinary client TLS readback and test_management_certificate_findings. "
     "Record a real handshake before and after renewal per decisions/platform-management-certificates.md."))
 def test_management_certificate_renewal_readback():
     from management_probes import live_events

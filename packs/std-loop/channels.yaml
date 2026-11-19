@@ -12,7 +12,10 @@ kinds:
   - {kind: flow_node_report, shape: rect}
   - {kind: loop_sweep_receipt, shape: rect}
   - {kind: loop_pending_operation, shape: rect}
+  - {kind: loop_goal, shape: rect}
+  - {kind: loop_batch_deferral, shape: rect}
 arrows:
   - {arrow: loop_completion.step, dash: none}
   - {arrow: loop_requirement.step, dash: none}
   - {arrow: loop_refusal.step, dash: none}
+  - {arrow: loop_batch_deferral.step, dash: none}

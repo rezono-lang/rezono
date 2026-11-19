@@ -281,7 +281,9 @@ SHARED_READERS = {
     "docs/rezono/cases/": ("compiler", "rezono"),
     "docs/semantics/value-cases.yaml": ("compiler", "rezono"),
     "docs/semantics/witness-alternatives-cases.yaml": ("checker", "compiler"),
+    "docs/formal.md": ("examples",),
     "docs/tutorial.md": ("examples",),
+    "rezono/README.md": ("examples",),
     "decisions/language-native-rules.md": ("compiler",),
     "decisions/publication-case-pins.md": ("compiler",),
     "decisions/conformance-*.md": ("compiler",),
@@ -673,11 +675,17 @@ def collect_component(folder: str, directory: Path) -> int:
     items: list[str] = []
     cluster: list[str] = []
     deselected: list[str] = []
+    skipped: set[str] = set()
     config_path = None
 
     class Inventory:
         def pytest_deselected(self, items):
             deselected.extend(item.nodeid for item in items)
+
+        def pytest_collectreport(self, report):
+            # A module-level skip is reported, and kept in the collection report.
+            if report.skipped:
+                skipped.add(report.nodeid.split("::", 1)[0])
 
         def pytest_collection_finish(self, session):
             nonlocal config_path
@@ -703,7 +711,20 @@ def collect_component(folder: str, directory: Path) -> int:
         return int(result)
     if len(items) != len(set(items)):
         raise ValueError(f"{folder}: duplicate pytest node IDs in the inventory")
-    files = sorted(set(test_files(folder)) | {i.split("::", 1)[0] for i in items})
+    collected = {i.split("::", 1)[0] for i in items}
+    # Options such as `--ignore` or `python_files` in a component's pytest
+    # configuration drop a file from both the inventory and the run, so the
+    # execution count still matches. Every test file must yield an item, be
+    # skipped visibly at module level, or have a record in blocked/.
+    silent = [f for f in test_files(folder) if f not in collected | skipped]
+    if silent:
+        from red_list import read_blocked
+        blocked = {target for target, _ in read_blocked(ROOT)}
+        if unrecorded := [f for f in silent if f not in blocked]:
+            print(f"{folder}: test files without a collected item or a blocked/ record: {unrecorded}",
+                  file=sys.stderr)
+            return 1
+    files = sorted(set(test_files(folder)) | collected)
     dest.write_text(json.dumps({"items": items, "cluster": cluster, "files": files, "config": config_path}),
                     encoding="utf-8")
     print(f"{folder}: inventoried {len(items)} node IDs from {len(files)} test files", flush=True)

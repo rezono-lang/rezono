@@ -85,10 +85,17 @@ def test_a_confirmed_disagreement_requires_complete_comparison_evidence(tmp_path
     assert incident.disagreements(*records({CASES[0]: message})) == [junit_key(CASES[0])[1]]
 
 
+@pytest.mark.xfail(strict=True, raises=ValueError, reason=(
+    "extra: compiler/ci/feldera_shards.py does not yet expect "
+    "compiler/tests/test_boolean_rule_inputs.py::test_native_boolean_rule_inputs in the live collection. "
+    "Lift this mark in the pull request that makes that test green and adds it to the compiler-bound shard."))
 @pytest.mark.parametrize("missing_subsidy_report", [False, True])
 def test_classifier_uses_complete_reports_from_the_parallel_comparison(tmp_path, missing_subsidy_report):
     ci = Path(incident.__file__).resolve().parent
-    cases = CASES + ["examples/test_feldera_rules.py::test_incremental_on_feldera_equals_batch[platform/tenant-capacity/interface]"]
+    cases = CASES + [
+        "examples/test_feldera_rules.py::test_incremental_on_feldera_equals_batch[platform/tenant-capacity/interface]",
+        "compiler/tests/test_boolean_rule_inputs.py::test_native_boolean_rule_inputs",
+    ]
     collected, report = records({CASES[7]: sql_error(36), CASES[8]: sql_error(96)}, cases, cases)
     original = ET.fromstring(report)
     inputs = tmp_path / "shards"
