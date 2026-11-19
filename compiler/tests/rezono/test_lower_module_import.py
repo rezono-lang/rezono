@@ -38,15 +38,6 @@ def meaning(bundle: dict) -> dict:
     }
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=pack.CompileError,
-    reason="Resolve an unaliased use line of a schema module against the packs that pack.yaml pins, and add the "
-           "LinkML import of each schema module of the used pack, in compiler/rezono_compiler/rezono_module.py "
-           "(header_errors and lower). Refuse a use of a pack that is not pinned at its line. Read "
-           "decisions/language-imports.md. Remove the case 'use' from the header refusals in "
-           "compiler/tests/test_rezono_module.py, which this task may change. No reader dependency.",
-)
 def test_lower_module_import(tmp_path):
     legacy = pinned(tmp_path, "legacy")
     (legacy / "schema" / "holder.yaml").write_bytes(yaml.safe_dump({

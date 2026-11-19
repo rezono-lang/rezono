@@ -499,8 +499,7 @@ def test_what_the_slice_does_not_lower_is_refused_at_its_line(tmp_path, decls, l
 @pytest.mark.parametrize("header, line, message", [
     ({"pack": "other"}, 2, "the `pack` line names other, not this pack, minimal"),
     ({"rezono": "1"}, 1, "the `rezono` line says 0, not 1"),
-    ({"use": ["std.money"]}, 3, "a `use` line is not lowered"),
-], ids=["another pack", "another language version", "use"])
+], ids=["another pack", "another language version"])
 def test_a_header_line_is_refused_at_its_line(tmp_path, header, line, message):
     d = Path(shutil.copytree(FIXTURE, tmp_path / "minimal"))
     module(d, [eta()], **header)
