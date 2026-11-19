@@ -10,6 +10,7 @@ from rezono_compiler import emit, modules, pack
 from support import FIXTURE
 
 STD_ACCESS = Path(__file__).resolve().parents[3] / "packs" / "std-access"
+STD_ACCESS_LEGACY = Path(__file__).resolve().parent / "fixtures" / "std-access-legacy"
 # A changed copy of std-access is an ordinary pack: the std-* names stand only for the standard packs
 # (decisions/standard-pack-names.md). The schema keeps the standard schema's id and name.
 PACK = "access-roles"
@@ -91,12 +92,13 @@ def test_lower_schema_metadata(tmp_path):
         (directory / "messages").mkdir()
         (directory / "channels.yaml").write_bytes((STD_ACCESS / "channels.yaml").read_bytes())
         meta = yaml.safe_load((STD_ACCESS / "pack.yaml").read_bytes()) | {"name": PACK}
+        meta.pop("rezono", None)
         (directory / "pack.yaml").write_text(yaml.safe_dump(meta, sort_keys=False), encoding="utf-8")
         (directory / "messages/nl.mf2").write_bytes((FIXTURE / "messages/nl.mf2").read_bytes())
 
     # Keep the public LinkML schema's Role and its two basic attributes. A slot description exercises
     # the same metadata path on a leaf without bringing capability enums and rules into this task.
-    oracle = yaml.safe_load((STD_ACCESS / "schema/access.yaml").read_bytes())
+    oracle = yaml.safe_load((STD_ACCESS_LEGACY / "schema/access.yaml").read_bytes())
     del oracle["enums"]
     attributes = oracle["classes"]["Role"]["attributes"]
     del attributes["capability"]
