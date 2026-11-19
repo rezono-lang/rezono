@@ -65,26 +65,6 @@ def _evidence(evidence, scope, retained):
             "index": {"completeness_receipts": [observation_reference("submitted", "receipt", evidence["receipt"])]}}
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=(AssertionError, ImportError, TypeError),
-    reason=(
-        "M2: decisions/admission-transport.md: section 6, member keys, and decisions/scoped-completeness.md "
-        "section 3. Derive complete_sweep only from admitted verified_member keys "
-        "[\"sweep-node\", run, collector, window, node] (parts 0 to 4) of a verified_receipt: at least one member "
-        "for that run, collector and window, each covered by its single final node_report over the interval "
-        "without gaps or lost events, and no recorded expected_node of that sweep outside those members. Keep the "
-        "interval, conflicting report and window bound checks and sweep_node_report_count(run, collector, window, "
-        "node, variants). Declare verified_receipt and verified_member in packs/std-loop/rules/complete_sweep.dl, "
-        "and loop/tests/flow_drift_cases.py passes them to the fragment as inputs. Write in packs/std-loop. "
-        "The same rule turns "
-        "loop/tests/test_flow_drift_sweep.py--test_complete_flow_sweep_needs_verified_inventory, "
-        "loop/tests/test_flow_drift_rows.py--test_flow_drift_needs_verified_sweep and "
-        "loop/tests/test_absence_coverage.py--test_absence_needs_verified_sweep_inventory green: remove their marks "
-        "in the same PR or in one PR per file. Today complete_sweep follows from the records alone, so the "
-        "shortened submission still completes the sweep (AssertionError)."
-    ),
-)
 def test_sweep_cannot_drop_expected_node(tmp_path):
     nodes = ("node-a", "node-b")
     scope = {"run": "run", "collector": "observer", "window": "flow-window"}

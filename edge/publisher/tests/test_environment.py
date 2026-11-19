@@ -39,19 +39,6 @@ def _editable_paths(spec):
             if line.startswith("-e ")]
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason=(
-        "extra: requirements/run.in and requirements/dev.in name -e ./edge/githost, which is not in this "
-        "repository: no workflow, script or test installs or imports it (scripts/install-python.sh installs "
-        "admission, canon, compiler and edge/publisher), and uv cannot resolve a missing path, so "
-        "requirements/lock.sh cannot regenerate the locks. The adapter does not come: remove the two "
-        "-e ./edge/githost lines and --no-emit-package rezono-githost from requirements/lock.sh, then "
-        "regenerate requirements/run.txt and requirements/dev.txt with requirements/lock.sh. uv keeps the "
-        "existing pins, so rezono-githost only disappears from the comments of both locks."
-    ),
-)
 def test_every_editable_input_exists():
     specs = sorted((ROOT / "requirements").glob("*.in"))
     found = {spec.name: _editable_paths(spec) for spec in specs}

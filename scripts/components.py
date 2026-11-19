@@ -262,7 +262,7 @@ PR_FILE_CONSUMERS = {
 # changes is read by them, or the selection falls back to everything. As dependents
 # of another component they run in the merge queue (decisions/pr-deferred-dependents.md).
 # The empty set restores them as pull request dependents.
-PR_DEFERRED_DEPENDENTS = frozenset({"loop", "run"})
+PR_DEFERRED_DEPENDENTS = frozenset({"examples", "loop", "run"})
 # These are test entry points and a private subprocess helper, rather than inputs to
 # the installed packages. Their shared corpus is still routed by SHARED_READERS.
 PR_TEST_LEAVES = frozenset({
@@ -409,8 +409,15 @@ def git_output(root: Path, *args: str) -> bytes:
     return subprocess.check_output(["git", *args], cwd=root, stderr=subprocess.PIPE)
 
 
+def design_record(path: str) -> bool:
+    """A decision or documentation page that no test reads: citing a test name there runs nothing."""
+    return (path.startswith(("decisions/", "docs/")) and path.endswith(".md") and path != LANGUAGE_COVERAGE_REPORT
+            and not shared_readers(path))
+
+
 def independent_test_leaves(root: Path, revision: str, leaves: dict[str, list[str]], folders: set[str],
-                            *, manual_references: dict[str, str] | None = None) -> bool:
+                            *, manual_references: dict[str, str] | None = None,
+                            cited_in_records: bool = False) -> bool:
     """Refuse a narrowed test selection if either tree names an outside reader."""
     leaf_paths = {path for paths in leaves.values() for path in paths}
     tracked = sorted(leaf_paths | (manual_references or {}).keys())
@@ -454,7 +461,7 @@ def independent_test_leaves(root: Path, revision: str, leaves: dict[str, list[st
                 if not entry.startswith(prefix):
                     return False
                 name = entry[len(prefix):]
-                if component_owner(name, folders) == owner:
+                if component_owner(name, folders) == owner or (cited_in_records and design_record(name)):
                     continue
                 if name not in (manual_references or {}):
                     return False
@@ -523,13 +530,17 @@ def reference_patterns(path: str, owner: str | None) -> list[re.Pattern[str]]:
     if source.stem in GENERIC_STEMS:
         return []
     stem = re.escape(source.stem)
-    patterns = [rf"(?<![\w.-]){re.escape(source.name)}\b", rf"/{stem}(?:\.\w+)?['\x22`]"]
+    patterns = [rf"(?<![\w.-]){re.escape(source.name)}\b", rf"/{stem}(?:\.\w+)?['\x22`]",
+                # The last segment of a joined path, as in ROOT / "loop" / "replay".
+                rf"/\s*['\x22]{stem}['\x22]"]
     if source.suffix == ".py" and owner:
         module = ".".join(Path(path[len(owner) + 1:]).with_suffix("").parts)
         package, _, name = module.rpartition(".")
         if package:
+            # A dotted module, or an import from its package on one line or in parentheses over several.
             patterns += [rf"(?<!\w){re.escape(module)}\b",
-                         rf"\bfrom\s+{re.escape(package)}\s+import\s[^\n]*\b{re.escape(name)}\b"]
+                         rf"\bfrom\s+{re.escape(package)}\s+import\s[^\n(]*\b{re.escape(name)}\b",
+                         rf"\bfrom\s+{re.escape(package)}\s+import\s*\([^)]*\b{re.escape(name)}\b"]
         else:
             patterns.append(rf"^\s*(?:from\s+{stem}\s+import\b|import\s+{stem}\b)")
     return [re.compile(pattern, re.MULTILINE) for pattern in patterns]
@@ -560,8 +571,14 @@ def own_readers(path: str) -> set[str]:
 
 
 def independent_test_file(root: Path, revisions: tuple[str, ...], path: str, owner: str, folders: set[str]) -> bool:
-    """A test file that nothing outside its component names in either tree."""
-    return all(independent_test_leaves(root, revision, {owner: [path]}, folders) for revision in revisions)
+    """A test file that nothing outside its component names in either tree.
+
+    A decision or documentation page that cites a changed or added test file does not read it.
+    A deleted test file keeps every citation, since a page may link to it."""
+    kept = subprocess.run(["git", "cat-file", "-e", f"{revisions[-1]}:{path}"], cwd=root,
+                          capture_output=True, check=False).returncode == 0
+    return all(independent_test_leaves(root, revision, {owner: [path]}, folders, cited_in_records=kept)
+               for revision in revisions)
 
 
 def language_coverage_only(root: Path, base: str, head: str, changed: list[str], folders: set[str]) -> bool | None:
