@@ -100,7 +100,7 @@ def oracle(julia):
 
 
 @pytest.mark.xfail(strict=True, raises=AssertionError,
-                   reason="Compare the typed step matcher in compiler/rezono_compiler/step_dpo.py with the pinned "
+                   reason="extra: Compare the typed step matcher in compiler/rezono_compiler/step_dpo.py with the pinned "
                           "AlgebraicRewriting oracle. Read decisions/safe-step-rounds.md. "
                           "Waits for compiler/tests/test_step_variant_rows.py::test_step_variant_rows.")
 def test_step_dpo_oracle():
