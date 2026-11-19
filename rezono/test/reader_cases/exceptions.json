@@ -1,0 +1,80 @@
+{
+  "source": "kind Shelf world closed\n  paused: Bool\n  shut: Bool\nextend Shelf\n  derived quota: Int = 5\n    unless\n      when paused then 0  @ policy#art-2\n      when shut then 1\n    unless shut then 2",
+  "format": "rezono.module/1",
+  "declarations": [
+    {
+      "kind": "Shelf",
+      "world": "closed",
+      "slots": [
+        {
+          "slot": "paused",
+          "type": "Bool"
+        },
+        {
+          "slot": "shut",
+          "type": "Bool"
+        }
+      ],
+      "derived": []
+    },
+    {
+      "extend": "Shelf",
+      "derived": [
+        {
+          "derived": "quota",
+          "type": "Int",
+          "value": {
+            "lit": "5"
+          },
+          "unless": [
+            [
+              {
+                "when": {
+                  "path": [
+                    "paused"
+                  ]
+                },
+                "then": {
+                  "lit": "0"
+                },
+                "source": "policy#art-2"
+              },
+              {
+                "when": {
+                  "path": [
+                    "shut"
+                  ]
+                },
+                "then": {
+                  "lit": "1"
+                }
+              }
+            ],
+            [
+              {
+                "when": {
+                  "path": [
+                    "shut"
+                  ]
+                },
+                "then": {
+                  "lit": "2"
+                }
+              }
+            ]
+          ]
+        }
+      ]
+    }
+  ],
+  "rejections": [
+    {
+      "from": "unless shut then 2",
+      "to": "unless shut"
+    },
+    {
+      "from": "    unless shut then 2",
+      "to": "    unless"
+    }
+  ]
+}

@@ -1,0 +1,20 @@
+id: value-hash-bool-key
+source: docs/semantics/value-cases.yaml#hash-bool-key
+status: settled
+input:
+  rows:
+    - key: [item-a, 'true']
+      values:
+        label: {state: known, value: first}
+    - key: [item-a, 'false']
+      values:
+        label: {state: known, value: second}
+expect:
+  value: 'true'
+  state: known
+  reason: null
+  witness: null
+unsupported:
+  compiler: A key component is spelled by the publisher and proof RowRef, not by a compiled rule.
+  checker: The shared snapshot reader takes key components as strings; the Boolean spelling is fixed in the publisher before the snapshot exists.
+  feldera: Canonical key text is constructed outside the SQL engine.

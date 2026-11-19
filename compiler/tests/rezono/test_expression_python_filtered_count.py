@@ -60,9 +60,6 @@ def replay_groups(case, lowered):
             assert "aggregate_contributors" in {item["reason"] for item in forged["findings"]}
 
 
-@pytest.mark.xfail(strict=True, raises=MissingFilteredCountDiagnostic,
-                   reason="Report R044 for a well-typed unrepresentable filter in compiler/rezono_compiler/native_rule_groups.py. "
-                          "Read decisions/language-expression-semantics.md.")
 def test_expression_python_filtered_count():
     case = yaml.safe_load((CORPUS / "expression-filtered-count.yaml").read_bytes())
     schema = json.loads((CORPUS / "case.schema.json").read_bytes())

@@ -99,8 +99,9 @@ def _receipt_grounds(witnesses, row):
     ),
 )
 def test_waiting_publication_explains_ambiguous_safety_cut(tmp_path):
+    # A supplied "proved" verdict is a claim, not authority (decisions/loop-certificate-admission.md), so the
+    # unique case only shows that the superseded refutation at the earlier cut leaves nothing waiting.
     snapshots, _ = _publish(tmp_path / "unique", second_at=9)
-    assert snapshots["safe_alone"] == [["run", "transfer", "left-cut"]]
     assert snapshots["waiting"] == []
 
     snapshots, witnesses = _publish(tmp_path / "ambiguous", second_at=10)

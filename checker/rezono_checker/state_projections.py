@@ -1,7 +1,7 @@
 """Authenticate state projections against the epoch's independently archived Values."""
 
 import json
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Collection, Mapping
 from dataclasses import dataclass
 
 from rezono_canon import sha256_hex
@@ -46,6 +46,17 @@ def _origin(value: Mapping[str, object]) -> str | None:
     return text if value.get("state") == "known" and isinstance(text, str) and text else None
 
 
+def _evidence(projection: Projection, original: Values) -> tuple[str, str, str] | None:
+    value = original.get(projection.value_column)
+    origin = _origin(original.get(projection.origin_column, {}))
+    if value is None or origin is None:
+        return None
+    state, reason = value["state"], value.get("reason", "")
+    if not isinstance(state, str) or not isinstance(reason, str):
+        return None
+    return state, reason, origin
+
+
 def _matches(projection: Projection, parts: tuple[str, ...], values: Values, source: Rows) -> bool:
     if len(parts) != 3:
         return False
@@ -53,17 +64,27 @@ def _matches(projection: Projection, parts: tuple[str, ...], values: Values, sou
     row = source.get(encode_key((subject,)))
     if row is None:
         return False
-    _, original = row
-    value = original.get(projection.value_column)
-    origin = _origin(original.get(projection.origin_column, {}))
-    # A descriptor's required flag cannot turn an omitted Value into evidence of a state.
-    return (value is not None and value["state"] == state and value.get("reason", "") == reason
-            and origin is not None and _origin(values.get("origin", {})) == origin)
+    origin = _origin(values.get("origin", {}))
+    return origin is not None and _evidence(projection, row[1]) == (state, reason, origin)
+
+
+def _expected(projection: Projection, source: Rows) -> set[str] | None:
+    expected = set()
+    for parts, original in source.values():
+        # A descriptor's required flag cannot turn an omitted Value into evidence of a state.
+        if projection.value_column not in original:
+            continue
+        evidence = _evidence(projection, original)
+        if len(parts) != 1 or evidence is None:
+            return None
+        state, reason, _ = evidence
+        expected.add(encode_key((*parts, state, reason)))
+    return expected
 
 
 def check(manifest: dict, read_bytes: Callable[[str], bytes],
-          snapshots: Mapping[str, Rows]) -> list[dict[str, str]]:
-    """Check the pinned descriptor and every projected row against verified snapshots."""
+          snapshots: Mapping[str, Rows], *, full: Collection[str] | None = None) -> list[dict[str, str]]:
+    """Check each row's evidence and require equality when both snapshot scopes are complete."""
     entries = [entry for entry in (manifest.get("compiled") or ())
                if isinstance(entry, dict) and entry.get("file") == FILE]
     if not entries:
@@ -86,8 +107,23 @@ def check(manifest: dict, read_bytes: Callable[[str], bytes],
 
     findings = []
     for projection in projections:
+        scope = (projection.source_relation, projection.relation)
+        complete = full is None or (projection.source_relation in full and projection.relation in full)
+        if complete:
+            missing = [relation for relation in scope if relation not in snapshots]
+            if missing:
+                findings.extend({"reason": "state_projection_snapshot_missing", "relation": relation}
+                                for relation in missing)
+                continue
         source = snapshots.get(projection.source_relation, {})
         rows = snapshots.get(projection.relation, {})
         if any(not _matches(projection, parts, values, source) for parts, values in rows.values()):
             findings.append({"reason": "state_projection_evidence_mismatch", "relation": projection.relation})
+        if complete:
+            # Per-row evidence rules out extra keys. All authenticated source state keys must also be present.
+            expected = _expected(projection, source)
+            if expected is None:
+                findings.append({"reason": "state_projection_source_unverifiable", "relation": projection.source_relation})
+            elif expected - rows.keys():
+                findings.append({"reason": "state_projection_incomplete", "relation": projection.relation})
     return findings

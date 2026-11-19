@@ -90,9 +90,10 @@ def test_platform_incremental_delta_and_witnesses_match_batch():
                        for row in feldera.query(pipeline, 'SELECT * FROM "provides"')}
             bindings = [tuple(str(row[c]) for c in rules_sql.witness_columns(rule))
                         for row in feldera.query(pipeline, f'SELECT * FROM "{rule.witness_relation}"')]
-            observed.append(verified(prog, checker_rules, label, rows, current, {rule.id: bindings}, expected))
-            assert current == batch_result(model, prog, checker_rules, label, rows, expected)
-        assert (observed[1] - observed[0], observed[0] - observed[1]) == ({NEW}, {OLD})
+            with feldera.comparing():
+                observed.append(verified(prog, checker_rules, label, rows, current, {rule.id: bindings}, expected))
+                assert current == batch_result(model, prog, checker_rules, label, rows, expected)
+        with feldera.comparing():
+            assert (observed[1] - observed[0], observed[0] - observed[1]) == ({NEW}, {OLD})
     finally:
-        feldera.stop(pipeline)
-        feldera.call("DELETE", f"/v0/pipelines/{pipeline}")
+        feldera.stop(pipeline, delete=True)

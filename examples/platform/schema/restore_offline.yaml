@@ -1,0 +1,27 @@
+id: https://rezono.org/examples/platform-core/restore-offline
+name: platform_restore_offline
+description: Operational prerequisites of a restore trial and the current readings that show them available.
+in_language: en
+imports: [linkml:types]
+default_range: string
+annotations:
+  layer: facts
+
+classes:
+  RestoreDependencyBinding:
+    description: A function the restore trial needs, the provider that supplies it and the cluster that provider runs in.
+    attributes:
+      id: {identifier: true}
+      trial: {required: true}
+      function: {required: true}
+      provider: {required: true}
+      cluster: {required: true}
+  RestoreDependencyReading:
+    description: A current observation of a provider within a run and trial.
+    attributes:
+      id: {identifier: true}
+      run: {required: true}
+      trial: {required: true}
+      provider: {required: true}
+      cluster: {required: true}
+      value: {required: true}
