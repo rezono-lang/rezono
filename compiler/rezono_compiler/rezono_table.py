@@ -1,13 +1,14 @@
 """Decision tables of modules written in Rezono, lowered to rules (docs/rezono/publication.md §9.1).
 
-A derived value with `table unique`, `table first` or `table collect` under `extend K` lowers to the rules a rule
-file could state: a named outcome of K with one state for every element and the relation of its value; for `unique`
-also an invariant that two rows never apply to one element. The rules are written as the text of a rule file and
-`rules_dl.read` reads them as it reads `rules/*.dl`, so every check, engine, proof and oracle holds for them
-unchanged; each rule's origin is the module's file and the line of the part of the table it comes from. Nothing is
-evaluated here, and nothing is approximated: what this slice does not lower is refused at its line.
+A derived value with `table unique`, `table first`, `table priority` or `table collect` under `extend K` lowers
+to the rules a rule file could state: a named outcome of K with one state for every element and the relation of its
+value; for `unique` also an invariant that two rows never apply to one element. The rules are written as the text of
+a rule file and `rules_dl.read` reads them as it reads `rules/*.dl`, so every check, engine, proof and oracle holds
+for them unchanged; each rule's origin is the module's file and the line of the part of the table it comes from.
+Nothing is evaluated here, and nothing is approximated: what this slice does not lower is refused at its line.
 
-The meaning is that of docs/rezono/tables.md §3 for `unique`, `first` and `collect`, over inputs that are slots of K:
+The meaning is that of docs/rezono/tables.md §3 for `unique`, `first`, `priority` and `collect`, over inputs that
+are slots of K:
 
 - a cell is true when the input's value passes one of its tests, false when the input has a value that passes
   none, `n/a` when an optional input has no value, and unknown when a required one has none (publication.md §4);
@@ -19,6 +20,9 @@ The meaning is that of docs/rezono/tables.md §3 for `unique`, `first` and `coll
 - under `first` the first row that applies wins and two rows that apply are no conflict, so there is no invariant;
   an undecided row above it whose output differs holds the value at `unknown no_value`
   (decisions/language-tables.md, "Lowering a first table");
+- under `priority` the output that comes first in the output enum's declared order wins among applying rows and
+  two rows that apply are no conflict; an undecided row whose output comes before the winning output holds the
+  value at `unknown no_value` (decisions/language-tables.md, "Lowering a priority table");
 - under `collect` on a derived value `T*` the set is known for every element, the output of each row that applies
   is a known member, and an output that only undecided rows give is a member whose membership is
   `unknown no_value`, in `<k>_<d>_undecided_member` (decisions/language-tables.md, "Lowering a collect table").
@@ -103,7 +107,7 @@ def lower(pack, pack_dir: Path, d, form: dict, gen: Generated, errors: list[str]
 
 
 def table(pack, k: str, slots: dict, dv: dict, at: str, place, refuse, gen: Generated) -> None:
-    """One derived value with `table unique`, `first` or `collect` (rezono_extend refuses the others), as rules."""
+    """One derived value with `table unique`, `first`, `priority` or `collect` (rezono_extend refuses others)."""
     from .pack import snake
     from .rules_dl import SQL
 
@@ -152,15 +156,27 @@ def table(pack, k: str, slots: dict, dv: dict, at: str, place, refuse, gen: Gene
         return
     # The inputs that can be unknown: a required slot that the rows test (publication.md §4, point 5).
     unknown = [j for j, s in enumerate(inputs) if s.required and any(row[j] for row in cells)]
-    first = t["table"] == "first"
+    policy = t["table"]
     outs = [row["value"]["lit"] for row in t["rows"]]
-    if t["table"] == "collect":
+    if policy == "collect":
         collect(k, name, inputs, cells, unknown, outs, at, place, gen)
         return
-    # Under `first`: the undecided rows m above a row r with another output, which hold the value when r wins.
+    # Under `first` or `priority`: undecided rows whose applying would change the winning output hold it at unknown.
     can_open = {r for r, conds in enumerate(cells, 1) if any(conds[j] for j in unknown)}
-    holds = [(m, r) for r in range(1, len(cells) + 1) for m in range(1, r)
-             if m in can_open and outs[m - 1] != outs[r - 1]] if first else []
+    ranks: list[int] = []
+    holding: set[int] = set()
+    holds_pairs: list[tuple[int, int]] = []
+    if policy == "priority":
+        order = {v: i for i, v in enumerate(pack.enums[out_enum])}
+        ranks = [order[o] for o in outs]
+        holding = {m for m in can_open if ranks[m - 1] < max(ranks)}
+        holds = bool(holding)
+    elif policy == "first":
+        holds_pairs = [(m, r) for r in range(1, len(cells) + 1) for m in range(1, r)
+                       if m in can_open and outs[m - 1] != outs[r - 1]]
+        holds = bool(holds_pairs)
+    else:
+        holds = False
     head = place(at)
     gen.add(head, f"// @outcome {k}")
     gen.add(head, f".decl {name}({k}: symbol, state: symbol, reason: symbol)")
@@ -168,12 +184,15 @@ def table(pack, k: str, slots: dict, dv: dict, at: str, place, refuse, gen: Gene
     gen.add(head, f".decl {name}_row({k}: symbol, row: number)")
     gen.add(head, f".decl {name}_cell({k}: symbol, row: number, column: number)")
     gen.add(head, f".decl {name}_applies({k}: symbol)")
-    if first:
-        gen.add(head, f".decl {name}_later({k}: symbol, row: number)")
-        gen.add(head, f".decl {name}_win({k}: symbol, row: number)")
-    else:
+    if policy == "unique":
         gen.add(head, "// @invariant")
         gen.add(head, f".decl {name}_conflict({k}: symbol, row: number, other: number)")
+    else:
+        col = "rank" if policy == "priority" else "row"
+        if policy == "priority":
+            gen.add(head, f".decl {name}_rank({k}: symbol, rank: number)")
+        gen.add(head, f".decl {name}_later({k}: symbol, {col}: number)")
+        gen.add(head, f".decl {name}_win({k}: symbol, {col}: number)")
     if unknown:
         gen.add(head, f".decl {name}_has({k}: symbol, column: number)")
         gen.add(head, f".decl {name}_missing({k}: symbol, column: number)")
@@ -181,7 +200,11 @@ def table(pack, k: str, slots: dict, dv: dict, at: str, place, refuse, gen: Gene
         gen.add(head, f".decl {name}_open({k}: symbol, row: number)")
         gen.add(head, f".decl {name}_undecided({k}: symbol)")
     if holds:
+        if policy == "priority":
+            gen.add(head, f".decl {name}_open_rank({k}: symbol, rank: number)")
         gen.add(head, f".decl {name}_held({k}: symbol)")
+    held_guard = f", !{name}_held(x)" if holds else ""
+    seen_ranks: set[int] = set()
     for r, conds in enumerate(cells, 1):
         rline = place(f"{at}/table/rows/{r - 1}")
         tested = [j for j, alts in enumerate(conds) if alts]
@@ -190,15 +213,21 @@ def table(pack, k: str, slots: dict, dv: dict, at: str, place, refuse, gen: Gene
                 gen.add(place(here), f"{name}_cell(x, {r}, {j + 1}) :- {c}.")
         body = ", ".join([f"{k}(x)"] + [f"{name}_cell(x, {r}, {j + 1})" for j in tested])
         gen.add(rline, f"{name}_row(x, {r}) :- {body}.")
-        if not first:
+        if policy == "unique":
             gen.add(rline, f'{name}_value(x, "{outs[r - 1]}") :- {name}_row(x, {r}).')
-        elif holds:
-            gen.add(rline, f'{name}_value(x, "{outs[r - 1]}") :- {name}_win(x, {r}), !{name}_held(x).')
+        elif policy == "first":
+            gen.add(rline, f'{name}_value(x, "{outs[r - 1]}") :- {name}_win(x, {r}){held_guard}.')
+            for m, w in holds_pairs:
+                if w == r:
+                    gen.add(rline, f"{name}_held(x) :- {name}_win(x, {r}), {name}_open(x, {m}).")
         else:
-            gen.add(rline, f'{name}_value(x, "{outs[r - 1]}") :- {name}_win(x, {r}).')
-        for m, w in holds:
-            if w == r:
-                gen.add(rline, f"{name}_held(x) :- {name}_win(x, {r}), {name}_open(x, {m}).")
+            rk = ranks[r - 1]
+            gen.add(rline, f"{name}_rank(x, {rk}) :- {name}_row(x, {r}).")
+            if rk not in seen_ranks:
+                seen_ranks.add(rk)
+                gen.add(rline, f'{name}_value(x, "{outs[r - 1]}") :- {name}_win(x, {rk}){held_guard}.')
+            if r in holding:
+                gen.add(rline, f"{name}_open_rank(x, {rk}) :- {name}_open(x, {r}).")
         if unknown:
             for j in tested:
                 gen.add(rline, f"{name}_false(x, {r}) :- {inputs[j].table}(x, _), !{name}_cell(x, {r}, {j + 1}).")
@@ -210,11 +239,14 @@ def table(pack, k: str, slots: dict, dv: dict, at: str, place, refuse, gen: Gene
         gen.add(iline, f"{name}_has(x, {j + 1}) :- {inputs[j].table}(x, _).")
         gen.add(iline, f"{name}_missing(x, {j + 1}) :- {k}(x), !{name}_has(x, {j + 1}).")
     gen.add(head, f"{name}_applies(x) :- {name}_row(x, _).")
-    if first:
-        gen.add(head, f"{name}_later(x, n) :- {name}_row(x, m), {name}_row(x, n), m < n.")
-        gen.add(head, f"{name}_win(x, n) :- {name}_row(x, n), !{name}_later(x, n).")
-    else:
+    if policy == "unique":
         gen.add(head, f"{name}_conflict(x, m, n) :- {name}_row(x, m), {name}_row(x, n), m < n.")
+    else:
+        win_src = f"{name}_rank" if policy == "priority" else f"{name}_row"
+        gen.add(head, f"{name}_later(x, n) :- {win_src}(x, m), {win_src}(x, n), m < n.")
+        gen.add(head, f"{name}_win(x, n) :- {win_src}(x, n), !{name}_later(x, n).")
+        if policy == "priority" and holds:
+            gen.add(head, f"{name}_held(x) :- {name}_win(x, k), {name}_open_rank(x, j), j < k.")
     if holds:
         gen.add(head, f'{name}(x, "known", "") :- {name}_applies(x), !{name}_held(x).')
         gen.add(head, f'{name}(x, "unknown", "{NO_VALUE}") :- {name}_held(x).')
