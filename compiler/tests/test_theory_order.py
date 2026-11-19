@@ -62,7 +62,7 @@ def evaluate(precedes, rank, tmp_path):
     assert as_text(batch_eval(prog, precedes, rank)) == want
     if shutil.which("souffle"):
         import souffle
-        text = souffle.source(prog, [p.read_text("utf-8") for p in sorted((THEORY / "rules").glob("*.dl"))])
+        text = souffle.pack_source(prog, THEORY)
         data = {"ordered__precedes": sorted(precedes), "ordered__rank": sorted(rank)}
         assert souffle.run(prog, data, tmp_path, program_text=text) == want
     return want
