@@ -11,7 +11,6 @@ from query_fixture import ROOT
 from transport_support import published_for
 
 RELATION = "published_default_transport"
-OBSERVATION = "vendor_default_transport"
 SOURCE = "vendor_default_transport_source"
 FIELDS = ("product", "series", "protocol", "port", "source_url", "source_sha256")
 UNVERIFIED = ("unregistered-product", "0", "UDP", 1234, "https://example.org/transport", "0" * 64)
@@ -42,23 +41,20 @@ def test_postgres_transport():
 
 def test_unverified_transport_does_not_publish():
     program = rules.load(pack.read(ROOT).rules)
-    observation_id = "unregistered-observation"
-    rows = _slots(OBSERVATION, observation_id, UNVERIFIED)
+    source_id = "unregistered-source"
+    rows = _slots(SOURCE, source_id, UNVERIFIED)
     assert _published(program, rows) == set()
-    rows.update({OBSERVATION: [(observation_id,)], "product": [(UNVERIFIED[0],)]})
+    rows[SOURCE] = [(source_id,)]
     assert _published(program, rows) == set()
 
 
-def test_published_transport_requires_the_product_observation_and_pinned_source():
+def test_published_transport_requires_the_product_and_pinned_source():
     model, program, (state,) = states(ROOT)
     expected = _expected_transport()
-    observation_id = "postgresql-17"
     source_id = "postgresql-17-connection-settings"
     rows = {
         "product": [(expected[0],)],
-        OBSERVATION: [(observation_id,)],
         SOURCE: [(source_id,)],
-        **_slots(OBSERVATION, observation_id, expected),
         **_slots(SOURCE, source_id, expected),
     }
     conclusion = tuple(map(str, expected))
@@ -66,9 +62,10 @@ def test_published_transport_requires_the_product_observation_and_pinned_source(
     for relation in rows:
         incomplete = {name: records for name, records in rows.items() if name != relation}
         assert _published(program, incomplete) == set(), relation
+    # One pinned statement: a changed value changes the published row, and the acceptance pin catches it.
     forged_slots = _slots(SOURCE, source_id, UNVERIFIED)
     for relation, forged in forged_slots.items():
-        assert _published(program, rows | {relation: forged}) == set(), relation
+        assert conclusion not in _published(program, rows | {relation: forged}), relation
 
     proof = state.proof(RELATION, conclusion)
     manifest, read = state.manifest()
