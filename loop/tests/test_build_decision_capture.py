@@ -93,21 +93,6 @@ def capture_module(missing):
     return build_decision_capture
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=MissingDecisionHeadCapture,
-    reason=(
-        "extra: decisions/decision-heads.md: sections 1, 2 and 4. Add loop/build_decision_capture.py with "
-        "decision_rows(root), which reads root/decisions/*.md except AGENTS.md and returns {\"decision\": [...], "
-        "\"subject\": [...]}, each sorted by id. A head gives one std-decision row: id from the file name, title "
-        "from the line after the head, decider and supersedes as lists in the order of the head (supersedes left "
-        "out when absent), each day as a YYYY-MM-DD string and also as the whole number in its *_day slot, and "
-        "state and subject as written. Each subject gives one subject row whose title is its slug. A file "
-        "without a head gives no row. A head that breaks section 1 (a quoted day, an unknown field, an empty "
-        "list, a taken decision without valid_from, an unknown state or decider, no title line or no closing "
-        "---) raises ValueError whose message names the file as decisions/<name>.md."
-    ),
-)
 def test_decision_head_gives_one_decision_row(tmp_path):
     capture = capture_module(MissingDecisionHeadCapture)
 
