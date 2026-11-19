@@ -510,6 +510,7 @@ classes:
       world: {range: World}
       applies: {range: Applies, inlined: true}
       sealed: {range: Name, description: "The slot of `sealed at`. It has no place of its own: its kind's stands for it."}
+      relationship: {range: boolean, description: "`true` for a relationship kind; absent otherwise (decisions/language-relationship-kinds.md)."}
       slots:
         required: true
         multivalued: true
