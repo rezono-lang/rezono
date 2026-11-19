@@ -62,14 +62,11 @@ def test_legacy_unit_rates_alone_cannot_prove_a_choice():
     (2**62, 0, 2**63 - 1),
 ])
 def test_wide_charge_is_checked_without_losing_other_offers(tmp_path, rate, setup, claimed_total):
-    from shutil import copytree
-
     import yaml
 
-    from rezono_compiler import batch, explain, facts, pack, rules, trace
+    from rezono_compiler import batch, explain, facts, modules, pack, rules, trace
 
-    directory = tmp_path / "offer-selection"
-    copytree(RUN / "packs" / directory.name, directory)
+    directory = modules.copy_closure(RUN / "packs" / "offer-selection", tmp_path / "copy")
     terms = {"period_price_minor": rate, "setup_price_minor": setup}
     mode = "estimate" if claimed_total is None else "binding_quote"
     extra = {"offer": [
