@@ -20,7 +20,9 @@ jobs:
       matrix:
         shard: [library, projects, platform, tenant-capacity-interface, subsidy, compiler-calc, compiler-bound, compiler-rules]
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    # Platform builds about 2,300 generated operator crates on four cores; its integrity program
+    # alone takes about 19 minutes. The other shards finish within 30 minutes.
+    timeout-minutes: 60
     defaults:
       run:
         shell: bash
