@@ -6,6 +6,10 @@ For a mixed pull request, `prepare` checks out the base and lays the pull reques
 protected paths over it, and `run` executes only the added tests without a red mark.
 If every one of them passes there, they do not distinguish the old source from the
 new one, and `run` fails. A test that cannot be loaded on the base does not pass.
+`run` reads each test's outcome from a JUnit report, not from the exit code alone:
+a skipped or deselected test proves nothing, so `run` fails only when at least one
+added test really passes on the base and none fails. When none of them runs there,
+it says so and succeeds.
 
 From the repository root:
   python -I scripts/red_before.py discover BASE HEAD
@@ -18,6 +22,8 @@ import os
 from pathlib import Path, PurePosixPath
 import subprocess
 import sys
+import tempfile
+import xml.etree.ElementTree as ET
 
 # Read the guard beside this file, which in CI is the base copy of both.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -106,6 +112,20 @@ def prepare(base, head, selection):
     return 0
 
 
+def outcomes(report):
+    """Count (passed, failed, skipped) test cases in a pytest JUnit XML report."""
+    counts = [0, 0, 0]
+    for case in ET.parse(report).getroot().iter("testcase"):
+        tags = {child.tag for child in case}
+        if tags & {"failure", "error"}:
+            counts[1] += 1
+        elif "skipped" in tags:
+            counts[2] += 1
+        else:
+            counts[0] += 1
+    return tuple(counts)
+
+
 def run(selection):
     with open(selection, encoding="utf-8") as lines:
         tests = [line.rstrip("\n") for line in lines if line.strip()]
@@ -119,24 +139,44 @@ def run(selection):
     for test in tests:
         files.setdefault(test.split("::", 1)[0], []).append(test)
     failed = []
-    for path, ids in files.items():
-        print(f"::group::pytest {path} on the base", flush=True)
-        code = subprocess.run([sys.executable, "-m", "pytest", "-p", "no:cacheprovider", "-q", "-rA",
-                               "--tb=short", "--rootdir", root, "--", *ids], cwd=root).returncode
-        print("::endgroup::", flush=True)
-        print(f"{path}: pytest exit {code} on the base", flush=True)
-        if code:
-            failed.append(path)
+    passed = skipped = 0
+    with tempfile.TemporaryDirectory() as reports:
+        for number, (path, ids) in enumerate(files.items()):
+            report = Path(reports) / f"{number}.xml"
+            print(f"::group::pytest {path} on the base", flush=True)
+            code = subprocess.run([sys.executable, "-m", "pytest", "-p", "no:cacheprovider", "-q", "-rA",
+                                   "--tb=short", "--rootdir", root, f"--junitxml={report}", "--", *ids],
+                                  cwd=root).returncode
+            print("::endgroup::", flush=True)
+            try:
+                ok, bad, skip = outcomes(report)
+            except (OSError, ET.ParseError):
+                if not code:
+                    raise SystemExit(f"ERROR pytest exited 0 for {path} without a readable JUnit report")
+                ok, bad, skip = 0, 0, 0
+            print(f"{path}: pytest exit {code} on the base; {ok} passed, {bad} failed, {skip} skipped",
+                  flush=True)
+            # Exit 5 means nothing was collected: not run, so not a failure. Any other
+            # non-zero exit, such as a test that cannot be loaded, does not pass.
+            if bad or code not in (0, 5):
+                failed.append(path)
+            passed += ok
+            skipped += skip
     if failed:
         verdict = (f"The base source fails the added tests in {', '.join(failed)}: "
                    "they tell the base from the change.")
         status = 0
-    else:
-        verdict = (f"ERROR all {len(tests)} added test(s) without a red mark pass on the base source, "
-                   "so they do not tell the old source from the new one. Strengthen at least one until "
-                   "it fails on the base. Tests that do not depend on the source change go first, "
-                   "in a pull request of their own.")
+    elif passed:
+        verdict = (f"ERROR {passed} of the added test case(s) without a red mark pass on the base source "
+                   f"and none fails ({skipped} skipped), so they do not tell the old source from the new one. "
+                   "Strengthen at least one until it fails on the base. Tests that do not depend on the "
+                   "source change go first, in a pull request of their own.")
         status = 1
+    else:
+        verdict = (f"None of the {len(tests)} added test(s) without a red mark ran on the base source "
+                   f"({skipped} skipped, the rest not selected), so this check proves nothing about them.")
+        print(f"::warning::{verdict}")
+        status = 0
     print(verdict)
     summary = os.environ.get("GITHUB_STEP_SUMMARY")
     if summary:

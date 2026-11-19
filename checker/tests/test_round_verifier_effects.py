@@ -55,12 +55,6 @@ def fixture(prefixes):
     return archive, context, archive.pin("claim.json", claim)
 
 
-@pytest.mark.xfail(strict=True, raises=ImportError,
-                   reason="Waits for checker/tests/test_round_verifier.py--test_round_verifier_replays_the_choice "
-                          "(same module rezono_checker.rounds). Then rebuild the visible boundaries of a step with "
-                          "several effects from the retained domain: one certificate from the base per nonempty "
-                          "prefix of its plans, in their fixed order, as decisions/admission-transport.md section 7 "
-                          "fixes. Checker only.")
 def test_round_verifier_rebuilds_the_boundaries_of_a_multi_effect_step():
     # Control: both prefix certificates are valid on their own.
     from rezono_checker.transition import check_transition_certificate

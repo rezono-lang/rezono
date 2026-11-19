@@ -22,8 +22,9 @@ FIRST = table(["level", "tone"],
     raises=pack.CompileError,
     reason="Lower a table first to the named outcome and value relations of a unique table, without the conflict "
            "invariant, in compiler/rezono_compiler/rezono_table.py and rezono_extend.py. Read docs/rezono/tables.md "
-           "section 3 and decisions/language-tables.md, section Lowering a first table. Remove the case 'first' from "
-           "the refusals in compiler/tests/test_rezono_table.py, which this task may change. No reader dependency.",
+           "section 3 and decisions/language-tables.md, section Lowering a first table. Ready for a worker: the refusal "
+           "of a first table is gone from compiler/tests/test_rezono_table.py, so only this mark goes. No reader "
+           "dependency.",
 )
 def test_lower_table_first(tmp_path):
     d = written(tmp_path, LEVEL, TONE, STANDING, ETA, {"extend": "Eta", "derived": [FIRST]})

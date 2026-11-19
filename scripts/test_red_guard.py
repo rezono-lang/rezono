@@ -37,6 +37,21 @@ def main():
             raise AssertionError(f"{label}: expected {expected}, got {actual}")
         print(f"{'ALLOW' if actual else 'DENY'} without planner: {label}")
     planner_cases(reason, function)
+    workflow_cases()
+
+
+def workflow_cases():
+    """The workflows that define required checks need the planner label to change."""
+    for path in (".github/workflows/ci.yml", ".github/workflows/disposable-cluster.yml"):
+        for status, after in (("M", b"jobs: {}\n"), ("D", None)):
+            change = Change(path, status, b"jobs: {check: {}}\n", after)
+            errors, notes = review([change], planner=False)
+            if errors != [f"ERROR planner label required for {ascii(path)}"]:
+                raise AssertionError(f"{status} {path} without planner: errors {errors}")
+            errors, notes = review([change], planner=True)
+            if errors or (path.endswith("ci.yml") and f"CHANGED {path}" not in notes):
+                raise AssertionError(f"{status} {path} with planner: errors {errors}, notes {notes}")
+            print(f"DENY without planner, ALLOW with planner: {status} {path}")
 
 
 def planner_cases(reason, function):
@@ -91,6 +106,9 @@ def planner_cases(reason, function):
         edit(".github/workflows/ci.yml", b"", b""),
     ], False, ["REMOVED tests/test_old.py", "CHANGED examples/demo/expected/rows.json",
                "CHANGED tests/test_total.py::test_total", "CHANGED .github/workflows/ci.yml"])
+    run("weakened expectation without a source change", [
+        edit("compiler/tests/test_total.py", other, other.replace(b"== 4", b"is not None")),
+    ], False, ["CHANGED compiler/tests/test_total.py::test_total"])
     errors, notes = review([edit("tests/test_count.py", pair, lifted + b"\n" + other),
                             edit("src/count.py", b"", b"")], planner=False)
     if errors or any(n.startswith("CHANGED tests/") for n in notes):

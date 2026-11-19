@@ -115,8 +115,12 @@ def lower(decl: dict, at: str, own: dict[str, str], owners: dict[str, list[str]]
     if "applies" in decl:
         refuse(f"{at}/applies", "`applies` is not lowered yet")
         ok = False
-    if "sealed" in decl:
+    sealed = decl.get("sealed")
+    if "sealed" in decl and not extended_format:
         refuse(f"{at}/sealed", "`sealed at` is not lowered yet")
+        ok = False
+    elif "sealed" in decl and not (isinstance(sealed, str) and NAME.fullmatch(sealed)):
+        refuse(f"{at}/sealed", "`sealed at` names the period slot of the kind", "§5a")
         ok = False
     for index, _ in enumerate(decl.get("derived") or []):
         refuse_derived(f"{at}/derived/{index}", refuse)
@@ -141,6 +145,8 @@ def lower(decl: dict, at: str, own: dict[str, str], owners: dict[str, list[str]]
             result["is_a"] = parent
         if relationship:
             result["represents_relationship"] = True
+        if "sealed" in decl:
+            result.setdefault("annotations", {})["seal"] = sealed
         if equations:
             result.setdefault("annotations", {})["path_equations"] = equations
         if rules:

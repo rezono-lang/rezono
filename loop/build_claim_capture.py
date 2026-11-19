@@ -2,10 +2,11 @@
 from __future__ import annotations
 
 import re
-from datetime import datetime
+from datetime import UTC, datetime
 
 _PREFIX = "refs/heads/task/"
 _SHA = re.compile(r"[0-9a-f]{40}")
+_EPOCH = datetime(1970, 1, 1, tzinfo=UTC)
 
 
 def _sha(value: object, what: str) -> str:
@@ -23,11 +24,18 @@ def _unix(timestamp: object) -> int:
         raise ValueError("push timestamp is not ISO 8601") from error
     if moment.tzinfo is None or moment.utcoffset() is None:
         raise ValueError("push timestamp has no UTC offset")
-    return int(moment.timestamp())
+    elapsed = moment - _EPOCH
+    if elapsed.microseconds:
+        raise ValueError("push timestamp is not a whole second")
+    return elapsed.days * 86400 + elapsed.seconds
 
 
-def claim_rows(refs, activity, *, run, observed_at, source):
-    """Return the BuildClaim and BuildClaimActivity rows for the task refs."""
+def claim_rows(refs, activity, *, run, observed_at, source, activity_source):
+    """Return the BuildClaim and BuildClaimActivity rows for the task refs.
+
+    Every push record of a listed claim becomes a BuildClaimActivity row with ``activity_source``,
+    the origin of the activity answer. The adapter does not choose the latest push; the rules do.
+    """
     generations: dict[str, str] = {}
     for entry in refs:
         name = entry["ref"]
@@ -42,13 +50,11 @@ def claim_rows(refs, activity, *, run, observed_at, source):
         claim = name[len("refs/heads/"):]
         claims.append({"id": claim, "run": run, "branch": claim, "generation": generations[name],
                        "observed_at": observed_at, "source": source})
-        newest = None
-        for record in activity.get(name, ()):
-            candidate = (_unix(record["timestamp"]), _sha(record["after"], f"push to {name}"))
-            if newest is None or candidate > newest:
-                newest = candidate
-        if newest is not None:
-            pushed_at, after = newest
-            pushes.append({"id": f"{claim}@{after}", "claim": claim, "after": after,
-                           "pushed_at": pushed_at, "source": source})
+        candidates = {
+            (_unix(record["timestamp"]), _sha(record["after"], f"push to {name}"))
+            for record in activity.get(name, ())
+        }
+        for pushed_at, after in sorted(candidates):
+            pushes.append({"id": f"{claim}@{after}@{pushed_at}", "claim": claim, "after": after,
+                           "pushed_at": pushed_at, "source": activity_source})
     return {"build_claim": claims, "build_claim_activity": pushes}
