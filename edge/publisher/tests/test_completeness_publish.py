@@ -27,7 +27,7 @@ def published(epoch, bucket):
 
 
 @pytest.mark.xfail(strict=True, raises=(ImportError, CompileError, TypeError),
-                   reason="Waits for edge/publisher/tests/test_evidence_batch.py--test_batch_admits_evidence_before_"
+                   reason="M2: Waits for edge/publisher/tests/test_evidence_batch.py--test_batch_admits_evidence_before_"
                           "the_rules. Then pass Epoch.evidence from publish.verify to check_epoch on the complete side, "
                           "list completeness_receipts and rounds in the complete manifest from publish.plan, and keep "
                           "the trusted context out of every manifest, as decisions/admission-transport.md sections 2 "
