@@ -75,12 +75,6 @@ REJECTED = [
 ]
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="Write admission_binding.load_binding and the binding schema as decisions/k8s-admission-binding-checks.md "
-           "specifies under Schema. Write in k8s-admission/admission_binding.py and "
-           "k8s-admission/resources/admission-binding.schema.json.",
-)
 def test_binding_schema():
     import jsonschema
     from admission_binding import load_binding
