@@ -313,6 +313,16 @@ SHARED_READERS = {
     "edge/plugins/*/plugin.yaml": ("contracts",),
     "contracts/output-index.yaml": ("edge/publisher",),
     "viewer/src/lib/canon.ts": ("compiler", "edge/publisher", "rezono"),
+    # Directories of one component that another component's tests read as data.
+    # rezono/test/test_message_catalogue.py reads the compiler's sources for the codes they report.
+    "compiler/rezono_compiler/": ("rezono",),
+    "run/packs/": ("compiler",),
+    "contracts/fixtures/": ("edge/publisher", "examples"),
+    # compiler/tests/test_domain_free.py scans the readers' sources and tests for domain words.
+    "edge/gate/": ("compiler",),
+    "tests/slip/": ("compiler",),
+    "tools/mcp/": ("compiler",),
+    "tools/repl/": ("compiler",),
     # The build pack: the loop tests read its schema and rules, and the converter
     # regression parses every tracked Datalog file.
     "build/": ("compiler", "loop"),
@@ -495,6 +505,16 @@ def area_readers(root: Path, revisions: tuple[str, ...], path: str, folders: set
             if owner := component_owner(reader, folders):
                 readers.add(owner)
     return readers
+
+
+GENERIC_STEMS = frozenset({"__init__", "__main__", "conftest", "index", "package", "package-lock", "pyproject",
+                           "README", "setup"})
+
+
+def changed_file_names(path: str) -> set[str]:
+    """The name by which another file refers to a changed file; none for an entry point or manifest."""
+    stem = Path(path).stem
+    return set() if stem in GENERIC_STEMS else {stem}
 
 
 def independent_test_file(root: Path, revisions: tuple[str, ...], path: str, owner: str, folders: set[str]) -> bool:
@@ -726,23 +746,40 @@ def pull_request_selection(components: list[Component], root: Path,
                 edges.setdefault(source, set()).update(set(consumers) & folders)
     except (OSError, ValueError, AttributeError, KeyError, TypeError, subprocess.CalledProcessError) as error:
         return everything(f"the selection failed ({type(error).__name__})")
-    # A deferred dependent is still traversed, so what depends on it runs.
+    def names_a_change(folder: str) -> str | None:
+        """A changed file of another component that the deferred component names, in either tree."""
+        for path in changed:
+            names = changed_file_names(path)
+            if names and component_owner(path, folders) != folder and any(
+                    files_naming(root, revision, names, folder + "/") for revision in revisions):
+                return path
+        return None
+
+    # A deferred dependent is still traversed, so what depends on it runs. It runs
+    # itself when its files name a changed file: then it reads that file directly.
     touched = direct | pending
     affected, deferred = set(), set()
     queue = sorted(pending)
-    while queue:
-        folder = queue.pop(0)
-        if folder in affected or folder in deferred:
-            continue
-        if folder in PR_DEFERRED_DEPENDENTS and folder not in touched:
-            deferred.add(folder)
-        else:
-            affected.add(folder)
-        for consumer in sorted(edges.get(folder, ())):
-            if consumer not in reasons:
-                reasons[consumer] = f"`{origins[folder]}` through `{folder}`"
-                origins[consumer] = origins[folder]
-            queue.append(consumer)
+    try:
+        while queue:
+            folder = queue.pop(0)
+            if folder in affected or folder in deferred:
+                continue
+            if folder in PR_DEFERRED_DEPENDENTS and folder not in touched:
+                if (path := names_a_change(folder)) is not None:
+                    reasons[folder], origins[folder] = f"`{path}`, which it names", path
+                    affected.add(folder)
+                else:
+                    deferred.add(folder)
+            else:
+                affected.add(folder)
+            for consumer in sorted(edges.get(folder, ())):
+                if consumer not in reasons:
+                    reasons[consumer] = f"`{origins[folder]}` through `{folder}`"
+                    origins[consumer] = origins[folder]
+                queue.append(consumer)
+    except (OSError, ValueError, subprocess.CalledProcessError) as error:
+        return everything(f"the selection failed ({type(error).__name__})")
     return [c for c in components if c.folder in direct | affected], reasons
 
 

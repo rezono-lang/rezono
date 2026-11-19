@@ -180,6 +180,8 @@ class RepositoryPullRequestSelectionTests(unittest.TestCase):
         self.assertLessEqual(declared["compiler"], selected)  # edge/publisher declares rezono-compiler
         self.assertLessEqual(set(ci.PR_FILE_CONSUMERS["compiler"]) & folders - ci.PR_DEFERRED_DEPENDENTS, selected)
         self.assertNotIn("tools/mcp", selected)
+        # rezono/test/test_message_catalogue.py reads the compiler's sources, also a new one.
+        self.assertIn("rezono", self.selected("compiler/rezono_compiler/a_new_module.py")[0])
         self.assertLess(selected, folders)
 
     def test_loop_and_run_are_deferred_dependents_of_a_pull_request_only(self):
@@ -192,8 +194,8 @@ class RepositoryPullRequestSelectionTests(unittest.TestCase):
         with patch.object(ci, "PR_DEFERRED_DEPENDENTS", frozenset()):
             restored, _, _ = self.selected(path)
         self.assertEqual(restored, selected | {"loop", "run"})
-        # A change to the loop itself still runs it.
-        self.assertIn("loop", self.selected("loop/replay.py")[0])
+        # A change to the loop itself still runs it, and run/tests/test_offline_run.py executes loop/replay.py.
+        self.assertLessEqual({"loop", "run"}, self.selected("loop/replay.py")[0])
 
     def test_the_queue_runs_at_least_the_pull_request_closure(self):
         for path in ("loop/replay.py", "loop/tests/test_case.py", "run/dispatch_policy.py",
@@ -438,11 +440,18 @@ class PullRequestSelectorTests(unittest.TestCase):
         reader = {"run/tests/test_replay.py": "from loop.tests.test_build_choice import CHOICE\n"}
         selected, summary = self.changed_matrix({"loop/tests/test_build_choice.py": "def test_choice(): pass\n"},
                                                 tree=reader)
-        self.assertEqual(selected, {"loop", "examples"})  # run is a deferred dependent
+        # run is a deferred dependent, but it names the changed test file, so it reads it and runs.
+        self.assertEqual(selected, {"loop", "run", "examples"})
         self.assertIn("- `examples`: `loop/tests/test_build_choice.py` through `loop`", summary)
-        # The loop's own source runs its consumers that are not deferred.
+        self.assertIn("- `run`: `loop/tests/test_build_choice.py`, which it names", summary)
+        # The loop's own source runs its consumers that are not deferred,
         selected, _ = self.changed_matrix({"loop/build_choice.py": "CHOICE = 2\n"})
         self.assertEqual(selected, {"loop", "examples"})
+        # and a deferred one that executes the changed module by name.
+        executes = {"run/tests/test_offline.py": 'MODULE = ROOT / "loop" / "build_choice.py"\n'}
+        selected, summary = self.changed_matrix({"loop/build_choice.py": "CHOICE = 2\n"}, tree=executes)
+        self.assertEqual(selected, {"loop", "run", "examples"})
+        self.assertIn("- `run`: `loop/build_choice.py`, which it names", summary)
 
     def test_conftest_runs_the_component_closure(self):
         selected, _ = self.changed_matrix({"compiler/tests/conftest.py": "FIXTURE = 2\n"})
@@ -604,6 +613,10 @@ class SharedReaderTests(unittest.TestCase):
         for graph in (ci.FILE_CONSUMERS, ci.PR_FILE_CONSUMERS):
             for dependency, consumers in graph.items():
                 edges.setdefault(dependency, set()).update(consumers)
+        # A directory inside another component, such as a source tree a test globs,
+        # is read whether or not the literal is rooted in the test's own syntax.
+        directories = {parent.as_posix() for path in paths for parent in Path(path).parents}
+        directories = {directory for directory in directories if "/" in directory}
         missing = set()
         observed = set()
         for relative in sorted(paths):
@@ -620,8 +633,18 @@ class SharedReaderTests(unittest.TestCase):
                 if not re.fullmatch(r"[a-zA-Z0-9_./*?\[\]-]+", hint):
                     continue
                 path = re.sub(r"^(?:\.\./|\./)+", "", hint).rstrip("/")
-                if rooted and path in paths and ci.shared_readers(path) is None:
-                    provider = ci.component_owner(path, folders)
+                inside = path + "/_entry" if path in directories else path
+                if (rooted and path in paths or path in directories) and owner != ci.component_owner(inside, folders):
+                    provider = ci.component_owner(inside, folders)
+                    readers = ci.shared_readers(inside)
+                    if readers is not None and not SHARED_PATH.match(hint):
+                        if owner in readers or owner in edges.get(provider, set()):
+                            observed.add((path, owner))
+                        else:
+                            missing.add((relative, path, owner))
+                        continue
+                if (rooted and path in paths or path in directories) and ci.shared_readers(inside) is None:
+                    provider = ci.component_owner(inside, folders)
                     if provider:
                         if owner != provider and owner not in edges.get(provider, set()):
                             missing.add((relative, path, owner))
