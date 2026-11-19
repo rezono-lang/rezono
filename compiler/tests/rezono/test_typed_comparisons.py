@@ -141,13 +141,6 @@ def comparisons(node):
             yield from comparisons(value)
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=TypedComparisonMismatch,
-    reason="extra: Keep utc_instant and binary_text on both operands when "
-           "compiler/rezono_compiler/native_rule_dl.py plans the native form of a Datalog comparison. Read "
-           "decisions/ordered-rule-scalars.md.",
-)
 def test_converter_keeps_typed_comparisons():
     converter = importlib.import_module("rezono_compiler.native_rule_dl")
     plan = converter.convert_modules([{"pack": "base", "file": "rules/order.dl", "text": DATALOG}],
