@@ -7,7 +7,7 @@ import pytest
 from query_fixture import ROOT
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError, reason="Depends on test_kubernetes_support. Consume the published support and synthetic service binding with runtime query parameters; implement the support_window modules under examples/platform. Read decisions/platform-source-and-scenario-cases.md.")
+@pytest.mark.xfail(strict=True, raises=AssertionError, reason="M2: Depends on test_kubernetes_support. Consume the published support and synthetic service binding with runtime query parameters; implement the support_window modules under examples/platform. Read decisions/platform-source-and-scenario-cases.md.")
 def test_support_window_uses_explicit_inclusive_dates():
     from rezono_compiler import scenarios
     from rules_support import State, states

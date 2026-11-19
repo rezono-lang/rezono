@@ -10,7 +10,7 @@ IGNITION = '{"ignition": {"version": "3.4.0"},\n "passwd": {}}\n'
 
 
 @pytest.mark.xfail(strict=True, reason=(
-    "Read decisions/run-price-enforcement.md, Installation. Implement body(operating_system, image_url, "
+    "M4: decisions/run-price-enforcement.md: Read the section Installation. Implement body(operating_system, image_url, "
     "image_sha256, ignition, hostname) in run/ovh_reinstall.py."
 ))
 def test_ovh_reinstall():

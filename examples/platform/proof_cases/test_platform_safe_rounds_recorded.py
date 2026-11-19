@@ -20,7 +20,7 @@ def observe(run, cut, subject, attribute, value, evidence):
 
 
 @pytest.mark.xfail(strict=True, raises=AssertionError, reason=(
-    "Depends on test_startup_transition_cases, test_restore_offline_dependencies and test_certified_round_replay. "
+    "M2: Depends on test_startup_transition_cases, test_restore_offline_dependencies and test_certified_round_replay. "
     "Bind platform steps to certified rounds and publish startup and isolated management dataset restore reader "
     "questions and their actual goal witnesses per decisions/safe-step-rounds.md, sections 3, 4 and 7."))
 def test_platform_safe_rounds_recorded(tmp_path):

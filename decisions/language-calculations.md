@@ -99,12 +99,15 @@ A path in a calculation resolves against the subject kind, in this order of kind
 | --- | --- |
 | `p`, where `p` is a parameter in scope | `{parameter: p}` |
 | `r`, where `r` is another derived value of the same subject in the pack closure | `{rule: r}` |
+| `Kind.r`, where `Kind` is the subject kind and `r` another derived value of it | `{rule: r}`. This is the full path of a derived value whose name is also a parameter. |
 | `s`, a slot of the subject kind | `{fact: subject.s}` |
 | `rel.col`, where `rel` is a relation whose first column has the subject kind and `col` is another column | `{fact: rel.col}` |
 | `rel`, a relation whose only column has the subject kind | `{fact: rel}`, read as presence: true when the subject has a row |
 | An integer literal | `{integer: "N"}` |
 | `true`, `false` | `{boolean: true}`, `{boolean: false}` |
 | An integer quantity literal in a declared unit | `{integer: "N", unit: U}` |
+
+A derived value never reads itself, so inside `derived r` the bare name `r` can only be a parameter or a fact. For example, `examples/subsidy-scheme` has a parameter and a derived value both named `advice_allowance`: the derived value reads the parameter as `advice_allowance`, and `entitlement` reads the derived value as `Application.advice_allowance`. The parameter's name cannot change, because it is the `name` of its rows.
 
 A relation read like a slot is a calculation's existing column and presence reading. The compiler still decides how a fact is read (attribute, optional, column, presence), as it does for `calc/*.yaml`. A decimal or percentage literal lowers to an exact `ratio` of integers. For example, `13.7 %` gives `ratio(137, 1, 1000)`.
 
@@ -152,3 +155,5 @@ The red tests per building block are planned separately. Each one compares with 
 - lowering `examples/subsidy-scheme/calc/award.yaml` and `examples/subsidy/calc/drift.yaml` and `date.yaml` from hand-written Rezono, comparing the bound `ir/calc.json` with the one the YAML gives;
 - lowering a row-backed parameter to `parameters` and `parameter_choice`, with a counter-case of two parameter sources;
 - each `R050` refusal at its span.
+
+They are `rezono/test/test_calculation_versions.py`, `compiler/tests/rezono/test_lower_calculation.py` and `compiler/tests/rezono/test_lower_parameters.py`.
