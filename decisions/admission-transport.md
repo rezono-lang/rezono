@@ -94,6 +94,8 @@ The protected relations are ordinary relations for access. A role reads them onl
 
 The round verifier builds its context only from the retained round context. It enumerates the candidate batches over the pinned domain up to the width, checks a certificate for every visible subset of the claimed batch with `check_transition_certificate`, and recomputes the deterministic selection of safe transition rounds. Every alternative that would precede the claimed batch needs a certificate for one of its visible subsets that the checker finds violating. Missing evidence for an alternative leaves the round unverified, so readiness waits instead of trusting a supplied verdict.
 
+Each step in the retained domain lists the plan hashes of its effects in their fixed order. A certificate binds `effect` to the canonical SHA-256 of the ordered list of plan hashes it applies, never to a step name. The verifier recomputes that digest from the domain and refuses a mismatch. A step with several effects has a visible boundary after each prefix of its effects, and each prefix needs its own certificate from the same base.
+
 ## 8. Names that apply
 
 This decision fixes the names at the admission boundary. Earlier drafts used others, and those names lapse.
