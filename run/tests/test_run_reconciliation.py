@@ -2,7 +2,9 @@
 
 from datetime import datetime
 
-from checked_questions import checked, registered
+import pytest
+
+from checked_questions import MissingReaderQuestion, checked, registered
 from rezono_canon import canonical_sha256
 
 
