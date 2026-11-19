@@ -52,7 +52,7 @@ def test_management_cluster_rights():
 
 @pytest.mark.cluster
 @pytest.mark.xfail(strict=True, raises=AssertionError, reason=(
-    "Depends on the disposable organization login, recorded RBAC reconciliation and test_management_cluster_rights. "
+    "M2: Depends on the disposable organization login, recorded RBAC reconciliation and test_management_cluster_rights. "
     "Check a witnessed withdrawal and the still-authenticated real API read per decisions/platform-management-access.md."))
 def test_management_membership_withdrawal():
     from management_probes import live_events

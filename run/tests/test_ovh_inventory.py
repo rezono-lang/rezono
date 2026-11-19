@@ -8,7 +8,7 @@ DELIVERED = ["srv-2.example.org", "srv-1.example.org"]
 
 
 @pytest.mark.xfail(strict=True, reason=(
-    "Read decisions/run-price-enforcement.md, Cleanup. Implement request() and remaining(listing, delivered) in "
+    "M4: decisions/run-price-enforcement.md: Read the section Cleanup. Implement request() and remaining(listing, delivered) in "
     "run/ovh_inventory.py: an unfiltered account-wide list, compared with the services the plan's orders delivered."
 ))
 def test_ovh_inventory():

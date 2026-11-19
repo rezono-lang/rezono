@@ -62,7 +62,7 @@ def archived(step="replace-link-a"):
 
 
 @pytest.mark.xfail(strict=True, raises=(ImportError, CompileError, TypeError),
-                   reason="Waits for checker/tests/test_evidence_admission.py--test_evidence_admits_rounds_after_"
+                   reason="M2: Waits for checker/tests/test_evidence_admission.py--test_evidence_admits_rounds_after_"
                           "receipts, edge/publisher/tests/test_evidence_batch.py--test_batch_admits_evidence_before_"
                           "the_rules (same batch code) and compiler/tests/test_protected_admission_relations.py--"
                           "test_admission_relations_are_protected_inputs. Then insert the admitted verified_round and "

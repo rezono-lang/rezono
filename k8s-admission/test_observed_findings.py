@@ -20,7 +20,7 @@ def finding(obj, reason, **detail):
 
 @pytest.mark.xfail(
     strict=True,
-    reason="Write observed_findings.observed_findings as decisions/k8s-admission-translator.md specifies under "
+    reason="extra: Write observed_findings.observed_findings as decisions/k8s-admission-translator.md specifies under "
            "What CEL cannot do. Write in k8s-admission/observed_findings.py.",
 )
 def test_observed_findings():

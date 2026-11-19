@@ -90,7 +90,7 @@ def layout(bucket, candidate_content=CONTENT):
 
 
 @pytest.mark.xfail(strict=True, raises=(ImportError, CompileError, TypeError),
-                   reason="Waits for checker/tests/test_evidence_admission.py--test_evidence_admits_receipts_from_the_"
+                   reason="M2: Waits for checker/tests/test_evidence_admission.py--test_evidence_admits_receipts_from_the_"
                           "pinned_context and compiler/tests/test_protected_admission_relations.py--test_admission_"
                           "relations_are_protected_inputs. Then give batch.epoch the keyword evidence and Epoch the "
                           "field evidence, and insert the admitted rows as base rows before the rules, as "

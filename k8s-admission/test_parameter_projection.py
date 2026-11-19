@@ -13,7 +13,7 @@ from translator_support import FIXTURES, IMAGE_A, IMAGE_B, fixture, load_program
 
 @pytest.mark.xfail(
     strict=True,
-    reason="Write parameter_projection.project_parameters as decisions/k8s-admission-translator.md specifies under "
+    reason="M4: Write parameter_projection.project_parameters as decisions/k8s-admission-translator.md specifies under "
            "Parameters. Write in k8s-admission/parameter_projection.py.",
 )
 def test_parameter_projection():
