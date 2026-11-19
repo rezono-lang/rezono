@@ -523,13 +523,17 @@ def reference_patterns(path: str, owner: str | None) -> list[re.Pattern[str]]:
     if source.stem in GENERIC_STEMS:
         return []
     stem = re.escape(source.stem)
-    patterns = [rf"(?<![\w.-]){re.escape(source.name)}\b", rf"/{stem}(?:\.\w+)?['\x22`]"]
+    patterns = [rf"(?<![\w.-]){re.escape(source.name)}\b", rf"/{stem}(?:\.\w+)?['\x22`]",
+                # The last segment of a joined path, as in ROOT / "loop" / "replay".
+                rf"/\s*['\x22]{stem}['\x22]"]
     if source.suffix == ".py" and owner:
         module = ".".join(Path(path[len(owner) + 1:]).with_suffix("").parts)
         package, _, name = module.rpartition(".")
         if package:
+            # A dotted module, or an import from its package on one line or in parentheses over several.
             patterns += [rf"(?<!\w){re.escape(module)}\b",
-                         rf"\bfrom\s+{re.escape(package)}\s+import\s[^\n]*\b{re.escape(name)}\b"]
+                         rf"\bfrom\s+{re.escape(package)}\s+import\s[^\n(]*\b{re.escape(name)}\b",
+                         rf"\bfrom\s+{re.escape(package)}\s+import\s*\([^)]*\b{re.escape(name)}\b"]
         else:
             patterns.append(rf"^\s*(?:from\s+{stem}\s+import\b|import\s+{stem}\b)")
     return [re.compile(pattern, re.MULTILINE) for pattern in patterns]
