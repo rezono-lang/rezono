@@ -1,0 +1,8 @@
+vendor_default_transport:
+  - id: keycloak-26.0.0-transport
+    product: keycloak
+    series: 26.0.0
+    protocol: TCP
+    port: 8443
+    source_url: 'https://raw.githubusercontent.com/keycloak/keycloak/26.0.0/docs/guides/server/enabletls.adoc'
+    source_sha256: 1163bd494afd2dced3c4e70e01106094ab8dc370962706ba2ec489943f81e248
