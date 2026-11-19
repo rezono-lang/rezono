@@ -22,6 +22,7 @@ In the merge queue no labels are read and this rule does not apply.
 import argparse
 import ast
 from collections import Counter, namedtuple
+import configparser
 import copy
 from fnmatch import fnmatchcase
 import hashlib
@@ -33,6 +34,7 @@ import re
 import subprocess
 import sys
 import tokenize
+import tomllib
 
 
 # The merge queue runs a candidate's own workflow files, so the workflows that define the
@@ -84,7 +86,8 @@ def protected(path):
             or p.name == "conftest.py" or p.name.startswith("test_")
             or p.name.endswith(("_test.py", "_support.py", ".test.ts", ".spec.ts",
                                 ".test.js", ".spec.js", ".snap", ".golden"))
-            or p.name in {"frozen_baseline.py", "reference.py", "pytest.ini"} | EXPECTATIONS
+            or p.name in {"frozen_baseline.py", "reference.py", "pytest.ini"} | STARTUP | EXPECTATIONS
+            or p.suffix == ".pth"
             or "fixture" in p.stem or p.stem.endswith(("-cases", "_cases", "-vectors", "_vectors"))
             or p.parts[0] == "blocked")
 
@@ -248,10 +251,46 @@ LIMIT = 2_000_000
 UNREADABLE = (SyntaxError, ValueError, UnicodeError, RecursionError)
 
 
+# Python runs these at start-up, before pytest collects anything; a .pth file may run a line of
+# code as well. setup.py is protected as well as source: it can register a pytest plugin.
+STARTUP = {"sitecustomize.py", "usercustomize.py", "setup.py"}
+# A package's metadata can register a pytest plugin (the `pytest11` entry point). CI installs
+# the candidate, so the plugin loads and its hooks can drop a red test from the collection.
+PLUGIN_CONFIG = {"pyproject.toml", "setup.cfg"}
+UNREADABLE_CONFIG = b"\xff"
+
+
+def plugin_config(path):
+    return PurePosixPath(path.lower()).name in PLUGIN_CONFIG
+
+
+def pytest_plugins(path, blob):
+    """The pytest11 entry points a pyproject.toml or setup.cfg blob registers, or None.
+
+    A blob that does not parse gives its bytes, so that any change to it counts.
+    """
+    if blob is None:
+        return None
+    try:
+        text = blob.decode("utf-8")
+        if PurePosixPath(path.lower()).name == "pyproject.toml":
+            data = tomllib.loads(text)
+            return (data.get("project", {}).get("entry-points", {}).get("pytest11"),
+                    data.get("tool", {}).get("poetry", {}).get("plugins", {}).get("pytest11")) or None
+        parser = configparser.ConfigParser(interpolation=None, strict=False)
+        parser.read_string(text)
+        if parser.has_option("options.entry_points", "pytest11"):
+            return parser.get("options.entry_points", "pytest11")
+        return None
+    except (UnicodeError, tomllib.TOMLDecodeError, configparser.Error, AttributeError):
+        return blob
+
+
 def source(path):
     """A path the guard does not protect, or policy that is also source; not documentation."""
-    return path in SOURCE_POLICY or not (protected(path) or path.endswith(".md")
-                                         or PurePosixPath(path).parts[0] in {"docs", "decisions"})
+    if path in SOURCE_POLICY or PurePosixPath(path).name == "setup.py":
+        return True
+    return not (protected(path) or path.endswith(".md") or PurePosixPath(path).parts[0] in {"docs", "decisions"})
 
 
 def is_param(node):
@@ -663,6 +702,13 @@ def review(changes, planner=False, head=None, labels=(), packs=frozenset(), pins
             unread.append(ascii(c.path))
         if c.path == CI_WORKFLOW:
             notes.append(f"CHANGED {CI_WORKFLOW}")
+        if (not protected(c.path) and plugin_config(c.path)
+                and pytest_plugins(c.path, c.before) != pytest_plugins(c.path, c.after)):
+            other.append(ascii(c.path))
+            notes.append(f"CHANGED {c.path} pytest plugins")
+            if not planner:
+                errors.append(f"ERROR planner label required for the pytest plugins in {ascii(c.path)}")
+            continue
         if not protected(c.path):
             continue
         quoted = ascii(c.path)
@@ -752,11 +798,15 @@ def changes(base, head):
         path = raw_path.decode("utf-8", "surrogateescape")
         old_mode, new_mode, old_id, new_id, status = header.decode().lstrip(":").split()
         sides = [None, None]
-        if protected(path):
+        if protected(path) or plugin_config(path):
             # Git objects are data. Never open a path in the proposed revision.
             for i, (mode, oid) in enumerate(((old_mode, old_id), (new_mode, new_id))):
                 if mode == "100644" and int(git("cat-file", "-s", oid)) <= LIMIT:
                     sides[i] = git("cat-file", "blob", oid)
+                elif mode != "000000" and plugin_config(path):
+                    # A link or an oversized file: not readable as metadata, so it counts as a
+                    # change of its plugins (bytes that are not UTF-8).
+                    sides[i] = UNREADABLE_CONFIG
         yield Change(path, status[0], *sides)
 
 
