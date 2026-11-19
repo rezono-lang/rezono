@@ -3,7 +3,7 @@ import { refused, type Diagnostic, type Span } from './parse-support.ts';
 import type { Node } from 'ohm-js';
 import type { Module } from './module.ts';
 import type { ParamDecl } from './module-parameter.ts';
-import type { DerivedDecl } from './module-derived.ts';
+import type { DefinitionDecl, DerivedDecl } from './module-derived.ts';
 import type { Expr } from './tree.ts';
 
 /** A validity range as written: a start and an end exclusive, or a start alone for an open range (§3). */
@@ -16,6 +16,8 @@ export interface VersionDecl {
 	known?: string;
 	value?: Expr;
 	source?: string;
+	/** The definitions of a version of a derived value written without `= value`: the block under its line. */
+	definitions?: DefinitionDecl[];
 }
 
 /** A stage context: one stage, or a range from a stage, closed at an exclusive end stage or open. */
@@ -38,9 +40,23 @@ export function contexts(nodes: Node): Contexts {
 	return out;
 }
 
-export function readVersion(line: Logical, build: Build): VersionDecl {
-	build.leaf(line);
-	return build.strip(line.read!);
+/**
+ * A version line. Under a derived value, `readDefinitions` reads the block of a version without `= value`: its
+ * definitions (decisions/language-calculations.md, Versions with definitions). Any other version is one line.
+ */
+export function readVersion(
+	line: Logical,
+	build: Build,
+	readDefinitions?: (lines: Logical[], build: Build) => DefinitionDecl[] | undefined
+): VersionDecl {
+	const decl = build.strip<VersionDecl>(line.read!);
+	if (!readDefinitions || decl.value !== undefined || !line.block.length) {
+		build.leaf(line);
+		return decl;
+	}
+	const definitions = readDefinitions(line.block, build);
+	if (definitions) decl.definitions = definitions;
+	return decl;
 }
 
 const printDuring = (d: During) => ('stage' in d ? d.stage : `${d.from}..${d.until === undefined ? '' : `<${d.until}`}`);

@@ -96,14 +96,6 @@ class MissingCollectTableLowering(AssertionError):
     """The compiler refused a `table collect`, which decisions/language-tables.md lowers."""
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=MissingCollectTableLowering,
-    reason="extra: decisions/language-tables.md: Lower a table collect on a derived value T* to the named outcome, "
-           "the relation of its known members and the relation of its undecided members, without the conflict "
-           "invariant, in compiler/rezono_compiler/rezono_table.py and rezono_extend.py. Read docs/rezono/tables.md "
-           "section 3 and the section Lowering a collect table.",
-)
 def test_lower_table_collect(tmp_path):
     d = written(tmp_path, LEVEL, TONE, STANDING, ETA, {"extend": "Eta", "derived": [COLLECT]})
     try:
