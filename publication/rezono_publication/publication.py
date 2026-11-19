@@ -17,7 +17,10 @@ element without a readable value, withheld or none (its files cannot tell the tw
 shape of the role's read rules, never from the data, so the schema of a role's form depends on no hidden row.
 
 A derived relation is a kind of its own: its element id is Rezono's canonical row key `CJ([parts])`, so the id is
-the row, and each column is a known `Text` slot marked `derived`. An enum relation is schema (`enums`), not data.
+the row, and `tuple_key` keeps the column order that key follows. Each column is a known slot marked `derived`, of
+the type the bundle checked for it: its semantic type where the bundle gives one (a reference to a kind), else its
+physical rule type (`string` is `Text`, `integer` is `Integer`). A column of any other type is no publication.
+An enum relation is schema (`enums`), not data.
 Exact values only: an integer is `Integer` with Rezono's BIGINT bounds; nothing is ever a float.
 
 A subkind (`is_a`) is a kind with a `parent` that restates its parent's slots (§2.1). In Rezono an element of a
@@ -43,6 +46,8 @@ from .l0 import _number_spelling
 COMPLETE = "checker"  # the role whose snapshots are complete (contracts/manifest.yaml, Snapshot.complete)
 NOT_READ_IN_FULL = "not_read_in_full"  # the reason of an absence in a relation the role does not read in full
 BIGINT = ("-9223372036854775808", "9223372036854775807")  # Rezono's integer storage (docs/compiler.md, Tables)
+RULE_COLUMN_TYPES = {"string": "Text", "integer": "Integer"}  # contracts/bundle.yaml RuleColumnType
+ID_STORAGE = {"text": "string", "integer": "integer"}  # a kind's `id_type` as the rule column that names it
 BASE = "https://rezono.example/{pack}/"  # §2.1 `base` of a pack whose pack.yaml declares no `iri:`
 MANIFEST_KEYS = ("id", "epoch", "knowledge_time", "definition_sha256", "compiled")
 SWEEPS_FILE = "ir/sweeps.json"  # the compiled sweep grid: per role at the gate, never in a role's form
@@ -159,23 +164,49 @@ def schema_document(bundle: dict, full=None) -> tuple[dict, dict]:
         name = pascal(r["id"])
         if name in kinds:
             raise FormError(f"derived relation {r['id']} collides with kind {name}")
-        cols = [c["name"] for c in r["columns"]]
-        column_types = {}
-        for c in r["columns"]:
-            column_types[c["name"]] = "Text"
-            if c.get("type") == "integer":  # an integer column keeps its type: no text that is not an integer
-                column_types[c["name"]] = f"{name}{pascal(c['name'])}"
-                types[column_types[c["name"]]] = {"of": "Integer", "min": BIGINT[0], "max": BIGINT[1]}
+        slots = {}
+        for column in r["columns"]:
+            if column["name"] in slots:
+                raise FormError(f"{r['id']}: two columns `{column['name']}`")
+            slots[column["name"]] = _column_slot(r["id"], column, by_id, chains) | {"card": "1", "states": ["known"],
+                                                                          "derived": True}
         kinds[name] = {"world": "open" if partial(r["id"]) else r["world"], "id": {"type": "Text"},
-                       "slots": {c: {"type": column_types[c], "card": "1", "states": ["known"], "derived": True}
-                                 for c in cols}}
-        plan["derived"][r["id"]] = (name, cols)
+                       "slots": slots, "tuple_key": list(slots)}
+        plan["derived"][r["id"]] = (name, list(slots))
     doc = {"rezono": "1.0", "pack": pack, "base": base, "kinds": kinds}
     if types:
         doc["types"] = types
     if enums:
         doc["enums"] = enums
     return doc, plan
+
+
+def _column_slot(relation: str, column: dict, by_id: dict, chains: dict) -> dict:
+    """The value of a derived column's slot: its checked semantic type where the bundle gives one, else the scalar
+    of its physical rule type. Its semantic type stores what its physical type stores; a reference stores the
+    identifier of its target's root kind."""
+    where = f"{relation}.{column['name']}"
+    physical = column.get("type")
+    if not isinstance(physical, str) or physical not in RULE_COLUMN_TYPES:
+        raise FormError(f"{where}: unsupported rule column type {physical!r}")
+    scalar = {"type": RULE_COLUMN_TYPES[physical]}
+    if physical == "integer":
+        scalar |= {"min": BIGINT[0], "max": BIGINT[1]}
+    semantic = column.get("semantic")
+    if semantic is None:
+        return scalar
+    if not isinstance(semantic, dict) or semantic.get("base") != physical:
+        raise FormError(f"{where}: its semantic type does not store a {physical}")
+    if semantic.get("case") == "scalar":
+        return scalar
+    if semantic.get("case") == "ref":
+        target = semantic.get("target")
+        if target not in by_id:
+            raise FormError(f"{where}: refers to {target!r}, which is not a kind of the bundle")
+        if ID_STORAGE.get(by_id[chains[target][-1]].get("id_type")) != physical:
+            raise FormError(f"{where}: the identifier of {target} is not stored as a {physical}")
+        return {"ref": by_id[target]["class"]}
+    raise FormError(f"{where}: a {semantic.get('case')!r} column is not written as a publication yet")
 
 
 # --- rows ------------------------------------------------------------------------------------------------------
@@ -259,9 +290,11 @@ def row_json(doc: dict, plan: dict, epoch: dict) -> list[dict]:
                 else:
                     row[slot_name] = {"$" + ("unknown" if "unknown" in slot["states"] else "na"): ""}
     for rel, (name, cols) in plan["derived"].items():
+        slots = doc["kinds"][name]["slots"]
         for parts in epoch["rows"].get(rel, []):
             i = canonical_json(list(parts))
-            elems[name, i] = {"$kind": name, "$id": i, **dict(zip(cols, parts))}
+            elems[name, i] = {"$kind": name, "$id": i,
+                              **{c: {"$ref": v} if "ref" in slots[c] else v for c, v in zip(cols, parts)}}
     for w in epoch["witnesses"]:
         rel = w["conclusion"]["relation"]
         if rel in plan["derived"]:
@@ -314,7 +347,7 @@ def relations(doc: dict, plan: dict, rows: list[dict]) -> dict[str, set]:
         name, i = r["$kind"], r["$id"]
         if name in derived_table:
             t, cols = derived_table[name]
-            out[t].add(_key([r[c] for c in cols]))
+            out[t].add(_key([r[c]["$ref"] if isinstance(r[c], dict) else r[c] for c in cols]))
             continue
         for kind in l0.chain(doc, name):  # an element of a subkind is an element of every kind above it
             out[kind_table[kind]].add(_key([i]))

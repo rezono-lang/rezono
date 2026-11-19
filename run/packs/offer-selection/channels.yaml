@@ -2,3 +2,16 @@ kinds:
   - {kind: offer, shape: rect}
   - {kind: demand, shape: rect}
   - {kind: guarantee, shape: rect}
+  - {kind: allocation_workload, shape: rect}
+  - {kind: allocation_member, shape: rect}
+  - {kind: allocation_scope, shape: rect}
+  - {kind: allocation_comparison, shape: rect}
+  - {kind: allocation_candidate_coverage, shape: bar}
+  - {kind: allocation_candidate, shape: rect}
+  - {kind: allocation_assignment, shape: bar}
+  - {kind: allocation_host, shape: rect}
+  - {kind: allocation_charge, shape: bar}
+  - {kind: allocation_supplier_limit, shape: bar}
+  - {kind: allocation_reserve, shape: bar}
+  - {kind: allocation_preference, shape: diamond}
+  - {kind: allocation_preference_coverage, shape: bar}

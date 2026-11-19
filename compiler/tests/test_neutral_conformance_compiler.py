@@ -14,10 +14,6 @@ CORPUS = Path(__file__).resolve().parents[2] / "tests/conformance"
 replay = run_path(str(CORPUS / "replay.py"))
 
 
-class UntypedAggregate(AssertionError):
-    """The publication reader accepted noninteger text in an integer aggregate."""
-
-
 @pytest.mark.parametrize("case", replay["cases"]("compiler"))
 def test_compiler_replays_neutral_case(case, tmp_path):
     result = replay["play"](case, tmp_path)
@@ -61,13 +57,15 @@ def test_compiled_conformance_aggregate_refuses_a_nonnumeric_publication_value(t
     })
     (row,) = [row for row in rows if row["$kind"] == kind and row[group_column] == subject]
     assert row[value_column] == case["expect"]["value"]
-    l0.read_rows(result.publication_schema, [row])
-    invalid_value = "zero"
-    wrong = {key: value for key, value in row.items() if key != "$why"}
-    wrong |= {"$id": json.dumps([subject, invalid_value], separators=(",", ":")), value_column: invalid_value}
-    try:
-        l0.read_rows(result.publication_schema, [wrong])
-    except l0.L0Error as error:
-        assert value_column in str(error) and "integer" in str(error)
-    else:
-        raise UntypedAggregate(f"{kind}.{value_column} admitted {invalid_value!r}")
+    (witness,) = [w for w in result.witnesses if w["conclusion"] == {"relation": relation, "key": row["$id"]}]
+    assert row["$why"]["$id"] == publication.witness_uri(witness)
+    l0.check_schema(result.publication_schema)
+    assert l0.read_rows(result.publication_schema, [row]) == [row]
+    assert publication.differences(result.publication_schema, result.publication_plan, rows, result.rows) == []
+
+    for value, message in [("zero", "integer"), ("01", "integer"), ("-0", "integer"), (0, "integer"),
+                           ("9223372036854775808", "outside"), ("-9223372036854775809", "outside")]:
+        wrong = {key: v for key, v in row.items() if key != "$why"}
+        wrong |= {"$id": json.dumps([subject, value], separators=(",", ":")), value_column: value}
+        with pytest.raises(l0.L0Error, match=rf"\.{value_column}: .*{message}"):
+            l0.read_rows(result.publication_schema, [wrong])

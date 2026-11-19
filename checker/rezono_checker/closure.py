@@ -148,6 +148,8 @@ def counter(rule, rules):
 def upper(condition, var):
     """The greatest value `var` may have under a condition that bounds it above by an integer constant, else None."""
     c = condition
+    if c.compare_as is not None:  # a typed comparison orders text, never an integer counter
+        return None
     if c.left == var and c.op in ("lt", "le") and INTEGER.fullmatch(c.right):
         return int(c.right) - (c.op == "lt")
     if c.right == var and c.op in ("gt", "ge") and INTEGER.fullmatch(c.left):
@@ -253,7 +255,7 @@ def _absent(current, atom, table, rule):
 def _condition(current, c, table, rule):
     variables, found = current
     left, right = _subst((c.left,), variables), _subst((c.right,), variables)
-    return variables, [row for row in found if _holds(c.op, left(row)[0], right(row)[0])]
+    return variables, [row for row in found if _holds(c.op, left(row)[0], right(row)[0], c.compare_as)]
 
 
 def _aggregate(current, spec, table, rule):
