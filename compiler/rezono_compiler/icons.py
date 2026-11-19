@@ -10,7 +10,7 @@ import re
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
-import yaml
+from . import strict_yaml
 
 SVG = "{http://www.w3.org/2000/svg}"
 # Elements and attributes an icon may hold: line art, nothing that refers outside itself (no id, use, href,
@@ -37,7 +37,7 @@ def sources(pack_dir: Path, where: str, errors: list[str]) -> dict[str, dict]:
     path = pack_dir / "icons" / SOURCES
     if not path.exists():
         return {}
-    data = yaml.safe_load(path.read_text(encoding="utf-8")) or []
+    data = strict_yaml.read(path) or []
     out: dict[str, dict] = {}
     for e in data if isinstance(data, list) else [data]:
         if not isinstance(e, dict) or set(e) != {"file", "sha256", "source", "licence"}:
