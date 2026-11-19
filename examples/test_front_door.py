@@ -86,10 +86,6 @@ echo second > "$RUNNER_TEMP/ran"
 """
 
 
-@pytest.mark.xfail(strict=True, raises=MissingQuickstartBlocks, reason=(
-    "M1: decisions/front-door.md: Let scripts/check-quickstart.sh run every bash block of README.md in order, "
-    "in one shell, so a later block uses the working directory and variables of an earlier one; a block in "
-    "another language, such as sh, is not run. scripts/check-quickstart.sh only."))
 def test_the_quickstart_runs_every_bash_block_in_one_shell(tmp_path):
     if not (shutil.which("bash") and shutil.which("python3")):
         pytest.skip("needs bash and python3, as CI has")
