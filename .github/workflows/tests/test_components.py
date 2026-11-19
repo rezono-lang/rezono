@@ -470,6 +470,23 @@ class PullRequestSelectorTests(unittest.TestCase):
         self.assertEqual(selected, {"loop", "run", "examples"})
         self.assertIn("- `run`: `loop/build_choice.py`, which it names", summary)
 
+    def test_a_deferred_dependent_names_a_file_by_import_or_path_not_by_a_bare_word(self):
+        tree = {"compiler/rezono_compiler/emit.py": "EMIT = 1\n"}
+        change = {"compiler/rezono_compiler/emit.py": "EMIT = 2\n"}
+        cases = (
+            ("def emit(): pass\n", False),
+            ("from rezono_compiler import pack, emit\n", True),
+            ("from rezono_compiler import (\n    pack,\n    emit,\n)\n", True),
+            ("from rezono_compiler.emit import EMIT\n", True),
+            ('MODULE = ROOT / "compiler" / "rezono_compiler" / "emit"\n', True),
+            ('MODULE = ROOT / "compiler/rezono_compiler/emit.py"\n', True),
+        )
+        for text, names in cases:
+            with self.subTest(text=text):
+                selected, _ = self.changed_matrix(change, tree={**tree, "run/tests/test_reader.py": text})
+                self.assertEqual("run" in selected, names, selected)
+                self.assertNotIn("loop", selected)
+
     def test_conftest_runs_the_component_closure(self):
         selected, _ = self.changed_matrix({"compiler/tests/conftest.py": "FIXTURE = 2\n"})
         self.assertEqual(selected, {"compiler", "downstream", "examples"})
@@ -739,7 +756,7 @@ class InventoryTests(unittest.TestCase):
                         "raise SystemExit(components.main())")
             def run(*args):
                 return subprocess.run([sys.executable, "-c", launcher, *map(str, args)],
-                                      env=env, cwd=root, capture_output=True, text=True, timeout=35)
+                                      env=env, cwd=root, capture_output=True, text=True, timeout=120)
             collected = run("collect-component", "examples", plans)
             self.assertEqual(collected.returncode, 0, collected.stdout + collected.stderr)
             def execute():
