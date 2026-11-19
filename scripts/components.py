@@ -262,7 +262,7 @@ PR_FILE_CONSUMERS = {
 # changes is read by them, or the selection falls back to everything. As dependents
 # of another component they run in the merge queue (decisions/pr-deferred-dependents.md).
 # The empty set restores them as pull request dependents.
-PR_DEFERRED_DEPENDENTS = frozenset({"loop", "run"})
+PR_DEFERRED_DEPENDENTS = frozenset({"examples", "loop", "run"})
 # These are test entry points and a private subprocess helper, rather than inputs to
 # the installed packages. Their shared corpus is still routed by SHARED_READERS.
 PR_TEST_LEAVES = frozenset({
