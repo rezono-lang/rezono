@@ -16,14 +16,15 @@ from graphlib import CycleError, TopologicalSorter
 
 from rezono_canon import canonical_sha256, sha256_hex
 
-from . import calc, closure, metadata
+from . import calc, closure, completeness, metadata
 from .canon import calc_value, encode_key, sha256_json, value_text
 from .evaluate import _arith, _fits, _fold, _holds, _value, cells
 from .snapshots import read_rows
 from .state_projections import check as check_state_projections
 
 # A role snapshot never decides validity: a bad one is reported, as a warning.
-WARNINGS = {"unreachable_witness", "role_snapshot_hash_mismatch", "role_malformed_snapshot"}  # every other reason blocks
+WARNINGS = {"unreachable_witness", "role_snapshot_hash_mismatch", "role_malformed_snapshot",
+            "receipt_unverified"}  # every other reason blocks; an unadmitted receipt only leaves coverage unknown
 # A role's report keeps only what carries no row data, plus the keys of rows the role can read.
 PUBLIC = ("reason", "severity", "witness", "relation")
 PUBLIC_DETAIL = {"manifest_mismatch", "manifest_check_red", "unknown_rule", "unknown_variable",
@@ -59,7 +60,8 @@ def check(proof: dict, manifest: dict, rules: dict, read_bytes, role: str | None
 
 
 def check_epoch(witnesses: list, manifest: dict, rules: dict, read_bytes, *, derived: set, full=None,
-                seals=(), calc_witnesses=(), calc_ir=None, bundle=None, check_metadata=None) -> dict:
+                seals=(), calc_witnesses=(), calc_ir=None, bundle=None, check_metadata=None,
+                completeness_authority=()) -> dict:
     """Every chosen witness of an epoch at once, against the complete snapshots, before a publication.
 
     Each witness is checked as in `check`, the graph of all of them is acyclic and every derived premise
@@ -93,6 +95,11 @@ def check_epoch(witnesses: list, manifest: dict, rules: dict, read_bytes, *, der
     With `bundle` (the publication's schema bundle, as a dict), the check metadata the engine loaded
     (`check_metadata`: table -> rows of canonical text) must be exactly what the bundle's schema gives
     (`check_metadata_mismatch`, `malformed_check_metadata`, metadata.check).
+
+    For the complete epoch every row of the protected relation `verified_receipt` must be supplied by a
+    candidate of the manifest's `completeness_receipts` that completeness.verify admits against the trusted
+    contexts in `completeness_authority` (from the verified definition or the protected caller, never from the
+    manifest): `receipt_not_admitted`. A candidate that is not admitted is `receipt_unverified`, a warning.
     """
     findings = []
     if bundle is not None or check_metadata is not None:  # either alone is refused: nothing to compare
@@ -103,6 +110,9 @@ def check_epoch(witnesses: list, manifest: dict, rules: dict, read_bytes, *, der
     if snapshots is None:
         return _report(proof, None, set(), findings)
     findings.extend(check_state_projections(manifest, read_bytes, snapshots, full=full))
+    if full is None:  # admission is on the complete side; a role's proof only shows what it may read
+        findings += completeness.check(manifest, read_bytes, completeness_authority,
+                                       snapshots.get(completeness.RELATION))
     rows, groups = _rows(snapshots, findings), {}
     for s in seals:
         _check_seal(s, rows, findings)
