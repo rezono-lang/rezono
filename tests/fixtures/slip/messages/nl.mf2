@@ -1,0 +1,17 @@
+@locale nl
+---
+rule.held = Item {$i} is geblokkeerd door {$h}.
+rule.flagged = Item {$i} is gemarkeerd met bedrag {$a}, en niets blokkeert het.
+rule.group_size = Groep {$g} heeft {$n} items.
+rule.busy = Groep {$g} is druk met {$n} items.
+rule.linked = Item {$i} is het begin van verbinding {$l}.
+arrow.total = Elk {$kind} heeft precies één {$arrow}.
+arrow.partial = Elk {$kind} heeft hoogstens één {$arrow}.
+attribute.total = Elk {$kind} heeft precies één {$attribute}.
+attribute.partial = Elk {$kind} heeft hoogstens één {$attribute}.
+attribute.many.total = Elk {$kind} heeft minstens één {$attribute}.
+attribute.many.partial = Elk {$kind} kan meer dan één {$attribute} hebben.
+is_a = Elk {$kind} is een {$parent}.
+unique_key = Elk {$key} hoort bij hoogstens één {$kind}.
+path_equation = Voor elk {$kind} geldt {$equation}.
+rule.recorded_amount = Item {$i} heeft het vastgelegde bedrag {$a}.

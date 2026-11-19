@@ -129,12 +129,6 @@ def test_the_third_step_supposes_one_change():
     assert "examples/subsidy" in steps[1]
 
 
-@pytest.mark.xfail(strict=True, raises=MissingDockerfile, reason=(
-    "extra: decisions/front-door.md: Add a Dockerfile at the root whose every FROM names its image by digest, "
-    "in which the README.md quickstart succeeds, and give the two commands that build and start it in an sh "
-    "block of README.md. The image is never published. In the same pull request, add the CI job the decision "
-    "describes: it builds the image and runs scripts/check-quickstart.sh in it, only when README.md, the "
-    "Dockerfile or requirements/ change."))
 def test_a_dockerfile_runs_the_quickstart_on_any_machine():
     path = ROOT / "Dockerfile"
     if not path.exists():

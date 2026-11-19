@@ -1,0 +1,12 @@
+kinds:
+  - {kind: item, shape: rect}
+  - {kind: group, shape: ellipse}
+  - {kind: hold, shape: rect}
+  - {kind: link, shape: bar}
+arrows:
+  - {arrow: item.group, dash: none}
+  - {arrow: hold.item, dash: none}
+  - {arrow: link.tail, dash: none}
+  - {arrow: link.head, dash: none}
+home:
+  claim: [flagged]

@@ -37,6 +37,9 @@ classes:
       target: {required: true}
       peer:
       port: {range: integer, required: true, minimum_value: 1, maximum_value: 65535}
+      target_tenant:
+      target_number: {range: integer, minimum_value: 1}
+      target_component:
   TenantCatalogOffer:
     attributes:
       id: {identifier: true}

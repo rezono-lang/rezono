@@ -5,7 +5,13 @@ import pytest
 from case_support import ROOT, exact, reference
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError, reason="M2: Depends on cluster endpoint/network placement. Derive each address and its owning network bounds in examples/platform/schema/address.yaml, facts/address.yaml and rules/address.dl. Read decisions/platform-derivation-acceptance.md.")
+@pytest.mark.xfail(strict=True, raises=AssertionError, reason=(
+    "M2: Derive endpoint_address_bounds(endpoint, network, address, first, last) in rules/address.dl from the derived "
+    "cluster_endpoint_network (test_cluster_worker_network is green). Declare NodeAddressRange (network, first, "
+    "last) and EndpointAddress (endpoint, address) in schema/address.yaml with plain text network and endpoint "
+    "slots, and copy the ranges and addresses of firewall-inputs.json into facts/address.yaml; that fragment "
+    "is self-contained, so expected/violations/address.json pins zero standalone violations. "
+    "Read decisions/platform-derivation-acceptance.md."))
 def test_address_ownership():
     inputs = json.loads((ROOT / "firewall-inputs.json").read_text())
     networks = dict(reference()["cluster_endpoint_network"])
