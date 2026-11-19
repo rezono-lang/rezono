@@ -9,6 +9,7 @@ A machine reports its block devices as the JSON output of `lsblk --json --output
 - Only entries of type `disk` are candidates. Partitions, LVM volumes and other children are searched recursively.
 - The boot disk is the one disk with `/` among the mount points of itself or any descendant.
 - The data disk is the one other disk that is free: no children, no file system type and no mount point.
+  Unknown is not free: a disk counts as free only when `fstype` is present (a string or null) and `mountpoints` is present as a list. `children` may be absent, as lsblk omits it for a device without children, but when present it must be an empty list.
 - Each is named by `/dev/disk/by-id/` plus the smallest link name, in code-point order, whose target is that disk itself. A link to a partition never names a disk.
 - Raise `ValueError` for bytes that are not this JSON, no root disk or more than one, zero or several free disks, or a chosen disk without a link.
 
@@ -26,11 +27,12 @@ The pack `run/packs/cluster-shape` has no facts of its own. Its input records ar
 
 A line is the cluster's demand for one SKU in one role, matching the plan line that ordered it. A machine belongs to a cluster through the plan hash it was ordered under.
 
-A machine of the cluster's plan is *valid* when it has exactly one value for each slot, its boot and data disks differ, and neither disk identity appears on another machine of that plan. The pack derives `shape_problem(cluster, reason)` with these reasons:
+A machine of the cluster's plan is *valid* when it has exactly one value for each slot, its boot and data disks differ, and neither disk identity appears on another machine of that plan. A line of the cluster is *valid* when it has exactly one `sku`, one `role` and one `quantity`; a missing slot is unknown, and unknown never passes. The pack derives `shape_problem(cluster, reason)` with these reasons:
 
 | Reason | When |
 | --- | --- |
 | `invalid_machine` | A machine of the plan is not valid. |
+| `invalid_line` | A line of the cluster is not valid. |
 | `count` | For some line, the number of valid machines of the plan with its SKU differs from its quantity. |
 | `unassigned` | A valid machine of the plan has a SKU that no line of the cluster names. |
 | `ambiguous_line` | Two lines of the cluster name the same SKU. |

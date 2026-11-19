@@ -599,6 +599,8 @@ def rule_body(prog, rule, order: tuple[str, ...] | None) -> tuple[dict, list[dic
                     "result": rule_term(x.var, "integer")}
         else:
             lit |= {"polarity": "positive", "op": x.op, "terms": [typed(x.left, x.right), typed(x.right, x.left)]}
+            if getattr(x, "compare_as", None):
+                lit["compare_as"] = x.compare_as
         body.append(lit)
     return {"relation": rule.head.relation, "terms": atom(rule.head)}, body
 
@@ -727,7 +729,8 @@ def bundle(pack: Pack, checks, prog=None, calc_prog=None) -> dict:
                 attributes.append(present(common | {"type": s.type.bundle, "schema_type": s.range,
                                             "derivation": "fact", "enum": s.enum,
                                             "minimum": decimal(s.minimum), "maximum": decimal(s.maximum),
-                                            "patterns": s.patterns, "constant": constant, "currency": s.currency,
+                                            "patterns": s.patterns, "input_format": s.input_format,
+                                            "constant": constant, "currency": s.currency,
                                             "sentence": owned(sentence(f"attribute.{mood}", kind=k,
                                                                        attribute=s.element), sid, s.span)}))
         for name, slots in kind.unique_keys:

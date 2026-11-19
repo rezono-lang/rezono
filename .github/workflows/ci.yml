@@ -96,12 +96,18 @@ jobs:
         env:
           BASE: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.event.before }}
         run: python3 -I scripts/leak_check.py --base "$BASE"
+      - name: Test the leak check on a throwaway repository
+        working-directory: release-source
+        run: python3 -I scripts/test_leak_check.py -v
       - name: Check Dependabot manifest coverage
         working-directory: release-source
         shell: bash
         run: |
           set -euo pipefail
           yq -o=json .github/dependabot.yml | python3 -I scripts/test_dependabot.py
+      - name: Check that NOTICE licenses every tracked file
+        working-directory: release-source
+        run: python3 -I scripts/test_notice.py
       - name: Warn about new literals outside packs
         id: pack_warnings
         if: ${{ !cancelled() && steps.full_checkout.outcome == 'success' }}
@@ -183,10 +189,13 @@ jobs:
       has_python: ${{ steps.matrix.outputs.has_python }}
       node: ${{ steps.matrix.outputs.node }}
       has_node: ${{ steps.matrix.outputs.has_node }}
+      pytest: ${{ steps.matrix.outputs.pytest }}
+      has_pytest: ${{ steps.matrix.outputs.has_pytest }}
       python_editable: ${{ steps.matrix.outputs.python_editable }}
       cluster_mode: ${{ steps.cluster.outputs.mode }}
       cluster_tasks: ${{ steps.cluster.outputs.tasks }}
       role_publication: ${{ steps.role_publication.outputs.required }}
+      red_before: ${{ steps.red_before.outputs.required }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
@@ -211,19 +220,48 @@ jobs:
         env:
           BASE: ${{ github.event.merge_group.base_sha || github.event.pull_request.base.sha }}
         run: python3 scripts/role_publication_ci.py select --base "$BASE" >> "$GITHUB_OUTPUT"
+      # The rules come from the base, as for the pack warnings. The merge queue and
+      # pushes skip the job; a pull request whose base lacks the rules runs it, and
+      # the job reports that and passes.
+      - name: Decide whether added tests must fail on the base source
+        id: red_before
+        shell: bash
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          if [[ "$GITHUB_EVENT_NAME" != pull_request ]]; then
+            echo "Only a pull request runs its added tests on the base source."
+            echo "required=false" >> "$GITHUB_OUTPUT"
+          elif ! git cat-file -e "$BASE:scripts/red_before.py" 2>/dev/null; then
+            echo "scripts/red_before.py is not on the base $BASE."
+            echo "required=true" >> "$GITHUB_OUTPUT"
+          else
+            policy="$RUNNER_TEMP/red-before"
+            mkdir -p "$policy"
+            for name in red_before.py red_guard.py; do
+              git show "$BASE:scripts/$name" > "$policy/$name"
+            done
+            python3 -I "$policy/red_before.py" discover "$BASE" "$HEAD" | tee -a "$GITHUB_OUTPUT"
+          fi
       - uses: ./.github/workflows/python-environment
-        if: steps.matrix.outputs.has_python == 'true'
+        if: steps.matrix.outputs.has_pytest == 'true'
         with:
           editable: ${{ steps.matrix.outputs.python_editable }}
           oracle: ${{ contains(fromJSON(steps.matrix.outputs.python).*.folder, 'compiler') || contains(fromJSON(steps.matrix.outputs.python).*.folder, 'examples') }}
           save-cache: 'true'
       - name: Test candidate selection and exact-once evidence
-        if: steps.matrix.outputs.has_python == 'true'
+        if: steps.matrix.outputs.has_pytest == 'true'
         run: python -I .github/workflows/tests/test_components.py
+      # These examples run pytest, so they wait for the locked environment.
+      - name: Test the candidate rules for added tests on the base source
+        if: steps.matrix.outputs.has_pytest == 'true'
+        run: python -I scripts/test_red_before.py
       - name: Collect each selected Python component once
-        if: steps.matrix.outputs.has_python == 'true'
+        if: steps.matrix.outputs.has_pytest == 'true'
         env:
-          PYTHON_MATRIX: ${{ steps.matrix.outputs.python }}
+          PYTHON_MATRIX: ${{ steps.matrix.outputs.pytest }}
           PYTHONHASHSEED: '0'
           REZONO_HYPOTHESIS_PROFILE: ci
         run: |
@@ -233,7 +271,7 @@ jobs:
             python scripts/red_list.py --skips "$report" | tee -a "$GITHUB_STEP_SUMMARY"
           done < <(find "$RUNNER_TEMP/inventory" -name collection.xml -print0)
       - name: Save the independent pytest inventory
-        if: always() && steps.matrix.outputs.has_python == 'true'
+        if: always() && steps.matrix.outputs.has_pytest == 'true'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: pytest-inventory
@@ -285,6 +323,72 @@ jobs:
         run: npm ci --ignore-scripts --prefix tools/mcp
       - name: Verify role-scoped current, retained and sweep publications
         run: python scripts/role_publication_ci.py run
+
+  # A pull request that changes source and adds tests without a red mark must
+  # show that at least one added test fails on the base source. The job lays the
+  # pull request's protected paths over the base and runs only those tests, with
+  # the rules from the base.
+  red_before:
+    name: Added tests on the base source
+    needs: [discover]
+    if: >-
+      !cancelled() && needs.discover.result == 'success' &&
+      needs.discover.outputs.red_before == 'true'
+    permissions:
+      contents: read
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      BASE: ${{ github.event.pull_request.base.sha }}
+      HEAD: ${{ github.event.pull_request.head.sha }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Check out the base source with the pull request's protected paths
+        id: prepare
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! git cat-file -e "$BASE:scripts/red_before.py" 2>/dev/null; then
+            echo "scripts/red_before.py is not on the base $BASE yet, so nothing runs there." | tee -a "$GITHUB_STEP_SUMMARY"
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          policy="$RUNNER_TEMP/red-before"
+          mkdir -p "$policy"
+          for name in red_before.py red_guard.py; do
+            git show "$BASE:scripts/$name" > "$policy/$name"
+          done
+          python3 -I "$policy/red_before.py" prepare "$BASE" "$HEAD" "$policy/selection.txt"
+          editable=""
+          for package in $(python3 scripts/components.py python-packages); do
+            editable+=" -e $package"
+          done
+          oracle=false
+          if grep -qE '^(compiler|examples)/' "$policy/selection.txt"; then
+            oracle=true
+          fi
+          {
+            echo "run=true"
+            echo "editable=${editable# }"
+            echo "oracle=$oracle"
+          } >> "$GITHUB_OUTPUT"
+      - uses: ./.github/workflows/python-environment
+        if: steps.prepare.outputs.run == 'true'
+        with:
+          editable: ${{ steps.prepare.outputs.editable }}
+          oracle: ${{ steps.prepare.outputs.oracle }}
+      - name: Run the added tests on the base source
+        if: steps.prepare.outputs.run == 'true'
+        shell: bash
+        env:
+          REZONO_HYPOTHESIS_PROFILE: ci
+          PYTHONHASHSEED: '0'
+        run: |
+          set -euo pipefail
+          python -I "$RUNNER_TEMP/red-before/red_before.py" run "$RUNNER_TEMP/red-before/selection.txt"
 
   python:
     needs: [discover, queue_evidence]
@@ -383,7 +487,7 @@ jobs:
       needs.discover.outputs.has_node == 'true'
     name: node (${{ matrix.component.folder }})
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
@@ -402,11 +506,50 @@ jobs:
         if: needs.queue_evidence.outputs.tested != 'true'
         working-directory: ${{ matrix.component.folder }}
         run: npm test
+      # The component's pytest files run here, beside its installed packages,
+      # and count in the exact-once inventory that the check job verifies.
+      - uses: ./.github/workflows/python-environment
+        if: matrix.component.pytest && needs.queue_evidence.outputs.tested != 'true'
+        with:
+          editable: ${{ needs.discover.outputs.python_editable }}
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        if: matrix.component.pytest && needs.queue_evidence.outputs.tested != 'true'
+        with:
+          name: pytest-inventory
+          path: ${{ runner.temp }}/inventory
+      - name: Check the pytest files of ${{ matrix.component.folder }}
+        if: matrix.component.pytest && needs.queue_evidence.outputs.tested != 'true'
+        shell: bash
+        env:
+          REZONO_HYPOTHESIS_PROFILE: ci
+          PYTHONHASHSEED: '0'
+          COMPONENT: ${{ matrix.component.folder }}
+        run: |
+          set -euo pipefail
+          python scripts/components.py run-shard "$COMPONENT" 0 1             "$RUNNER_TEMP/inventory" "$RUNNER_TEMP/reports" "$RUNNER_TEMP/receipts"
+      - name: Save execution evidence
+        if: always() && matrix.component.pytest && needs.queue_evidence.outputs.tested != 'true'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: pytest-execution-node-${{ strategy.job-index }}
+          path: ${{ runner.temp }}/receipts
+          if-no-files-found: error
+          overwrite: true
+          retention-days: 2
+      - name: Report actual skips
+        if: always() && matrix.component.pytest && needs.queue_evidence.outputs.tested != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          for report in "$RUNNER_TEMP"/reports/*.xml; do
+            python scripts/red_list.py --skips "$report" | tee -a "$GITHUB_STEP_SUMMARY"
+          done
 
   check:
     name: check
     if: always()
-    needs: [queue_evidence, discover, python, node, light_checks, cluster_worker, role_publication]
+    needs: [queue_evidence, discover, python, node, light_checks, cluster_worker, role_publication, red_before]
     permissions:
       contents: read
       actions: read
@@ -414,24 +557,24 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        if: needs.discover.outputs.has_python == 'true' && needs.queue_evidence.outputs.tested != 'true'
+        if: needs.discover.outputs.has_pytest == 'true' && needs.queue_evidence.outputs.tested != 'true'
         with:
           persist-credentials: false
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
-        if: always() && needs.discover.outputs.has_python == 'true' && needs.queue_evidence.outputs.tested != 'true'
+        if: always() && needs.discover.outputs.has_pytest == 'true' && needs.queue_evidence.outputs.tested != 'true'
         with:
           name: pytest-inventory
           path: ${{ runner.temp }}/inventory
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
-        if: always() && needs.discover.outputs.has_python == 'true' && needs.queue_evidence.outputs.tested != 'true'
+        if: always() && needs.discover.outputs.has_pytest == 'true' && needs.queue_evidence.outputs.tested != 'true'
         with:
           pattern: pytest-execution-*
           path: ${{ runner.temp }}/receipts
           merge-multiple: true
       - name: Verify every inventoried test started and finished exactly once
-        if: always() && needs.discover.outputs.has_python == 'true' && needs.queue_evidence.outputs.tested != 'true'
+        if: always() && needs.discover.outputs.has_pytest == 'true' && needs.queue_evidence.outputs.tested != 'true'
         env:
-          PYTHON_MATRIX: ${{ needs.discover.outputs.python }}
+          PYTHON_MATRIX: ${{ needs.discover.outputs.pytest }}
         run: python3 scripts/components.py verify-execution "$RUNNER_TEMP/inventory" "$RUNNER_TEMP/receipts"
       - name: Record runner wait separately from execution
         if: always()
@@ -457,15 +600,17 @@ jobs:
           CLUSTER_MODE: ${{ needs.discover.outputs.cluster_mode }}
           ROLE_PUBLICATION_REQUIRED: ${{ needs.discover.outputs.role_publication }}
           ROLE_PUBLICATION_RESULT: ${{ needs.role_publication.result }}
+          RED_BEFORE_REQUIRED: ${{ needs.discover.outputs.red_before }}
+          RED_BEFORE_RESULT: ${{ needs.red_before.result }}
           DRAFT: ${{ github.event_name == 'pull_request' && github.event.pull_request.draft }}
           QUEUE_TESTED: ${{ github.event_name == 'push' && needs.queue_evidence.outputs.tested == 'true' }}
         run: |
           set -euo pipefail
-          echo "discover=$DISCOVER_RESULT python=$PYTHON_RESULT node=$NODE_RESULT light=$LIGHT_RESULT cluster=$CLUSTER_RESULT role_publication=$ROLE_PUBLICATION_RESULT draft=$DRAFT queue_tested=$QUEUE_TESTED"
+          echo "discover=$DISCOVER_RESULT python=$PYTHON_RESULT node=$NODE_RESULT light=$LIGHT_RESULT cluster=$CLUSTER_RESULT role_publication=$ROLE_PUBLICATION_RESULT red_before=$RED_BEFORE_RESULT draft=$DRAFT queue_tested=$QUEUE_TESTED"
           if [[ "$DRAFT" == true ]]; then
             # A draft gets only the light checks; ready_for_review starts the full check.
             [ "$LIGHT_RESULT" = success ]
-            for result in "$DISCOVER_RESULT" "$PYTHON_RESULT" "$NODE_RESULT" "$CLUSTER_RESULT" "$ROLE_PUBLICATION_RESULT"; do
+            for result in "$DISCOVER_RESULT" "$PYTHON_RESULT" "$NODE_RESULT" "$CLUSTER_RESULT" "$ROLE_PUBLICATION_RESULT" "$RED_BEFORE_RESULT"; do
               [ "$result" = skipped ]
             done
             exit 0
@@ -474,7 +619,7 @@ jobs:
             # The merge queue passed this commit; only the cache refresh ran.
             [ "$DISCOVER_RESULT" = success ]
             case "$NODE_RESULT" in success|skipped) ;; *) exit 1 ;; esac
-            for result in "$LIGHT_RESULT" "$PYTHON_RESULT" "$CLUSTER_RESULT" "$ROLE_PUBLICATION_RESULT"; do
+            for result in "$LIGHT_RESULT" "$PYTHON_RESULT" "$CLUSTER_RESULT" "$ROLE_PUBLICATION_RESULT" "$RED_BEFORE_RESULT"; do
               [ "$result" = skipped ]
             done
             exit 0
@@ -495,5 +640,10 @@ jobs:
           case "$ROLE_PUBLICATION_REQUIRED" in
             true) [ "$ROLE_PUBLICATION_RESULT" = success ] ;;
             false) [ "$ROLE_PUBLICATION_RESULT" = skipped ] ;;
+            *) exit 1 ;;
+          esac
+          case "$RED_BEFORE_REQUIRED" in
+            true) [ "$RED_BEFORE_RESULT" = success ] ;;
+            false) [ "$RED_BEFORE_RESULT" = skipped ] ;;
             *) exit 1 ;;
           esac

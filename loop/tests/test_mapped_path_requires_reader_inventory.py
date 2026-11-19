@@ -10,6 +10,7 @@ import yaml
 
 from rezono_canon import canonical_bytes, canonical_json, canonical_sha256, sha256_hex
 from rezono_publisher import batch, publish, store
+from round_visibility_publication import pinned_evidence
 from scripts import components
 from test_build_selection import OBSERVED_AT, ROOT, SUITES, capture, git, repository
 
@@ -120,8 +121,8 @@ def published_selection(directory, source, submitted, evidence):
         shutil.copytree(ROOT / "packs" / name, directory / "packs" / name)
     (build / "facts").mkdir()
     (build / "facts/input.yaml").write_text(yaml.safe_dump(submitted), encoding="utf-8")
-    # The checker can replay the pinned Git scope instead of trusting the
-    # evidence rows copied into the build publication.
+    # The protected job derives the trusted inventory and content from the pinned repository bundle
+    # (decisions/admission-transport.md section 4); it retains the bundle beside them.
     bundle = directory / "build-fixture.bundle"
     git(source, "bundle", "create", str(bundle), "HEAD", "refs/remotes/origin/main")
     bundle_bytes = bundle.read_bytes()
@@ -134,13 +135,14 @@ def published_selection(directory, source, submitted, evidence):
     for name in ("inventory", "content"):
         retained = f"observations/retained/{name}.json"
         protected_context[name] = archived_json(retained, objects[retained])
-    protected_context["git_bundle"] = {"file": bundle_key, "uri": archive.uri(bundle_key),
-                                       "sha256": sha256_hex(bundle_bytes)}
-    # The protected caller hands the candidate and its trusted context to the batch boundary separately
-    # (decisions/scoped-completeness.md, admission and replay transport).
+    # The protected caller pins its trusted context in context.json and the candidate in index.json, and hands
+    # both to the batch boundary as one Evidence (decisions/admission-transport.md sections 2 to 4).
+    evidence = pinned_evidence(
+        archive, {"completeness": [protected_context]},
+        {"completeness_receipts": [archived_json("observations/submitted/receipt.json", receipt)]},
+    )
     epoch = batch.epoch(build, epoch=1, knowledge_time=INSTANT, sources=[("build-observation", receipt["id"])],
-                        completeness_receipts=[archived_json("observations/submitted/receipt.json", receipt)],
-                        completeness_authority=[protected_context], archive=archive)
+                        evidence=evidence)
     manifest = publish.publish(epoch, archive, {"reader": "complete"})
     assert any(check["name"] == "rezono:proofs" and check["status"] == "green" for check in manifest["checks"])
     assert {"source_id": "build-observation", "position": receipt["id"]} in manifest["sources"]
@@ -165,14 +167,15 @@ def submission(source, base, head, engine, path, evidence):
 
 
 @pytest.mark.xfail(
-    strict=True, raises=(AssertionError, TypeError),
+    strict=True, raises=(AssertionError, ImportError, TypeError),
     reason="Build selection trusts an emptied mapped-reader relation. Derive build_readerless_path from a verified "
-           "receipt for the build scope and select full checks otherwise. Read decisions/scoped-completeness.md "
-           "§3. Write in build/ (selection.dl and its schema). Waits for "
+           "receipt for the build scope (verified_receipt, and verified_member for the path-readers keys) and "
+           "select full checks otherwise. Read decisions/scoped-completeness.md §3 and "
+           "decisions/admission-transport.md section 6. Write in build/ (selection.dl and its schema). Waits for "
            "edge/publisher/tests/test_completeness_publish.py--test_publisher_admits_receipts_only_with_a_trusted_context "
            "(the batch boundary admits the receipt and fills verified_receipt) and for "
-           "test_absent_checked_requires_readable_coverage (std-completeness supplies complete). Today batch.epoch "
-           "rejects the admission keywords with TypeError.",
+           "test_absent_checked_requires_readable_coverage (std-completeness supplies complete). Today "
+           "rezono_checker.evidence is missing (ImportError).",
 )
 def test_mapped_path_requires_reader_inventory(tmp_path):
     source = tmp_path / "source"
@@ -254,12 +257,11 @@ def resealed_without_reader(evidence):
 
 
 @pytest.mark.xfail(
-    strict=True, raises=(AssertionError, TypeError),
+    strict=True, raises=(AssertionError, ImportError, TypeError),
     reason="A receipt whose digests are recomputed over the truncated submission still narrows the selection. "
            "Admission must compare it with the independently retained inventory and content. Read "
            "decisions/scoped-completeness.md §1 and §3. Write in build/ (selection.dl and its schema). Waits for "
-           "test_mapped_path_requires_reader_inventory. Today batch.epoch rejects the admission keywords with "
-           "TypeError.",
+           "test_mapped_path_requires_reader_inventory. Today rezono_checker.evidence is missing (ImportError).",
 )
 def test_resealed_receipt_cannot_drop_mapped_reader(tmp_path):
     source = tmp_path / "source"

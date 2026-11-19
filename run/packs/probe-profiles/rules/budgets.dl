@@ -8,9 +8,27 @@ probe_cluster_of(p, c, k) :- probe_cell_of(p, c), probe_cluster(k), constituent_
 .decl probe_member_of(profile: symbol, cell: symbol, cluster: symbol, member: symbol)
 probe_member_of(p, c, k, m) :- probe_cluster_of(p, c, k), probe_member(m), constituent__part_of(m, k).
 
-// A count is published only for a snapshot that certifies the membership as complete.
+// The governing snapshot of a profile is its latest recorded planning snapshot, complete or partial: its reference
+// day is the evaluation time of every term, and only its completeness and coverage certify counts and absences.
+// An earlier snapshot is history; a term that ended since then is not in force.
+.decl probe_earlier_snapshot(snapshot: symbol)
+probe_earlier_snapshot(s) :- probe_snapshot__profile(s, p), probe_snapshot__reference_date(s, r),
+    reference_date__day(r, n), probe_snapshot__profile(t, p), probe_snapshot__reference_date(t, q),
+    reference_date__day(q, m), n < m.
+
+.decl probe_governing_day(profile: symbol, snapshot: symbol, on: symbol)
+probe_governing_day(p, s, r) :- probe_snapshot__profile(s, p), probe_snapshot__reference_date(s, r),
+    !probe_earlier_snapshot(s).
+
+// Two or more snapshots on the latest day tie: none governs alone, so none certifies the membership, and counts and
+// absences stay unknown rather than absent.
+.decl probe_governing_count(profile: symbol, snapshots: number)
+probe_governing_count(p, n) :- probe_profile(p), n = count : { probe_governing_day(p, _, _) }.
+
+// A count is published only when the single governing snapshot certifies the membership as complete.
 .decl probe_membership_complete(profile: symbol, snapshot: symbol)
-probe_membership_complete(p, s) :- probe_snapshot__profile(s, p), probe_snapshot__membership_complete(s, "complete").
+probe_membership_complete(p, s) :- probe_governing_day(p, s, _), probe_governing_count(p, 1),
+    probe_snapshot__membership_complete(s, "complete").
 
 .decl probe_cluster_size(profile: symbol, cell: symbol, cluster: symbol, members: number)
 probe_cluster_size(p, c, k, n) :- probe_cluster_of(p, c, k), probe_membership_complete(p, _),
@@ -22,19 +40,19 @@ probe_profile_total(p, a, b, n) :- probe_membership_complete(p, _),
     b = count : { probe_cluster_of(p, _, _) },
     n = count : { probe_member_of(p, _, _, _) }.
 
-// Terms are certified complete when the snapshot says the membership is complete and the register covers it.
+// Terms are certified complete when the governing snapshot says the membership is complete and the register covers it.
 .decl probe_terms_certified(profile: symbol, snapshot: symbol, coverage: symbol)
 probe_terms_certified(p, s, c) :- probe_membership_complete(p, s), probe_term_coverage__snapshot(c, s).
 
 .decl has_certified_terms(profile: symbol)
 has_certified_terms(p) :- probe_terms_certified(p, _, _).
 
-// Physical requirement: the decision of the term is in force on the reference day of a snapshot of the profile.
+// Physical requirement: the decision of the term is in force on the reference day of the governing snapshot.
 .decl effective_physical(profile: symbol, cell: symbol, requirement: symbol, term: symbol)
 effective_physical(p, c, req, t) :- probe_physical_requirement__profile(t, p),
     probe_physical_requirement__cell(t, c), probe_physical_requirement__requirement(t, req),
     probe_physical_requirement__decision(t, d), probe_cell_of(p, c),
-    probe_snapshot__profile(s, p), probe_snapshot__reference_date(s, r), in_force_on(d, r).
+    probe_governing_day(p, _, r), in_force_on(d, r).
 
 .decl physical_conflict(profile: symbol, cell: symbol)
 physical_conflict(p, c) :- effective_physical(p, c, a, _), effective_physical(p, c, b, _), a != b.
@@ -51,12 +69,13 @@ probe_physical_status(p, c, "missing_requirement") :- probe_cell_of(p, c), !has_
 probe_physical_status(p, c, "unknown") :- probe_cell_of(p, c), !has_physical(p, c), !has_certified_terms(p).
 probe_physical_status(p, c, "unknown") :- physical_conflict(p, c).
 
-// Phase budget: profile, variant and phase all match, and the decision of the term is in force.
+// Phase budget: profile, variant and phase all match, and the decision of the term is in force on the reference
+// day of the governing snapshot.
 .decl effective_budget(profile: symbol, variant: symbol, phase: symbol, seconds: number, term: symbol)
 effective_budget(p, v, ph, n, t) :- probe_phase_budget__profile(t, p), probe_phase_budget__variant(t, v),
     probe_phase_budget__phase(t, ph), probe_phase_budget__seconds(t, n), probe_phase_budget__decision(t, d),
     probe_storage_variant(v), probe_phase(ph),
-    probe_snapshot__profile(s, p), probe_snapshot__reference_date(s, r), in_force_on(d, r).
+    probe_governing_day(p, _, r), in_force_on(d, r).
 
 .decl budget_conflict(profile: symbol, variant: symbol, phase: symbol)
 budget_conflict(p, v, ph) :- effective_budget(p, v, ph, a, _), effective_budget(p, v, ph, b, _), a != b.

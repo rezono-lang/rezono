@@ -18,6 +18,7 @@ export interface KindDecl extends Metadata {
 	kind: string;
 	embedded?: true;
 	abstract?: true;
+	relationship?: true;
 	parent?: string;
 	world?: World;
 	applies?: { axis: 'at' | 'during' | 'in'; slot: string };
@@ -87,7 +88,7 @@ function readExtension(line: Logical, build: Build): ExtendDecl {
 
 function printKind(d: KindDecl): string[] {
 	const parent = d.parent === undefined ? '' : ` is ${d.parent}`;
-	return block(`${d.embedded ? 'embedded ' : d.abstract ? 'abstract ' : ''}kind ${d.kind}${parent}${printWorld(d.world)}`, [
+	return block(`${d.embedded ? 'embedded ' : d.abstract ? 'abstract ' : ''}${d.relationship ? 'relationship ' : ''}kind ${d.kind}${parent}${printWorld(d.world)}`, [
 		...printMetadata(d),
 		...(d.applies ? [`applies ${d.applies.axis}: ${d.applies.slot}`] : []),
 		...(d.sealed !== undefined ? [`sealed at: ${d.sealed}`] : []),
@@ -105,7 +106,11 @@ function printKind(d: KindDecl): string[] {
 export const kind = {
 	lineRules: ['KindLine', 'ExtendLine', 'AppliesLine', 'SealedLine', 'ConditionalCheckLine', ...key.lineRules, ...pathEquation.lineRules],
 	grammar: String.raw`
-  KindLine = (kw<"embedded"> | kw<"abstract">)? kw<"kind"> typeName (is typeName)? World?
+  KindModifier = kw<"embedded"> -- embedded
+    | kw<"abstract"> kw<"relationship"> -- abstractRelationship
+    | kw<"abstract"> -- abstract
+    | kw<"relationship"> -- relationship
+  KindLine = KindModifier? kw<"kind"> typeName (is typeName)? World?
   ExtendLine = kw<"extend"> typeName
   AppliesLine = kw<"applies"> (at | during | in) ":" name
   SealedLine = kw<"sealed"> at ":" name
@@ -113,11 +118,16 @@ export const kind = {
   ${key.grammar}
   ${pathEquation.grammar}`,
 	actions: {
+		KindModifier_embedded: (_e) => 'embedded',
+		KindModifier_abstractRelationship: (_a, _r) => 'abstract relationship',
+		KindModifier_abstract: (_a) => 'abstract',
+		KindModifier_relationship: (_r) => 'relationship',
 		KindLine(modifier, _k, t, _is, parent, world) {
 			const decl: Line = { line: 'kind', kind: t.sourceString };
 			const kindModifier = opt(modifier);
 			if (kindModifier === 'embedded') decl.embedded = true;
-			if (kindModifier === 'abstract') decl.abstract = true;
+			if (kindModifier?.startsWith('abstract')) decl.abstract = true;
+			if (kindModifier?.endsWith('relationship')) decl.relationship = true;
 			if (parent.numChildren) decl.parent = opt(parent);
 			if (world.numChildren) decl.world = world.child(0).decl();
 			return named(t, decl);

@@ -42,8 +42,10 @@ TOKEN = re.compile(r"""
     (?P<op>:-|!=|<=|>=|[(),.:{}!=<>+\-*;|&^%/\[\]$@#])
 """, re.X | re.S)
 TYPES = {"symbol": "string", "number": "integer"}
+SYMBOLS = {t: s for s, t in TYPES.items()}
 SQL = {"VARCHAR": "string", "BIGINT": "integer"}
 COMPARE = {"=": "eq", "!=": "ne", "<": "lt", "<=": "le", ">": "gt", ">=": "ge"}
+COMPARE_AS = ir.COMPARE_AS  # `binary_text(x) < binary_text(y)`: a comparison type, written on both operands
 ARITH = {"+": "add", "-": "sub", "*": "mul", "/": "div"}
 FUNCTIONS = ("count", "sum", "min", "max")
 VARIABLE = re.compile(r"^[a-z][a-z0-9_]*$")
@@ -55,7 +57,15 @@ RELEASE = re.compile(r"^//\s*@release\b")  # reserved (O8, delimited release): r
 OUTCOME = re.compile(r"^//\s*@outcome(?:\s+(\S+))?\s*$")
 EXTEND = re.compile(r"^//\s*@extend\s*$")
 CHECKED_ABSENCE = "absent_checked"  # reserved conclusion of decisions/scoped-completeness.md
-RECEIPT_PREMISES = frozenset({"complete", "verified_receipt"})
+RECEIPT_INPUT = "verified_receipt"  # protected: only admission fills it (decisions/admission-transport.md)
+RECEIPT_LOOKUP = "registered_match"  # the lookup over the contents of one receipt
+RECEIPT_MEMBER = "verified_member"  # protected: the admitted member keys of one receipt
+# Protected admission inputs (decisions/admission-transport.md, section 6): a pack declares one with exactly
+# this signature and no clause; only admission fills it, as base rows before the rules run.
+PROTECTED = {
+    RECEIPT_INPUT: [("receipt", "string"), ("source", "string"), ("scope", "string"), ("cut", "string"),
+                    ("inventory", "string"), ("content", "string")],
+}
 CLOSES = re.compile(r"^//\s*@closes\s+(\S+)\s*$")
 
 
@@ -173,14 +183,32 @@ def atom(p: Parser):
     return name.text, terms, name.line
 
 
+def annotation(p: Parser, left: bool = True):
+    """`binary_text(x)` or `utc_instant(x)` before a comparison operator: (mode, variable term)."""
+    name = p.take(kind="ident")
+    p.take("(")
+    t = term(p)
+    if t[0] != "var":
+        p.fail(f"{name.text}(…) takes one variable", name)
+    p.take(")")
+    if left and not (p.peek().kind == "op" and p.peek().text in COMPARE):
+        p.fail(f"{name.text}(…) only as an operand of a comparison", name)
+    return name.text, t
+
+
 def body_item(p: Parser):
     """One body element: ('lit', polarity, atom) | ('agg', var, fn, target, atom) | ('cmp', op, l, r) | ('arith', var, op, l, r)."""
     if p.at("!"):
         p.take("!")
         return ("lit", "negative", atom(p))
+    mode = None
     if p.peek().kind == "ident" and p.peek(1).text == "(":
-        return ("lit", "positive", atom(p))
-    left = term(p)
+        if p.peek().text not in COMPARE_AS:
+            return ("lit", "positive", atom(p))
+        mode = annotation(p)
+        left = mode[1]
+    else:
+        left = term(p)
     op = p.take(kind="op").text
     if op not in COMPARE:
         p.fail(f"'{op}' is not a comparison")
@@ -200,6 +228,15 @@ def body_item(p: Parser):
             p.fail("an aggregate ranges over one atom; derive a relation first")
         p.take("}")
         return ("agg", left[1], fn, target and target[1], a)
+    if mode:
+        if not (p.peek().kind == "ident" and p.peek().text == mode[0] and p.peek(1).text == "("):
+            p.fail(f"{mode[0]}(…) on one side of a comparison only; write it on both operands")
+        right = annotation(p, False)[1]
+        if p.peek().kind == "op" and p.peek().text in ARITH:
+            p.fail(f"{mode[0]}(…) does not take arithmetic")
+        return ("cmp", COMPARE[op], left, right, mode[0])
+    if p.peek().kind == "ident" and p.peek().text in COMPARE_AS and p.peek(1).text == "(":
+        p.fail(f"{p.peek().text}(…) on one side of a comparison only; write it on both operands")
     if op == "=" and left[0] == "var" and nxt.text == "@":
         p.take("@")
         name = p.take(kind="ident")
@@ -402,12 +439,12 @@ def remap_statement(stmt, names):
         if s[0] in ("lit", "agg"):
             s = (*s[:-1], atom(s[-1]))
         elif s[0] == "cmp":
-            _, op, left, right = s
+            _, op, left, right, *typed = s
             if left[0] == "var" and left[1] in kind_vars:
                 right = kind_constant(right)
             if right[0] == "var" and right[1] in kind_vars:
                 left = kind_constant(left)
-            s = "cmp", op, left, right
+            s = "cmp", op, left, right, *typed
         body.append(s)
     return stmt[0], atom(stmt[1]), body, stmt[3]
 
@@ -528,6 +565,12 @@ def read(pack, pack_dir: Path, imports=None, renames=None, *, calc_inputs=None, 
                             (invariant, absence, outcome, closes, fold) != options[name][1:]:
                         errors.append(f"{where}:{line}: .decl {name} must match the imported declaration and annotations")
                     continue
+                if name in PROTECTED and (cols != PROTECTED[name] or extend or invariant or absence or fold
+                                          or outcome is not None or closes is not None or explain is not None):
+                    errors.append(f"{where}:{line}: {name} is a protected admission input; declare it as "
+                                  f".decl {name}({', '.join(f'{c}: {SYMBOLS[t]}' for c, t in PROTECTED[name])}) "
+                                  "without annotations")
+                    continue
                 if not ir.NAME.match(name):
                     errors.append(f"{where}:{line}: derived relation '{name}' is not lower snake case without '__'")
                 decls[name], owners[name] = cols, module
@@ -613,10 +656,16 @@ def read(pack, pack_dir: Path, imports=None, renames=None, *, calc_inputs=None, 
                               "only its owner can mark it @extend")
                 continue
             module = owners[rel]
-        if rel == CHECKED_ABSENCE and not any(
-                s[0] == "lit" and s[1] == "positive" and s[2][0] in RECEIPT_PREMISES for s in body):
-            errors.append(f"{where}:{line}: {rel} needs a positive premise from a verified receipt "
-                          f"({' or '.join(sorted(RECEIPT_PREMISES))}); a lookup alone proves no absence")
+        if rel in PROTECTED:
+            errors.append(f"{where}:{line}: {rel} is a protected admission input; only admission fills it, "
+                          "so no rule may derive it")
+            continue
+        if rel == CHECKED_ABSENCE and not checked_absence(head, body, rules_src):
+            errors.append(f"{where}:{line}: {rel} needs a positive premise from the verified receipt "
+                          f"({RECEIPT_INPUT}, or a projection of it such as complete) with the head's source, "
+                          f"scope, cut and receipt, and a negative {RECEIPT_LOOKUP}(receipt, key) of the head that only "
+                          f"projects {RECEIPT_MEMBER} of that same receipt; "
+                          "a lookup alone proves no absence")
             continue
         accessible = set(renames.get(source, {}).values())
         atoms = [head] + [s[-1] for s in body if s[0] in ("lit", "agg")]
@@ -659,6 +708,10 @@ def read(pack, pack_dir: Path, imports=None, renames=None, *, calc_inputs=None, 
         relations[name] = {"name": name, "role": "base", "key": [{"name": c, "type": t} for c, t in tables[name]],
                            "world": worlds.get(name, "closed")}
     for name, cols in decls.items():
+        if name in PROTECTED:  # admitted rows enter as base rows; an empty relation leaves what needs it unknown
+            relations[name] = {"name": name, "role": "base", "key": [{"name": c, "type": t} for c, t in cols],
+                               "world": "closed"}
+            continue
         relations[name] = {"name": name, "role": "derived", "module": owners[name],
                            "key": [{"name": c, "type": t} for c, t in cols]}
         if name in invariants:
@@ -711,6 +764,62 @@ def read(pack, pack_dir: Path, imports=None, renames=None, *, calc_inputs=None, 
 LITERAL = {"lit": "atom", "agg": "aggregate", "arith": "assignment", "cmp": "comparison"}
 
 
+def receipt_binding(atom, rules_src, *, unfold=True):
+    """The (source, scope, cut, receipt) terms a positive premise verifies, or None.
+
+    Only the protected admission input verified_receipt(receipt, source, scope, cut, inventory, content)
+    verifies a read; a pack cannot fill it. A derived relation such as std-completeness's `complete`
+    counts only when every clause of it merely projects that input, so naming a relation `complete`
+    and filling it proves nothing (decisions/scoped-completeness.md, section 2).
+    """
+    name, args, _ = atom
+    if name == RECEIPT_INPUT:
+        bound = (args[1], args[2], args[3], args[0]) if len(args) == 6 else None
+        return None if bound is None or ("wild",) in bound else bound
+    clauses = [(h, b) for _, _, h, b, *_ in rules_src if h[0] == name]
+    if not unfold or not clauses or len(args) != 4 or ("wild",) in args:
+        return None
+    for clause_head, clause_body in clauses:
+        if (len(clause_body) != 1 or clause_body[0][:2] != ("lit", "positive")
+                or receipt_binding(clause_body[0][2], rules_src, unfold=False) != tuple(clause_head[1])):
+            return None
+    return tuple(args)
+
+
+def checked_absence(head, body, rules_src) -> bool:
+    """absent_checked(source, scope, cut, key, receipt) holds only on a verified read of that receipt
+    and a negative lookup in the contents of that same receipt."""
+    terms = tuple(head[1])
+    if len(terms) != 5:
+        return False
+    bound = (*terms[:3], terms[4])
+    verified = any(s[:2] == ("lit", "positive") and receipt_binding(s[2], rules_src) == bound for s in body)
+    lookups = [s for s in body if s[0] == "lit" and s[2][0] == RECEIPT_LOOKUP]
+    return verified and bool(lookups) and member_lookup(rules_src) and all(
+        s[1] == "negative" and list(s[2][1]) == [terms[4], terms[3]] for s in lookups)
+
+
+def member_lookup(rules_src) -> bool:
+    """registered_match(receipt, key) reads the admitted contents of that receipt and nothing else.
+
+    Every clause has the single premise verified_member(receipt, ...) with the head's receipt and key,
+    so the pack cannot narrow the lookup until it never matches (decisions/scoped-completeness.md,
+    section 2; decisions/admission-transport.md).
+    """
+    clauses = [(h, b) for _, _, h, b, *_ in rules_src if h[0] == RECEIPT_LOOKUP]
+    for clause_head, clause_body in clauses:
+        args = list(clause_head[1])
+        if len(args) != 2 or ("wild",) in args or len(clause_body) != 1:
+            return False
+        premise = clause_body[0]
+        if premise[:2] != ("lit", "positive") or premise[2][0] != RECEIPT_MEMBER or len(premise[2][1]) != 4:
+            return False
+        member = list(premise[2][1])
+        if member[0] != args[0] or args[1] not in (member[1], member[3]):
+            return False
+    return bool(clauses)
+
+
 def _terms(item):
     if item[0] == "lit":
         return item[2][1]
@@ -756,7 +865,9 @@ def to_rule(rid, module, where, head, body, line, columns=lambda name: None) -> 
             fail("'_' only inside an aggregate, not in a comparison or arithmetic")
         if b[0] == "cmp":
             kinds = {typ(t) for t in (b[2], b[3])} - {None}
-            if b[1] not in ("eq", "ne") and kinds - {"integer"}:
+            if len(b) > 4 and kinds - {"string"}:
+                fail(f"{b[4]}(…) compares two text variables")
+            if len(b) == 4 and b[1] not in ("eq", "ne") and kinds - {"integer"}:
                 fail(f"{show(b[2])} {b[1]} {show(b[3])}: an order comparison needs whole numbers, not text")
             if len(kinds) > 1:
                 fail(f"{show(b[2])} and {show(b[3])} have different types")
@@ -835,13 +946,14 @@ def to_rule(rid, module, where, head, body, line, columns=lambda name: None) -> 
                 fail(f"{var} = …: arithmetic binds a fresh variable")
             assigns.append({"var": "?" + var, "op": op, "left": text(left), "right": text(right)})
         else:
-            _, op, left, right = b
+            _, op, left, right, *typed = b
             for t in (left, right):
                 if t[0] == "var" and t[1] not in defined:
                     fail(f"{t[1]} in a comparison is not bound (bind it with a positive literal)")
                 if t[0] == "wild":
                     fail("'_' only inside an aggregate")
-            conds.append({"op": op, "left": text(left), "right": text(right)})
+            conds.append({"op": op, "left": text(left), "right": text(right),
+                          **({"compare_as": typed[0]} if typed else {})})
     rule = {"id": rid, "module": module, "head": {"relation": head[0], "terms": [text(t) for t in head[1]]},
             "body": lits, "origin": {"file": where, "line": str(line)}}
     if aggs:

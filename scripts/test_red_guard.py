@@ -3,7 +3,7 @@ from pathlib import Path
 import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from red_guard import allowed
+from red_guard import Change, allowed, review
 
 
 def main():
@@ -36,6 +36,84 @@ def main():
         if actual != expected:
             raise AssertionError(f"{label}: expected {expected}, got {actual}")
         print(f"{'ALLOW' if actual else 'DENY'} without planner: {label}")
+    planner_cases(reason, function)
+    workflow_cases()
+
+
+def workflow_cases():
+    """The workflows that define required checks need the planner label to change."""
+    for path in (".github/workflows/ci.yml", ".github/workflows/disposable-cluster.yml"):
+        for status, after in (("M", b"jobs: {}\n"), ("D", None)):
+            change = Change(path, status, b"jobs: {check: {}}\n", after)
+            errors, notes = review([change], planner=False)
+            if errors != [f"ERROR planner label required for {ascii(path)}"]:
+                raise AssertionError(f"{status} {path} without planner: errors {errors}")
+            errors, notes = review([change], planner=True)
+            if errors or (path.endswith("ci.yml") and f"CHANGED {path}" not in notes):
+                raise AssertionError(f"{status} {path} with planner: errors {errors}, notes {notes}")
+            print(f"DENY without planner, ALLOW with planner: {status} {path}")
+
+
+def planner_cases(reason, function):
+    """The planner label allows protected changes; the guard still runs."""
+    lifted = function.split(b"\n", 1)[1]
+    other = b"def test_total():\n    assert total() == 4\n"
+    loose = b"@pytest.mark.xfail(reason=\"pending\")\n" + other
+    unrun = b"@pytest.mark.xfail(strict=True, run=False)\n" + other
+    marked = b"@" + reason + b"\n" + other
+    pair = function + b"\n" + other
+
+    def run(label, changes, expected, notes=()):
+        errors, actual_notes = review(changes, planner=True)
+        if bool(errors) != expected or any(n not in actual_notes for n in notes):
+            raise AssertionError(f"{label}: errors {errors}, notes {actual_notes}")
+        print(f"{'DENY' if errors else 'ALLOW'} with planner: {label}")
+
+    edit = lambda path, before, after: Change(path, "M", before, after)
+    run("lifted mark beside a changed expectation", [
+        edit("tests/test_count.py", function, lifted),
+        edit("tests/test_total.py", other, other.replace(b"== 4", b"== 5")),
+    ], True)
+    run("lifted mark and changed expectation in one file", [
+        edit("tests/test_count.py", function, lifted.replace(b"== 2", b"== 3")),
+    ], True)
+    run("lifted mark beside a changed recorded outcome", [
+        edit("tests/test_count.py", function, lifted),
+        edit("examples/demo/expected/rows.json", b"[2]", b"[3]"),
+    ], True)
+    run("lifted mark alone", [edit("tests/test_count.py", function, lifted)], False)
+    run("new mark without strict=True", [edit("tests/test_total.py", other, loose)], True)
+    run("new mark with run=False", [edit("tests/test_total.py", other, unrun)], True)
+    run("strict mark loosened", [edit("tests/test_count.py", function, function.replace(b"strict=True, ", b""))], True)
+    run("new test file with a loose mark", [Change("tests/test_new.py", "A", None, loose)], True)
+    run("new strict mark with a new expectation", [
+        edit("tests/test_total.py", other, marked.replace(b"== 4", b"== 5")),
+    ], False)
+    run("changed expectation without marks", [
+        edit("tests/test_total.py", other, other.replace(b"== 4", b"== 5")),
+    ], False)
+    run("removed test function", [edit("tests/test_count.py", pair, other)], False,
+        ["REMOVED tests/test_count.py::test_count"])
+    run("removed red test is not a lift", [
+        edit("tests/test_count.py", pair, other),
+        edit("tests/test_total.py", other, other.replace(b"== 4", b"== 5")),
+    ], False, ["REMOVED tests/test_count.py::test_count"])
+    run("removed and changed evidence", [
+        Change("tests/test_old.py", "D", other, None),
+        edit("examples/demo/expected/rows.json", b"[2]", b"[3]"),
+        edit("src/count.py", b"", b""),
+        edit("tests/test_total.py", other, other.replace(b"== 4", b"== 5")),
+        edit(".github/workflows/ci.yml", b"", b""),
+    ], False, ["REMOVED tests/test_old.py", "CHANGED examples/demo/expected/rows.json",
+               "CHANGED tests/test_total.py::test_total", "CHANGED .github/workflows/ci.yml"])
+    run("weakened expectation without a source change", [
+        edit("compiler/tests/test_total.py", other, other.replace(b"== 4", b"is not None")),
+    ], False, ["CHANGED compiler/tests/test_total.py::test_total"])
+    errors, notes = review([edit("tests/test_count.py", pair, lifted + b"\n" + other),
+                            edit("src/count.py", b"", b"")], planner=False)
+    if errors or any(n.startswith("CHANGED tests/") for n in notes):
+        raise AssertionError(f"a lifted mark is not a change: errors {errors}, notes {notes}")
+    print("ALLOW without planner: lifted mark is not reported as a change")
 
 
 if __name__ == "__main__":

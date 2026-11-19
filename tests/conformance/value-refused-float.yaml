@@ -21,3 +21,4 @@ expect:
   witness: null
 unsupported:
   feldera: The refusal happens at typed fact loading before rows are sent to the engine.
+  language: "The case is a refusal while loading facts, while the shared runner compares the answer to a question."

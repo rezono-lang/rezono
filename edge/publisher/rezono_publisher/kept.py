@@ -167,6 +167,34 @@ def allowed(name: str, v1: bool = False) -> bool:
     return parts[0] == "pack" and len(parts) > 1 and not SKIP.intersection(parts)
 
 
+def _view_mapping_errors(root: Path, main: Path, imports: list[tuple[str, Path]]) -> list[str]:
+    """Read and type every theory mapping (views.yaml) of the archive's closure with the reader and typing that
+    compilation uses (decisions/kept-view-mapping.md). Only current code runs. A refusal names the file."""
+    from rezono_compiler import pack as compiler_pack, view_typing, views
+
+    out = []
+    for d in sorted({main, *(d for _, d in imports)}):
+        path = d / "views.yaml"
+        if not (path.exists() or path.is_symlink()):
+            continue
+        name = f"pack/{path.relative_to(root).as_posix()}"
+        try:
+            if d != main:
+                views.refuse(d)  # an imported pack may carry no view
+            value = views.admit(d)
+            domain = compiler_pack.read(d)
+            dirs = dict(imports)
+            missing = sorted(v.theory for v in value.views if v.theory not in dirs)
+            if missing:
+                raise views.ViewError(f"views[{missing[0]}].theory: expected a pinned import")
+            theories = {v.theory: compiler_pack.read(dirs[v.theory]) for v in value.views}
+            view_typing.resolve(value, domain, theories, source=path)
+        except Exception as e:  # any refusal of the reader or the typing, or a pack that does not read
+            detail = " ".join(str(e).replace(str(path), name).split())
+            out.append(f"{name}: theory views.yaml {detail}"[:600])
+    return out
+
+
 def archived_pack(root: Path) -> tuple[Path | None, list[str]]:
     """The pack an unpacked archive was made for, under its pack/ directory `root`, checked with the current
     code before anything runs: the one pack.yaml that no other pack there imports, every pack it imports
@@ -192,10 +220,7 @@ def archived_pack(root: Path) -> tuple[Path | None, list[str]]:
     out += [f"pack/{p.relative_to(root).as_posix()}: neither the pack's nor a definition file of a pack it imports"
             for p in sorted(root.rglob("*")) if p.is_file() and p not in kept]
     if not out:  # The existing verified closure/inventory, never a second resolver or archived code.
-        roots = sorted({main, *(d for _, d in imports)})
-        out += [f"pack/{(d / 'views.yaml').relative_to(root).as_posix()}: "
-                "theory views.yaml execution is not supported yet"
-                for d in roots if (d / "views.yaml").exists()]
+        out += _view_mapping_errors(root, main, imports)
     return (None if out else main), out
 
 

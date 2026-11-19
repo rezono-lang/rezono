@@ -18,17 +18,6 @@ STATE = {
 }
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason=(
-        "Read formal/Rounds.tla (SubmitOne, Crash, LoseReply, DoneHasCurrentMatchingObservation). Add "
-        "loop/round_submit.py with submit_refusal(state, *, worker, member), which returns None or the first "
-        "failed guard as stale_certificate, not_pending, not_claimant, worker_stopped or already_submitted, and "
-        "record_submit(state, *, worker, member), which returns a new state with the submit and its certificate "
-        "pin appended and done unchanged. Write in loop/."
-    ),
-)
 def test_round_submit_follows_the_certified_claim():
     assert find_spec("loop.round_submit") is not None, "The submit guard is not wired"
     from loop.round_submit import record_submit, submit_refusal

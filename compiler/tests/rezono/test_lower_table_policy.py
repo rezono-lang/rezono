@@ -22,8 +22,9 @@ FIRST = table(["level", "tone"],
     raises=pack.CompileError,
     reason="Lower a table first to the named outcome and value relations of a unique table, without the conflict "
            "invariant, in compiler/rezono_compiler/rezono_table.py and rezono_extend.py. Read docs/rezono/tables.md "
-           "section 3 and decisions/language-tables.md, section Lowering a first table. Remove the case 'first' from "
-           "the refusals in compiler/tests/test_rezono_table.py, which this task may change. No reader dependency.",
+           "section 3 and decisions/language-tables.md, section Lowering a first table. Ready for a worker: the refusal "
+           "of a first table is gone from compiler/tests/test_rezono_table.py, so only this mark goes. No reader "
+           "dependency.",
 )
 def test_lower_table_first(tmp_path):
     d = written(tmp_path, LEVEL, TONE, STANDING, ETA, {"extend": "Eta", "derived": [FIRST]})
@@ -37,9 +38,11 @@ def test_lower_table_first(tmp_path):
         ("e3", "known", ""),  # row 3 is the first that applies
         ("e4", "unknown", "no_value"),  # level unknown: row 1 is undecided above row 3 and gives another output
         ("e5", "known", ""),  # tone n/a: a test on it does not apply, so row 4 applies
-        ("e6", "known", ""),  # level unknown, tone n/a: row 1 is undecided above row 4 with the same output
+        # level unknown, tone n/a: row 2 is `unknown and n/a`, which is unknown (expressions.md A.1), so it is
+        # undecided above row 4 and gives another output; row 1, undecided with row 4's output, changes nothing
+        ("e6", "unknown", "no_value"),
         ("e7", "known", ""),  # rows 3 and 4 both apply: the first wins, which is no conflict
     }
     assert rows(db, "eta_standing_value") == {
-        ("e1", "good"), ("e2", "withdrawn"), ("e3", "withdrawn"), ("e5", "good"), ("e6", "good"), ("e7", "withdrawn"),
+        ("e1", "good"), ("e2", "withdrawn"), ("e3", "withdrawn"), ("e5", "good"), ("e7", "withdrawn"),
     }

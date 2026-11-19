@@ -50,22 +50,24 @@ def _receipt(scope, nodes, finals, retained):
     return {**artifacts, "receipt": receipt}
 
 
-def _admission(evidence, scope, retained):
-    return {"completeness_receipts": [observation_reference("submitted", "receipt", evidence["receipt"])],
-            "completeness_authority": [_authority(scope, retained)]}
+def _evidence(evidence, scope, retained):
+    """The bodies of context.json and index.json (decisions/admission-transport.md section 3)."""
+    return {"context": {"completeness": [_authority(scope, retained)]},
+            "index": {"completeness_receipts": [observation_reference("submitted", "receipt", evidence["receipt"])]}}
 
 
 @pytest.mark.xfail(
     strict=True,
-    raises=(AssertionError, TypeError),
+    raises=(AssertionError, ImportError, TypeError),
     reason=(
-        "Read decisions/scoped-completeness.md sections 1 and 3. Derive complete_sweep only with a verified "
-        "receipt for the sweep scope, so the pinned two-node inventory decides coverage. Keep the interval, "
-        "terminal reports, gap and loss requirements. Write in packs/std-loop (complete_sweep.dl) and its "
-        "schema. Waits for edge/publisher/tests/test_completeness_publish.py--"
+        "Read decisions/scoped-completeness.md sections 1 and 3 and decisions/admission-transport.md section 6. "
+        "Derive complete_sweep only with a verified receipt for the sweep scope (verified_receipt and "
+        "verified_member), so the pinned two-node inventory decides coverage. Keep the interval, terminal "
+        "reports, gap and loss requirements. Write in packs/std-loop (complete_sweep.dl) and its schema. Waits "
+        "for edge/publisher/tests/test_completeness_publish.py--"
         "test_publisher_admits_receipts_only_with_a_trusted_context (the batch boundary admits the receipt and "
-        "fills verified_receipt) and for test_absent_checked_requires_readable_coverage (std-completeness "
-        "supplies complete). Today batch.epoch rejects the admission keywords with TypeError."
+        "the checker admits it again) and for test_absent_checked_requires_readable_coverage (std-completeness "
+        "supplies complete). Today rezono_checker.evidence is missing (ImportError)."
     ),
 )
 def test_sweep_cannot_drop_expected_node(tmp_path):
@@ -89,7 +91,7 @@ def test_sweep_cannot_drop_expected_node(tmp_path):
     complete_evidence = _receipt(scope, nodes, finals, retained)
     manifest, rows, _ = checked_loop_publication(
         tmp_path / "full", records, retained=retained, submitted=complete_evidence,
-        admission=_admission(complete_evidence, scope, retained),
+        **_evidence(complete_evidence, scope, retained),
     )
     assert rows("complete_sweep") == completed
     assert {entry["source_id"]: entry["position"] for entry in manifest["sources"]} == {
@@ -101,7 +103,7 @@ def test_sweep_cannot_drop_expected_node(tmp_path):
     assert shortened_evidence["receipt"] != complete_evidence["receipt"]
     _, rows, _ = checked_loop_publication(
         tmp_path / "truncated", truncated, retained=retained, submitted=shortened_evidence,
-        admission=_admission(shortened_evidence, scope, retained),
+        **_evidence(shortened_evidence, scope, retained),
     )
     assert rows("complete_sweep") == set(), (
         f"The published sweep trusts a shortened submission over the pinned two-node inventory: {rows('complete_sweep')}"

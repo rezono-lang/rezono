@@ -1,0 +1,8 @@
+vendor_default_transport_source:
+  - id: argocd-3.0.0-transport-source
+    product: argocd
+    series: 3.0.0
+    protocol: TCP
+    port: 8080
+    source_url: 'https://raw.githubusercontent.com/argoproj/argo-cd/v3.0.0/docs/operator-manual/server-commands/argocd-server.md'
+    source_sha256: 3f2c88ccfdaf6beed6c9f52600f05f0073b8f715b23d57600b3a44e8242ac385

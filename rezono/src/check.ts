@@ -35,6 +35,8 @@ export interface Typed {
 	reads: Map<string, boolean>;
 	/** The open relations whose missing rows it reads (§6). */
 	opens: string[];
+	/** The calls of a rule that can be undecided and has no keyed outcome: a missing success row proves nothing about them. */
+	partials: Expr[];
 	/** The values that are known whenever this one is: what its strict operators read (Appendix A.3). */
 	sure: Set<string>;
 	/**
@@ -167,6 +169,7 @@ export function typing(text: string, schema: Schema, spans: WeakMap<object, Span
 			states: union<StateName>(['known'], ...parts.map((p) => p.states)),
 			reads,
 			opens: [...union(...parts.map((p) => p.opens))],
+			partials: [...union(...parts.map((p) => p.partials))],
 			sure: union(...parts.map((p) => p.sure)),
 			inexact: ty.t === 'num' && parts.some((p) => p.inexact)
 		};
@@ -268,9 +271,15 @@ export function typing(text: string, schema: Schema, spans: WeakMap<object, Span
 		return v;
 	}
 	/** `not`, `all`, `none`, the left side of `=>` and an aggregate read a missing row as not there: only over a closed relation. */
-	function closed(v: Typed, node: object): void {
+	function closed(v: Typed, node: object, atCall = false): void {
 		if (v.opens.length) report('R004', spanOf(node), [v.opens[0]]);
+		// A rule that can be undecided and gives no outcome cannot tell a miss from an undecided call (R047).
+		if (v.partials.length) {
+			const call = v.partials[0];
+			report('R047', spanOf(atCall ? call : node), [(call as { call: [string, Expr[]] }).call[0]]);
+		}
 		v.opens = [];
+		v.partials = [];
 	}
 
 	function literal(e: { lit: string }): Typed {
@@ -467,13 +476,13 @@ export function typing(text: string, schema: Schema, spans: WeakMap<object, Span
 				if (name === 'min' || name === 'max') v.states.add('not_applicable');
 				// A count, a sum, the least and the greatest speak of every member: over a set that is not known
 				// complete they would read a missing row as "not there".
-				closed(v, e);
+				closed(v, e, true);
 				v.sure = new Set();
 				return v;
 			}
 			const over = arg === undefined ? undefined : inside(element, () => truth(arg));
 			const v = value({ t: 'bool' }, over ? [base, over] : [base]);
-			if (name !== 'any') closed(v, e);
+			if (name !== 'any') closed(v, e, true);
 			v.sure = new Set();
 			return v;
 		}
@@ -581,6 +590,7 @@ export function typing(text: string, schema: Schema, spans: WeakMap<object, Span
 		}
 		const v = value({ t: 'bool' }, given);
 		if (rule.world === 'open') v.opens.push(name);
+		if (!rule.outcome && rule.states?.some((s) => s !== 'known')) v.partials.push(e);
 		return v;
 	}
 
