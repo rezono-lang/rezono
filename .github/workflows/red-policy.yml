@@ -42,15 +42,21 @@ jobs:
           git fetch --no-tags origin "refs/pull/$PR/head"
           [[ "$(git rev-parse FETCH_HEAD)" == "$HEAD" ]]
           base=$(git merge-base "$BASE" "$HEAD")
+          # Labels are read live, not from the event, so the review sees the labels the pull
+          # request carries now. The guard needs the label p1-read-<first seven characters of
+          # the head> for a change to the checker or read access; a `labeled` event reruns it.
           current_state() {
             gh api "repos/$GITHUB_REPOSITORY/pulls/$PR" \
-              --jq '[.head.sha, any(.labels[]; .name == "planner")] | @tsv'
+              --jq '{sha: .head.sha, labels: [.labels[].name]} | tojson'
           }
           report="$RUNNER_TEMP/test-evidence.txt"
           for attempt in 1 2 3; do
             state=$(current_state)
-            IFS=$'\t' read -r sha planner <<< "$state"
+            sha=$(jq -r '.sha' <<< "$state")
+            planner=$(jq 'any(.labels[]; . == "planner")' <<< "$state")
+            labels=$(jq -c '.labels' <<< "$state")
             [[ "$sha" == "$HEAD" ]]
+            echo "Labels on #$PR at $sha: $labels"
             result=0
             label=()
             case "$planner" in
@@ -61,7 +67,7 @@ jobs:
               false) ;;
               *) exit 1 ;;
             esac
-            python -I scripts/red_guard.py "${label[@]}" "$base" "$HEAD" > "$report" || result=$?
+            python -I scripts/red_guard.py "${label[@]}" --labels "$labels" "$base" "$HEAD" > "$report" || result=$?
             cat "$report"
             latest=$(current_state)
             if [[ "$state" == "$latest" ]]; then
@@ -118,6 +124,8 @@ jobs:
           esac
           report="$RUNNER_TEMP/test-evidence.txt"
           result=0
+          # No --labels here: the queue reads no labels, and the pull request check that
+          # required the read label had to pass before the change could enter the queue.
           python -I scripts/red_guard.py "${label[@]}" "$BASE" "$HEAD" > "$report" || result=$?
           cat "$report"
           {

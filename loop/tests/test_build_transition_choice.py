@@ -10,7 +10,7 @@ UNIVERSE = frozenset({"alpha", "beta", "gamma", "viewer"})
     strict=True,
     raises=AssertionError,
     reason=(
-        "Read decisions/build-reconciliation.md, section Transition evidence. Add loop/build_transition_choice.py "
+        "extra: Read decisions/build-reconciliation.md, section Transition evidence. Add loop/build_transition_choice.py "
         "with transition_choice(*, run, pack, python, universe) that keeps the Python result, records a "
         "disagreement with both sides, and requests every suite when the pack result is unverified. "
         "Write only in that file."

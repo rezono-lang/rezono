@@ -14,7 +14,7 @@ EXPECTED = [("registry", "3.0.0", "TCP", 5000,
 
 
 @pytest.mark.xfail(strict=True, raises=AssertionError, reason=(
-    "Add facts/registry_transport_source.yaml with one vendor_default_transport_source row id registry-3.0.0-transport-source "
+    "M2: Add facts/registry_transport_source.yaml with one vendor_default_transport_source row id registry-3.0.0-transport-source "
     "holding the expected values. "
     "Give the source file a sidecar facts/registry_transport_source.sources.yaml whose default is a tool source named "
     "'Vendor transport inspection' with the revision, position, url and fragment_sha256 this test states. "
