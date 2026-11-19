@@ -8,6 +8,9 @@ MAPPINGS = (("exactMappings", "exact_mappings"), ("closeMappings", "close_mappin
 FIELDS = {"description", "annotations"} | {written for written, _ in MAPPINGS}
 HEADER = FIELDS | {"schema", "iri", "language", "prefixes", "imports", "defaultRange"}
 NAME = re.compile(r"[a-z][a-z0-9_]*")
+WHOLE = re.compile(r"-?(0|[1-9][0-9]*)")
+# Fields that the named annotation's schema types as whole numbers (pack.explore); all other values stay as written.
+WHOLE_FIELDS = {"explore": frozenset({"min", "max", "step"})}
 
 
 def name(value: object) -> bool:
@@ -24,6 +27,16 @@ def annotation_value(value: object) -> bool:
     if isinstance(value, dict):
         return all(annotation_value(item) for item in value.values())
     return isinstance(value, (str, bool))
+
+
+def annotation_literal(tag: str, value: object) -> object:
+    """The module form writes numbers as exact decimal text; LinkML holds a whole number as an integer.
+    Only fields the named annotation's schema types as whole numbers convert; other text stays text."""
+    fields = WHOLE_FIELDS.get(tag)
+    if not fields or not isinstance(value, dict):
+        return value
+    return {key: int(item) if key in fields and isinstance(item, str) and WHOLE.fullmatch(item) else item
+            for key, item in value.items()}
 
 
 def valid(body: dict) -> bool:
@@ -64,7 +77,8 @@ def lower(body: dict) -> dict:
         if written in body:
             metadata[target] = list(body[written])
     if "annotations" in body:
-        metadata["annotations"] = {tag: {"value": value} for tag, value in body["annotations"].items()}
+        annotations = body["annotations"]
+        metadata["annotations"] = {tag: {"value": annotation_literal(tag, value)} for tag, value in annotations.items()}
     return metadata
 
 
