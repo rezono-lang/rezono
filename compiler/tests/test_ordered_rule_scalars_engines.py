@@ -45,10 +45,6 @@ def evaluated(program_):
         return batch.read(db, program_, ["comparison"])["comparison"]
 
 
-@pytest.mark.xfail(strict=True, raises=rules_dl.RuleError, reason=WAIT + (
-    "Then lower `utc_instant(a) < utc_instant(b)` and `binary_text(a) < binary_text(b)` in "
-    "compiler/rezono_compiler/rules_dl.py to one condition with compare_as, refusing an annotation on one side only "
-    "or outside a comparison."))
 def test_datalog_spells_typed_comparisons():
     doc = rules_dl.read_program(datalog(), "order", {"left_value": COLUMNS, "right_value": COLUMNS}, "order")
     typed = {(c["op"], c.get("compare_as")) for rule in doc["rules"] for c in rule.get("conditions", ())
@@ -82,9 +78,6 @@ def test_the_bundle_keeps_typed_comparisons():
         assert ids[f"binary_text_{op}"] != ids[f"utc_instant_{op}"], op
 
 
-@pytest.mark.xfail(strict=True, raises=rules.IRError, reason=WAIT + (
-    "Then follow compare_as in compiler/rezono_compiler/gap.py, both in the plain-Python failures and in the Soufflé "
-    "prefix program: a typed condition that does not hold is the failing premise."))
 def test_gap_follows_typed_comparisons():
     prog = rules.load(program())
     rows = {name: [list(row) for row in table] for name, table in inputs().items()}

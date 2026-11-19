@@ -5,7 +5,6 @@ import pytest
 from offline_cases import implementation
 
 
-@pytest.mark.xfail(strict=True, reason="Read decisions/run-cluster-shape.md, section Converters, Node names. Implement meta_data in run/nocloud_meta.py.")
 def test_nocloud_meta():
     meta_data = implementation("nocloud_meta.py", "meta_data")
     assert meta_data("m-a") == b"instance-id: m-a\nlocal-hostname: m-a\n"

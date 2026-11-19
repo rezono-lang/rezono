@@ -74,9 +74,12 @@ export function mismatch(file) {
         assert.ok(place, `Missing authored span at ${at}.`);
         assert.equal([...source].slice(Number(place.start), Number(place.end)).join(''), name);
     }
-    for (const { from, to } of fixture.rejections ?? []) {
+    for (const { from, to, diagnostics } of fixture.rejections ?? []) {
         assert.ok(source.includes(from), `No source to replace: ${from}`);
-        assert.equal(moduleForm(source.replace(from, to)).form, undefined, `Accepted ${to}`);
+        const refused = moduleForm(source.replace(from, to));
+        assert.equal(refused.form, undefined, `Accepted ${to}`);
+        // A rejection that records its diagnostics fixes their code and place in the replaced source.
+        if (diagnostics) assert.deepEqual(diagnosticPlaces(refused.diagnostics), diagnostics, `Refused ${to} differently`);
     }
     return null;
 }

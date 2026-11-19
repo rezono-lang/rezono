@@ -73,7 +73,6 @@ COUNTER_CASES = {
 }
 
 
-@pytest.mark.xfail(strict=True, reason="Read decisions/run-cluster-shape.md, section Cluster shape. Write the fact-free pack run/packs/cluster-shape/ with its schema and rules.")
 def test_cluster_shape():
     result = shape(machines(), lines())
     assert result["member"] == {(CLUSTER, "m-a", "worker"), (CLUSTER, "m-b", "worker"),

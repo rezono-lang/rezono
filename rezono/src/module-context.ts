@@ -1,4 +1,6 @@
-import { declaration, named, type Build, type Logical, type ModuleComponent } from './module-support.ts';
+import { declaration, leafDeclaration, named, type ModuleComponent } from './module-support.ts';
+import { refused } from './parse-support.ts';
+import type { Node } from 'ohm-js';
 
 export interface ContextDecl {
 	asOf: string;
@@ -13,12 +15,10 @@ export function isCalendarDay(date: string): boolean {
 	return at.getUTCMonth() === m - 1 && at.getUTCDate() === d;
 }
 
-function readContext(line: Logical, build: Build): ContextDecl {
-	build.leaf(line);
-	const decl = build.strip<ContextDecl>(line.read!);
-	for (const date of [decl.asOf, decl.known]) if (!isCalendarDay(date)) build.refuse(line, 'a day of the calendar');
-	return decl;
-}
+const day = (date: Node): string => {
+	if (!isCalendarDay(date.sourceString)) refused(date, 'R012', [date.sourceString]);
+	return date.sourceString;
+};
 
 export const context = {
 	lineRules: ['ContextLine'],
@@ -27,8 +27,8 @@ export const context = {
   asOfWords = as hsp+ "of" wordEnd
   `,
 	actions: {
-		ContextLine: (words, asOf, _known, known) => named(words, { line: 'context', asOf: asOf.sourceString, known: known.sourceString }),
+		ContextLine: (words, asOf, _known, known) => named(words, { line: 'context', asOf: day(asOf), known: day(known) }),
 		asOfWords: (_as, _space, _of, _end) => undefined
 	},
-	declarations: { context: declaration<ContextDecl>('asOf', readContext, d => [`as of ${d.asOf} known ${d.known}`]) }
+	declarations: { context: declaration<ContextDecl>('asOf', leafDeclaration, d => [`as of ${d.asOf} known ${d.known}`]) }
 } satisfies ModuleComponent;
