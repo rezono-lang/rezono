@@ -1,0 +1,57 @@
+{
+  "source": "kind SchemeParameter world closed\n  name: Text\n  value: Int\nparam income_margin: Int from SchemeParameter.value by name",
+  "module": {
+    "rezono": "0",
+    "pack": "sample",
+    "use": [],
+    "decls": [
+      {
+        "kind": "SchemeParameter",
+        "world": "closed",
+        "slots": [
+          {
+            "slot": "name",
+            "type": "Text"
+          },
+          {
+            "slot": "value",
+            "type": "Int"
+          }
+        ],
+        "derived": []
+      },
+      {
+        "param": "income_margin",
+        "type": "Int",
+        "source": {
+          "kind": "SchemeParameter",
+          "slot": "value",
+          "nameSlot": "name"
+        }
+      }
+    ]
+  },
+  "spanNames": {
+    "/decls/1": "income_margin"
+  },
+  "rejections": [
+    {
+      "from": "from SchemeParameter.value by name",
+      "to": "from SchemeParameter.value"
+    },
+    {
+      "from": "param income_margin: Int from",
+      "to": "param income_margin: Int = 5 from"
+    }
+  ],
+  "knownDiagnostics": [
+    {
+      "code": "R000",
+      "span": {
+        "text": "from",
+        "start": 106,
+        "end": 110
+      }
+    }
+  ]
+}

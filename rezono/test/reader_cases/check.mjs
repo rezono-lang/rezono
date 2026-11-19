@@ -57,10 +57,12 @@ export function mismatch(file) {
     const source = 'rezono 0\npack sample\n' + fixture.source + '\n';
     const { form, diagnostics } = moduleForm(source);
     if (!form) {
-        assert.deepEqual(diagnostics, fixture.knownDiagnostics, 'The reader returned a different diagnostic.');
-        return JSON.stringify(diagnostics);
+        // Compare the code and place only: the list of expected tokens grows with every new construct.
+        assert.deepEqual(diagnosticPlaces(diagnostics), diagnosticPlaces(fixture.knownDiagnostics),
+            'The reader returned a different diagnostic.');
+        return JSON.stringify(diagnosticPlaces(diagnostics));
     }
-    assert.equal(form.format, 'rezono.module/2');
+    assert.equal(form.format, fixture.format ?? 'rezono.module/2');
     if (fixture.module) {
         assert.deepEqual(form.module, fixture.module);
         assert.deepEqual(moduleFromJson(JSON.parse(moduleToJson(form))), form);

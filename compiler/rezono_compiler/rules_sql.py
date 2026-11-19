@@ -24,7 +24,8 @@ and WHERE as the rule. It reads the final relations, so it is never part of a re
 
 from dataclasses import replace
 
-from .rules import BOOLEAN, Condition, calc_input_table, is_var, upper
+from . import feldera_names
+from .rules import BOOLEAN, Condition, calc_input_table, const_type, is_var, upper
 from .sqltext import literal, q
 
 OPS = {"eq": "=", "ne": "<>", "lt": "<", "le": "<=", "gt": ">", "ge": ">=", "add": "+", "sub": "-", "mul": "*", "div": "/"}
@@ -240,11 +241,13 @@ def wants_witness(prog, rule, witnesses):
     return bool(witnesses)
 
 
-def empty_relation(rel):
+def empty_relation(rel, dialect):
     """A declaration-only extension is empty, with typed columns and no implicit grants or NULLs."""
     empty = {"string": "", "integer": "0", "boolean": "false"}
     cols = [f"{lit_sql(empty[c.type], c.type)} AS {q(c.name)}" for c in rel.key]
-    return f"SELECT {', '.join(cols)} WHERE FALSE"
+    # Calcite requires a FROM clause before WHERE. The constant source contributes no facts.
+    source = " FROM (VALUES (1)) AS seed(n)" if dialect == "feldera" else ""
+    return f"SELECT {', '.join(cols)}{source} WHERE FALSE"
 
 
 def feldera(prog, witnesses=False, relations=None, inputs=None, tables=True):
@@ -263,7 +266,7 @@ def feldera(prog, witnesses=False, relations=None, inputs=None, tables=True):
         if name in prog.bounds:
             body = unrolled(prog, name)
         else:
-            body = "\nUNION\n".join(rule_select(prog, r) for r in prog.rules_for(name)) or empty_relation(rel)
+            body = "\nUNION\n".join(rule_select(prog, r) for r in prog.rules_for(name)) or empty_relation(rel, "feldera")
             if prog.recursive(name):
                 cols = ", ".join(f"{q(c.name)} {SQL_TYPE[c.type]} NOT NULL" for c in rel.key)
                 stmts.append(f"DECLARE RECURSIVE VIEW {q(name)} ({cols});")
@@ -272,7 +275,7 @@ def feldera(prog, witnesses=False, relations=None, inputs=None, tables=True):
             if wants_witness(prog, r, witnesses):
                 stmts.append(f"CREATE MATERIALIZED VIEW {q(r.witness_relation)} AS\n{witness_select(prog, r)};")
         stmts += [f"CREATE MATERIALIZED VIEW {q(v)} AS\n{s};" for v, s in checks(prog, name)]
-    return "\n\n".join(stmts) + "\n"
+    return feldera_names.render("\n\n".join(stmts) + "\n")
 
 
 def _input_tables(prog, names):
@@ -286,7 +289,7 @@ def _input_tables(prog, names):
 
 def input_tables(prog, names):
     """Derived or calc relations another pipeline computes, as input tables of this one."""
-    return "\n\n".join(_input_tables(prog, sorted(names))) + "\n"
+    return feldera_names.render("\n\n".join(_input_tables(prog, sorted(names))) + "\n")
 
 
 def divides(prog):
@@ -305,7 +308,7 @@ def duckdb_relation(prog, name):
     if name in prog.bounds:
         return [f"CREATE OR REPLACE TABLE {q(name)} AS\n{unrolled(prog, name, 'duckdb')};"]
     if not prog.recursive(name):
-        body = "\nUNION\n".join(rule_select(prog, r, dialect="duckdb") for r in rules) or empty_relation(rel)
+        body = "\nUNION\n".join(rule_select(prog, r, dialect="duckdb") for r in rules) or empty_relation(rel, "duckdb")
         return [f"CREATE OR REPLACE TABLE {q(name)} AS\n{body};"]
     rec = [r for r in rules if any(b.atom.relation == name for b in r.body)]
     base = [r for r in rules if r not in rec]

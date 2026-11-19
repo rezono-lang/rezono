@@ -87,11 +87,6 @@ def recorded_allocation(preferences=(), *, coverage=SCOPE, third=False, setup=Fa
             "allocation-decisions.yaml": approved}
 
 
-@pytest.mark.xfail(strict=True, raises=MissingReaderQuestion, reason=(
-    "Publish physical-or-nested and its grounds for whole allocations, per-host reserves, full-order prices, "
-    "authorized preference coverage and supersession. Read decisions/run-physical-nested-allocation.md. "
-    "Write in run/packs/offer-selection/."
-))
 def test_physical_nested_allocation(tmp_path):
     registered(QUESTION, __file__, "test_physical_nested_allocation")
     checked(PACK, tmp_path / "plain").question(QUESTION)

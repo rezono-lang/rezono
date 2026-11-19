@@ -1,0 +1,36 @@
+{
+  "source": "use std-decision\nuse lib.terms as terms",
+  "format": "rezono.module/1",
+  "module": {
+    "rezono": "0",
+    "pack": "sample",
+    "use": [
+      {
+        "use": "std-decision"
+      },
+      {
+        "use": "lib.terms",
+        "as": "terms"
+      }
+    ],
+    "decls": []
+  },
+  "spanNames": {
+    "/use/0": "std-decision",
+    "/use/1": "lib.terms"
+  },
+  "rejections": [
+    {
+      "from": "use std-decision",
+      "to": "use Std"
+    },
+    {
+      "from": "as terms",
+      "to": "as Terms"
+    },
+    {
+      "from": "lib.terms",
+      "to": "lib..terms"
+    }
+  ]
+}

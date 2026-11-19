@@ -100,11 +100,6 @@ def inputs(*, second_stop="03:00", registry=True, invoice=True, cap=300, billed_
             "reconciliation-decisions.yaml": approvals}
 
 
-@pytest.mark.xfail(strict=True, raises=MissingReaderQuestion, reason=(
-    "Publish run-reconciliation and grounds from invoice-drift. Derive forecast, per-resource "
-    "usage charges, independently bound invoice amounts, drift, and rated/billed cap findings. "
-    "Read decisions/run-reconciliation.md. Write in run/packs/invoice-drift/."
-))
 def test_run_reconciliation(tmp_path):
     registered(QUESTION, __file__, "test_run_reconciliation")
     checked(PACK, tmp_path / "plain").question(QUESTION)

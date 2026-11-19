@@ -63,6 +63,22 @@ def test_consumer_cannot_reopen_a_relation(imported, declaration):
         pack.read(consumer)
 
 
+def test_empty_mixed_extension_has_a_typed_source_for_the_engine_filter(imported):
+    import duckdb
+
+    owner, consumer = imported
+    write_rules(owner, "// @extend\n.decl observed(label: symbol, amount: number)\n")
+    pin(consumer, owner)
+    p = program(consumer)
+    view = rules_sql.feldera(p).split('CREATE MATERIALIZED VIEW "observed" AS\n', 1)[1].split(";", 1)[0]
+    assert view.index(" FROM ") < view.index(" WHERE ")
+    with duckdb.connect() as db:
+        result = db.execute(view)
+        assert [(column[0], str(column[1])) for column in result.description] == [
+            ("label", "VARCHAR"), ("amount", "BIGINT")]
+        assert result.fetchall() == []
+
+
 def test_only_an_owner_can_open_an_extension_and_no_grant_is_invented(imported):
     owner, consumer = imported
     write_rules(owner, "// @extend\n.decl granted(r: symbol, k: symbol, x: symbol)\n")

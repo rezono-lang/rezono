@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 from collections.abc import Iterator, Mapping
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 import json
 from pathlib import Path, PurePosixPath
 import re
+
+import yaml
 
 from . import modules, pack, rezono_module, rules_dl, spans, types
 from .diagnostics import Diagnostic
@@ -14,7 +16,10 @@ from .diagnostics import Diagnostic
 Column = tuple[str, str, str]
 ClauseKey = tuple[str, str, str]
 ResolvedPath = tuple[str | None, str]
+Place = dict[str, str]
 SCALARS = {"Text": "string", "Int": "integer"}
+# The value states in code order (publication section 2.1).
+STATES = ("known", "not_applicable", "unknown", "invalid")
 
 
 @dataclass(frozen=True)
@@ -24,6 +29,9 @@ class Signature:
     owner: str
     source: str
     extend: bool = False
+    # Linked evidence for a ground call: relation, owner, columns, world, the states it can take and the
+    # places that explain each undecided state (decisions/language-expression-semantics.md section 2).
+    predicate: dict | None = None
 
 
 @dataclass(frozen=True)
@@ -33,6 +41,8 @@ class LinkedClause:
     calls: dict[str, str]
     paths: dict[str, ResolvedPath]
     memberships: dict[str, str] = field(default_factory=dict)
+    # The hops of each path node, as (subject type, slot), from which its possible states follow.
+    hops: dict[str, tuple[tuple[str, str], ...]] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -75,8 +85,10 @@ class Source:
 
 
 class Schema:
-    def __init__(self, definitions: list[modules.Module], names: modules.Names):
+    def __init__(self, definitions: list[modules.Module], names: modules.Names, root: str = ""):
         self.names = names
+        self.root = root
+        self.marks: dict[tuple[str, str], dict[tuple, tuple[int, int]]] = {}
         self.classes: dict[str, tuple[modules.Module, str]] = {}
         self.enums: dict[str, tuple[modules.Module, str]] = {}
         self.by_owner: dict[tuple[str, str], list[str]] = {}
@@ -170,6 +182,38 @@ class Schema:
         if target is None:
             target, _ = self.scalar_type(definition, rng, at)
         return (f"{owner}__{name}", target), bool(slot.multivalued)
+
+    def slot_states(self, subject: str, name: str) -> tuple[tuple[str, ...], Place | None]:
+        """The states one hop can give, and the slot that explains a state other than known.
+
+        A missing required scalar is unknown and a missing optional one is not applicable. An identifier is
+        always known, and a multivalued hop gives a collection whose fold decides its own state."""
+        definition, authored = self.classes[subject]
+        view = definition.sv
+        ancestor = next(ancestor for ancestor in view.class_ancestors(authored, mixins=False)
+                        if name in (view.get_class(ancestor).attributes or {})
+                        or name in (view.get_class(ancestor).slots or []))
+        slot = view.induced_slot(name, ancestor)
+        if slot.identifier or slot.multivalued:
+            return ("known",), None
+        owner, written = self.classes.get(self.names.resolve(definition.id, ancestor) or "", (definition, ancestor))
+        return ("known", "unknown" if slot.required else "not_applicable"), self.slot_place(owner, written, name)
+
+    def slot_place(self, module: modules.Module, kind: str, name: str) -> Place | None:
+        key = module.pack, module.rel
+        if key not in self.marks:
+            try:
+                self.marks[key] = (rezono_module.marks(module.file, module.form) if module.form is not None
+                                   else spans.marks(module.file))
+            except (OSError, UnicodeError, ValueError, yaml.YAMLError):
+                self.marks[key] = {}
+        found = self.marks[key]
+        for path in (("classes", kind, "attributes", name), ("slots", name)):
+            if path in found:
+                line, column = found[path]
+                return {"file": spans.where(module.pack, self.root, module.rel),
+                        "at": "/" + "/".join(path), "line": str(line), "column": str(column)}
+        return None
 
 
 def source_for(owner: str, path: str, form: dict, root: str, allowed: list[str],
@@ -285,6 +329,7 @@ def read_clause(schema: Schema, source: Source, at: str, decl: dict, signatures:
         raise Refusal("R041", f"{relation!r} takes {len(signature.key)} columns, got {len(head)}", at)
     explicit = set(known)
     paths: dict[str, ResolvedPath] = {}
+    hops: dict[str, tuple[tuple[str, str], ...]] = {}
     calls: dict[str, str] = {}
     memberships: dict[str, str] = {}
     arguments: list[tuple[dict, str, str, bool]] = []
@@ -333,11 +378,14 @@ def read_clause(schema: Schema, source: Source, at: str, decl: dict, signatures:
         if value is None or not steps:
             return value
         place = None
+        visited = []
         for i, step in enumerate(steps):
+            visited.append((value, step))
             (place, value), many = schema.slot(value, step, pointer)
             if many and i + 1 < len(steps):
                 raise Refusal("R005", f"{step!r} gives a set where a single subject is required", pointer)
         paths[pointer] = (place, value)
+        hops[pointer] = tuple(visited)
         return value
 
     for node, expected, pointer, _ in arguments:
@@ -377,7 +425,7 @@ def read_clause(schema: Schema, source: Source, at: str, decl: dict, signatures:
         path = node.get("path", ())
         if len(path) > 1 and path[0] in known:
             value_type(node, pointer)
-    return LinkedClause(relation, signature.module, calls, paths, memberships)
+    return LinkedClause(relation, signature.module, calls, paths, memberships, hops)
 
 
 def link(pack_dir: str | Path, forms: Mapping[tuple[str, str], dict]) -> Linked:
@@ -396,7 +444,7 @@ def link_modules(meta: dict, definitions: list[modules.Module], imported: dict[s
     """Link native forms using the schema and import pins already read by pack compilation."""
     root = meta["name"]
     schema_errors = names.errors
-    schema = Schema(definitions, names)
+    schema = Schema(definitions, names, root)
     errors: list[Diagnostic] = []
     rules: list[tuple[Source, str, dict]] = []
     for (owner, path), form in sorted(forms.items()):
@@ -450,4 +498,127 @@ def link_modules(meta: dict, definitions: list[modules.Module], imported: dict[s
                 errors.append(source.diagnose(Refusal("R048", f"{relation!r} has no defining clause", at)))
     if errors:
         raise pack.CompileError("\n".join(map(str, errors)), errors)
-    return Linked(signatures, clauses)
+    places = Places(definitions, forms)
+    guards = {key: (source, decl["when"]) for source, at, decl in rules
+              if (key := (source.owner, source.path, at)) in clauses}
+    return Linked(predicates(schema, signatures, clauses, guards, places, defined), clauses)
+
+
+class Places:
+    """The line and column of native rule nodes, from the authored text of each linked form."""
+
+    def __init__(self, definitions: list[modules.Module], forms: Mapping[tuple[str, str], dict]):
+        self.directories = {module.pack: module.pack_dir for module in definitions}
+        self.forms = forms
+        self.texts: dict[tuple[str, str], str | None] = {}
+
+    def of(self, source: Source, at: str) -> Place:
+        key = source.owner, source.path
+        if key not in self.texts:
+            directory = self.directories.get(source.owner)
+            try:
+                self.texts[key] = (directory / source.path).read_bytes().decode("utf-8") if directory else None
+            except (OSError, UnicodeError):
+                self.texts[key] = None
+        text = self.texts[key]
+        start = next((place.get("start") for place in self.forms[key]["spans"] if place.get("at") == at), None)
+        line, column = source.lines.get(at), None
+        # A form can describe a different text. Only map an offset that lies in this source.
+        if text is not None and isinstance(start, str) and start.isdigit() and int(start) < len(text):
+            offset = int(start)
+            line, column = text.count("\n", 0, offset) + 1, offset - text.rfind("\n", 0, offset)
+        place = {"file": source.file, "at": at}
+        if line is not None:
+            place["line"] = str(line)
+            if column is not None:
+                place["column"] = str(column)
+        return place
+
+
+Outcome = tuple[frozenset[str], tuple[Place, ...]]
+DECIDED: Outcome = (frozenset({"known"}), ())
+
+
+def merge(*outcomes: Outcome) -> Outcome:
+    states = frozenset().union(*(states for states, _ in outcomes))
+    related: dict[tuple, Place] = {}
+    for _, found in outcomes:
+        for place in found:
+            related.setdefault(tuple(sorted(place.items())), place)
+    return states, tuple(related.values())
+
+
+def outcome(node: object, at: str, schema: Schema, source: Source, clause: LinkedClause,
+            relations: Mapping[str, Outcome], places: Places) -> Outcome:
+    """The states a guard can take by the truth tables, with the places that explain an undecided state."""
+    if not isinstance(node, dict):
+        return DECIDED
+
+    def part(child: object, pointer: str) -> Outcome:
+        return outcome(child, pointer, schema, source, clause, relations, places)
+
+    for op, dominant in (("and", "false"), ("or", "true")):
+        if op in node:
+            terms = node[op]
+            # A constant false conjunct, or true disjunct, decides the connective whatever the others give.
+            if any(isinstance(term, dict) and term.get("lit") == dominant for term in terms):
+                return DECIDED
+            return merge(DECIDED, *(part(term, f"{at}/{op}/{i}") for i, term in enumerate(terms)))
+    if "is" in node:
+        return DECIDED  # A state test is a decided Boolean about its operand.
+    if "path" in node:
+        states, related = set(DECIDED[0]), []
+        for subject, slot in clause.hops.get(at, ()):
+            possible, place = schema.slot_states(subject, slot)
+            states.update(possible)
+            if place is not None and set(possible) != {"known"}:
+                related.append(place)
+        return frozenset(states), tuple(related)
+    if "call" in node:
+        _, terms = node["call"]
+        found = [part(term, f"{at}/call/1/{i}") for i, term in enumerate(terms)]
+        target = clause.calls.get(at)
+        if target in relations:
+            found.append(relations[target])
+        return merge(DECIDED, *found)
+    children = [part(child, f"{at}/{key}") for key, child in node.items() if isinstance(child, dict)]
+    children += [part(item, f"{at}/{key}/{i}") for key, child in node.items() if isinstance(child, list)
+                 for i, item in enumerate(child)]
+    found = merge(DECIDED, *children)
+    if "cmp" in node and found[0] != DECIDED[0]:
+        # The comparison is where an undecided operand reaches the predicate.
+        return found[0], (places.of(source, at), *found[1])
+    return found
+
+
+def predicates(schema: Schema, signatures: dict[str, Signature], clauses: dict[ClauseKey, LinkedClause],
+               guards: Mapping[ClauseKey, tuple[Source, dict]], places: Places,
+               defined: set[str]) -> dict[str, Signature]:
+    """Attach to each signature the states its ground predicate can take: a least fixed point over every
+    clause in the closure, through wrappers, positive recursion and authorized extensions."""
+    relations: dict[str, Outcome] = {name: (frozenset(), ()) for name in signatures}
+    changed = True
+    while changed:
+        changed = False
+        for key, clause in sorted(clauses.items()):
+            source, guard = guards[key]
+            previous = relations[clause.relation]
+            combined = merge(previous, outcome(guard, f"{key[2]}/when", schema, source, clause, relations, places))
+            if combined != previous:
+                relations[clause.relation] = combined
+                changed = True
+    linked = {}
+    for name, signature in signatures.items():
+        states, related = relations[name]
+        states = states or DECIDED[0]
+        linked[name] = replace(signature, predicate={
+            "relation": name,
+            "owner": signature.owner,
+            "columns": [{"name": column, "logical": logical, "physical": physical}
+                        for column, logical, physical in signature.key],
+            # An extension point that no clause in the closure defines can still gain rows from elsewhere.
+            "world": "open" if signature.extend and name not in defined else "closed",
+            "states": [state for state in STATES if state in states],
+            "related": [dict(place) for place in related] if states != DECIDED[0] else [],
+        })
+    return linked

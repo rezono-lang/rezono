@@ -55,6 +55,8 @@ ABSENCE = re.compile(r"^//\s*@absence\s*$")
 RELEASE = re.compile(r"^//\s*@release\b")  # reserved (O8, delimited release): refused until it is built
 OUTCOME = re.compile(r"^//\s*@outcome(?:\s+(\S+))?\s*$")
 EXTEND = re.compile(r"^//\s*@extend\s*$")
+CHECKED_ABSENCE = "absent_checked"  # reserved conclusion of decisions/scoped-completeness.md
+RECEIPT_PREMISES = frozenset({"complete", "verified_receipt"})
 CLOSES = re.compile(r"^//\s*@closes\s+(\S+)\s*$")
 
 
@@ -603,6 +605,11 @@ def read(pack, pack_dir: Path, imports=None, renames=None, *, calc_inputs=None, 
                               "only its owner can mark it @extend")
                 continue
             module = owners[rel]
+        if rel == CHECKED_ABSENCE and not any(
+                s[0] == "lit" and s[1] == "positive" and s[2][0] in RECEIPT_PREMISES for s in body):
+            errors.append(f"{where}:{line}: {rel} needs a positive premise from a verified receipt "
+                          f"({' or '.join(sorted(RECEIPT_PREMISES))}); a lookup alone proves no absence")
+            continue
         accessible = set(renames.get(source, {}).values())
         atoms = [head] + [s[-1] for s in body if s[0] in ("lit", "agg")]
         for n, _, _ in atoms:

@@ -2,3 +2,5 @@ name: offer-selection
 version: 0.1.0
 default_language: en
 imports: []
+sweeps:
+  - {name: amber_period_price, kind: offer, key: amber, slot: period_price_minor}

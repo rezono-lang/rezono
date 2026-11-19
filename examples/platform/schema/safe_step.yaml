@@ -1,0 +1,39 @@
+id: https://rezono.org/examples/platform-core/safe-step
+name: platform_safe_step
+description: Requested startup and retirement steps, the observations of one bound cut and the scope receipts that cover them.
+in_language: en
+imports: [linkml:types]
+default_range: string
+annotations:
+  layer: facts
+
+classes:
+  SafeRoundCut:
+    description: The observation cut a safe round is evaluated against.
+    attributes:
+      id: {identifier: true}
+      run: {required: true}
+  SafeStepRequest:
+    description: A change requested in a run, such as exposing a listener or retiring a provider.
+    attributes:
+      id: {identifier: true}
+      run: {required: true}
+      effect: {required: true, description: "expose or retire."}
+      subject: {required: true}
+  SafeStepObservation:
+    description: A reading of one attribute of a subject, bound to a run and a cut.
+    attributes:
+      id: {identifier: true}
+      run: {required: true}
+      cut: {required: true}
+      subject: {required: true}
+      attribute: {required: true}
+      value: {required: true}
+  SafeStepScope:
+    description: A receipt that a reader completely covered a scope in a run and cut.
+    attributes:
+      id: {identifier: true}
+      run: {required: true}
+      cut: {required: true}
+      reader: {required: true}
+      scope: {required: true}
