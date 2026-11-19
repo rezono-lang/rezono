@@ -122,11 +122,32 @@ class RepositoryPullRequestSelectionTests(unittest.TestCase):
         self.assertEqual(selected, {c.folder for c in components})
 
 
+# A tree with the loop, its consumers and paths outside every component.
+LOOP_TREE = {
+    "loop/pyproject.toml": '[project]\nname = "rezono-loop"\n[tool.setuptools]\npy-modules = ["rezono_cluster"]\n',
+    "loop/rezono_cluster.py": "PLUGIN = 1\n",
+    "loop/build_choice.py": "CHOICE = 1\n",
+    "loop/tests/test_build_choice.py": "from build_choice import CHOICE\n\ndef test_choice(): assert CHOICE\n",
+    "run/pyproject.toml": '[project]\nname = "rezono-run"\n',
+    "examples/test_examples.py": "def test_examples(): pass\n",
+    "examples/demo/test_demo_reader.py": "def test_demo(): pass\n",
+    "compiler/pyproject.toml": '[project]\nname = "rezono-compiler"\n',
+    "compiler/tests/conftest.py": "FIXTURE = 1\n",
+    "downstream/pyproject.toml": '[project]\nname = "downstream"\ndependencies = ["rezono-compiler"]\n',
+    "idle/pyproject.toml": '[project]\nname = "idle"\n',
+    "build/rules/tasks.dl": ".decl task(id: symbol)\n",
+    "scripts/standalone_rule.py": "RULE = 1\n",
+    "scripts/rule_caller.py": "import standalone_rule\n",
+    "scripts/red_list.py": "SKIPS = 1\n",
+}
+LOOP_EVERYTHING = {"loop", "run", "examples", "compiler", "downstream", "idle"}
+
+
 class PullRequestSelectorTests(unittest.TestCase):
-    def repository(self, directory, files):
+    def repository(self, directory, files, selector=True):
         root = Path(directory)
         self.write(root, files)
-        (root / "scripts").mkdir()
+        (root / "scripts").mkdir(exist_ok=not selector)
         shutil.copyfile(ROOT / "scripts/components.py", root / "scripts/components.py")
         self.git(root, "init", "-q")
         self.git(root, "config", "user.email", "selector@example.org")
@@ -151,16 +172,19 @@ class PullRequestSelectorTests(unittest.TestCase):
         self.git(root, "commit", "-qm", "Fixture")
         return self.git(root, "rev-parse", "HEAD")
 
-    def matrix_output(self, root, event, base):
+    def matrix_output(self, root, event, base, summary=None):
         head = self.git(root, "rev-parse", "HEAD")
         env = os.environ.copy()
         env.pop("GITHUB_OUTPUT", None)
+        env.pop("GITHUB_STEP_SUMMARY", None)
+        if summary:
+            env["GITHUB_STEP_SUMMARY"] = str(summary)
         env.update(GITHUB_EVENT_NAME=event, GITHUB_BASE_REF="main" if event == "pull_request" else "",
                    GITHUB_EVENT_BEFORE=base, MERGE_GROUP_HEAD_SHA=head, MERGE_GROUP_BASE_SHA=base)
         return subprocess.check_output([sys.executable, str(root / "scripts/components.py"), "ci-matrix"], cwd=root, env=env)
 
-    def matrix(self, root, event, base):
-        output = self.matrix_output(root, event, base).decode()
+    def matrix(self, root, event, base, summary=None):
+        output = self.matrix_output(root, event, base, summary).decode()
         fields = dict(line.split("=", 1) for line in output.splitlines())
         return {item["folder"] for kind in ("python", "node") for item in json.loads(fields[kind])}
 
@@ -303,8 +327,91 @@ class PullRequestSelectorTests(unittest.TestCase):
             self.commit(root)
             self.assertEqual(self.matrix(root, "pull_request", base), {"compiler", "idle", "rezono"})
 
+    def changed_matrix(self, files, *, tree=None):
+        """The pull request matrix for one change on the loop tree, with its step summary."""
+        with tempfile.TemporaryDirectory() as directory:
+            root, base = self.repository(directory, {**LOOP_TREE, **(tree or {})}, selector=False)
+            self.write(root, files)
+            self.commit(root)
+            summary = Path(directory) / "summary.md"
+            selected = self.matrix(root, "pull_request", base, summary)
+            return selected, summary.read_text(encoding="utf-8")
 
-SHARED_PATH = re.compile(r"^(?:(?:\.\./|\./)*)(?:docs|decisions|tests/(?:fixtures|conformance)|packs|examples|viewer|edge/plugins)(?=/|$)")
+    def test_a_test_file_named_only_in_its_component_runs_that_component_alone(self):
+        selected, summary = self.changed_matrix({"loop/tests/test_build_choice.py": "def test_choice(): pass\n"})
+        self.assertEqual(selected, {"loop"})
+        self.assertIn("- `loop`: `loop/tests/test_build_choice.py`", summary)
+        # Under examples/ such a test file skips the pack readers of examples/.
+        selected, _ = self.changed_matrix({"examples/demo/test_demo_reader.py": "def test_demo(): assert 1\n"})
+        self.assertEqual(selected, {"examples"})
+
+    def test_a_test_file_named_elsewhere_keeps_its_component_closure(self):
+        reader = {"run/tests/test_replay.py": "from loop.tests.test_build_choice import CHOICE\n"}
+        selected, summary = self.changed_matrix({"loop/tests/test_build_choice.py": "def test_choice(): pass\n"},
+                                                tree=reader)
+        self.assertEqual(selected, {"loop", "run", "examples"})
+        self.assertIn("- `run`: `loop/tests/test_build_choice.py` through `loop`", summary)
+        # The loop's own source runs its consumers as before.
+        selected, _ = self.changed_matrix({"loop/build_choice.py": "CHOICE = 2\n"})
+        self.assertEqual(selected, {"loop", "run", "examples"})
+
+    def test_conftest_runs_the_component_closure(self):
+        selected, _ = self.changed_matrix({"compiler/tests/conftest.py": "FIXTURE = 2\n"})
+        self.assertEqual(selected, {"compiler", "downstream", "loop", "run", "examples"})
+
+    def test_build_rules_run_the_loop_and_the_compiler(self):
+        selected, summary = self.changed_matrix({"build/rules/tasks.dl": ".decl task(id: symbol, at: number)\n"})
+        self.assertEqual(selected, {"compiler", "loop"})
+        self.assertIn("- `compiler`: `build/rules/tasks.dl`, which it reads", summary)
+
+    def test_paths_outside_components_with_their_readers(self):
+        cases = (
+            ({"scripts/standalone_rule.py": "RULE = 2\n"}, set()),
+            ({".github/workflows/release.yml": "name: release\n"}, set()),
+            ({".github/workflows/tests/test_components.py": "# regression\n"}, set()),
+            ({"README.md": "# Rezono\n"}, {"examples"}),
+            ({"scripts/check-quickstart.sh": "#!/bin/sh\n"}, {"examples"}),
+            ({"scripts/red_list.py": "SKIPS = 2\n"}, LOOP_EVERYTHING),
+            ({".github/workflows/ci.yml": "name: ci\n"}, LOOP_EVERYTHING),
+            ({".github/workflows/python-environment/action.yml": "name: env\n"}, LOOP_EVERYTHING),
+            ({"blocked/a-task.txt": "waiting\n"}, LOOP_EVERYTHING),
+            ({"an-unknown-directory/resource.yaml": "unknown: true\n"}, LOOP_EVERYTHING),
+        )
+        for files, expected in cases:
+            with self.subTest(files=sorted(files)):
+                self.assertEqual(self.changed_matrix(files)[0], expected)
+        # A script a component test names, directly or through another script, selects that component only.
+        reader = {"run/tests/test_rule.py": "import rule_caller\n"}
+        selected, summary = self.changed_matrix({"scripts/standalone_rule.py": "RULE = 3\n"}, tree=reader)
+        self.assertEqual(selected, {"run"})
+        self.assertIn("- `run`: `scripts/standalone_rule.py`, which it names", summary)
+        selector = (ROOT / "scripts/components.py").read_text(encoding="utf-8") + "\n# A changed selector.\n"
+        selected, summary = self.changed_matrix({"scripts/components.py": selector})
+        self.assertEqual(selected, LOOP_EVERYTHING)
+        self.assertIn("everything: `scripts/components.py`", summary)
+
+    def test_component_job_scripts_keep_the_full_selection(self):
+        """Every script a component job or its environment runs is a full-selection path."""
+        workflow = ROOT / ".github/workflows"
+        jobs = yaml.safe_load((workflow / "ci.yml").read_text(encoding="utf-8"))["jobs"]
+        texts = [json.dumps(jobs[name]) for name in ("python", "node")]
+        texts += [(workflow / name).read_text(encoding="utf-8")
+                  for name in ("python-environment/action.yml", "disposable-cluster.yml")]
+        named = {match for text in texts for match in re.findall(r"scripts/[A-Za-z0-9_.-]+", text)}
+        self.assertTrue(named)
+        for script in named:
+            self.assertTrue(script.startswith(ci.FULL_SELECTION_PATHS) or script in ci.SHARED_READERS, script)
+        uses = {step["uses"].removeprefix("./") for job in jobs.values() for step in job.get("steps", [])
+                if step.get("uses", "").startswith("./.github/")}
+        uses |= {job["uses"].removeprefix("./") for job in jobs.values() if job.get("uses", "").startswith("./")}
+        for used in uses:
+            self.assertTrue((used + "/").startswith(ci.FULL_SELECTION_PATHS), used)
+        for reads in ("compiler-duration-profile.json", "publication_fixture.py"):
+            self.assertIn(reads, (ROOT / "scripts/components.py").read_text(encoding="utf-8"))
+            self.assertIn(".github/workflows/" + reads, ci.JOB_INPUTS)
+
+
+SHARED_PATH = re.compile(r"^(?:(?:\.\./|\./)*)(?:docs|decisions|tests/(?:fixtures|conformance)|packs|examples|viewer|edge/plugins|build)(?=/|$)")
 JS_STRINGS = re.compile(r"//[^\n]*|/\*[\s\S]*?\*/|(['\x22\x60])((?:\\.|(?!\1)[^\\])*)\1")
 
 
@@ -405,7 +512,7 @@ class SharedReaderTests(unittest.TestCase):
                          ("docs/publication/cases", "publication"), ("decisions/publication-case-pins.md", "compiler"),
                          ("decisions/conformance-*.md", "compiler"), ("tests/conformance", "compiler"),
                          ("viewer/src/lib/canon.ts", "rezono"), ("edge/plugins/*/plugin.yaml", "contracts"),
-                         ("edge/plugins/connectors/accept.py", "examples")):
+                         ("edge/plugins/connectors/accept.py", "examples"), ("build/schema", "loop")):
             self.assertIn(citation, observed)
 
 

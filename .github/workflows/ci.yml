@@ -257,18 +257,17 @@ jobs:
             done
             python3 -I "$policy/red_before.py" discover "$BASE" "$HEAD" | tee -a "$GITHUB_OUTPUT"
           fi
+      # The selection's own regressions run whatever it selects: a pull request
+      # that changes only scripts or workflows may select no component job.
       - uses: ./.github/workflows/python-environment
-        if: steps.matrix.outputs.has_pytest == 'true'
         with:
           editable: ${{ steps.matrix.outputs.python_editable }}
           oracle: ${{ contains(fromJSON(steps.matrix.outputs.python).*.folder, 'compiler') || contains(fromJSON(steps.matrix.outputs.python).*.folder, 'examples') }}
           save-cache: 'true'
       - name: Test candidate selection and exact-once evidence
-        if: steps.matrix.outputs.has_pytest == 'true'
         run: python -I .github/workflows/tests/test_components.py
       # These examples run pytest, so they wait for the locked environment.
       - name: Test the candidate rules for added tests on the base source
-        if: steps.matrix.outputs.has_pytest == 'true'
         run: python -I scripts/test_red_before.py
       - name: Collect each selected Python component once
         if: steps.matrix.outputs.has_pytest == 'true'
