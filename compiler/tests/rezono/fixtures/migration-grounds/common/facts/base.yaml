@@ -1,0 +1,4 @@
+alpha:
+  - {id: a1, title: open}
+  - {id: a2, title: open}
+  - {id: a3, title: closed}
