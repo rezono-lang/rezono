@@ -78,7 +78,7 @@ STANDINGS = {(*DB, "allow-db", ON, "in_force"),
 
 
 @pytest.mark.xfail(strict=True, raises=AssertionError, reason=(
-    "Derive flow_policy_standing(source, destination, protocol, port, decision, on, standing) with standings "
+    "extra: decisions/platform-network-policy-provenance.md: Derive flow_policy_standing(source, destination, protocol, port, decision, on, standing) with standings "
     "in_force, proposed, ended and decider-missing from std-decision, flow_policy_applied and "
     "flow_policy_application_unknown(source, destination, protocol, port, decision, on), and "
     "flow_policy_matrix_drift(entry, source, destination, protocol, port, decision, on, recorded) in "

@@ -52,7 +52,7 @@ def outcome(data):
 
 
 @pytest.mark.xfail(strict=True, raises=AssertionError, reason=(
-    "Derive placement_comparison(export, service, outcome, reason) in rules/comparison_publication.dl from "
+    "extra: decisions/platform-comparison-publication.md: Derive placement_comparison(export, service, outcome, reason) in rules/comparison_publication.dl from "
     "cluster_service_placement and the cmdb_reference relations: equal/same-clusters and "
     "different/different-clusters for a scoped service with both sides, not-comparable with reference-missing, "
     "platform-missing or scope-incomplete otherwise. The existing cmdb drift findings stay. Only rules; no new "

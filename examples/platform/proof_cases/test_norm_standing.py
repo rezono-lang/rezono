@@ -68,7 +68,7 @@ INCOMPLETE = {(SCOPE, ON, "authority-coverage-incomplete")}
 
 
 @pytest.mark.xfail(strict=True, raises=AssertionError, reason=(
-    "Derive norm_standing(scope, on, outcome), norm_standing_unknown(scope, on, reason) with reasons "
+    "extra: decisions/platform-norm-standing.md: Derive norm_standing(scope, on, outcome), norm_standing_unknown(scope, on, reason) with reasons "
     "authority-coverage-incomplete, no-valid-ruling and latest-date-conflict, norm_ruling_conflict(scope, on, "
     "ruling, other) in both directions, and norm_registration_finding(scope, on, ruling, register, finding) for "
     "each valid ruling, with findings missing, register-coverage-incomplete and proposal-only, in "

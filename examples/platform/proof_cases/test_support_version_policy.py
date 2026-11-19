@@ -77,7 +77,7 @@ def leaf(leaves, relation, key):
 
 
 @pytest.mark.xfail(strict=True, raises=AssertionError, reason=(
-    "Derive latest_supported_cycle(reference, product, cycle), support_severity(reference, service, cycle, "
+    "extra: decisions/platform-support-version-policy.md: Derive latest_supported_cycle(reference, product, cycle), support_severity(reference, service, cycle, "
     "severity), support_severity_unknown(reference, service, reason) with reasons pin-unmapped, cycle-conflict "
     "and policy-missing, and support_severity_drift(reference, service, cycle, derived, registered, entry) in "
     "rules/support_version_policy.dl, using std-time for holds and ended and std-decision in_force_on for the "

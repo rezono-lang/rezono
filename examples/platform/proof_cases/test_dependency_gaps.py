@@ -74,7 +74,7 @@ def leaf(leaves, relation, key):
 
 
 @pytest.mark.xfail(strict=True, raises=AssertionError, reason=(
-    "Derive dependency_gap(consumer, function, reason) with reasons no-solution, no-placement and "
+    "extra: decisions/platform-dependency-gaps.md: Derive dependency_gap(consumer, function, reason) with reasons no-solution, no-placement and "
     "no-independent-placement, and dependency_gap_unknown(consumer, function, reason) with reasons "
     "coverage-missing and domain-not-recorded, in rules/dependency_gaps.dl from needs, unmet_need and "
     "cluster_service_placement. Declare FailureDomainMembership (cluster: Cluster, domain), "
