@@ -83,6 +83,10 @@ types:
     typeof: string
     pattern: '^([a-z][a-z0-9_]*\.)?[A-Z][A-Za-z0-9]*(<[A-Za-z0-9<>,]+>)?$'
     description: A column type with an optional pack alias.
+  StepKindName:
+    typeof: string
+    pattern: '^([a-z][a-z0-9_]*\.)?[A-Z][A-Za-z0-9]*$'
+    description: A kind name with an optional pack alias.
   TrueFlag:
     typeof: boolean
     description: A native marker, constrained by rezono-module-literals.schema.json to true.
@@ -158,6 +162,7 @@ classes:
         any_of:
           - {range: ModuleWithRules, inlined: true}
           - {range: NativeRuleModule, inlined: true}
+          - {range: SafeStepModule, inlined: true}
       spans: {required: true, range: Place, multivalued: true, inlined_as_list: true, description: "The place of every node of `module` that has one, in the order of the canonical JSON of `module` (members by name, arrays by index); each node once."}
 
     rules:
@@ -198,8 +203,8 @@ classes:
         postconditions:
           slot_conditions:
             module:
-              all_of:
-                - {range: NativeRuleModule, inlined: true}
+              any_of:
+                - {range: SafeStepModule, inlined: true}
                 - {range: ModuleWithSafeSteps, inlined: true}
 
   Place:
@@ -535,6 +540,150 @@ classes:
       - slot_conditions: {closes: {required: true}}
       - slot_conditions: {explain: {required: true}}
 
+  SafeStepModule:
+    is_a: ModuleHeader
+    description: The module shape with safe step declarations (decisions/language-safe-steps.md).
+    attributes:
+      decls:
+        required: true
+        multivalued: true
+        inlined_as_list: true
+        any_of:
+          - *unit_decl
+          - *enum_decl
+          - *reason_decl
+          - *rounding_decl
+          - *param_decl
+          - *kind_with_keys
+          - *kind_decl
+          - *extend_decl
+          - *check_decl
+          - *fact_table
+          - *fact_row
+          - *scalar_alias
+          - range: NativeRuleDecl
+          - range: RulesDecl
+          - range: DatasetDecl
+          - range: SourceDecl
+          - range: StepDecl
+    all_of:
+      - slot_conditions:
+          decls:
+            required: true
+            all_of:
+              - multivalued: true
+                has_member:
+                  range_expression:
+                    slot_conditions:
+                      step: {required: true}
+
+  StepDecl:
+    description: A declared step with its match condition, scoped forbids, typed effect and confirmation.
+    attributes:
+      step: {required: true, range: Name}
+      columns: {required: true, range: RuleColumn, multivalued: true, inlined_as_list: true, minimum_cardinality: 1}
+      when: {required: true, range: Expr, inlined: true}
+      forbid: {range: StepForbid, multivalued: true, inlined_as_list: true, minimum_cardinality: 1}
+      effect: {required: true, range: StepEffect, inlined: true}
+      confirm: {required: true, range: StepConfirm, inlined: true}
+
+  StepForbid:
+    description: A scoped forbid clause under a step declaration.
+    attributes:
+      pattern: {required: true, range: StepCallWithWildcard, inlined: true}
+      within: {required: true, range: StepCall, inlined: true}
+
+  StepCallWithWildcard:
+    description: A direct relation call whose arguments may use wildcards.
+    attributes:
+      call:
+        required: true
+        array: {minimum_number_dimensions: 1}
+        any_of: [{range: string}, {range: NativeRuleExpr}]
+
+  StepCall:
+    description: A direct relation call without wildcards.
+    attributes:
+      call:
+        required: true
+        array: {minimum_number_dimensions: 1}
+        any_of: [{range: string}, {range: Expr}]
+
+  StepEffect:
+    description: The effect operation and ordered changes of a step declaration.
+    attributes:
+      operation: {required: true, range: Name}
+      changes:
+        required: true
+        multivalued: true
+        inlined_as_list: true
+        minimum_cardinality: 1
+        any_of:
+          - {range: StepInsertRowChange}
+          - {range: StepRetractRowChange}
+          - {range: StepSetSlotChange}
+          - {range: StepRetractSlotChange}
+
+  StepInsertRowChange:
+    description: An effect change inserting a complete record.
+    attributes:
+      insert_row: {required: true, range: StepInsertRow, inlined: true}
+
+  StepInsertRow:
+    description: The kind, key expression and slot assignments of a step row insertion.
+    attributes:
+      kind: {required: true, range: StepKindName}
+      key: {required: true, range: Expr, inlined: true}
+      slots: {required: true, range: StepSlotAssignment, multivalued: true, inlined_as_list: true}
+
+  StepSlotAssignment:
+    description: A named slot assignment in a step row insertion.
+    attributes:
+      name: {required: true, range: Name}
+      value: {required: true, range: Expr, inlined: true}
+
+  StepRetractRowChange:
+    description: An effect change retracting a record by key.
+    attributes:
+      retract_row: {required: true, range: StepRetractRow, inlined: true}
+
+  StepRetractRow:
+    description: The kind and key expression of a step row retraction.
+    attributes:
+      kind: {required: true, range: StepKindName}
+      key: {required: true, range: Expr, inlined: true}
+
+  StepSetSlotChange:
+    description: An effect change setting a slot value on a keyed record.
+    attributes:
+      set_slot: {required: true, range: StepSetSlot, inlined: true}
+
+  StepSetSlot:
+    description: The kind, slot, key expression and value expression of a step slot write.
+    attributes:
+      kind: {required: true, range: StepKindName}
+      slot: {required: true, range: Name}
+      key: {required: true, range: Expr, inlined: true}
+      value: {required: true, range: Expr, inlined: true}
+
+  StepRetractSlotChange:
+    description: An effect change retracting a slot value on a keyed record.
+    attributes:
+      retract_slot: {required: true, range: StepRetractSlot, inlined: true}
+
+  StepRetractSlot:
+    description: The kind, slot and key expression of a step slot retraction.
+    attributes:
+      kind: {required: true, range: StepKindName}
+      slot: {required: true, range: Name}
+      key: {required: true, range: Expr, inlined: true}
+
+  StepConfirm:
+    description: The confirmation reader call and prerequisite token expression of a step declaration.
+    attributes:
+      reader: {required: true, range: StepCall, inlined: true}
+      token: {required: true, range: Expr, inlined: true}
+
   RulesDecl:
     description: An embedded relational rules block (decisions/language-rules.md).
     attributes:
@@ -802,9 +951,16 @@ classes:
       card: {range: Card}
       value: {range: Expr, inlined: true}
       unless: {range: Clause, array: {dimensions: [{alias: unless}, {alias: clause}]}, description: "Each `unless`, in the order of the text: its one clause, or the clauses of its block (v0 §5b)."}
-      versions: {range: Version, multivalued: true, inlined_as_list: true, minimum_cardinality: 1}
+      versions: {range: DerivedVersion, multivalued: true, inlined_as_list: true, minimum_cardinality: 1}
       table: {range: Table, inlined: true}
       output: {range: DerivedOutput, inlined: true}
+      unit: {range: Word, description: "`unit TEXT`: the unit of the calculated value, as written (decisions/language-calculations.md)."}
+      definitions: {range: Definition, multivalued: true, inlined_as_list: true, minimum_cardinality: 1}
+
+  DerivedVersion:
+    is_a: Version
+    description: "A version of a derived value. Without `= value`, its line opens a block of definitions (decisions/language-calculations.md, Versions with definitions)."
+    attributes:
       definitions: {range: Definition, multivalued: true, inlined_as_list: true, minimum_cardinality: 1}
 
   Table:
@@ -862,6 +1018,13 @@ classes:
       name: {required: true, range: Name}
       when: {required: true, range: Expr, inlined: true}
       value: {required: true, range: Expr, inlined: true}
+      overrides: {range: Override, multivalued: true, inlined_as_list: true, minimum_cardinality: 1, description: "Each `overrides name because \"reason\"` at the end of the line, in the order written."}
+
+  Override:
+    description: "This definition goes before the named definition of the same version, for the reason given."
+    attributes:
+      definition: {required: true, range: Name}
+      reason: {required: true, description: "The text after `because`, decoded."}
 
   Clause:
     attributes:

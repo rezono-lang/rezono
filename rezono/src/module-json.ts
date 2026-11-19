@@ -36,7 +36,7 @@ function hasIntermediateInvariant(decl: Module['decls'][number]): boolean {
 }
 
 function formatOf(module: Module): ModuleForm['format'] {
-	if (module.decls.some(hasIntermediateInvariant)) return SAFE_STEP_MODULE_FORMAT;
+	if (module.decls.some(decl => 'step' in decl || hasIntermediateInvariant(decl))) return SAFE_STEP_MODULE_FORMAT;
 	if (module.decls.some(decl => 'rule' in decl)) return NATIVE_RULE_MODULE_FORMAT;
 	const extended = module.schema !== undefined || module.decls.some(decl => {
 		if ('dataset' in decl || 'rules' in decl || ('source' in decl && 'fields' in decl)) return true;
@@ -49,7 +49,8 @@ function formatOf(module: Module): ModuleForm['format'] {
 		}
 		if ('base' in decl || 'asOf' in decl) return true;
 		if ('param' in decl && decl.source !== undefined) return true;
-		if ('derived' in decl && Array.isArray(decl.derived) && decl.derived.some(d => d.output !== undefined || d.definitions !== undefined)) return true;
+		if ('derived' in decl && Array.isArray(decl.derived) && decl.derived.some(d => d.output !== undefined || d.definitions !== undefined
+			|| d.unit !== undefined || d.versions?.some(v => v.definitions !== undefined))) return true;
 		return 'enum' in decl && (decl.memberMetadata !== undefined || hasMetadata(decl));
 	});
 	return extended ? EXTENDED_MODULE_FORMAT : MODULE_FORMAT;
