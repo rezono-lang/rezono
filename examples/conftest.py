@@ -3,6 +3,8 @@ import shutil
 import sys
 from pathlib import Path
 
+import pytest
+
 if os.environ.get("GITHUB_ACTIONS") == "true" and shutil.which("souffle") is None:
     raise RuntimeError("The CI oracle requires Souffle; check the pinned installer.")
 
@@ -21,4 +23,17 @@ if (ROOT / "blocked").is_dir():
 collect_ignore_glob = list(collect_ignore)
 
 
+@pytest.fixture(scope="session", autouse=True)
+def shared_builds_directory(tmp_path_factory):
+    """Where examples/shared_builds.py keeps what tests share. In CI the shard's worker processes share one
+    directory (scripts/components.py sets it); a run without one gets its own, for this session alone."""
+    from shared_builds import SHARED
 
+    if os.environ.get(SHARED):
+        yield Path(os.environ[SHARED])
+        return
+    os.environ[SHARED] = str(tmp_path_factory.mktemp("shared-builds"))
+    try:
+        yield Path(os.environ[SHARED])
+    finally:
+        del os.environ[SHARED]

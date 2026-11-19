@@ -463,18 +463,22 @@ class InventoryTests(unittest.TestCase):
             self.assertEqual(len(list(receipts.rglob("*.jsonl"))), 4)
             self.assertIn("Current publication fixture producer:", result.stdout)
             self.assertIn("Current publication fixture reader:", result.stdout)
-            self.assertEqual((module.parent / "a-source").read_text(), "True")
-            self.assertEqual((module.parent / "b-source").read_text(), "False")
+            # test_a stands for the second publication: its process reads the world the other one published.
+            self.assertEqual((module.parent / "a-source").read_text(), "False")
+            self.assertEqual((module.parent / "b-source").read_text(), "True")
             original = (plans / "examples/items.json").read_text(encoding="utf-8")
             manifest = json.loads(original)
             try:
                 for selection in (manifest["items"][::-1], manifest["items"][1:]):
                     (module.parent / "builds").unlink()
+                    (module.parent / "a-source").unlink(missing_ok=True)
                     (plans / "examples/items.json").write_text(
                         json.dumps(dict(manifest, items=selection)), encoding="utf-8")
                     selected = execute()
                     self.assertEqual(selected.returncode, 0, selected.stdout + selected.stderr)
-                    self.assertEqual((module.parent / "b-source").read_text(), str(len(selection) == 1))
+                    self.assertEqual((module.parent / "b-source").read_text(), "True")
+                    if len(selection) == 2:
+                        self.assertEqual((module.parent / "a-source").read_text(), "False")
                     self.assertEqual((module.parent / "builds").read_text(), "one")
             finally:
                 (plans / "examples/items.json").write_text(original, encoding="utf-8")

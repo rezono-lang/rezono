@@ -120,16 +120,17 @@ def test_the_policy_adviser_s_form_holds_nothing_of_the_ledger(world):
     assert "LedgerPayment" not in kinds["policy_adviser"]
 
 
-def test_a_ledger_payment_does_not_change_the_policy_adviser_s_form(world, tmp_path):
+def test_a_ledger_payment_does_not_change_the_policy_adviser_s_form(request, tmp_path):
     """Non-interference (R6): change what only the case officer reads, and the policy adviser's form stays byte
     for byte; the case officer's changes, so the change is real."""
-    s, _ = world
     d = copy(tmp_path / "pack")
     facts = d / "facts" / "ledger.yaml"
     text = facts.read_text(encoding="utf-8")
     assert PAYMENT in text
     facts.write_text(text.replace(PAYMENT, PAYMENT.replace("269400", "269401")), encoding="utf-8")
     other, _ = published(d, tmp_path / "store")
+    # The unchanged world only now: in CI the readers' process publishes it meanwhile (scripts/components.py).
+    s, _ = request.getfixturevalue("world")
     assert objects(other, "policy_adviser") == objects(s, "policy_adviser")
     assert objects(other, "case_officer")["rows.json"] != objects(s, "case_officer")["rows.json"]
     # The epoch statement too: the policy adviser's is the same bytes, the case officer's is not.

@@ -594,13 +594,17 @@ def pull_request_components(components: list[Component], root: Path, base_ref: s
     return [c for c in components if c.folder in direct | affected]
 
 
-# Files are assigned to jobs round-robin. Within a job pytest items share the
-# runner's cores, so one large parametrized file can use more than one core.
+# Files are assigned to jobs round-robin, the examples by their measured seconds.
+# Within a job pytest items share the runner's cores, so one large parametrized
+# file can use more than one core.
 FORMS_MODULE = "examples/subsidy/test_subsidy_forms.py"
 INDEPENDENT_PUBLICATIONS = "examples/subsidy/test_subsidy.py"
-RULE_EXAMPLES = "examples/test_rules.py"
 SHARDS = {"compiler": 3, "edge/publisher": 2}
 PARALLEL = {"compiler", "examples", "edge/publisher"}
+EXAMPLE_PROFILE = ROOT / ".github/workflows/examples-duration-profile.json"
+# The processes of an examples shard: runner_cores() on a hosted runner. Fixed, so that the
+# verification job, on any runner, finds the same shards.
+EXAMPLE_WORKERS = 4
 
 
 def test_files(folder: str) -> list[str]:
@@ -617,13 +621,67 @@ def shard_count(folder: str) -> int:
     files = test_files(folder)
     if folder != "examples":
         return min(SHARDS.get(folder, 1), max(1, len(files)))
-    # Run 44301601328 placed the two CPU-heavy modules on the same runner.
-    # Choose the fewest round-robin partitions that separate the three long
-    # example modules, even as new test files change their sorted positions.
-    heavy = {RULE_EXAMPLES, INDEPENDENT_PUBLICATIONS, FORMS_MODULE}
-    positions = [i for i, file in enumerate(files) if file in heavy]
-    candidates = range(max(1, len(positions)), min(8, max(1, len(files))) + 1)
-    return min(candidates, key=lambda n: (len(positions) - len({i % n for i in positions}), n))
+    return min(example_profile()["shards"], max(1, len(files)))
+
+
+def example_profile() -> dict:
+    """Seconds per example unit, as `run-shard` prints them for each shard of a hosted run. Without the
+    profile (a repository under test), one shard and one second per test ID."""
+    if not EXAMPLE_PROFILE.is_file():
+        return {"shards": 1, "default_s": 1, "seconds": {}}
+    return json.loads(EXAMPLE_PROFILE.read_text(encoding="utf-8"))
+
+
+def example_unit(node: str) -> str:
+    """Keep cached pack states and module-scoped fixtures in one process: a file is a unit. The independent
+    subsidy publications are each a unit of their own."""
+    path = node.partition("::")[0]
+    return node if path == INDEPENDENT_PUBLICATIONS else path
+
+
+def forms_pair(items: list[str]) -> tuple[list[str], list[str]]:
+    """The publication form tests in two processes: the readers, whose process publishes the shared world,
+    and the test with the second publication, which makes that one meanwhile and reads the world after it.
+    Empty unless there are readers to pair."""
+    forms = FORMS_MODULE
+    readers = sorted(i for i in items if i.split("::", 1)[0] == forms)
+    if not readers:
+        return [], []
+    # The second publication and the independent standards readers dominate
+    # this module. Give the table checks to the shorter reader as well.
+    costs = {
+        forms + "::test_a_ledger_payment_does_not_change_the_policy_adviser_s_form": 79_000,
+        forms + "::test_each_role_s_standards_exports_pass_their_readers": 55_000,
+        forms + "::test_each_role_s_tables_give_its_dataset_hash_alone": 7_700,
+    }
+    second = set(weighted_workers(readers, 2, costs, 200)[0])
+    return [i for i in readers if i not in second], [i for i in readers if i in second]
+
+
+def example_slots(items: list[str], slots: int) -> list[list[str]]:
+    """Longest first onto the least loaded of `slots` processes, by the profile's seconds per unit. With at
+    least three, the form readers have slot 0 to themselves, so the shared world is published first, and the
+    second publication starts slot 1; pytest order within each."""
+    profile = example_profile()
+    seconds, default = profile["seconds"], profile["default_s"]
+    loads, assigned = [0.0] * slots, {}
+    readers, second = forms_pair(items) if slots > 2 else ([], [])
+    free = range(slots)
+    if readers and second:
+        free = range(1, slots)
+        for slot, group in enumerate((readers, second)):
+            for node in group:
+                assigned[node] = slot
+                loads[slot] += seconds.get(node, default)
+    units = Counter(example_unit(i) for i in items if i not in assigned)
+    for unit in sorted(units, key=lambda u: (-seconds.get(u, default * units[u]), u)):
+        slot = min(free, key=loads.__getitem__)
+        assigned[unit] = slot
+        loads[slot] += seconds.get(unit, default * units[unit])
+    groups = [[] for _ in range(slots)]
+    for node in items:
+        groups[assigned.get(node, assigned.get(example_unit(node)))].append(node)
+    return groups
 
 
 def runner_cores() -> int:
@@ -724,7 +782,12 @@ def collect_matrix(matrix: list[dict], directory: Path) -> int:
         return next((code for code in statuses if code), 0)
 
 
-def shard_items(plan: dict, shard: int, total: int) -> list[str]:
+def shard_items(folder: str, plan: dict, shard: int, total: int) -> list[str]:
+    if folder == "examples":
+        # Each shard gets EXAMPLE_WORKERS processes' worth of the profile, the form pair on the first.
+        slots = example_slots(plan["items"], total * EXAMPLE_WORKERS)
+        return [node for slot in range(shard * EXAMPLE_WORKERS, (shard + 1) * EXAMPLE_WORKERS)
+                for node in slots[slot]]
     files = set(plan["files"][shard::total])
     return [node for node in plan["items"] if node.split("::", 1)[0] in files]
 
@@ -753,47 +816,7 @@ def worker_items(folder: str, items: list[str], workers: int) -> list[list[str]]
     if folder != "examples" or workers == 1:
         return [items[n::workers] for n in range(workers)]
     # Keep the examples' file-scoped accumulation and the two independent immutable readers.
-    forms = FORMS_MODULE
-    readers = sorted(i for i in items if i.split("::", 1)[0] == forms)
-    groups = [[] for _ in range(workers)]
-    offset = 2 if readers and workers > 2 else 0
-    if offset:
-        # Keep pytest collection order within each execution process.
-        # The second publication and the independent standards readers dominate
-        # this module. Give the table checks to the shorter reader as well.
-        costs = {
-            forms + "::test_a_ledger_payment_does_not_change_the_policy_adviser_s_form": 79_000,
-            forms + "::test_each_role_s_standards_exports_pass_their_readers": 55_000,
-            forms + "::test_each_role_s_tables_give_its_dataset_hash_alone": 7_700,
-        }
-        first = set(weighted_workers(readers, 2, costs, 200)[0])
-        for node in items:
-            if node in first:
-                groups[0].append(node)
-            elif node in readers:
-                groups[1].append(node)
-    others = [i for i in items if not offset or i.split("::", 1)[0] != forms]
-    # The independent subsidy tests each publish into their own tmp_path.
-    # Keep cached pack states and all other module-scoped fixtures together.
-    def unit(node: str) -> str:
-        path = node.partition("::")[0]
-        return node if path == INDEPENDENT_PUBLICATIONS else path
-
-    by_unit = Counter(map(unit, others))
-    # Rounded worker durations from run 44300384730. Unknown files cost one
-    # second per collected item, and new independent publications cost 17s.
-    weights = {
-        key: (17 if key.startswith(INDEPENDENT_PUBLICATIONS + "::") else count)
-        for key, count in by_unit.items()
-    }
-    weights.update({RULE_EXAMPLES: 125, "examples/test_examples.py": 75,
-                    "examples/subsidy/test_proposal_path.py": 45,
-                    "examples/subsidy/test_assessment_transition.py": 30,
-                    "examples/subsidy/test_tutorial.py": 30})
-    for index, units in enumerate(weighted_workers(sorted(by_unit), workers - offset, weights, 1), offset):
-        assigned = set(units)
-        groups[index].extend(node for node in others if unit(node) in assigned)
-    return groups
+    return example_slots(items, workers)
 
 
 def execute_worker(assignment: Path, journal: Path, report: Path) -> int:
@@ -806,7 +829,13 @@ def execute_worker(assignment: Path, journal: Path, report: Path) -> int:
         if not expected:
             return 0
 
+        seconds: dict[str, float] = {}
+
         class Evidence:
+            def pytest_runtest_logreport(self, report):
+                # Setup, call and teardown: what the ID costs its process, for the duration profile.
+                seconds[report.nodeid] = seconds.get(report.nodeid, 0.0) + report.duration
+
             def pytest_collection_finish(self, session):
                 found = [i.nodeid for i in session.items]
                 if Counter(found) != Counter(expected):
@@ -849,7 +878,9 @@ def execute_worker(assignment: Path, journal: Path, report: Path) -> int:
             share = data["publication"]
             plugin = PublicationProducer if share["producer"] else PublicationReader
             plugins.append(plugin(Path(share["directory"]), ROOT / FORMS_MODULE))
-        return int(pytest.main([*args, "--", *expected], plugins=plugins))
+        status = int(pytest.main([*args, "--", *expected], plugins=plugins))
+        report.with_suffix(".seconds.json").write_text(json.dumps(seconds), encoding="utf-8")
+        return status
 
 
 def run_shard(folder: str, shard: int, total: int, plans: Path, reports: Path, receipts: Path) -> int:
@@ -857,14 +888,13 @@ def run_shard(folder: str, shard: int, total: int, plans: Path, reports: Path, r
     reports.mkdir(parents=True, exist_ok=True)
     evidence = receipts / folder
     evidence.mkdir(parents=True, exist_ok=True)
-    selected = shard_items(plan, shard, total)
+    selected = shard_items(folder, plan, shard, total)
     groups = worker_items(folder, selected, runner_cores() if folder in PARALLEL else 1)
     if Counter(i for group in groups for i in group) != Counter(selected):
         raise ValueError("Worker assignments differ from the shard inventory")
     print(f"{folder} shard {shard+1}/{total}: {len(selected)} test IDs", flush=True)
-    paired_readers = (folder == "examples" and len(groups) > 2 and
-                      all(group and all(node.partition("::")[0] == FORMS_MODULE for node in group)
-                          for group in groups[:2]))
+    readers, second = forms_pair(selected) if folder == "examples" and len(groups) > 2 else ([], [])
+    paired_readers = bool(readers and second) and set(groups[0]) == set(readers) and set(second) <= set(groups[1])
 
     def execute(pair):
         index, nodes = pair
@@ -873,16 +903,19 @@ def run_shard(folder: str, shard: int, total: int, plans: Path, reports: Path, r
         share = paired_readers and index < 2
         if share:
             data["publication"] = {"directory": directory, "producer": index == 0}
+        # The shard's processes share the builds of examples/shared_builds.py for this run only.
+        env = dict(os.environ, REZONO_SHARED_BUILDS=str(Path(directory) / "builds")) if folder == "examples" else None
         try:
             assignment.write_text(json.dumps(data), encoding="utf-8")
             return subprocess.call([
                 sys.executable, __file__, "execute-worker", str(assignment),
                 str(evidence / f"{shard}-{index}.jsonl"), str(reports / f"pytest-{index}.xml"),
-            ])
+            ], env=env)
         finally:
             if share and index == 0:
                 (Path(directory) / "producer-finished").touch()
     with tempfile.TemporaryDirectory(prefix="pytest-fixture-") as directory:
+        (Path(directory) / "builds").mkdir()
         with ThreadPoolExecutor(max_workers=len(groups)) as pool:
             statuses = list(pool.map(execute, enumerate(groups)))
         status = next((code for code in statuses if code), 0)
@@ -890,6 +923,17 @@ def run_shard(folder: str, shard: int, total: int, plans: Path, reports: Path, r
             for role in ("producer", "reader"):
                 timing = (Path(directory) / f"{role}.json").read_text(encoding="utf-8")
                 print(f"Current publication fixture {role}: {timing}", flush=True)
+    if folder == "examples":
+        # The seconds per unit of this shard, for examples-duration-profile.json.
+        seconds = Counter()
+        for index in range(len(groups)):
+            measured = reports / f"pytest-{index}.seconds.json"
+            if measured.is_file():
+                for node, spent in json.loads(measured.read_text(encoding="utf-8")).items():
+                    paired = paired_readers and node.partition("::")[0] == FORMS_MODULE
+                    seconds[node if paired else example_unit(node)] += spent
+        print("Example seconds per unit: " + json.dumps({u: round(t, 1) for u, t in sorted(seconds.items())}),
+              flush=True)
     # Write the expected number of journals even on failure, for diagnosis.
     (evidence / f"{shard}.json").write_text(json.dumps(len(groups)), encoding="utf-8")
     return status
@@ -907,7 +951,7 @@ def verify_execution(matrix: list[dict], plans: Path, receipts: Path) -> int:
         for row in rows:
             shard, total = row["shard"], row["total"]
             directory = receipts / folder
-            expected = Counter(shard_items(plan, shard, total))
+            expected = Counter(shard_items(folder, plan, shard, total))
             shard_counts = {event: Counter() for event in expected_events}
             try:
                 workers = json.loads((directory / f"{shard}.json").read_text(encoding="utf-8"))
