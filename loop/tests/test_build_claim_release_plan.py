@@ -77,17 +77,6 @@ def claim_records(leases):
     return records
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason=(
-        "Read decisions/build-claim-release.md sections 1 and 2. Declare the claim kinds in a new "
-        "build/schema/claims.yaml and derive build_claim_release_plan and build_claim_held in a new "
-        "build/rules/claims.dl, using the verified cut, the policy date and std-decision. A none reading counts "
-        "only with its receipt: a LoopSweepReceipt of the claim's run at the reading's tick. Write only in those "
-        "two build files. Today the build schema lacks the claim kinds."
-    ),
-)
 @pytest.mark.parametrize(("leases", "policy_known"), [([LEASE], True), ([LEASE, 2 * LEASE], False), ([], False)])
 def test_build_claim_release_plan(tmp_path, leases, policy_known):
     assert KINDS <= declared_kinds(), f"The build schema lacks {sorted(KINDS - declared_kinds())}"
