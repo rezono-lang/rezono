@@ -82,9 +82,8 @@ def typed_condition(rule, slot, mode):
 @pytest.mark.xfail(
     strict=True,
     raises=TypedComparisonMismatch,
-    reason="extra: Waits for compiler/tests/test_ordered_rule_scalars.py--test_ordered_rule_scalars_compiler_preserves_exact_values "
-           "(compare_as in the rule IR) and compiler/tests/rezono/test_expression_scalar_negation.py--"
-           "test_expression_python_scalar_negation (comparisons in native lowering). Then lower utc_instant(x) and "
+    reason="extra: Waits for test_expression_python_scalar_negation (comparisons in native lowering). Then lower "
+           "utc_instant(x) and "
            "binary_text(x) on both sides of a comparison in compiler/rezono_compiler/native_rule_lowering.py to one "
            "condition with compare_as over the two slot values, and refuse an annotation on one side only. Read "
            "decisions/ordered-rule-scalars.md.",
@@ -145,8 +144,7 @@ def comparisons(node):
 @pytest.mark.xfail(
     strict=True,
     raises=TypedComparisonMismatch,
-    reason="extra: Waits for compiler/tests/test_ordered_rule_scalars_engines.py--test_datalog_spells_typed_comparisons, "
-           "which reads the Datalog spelling. Then keep utc_instant and binary_text on both operands when "
+    reason="extra: Keep utc_instant and binary_text on both operands when "
            "compiler/rezono_compiler/native_rule_dl.py plans the native form of a Datalog comparison. Read "
            "decisions/ordered-rule-scalars.md.",
 )
