@@ -62,7 +62,7 @@ rules old_members
     program, bundle = compiled(directory)
     assert [item["id"] for item in bundle["kinds"]].count("panel") == 1
     rules = {rule["head"]["relation"]: rule for rule in program["rules"]}
-    assert len(program["rules"]) == len(rules) == 2
+    assert len(program["rules"]) == len(rules) == 3
     assert {name: rule["body"][0]["relation"] for name, rule in rules.items()} == {
         "panel_present": "panel", "old_present": "alpha",
     }
