@@ -79,15 +79,19 @@ def capture(root, base, head, paths, *, coverage=True):
     return records
 
 
-def published(tmp, records):
+def published(tmp, records, evidence=None):
+    """Publish `records` through the build pack. `evidence`, when given, stores the protected caller's objects
+    in the archive and returns the Evidence that the batch boundary admits (decisions/admission-transport.md)."""
     build = tmp / "build"
     shutil.copytree(ROOT / "build", build)
     for pack in ("std-loop", "std-order", "std-decision"):
         shutil.copytree(ROOT / "packs" / pack, tmp / "packs" / pack)
     (build / "facts").mkdir()
     (build / "facts" / "input.yaml").write_text(yaml.safe_dump(records), encoding="utf-8")
-    epoch = batch.epoch(build, epoch=1, knowledge_time="2027-01-15T08:00:00Z", sources=[("facts", "input")])
     archive = store.FileStore(tmp / "archive")
+    handoff = {} if evidence is None else {"evidence": evidence(archive)}
+    epoch = batch.epoch(build, epoch=1, knowledge_time="2027-01-15T08:00:00Z", sources=[("facts", "input")],
+                        **handoff)
     manifest = publish.publish(epoch, archive, {"reader": "complete"})
 
     def read(entry):
