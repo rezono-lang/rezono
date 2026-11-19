@@ -39,8 +39,12 @@ single role.
 
 ## Release order
 
-Add published positions and the reference viewer after the first installable
-release. Bring either forward only when an acceptance question requires it.
-The 27 deferred drawing-view tests cover positions in the publication. Make
-them eligible for work as soon as positions are published, including when the
-reference viewer is still pending.
+Add published positions and the drawing views of the reference viewer after
+the first installable release. Bring either forward only when an acceptance
+question requires it. The 27 deferred drawing-view tests cover positions in the
+publication. Make them eligible for work as soon as positions are published,
+including when the drawing views are still pending.
+
+The slip, the first sheet of the reference viewer, does not wait: it needs no
+positions and no layout engine, so it is built now, before the first release.
+See [the slip](viewer-slip.md).
