@@ -231,16 +231,21 @@ def affected_components(
 PR_FILE_CONSUMERS = {
     "admission": ("examples",),
     "canon": ("edge/plugins/connectors", "examples", "k8s-admission", "loop"),
-    "checker": ("compiler", "examples", "k8s-admission", "loop", "run"),
-    "compiler": ("admission", "checker", "edge/plugins/connectors", "examples", "loop", "publication", "run"),
+    "checker": ("compiler", "examples", "k8s-admission", "loop", "run", "tests/slip"),
+    "compiler": ("admission", "checker", "edge/plugins/connectors", "examples", "loop", "publication", "run",
+                 "tests/slip"),
     "edge/plugins/connectors": ("examples",),
-    "contracts": ("admission", "canon", "checker", "compiler", "edge/plugins/connectors", "loop", "publication", "rezono"),
-    "edge/gate": ("tools/repl", "tools/mcp"),
-    "edge/publisher": ("compiler", "deploy/profiles/edge", "edge/plugins/connectors", "examples", "k8s-admission", "run"),
+    "contracts": ("admission", "canon", "checker", "compiler", "edge/plugins/connectors", "loop", "publication", "rezono",
+                  "tests/slip"),
+    "edge/gate": ("tests/slip", "tools/repl", "tools/mcp"),
+    "edge/publisher": ("compiler", "deploy/profiles/edge", "edge/plugins/connectors", "examples", "k8s-admission", "run",
+                       "tests/slip"),
     "loop": ("examples",),
-    "publication": ("checker", "compiler", "edge/plugins/connectors", "edge/publisher", "examples"),
-    "rezono": ("compiler",),
-    "tools/repl": ("tools/mcp",),
+    "publication": ("checker", "compiler", "edge/plugins/connectors", "edge/publisher", "examples", "tests/slip"),
+    "rezono": ("compiler", "tests/slip"),
+    "tools/repl": ("tests/slip", "tools/mcp"),
+    # examples/test_slip_claims.py draws the slip with the helpers of tests/slip (decisions/viewer-slip.md).
+    "tests/slip": ("examples",),
 }
 # These are test entry points and a private subprocess helper, rather than inputs to
 # the installed packages. Their shared corpus is still routed by SHARED_READERS.
@@ -276,16 +281,24 @@ SHARED_READERS = {
     "docs/rezono/cases/": ("compiler", "rezono"),
     "docs/semantics/value-cases.yaml": ("compiler", "rezono"),
     "docs/semantics/witness-alternatives-cases.yaml": ("checker", "compiler"),
+    "docs/formal.md": ("examples",),
     "docs/tutorial.md": ("examples",),
     "decisions/language-native-rules.md": ("compiler",),
     "decisions/publication-case-pins.md": ("compiler",),
     "decisions/conformance-*.md": ("compiler",),
     "tests/fixtures/neutral/": ("checker", "compiler", "edge/publisher", "rezono"),
+    "tests/fixtures/slip/": ("examples", "tests/slip"),
+    "tests/fixtures/turns/": ("checker", "edge/publisher"),
+    # The verb bar of the slip (decisions/viewer-slip.md): its contract test and the page tests read it.
+    "packs/std-view/": ("contracts", "tests/slip"),
+    "viewer/slip/": ("compiler", "examples", "tests/slip"),
+    "viewer/messages/": ("compiler", "examples", "tests/slip"),
     "tests/conformance/": ("checker", "compiler", "edge/publisher", "rezono"),
     "packs/": PACK_READERS,
     "examples/": PACK_READERS,
     "examples/**/expected/**": ("contracts",),
     "edge/plugins/*/plugin.yaml": ("contracts",),
+    "contracts/output-index.yaml": ("edge/publisher",),
     "viewer/src/lib/canon.ts": ("compiler", "edge/publisher", "rezono"),
 }
 
@@ -596,7 +609,7 @@ def test_files(folder: str) -> list[str]:
         path.relative_to(ROOT).as_posix()
         for pattern in ("test_*.py", "*_test.py")
         for path in directory.rglob(pattern)
-        if path.is_file()
+        if path.is_file() and "node_modules" not in path.relative_to(directory).parts
     })
 
 
@@ -986,10 +999,17 @@ def main() -> int:
             for total in [shard_count(c.folder)]
             for shard in range(total)
         ]
+        # A node component's pytest files run once, in its node job, which already
+        # installs the component's packages; the exact-once inventory includes them.
         node_items = [
-            {"folder": c.folder, "kind": c.kind}
+            {"folder": c.folder, "kind": c.kind, "pytest": bool(test_files(c.folder))}
             for c in active
             if c.kind == "node"
+        ]
+        pytest_items = py_items + [
+            {"folder": item["folder"], "kind": "node", "shard": 0, "total": 1, "label": item["folder"]}
+            for item in node_items
+            if item["pytest"]
         ]
         editable_flags = " ".join(f"-e {pkg}" for pkg in discover_python_packages())
         lines = [
@@ -997,6 +1017,8 @@ def main() -> int:
             f"has_python={'true' if py_items else 'false'}",
             f"node={json.dumps(node_items, separators=(',', ':'))}",
             f"has_node={'true' if node_items else 'false'}",
+            f"pytest={json.dumps(pytest_items, separators=(',', ':'))}",
+            f"has_pytest={'true' if pytest_items else 'false'}",
             f"python_editable={editable_flags}",
         ]
         out_path = os.environ.get("GITHUB_OUTPUT")

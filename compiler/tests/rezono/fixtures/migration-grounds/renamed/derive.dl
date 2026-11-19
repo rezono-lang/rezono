@@ -1,0 +1,13 @@
+.decl total(n: number)
+.decl unmarked(item: symbol)
+.decl listed(item: symbol)
+.decl tagged(cohort: symbol, item: symbol)
+.decl other(item: symbol)
+.decl mid(item: symbol)
+total(size) :- size = count : { tagged("left", _) }.
+unmarked(e) :- alpha(e), !mid(e).
+listed(y) :- alpha__title(y, "open"), alpha__title(y, "open").
+listed(z) :- alpha(z), mid(z), alpha(z), mid(z).
+tagged("left", w) :- alpha(w).
+other(u) :- alpha__title(u, "open").
+mid(t) :- alpha__title(t, "open").

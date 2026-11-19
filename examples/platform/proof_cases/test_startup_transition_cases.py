@@ -7,10 +7,6 @@ from management_probes import compiled
 from rezono_compiler import pack, rules
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError, reason=(
-    "Implement platform startup transition bindings and typed protection, runtime-provider and coverage "
-    "projections in the platform pack. Read decisions/safe-step-rounds.md, sections 1, 3 and 4. "
-    "Independent pack-level case, without certified replay or disposable cluster."))
 def test_startup_transition_cases():
     relation = "startup_transition_result"
     assert relation in rules.load(pack.read(ROOT).rules).derived(), "Missing platform startup transition results"
@@ -69,3 +65,26 @@ def test_startup_transition_cases():
     } <= verified(relation, safe_expose, state=(model, state))
     assert ("safe_step_observation__value", ("identity-state", "stopped")) in verified(
         relation, safe_retire, state=(model, state))
+
+    # A stopped consumer without a complete runtime receipt for the provider does not prove absence.
+    runtime_receipt = records["safe_step_scope"].pop(0)
+    assert runtime_receipt["reader"] == "runtime"
+    _, state = compiled(records)
+    no_runtime = (run, cut, "retire-database", "unknown", "missing-runtime-coverage", "idp")
+    assert state.derived.get(relation) == {safe_expose, no_runtime}
+    records["safe_step_scope"].append(runtime_receipt)
+
+    # A contradictory observation in the same cut leaves the protection unknown.
+    records["safe_step_observation"].append(
+        {**context, "id": "router-denial", "subject": "lb", "attribute": "router-policy", "value": "denied"})
+    _, state = compiled(records)
+    contradicted = (run, cut, "expose-entry", "unknown", "contradictory-observation", "lb")
+    assert state.derived.get(relation) == {contradicted, safe_retire}
+    records["safe_step_observation"].pop()
+
+    # Router coverage and allowance without any network-policy read leave the protection unknown.
+    policy_read = records["safe_step_observation"].pop(0)
+    assert policy_read["attribute"] == "network-policy"
+    _, state = compiled(records)
+    no_policy = (run, cut, "expose-entry", "unknown", "missing-network-policy-read", "lb")
+    assert state.derived.get(relation) == {no_policy, safe_retire}

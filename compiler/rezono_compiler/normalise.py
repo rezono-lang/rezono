@@ -54,11 +54,12 @@ def readings(rule: ir.Rule) -> list[list[tuple[tuple[str, ...], tuple[str, ...]]
         ways = [(s.var, s.left, s.right)] + ([(s.var, s.right, s.left)] if s.op in COMMUTATIVE else [])
         out.append([((ASSIGNMENT, s.op), t) for t in ways])
     for c in rule.conditions:
+        typed = (c.compare_as,) if c.compare_as else ()  # an untyped condition keeps its key
         if c.op in CONVERSE:
-            out.append([((CONDITION, CONVERSE[c.op]), (c.right, c.left))])
+            out.append([((CONDITION, CONVERSE[c.op], *typed), (c.right, c.left))])
         else:
             ways = [(c.left, c.right)] + ([(c.right, c.left)] if c.op in SYMMETRIC else [])
-            out.append([((CONDITION, c.op), t) for t in ways])
+            out.append([((CONDITION, c.op, *typed), t) for t in ways])
     seen, unique = set(), []
     for lit in out:
         if not seen & set(lit):
@@ -182,7 +183,8 @@ def rule_doc(rule: ir.Rule) -> dict:
         elif rank == ASSIGNMENT:
             assignments.append({"var": terms[0], "op": fixed[1], "left": terms[1], "right": terms[2]})
         else:
-            doc["conditions"].append({"op": fixed[1], "left": terms[0], "right": terms[1]})
+            doc["conditions"].append({"op": fixed[1], "left": terms[0], "right": terms[1],
+                                      **({"compare_as": fixed[2]} if len(fixed) > 2 else {})})
     results = {s["var"] for s in assignments}
     placed: set[str] = set()
     while assignments:  # canonical order, each after the assignments it reads (acyclic in a valid rule)

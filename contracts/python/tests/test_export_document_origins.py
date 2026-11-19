@@ -15,7 +15,7 @@ def problems(field):
 
 def test_schema_and_role_listing_are_distinct_typed_field_origins():
     for origin, file, raw, pointer in [
-        ("schema", "schema.json", b'{"pack":"atlas"}', "/pack"),
+        ("schema", "schema.json", b'{"pack":"sample"}', "/pack"),
         ("role_listing", "index.json", b'{"objects":[{"name":"rows.json"}]}', "/objects/0/name"),
     ]:
         source = {"file": file, "sha256": sha256(raw).hexdigest(), "pointer": pointer}

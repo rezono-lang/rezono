@@ -1,0 +1,9 @@
+rezono 0
+pack order-check
+use std-order as ord
+
+rule edge(pred: ord.Ordered, succ: ord.Ordered) when ord.Ordered.precedes(pred, succ)
+rule zero(x: Stage) when x in Stage and x.rank = 0
+rule nonzero(x: Stage) when x in Stage and not (x.rank = 0)
+rule successors(x: Stage, n: Int) when x in Stage
+  and n = (edge(_, _) where it.pred = x).count()

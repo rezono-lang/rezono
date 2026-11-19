@@ -182,6 +182,10 @@ function readModule(text: string, bare: boolean): ParsedModule {
 			build.refuse(line, 'one dataset on its own in a module');
 			continue;
 		}
+		if (r.line === 'context' && module.decls.some(decl => 'asOf' in decl)) {
+			build.refuse(line, 'one evaluation date in a module');
+			continue;
+		}
 		stage = 2;
 		module.decls.push(declaration.read(line, build) as Decl);
 	}

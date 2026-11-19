@@ -120,7 +120,7 @@ def test_decoy_unreachable_or_unguarded_job_is_rejected(job, key, wrong):
         check_boundary(doc)
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError, reason="Depends on the live provider ports and durable claim. Implement the operator workflow's dispatch structure in .github/workflows/provider-run.yml per decisions/provider-workflow-dispatch.md. Provider wiring requires separate integration evidence.")
+@pytest.mark.xfail(strict=True, raises=AssertionError, reason="M4: decisions/provider-workflow-dispatch.md: Depends on the live provider ports and durable claim. Implement the operator workflow's dispatch structure in .github/workflows/provider-run.yml per decisions/provider-workflow-dispatch.md. Provider wiring requires separate integration evidence.")
 def test_provider_workflow_dispatch_boundary():
     assert WORKFLOW.is_file(), "the operator-triggered provider workflow is missing"
     # BaseLoader keeps the event key 'on' as a string.

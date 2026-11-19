@@ -5,7 +5,7 @@ import pytest
 from offline_cases import RUN, implementation, FIXTURE, PLAN_HASH, case
 
 
-@pytest.mark.xfail(strict=True, reason="Read decisions/run-offline-acceptance.md. Implement run/offline_replay.py. Waits for the shared loop executor, price_capture, exact_quote, dispatch_policy, order_render, journal_claim, order_uncertainty, inventory_chain, cleanup_policy, installation_input and request_source.")
+@pytest.mark.xfail(strict=True, reason="M4: decisions/run-offline-acceptance.md: Implement run/offline_replay.py by composing loop/replay.py with the existing run boundaries: price_capture, exact_quote, the dispatch and cleanup packs, order_render, journal_claim, order_uncertainty, inventory_chain, installation_input and request_source.")
 def test_offline_run(tmp_path):
     replay = implementation("offline_replay.py", "replay")
     execute = run_path(str(RUN.parent / "loop" / "replay.py"))["replay"]

@@ -87,11 +87,6 @@ def recorded_allocation(preferences=(), *, coverage=SCOPE, third=False, setup=Fa
             "allocation-decisions.yaml": approved}
 
 
-@pytest.mark.xfail(strict=True, raises=MissingReaderQuestion, reason=(
-    "Publish physical-or-nested and its grounds for whole allocations, per-host reserves, full-order prices, "
-    "authorized preference coverage and supersession. Read decisions/run-physical-nested-allocation.md. "
-    "Write in run/packs/offer-selection/."
-))
 def test_physical_nested_allocation(tmp_path):
     registered(QUESTION, __file__, "test_physical_nested_allocation")
     checked(PACK, tmp_path / "plain").question(QUESTION)
@@ -146,3 +141,27 @@ def test_physical_nested_allocation(tmp_path):
         if not feasible:
             assert {"member-one", "member-two", "reserve-disk", "approve-disk", "n1"} <= report.ground_ids(
                 "allocation_limit_exceeded", failure)
+
+
+def test_allocation_unrelated_successor_and_unpriced_host(tmp_path):
+    prefix = (WORKLOAD, SCOPE)
+    physical = ("prefer-physical", PHYSICAL, SCOPE)
+    nested = ("prefer-nested", NESTED, SCOPE)
+
+    # A successor that is no preference for this workload and scope does not exclude the physical preference:
+    # whether it still stands is not proved, so the tie stays unknown instead of going to the nested candidate.
+    records = recorded_allocation((physical, nested))
+    records["allocation-decisions.yaml"]["decision"].append(decision("unrelated-reserve-change", "prefer-physical"))
+    unrelated = checked(PACK, tmp_path / "unrelated-successor", records)
+    assert unrelated.rows(unrelated.question(QUESTION)) == set()
+    assert unrelated.rows("allocation_comparison_status") == {prefix + ("unknown",)}
+
+    # A host of the physical candidate without a charge leaves its full price unknown: no partial total of
+    # 800 against 1,200, and no choice.
+    records = recorded_allocation((nested,))
+    supplier = records["allocation-supplier.yaml"]
+    supplier["allocation_charge"] = [row for row in supplier["allocation_charge"] if row["id"] != "quote-p3"]
+    unpriced = checked(PACK, tmp_path / "unpriced-host", records)
+    assert unpriced.rows(unpriced.question(QUESTION)) == set()
+    assert unpriced.rows("allocation_payable_total") == {prefix + ("nested", "EUR", "1200")}
+    assert unpriced.rows("allocation_comparison_status") == {prefix + ("unknown",)}

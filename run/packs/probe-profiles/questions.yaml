@@ -1,0 +1,12 @@
+format: rezono.questions/1
+reader:
+  - id: probe-profile-budgets
+    title_message: reader.probe_budget
+    about_message: reader.probe_budget.about
+    relation: probe_budget
+    proof: grounds
+    columns:
+      - {column: profile, message: reader.probe_budget.profile, element: probe_profile}
+      - {column: variant, message: reader.probe_budget.variant, element: probe_storage_variant}
+      - {column: phase, message: reader.probe_budget.phase, element: probe_phase}
+      - {column: seconds, message: reader.probe_budget.seconds}

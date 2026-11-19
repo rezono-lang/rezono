@@ -17,6 +17,7 @@ imports:
   - value
   - proof
   - source
+  - manifest
 
 types:
   DecimalText:
@@ -24,6 +25,44 @@ types:
     pattern: "^(0|[1-9][0-9]*)$"
 
 classes:
+  CompletenessReceipt:
+    description: >-
+      Checked evidence that one read covered a whole population at one cut (decisions/scoped-completeness.md).
+      Candidate bytes only: admission supplies the authority. The id is the SHA-256 of the canonical array
+      ["rezono.completeness-receipt/1", body], with body holding the other six fields.
+    attributes:
+      id: {identifier: true, required: true, pattern: "^[0-9a-f]{64}$", description: Lowercase hexadecimal SHA-256 of the versioned canonical receipt body.}
+      source: {range: Source, required: true, inlined: true, description: The locator and position of the read that is attested.}
+      issuer: {range: ReceiptIssuer, required: true, inlined: true}
+      scope: {range: ReceiptScope, required: true, inlined: true}
+      cut: {range: ReceiptCut, required: true, inlined: true}
+      inventory: {range: ArchivedFile, required: true, inlined: true, description: Pinned expected member keys in canonical order.}
+      content: {range: ArchivedFile, required: true, inlined: true, description: Pinned canonical contents keyed by those members.}
+
+  ReceiptIssuer:
+    description: The identity that performed the read and the pinned declaration that authorizes it to enumerate the population.
+    attributes:
+      id: {required: true}
+      authorization: {range: ArchivedFile, required: true, inlined: true}
+
+  ReceiptScope:
+    description: The query and its pinned definition, with typed bindings. A changed filter or binding changes the scope.
+    attributes:
+      definition: {range: ArchivedFile, required: true, inlined: true}
+      query: {required: true}
+      bindings: {range: ReceiptBinding, required: true, multivalued: true, inlined_as_list: true}
+
+  ReceiptBinding:
+    attributes:
+      name: {required: true}
+      type: {required: true}
+      value: {required: true, description: "The canonical value, in its exact scalar spelling."}
+
+  ReceiptCut:
+    description: The immutable source revision, snapshot or log frontier at which the read is complete.
+    attributes:
+      frontier: {range: SourcePosition, required: true, inlined: true}
+
   Observation:
     tree_root: true
     attributes:

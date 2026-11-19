@@ -73,9 +73,6 @@ def manifest(snapshots):
     ]}
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError, reason=(
-    "Requires Condition.compare_as in contracts/rules.yaml and ordinary batch lowering with typed operand checks. "
-    "Read decisions/ordered-rule-scalars.md."))
 def test_ordered_rule_scalars_compiler_preserves_exact_values():
     doc = program()
     errors = validator("rules.yaml").validate(doc, "RuleProgram").results
@@ -106,9 +103,6 @@ def test_ordered_rule_scalars_compiler_preserves_exact_values():
         assert report["valid"] and not report["findings"], (case, report)
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError, reason=(
-    "Requires independent checker semantics for Condition.compare_as, including malformed UTC and byte order. "
-    "Read decisions/ordered-rule-scalars.md."))
 def test_ordered_rule_scalars_checker_recomputes_raw_operands():
     definitions = load_rules(program())
     selected = {case: (mode, left, right) for mode, case, left, right, _ in CASES}

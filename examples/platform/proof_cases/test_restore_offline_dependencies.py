@@ -9,10 +9,6 @@ from case_support import verified
 from management_probes import compiled
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError, reason=(
-    "Implement platform restore trial dependency, placement and current observation projections. "
-    "Build on managed_backup_restored and outage_impact per decisions/safe-step-rounds.md, section 4. "
-    "Independent offline case, without certified replay or disposable cluster."))
 def test_restore_offline_dependencies():
     run, trial, backup, recovery = "restore-run", "restore-trial", "chosen-copy", "recovery"
     digest = sha256(b"authored recovery payload\n").hexdigest()
@@ -77,3 +73,58 @@ def test_restore_offline_dependencies():
         _, state = compiled(bad)
         assert state.derived["managed_backup_restored"] == set()
         assert state.derived[relation] == {(run, trial, backup, "waiting", "missing-matching-readback", recovery)}
+
+
+def test_restore_offline_requires_every_readback_on_target():
+    """Restored needs every binding read, no contradicting reading and the trial's own control plane."""
+    run, trial, backup, recovery = "restore-run", "restore-trial", "chosen-copy", "recovery"
+    digest = sha256(b"authored recovery payload\n").hexdigest()
+    bindings = (("control", "recovery-api", recovery), ("credentials", "recovery-key", recovery),
+                ("storage", "backup-store", "storage"))
+    records = {
+        "backup_trial": [{"id": trial, "backup": backup, "cluster": recovery, "run": run}],
+        "backup_capture": [{"id": "capture", "backup": backup, "source_cluster": "management", "run": run,
+                            "payload_sha256": digest}],
+        "backup_readback": [{"id": "readback", "backup": backup, "cluster": recovery, "run": run,
+                             "trial": trial, "source_evidence": "capture", "payload_sha256": digest}],
+        "restore_dependency_binding": [
+            {"id": function, "trial": trial, "function": function, "provider": provider, "cluster": cluster}
+            for function, provider, cluster in bindings
+        ],
+        "restore_dependency_reading": [
+            {"id": f"observed-{function}", "run": run, "trial": trial, "provider": provider, "cluster": cluster,
+             "value": "available"}
+            for function, provider, cluster in bindings
+        ],
+        "failure_observation": [{"id": "management"}],
+    }
+    relation = "restore_offline_result"
+
+    def results(change):
+        changed = deepcopy(records)
+        change(changed)
+        return compiled(changed)[1].derived[relation]
+
+    assert results(lambda r: None) == {(run, trial, backup, "restored", "matching-copy", recovery)}
+
+    def unread(function, provider, cluster):
+        return lambda r: r["restore_dependency_binding"].append(
+            {"id": f"extra-{function}", "trial": trial, "function": function, "provider": provider, "cluster": cluster})
+
+    assert results(unread("dns", "dns-svc", recovery)) == {
+        (run, trial, backup, "unknown", "missing-dependency-readback", "dns-svc")}
+    assert results(unread("storage", "other-store", "storage")) == {
+        (run, trial, backup, "unknown", "missing-dependency-readback", "other-store")}
+
+    def contradicted(r):
+        r["restore_dependency_reading"].append({"id": "observed-control-later", "run": run, "trial": trial,
+                                                "provider": "recovery-api", "cluster": recovery,
+                                                "value": "unavailable"})
+
+    assert results(contradicted) == {(run, trial, backup, "unknown", "conflicting-dependency-readback", "recovery-api")}
+
+    def elsewhere(r):
+        r["restore_dependency_binding"][0]["cluster"] = "elsewhere"
+        r["restore_dependency_reading"][0]["cluster"] = "elsewhere"
+
+    assert results(elsewhere) == {(run, trial, backup, "unknown", "foreign-control-plane", "recovery-api")}

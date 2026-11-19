@@ -1,0 +1,94 @@
+name: Nightly property examples
+
+# Fresh Hypothesis examples for the property tests of compiler/ and checker/.
+# Pull requests run them with a fixed seed (checker) or few examples (compiler),
+# so every run sees the same inputs. This run draws a new seed each time and
+# prints it, so a failure can be replayed with `--hypothesis-seed=<seed>`.
+# It blocks no pull request and opens no issue.
+
+on:
+  schedule:
+    - cron: '41 3 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: property-nightly-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  properties:
+    name: Property tests with fresh examples
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+      - name: List the repository packages
+        id: packages
+        run: |
+          set -euo pipefail
+          editable=$(python3 scripts/components.py python-packages | sed -E 's/([^ ]+)/-e \1/g')
+          echo "editable=$editable" >> "$GITHUB_OUTPUT"
+      - uses: ./.github/workflows/python-environment
+        with:
+          editable: ${{ steps.packages.outputs.editable }}
+          oracle: 'true'
+      - name: Draw a fresh seed
+        id: seed
+        run: |
+          set -euo pipefail
+          seed=$(od -An -N4 -tu4 /dev/urandom | tr -d ' ')
+          echo "Hypothesis seed: $seed"
+          echo "seed=$seed" >> "$GITHUB_OUTPUT"
+          {
+            echo "### Nightly property examples"
+            echo
+            echo "Hypothesis seed: \`$seed\`"
+            echo
+            echo "Replay: \`REZONO_HYPOTHESIS_PROFILE=nightly python -m pytest <folder>/tests -m hypothesis --hypothesis-seed=$seed\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Run the property tests of compiler and checker
+        env:
+          REZONO_HYPOTHESIS_PROFILE: nightly
+          PYTHONHASHSEED: '0'
+          SEED: ${{ steps.seed.outputs.seed }}
+        run: |
+          set -euo pipefail
+          echo "Hypothesis seed: $SEED"
+          logs="$RUNNER_TEMP/property-logs"
+          mkdir -p "$logs"
+          # Both components run side by side on this one runner. Tests that set their own
+          # example bound or seed with @settings keep it; every other test uses the profile.
+          pids=()
+          for component in compiler checker; do
+            python -m pytest "$component/tests" -m hypothesis -p no:cacheprovider \
+              --rootdir . -c "$component/pyproject.toml" --hypothesis-seed="$SEED" \
+              -q -rfE --durations=15 > "$logs/$component.log" 2>&1 &
+            pids+=("$!")
+          done
+          status=0
+          index=0
+          for component in compiler checker; do
+            code=0
+            wait "${pids[$index]}" || code=$?
+            index=$((index + 1))
+            echo "::group::$component (exit $code)"
+            cat "$logs/$component.log"
+            echo "::endgroup::"
+            tail -n 1 "$logs/$component.log"
+            if [[ "$code" -ne 0 ]]; then
+              echo "::error::$component property tests failed with seed $SEED (exit $code)."
+              status=1
+            fi
+            echo "- $component: exit $code, $(tail -n 1 "$logs/$component.log")" >> "$GITHUB_STEP_SUMMARY"
+          done
+          echo "Hypothesis seed: $SEED"
+          exit "$status"

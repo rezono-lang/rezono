@@ -1,0 +1,283 @@
+// Reconcile a run: prediction, measured run, order registry, invoice and ceilings, each from its own source.
+// Amounts are exact whole minor units. A duration is billed only in whole hours; anything else stays unresolved.
+
+// A run with its profile, approved plan and reference date.
+.decl run_scope(profile: symbol, run: symbol, plan: symbol, day: symbol)
+run_scope(p, run, plan, day) :- reconciliation_run(run), reconciliation_run__profile(run, p),
+    reconciliation_run__plan(run, plan), reconciliation_plan__profile(plan, p),
+    reconciliation_plan__reference_date(plan, day).
+
+.decl plan_seconds(plan: symbol, seconds: number)
+plan_seconds(plan, secs) :- reconciliation_plan__window(plan, w), reconciliation_plan_window(w),
+    interval__start(w, s), interval__end(w, e), s < e, secs = e - s.
+
+.decl run_seconds(run: symbol, seconds: number)
+run_seconds(run, secs) :- reconciliation_run__window(run, w), reconciliation_run_window(w),
+    interval__start(w, s), interval__end(w, e), s < e, secs = e - s.
+
+// Planned versus measured elapsed seconds.
+.decl reconciliation_duration(profile: symbol, run: symbol, planned: number, measured: number)
+reconciliation_duration(p, run, a, b) :- run_scope(p, run, plan, _), plan_seconds(plan, a), run_seconds(run, b).
+
+// Forecast: each planned line priced by the single quote of its supplier plan on the plan's reference date.
+.decl plan_hours(plan: symbol, hours: number)
+plan_hours(plan, h) :- plan_seconds(plan, secs), h = secs / 3600, whole = h * 3600, whole = secs.
+
+.decl quote_match(quote: symbol, supplier_plan: symbol, day: symbol)
+quote_match(q, sp, day) :- reconciliation_quote__supplier_plan(q, sp), reconciliation_quote__reference_date(q, day).
+
+.decl quote_count(supplier_plan: symbol, day: symbol, quotes: number)
+quote_count(sp, day, n) :- quote_match(_, sp, day), n = count : { quote_match(_, sp, day) }.
+
+.decl forecast_line(profile: symbol, run: symbol, line: symbol, currency: symbol, amount: number)
+forecast_line(p, run, l, cur, amt) :- run_scope(p, run, plan, day), plan_hours(plan, h),
+    reconciliation_planned_line__plan(l, plan), reconciliation_planned_line__supplier_plan(l, sp),
+    reconciliation_planned_line__quantity(l, q), quote_count(sp, day, 1), quote_match(qt, sp, day),
+    reconciliation_quote__hourly_minor(qt, rate), reconciliation_quote__currency(qt, cur),
+    base = q * rate, amt = base * h.
+
+.decl planned_line_count(run: symbol, lines: number)
+planned_line_count(run, n) :- run_scope(_, run, plan, _), n = count : { reconciliation_planned_line__plan(_, plan) }.
+
+// @absence
+.decl forecast_line_count(profile: symbol, run: symbol, currency: symbol, lines: number)
+forecast_line_count(p, run, cur, n) :- forecast_line(p, run, _, cur, _), n = count : { forecast_line(p, run, _, cur, _) }.
+
+// @absence
+.decl forecast_total(profile: symbol, run: symbol, currency: symbol, amount: number)
+forecast_total(p, run, cur, total) :- forecast_line_count(p, run, cur, n), planned_line_count(run, n),
+    total = sum a : { forecast_line(p, run, _, cur, a) }.
+
+// The order registry captures of this run. Only the latest capture counts: an older one never adds rows beside it,
+// and two captures at the same latest instant bind no registry at all.
+.decl registry_capture(run: symbol, registry: symbol, captured_at: number)
+registry_capture(run, reg, t) :- run_scope(_, run, _, _), reconciliation_registry__run(reg, run),
+    reconciliation_registry__captured_at(reg, t).
+
+.decl latest_capture(run: symbol, captured_at: number)
+latest_capture(run, latest) :- registry_capture(run, _, _), latest = max t : { registry_capture(run, _, t) }.
+
+.decl latest_capture_count(run: symbol, captures: number)
+latest_capture_count(run, n) :- latest_capture(run, t), n = count : { registry_capture(run, _, t) }.
+
+// The latest captured order registry, bound to this run and plan digest, with its coverage.
+.decl bound_registry(run: symbol, registry: symbol)
+bound_registry(run, reg) :- run_scope(_, run, plan, _), latest_capture(run, t), latest_capture_count(run, 1),
+    registry_capture(run, reg, t), reconciliation_registry__plan_hash(reg, h), reconciliation_plan__sha256(plan, h),
+    reconciliation_registry_coverage__registry(_, reg).
+
+.decl has_bound_registry(run: symbol)
+has_bound_registry(run) :- bound_registry(run, _).
+
+.decl deployed(run: symbol, resource: symbol)
+deployed(run, res) :- reconciliation_deployment__run(d, run), reconciliation_deployment__resource(d, res).
+
+// Distinct deployed resources, not deployment rows.
+.decl deployed_count(run: symbol, resources: number)
+deployed_count(run, n) :- reconciliation_run(run), n = count : { deployed(run, _) }.
+
+.decl registry_resource_line(registry: symbol, resource: symbol, line: symbol)
+registry_resource_line(reg, res, l) :- reconciliation_registry_line__registry(l, reg),
+    reconciliation_registry_line__resource(l, res).
+
+.decl registry_line_count(run: symbol, resource: symbol, lines: number)
+registry_line_count(run, res, n) :- deployed(run, res), bound_registry(run, reg),
+    n = count : { registry_resource_line(reg, res, _) }.
+
+.decl run_activity(run: symbol, resource: symbol, activity: symbol)
+run_activity(run, res, a) :- reconciliation_activity__run(a, run), reconciliation_activity__resource(a, res).
+
+.decl activity_count(run: symbol, resource: symbol, activities: number)
+activity_count(run, res, n) :- deployed(run, res), n = count : { run_activity(run, res, _) }.
+
+// Charge terms in force on the run's reference date. A charge needs exactly one; several leave the rating unresolved.
+.decl charge_terms_in_force(run: symbol, terms: symbol)
+charge_terms_in_force(run, t) :- run_scope(_, run, _, day), reconciliation_charge_terms__run(t, run),
+    reconciliation_charge_terms__decision(t, d), in_force_on(d, day).
+
+.decl charge_terms_count(run: symbol, terms: number)
+charge_terms_count(run, n) :- run_scope(_, run, _, _), n = count : { charge_terms_in_force(run, _) }.
+
+// The measured usage charge per resource: whole active hours times the registered rate, plus the decided fee.
+.decl reconciliation_usage_charge(profile: symbol, run: symbol, resource: symbol, currency: symbol, amount: number)
+reconciliation_usage_charge(p, run, res, cur, amt) :- run_scope(p, run, _, day),
+    reconciliation_run_coverage__run(_, run), bound_registry(run, reg),
+    registry_line_count(run, res, 1), activity_count(run, res, 1),
+    registry_resource_line(reg, res, l), run_activity(run, res, a),
+    reconciliation_registry_line__hourly_minor(l, rate), reconciliation_registry_line__currency(l, cur),
+    interval__start(a, s), interval__end(a, e), s < e, secs = e - s, h = secs / 3600, whole = h * 3600, whole = secs,
+    charge_terms_count(run, 1), charge_terms_in_force(run, t),
+    reconciliation_charge_terms__unit(t, "hour"), reconciliation_charge_terms__basis(t, "active_interval"),
+    reconciliation_charge_terms__fee_minor(t, fee), used = h * rate, amt = used + fee.
+
+.decl charged_resource(profile: symbol, run: symbol, resource: symbol, currency: symbol)
+charged_resource(p, run, res, cur) :- reconciliation_usage_charge(p, run, res, cur, _).
+
+// Distinct charged resources, not charge rows.
+// @absence
+.decl usage_charge_count(profile: symbol, run: symbol, currency: symbol, resources: number)
+usage_charge_count(p, run, cur, n) :- charged_resource(p, run, _, cur),
+    n = count : { charged_resource(p, run, _, cur) }.
+
+.decl has_usage_charge(run: symbol, resource: symbol)
+has_usage_charge(run, res) :- reconciliation_usage_charge(_, run, res, _, _).
+
+// Why a rated total stays unknown. A reason blocks the total; it never yields a partial or substituted amount.
+// @absence
+.decl rated_gap(profile: symbol, run: symbol, reason: symbol)
+rated_gap(p, run, "resource_without_charge") :- run_scope(p, run, _, _), deployed(run, res),
+    !has_usage_charge(run, res).
+rated_gap(p, run, "incomplete_in_currency") :- usage_charge_count(p, run, _, n), deployed_count(run, m), n != m.
+
+.decl rated_unresolved(profile: symbol, run: symbol, reason: symbol)
+rated_unresolved(p, run, r) :- rated_gap(p, run, r).
+rated_unresolved(p, run, "several_charge_terms") :- run_scope(p, run, _, _), charge_terms_count(run, n), n > 1.
+rated_unresolved(p, run, "activity_without_deployment") :- run_scope(p, run, _, _), run_activity(run, res, _),
+    !deployed(run, res).
+rated_unresolved(p, run, "registry_not_bound") :- run_scope(p, run, _, _), !has_bound_registry(run).
+
+.decl rated_blocked(profile: symbol, run: symbol)
+rated_blocked(p, run) :- rated_unresolved(p, run, _).
+
+// @absence
+.decl rated_total(profile: symbol, run: symbol, currency: symbol, amount: number)
+rated_total(p, run, cur, total) :- usage_charge_count(p, run, cur, n), deployed_count(run, n), !rated_blocked(p, run),
+    total = sum a : { reconciliation_usage_charge(p, run, _, cur, a) }.
+
+// Billed: invoice lines listed by the invoice coverage, bound by the plan digest and the deployed resource.
+.decl covered_line(run: symbol, line: symbol)
+covered_line(run, i) :- reconciliation_invoice_coverage__run(c, run), reconciliation_invoice_coverage__lines(c, i).
+
+.decl bound_line(run: symbol, resource: symbol, line: symbol)
+bound_line(run, res, i) :- run_scope(_, run, plan, _), reconciliation_plan__sha256(plan, h), covered_line(run, i),
+    invoice_line__plan_hash(i, h), invoice_line__item(i, res), deployed(run, res).
+
+.decl has_bound_line(run: symbol, line: symbol)
+has_bound_line(run, i) :- bound_line(run, _, i).
+
+// @absence
+.decl bound_line_count(run: symbol, resource: symbol, lines: number)
+bound_line_count(run, res, n) :- deployed(run, res), n = count : { bound_line(run, res, _) }.
+
+.decl billed_line(profile: symbol, run: symbol, resource: symbol, currency: symbol, amount: number)
+billed_line(p, run, res, cur, amt) :- run_scope(p, run, _, _), bound_line_count(run, res, 1), bound_line(run, res, i),
+    invoice_line__currency(i, cur), invoice_line__minor(i, amt).
+
+.decl billed_resource(profile: symbol, run: symbol, resource: symbol, currency: symbol)
+billed_resource(p, run, res, cur) :- billed_line(p, run, res, cur, _).
+
+// Distinct billed resources, not invoice rows.
+// @absence
+.decl billed_line_count(profile: symbol, run: symbol, currency: symbol, resources: number)
+billed_line_count(p, run, cur, n) :- billed_resource(p, run, _, cur), n = count : { billed_resource(p, run, _, cur) }.
+
+.decl has_billed_line(run: symbol, resource: symbol)
+has_billed_line(run, res) :- billed_line(_, run, res, _, _).
+
+// Why a billed total stays unknown. A covered line that does not bind leaves the total unknown, never smaller.
+// @absence
+.decl billed_gap(profile: symbol, run: symbol, reason: symbol)
+billed_gap(p, run, "resource_without_billed_line") :- run_scope(p, run, _, _), deployed(run, res),
+    !has_billed_line(run, res).
+billed_gap(p, run, "unbound_invoice_line") :- run_scope(p, run, _, _), covered_line(run, i), !has_bound_line(run, i).
+billed_gap(p, run, "incomplete_in_currency") :- billed_line_count(p, run, _, n), deployed_count(run, m), n != m.
+
+.decl billed_blocked(profile: symbol, run: symbol)
+billed_blocked(p, run) :- billed_gap(p, run, _).
+
+// @absence
+.decl billed_total(profile: symbol, run: symbol, currency: symbol, amount: number)
+billed_total(p, run, cur, total) :- billed_line_count(p, run, cur, n), deployed_count(run, n), !billed_blocked(p, run),
+    total = sum a : { billed_line(p, run, _, cur, a) }.
+
+// The forecast, rated and billed totals, each a separately identified amount.
+.decl reconciliation_total(profile: symbol, run: symbol, basis: symbol, currency: symbol, amount: number)
+reconciliation_total(p, run, "forecast", cur, a) :- forecast_total(p, run, cur, a).
+reconciliation_total(p, run, "rated", cur, a) :- rated_total(p, run, cur, a).
+reconciliation_total(p, run, "billed", cur, a) :- billed_total(p, run, cur, a).
+
+// Registered plan and rate against the prediction and the measured deployment.
+.decl reconciliation_plan_difference(profile: symbol, run: symbol, slot: symbol, planned: symbol, registered: symbol)
+reconciliation_plan_difference(p, run, slot, a, b) :- run_scope(p, run, plan, _), bound_registry(run, reg),
+    reconciliation_planned_line__plan(l, plan), reconciliation_planned_line__slot(l, slot),
+    reconciliation_planned_line__supplier_plan(l, a), reconciliation_registry_line__registry(r, reg),
+    reconciliation_registry_line__slot(r, slot), reconciliation_registry_line__supplier_plan(r, b), a != b.
+
+.decl reconciliation_deployment_difference(profile: symbol, run: symbol, resource: symbol, deployed: symbol,
+    registered: symbol)
+reconciliation_deployment_difference(p, run, res, a, b) :- run_scope(p, run, _, _), bound_registry(run, reg),
+    reconciliation_deployment__run(d, run), reconciliation_deployment__resource(d, res),
+    reconciliation_deployment__supplier_plan(d, a), registry_resource_line(reg, res, r),
+    reconciliation_registry_line__supplier_plan(r, b), a != b.
+
+.decl reconciliation_rate_difference(profile: symbol, run: symbol, supplier_plan: symbol, currency: symbol,
+    quoted: number, registered: number)
+reconciliation_rate_difference(p, run, sp, cur, quoted, registered) :- run_scope(p, run, _, day),
+    bound_registry(run, reg), quote_count(sp, day, 1), quote_match(q, sp, day),
+    reconciliation_quote__hourly_minor(q, quoted), reconciliation_quote__currency(q, cur),
+    reconciliation_registry_line__registry(r, reg), reconciliation_registry_line__supplier_plan(r, sp),
+    reconciliation_registry_line__currency(r, cur), reconciliation_registry_line__hourly_minor(r, registered),
+    quoted != registered.
+
+// A cap comparison names the basis of the amount it limits. A ceiling counts when its decision is in force.
+.decl ceiling_match(ceiling: symbol, run: symbol, basis: symbol, currency: symbol)
+ceiling_match(c, run, basis, cur) :- reconciliation_ceiling__run(c, run), reconciliation_ceiling__basis(c, basis),
+    reconciliation_ceiling__currency(c, cur).
+
+.decl ceiling_count(run: symbol, basis: symbol, currency: symbol, ceilings: number)
+ceiling_count(run, basis, cur, n) :- ceiling_match(_, run, basis, cur), n = count : { ceiling_match(_, run, basis, cur) }.
+
+.decl reconciliation_cap_result(profile: symbol, run: symbol, basis: symbol, currency: symbol, amount: number,
+    cap: number, excess: number)
+reconciliation_cap_result(p, run, basis, cur, amt, cap, 0) :- reconciliation_total(p, run, basis, cur, amt),
+    run_scope(p, run, _, day), ceiling_count(run, basis, cur, 1), ceiling_match(c, run, basis, cur),
+    reconciliation_ceiling__decision(c, d), in_force_on(d, day), reconciliation_ceiling__minor(c, cap), amt <= cap.
+reconciliation_cap_result(p, run, basis, cur, amt, cap, excess) :- reconciliation_total(p, run, basis, cur, amt),
+    run_scope(p, run, _, day), ceiling_count(run, basis, cur, 1), ceiling_match(c, run, basis, cur),
+    reconciliation_ceiling__decision(c, d), in_force_on(d, day), reconciliation_ceiling__minor(c, cap),
+    amt > cap, excess = amt - cap.
+
+.decl reconciliation_cap_overrun(profile: symbol, run: symbol, basis: symbol, currency: symbol, amount: number,
+    cap: number, excess: number)
+reconciliation_cap_overrun(p, run, basis, cur, amt, cap, excess) :-
+    reconciliation_cap_result(p, run, basis, cur, amt, cap, excess), excess > 0.
+
+// What is not resolved, stated explicitly, with its reason. A missing row is unknown, never zero: each rule below
+// names the recorded item that lacks its result, or a total that does not cover every item.
+.decl has_forecast_line(line: symbol)
+has_forecast_line(l) :- forecast_line(_, _, l, _, _).
+
+// @absence
+.decl forecast_gap(profile: symbol, run: symbol, reason: symbol)
+forecast_gap(p, run, "planned_line_without_price") :- run_scope(p, run, plan, _),
+    reconciliation_planned_line__plan(l, plan), !has_forecast_line(l).
+forecast_gap(p, run, "incomplete_in_currency") :- forecast_line_count(p, run, _, n), planned_line_count(run, m), n != m.
+
+.decl has_cap_result(profile: symbol, run: symbol, basis: symbol)
+has_cap_result(p, run, basis) :- reconciliation_cap_result(p, run, basis, _, _, _, _).
+
+// @absence
+.decl cap_gap(profile: symbol, run: symbol, basis: symbol)
+cap_gap(p, run, "rated") :- run_scope(p, run, _, _), !has_cap_result(p, run, "rated").
+cap_gap(p, run, "billed") :- run_scope(p, run, _, _), !has_cap_result(p, run, "billed").
+
+.decl reconciliation_unresolved(profile: symbol, run: symbol, subject: symbol, reason: symbol)
+reconciliation_unresolved(p, run, "forecast", r) :- forecast_gap(p, run, r).
+reconciliation_unresolved(p, run, "rated", r) :- rated_unresolved(p, run, r).
+reconciliation_unresolved(p, run, "billed", r) :- billed_gap(p, run, r).
+reconciliation_unresolved(p, run, "rated_cap", "no_cap_result") :- cap_gap(p, run, "rated").
+reconciliation_unresolved(p, run, "billed_cap", "no_cap_result") :- cap_gap(p, run, "billed").
+
+.decl reconciliation_status(profile: symbol, run: symbol, subject: symbol, state: symbol)
+reconciliation_status(p, run, subject, "unknown") :- reconciliation_unresolved(p, run, subject, _).
+
+.output reconciliation_duration
+.output reconciliation_usage_charge
+.output reconciliation_total
+.output reconciliation_plan_difference
+.output reconciliation_deployment_difference
+.output reconciliation_rate_difference
+.output reconciliation_cap_result
+.output reconciliation_cap_overrun
+.output reconciliation_status
+.output reconciliation_unresolved

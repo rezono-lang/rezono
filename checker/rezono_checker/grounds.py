@@ -33,17 +33,20 @@ def aggregate_grounds(spec, theta, rows, groups) -> set[Ground]:
     members = aggregate_members(spec, fixed, rows(relation, None), groups)
     if not members:
         return {("empty-group", relation, encoded(fixed))}
-    return {("read", relation, key) for key, _ in members}
+    # The group scope (relation and fixed terms) is a ground of its own, next to the contributor keys.
+    return {("group-scope", relation, encoded(fixed)), *(("read", relation, key) for key, _ in members)}
 
 
 def comparison(condition, theta):
     op = condition.op
     left, right = _value(condition.left, theta), _value(condition.right, theta)
-    result = _holds(op, left, right)
+    result = _holds(op, left, right, condition.compare_as)
     if op in ("gt", "ge"):
         op, left, right = {"gt": "lt", "ge": "le"}[op], right, left
     if op in ("eq", "ne"):
         left, right = sorted((left, right), key=str)
+    if condition.compare_as is not None:  # a typed guard is a different comparison of the same text
+        op = f"{condition.compare_as}:{op}"
     return op, left, right, result
 
 

@@ -21,7 +21,10 @@ type NativeForm = {
 	module: { rezono: '0'; pack: 'sample'; use: []; decls: Rule[] };
 	spans: Place[];
 };
-type Signature = { columns: Column[]; world: World; role: 'input' | 'derived'; absence?: true };
+type Signature = {
+	columns: Column[]; world: World; role: 'input' | 'derived'; absence?: true;
+	predicate?: { states: readonly string[] };
+};
 type SignatureEnvironment = { schema: Schema; relations: Record<string, Signature> };
 type Diagnosis = { code: string; args: string[]; span: Place; related?: Place[] };
 
@@ -148,7 +151,11 @@ const schema: Schema = {
 const input = (columns: Fragment<Column>[], world: World = 'closed'): Signature =>
 	({ columns: columns.map(col => col.tree), role: 'input', world });
 const derived = (columns: Fragment<Column>[], absence = false): Signature =>
-	({ columns: columns.map(col => col.tree), role: 'derived', world: 'closed', ...(absence ? { absence: true } : {}) });
+	({
+		columns: columns.map(col => col.tree), role: 'derived', world: 'closed',
+		// Linked evidence that the predicate is two-valued, which a negation or group of it needs.
+		predicate: { states: ['known'] }, ...(absence ? { absence: true } : {}),
+	});
 const environment: SignatureEnvironment = {
 	schema,
 	relations: {

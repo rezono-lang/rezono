@@ -7,10 +7,10 @@ from rezono_checker.rules import load_rules
 from rezono_compiler import batch, pack, rules, sources
 from rules_support import states
 
-from query_fixture import ROOT, check_relation
+from query_fixture import ROOT
+from transport_support import published_for
 
 RELATION = "published_default_transport"
-OBSERVATION = "vendor_default_transport"
 SOURCE = "vendor_default_transport_source"
 FIELDS = ("product", "series", "protocol", "port", "source_url", "source_sha256")
 UNVERIFIED = ("unregistered-product", "0", "UDP", 1234, "https://example.org/transport", "0" * 64)
@@ -35,28 +35,26 @@ def _published(program, rows):
 
 
 def test_postgres_transport():
-    check_relation(RELATION, [_expected_transport()])
+    # Other products publish their own defaults; PostgreSQL publishes exactly its pinned one.
+    assert published_for("postgresql") == {tuple(map(str, _expected_transport()))}
 
 
 def test_unverified_transport_does_not_publish():
     program = rules.load(pack.read(ROOT).rules)
-    observation_id = "unregistered-observation"
-    rows = _slots(OBSERVATION, observation_id, UNVERIFIED)
+    source_id = "unregistered-source"
+    rows = _slots(SOURCE, source_id, UNVERIFIED)
     assert _published(program, rows) == set()
-    rows.update({OBSERVATION: [(observation_id,)], "product": [(UNVERIFIED[0],)]})
+    rows[SOURCE] = [(source_id,)]
     assert _published(program, rows) == set()
 
 
-def test_published_transport_requires_the_product_observation_and_pinned_source():
+def test_published_transport_requires_the_product_and_pinned_source():
     model, program, (state,) = states(ROOT)
     expected = _expected_transport()
-    observation_id = "postgresql-17"
     source_id = "postgresql-17-connection-settings"
     rows = {
         "product": [(expected[0],)],
-        OBSERVATION: [(observation_id,)],
         SOURCE: [(source_id,)],
-        **_slots(OBSERVATION, observation_id, expected),
         **_slots(SOURCE, source_id, expected),
     }
     conclusion = tuple(map(str, expected))
@@ -64,9 +62,12 @@ def test_published_transport_requires_the_product_observation_and_pinned_source(
     for relation in rows:
         incomplete = {name: records for name, records in rows.items() if name != relation}
         assert _published(program, incomplete) == set(), relation
+    # One pinned statement: a forged product publishes nothing, any other forged value publishes exactly that value.
     forged_slots = _slots(SOURCE, source_id, UNVERIFIED)
-    for relation, forged in forged_slots.items():
-        assert _published(program, rows | {relation: forged}) == set(), relation
+    for index, (relation, forged) in enumerate(forged_slots.items()):
+        changed = (*conclusion[:index], str(UNVERIFIED[index]), *conclusion[index + 1:])
+        want = set() if FIELDS[index] == "product" else {changed}
+        assert _published(program, rows | {relation: forged}) == want, relation
 
     proof = state.proof(RELATION, conclusion)
     manifest, read = state.manifest()

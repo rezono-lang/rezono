@@ -83,7 +83,7 @@ def parent_of(value: object, kind: str, at: str, own: dict[str, str],
 def lower(decl: dict, at: str, own: dict[str, str], owners: dict[str, list[str]],
           declared: Set[str], uses: set[str], refuse: Refuse, *, extended_format: bool = False) -> dict | None:
     ok = True
-    allowed = (MEMBERS | {"checks", "embedded", "equations", "parent"} | rezono_metadata.FIELDS
+    allowed = (MEMBERS | {"checks", "embedded", "equations", "parent", "relationship"} | rezono_metadata.FIELDS
                if extended_format else MEMBERS)
     if extra := set(decl) - allowed:
         refuse(at, f"a kind with {', '.join(sorted(extra))} is not lowered", "§5.1")
@@ -94,6 +94,13 @@ def lower(decl: dict, at: str, own: dict[str, str], owners: dict[str, list[str]]
     embedded = decl.get("embedded") is True
     if extended_format and "embedded" in decl and not embedded:
         refuse(at, "an embedded kind must be marked true", "§5.1")
+        ok = False
+    relationship = decl.get("relationship") is True
+    if extended_format and "relationship" in decl and not relationship:
+        refuse(at, "a relationship kind must be marked true", "§5.1")
+        ok = False
+    if embedded and relationship:
+        refuse(at, "an embedded kind cannot be a relationship: it has no identity of its own", "§5.1")
         ok = False
     has_parent = extended_format and "parent" in decl
     if embedded and has_parent:
@@ -108,8 +115,12 @@ def lower(decl: dict, at: str, own: dict[str, str], owners: dict[str, list[str]]
     if "applies" in decl:
         refuse(f"{at}/applies", "`applies` is not lowered yet")
         ok = False
-    if "sealed" in decl:
+    sealed = decl.get("sealed")
+    if "sealed" in decl and not extended_format:
         refuse(f"{at}/sealed", "`sealed at` is not lowered yet")
+        ok = False
+    elif "sealed" in decl and not (isinstance(sealed, str) and NAME.fullmatch(sealed)):
+        refuse(f"{at}/sealed", "`sealed at` names the period slot of the kind", "§5a")
         ok = False
     for index, _ in enumerate(decl.get("derived") or []):
         refuse_derived(f"{at}/derived/{index}", refuse)
@@ -132,6 +143,10 @@ def lower(decl: dict, at: str, own: dict[str, str], owners: dict[str, list[str]]
         result = {"attributes": attributes} | rezono_metadata.lower(decl)
         if parent is not None:
             result["is_a"] = parent
+        if relationship:
+            result["represents_relationship"] = True
+        if "sealed" in decl:
+            result.setdefault("annotations", {})["seal"] = sealed
         if equations:
             result.setdefault("annotations", {})["path_equations"] = equations
         if rules:

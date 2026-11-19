@@ -86,7 +86,7 @@ PENDING_PLATFORM = {
     *(pytest.param(p, set(), id=name(p)) for p in RULED if p != PLATFORM),
     pytest.param(PLATFORM, PENDING_PLATFORM, id="platform", marks=pytest.mark.xfail(
         strict=True, raises=MissingPlatformRelations,
-        reason="Waits for the platform cluster projection tasks in examples/platform/proof_cases. "
+        reason="M2: Waits for the platform cluster projection tasks in examples/platform/proof_cases. "
                "Read decisions/platform-derivation-acceptance.md. Every implemented relation must already agree.")),
 ])
 def test_same_as_the_pack_reference(example, pending):
@@ -223,8 +223,9 @@ class MissingExplainedReference(FileNotFoundError):
 
 
 @pytest.mark.xfail(strict=True, raises=MissingExplainedReference, reason=(
-    "Needs independent expected/explained bytes for every example fact state, proof and referenced "
-    "snapshot. A row reference alone cannot verify the serialized proof."))
+    "later: a byte reference for explained output is recorded per example only after its proofs were checked "
+    "by hand against the pack's worked reference; engine output is never its own golden. Not a worker task. "
+    "Read decisions/example-explained-output.md."))
 @pytest.mark.parametrize("example", RULED, ids=name)
 def test_explained_output_is_the_golden(example, tmp_path):
     """Check all emitted proof and snapshot bytes against the pack's independent reference."""

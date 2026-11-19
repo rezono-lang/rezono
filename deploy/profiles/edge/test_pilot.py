@@ -41,8 +41,6 @@ def sweep(tmp_path):
     return local, manifest, put, variants
 
 
-@pytest.mark.xfail(strict=True, raises=AttributeError,
-                   reason='Add pilot.checked_local_grid(store, pack, position, base_epoch, count) and pilot.check_local_sweeps(role, seen, grids, full) to deploy/profiles/edge/pilot.py. Read the sweep grid compiled into the base manifest, verify each variant manifest and its pointer as the sweep fixture builds them (edge/publisher/rezono_publisher/sweep.py), and return the masked and full grids; exit with the diagnostics these tests match. The same change makes the other local sweep tests in this file pass: remove their marks in the same pull request.')
 def test_private_variants_and_the_masked_gate_view(sweep):
     local, _, _, _ = sweep
     grids = pilot.checked_local_grid(local, "example", "a" * 40, 3, 64)
@@ -61,8 +59,6 @@ def test_private_variants_and_the_masked_gate_view(sweep):
         pilot.check_local_sweeps("viewer", {**seen, "sweeps": grids[True]}, grids, False)
 
 
-@pytest.mark.xfail(strict=True, raises=AttributeError,
-                   reason='Covered by the task deploy/profiles/edge/test_pilot.py--test_private_variants_and_the_masked_gate_view: a full reader sees each variant status through pilot.check_local_sweeps. The change for that task makes this pass; remove this mark with it.')
 def test_a_role_that_reads_all_in_full_sees_each_variant_status(sweep):
     """The fixture gives `propose` every relation of the lab in full: the gate shows it the computed grid."""
     local, manifest, _, variants = sweep
@@ -83,8 +79,6 @@ def test_a_role_that_reads_all_in_full_sees_each_variant_status(sweep):
         pilot.check_local_sweeps("propose", {"sweeps": shown}, grids, True)
 
 
-@pytest.mark.xfail(strict=True, raises=AttributeError,
-                   reason='Covered by the task deploy/profiles/edge/test_pilot.py--test_private_variants_and_the_masked_gate_view: pilot.checked_local_grid refuses a variant with another base, epoch or cell. The change for that task makes this pass; remove this mark with it.')
 @pytest.mark.parametrize("field,value", [("base_manifest", "m-2"), ("epoch", 5), ("variant", {"sweep": "size", "index": 0, "value": "2"})])
 def test_variant_must_match_its_exact_base_epoch_and_cell(sweep, field, value):
     local, manifest, _, variants = sweep
@@ -93,8 +87,6 @@ def test_variant_must_match_its_exact_base_epoch_and_cell(sweep, field, value):
         pilot.checked_local_grid(local, "example", "a" * 40, 3, 64)
 
 
-@pytest.mark.xfail(strict=True, raises=AttributeError,
-                   reason='Covered by the task deploy/profiles/edge/test_pilot.py--test_private_variants_and_the_masked_gate_view: pilot.checked_local_grid refuses a variant without the swept value. The change for that task makes this pass; remove this mark with it.')
 def test_a_matching_variant_must_hold_the_swept_value(sweep):
     local, manifest, put, variants = sweep
     first = variants[0]
@@ -104,8 +96,6 @@ def test_a_matching_variant_must_hold_the_swept_value(sweep):
         pilot.checked_local_grid(local, "example", "a" * 40, 3, 64)
 
 
-@pytest.mark.xfail(strict=True, raises=AttributeError,
-                   reason='Covered by the task deploy/profiles/edge/test_pilot.py--test_private_variants_and_the_masked_gate_view: pilot.checked_local_grid refuses a pointer to other bytes. The change for that task makes this pass; remove this mark with it.')
 def test_a_variant_pointer_must_bind_its_exact_bytes(sweep):
     local, _, put, _ = sweep
     put("example/epochs/4/manifests/v-size-00-4.json", {"sha256": "1" * 64})
@@ -114,7 +104,7 @@ def test_a_variant_pointer_must_bind_its_exact_bytes(sweep):
 
 
 @pytest.mark.xfail(strict=True, raises=AttributeError,
-                   reason="Waits for deploy/profiles/edge/test_pilot.py--test_a_role_that_reads_in_part_sees_exactly_unavailable (same file). Add pilot.check_sweeps(reader, role, pack, sweeps): a generic sweep cell needs a computed status read through the role's reader at the variant's snapshot; an unavailable cell exits with a diagnostic.")
+                   reason="extra: Waits for deploy/profiles/edge/test_pilot.py--test_a_role_that_reads_in_part_sees_exactly_unavailable (same file). Add pilot.check_sweeps(reader, role, pack, sweeps): a generic sweep cell needs a computed status read through the role's reader at the variant's snapshot; an unavailable cell exits with a diagnostic.")
 def test_generic_sweep_still_requires_computed_status():
     class FullReader:
         def get(self, path):
@@ -139,7 +129,7 @@ def scoped(role: str, checks: list) -> dict:
 
 
 @pytest.mark.xfail(strict=True, raises=AttributeError,
-                   reason="Waits for deploy/profiles/edge/test_pilot.py--test_private_variants_and_the_masked_gate_view (same file). Add pilot.check_statuses(role, manifest, truth) to deploy/profiles/edge/pilot.py: a role sees check statuses only if the unscoped manifest in the store (truth) shows it reads every relation in full, and otherwise every check as unavailable; without a store, all or nothing by the role's own snapshots. The comment above these tests and pilot_sample.TRUTH give the cases. The same change makes the other check_statuses tests in this file pass: remove their marks in the same pull request.")
+                   reason="extra: Waits for deploy/profiles/edge/test_pilot.py--test_private_variants_and_the_masked_gate_view (same file). Add pilot.check_statuses(role, manifest, truth) to deploy/profiles/edge/pilot.py: a role sees check statuses only if the unscoped manifest in the store (truth) shows it reads every relation in full, and otherwise every check as unavailable; without a store, all or nothing by the role's own snapshots. The comment above these tests and pilot_sample.TRUTH give the cases. The same change makes the other check_statuses tests in this file pass: remove their marks in the same pull request.")
 def test_a_role_that_reads_in_part_sees_exactly_unavailable():
     pilot.check_statuses("propose", scoped("propose", UNAVAILABLE), TRUTH)
     # The leak AUD-E1 closed: a status of rows the role does not read; and a check left out.
@@ -149,7 +139,7 @@ def test_a_role_that_reads_in_part_sees_exactly_unavailable():
 
 
 @pytest.mark.xfail(strict=True, raises=AttributeError,
-                   reason='Covered by the task deploy/profiles/edge/test_pilot.py--test_a_role_that_reads_in_part_sees_exactly_unavailable: a full reader sees the true statuses. The change for that task makes this pass; remove this mark with it.')
+                   reason='extra: Covered by the task deploy/profiles/edge/test_pilot.py--test_a_role_that_reads_in_part_sees_exactly_unavailable: a full reader sees the true statuses. The change for that task makes this pass; remove this mark with it.')
 def test_a_full_reader_sees_the_true_statuses_and_never_unavailable():
     pilot.check_statuses("auditor", scoped("auditor", SHOWN), TRUTH)
     # A gate that masks every status would pass an all-or-nothing check; against the store it does not.
@@ -166,14 +156,14 @@ def test_a_full_reader_sees_the_true_statuses_and_never_unavailable():
 
 
 @pytest.mark.xfail(strict=True, raises=AttributeError,
-                   reason='Covered by the task deploy/profiles/edge/test_pilot.py--test_a_role_that_reads_in_part_sees_exactly_unavailable: the truth must be the same manifest. The change for that task makes this pass; remove this mark with it.')
+                   reason='extra: Covered by the task deploy/profiles/edge/test_pilot.py--test_a_role_that_reads_in_part_sees_exactly_unavailable: the truth must be the same manifest. The change for that task makes this pass; remove this mark with it.')
 def test_the_truth_must_be_the_same_manifest():
     with pytest.raises(SystemExit, match="checked against"):
         pilot.check_statuses("auditor", scoped("auditor", SHOWN), dict(TRUTH, id="m-0"))
 
 
 @pytest.mark.xfail(strict=True, raises=AttributeError,
-                   reason='Covered by the task deploy/profiles/edge/test_pilot.py--test_a_role_that_reads_in_part_sees_exactly_unavailable: without a store, all or nothing. The change for that task makes this pass; remove this mark with it.')
+                   reason='extra: Covered by the task deploy/profiles/edge/test_pilot.py--test_a_role_that_reads_in_part_sees_exactly_unavailable: without a store, all or nothing. The change for that task makes this pass; remove this mark with it.')
 def test_without_a_store_only_all_or_nothing():
     # `live` has no store: a role whose own snapshots are all full may see statuses, every role may see
     # every check unavailable, none sees a mix, a count or a status beside a part read.

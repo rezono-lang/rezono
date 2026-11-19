@@ -6,15 +6,6 @@ import pytest
 from test_replay_fixed_point import boundary, execute, setup_recording
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason=(
-        "Read decisions/safe-step-rounds.md. Through loop.recording_cli and the std-loop fixed-point "
-        "rules, report the closed blocked goals including a goal without a producer. "
-        "Waits for test_step_safety_reasons and test_batch_visible_prefixes for the integrated rule inputs."
-    ),
-)
 def test_safe_fixed_point(tmp_path, capsys):
     recording = setup_recording(tmp_path)
     records = recording["records"]

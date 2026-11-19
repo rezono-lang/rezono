@@ -1,0 +1,120 @@
+{
+  "source": "fact party p1, during stage-a..<stage-c, known 2026-01-05\n  size = 3\nfact party p1, during stage-c..\n  size = 4\nfact party p2, during stage-b\n  size = 5\nfact party p3, valid 2026-01-01.., in setup-a | setup-b\n  size = 6",
+  "format": "rezono.module/1",
+  "declarations": [
+    {
+      "fact": "party",
+      "id": "p1",
+      "during": {
+        "from": "stage-a",
+        "until": "stage-c"
+      },
+      "known": "2026-01-05",
+      "set": [
+        {
+          "slot": "size",
+          "value": {
+            "lit": "3"
+          }
+        }
+      ]
+    },
+    {
+      "fact": "party",
+      "id": "p1",
+      "during": {
+        "from": "stage-c"
+      },
+      "set": [
+        {
+          "slot": "size",
+          "value": {
+            "lit": "4"
+          }
+        }
+      ]
+    },
+    {
+      "fact": "party",
+      "id": "p2",
+      "during": {
+        "stage": "stage-b"
+      },
+      "set": [
+        {
+          "slot": "size",
+          "value": {
+            "lit": "5"
+          }
+        }
+      ]
+    },
+    {
+      "fact": "party",
+      "id": "p3",
+      "valid": [
+        "2026-01-01"
+      ],
+      "in": [
+        "setup-a",
+        "setup-b"
+      ],
+      "set": [
+        {
+          "slot": "size",
+          "value": {
+            "lit": "6"
+          }
+        }
+      ]
+    }
+  ],
+  "rejections": [
+    {
+      "from": "during stage-a..<stage-c",
+      "to": "during stage-a..<"
+    },
+    {
+      "from": "in setup-a | setup-b",
+      "to": "in setup-a |"
+    },
+    {
+      "from": "in setup-a | setup-b",
+      "to": "in setup-a | setup-b, in setup-c"
+    }
+  ],
+  "knownDiagnostics": [
+    {
+      "code": "R000",
+      "span": {
+        "text": "during",
+        "start": 36,
+        "end": 42
+      }
+    },
+    {
+      "code": "R000",
+      "span": {
+        "text": "during",
+        "start": 105,
+        "end": 111
+      }
+    },
+    {
+      "code": "R000",
+      "span": {
+        "text": "during",
+        "start": 148,
+        "end": 154
+      }
+    },
+    {
+      "code": "R000",
+      "span": {
+        "text": "in",
+        "start": 209,
+        "end": 211
+      }
+    }
+  ]
+}

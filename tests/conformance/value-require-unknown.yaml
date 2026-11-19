@@ -3,33 +3,12 @@ source: docs/semantics/value-cases.yaml#require-unknown
 status: settled
 input:
   rows:
-  - kind: item
-    id: item-a
-    group: group-a
-    labels:
-    - first
-    - second
-    quantity: 7
-    weight: 3
-  - kind: item
-    id: item-b
-    group: group-a
-    labels:
-    - first
-    weight: 3
-  - kind: item
-    id: item-c
-    group: group-b
-    labels:
-    - second
-    quantity:
-      state: unknown
-      reason: not_assigned
-  - kind: item
-    id: item-e
-    group: group-b
-    labels:
-    - second
+    - {$kind: Group, $id: group-a}
+    - {$kind: Group, $id: group-b}
+    - {$kind: Item, $id: item-a, group: {$ref: group-a}, labels: [first], quantity: "7", weight: "3"}
+    - {$kind: Item, $id: item-b, group: {$ref: group-a}, labels: [first], weight: "3"}
+    - {$kind: Item, $id: item-c, group: {$ref: group-b}, labels: [second], quantity: {$unknown: not_assigned}}
+    - {$kind: Item, $id: item-e, group: {$ref: group-b}, labels: [second]}
   check: 'require eligible: item.quantity = 7'
   role: reader
 expect:

@@ -17,6 +17,10 @@ from .names import ISO_DATE, NAME
 FORMAT = "rezono.rules/1"
 FUNCTIONS = ("count", "sum", "min", "max")
 COMPARISONS = ("eq", "ne", "lt", "le", "gt", "ge")
+# A condition's declared comparison type (decisions/ordered-rule-scalars.md): both operands are text
+# variables bound by positive literals. binary_text orders the UTF-8 bytes; utc_instant validates
+# YYYY-MM-DDTHH:mm:ss[.digits]Z and orders the exact instant. A malformed instant satisfies no operator.
+COMPARE_AS = ("binary_text", "utc_instant")
 ARITHMETIC = ("add", "sub", "mul", "div")
 # `days`: the whole number of days from the ISO date `right` (a constant) to the ISO date `left` (a text
 # variable), in the proleptic Gregorian calendar. Only a view's reading makes it: no rule file can
@@ -49,6 +53,15 @@ def const_type(t):
 
 def is_var(t):
     return t.startswith("?")
+
+
+def untyped_conditions(rule, where):
+    """The conditions of a rule, for a translation that has no lowering of compare_as yet: it refuses one
+    rather than compare the raw text (decisions/ordered-rule-scalars.md)."""
+    for c in rule.conditions:
+        if c.compare_as is not None:
+            raise IRError("compare_as_unsupported", f"{rule.id}: {where} has no lowering of compare_as {c.compare_as}")
+    return rule.conditions
 
 
 def closes_check(closing, closed):
@@ -128,6 +141,7 @@ class Condition:
     op: str
     left: str
     right: str
+    compare_as: str | None = None
 
 
 @dataclass(frozen=True)
@@ -428,7 +442,8 @@ def load(doc, require_witness=True):
             body=tuple(Literal(_atom(b, rid), b["polarity"], _nat(b["stratum"], rid)) for b in d.get("body", [])),
             aggregates=tuple(Aggregate(_atom(a, rid), a["function"], a.get("over"), a["as"], _nat(a["stratum"], rid))
                              for a in d.get("aggregates", [])),
-            conditions=tuple(Condition(c["op"], c["left"], c["right"]) for c in d.get("conditions", [])),
+            conditions=tuple(Condition(c["op"], c["left"], c["right"], c.get("compare_as"))
+                             for c in d.get("conditions", [])),
             assignments=tuple(Assignment(s["var"], s["op"], s["left"], s["right"]) for s in d.get("assignments", [])),
             origin=(d["origin"]["file"], _nat(d["origin"]["line"], rid)),
         )
@@ -601,6 +616,14 @@ def _check_rule(rule, relations):
         for t in (c.left, c.right):
             if is_var(t) and t not in bound:
                 raise IRError("unsafe_variable", f"{rule.id}: {t} in a condition is not bound")
+        if c.compare_as is not None:
+            if c.compare_as not in COMPARE_AS:
+                raise IRError("bad_condition", f"{rule.id}: compare_as {c.compare_as!r}")
+            for t in (c.left, c.right):
+                if not is_var(t) or t not in positive or types[t] != "string":
+                    raise IRError("bad_condition", f"{rule.id}: {c.compare_as} compares two text variables "
+                                                   f"bound by positive literals, not {t}")
+            continue
         kinds = {types[t] for t in (c.left, c.right) if is_var(t)}
         if not kinds:  # two constants: typed by their own form
             kinds = {const_type(t) for t in (c.left, c.right)}
@@ -798,7 +821,8 @@ def to_doc(prog):
                                                   ("as", a.var), ("stratum", str(a.stratum))) if v is not None}
                                for a in r.aggregates]
         if r.conditions:
-            d["conditions"] = [{"op": c.op, "left": c.left, "right": c.right} for c in r.conditions]
+            d["conditions"] = [{"op": c.op, "left": c.left, "right": c.right,
+                                **({"compare_as": c.compare_as} if c.compare_as else {})} for c in r.conditions]
         if r.assignments:
             d["assignments"] = [{"var": s.var, "op": s.op, "left": s.left, "right": s.right} for s in r.assignments]
         d["witness"] = {"relation": r.witness_relation, "variables": list(r.variables)}

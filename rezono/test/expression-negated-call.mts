@@ -48,10 +48,12 @@ const differences: unknown[] = [];
 const relatedSpans = expect.witness.related.map(({ file, at, line, column }) => ({ file, at, line, column }));
 
 for (const sample of input.cases.filter(entry => !entry.lowering_only)) {
-	assert.ok(sample.summary);
-	const predicate = { ...expect.value.summaries[sample.summary] };
-	if (sample.summary === 'active') predicate.related = relatedSpans;
-	const declaration = { columns, world: predicate.world, role: 'derived', predicate } as const;
+	// A case without a summary checks a derived relation whose predicate states were never linked.
+	const predicate = sample.summary ? { ...expect.value.summaries[sample.summary] } : undefined;
+	if (predicate && sample.summary === 'active') predicate.related = relatedSpans;
+	const declaration = predicate
+		? { columns, world: predicate.world, role: 'derived', predicate } as const
+		: { columns, world: 'closed', role: 'derived' } as const;
 	const source = input.consumer.replace('GUARD', sample.guard);
 	const { form, diagnostics } = moduleForm(source);
 	assert.deepEqual(diagnostics, []);
@@ -70,7 +72,7 @@ for (const sample of input.cases.filter(entry => !entry.lowering_only)) {
 	const expected = sample.error ? [{
 		code: sample.error,
 		span,
-		related: sample.error === 'R047' ? relatedSpans : [],
+		related: sample.error === 'R047' && predicate ? relatedSpans : [],
 	}] : [];
 	const positions = actual.map(({ code, span, related }) => ({ code, span, related: related ?? [] }));
 	try {

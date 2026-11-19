@@ -1,0 +1,2 @@
+.decl may_read(role: symbol, kind: symbol, element: symbol)
+may_read("viewer", "alpha", item) :- alpha(item).

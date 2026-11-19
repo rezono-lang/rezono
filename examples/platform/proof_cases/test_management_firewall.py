@@ -23,10 +23,11 @@ def records():
 
 
 @pytest.mark.xfail(strict=True, raises=AssertionError, reason=(
-    "Derive both directions of managed router drift from scoped snapshots in schema/management_firewall.yaml "
+    "M2: Derive both directions of managed router drift from scoped snapshots in schema/management_firewall.yaml "
     "and rules/management_firewall.dl, consuming the observed-first comparison in std-loop. "
     "Requires native Boolean rule input for sweep completeness and an observed-first std-loop comparison. "
-    "The current std-loop drift requires a desired token. Read decisions/platform-management-firewall.md."))
+    "The current std-loop drift requires a desired token. Read decisions/platform-management-firewall.md. "
+    "Blocked: the test records carry sweep completeness as a Python bool, which no text or integer rule column accepts, so this waits for test_native_boolean_rule_inputs (still red)."))
 def test_management_firewall_bidirectional():
     from management_probes import compiled
 
@@ -50,7 +51,7 @@ def test_management_firewall_bidirectional():
 
 @pytest.mark.cluster
 @pytest.mark.xfail(strict=True, raises=AssertionError, reason=(
-    "Depends on the disposable router reader, shared router renderer and test_management_firewall_bidirectional. "
+    "M2: Depends on the disposable router reader, shared router renderer and test_management_firewall_bidirectional. "
     "Read decisions/platform-management-firewall.md and compare an actual complete table read to the intended rows."))
 def test_management_firewall_readback(monkeypatch):
     from case_support import ROOT

@@ -26,10 +26,12 @@ def records():
 
 
 @pytest.mark.xfail(strict=True, raises=AssertionError, reason=(
-    "Implement the platform backup-plan, scoped inventory and age rules in schema/management_backup.yaml "
+    "M2: Implement the platform backup-plan, scoped inventory and age rules in schema/management_backup.yaml "
     "and rules/management_backup.dl using std-time and std-decision. Read decisions/platform-management-backup.md. "
     "Requires native boolean rules for inventory completion and a common day projection for the copy, "
-    "inventory, and decision dates; the existing std-time view accepts one source kind per theory kind."))
+    "inventory, and decision dates; the existing std-time view accepts one source kind per theory kind. "
+    "Confirmed: a rule reading the boolean backup_inventory__complete is refused with 'rules cannot read it yet', "
+    "and a date column is readable only through a single-source view reading, so the compiler needs both first."))
 def test_management_backup_age_and_absence():
     from management_probes import compiled
 
@@ -100,7 +102,7 @@ def test_management_restore_matches_copy(kind, changes):
 
 @pytest.mark.cluster
 @pytest.mark.xfail(strict=True, raises=AssertionError, reason=(
-    "Depends on the recorded disposable recovery cluster and test_management_restore_matches_copy. "
+    "M2: Depends on the recorded disposable recovery cluster and test_management_restore_matches_copy. "
     "Restore a fresh marker while management stays down per decisions/platform-management-backup.md."))
 def test_management_backup_restore_readback():
     from management_probes import live_events

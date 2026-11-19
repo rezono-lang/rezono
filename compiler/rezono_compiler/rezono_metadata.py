@@ -4,9 +4,13 @@ import re
 
 from .rezono_lowering import Refuse
 
-FIELDS = {"description", "exactMappings", "annotations"}
+MAPPINGS = (("exactMappings", "exact_mappings"), ("closeMappings", "close_mappings"), ("broadMappings", "broad_mappings"))
+FIELDS = {"description", "annotations"} | {written for written, _ in MAPPINGS}
 HEADER = FIELDS | {"schema", "iri", "language", "prefixes", "imports", "defaultRange"}
 NAME = re.compile(r"[a-z][a-z0-9_]*")
+WHOLE = re.compile(r"-?(0|[1-9][0-9]*)")
+# Fields that the named annotation's schema types as whole numbers (pack.explore); all other values stay as written.
+WHOLE_FIELDS = {"explore": frozenset({"min", "max", "step"})}
 
 
 def name(value: object) -> bool:
@@ -25,10 +29,20 @@ def annotation_value(value: object) -> bool:
     return isinstance(value, (str, bool))
 
 
+def annotation_literal(tag: str, value: object) -> object:
+    """The module form writes numbers as exact decimal text; LinkML holds a whole number as an integer.
+    Only fields the named annotation's schema types as whole numbers convert; other text stays text."""
+    fields = WHOLE_FIELDS.get(tag)
+    if not fields or not isinstance(value, dict):
+        return value
+    return {key: int(item) if key in fields and isinstance(item, str) and WHOLE.fullmatch(item) else item
+            for key, item in value.items()}
+
+
 def valid(body: dict) -> bool:
     if "description" in body and not isinstance(body["description"], str):
         return False
-    if "exactMappings" in body and not text_list(body["exactMappings"]):
+    if any(written in body and not text_list(body[written]) for written, _ in MAPPINGS):
         return False
     if "annotations" in body:
         annotations = body["annotations"]
@@ -59,10 +73,12 @@ def lower(body: dict) -> dict:
     metadata = {}
     if "description" in body:
         metadata["description"] = body["description"]
-    if "exactMappings" in body:
-        metadata["exact_mappings"] = list(body["exactMappings"])
+    for written, target in MAPPINGS:
+        if written in body:
+            metadata[target] = list(body[written])
     if "annotations" in body:
-        metadata["annotations"] = {tag: {"value": value} for tag, value in body["annotations"].items()}
+        annotations = body["annotations"]
+        metadata["annotations"] = {tag: {"value": annotation_literal(tag, value)} for tag, value in annotations.items()}
     return metadata
 
 

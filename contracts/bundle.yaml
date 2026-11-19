@@ -39,6 +39,9 @@ enums:
   ValueType:
     description: The type of a value in the engine. Arrows carry the id type of their target.
     permissible_values: {text: {}, integer: {}, boolean: {}, date: {}, enum: {}}
+  InputFormat:
+    permissible_values:
+      sha256: {description: A canonical lowercase SHA-256 digest as 64 hexadecimal characters.}
   Derivation:
     permissible_values: {fact: {}, conclusion: {}}
   SemanticCase:
@@ -85,6 +88,9 @@ enums:
   RuleOperator:
     description: "The operator of a comparison (eq, ne, lt, le, gt, ge) or an assignment (add, sub, mul, div, days), as in the rule IR (contracts/rules.yaml)."
     permissible_values: {eq: {}, ne: {}, lt: {}, le: {}, gt: {}, ge: {}, add: {}, sub: {}, mul: {}, div: {}, days: {}}
+  RuleCompareAs:
+    description: "The declared comparison type of a comparison, as in the rule IR (contracts/rules.yaml, decisions/ordered-rule-scalars.md)."
+    permissible_values: {binary_text: {}, utc_instant: {}}
 
 classes:
   Bundle:
@@ -253,6 +259,7 @@ classes:
     attributes:
       type: {range: ValueType, required: true}
       schema_type: {required: true, description: "The LinkML range, for example a pack type such as Cents."}
+      input_format: {range: InputFormat, description: "A format that admission requires before admitting this attribute."}
       derivation: {range: Derivation, required: true}
       enum: {}
       minimum: {range: DecimalInteger}
@@ -328,6 +335,7 @@ classes:
       result: {range: RuleTerm, inlined: true, description: "The variable an assignment or an aggregate binds; an integer."}
       function: {range: AggregateFunction, description: "The function of an aggregate."}
       over: {description: "The column that an aggregate's `sum`, `min` or `max` folds; left out for `count`."}
+      compare_as: {range: RuleCompareAs, description: "The declared comparison type of a comparison; absent for the untyped comparison."}
       aggregate_position: {range: integer, minimum_value: 0, description: "An aggregate's place in `aggregates` (from 0), the `position` a witness names it by."}
     rules:
       - preconditions: {slot_conditions: {kind: {equals_string: atom}}}
@@ -378,6 +386,7 @@ classes:
     attributes:
       name: {required: true}
       type: {required: true, range: RuleColumnType}
+      semantic: {range: SemanticType, inlined: true, description: "What the column's value means, where the checked rules give more than its physical type, such as a reference to a kind. Its `base` is the column's `type`. A publication writes the column as this type. Left out: the scalar of `type`."}
       currency: {pattern: "^[A-Z]{3}$", description: "An amount, where the rules determine it: whole minor units of this ISO 4217 currency, as `currency` on an Attribute. Derived, never declared: the column is bound to an amount attribute, or to a `sum`, `min` or `max` over an amount column, or to a sum or difference of such amounts, in every rule of the relation. A count, a product and a quotient have none. Two currencies in one variable or one column is a compiler error."}
 
   CheckView:

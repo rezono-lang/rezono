@@ -110,10 +110,10 @@ acceptance:
     tests:
       - proof_cases/test_decision_standing.py::test_platform_recalculates_and_retains_conflicting_placements
   - id: default-transport-publication-grounds
-    question: Which product, observation and pinned source must agree before a default transport can be published?
+    question: Which registered product and pinned vendor statement must ground a default transport before it is published?
     tests:
       - acceptance/test_postgres_transport.py::test_unverified_transport_does_not_publish
-      - acceptance/test_postgres_transport.py::test_published_transport_requires_the_product_observation_and_pinned_source
+      - acceptance/test_postgres_transport.py::test_published_transport_requires_the_product_and_pinned_source
   - id: delivery-status-rendering
     question: Which commit-status context, state and reason represent an observed tenant delivery step?
     tests:
@@ -215,7 +215,7 @@ acceptance:
     question: Which default PostgreSQL client transport and port does the pinned product documentation declare?
     tests:
       - acceptance/test_postgres_transport.py::test_postgres_transport
-      - acceptance/test_postgres_transport.py::test_published_transport_requires_the_product_observation_and_pinned_source
+      - acceptance/test_postgres_transport.py::test_published_transport_requires_the_product_and_pinned_source
   - id: product-part-closure
     question: Which enclosing delivery and catalog entry contain a component, and which part links prove it?
     tests:

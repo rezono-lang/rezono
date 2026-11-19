@@ -125,8 +125,10 @@ def check_publication(directory, source, bucket, manifest, titles, listed, count
     assert {entry["status"] for entry in manifest["checks"]} == {"green"}
     compiled = {entry["file"]: artifact(bucket, entry) for entry in manifest["compiled"]}
     bundle = compiled["bundle/schema-bundle.json"]
-    published_rules = {entry["id"]: entry for entry in bundle["rules"] if entry["id"] in RULES}
+    # Rule IDs and stable IDs are local choices of each representation; resolve them by relation.
+    published_rules = {entry["relation"]: entry for entry in bundle["rules"] if entry["relation"] in RULES}
     assert set(published_rules) == set(RULES)
+    rule_relation = {entry["id"]: entry["relation"] for entry in bundle["rules"]}
     assert published_rules["listed_count"]["aggregates"] == [{"position": 0, "relation": "listed", "function": "count"}]
     message = next(entry["resource"] for entry in bundle["messages"] if entry["lang"] == "en").splitlines()
     for name, number in zip(RULES, numbers):
@@ -164,18 +166,21 @@ def check_publication(directory, source, bucket, manifest, titles, listed, count
         [witness_set] = [entry for entry in manifest["witnesses"] if entry["role"] == role]
         witnesses = artifact(bucket, witness_set)
         assert witnesses["hidden"] == []
-        evidence = {(w["conclusion"]["relation"], tuple(json.loads(w["conclusion"]["key"]))): w
-                    for w in witnesses["witnesses"] if w["conclusion"]["relation"] in RULES}
+        # Accumulate every alternative of a conclusion before comparing its grounds.
+        evidence = {}
+        for w in witnesses["witnesses"]:
+            if w["conclusion"]["relation"] in RULES:
+                evidence.setdefault((w["conclusion"]["relation"], tuple(json.loads(w["conclusion"]["key"]))), []).append(w)
         assert set(evidence) == {(name, key) for name in RULES for key in expected[name]}
         for item in listed:
-            witness = evidence["listed", (item,)]
-            assert witness["rule_id"] == "listed"
-            assert witness["bindings"] == [{"variable": "?x", "value": item}]
+            [witness] = evidence["listed", (item,)]
+            assert rule_relation[witness["rule_id"]] == "listed"
+            assert [binding["value"] for binding in witness["bindings"]] == [item]
             assert witness["premises"] == [premise("alpha", item), premise("alpha__title", item, "open")]
         if role == "checker":
-            witness = evidence["listed_count", ("b", str(count))]
-            assert witness["rule_id"] == "listed_count"
-            assert {x["variable"]: x["value"] for x in witness["bindings"]} == {"?s": "b", "?n": str(count)}
+            [witness] = evidence["listed_count", ("b", str(count))]
+            assert rule_relation[witness["rule_id"]] == "listed_count"
+            assert sorted(binding["value"] for binding in witness["bindings"]) == sorted(["b", str(count)])
             assert witness["premises"] == [premise("beta", "b")]
             [group] = witness["aggregates"]
             contributors = [[json.dumps([item])] for item in sorted(listed)]
@@ -184,7 +189,7 @@ def check_publication(directory, source, bucket, manifest, titles, listed, count
                 "contributors_sha256": digest(json.dumps(contributors, separators=(",", ":")).encode()),
                 "result": f"known:{count}",
             }
-        seen[role] = (rows, evidence)
+        seen[role] = (rows, grounds(evidence))
 
     prefix = f"minimal/{manifest['id']}/viewer/publication/"
     index = json.loads(bucket.get(prefix + "index.json"))
@@ -197,9 +202,22 @@ def check_publication(directory, source, bucket, manifest, titles, listed, count
     }
     assert visible == expected_view
 
-    # Compare complete rule meanings across source paths, preserving stable IDs and clause addresses above.
-    return seen, {name: {key: value for key, value in rule.items() if key not in ("origin", "span")}
-                  for name, rule in published_rules.items()}
+    # Compare rows, grounds and each rule's head arity across source paths. Rule IDs, variable names, clause
+    # order and logical column types are local to each representation (decisions/language-expression-semantics.md §4).
+    return seen, {name: len(rule["head"]["terms"]) for name, rule in published_rules.items()}
+
+
+def grounds(evidence):
+    """The union of signed premises and group certificates over all alternatives of each conclusion."""
+    union = {}
+    for conclusion, alternatives in evidence.items():
+        reads = set()
+        for witness in alternatives:
+            reads.update((p["polarity"], p["row"]["relation"], p["row"]["key"]) for p in witness["premises"])
+            reads.update(("group", g["relation"], g["group_key"], g["count"], g["contributors_sha256"])
+                         for g in witness.get("aggregates", ()))
+        union[conclusion] = reads
+    return union
 
 
 def changed_epoch(model, states, template):
@@ -268,10 +286,12 @@ class NativePublicationError(Exception):
 @pytest.mark.xfail(
     strict=True,
     raises=NativePublicationError,
-    reason="Publish native rules through the normal pack compiler in compiler/rezono_compiler/. "
-           "Read decisions/language-native-rules.md sections 3, 5, 7 and 11. "
-           "Waits for the /3 form and reader, linked signature and body checking, native pack linking, and group lowering. "
-           "The two source fixtures are authored, so state projection and the corpus converter are not needed here.",
+    reason="M3: Publish native rules through the normal pack compiler in compiler/rezono_compiler/. "
+           "Read decisions/language-native-rules.md sections 3, 5, 7 and 11, and the migration comparison in "
+           "decisions/language-expression-semantics.md §4. Waits for test_expression_python_branch_bindings and "
+           "test_order_check_ordinary_filtered_count, which lower the slot-call conjunction and the count on "
+           "the ordinary path. The two source fixtures are authored, so state projection and the corpus "
+           "converter are not needed here.",
 )
 def test_native_rule_publication_parity(tmp_path):
     expected = published_meaning(tmp_path / "legacy", "legacy")

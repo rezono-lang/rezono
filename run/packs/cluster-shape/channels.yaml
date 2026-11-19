@@ -1,0 +1,4 @@
+kinds:
+  - {kind: cluster, shape: rect}
+  - {kind: line, shape: rect}
+  - {kind: machine, shape: rect}
