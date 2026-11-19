@@ -66,6 +66,12 @@ def plugin_cases(function):
          plugin.replace(b"rezono-compiler", b"rezono-compiler2"), False),
         ("pyproject.toml that no longer parses", "compiler/pyproject.toml", plugin, plugin + b"[[[\n", True),
         ("pyproject.toml replaced by a link", "compiler/pyproject.toml", plugin, UNREADABLE_CONFIG, True),
+        # Entry points from elsewhere: the file they come from is not read, so the switch counts.
+        ("dynamic entry points in pyproject.toml", "compiler/pyproject.toml", project,
+         project + b'dynamic = ["entry-points"]\n\n[tool.setuptools.dynamic]\nentry-points = {file = ["eps.ini"]}\n',
+         True),
+        ("entry points from a file in setup.cfg", "demo/setup.cfg", config,
+         config + b"\n[options]\nentry_points = file: eps.cfg\n", True),
     ]
     for label, path, before, after, expected in cases:
         change = Change(path, "M", before, after)
@@ -86,6 +92,11 @@ def plugin_cases(function):
         if not any("Lift marks in a pull request of their own" in e for e in errors):
             raise AssertionError(f"lifted mark beside {path}: errors {errors}")
         print(f"DENY without planner and beside a lifted mark: {path}")
+    # CI reads the allowed plugins from the base; a change to the list is policy.
+    errors, _ = review([Change("scripts/pytest-plugins.txt", "M", b"a = a\n", b"a = a\nx = tidy\n")], planner=False)
+    if errors != ["ERROR planner label required for 'scripts/pytest-plugins.txt'"]:
+        raise AssertionError(f"scripts/pytest-plugins.txt without planner: errors {errors}")
+    print("DENY without planner: scripts/pytest-plugins.txt")
     if not source("compiler/setup.py"):
         raise AssertionError("setup.py is source as well")
 

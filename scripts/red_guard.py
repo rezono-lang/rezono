@@ -56,7 +56,7 @@ POLICY = SOURCE_POLICY | {
     ".github/workflows/ci.yml", ".github/workflows/disposable-cluster.yml",
     ".github/workflows/resume-feldera-review.yml", "scripts/feldera_admission.py",
     "scripts/red_guard.py", "scripts/test_red_guard.py",
-    "scripts/red_before.py", "scripts/test_red_before.py",
+    "scripts/red_before.py", "scripts/test_red_before.py", "scripts/pytest-plugins.txt",
 }
 EVIDENCE_DIRS = {
     "test", "tests", "__tests__", "__snapshots__", "fixture", "fixtures",
@@ -265,9 +265,13 @@ def plugin_config(path):
 
 
 def pytest_plugins(path, blob):
-    """The pytest11 entry points a pyproject.toml or setup.cfg blob registers, or None.
+    """What in a pyproject.toml or setup.cfg blob can register a pytest plugin.
 
-    A blob that does not parse gives its bytes, so that any change to it counts.
+    That is the pytest11 entry points, and every way to give entry points from elsewhere:
+    `dynamic` entry points and their source in pyproject.toml, `entry_points` under
+    `[options]` in setup.cfg (`file: ...`). A blob that does not parse gives its bytes, so that
+    any change to it counts. CI also compares the installed plugins with a list from the base
+    (scripts/pytest-plugins.txt), which covers any other way.
     """
     if blob is None:
         return None
@@ -275,14 +279,17 @@ def pytest_plugins(path, blob):
         text = blob.decode("utf-8")
         if PurePosixPath(path.lower()).name == "pyproject.toml":
             data = tomllib.loads(text)
-            return (data.get("project", {}).get("entry-points", {}).get("pytest11"),
-                    data.get("tool", {}).get("poetry", {}).get("plugins", {}).get("pytest11")) or None
+            project, tool = data.get("project", {}), data.get("tool", {})
+            dynamic = project.get("dynamic", [])
+            return json.dumps([project.get("entry-points", {}).get("pytest11"),
+                               tool.get("poetry", {}).get("plugins", {}).get("pytest11"),
+                               "entry-points" in dynamic,
+                               tool.get("setuptools", {}).get("dynamic", {}).get("entry-points")], sort_keys=True)
         parser = configparser.ConfigParser(interpolation=None, strict=False)
         parser.read_string(text)
-        if parser.has_option("options.entry_points", "pytest11"):
-            return parser.get("options.entry_points", "pytest11")
-        return None
-    except (UnicodeError, tomllib.TOMLDecodeError, configparser.Error, AttributeError):
+        return json.dumps([parser.get(section, option, fallback=None) for section, option in (
+            ("options.entry_points", "pytest11"), ("options", "entry_points"))])
+    except (UnicodeError, tomllib.TOMLDecodeError, configparser.Error, AttributeError, TypeError, ValueError):
         return blob
 
 
