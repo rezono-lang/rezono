@@ -84,6 +84,35 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 27
     steps:
+      # GitHub does not cancel the runs of a merge group that the queue replaced.
+      # Such a job stops here, before it spends a runner on a commit that can no
+      # longer land: the group's ref is gone or points elsewhere. A failed lookup
+      # lets the job run. Stopping fails the job, which is safe: the group no
+      # longer exists, and a misread can never turn an untested group green.
+      - name: Stop when the merge group was replaced
+        if: github.event_name == 'merge_group'
+        shell: bash
+        env:
+          HEAD_REF: ${{ github.event.merge_group.head_ref }}
+          HEAD_SHA: ${{ github.event.merge_group.head_sha }}
+        run: |
+          set -euo pipefail
+          if [[ -z "$HEAD_REF" || -z "$HEAD_SHA" ]]; then
+            echo "::warning::The event names no merge-group ref or commit; running the job"
+            exit 0
+          fi
+          [[ "$HEAD_REF" == refs/* ]] || HEAD_REF="refs/heads/$HEAD_REF"
+          # No checkout yet, so the repository is named by its address.
+          if ! found=$(GIT_TERMINAL_PROMPT=0 timeout 60 git ls-remote "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git" "$HEAD_REF"); then
+            echo "::warning::Could not read $HEAD_REF from the remote; running the job"
+            exit 0
+          fi
+          current=$(awk -v ref="$HEAD_REF" '$2 == ref { print $1 }' <<< "$found")
+          echo "Merge group $HEAD_REF: tested commit $HEAD_SHA, remote has ${current:-no such ref}"
+          if [[ "$current" != "$HEAD_SHA" ]]; then
+            echo "::error title=group replaced::The merge queue replaced this group ($HEAD_REF is ${current:-gone}, not $HEAD_SHA); stopping without running the job"
+            exit 1
+          fi
       - id: full_checkout
         name: Check out the candidate with history
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -205,6 +234,35 @@ jobs:
       role_publication: ${{ steps.role_publication.outputs.required }}
       red_before: ${{ steps.red_before.outputs.required }}
     steps:
+      # GitHub does not cancel the runs of a merge group that the queue replaced.
+      # Such a job stops here, before it spends a runner on a commit that can no
+      # longer land: the group's ref is gone or points elsewhere. A failed lookup
+      # lets the job run. Stopping fails the job, which is safe: the group no
+      # longer exists, and a misread can never turn an untested group green.
+      - name: Stop when the merge group was replaced
+        if: github.event_name == 'merge_group'
+        shell: bash
+        env:
+          HEAD_REF: ${{ github.event.merge_group.head_ref }}
+          HEAD_SHA: ${{ github.event.merge_group.head_sha }}
+        run: |
+          set -euo pipefail
+          if [[ -z "$HEAD_REF" || -z "$HEAD_SHA" ]]; then
+            echo "::warning::The event names no merge-group ref or commit; running the job"
+            exit 0
+          fi
+          [[ "$HEAD_REF" == refs/* ]] || HEAD_REF="refs/heads/$HEAD_REF"
+          # No checkout yet, so the repository is named by its address.
+          if ! found=$(GIT_TERMINAL_PROMPT=0 timeout 60 git ls-remote "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git" "$HEAD_REF"); then
+            echo "::warning::Could not read $HEAD_REF from the remote; running the job"
+            exit 0
+          fi
+          current=$(awk -v ref="$HEAD_REF" '$2 == ref { print $1 }' <<< "$found")
+          echo "Merge group $HEAD_REF: tested commit $HEAD_SHA, remote has ${current:-no such ref}"
+          if [[ "$current" != "$HEAD_SHA" ]]; then
+            echo "::error title=group replaced::The merge queue replaced this group ($HEAD_REF is ${current:-gone}, not $HEAD_SHA); stopping without running the job"
+            exit 1
+          fi
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           fetch-depth: 0
@@ -461,10 +519,41 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     strategy:
-      fail-fast: false
+      # In the merge queue one failed shard fails the group, so the other shards
+      # stop; a pull request keeps every shard to report all its failures.
+      fail-fast: ${{ github.event_name == 'merge_group' }}
       matrix:
         component: ${{ fromJson(needs.discover.outputs.python) }}
     steps:
+      # GitHub does not cancel the runs of a merge group that the queue replaced.
+      # Such a job stops here, before it spends a runner on a commit that can no
+      # longer land: the group's ref is gone or points elsewhere. A failed lookup
+      # lets the job run. Stopping fails the job, which is safe: the group no
+      # longer exists, and a misread can never turn an untested group green.
+      - name: Stop when the merge group was replaced
+        if: github.event_name == 'merge_group'
+        shell: bash
+        env:
+          HEAD_REF: ${{ github.event.merge_group.head_ref }}
+          HEAD_SHA: ${{ github.event.merge_group.head_sha }}
+        run: |
+          set -euo pipefail
+          if [[ -z "$HEAD_REF" || -z "$HEAD_SHA" ]]; then
+            echo "::warning::The event names no merge-group ref or commit; running the job"
+            exit 0
+          fi
+          [[ "$HEAD_REF" == refs/* ]] || HEAD_REF="refs/heads/$HEAD_REF"
+          # No checkout yet, so the repository is named by its address.
+          if ! found=$(GIT_TERMINAL_PROMPT=0 timeout 60 git ls-remote "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git" "$HEAD_REF"); then
+            echo "::warning::Could not read $HEAD_REF from the remote; running the job"
+            exit 0
+          fi
+          current=$(awk -v ref="$HEAD_REF" '$2 == ref { print $1 }' <<< "$found")
+          echo "Merge group $HEAD_REF: tested commit $HEAD_SHA, remote has ${current:-no such ref}"
+          if [[ "$current" != "$HEAD_SHA" ]]; then
+            echo "::error title=group replaced::The merge queue replaced this group ($HEAD_REF is ${current:-gone}, not $HEAD_SHA); stopping without running the job"
+            exit 1
+          fi
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
       - uses: ./.github/workflows/python-environment
         with:
@@ -564,10 +653,41 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     strategy:
-      fail-fast: false
+      # In the merge queue one failed shard fails the group, so the other shards
+      # stop; a pull request keeps every shard to report all its failures.
+      fail-fast: ${{ github.event_name == 'merge_group' }}
       matrix:
         component: ${{ fromJson(needs.discover.outputs.node) }}
     steps:
+      # GitHub does not cancel the runs of a merge group that the queue replaced.
+      # Such a job stops here, before it spends a runner on a commit that can no
+      # longer land: the group's ref is gone or points elsewhere. A failed lookup
+      # lets the job run. Stopping fails the job, which is safe: the group no
+      # longer exists, and a misread can never turn an untested group green.
+      - name: Stop when the merge group was replaced
+        if: github.event_name == 'merge_group'
+        shell: bash
+        env:
+          HEAD_REF: ${{ github.event.merge_group.head_ref }}
+          HEAD_SHA: ${{ github.event.merge_group.head_sha }}
+        run: |
+          set -euo pipefail
+          if [[ -z "$HEAD_REF" || -z "$HEAD_SHA" ]]; then
+            echo "::warning::The event names no merge-group ref or commit; running the job"
+            exit 0
+          fi
+          [[ "$HEAD_REF" == refs/* ]] || HEAD_REF="refs/heads/$HEAD_REF"
+          # No checkout yet, so the repository is named by its address.
+          if ! found=$(GIT_TERMINAL_PROMPT=0 timeout 60 git ls-remote "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git" "$HEAD_REF"); then
+            echo "::warning::Could not read $HEAD_REF from the remote; running the job"
+            exit 0
+          fi
+          current=$(awk -v ref="$HEAD_REF" '$2 == ref { print $1 }' <<< "$found")
+          echo "Merge group $HEAD_REF: tested commit $HEAD_SHA, remote has ${current:-no such ref}"
+          if [[ "$current" != "$HEAD_SHA" ]]; then
+            echo "::error title=group replaced::The merge queue replaced this group ($HEAD_REF is ${current:-gone}, not $HEAD_SHA); stopping without running the job"
+            exit 1
+          fi
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1  # v7.1.0
         with:
