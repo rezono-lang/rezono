@@ -42,6 +42,7 @@ TOKEN = re.compile(r"""
     (?P<op>:-|!=|<=|>=|[(),.:{}!=<>+\-*;|&^%/\[\]$@#])
 """, re.X | re.S)
 TYPES = {"symbol": "string", "number": "integer"}
+SYMBOLS = {t: s for s, t in TYPES.items()}
 SQL = {"VARCHAR": "string", "BIGINT": "integer"}
 COMPARE = {"=": "eq", "!=": "ne", "<": "lt", "<=": "le", ">": "gt", ">=": "ge"}
 ARITH = {"+": "add", "-": "sub", "*": "mul", "/": "div"}
@@ -58,6 +59,12 @@ CHECKED_ABSENCE = "absent_checked"  # reserved conclusion of decisions/scoped-co
 RECEIPT_INPUT = "verified_receipt"  # protected: only admission fills it (decisions/admission-transport.md)
 RECEIPT_LOOKUP = "registered_match"  # the lookup over the contents of one receipt
 RECEIPT_MEMBER = "verified_member"  # protected: the admitted member keys of one receipt
+# Protected admission inputs (decisions/admission-transport.md, section 6): a pack declares one with exactly
+# this signature and no clause; only admission fills it, as base rows before the rules run.
+PROTECTED = {
+    RECEIPT_INPUT: [("receipt", "string"), ("source", "string"), ("scope", "string"), ("cut", "string"),
+                    ("inventory", "string"), ("content", "string")],
+}
 CLOSES = re.compile(r"^//\s*@closes\s+(\S+)\s*$")
 
 
@@ -519,6 +526,12 @@ def read(pack, pack_dir: Path, imports=None, renames=None, *, calc_inputs=None, 
                             (invariant, absence, outcome, closes, fold) != options[name][1:]:
                         errors.append(f"{where}:{line}: .decl {name} must match the imported declaration and annotations")
                     continue
+                if name in PROTECTED and (cols != PROTECTED[name] or extend or invariant or absence or fold
+                                          or outcome is not None or closes is not None or explain is not None):
+                    errors.append(f"{where}:{line}: {name} is a protected admission input; declare it as "
+                                  f".decl {name}({', '.join(f'{c}: {SYMBOLS[t]}' for c, t in PROTECTED[name])}) "
+                                  "without annotations")
+                    continue
                 if not ir.NAME.match(name):
                     errors.append(f"{where}:{line}: derived relation '{name}' is not lower snake case without '__'")
                 decls[name], owners[name] = cols, module
@@ -604,6 +617,10 @@ def read(pack, pack_dir: Path, imports=None, renames=None, *, calc_inputs=None, 
                               "only its owner can mark it @extend")
                 continue
             module = owners[rel]
+        if rel in PROTECTED:
+            errors.append(f"{where}:{line}: {rel} is a protected admission input; only admission fills it, "
+                          "so no rule may derive it")
+            continue
         if rel == CHECKED_ABSENCE and not checked_absence(head, body, rules_src):
             errors.append(f"{where}:{line}: {rel} needs a positive premise from the verified receipt "
                           f"({RECEIPT_INPUT}, or a projection of it such as complete) with the head's source, "
@@ -652,6 +669,10 @@ def read(pack, pack_dir: Path, imports=None, renames=None, *, calc_inputs=None, 
         relations[name] = {"name": name, "role": "base", "key": [{"name": c, "type": t} for c, t in tables[name]],
                            "world": worlds.get(name, "closed")}
     for name, cols in decls.items():
+        if name in PROTECTED:  # admitted rows enter as base rows; an empty relation leaves what needs it unknown
+            relations[name] = {"name": name, "role": "base", "key": [{"name": c, "type": t} for c, t in cols],
+                               "world": "closed"}
+            continue
         relations[name] = {"name": name, "role": "derived", "module": owners[name],
                            "key": [{"name": c, "type": t} for c, t in cols]}
         if name in invariants:
