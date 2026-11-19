@@ -47,6 +47,28 @@ class WorkflowEnvironmentTests(unittest.TestCase):
             self.assertNotIn("if", step)
             self.assertNotIn("continue-on-error", step)
 
+    def test_every_node_runtime_reads_the_one_exact_version(self):
+        self.assertRegex((ROOT / ".node-version").read_text(encoding="utf-8"), r"^\d+\.\d+\.\d+\n$")
+        github = ROOT / ".github"
+        found = []
+        for path in sorted([*github.glob("workflows/*.yml"), *github.glob("**/action.yml")]):
+            document = yaml.safe_load(path.read_text(encoding="utf-8"))
+            jobs = {"action": document["runs"]} if path.name == "action.yml" else document.get("jobs", {})
+            for name, job in jobs.items():
+                steps = job.get("steps", [])
+                for i, step in enumerate(steps):
+                    if not step.get("uses", "").startswith("actions/setup-node@"):
+                        continue
+                    where = f"{path.relative_to(ROOT).as_posix()} {name}"
+                    found.append(where)
+                    self.assertNotIn("node-version", step.get("with", {}), where)
+                    self.assertRegex(step["with"].get("node-version-file", ""), r"(^|/)\.node-version$", where)
+                    if path.name != "action.yml":
+                        self.assertTrue(any(s.get("uses", "").startswith("actions/checkout@") for s in steps[:i]),
+                                        f"{where} reads .node-version before a checkout")
+        self.assertIn(".github/workflows/release.yml publish", found)
+        self.assertIn(".github/actions/release-rehearsal/action.yml action", found)
+
     def test_the_base_decides_what_runs_and_counts_what_ran(self):
         # A candidate's scripts/components.py, environment action or pytest
         # options must not drop tests from both its inventory and its run.
@@ -78,6 +100,18 @@ class WorkflowEnvironmentTests(unittest.TestCase):
         self.assertEqual(checkout["with"]["sparse-checkout"], "scripts")
         self.assertIn("python3 scripts/components.py verify-execution", steps[verify]["run"])
 
+    def test_a_hanging_claim_cleanup_cannot_hold_its_queue_for_hours(self):
+        # One concurrency group: without a limit a hung job blocks every later run for up to six hours.
+        workflow = yaml.safe_load((ROOT / ".github/workflows/cleanup.yml").read_text(encoding="utf-8"))
+        self.assertIsInstance(workflow["concurrency"], str)
+        schedule, = workflow[True]["schedule"]  # PyYAML reads the key `on` as True
+        minutes = sorted(int(minute) for minute in schedule["cron"].split()[0].split(","))
+        interval = min(b - a for a, b in zip(minutes, [*minutes[1:], minutes[0] + 60]))
+        self.assertEqual(set(workflow["jobs"]), {"release", "standstill"})
+        for name, job in workflow["jobs"].items():
+            self.assertIn("timeout-minutes", job, name)
+            self.assertLessEqual(job["timeout-minutes"], interval, name)
+
 
 class SelectorTests(unittest.TestCase):
     def test_shared_and_transitive_inputs(self):
@@ -86,9 +120,9 @@ class SelectorTests(unittest.TestCase):
             return {c.folder for c in ci.affected_components(components, list(files))}
         self.assertEqual(selected("run/tests/test_quote.py"), {"run"})
         self.assertEqual(selected("run/dispatch_policy.py"), {"run"})
-        self.assertEqual(selected("loop/replay.py"), {"loop", "run"})
-        self.assertEqual(selected("loop/tests/test_case.py", "run/tests/test_quote.py"), {"loop", "run"})
-        self.assertEqual(selected("k8s-admission/parameter_reader.py"), {"k8s-admission", "loop", "run"})
+        self.assertEqual(selected("loop/replay.py"), {"loop", "run", "examples"})
+        self.assertEqual(selected("loop/tests/test_case.py", "run/tests/test_quote.py"), {"loop", "run", "examples"})
+        self.assertEqual(selected("k8s-admission/parameter_reader.py"), {"k8s-admission", "loop", "run", "examples"})
         for path in ("scripts/components.py", "packs/common/pack.yaml", "contracts/core.yaml",
                      "contracts/python/tests/test_ports.py", "loop/pyproject.toml", "unknown/resource",
                      "loop/rezono_cluster.py", "loop/tests/conftest.py", "loop/tests/wire_fixtures.py",
@@ -144,9 +178,52 @@ class RepositoryPullRequestSelectionTests(unittest.TestCase):
         declared = ci.declared_dependents(ROOT, head, folders, {})
         self.assertIn("compiler", selected)
         self.assertLessEqual(declared["compiler"], selected)  # edge/publisher declares rezono-compiler
-        self.assertLessEqual(set(ci.PR_FILE_CONSUMERS["compiler"]) & folders, selected)
+        self.assertLessEqual(set(ci.PR_FILE_CONSUMERS["compiler"]) & folders - ci.PR_DEFERRED_DEPENDENTS, selected)
         self.assertNotIn("tools/mcp", selected)
+        # rezono/test/test_message_catalogue.py reads the compiler's sources, also a new one.
+        self.assertIn("rezono", self.selected("compiler/rezono_compiler/a_new_module.py")[0])
         self.assertLess(selected, folders)
+
+    def test_loop_and_run_are_deferred_dependents_of_a_pull_request_only(self):
+        self.assertEqual(ci.PR_DEFERRED_DEPENDENTS, {"loop", "run"})
+        path = "compiler/rezono_compiler/__init__.py"
+        selected, components, _ = self.selected(path)
+        self.assertTrue(selected.isdisjoint({"loop", "run"}), selected)
+        self.assertLessEqual({"loop", "run"}, {c.folder for c in ci.affected_components(components, [path])})
+        # The empty set restores them as pull request dependents.
+        with patch.object(ci, "PR_DEFERRED_DEPENDENTS", frozenset()):
+            restored, _, _ = self.selected(path)
+        self.assertEqual(restored, selected | {"loop", "run"})
+        # A change to the loop itself still runs it, and run/tests/test_offline_run.py executes loop/replay.py.
+        self.assertLessEqual({"loop", "run"}, self.selected("loop/replay.py")[0])
+        # A module whose bare stem is a common word in loop and run, but which they do not import or name.
+        self.assertTrue(self.selected("compiler/rezono_compiler/emit.py")[0].isdisjoint({"loop", "run"}))
+
+    def test_a_test_file_leaf_keeps_the_readers_of_its_directory(self):
+        # compiler/tests/test_domain_free.py scans tests/slip.
+        self.assertIn("compiler", self.selected("tests/slip/test_stops_only.py")[0])
+        # Under examples/ a leaf test file skips the pack readers of examples/.
+        selected = self.selected("examples/a_new_directory/test_a_new_leaf.py")[0]
+        self.assertTrue(selected.isdisjoint(set(ci.PACK_READERS) - {"examples"}), selected)
+
+    def test_the_queue_runs_at_least_the_pull_request_closure(self):
+        components = ci.discover_components(ROOT, keep_invalid_node=True)
+        folders = {c.folder for c in components}
+        # Every directory route inside a component, and the files this selection routes.
+        routes = [pattern + "probe.yaml" for pattern in ci.SHARED_READERS
+                  if pattern.endswith("/") and ci.component_owner(pattern + "probe.yaml", folders)]
+        self.assertIn("run/packs/probe.yaml", routes)
+        for path in ("loop/replay.py", "loop/tests/test_case.py", "run/dispatch_policy.py",
+                     "k8s-admission/parameter_reader.py", "deploy/profiles/edge/forms_issue.py",
+                     "run/packs/cleanup-deadline/pack.yaml", "run/packs/dispatch/rules/authorization.dl",
+                     "tests/slip/test_stops_only.py", "compiler/rezono_compiler/emit.py", *routes):
+            selected, components, _ = self.selected(path)
+            self.assertLessEqual(selected, {c.folder for c in ci.affected_components(components, [path])}, path)
+        # A change in examples itself still runs everything in the queue, also together with a loop change.
+        for changed in (["examples/subsidy/pack.yaml"], ["examples/test_rules.py"],
+                        ["loop/replay.py", "examples/test_rules.py"]):
+            _, components, _ = self.selected(*changed)
+            self.assertEqual(ci.affected_components(components, changed), components, changed)
 
     def test_unknown_path_selects_every_component(self):
         selected, components, _ = self.selected("an-unknown-directory/resource.yaml")
@@ -345,7 +422,7 @@ class PullRequestSelectorTests(unittest.TestCase):
             self.write(root, {"run/packs/dispatch/rules/authorization.dl": ".decl grant(item: symbol)\n"})
             self.commit(root)
             self.assertEqual(self.matrix(root, "pull_request", base), {"compiler", "run"})
-            self.assertEqual(self.matrix(root, "merge_group", base), {"run"})
+            self.assertEqual(self.matrix(root, "merge_group", base), {"compiler", "run"})
 
     def test_malformed_manifest_keeps_the_full_matrix(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -380,15 +457,32 @@ class PullRequestSelectorTests(unittest.TestCase):
         reader = {"run/tests/test_replay.py": "from loop.tests.test_build_choice import CHOICE\n"}
         selected, summary = self.changed_matrix({"loop/tests/test_build_choice.py": "def test_choice(): pass\n"},
                                                 tree=reader)
+        # run is a deferred dependent, but it names the changed test file, so it reads it and runs.
         self.assertEqual(selected, {"loop", "run", "examples"})
-        self.assertIn("- `run`: `loop/tests/test_build_choice.py` through `loop`", summary)
-        # The loop's own source runs its consumers as before.
+        self.assertIn("- `examples`: `loop/tests/test_build_choice.py` through `loop`", summary)
+        self.assertIn("- `run`: `loop/tests/test_build_choice.py`, which it names", summary)
+        # The loop's own source runs its consumers that are not deferred,
         selected, _ = self.changed_matrix({"loop/build_choice.py": "CHOICE = 2\n"})
+        self.assertEqual(selected, {"loop", "examples"})
+        # and a deferred one that executes the changed module by name.
+        executes = {"run/tests/test_offline.py": 'MODULE = ROOT / "loop" / "build_choice.py"\n'}
+        selected, summary = self.changed_matrix({"loop/build_choice.py": "CHOICE = 2\n"}, tree=executes)
         self.assertEqual(selected, {"loop", "run", "examples"})
+        self.assertIn("- `run`: `loop/build_choice.py`, which it names", summary)
 
     def test_conftest_runs_the_component_closure(self):
         selected, _ = self.changed_matrix({"compiler/tests/conftest.py": "FIXTURE = 2\n"})
-        self.assertEqual(selected, {"compiler", "downstream", "loop", "run", "examples"})
+        self.assertEqual(selected, {"compiler", "downstream", "examples"})
+
+    def test_deferred_dependents_run_in_the_merge_queue(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root, base = self.repository(directory, LOOP_TREE, selector=False)
+            self.write(root, {"compiler/source.py": "VALUE = 1\n"})
+            self.commit(root)
+            self.assertEqual(self.matrix(root, "pull_request", base), {"compiler", "downstream", "examples"})
+            self.assertEqual(self.matrix(root, "merge_group", base), LOOP_EVERYTHING)
+        self.assertIn("examples", self.changed_matrix({"examples/demo/pack.yaml": "name: demo\n"})[0])
+        self.assertEqual(self.changed_matrix({"an-unknown-directory/x.yaml": "x: 1\n"})[0], LOOP_EVERYTHING)
 
     def test_build_rules_run_the_loop_and_the_compiler(self):
         selected, summary = self.changed_matrix({"build/rules/tasks.dl": ".decl task(id: symbol, at: number)\n"})
@@ -536,6 +630,10 @@ class SharedReaderTests(unittest.TestCase):
         for graph in (ci.FILE_CONSUMERS, ci.PR_FILE_CONSUMERS):
             for dependency, consumers in graph.items():
                 edges.setdefault(dependency, set()).update(consumers)
+        # A directory inside another component, such as a source tree a test globs,
+        # is read whether or not the literal is rooted in the test's own syntax.
+        directories = {parent.as_posix() for path in paths for parent in Path(path).parents}
+        directories = {directory for directory in directories if "/" in directory}
         missing = set()
         observed = set()
         for relative in sorted(paths):
@@ -552,8 +650,18 @@ class SharedReaderTests(unittest.TestCase):
                 if not re.fullmatch(r"[a-zA-Z0-9_./*?\[\]-]+", hint):
                     continue
                 path = re.sub(r"^(?:\.\./|\./)+", "", hint).rstrip("/")
-                if rooted and path in paths and ci.shared_readers(path) is None:
-                    provider = ci.component_owner(path, folders)
+                inside = path + "/_entry" if path in directories else path
+                if (rooted and path in paths or path in directories) and owner != ci.component_owner(inside, folders):
+                    provider = ci.component_owner(inside, folders)
+                    readers = ci.shared_readers(inside)
+                    if readers is not None and not SHARED_PATH.match(hint):
+                        if owner in readers or owner in edges.get(provider, set()):
+                            observed.add((path, owner))
+                        else:
+                            missing.add((relative, path, owner))
+                        continue
+                if (rooted and path in paths or path in directories) and ci.shared_readers(inside) is None:
+                    provider = ci.component_owner(inside, folders)
                     if provider:
                         if owner != provider and owner not in edges.get(provider, set()):
                             missing.add((relative, path, owner))

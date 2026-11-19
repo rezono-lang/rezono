@@ -99,6 +99,14 @@ jobs:
       - name: Test the leak check on a throwaway repository
         working-directory: release-source
         run: python3 -I scripts/test_leak_check.py -v
+      - name: Check references to missing docs pages against their budget
+        working-directory: release-source
+        env:
+          BASE: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.event.before }}
+        run: python3 -I scripts/docs_links.py --base "$BASE"
+      - name: Test the docs reference check on a throwaway repository
+        working-directory: release-source
+        run: python3 -I scripts/test_docs_links.py -v
       - name: Check Dependabot manifest coverage
         working-directory: release-source
         shell: bash
@@ -425,6 +433,23 @@ jobs:
         run: |
           set -euo pipefail
           python -I "$RUNNER_TEMP/red-before/red_before.py" run "$RUNNER_TEMP/red-before/selection.txt"
+      # An evidence completion lifts one red mark beside only the evidence data its test reads.
+      # The step above showed the test red without that data; this one lays it over the base
+      # and requires the test to pass. Any other pull request passes this step unchanged.
+      - name: Run a completed test with the new evidence
+        if: steps.prepare.outputs.run == 'true'
+        shell: bash
+        env:
+          REZONO_HYPOTHESIS_PROFILE: ci
+          PYTHONHASHSEED: '0'
+        run: |
+          set -euo pipefail
+          policy="$RUNNER_TEMP/red-before"
+          if ! grep -q '^def green(' "$policy/red_before.py"; then
+            echo "The base red_before.py has no evidence completion yet, so nothing more runs."
+            exit 0
+          fi
+          python -I "$policy/red_before.py" green "$BASE" "$HEAD" "$policy/selection.txt"
 
   python:
     needs: [discover, queue_evidence]

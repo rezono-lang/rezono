@@ -23,8 +23,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import cast
 
-import yaml
-from . import rezono_alias, rezono_enum, rezono_extend, rezono_key, rezono_kind, rezono_metadata, rezono_slot, rezono_unit
+from . import rezono_alias, rezono_enum, rezono_extend, rezono_key, rezono_kind, rezono_metadata, rezono_slot, rezono_unit, strict_yaml
 from .native_literals import NATIVE_FORMAT, native_literal_errors
 from .schemaview import SchemaView
 from linkml_runtime.linkml_model import SchemaDefinition
@@ -556,7 +555,7 @@ def schema_classes(pack_dir: Path, rel: str) -> dict:
     """The classes of a compilable pack's module, with ranges from the compiler's name resolution."""
     from . import modules  # The schema loader also calls this module's lowering functions.
 
-    meta = yaml.safe_load((pack_dir / "pack.yaml").read_text(encoding="utf-8")) or {}
+    meta = strict_yaml.read(pack_dir / "pack.yaml") or {}
     loaded, _ = modules.load(pack_dir, meta, [])
     schema = next(m.sv.schema for m in loaded if m.pack_dir == pack_dir and m.rel == rel)
     classes = {}
@@ -575,7 +574,7 @@ def schema_classes(pack_dir: Path, rel: str) -> dict:
 
 def class_slot_order(pack_dir: Path, rel: str) -> dict[str, list[str]]:
     """Read a compiled module's class and slot order from its form for the writer."""
-    meta = yaml.safe_load((pack_dir / "pack.yaml").read_text(encoding="utf-8")) or {}
+    meta = strict_yaml.read(pack_dir / "pack.yaml") or {}
     d = next(d for d in declared(meta, pack_dir, []) if d.module == rel)
     form = effective_form(pack_dir, d, []) or {"module": {"decls": []}}
     return {decl["kind"]: ([] if decl.get("embedded") is True else ["id"])

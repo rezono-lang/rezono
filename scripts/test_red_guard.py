@@ -47,7 +47,8 @@ def workflow_cases():
     """The workflows that define required checks, and what they run to decide, need the label."""
     deciders = (".github/workflows/python-environment/action.yml", "loop/rezono_cluster.py",
                 "scripts/cluster_worker_tasks.py", "scripts/role_publication_ci.py",
-                "scripts/components.py")
+                "scripts/components.py", "scripts/fast_check.py", "loop/cluster/select_tests.py",
+                "scripts/red_list.py")
     for path in deciders:
         # Protected, yet still source: red_before.py runs added tests against the base copy.
         if not (protected(path) and source(path)):
@@ -70,7 +71,10 @@ def workflow_cases():
 def read_cases(function):
     """A change to the checker or read access needs the read label for its head commit."""
     head = "0123456789abcdef" * 2 + "01234567"
-    current, stale = "p1-read-0123456", "p1-read-fedcba9"
+    current, stale = "p1-read-" + head, "p1-read-" + "fedcba98" * 5
+    prefix = "p1-read-" + head[:7]
+    # Another commit that shares the first seven characters must not inherit the label.
+    twin = head[:7] + "f" * 33
     checker = [Change("checker/rezono_checker/proof.py", "M", None, None)]
     lifted = function.split(b"\n", 1)[1]
 
@@ -86,6 +90,12 @@ def read_cases(function):
     run("checker change labelled for an earlier commit", checker, ["planner", stale], True)
     run("checker change labelled for its head commit", checker, ["planner", current], False)
     run("checker change with a read label but a malformed head", checker, [current], True, at=head[:7])
+    run("checker change labelled with only the prefix of its head", checker, ["planner", prefix], True)
+    run("checker change at another commit with the same prefix", checker, ["planner", current], True,
+        at=twin)
+    canon = [Change("canon/rezono_canon/__init__.py", "M", None, None)]
+    run("canonical encoding change without a label", canon, ["planner"], True)
+    run("canonical encoding change labelled for its head commit", canon, ["planner", current], False)
     run("only marks lifted in tests under the read paths", [
         Change("checker/rezono_checker/tests/test_proof.py", "M", function, lifted),
         Change("packs/std-access/tests/test_access.py", "M", function, lifted),
@@ -96,10 +106,17 @@ def read_cases(function):
     ], ["planner"], False)
     for path in ("checker/rezono_checker/proof.py", "packs/std-access/rules/access.dl",
                  "edge/gate/src/ask.ts", "edge/publisher/rezono_publisher/access.py",
-                 "contracts/proof.yaml", "checker/rezono_checker/fixtures.py"):
+                 "contracts/proof.yaml", "checker/rezono_checker/fixtures.py",
+                 *(f"edge/publisher/rezono_publisher/{name}.py" for name in (
+                     "calc_scope", "sources", "sweep", "difference", "batch", "publish", "proof", "views"))):
         for status in ("M", "A", "D"):
             run(f"{status} {path} without a read label", [Change(path, status, None, None)],
                 ["planner"], True)
+    sweep = [Change("edge/publisher/rezono_publisher/sweep.py", "M", None, None)]
+    run("sweep change in the publisher with only the planner label", sweep, ["planner"], True)
+    run("sweep change in the publisher labelled for its head commit", sweep, ["planner", current], False)
+    run("other publisher change without a read label",
+        [Change("edge/publisher/rezono_publisher/store.py", "M", None, None)], [], False, planner=False)
     run("other contracts change without a read label",
         [Change("contracts/facts.yaml", "M", None, None)], [], False, planner=False)
     errors, _ = review(checker, planner=True)
@@ -134,9 +151,10 @@ def planner_cases(reason, function):
     run("lifted mark and changed expectation in one file", [
         edit("tests/test_count.py", function, lifted.replace(b"== 2", b"== 3")),
     ], True)
-    run("lifted mark beside a changed recorded outcome", [
+    run("lifted mark beside a changed recorded outcome and a test helper", [
         edit("tests/test_count.py", function, lifted),
         edit("examples/demo/expected/rows.json", b"[2]", b"[3]"),
+        edit("tests/support.py", b"value = 2\n", b"value = 3\n"),
     ], True)
     run("lifted mark alone", [edit("tests/test_count.py", function, lifted)], False)
     strictly = "needs strict=True"
@@ -176,6 +194,80 @@ def planner_cases(reason, function):
         raise AssertionError(f"a lifted mark is not a change: errors {errors}, notes {notes}")
     print("ALLOW without planner: lifted mark is not reported as a change")
     milestone_cases(edit, other)
+    completion_cases(edit, function, lifted, other, reason)
+
+
+def completion_cases(edit, function, lifted, other, reason):
+    """With the label, one lifted mark may come with new evidence data its test reads."""
+    outcome = Change("examples/demo/expected/rows.json", "A", None, b"[3]")
+    case = Change("examples/demo/snapshots/count.json", "A", None, b"{\"count\": 2}\n")
+    lift = edit("tests/test_count.py", function, lifted)
+    refusal = "Lift marks in a pull request of their own"
+    # The pack roots of the reviewed revision: the directories with a pack.yaml.
+    roots = frozenset({"examples/demo", "packs/demo"})
+
+    def run(label, changes, planner, expected, packs=roots, test="tests/test_count.py"):
+        errors, notes = review(changes, planner=planner, packs=packs)
+        refused = any(refusal in e for e in errors)
+        completed = f"COMPLETED {test}::test_count" in notes
+        if refused != expected or completed == expected or (not expected and errors):
+            raise AssertionError(f"{label}: errors {errors}, notes {notes}")
+        print(f"{'DENY' if expected else 'ALLOW'} {'with' if planner else 'without'} planner: {label}")
+
+    run("one lifted mark beside evidence data only", [lift, outcome, case], True, False)
+    run("one lifted mark beside evidence data, without the label", [lift, outcome], False, True)
+    run("one lifted mark beside evidence data and another protected path",
+        [lift, outcome, edit("tests/support.py", b"value = 2\n", b"value = 3\n")], True, True)
+    marked = b"@pytest.mark.xfail(strict=True, reason=\"M2: pending\")\n" + other
+    run("one lifted mark beside evidence data and a mark of another test",
+        [lift, outcome, edit("tests/test_total.py", marked, other)], True, True)
+    pair = function + b"\n" + marked
+    run("one lifted mark beside evidence data and an explained mark of another test",
+        [edit("tests/test_count.py", pair, lifted + b"\n" + marked.replace(b"pending", b"waiting")), outcome],
+        True, True)
+    run("one lifted mark beside evidence data and source",
+        [lift, outcome, edit("src/count.py", b"", b"x = 1\n")], True, True)
+    run("one lifted mark beside removed evidence data",
+        [lift, Change("examples/demo/expected/rows.json", "D", b"[2]", None)], True, True)
+    run("one lifted mark beside a changed policy workflow",
+        [lift, outcome, edit(".github/workflows/ci.yml", b"a", b"b")], True, True)
+    run("one lifted mark beside a changed conftest",
+        [lift, edit("tests/conftest.py", b"value = 2\n", b"value = 3\n")], True, True)
+    # A changed outcome could weaken what the test already expects; only added files count.
+    run("one lifted mark beside changed evidence data",
+        [lift, edit("examples/demo/expected/rows.json", b"[2]", b"[3]")], True, True)
+    # Data outside expected/, snapshots/ and vectors/ configures what runs or is accepted.
+    for path in ("blocked/tests.txt", "tests/fixtures/rows.json", "tests/conformance/count.yaml",
+                 "examples/demo/expected/rows.schema.json", "examples/demo/expected/pack.yaml",
+                 "rezono/test/expected/not-yet.json", "contracts/expected/proof.json",
+                 "examples/demo/expected/fixtures/rows.json", "examples/demo/expected/rows.py"):
+        run(f"one lifted mark beside {path}",
+            [lift, outcome, Change(path, "A", None, b"tests/test_count.py\n")], True, True)
+    # Without readable bytes, Git recorded no regular file: a symbolic link or an executable.
+    run("one lifted mark beside an added symbolic link",
+        [lift, Change("examples/demo/expected/rows.json", "A", None, None)], True, True)
+    # pytest collects no test in a class whose name does not start with Test.
+    hidden = b"class Helper:\n    @" + reason + b"\n    def test_count(self):\n        assert count() == 2\n"
+    bare = b"class Helper:\n    def test_count(self):\n        assert count() == 2\n"
+    run("one lifted mark on a test that pytest does not collect",
+        [edit("tests/test_count.py", hidden, bare), outcome], True, True)
+    # The evidence directory sits directly in a pack root, a tests/ or test/ directory, or a
+    # directory on the path of the test file.
+    run("one lifted mark beside evidence in a tests directory",
+        [lift, Change("tests/expected/rows.json", "A", None, b"[3]")], True, False, packs=frozenset())
+    run("one lifted mark beside evidence on the path of its test file",
+        [edit("suite/checks/test_count.py", function, lifted), Change("suite/expected/rows.json", "A", None, b"[3]")],
+        True, False, packs=frozenset(), test="suite/checks/test_count.py")
+    run("one lifted mark beside evidence in a directory without pack.yaml",
+        [lift, outcome], True, True, packs=frozenset())
+    # The compiler reads these directories of a pack as its definition, so the pack would change.
+    for path in ("examples/demo/schema/expected/smokkel.yaml", "examples/demo/schema/kinds/expected/a.yaml",
+                 "examples/demo/rezono/expected/rows.json", "examples/demo/rules/expected/rows.yaml",
+                 "examples/demo/facts/expected/rows.yaml", "examples/demo/labels/expected/rows.yaml",
+                 "examples/demo/messages/expected/rows.json", "examples/demo/calc/expected/rows.yaml",
+                 "packs/demo/expected/rows.json", "examples/other/expected/rows.json",
+                 "examples/demo/notes/expected/rows.json"):
+        run(f"one lifted mark beside {path}", [lift, Change(path, "A", None, b"kind: smuggled\n")], True, True)
 
 
 def milestone_cases(edit, other):

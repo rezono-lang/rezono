@@ -22,7 +22,7 @@ from typing import Mapping
 import yaml
 from rezono_canon import canonical_json
 
-from . import facts, source_format, sources, writer
+from . import facts, source_format, sources, strict_yaml, writer
 
 Ref = tuple[str, str]
 
@@ -167,10 +167,10 @@ CHANGE_KEYS = {"op", "file", "kind", "key", "slot", "value", "values", "restore"
 def step(lay: writer.Layout, name: str, text: str, change: dict, ledger: dict[Ref, dict], origin, where: str) -> tuple[str, dict]:
     """One change on a fact file whose every row has an explicit origin in `ledger`, which follows the change.
     `origin(rows)` gives the entries of exactly the rows the change writes. Returns the new text and the undo."""
-    data = yaml.load(text, writer.Loader) or {}
+    data = strict_yaml.load(text, name) or {}
     before_rows, before = _rows(lay.pack, data), _affected(lay, data, change)
     new_text, inverse = source_format.of(name).edit_fact(lay, text, change)
-    new_data = yaml.load(new_text, writer.Loader) or {}
+    new_data = strict_yaml.load(new_text, name) or {}
     after_rows, after = _rows(lay.pack, new_data), _affected(lay, new_data, change)
     if any(before_rows[r] > before[r] for r in before) or any(after_rows[r] > after[r] for r in after):
         raise writer.WriteError(f"{name}: ambiguous shared-row source contribution")
@@ -207,7 +207,7 @@ def plan(lay: writer.Layout, delta: dict, base: VerifiedBasePin, proposal: Propo
             ident, sql_type = lay.identifier(change["kind"])
             key = writer.scalar(sql_type, change["key"], ident)
             found = [n for n, data in current.items() if writer.FACT_FILE.fullmatch(n)
-                     and any(writer.same(r.get(ident), key) for r in (yaml.safe_load(data) or {}).get(change["kind"], []) or [])]
+                     and any(writer.same(r.get(ident), key) for r in (strict_yaml.load(data, n) or {}).get(change["kind"], []) or [])]
             if len(found) != 1:
                 raise writer.WriteError("name the one fact file for this change")
             change["file"] = found[0]
@@ -219,7 +219,7 @@ def plan(lay: writer.Layout, delta: dict, base: VerifiedBasePin, proposal: Propo
             ledger[name] = _origins(origins.base.get(name, ()), name)
             sources.canonical_sidecar_text(lay.pack, name, text, list(ledger[name].values()))
             if companion(name) in original:
-                prior = sources.text_entries(lay.pack, name, text, metadata=yaml.safe_load(original[companion(name)]))
+                prior = sources.text_entries(lay.pack, name, text, metadata=strict_yaml.load(original[companion(name)], companion(name)))
                 if sources.collected(ledger[name].values()) != prior:
                     raise writer.WriteError(f"{name}: explicit base origins would be replaced")
             for e in sources.text_entries(lay.pack, name, text):
@@ -361,7 +361,7 @@ class Companions:
             if sha256(raw).hexdigest() != entry["sources_sha256"] or _sha(text) != entry["facts_sha256"]:
                 raise writer.WriteError(f"{comp}: stale source undo; no files changed")
             return RESTORED
-        doc = yaml.safe_load(raw.decode("utf-8"))
+        doc = strict_yaml.load(raw.decode("utf-8"), comp)
         ledger = _origins(sources.text_entries(self.lay.pack, name, text, metadata=doc), comp)
         self.docs[name], self.exact[name] = doc, {(e["row"]["relation"], e["row"]["key"]) for e in doc.get("rows", [])}
         return ledger
@@ -386,7 +386,7 @@ class Companions:
         if not set(doc) - {"rows"}:
             return None
         try:
-            data = yaml.safe_load(text) or {}
+            data = strict_yaml.load(text, name) or {}
             rows = sources.collected(ledger[ref] for ref in self.exact[name] if ref in ledger)
             orphans = set()
             try:  # the selectors of records and cells the delta removed
@@ -396,7 +396,7 @@ class Companions:
             drop = {i for i, entry in enumerate(doc.get("records", []))
                     if sources.selector(self.lay.pack, entry, comp) in orphans}
             kept = kept_text(self.before[comp][0], drop, rows)
-            if kept is None or (sources.text_entries(self.lay.pack, name, text, data, metadata=yaml.safe_load(kept))
+            if kept is None or (sources.text_entries(self.lay.pack, name, text, data, metadata=strict_yaml.load(kept, comp))
                                 != sources.collected(ledger.values())):
                 return None
             return kept
@@ -432,7 +432,7 @@ class Companions:
                     text = self.restore[comp]["text"]
                     if _sha(texts[name]) != self.restore[comp]["restored_facts_sha256"]:
                         raise writer.WriteError(f"{comp}: the undo's changes do not give back the facts its companion describes")
-                    sources.text_entries(self.lay.pack, name, texts[name], metadata=yaml.safe_load(text))
+                    sources.text_entries(self.lay.pack, name, texts[name], metadata=strict_yaml.load(text, comp))
                 else:
                     text = self._kept(name, texts[name], ledger)
                     if text is None:

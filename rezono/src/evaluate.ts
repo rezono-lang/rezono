@@ -708,6 +708,7 @@ export function suppose(data: Data, line: Checked, schema: Schema): Data {
 		kinds.get(tree.retract_row[0])?.delete(tree.retract_row[1]);
 		return out;
 	}
+	if ('insert_row' in tree) throw new TypeError('a whole-record insertion is not applied yet');
 	const read = reader(line, schema, data);
 	const at = read.target('set' in tree ? tree.set[0] : tree.retract);
 	// A path through a value that is not there names no row: nothing to change.

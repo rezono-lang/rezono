@@ -7,9 +7,14 @@ literal text that starts with a milestone, and a changed reason keeps a mileston
 the label, a changed reason may move its mark to an earlier milestone but not to a later one.
 Removed and changed evidence is reported either way.
 
+One exception lets a planner complete evidence: with the label, a pull request may lift one
+red mark beside new evidence data that test reads (added files under expected/, snapshots/
+or vectors/), if it changes nothing else. red_before.py
+then shows that the test is red on the base and green with the new evidence.
+
 A pull request that changes the checker or read access in a file that is not a test is
-read before it lands: it needs the label `p1-read-` plus the first seven characters of its
-head commit, whatever other labels it carries. A new push therefore needs a new label.
+read before it lands: it needs the label `p1-read-` plus the full id of its head commit
+(40 hex characters), whatever other labels it carries. A new push therefore needs a new label.
 In the merge queue no labels are read and this rule does not apply.
 """
 import argparse
@@ -33,6 +38,10 @@ import tokenize
 SOURCE_POLICY = {
     ".github/workflows/python-environment/action.yml", "loop/rezono_cluster.py",
     "scripts/cluster_worker_tasks.py", "scripts/role_publication_ci.py", "scripts/components.py",
+    # The cluster task split imports fast_check.py, and the cluster workflow runs it for a
+    # task; for a suite, select_tests.py chooses the cluster tests and nothing counts them.
+    # ci.yml runs red_list.py to decide whether the milestones and skips hold.
+    "scripts/fast_check.py", "loop/cluster/select_tests.py", "scripts/red_list.py",
 }
 POLICY = SOURCE_POLICY | {
     ".github/workflows/red-policy.yml",
@@ -48,6 +57,19 @@ EVIDENCE_DIRS = {
 # Expectations recorded by hand outside an evidence directory, such as the slip an example
 # must render.
 EXPECTATIONS = {"slip.yaml"}
+# Evidence data that completes a red test: a new recorded outcome, snapshot or vector, not
+# code and not configuration. Only these directories hold it; a fixture, a conformance case,
+# a schema, a pack, a contract or a list of what is blocked or not yet supported does not.
+EVIDENCE_DATA = {".json", ".jsonl", ".yaml", ".yml", ".csv", ".txt", ".ttl", ".xml", ".snap", ".golden"}
+COMPLETION_DIRS = {"expected", "snapshots", "vectors"}
+NOT_EVIDENCE_DIRS = {"fixture", "fixtures", "contracts", ".github"}
+NOT_EVIDENCE_TOP = {"blocked", "contracts", ".github"}
+NOT_EVIDENCE_NAMES = {"not-yet.json", "pack.yaml"}
+# The compiler reads these directories of a pack as its definition (DEFINITION in
+# compiler/rezono_compiler/modules.py), at any depth for schema/ and rezono/. An evidence
+# directory inside one of them would change the pack, not record what it should produce.
+DEFINITION_DIRS = {"schema", "rezono", "facts", "labels", "messages", "rules", "calc", "icons"}
+EVIDENCE_HOME_DIRS = {"test", "tests"}
 
 
 def protected(path):
@@ -62,11 +84,24 @@ def protected(path):
 
 
 # Changes here decide whether a proof is accepted or what a role may see. Nothing downstream
-# catches a mistake in them, so a reviewer reads them before they land.
-READ_FIRST_DIRS = ("checker/rezono_checker/", "packs/std-access/", "edge/gate/src/")
-READ_FIRST_FILES = {"edge/publisher/rezono_publisher/access.py", "contracts/proof.yaml"}
+# catches a mistake in them, so a reviewer reads them before they land. The checker hashes
+# and encodes through rezono_canon, so that package decides as much as the checker itself.
+READ_FIRST_DIRS = ("checker/rezono_checker/", "packs/std-access/", "edge/gate/src/",
+                   "canon/rezono_canon/")
+# In the publisher, these decide what a role reads or what the checker is handed to check
+# it by; decisions/checker-and-access-review.md says what each decides.
+PUBLISHER = "edge/publisher/rezono_publisher/"
+READ_FIRST_FILES = {"contracts/proof.yaml", *(PUBLISHER + name for name in (
+    "access.py", "calc_scope.py", "sources.py", "sweep.py", "difference.py", "batch.py",
+    "publish.py", "proof.py", "views.py"))}
 TEST_DIRS = {"test", "tests", "__tests__"}
 READ_LABEL = "p1-read-"
+
+
+def collectable(name):
+    """A qualified name that pytest collects by default: test functions in Test classes."""
+    *classes, function = name.split("::")
+    return function.startswith("test") and all(c.startswith("Test") for c in classes)
 
 
 def is_test(path):
@@ -88,7 +123,8 @@ def read_label(head):
     if not (isinstance(head, str) and len(head) == 40
             and all(ch in "0123456789abcdef" for ch in head)):
         return None
-    return READ_LABEL + head[:7]
+    # The full id: a prefix is cheap to match with another commit, which would inherit the label.
+    return READ_LABEL + head
 
 
 def is_red(node):
@@ -348,12 +384,98 @@ def postponed(old, new):
     return sorted(moved)
 
 
-def review(changes, planner=False, head=None, labels=()):
+def lifted_tests(before, after):
+    """The test functions that a lift of red marks alone turns from red to green."""
+    try:
+        old, new = inventory(before), inventory(after)
+    except UNREADABLE:
+        return ()
+    marks = lambda inv: Counter((owner, ast.dump(mark)) for owner, mark in inv.marks)
+    gone, added = marks(old) - marks(new), marks(new) - marks(old)
+    if sum(gone.values()) != 1 or added:
+        return ()  # Exactly one mark goes, and every other mark stays as it was.
+    return tuple(sorted(name for name, (_, red) in new.tests.items()
+                        if not red and old.tests.get(name, (None, False))[1]))
+
+
+def evidence_home(path, test_path, packs):
+    """Whether the evidence directory in `path` sits where evidence lives, not a definition.
+
+    The first expected/, snapshots/ or vectors/ directory must sit directly in a pack root
+    (a directory with pack.yaml, given in `packs`), in a tests/ or test/ directory, or in a
+    directory on the path of the test file. Nothing under packs/ counts, nor anything below
+    a directory that the compiler reads as a pack definition.
+    """
+    parts = PurePosixPath(path).parts
+    lower = [part.lower() for part in parts]
+    at = next((i for i, part in enumerate(lower[:-1]) if part in COMPLETION_DIRS), None)
+    if not at or lower[0] == "packs" or DEFINITION_DIRS.intersection(lower[:at]):
+        return False
+    parent = "/".join(parts[:at])
+    test_dirs = PurePosixPath(test_path).parts[:-1]
+    on_test_path = {"/".join(test_dirs[:k]) for k in range(1, len(test_dirs) + 1)}
+    return parent in packs or lower[at - 1] in EVIDENCE_HOME_DIRS or parent in on_test_path
+
+
+def new_evidence(change, test_path, packs):
+    """An added regular file of evidence data under expected/, snapshots/ or vectors/.
+
+    Only an added file: a changed one could weaken an expectation the test already holds.
+    `after` is None unless Git records a regular, non-executable file (mode 100644) of
+    readable size, so a symbolic link or an executable never counts.
+    """
+    p = PurePosixPath(change.path.lower())
+    return (change.status == "A" and change.after is not None
+            and protected(change.path) and change.path not in POLICY
+            and p.suffix in EVIDENCE_DATA and not p.name.endswith(".schema.json")
+            and p.name not in NOT_EVIDENCE_NAMES and p.parts[0] not in NOT_EVIDENCE_TOP
+            and not NOT_EVIDENCE_DIRS.intersection(p.parts[:-1])
+            and evidence_home(change.path, test_path, packs))
+
+
+def lift_only(c):
+    """The collectable tests that a change of a test file by one lifted mark turns green."""
+    if not (c.status == "M" and c.path.endswith(".py") and protected(c.path) and c.path not in POLICY
+            and c.before is not None and c.after is not None and allowed(c.path, c.before, c.after)):
+        return ()
+    return tuple(n for n in lifted_tests(c.before, c.after) if collectable(n))
+
+
+def completion(changes, packs=frozenset()):
+    """The (test file, test names) that a pull request completes with evidence data, or None.
+
+    It lifts exactly one red mark, in one test file whose change is only that lift, and that
+    turns at least one test that pytest collects green. Every other path is new evidence data
+    (`new_evidence`). Anything else, such as source, another test file, another mark, a
+    changed or removed file, means it is not an evidence completion. `packs` holds the pack
+    roots at the head: the directories with a pack.yaml.
+    """
+    changes = list(changes)
+    lifts = [(c, names) for c in changes if (names := lift_only(c))]
+    if len(lifts) != 1:
+        return None
+    test, names = lifts[0]
+    rest = [c for c in changes if c is not test]
+    if not rest or not all(new_evidence(c, test.path, packs) for c in rest):
+        return None
+    return test.path, names
+
+
+def pack_roots(rev):
+    """The directories that hold a pack.yaml at `rev`, read from Git objects only."""
+    names = git("ls-tree", "-r", "-z", "--name-only", "--full-tree", rev).split(b"\0")
+    return frozenset(str(PurePosixPath(n.decode("utf-8", "surrogateescape")).parent)
+                     for n in names if n.endswith(b"/pack.yaml"))
+
+
+def review(changes, planner=False, head=None, labels=(), packs=frozenset()):
     """Return (errors, notes) for a sequence of Change records.
 
     `head` and `labels` describe a pull request. Without `head`, as in the merge queue,
     labels are not read and changes to the checker or read access are not refused.
+    `packs` holds the pack roots of the reviewed revision, for an evidence completion.
     """
+    changes = list(changes)
     errors, notes, lifted, other, unread = [], [], [], [], []
     for c in changes:
         if read_first(c.path):
@@ -415,9 +537,15 @@ def review(changes, planner=False, head=None, labels=()):
         # weakening an expectation on its own is the change a reviewer most needs to see.
         notes.extend(f"CHANGED {c.path}::{name}" for name, (shape, red) in new.tests.items()
                      if name in old.tests and not red and old.tests[name][0] != shape)
-    if lifted and other:
+    completed = completion(changes, packs) if planner and lifted and other else None
+    if completed:
+        path, names = completed
+        notes.extend(f"COMPLETED {path}::{name}" for name in names)
+    elif lifted and other:
         errors.append(f"ERROR red marks are lifted in {', '.join(lifted)} while protected paths "
-                      f"also change: {', '.join(other)}. Lift marks in a pull request of their own.")
+                      f"also change: {', '.join(other)}. Lift marks in a pull request of their own, or, with the "
+                      "planner label, lift one mark beside only new evidence data in expected/, snapshots/ or vectors/ "
+                      "of a pack root or test directory.")
     if head is not None and unread:
         label = read_label(head)
         if label is None:
@@ -453,7 +581,7 @@ def check(base, head, planner=False, labels=None):
     pr_head = None
     if labels is not None:
         pr_head = git("rev-parse", "--verify", "--end-of-options", head + "^{commit}").decode().strip()
-    return review(list(changes(base, head)), planner, pr_head, labels or ())
+    return review(list(changes(base, head)), planner, pr_head, labels or (), pack_roots(head))
 
 
 def label_list(text):

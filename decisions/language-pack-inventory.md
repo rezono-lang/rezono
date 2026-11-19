@@ -10,8 +10,8 @@ A module starts with the existing rezono and pack headers. Each language decisio
 | subsidy | Fact tables, calculations, time qualifiers | Typed and sparse facts with provenance, evaluation date, relations and diagnostics. Credential fixtures, views and scenarios continue to use their existing contracts |
 | std-access, std-decision, std-identity, std-order, std-part, std-time | Kinds, slots, enums | Publish shared definitions once per pack. Preserve schema and member descriptions, mappings, annotations, relational rules and outputs |
 | std-view, std-explain | No schema or rule migration | Their messages and presentation assets retain their existing formats |
-| zorgtoeslag | Module and facts already use Rezono | Compile the existing modules and verify case results after the preceding packs |
 | platform | Depends on completed example | Inventory and compare the finished example after the platform work lands |
+| zorgtoeslag | Module and facts already use Rezono; `examples/zorgtoeslag` stays a design | The [first slice](language-healthcare-allowance-slice.md), `examples/zorgtoeslag-slice`, publishes after inline parameter versions, exceptions and dated facts lower, in that order, and its cases are compared with its oracle `reference.py`. The full example follows when every construct is there |
 
 For each construct, compare the reader to the explicit tree and the lowering to the public example's existing schema, fact, rule or calculation file. For each pack, publish the same dataset and imports through both paths. Compare the facts, conclusions, proof meaning and presentation data under the semantic publication decision. Validate the source references within each publication against its own inputs. Keep both source forms until these checks pass. A lowerer change under compiler/rezono_compiler belongs to the compiler track. A contract version belongs to the contracts track. Coordinate those dependencies before assigning an implementation task.
 

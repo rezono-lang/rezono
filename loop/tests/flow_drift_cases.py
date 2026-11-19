@@ -1,5 +1,6 @@
 """Finite policy and Hubble input rows, with independently stated output witnesses."""
 
+from rezono_canon import canonical_json
 from wire_fixtures import fixture
 
 
@@ -17,6 +18,9 @@ SWEEP_COLUMNS = {
     "sweep_window": WINDOW_COLUMNS,
     "expected_node": columns(SCOPE_NAMES + " node"),
     "node_report": columns(SCOPE_NAMES + " node first last gaps lost", {"first", "last", "gaps", "lost"}),
+    # The protected admission inputs, with their reserved signatures (decisions/admission-transport.md section 6).
+    "verified_receipt": columns("receipt source scope cut inventory content"),
+    "verified_member": columns("receipt member part value", {"part"}),
 }
 FLOW_COLUMNS = {
     "sweep_window": WINDOW_COLUMNS,
@@ -39,18 +43,41 @@ REPORT_CASES = {
 
 OTHER_SCOPES = [("prior", "hubble", "sample"), ("run-a", "hubble", "prior"),
                 ("run-a", "other", "sample")]
+NODES = ("node-a", "node-b")
 
 
-def coverage_rows(case):
+class MissingVerifiedSweepInventory(AssertionError):
+    """complete_sweep follows from the recorded inventory without an admitted sweep receipt."""
+
+
+def verified_sweep(nodes=NODES, scope=SCOPE, receipt="receipt/sweep", tag="sweep-node"):
+    """The rows that admission gives for one verified sweep receipt (decisions/admission-transport.md section 6).
+
+    Each trusted member key is [tag, run, collector, window, node]; admission exposes one row per part."""
+    members = []
+    for node in nodes:
+        key = [tag, *scope, node]
+        member = canonical_json(key)
+        members.extend((receipt, member, part, value) for part, value in enumerate(key))
+    return {
+        "verified_receipt": [(receipt, "inventory-observer", "scope/" + receipt, "cut/" + receipt,
+                              "inventory/" + receipt, "content/" + receipt)],
+        "verified_member": members,
+    }
+
+
+def coverage_rows(case, verified=True):
     reports = [(*SCOPE, "node-a", 10, 20, 0, 0)]
     if case in REPORT_CASES and REPORT_CASES[case] is not None:
         reports.append((*SCOPE, *REPORT_CASES[case]))
     reports.extend((*other, "node-b", 10, 20, 0, 0) for other in OTHER_SCOPES)
-    return {
+    rows = {
         "sweep_window": [(*SCOPE, 10, 20, SWEEP_REF)],
         "expected_node": [] if case == "empty-inventory" else [(*SCOPE, "node-a"), (*SCOPE, "node-b")],
         "node_report": reports,
     }
+    # The pinned inventory lists both nodes in every case; the empty-inventory case only empties the records.
+    return {**rows, **verified_sweep()} if verified else rows
 
 
 def tuples():

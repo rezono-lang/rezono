@@ -19,8 +19,7 @@ class MissingFactTableDash(AssertionError):
     raises=MissingFactTableDash,
     reason="M3: decisions/language-facts.md: In rezono/src/module-facts.ts, read a dash in a slot column of a fact "
            "table that stands on its own as {boundary: omitted}, as in a table of a dataset, and keep refusing it "
-           "in the identity column. Read section A dash in any fact table. Waits for test_structured_fact while it "
-           "owns module-facts.ts.",
+           "in the identity column. Read section A dash in any fact table.",
 )
 def test_dash_omits_a_slot_in_a_fact_table():
     identity = TABLE.replace("| host-a | -     |", "| -      | -     |")

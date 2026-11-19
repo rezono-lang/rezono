@@ -23,22 +23,6 @@ def _records(*readbacks):
     }
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=(AssertionError, ImportError, TypeError),
-    reason=(
-        "M2: Read decisions/admission-transport.md sections 6 and 8 and decisions/loop-certificate-admission.md "
-        "section 2. Declare verified_round and verified_round_member in std-loop with the reserved signatures "
-        "and no clause. Derive safe_alone(run, step, cut) from a verified round of the current run and cut "
-        "whose batch has exactly that one member, and loop_certified_batch and loop_selected_batch from a "
-        "verified round of the current run and cut, with the round's batch as the batch column. Keep the "
-        "supplied-verdict derivations for now; test_supplied_verdicts_authorize_nothing removes them. Write in "
-        "packs/std-loop (step_safety.dl, batch_selection.dl and their schema) and refresh the std-loop sha256 "
-        "pin in build/pack.yaml. The fixture is ready: round_claim writes the ordered plan hashes (effects) of "
-        "every subset, so admission verifies the claim for withdraw-a and refuses the one for withdraw-b "
-        "(round_preceded). Today std-loop declares no verified_round, so safe_alone stays empty (AssertionError)."
-    ),
-)
 def test_verified_round_authorizes_steps(tmp_path):
     retained, submitted, context, index = singleton_rounds()
     _, rows, _ = checked_loop_publication(

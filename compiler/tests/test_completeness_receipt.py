@@ -86,12 +86,14 @@ def test_completeness_receipt_exact_inventory(tmp_path):
     scope = {"definition": definition, "query": "partitions", "bindings": [
         {"name": "register", "type": "Text", "value": "example-register"},
     ]}
+    # The scope digest names its definition by the hash of the bytes it pins, not by where a copy is stored.
+    scope_digest = canonical_sha256({**scope, "definition": definition["sha256"]})
     cut = {"frontier": {"source_id": "example-register", "position": "snapshot-17"}}
     initial = {"source": SOURCE, "issuer": {"id": "reader", "authorization": authorization},
                "scope": scope, "cut": cut, "inventory": trusted_inventory, "content": trusted_content}
     first = initial | {"id": canonical_sha256(["rezono.completeness-receipt/1", initial])}
     assert asserted_complete(
-        bucket, first, SOURCE["name"], canonical_sha256(scope), canonical_sha256(cut),
+        bucket, first, SOURCE["name"], scope_digest, canonical_sha256(cut),
         trusted_inventory["sha256"], trusted_content["sha256"], trusted_relation=True,
     )["valid"]
 
@@ -110,10 +112,10 @@ def test_completeness_receipt_exact_inventory(tmp_path):
     # The trusted context is the protected caller's: the exact read is admitted against it, and each mutation
     # below is refused for its own reason, not for a missing authority.
     authority = [initial]
-    admitted = asserted_complete(bucket, first, SOURCE["name"], canonical_sha256(scope), canonical_sha256(cut),
+    admitted = asserted_complete(bucket, first, SOURCE["name"], scope_digest, canonical_sha256(cut),
                                  trusted_inventory["sha256"], trusted_content["sha256"], authority=authority)
     assert admitted == {**admitted, "valid": True, "findings": []}, admitted["findings"]
-    unauthorized = asserted_complete(bucket, first, SOURCE["name"], canonical_sha256(scope), canonical_sha256(cut),
+    unauthorized = asserted_complete(bucket, first, SOURCE["name"], scope_digest, canonical_sha256(cut),
                                      trusted_inventory["sha256"], trusted_content["sha256"])
     assert not unauthorized["valid"]
 
@@ -129,7 +131,7 @@ def test_completeness_receipt_exact_inventory(tmp_path):
     ):
         body = initial | change
         receipt = body | {"id": canonical_sha256(["rezono.completeness-receipt/1", body])}
-        checked = asserted_complete(bucket, receipt, SOURCE["name"], canonical_sha256(scope),
+        checked = asserted_complete(bucket, receipt, SOURCE["name"], scope_digest,
                                     canonical_sha256(body["cut"]), body["inventory"]["sha256"],
                                     body["content"]["sha256"], authority=authority)
         if checked["valid"]:

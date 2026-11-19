@@ -6,8 +6,7 @@ import re
 from functools import lru_cache
 from pathlib import Path
 
-import yaml
-
+from .. import strict_yaml
 from ..pack import contract_dir
 
 
@@ -32,12 +31,12 @@ class OperationError(Exception):
 
 @lru_cache(maxsize=1)
 def _operation_set_fields() -> frozenset[str]:
-    contract = yaml.safe_load((contract_dir() / "operation.yaml").read_text(encoding="utf-8"))
+    contract = strict_yaml.read(contract_dir() / "operation.yaml")
     return frozenset(contract["classes"]["OperationSet"]["attributes"])
 
 
 def load(path: str | Path) -> dict:
-    doc = yaml.safe_load(Path(path).read_text(encoding="utf-8"))
+    doc = strict_yaml.read(path)
     if not isinstance(doc, dict) or doc.get("format") != FORMAT:
         raise OperationError(f"{path}: not an operation set ({FORMAT})")
     fields = _operation_set_fields()

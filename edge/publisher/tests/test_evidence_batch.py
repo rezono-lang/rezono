@@ -84,7 +84,9 @@ def layout(bucket, candidate_content=CONTENT):
     candidate = pin(bucket, "observations/submitted/receipt.json", submitted | {"id": identity})
     context = pin(bucket, "observations/retained/context.json", {"completeness": [trusted], "rounds": []})
     index = pin(bucket, "observations/submitted/index.json", {"completeness_receipts": [candidate], "rounds": []})
-    expected = (identity, SOURCE["name"], canonical_sha256(trusted["scope"]), canonical_sha256(trusted["cut"]),
+    # The scope digest names its definition by the hash of the bytes it pins, not by where a copy is stored.
+    scope = {**trusted["scope"], "definition": trusted["scope"]["definition"]["sha256"]}
+    expected = (identity, SOURCE["name"], canonical_sha256(scope), canonical_sha256(trusted["cut"]),
                 trusted["inventory"]["sha256"], trusted["content"]["sha256"])
     return context, index, candidate, expected
 

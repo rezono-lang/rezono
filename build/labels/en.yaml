@@ -7,6 +7,7 @@ build_path: Changed path
 build_path_reader: Path reader
 build_selected_job: Selected job
 build_full_selection: Full selection reason
+build_readerless_path: Readerless changed path
 build_task: Observed build task
 build_policy_date: Effective policy day
 build_track_rank: Track priority
