@@ -14,7 +14,7 @@ A pull request check selects the components a change reaches, and everything tha
 ## Why
 
 - In 34 failed pull request runs before this change, `loop` or `run` never failed alone: a change that broke them broke a component the pull request still runs, or their own tests.
-- A typical loop task adds a module and its test. It ran `loop`, `run` and three `examples` shards. Without `run` such a pull request runs fewer than ten jobs.
+- A typical loop task adds a module and its test. It runs `loop`, `run` and every `examples` shard. Without `run` it saves one job of about five minutes; `examples` is the larger share, see below.
 - `examples` stays a dependent. Whether to defer it too is decided after a day of measurements, against the merge-queue groups that fail on something a pull request should have caught.
 
 ## Alternatives
