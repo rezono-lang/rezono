@@ -208,6 +208,7 @@ jobs:
           python -I scripts/test_feldera_admission.py
           python -I scripts/test_cluster_worker_tasks.py
           python -I scripts/test_role_publication_ci.py
+          python -I scripts/test_standstill.py
       - id: matrix
         env:
           GITHUB_BASE_REF: ${{ github.base_ref }}
