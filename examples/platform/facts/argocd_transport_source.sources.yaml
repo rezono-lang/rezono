@@ -1,0 +1,7 @@
+default:
+  kind: tool
+  name: Vendor transport inspection
+  revision: v3.0.0
+  position: L74
+  url: 'https://raw.githubusercontent.com/argoproj/argo-cd/v3.0.0/docs/operator-manual/server-commands/argocd-server.md'
+  fragment_sha256: cac5ee8e4d65f9f2701e39a940db73aa8ba07100665780db00752324dc4969b9
