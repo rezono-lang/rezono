@@ -87,7 +87,7 @@ def test_global_request_ordinals_use_exact_time_tenant_and_service(tmp_path):
 
 
 @pytest.mark.xfail(strict=True, raises=AdapterKeyDecidesOrder, reason=(
-    "Waits for compiler/tests/test_ordered_rule_scalars_engines.py--test_datalog_spells_typed_comparisons, "
+    "M2: Waits for compiler/tests/test_ordered_rule_scalars_engines.py--test_datalog_spells_typed_comparisons, "
     "--test_the_bundle_keeps_typed_comparisons, --test_gap_follows_typed_comparisons, "
     "--test_souffle_oracle_orders_typed_values and --test_feldera_orders_typed_values "
     "(decisions/ordered-rule-scalars.md requires Soufflé and Feldera evidence before the platform rule). "
