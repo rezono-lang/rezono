@@ -1,5 +1,12 @@
 """Validate edge pilot results against the publication manifest."""
 
+import json
+from hashlib import sha256
+
+from rezono_publisher import pointers, publish
+
+_ORDER = {"green": 0, "warning": 1, "red": 2}
+
 
 def reads_all_in_full(manifest: dict, role: str) -> bool:
     """Check a role's full coverage against all relations in the unscoped manifest."""
@@ -54,3 +61,103 @@ def asked(gate, role: str, pack: str, manifest: str, question: str) -> list[dict
             raise SystemExit(f"{role} ask: invalid or repeated cursor")
         seen.add(after)
         body = {"ask": question, "after": after}
+
+
+def _fetch(local, uri: str, digest: str, what: str) -> bytes:
+    """The bytes of an object by its uri, which must hash to the digest that names them."""
+    data = local.get(uri.split("/", 3)[3]) if uri.startswith("s3://") else None
+    if data is None or sha256(data).hexdigest() != digest:
+        raise SystemExit(f"{what}: missing object or wrong hash")
+    return data
+
+
+def _object(local, key: str, what: str) -> bytes:
+    data = local.get(key)
+    if data is None:
+        raise SystemExit(f"{what}: {key} is missing")
+    return data
+
+
+def checked_local_grid(local, pack: str, position: str, base_epoch: int, count: int) -> dict:
+    """Read the sweep grid of the base manifest and check every variant against it.
+
+    Returns {False: sweeps, True: sweeps}: the grid as a role that does not read every relation sees it
+    (a variant exposes nothing but its value, and each check is unavailable) and as a full reader sees it
+    (status, checks and the link to the variant manifest or diagnosis).
+    """
+    base = f"m-{base_epoch}"
+    raw = _object(local, f"{pack}/manifests/{base}.json", "base manifest")
+    manifest = json.loads(raw)
+    head = pointers.head(pack, raw)
+    if head is None or local.get(head[0]) != head[1]:
+        raise SystemExit(f"{base}: wrong head pointer")
+    if manifest.get("id") != base or manifest.get("epoch") != base_epoch:
+        raise SystemExit(f"{base}: manifest id or epoch mismatch")
+    if not any(s.get("position") == position for s in manifest.get("sources", [])):
+        raise SystemExit(f"{base}: manifest is not of position {position}")
+    files = [f for f in manifest.get("compiled", []) if f.get("file") == "ir/sweeps.json"]
+    if len(files) != 1:
+        raise SystemExit(f"{base}: expected one compiled sweep grid")
+    declared = json.loads(_fetch(local, files[0]["uri"], files[0]["sha256"], f"{base} sweep grid"))["sweeps"]
+    names = [c["name"] for c in manifest.get("checks", [])]
+    masked_checks = [{"name": name, "status": "unavailable"} for name in names]
+    epoch = base_epoch + 1
+    masked, full = [], []
+    for sweep in declared:
+        if sweep["count"] != count:
+            raise SystemExit(f"sweep {sweep['name']}: expected {count} cells, the grid has {sweep['count']}")
+        relation = f"{sweep['kind']}__{sweep['slot']}"
+        cells_masked, cells_full = [], []
+        for index in range(count):
+            value = str(sweep["min"] + index * sweep["step"])
+            vid = publish.variant_id(sweep["name"], index, epoch)
+            cell = {"index": index, "value": value}
+            cells_masked.append({**cell, "status": "unavailable", "checks": masked_checks})
+            body = local.get(f"{pack}/manifests/{vid}.json")
+            diagnosis = local.get(f"{pack}/diagnoses/{vid}.json")
+            if body is None and diagnosis is None:
+                cells_full.append({**cell, "status": "not_computed"})
+                continue
+            kind, data = ("manifests", body) if body is not None else ("diagnoses", diagnosis)
+            if kind == "manifests":
+                variant = json.loads(body)
+                if (variant.get("id") != vid or variant.get("base_manifest") != base or variant.get("epoch") != epoch
+                        or {k: (variant.get("variant") or {}).get(k) for k in ("sweep", "index", "value")}
+                        != {"sweep": sweep["name"], "index": index, "value": value}):
+                    raise SystemExit(f"{vid}: does not match its base and grid cell")
+            expected = dict(pointers.pointers(pack, kind, data))
+            pointer_key = f"{pack}/epochs/{epoch}/{kind}/{vid}.json"
+            found = local.get(pointer_key)
+            if found is None or json.loads(found) != json.loads(expected[pointer_key]):
+                raise SystemExit(f"{vid}: wrong manifest pointer")
+            if kind == "diagnoses":
+                cells_full.append({**cell, "status": "red", "diagnosis": vid})
+                continue
+            held = False
+            for snapshot in variant.get("snapshots", []):
+                if snapshot.get("relation") != relation:
+                    continue
+                rows = json.loads(_fetch(local, snapshot["uri"], snapshot["sha256"], f"{vid} snapshot"))
+                held = held or any(row.get("key") == [sweep["key"], value] for row in rows)
+            if not held:
+                raise SystemExit(f"{vid}: snapshot does not hold {sweep['key']} = {value}")
+            checks = [{"name": c["name"], "status": c["status"]} for c in variant.get("checks", [])]
+            status = max((c["status"] for c in checks), key=_ORDER.get, default="green")
+            cells_full.append({**cell, "status": status, "checks": checks, "manifest": vid})
+        head_of = {k: sweep[k] for k in ("name", "kind", "key", "slot")}
+        masked.append({**head_of, "cells": cells_masked})
+        full.append({**head_of, "cells": cells_full})
+    return {False: masked, True: full}
+
+
+def check_local_sweeps(role: str, seen: dict, grids: dict, full: bool) -> None:
+    """Check the sweeps a role was shown against the grids read from the store."""
+    shown = seen.get("sweeps")
+    if not full:
+        for sweep in shown or []:
+            if any("manifest" in cell or "diagnosis" in cell for cell in sweep.get("cells", [])):
+                raise SystemExit(f"{role} sweeps: a role that reads in part exposes a variant")
+        if shown != grids[False]:
+            raise SystemExit(f"{role} sweeps: masked sweep differs from the store")
+    elif shown != grids[True]:
+        raise SystemExit(f"{role} sweeps: computed sweep differs from the store")
