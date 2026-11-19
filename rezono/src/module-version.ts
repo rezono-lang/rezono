@@ -10,6 +10,8 @@ import type { Expr } from './tree.ts';
 export type Valid = [string] | [string, string];
 export interface VersionDecl {
 	version: string;
+	/** The number of the version this one replaces, as text (decisions/language-parameters.md). */
+	replaces?: string;
 	valid?: Valid;
 	known?: string;
 	value?: Expr;
@@ -44,7 +46,8 @@ export function readVersion(line: Logical, build: Build): VersionDecl {
 const printDuring = (d: During) => ('stage' in d ? d.stage : `${d.from}..${d.until === undefined ? '' : `<${d.until}`}`);
 export const printContexts = (c: Contexts) =>
 	`${c.valid ? `, valid ${c.valid[0]}..${c.valid.length === 2 ? `<${c.valid[1]}` : ''}` : ''}${c.during ? `, during ${printDuring(c.during)}` : ''}${c.in ? `, in ${c.in.join(' | ')}` : ''}${c.known !== undefined ? `, known ${c.known}` : ''}`;
-export const printVersion = (v: VersionDecl) => `version ${v.version}${printContexts(v)}${printValue(v.value)}${printSource(v.source)}`;
+export const printVersion = (v: VersionDecl) =>
+	`version ${v.version}${v.replaces !== undefined ? ` replaces ${v.replaces}` : ''}${printContexts(v)}${printValue(v.value)}${printSource(v.source)}`;
 
 /** W108: a declaration whose versions all start at a `valid` date has no value before the earliest one. */
 export function versionGaps(module: Module, spans: WeakMap<object, Span>): Diagnostic[] {
@@ -66,14 +69,16 @@ export function versionGaps(module: Module, spans: WeakMap<object, Span>): Diagn
 export const version = {
 	lineRules: ['VersionLine'],
 	grammar: String.raw`
-  VersionLine = kw<"version"> number ("," VContext)* ("=" Expr Src?)?
+  VersionLine = kw<"version"> number (kw<"replaces"> number)? ("," VContext)* ("=" Expr Src?)?
   VContext = kw<"valid"> date "..<" date    -- closed
            | kw<"valid"> date ".."           -- open
            | known date                      -- known
   `,
 	actions: {
-		VersionLine(_k, n, _commas, ctxs, _eq, value, src) {
-			const decl: Line = { line: 'version', version: n.sourceString, ...contexts(ctxs) };
+		VersionLine(_k, n, _r, replaced, _commas, ctxs, _eq, value, src) {
+			const decl: Line = { line: 'version', version: n.sourceString };
+			if (replaced.numChildren) decl.replaces = replaced.child(0).sourceString;
+			Object.assign(decl, contexts(ctxs));
 			if (value.numChildren) decl.value = optTree(value);
 			const source = optSrc(src);
 			if (source !== undefined) decl.source = source;
