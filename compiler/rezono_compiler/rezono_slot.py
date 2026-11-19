@@ -83,17 +83,19 @@ def lower(slots: list[dict], declared: Set[str], *, implicit_identifier: bool = 
             attribute["multivalued"] = True
         if slot.get("embedded") is True:
             attribute["inlined"] = True
+        if slot.get("world") == "open":
+            attribute.setdefault("annotations", {})["world"] = "open"
         out[slot["slot"]] = attribute
     return out
 
 
 def validate(slots: list, kind: str, at: str, own: Mapping[str, str], owners: Mapping[str, list[str]],
-             uses: set[str], refuse: Refuse, *, extended: bool = False) -> bool:
+             uses: set[str], refuse: Refuse, *, extended: bool = False, open_kind: bool = False) -> bool:
     """Check slot forms and resolve references against all the modules of the pack."""
     ok = True
     seen: set[str] = set()
     identifier_seen = False
-    allowed = (MEMBERS | {"identifier", "slotUri", "constraints", "embedded"} | rezono_metadata.FIELDS
+    allowed = (MEMBERS | {"identifier", "slotUri", "constraints", "embedded", "world"} | rezono_metadata.FIELDS
                if extended else MEMBERS)
     for index, slot in enumerate(slots):
         here = f"{at}/slots/{index}"
@@ -119,6 +121,17 @@ def validate(slots: list, kind: str, at: str, own: Mapping[str, str], owners: Ma
         if "identifier" in slot and not explicit:
             refuse(here, "an explicit identifier must be marked true", "§5.1")
             ok = False
+        if "world" in slot:
+            # The pack loader keeps the world of an identifier on its kind and an open kind's slots open.
+            if slot["world"] not in ("open", "closed"):
+                refuse(here, "a slot world is `open` or `closed`", "§5.1")
+                ok = False
+            elif explicit:
+                refuse(here, "an identifier has the world of its kind", "§5.1")
+                ok = False
+            elif open_kind and slot["world"] != "open":
+                refuse(here, "a slot of an open kind is open", "§5.1")
+                ok = False
         if explicit:
             if embedded:
                 refuse(here, "an embedded reference cannot be an identifier", "§5.1")
