@@ -73,8 +73,6 @@ def asserted_complete(bucket, evidence, source, scope, cut, inventory, content, 
                        derived={result})
 
 
-@pytest.mark.xfail(strict=True, raises=UnverifiedReceiptAccepted,
-                   reason="Verify complete receipt evidence before admitting its protected input row.")
 def test_completeness_receipt_exact_inventory(tmp_path):
     bucket = store.FileStore(tmp_path / "archive")
     expected = captured()

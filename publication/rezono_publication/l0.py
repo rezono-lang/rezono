@@ -5,6 +5,8 @@ not in its normal form. A **verifier** also classifies the change from one schem
 need nothing but L0 and Rezono's canonical JSON; this module imports no compiler, publisher or engine (§1).
 
 - `check_schema(doc)`: a schema document (§2, §3.6, §3.7); returns its schema id `s-…`.
+  A kind of derived tuples may name its column order in `tuple_key`: every slot once, each derived, single and
+  known. A row's `$id` is then the canonical JSON of its typed cells in that order, and is read against them.
 - `read_row`, `read_rows`, `read_collection`, `read_jsonl`, `loads`: row JSON (§3) under a schema.
 - `check_field`, `check_table_metadata`: the `rezono` metadata of a columnar file (§4.2, §4.4, §4.5).
 - `classify(a, b, datasets)`: the change class from schema A to its successor B (§2.4); `read_under` reads rows
@@ -71,7 +73,7 @@ _TYPE_MEMBERS = {
     "Period": {"over", "range"},
     "Enum": {"enum"},
 }
-_KIND_MEMBERS = {"world", "id", "slots", "iri", "parent", "versioned", "applies", "plane", "owner"}
+_KIND_MEMBERS = {"world", "id", "slots", "iri", "parent", "versioned", "applies", "plane", "owner", "tuple_key"}
 _SLOT_MEMBERS = {"type", "ref", "card", "states", "world", "derived", "inverse", "min", "max", "backfill",
                  "versions", "expr"}
 _TOP_MEMBERS = {"rezono", "pack", "base", "kinds", "types", "enums", "imports", "map", "reasons", "follows"}
@@ -472,6 +474,8 @@ def check_schema(doc: dict, *, versioned: bool = True, allow_legacy: bool = Fals
                 _fail(name, "a control kind has a slot `decision`: Text or a reference, card 1, states [known]")
         elif "owner" in kind:
             _fail(name, "`owner` is a member of a control kind only")
+        if "tuple_key" in kind:
+            _check_tuple_key(doc, name, kind)
     for name, kind in doc["kinds"].items():
         if "parent" in kind:
             _check_parent(doc, name, kind)
@@ -489,6 +493,37 @@ def check_schema(doc: dict, *, versioned: bool = True, allow_legacy: bool = Fals
         if slot_name and declaring(doc, kind_name, slot_name) != kind_name:
             _fail(f"map.{key}", "a restated slot is one property: map it on the kind that declares it")
     return schema_id(doc)
+
+
+def _check_tuple_key(doc: dict, name: str, kind: dict):
+    """A derived tuple's column order: its element id is the canonical JSON of its cells in this order."""
+    where = f"{name}.tuple_key"
+    key = kind["tuple_key"]
+    if (not isinstance(key, list) or not key or not all(_is_text(c) for c in key) or len(set(key)) != len(key)
+            or set(key) != set(kind["slots"])):
+        _fail(where, "names every slot of the kind exactly once")
+    if any(m in kind for m in ("parent", "versioned", "plane")):
+        _fail(where, "a derived tuple has no `parent`, `versioned` or `plane`")
+    id_type = _local_type(doc, kind["id"]["type"])
+    if id_type is None or id_type["of"] != "Text" or set(id_type) != {"of"}:
+        _fail(where, "a derived tuple's id is plain `Text`")
+    for column in key:
+        slot = kind["slots"][column]
+        if (slot.get("derived") is not True or slot["card"] != "1" or slot["states"] != ["known"]
+                or set(slot) & {"inverse", "versions", "backfill", "expr"}):
+            _fail(f"{name}.{column}", "a tuple column is derived, card `1`, states `[known]`")
+
+
+def _tuple_id(kind: dict, row: dict, payloads: dict, where: str):
+    """A derived tuple's `$id` is the canonical JSON of its typed cells in `tuple_key` order."""
+    parts = []
+    for column in kind["tuple_key"]:
+        part = row[column]["$ref"] if "ref" in kind["slots"][column] else payloads[column]
+        if not isinstance(part, str):
+            _fail(f"{where}.{column}", "a tuple cell is text in the row key")
+        parts.append(part)
+    if row["$id"] != _cj(parts):
+        _fail(where + ".$id", "is not the canonical JSON of its cells in `tuple_key` order")
 
 
 def _check_parent(doc: dict, name: str, kind: dict):
@@ -894,6 +929,7 @@ def read_row(schema: dict, row: dict) -> tuple:
         elif "$known" in row:
             _fail(where, "`$known` present; `known` is not declared")
 
+    payloads = {}
     for slot_name, slot in kind["slots"].items():
         sw = f"{where}.{slot_name}"
         if "inverse" in slot:
@@ -907,7 +943,7 @@ def read_row(schema: dict, row: dict) -> tuple:
             _check_state_object(schema, slot, value, sw)
             continue
         if slot["card"] in ("1", "?"):
-            _known(schema, slot, value, sw)
+            payloads[slot_name] = _known(schema, slot, value, sw)
             continue
         if not isinstance(value, list):
             _fail(sw, "a many-valued slot is a list or a state object")
@@ -921,6 +957,8 @@ def read_row(schema: dict, row: dict) -> tuple:
                 _fail(sw, f"duplicate member {key!r}")
             seen.add(key)
 
+    if "tuple_key" in kind:
+        _tuple_id(kind, row, payloads, where)
     _side(schema, kind, row, where)
     valid = _cj(row.get("$valid", {})) if versioned is not None else ""
     return (name, rid, valid, row.get("$known", ""))

@@ -1,0 +1,112 @@
+{
+  "source": "kind ReferencePoint world closed\n  close mapping \"time:Instant\"\n  on_axis: Text\n    close mapping \"time:hasTRS\"\n  position: Int\n    exact mapping \"ex:position\"\n    broad mapping \"time:numericPosition\"\nenum Relation world closed = before | meets\n  value before\n    close mapping \"time:intervalBefore\"\n    broad mapping \"skos:related\"",
+  "module": {
+    "rezono": "0",
+    "pack": "sample",
+    "use": [],
+    "decls": [
+      {
+        "kind": "ReferencePoint",
+        "world": "closed",
+        "closeMappings": [
+          "time:Instant"
+        ],
+        "slots": [
+          {
+            "slot": "on_axis",
+            "type": "Text",
+            "closeMappings": [
+              "time:hasTRS"
+            ]
+          },
+          {
+            "slot": "position",
+            "type": "Int",
+            "exactMappings": [
+              "ex:position"
+            ],
+            "broadMappings": [
+              "time:numericPosition"
+            ]
+          }
+        ],
+        "derived": []
+      },
+      {
+        "enum": "Relation",
+        "world": "closed",
+        "values": [
+          "before",
+          "meets"
+        ],
+        "memberMetadata": {
+          "before": {
+            "closeMappings": [
+              "time:intervalBefore"
+            ],
+            "broadMappings": [
+              "skos:related"
+            ]
+          }
+        }
+      }
+    ]
+  },
+  "spanNames": {
+    "/decls/0": "ReferencePoint",
+    "/decls/0/slots/1": "position",
+    "/decls/1": "Relation"
+  },
+  "rejections": [
+    {
+      "from": "  close mapping \"time:Instant\"",
+      "to": "  close mapping"
+    },
+    {
+      "from": "    broad mapping \"time:numericPosition\"",
+      "to": "    broad mapping time:numericPosition"
+    }
+  ],
+  "knownDiagnostics": [
+    {
+      "code": "R000",
+      "span": {
+        "text": "mapping",
+        "start": 62,
+        "end": 69
+      }
+    },
+    {
+      "code": "R000",
+      "span": {
+        "text": "mapping",
+        "start": 111,
+        "end": 118
+      }
+    },
+    {
+      "code": "R000",
+      "span": {
+        "text": "mapping",
+        "start": 191,
+        "end": 198
+      }
+    },
+    {
+      "code": "R000",
+      "span": {
+        "text": "mapping",
+        "start": 291,
+        "end": 298
+      }
+    },
+    {
+      "code": "R000",
+      "span": {
+        "text": "mapping",
+        "start": 331,
+        "end": 338
+      }
+    }
+  ]
+}

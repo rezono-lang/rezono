@@ -9,10 +9,6 @@ from case_support import verified
 from management_probes import compiled
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError, reason=(
-    "Implement platform restore trial dependency, placement and current observation projections. "
-    "Build on managed_backup_restored and outage_impact per decisions/safe-step-rounds.md, section 4. "
-    "Independent offline case, without certified replay or disposable cluster."))
 def test_restore_offline_dependencies():
     run, trial, backup, recovery = "restore-run", "restore-trial", "chosen-copy", "recovery"
     digest = sha256(b"authored recovery payload\n").hexdigest()

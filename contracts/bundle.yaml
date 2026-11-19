@@ -382,6 +382,7 @@ classes:
     attributes:
       name: {required: true}
       type: {required: true, range: RuleColumnType}
+      semantic: {range: SemanticType, inlined: true, description: "What the column's value means, where the checked rules give more than its physical type, such as a reference to a kind. Its `base` is the column's `type`. A publication writes the column as this type. Left out: the scalar of `type`."}
       currency: {pattern: "^[A-Z]{3}$", description: "An amount, where the rules determine it: whole minor units of this ISO 4217 currency, as `currency` on an Attribute. Derived, never declared: the column is bound to an amount attribute, or to a `sum`, `min` or `max` over an amount column, or to a sum or difference of such amounts, in every rule of the relation. A count, a product and a quotient have none. Two currencies in one variable or one column is a compiler error."}
 
   CheckView:

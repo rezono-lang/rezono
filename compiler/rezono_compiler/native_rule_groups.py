@@ -5,7 +5,7 @@ import json
 import re
 from typing import Literal, Never
 
-from . import rules, rules_dl
+from . import diagnostics, rules, rules_dl
 
 
 Term = tuple[Literal["var", "wild"], str] | tuple[Literal["const"], str, Literal["string", "integer"]]
@@ -31,6 +31,12 @@ class _GroupClause:
 
     def refuse(self, message: str) -> Never:
         raise rules_dl.RuleError(f"{self.file}:{self.line}: {message}")
+
+    def unrepresentable(self, message: str) -> Never:
+        """Refuse a sound expression that the group IR cannot hold (R044), leaving no partial rule."""
+        where = f"{self.file}:{self.line}"
+        raise diagnostics.Diagnosed(f"{where}: {message}", [diagnostics.Diagnostic(
+            "R044", message, where, hint="Fix each ranged key column of the group by equality.")])
 
     def columns(self, name: str) -> list[str]:
         return [column["type"] for column in self.relations[name]["key"]]
@@ -106,7 +112,7 @@ class _GroupClause:
         for condition in _conjuncts(domain["filter"][1]):
             cmp = condition.get("cmp", ())
             if len(cmp) != 3 or cmp[0] != "=":
-                self.refuse("an aggregate filter must fix a ranged key column by equality")
+                self.unrepresentable("an aggregate filter must fix a ranged key column by equality")
             _, left, right = cmp
             if right.get("path", ())[:1] == ["it"]:
                 left, right = right, left

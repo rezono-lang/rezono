@@ -1,0 +1,12 @@
+kinds:
+  - {kind: probe_profile, shape: rect}
+  - {kind: probe_cell, shape: rect}
+  - {kind: probe_cluster, shape: rect}
+  - {kind: probe_member, shape: rect}
+  - {kind: probe_phase, shape: rect}
+  - {kind: probe_storage_variant, shape: rect}
+  - {kind: probe_snapshot, shape: rect}
+  - {kind: probe_phase_budget, shape: rect}
+  - {kind: probe_physical_requirement, shape: rect}
+  - {kind: probe_term_coverage, shape: rect}
+  - {kind: probe_budget_read_grant, shape: rect}

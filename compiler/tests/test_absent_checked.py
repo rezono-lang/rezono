@@ -48,8 +48,6 @@ def objects(epoch, bucket, role):
             publish.role_objects(bucket, epoch.pack, "m-1", role).items()}
 
 
-@pytest.mark.xfail(strict=True, raises=UnwitnessedAbsenceReleased,
-                   reason="Require both checked source coverage and full role-read authority for absence.")
 def test_absent_checked_requires_readable_coverage(tmp_path):
     root = Path(shutil.copytree(MINIMAL, tmp_path / "pack"))
     (root / "facts").mkdir()

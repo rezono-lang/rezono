@@ -10,17 +10,20 @@ from round_visibility_cases import (
     LANES, OPENING, ROUNDS, RUN, SOLO_A, SOLO_B, VIOLATION, WITHDRAW_A, WITHDRAW_B, serving, visible_boundaries,
 )
 from round_visibility_pair import MANIFEST, PROGRAM, pair_evidence
-from round_visibility_publication import checked_loop_publication
+from round_visibility_publication import checked_loop_publication, round_authority, round_candidates
 
 
 @pytest.mark.xfail(
     strict=True,
-    raises=AssertionError,
+    raises=(AssertionError, TypeError),
     reason=(
-        "Read decisions/scoped-completeness.md sections 3 and 4. Reconstruct all nine visible "
-        "boundaries from the retained effect declarations. Refuse overlapping withdrawals even when "
-        "every submitted pair checks and the violating boundary was left out. Preserve observed "
-        "old rows and residual effects. Write in the Loop round admission path."
+        "Read decisions/scoped-completeness.md sections 3 and 4 and decisions/loop-certificate-admission.md. "
+        "Reconstruct all nine visible boundaries from the retained effect declarations. Refuse overlapping "
+        "withdrawals even when every submitted pair checks and the violating boundary was left out. Preserve "
+        "observed old rows and residual effects. Write in packs/std-loop. Waits for "
+        "test_ready_requires_checked_batch_member and for the core round verifier that rebuilds the visible "
+        "boundaries from transition_authority (no core red test yet). Today batch.epoch rejects the admission "
+        "keywords with TypeError."
     ),
 )
 def test_overlapping_withdrawals_break_availability(tmp_path):
@@ -88,5 +91,9 @@ def test_overlapping_withdrawals_break_availability(tmp_path):
             for step in members
         ],
     }
-    _, rows, _ = checked_loop_publication(tmp_path, records, retained=retained, submitted=submitted)
+    _, rows, _ = checked_loop_publication(
+        tmp_path, records, retained=retained, submitted=submitted,
+        admission={"transition_certificates": round_candidates(submitted),
+                   "transition_authority": [round_authority(retained, run=RUN, cut=OPENING.cut)]},
+    )
     assert not rows("ready"), f"A batch with an omitted unsafe intermediate boundary was published ready: {rows('ready')}"

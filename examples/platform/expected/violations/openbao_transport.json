@@ -1,0 +1,8 @@
+{
+  "vendor_default_transport__product__reference": [
+    [
+      "openbao-2.3.0-transport",
+      "openbao"
+    ]
+  ]
+}

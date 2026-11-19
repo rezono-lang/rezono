@@ -5,3 +5,18 @@ kinds:
   - {kind: rounding_digit, shape: rect}
   - {kind: rounding_word, shape: rect}
   - {kind: rounding_carry, shape: rect}
+  - {kind: reconciliation_activity, shape: rect}
+  - {kind: reconciliation_ceiling, shape: rect}
+  - {kind: reconciliation_charge_terms, shape: rect}
+  - {kind: reconciliation_deployment, shape: rect}
+  - {kind: reconciliation_invoice_coverage, shape: rect}
+  - {kind: reconciliation_plan, shape: rect}
+  - {kind: reconciliation_plan_window, shape: rect}
+  - {kind: reconciliation_planned_line, shape: rect}
+  - {kind: reconciliation_quote, shape: rect}
+  - {kind: reconciliation_registry, shape: rect}
+  - {kind: reconciliation_registry_coverage, shape: rect}
+  - {kind: reconciliation_registry_line, shape: rect}
+  - {kind: reconciliation_run, shape: rect}
+  - {kind: reconciliation_run_coverage, shape: rect}
+  - {kind: reconciliation_run_window, shape: rect}

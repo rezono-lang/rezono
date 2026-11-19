@@ -1,0 +1,24 @@
+# The in-zone-flow rule in the rule IR: decisions/k8s-admission-rules.md and k8s-admission-translator.md.
+# A requested directional flow is admitted when the same namespace, source, destination, protocol
+# and port is a checked same-zone flow.
+format: rezono.rules/1
+pack: admission_flow
+relations:
+  - {name: admission_flow, role: base, key: [{name: namespace, type: string}, {name: source, type: string}, {name: destination, type: string}, {name: protocol, type: string}, {name: port, type: integer}]}
+  - {name: requested_flow, role: base, key: [{name: namespace, type: string}, {name: source, type: string}, {name: destination, type: string}, {name: protocol, type: string}, {name: port, type: integer}]}
+  - {name: published_flow, role: derived, module: flow, key: [{name: namespace, type: string}, {name: source, type: string}, {name: destination, type: string}, {name: protocol, type: string}, {name: port, type: integer}]}
+  - {name: allow_flow, role: derived, module: flow, key: [{name: namespace, type: string}, {name: source, type: string}, {name: destination, type: string}, {name: protocol, type: string}, {name: port, type: integer}]}
+rules:
+  - id: published_flow
+    module: flow
+    head: {relation: published_flow, terms: ["?namespace", "?source", "?destination", "?protocol", "?port"]}
+    body:
+      - {relation: admission_flow, terms: ["?namespace", "?source", "?destination", "?protocol", "?port"], polarity: positive}
+    origin: {file: flow.dl, line: "1"}
+  - id: allow_flow
+    module: flow
+    head: {relation: allow_flow, terms: ["?namespace", "?source", "?destination", "?protocol", "?port"]}
+    body:
+      - {relation: requested_flow, terms: ["?namespace", "?source", "?destination", "?protocol", "?port"], polarity: positive}
+      - {relation: published_flow, terms: ["?namespace", "?source", "?destination", "?protocol", "?port"], polarity: positive}
+    origin: {file: flow.dl, line: "2"}

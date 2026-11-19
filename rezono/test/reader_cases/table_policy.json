@@ -1,0 +1,133 @@
+{
+  "source": "kind Shelf world closed\n  large: Bool\n  heavy: Bool\nextend Shelf\n  derived size: Text\n    table first\n      | large | heavy | -> size |\n      | true  | -     | \"big\"   |\n      | -     | true  | \"dense\" |\n  derived marks: Text*\n    table collect\n      | large | heavy | -> marks |\n      | true  | -     | \"wide\"  |\n      | -     | true  | \"solid\" |",
+  "format": "rezono.module/1",
+  "declarations": [
+    {
+      "kind": "Shelf",
+      "world": "closed",
+      "slots": [
+        {
+          "slot": "large",
+          "type": "Bool"
+        },
+        {
+          "slot": "heavy",
+          "type": "Bool"
+        }
+      ],
+      "derived": []
+    },
+    {
+      "extend": "Shelf",
+      "derived": [
+        {
+          "derived": "size",
+          "type": "Text",
+          "table": {
+            "table": "first",
+            "inputs": [
+              {
+                "path": [
+                  "large"
+                ]
+              },
+              {
+                "path": [
+                  "heavy"
+                ]
+              }
+            ],
+            "output": "size",
+            "rows": [
+              {
+                "tests": [
+                  [
+                    {
+                      "lit": "true"
+                    }
+                  ],
+                  "-"
+                ],
+                "value": {
+                  "lit": "\"big\""
+                }
+              },
+              {
+                "tests": [
+                  "-",
+                  [
+                    {
+                      "lit": "true"
+                    }
+                  ]
+                ],
+                "value": {
+                  "lit": "\"dense\""
+                }
+              }
+            ]
+          }
+        },
+        {
+          "derived": "marks",
+          "type": "Text",
+          "card": "*",
+          "table": {
+            "table": "collect",
+            "inputs": [
+              {
+                "path": [
+                  "large"
+                ]
+              },
+              {
+                "path": [
+                  "heavy"
+                ]
+              }
+            ],
+            "output": "marks",
+            "rows": [
+              {
+                "tests": [
+                  [
+                    {
+                      "lit": "true"
+                    }
+                  ],
+                  "-"
+                ],
+                "value": {
+                  "lit": "\"wide\""
+                }
+              },
+              {
+                "tests": [
+                  "-",
+                  [
+                    {
+                      "lit": "true"
+                    }
+                  ]
+                ],
+                "value": {
+                  "lit": "\"solid\""
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  "rejections": [
+    {
+      "from": "table first",
+      "to": "table fastest"
+    },
+    {
+      "from": "table collect",
+      "to": "table"
+    }
+  ]
+}
