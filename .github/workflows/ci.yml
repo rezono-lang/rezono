@@ -205,10 +205,21 @@ jobs:
         run: |
           set -euo pipefail
           python -I scripts/test_red_guard.py
+          python -I scripts/test_red_list.py
           python -I scripts/test_feldera_admission.py
           python -I scripts/test_cluster_worker_tasks.py
           python -I scripts/test_role_publication_ci.py
           python -I scripts/test_standstill.py
+      # Only reads test sources; a test without a milestone mark counts under "none".
+      - name: Report red tests per milestone
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            echo '### Red tests per milestone'
+            echo
+            python -I scripts/red_list.py --milestones
+          } | tee -a "$GITHUB_STEP_SUMMARY"
       # What must run and what counts as run come from the base, as the pack
       # warnings do: a candidate cannot weaken its own count through
       # scripts/components.py. The base scripts sit in a hidden directory of the

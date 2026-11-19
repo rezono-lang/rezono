@@ -14,7 +14,7 @@ def rows(*keys):
     strict=True,
     raises=AssertionError,
     reason=(
-        "Read decisions/build-reconciliation.md, sections Observed kinds and Selection and publication. Add "
+        "extra: Read decisions/build-reconciliation.md, sections Observed kinds and Selection and publication. Add "
         "loop/build_selection_outcome.py with selection_outcome(*, run, manifest, rows, engine_error) returning "
         "the mode, the selected suites and the full-selection reasons. The first failure decides: engine failure, "
         "missing publication, invalid publication (a check not green, no checks or a missing relation), then the "
