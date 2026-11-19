@@ -1,7 +1,7 @@
 id: https://rezono.org/std-loop/round-progress
 name: std_loop_round_progress
 description: Observation coverage and outstanding work at the current reconciliation boundary.
-imports: [linkml:types]
+imports: [linkml:types, loop_inputs]
 default_range: string
 annotations:
   layer: facts
@@ -18,3 +18,17 @@ classes:
       id: {identifier: true}
       run: {required: true}
       token: {required: true}
+  LoopGoal:
+    description: A required outcome of a run, confirmed by its token whether or not a step produces it.
+    attributes:
+      id: {identifier: true}
+      run: {required: true}
+      token: {required: true}
+  LoopBatchDeferral:
+    description: A step deferred by batch selection at an observation cut.
+    attributes:
+      id: {identifier: true}
+      run: {required: true}
+      step: {range: LoopStep, required: true}
+      cut: {required: true, description: The identity of the sweep receipt used for the selection.}
+      batch: {required: true, description: The selected batch that deferred the step.}

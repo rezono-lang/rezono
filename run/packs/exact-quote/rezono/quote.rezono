@@ -1,0 +1,120 @@
+rezono 0
+pack exact-quote
+
+schema exact_quote
+  iri "https://rezono.org/examples/run/exact-quote"
+  language en
+  import "linkml:types"
+  default range Text
+  annotation layer = "facts"
+
+enum QuoteOperand world closed = quantity | billed_periods | period_price_micros | setup_price_micros
+
+kind RecordedQuote world closed
+
+kind RecordedLine world closed
+  quote: RecordedQuote
+
+kind QuoteDigit world closed
+  line: RecordedLine
+  operand: QuoteOperand
+  position: Int
+    minimum 0
+  value: Int
+    minimum 0
+    maximum 9
+
+kind QuoteCarry world closed
+  amount: Text
+  position: Int
+    minimum 0
+  value: Int
+    minimum 0
+
+rules quote
+  | // Work in little-endian decimal columns, so no monetary amount enters a machine word.
+  | .decl operand_digit(line: symbol, operand: symbol, position: number, value: number)
+  | operand_digit(l, field, p, n) :- recorded_line(l), quote_digit(s), quote_digit__line(s, l),
+  |     quote_digit__operand(s, field), quote_digit__position(s, p), quote_digit__value(s, n),
+  |     p >= 0, n >= 0, n <= 9.
+  | 
+  | .decl conflicted_digit(line: symbol)
+  | conflicted_digit(l) :- operand_digit(l, field, p, n), operand_digit(l, field, p, other), n != other.
+  | 
+  | .decl priced_line(line: symbol)
+  | priced_line(l) :- operand_digit(l, "quantity", 0, _), operand_digit(l, "billed_periods", 0, _),
+  |     operand_digit(l, "period_price_micros", 0, _), operand_digit(l, "setup_price_micros", 0, _), !conflicted_digit(l).
+  | 
+  | // One machine pays for its billed periods and setup. The offset distinguishes
+  | // equal products that contribute to the same column.
+  | .decl machine_term(line: symbol, position: number, part: symbol, offset: number, value: number)
+  | machine_term(l, p, "period", i, n) :- operand_digit(l, "billed_periods", i, a),
+  |     operand_digit(l, "period_price_micros", j, b), a > 0, b > 0, p = i + j, n = a * b.
+  | machine_term(l, p, "setup", 0, n) :- operand_digit(l, "setup_price_micros", p, n), n > 0.
+  | 
+  | .decl machine_position(line: symbol, position: number)
+  | machine_position(l, p) :- machine_term(l, p, _, _, _).
+  | 
+  | .decl machine_column(line: symbol, position: number, coefficient: number)
+  | machine_column(l, p, n) :- machine_position(l, p), n = sum term : { machine_term(l, p, _, _, term) }.
+  | 
+  | // Multiply the machine charge by the quantity on each recorded line.
+  | .decl line_term(line: symbol, position: number, offset: number, value: number)
+  | line_term(l, p, i, n) :- machine_column(l, i, a), operand_digit(l, "quantity", j, b),
+  |     b > 0, p = i + j, n = a * b.
+  | 
+  | .decl line_position(line: symbol, position: number)
+  | line_position(l, 0) :- priced_line(l).
+  | line_position(l, p) :- line_term(l, p, _, _).
+  | 
+  | .decl line_column(line: symbol, position: number, coefficient: number)
+  | line_column(l, p, n) :- priced_line(l), line_position(l, p), n = sum term : { line_term(l, p, _, term) }.
+  | 
+  | .decl total_term(quote: symbol, line: symbol, position: number, value: number)
+  | total_term(q, l, p, n) :- recorded_quote(q), recorded_line__quote(l, q), line_column(l, p, n).
+  | 
+  | .decl incomplete_quote(quote: symbol)
+  | incomplete_quote(q) :- recorded_quote(q), recorded_line(l), recorded_line__quote(l, q), !priced_line(l).
+  | 
+  | .decl total_position(quote: symbol, position: number)
+  | total_position(q, 0) :- recorded_quote(q).
+  | total_position(q, p) :- total_term(q, _, p, _).
+  | 
+  | .decl amount_column(amount: symbol, position: number, coefficient: number)
+  | amount_column(l, p, n) :- line_column(l, p, n).
+  | amount_column(q, p, n) :- total_position(q, p), !incomplete_quote(q), n = sum term : { total_term(q, _, p, term) }.
+  | 
+  | // The adapter supplies candidate carries, including terminal zeros. The pack
+  | // calculates every output digit and requires the chain to cover all columns.
+  | .decl carry(amount: symbol, position: number, value: number)
+  | carry(a, p, n) :- quote_carry(s), quote_carry__amount(s, a), quote_carry__position(s, p), quote_carry__value(s, n),
+  |     p >= 0, n >= 0.
+  | 
+  | .decl conflicted_carry(amount: symbol)
+  | conflicted_carry(a) :- carry(a, p, n), carry(a, p, other), n != other.
+  | 
+  | .decl column_position(amount: symbol, position: number)
+  | column_position(a, p) :- amount_column(a, p, _).
+  | 
+  | .decl next_position(amount: symbol, position: number, next: number)
+  | next_position(a, p, next) :- carry(a, p, _), next = p + 1.
+  | 
+  | .decl normalized_column(amount: symbol, position: number, next: number, digit: number)
+  | normalized_column(a, p, next, d) :- amount_column(a, p, n), carry(a, p, c),
+  |     next_position(a, p, next), carry(a, next, b), available = n + c, shifted = b * 10,
+  |     d = available - shifted, d >= 0, d <= 9.
+  | normalized_column(a, p, next, d) :- carry(a, p, c), next_position(a, p, next), carry(a, next, b),
+  |     !column_position(a, p), shifted = b * 10, d = c - shifted, d >= 0, d <= 9.
+  | 
+  | .decl normalized_prefix(amount: symbol, position: number)
+  | normalized_prefix(a, 0) :- carry(a, 0, 0).
+  | normalized_prefix(a, next) :- normalized_prefix(a, p), normalized_column(a, p, next, _).
+  | 
+  | .decl complete_amount(amount: symbol)
+  | complete_amount(a) :- normalized_prefix(a, p), carry(a, p, 0), !conflicted_carry(a),
+  |     last = max column : { column_position(a, column) }, p > last.
+  | 
+  | .decl amount_digit(amount: symbol, position: number, digit: number)
+  | amount_digit(a, p, d) :- complete_amount(a), normalized_prefix(a, p), normalized_column(a, p, _, d).
+  | 
+  | .output amount_digit

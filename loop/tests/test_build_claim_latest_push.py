@@ -13,7 +13,7 @@ from test_build_selection import OBSERVED_AT, capture, published, repository
 def latest_push_records():
     t = OBSERVED_AT
     cases = {
-        # branch: [(pushed generation name, pushed_at), ...] in no particular order
+        # branch: [(pushed generation name, pushed_at[, source]), ...] in no particular order
         # A renewal: the older push made another commit, the newer one the observed generation, long enough ago.
         "task/renewed-ended": [("task/renewed-ended-before", t - 10 * LEASE), ("task/renewed-ended", t - LEASE)],
         # The observed generation was pushed once long ago and again within the lease: the latest push counts.
@@ -23,6 +23,8 @@ def latest_push_records():
         # Two equally recent pushes with different commits leave the latest push undecided, even though one of
         # them made the observed generation long enough ago.
         "task/tied": [("task/tied", t - LEASE), ("task/tied-other", t - LEASE)],
+        # The latest push has no source: it still supersedes the older matching push, and the lease is undecided.
+        "task/unsourced": [("task/unsourced", t - 10 * LEASE), ("task/unsourced", t - 1, "")],
     }
     records = claim_records([LEASE])
     records.update(build_claim=[], build_claim_activity=[], build_claim_pull_reading=[])
@@ -30,29 +32,18 @@ def latest_push_records():
         records["build_claim"].append({"id": branch, "run": "current", "branch": branch,
                                        "generation": generation(branch), "observed_at": t,
                                        "source": "ref-listing"})
-        for pushed, pushed_at in pushes:
+        for pushed, pushed_at, *rest in pushes:
+            push_source = rest[0] if rest else "push-activity"
             after = generation(pushed)
             records["build_claim_activity"].append({"id": f"{branch}@{after}@{pushed_at}", "claim": branch,
                                                     "after": after, "pushed_at": pushed_at,
-                                                    "source": "push-activity"})
+                                                    "source": push_source})
         records["build_claim_pull_reading"].append({"id": f"{branch}@{t}-none", "claim": branch,
                                                     "observed_at": t, "state": "none", "source": "pull-query",
                                                     "receipt": "receipt"})
     return records
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason=(
-        "Read decisions/build-claim-release.md sections 1 and 2. build_claim_activity holds every push record of "
-        "a claim. Take the latest push per claim by pushed_at; two equally recent pushes with different commits "
-        "leave it undecided. The latest push supplies the lease start only when its after "
-        "equals the observed generation. An older matching push never starts a lease. Write in "
-        "build/rules/claims.dl. Waits for test_build_claim_release_plan (same file, adds the claim kinds). Today "
-        "the build schema lacks the claim kinds."
-    ),
-)
 def test_build_claim_latest_push(tmp_path):
     assert KINDS <= declared_kinds(), f"The build schema lacks {sorted(KINDS - declared_kinds())}"
     source = tmp_path / "source"
@@ -71,4 +62,5 @@ def test_build_claim_latest_push(tmp_path):
         ("current", "task/repushed", "lease-active"),
         ("current", "task/raced", "lease-unknown"),
         ("current", "task/tied", "lease-unknown"),
+        ("current", "task/unsourced", "lease-unknown"),
     }, f"An older push must not start the lease: {held}"

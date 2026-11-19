@@ -38,7 +38,7 @@ rule unsafe(x: Stage) when x in Stage and not Stage.next(x, y)
 @pytest.mark.xfail(
     strict=True,
     raises=BranchBindingMismatch,
-    reason="Lower conjunctions, disjunctions and assignments in compiler/rezono_compiler/native_rule_lowering.py: "
+    reason="M3: Lower conjunctions, disjunctions and assignments in compiler/rezono_compiler/native_rule_lowering.py: "
            "one rule per alternative, a computed n = k + 1 as an IR assignment, and R042 for a branch-local head "
            "name and for an unbound negative key. Read decisions/language-expression-semantics.md §1. "
            "Waits for test_expression_python_negated_call and test_expression_python_path_bindings, "

@@ -24,7 +24,7 @@ def declaration(path: Path) -> dict:
     return yaml.safe_load(path.read_text("utf-8"))
 
 
-@pytest.mark.xfail(strict=True, reason="Waits for edge/publisher/tests/test_export_output_index.py--test_exports_carry_an_output_index: an out-port needs row_source output_index, and the publisher does not write that index yet. Then declare the five standards mappings (RDF with its JSON-LD context, PROV-O, SHACL, ODCS, DCAT) as out-ports in edge/plugins/<name>/plugin.yaml, as decisions/export-output-index.md fixes.")
+@pytest.mark.xfail(strict=True, reason="extra: Waits for edge/publisher/tests/test_export_output_index.py--test_exports_carry_an_output_index: an out-port needs row_source output_index, and the publisher does not write that index yet. Then declare the five standards mappings (RDF with its JSON-LD context, PROV-O, SHACL, ODCS, DCAT) as out-ports in edge/plugins/<name>/plugin.yaml, as decisions/export-output-index.md fixes.")
 def test_there_are_declarations():
     assert len(DECLARATIONS) >= 5
 

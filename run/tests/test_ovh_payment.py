@@ -6,7 +6,7 @@ from offline_cases import implementation
 
 
 @pytest.mark.xfail(strict=True, reason=(
-    "Read decisions/run-price-enforcement.md, Correlation. Implement pay(call, order_id, payment_method_id) in "
+    "M4: decisions/run-price-enforcement.md: Read the section Correlation. Implement pay(call, order_id, payment_method_id) in "
     "run/ovh_payment.py; call(method, path, body) is the provider port."
 ))
 def test_ovh_payment():

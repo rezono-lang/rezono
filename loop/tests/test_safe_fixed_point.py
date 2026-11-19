@@ -6,16 +6,6 @@ import pytest
 from test_replay_fixed_point import boundary, execute, setup_recording
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason=(
-        "Read decisions/safe-step-rounds.md. Through loop.recording_cli and the std-loop fixed-point "
-        "rules, report the closed blocked goals including a goal without a producer. Admit loop_goal and "
-        "loop_batch_deferral in packs/std-loop beside the existing loop_pending_operation. A supplied safe deferral may withhold "
-        "the fixed point (decisions/loop-certificate-admission.md section 1). Write in packs/std-loop and loop/."
-    ),
-)
 def test_safe_fixed_point(tmp_path, capsys):
     recording = setup_recording(tmp_path)
     records = recording["records"]

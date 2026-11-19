@@ -1,0 +1,4 @@
+// The shared typed read right (S28, O8). Each consumer supplies its own grant clauses.
+// This declaration alone denotes the empty set and confers no read rights.
+// @extend
+.decl may_read(role: symbol, kind: symbol, element: symbol)
