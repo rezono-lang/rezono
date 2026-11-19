@@ -1,6 +1,6 @@
 """A row-backed parameter written in Rezono lowers to the parameters and parameter_choice of the calculation
-program (decisions/language-calculations.md, section Parameters). The oracle is calc/award.yaml of
-examples/subsidy-scheme: two of its rules move to a module form, the rest stays in the YAML file."""
+program (decisions/language-calculations.md, section Parameters). The oracle is calc/award.yaml of the
+scheme that examples/subsidy imports: two of its rules move to a module form, the rest stays in the YAML file."""
 
 import pytest
 import yaml

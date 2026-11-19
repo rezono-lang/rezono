@@ -1,6 +1,6 @@
 """A calculation written in Rezono lowers to the program its calc/*.yaml file states: the same ir/calc.json and
-calculation SQL (decisions/language-calculations.md). The existing files of examples/subsidy and
-examples/subsidy-scheme are the oracle; the module forms below are written by hand from that decision."""
+calculation SQL (decisions/language-calculations.md). The existing files of examples/subsidy and of the
+scheme it imports are the oracle; the module forms below are written by hand from that decision."""
 
 import pytest
 
@@ -47,7 +47,7 @@ def test_lower_calculation(tmp_path):
 
 
 def award() -> list:
-    """calc/award.yaml of examples/subsidy-scheme. Inside entitlement the derived value advice_allowance is
+    """calc/award.yaml of the scheme that examples/subsidy imports. Inside entitlement the derived value advice_allowance is
     written Application.advice_allowance, because a parameter has the same name (the section Leaves)."""
     rule_leaf = {"dot": [{"kind": "Application"}, "advice_allowance"]}
     income, costs = path("assessed_income", "cents"), path("assessed_costs", "cents")
@@ -78,7 +78,7 @@ def award() -> list:
 
 
 @pytest.mark.xfail(strict=True, raises=MissingCalculationLowering, reason=(
-    "M3: decisions/language-calculations.md: Lower the whole award of examples/subsidy-scheme from its module "
+    "M3: decisions/language-calculations.md: Lower the whole award (calc/award.yaml of the scheme that examples/subsidy imports) from its module "
     "form: row-backed parameters, a parameter and a derived value of the same name (the subject-qualified "
     "Application.advice_allowance is the derived value; a bare name that matches both is R050 ambiguous leaf), "
     "round, min, when-then-else and the chained comparisons, in compiler/rezono_compiler/rezono_calc.py. "

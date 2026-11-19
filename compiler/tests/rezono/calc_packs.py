@@ -14,8 +14,19 @@ from rezono_compiler import emit, pack, rezono_module
 
 
 ROOT = Path(__file__).resolve().parents[3]
-SCHEME = "examples/subsidy-scheme"
 SUBSIDY = "examples/subsidy"
+
+
+def imported_example(example: str) -> str:
+    """The one example pack that `example` imports, as a path from the repository root."""
+    meta = yaml.safe_load((ROOT / example / "pack.yaml").read_bytes())
+    [path] = [(ROOT / example / entry["path"]).resolve() for entry in meta["imports"]
+              if (ROOT / example / entry["path"]).resolve().parent == (ROOT / "examples").resolve()]
+    return path.relative_to(ROOT.resolve()).as_posix()
+
+
+# The scheme the subsidy example imports: its definition, with calc/award.yaml.
+SCHEME = imported_example(SUBSIDY)
 
 
 def examples(root: Path) -> Path:

@@ -15,6 +15,7 @@ import yaml
 
 from rezono_compiler import emit, modules, pack
 from rezono_publisher import batch, publish, store
+from calc_packs import SCHEME
 
 
 REPO = Path(__file__).resolve().parents[3]
@@ -23,13 +24,12 @@ ACCESS = "packs/std-access"
 CONSUMER = "examples/subsidy"
 LEGACY = ("schema/access.yaml", "rules/access.dl")
 MODULE = "rezono/access.rezono"
-ROLES = {"checker": "complete", "case_officer": "may_read", "policy_adviser": "may_read", "public": "may_read"}
 
 
 def published(tmp_path, form):
     root = tmp_path / form
     shutil.copytree(REPO / "packs", root / "packs")
-    for example in (CONSUMER, "examples/subsidy-scheme"):
+    for example in (CONSUMER, SCHEME):
         shutil.copytree(REPO / example, root / example)
     access = root / ACCESS
     meta_path = access / "pack.yaml"
@@ -53,9 +53,11 @@ def published(tmp_path, form):
     files = emit.compile_pack(pack.read(consumer))
     epoch = batch.epoch(consumer, epoch=1, knowledge_time="2026-11-10T00:00:00Z", sources=[("rules", "test")])
     bucket = store.FileStore(tmp_path / f"{form}-store")
-    publish.publish(epoch, bucket, ROLES)
+    roles = {"checker": "complete"} | {str(row["id"]): "may_read" for row in
+                                       yaml.safe_load((consumer / "facts/roles.yaml").read_bytes())["role"]}
+    publish.publish(epoch, bucket, roles)
     seen = {}
-    for role in ROLES:
+    for role in roles:
         objects = publish.role_objects(bucket, "subsidy", "m-1", role)
         assert objects, role
         seen[role] = {name[len("relations/"):-len(".json")]: sorted(repr(row["key"]) for row in
@@ -93,11 +95,13 @@ def test_the_oracle_is_the_existing_std_access():
 
 def test_std_access_publishes_through_its_consumer(tmp_path):
     _, seen = published(tmp_path, "legacy")
-    # The public reads the scheme and never a case; the case officer reads the cases (examples/subsidy,
-    # rules/access.dl). Without these the comparison below could agree on two empty worlds.
-    assert seen["public"]["article"] and seen["public"]["article"] == seen["case_officer"]["article"]
-    assert not seen["public"].get("application")
-    assert seen["case_officer"]["application"]
+    # Every role reads the articles of the scheme; some roles read the applications and some read none
+    # (examples/subsidy, rules/access.dl). Without these the comparison below could agree on empty worlds.
+    readers = {role: relations for role, relations in seen.items() if role != "checker"}
+    articles = {tuple(relations.get("article", [])) for relations in readers.values()}
+    assert len(articles) == 1 and all(articles)
+    assert any(relations.get("application") for relations in readers.values())
+    assert any(not relations.get("application") for relations in readers.values())
 
 
 @pytest.mark.xfail(strict=True, raises=AssertionError, reason=(
