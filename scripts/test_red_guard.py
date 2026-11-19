@@ -4,7 +4,8 @@ from pathlib import Path
 import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from red_guard import DEFINITION, Change, Tree, allowed, pack_hash, pin_update, protected, review, source
+from red_guard import (DEFINITION, UNREADABLE_CONFIG, Change, Tree, allowed, pack_hash, pin_update, protected,
+                       review, source)
 
 
 def main():
@@ -43,6 +44,79 @@ def main():
     workflow_cases()
     read_cases(function)
     pin_cases(function)
+    pytest_config_cases(function)
+    green_to_red_cases()
+
+
+def pytest_config_cases(function):
+    """The pytest section of pyproject.toml, setup.cfg or tox.ini can drop a test from the run."""
+    lifted = function.split(b"\n", 1)[1]
+    project = b'[project]\nname = "demo"\n\n[tool.pytest.ini_options]\ntestpaths = ["tests"]\n'
+    ignored = project.replace(b'testpaths = ["tests"]\n', b'testpaths = ["tests"]\naddopts = "--ignore=tests/test_a.py"\n')
+    cases = [
+        ("pytest section of pyproject.toml", "demo/pyproject.toml", project, ignored, True),
+        ("other section of pyproject.toml", "demo/pyproject.toml", project, project.replace(b'"demo"', b'"demo2"'), False),
+        ("pytest section added to pyproject.toml", "pyproject.toml", b'[project]\nname = "demo"\n',
+         b'[project]\nname = "demo"\n\n[tool.pytest]\naddopts = ["--ignore=tests"]\n', True),
+        ("pytest section of setup.cfg", "demo/setup.cfg", b"[metadata]\nname = demo\n\n[tool:pytest]\naddopts = -q\n",
+         b"[metadata]\nname = demo\n\n[tool:pytest]\naddopts = -q --ignore=tests\n", True),
+        ("other section of setup.cfg", "demo/setup.cfg", b"[metadata]\nname = demo\n", b"[metadata]\nname = demo2\n",
+         False),
+        ("pytest section of tox.ini", "tox.ini", b"[pytest]\naddopts = -q\n", b"[pytest]\naddopts = -q -k 'not a'\n",
+         True),
+        ("pyproject.toml that no longer parses", "demo/pyproject.toml", project, project + b"[[[\n", True),
+        ("pyproject.toml replaced by a link", "demo/pyproject.toml", project, UNREADABLE_CONFIG, True),
+        ("new pyproject.toml as a link", "demo/pyproject.toml", None, UNREADABLE_CONFIG, True),
+        ("removed pyproject.toml with a pytest section", "demo/pyproject.toml", project, None, True),
+    ]
+    for label, path, before, after, expected in cases:
+        status = "A" if before is None else "D" if after is None else "M"
+        change = Change(path, status, before, after)
+        errors, notes = review([change], planner=False)
+        if bool(errors) != expected or (f"CHANGED {path} pytest configuration" in notes) != expected:
+            raise AssertionError(f"{label}: errors {errors}, notes {notes}")
+        errors, notes = review([change], planner=True)
+        if errors:
+            raise AssertionError(f"{label} with planner: errors {errors}")
+        print(f"{'DENY' if expected else 'ALLOW'} without planner, ALLOW with planner: {label}")
+    # Beside a lifted mark, a changed pytest section is another protected change.
+    errors, _ = review([Change("tests/test_count.py", "M", function, lifted),
+                        Change("demo/pyproject.toml", "M", project, ignored)], planner=True)
+    if not any("Lift marks in a pull request of their own" in e for e in errors):
+        raise AssertionError(f"lifted mark beside a pytest section: errors {errors}")
+    print("DENY with planner: lifted mark beside a changed pytest section")
+
+
+def green_to_red_cases():
+    """A new red mark on a test that was green is reported, and needs the planner label."""
+    green = b"import pytest\n\n\ndef test_a():\n    assert f() == 1\n"
+    other = b"\n\n@pytest.mark.xfail(strict=True, reason=\"M1: x\")\ndef test_b():\n    assert f() == 2\n"
+    mark = b"@pytest.mark.xfail(strict=True, reason=\"M1: x\")\n"
+    param = (b"import pytest\n\n\n@pytest.mark.parametrize('v', [1, 2])\ndef test_a(v):\n    assert f(v)\n",
+             b"import pytest\n\n\n@pytest.mark.parametrize('v', [1, pytest.param(2, marks=pytest.mark.xfail("
+             b"strict=True, reason=\"M1: x\"))])\ndef test_a(v):\n    assert f(v)\n")
+    cases = [
+        ("function mark on a green test", green, green.replace(b"def test_a", mark + b"def test_a")),
+        ("same mark as a red test beside it", green + other, green.replace(b"def test_a", mark + b"def test_a") + other),
+        ("module mark over a green test", green,
+         green.replace(b"\n\n\ndef", b"\npytestmark = pytest.mark.xfail(strict=True, reason=\"M1: x\")\n\n\ndef")),
+        ("parameter mark on a green test", *param),
+    ]
+    for label, before, after in cases:
+        change = Change("tests/test_a.py", "M", before, after)
+        note = "CHANGED tests/test_a.py::test_a from green to red"
+        errors, notes = review([change], planner=False)
+        if note not in notes or not any("turn red" in e for e in errors):
+            raise AssertionError(f"{label} without planner: errors {errors}, notes {notes}")
+        errors, notes = review([change], planner=True)
+        if errors or note not in notes:
+            raise AssertionError(f"{label} with planner: errors {errors}, notes {notes}")
+        print(f"DENY without planner, ALLOW with planner and reported: {label}")
+    errors, notes = review([Change("tests/test_a.py", "M", green + other, green + other.replace(b"M1", b"M2"))],
+                           planner=True)
+    if any("from green to red" in n for n in notes):
+        raise AssertionError(f"a red test that stays red is not green to red: notes {notes}")
+    print("ALLOW: a red test that stays red is not reported as green to red")
 
 
 def pin_cases(function):

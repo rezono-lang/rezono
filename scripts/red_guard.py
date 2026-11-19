@@ -22,6 +22,7 @@ In the merge queue no labels are read and this rule does not apply.
 import argparse
 import ast
 from collections import Counter, namedtuple
+import configparser
 import copy
 from fnmatch import fnmatchcase
 import hashlib
@@ -33,6 +34,7 @@ import re
 import subprocess
 import sys
 import tokenize
+import tomllib
 
 
 # The merge queue runs a candidate's own workflow files, so the workflows that define the
@@ -87,6 +89,38 @@ def protected(path):
             or p.name in {"frozen_baseline.py", "reference.py", "pytest.ini"} | EXPECTATIONS
             or "fixture" in p.stem or p.stem.endswith(("-cases", "_cases", "-vectors", "_vectors"))
             or p.parts[0] == "blocked")
+
+
+# Files that may hold pytest's configuration beside other settings. Their pytest section can
+# drop a test file from the run (`addopts = --ignore=...`), so a change to that section is
+# protected like pytest.ini; the rest of the file is not.
+PYTEST_CONFIG = {"pyproject.toml": None, "setup.cfg": "tool:pytest", "tox.ini": "pytest"}
+UNREADABLE_CONFIG = b"\xff"
+
+
+def pytest_config(path):
+    return PurePosixPath(path.lower()).name in PYTEST_CONFIG
+
+
+def pytest_section(path, blob):
+    """The pytest configuration in a pyproject.toml, setup.cfg or tox.ini blob.
+
+    An absent file or section gives None. A blob that does not parse gives its bytes, so that
+    any change to it counts.
+    """
+    if blob is None:
+        return None
+    try:
+        text = blob.decode("utf-8")
+        name = PurePosixPath(path.lower()).name
+        if name == "pyproject.toml":
+            return tomllib.loads(text).get("tool", {}).get("pytest")
+        parser = configparser.ConfigParser(interpolation=None, strict=False)
+        parser.read_string(text)
+        section = PYTEST_CONFIG[name]
+        return dict(parser.items(section)) if parser.has_section(section) else None
+    except (UnicodeError, tomllib.TOMLDecodeError, configparser.Error, AttributeError):
+        return blob
 
 
 # Changes here decide whether a proof is accepted or what a role may see. Nothing downstream
@@ -663,6 +697,13 @@ def review(changes, planner=False, head=None, labels=(), packs=frozenset(), pins
             unread.append(ascii(c.path))
         if c.path == CI_WORKFLOW:
             notes.append(f"CHANGED {CI_WORKFLOW}")
+        if (not protected(c.path) and pytest_config(c.path)
+                and pytest_section(c.path, c.before) != pytest_section(c.path, c.after)):
+            other.append(ascii(c.path))
+            notes.append(f"CHANGED {c.path} pytest configuration")
+            if not planner:
+                errors.append(f"ERROR planner label required for the pytest configuration in {ascii(c.path)}")
+            continue
         if not protected(c.path):
             continue
         quoted = ascii(c.path)
@@ -721,6 +762,14 @@ def review(changes, planner=False, head=None, labels=(), packs=frozenset(), pins
         # weakening an expectation on its own is the change a reviewer most needs to see.
         notes.extend(f"CHANGED {c.path}::{name}" for name, (shape, red) in new.tests.items()
                      if name in old.tests and not red and old.tests[name][0] != shape)
+        # A green test that a new mark turns red stops guarding what it guarded. Only a planner
+        # does that, and names the decision in the pull request.
+        reddened = [name for name, (_, red) in new.tests.items()
+                    if red and name in old.tests and not old.tests[name][1]]
+        notes.extend(f"CHANGED {c.path}::{name} from green to red" for name in reddened)
+        if reddened and not planner:
+            errors.append(f"ERROR green tests turn red in {quoted}: {', '.join(reddened)}. Only a pull request "
+                          "with the planner label marks a green test red, and it names the decision.")
     completed = completion(changes, packs) if planner and lifted and other else None
     if completed:
         path, names = completed
@@ -752,11 +801,15 @@ def changes(base, head):
         path = raw_path.decode("utf-8", "surrogateescape")
         old_mode, new_mode, old_id, new_id, status = header.decode().lstrip(":").split()
         sides = [None, None]
-        if protected(path):
+        if protected(path) or pytest_config(path):
             # Git objects are data. Never open a path in the proposed revision.
             for i, (mode, oid) in enumerate(((old_mode, old_id), (new_mode, new_id))):
                 if mode == "100644" and int(git("cat-file", "-s", oid)) <= LIMIT:
                     sides[i] = git("cat-file", "blob", oid)
+                elif mode != "000000" and pytest_config(path):
+                    # A link or an oversized file: not readable as configuration, so it counts
+                    # as a change of its pytest section (bytes that are not UTF-8).
+                    sides[i] = UNREADABLE_CONFIG
         yield Change(path, status[0], *sides)
 
 
