@@ -5,18 +5,22 @@ from rezono_canon import canonical_bytes
 from rezono_checker.transition import check_transition_certificate
 from round_visibility_cases import A_WITHDRAWN, OPENING, PRIORITIES, RUN, WITHDRAW_A, WITHDRAW_B
 from round_visibility_pair import MANIFEST, PROGRAM, pair_evidence
-from round_visibility_publication import checked_loop_publication
+from round_visibility_publication import checked_loop_publication, round_authority, round_candidates
 
 
 @pytest.mark.xfail(
     strict=True,
-    raises=AssertionError,
+    raises=(AssertionError, TypeError),
     reason=(
-        "Read decisions/scoped-completeness.md sections 1 and 3. Only the selected members of a valid "
-        "independently checked current batch certificate enter ready. A supplied positive result "
-        "without the complete obligation inventory is not a certificate. Write in the Loop round admission path. "
-        "Waits for test_completeness_receipt_exact_inventory: ready needs the std-completeness admission that "
-        "checks submitted evidence against the retained context and only then supplies a protected rule input."
+        "Read decisions/scoped-completeness.md sections 1 and 3 and decisions/loop-certificate-admission.md. "
+        "Only the selected members of a valid independently checked current batch certificate enter ready. "
+        "A supplied positive result without the complete obligation inventory is not a certificate. Write in "
+        "packs/std-loop (ready.dl, fixed_point.dl) and switch the readers of the old ready to unblocked "
+        "(loop/typed_recording.py, build/rules/tasks.dl). Waits for test_unblocked_evidence, "
+        "test_supplied_verdicts_authorize_nothing and the core round admission: batch.epoch must admit "
+        "transition_certificates against transition_authority with the round verifier in the checker and supply "
+        "loop_certified_step and loop_certified_member (no core red test yet). Today batch.epoch rejects the "
+        "admission keywords with TypeError."
     ),
 )
 def test_ready_requires_checked_batch_member(tmp_path):
@@ -45,8 +49,10 @@ def test_ready_requires_checked_batch_member(tmp_path):
                                          "width": 1, "effects": [WITHDRAW_A.plan, WITHDRAW_B.plan],
                                          "priorities": PRIORITIES}),
     }
+    authority = [round_authority(retained, run=RUN, cut=OPENING.cut)]
     _, rows, _ = checked_loop_publication(
         tmp_path / "without-certificate", records, retained=retained,
+        admission={"transition_certificates": [], "transition_authority": authority},
     )
     assert (rows("safe_alone"), rows("ready")) == (set(), set()), (
         f"An incomplete supplied check authorized a step. safe_alone={rows('safe_alone')}. ready={rows('ready')}"
@@ -61,6 +67,7 @@ def test_ready_requires_checked_batch_member(tmp_path):
     }
     _, rows, _ = checked_loop_publication(
         tmp_path / "with-certificate", records, retained=retained, submitted=submitted,
+        admission={"transition_certificates": round_candidates(submitted), "transition_authority": authority},
     )
     assert {row[:2] for row in rows("ready")} == {(RUN, WITHDRAW_A.step)}
     assert all(row[2] for row in rows("ready")), "The selection must retain its proof reason"
