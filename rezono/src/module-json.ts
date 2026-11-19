@@ -36,7 +36,7 @@ function formatOf(module: Module): ModuleForm['format'] {
 		if ('dataset' in decl || 'rules' in decl) return true;
 		if ('kind' in decl) {
 			if (decl.parent !== undefined) return true;
-			return decl.abstract || decl.embedded || decl.keys?.length || hasMetadata(decl)
+			return decl.abstract || decl.embedded || decl.relationship || decl.keys?.length || hasMetadata(decl)
 				|| decl.slots.some(slot => slot.identifier || slot.embedded || slot.slotUri !== undefined
 					|| slot.constraints !== undefined || hasMetadata(slot))
 				|| decl.equations?.length || decl.checks?.length;
