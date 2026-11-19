@@ -36,7 +36,7 @@ from linkml_runtime.linkml_model import SchemaDefinition
 from .schemaview import SchemaView
 from rezono_canon import canonical_sha256, sha256_hex
 
-from . import rezono_module, standard_packs
+from . import rezono_module, standard_packs, strict_yaml
 
 # The files that define a pack: everything the compiler reads but facts, scenarios and diagnostics (data)
 # and expected output. Its hash covers exactly these: the import pin and the publication's
@@ -122,7 +122,7 @@ def closure(pack_dir: str | Path) -> tuple[Path, list[tuple[str, Path]]]:
     relative to the pack, so a copy keeps them where they are relative to each other: under that common
     directory. Raises ValueError for an import that does not hold."""
     pack_dir = Path(os.path.abspath(pack_dir))
-    meta = yaml.safe_load((pack_dir / "pack.yaml").read_text("utf-8")) or {}
+    meta = strict_yaml.read(pack_dir / "pack.yaml") or {}
     errors: list[str] = []
     imported_packs(pack_dir, meta, errors)  # names, pins and cycles, as the compiler checks them
     if errors:
@@ -139,7 +139,7 @@ def closure(pack_dir: str | Path) -> tuple[Path, list[tuple[str, Path]]]:
                 raise ValueError(f"{at.name}/pack.yaml: import {imp['name']} is not the pinned {imp['sha256']}")
             if d not in found:
                 found[d] = str(imp["name"])
-                todo.append((d, yaml.safe_load((d / "pack.yaml").read_text("utf-8")) or {}))
+                todo.append((d, strict_yaml.read(d / "pack.yaml") or {}))
     dirs = sorted((name, d) for d, name in found.items())
     return Path(os.path.commonpath([pack_dir, *(d for _, d in dirs)])), dirs
 
@@ -211,7 +211,7 @@ def imported_packs(pack_dir: Path, meta: dict, errors: list[str]) -> dict[str, I
             if not (d / "pack.yaml").is_file():
                 errors.append(f"{where}: no pack.yaml in {d}")
                 continue
-            sub = yaml.safe_load((d / "pack.yaml").read_text("utf-8")) or {}
+            sub = strict_yaml.read(d / "pack.yaml") or {}
             if sub.get("name") != name:
                 errors.append(f"{where}: the pack in {imp['path']} is named {sub.get('name')!r}")
                 continue
@@ -329,7 +329,7 @@ def schema_names(pack_dir: Path) -> dict[str, set[str]]:
     out: dict[str, set[str]] = {}
     for f in sorted((pack_dir / "schema").rglob("*.yaml")):
         try:
-            doc = yaml.safe_load(f.read_text("utf-8")) or {}
+            doc = strict_yaml.read(f) or {}
         except (OSError, ValueError, yaml.YAMLError):
             continue  # load() reports a file LinkML cannot read
         if isinstance(doc, dict):

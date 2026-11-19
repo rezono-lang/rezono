@@ -19,9 +19,8 @@ from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import cast
 
-import yaml
 
-from . import rules_dl, spans, types
+from . import rules_dl, spans, strict_yaml, types
 from .names import ISO_DATE
 from .pack import CompileError, Pack, Slot, located, renamed
 
@@ -327,7 +326,7 @@ def check_imports(pack: Pack, prog: Program, parts: dict[str, dict], imports: di
 
 def load_yaml(path: Path):
     """YAML with libyaml when it is there: a calc file of a large pack is a megabyte."""
-    return yaml.load(Path(path).read_text(encoding="utf-8"), Loader=getattr(yaml, "CSafeLoader", yaml.SafeLoader))
+    return strict_yaml.read(path)
 
 
 def build(pack: Pack, doc: dict, derived: dict | None = None, files: list[tuple[str, Path]] | None = None) -> Program:
