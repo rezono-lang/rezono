@@ -24,12 +24,11 @@ expect:
     count:
       accepted: false
       diagnostic: R004
-    any: false
+    any:
+      $unknown: open_world
     known_absent_members: []
   state: known
   reason: null
   witness: null
 unsupported:
   feldera: The compiler refuses the unguarded count before sending rules to the engine.
-  language: The current language evaluator gives unknown for any on an empty open relation, while this
-    case distinguishes recorded positive evidence.
