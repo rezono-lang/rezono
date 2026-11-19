@@ -26,11 +26,6 @@ CASES = [
 ]
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="M4: Write cel_port_range.covers as decisions/k8s-admission-translator.md specifies under Port range. "
-           "Write in k8s-admission/cel_port_range.py. Without Go the test checks the exact text; the CI also runs cel-go.",
-)
 def test_cel_port_range():
     from cel_port_range import covers
 

@@ -343,6 +343,7 @@ def format_milestones(counts: dict[str, dict[str, int]]) -> str:
 
 WAIT_START = re.compile(r"\b(?:waits for|depends on)\s+", re.IGNORECASE)
 CLAUSE_END = re.compile(r"[:;(]|\.(?:\s|$)")
+PARENTHETICAL = re.compile(r"\s*\([^()]*\)")
 TEST_NAME = re.compile(r"(?:[\w.-]+/)*test_\w*(?:\.py)?(?:(?:::|--)\w+)*")
 FUNCTION_IN_LAST_FILE = re.compile(r"(?:::|--)test_\w*")
 LIST_SEPARATOR =re.compile(r",|\s+and\s+")
@@ -354,12 +355,18 @@ QUALIFIER_WORDS = frozenset({
 
 
 def _wait_clauses(reason: str) -> list[str]:
-    """Return the text after each "Waits for" or "Depends on", up to the end of its sentence."""
+    """Return the text after each "Waits for" or "Depends on", up to the end of its sentence.
+
+    A closed parenthetical, such as "(compare_as in the rule IR)" after a test name, is left
+    out, so the list goes on after it; an unclosed one ends the clause.
+    """
     starts = list(WAIT_START.finditer(reason))
     clauses: list[str] = []
     for index, match in enumerate(starts):
         stop = starts[index + 1].start() if index + 1 < len(starts) else len(reason)
         rest = reason[match.end():stop]
+        while (stripped := PARENTHETICAL.sub("", rest)) != rest:
+            rest = stripped
         end = CLAUSE_END.search(rest)
         clauses.append(rest[: end.start()] if end else rest)
     return clauses

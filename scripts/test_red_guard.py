@@ -1,9 +1,10 @@
 """Regression cases for the policy, using inert bytes without executing proposed changes."""
+import ast
 from pathlib import Path
 import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from red_guard import Change, allowed, protected, review, source
+from red_guard import DEFINITION, Change, Tree, allowed, pack_hash, pin_update, protected, review, source
 
 
 def main():
@@ -41,13 +42,82 @@ def main():
     planner_cases(reason, function)
     workflow_cases()
     read_cases(function)
+    pin_cases(function)
+
+
+def pin_cases(function):
+    """With the label, a fixture pack may re-pin an import to the hash the guard computes."""
+    source_of = Path(__file__).resolve().parent.parent / "compiler/rezono_compiler/modules.py"
+    tree_of = ast.parse(source_of.read_text(encoding="utf-8"))
+    compiled = next(ast.literal_eval(node.value) for node in tree_of.body if isinstance(node, ast.Assign)
+                    and [getattr(t, "id", None) for t in node.targets] == ["DEFINITION"])
+    if compiled != DEFINITION:
+        raise AssertionError(f"red_guard.DEFINITION differs from the compiler's: {compiled}")
+    print("SAME: the pack definition files of the guard and the compiler")
+
+    lifted = function.split(b"\n", 1)[1]
+    lift = Change("tests/test_count.py", "M", function, lifted)
+    access, explain = "packs/std-access", "packs/std-explain"
+    files = {f"{access}/pack.yaml": b"name: std-access\n", f"{access}/rules/access.dl": b"may_read(r, k).\n",
+             f"{access}/expected/out.json": b"[]\n", f"{explain}/pack.yaml": b"name: std-explain\n"}
+    tree = Tree.of(files)
+    new, other = pack_hash(tree, access), pack_hash(tree, explain)
+    old = "cc" * 32
+
+    def fixture(digest, extra=b""):
+        return (b"name: neutral\nimports:\n  - name: std-access\n    path: ../../../packs/std-access\n"
+                b"    sha256: " + digest.encode() + b"\n" + extra
+                + b"  - name: std-explain\n    path: ../../../packs/std-explain\n"
+                b"    sha256: " + other.encode() + b"\n")
+
+    pinned = Change("tests/fixtures/neutral/pack.yaml", "M", fixture(old), fixture(new))
+    changed = Change(f"{access}/rules/access.dl", "M", None, None)
+
+    def run(label, changes, expected, planner=True, at=tree):
+        paths = {c.path for c in changes}
+        pins = frozenset(c.path for c in changes if pin_update(c, at, paths))
+        errors, notes = review(changes, planner=planner, pins=pins)
+        allowed_ = not errors and "PINNED tests/fixtures/neutral/pack.yaml" in notes
+        if allowed_ != expected:
+            raise AssertionError(f"{label}: errors {errors}, notes {notes}")
+        print(f"{'ALLOW' if expected else 'DENY'} {'with' if planner else 'without'} planner: {label}")
+
+    run("a pin update to the computed hash beside a lifted mark", [lift, changed, pinned], True)
+    run("a pin update to the computed hash, without the label", [lift, changed, pinned], False, planner=False)
+    run("a pin update to another hash", [lift, changed, Change(pinned.path, "M", fixture(old), fixture("ab" * 32))],
+        False)
+    run("a pin update with an added line beside it",
+        [lift, changed, Change(pinned.path, "M", fixture(old), fixture(new, b"  # moved\n"))], False)
+    run("a pin update whose other lines change too", [lift, changed, Change(
+        pinned.path, "M", fixture(old), fixture(new).replace(b"name: neutral", b"name: neutral2"))], False)
+    run("a pin update without a change in the imported pack", [lift, pinned], False)
+    run("a pin update beside a change outside the imported pack",
+        [lift, Change("packs/std-time/rules/time.dl", "M", None, None), pinned], False)
+    run("a new fixture pack.yaml", [lift, changed, Change(pinned.path, "A", None, fixture(new))], False)
+    run("a pin update outside a fixture or test directory",
+        [lift, changed, Change("examples/demo/expected/pack.yaml", "M", fixture(old), fixture(new))], False)
+    # The pinned pack imports the changed one: its hash moves with its own new pin.
+    middle = "packs/std-middle"
+    deep = dict(files, **{f"{middle}/pack.yaml": b"name: std-middle\nimports:\n  - name: std-access\n"
+                          b"    path: ../std-access\n    sha256: " + new.encode() + b"\n"})
+    deep_tree = Tree.of(deep)
+    via = (b"name: neutral\nimports:\n  - name: std-middle\n    path: ../../../packs/std-middle\n    sha256: ")
+    run("a pin update of a pack that imports the changed pack", [lift, changed, Change(
+        pinned.path, "M", via + old.encode() + b"\n", via + pack_hash(deep_tree, middle).encode() + b"\n")],
+        True, at=deep_tree)
+    flow = b"imports:\n  - {name: std-access, path: ../../../packs/std-access, sha256: %s}\n"
+    run("a pin update in a flow mapping", [lift, changed, Change(
+        pinned.path, "M", flow % old.encode(), flow % new.encode())], True)
+    linked = Tree(dict(Tree.of(files).modes, **{f"{access}/rules/link.dl": "120000"}), files.__getitem__)
+    run("a pin update of a pack that holds a symbolic link", [lift, changed, pinned], False, at=linked)
 
 
 def workflow_cases():
     """The workflows that define required checks, and what they run to decide, need the label."""
     deciders = (".github/workflows/python-environment/action.yml", "loop/rezono_cluster.py",
                 "scripts/cluster_worker_tasks.py", "scripts/role_publication_ci.py",
-                "scripts/components.py")
+                "scripts/components.py", "scripts/fast_check.py", "loop/cluster/select_tests.py",
+                "scripts/red_list.py")
     for path in deciders:
         # Protected, yet still source: red_before.py runs added tests against the base copy.
         if not (protected(path) and source(path)):
@@ -70,7 +140,10 @@ def workflow_cases():
 def read_cases(function):
     """A change to the checker or read access needs the read label for its head commit."""
     head = "0123456789abcdef" * 2 + "01234567"
-    current, stale = "p1-read-0123456", "p1-read-fedcba9"
+    current, stale = "p1-read-" + head, "p1-read-" + "fedcba98" * 5
+    prefix = "p1-read-" + head[:7]
+    # Another commit that shares the first seven characters must not inherit the label.
+    twin = head[:7] + "f" * 33
     checker = [Change("checker/rezono_checker/proof.py", "M", None, None)]
     lifted = function.split(b"\n", 1)[1]
 
@@ -86,6 +159,12 @@ def read_cases(function):
     run("checker change labelled for an earlier commit", checker, ["planner", stale], True)
     run("checker change labelled for its head commit", checker, ["planner", current], False)
     run("checker change with a read label but a malformed head", checker, [current], True, at=head[:7])
+    run("checker change labelled with only the prefix of its head", checker, ["planner", prefix], True)
+    run("checker change at another commit with the same prefix", checker, ["planner", current], True,
+        at=twin)
+    canon = [Change("canon/rezono_canon/__init__.py", "M", None, None)]
+    run("canonical encoding change without a label", canon, ["planner"], True)
+    run("canonical encoding change labelled for its head commit", canon, ["planner", current], False)
     run("only marks lifted in tests under the read paths", [
         Change("checker/rezono_checker/tests/test_proof.py", "M", function, lifted),
         Change("packs/std-access/tests/test_access.py", "M", function, lifted),
@@ -96,10 +175,17 @@ def read_cases(function):
     ], ["planner"], False)
     for path in ("checker/rezono_checker/proof.py", "packs/std-access/rules/access.dl",
                  "edge/gate/src/ask.ts", "edge/publisher/rezono_publisher/access.py",
-                 "contracts/proof.yaml", "checker/rezono_checker/fixtures.py"):
+                 "contracts/proof.yaml", "checker/rezono_checker/fixtures.py",
+                 *(f"edge/publisher/rezono_publisher/{name}.py" for name in (
+                     "calc_scope", "sources", "sweep", "difference", "batch", "publish", "proof", "views"))):
         for status in ("M", "A", "D"):
             run(f"{status} {path} without a read label", [Change(path, status, None, None)],
                 ["planner"], True)
+    sweep = [Change("edge/publisher/rezono_publisher/sweep.py", "M", None, None)]
+    run("sweep change in the publisher with only the planner label", sweep, ["planner"], True)
+    run("sweep change in the publisher labelled for its head commit", sweep, ["planner", current], False)
+    run("other publisher change without a read label",
+        [Change("edge/publisher/rezono_publisher/store.py", "M", None, None)], [], False, planner=False)
     run("other contracts change without a read label",
         [Change("contracts/facts.yaml", "M", None, None)], [], False, planner=False)
     errors, _ = review(checker, planner=True)
