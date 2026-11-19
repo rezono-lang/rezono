@@ -5,16 +5,6 @@ import pytest
 from loop_oracle import evaluate
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=FileNotFoundError,
-    reason=(
-        "Read decisions/loop-certificate-admission.md section 1 and decisions/safe-step-rounds.md section 1. "
-        "Add packs/std-loop/rules/unblocked.dl with unblocked(run, step, reason): each eligibility witness of an "
-        "unfinished step with no waiting row in the same run, which is what ready.dl derives today. Leave "
-        "ready.dl unchanged; a later task gives ready its certified meaning. Write in packs/std-loop."
-    ),
-)
 def test_unblocked_evidence():
     columns = {
         "eligible": "run step reason",

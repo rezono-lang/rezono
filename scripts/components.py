@@ -597,7 +597,7 @@ def test_files(folder: str) -> list[str]:
         path.relative_to(ROOT).as_posix()
         for pattern in ("test_*.py", "*_test.py")
         for path in directory.rglob(pattern)
-        if path.is_file()
+        if path.is_file() and "node_modules" not in path.relative_to(directory).parts
     })
 
 
@@ -987,10 +987,17 @@ def main() -> int:
             for total in [shard_count(c.folder)]
             for shard in range(total)
         ]
+        # A node component's pytest files run once, in its node job, which already
+        # installs the component's packages; the exact-once inventory includes them.
         node_items = [
-            {"folder": c.folder, "kind": c.kind}
+            {"folder": c.folder, "kind": c.kind, "pytest": bool(test_files(c.folder))}
             for c in active
             if c.kind == "node"
+        ]
+        pytest_items = py_items + [
+            {"folder": item["folder"], "kind": "node", "shard": 0, "total": 1, "label": item["folder"]}
+            for item in node_items
+            if item["pytest"]
         ]
         editable_flags = " ".join(f"-e {pkg}" for pkg in discover_python_packages())
         lines = [
@@ -998,6 +1005,8 @@ def main() -> int:
             f"has_python={'true' if py_items else 'false'}",
             f"node={json.dumps(node_items, separators=(',', ':'))}",
             f"has_node={'true' if node_items else 'false'}",
+            f"pytest={json.dumps(pytest_items, separators=(',', ':'))}",
+            f"has_pytest={'true' if pytest_items else 'false'}",
             f"python_editable={editable_flags}",
         ]
         out_path = os.environ.get("GITHUB_OUTPUT")

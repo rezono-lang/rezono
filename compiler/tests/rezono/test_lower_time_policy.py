@@ -5,13 +5,6 @@ import pytest
 from model_parity import kind, lower_declarations, schema_file, slot
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason="Lower the kind member sealed to the LinkML class annotation seal in compiler/rezono_compiler/rezono_kind.py "
-           "instead of refusing it. Read docs/rezono/v0.md (sealed at, section 5a) and decisions/language-native-rules.md "
-           "(Seal). Waits for test_lower_relationship_kind while it owns rezono_kind.py.",
-)
 def test_lower_time_policy(tmp_path):
     oracle = schema_file("examples/subsidy/schema/reference.yaml")["classes"]["LedgerPayment"]
     declaration = kind("LedgerPayment", slot("application", "Application"), slot("booked_on", "Date"),

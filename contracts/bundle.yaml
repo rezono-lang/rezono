@@ -88,6 +88,9 @@ enums:
   RuleOperator:
     description: "The operator of a comparison (eq, ne, lt, le, gt, ge) or an assignment (add, sub, mul, div, days), as in the rule IR (contracts/rules.yaml)."
     permissible_values: {eq: {}, ne: {}, lt: {}, le: {}, gt: {}, ge: {}, add: {}, sub: {}, mul: {}, div: {}, days: {}}
+  RuleCompareAs:
+    description: "The declared comparison type of a comparison, as in the rule IR (contracts/rules.yaml, decisions/ordered-rule-scalars.md)."
+    permissible_values: {binary_text: {}, utc_instant: {}}
 
 classes:
   Bundle:
@@ -332,6 +335,7 @@ classes:
       result: {range: RuleTerm, inlined: true, description: "The variable an assignment or an aggregate binds; an integer."}
       function: {range: AggregateFunction, description: "The function of an aggregate."}
       over: {description: "The column that an aggregate's `sum`, `min` or `max` folds; left out for `count`."}
+      compare_as: {range: RuleCompareAs, description: "The declared comparison type of a comparison; absent for the untyped comparison."}
       aggregate_position: {range: integer, minimum_value: 0, description: "An aggregate's place in `aggregates` (from 0), the `position` a witness names it by."}
     rules:
       - preconditions: {slot_conditions: {kind: {equals_string: atom}}}

@@ -91,6 +91,9 @@ def planner_cases(reason, function):
         edit(".github/workflows/ci.yml", b"", b""),
     ], False, ["REMOVED tests/test_old.py", "CHANGED examples/demo/expected/rows.json",
                "CHANGED tests/test_total.py::test_total", "CHANGED .github/workflows/ci.yml"])
+    run("weakened expectation without a source change", [
+        edit("compiler/tests/test_total.py", other, other.replace(b"== 4", b"is not None")),
+    ], False, ["CHANGED compiler/tests/test_total.py::test_total"])
     errors, notes = review([edit("tests/test_count.py", pair, lifted + b"\n" + other),
                             edit("src/count.py", b"", b"")], planner=False)
     if errors or any(n.startswith("CHANGED tests/") for n in notes):

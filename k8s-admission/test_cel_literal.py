@@ -19,11 +19,6 @@ EXACT = [
 ]
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="Write cel_literal.literal as decisions/k8s-admission-translator.md specifies under Literal. "
-           "Write in k8s-admission/cel_literal.py. Without Go the test checks the exact text; the CI also runs cel-go.",
-)
 def test_cel_literal():
     from cel_literal import literal
 
