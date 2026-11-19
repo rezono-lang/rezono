@@ -9,7 +9,7 @@ Every row belongs to one verified `BuildRun` cut. Times are integer Unix seconds
 | Kind | Independent origin and acceptance question |
 | --- | --- |
 | `BuildClaim` | The ref listing under `refs/heads/task/` at the cut. Which claim branch existed, at which generation? The generation is the full commit ID of the ref tip. |
-| `BuildClaimActivity` | The server's activity records for the pushes to that ref, one row per push with the activity answer as its source and the exact whole-second push time. When did the push that produced this generation happen? The rules take the latest push, and it supplies a lease start only when its resulting commit equals the observed generation. |
+| `BuildClaimActivity` | The server's activity records for the pushes to that ref, one row per push with the activity answer as its source and the exact whole-second push time. When did the push that produced this generation happen? The rules take the latest push, and it supplies a lease start only when its resulting commit equals the observed generation. Two equally recent pushes with different commits leave the latest push undecided, so the claim gets no lease start. |
 | `BuildClaimLease` | A `std-decision` decision states the lease duration in seconds. Which duration is in force on the policy date of the cut? The first decision sets four hours. |
 | `BuildClaimPullReading` | A query for pull requests whose head is the claim branch, at the cut. Is a pull request open for this claim, or did the complete answer contain none? A `none` reading names the `LoopSweepReceipt` of its run and cut that attests the complete read. An empty answer without that receipt, an unreadable answer and a mismatched answer produce no row. |
 | `BuildClaimDelete` | The conditional delete adapter's record of one attempt. Which generation of which branch did it try to delete, when, and was the answer `sent`, `refused` or `unknown`? It names the branch, not a `BuildClaim` row, because the release and its readback concern the ref. |
@@ -25,9 +25,9 @@ The fields are those of the acceptance tests in section 4. Use string enumeratio
 - its activity record names the same generation and gives the lease start;
 - exactly one lease duration is in force on the run's policy date;
 - the lease start plus that duration is at most the cut tick, as in the model's `now >= leaseUntil`;
-- a pull reading for the claim at the cut tick says `none`, and no reading at that tick says `open`.
+- a pull reading for the claim at the cut tick says `none` and names a `LoopSweepReceipt` of the run at that tick, and no reading at that tick says `open`.
 
-Otherwise the claim is held. `build_claim_held(run, claim, reason)` names each failing ground with one of `lease-active`, `lease-unknown` (the latest push record of the claim did not make this generation, or there is none), `lease-policy-unknown`, `pull-request-open` (some reading at the cut tick says `open`) and `pull-request-unknown` (no reading at the cut tick). A claim listed only at an earlier tick is not at the cut and gets neither row. A claim with a release plan has no held row. A renewed claim has a new generation and a new push, so an old activity record cannot release it. Missing or contradictory evidence never yields a plan.
+Otherwise the claim is held. `build_claim_held(run, claim, reason)` names each failing ground with one of `lease-active`, `lease-unknown` (the latest push record of the claim did not make this generation, two equally recent pushes made different commits, or there is none), `lease-policy-unknown`, `pull-request-open` (some reading at the cut tick says `open`) and `pull-request-unknown` (no reading at the cut tick, or only a `none` reading without such a receipt). A claim listed only at an earlier tick is not at the cut and gets neither row. A claim with a release plan has no held row. A renewed claim has a new generation and a new push, so an old activity record cannot release it. Missing or contradictory evidence never yields a plan.
 
 A plan is not a release. Eligibility alone yields only the plan, as the build decision requires.
 
