@@ -618,28 +618,18 @@ def import_pins(text):
     return pins
 
 
-def imported_dirs(tree, pack_dir, seen=None):
-    """The pack directories that `pack_dir` imports at `tree`, directly or not."""
-    seen = set() if seen is None else seen
-    try:
-        text = tree.read(pack_dir + "/pack.yaml").decode("utf-8")
-    except (KeyError, UnicodeError, subprocess.CalledProcessError):
-        return seen
-    for _, path, _ in import_pins(text).values():
-        target = posixpath.normpath(posixpath.join(pack_dir, path))
-        if target not in seen and not target.startswith("../"):
-            seen.add(target)
-            imported_dirs(tree, target, seen)
-    return seen
+# YAML whose lines do not stand on their own: an anchor or alias, or a second document.
+NOT_PLAIN = re.compile(r"(^|[\s,\[{:-])[&*][^\s,\]}]+|^(---|\.\.\.)([ \t]|$)", re.M)
 
 
-def pin_update(change, tree, changed):
-    """Whether a change only re-pins imports of a fixture or test pack to their hash at `tree`.
+def pin_update(change, tree, base):
+    """Whether a change only re-pins imports of a fixture or test pack, from `base` to `tree`.
 
-    The pack.yaml exists already (status M) under a fixture or test directory. Only lines with
-    `sha256: <64 hex>` in its imports differ, each only in that value, and each new value is
-    the hash of the imported pack at `tree`. That pack, or one it imports, changes in this pull
-    request (`changed` holds every changed path).
+    The pack.yaml exists already (status M) under a fixture or test directory, and holds no
+    anchor, alias or second document. Only lines with `sha256: <64 hex>` in its imports differ,
+    each only in that value. Each old value is the hash of the imported pack at `base`, and each
+    new value its hash at `tree`: so the pack's definition, or that of a pack it imports,
+    changes in this pull request, and the pin follows it.
     """
     p = PurePosixPath(change.path)
     if not (change.status == "M" and p.name == "pack.yaml" and change.before is not None
@@ -648,6 +638,8 @@ def pin_update(change, tree, changed):
     try:
         before, after = change.before.decode("utf-8"), change.after.decode("utf-8")
     except UnicodeError:
+        return False
+    if NOT_PLAIN.search(before) or NOT_PLAIN.search(after):
         return False
     old_lines, new_lines = before.splitlines(keepends=True), after.splitlines(keepends=True)
     if len(old_lines) != len(new_lines):
@@ -662,24 +654,22 @@ def pin_update(change, tree, changed):
             return False
         _, path, digest = new_pins[i]
         target = posixpath.normpath(posixpath.join(str(p.parent), path))
-        if target.startswith("../") or target + "/pack.yaml" not in tree.modes:
+        if (target.startswith("../") or target + "/pack.yaml" not in tree.modes
+                or target + "/pack.yaml" not in base.modes):
             return False
-        if pack_hash(tree, target) != digest:
-            return False
-        dirs = {target} | imported_dirs(tree, target)
-        if not any(c.startswith(d + "/") for d in dirs for c in changed):
+        if pack_hash(tree, target) != digest or pack_hash(base, target) != old_pins[i][2]:
             return False
     return True
 
 
-def pin_updates(changes, rev):
-    """The paths of the changes that are pin updates at `rev`."""
+def pin_updates(changes, base, rev):
+    """The paths of the changes that are pin updates from `base` to `rev`."""
     candidates = [c for c in changes if c.status == "M" and PurePosixPath(c.path).name == "pack.yaml"
                   and protected(c.path)]
     if not candidates:
         return frozenset()
-    tree, changed = Tree.at(rev), {c.path for c in changes}
-    return frozenset(c.path for c in candidates if pin_update(c, tree, changed))
+    tree, before = Tree.at(rev), Tree.at(base)
+    return frozenset(c.path for c in candidates if pin_update(c, tree, before))
 
 
 def review(changes, planner=False, head=None, labels=(), packs=frozenset(), pins=frozenset()):
@@ -774,6 +764,9 @@ def review(changes, planner=False, head=None, labels=(), packs=frozenset(), pins
     if completed:
         path, names = completed
         notes.extend(f"COMPLETED {path}::{name}" for name in names)
+        # Nothing checks where the new evidence came from. A reviewer reads its source before
+        # it lands, so that no output of the engine becomes the test's own expectation.
+        unread.append(f"the evidence that completes {ascii(path)}")
     elif lifted and other:
         errors.append(f"ERROR red marks are lifted in {', '.join(lifted)} while protected paths "
                       f"also change: {', '.join(other)}. Lift marks in a pull request of their own, or, with the "
@@ -785,7 +778,8 @@ def review(changes, planner=False, head=None, labels=(), packs=frozenset(), pins
             errors.append(f"ERROR the head commit {ascii(head)} is not a full commit id, "
                           f"so no {READ_LABEL} label can apply to it")
         elif label not in labels:
-            errors.append(f"ERROR the checker or read access changes in {', '.join(unread)}: a reviewer "
+            errors.append(f"ERROR the checker, read access or completed evidence changes in {', '.join(unread)}: "
+                          "a reviewer "
                           f"reads it before it lands and then sets the label {label} for the head "
                           "commit. The planner label does not replace it, and a new push needs a new label.")
     return errors, notes
@@ -819,7 +813,7 @@ def check(base, head, planner=False, labels=None):
     if labels is not None:
         pr_head = git("rev-parse", "--verify", "--end-of-options", head + "^{commit}").decode().strip()
     records = list(changes(base, head))
-    pins = pin_updates(records, head) if planner else frozenset()
+    pins = pin_updates(records, base, head) if planner else frozenset()
     return review(records, planner, pr_head, labels or (), pack_roots(head), pins)
 
 
