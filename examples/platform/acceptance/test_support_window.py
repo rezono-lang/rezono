@@ -7,7 +7,16 @@ import pytest
 from query_fixture import ROOT
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError, reason="Depends on test_kubernetes_support. Consume the published support and synthetic service binding with runtime query parameters; implement the support_window modules under examples/platform. Read decisions/platform-source-and-scenario-cases.md.")
+@pytest.mark.xfail(strict=True, raises=AssertionError, reason=(
+    "Waits for a day number of a published date in rules (track kern): .dl has no days(), a view's days reading "
+    "needs a DATE column, and rules cannot read a DATE column yet (compare test_independent_date_equality). "
+    "Then derive support_window_result(query, service, version, end, url, sha256) in rules/support_window.dl from "
+    "published_series_support. Declare SupportQuery (as_of_day, horizon_days: integers the caller supplies, no "
+    "fact rows) and SupportedServiceRelease (service: Service, product: Product, series, version) in "
+    "schema/support_window.yaml, and write the one binding {id: cp-kubernetes-1.32.13, service: cp, product: "
+    "kubernetes, series: '1.32', version: 1.32.13} in facts/support_window.yaml; its standalone violations are "
+    "pinned in expected/violations/support_window.json. Both bounds are inclusive. "
+    "Read decisions/platform-source-and-scenario-cases.md."))
 def test_support_window_uses_explicit_inclusive_dates():
     from rezono_compiler import scenarios
     from rules_support import State, states

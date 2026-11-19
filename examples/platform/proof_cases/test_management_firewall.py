@@ -25,8 +25,9 @@ def records():
 @pytest.mark.xfail(strict=True, raises=AssertionError, reason=(
     "Derive both directions of managed router drift from scoped snapshots in schema/management_firewall.yaml "
     "and rules/management_firewall.dl, consuming the observed-first comparison in std-loop. "
-    "Requires native Boolean rule input for sweep completeness and an observed-first std-loop comparison. "
-    "The current std-loop drift requires a desired token. Read decisions/platform-management-firewall.md."))
+    "Read decisions/platform-management-firewall.md. Waits for test_native_boolean_rule_inputs (#347, "
+    "track kern) for sweep completeness, and for an observed-first comparison in packs/std-loop (track kring): "
+    "the current std-loop drift requires a desired token."))
 def test_management_firewall_bidirectional():
     from management_probes import compiled
 
