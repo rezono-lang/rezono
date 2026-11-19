@@ -15,8 +15,10 @@ sys.path.insert(0, str(HERE))
 settings.register_profile("ci", max_examples=15, deadline=None, suppress_health_check=[HealthCheck.too_slow])
 settings.register_profile("pr", max_examples=200, deadline=None, suppress_health_check=[HealthCheck.too_slow])
 # Explicitly random: Hypothesis derandomizes by default on CI, which would hide the fresh seed.
+# 150 examples took 20.6 minutes in run 44485933901, beside the checker on the same runner; the
+# nightly run must stay under 30 minutes, so it uses 120. Tests with their own @settings keep it.
 settings.register_profile(
-    "nightly", max_examples=150, deadline=None, derandomize=False, database=None,
+    "nightly", max_examples=120, deadline=None, derandomize=False, database=None,
     suppress_health_check=[HealthCheck.too_slow],
 )
 settings.load_profile(os.environ.get("REZONO_HYPOTHESIS_PROFILE", "pr"))
