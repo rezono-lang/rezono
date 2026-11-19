@@ -139,12 +139,6 @@ def test_a_dockerfile_runs_the_quickstart_on_any_machine():
     assert "docker build" in shell and "docker run" in shell
 
 
-@pytest.mark.xfail(strict=True, raises=MissingContributing, reason=(
-    "extra: decisions/front-door.md: Add CONTRIBUTING.md with only what holds now: a bug as an issue with the "
-    "smallest pack that shows it and a vulnerability as SECURITY.md says; the licence of the path a "
-    "contribution touches, as NOTICE says; work from a fork without claiming a task branch; outside checks "
-    "run after the maintainer approves them; only the maintainer sets the label planner. Link it from "
-    "README.md, and say in WORKER.md that its commit identity is for the project's own agents."))
 def test_contributing_says_what_holds_now():
     path = ROOT / "CONTRIBUTING.md"
     if not path.exists():

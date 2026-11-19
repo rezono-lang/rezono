@@ -220,13 +220,28 @@ jobs:
             echo
             python -I scripts/red_list.py --milestones
           } | tee -a "$GITHUB_STEP_SUMMARY"
+      # What must run and what counts as run come from the base, as the pack
+      # warnings do: a candidate cannot weaken its own count through
+      # scripts/components.py. The base scripts sit in a hidden directory of the
+      # checkout, so they read the candidate's tree. The candidate's own copy
+      # runs its regressions below and executes the shards; a change to the
+      # matrix or inventory format must stay readable by the base until it lands.
+      - name: Take the build rules from the base
+        shell: bash
+        env:
+          POLICY: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.sha }}
+        run: |
+          set -euo pipefail
+          mkdir -p .build-base
+          git archive "$POLICY" scripts | tar -x -C .build-base --strip-components=1
+          echo "Build rules from $POLICY, scripts/components.py blob $(git rev-parse "$POLICY:scripts/components.py")"
       - id: matrix
         env:
           GITHUB_BASE_REF: ${{ github.base_ref }}
           MERGE_GROUP_BASE_SHA: ${{ github.event.merge_group.base_sha }}
           MERGE_GROUP_HEAD_SHA: ${{ github.event.merge_group.head_sha }}
           GITHUB_EVENT_BEFORE: ${{ github.event.before }}
-        run: python3 scripts/components.py ci-matrix
+        run: python3 .build-base/components.py ci-matrix
       - name: Select the role-publication proof
         id: role_publication
         env:
@@ -278,7 +293,9 @@ jobs:
           REZONO_HYPOTHESIS_PROFILE: ci
         run: |
           set -euo pipefail
-          python scripts/components.py inventory "$RUNNER_TEMP/inventory"
+          # The candidate's environment action must not narrow the inventory.
+          unset PYTEST_ADDOPTS PYTEST_PLUGINS
+          python .build-base/components.py inventory "$RUNNER_TEMP/inventory"
           while IFS= read -r -d '' report; do
             python scripts/red_list.py --skips "$report" | tee -a "$GITHUB_STEP_SUMMARY"
           done < <(find "$RUNNER_TEMP/inventory" -name collection.xml -print0)
@@ -590,9 +607,13 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      # The count comes from the base's scripts, as the inventory does.
+      - name: Check out the base build rules
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         if: needs.discover.outputs.has_pytest == 'true' && needs.queue_evidence.outputs.tested != 'true'
         with:
+          ref: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.sha }}
+          sparse-checkout: scripts
           persist-credentials: false
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         if: always() && needs.discover.outputs.has_pytest == 'true' && needs.queue_evidence.outputs.tested != 'true'

@@ -142,7 +142,7 @@ class Scope:
             for r in rows.get(k, ()):
                 if not self.reads(k, r[0]):
                     raise Uncovered(f"role {role}: the read rules give kind {k} in full, but not every element")
-        self.withheld = self._withheld_seals(rules)
+        self.withheld = self._withheld_seals(rules) | self._withheld_admission(rules)
         # What each calculation view rests on, as `with_calc` gave it; without a program there is none.
         self.calc_sources = getattr(columns, "calc_sources", {})
         self.full = Full(self._full_relations(rules, rows))
@@ -166,6 +166,15 @@ class Scope:
             if parts and not all(p["kind"] in self.full_kinds for p in parts):
                 out |= {s["refused"], s["accepted"], s["row_sha256"], *(p["accepted"] for p in parts)}
         return frozenset(out)
+
+    @staticmethod
+    def _withheld_admission(rules: dict) -> frozenset[str]:
+        """The protected admission inputs the pack declares (decisions/admission-transport.md, section 6). They
+        expose the trusted inventory of a receipt or round, member keys included, and no decision gives them a
+        read rule or element columns yet: a role gets none of their rows, and nothing that rests on them."""
+        from rezono_compiler.rules_dl import PROTECTED
+
+        return frozenset(r["name"] for r in rules.get("relations", ()) if r["name"] in PROTECTED)
 
     def _witnessed_grants(self, rows, rules: dict, witnesses, role: str) -> list[dict]:
         """Match evaluated coverage rows to the rule substitutions that derived them."""

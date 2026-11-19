@@ -111,7 +111,10 @@ def test_std_access_publishes_through_its_consumer(tmp_path):
     "aside) and relations per role over it as over the oracle in "
     "compiler/tests/rezono/fixtures/std-access-legacy. Update the sha256 of std-access in every pack.yaml "
     "that imports it, and onwards for their importers; this task may change those lines. Waits for "
-    "test_lower_schema_annotations, which lowers the schema metadata of the pack."))
+    "test_lower_schema_annotations, which lowers the schema metadata of the pack. Learned: the converted pack "
+    "agrees on files and role relations, but meaning() still differs on two points the decision lets differ: "
+    "imported places are named std-access:<file> (compiler/rezono_compiler/spans.py), which unplaced() does "
+    "not match, and bundle imports[].sha256 pins each form's own std-access bytes."))
 def test_whole_std_access_has_the_same_meaning(tmp_path):
     expected = meaning(published(tmp_path, "legacy"))
     actual = meaning(published(tmp_path, "rezono"))

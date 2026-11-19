@@ -29,11 +29,6 @@ def day(text):
     return (date.fromisoformat(text) - date(1970, 1, 1)).days
 
 
-@pytest.mark.xfail(strict=True, raises=pack.CompileError,
-                   reason="Let a .dl rule write the existing days assignment as d = @days(text, \"YYYY-MM-DD\") in "
-                          "compiler/rezono_compiler/rules_dl.py and admit it in rules.py for rule files, as "
-                          "decisions/rule-day-numbers.md fixes. The IR op, its SQL and the checker already exist for "
-                          "view readings. No other dependency.")
 def test_rules_read_a_text_date_as_a_day_number(tmp_path):
     folder = shutil.copytree(FIXTURE, tmp_path / "pack")
     (folder / "rules").mkdir()
