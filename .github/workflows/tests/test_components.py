@@ -47,6 +47,28 @@ class WorkflowEnvironmentTests(unittest.TestCase):
             self.assertNotIn("if", step)
             self.assertNotIn("continue-on-error", step)
 
+    def test_every_node_runtime_reads_the_one_exact_version(self):
+        self.assertRegex((ROOT / ".node-version").read_text(encoding="utf-8"), r"^\d+\.\d+\.\d+\n$")
+        github = ROOT / ".github"
+        found = []
+        for path in sorted([*github.glob("workflows/*.yml"), *github.glob("**/action.yml")]):
+            document = yaml.safe_load(path.read_text(encoding="utf-8"))
+            jobs = {"action": document["runs"]} if path.name == "action.yml" else document.get("jobs", {})
+            for name, job in jobs.items():
+                steps = job.get("steps", [])
+                for i, step in enumerate(steps):
+                    if not step.get("uses", "").startswith("actions/setup-node@"):
+                        continue
+                    where = f"{path.relative_to(ROOT).as_posix()} {name}"
+                    found.append(where)
+                    self.assertNotIn("node-version", step.get("with", {}), where)
+                    self.assertRegex(step["with"].get("node-version-file", ""), r"(^|/)\.node-version$", where)
+                    if path.name != "action.yml":
+                        self.assertTrue(any(s.get("uses", "").startswith("actions/checkout@") for s in steps[:i]),
+                                        f"{where} reads .node-version before a checkout")
+        self.assertIn(".github/workflows/release.yml publish", found)
+        self.assertIn(".github/actions/release-rehearsal/action.yml action", found)
+
     def test_the_base_decides_what_runs_and_counts_what_ran(self):
         # A candidate's scripts/components.py, environment action or pytest
         # options must not drop tests from both its inventory and its run.
