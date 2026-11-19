@@ -43,7 +43,7 @@ def entries(body: dict) -> list[dict]:
     strict=True,
     raises=(MissingVariantDifference, AssertionError),
     reason=(
-        "Serve scenario for a variant of a sweep in the local reader (edge/gate/src/local.ts) from the difference "
+        "extra: decisions/viewer-slip.md: Serve scenario for a variant of a sweep in the local reader (edge/gate/src/local.ts) from the difference "
         "the publisher writes per filtered role, for a role that reads every relation in full, and shorten "
         "blocked/edge-gate-variant-queries.txt by what then works (decisions/viewer-slip.md, What if, on the "
         "line). Expectation: tests/fixtures/slip at amount 20, rows by hand."

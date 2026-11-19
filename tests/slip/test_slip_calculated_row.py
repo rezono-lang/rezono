@@ -16,7 +16,7 @@ from slip_support import MissingSlipPage, lines, publish_main, render
     strict=True,
     raises=(MissingSlipPage, AssertionError),
     reason=(
-        "Waits for tests/slip/test_role_part_of_bundle.py--test_role_part_of_bundle, "
+        "extra: decisions/viewer-slip.md: Waits for tests/slip/test_role_part_of_bundle.py--test_role_part_of_bundle, "
         "tests/slip/test_head_status_and_hash.py--test_head_status_and_hash, "
         "tests/slip/test_message_filled.py--test_message_filled and, for the page itself, "
         "tests/slip/test_slip_rule_row.py--test_slip_rule_row. "

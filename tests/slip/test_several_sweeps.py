@@ -34,7 +34,7 @@ def published(tmp_path):
     strict=True,
     raises=(MissingSeveralSweeps, AssertionError),
     reason=(
-        "Waits for compiler/tests/test_sweeps.py--test_a_pack_has_up_to_four_sweeps. Then publish the variants of "
+        "extra: decisions/viewer-slip.md: Waits for compiler/tests/test_sweeps.py--test_a_pack_has_up_to_four_sweeps. Then publish the variants of "
         "every sweep (edge/publisher/rezono_publisher/sweep.py), list every sweep whose cell the role reads in the "
         "local reader (edge/gate/src/sweep.ts), and answer sweep by its name, as decisions/viewer-slip.md, "
         "section Several sweeps, says. Expectation: tests/fixtures/slip with a second sweep, grid by hand."
@@ -62,7 +62,7 @@ def test_several_sweeps(tmp_path):
     strict=True,
     raises=(MissingSeveralSweeps, AssertionError),
     reason=(
-        "Waits for tests/slip/test_several_sweeps.py--test_several_sweeps. Then let :sweep <name> in "
+        "extra: decisions/viewer-slip.md: Waits for tests/slip/test_several_sweeps.py--test_several_sweeps. Then let :sweep <name> in "
         "tools/repl/src/session.ts take any sweep the reader lists, and :sweep without a name only when it lists "
         "one, as decisions/viewer-slip.md, section Several sweeps, says. Expectation: the grid of the second "
         "sweep of tests/fixtures/slip, by hand."

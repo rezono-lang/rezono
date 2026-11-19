@@ -161,7 +161,7 @@ MAX_SWEEPS = 4  # decisions/viewer-slip.md, "Several sweeps"
     strict=True,
     raises=(MissingSeveralSweeps, AssertionError),
     reason=(
-        "Raise MAX_SWEEPS in compiler/rezono_compiler/pack.py to 4, and let contracts/pack.yaml (SweepFile.sweeps) "
+        "extra: decisions/viewer-slip.md: Raise MAX_SWEEPS in compiler/rezono_compiler/pack.py to 4, and let contracts/pack.yaml (SweepFile.sweeps) "
         "and contracts/explain.yaml (BoundSweepList.sweeps) follow it with maximum_cardinality 4, as "
         "decisions/viewer-slip.md, section Several sweeps, says. Expectation: the minimal fixture with two sweeps, "
         "grids written by hand; five sweeps are refused."

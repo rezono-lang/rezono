@@ -22,7 +22,7 @@ def head(store, role="reader") -> dict:
     strict=True,
     raises=(MissingHeadStatus, AssertionError),
     reason=(
-        "Add witness_check (the status of the check rezono:proofs in the manifest, and nothing else of it) and "
+        "extra: decisions/viewer-slip.md: Add witness_check (the status of the check rezono:proofs in the manifest, and nothing else of it) and "
         "manifest_sha256 to the head that edge/gate/src/local.ts lists, as decisions/viewer-slip.md says. "
         "Expectation: the hash is computed in the test from the stored manifest bytes; a manifest rewritten "
         "without that check gives no witness_check."
