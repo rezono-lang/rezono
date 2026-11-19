@@ -100,11 +100,6 @@ def test_evidence_admits_receipts_from_the_pinned_context():
         admit(Evidence(context, index | {"sha256": "0" * 64}, archive.__getitem__))
 
 
-@pytest.mark.xfail(strict=True, raises=ImportError,
-                   reason="Waits for checker/tests/test_evidence_admission.py--test_evidence_admits_receipts_from_the_"
-                          "pinned_context (same module) and checker/tests/test_round_verifier.py--test_round_verifier_"
-                          "replays_the_choice. Then admit the index's rounds with rezono_checker.rounds after the "
-                          "receipts, as decisions/admission-transport.md sections 1, 5 and 6 fix.")
 def test_evidence_admits_rounds_after_receipts():
     from rezono_checker.evidence import Evidence, admit
     from test_round_verifier import fixture
