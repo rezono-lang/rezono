@@ -79,7 +79,11 @@ export type V = { s: 'known'; v: Known } | Stated;
 type Member = V & { maybe?: Stated };
 /** Why "no member found" over an open relation, and a value of an element nobody listed, are unknown (§7). */
 const OPEN_WORLD = 'open_world';
-/** Why a call of a partial rule is unknown when the publication carries outcomes for it but none at the call's key. */
+/**
+ * Why a call of a partial rule is unknown when no row holds its key: the rule declares `outcome` and a state
+ * beyond `known`, and neither an outcome row nor a success row has the key. That holds whether or not any
+ * outcome row of the rule was loaded.
+ */
 const NO_OUTCOME = 'no_outcome';
 /** Why a shown amount that no decimal of its type holds is unknown (§8a). */
 const NOT_EXACT = 'not_exact';

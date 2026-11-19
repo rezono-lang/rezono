@@ -472,7 +472,18 @@ REFUSALS = {
     "a reason": ([{"reason": "r", "text": '"r"'}], 10, "a reason declaration is not lowered"),
     "a slot named id": ([slot(slot="id", type="Text")], 11, "a slot named `id` is refused"),
     "an unknown slot suffix": ([slot(slot="many", type="Text", card="**")], 11, "a slot `Text**` is not lowered"),
-    "an inverse": ([slot(slot="many", type="Beta", card="*", inverse="eta")], 11, "a slot with inverse is not lowered"),
+    # decisions/language-inverse-references.md: the forward slot must exist on the kind the type names; Zeta has
+    # no slot eta, so the inverse is refused at its own line.
+    "an inverse without its forward slot": pytest.param(
+        [slot(slot="many", type="Zeta", card="*", inverse="eta"), eta(kind="Zeta")], 11,
+        "the inverse eta is not a slot of Zeta",
+        marks=pytest.mark.xfail(
+            strict=True,
+            raises=AssertionError,
+            reason="Refuses every inverse with 'a slot with inverse is not lowered' today. Goes green with "
+                   "compiler/tests/rezono/test_lower_inverse_reference.py::test_lower_inverse_reference; the worker "
+                   "of that task removes this mark too.",
+        )),
     "world on a slot": ([slot(slot="note", type="Text", world="open")], 11, "a slot with world is not lowered"),
     "a DateTime slot": ([slot(slot="observed_at", type="DateTime")], 11, "DateTime is not Date, Text, or an enum or a kind of this pack"),
     "a Money slot": ([slot(slot="cost", type="Money<EUR>")], 11, "Money<EUR> is not Date, Text"),
