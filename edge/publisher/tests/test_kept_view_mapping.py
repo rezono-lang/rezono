@@ -26,10 +26,6 @@ def unpacked(tmp_path):
     return root, main
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError,
-                   reason="Replace the presence refusal of theory views.yaml in kept.archived_pack "
-                          "(edge/publisher/rezono_publisher/kept.py) with reading and typing the mapping against the "
-                          "archive's pinned closure, as decisions/kept-view-mapping.md fixes. Publisher only.")
 def test_a_typed_theory_mapping_is_admitted_before_install(tmp_path):
     root, main = unpacked(tmp_path / "typed")
     assert kept.archived_pack(root) == (main.resolve(), [])
