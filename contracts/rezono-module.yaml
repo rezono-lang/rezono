@@ -500,6 +500,7 @@ classes:
     description: One version of a parameter or a derived value (v0 §5a).
     attributes:
       version: {required: true, range: NumberText}
+      replaces: {range: NumberText, description: "The number of the version this one replaces, from `version N replaces M`; precedence (a) of v0 §5a, rule 4."}
       valid: {range: Date, multivalued: true, minimum_cardinality: 1, maximum_cardinality: 2, description: "The first day, and the day after the last one; one date for a range without an end."}
       known: {range: Date}
       value: {range: Expr, inlined: true}
