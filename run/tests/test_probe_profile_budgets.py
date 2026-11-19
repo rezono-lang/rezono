@@ -137,3 +137,19 @@ def test_probe_profile_counts_and_findings_follow_the_governing_snapshot(tmp_pat
     assert current.rows("probe_budget_status") == {(PROFILE, "automatic", "install", "unknown")}
     assert current.rows("probe_physical") == {(PROFILE, "cell-one", "required")}
     assert current.rows("probe_physical_status") == set()
+
+
+def test_probe_profile_tie_on_the_latest_day_certifies_nothing(tmp_path):
+    # A complete and a partial snapshot of the same profile share the latest day. Neither governs alone, so the
+    # membership is not certified: no counts, and a missing term is unknown rather than absent.
+    design = recorded_design(automatic_term=False)
+    design["profile-design.yaml"]["probe_snapshot"].append(
+        {"id": "planning-partial", "profile": PROFILE, "reference_date": "planning-day",
+         "membership_complete": "partial"})
+    current = checked(PACK, tmp_path / "tied-snapshots", design)
+    assert current.rows("probe_cluster_size") == set()
+    assert current.rows("probe_profile_total") == set()
+    assert current.rows("probe_budget") == EXPECTED_BUDGETS - {(PROFILE, "automatic", "install", "420")}
+    assert current.rows("probe_budget_status") == {(PROFILE, "automatic", "install", "unknown")}
+    assert current.rows("probe_physical") == {(PROFILE, "cell-one", "required")}
+    assert current.rows("probe_physical_status") == set()

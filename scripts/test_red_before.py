@@ -19,6 +19,10 @@ TESTS = b"from pkg.calc import double\n\n\ndef test_double_two():\n    assert do
 # Both pass on the fixed source. Only the second fails on the buggy base (6 is even; 5 is not 6).
 STILL_PASSES = TESTS + b"\n\ndef test_double_is_even():\n    assert double(4) % 2 == 0\n"
 FAILS_ON_BASE = TESTS + b"\n\ndef test_double_three():\n    assert double(3) == 6\n"
+# The only added test is skipped: it runs nowhere, so it proves nothing on the base either.
+ONLY_SKIPPED = (b"import pytest\n" + TESTS + b"\n\n"
+                + b"@pytest.mark.skip(reason='needs a cluster')\n"
+                + b"def test_double_three():\n    assert double(3) == 6\n")
 
 
 def git(repo, *args):
@@ -41,7 +45,7 @@ def script(repo, *args):
     return subprocess.run([sys.executable, "-I", str(SCRIPT), *args], cwd=repo, capture_output=True)
 
 
-def end_to_end(label, added, expected_code):
+def end_to_end(label, added, expected_code, verdict):
     """A fix to double() with a new test: red when the test also passes on the base."""
     with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as directory:
         repo = Path(directory)
@@ -63,7 +67,6 @@ def end_to_end(label, added, expected_code):
             ran = script(repo, "run", str(selection))
         finally:
             selection.unlink(missing_ok=True)
-        verdict = "pass on the base source" if expected_code else "The base source fails the added tests"
         if ran.returncode != expected_code or verdict not in ran.stdout.decode():
             raise AssertionError(f"{label}: run exited {ran.returncode}, expected {expected_code}\n"
                                  f"{ran.stdout.decode()}{ran.stderr.decode()}")
@@ -123,8 +126,12 @@ def selection_cases():
 def main():
     selection_cases()
     not_mixed()
-    end_to_end("source fix with an added test that also passes on the base", STILL_PASSES, 1)
-    end_to_end("source fix with an added test that fails on the base", FAILS_ON_BASE, 0)
+    end_to_end("source fix with an added test that also passes on the base", STILL_PASSES, 1,
+               "pass on the base source")
+    end_to_end("source fix with an added test that fails on the base", FAILS_ON_BASE, 0,
+               "The base source fails the added tests")
+    end_to_end("source fix with only a skipped added test", ONLY_SKIPPED, 0,
+               "ran on the base source")
 
 
 if __name__ == "__main__":

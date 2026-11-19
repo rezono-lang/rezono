@@ -79,6 +79,12 @@ export type V = { s: 'known'; v: Known } | Stated;
 type Member = V & { maybe?: Stated };
 /** Why "no member found" over an open relation, and a value of an element nobody listed, are unknown (§7). */
 const OPEN_WORLD = 'open_world';
+/**
+ * Why a call of a partial rule is unknown when no row holds its key: the rule declares `outcome` and a state
+ * beyond `known`, and neither an outcome row nor a success row has the key. That holds whether or not any
+ * outcome row of the rule was loaded.
+ */
+const NO_OUTCOME = 'no_outcome';
 /** Why a shown amount that no decimal of its type holds is unknown (§8a). */
 const NOT_EXACT = 'not_exact';
 /** What a row gives for a slot: one value, or the members of a many-valued slot (a state stands for the whole set). */
@@ -642,6 +648,9 @@ export function reader(checked: Pick<Checked, 'typed' | 'heads'>, schema: Schema
 			const outcome = data.outcomes.get(name)?.get(canonicalJson(key));
 			if (outcome) return outcome;
 			if (data.rules.get(name)?.has(canonicalJson(key))) return T;
+			// A partial rule that publishes outcomes decides a key only by its outcome row (§2): without one the call
+			// is unknown, with the missing outcome row as cause, and never false by absence.
+			if (rule.outcome && rule.states?.some((s) => s !== 'known')) return { s: 'unknown', reason: NO_OUTCOME, cause: { relation: name, key } };
 			// No row: false for a closed rule; for an open one unknown, with the row that would hold it as cause.
 			return rule.world === 'open' ? { s: 'unknown', reason: OPEN_WORLD, cause: { relation: name, key } } : F;
 		});

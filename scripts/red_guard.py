@@ -15,8 +15,12 @@ import sys
 import tokenize
 
 
+# The merge queue runs a candidate's own workflow files, so the workflows that define the
+# required checks (`check` and `Light checks` in ci.yml, and the reusable cluster workflow
+# that `check` aggregates) are policy as much as the guard that reviews them.
 POLICY = {
     ".github/workflows/red-policy.yml",
+    ".github/workflows/ci.yml", ".github/workflows/disposable-cluster.yml",
     ".github/workflows/resume-feldera-review.yml", "scripts/feldera_admission.py",
     "scripts/red_guard.py", "scripts/test_red_guard.py",
     "scripts/red_before.py", "scripts/test_red_before.py",
@@ -252,7 +256,6 @@ def strict(mark):
 def review(changes, planner=False):
     """Return (errors, notes) for a sequence of Change records."""
     errors, notes, lifted, other = [], [], [], []
-    with_source = any(source(c.path) for c in changes)
     for c in changes:
         if c.path == CI_WORKFLOW:
             notes.append(f"CHANGED {CI_WORKFLOW}")
@@ -294,9 +297,10 @@ def review(changes, planner=False):
                 errors.append(f"ERROR new or changed red mark on {ascii(c.path + '::' + owner)} "
                               "needs strict=True and must not set run=False")
         notes.extend(f"REMOVED {c.path}::{name}" for name in old.tests if name not in new.tests)
-        if with_source:
-            notes.extend(f"CHANGED {c.path}::{name}" for name, (shape, red) in new.tests.items()
-                         if name in old.tests and not red and old.tests[name][0] != shape)
+        # Report every changed green test, whether or not the pull request also changes source:
+        # weakening an expectation on its own is the change a reviewer most needs to see.
+        notes.extend(f"CHANGED {c.path}::{name}" for name, (shape, red) in new.tests.items()
+                     if name in old.tests and not red and old.tests[name][0] != shape)
     if lifted and other:
         errors.append(f"ERROR red marks are lifted in {', '.join(lifted)} while protected paths "
                       f"also change: {', '.join(other)}. Lift marks in a pull request of their own.")

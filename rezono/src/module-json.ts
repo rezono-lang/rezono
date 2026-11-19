@@ -41,7 +41,8 @@ function formatOf(module: Module): ModuleForm['format'] {
 					|| slot.constraints !== undefined || hasMetadata(slot))
 				|| decl.equations?.length || decl.checks?.length;
 		}
-		if ('base' in decl) return true;
+		if ('base' in decl || 'asOf' in decl) return true;
+		if ('param' in decl && decl.source !== undefined) return true;
 		if ('derived' in decl && Array.isArray(decl.derived) && decl.derived.some(d => d.output !== undefined || d.definitions !== undefined)) return true;
 		return 'enum' in decl && (decl.memberMetadata !== undefined || hasMetadata(decl));
 	});

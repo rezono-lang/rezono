@@ -20,9 +20,15 @@ probe_earlier_snapshot(s) :- probe_snapshot__profile(s, p), probe_snapshot__refe
 probe_governing_day(p, s, r) :- probe_snapshot__profile(s, p), probe_snapshot__reference_date(s, r),
     !probe_earlier_snapshot(s).
 
-// A count is published only when the governing snapshot certifies the membership as complete.
+// Two or more snapshots on the latest day tie: none governs alone, so none certifies the membership, and counts and
+// absences stay unknown rather than absent.
+.decl probe_governing_count(profile: symbol, snapshots: number)
+probe_governing_count(p, n) :- probe_profile(p), n = count : { probe_governing_day(p, _, _) }.
+
+// A count is published only when the single governing snapshot certifies the membership as complete.
 .decl probe_membership_complete(profile: symbol, snapshot: symbol)
-probe_membership_complete(p, s) :- probe_governing_day(p, s, _), probe_snapshot__membership_complete(s, "complete").
+probe_membership_complete(p, s) :- probe_governing_day(p, s, _), probe_governing_count(p, 1),
+    probe_snapshot__membership_complete(s, "complete").
 
 .decl probe_cluster_size(profile: symbol, cell: symbol, cluster: symbol, members: number)
 probe_cluster_size(p, c, k, n) :- probe_cluster_of(p, c, k), probe_membership_complete(p, _),

@@ -53,12 +53,6 @@ def sha(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError,
-                   reason="Write exports.index.json, an OutputIndex of contracts/output-index.yaml, beside each role's "
-                          "standards exports in edge/publisher/rezono_publisher/forms.py, as "
-                          "decisions/export-output-index.md fixes: identity, one file entry per export, a knowledge "
-                          "field for every line holding a row value and schema fields into schema.json. Publisher "
-                          "only; the port declarations of contracts/python/tests/test_ports.py wait for this.")
 def test_exports_carry_an_output_index(tmp_path):
     bucket = store.FileStore(tmp_path / "bucket")
     epoch = batch.epoch(pack(tmp_path / "pack"), epoch=1, knowledge_time="2026-01-01T00:00:00Z", sources=[])

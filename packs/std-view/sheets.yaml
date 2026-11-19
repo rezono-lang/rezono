@@ -1,0 +1,82 @@
+# How std-view lays out a sheet, as data: the frame and its cartouche, an extract of the key, the
+# fold on an Impact sheet, and the Lens that opens on any value and shows its answer beside the sheet.
+frame_stroke_role: frame
+metrics: {font_size: 14, char_width: 8, line_height: 18, padding: 8, gap: 28, bar_width: 64, chart_height: 220, narrow_width: 640}
+# Sheet dimensions (CSS variables --s-<role>), in pixels.
+sizes:
+  - {role: space.xs, px: 2}
+  - {role: space.s, px: 4}
+  - {role: space.m, px: 8}
+  - {role: space.l, px: 16}
+  - {role: space.xl, px: 24}
+  - {role: space.xxl, px: 32}
+  - {role: type.small, px: 12}
+  - {role: type.label, px: 13}
+  - {role: type.body, px: 15}
+  - {role: type.heading, px: 16}
+  - {role: type.title, px: 22}
+  - {role: leading.body, px: 22}
+  - {role: tracking.caps, px: 1}
+  - {role: sample.width, px: 32}
+  - {role: sample.height, px: 16}
+  # Legend signs (key.yaml, signs). The bar that stands for a value the role may not see has one length,
+  # so it tells nothing about the value's size; the gap separates the two lines of drift and a value from its underline.
+  - {role: sign.bar.width, px: 96}
+  - {role: sign.bar.height, px: 12}
+  - {role: sign.gap, px: 3}
+  - {role: selection.offset, px: 4}
+  # A Timeline: the height of a bar and the width of one year on its axis. A Track: the radius of a station.
+  - {role: timeline.bar, px: 12}
+  - {role: timeline.year, px: 128}
+  - {role: track.station, px: 8}
+  - {role: focus.offset, px: 3}
+  - {role: page.max, px: 1280}
+  # The side of a tile of a published sheet view: a page reads one tile, never the whole sheet.
+  - {role: page.tile, px: 1536}
+  # The widest second line of a node (its headline): longer text is cut with an ellipsis, the Lens has it whole.
+  - {role: label.width, px: 288}
+  # The width of the answer panel beside a sheet; below metrics.narrow_width the Lens links to the answer sheet.
+  - {role: panel.width, px: 480}
+cartouche:
+  placement: bottom
+  # The title is the claim of the sheet, above the picture; the cartouche does not repeat it.
+  fields: [pack, manifest, knowledge_time, zoom]
+key_extract:
+  placement: end
+  title_message: key.title
+fold:
+  current_message: fold.current
+  proposal_message: fold.proposal
+  stroke_role: hairline
+lens:
+  placement: end
+  # One glyph per answer shape (contracts/explain.yaml), so a pack's own question gets one too.
+  glyphs:
+    - {answer: route, glyph: "↓"}
+    - {answer: rings, glyph: "◎"}
+    - {answer: gap, glyph: "∅"}
+    - {answer: overlay, glyph: "→"}
+    - {answer: series, glyph: "≋"}
+# The verb bar: six verbs, the same on every value, in this order, each with its key. `question` names
+# the std-explain question that answers the verb; a verb without one is an action of the viewer.
+verbs:
+  - {verb: why, label_message: verb.why, key: w, question: grounds}
+  - {verb: depends, label_message: verb.depends, key: d, question: reach}
+  - {verb: missing, label_message: verb.missing, key: m, question: gap}
+  - {verb: suppose, label_message: verb.suppose, key: s}
+  - {verb: compare, label_message: verb.compare, key: c}
+  - {verb: propose, label_message: verb.propose, key: p, primary: true}
+# Landscape as relief: contour lines from the coast to the highest summit, the summit radius
+# and the grid spacing used to compute the contours. Without a height binding, and for an island of a
+# kind, the height is the number of members, as a root (count_scale).
+relief:
+  levels: 5
+  radius: 64
+  cell: 4
+  count_scale: {zero: 0, exponent_numerator: 1, exponent_denominator: 2, unit_message: relief.elements}
+sheets:
+  - {sheet: index, title_message: sheet.index}
+  - {sheet: kind, title_message: sheet.kind}
+  - {sheet: answer, title_message: sheet.answer}
+  - {sheet: impact, title_message: sheet.impact, fold: true}
+  - {sheet: effect, title_message: sheet.effect}
