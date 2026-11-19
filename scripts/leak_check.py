@@ -37,12 +37,17 @@ def counts(data):
     return {kind: number for kind, number in sorted(found.items()) if number}
 
 
+def addressed(match):
+    """A local part without a letter or digit, such as the backtick of `@pytest.mark.xfail`, names no one."""
+    return any(c.isalnum() for c in match.rpartition(b"@")[0].decode("utf-8", "replace"))
+
+
 def message_counts(data):
     """Count Co-authored-by trailers and foreign addresses in a commit message or PR text."""
     lines = (line for line in data.splitlines() if line.strip() != BOT_SIGN_OFF)
     found = {
         "co_author": len(CO_AUTHOR.findall(data)),
-        "email": sum(foreign(m.group()) for line in lines for m in EMAIL.finditer(line)),
+        "email": sum(foreign(m.group()) for line in lines for m in EMAIL.finditer(line) if addressed(m.group())),
     }
     return {kind: number for kind, number in found.items() if number}
 

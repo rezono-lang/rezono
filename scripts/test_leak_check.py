@@ -86,6 +86,12 @@ class LeakCheck(unittest.TestCase):
         self.assertIn("pull request body co_author: observed=1 allowed=0", result.stdout)
         self.assertIn("pull request body email: observed=1 allowed=0", result.stdout)
 
+    def test_a_decorator_in_backticks_is_not_an_address(self):
+        text = "Lift the `@pytest.mark.xfail` mark and keep '@pytest.mark.skip' as it is.\n"
+        result = self.run_pull_request([f"Lift a mark\n\n{text}"], body=text)
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertNotIn("email", result.stdout.replace("email=0", ""))
+
     def test_merge_group_squash_message_is_checked(self):
         squash = f"Add a pack reader (#7)\n\nCo-authored-by: Someone <{FOREIGN}>\n"
 
