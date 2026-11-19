@@ -129,7 +129,7 @@ def test_a_ledger_payment_does_not_change_the_policy_adviser_s_form(request, tmp
     assert PAYMENT in text
     facts.write_text(text.replace(PAYMENT, PAYMENT.replace("269400", "269401")), encoding="utf-8")
     other, _ = published(d, tmp_path / "store")
-    # The unchanged world only now: in CI the readers' process publishes it meanwhile (scripts/components.py).
+    # The unchanged world only now: in CI another process publishes it meanwhile (scripts/components.py).
     s, _ = request.getfixturevalue("world")
     assert objects(other, "policy_adviser") == objects(s, "policy_adviser")
     assert objects(other, "case_officer")["rows.json"] != objects(s, "case_officer")["rows.json"]

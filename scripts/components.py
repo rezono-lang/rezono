@@ -599,6 +599,8 @@ def pull_request_components(components: list[Component], root: Path, base_ref: s
 # file can use more than one core.
 FORMS_MODULE = "examples/subsidy/test_subsidy_forms.py"
 INDEPENDENT_PUBLICATIONS = "examples/subsidy/test_subsidy.py"
+FORMS_READER = ("test_a_ledger_payment_does_not_change_the_policy_adviser_s_form",
+                "test_each_role_s_standards_exports_pass_their_readers")
 SHARDS = {"compiler": 3, "edge/publisher": 2}
 PARALLEL = {"compiler", "examples", "edge/publisher"}
 EXAMPLE_PROFILE = ROOT / ".github/workflows/examples-duration-profile.json"
@@ -640,44 +642,49 @@ def example_unit(node: str) -> str:
 
 
 def forms_pair(items: list[str]) -> tuple[list[str], list[str]]:
-    """The publication form tests in two processes: the readers, whose process publishes the shared world,
-    and the test with the second publication, which makes that one meanwhile and reads the world after it.
-    Empty unless there are readers to pair."""
-    forms = FORMS_MODULE
-    readers = sorted(i for i in items if i.split("::", 1)[0] == forms)
-    if not readers:
-        return [], []
-    # The second publication and the independent standards readers dominate
-    # this module. Give the table checks to the shorter reader as well.
-    costs = {
-        forms + "::test_a_ledger_payment_does_not_change_the_policy_adviser_s_form": 79_000,
-        forms + "::test_each_role_s_standards_exports_pass_their_readers": 55_000,
-        forms + "::test_each_role_s_tables_give_its_dataset_hash_alone": 7_700,
-    }
-    second = set(weighted_workers(readers, 2, costs, 200)[0])
-    return [i for i in readers if i not in second], [i for i in readers if i in second]
+    """The publication form tests in two processes. The producer's first test publishes the shared world. The
+    reader's test with the second publication makes that one meanwhile and reads the shared world after it,
+    and the standards readers, the longest of the other tests, follow it there. Without those tests, the
+    longer half by the profile produces. Empty unless both processes have a test."""
+    readers = sorted(i for i in items if i.split("::", 1)[0] == FORMS_MODULE)
+    reader = [i for i in readers if i.partition("::")[2] in FORMS_READER]
+    if not reader:
+        profile = example_profile()
+        costs = {i: profile["seconds"].get(i, profile["default_s"]) for i in readers}
+        reader = weighted_workers(readers, 2, costs, profile["default_s"])[1] if len(readers) > 1 else []
+    producer = [i for i in readers if i not in reader]
+    return (producer, reader) if producer and reader else ([], [])
 
 
-def example_slots(items: list[str], slots: int) -> list[list[str]]:
-    """Longest first onto the least loaded of `slots` processes, by the profile's seconds per unit. With at
-    least three, the form readers have slot 0 to themselves, so the shared world is published first, and the
-    second publication starts slot 1; pytest order within each."""
+def example_slots(items: list[str], slots: int, width: int = 0) -> list[list[str]]:
+    """Longest first onto `slots` processes by the profile's seconds per unit, `width` processes to a runner
+    (all by default); pytest order within each. A unit goes to the least loaded process where it does not
+    lengthen its runner, else to the least loaded one: a runner costs its longest process. With at least
+    three processes, the producer of the form tests has process 0, where only units that pytest runs after
+    them may follow, so the shared world is published first; their reader starts process 1."""
+    width = width or slots
     profile = example_profile()
     seconds, default = profile["seconds"], profile["default_s"]
     loads, assigned = [0.0] * slots, {}
-    readers, second = forms_pair(items) if slots > 2 else ([], [])
-    free = range(slots)
-    if readers and second:
-        free = range(1, slots)
-        for slot, group in enumerate((readers, second)):
-            for node in group:
-                assigned[node] = slot
-                loads[slot] += seconds.get(node, default)
+    producer, reader = forms_pair(items) if slots > 2 else ([], [])
+    for slot, group in enumerate((producer, reader)):
+        for node in group:
+            assigned[node] = slot
+            loads[slot] += seconds.get(node, default)
+    last = max((items.index(node) for node in producer), default=-1)
+    first: dict[str, int] = {}
+    for index, node in enumerate(items):
+        if node not in assigned:
+            first.setdefault(example_unit(node), index)
     units = Counter(example_unit(i) for i in items if i not in assigned)
     for unit in sorted(units, key=lambda u: (-seconds.get(u, default * units[u]), u)):
-        slot = min(free, key=loads.__getitem__)
+        cost = seconds.get(unit, default * units[unit])
+        free = [s for s in range(slots) if s or first[unit] > last]
+        runner = [max(loads[s - s % width:s - s % width + width]) for s in range(slots)]
+        within = [s for s in free if loads[s] + cost <= runner[s]]
+        slot = min(within or free, key=loads.__getitem__)
         assigned[unit] = slot
-        loads[slot] += seconds.get(unit, default * units[unit])
+        loads[slot] += cost
     groups = [[] for _ in range(slots)]
     for node in items:
         groups[assigned.get(node, assigned.get(example_unit(node)))].append(node)
@@ -803,8 +810,8 @@ def collect_matrix(matrix: list[dict], directory: Path) -> int:
 
 def shard_items(folder: str, plan: dict, shard: int, total: int) -> list[str]:
     if folder == "examples":
-        # Each shard gets EXAMPLE_WORKERS processes' worth of the profile, the form pair on the first.
-        slots = example_slots(plan["items"], total * EXAMPLE_WORKERS)
+        # Each shard gets EXAMPLE_WORKERS processes' worth of the profile, the form tests on the first.
+        slots = example_slots(plan["items"], total * EXAMPLE_WORKERS, EXAMPLE_WORKERS)
         return [node for slot in range(shard * EXAMPLE_WORKERS, (shard + 1) * EXAMPLE_WORKERS)
                 for node in slots[slot]]
     files = set(plan["files"][shard::total])
@@ -912,8 +919,8 @@ def run_shard(folder: str, shard: int, total: int, plans: Path, reports: Path, r
     if Counter(i for group in groups for i in group) != Counter(selected):
         raise ValueError("Worker assignments differ from the shard inventory")
     print(f"{folder} shard {shard+1}/{total}: {len(selected)} test IDs", flush=True)
-    readers, second = forms_pair(selected) if folder == "examples" and len(groups) > 2 else ([], [])
-    paired_readers = bool(readers and second) and set(groups[0]) == set(readers) and set(second) <= set(groups[1])
+    producer, reader = forms_pair(selected) if folder == "examples" and len(groups) > 2 else ([], [])
+    paired_readers = bool(producer) and set(groups[0]) == set(producer) and set(reader) <= set(groups[1])
 
     def execute(pair):
         index, nodes = pair
