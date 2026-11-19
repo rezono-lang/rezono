@@ -1,0 +1,49 @@
+id: https://rezono.org/build/claims
+name: build_claims
+description: Observed task claims, their pushes, the lease policy and the pull request readings that release them.
+imports: [linkml:types, selection, "std-loop:round_progress", "std-decision:decision"]
+default_range: string
+annotations:
+  layer: facts
+
+enums:
+  BuildClaimPullState:
+    permissible_values:
+      open:
+      none:
+
+classes:
+  BuildClaim:
+    description: A claim branch listed under refs/heads/task/ at an observation cut, at the generation of its tip.
+    attributes:
+      id: {identifier: true}
+      run: {range: BuildRun, required: true}
+      branch: {required: true}
+      generation: {range: Commit, required: true}
+      observed_at: {range: integer, required: true}
+      source: {required: true}
+  BuildClaimActivity:
+    description: One push to a claim branch from the server's activity records, with the commit it produced.
+    attributes:
+      id: {identifier: true}
+      claim: {range: BuildClaim, required: true}
+      after: {range: Commit, required: true}
+      pushed_at: {range: integer, required: true}
+      source: {required: true}
+  BuildClaimLease:
+    description: The claim lease duration in seconds that a build policy decision states.
+    attributes:
+      id: {identifier: true}
+      decision: {range: Decision, required: true}
+      seconds: {range: integer, minimum_value: 0, required: true}
+  BuildClaimPullReading:
+    description: >-
+      A pull request reading for a claim branch at an observation cut. A none reading names the receipt of its
+      complete read.
+    attributes:
+      id: {identifier: true}
+      claim: {range: BuildClaim, required: true}
+      observed_at: {range: integer, required: true}
+      state: {range: BuildClaimPullState, required: true}
+      source: {required: true}
+      receipt: {range: LoopSweepReceipt}

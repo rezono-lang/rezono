@@ -41,7 +41,7 @@ def published(directory, tmp_path, capsys):
 @pytest.mark.xfail(
     strict=True,
     raises=AssertionError,
-    reason="Admit source declarations and cited fact tables in the module/2 contract (contracts/rezono-module.yaml) and "
+    reason="M3: Admit source declarations and cited fact tables in the module/2 contract (contracts/rezono-module.yaml) and "
            "publish their row sources through compiler/rezono_compiler/sources.py, as the sidecar does. "
            "Read decisions/language-fact-provenance.md. Waits for test_lower_fact_table while it owns facts.py.",
 )

@@ -1,0 +1,47 @@
+id: https://rezono.example/std-access/access
+name: std_access
+description: >-
+  Roles in two layers. A role is an element like any other: the pack names its roles as facts,
+  and its rules derive which typed elements a role may read, as may_read(role, kind, element). Rezono knows only
+  the generic capabilities below; a pack maps each of its roles to capabilities as facts (role__capability), and
+  its read rules may grant a kind to every role that holds a capability.
+in_language: en
+prefixes:
+  linkml: https://w3id.org/linkml/
+  rdfs: http://www.w3.org/2000/01/rdf-schema#
+imports:
+  - linkml:types
+default_range: string
+annotations:
+  layer: facts
+
+enums:
+  Capability:
+    description: >-
+      The generic capabilities, the one vocabulary of the core. A pack says what a capability
+      reads through its own read rules; holding one grants nothing by itself.
+    permissible_values:
+      read: {description: "reads what the pack's read rules give this capability"}
+      propose: {description: "may also propose a change"}
+      review: {description: "may review a proposal"}
+      administer: {description: "may administer the pack's deployment"}
+      read_restricted: {description: "reads the restricted sources the pack's read rules give this capability"}
+      agent: {description: "an automated reader or proposer, not a person"}
+
+classes:
+  Role:
+    description: A role at the gate, as the deploy profile names it (access.roles).
+    attributes:
+      id:
+        identifier: true
+      title:
+        required: true
+        slot_uri: rdfs:label
+      capability:
+        range: Capability
+        multivalued: true
+        description: >-
+          The capabilities the pack maps this role to: pack data, never code. A read rule of the form
+          may_read(r, "K", x) :- role__capability(r, "c"), K(x). gives kind K in full to every role with a row
+          (r, c) here, and that row is the evidence the checker recomputes (docs/architecture.md, access and
+          privacy).

@@ -32,7 +32,7 @@ ROWS = {
 @pytest.mark.xfail(
     strict=True,
     raises=ScalarNegationMismatch,
-    reason="Lower not (x.rank = 0) in compiler/rezono_compiler/native_rule_lowering.py as the positive slot row "
+    reason="M3: Lower not (x.rank = 0) in compiler/rezono_compiler/native_rule_lowering.py as the positive slot row "
            "stage__rank(?x, ?v) with the condition ne(?v, 0), never as an anti-join. Read "
            "decisions/language-expression-semantics.md §1 and §2 rule 1. Waits for "
            "test_expression_python_branch_bindings, which lowers the conjunction and path premises it uses.",

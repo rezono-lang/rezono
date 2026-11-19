@@ -2,7 +2,9 @@
 
 Without the planner label, only existing pytest xfail marks may be lifted or explained.
 With it, protected paths may change, but a lifted mark must stand alone and every added
-or changed mark must be strict. Removed and changed evidence is reported either way.
+or changed mark must be strict. Either way, the reason of every added or changed mark is
+literal text that starts with a milestone, and a changed reason keeps the milestone it had.
+Removed and changed evidence is reported either way.
 """
 import argparse
 import ast
@@ -15,8 +17,12 @@ import sys
 import tokenize
 
 
+# The merge queue runs a candidate's own workflow files, so the workflows that define the
+# required checks (`check` and `Light checks` in ci.yml, and the reusable cluster workflow
+# that `check` aggregates) are policy as much as the guard that reviews them.
 POLICY = {
     ".github/workflows/red-policy.yml",
+    ".github/workflows/ci.yml", ".github/workflows/disposable-cluster.yml",
     ".github/workflows/resume-feldera-review.yml", "scripts/feldera_admission.py",
     "scripts/red_guard.py", "scripts/test_red_guard.py",
     "scripts/red_before.py", "scripts/test_red_before.py",
@@ -249,6 +255,18 @@ def strict(mark):
     return None not in words and true("strict") and ("run" not in words or true("run"))
 
 
+MILESTONES = ("M1: ", "M2: ", "M3: ", "M4: ", "extra: ", "later: ")
+
+
+def milestone(mark):
+    """A red mark whose reason is literal text that starts with a milestone."""
+    if not isinstance(mark, ast.Call):
+        return False
+    return any(kw.arg == "reason" and isinstance(kw.value, ast.Constant)
+               and isinstance(kw.value.value, str) and kw.value.value.startswith(MILESTONES)
+               for kw in mark.keywords)
+
+
 def review(changes, planner=False):
     """Return (errors, notes) for a sequence of Change records."""
     errors, notes, lifted, other = [], [], [], []
@@ -282,6 +300,15 @@ def review(changes, planner=False):
             old = EMPTY
         signed = lambda inv: Counter((o, mark_signature(copy.deepcopy(m))) for o, m in inv.marks)
         old_marks, seen = signed(old), Counter()
+        # Per owner and mark without its reason, the marks without a milestone may not grow:
+        # a new mark needs one, and a changed reason keeps the milestone it had.
+        unmarked = lambda inv: Counter((o, mark_signature(copy.deepcopy(m)))
+                                       for o, m in inv.marks if not milestone(m))
+        old_unmarked, new_unmarked = unmarked(old), unmarked(new)
+        for owner, _ in sorted(key for key, n in new_unmarked.items() if n > old_unmarked[key]):
+            errors.append(f"ERROR red mark on {ascii(c.path + '::' + owner)} needs a reason that is "
+                          f"literal text starting with one of {', '.join(map(repr, MILESTONES))}; "
+                          "a changed reason keeps the milestone it had")
         old_count = Counter(owner for owner, _ in old.marks)
         new_count = Counter(owner for owner, _ in new.marks)
         if any(new_count[owner] < n for owner, n in old_count.items() if owner in new.owners):

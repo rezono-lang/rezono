@@ -70,3 +70,6 @@ arrows:
   dash: none
 - arrow: product_licence_gap.product
   dash: none
+
+home:
+  claim: [platform_service_count]

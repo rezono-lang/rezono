@@ -64,7 +64,7 @@ class MissingShareRules(AssertionError):
 @pytest.mark.xfail(
     strict=True,
     raises=MissingShareRules,
-    reason="Implement covered shared-cost shares and balance in examples/platform/rules/shared_cost.dl "
+    reason="extra: Implement covered shared-cost shares and balance in examples/platform/rules/shared_cost.dl "
            "with inputs in schema/shared_cost.yaml. Read decisions/platform-core-day-shares.md. "
            "Waits for exact reduced fraction support in rule relations: rules reject data-dependent divisors "
            "and the calculation bridge only exposes known whole numbers. The balance has to sum derived shares.",

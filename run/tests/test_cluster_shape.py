@@ -37,7 +37,8 @@ def facts(observed, demand):
         rows["line"].append((line["id"],))
         rows["line__cluster"].append((line["id"], CLUSTER))
         for slot in ("sku", "role", "quantity"):
-            rows[f"line__{slot}"].append((line["id"], line[slot]))
+            if slot in line:
+                rows[f"line__{slot}"].append((line["id"], line[slot]))
     for record in observed:
         rows["machine"].append((record["id"],))
         for slot in ("plan_hash", "sku", "address", "boot_disk", "data_disk"):
@@ -59,6 +60,11 @@ def edited(name, **slots):
     return [dict(record, **slots) if record["id"] == name else record for record in machines()]
 
 
+def storage_without(slot):
+    return [{key: value for key, value in line.items() if key != slot} if line["id"] == "storage" else line
+            for line in lines()]
+
+
 COUNTER_CASES = {
     "missing-worker": (without("m-b"), lines(), {"count"}),
     "missing-data-disk": (edited("m-b", data_disk=[]), lines(), {"invalid_machine", "count"}),
@@ -70,6 +76,12 @@ COUNTER_CASES = {
     "ambiguous-line": (machines(), lines() + [{"id": "spare", "sku": "sku-small", "role": "worker", "quantity": 2}],
                        {"ambiguous_line"}),
     "no-controller": (machines(), [dict(line, role="worker") for line in lines()], {"no_controller"}),
+    # An unknown line slot never passes: the line is invalid, whatever was observed.
+    "line-without-quantity": (machines() + [machine("m-e", "sku-small", "192.0.2.15")], storage_without("quantity"),
+                              {"invalid_line"}),
+    "line-without-role": (machines(), storage_without("role"), {"invalid_line"}),
+    "line-without-sku": ([record for record in machines() if record["sku"] != ["sku-small"]], storage_without("sku"),
+                         {"invalid_line"}),
 }
 
 

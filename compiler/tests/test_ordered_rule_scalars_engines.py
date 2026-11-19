@@ -13,8 +13,6 @@ import pytest
 from rezono_compiler import batch, gap, rules, rules_dl, rules_sql
 from test_ordered_rule_scalars import CASES, COMPARISONS, program
 
-WAIT = "Waits for compiler/tests/test_ordered_rule_scalars.py--test_ordered_rule_scalars_compiler_preserves_exact_values " \
-       "(compare_as in the rule IR and DuckDB). "
 COLUMNS = [("mode", "string"), ("case", "string"), ("value", "string")]
 OPS = sorted(COMPARISONS[-1] | COMPARISONS[0] | COMPARISONS[1])
 SPELLING = {"eq": "=", "ne": "!=", "lt": "<", "le": "<=", "gt": ">", "ge": ">="}
@@ -86,8 +84,9 @@ def test_gap_follows_typed_comparisons():
         gap.prefix_program(prog, "comparison", [0, 1, 2])
 
 
-@pytest.mark.xfail(strict=True, raises=(rules.IRError, ValueError), reason=WAIT + (
-    "Then lower compare_as for the pinned Soufflé in compiler/rezono_compiler/rule_proposal_oracle.py, without the "
+@pytest.mark.xfail(strict=True, raises=(rules.IRError, ValueError), reason=(
+    "M2: decisions/ordered-rule-scalars.md: Lower compare_as for the pinned Soufflé in "
+    "compiler/rezono_compiler/rule_proposal_oracle.py, without the "
     "SQL implementation's results: prove the pinned binary's symbol order is byte order, or compare an "
     "independently encoded byte sequence. Needs souffle on the path, as CI installs it."))
 def test_souffle_oracle_orders_typed_values():
@@ -98,8 +97,9 @@ def test_souffle_oracle_orders_typed_values():
     assert oracle.evaluate(rules.load(program()), inputs(), "comparison") == expected()
 
 
-@pytest.mark.xfail(strict=True, raises=rules.IRError, reason=WAIT + (
-    "Then lower compare_as in Feldera SQL in compiler/rezono_compiler/rules_sql.py, by a byte comparison or a pure "
+@pytest.mark.xfail(strict=True, raises=rules.IRError, reason=(
+    "M2: decisions/ordered-rule-scalars.md: Lower compare_as in Feldera SQL in "
+    "compiler/rezono_compiler/rules_sql.py, by a byte comparison or a pure "
     "typed sign function. Select this test in compiler/ci/run_feldera_oracle.sh and provide the hosted dispatch for "
     "the implementation commit, as the decision requires before the platform rule uses it."))
 def test_feldera_orders_typed_values():
