@@ -743,16 +743,19 @@ def read(pack_dir: str | Path) -> Pack:
     if not errors:
         pack.sweeps = sweeps(pack, pack_dir, errors)
     calc_inputs, calc_parts, ordered, renames = {}, {}, {}, {}
+    calc_bare_leaves: list[tuple[str, str, str, str]] = []
     if not errors:
         from . import calc  # calc reads the IR of this module, so it is imported here
         ordered = {n: packs[n] for n in modules.dependency_order(packs, modules.direct(meta))}
         renames = {p.name: rename(mods, p, names) for p in packs.values()}
         try:
-            pack.calc, calc_parts = calc.read_closure(pack, pack_dir, ordered, renames)
+            pack.calc, calc_parts = calc.read_closure(pack, pack_dir, ordered, renames, mods=mods,
+                                                      bare_leaves=calc_bare_leaves)
             if pack.calc is not None:
                 calc_inputs = calc.rule_input_columns(pack, pack.calc)
         except CompileError as e:
             errors.append(str(e))
+            typed[str(e)] = e.diagnostics
     generated = []
     if not errors:
         from . import rezono_relational, rezono_table  # table lowering reads the pack's model
@@ -803,6 +806,9 @@ def read(pack_dir: str | Path) -> Pack:
     if not errors and pack.seals and pack.rules:
         from . import seal
         seal.check_rules(pack, pack.rules, errors)
+    if not errors and pack.calc is not None and calc_bare_leaves and pack.rules:
+        from . import rezono_calc
+        rezono_calc.check_relation_ambiguity(pack, calc_bare_leaves, errors)
     if not errors and pack.calc is not None:
         from . import calc, calc_sql, rules as rule_ir
         try:

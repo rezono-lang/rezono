@@ -130,9 +130,19 @@ def lower(decl: dict, at: str, own: dict[str, str], owners: dict[str, list[str]]
     elif "sealed" in decl and not (isinstance(sealed, str) and NAME.fullmatch(sealed)):
         refuse(f"{at}/sealed", "`sealed at` names the period slot of the kind", "§5a")
         ok = False
-    for index, _ in enumerate(decl.get("derived") or []):
-        refuse_derived(f"{at}/derived/{index}", refuse)
-        ok = False
+    for index, derived in enumerate(decl.get("derived") or []):
+        here = f"{at}/derived/{index}"
+        if not extended_format:
+            refuse_derived(here, refuse)
+            ok = False
+        elif isinstance(derived, dict) and isinstance(derived.get("table"), dict):
+            refuse(here, "a decision table under a kind is not lowered (R050)", "§5.4")
+            ok = False
+        else:
+            from . import rezono_calc
+
+            if not rezono_calc.validate_derived(derived, here, refuse):
+                ok = False
     equations = rezono_equation.lower(decl.get("equations", []), f"{at}/equations", refuse) if extended_format else []
     rules = lower_checks(decl.get("checks", []), f"{at}/checks", refuse) if extended_format else []
     slots = decl.get("slots") or []
