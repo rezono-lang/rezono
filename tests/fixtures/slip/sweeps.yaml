@@ -1,0 +1,2 @@
+sweeps:
+  - {name: item_amount, kind: item, key: item-a, slot: amount}

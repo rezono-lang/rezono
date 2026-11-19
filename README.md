@@ -1,10 +1,48 @@
 # Rezono
 
-Rezono is a language and reasoning engine for describing facts and the rules they must satisfy. You write questions and checks in Rezono, and the batch engine computes the results for a pack. The publisher runs an independent checker before producing a JSON manifest that records content hashes, checks and references to proof data.
+Facts and rules in, answers with proof out: every conclusion carries a witness that an independent checker verifies.
 
-## Publish the library example
+## What you get
 
-Start in a clean checkout on Ubuntu 24.04 x86-64 with Python 3.13.18, Bash and jq. The example includes both valid library records and deliberately invalid teaching data. These commands install the locked dependencies into a temporary virtual environment, copy the valid example, publish it locally and show the independent checker's result.
+- Rules over facts, computed for a whole pack by a batch engine on DuckDB.
+- A witness for every derived row: the rule that derived it and the rows it used.
+- An independent checker that verifies the proofs before anything is published.
+- A manifest per publication with content hashes, checks and references to the proofs.
+- Example packs to copy, from a library catalogue to a municipal subsidy scheme.
+
+## Example
+
+The [subsidy example](examples/subsidy/README.md) is a fictional energy-saving subsidy. Two of its facts: application A001 comes from household H001, and household H001 has a registered advice report.
+
+```yaml
+application:
+  - {"id": "A001", "household": "H001", "claimed_costs": 1100000}
+advice_report:
+  - {"id": "R001", "household": "H001"}
+```
+
+One rule, from [the assessment rules](examples/subsidy-scheme/rules/assessment.dl): an application is advised when its household has an advice report. The slot `household` of `application` is the relation `application__household`.
+
+```
+advised(a) :- application__household(a, h), advice_report__household(_, h).
+```
+
+The answer and its witness: the derived row, the rule that derived it, and the two fact rows it used. The checker verified this witness before the publication was written.
+
+```text
+advised(A001)
+  rule: advised
+  premise: application__household(A001, H001)
+  premise: advice_report__household(R001, H001)
+```
+
+## Try it
+
+Start in a clean checkout on Ubuntu 24.04 x86-64 with Python 3.13.18, Bash and jq. Run the steps in order in one shell.
+
+### 1. Publish the library example
+
+Install the locked dependencies into a temporary virtual environment, copy the valid part of the library example, publish it to a local store and show the independent checker's result.
 
 ```bash
 work=$(mktemp -d)
@@ -18,36 +56,53 @@ manifest=$("$work/venv/bin/rezono-publish" "$work/library" --store "file://$work
 jq -e '.checks[] | select(.name == "rezono:proofs" and .status == "green" and .violations == 0)' "$work/store/library/manifests/$manifest.json"
 ```
 
-The final command prints the recorded proof check. Open the same manifest to see the snapshot hashes and witness references. Explore other [examples](examples/) or read the [language guide](rezono/README.md).
+```text
+No broken requirements found.
+{
+  "name": "rezono:proofs",
+  "status": "green",
+  "violations": 0
+}
+```
 
-## Compile an authored Rezono pack
+### 2. Compute and prove with the subsidy example
 
-The released Python wheel includes the module reader. Put Node 24 on PATH or set `REZONO_NODE` to its
-executable, then run `rezono compile <pack> <output>`. YAML packs and older form-only modules continue
-to run with Python alone.
+Publish the subsidy example to the same store. The publisher only writes the manifest once the checker has accepted every proof. Then read the witness of the row from the example.
 
-To include the same reader in a standalone compiler wheel, run these commands from the checkout in
-the same shell.
+```bash
+manifest=$("$work/venv/bin/rezono-publish" examples/subsidy --store "file://$work/store" --role reader=complete --epoch 1 --knowledge-time 2026-01-01T00:00:00Z)
+witnesses="$work/store/subsidy/objects/$(jq -r '.witnesses[0].sha256' "$work/store/subsidy/manifests/$manifest.json").json"
+jq -er 'def row: "\(.relation)(\(.key | fromjson | join(", ")))"; .witnesses[] | select(.conclusion == {relation: "advised", key: "[\"A001\"]"}) | (.conclusion | row), "  rule: \(.rule_id)", (.premises[] | "  premise: \(.row | row)")' "$witnesses"
+```
 
-1. Set aside a working directory with `work=$(mktemp -d)`.
-2. Install the locked reader dependencies with `npm ci --prefix rezono --omit=dev --ignore-scripts`.
-3. Prepare the reader with `node scripts/release-language.mjs "$work/language" "$work/module-reader"`.
-4. Build the wheel with `REZONO_PREPARED_READER="$work/module-reader" python -m pip wheel --no-deps --wheel-dir "$work" ./compiler`.
+```text
+advised(A001)
+  rule: advised
+  premise: application__household(A001, H001)
+  premise: advice_report__household(R001, H001)
+```
+
+### On any other machine
+
+With Docker, build an image from the checkout with the same Ubuntu, Python and jq, start a shell in it, and run the steps above there. The image stays on your machine.
+
+```sh
+docker build --tag rezono-quickstart .
+docker run --rm -it rezono-quickstart
+```
+
+## Read further
+
+- [The tutorial](docs/tutorial.md) follows one subsidy award from its facts to its proof.
+- [The language guide](rezono/README.md) describes the Rezono language and its reader.
+- [The examples](examples/) are packs to read and copy.
+- [The vision](docs/vision.md) says where Rezono is going.
+
+## Status
+
+There is no release yet. Install from a checkout, as the steps above do. At this commit the compiler, the batch engine, the independent checker and the publisher work from a checkout, and CI runs the steps above on every pull request.
 
 ## Licences and contributing
 
-Code, tests and build scripts use Apache-2.0. Schemas and theories use CC0-1.0. Documentation and example content use CC-BY-4.0. See [LICENSE](LICENSE), the [licence texts](LICENSES/) and the [path-by-path attribution notice](NOTICE).
-
-Read [AGENTS.md](AGENTS.md) and the component's working instructions before making a change. Contributors select one expected failure from `python scripts/red_list.py` and follow [the worker card](WORKER.md).
-
-Pull requests require `check`, `Light checks` and `Inspect test evidence`. A read-only workflow from the base revision checks proposed Git objects. GitHub attaches the read-only check directly to the reviewed commit. Builders and maintainers who need to move or edit tests, fixtures, recorded outcomes, test helpers or the policy itself, including the workflows that define the required checks (`.github/workflows/ci.yml`, `.github/workflows/disposable-cluster.yml` and `.github/workflows/red-policy.yml`), must apply the `planner` label and explain why in the pull request. The label does not switch the review off: a pull request that lifts a red mark changes no other protected path, and every new or changed red mark sets `strict=True` without `run=False`. The review lists removed protected files and test functions, and changed evidence, as `REMOVED` and `CHANGED` lines in its log and job summary; these lines do not block. In the merge queue, `Inspect test evidence` reviews the queued change again against the commit it lands on, with the policy from that commit and the pull request's current label, so a pull request reviewed against an older base cannot land under an older policy. The merge queue runs every discovered component against the combined changes. The compiler and example suites require the pinned Soufflé 2.5 oracle in CI. Job summaries report actual skips by reason, including Feldera comparisons that need an endpoint. Run `python scripts/red_list.py --skips report.xml` on a pytest JUnit report to reproduce a summary. Inactive task claims without an open pull request expire after four hours.
-
-## Dependency updates
-
-Dependabot groups ordinary version updates weekly. Security updates are handled separately as alerts arrive. The maintainer for the affected component owns its alerts and update pull requests.
-
-- Assign an immediate repair for critical or high alerts affecting a release or image. Give it priority over other work.
-- Critical or high alerts confined to unreleased tests, oracles or tools need a merged repair or a record in `blocked/` within 24 hours of the alert.
-- Medium and low alerts need a repair within a week or in the weekly update.
-
-When an update fails a check, repair it or record the alert, affected manifest and version, and the failing evidence in `blocked/`. Use `yq -o=json .github/dependabot.yml | python3 -I scripts/test_dependabot.py` to check manifest coverage. Review the deployment overlays' Kustomize image pins separately because Dependabot's Docker updater does not read those replacements.
+Code, tests and build scripts use Apache-2.0, schemas and theories CC0-1.0, documentation and examples CC-BY-4.0: see [LICENSE](LICENSE), [the licence texts](LICENSES/) and [NOTICE](NOTICE).
+To report a bug or contribute from a fork, read [CONTRIBUTING.md](CONTRIBUTING.md).

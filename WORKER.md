@@ -10,7 +10,9 @@ Make exactly one red test green: `<test id>`.
 - Read this card, the root `AGENTS.md`, and the `AGENTS.md` of the folder you work in.
 - You may write in the component reported by `python scripts/red_list.py --json` and in the implementation source the expectation explicitly requires. Test helpers, conftest.py, fixtures, recorded outcomes and policy files require planner review. Pick work that can be completed by changing implementation code and removing the assigned mark. Report a dependency on new evidence to the planner.
 
-Use the exact id from `python scripts/red_list.py` wherever this card says `<test id>`. Configure this checkout with `git config user.name vdo89` and `git config user.email 222310762+vdo89@users.noreply.github.com`. Run commands from the repository root. The quick check adds the discovered source packages to the Python path automatically. If the test dependencies are available, start directly with the quick check on any platform. The command examples below use Bash. For a fresh environment on Ubuntu with the Python version in requirements/.python-version, prepare a virtual environment once:
+The reason of every red test starts with a milestone mark: `M1: `, `M2: `, `M3: `, `M4: `, `extra: ` or `later: `. When you choose among the red tests of one area, take the one with the earliest mark: `M1`, then `M2`, `M3`, `M4`, then `extra`. A test marked `later` is not a task. When you extend a reason, as described under "If it does not work", keep its mark at the start. `python scripts/red_list.py --milestones` counts the red tests per folder and mark.
+
+Use the exact id from `python scripts/red_list.py` wherever this card says `<test id>`. Configure this checkout with `git config user.name vdo89` and `git config user.email 222310762+vdo89@users.noreply.github.com`. That commit identity is for the project's own agents; anyone else commits under their own name, as [CONTRIBUTING.md](CONTRIBUTING.md) says. Run commands from the repository root. The quick check adds the discovered source packages to the Python path automatically. If the test dependencies are available, start directly with the quick check on any platform. The command examples below use Bash. For a fresh environment on Ubuntu with the Python version in requirements/.python-version, prepare a virtual environment once:
 
 ```bash
 python -m venv .venv
@@ -76,7 +78,7 @@ The test passes, the fast check passes, the mark is gone, and the pull request i
 After two attempts, stop.
 
 1. Create a branch `note/<test id>` from the main branch.
-2. On it, change only the reason of the test's mark: add what you learned, in one or two sentences. This is the one edit to a red test you may make.
+2. On it, change only the reason of the test's mark: add what you learned, in one or two sentences, and keep the milestone mark at its start. This is the one edit to a red test you may make.
 3. Open a pull request for it and turn on auto-merge. It changes only a reason, so the guard lets it through.
 4. Push your task branch, then release your claim. The condition makes sure you delete only your own claim, never a newer one:
    `git push --force-with-lease=refs/heads/task/<test id>:$(git rev-parse task/<test id>) origin :refs/heads/task/<test id>`

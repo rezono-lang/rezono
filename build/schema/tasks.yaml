@@ -6,6 +6,16 @@ default_range: string
 annotations:
   layer: facts
 
+enums:
+  BuildQueuePullState:
+    permissible_values:
+      open:
+      closed:
+  BuildQueueDraft:
+    permissible_values:
+      draft:
+      ready:
+
 classes:
   BuildTask:
     description: A task observed by the scanner and linked to its reconciliation step.
@@ -44,3 +54,23 @@ classes:
       count: {range: integer, minimum_value: 0, required: true}
       source: {required: true}
       receipt: {range: LoopSweepReceipt}
+  BuildQueueListing:
+    description: >-
+      A complete pull request listing against a base branch at this observation cut, with the receipt that attests
+      it.
+    attributes:
+      id: {identifier: true}
+      run: {range: BuildRun, required: true}
+      observed_at: {range: integer, required: true}
+      base: {required: true}
+      source: {required: true}
+      receipt: {range: LoopSweepReceipt}
+  BuildQueuePull:
+    description: One pull request in a queue listing, with its state, draft flag and base branch.
+    attributes:
+      id: {identifier: true}
+      listing: {range: BuildQueueListing, required: true}
+      number: {range: integer, minimum_value: 0, required: true}
+      state: {range: BuildQueuePullState, required: true}
+      draft: {range: BuildQueueDraft, required: true}
+      base: {required: true}

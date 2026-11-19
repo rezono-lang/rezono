@@ -1,0 +1,7 @@
+default:
+  kind: tool
+  name: Vendor transport inspection
+  revision: v3.0.0
+  position: L907
+  url: https://raw.githubusercontent.com/distribution/distribution/v3.0.0/docs/content/about/configuration.md
+  fragment_sha256: d5ba233f3082ac84cad47485eca5e62cd025f8ff0dfc54e322599e11f507a939

@@ -216,10 +216,9 @@ def imported_packs(pack_dir: Path, meta: dict, errors: list[str]) -> dict[str, I
                 errors.append(f"{where}: the pack in {imp['path']} is named {sub.get('name')!r}")
                 continue
             digest = pack_hash(d)
-            if digest != imp["sha256"]:
-                errors.append(f"{where}: the files hash to {digest}, not the pinned {imp['sha256']}")
-                continue
-            if (why := standard_packs.refusal(name, digest)):
+            why = (f"the files hash to {digest}, not the pinned {imp['sha256']}" if digest != imp["sha256"]
+                   else standard_packs.refusal(name, digest))
+            if why:
                 errors.append(f"{where}: {why}")
                 continue
             if name in found and found[name].sha256 != digest:

@@ -1,0 +1,18 @@
+group:
+  - {id: group-a}
+  - {id: group-b}
+
+item:
+  - {id: item-a, group: group-a, amount: 12}
+  - {id: item-b, group: group-a, amount: 4}
+  - {id: item-c, group: group-b}
+
+hold:
+  - {id: hold-b, item: item-b}
+
+link:
+  - {id: link-a, tail: item-a, head: item-b}
+
+role:
+  - {id: reader, title: Reader, capability: [read, read_restricted]}
+  - {id: summary, title: Summary reader, capability: [read]}

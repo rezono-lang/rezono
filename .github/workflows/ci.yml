@@ -99,6 +99,14 @@ jobs:
       - name: Test the leak check on a throwaway repository
         working-directory: release-source
         run: python3 -I scripts/test_leak_check.py -v
+      - name: Check references to missing docs pages against their budget
+        working-directory: release-source
+        env:
+          BASE: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.event.before }}
+        run: python3 -I scripts/docs_links.py --base "$BASE"
+      - name: Test the docs reference check on a throwaway repository
+        working-directory: release-source
+        run: python3 -I scripts/test_docs_links.py -v
       - name: Check Dependabot manifest coverage
         working-directory: release-source
         shell: bash
@@ -205,17 +213,43 @@ jobs:
         run: |
           set -euo pipefail
           python -I scripts/test_red_guard.py
+          python -I scripts/test_red_list.py
           python -I scripts/test_feldera_admission.py
           python -I scripts/test_cluster_worker_tasks.py
           python -I scripts/test_role_publication_ci.py
           python -I scripts/test_standstill.py
+      # Only reads test sources; a test without a milestone mark counts under "none".
+      - name: Report red tests per milestone
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            echo '### Red tests per milestone'
+            echo
+            python -I scripts/red_list.py --milestones
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+      # What must run and what counts as run come from the base, as the pack
+      # warnings do: a candidate cannot weaken its own count through
+      # scripts/components.py. The base scripts sit in a hidden directory of the
+      # checkout, so they read the candidate's tree. The candidate's own copy
+      # runs its regressions below and executes the shards; a change to the
+      # matrix or inventory format must stay readable by the base until it lands.
+      - name: Take the build rules from the base
+        shell: bash
+        env:
+          POLICY: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.sha }}
+        run: |
+          set -euo pipefail
+          mkdir -p .build-base
+          git archive "$POLICY" scripts | tar -x -C .build-base --strip-components=1
+          echo "Build rules from $POLICY, scripts/components.py blob $(git rev-parse "$POLICY:scripts/components.py")"
       - id: matrix
         env:
           GITHUB_BASE_REF: ${{ github.base_ref }}
           MERGE_GROUP_BASE_SHA: ${{ github.event.merge_group.base_sha }}
           MERGE_GROUP_HEAD_SHA: ${{ github.event.merge_group.head_sha }}
           GITHUB_EVENT_BEFORE: ${{ github.event.before }}
-        run: python3 scripts/components.py ci-matrix
+        run: python3 .build-base/components.py ci-matrix
       - name: Select the role-publication proof
         id: role_publication
         env:
@@ -246,18 +280,17 @@ jobs:
             done
             python3 -I "$policy/red_before.py" discover "$BASE" "$HEAD" | tee -a "$GITHUB_OUTPUT"
           fi
+      # The selection's own regressions run whatever it selects: a pull request
+      # that changes only scripts or workflows may select no component job.
       - uses: ./.github/workflows/python-environment
-        if: steps.matrix.outputs.has_pytest == 'true'
         with:
           editable: ${{ steps.matrix.outputs.python_editable }}
           oracle: ${{ contains(fromJSON(steps.matrix.outputs.python).*.folder, 'compiler') || contains(fromJSON(steps.matrix.outputs.python).*.folder, 'examples') }}
           save-cache: 'true'
       - name: Test candidate selection and exact-once evidence
-        if: steps.matrix.outputs.has_pytest == 'true'
         run: python -I .github/workflows/tests/test_components.py
       # These examples run pytest, so they wait for the locked environment.
       - name: Test the candidate rules for added tests on the base source
-        if: steps.matrix.outputs.has_pytest == 'true'
         run: python -I scripts/test_red_before.py
       - name: Collect each selected Python component once
         if: steps.matrix.outputs.has_pytest == 'true'
@@ -267,7 +300,9 @@ jobs:
           REZONO_HYPOTHESIS_PROFILE: ci
         run: |
           set -euo pipefail
-          python scripts/components.py inventory "$RUNNER_TEMP/inventory"
+          # The candidate's environment action must not narrow the inventory.
+          unset PYTEST_ADDOPTS PYTEST_PLUGINS
+          python .build-base/components.py inventory "$RUNNER_TEMP/inventory"
           while IFS= read -r -d '' report; do
             python scripts/red_list.py --skips "$report" | tee -a "$GITHUB_STEP_SUMMARY"
           done < <(find "$RUNNER_TEMP/inventory" -name collection.xml -print0)
@@ -280,6 +315,14 @@ jobs:
           if-no-files-found: error
           overwrite: true
           retention-days: 2
+      # Reads pack sources and test files only. The coverage page keeps no copy of this output.
+      - name: Report language coverage
+        if: steps.matrix.outputs.has_pytest == 'true'
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -I compiler/tests/rezono/language_usage.py | tee -a "$GITHUB_STEP_SUMMARY"
       - name: Route the disposable cluster from the candidate
         id: cluster
         env:
@@ -416,8 +459,22 @@ jobs:
         run: |
           set -euo pipefail
           if ! command -v bsdtar >/dev/null; then
-            sudo apt-get -o Acquire::Retries=3 update -qq
-            sudo apt-get -o Acquire::Retries=3 install -y --no-install-recommends libarchive-tools
+            # A mirror can answer 503 for minutes; retry update and install as a whole.
+            attempts=5
+            for attempt in $(seq 1 "$attempts"); do
+              echo "apt attempt $attempt/$attempts: libarchive-tools"
+              if sudo apt-get -o Acquire::Retries=3 update -qq &&
+                 sudo apt-get -o Acquire::Retries=3 install -y --no-install-recommends libarchive-tools; then
+                break
+              fi
+              if (( attempt == attempts )); then
+                echo "::error::apt could not install libarchive-tools after $attempts attempts"
+                exit 1
+              fi
+              pause=$(( attempt * 15 < 60 ? attempt * 15 : 60 ))
+              echo "apt attempt $attempt failed; retrying in ${pause}s"
+              sleep "$pause"
+            done
           fi
           bsdtar --version
           renderer="$RUNNER_TEMP/rezono-worker-render"
@@ -557,9 +614,13 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      # The count comes from the base's scripts, as the inventory does.
+      - name: Check out the base build rules
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         if: needs.discover.outputs.has_pytest == 'true' && needs.queue_evidence.outputs.tested != 'true'
         with:
+          ref: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.sha }}
+          sparse-checkout: scripts
           persist-credentials: false
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         if: always() && needs.discover.outputs.has_pytest == 'true' && needs.queue_evidence.outputs.tested != 'true'

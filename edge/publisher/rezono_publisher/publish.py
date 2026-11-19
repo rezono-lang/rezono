@@ -99,6 +99,10 @@ class Epoch:
     # role gets those of its own rows. Not `sources`, which says where each source stood. None: the caller
     # supplies none (an older caller), and the manifest lists no source sets.
     fact_sources: list | None = None
+    # The evidence the protected caller passed to batch.epoch (rezono_checker.evidence.Evidence), whose admitted
+    # rows entered the protected relations before the rules ran (decisions/admission-transport.md). None: no
+    # evidence, and the protected relations stay empty.
+    evidence: object | None = None
 
 
 PROOFS = "rezono:proofs"  # the check of the witnesses by the checker; not a relation name (no colon there)
@@ -303,7 +307,8 @@ def verify(e: Epoch, snapshots=None, witnesses=None, full=None, calc_witnesses=N
         {"relation": rel, "role": "checker", "complete": True, "uri": rel, "sha256": sha256(b), "format": "json"}
         for rel, b in sorted(snapshots.items())]}
     report = check_epoch(witnesses, manifest, rules, snapshots.__getitem__, derived=derived, full=full, seals=seals,
-                         calc_witnesses=calc_witnesses or (), calc_ir=calculation, **metadata_args(e, full))
+                         calc_witnesses=calc_witnesses or (), calc_ir=calculation, **metadata_args(e, full),
+                         evidence=e.evidence if full is None else None)  # admitted again on the complete side
     if scope:
         report = report | {"valid": False, "findings": scope + report["findings"]}  # what the filter got wrong first
     return report
@@ -552,7 +557,24 @@ def plan(e: Epoch, store, roles: dict[str, str], base: dict | None = None,
         manifest["proposal"] = e.proposal
     if e.variant:
         manifest["variant"] = e.variant
+    manifest |= candidates(e)
     return files, manifest
+
+
+def candidates(e: Epoch) -> dict:
+    """The candidate references the epoch's admission step read from the submitted index, for the complete
+    manifest (decisions/admission-transport.md, section 2): `completeness_receipts` and `rounds`, each only when
+    it lists one. The trusted context confers the authority and is never listed; the access gate gives a role's
+    manifest neither list."""
+    if e.evidence is None:
+        return {}
+    from rezono_checker import evidence as admission
+
+    try:
+        references = admission.admit(e.evidence).references
+    except ValueError as err:
+        raise Blocked(f"rezono:evidence: {err}") from err
+    return {field: references[field] for field in admission.INDEX_FIELDS if references[field]}
 
 
 def build_bytes(build: dict, roles: dict[str, str]) -> bytes:

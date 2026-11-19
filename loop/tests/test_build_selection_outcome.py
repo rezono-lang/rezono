@@ -10,17 +10,6 @@ def rows(*keys):
     return [{"key": list(key)} for key in keys]
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason=(
-        "Read decisions/build-reconciliation.md, sections Observed kinds and Selection and publication. Add "
-        "loop/build_selection_outcome.py with selection_outcome(*, run, manifest, rows, engine_error) returning "
-        "the mode, the selected suites and the full-selection reasons. The first failure decides: engine failure, "
-        "missing publication, invalid publication (a check not green, no checks or a missing relation), then the "
-        "published full-selection reasons. Write only in that file."
-    ),
-)
 def test_build_selection_outcome():
     assert find_spec("loop.build_selection_outcome") is not None, "The build selection outcome glue is missing"
     from loop.build_selection_outcome import selection_outcome

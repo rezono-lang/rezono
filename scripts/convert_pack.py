@@ -194,7 +194,8 @@ def schema_source(path: Path, identity: str, module: str) -> Source:
         lines.extend(metadata_lines(body, place, "  "))
         for member, definition in members.items():
             member_where = f"{place}.{member}"
-            metadata = supported(definition, {"description", "exact_mappings"}, member_where)
+            metadata = supported({} if definition is None else definition, {"description", "exact_mappings"},
+                                 member_where)
             if annotations := metadata_lines(metadata, member_where, "    "):
                 lines.extend([f"  value {member}", *annotations])
         lines.append("")
@@ -272,7 +273,12 @@ def compare_imported(consumer: Path, original: Path, candidate: Path, identity: 
 
 def compare(baseline: pack.Pack, trial: pack.Pack) -> None:
     original_schemas = [{key: value for key, value in schema.items() if key != "file"} for schema in baseline.schemas]
-    trial_schemas = [{key: value for key, value in schema.items() if key != "file"} for schema in trial.schemas]
+    # A rules file named after no schema becomes a native module that only holds rules
+    # (decisions/language-native-rules.md); it declares no type, so it is not an extra schema.
+    known = {schema["module"] for schema in baseline.schemas}
+    typed = {kind.module for kind in trial.kinds.values()}
+    trial_schemas = [{key: value for key, value in schema.items() if key != "file"} for schema in trial.schemas
+                     if schema["module"] in known or schema["module"] in typed]
     if original_schemas != trial_schemas:
         raise ConversionError("the candidate changed the schema or module identity")
     if (list(map(kind_meaning, baseline.kinds.values())) != list(map(kind_meaning, trial.kinds.values()))
