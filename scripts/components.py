@@ -342,7 +342,7 @@ FULL_SELECTION_PATHS = (
     ".github/workflows/ci.yml", ".github/workflows/disposable-cluster.yml",
     ".github/workflows/python-environment/", "blocked/",
     "scripts/check-pinned.py", "scripts/components.py", "scripts/fast_check.py",
-    "scripts/install-souffle.sh", "scripts/red_list.py",
+    "scripts/install-souffle.sh", "scripts/pytest-plugins.txt", "scripts/red_list.py",
 )
 # What scripts/components.py itself reads while it runs one component's shards.
 JOB_INPUTS = {
