@@ -38,7 +38,9 @@ def _records(*readbacks):
         "edge/publisher/tests/test_completeness_publish.py--"
         "test_publisher_admits_receipts_only_with_a_trusted_context (the checker admits again on publish) and "
         "compiler/tests/test_protected_admission_relations.py--test_admission_relations_are_protected_inputs. "
-        "Today rezono_checker.evidence is missing (ImportError)."
+        "With those derivations admission still refuses both claims as claim_malformed: the round verifier "
+        "(checker/rezono_checker/rounds.py) requires effects, the ordered plan hashes, in every subset, and "
+        "round_claim in round_visibility_publication.py writes none; with effects added the test passes."
     ),
 )
 def test_verified_round_authorizes_steps(tmp_path):
