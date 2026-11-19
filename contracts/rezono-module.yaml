@@ -70,7 +70,7 @@ types:
     description: The name of a kind, a unit or an enum (v0 §3).
   TypeText:
     typeof: string
-    pattern: "^[A-Z][A-Za-z0-9]*(<[A-Za-z0-9<>,]+>)?$"
+    pattern: "^([a-z][a-z0-9_]*[.])?[A-Z][A-Za-z0-9]*(<[A-Za-z0-9<>,]+>)?$"
     description: A type as written, without white space, such as `Money<EUR>`.
   Date:
     typeof: string
@@ -81,7 +81,7 @@ types:
     description: The decoded spelling of a local or imported rule name.
   RuleType:
     typeof: string
-    pattern: '^([a-z][a-z0-9_]*\.)?[A-Z][A-Za-z0-9]*(<[A-Za-z0-9<>,]+>)?$'
+    pattern: '^([a-z][a-z0-9_]*.)?[A-Z][A-Za-z0-9]*(<[A-Za-z0-9<>,]+>)?$'
     description: A column type with an optional pack alias.
   TrueFlag:
     typeof: boolean
