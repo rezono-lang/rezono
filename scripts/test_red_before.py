@@ -71,17 +71,27 @@ def end_to_end(label, added, expected_code):
 
 
 def not_mixed():
-    """New tests beside documentation only: nothing runs on the base."""
-    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as directory:
-        repo = Path(directory)
-        git(repo, "init", "-q")
-        git(repo, "config", "core.autocrlf", "false")
-        base = commit(repo, {"pkg/calc.py": BUGGY, "tests/test_calc.py": TESTS})
-        head = commit(repo, {"docs/calc.md": b"# Calc\n", "tests/test_calc.py": FAILS_ON_BASE})
-        found = script(repo, "discover", base, head)
-        if found.returncode or found.stdout.decode().strip() != "required=false":
-            raise AssertionError(f"tests beside documentation: discover gave {found.stdout!r} {found.stderr!r}")
-        print("SKIP: added tests beside documentation only")
+    """Pull requests that change no source: nothing runs on the base."""
+    red = TESTS.replace(b"def test_double_two", b"@pytest.mark.xfail(strict=True)\ndef test_double_two")
+    cases = [
+        ("added tests beside documentation only",
+         {"pkg/calc.py": BUGGY, "tests/test_calc.py": TESTS},
+         {"docs/calc.md": b"# Calc\n", "tests/test_calc.py": FAILS_ON_BASE}),
+        ("lifted mark beside an added evidence file",
+         {"pkg/calc.py": FIXED, "tests/test_calc.py": b"import pytest\n" + red},
+         {"tests/test_calc.py": b"import pytest\n" + TESTS, "tests/cases/double.json": b"[4]\n"}),
+    ]
+    for label, before, after in cases:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as directory:
+            repo = Path(directory)
+            git(repo, "init", "-q")
+            git(repo, "config", "core.autocrlf", "false")
+            base = commit(repo, before)
+            head = commit(repo, after)
+            found = script(repo, "discover", base, head)
+            if found.returncode or found.stdout.decode().strip() != "required=false":
+                raise AssertionError(f"{label}: discover gave {found.stdout!r} {found.stderr!r}")
+            print(f"SKIP: {label}")
 
 
 def selection_cases():
