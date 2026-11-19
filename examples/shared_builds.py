@@ -6,6 +6,7 @@ it in CI (scripts/components.py), and a plain pytest run gets one of its own (ex
 committed packs are shared: their files do not change during a run, and the key names the pack, the epoch
 arguments and the roles, which is everything the build reads besides the code of that same run."""
 
+import copy
 import hashlib
 import json
 import os
@@ -102,3 +103,28 @@ def publication(pack_dir, root, roles: dict[str, str], **arguments):
     state = json.loads((found / "publication.json").read_text(encoding="utf-8"))
     shutil.copytree(found / "store", root, dirs_exist_ok=True)
     return store.FileStore(root, bucket=state["bucket"]), state["manifest"]
+
+
+class CommittedPacks:
+    """The read model and the compiled files of a committed example pack, made once per process (the pack's
+    files do not change during a run, and compiling is deterministic: test_examples.py checks both). Each call
+    returns a copy: a deep copy of the model, and a new dict of the compiled texts."""
+
+    def __init__(self):
+        self._models, self._files = {}, {}
+
+    def model(self, pack_dir):
+        from rezono_compiler import pack
+
+        key = _committed(pack_dir)
+        if key not in self._models:
+            self._models[key] = pack.read(pack_dir)
+        return copy.deepcopy(self._models[key])
+
+    def compiled(self, pack_dir) -> dict[str, str]:
+        from rezono_compiler import emit, pack
+
+        key = _committed(pack_dir)
+        if key not in self._files:
+            self._files[key] = emit.compile_pack(pack.read(pack_dir))
+        return dict(self._files[key])

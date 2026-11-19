@@ -37,3 +37,11 @@ def shared_builds_directory(tmp_path_factory):
         yield Path(os.environ[SHARED])
     finally:
         del os.environ[SHARED]
+
+
+@pytest.fixture(scope="session")
+def committed_packs():
+    """Committed example packs read and compiled once per process; each test gets its own copy."""
+    from shared_builds import CommittedPacks
+
+    return CommittedPacks()
