@@ -28,7 +28,8 @@ def round_context(retained, *, run, cut, manifest, invariants, program, observat
 
     `cut` is the trusted cut binding. `program`, `base` and `domain` name retained objects, and
     `observations` maps each observation input of the certificate context to the retained object that holds
-    it. The domain lists the steps with their integer priorities and effect plans, and the batch width.
+    it. The domain lists the steps with their integer priorities and the plan hashes of their effects in order,
+    and the batch width.
     """
     def pinned(name):
         return observation_reference("retained", name, retained[name])

@@ -3,7 +3,7 @@ import json
 
 import pytest
 
-from rezono_canon import canonical_bytes
+from rezono_canon import canonical_bytes, canonical_sha256
 from rezono_checker.transition import check_transition_certificate
 from round_visibility_cases import (
     ACTIVATE_A, A_RESTORED, A_WITHDRAWN, ALL_STATES, EFFECTS, Effect, FINISHED_ONLY, INITIAL,
@@ -20,7 +20,7 @@ from round_visibility_publication import (
     raises=(AssertionError, ImportError, TypeError),
     reason=(
         "Read decisions/admission-transport.md sections 3 and 7 and decisions/loop-certificate-admission.md. "
-        "The round verifier rebuilds all nine visible boundaries of the two ordered steps from the effect plans "
+        "The round verifier rebuilds all nine visible boundaries of the two ordered steps from the plan hashes "
         "in the retained domain and refuses the claim, because the violating boundary has no certificate even "
         "though every submitted pair checks. So no verified_round row is admitted and nothing is ready. "
         "Preserve observed old rows and residual effects. Waits for test_ready_requires_checked_batch_member "
@@ -47,14 +47,16 @@ def test_overlapping_withdrawals_break_availability(tmp_path):
             Effect(f"pair-{lane}", lane, old, new)
             for lane, old, new in zip(LANES, INITIAL, target, strict=True) if old != new
         )
+        # A subset of ordered steps names the effects applied at that boundary, and its certificate binds the
+        # digest of their plan hashes in order (decisions/admission-transport.md section 7).
+        applied = [effect for offset, phase in zip((0, 2), target, strict=True)
+                   for effect in EFFECTS[offset:offset + progress[phase]]]
         pair = pair_evidence(OPENING, net_effects, target)
+        pair.certificate["effect"] = canonical_sha256([effect.plan_hash for effect in applied])
         assert check_transition_certificate(*pair)["valid"]
         submitted[f"variant-{number}"] = canonical_bytes(pair.variant)
         submitted[f"certificate-{number}"] = canonical_bytes(pair.certificate)
-        # A subset of ordered steps names the effects applied at that boundary.
-        applied = [effect.step for offset, phase in zip((0, 2), target, strict=True)
-                   for effect in EFFECTS[offset:offset + progress[phase]]]
-        pairs.append((applied, f"variant-{number}", f"certificate-{number}"))
+        pairs.append(([effect.step for effect in applied], f"variant-{number}", f"certificate-{number}"))
     assert len(pairs) == 8
 
     overlap = pair_evidence(OPENING, (WITHDRAW_A, WITHDRAW_B), VIOLATION)
@@ -82,7 +84,7 @@ def test_overlapping_withdrawals_break_availability(tmp_path):
         "lane-inventory": OPENING.inventory_bytes(),
         "base": canonical_bytes(overlap.base),
         "round-domain": canonical_bytes({"width": 2, "steps": [
-            {"step": member, "priority": priority, "effects": [effect.plan for effect in EFFECTS[offset:offset + 2]]}
+            {"step": member, "priority": priority, "effects": [effect.plan_hash for effect in EFFECTS[offset:offset + 2]]}
             for member, priority, offset in zip(members, (0, 1), (0, 2), strict=True)
         ]}),
     }

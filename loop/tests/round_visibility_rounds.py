@@ -22,7 +22,7 @@ def singleton_rounds():
         "definition": canonical_bytes(PROGRAM),
         "base": canonical_bytes(pairs[WITHDRAW_A].base),
         "round-domain": canonical_bytes({"width": 1, "steps": [
-            {"step": effect.step, "priority": PRIORITIES[effect.step], "effects": [effect.plan]}
+            {"step": effect.step, "priority": PRIORITIES[effect.step], "effects": [effect.plan_hash]}
             for effect in TARGETS
         ]}),
     }
