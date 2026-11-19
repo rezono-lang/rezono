@@ -15,7 +15,7 @@ def holder(**inverse):
 @pytest.mark.xfail(
     strict=True,
     raises=AssertionError,
-    reason="Lower the slot member inverse to the LinkML slot property inverse in compiler/rezono_compiler/rezono_slot.py "
+    reason="extra: Lower the slot member inverse to the LinkML slot property inverse in compiler/rezono_compiler/rezono_slot.py "
            "instead of refusing it, and refuse an inverse whose forward slot is missing or points elsewhere. Read "
            "decisions/language-inverse-references.md. Remove the case 'an inverse' from REFUSALS in "
            "compiler/tests/test_rezono_module.py, which this task may change. Waits for test_lower_extended_scalar "

@@ -54,7 +54,7 @@ class InapplicableMemberSkipped(AssertionError):
 @pytest.mark.xfail(
     strict=True,
     raises=InapplicableMemberSkipped,
-    reason="Refuse a sum, min or max whose measure is a Value column (it can hold not_applicable or unknown) "
+    reason="extra: Refuse a sum, min or max whose measure is a Value column (it can hold not_applicable or unknown) "
            "with R044 at the clause origin in _GroupClause.measure of compiler/rezono_compiler/native_rule_groups.py, "
            "and keep lowering a ranged key-column measure. Read decisions/language-expression-semantics.md §1 and "
            "decisions/conformance-value-agg-na-member.md. Waits for "
