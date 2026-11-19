@@ -15,11 +15,12 @@ def holder(**inverse):
 @pytest.mark.xfail(
     strict=True,
     raises=AssertionError,
-    reason="Lower the slot member inverse to the LinkML slot property inverse in compiler/rezono_compiler/rezono_slot.py "
+    reason="extra: Lower the slot member inverse to the LinkML slot property inverse in compiler/rezono_compiler/rezono_slot.py "
            "instead of refusing it, and refuse an inverse whose forward slot is missing or points elsewhere. Read "
-           "decisions/language-inverse-references.md. Remove the case 'an inverse' from REFUSALS in "
-           "compiler/tests/test_rezono_module.py, which this task may change. Waits for test_lower_extended_scalar "
-           "and test_lower_open_world while they own rezono_slot.py.",
+           "decisions/language-inverse-references.md. Refuse a missing forward slot with the message 'the inverse "
+           "<name> is not a slot of <Kind>'. Ready for a worker: also remove the red mark of the case 'an inverse "
+           "without its forward slot' in REFUSALS of compiler/tests/test_rezono_module.py, and change nothing else "
+           "there. Waits for test_lower_extended_scalar and test_lower_open_world while they own rezono_slot.py.",
 )
 def test_lower_inverse_reference(tmp_path):
     # LinkML's metamodel names the forward slot of an inverse with the slot property `inverse`.

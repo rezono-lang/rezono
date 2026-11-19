@@ -27,11 +27,12 @@ The pack `run/packs/cluster-shape` has no facts of its own. Its input records ar
 
 A line is the cluster's demand for one SKU in one role, matching the plan line that ordered it. A machine belongs to a cluster through the plan hash it was ordered under.
 
-A machine of the cluster's plan is *valid* when it has exactly one value for each slot, its boot and data disks differ, and neither disk identity appears on another machine of that plan. The pack derives `shape_problem(cluster, reason)` with these reasons:
+A machine of the cluster's plan is *valid* when it has exactly one value for each slot, its boot and data disks differ, and neither disk identity appears on another machine of that plan. A line of the cluster is *valid* when it has exactly one `sku`, one `role` and one `quantity`; a missing slot is unknown, and unknown never passes. The pack derives `shape_problem(cluster, reason)` with these reasons:
 
 | Reason | When |
 | --- | --- |
 | `invalid_machine` | A machine of the plan is not valid. |
+| `invalid_line` | A line of the cluster is not valid. |
 | `count` | For some line, the number of valid machines of the plan with its SKU differs from its quantity. |
 | `unassigned` | A valid machine of the plan has a SKU that no line of the cluster names. |
 | `ambiguous_line` | Two lines of the cluster name the same SKU. |

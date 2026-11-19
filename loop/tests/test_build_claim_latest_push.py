@@ -41,18 +41,6 @@ def latest_push_records():
     return records
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason=(
-        "extra: Read decisions/build-claim-release.md sections 1 and 2. build_claim_activity holds every push record of "
-        "a claim. Take the latest push per claim by pushed_at; two equally recent pushes with different commits "
-        "leave it undecided. The latest push supplies the lease start only when its after "
-        "equals the observed generation. An older matching push never starts a lease. Write in "
-        "build/rules/claims.dl. Waits for test_build_claim_release_plan (same file, adds the claim kinds). Today "
-        "the build schema lacks the claim kinds."
-    ),
-)
 def test_build_claim_latest_push(tmp_path):
     assert KINDS <= declared_kinds(), f"The build schema lacks {sorted(KINDS - declared_kinds())}"
     source = tmp_path / "source"

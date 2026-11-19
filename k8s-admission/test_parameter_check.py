@@ -64,7 +64,7 @@ CASES = [
 
 @pytest.mark.xfail(
     strict=True,
-    reason="Write parameter_check.check_parameters as decisions/k8s-admission-binding-checks.md specifies under "
+    reason="extra: Write parameter_check.check_parameters as decisions/k8s-admission-binding-checks.md specifies under "
            "Parameter check. Write in k8s-admission/parameter_check.py.",
 )
 def test_parameter_check():

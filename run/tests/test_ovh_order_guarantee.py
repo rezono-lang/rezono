@@ -39,7 +39,7 @@ def record():
 
 
 @pytest.mark.xfail(strict=True, reason=(
-    "Read decisions/run-price-enforcement.md, section Conditions for the OVHcloud guarantee. "
+    "M4: decisions/run-price-enforcement.md: Read the section Conditions for the OVHcloud guarantee. "
     "Implement guarantee(order, record, plan_hash, day) in run/ovh_order.py."
 ))
 def test_ovh_order_guarantee():

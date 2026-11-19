@@ -187,7 +187,7 @@ def publish_both_epochs(tmp_path, directory):
 @pytest.mark.xfail(
     strict=True,
     raises=OrderCheckMismatch,
-    reason="Make the native order-check pack publish the §5 observations on the ordinary path. Read "
+    reason="extra: Make the native order-check pack publish the §5 observations on the ordinary path. Read "
            "decisions/language-expression-semantics.md §5. Waits for test_expression_python_path_bindings, "
            "test_expression_python_branch_bindings, test_expression_python_scalar_negation, "
            "test_expression_python_filtered_count and test_order_check_ordinary_filtered_count for lowering, "
@@ -214,7 +214,7 @@ def test_order_check_publication(tmp_path):
 @pytest.mark.xfail(
     strict=True,
     raises=OrderCheckMismatch,
-    reason="Lower successors(x, n) when x in Stage and n = (edge(_, _) where it.pred = x).count() through "
+    reason="M3: Lower successors(x, n) when x in Stage and n = (edge(_, _) where it.pred = x).count() through "
            "compiler/rezono_compiler/native_rule_lowering.py into native_rule_groups: one count aggregate over "
            "edge with terms [?x, _], as the legacy rule. Read decisions/language-expression-semantics.md §1 "
            "and §5. Waits for test_expression_python_filtered_count and test_expression_python_path_bindings.",
@@ -250,7 +250,7 @@ def column_of(path: Path, line: int, text: str) -> int:
 @pytest.mark.xfail(
     strict=True,
     raises=OrderCheckMismatch,
-    reason="Refuse the order-check revision with not zero(x) as R047 on the ordinary compiler path, with "
+    reason="extra: Refuse the order-check revision with not zero(x) as R047 on the ordinary compiler path, with "
            "x.rank = 0 and the partial rank slot as related places. Read decisions/language-expression-"
            "semantics.md §2 rule 2 and §5. Waits for test_expression_link_partiality and "
            "test_expression_python_negated_call.",

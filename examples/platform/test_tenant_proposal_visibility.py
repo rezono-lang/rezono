@@ -3,7 +3,7 @@ import pytest
 from tenant_proposal_case import load, proposal, query, quota, write
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError, reason="Depends on test_trusted_tenant_proposal_inputs and the std-access role/read-grant binding. Implement tenant-visible delivery and quota evidence in rules/tenant_delivery_visibility.dl. Read decisions/platform-tenant-proposal-relations.md. Waits for test_file_delivery_numbers and tenant-scoped completeness for the numbering aggregate. A checked publication exposes both ordinals to the complete checker but withholds each ordinal from its tenant even when that tenant can read its own request.")
+@pytest.mark.xfail(strict=True, raises=AssertionError, reason="extra: Depends on test_trusted_tenant_proposal_inputs and the std-access role/read-grant binding. Implement tenant-visible delivery and quota evidence in rules/tenant_delivery_visibility.dl. Read decisions/platform-tenant-proposal-relations.md. Waits for test_file_delivery_numbers and tenant-scoped completeness for the numbering aggregate. A checked publication exposes both ordinals to the complete checker but withholds each ordinal from its tenant even when that tenant can read its own request.")
 def test_real_proposal_delivery_and_quota_evidence_stay_with_owner(tmp_path):
     teams, catalog = proposal(tmp_path)
     model = load(catalog)

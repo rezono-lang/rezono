@@ -2,3 +2,8 @@ name: exact-quote
 version: 0.1.0
 default_language: en
 imports: []
+theory: false
+rezono:
+- module: rezono/quote.rezono
+  form: rezono/quote.json
+  layer: facts
