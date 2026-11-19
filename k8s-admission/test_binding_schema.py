@@ -6,11 +6,13 @@ binding in one place, chosen by hand from the rules that decision states.
 
 import json
 from copy import deepcopy
+from pathlib import Path
 
 import pytest
 import yaml
-from translator_support import FIXTURES, ROOT
 
+ROOT = Path(__file__).parent.resolve()
+FIXTURES = ROOT / "fixtures" / "translator"
 SCHEMA = ROOT / "resources" / "admission-binding.schema.json"
 
 

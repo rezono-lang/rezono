@@ -8,7 +8,6 @@ counter-case: the same two lists are sound in one order and not in the other.
 from copy import deepcopy
 
 import pytest
-from translator_support import fixture, load_program
 
 P = "parameters/published_flow"
 
@@ -70,6 +69,7 @@ CASES = [
 )
 def test_parameter_check():
     from parameter_check import check_parameters
+    from translator_support import fixture, load_program
 
     for rule in ("verified-supply", "in-zone-flow"):
         assert check_parameters(fixture(f"{rule}.binding.yaml"), load_program(f"{rule}.rules.yaml")) == [], rule

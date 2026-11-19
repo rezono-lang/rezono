@@ -8,7 +8,6 @@ further on, such as a column that reads from a renamed iterator.
 from copy import deepcopy
 
 import pytest
-from translator_support import fixture, load_program
 
 
 def ingress(doc):
@@ -67,6 +66,7 @@ CASES = [
 )
 def test_request_check():
     from request_check import check_request
+    from translator_support import fixture, load_program
 
     for rule in ("verified-supply", "in-zone-flow"):
         assert check_request(fixture(f"{rule}.binding.yaml"), load_program(f"{rule}.rules.yaml")) == [], rule

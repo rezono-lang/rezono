@@ -6,15 +6,17 @@ place; the expected problems follow by hand from the decision.
 """
 
 from copy import deepcopy
+from pathlib import Path
 
 import pytest
 import yaml
-from translator_support import ROOT, fixture, load_program
 
-CRD = ROOT / "resources" / "publication-crd.yaml"
+CRD = Path(__file__).parent.resolve() / "resources" / "publication-crd.yaml"
 
 
 def pairs():
+    from translator_support import fixture, load_program
+
     return [(fixture(f"{rule}.binding.yaml"), load_program(f"{rule}.rules.yaml"))
             for rule in ("verified-supply", "in-zone-flow")]
 
