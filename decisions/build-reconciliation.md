@@ -26,7 +26,7 @@ Publish `build_selected_job(run, component, reason)` with a proof per row. Publi
 
 ## Task and queue observations
 
-Derive task states from the imported `std-loop` relations using task prerequisites, current claims and observed PR state. Observe PR checks and run minutes with dated origins. Use `std-decision` to hold the effective claim lease, queue bounds and task priority limits. When choices are available, the language task precedes the core task, a queue of thirty denies a planner slot under the named decision, and an unfinished prerequisite keeps its task waiting. An outranked task cites its rank and the winning work. Unknown queue coverage or an incomplete inventory does not prove planner capacity. [Decision library](../packs/std-decision/pack.yaml) · [Order library](../packs/std-order/pack.yaml)
+Derive task states from the imported `std-loop` relations using task prerequisites, current claims and observed PR state. Observe PR checks and run minutes with dated origins. Use `std-decision` to hold the effective claim lease, queue bounds and task priority limits. When choices are available, the language task precedes the core task, a queue of thirty denies a planner slot under the named decision, and an unfinished prerequisite keeps its task waiting. An outranked task cites its rank and the winning work. Unknown queue coverage or an incomplete inventory does not prove planner capacity: only the admitted member inventory of a pull listing does ([admission transport](admission-transport.md), section 6, queue pulls). [Decision library](../packs/std-decision/pack.yaml) · [Order library](../packs/std-order/pack.yaml)
 
 | Kind | Independent origin and acceptance question |
 | --- | --- |
@@ -34,7 +34,8 @@ Derive task states from the imported `std-loop` relations using task prerequisit
 | `BuildPolicyDate` | The observation adapter derives the reference day from the recorded cut. Which policy day applies to this run? |
 | `BuildTrackRank` | An effective decision assigns a track priority. Which ready task precedes another under those decision rows? |
 | `BuildQueueLimit` | A decision supplies the planner threshold. Which threshold establishes or denies a free planner slot? |
-| `BuildQueueReading` | An independent queue reader reports a count and event time. Can this same-cut reading establish planner capacity, or is it missing, stale or contradicted? |
+| `BuildQueueReading` | An independent queue reader reports a count and event time. It establishes no count, because no rule can check a reported number against the pull requests it counts; it remains a record to compare. |
+| `BuildQueueListing` | A pull listing of one base at the run's cut names the receipt of its protected read. Do the admitted `queue-listing` and `queue-pull` members of that receipt establish the queue, or is it missing, stale or contradicted? |
 
 Publish the witnessed task relations and planner decisions as read-only findings. The first task-order slice accepts supplied `std-loop` step and requirement observations. It consults effective policy at the recorded reference date. The real red-list, PR observation and claim adapters remain separate integration work.
 

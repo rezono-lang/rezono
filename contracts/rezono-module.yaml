@@ -744,9 +744,16 @@ classes:
       card: {range: Card}
       value: {range: Expr, inlined: true}
       unless: {range: Clause, array: {dimensions: [{alias: unless}, {alias: clause}]}, description: "Each `unless`, in the order of the text: its one clause, or the clauses of its block (v0 §5b)."}
-      versions: {range: Version, multivalued: true, inlined_as_list: true, minimum_cardinality: 1}
+      versions: {range: DerivedVersion, multivalued: true, inlined_as_list: true, minimum_cardinality: 1}
       table: {range: Table, inlined: true}
       output: {range: DerivedOutput, inlined: true}
+      unit: {range: Word, description: "`unit TEXT`: the unit of the calculated value, as written (decisions/language-calculations.md)."}
+      definitions: {range: Definition, multivalued: true, inlined_as_list: true, minimum_cardinality: 1}
+
+  DerivedVersion:
+    is_a: Version
+    description: "A version of a derived value. Without `= value`, its line opens a block of definitions (decisions/language-calculations.md, Versions with definitions)."
+    attributes:
       definitions: {range: Definition, multivalued: true, inlined_as_list: true, minimum_cardinality: 1}
 
   Table:
@@ -804,6 +811,13 @@ classes:
       name: {required: true, range: Name}
       when: {required: true, range: Expr, inlined: true}
       value: {required: true, range: Expr, inlined: true}
+      overrides: {range: Override, multivalued: true, inlined_as_list: true, minimum_cardinality: 1, description: "Each `overrides name because \"reason\"` at the end of the line, in the order written."}
+
+  Override:
+    description: "This definition goes before the named definition of the same version, for the reason given."
+    attributes:
+      definition: {required: true, range: Name}
+      reason: {required: true, description: "The text after `because`, decoded."}
 
   Clause:
     attributes:

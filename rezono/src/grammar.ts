@@ -135,7 +135,7 @@ ${moduleGrammar}
   // The keywords of v0 §3, with the two literals of Bool (§3 here). None of them is a name.
   keyword = (${keywords.map(word => '"' + word + '"').join(' | ')}) wordEnd
   // A contextual word is a name wherever it is not expected as a word; it is never a unit.
-  contextual = ("during" | "order" | "group" | "limit") wordEnd
+  contextual = ("during" | "order" | "group" | "limit" | "overrides") wordEnd
 
   name (a name) = ~keyword az (az | d | "_")* ~wordChar ~("-" wordChar)
   typeName (a kind name) = cap (az | cap | d)* ~wordChar ~("-" wordChar)

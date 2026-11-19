@@ -1,6 +1,6 @@
 """Lower a closed or open Rezono kind using the slot component."""
 
-from collections.abc import Set
+from collections.abc import Mapping, Set
 
 from . import rezono_equation, rezono_metadata, rezono_slot
 from .names import NAME
@@ -60,11 +60,14 @@ def lower_checks(checks: object, at: str, refuse: Refuse) -> list[dict] | None:
 
 
 def parent_of(value: object, kind: str, at: str, own: dict[str, str],
-              owners: dict[str, list[str]], uses: set[str], refuse: Refuse) -> str | None:
+              owners: dict[str, list[str]], uses: set[str], refuse: Refuse,
+              aliases: Mapping[str, Mapping[str, list[str]]] | None = None) -> str | None:
     """Resolve a parent using the same module imports as a slot reference."""
     if not isinstance(value, str) or not value:
         refuse(at, "a parent needs a kind name", "§5.1")
         return None
+    if "." in value:
+        return rezono_slot.resolve_prefixed(value, aliases, at, refuse, role="parent")
     if value == kind:
         refuse(at, "a kind cannot be its own parent", "§5.1")
         return None
@@ -81,7 +84,8 @@ def parent_of(value: object, kind: str, at: str, own: dict[str, str],
 
 
 def lower(decl: dict, at: str, own: dict[str, str], owners: dict[str, list[str]],
-          declared: Set[str], uses: set[str], refuse: Refuse, *, extended_format: bool = False) -> dict | None:
+          declared: Set[str], uses: set[str], refuse: Refuse, *, extended_format: bool = False,
+          aliases: Mapping[str, Mapping[str, list[str]]] | None = None) -> dict | None:
     ok = True
     allowed = (MEMBERS | {"checks", "deprecated", "embedded", "equations", "parent", "relationship"} | rezono_metadata.FIELDS
                if extended_format else MEMBERS)
@@ -107,7 +111,7 @@ def lower(decl: dict, at: str, own: dict[str, str], owners: dict[str, list[str]]
     if embedded and has_parent:
         refuse(at, "an embedded kind cannot inherit an identifier from a parent", "§5.1")
         ok = False
-    parent = parent_of(decl["parent"], decl["kind"], f"{at}/parent", own, owners, uses, refuse) if has_parent else None
+    parent = parent_of(decl["parent"], decl["kind"], f"{at}/parent", own, owners, uses, refuse, aliases) if has_parent else None
     if has_parent and parent is None:
         ok = False
     world = decl.get("world")
@@ -142,7 +146,8 @@ def lower(decl: dict, at: str, own: dict[str, str], owners: dict[str, list[str]]
         refuse(at, "a kind with a parent inherits its identifier and cannot declare its own", "§5.1")
         ok = False
     if rezono_slot.validate(
-        slots, decl["kind"], at, own, owners, uses, refuse, extended=extended_format, open_kind=world == "open"
+        slots, decl["kind"], at, own, owners, uses, refuse,
+        extended=extended_format, open_kind=world == "open", aliases=aliases,
     ) and ok and equations is not None and rules is not None and deprecated is not None:
         attributes = rezono_slot.lower(slots, declared, implicit_identifier=not embedded and parent is None)
         result = {"attributes": attributes} | rezono_metadata.lower(decl)
