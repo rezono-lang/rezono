@@ -135,6 +135,14 @@ class WaitStatus(unittest.TestCase):
         self.assertEqual(red_list.wait_status(reason, self.index()),
                          {"waits": ["demo/tests/test_waiting"]})
 
+    def test_names_after_a_parenthetical_are_still_waited_for(self):
+        reason = ("M1: Waits for demo/tests/test_waiting.py--test_done (the reader) and "
+                  "demo/tests/test_waiting.py--test_pending (the lowering). Then lower it.")
+        self.assertEqual(red_list.wait_status(reason, self.index()),
+                         {"waits": ["demo/tests/test_waiting.py--test_pending"]})
+        reason = "M1: Waits for test_done (#718): then lower it."
+        self.assertEqual(red_list.wait_status(reason, self.index()), {"ready": True})
+
     def test_reason_waiting_for_something_else_waits_without_a_name(self):
         for reason in (
             "M1: Waits for PR #702 (fix/some-branch).",

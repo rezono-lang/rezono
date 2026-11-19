@@ -21,7 +21,8 @@ nothing. Anything missing, unreadable or mismatched leaves coverage unknown: the
 
 Only an admitted receipt supplies a row of the protected relation `verified_receipt`
 (Receipt, Source, Scope, Cut, InventoryHash, ContentHash): the receipt id, the source name, the canonical
-hashes of scope and cut, and the hashes of the trusted inventory and contents. `admit` gives those rows;
+hashes of scope (its definition as the hash of the bytes it pins: `scope_digest`) and cut, and the hashes of the
+trusted inventory and contents. `admit` gives those rows;
 `check` holds the published `verified_receipt` snapshot against them.
 """
 
@@ -46,6 +47,13 @@ class Unverified(Exception):
 def receipt_id(body: dict) -> str:
     """The id of a receipt body: SHA-256 of the canonical ["rezono.completeness-receipt/1", body]."""
     return canonical_sha256([FORMAT, body])
+
+
+def scope_digest(scope: dict) -> str:
+    """The `Scope` of a `verified_receipt` row: the canonical SHA-256 of the bound scope with its definition as
+    the hash of the bytes it pins, not as the reference to a stored copy. The same scope stored elsewhere gives the
+    same digest, as admission compares it (`_by_hash`)."""
+    return canonical_sha256(_by_hash("scope", scope))
 
 
 def verify(reference, authorities, read_bytes) -> tuple[str, ...]:
@@ -84,7 +92,7 @@ def verify(reference, authorities, read_bytes) -> tuple[str, ...]:
     if changed:
         raise Unverified("receipt_content_mismatch", "members " + ", ".join(changed))
     # The scope and cut as the trusted context binds them: a candidate's own references confer nothing.
-    return (receipt["id"], body["source"]["name"], canonical_sha256(authority["scope"]),
+    return (receipt["id"], body["source"]["name"], scope_digest(authority["scope"]),
             canonical_sha256(authority["cut"]), authority["inventory"]["sha256"], authority["content"]["sha256"])
 
 

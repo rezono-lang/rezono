@@ -188,11 +188,8 @@ def publish_both_epochs(tmp_path, directory):
     strict=True,
     raises=OrderCheckMismatch,
     reason="extra: Make the native order-check pack publish the §5 observations on the ordinary path. Read "
-           "decisions/language-expression-semantics.md §5. Waits for test_expression_python_path_bindings, "
-           "test_expression_python_branch_bindings, test_expression_python_scalar_negation, "
-           "test_expression_python_filtered_count and test_order_check_ordinary_filtered_count for lowering, "
-           "and for test_publication_derived_column_types and test_publication_derived_column_read for the "
-           "typed successors column.",
+           "decisions/language-expression-semantics.md §5. Waits for test_expression_python_branch_bindings, "
+           "test_expression_python_scalar_negation and test_order_check_ordinary_filtered_count for lowering.",
 )
 def test_order_check_publication(tmp_path):
     # The independently authored legacy representation shows the same rows, groups and role views.

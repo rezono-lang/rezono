@@ -452,3 +452,23 @@ def test_souffle_agrees_on_the_lowered_program_as_a_set(shared):
         if rel.role == 'derived':
             assert oracle[name] == rows[name], name
     assert rows['covers'] == expected_covers(terms, readings) and rows['covers']
+
+
+@pytest.mark.parametrize('kind', ['member', 'receipt', 'round', 'round_member'])
+def test_a_generated_name_that_is_a_protected_admission_input_is_refused(tmp_path, kind):
+    # A view makes the relation <theory>_<table> for each theory table. The theory `verified` with the kind
+    # `round` made verified_round, a protected admission input that only admission fills, and pack.read took it.
+    import re
+    domain, theory = packs(tmp_path)
+    cls = ''.join(part.title() for part in kind.split('_'))
+    for path in (theory / 'schema/minimal.yaml', theory / 'pack.yaml', theory / 'channels.yaml',
+                 domain / 'views.yaml'):
+        text = re.sub(r'\bspans\b', 'verified', path.read_text(encoding='utf-8'))
+        text = re.sub(r'\bLine\b', cls, re.sub(r'\bline\b', kind, text))
+        path.write_text(text, encoding='utf-8', newline='\n')
+    meta = yaml.safe_load((domain / 'pack.yaml').read_text(encoding='utf-8'))
+    meta['imports'] = [{'name': 'verified', 'path': '../theory', 'sha256': modules.pack_hash(theory)}]
+    write(domain / 'pack.yaml', meta)
+    with pytest.raises(pack.CompileError, match=f'verified_{kind} has the name of a protected admission input') as error:
+        pack.read(domain)
+    assert [d.code for d in error.value.diagnostics] == ['view_relation_protected']
