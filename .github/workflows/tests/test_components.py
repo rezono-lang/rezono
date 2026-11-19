@@ -100,6 +100,18 @@ class WorkflowEnvironmentTests(unittest.TestCase):
         self.assertEqual(checkout["with"]["sparse-checkout"], "scripts")
         self.assertIn("python3 scripts/components.py verify-execution", steps[verify]["run"])
 
+    def test_a_hanging_claim_cleanup_cannot_hold_its_queue_for_hours(self):
+        # One concurrency group: without a limit a hung job blocks every later run for up to six hours.
+        workflow = yaml.safe_load((ROOT / ".github/workflows/cleanup.yml").read_text(encoding="utf-8"))
+        self.assertIsInstance(workflow["concurrency"], str)
+        schedule, = workflow[True]["schedule"]  # PyYAML reads the key `on` as True
+        minutes = sorted(int(minute) for minute in schedule["cron"].split()[0].split(","))
+        interval = min(b - a for a, b in zip(minutes, [*minutes[1:], minutes[0] + 60]))
+        self.assertEqual(set(workflow["jobs"]), {"release", "standstill"})
+        for name, job in workflow["jobs"].items():
+            self.assertIn("timeout-minutes", job, name)
+            self.assertLessEqual(job["timeout-minutes"], interval, name)
+
 
 class SelectorTests(unittest.TestCase):
     def test_shared_and_transitive_inputs(self):
@@ -108,9 +120,9 @@ class SelectorTests(unittest.TestCase):
             return {c.folder for c in ci.affected_components(components, list(files))}
         self.assertEqual(selected("run/tests/test_quote.py"), {"run"})
         self.assertEqual(selected("run/dispatch_policy.py"), {"run"})
-        self.assertEqual(selected("loop/replay.py"), {"loop", "run"})
-        self.assertEqual(selected("loop/tests/test_case.py", "run/tests/test_quote.py"), {"loop", "run"})
-        self.assertEqual(selected("k8s-admission/parameter_reader.py"), {"k8s-admission", "loop", "run"})
+        self.assertEqual(selected("loop/replay.py"), {"loop", "run", "examples"})
+        self.assertEqual(selected("loop/tests/test_case.py", "run/tests/test_quote.py"), {"loop", "run", "examples"})
+        self.assertEqual(selected("k8s-admission/parameter_reader.py"), {"k8s-admission", "loop", "run", "examples"})
         for path in ("scripts/components.py", "packs/common/pack.yaml", "contracts/core.yaml",
                      "contracts/python/tests/test_ports.py", "loop/pyproject.toml", "unknown/resource",
                      "loop/rezono_cluster.py", "loop/tests/conftest.py", "loop/tests/wire_fixtures.py",
@@ -169,6 +181,17 @@ class RepositoryPullRequestSelectionTests(unittest.TestCase):
         self.assertLessEqual(set(ci.PR_FILE_CONSUMERS["compiler"]) & folders, selected)
         self.assertNotIn("tools/mcp", selected)
         self.assertLess(selected, folders)
+
+    def test_the_queue_runs_at_least_the_pull_request_closure(self):
+        for path in ("loop/replay.py", "loop/tests/test_case.py", "run/dispatch_policy.py",
+                     "k8s-admission/parameter_reader.py", "deploy/profiles/edge/forms_issue.py"):
+            selected, components, _ = self.selected(path)
+            self.assertLessEqual(selected, {c.folder for c in ci.affected_components(components, [path])}, path)
+        # A change in examples itself still runs everything in the queue, also together with a loop change.
+        for changed in (["examples/subsidy/pack.yaml"], ["examples/test_rules.py"],
+                        ["loop/replay.py", "examples/test_rules.py"]):
+            _, components, _ = self.selected(*changed)
+            self.assertEqual(ci.affected_components(components, changed), components, changed)
 
     def test_unknown_path_selects_every_component(self):
         selected, components, _ = self.selected("an-unknown-directory/resource.yaml")
