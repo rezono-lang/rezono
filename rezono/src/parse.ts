@@ -272,9 +272,11 @@ export { semantics, placed, refused, reserved };
  * of a file this way: it passes the file with every other line blanked, so that offsets are those of the file,
  * and the code points of the file itself (`at`), since a blank has none of its astral characters.
  */
+const nativeRules = new Set(['NativeRuleLine', 'StepClauseLine', 'StepChangeLine']);
+
 export function readRule<T>(text: string, rule: string, read: (node: Node) => T, spans = new WeakMap<object, Span>(), at = points(text)): Read<T> {
 	startRun(text, spans, at);
-	const native = rule === 'NativeRuleLine';
+	const native = nativeRules.has(rule);
 	const match = (native ? nativeRuleGrammar : grammar).match(text, rule);
 	if (match.failed()) {
 		const at = Math.min(match.getRightmostFailurePosition(), text.length);

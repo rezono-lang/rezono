@@ -43,16 +43,6 @@ class MissingStepDeclaration(AssertionError):
     """The module reader did not read, print or place a step as the decision gives it."""
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=MissingStepDeclaration,
-    reason="extra: decisions/language-safe-steps.md: Read a step declaration (typed columns, one when, zero or more "
-           "forbid ... within ..., one effect with its changes, one confirm ... token ...) in a new "
-           "rezono/src/module-step.ts registered in rezono/src/module.ts, print it back in that order with two "
-           "spaces per level, give a module with a step the format rezono.module/4 in rezono/src/module-json.ts, "
-           "and admit the closed shape in contracts/rezono-module.yaml. Read sections 2 and 4. "
-           "test_invariant_intermediate also adds rezono.module/4: whoever lands second resolves the conflict.",
-)
 def test_step_declaration():
     without_forbid = STEP.replace(
         "  forbid active_policy(change.target) within policy_inventory(change.zone)\n", "")

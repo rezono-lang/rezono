@@ -29,8 +29,10 @@ import { printModule } from './print.ts';
 export const MODULE_FORMAT = 'rezono.module/1';
 const EXTENDED_MODULE_FORMAT = 'rezono.module/2';
 const NATIVE_RULE_MODULE_FORMAT = 'rezono.module/3';
+const SAFE_STEP_MODULE_FORMAT = 'rezono.module/4';
 
 function formatOf(module: Module): ModuleForm['format'] {
+	if (module.decls.some(decl => 'step' in decl)) return SAFE_STEP_MODULE_FORMAT;
 	if (module.decls.some(decl => 'rule' in decl)) return NATIVE_RULE_MODULE_FORMAT;
 	const extended = module.schema !== undefined || module.decls.some(decl => {
 		if ('dataset' in decl || 'rules' in decl || ('source' in decl && 'fields' in decl)) return true;
@@ -43,7 +45,8 @@ function formatOf(module: Module): ModuleForm['format'] {
 		}
 		if ('base' in decl || 'asOf' in decl) return true;
 		if ('param' in decl && decl.source !== undefined) return true;
-		if ('derived' in decl && Array.isArray(decl.derived) && decl.derived.some(d => d.output !== undefined || d.definitions !== undefined)) return true;
+		if ('derived' in decl && Array.isArray(decl.derived) && decl.derived.some(d => d.output !== undefined || d.definitions !== undefined
+			|| d.unit !== undefined || d.versions?.some(v => v.definitions !== undefined))) return true;
 		return 'enum' in decl && (decl.deprecated !== undefined || decl.memberMetadata !== undefined || hasMetadata(decl));
 	});
 	return extended ? EXTENDED_MODULE_FORMAT : MODULE_FORMAT;
@@ -57,7 +60,7 @@ export interface Place {
 	end: string;
 }
 export interface ModuleForm {
-	format: typeof MODULE_FORMAT | typeof EXTENDED_MODULE_FORMAT | typeof NATIVE_RULE_MODULE_FORMAT;
+	format: typeof MODULE_FORMAT | typeof EXTENDED_MODULE_FORMAT | typeof NATIVE_RULE_MODULE_FORMAT | typeof SAFE_STEP_MODULE_FORMAT;
 	module: Module;
 	spans: Place[];
 }
@@ -126,7 +129,7 @@ export function moduleFromJson(value: unknown): ModuleForm {
 	const not = (why: string) => new JsonFormError(`not the JSON form of a module: ${why}`);
 	if (typeof value !== 'object' || value === null || Array.isArray(value)) throw not('it is not an object');
 	const { format, module, spans, ...rest } = value as Record<string, unknown>;
-	if ((format !== MODULE_FORMAT && format !== EXTENDED_MODULE_FORMAT && format !== NATIVE_RULE_MODULE_FORMAT) || Object.keys(rest).length)
+	if ((format !== MODULE_FORMAT && format !== EXTENDED_MODULE_FORMAT && format !== NATIVE_RULE_MODULE_FORMAT && format !== SAFE_STEP_MODULE_FORMAT) || Object.keys(rest).length)
 		throw not('its members are a supported `format`, `module` and `spans`');
 	let canonical: string;
 	let text: string;
