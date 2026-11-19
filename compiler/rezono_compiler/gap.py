@@ -21,12 +21,16 @@ The compiler derives three things the gate needs and must not work out again:
 
 from __future__ import annotations
 
-from .rules import Atom, const_type, days, is_var, untyped_conditions
+import re
+
+from .rules import Atom, const_type, days, is_var
+from .rules_sql import UTC_PATTERN, UTC_WHOLE
 
 FORMAT = "rezono.gap/1"
 KINDS = ("positive", "negative", "condition", "assignment", "aggregate")
 OPS = {"eq": "=", "ne": "!=", "lt": "<", "le": "<=", "gt": ">", "ge": ">=", "add": "+", "sub": "-", "mul": "*", "div": "/"}
 TYPE = {"string": "symbol", "integer": "number"}
+_UTC = re.compile(r"([0-9]{4})-([0-9]{2})-([0-9]{2})T([0-9]{2}):([0-9]{2}):([0-9]{2})(?:[.]([0-9]+))?Z", re.ASCII)
 
 
 def _vars(terms) -> set[str]:
@@ -242,9 +246,34 @@ def _item_text(prog, rule, kind, index, types):
         if s.op == "days":   # a view's reading of a date
             return f"{_term(s.var, 'integer')} = {days_text(_term(s.left, 'string'))} - {days_text(_term(s.right, 'string'))}"
         return f"{_term(s.var, 'integer')} = {_term(s.left, 'integer')} {OPS[s.op]} {_term(s.right, 'integer')}"
-    c = untyped_conditions(rule, "gap")[index]
+    c = rule.conditions[index]
     t = types.get(c.left) or types.get(c.right) or const_type(c.left)
+    if c.compare_as == "utc_instant":   # only an instant that is valid has a key; the key orders by its bytes
+        return (f"utc_key({_term(c.left, t)}, KL_), utc_key({_term(c.right, t)}, KR_), KL_ {OPS[c.op]} KR_")
     return f"{_term(c.left, t)} {OPS[c.op]} {_term(c.right, t)}"
+
+
+def _utc_rules() -> list[str]:
+    """The Soufflé relations of the UTC comparison key (decisions/ordered-rule-scalars.md): `utc_in` collects the
+    operands, `utc_key(x, k)` holds for a valid instant x with the terminal Z removed and the trailing zeros of the
+    fraction stripped. Soufflé has no function for it, so the strip is a recursion that shortens the text."""
+    pattern = UTC_PATTERN
+    whole = UTC_WHOLE
+    year, month, day = ("to_number(substr(x, 0, 4))", "to_number(substr(x, 5, 2))", "to_number(substr(x, 8, 2))")
+    leap = f"(({year} % 4 = 0 AND {year} % 100 != 0) OR {year} % 400 = 0)"
+    lines = [".decl utc_in(x: symbol)", ".decl utc_ok(x: symbol)", ".decl utc_cut(x: symbol, t: symbol)",
+             ".decl utc_key(x: symbol, k: symbol)",
+             f'utc_ok(x) :- utc_in(x), match("{pattern}", x), {year} >= 1, {day} <= 28.',
+             f'utc_ok(x) :- utc_in(x), match("{pattern}", x), {year} >= 1, {day} <= 30, {month} != 2.',
+             f'utc_ok(x) :- utc_in(x), match("{pattern}", x), {year} >= 1, {day} = 31, '
+             f'({month} = 1 ; {month} = 3 ; {month} = 5 ; {month} = 7 ; {month} = 8 ; {month} = 10 ; {month} = 12).',
+             f'utc_ok(x) :- utc_in(x), match("{pattern}", x), {year} >= 1, {month} = 2, {day} = 29, {leap}.',
+             f"utc_key(x, substr(x, 0, {whole - 1})) :- utc_ok(x), strlen(x) = {whole}.",
+             f"utc_cut(x, substr(x, 0, strlen(x) - 1)) :- utc_ok(x), strlen(x) > {whole}.",
+             'utc_cut(x, substr(t, 0, strlen(t) - 1)) :- utc_cut(x, t), substr(t, strlen(t) - 1, 1) = "0".',
+             'utc_key(x, substr(t, 0, strlen(t) - 1)) :- utc_cut(x, t), substr(t, strlen(t) - 1, 1) = ".".',
+             'utc_key(x, t) :- utc_cut(x, t), substr(t, strlen(t) - 1, 1) != "0", substr(t, strlen(t) - 1, 1) != ".".']
+    return lines
 
 
 def prefix_name(rule_id, i):
@@ -269,6 +298,7 @@ def prefix_program(prog, relation, bound) -> str:
     for name in read:
         r = prog.relations[name]
         lines += [f".decl {name}({', '.join(f'{c.name}: {TYPE[c.type]}' for c in r.key + r.values)})", f".input {name}"]
+    utc = False
     for s in steps(prog, relation, bound):
         rule = prog.rules[s["rule"]]
         types = _types(prog, rule)
@@ -279,6 +309,14 @@ def prefix_program(prog, relation, bound) -> str:
         p0 = prefix_name(rule.id, 0)
         lines += [decl(p0, have), f"{use(p0, have)} :- start({', '.join(start)}).", f".output {p0}"]
         for i, item in enumerate(s["items"], 1):
+            if item["kind"] == "condition" and rule.conditions[item["index"]].compare_as == "utc_instant":
+                utc = True
+                c = rule.conditions[item["index"]]
+                for t in (c.left, c.right):   # the operands whose key the item reads
+                    if is_var(t):
+                        lines.append(f"utc_in({_term(t, 'string')}) :- {use(prefix_name(rule.id, i - 1), item['have'])}.")
+                    else:
+                        lines.append(f"utc_in({_term(t, 'string')}).")
             nxt = sorted(set(item["have"]) | _binds(rule, item["kind"], item["index"]))
             p, q, ok, fail = prefix_name(rule.id, i - 1), prefix_name(rule.id, i), f"{rule.id}__ok{i}", fail_name(rule.id, i)
             text = _item_text(prog, rule, item["kind"], item["index"], types)
@@ -286,6 +324,8 @@ def prefix_program(prog, relation, bound) -> str:
                       decl(ok, item["have"]), f"{use(ok, item['have'])} :- {use(q, nxt)}.",
                       decl(fail, item["have"]), f"{use(fail, item['have'])} :- {use(p, item['have'])}, !{use(ok, item['have'])}.",
                       f".output {fail}"]
+    if utc:
+        lines += _utc_rules()
     return "\n".join(lines) + "\n"
 
 
@@ -348,6 +388,32 @@ def _calc(op, a, b):
     return v if _fits(v) else None
 
 
+def utc_key(text):
+    """The comparison key of a UTC instant, or None if it is not one (decisions/ordered-rule-scalars.md): the
+    text without the terminal Z, trailing zeros of the fraction stripped and the separator dropped if the fraction
+    becomes empty. Years 0001 to 9999, a Gregorian day, seconds 00 to 59. The bytes of the key order the instants."""
+    m = _UTC.fullmatch(text)
+    if m is None:
+        return None
+    year, month, day, hour, minute, second = (int(m[n]) for n in range(1, 7))
+    last = 29 if month == 2 and (year % 4 == 0 and year % 100 != 0 or year % 400 == 0) else         28 if month == 2 else 30 if month in (4, 6, 9, 11) else 31
+    if year < 1 or not 1 <= month <= 12 or not 1 <= day <= last or hour > 23 or minute > 59 or second > 59:
+        return None
+    fraction = (m[7] or "").rstrip("0")
+    return text[:19] + ("." + fraction if fraction else "")
+
+
+def _ordered(c, a, b):
+    """`a op b` under the condition's comparison type; a text that is no instant satisfies nothing."""
+    if c.compare_as == "utc_instant":
+        a, b = utc_key(a), utc_key(b)
+        if a is None or b is None:
+            return False
+    if c.compare_as:
+        a, b = a.encode(), b.encode()
+    return _compare(c.op, a, b)
+
+
 def _compare(op, a, b):
     return {"eq": a == b, "ne": a != b, "lt": a < b, "le": a <= b, "gt": a > b, "ge": a >= b}[op]
 
@@ -364,9 +430,9 @@ def _extend(prog, rule, kind, index, theta, rows, types):
         atom = rule.body[index].atom
         return [] if any(_match(prog, atom, r, theta, types) is not None for r in rows.get(atom.relation, ())) else [theta]
     if kind == "condition":
-        c = untyped_conditions(rule, "gap")[index]
+        c = rule.conditions[index]
         t = types.get(c.left) or types.get(c.right) or const_type(c.left)
-        return [theta] if _compare(c.op, val(c.left, t), val(c.right, t)) else []
+        return [theta] if _ordered(c, val(c.left, t), val(c.right, t)) else []
     if kind == "assignment":
         s = rule.assignments[index]
         if s.op == "days":   # a view's reading of a date; a text that is no day derives nothing

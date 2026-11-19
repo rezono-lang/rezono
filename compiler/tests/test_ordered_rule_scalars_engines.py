@@ -82,9 +82,6 @@ def test_the_bundle_keeps_typed_comparisons():
         assert ids[f"binary_text_{op}"] != ids[f"utc_instant_{op}"], op
 
 
-@pytest.mark.xfail(strict=True, raises=rules.IRError, reason=WAIT + (
-    "Then follow compare_as in compiler/rezono_compiler/gap.py, both in the plain-Python failures and in the Soufflé "
-    "prefix program: a typed condition that does not hold is the failing premise."))
 def test_gap_follows_typed_comparisons():
     prog = rules.load(program())
     rows = {name: [list(row) for row in table] for name, table in inputs().items()}
