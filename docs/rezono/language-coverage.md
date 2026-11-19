@@ -36,7 +36,7 @@ Native conversion requires reader, form, IR, signature and publication evidence.
 | rule-metadata | 3 | Supported ([reader](../../rezono/test/test_rule_metadata.py), [lowering](../../compiler/tests/rezono/test_lower_rule_metadata.py)) |
 | embedded-kind | 2 | Supported ([reader](../../rezono/test/test_embedded_kind.py), [lowering](../../compiler/tests/rezono/test_lower_embedded_kind.py)) |
 | embedded-reference | 2 | Supported ([reader](../../rezono/test/test_embedded_relation.py), [lowering](../../compiler/tests/rezono/test_lower_embedded_reference.py)) |
-| module-import | 2 | Pending ([reader](../../rezono/test/test_module_import.py), [lowering](../../compiler/tests/rezono/test_lower_module_import.py)) |
+| module-import | 2 | Pending ([reader](../../rezono/test/test_module_import.py), [reader](../../rezono/test/test_prefixed_type.py), [lowering](../../compiler/tests/rezono/test_lower_module_import.py)) |
 | parameters | 2 | Pending ([reader](../../rezono/test/test_parameters.py), [reader](../../rezono/test/test_version_replaces.py), [lowering](../../compiler/tests/rezono/test_lower_parameters.py)) |
 | path-equation | 2 | Supported ([reader](../../rezono/test/test_path_equation.py), [lowering](../../compiler/tests/rezono/test_lower_path_equation.py)) |
 | boolean-slot | 1 | Supported ([reader](../../rezono/test/module-json.test.ts), [lowering](../../compiler/tests/rezono/test_library_boolean.py)) |

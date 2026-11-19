@@ -27,6 +27,26 @@ The corresponding JSON fragment is
 
 A prefix (`as terms`, written `terms.Party` in a slot type) and a dotted pack name lower in a later step. Until then the compiler refuses them at their line.
 
+## Reading a prefixed type
+
+A slot names a kind, an enum or a type of an aliased pack with the prefix, a dot and the declared name, as v0 section 4 writes `net.Zone`. The slot member `type` keeps it as written, `terms.Party`, with the cardinality in `card` as for any other type. The prefix is a name and the type a type name, so `Terms.Party` and `terms.party` are refused. The module form contract widens the type text by one optional prefix.
+
+```rezono
+use lib as terms
+
+kind Holder world closed
+  party: terms.Party
+```
+
+The corresponding JSON fragment is the slot:
+
+```json
+{
+  "slot": "party",
+  "type": "terms.Party"
+}
+```
+
 ## Considered
 
 - **Visibility through `pack.yaml` alone.** Every pinned pack would be visible in every module. A reader could then not tell from a module which packs it depends on, and a new import could make an unqualified name ambiguous in a module that never asked for it.

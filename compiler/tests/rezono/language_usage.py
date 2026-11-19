@@ -91,7 +91,7 @@ EVIDENCE |= {
     "relationship-kind": (reader("relationship_kind"), lowering("lower_relationship_kind")),
     "calculation": (reader("calculation"), lowering("lower_calculation")),
     "parameters": (reader("parameters"), reader("version_replaces"), lowering("lower_parameters")),
-    "module-import": (reader("module_import"), lowering("lower_module_import")),
+    "module-import": (reader("module_import"), reader("prefixed_type"), lowering("lower_module_import")),
     "inverse-reference": (reader("inverse_reference"), lowering("lower_inverse_reference")),
     "dated-fact": (reader("dated_fact"), reader("fact_context_axes"), lowering("lower_dated_fact")),
     "units": (reader("units"), reader("unit_definition"), lowering("lower_units")),
