@@ -9,13 +9,22 @@ type Expression =
 	| { cmp: [string, Expression, Expression] } | { arith: [string, Expression, Expression] }
 	| { agg: [string, Expression] | [string, Expression, Expression] }
 	| { in: [Expression, Expression] } | { is: [Expression, State] }
-	| { neg: Expression };
+	| { neg: Expression } | { filter: [Expression, Expression] };
 
 type Column = { name: string; type: string };
 type Declaration = { rule: string; locals?: Column[]; when?: Expression } &
 	({ args: Expression[] } | { columns: Column[] });
 
-type Signature = { columns: Column[]; world: World; role: 'input' | 'derived'; absence?: true };
+/** Linked evidence for a derived predicate: the states it can take and the places that explain partiality. */
+export interface PredicateSummary {
+	states: readonly string[];
+	related?: readonly Place[];
+}
+
+type Signature = {
+	columns: Column[]; world: World; role: 'input' | 'derived'; absence?: true;
+	predicate?: PredicateSummary;
+};
 
 export interface NativeRuleEnvironment {
 	schema: Schema;
@@ -51,12 +60,14 @@ class RuleFault extends Error {
 	readonly code: string;
 	readonly at: string;
 	readonly args: string[];
+	readonly related: readonly Place[];
 
-	constructor(code: string, at: string, args: string[]) {
+	constructor(code: string, at: string, args: string[], related: readonly Place[] = []) {
 		super(code);
 		this.code = code;
 		this.at = at;
 		this.args = args;
+		this.related = related;
 	}
 }
 
@@ -89,7 +100,9 @@ export function checkNativeRules(form: NativeRuleForm, environment: NativeRuleEn
 			dependencies.push(...checker.dependencies);
 		} catch (error) {
 			if (!(error instanceof RuleFault)) throw error;
-			diagnostics.push({ code: error.code, args: error.args, span: place(error.at) });
+			const diagnosis: NativeRuleDiagnostic = { code: error.code, args: error.args, span: place(error.at) };
+			if (error.related.length) diagnosis.related = [...error.related];
+			diagnostics.push(diagnosis);
 		}
 	}
 
@@ -215,6 +228,13 @@ class ClauseCheck {
 		if (signature.world === 'open' && !this.absence) refuse('R004', at, name);
 	}
 
+	// A negation or group needs a decided answer, so a predicate that can be undecided is refused.
+	private requireTotal(name: string, signature: Signature, at: string): void {
+		const { predicate } = signature;
+		if (!predicate || predicate.states.every(state => state === 'known')) return;
+		throw new RuleFault('R047', at, [name], predicate.related ?? []);
+	}
+
 	private row(call: [string, Expression[]], at: string, flow: Flow, premise: Premise, dependencyAt = at): Signature {
 		const [name, terms] = call;
 		const signature = this.relation(name);
@@ -237,7 +257,10 @@ class ClauseCheck {
 			}
 			this.requireType(this.scalar(term, pointer, flow, expected).type, expected, pointer);
 		});
-		if (premise !== 'positive') this.requireClosed(name, signature, dependencyAt);
+		if (premise !== 'positive') {
+			this.requireClosed(name, signature, dependencyAt);
+			this.requireTotal(name, signature, dependencyAt);
+		}
 		if (signature.role === 'derived') this.dependencies.push({ from: this.rule, to: name, at: dependencyAt, premise });
 		return signature;
 	}
@@ -342,8 +365,12 @@ class ClauseCheck {
 
 	private aggregate([operator, domain, measure]: [string, Expression] | [string, Expression, Expression],
 		at: string, flow: Flow): string {
-		if (!['count', 'sum', 'min', 'max'].includes(operator) || !('call' in domain)) refuse('R044', at, operator);
-		const signature = this.row(domain.call, at + '/agg/1', flow, 'aggregate', at);
+		const filtered = 'filter' in domain;
+		const source = filtered ? domain.filter[0] : domain;
+		if (!['count', 'sum', 'min', 'max'].includes(operator) || !('call' in source)) refuse('R044', at, operator);
+		const sourceAt = at + '/agg/1' + (filtered ? '/filter/0' : '');
+		const signature = this.row(source.call, sourceAt, flow, 'aggregate', at);
+		if (filtered) this.fixedColumns(domain.filter[1], at + '/agg/1/filter/1', source.call[1], signature, flow);
 		if (operator === 'count') {
 			if (measure) refuse('R044', at + '/agg/2', operator);
 			return 'Int';
@@ -353,10 +380,42 @@ class ClauseCheck {
 			? signature.columns.findIndex(column => column.name === names[1])
 			: -1;
 		const column = signature.columns[index];
-		if (!column || !this.whole(column.type) || !('wildcard' in domain.call[1][index])) {
+		if (!column || !this.whole(column.type) || !('wildcard' in source.call[1][index])) {
 			refuse('R044', measure ? at + '/agg/2' : at, operator);
 		}
 		return column.type;
+	}
+
+	/**
+	 * A filter the single-relation IR can fix: a conjunction of `it.column = term` equalities, in either
+	 * orientation, over distinct wildcard columns. Each term is a typed constant or an already bound name.
+	 */
+	private fixedColumns(predicate: Expression, at: string, terms: Expression[], signature: Signature,
+		flow: Flow): void {
+		if ('and' in predicate) {
+			const fixed = new Set<number>();
+			predicate.and.forEach((term, index) => this.fixedColumn(term, at + '/and/' + index, terms, signature, flow, fixed));
+			return;
+		}
+		this.fixedColumn(predicate, at, terms, signature, flow, new Set());
+	}
+
+	private fixedColumn(term: Expression, at: string, terms: Expression[], signature: Signature, flow: Flow,
+		fixed: Set<number>): void {
+		if (!('cmp' in term) || term.cmp[0] !== '=') refuse('R044', at, 'filter');
+		const [, left, right] = term.cmp;
+		const member = (side: Expression): string | undefined =>
+			'path' in side && side.path.length === 2 && side.path[0] === 'it' ? side.path[1] : undefined;
+		const leftMember = member(left), rightMember = member(right);
+		if ((leftMember === undefined) === (rightMember === undefined)) refuse('R044', at, 'filter');
+		const [name, other, otherAt] = leftMember !== undefined
+			? [leftMember, right, at + '/cmp/2'] : [rightMember!, left, at + '/cmp/1'];
+		const index = signature.columns.findIndex(column => column.name === name);
+		if (index < 0) refuse('R001', at + (leftMember !== undefined ? '/cmp/1' : '/cmp/2'), name);
+		if (fixed.has(index) || !('wildcard' in terms[index])) refuse('R044', at, 'filter');
+		fixed.add(index);
+		const expected = signature.columns[index].type;
+		this.requireType(this.scalar(other, otherAt, flow, expected).type, expected, otherAt);
 	}
 
 	private scalar(expr: Expression, at: string, flow: Flow, expected?: string): Value {
