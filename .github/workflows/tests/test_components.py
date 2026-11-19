@@ -578,6 +578,41 @@ class InventoryTests(unittest.TestCase):
             self.assertNotEqual(filtered.returncode, 0)
             self.assertIn("tests deselected during full inventory", filtered.stdout)
 
+    def test_a_configured_ignore_cannot_drop_a_file_without_a_blocked_record(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "scripts").mkdir()
+            for name in ("components.py", "red_list.py"):
+                shutil.copyfile(ROOT / "scripts" / name, root / "scripts" / name)
+            component = root / "probe"
+            component.mkdir()
+            (component / "test_kept.py").write_text("def test_kept(): pass\n", encoding="utf-8")
+            (component / "test_dropped.py").write_text("def test_dropped(): pass\n", encoding="utf-8")
+            (component / "test_optional.py").write_text(
+                "import pytest\npytest.skip('optional module', allow_module_level=True)\n", encoding="utf-8")
+            env = dict(os.environ, PYTEST_DISABLE_PLUGIN_AUTOLOAD="1", PYTEST_PLUGINS="rezono_cluster",
+                       PYTHONPATH=str(ROOT / "loop"))
+            env.pop("PYTEST_ADDOPTS", None)
+            def collect():
+                return subprocess.run([sys.executable, str(root / "scripts/components.py"), "collect-component",
+                                       "probe", str(root / "plans")], cwd=root, env=env,
+                                      stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+            self.assertEqual(collect().returncode, 0)
+            for option in ("--ignore=probe/test_dropped.py", "--ignore-glob=*/test_drop*.py"):
+                (component / "pyproject.toml").write_text(
+                    f'[tool.pytest.ini_options]\naddopts = "{option}"\n', encoding="utf-8")
+                dropped = collect()
+                self.assertNotEqual(dropped.returncode, 0, option)
+                self.assertIn("test files without a collected item or a blocked/ record: "
+                              "['probe/test_dropped.py']", dropped.stdout)
+            (root / "blocked").mkdir()
+            (root / "blocked/probe-dropped.txt").write_text(
+                "probe/test_dropped.py: needs a capability the probe lacks\n", encoding="utf-8")
+            recorded = collect()
+            self.assertEqual(recorded.returncode, 0, recorded.stdout)
+            inventory = json.loads((root / "plans/probe/items.json").read_text(encoding="utf-8"))
+            self.assertEqual(inventory["items"], ["probe/test_kept.py::test_kept"])
+
 
 if __name__ == "__main__":
     unittest.main()
