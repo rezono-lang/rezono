@@ -2,6 +2,8 @@
 .decl step_safety_latest_time(run: symbol, event_time: number)
 .decl step_safety_current_cut(run: symbol, cut: symbol)
 .decl current_step_safety_check(run: symbol, step: symbol, cut: symbol, obligation: symbol, verdict: symbol, reason: symbol)
+.decl step_safety_ambiguous_cut(run: symbol, cut: symbol, other: symbol)
+.decl step_safety_undecided(run: symbol, step: symbol, obligation: symbol)
 .decl step_safety_blocker(run: symbol, step: symbol, cut: symbol, obligation: symbol, reason: symbol)
 .decl step_safety_blocked(run: symbol, step: symbol, cut: symbol)
 .decl safe_alone(run: symbol, step: symbol, cut: symbol)
@@ -18,6 +20,17 @@ step_safety_current_cut(run, cut) :-
     step_safety_latest_time(run, latest), step_safety_receipt(run, cut, latest),
     cuts = count : { step_safety_receipt(run, _, latest) },
     cuts = 1.
+
+// Name both equally recent receipts so a reader can see why no current cut exists.
+step_safety_ambiguous_cut(run, cut, other) :-
+    step_safety_latest_time(run, latest), step_safety_receipt(run, cut, latest),
+    step_safety_receipt(run, other, latest), cut != other.
+
+// A step checked at an ambiguous latest cut waits on that obligation, citing both receipts.
+step_safety_undecided(run, step, obligation) :-
+    step_safety_ambiguous_cut(run, cut, other), loop_step(step),
+    loop_step_safety_check__run(check, run), loop_step_safety_check__step(check, step),
+    loop_step_safety_check__cut(check, cut), loop_step_safety_check__obligation(check, obligation).
 
 current_step_safety_check(run, step, cut, obligation, verdict, reason) :-
     step_safety_current_cut(run, cut), loop_step(step),
