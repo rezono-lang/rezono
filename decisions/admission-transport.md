@@ -94,6 +94,19 @@ The protected relations are ordinary relations for access. A role reads them onl
 
 The round verifier builds its context only from the retained round context. It enumerates the candidate batches over the pinned domain up to the width, checks a certificate for every visible subset of the claimed batch with `check_transition_certificate`, and recomputes the deterministic selection of safe transition rounds. Every alternative that would precede the claimed batch needs a certificate for one of its visible subsets that the checker finds violating. Missing evidence for an alternative leaves the round unverified, so readiness waits instead of trusting a supplied verdict.
 
+## 8. Names that apply
+
+This decision fixes the names at the admission boundary. Earlier drafts used others, and those names lapse.
+
+| Applies | Lapses |
+| --- | --- |
+| `batch.epoch(..., evidence=Evidence(context, candidates, read_bytes))` | the `batch.epoch` keywords `completeness_receipts`, `completeness_authority`, `transition_certificates`, `transition_authority` and `archive` |
+| `context.json` with `completeness` and `rounds`; `index.json` with `completeness_receipts` and `rounds` | a list of trusted contexts or round objects passed beside the archive |
+| complete manifest lists `completeness_receipts` and `rounds` | a manifest list `transition_certificates` |
+| `verified_round(round, run, cut, batch)` and `verified_round_member(round, step)` | the protected inputs `loop_certified_step` and `loop_certified_member` |
+
+A pack that needs a step that is safe on its own reads a verified round whose batch has that single member. A pack that needs the certified batch reads `verified_round` and its members. The round digest is what a witness cites. Inside the certifier's own speculative evaluation, a pack may keep internal relations under other names. They are not admission inputs.
+
 ## Alternatives considered
 
 - **Separate keywords for candidates, authorities and the store.** Simple for receipts alone, but a second evidence kind would add three more, and inline trusted dictionaries leave no pin a replay can check. Replaced by one `Evidence` object with a pinned context.
