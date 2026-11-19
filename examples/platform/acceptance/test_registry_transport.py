@@ -14,11 +14,11 @@ EXPECTED = [("registry", "3.0.0", "TCP", 5000,
 
 
 @pytest.mark.xfail(strict=True, raises=AssertionError, reason=(
-    "Add facts/registry_transport.yaml with one vendor_default_transport row id registry-3.0.0-transport and facts/registry_transport_source.yaml "
-    "with one vendor_default_transport_source row id registry-3.0.0-transport-source, both holding the expected values. "
+    "Add facts/registry_transport_source.yaml with one vendor_default_transport_source row id registry-3.0.0-transport-source "
+    "holding the expected values. "
     "Give the source file a sidecar facts/registry_transport_source.sources.yaml whose default is a tool source named "
     "'Vendor transport inspection' with the revision, position, url and fragment_sha256 this test states. "
-    "Write only those three files. Read decisions/platform-vendor-transport-evidence.md."))
+    "Write only those two files. Read decisions/platform-vendor-transport-evidence.md."))
 def test_registry_transport():
     check_vendor_transport("registry_transport", EXPECTED, revision="v3.0.0", line=907,
                            fragment_sha256="d5ba233f3082ac84cad47485eca5e62cd025f8ff0dfc54e322599e11f507a939")

@@ -1,8 +1,0 @@
-vendor_default_transport:
-  - id: chrony-4.6-transport
-    product: chrony
-    series: '4.6'
-    protocol: UDP
-    port: 123
-    source_url: 'https://gitlab.com/chrony/chrony/-/raw/4.6/doc/chrony.conf.adoc'
-    source_sha256: 09051963c6a2d5ab4ed4fe816ac480bb9c5bf87009839c19d796f00065672d3f
