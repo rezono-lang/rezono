@@ -35,3 +35,23 @@ Lowering needs a place for versioned values in the fact contracts. That place, a
 
 - **One row per record with a list of versions.** It would move the dates away from the values they qualify and differ from how parameters and derived values write versions.
 - **Separate valid-from and valid-until slots on the kind.** Every versioned slot would need its own pair, and a correction known later could not be told apart from a change of period.
+
+## Stage and setup contexts
+
+A fact row may also hold for a range of stages or for some setups, the other two axes of v0 section 5a. They stand after the record, before `known`, in the order of that section's table: `valid`, `during`, `in`, `known`.
+
+| Rezono | Member |
+|---|---|
+| `during stage-a` | `"during": {"stage": "stage-a"}` |
+| `during stage-a..<stage-c` | `"during": {"from": "stage-a", "until": "stage-c"}` |
+| `during stage-c..` | `"during": {"from": "stage-c"}` |
+| `in setup-a \| setup-b` | `"in": ["setup-a", "setup-b"]`, in the order written |
+
+```rezono
+fact party p1, during stage-a..<stage-c, known 2026-01-05
+  size = 3
+fact party p3, valid 2026-01-01.., in setup-a | setup-b
+  size = 6
+```
+
+A stage context is an object, not a list like `valid`: one stage and an open range starting at that stage are different contexts, and a list of one would not tell them apart. The stage and setup names are record identifiers, written as a fact row writes its record. The module form contract gains the two members on `FactRow`.
