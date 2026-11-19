@@ -108,8 +108,8 @@ def test_the_readme_has_seven_parts_in_one_screen():
     assert len(opening[0].split()) <= 25, opening[0]
 
     assert 1 <= len(prose(body["What you get"])) <= 5, prose(body["What you get"])
-    for target in ("docs/tutorial.md", "rezono/README.md", "examples/", "docs/vision.md"):
-        assert f"]({target}" in body["Read further"], target
+    for link in ("](docs/tutorial.md", "](rezono/README.md", "](examples/", "](docs/vision.md"):
+        assert link in body["Read further"], link
     assert "There is no release yet." in body["Status"]
     closing = prose(body["Licences and contributing"])
     assert len(closing) == 2, closing
