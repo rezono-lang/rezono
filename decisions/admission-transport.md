@@ -22,7 +22,7 @@ The admission module is `checker/rezono_checker/evidence.py`. The name avoids th
 class Evidence:
     context: dict             # archived-file reference {file, uri, sha256} to the trusted context
     candidates: dict | None   # archived-file reference to the submitted index; None: nothing submitted
-    read_bytes: Callable      # archived-file reference -> bytes, the storage resolver of the snapshots
+    read_bytes: Callable      # uri -> bytes, the storage resolver of the snapshots
 
 def admit(evidence: Evidence) -> Admitted   # .rows {relation: [row]}, .findings, .references
 ```
