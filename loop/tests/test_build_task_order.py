@@ -52,6 +52,7 @@ def queue_members(numbers, base="main"):
 
 
 def _pull_number_is_text():
+    """Return True once BuildQueuePull.number uses string range to match verified_member part 2."""
     schema = yaml.safe_load((ROOT / "build" / "schema" / "tasks.yaml").read_text(encoding="utf-8"))
     slot = (schema.get("classes") or {}).get("BuildQueuePull", {}).get("attributes", {}).get("number") or {}
     return slot.get("range", schema.get("default_range", "string")) == "string"
