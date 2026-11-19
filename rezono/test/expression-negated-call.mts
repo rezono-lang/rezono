@@ -51,9 +51,11 @@ for (const sample of input.cases.filter(entry => !entry.lowering_only)) {
 	// A case without a summary checks a derived relation whose predicate states were never linked.
 	const predicate = sample.summary ? { ...expect.value.summaries[sample.summary] } : undefined;
 	if (predicate && sample.summary === 'active') predicate.related = relatedSpans;
+	// The signature names the owner of the called relation, which a linked summary must repeat with its relation.
+	const owner = expect.value.summaries[sample.relation].owner;
 	const declaration = predicate
-		? { columns, world: predicate.world, role: 'derived', predicate } as const
-		: { columns, world: 'closed', role: 'derived' } as const;
+		? { columns, world: predicate.world, role: 'derived', owner, predicate } as const
+		: { columns, world: 'closed', role: 'derived', owner } as const;
 	const source = input.consumer.replace('GUARD', sample.guard);
 	const { form, diagnostics } = moduleForm(source);
 	assert.deepEqual(diagnostics, []);

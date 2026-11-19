@@ -5,6 +5,7 @@ Licence by path:
 
 - Apache License 2.0 (Apache-2.0) — code, tests, build configuration, and scripts:
   - .basedpyright/
+  - .dockerignore
   - .gitattributes
   - .github/
   - .gitignore
@@ -20,6 +21,7 @@ Licence by path:
   - contracts/gen-types.sh
   - contracts/python/
   - deploy/
+  - Dockerfile
   - edge/
   - examples/**/*.py
   - formal/
