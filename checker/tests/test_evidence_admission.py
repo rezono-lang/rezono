@@ -23,13 +23,13 @@ class Archive(dict):
         return {"file": name, "uri": uri, "sha256": sha256_hex(data)}
 
 
-def receipt(archive, prefix, content=CONTENT):
-    """A receipt body, pinned under `prefix`, and its id."""
+def receipt(archive, prefix, content=CONTENT, definition="observations/retained/definition.json"):
+    """A receipt body, pinned under `prefix` with its scope definition stored at `definition`, and its id."""
     body = {
         "source": SOURCE,
         "issuer": {"id": "reader",
                    "authorization": archive.pin("observations/retained/authorization.json", {"issuer": "reader"})},
-        "scope": {"definition": archive.pin("observations/retained/definition.json", {"query": "partitions"}),
+        "scope": {"definition": archive.pin(definition, {"query": "partitions"}),
                   "query": "partitions", "bindings": []},
         "cut": {"frontier": {"source_id": "example-register", "position": "snapshot-17"}},
         "inventory": archive.pin(f"{prefix}/inventory.json", MEMBERS),
@@ -38,9 +38,10 @@ def receipt(archive, prefix, content=CONTENT):
     return body, canonical_sha256(["rezono.completeness-receipt/1", body])
 
 
-def layout(archive, candidate_content=CONTENT, rounds=None):
-    """The retained context and the submitted index, as the protected caller writes them."""
-    trusted, _ = receipt(archive, "observations/retained")
+def layout(archive, candidate_content=CONTENT, rounds=None, definition="observations/retained/definition.json"):
+    """The retained context and the submitted index, as the protected caller writes them. `definition`: where the
+    trusted context stores its copy of the scope definition."""
+    trusted, _ = receipt(archive, "observations/retained", definition=definition)
     body, identity = receipt(archive, "observations/submitted", candidate_content)
     candidate = archive.pin("observations/submitted/receipt.json", body | {"id": identity})
     context = archive.pin("observations/retained/context.json",
@@ -54,6 +55,26 @@ def rows(admitted, relation):
     return {tuple(row) for row in admitted.rows.get(relation, ())}
 
 
+def scope_digest(scope):
+    """The scope part of a verified_receipt row, by hand: the bound scope with its definition as the hash of the
+    bytes it pins, so where a copy is stored does not change it."""
+    return canonical_sha256({**scope, "definition": scope["definition"]["sha256"]})
+
+
+def test_the_same_scope_stored_elsewhere_gives_the_same_receipt_row():
+    from rezono_checker.evidence import Evidence, admit
+
+    found = []
+    for place in ("observations/retained/definition.json", "observations/retained/copies/scope-definition.json"):
+        archive = Archive()
+        context, index, _, trusted, _ = layout(archive, definition=place)
+        assert trusted["scope"]["definition"]["file"] == place
+        admitted = rows(admit(Evidence(context, index, archive.__getitem__)), "verified_receipt")
+        assert {row[2] for row in admitted} == {scope_digest(trusted["scope"])}
+        found.append(admitted)
+    assert found[0] == found[1] and len(found[0]) == 1
+
+
 def test_evidence_admits_receipts_from_the_pinned_context():
     from rezono_checker.evidence import Evidence, admit
 
@@ -61,7 +82,7 @@ def test_evidence_admits_receipts_from_the_pinned_context():
     context, index, candidate, trusted, identity = layout(archive)
     admitted = admit(Evidence(context, index, archive.__getitem__))
     assert rows(admitted, "verified_receipt") == {(
-        identity, "example-register", canonical_sha256(trusted["scope"]), canonical_sha256(trusted["cut"]),
+        identity, "example-register", scope_digest(trusted["scope"]), canonical_sha256(trusted["cut"]),
         trusted["inventory"]["sha256"], trusted["content"]["sha256"])}
     # One row per key part; the member is the canonical JSON text of the typed key.
     assert rows(admitted, "verified_member") == {

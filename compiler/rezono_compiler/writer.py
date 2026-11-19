@@ -41,7 +41,7 @@ from pathlib import Path
 
 import yaml
 
-from . import modules, rezono_module
+from . import modules, rezono_module, strict_yaml
 from . import pack as packs
 from . import source_format
 from .names import ISO_DATE
@@ -103,7 +103,7 @@ def layout(pack_dir: str | Path) -> Layout:
     module counts, also those of an imported pack, under the engine name the compiler gave the class."""
     pack_dir = Path(pack_dir)
     model = packs.read(pack_dir)
-    meta = yaml.safe_load((pack_dir / "pack.yaml").read_text("utf-8"))
+    meta = strict_yaml.read(pack_dir / "pack.yaml")
     dirs = {name: p.dir for name, p in modules.imported_packs(pack_dir, meta, []).items()}
     name_of = {(kind.module, kind.cls): k for k, kind in model.kinds.items()}
     kinds, declared = [], {}
@@ -112,7 +112,7 @@ def layout(pack_dir: str | Path) -> Layout:
         if s["file"].endswith(".rezono"):
             slots_by_class = rezono_module.class_slot_order(d, s["file"])
         else:
-            doc = yaml.safe_load((d / s["file"]).read_text("utf-8")) or {}
+            doc = strict_yaml.read(d / s["file"]) or {}
             slots_by_class = {cname: list((c or {}).get("slots") or []) + list((c or {}).get("attributes") or {})
                               for cname, c in (doc.get("classes") or {}).items()}
         for cname, slots in slots_by_class.items():
@@ -669,7 +669,7 @@ def apply_change(lay: Layout, text: str, ch: dict) -> tuple[str, dict]:
     exact = restored(lines, ch.get("restore"))
     if exact is not None:
         out = exact
-    got = yaml.load(out, Loader) or {}  # quoting is checked against both readers, so the fast one suffices
+    got = strict_yaml.load(out) or {}  # quoting is checked against both readers, so the fast one suffices
     if exact is not None:  # restored lines keep the dialect they were written in: a date may stand there as ISO text
         got, expected = as_written(got, True), as_written(expected, True)
     if not same_facts(got, expected, ordered_rows=exact is None):

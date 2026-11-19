@@ -18,8 +18,7 @@ class MissingUnlinkedSummaryRefusal(AssertionError):
            "owner required on PredicateSummary and owner required on a derived relation's signature, and refuse a "
            "negation or group with R047 at the call and without related places when the summary leaves out its "
            "relation or owner, or the signature leaves out its owner, as native_rule_lowering does. Read section "
-           "2, Linking partial predicates. Waits for test_expression_ts_forged_summary while it owns "
-           "native-rule-check.ts.",
+           "2, Linking partial predicates.",
 )
 def test_expression_ts_unlinked_summary():
     probe = Path(__file__).with_name("expression-unlinked-summary.mts")
