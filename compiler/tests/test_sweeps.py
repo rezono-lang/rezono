@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from support import FIXTURE, compile_dir
+from support import FIXTURE, REPO, compile_dir
 from rezono_compiler import modules, pack
 
 SWEEP = {"name": "size_scale", "kind": "alpha", "key": "a1", "slot": "size"}
@@ -150,9 +150,42 @@ def test_a_record_in_two_fact_files_is_refused(fixture):
     refused(fixture, "is in facts/one.yaml, facts/two.yaml")
 
 
-def test_one_sweep_per_pack_in_v1(fixture):
-    sweeps(fixture, SWEEP, {**SWEEP, "name": "second"})
-    refused(fixture, "2 sweeps; a pack has at most 1")
+class MissingSeveralSweeps(AssertionError):
+    """A pack still has at most one sweep."""
+
+
+MAX_SWEEPS = 4  # decisions/viewer-slip.md, "Several sweeps"
+
+
+@pytest.mark.xfail(
+    strict=True,
+    raises=(MissingSeveralSweeps, AssertionError),
+    reason=(
+        "Raise MAX_SWEEPS in compiler/rezono_compiler/pack.py to 4, and let contracts/pack.yaml (SweepFile.sweeps) "
+        "and contracts/explain.yaml (BoundSweepList.sweeps) follow it with maximum_cardinality 4, as "
+        "decisions/viewer-slip.md, section Several sweeps, says. Expectation: the minimal fixture with two sweeps, "
+        "grids written by hand; five sweeps are refused."
+    ),
+)
+def test_a_pack_has_up_to_four_sweeps(fixture, tmp_path):
+    second = {**SWEEP, "name": "second", "key": "a2"}
+    sweeps(fixture, SWEEP, second)
+    try:
+        read = pack.read(fixture)
+    except pack.CompileError as error:
+        raise MissingSeveralSweeps(str(error)) from error
+    grid = {"min": 0, "max": 9, "step": 1, "count": 10}
+    assert read.sweeps == [{**SWEEP, **grid}, {**second, **grid}]
+    files = compile_dir(fixture, tmp_path / "out")
+    assert json.loads(files["ir/sweeps.json"])["sweeps"] == [{**SWEEP, **grid}, {**second, **grid}]
+    sweeps(fixture, *({**SWEEP, "name": f"sweep{i}"} for i in range(MAX_SWEEPS + 1)))
+    refused(fixture, f"{MAX_SWEEPS + 1} sweeps; a pack has at most {MAX_SWEEPS}")
+    assert pack.MAX_SWEEPS == MAX_SWEEPS
+    contracts = REPO / "contracts"
+    sweep_file = yaml.safe_load((contracts / "pack.yaml").read_text(encoding="utf-8"))["classes"]["SweepFile"]
+    listing = yaml.safe_load((contracts / "explain.yaml").read_text(encoding="utf-8"))["classes"]["BoundSweepList"]
+    assert sweep_file["attributes"]["sweeps"]["maximum_cardinality"] == MAX_SWEEPS
+    assert listing["attributes"]["sweeps"]["maximum_cardinality"] == MAX_SWEEPS
 
 
 @pytest.mark.parametrize("doc", [[SWEEP], {"sweeps": SWEEP}, {"sweeps": [SWEEP], "more": 1}, None])

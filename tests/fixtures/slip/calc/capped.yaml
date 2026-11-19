@@ -1,0 +1,21 @@
+format: rezono.calc/1
+pack: slip
+subject: item
+as_of: {valid_at: 2026-01-01, known_at: 2026-01-01}
+rules:
+  - id: capped_amount@v1
+    rule: capped_amount
+    version: v1
+    output: capped_amount.value
+    unit: count
+    valid_from: 2026-01-01
+    valid_until: 2027-01-01
+    known_from: 2026-01-01
+    definitions:
+      - name: at_most_twenty
+        when: {boolean: true}
+        value:
+          op: min
+          args:
+            - {fact: recorded_amount.amount}
+            - {integer: "20"}
