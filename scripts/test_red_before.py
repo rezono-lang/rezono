@@ -20,9 +20,9 @@ TESTS = b"from pkg.calc import double\n\n\ndef test_double_two():\n    assert do
 STILL_PASSES = TESTS + b"\n\ndef test_double_is_even():\n    assert double(4) % 2 == 0\n"
 FAILS_ON_BASE = TESTS + b"\n\ndef test_double_three():\n    assert double(3) == 6\n"
 # The only added test is skipped: it runs nowhere, so it proves nothing on the base either.
-ONLY_SKIPPED = (b"import pytest\n" + TESTS
-                + b"\n\n@pytest.mark.skip(reason='needs a cluster')\ndef test_double_three():\n"
-                + b"    assert double(3) == 6\n")
+ONLY_SKIPPED = (b"import pytest\n" + TESTS + b"\n\n"
+                + b"@pytest.mark.skip(reason='needs a cluster')\n"
+                + b"def test_double_three():\n    assert double(3) == 6\n")
 
 
 def git(repo, *args):
