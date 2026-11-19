@@ -205,16 +205,32 @@ MODULE_SYNTAX = {
 RULE_DECLARATION = re.compile(r"^rule\b[^\n]*(?:\n[ \t][^\n]*)*", re.MULTILINE)
 STATE_PREDICATE = re.compile(r"\bis\s+(?:known\b|unknown\b|invalid\b|n/a(?![\w/]))")
 STATE_REVIEW = "native-rule-state-review"
+LITERALS = re.compile(r'"(?:\\.|[^"\\])*"|\x60[^\x60\n]*\x60|--[^\n]*')
+# The schema header declares module identity (decisions/language-metadata.md). Its base fields match
+# BASE_SCHEMA_FIELDS of a written schema; any other header field is schema metadata.
+SCHEMA_HEADER = re.compile(r"^schema\b[^\n]*((?:\n[ \t][^\n]*)*)", re.MULTILINE)
+BASE_HEADER_FIELD = re.compile(
+    r'^\s+(?:iri\s+"|language\s|default range\s|import\s+"linkml:types"\s*(?:--|$)|annotation\s+layer\s*=)'
+)
+
+
+def header_metadata(raw):
+    return any(
+        LITERALS.sub("", line).strip() and not BASE_HEADER_FIELD.match(line)
+        for header in SCHEMA_HEADER.finditer(raw) for line in header[1].splitlines()
+    )
 
 
 def authored_features(path):
     raw = path.read_text(encoding="utf-8")
     # Look for authored syntax outside comments, literals and escaped names.
-    tokens = re.sub(r'"(?:\\.|[^"\\])*"|\x60[^\x60\n]*\x60|--[^\n]*', " ", raw)
+    tokens = LITERALS.sub(" ", raw)
     found = {name for name, pattern in MODULE_SYNTAX.items() if re.search(pattern, tokens, re.MULTILINE)}
     if any(STATE_PREDICATE.search(rule[0]) for rule in RULE_DECLARATION.finditer(tokens)):
         found.add(STATE_REVIEW)
-    known_lines = [r"^(?:rezono|pack|extend)\b", *MODULE_SYNTAX.values()]
+    if header_metadata(raw):
+        found.add("schema-metadata")
+    known_lines = [r"^(?:rezono|pack|extend|schema)\b", *MODULE_SYNTAX.values()]
     if any(line and not any(re.search(pattern, line) for pattern in known_lines)
            for line in tokens.splitlines() if not line.startswith((" ", "\t"))):
         found.add("unclassified-authored-syntax")

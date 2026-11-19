@@ -1,10 +1,13 @@
-"""Coverage certificates must follow the recorded node inventory and reports."""
+"""Coverage certificates must follow the verified node inventory and the recorded reports."""
 
 import json
 
 import pytest
 
-from flow_drift_cases import REPORT_CASES, SCOPE, SWEEP_COLUMNS, SWEEP_REF, coverage_rows
+from flow_drift_cases import (
+    NODES, OTHER_SCOPES, REPORT_CASES, SCOPE, SWEEP_COLUMNS, SWEEP_REF, MissingVerifiedSweepInventory,
+    coverage_rows, verified_sweep,
+)
 from loop_oracle import evaluate
 from pack_records import LOOP, evaluate as evaluate_pack
 
@@ -13,6 +16,37 @@ def test_complete_flow_sweep():
     for case in (*REPORT_CASES, "empty-inventory"):
         expected = {(*SCOPE, SWEEP_REF)} if case == "complete" else set()
         assert evaluate("complete_sweep", SWEEP_COLUMNS, coverage_rows(case)) == expected, case
+
+
+@pytest.mark.xfail(
+    strict=True,
+    raises=MissingVerifiedSweepInventory,
+    reason=(
+        "M2: decisions/admission-transport.md: section 6, member keys. complete_sweep needs admitted members "
+        "[\"sweep-node\", run, collector, window, node] for that sweep, each covered by its single final report, "
+        "and no recorded expected_node outside them. Declare verified_receipt and verified_member in "
+        "packs/std-loop/rules/complete_sweep.dl; loop/tests/flow_drift_cases.py passes them to the fragment as "
+        "inputs. Today "
+        "complete_sweep follows from the recorded inventory without any receipt."
+    ),
+)
+def test_complete_flow_sweep_needs_verified_inventory():
+    records = coverage_rows("complete", verified=False)
+    cases = {
+        "verified": (verified_sweep(), True),
+        "verified-without-recorded-inventory": (verified_sweep(), True, {"expected_node": []}),
+        "no-receipt": ({}, False),
+        "recorded-node-outside-receipt": (verified_sweep(NODES[:1]), False),
+        "unreported-member": (verified_sweep((*NODES, "node-c")), False),
+        "other-tag": (verified_sweep(tag="path-reader"), False),
+    }
+    for index, other in enumerate(OTHER_SCOPES):
+        cases[f"other-scope-{index}"] = (verified_sweep(scope=other), False)
+    for name, (verified, complete, *change) in cases.items():
+        data = {**records, **verified, **(change[0] if change else {})}
+        produced = evaluate("complete_sweep", SWEEP_COLUMNS, data)
+        if produced != ({(*SCOPE, SWEEP_REF)} if complete else set()):
+            raise MissingVerifiedSweepInventory(f"{name}: {produced}")
 
 
 @pytest.mark.parametrize("reverse", [False, True], ids=["recorded-order", "reversed-order"])
@@ -36,9 +70,12 @@ def test_conflicting_final_reports(reverse):
         ("other-node", {"node": "unlisted", "lost": 7}, True),
     ]
     records = {"flow_sweep_window": [], "flow_expected_node": [], "flow_node_report": []}
+    verified = {"verified_receipt": [], "verified_member": []}
     certificates = set()
     for window, change, complete in cases:
         scope = dict(run="run-a", collector="hubble", window=window)
+        for relation, rows in verified_sweep(("node-b",), tuple(scope.values()), f"receipt/{window}").items():
+            verified[relation].extend(rows)
         ref = f"sweep/{window}"
         records["flow_sweep_window"].append(dict(scope, id=ref, start=10, stop=20))
         records["flow_expected_node"].append(dict(scope, id=f"inventory/{window}", node="node-b"))
@@ -51,7 +88,7 @@ def test_conflicting_final_reports(reverse):
     if reverse:
         records["flow_node_report"].reverse()
 
-    _, rows, explainer = evaluate_pack(pack.read(LOOP), records)
+    _, rows, explainer = evaluate_pack(pack.read(LOOP), records, verified)
     assert rows["complete_sweep"] == certificates
 
     # The disputed node's count commits to both distinct report tuples. Each

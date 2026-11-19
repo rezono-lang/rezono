@@ -7,7 +7,7 @@ import yaml
 
 from flow_drift_cases import (
     FLOW_COLUMNS, OTHER_SCOPES, POLICY, REPORT_CASES, SCOPE, SWEEP_COLUMNS, SWEEP_REF,
-    coverage_rows, expected_rows, flow_rows, tuples,
+    MissingVerifiedSweepInventory, coverage_rows, expected_rows, flow_rows, tuples,
 )
 from loop_oracle import evaluate
 from wire_fixtures import fixture
@@ -22,10 +22,16 @@ def test_recorded_flow_reference():
     complete = coverage_rows("complete")
     for case in (*REPORT_CASES, "empty-inventory"):
         data = coverage_rows(case)
-        required = {node for *scope, node in data["expected_node"] if tuple(scope) == SCOPE}
+        # The verified members decide the population; a recorded node outside them blocks completeness.
+        keys = {}
+        for _, member, part, value in data["verified_member"]:
+            keys.setdefault(member, {})[part] = value
+        required = {key[4] for key in keys.values()
+                    if (key[0], key[1], key[2], key[3]) == ("sweep-node", *SCOPE)}
+        recorded = {node for *scope, node in data["expected_node"] if tuple(scope) == SCOPE}
         covered = {node for *scope, node, first, last, gaps, lost in data["node_report"]
                    if tuple(scope) == SCOPE and first <= 10 and last >= 20 and gaps == lost == 0}
-        assert bool(required and required <= covered) == (case == "complete"), case
+        assert bool(required and required <= covered and recorded <= required) == (case == "complete"), case
     assert complete["sweep_window"] == [(*SCOPE, 10, 20, SWEEP_REF)]
     observed = {}
     for *scope, tick, src, dst, protocol, port, verdict, ref in raw["flow_event"]:
@@ -80,3 +86,22 @@ def test_flow_drift_rows():
         changed.add((*row[:-4], *outcome, alternate, row[-1]))
     assert evaluate("flow_drift", FLOW_COLUMNS, variant) == changed
     assert evaluate("flow_drift", FLOW_COLUMNS, dict(variant, bound_policy=[])) == set()
+
+
+@pytest.mark.xfail(
+    strict=True,
+    raises=MissingVerifiedSweepInventory,
+    reason=(
+        "M2: decisions/admission-transport.md: section 6, member keys. Without admitted sweep-node members the "
+        "complete recorded sweep certifies nothing, so the allowed flow that was not seen stays out of flow_drift. "
+        "Waits for loop/tests/test_flow_drift_sweep.py--test_complete_flow_sweep_needs_verified_inventory. Today "
+        "complete_sweep follows from the recorded inventory without any receipt."
+    ),
+)
+def test_flow_drift_needs_verified_sweep():
+    raw = flow_rows()
+    for verified, complete in ((True, True), (False, False)):
+        produced = evaluate("complete_sweep", SWEEP_COLUMNS, coverage_rows("complete", verified=verified))
+        drift = evaluate("flow_drift", FLOW_COLUMNS, dict(raw, complete_sweep=list(produced)))
+        if drift != expected_rows(complete):
+            raise MissingVerifiedSweepInventory(f"verified={verified}: {sorted(drift - expected_rows(complete))}")

@@ -33,12 +33,10 @@ def _records(*readbacks):
         "whose batch has exactly that one member, and loop_certified_batch and loop_selected_batch from a "
         "verified round of the current run and cut, with the round's batch as the batch column. Keep the "
         "supplied-verdict derivations for now; test_supplied_verdicts_authorize_nothing removes them. Write in "
-        "packs/std-loop (step_safety.dl, batch_selection.dl and their schema). Waits for "
-        "edge/publisher/tests/test_round_evidence_batch.py--test_batch_admits_certified_rounds_before_the_rules, "
-        "edge/publisher/tests/test_completeness_publish.py--"
-        "test_publisher_admits_receipts_only_with_a_trusted_context (the checker admits again on publish) and "
-        "compiler/tests/test_protected_admission_relations.py--test_admission_relations_are_protected_inputs. "
-        "Today rezono_checker.evidence is missing (ImportError)."
+        "packs/std-loop (step_safety.dl, batch_selection.dl and their schema) and refresh the std-loop sha256 "
+        "pin in build/pack.yaml. The fixture is ready: round_claim writes the ordered plan hashes (effects) of "
+        "every subset, so admission verifies the claim for withdraw-a and refuses the one for withdraw-b "
+        "(round_preceded). Today std-loop declares no verified_round, so safe_alone stays empty (AssertionError)."
     ),
 )
 def test_verified_round_authorizes_steps(tmp_path):

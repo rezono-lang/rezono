@@ -6,6 +6,8 @@
 .decl build_rank_conflict(run: symbol, task: symbol)
 .decl build_task_precedes(run: symbol, first: symbol, second: symbol)
 .decl build_queue_at_cut(run: symbol, count: number, reading: symbol)
+.decl build_queue_listing_at_cut(run: symbol, listing: symbol)
+.decl build_queue_counted(listing: symbol, number: number)
 .decl build_queue_conflict(run: symbol)
 .decl build_queue_known(run: symbol, count: number, reading: symbol)
 .decl build_has_queue_count(run: symbol)
@@ -37,6 +39,16 @@ build_queue_at_cut(run, count, reading) :- build_verified_cut(run), build_run__o
     build_queue_reading__receipt(reading, receipt), loop_sweep_receipt__run(receipt, run),
     loop_sweep_receipt__event_time(receipt, tick),
     build_queue_reading__count(reading, count), build_queue_reading__source(reading, source), source != "".
+// The rules count a listing themselves: the open pull requests against its base that are not drafts.
+build_queue_listing_at_cut(run, listing) :- build_verified_cut(run), build_run__observed_at(run, tick),
+    build_queue_listing__run(listing, run), build_queue_listing__observed_at(listing, tick),
+    build_queue_listing__receipt(listing, receipt), loop_sweep_receipt__run(receipt, run),
+    loop_sweep_receipt__event_time(receipt, tick), build_queue_listing__source(listing, source), source != "".
+build_queue_counted(listing, number) :- build_queue_listing__base(listing, base), build_queue_pull__listing(pull, listing),
+    build_queue_pull__number(pull, number), build_queue_pull__state(pull, "open"),
+    build_queue_pull__draft(pull, "ready"), build_queue_pull__base(pull, base).
+build_queue_at_cut(run, count, listing) :- build_queue_listing_at_cut(run, listing),
+    count = count : { build_queue_counted(listing, _) }.
 build_queue_conflict(run) :- build_queue_at_cut(run, a, _), build_queue_at_cut(run, b, _), a != b.
 build_queue_known(run, count, reading) :- build_queue_at_cut(run, count, reading), !build_queue_conflict(run).
 build_has_queue_count(run) :- build_queue_known(run, _, _).
