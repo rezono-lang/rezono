@@ -24,6 +24,7 @@ class Diagnostic:
     span: spans.Span | None = None
     hint: str = ""
     severity: str = "error"
+    related: tuple[spans.Span, ...] = ()
 
     def doc(self) -> dict:
         """As the contract writes it: what is not known is left out, never null."""
@@ -36,6 +37,8 @@ class Diagnostic:
             out["span"] = spans.doc(self.span)
         if self.hint.strip():
             out["hint"] = self.hint
+        if self.related:
+            out["related"] = [spans.doc(place) for place in self.related]
         return out
 
     def __str__(self) -> str:

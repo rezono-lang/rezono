@@ -1,0 +1,62 @@
+{
+  "source": "unit B = integer\nunit GiB = 2^30 B\nunit Sec = integer\nunit Hour = 3600 Sec\nunit Cents = money minor EUR\nunit CentsPerHour = Cents per Hour",
+  "format": "rezono.module/1",
+  "declarations": [
+    {
+      "unit": "B",
+      "is": "integer"
+    },
+    {
+      "unit": "GiB",
+      "is": "2^30 B"
+    },
+    {
+      "unit": "Sec",
+      "is": "integer"
+    },
+    {
+      "unit": "Hour",
+      "is": "3600 Sec"
+    },
+    {
+      "unit": "Cents",
+      "is": "money minor EUR"
+    },
+    {
+      "unit": "CentsPerHour",
+      "is": "Cents per Hour"
+    }
+  ],
+  "spanNames": {
+    "/decls/1": "GiB",
+    "/decls/5": "CentsPerHour"
+  },
+  "rejections": [
+    {
+      "from": "2^30 B",
+      "to": "2^ B"
+    },
+    {
+      "from": "Cents per Hour",
+      "to": "Cents per"
+    }
+  ],
+  "knownDiagnostics": [
+    {
+      "code": "R000",
+      "span": {
+        "text": "^",
+        "start": 50,
+        "end": 51
+      }
+    },
+    {
+      "code": "R000",
+      "span": {
+        "text": "per",
+        "start": 151,
+        "end": 154
+      }
+    }
+  ]
+}

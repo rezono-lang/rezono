@@ -1,0 +1,41 @@
+# How one NetworkPolicy is read as requested_flow rows in both directions, and published_flow rows
+# become publication flows. Format: decisions/k8s-admission-translator.md.
+# Rule and transports: decisions/k8s-admission-rules.md and k8s-admission-transport.md.
+format: rezono.admission-binding/1
+rule: in-zone-flow
+output: allow_flow
+match:
+  - apiGroups: [networking.k8s.io]
+    apiVersions: [v1]
+    operations: [CREATE, UPDATE]
+    resources: [networkpolicies]
+    scope: Namespaced
+request:
+  - relation: requested_flow
+    each:
+      - {name: rule, path: [object, spec, ingress], optional: true, closed: [from, ports]}
+      - {name: peer, path: [rule, from], nonempty: true, closed: [podSelector]}
+      - {name: port, path: [rule, ports], nonempty: true, closed: [protocol, port, endPort]}
+    columns:
+      namespace: {path: [request, namespace]}
+      source: {path: [peer, podSelector, matchLabels, rezono.org/service]}
+      destination: {path: [object, spec, podSelector, matchLabels, rezono.org/service]}
+      protocol: {path: [port, protocol], default: TCP}
+      port: {path: [port, port], reading: port-range, end: [port, endPort]}
+  - relation: requested_flow
+    each:
+      - {name: rule, path: [object, spec, egress], optional: true, closed: [to, ports]}
+      - {name: peer, path: [rule, to], nonempty: true, closed: [podSelector]}
+      - {name: port, path: [rule, ports], nonempty: true, closed: [protocol, port, endPort]}
+    columns:
+      namespace: {path: [request, namespace]}
+      source: {path: [object, spec, podSelector, matchLabels, rezono.org/service]}
+      destination: {path: [peer, podSelector, matchLabels, rezono.org/service]}
+      protocol: {path: [port, protocol], default: TCP}
+      port: {path: [port, port], reading: port-range, end: [port, endPort]}
+parameters:
+  published_flow:
+    scope: namespace
+    lists:
+      - {field: flows, columns: [source, destination, port], fixed: {protocol: TCP}}
+      - {field: transportFlows, columns: [source, destination, protocol, port], optional: true}

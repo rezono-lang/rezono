@@ -1,4 +1,10 @@
-"""Replay a billing close against the exact price publication it names."""
+"""Replay a billing close against the exact price publication and intake receipt it names.
+
+A close publishes its lines and rational total only on a completeness receipt that the shared admission of
+`rezono_checker.completeness` verifies against the trusted intake context, at this close's cutoff, and whose
+certified rows equal the replayed timely observations. Otherwise coverage is unknown: the close stays pending
+with no lines and no total. A certified empty intake closes at zero.
+"""
 
 from collections.abc import Iterable
 from datetime import datetime, timedelta, timezone
@@ -7,7 +13,10 @@ from fractions import Fraction
 from hashlib import sha256
 import json
 import re
-from typing import Literal, Protocol, TypedDict
+from typing import Literal, NotRequired, Protocol, TypedDict
+
+from rezono_canon import canonical_sha256
+from rezono_checker.completeness import admit
 
 
 _EPOCH = datetime(1970, 1, 1, tzinfo=timezone.utc)
@@ -28,6 +37,9 @@ class CloseDecision(TypedDict):
     month: str
     closed_at: str
     publication_sha256: str
+    # Candidate completeness receipts for the billing intake at `closed_at`, as archived-file references.
+    # They select bytes to check and confer no authority: the trusted context comes from the caller.
+    completeness_receipts: NotRequired[list[dict[str, str]]]
 
 
 class Receipt(TypedDict):
@@ -51,11 +63,22 @@ class SetupReceipt(Receipt):
 Observation = PeriodReceipt | SetupReceipt
 
 
+class Coverage(TypedDict, total=False):
+    # Verified: the `verified_receipt` row (receipt id, source name, scope and cut hashes, inventory and
+    # content hashes) and the aggregate witness of the total (contributing rows and the hash over them).
+    verified_receipt: list[str]
+    count: int
+    contributors_sha256: str
+    # Unknown: why the close stays pending.
+    unknown: list[str]
+
+
 class CloseReport(TypedDict):
     publication_sha256: str
-    total_eur: list[int]
-    lines: dict[str, list[int]]
+    total_eur: list[int] | None
+    lines: dict[str, list[int]] | None
     late: list[tuple[str, str, Literal["arrived_after_cutoff"]]]
+    coverage: Coverage
 
 
 def retain(store: PublicationWriter, body: bytes) -> str:
@@ -144,8 +167,95 @@ def _ratio(amount: Fraction) -> list[int]:
     return [amount.numerator, amount.denominator]
 
 
-def report(store: PublicationReader, decision: CloseDecision, observations: Iterable[Observation]) -> CloseReport:
-    """Allocate recorded charges by UTC service time, using only pre-close receipts."""
+def _reader(store: PublicationReader):
+    """Resolve an archived-file URI through the same store that holds the publication."""
+    uri = getattr(store, "uri", None)
+    prefix = uri("") if callable(uri) else None
+
+    def read(location: str) -> bytes | None:
+        if prefix is None or not isinstance(location, str) or not location.startswith(prefix):
+            return None
+        return store.get(location[len(prefix):])
+
+    return read
+
+
+def _binds_close(scope: dict, cutoff: Fraction) -> bool:
+    """The trusted intake scope is bound to exactly this close's cutoff."""
+    bound = [binding for binding in scope["bindings"] if binding["name"] == "closed_at"]
+    if len(bound) != 1 or bound[0]["type"] != "datetime" or not isinstance(bound[0]["value"], str):
+        return False
+    try:
+        return _utc(bound[0]["value"]) == cutoff
+    except ValueError:
+        return False
+
+
+def _certified_rows(read, authority: dict) -> dict[str, dict]:
+    """The intake rows of the trusted contents that the admitted receipt equals, as observations by id."""
+    body = read(authority["content"]["uri"])
+    if body is None or sha256(body).hexdigest() != authority["content"]["sha256"]:
+        raise LookupError("certified_content_unreadable")
+    rows: dict[str, dict] = {}
+    for member in json.loads(body):
+        for row in member["rows"]:
+            key = row["key"]
+            if not (len(key) == 1 and isinstance(key[0], str)) or "id" in row["values"]:
+                raise LookupError("certified_row_malformed")
+            observation = {"id": key[0], **row["values"]}
+            if rows.setdefault(key[0], observation) != observation:
+                raise LookupError(f"certified_row_conflict: {key[0]}")
+    return rows
+
+
+def _coverage(store: PublicationReader, decision: CloseDecision, authorities, cutoff: Fraction,
+              timely: dict[str, Observation]) -> dict:
+    """The verified receipt row that covers exactly the timely intake of this close, or why coverage is unknown."""
+    references = decision.get("completeness_receipts")
+    if not references:
+        return {"unknown": ["receipt_missing"]}
+    read = _reader(store)
+    trusted = [authority for authority in authorities or () if isinstance(authority, dict)]
+    admitted, rejected = admit(references, trusted, read)
+    reasons = [str(error) for _, error in rejected]
+    at_close = []
+    for parts in admitted.values():
+        receipt, source, scope, cut, inventory, content = parts
+        # The admitted row names its trusted context; the receipt counts only for this close's cutoff.
+        matches = [a for a in trusted if a["source"]["name"] == source and canonical_sha256(a["scope"]) == scope
+                   and canonical_sha256(a["cut"]) == cut and a["inventory"]["sha256"] == inventory
+                   and a["content"]["sha256"] == content]
+        if matches and _binds_close(matches[0]["scope"], cutoff):
+            at_close.append((parts, matches[0]))
+        else:
+            reasons.append(f"receipt_not_at_close: {receipt}")
+    if len(at_close) != 1:
+        return {"unknown": ["receipt_ambiguous"] if at_close else reasons}
+    (parts, authority), = at_close
+
+    try:
+        certified = _certified_rows(read, authority)
+    except LookupError as error:
+        return {"unknown": [error.args[0]]}
+    except (ValueError, TypeError, KeyError, AttributeError):
+        return {"unknown": ["certified_content_malformed"]}
+    # Replay the exact receipt identities, plan hashes and contents: the timely set is the certified set.
+    differences = [f"missing {identity}" for identity in sorted(certified.keys() - timely.keys())]
+    differences += [f"unexpected {identity}" for identity in sorted(timely.keys() - certified.keys())]
+    differences += [f"changed {identity}" for identity in sorted(certified.keys() & timely.keys())
+                    if certified[identity] != timely[identity]]
+    if differences:
+        return {"unknown": ["receipt_replay_mismatch: " + ", ".join(differences)]}
+    return {"verified_receipt": list(parts)}
+
+
+def report(store: PublicationReader, decision: CloseDecision, observations: Iterable[Observation],
+           authorities: Iterable[dict] = ()) -> CloseReport:
+    """Allocate recorded charges by UTC service time, using only pre-close receipts.
+
+    `authorities` is the trusted intake context of the protected caller, never taken from the candidates.
+    Lines and a total are published only on verified coverage of the whole timely intake.
+    """
     digest = decision["publication_sha256"]
     rates = _rates(store, digest)
     month_start, month_end = _month_window(decision["month"])
@@ -161,21 +271,34 @@ def report(store: PublicationReader, decision: CloseDecision, observations: Iter
         if existing != observation:
             raise ValueError(f"conflicting billing observations for {identity}")
 
-    total = Fraction()
-    lines = {}
+    timely: dict[str, Observation] = {}
+    parts: dict[str, Fraction] = {}
     late: list[tuple[str, str, Literal["arrived_after_cutoff"]]] = []
     for identity, observation in sorted(by_id.items()):
         part = _allocation(observation, month_start, month_end)
-        if not part:
-            continue
         if _utc(observation["received_at"]) >= cutoff:
-            late.append((identity, decision["id"], "arrived_after_cutoff"))
+            if part:
+                late.append((identity, decision["id"], "arrived_after_cutoff"))
             continue
-        item = observation["item"]
+        timely[identity] = observation
+        if part:
+            parts[identity] = part
+
+    coverage = _coverage(store, decision, authorities, cutoff, timely)
+    if "unknown" in coverage:
+        return {"publication_sha256": digest, "total_eur": None, "lines": None, "late": late, "coverage": coverage}
+
+    total = Fraction()
+    lines = {}
+    for identity, part in parts.items():
+        item = timely[identity]["item"]
         if item not in rates:
             raise ValueError(f"price publication has no rate for {item}")
         amount = rates[item] * part
         lines[identity] = _ratio(amount)
         total += amount
-
-    return {"publication_sha256": digest, "total_eur": _ratio(total), "lines": lines, "late": late}
+    # The aggregate witness: the contributing certified rows, sorted by id, and the hash over them.
+    coverage["count"] = len(parts)
+    coverage["contributors_sha256"] = canonical_sha256([timely[identity] for identity in parts])
+    return {"publication_sha256": digest, "total_eur": _ratio(total), "lines": lines, "late": late,
+            "coverage": coverage}

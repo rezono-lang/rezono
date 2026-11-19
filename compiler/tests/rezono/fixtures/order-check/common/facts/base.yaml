@@ -1,0 +1,6 @@
+# Exactly the edges a -> b and a -> c. The rank of a is not a fact row: its archived Value is unknown,
+# with the reason not_measured.
+stage:
+  - {id: a, precedes: [b, c]}
+  - {id: b, rank: 0}
+  - {id: c, rank: 2}

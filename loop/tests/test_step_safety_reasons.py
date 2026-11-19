@@ -30,7 +30,8 @@ def test_step_safety_reasons():
     model = pack.read(LOOP)
     assert "loop_step_safety_check" in model.kinds, "The loop pack lacks the typed step-check input"
     program, rows, explainer = evaluate(model, records)
-    assert {row[:2] for row in rows.get("safe_alone", ())} == {("active", "safe")}
+    # Supplied verdicts may block a step but never authorize one (decisions/loop-certificate-admission.md).
+    assert not {row[1] for row in rows.get("safe_alone", ())} & {"false", "unsafe", "unknown"}
     expected = {
         ("active", "false", "permit", "failed-prerequisite"),
         ("active", "unsafe", "retains-provider", "violated-invariant"),

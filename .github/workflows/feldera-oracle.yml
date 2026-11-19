@@ -13,9 +13,123 @@ permissions:
   contents: read
 
 jobs:
-  oracle:
+  compare:
+    needs: seed
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [library, projects, platform, tenant-capacity-interface, subsidy, compiler-calc, compiler-bound, compiler-rules]
     runs-on: ubuntu-24.04
-    timeout-minutes: 120
+    # Platform builds about 2,300 generated operator crates on four cores; its integrity program
+    # alone takes about 19 minutes. The other shards finish within 30 minutes.
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - &reserve-disk
+        name: Reserve disk space on the disposable runner
+        run: |
+          set -euo pipefail
+          docker_root=$(docker info --format '{{.DockerRootDir}}')
+          # The measured high-water use approached 40 GiB, including the image and dependencies.
+          # Leave another 40 GiB available for the next compilation and its reports.
+          minimum_kib=$((80 * 1024 * 1024))
+          disk_has_budget() {
+            df -Pk "$RUNNER_TEMP" "$docker_root" |
+              awk -v minimum="$minimum_kib" 'NR > 1 && $4 < minimum { short = 1 } END { exit short || NR < 2 }'
+          }
+          df -h "$RUNNER_TEMP" "$docker_root"
+          if ! disk_has_budget && [[ "${RUNNER_ENVIRONMENT:-}" == github-hosted ]]; then
+            sudo rm -rf -- /usr/share/dotnet /usr/local/lib/android /opt/ghc
+            df -h "$RUNNER_TEMP" "$docker_root"
+          fi
+          if ! disk_has_budget; then
+            echo "::error::Feldera needs 80 GiB of free space for the runner and Docker filesystems."
+            exit 1
+          fi
+      - &oracle-checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+      - &oracle-python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0  # v7.1.0
+        with:
+          python-version-file: requirements/.python-version
+          cache: ''
+      - name: Install the locked dependencies and generate contract types
+        run: |
+          set -euo pipefail
+          pull_log="$RUNNER_TEMP/feldera-image-pull.log"
+          bash compiler/ci/run_feldera_oracle.sh --pull > "$pull_log" 2>&1 &
+          pull_pid=$!
+          trap 'kill "$pull_pid" 2>/dev/null || true; wait "$pull_pid" 2>/dev/null || true' EXIT
+          python -m venv .venv
+          source .venv/bin/activate
+          python -m pip install --no-deps --require-hashes -r requirements/dev.txt
+          packages=$(python scripts/components.py python-packages)
+          for package in $packages; do
+            python -m pip install --no-deps --no-build-isolation -e "$package"
+          done
+          bash contracts/gen-types.sh
+          bash scripts/install-souffle.sh
+          if ! wait "$pull_pid"; then
+            cat "$pull_log" >&2
+            exit 1
+          fi
+          trap - EXIT
+          echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
+      - name: Download same-attempt Feldera dependencies
+        if: matrix.shard == 'platform' || matrix.shard == 'subsidy'
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093  # v4.3.0
+        with:
+          name: feldera-dependencies-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/feldera-dependencies/
+      - name: Run the assigned Feldera comparisons
+        env:
+          FELDERA_SHARD: ${{ matrix.shard }}
+          FELDERA_DEPENDENCY_PROVENANCE: ${{ needs.seed.outputs.provenance }}
+        run: bash compiler/ci/run_feldera_oracle.sh
+      - name: Retain the shard's original reports
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.6.2
+        with:
+          name: feldera-shard-${{ github.run_attempt }}-${{ matrix.shard }}
+          path: ${{ runner.temp }}/feldera-oracle/
+          if-no-files-found: warn
+          retention-days: 7
+
+  seed:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash
+    outputs:
+      provenance: ${{ steps.seed.outputs.provenance }}
+    steps:
+      - *reserve-disk
+      - *oracle-checkout
+      - *oracle-python
+      - name: Compile the stock Feldera dependencies
+        id: seed
+        run: bash compiler/ci/run_feldera_oracle.sh --seed-dependencies
+      - name: Transfer verified dependency artifacts within this attempt
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.6.2
+        with:
+          name: feldera-dependencies-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/feldera-dependencies/
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 1
+
+  oracle:
+    needs: compare
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    outputs:
+      disagreement: ${{ steps.classify.outputs.confirmed }}
     defaults:
       run:
         shell: bash
@@ -27,22 +141,25 @@ jobs:
         with:
           python-version-file: requirements/.python-version
           cache: ''
-      - name: Install the locked dependencies and generate contract types
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093  # v4.3.0
+        with:
+          pattern: feldera-shard-${{ github.run_attempt }}-*
+          path: ${{ runner.temp }}/feldera-shards/
+      - name: Compare compiler and example results with Feldera
+        id: compare
+        env:
+          COMPARE_RESULT: ${{ needs.compare.result }}
         run: |
           set -euo pipefail
-          python -m venv .venv
-          source .venv/bin/activate
-          python -m pip install --no-deps --require-hashes -r requirements/dev.txt
-          packages=$(python scripts/components.py python-packages)
-          for package in $packages; do
-            python -m pip install --no-deps --no-build-isolation -e "$package"
-          done
-          bash contracts/gen-types.sh
-          bash scripts/install-souffle.sh
-          echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
-      - name: Compare compiler and example results with Feldera
-        timeout-minutes: 100
-        run: bash compiler/ci/run_feldera_oracle.sh
+          inputs="$RUNNER_TEMP/feldera-shards"
+          reports="$RUNNER_TEMP/feldera-oracle"
+          python compiler/ci/feldera_shards.py merge "$inputs" "$reports" "$GITHUB_RUN_ATTEMPT"
+          python compiler/ci/verify_feldera_run.py "$reports/collected.txt" "$reports/results.xml"
+          test "$COMPARE_RESULT" = success
+      - name: Classify the completed comparison
+        id: classify
+        if: failure() && steps.compare.outcome == 'failure' && github.event_name == 'schedule' && github.ref == 'refs/heads/main'
+        run: python compiler/ci/feldera_incident.py classify "$RUNNER_TEMP/feldera-oracle" >> "$GITHUB_OUTPUT"
       - name: Retain collected cases and test results
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.6.2
@@ -50,4 +167,26 @@ jobs:
           name: feldera-oracle
           path: ${{ runner.temp }}/feldera-oracle/
           if-no-files-found: warn
+          overwrite: true
           retention-days: 7
+
+  report:
+    needs: oracle
+    if: >-
+      ${{ !cancelled() && github.event_name == 'schedule' && github.ref == 'refs/heads/main' &&
+          needs.oracle.result == 'failure' && needs.oracle.outputs.disagreement == 'true' }}
+    permissions:
+      actions: read
+      contents: read
+      issues: write
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Record the first disagreement and last green main revision
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 compiler/ci/feldera_incident.py report

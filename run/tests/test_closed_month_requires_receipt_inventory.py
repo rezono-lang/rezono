@@ -72,11 +72,6 @@ def april_intake(store):
     return trusted, manifest("complete", complete), manifest("dropped", dropped)
 
 
-@pytest.mark.xfail(strict=True, raises=UnprovedClosedAmount, reason=(
-    "Read decisions/scoped-completeness.md. Require the independently checked same-cut receipt inventory "
-    "before publishing a closed total. Waits for test_completeness_receipt_exact_inventory. "
-    "Implement in run/closed_month.py."
-))
 def test_closed_month_requires_receipt_inventory(tmp_path):
     from rezono_publisher.store import FileStore
 

@@ -1,0 +1,100 @@
+// Membership comes from std-part: a cell is part of a profile, a cluster of a cell, a member of a cluster.
+.decl probe_cell_of(profile: symbol, cell: symbol)
+probe_cell_of(p, c) :- probe_profile(p), probe_cell(c), constituent__part_of(c, p).
+
+.decl probe_cluster_of(profile: symbol, cell: symbol, cluster: symbol)
+probe_cluster_of(p, c, k) :- probe_cell_of(p, c), probe_cluster(k), constituent__part_of(k, c).
+
+.decl probe_member_of(profile: symbol, cell: symbol, cluster: symbol, member: symbol)
+probe_member_of(p, c, k, m) :- probe_cluster_of(p, c, k), probe_member(m), constituent__part_of(m, k).
+
+// A count is published only for a snapshot that certifies the membership as complete.
+.decl probe_membership_complete(profile: symbol, snapshot: symbol)
+probe_membership_complete(p, s) :- probe_snapshot__profile(s, p), probe_snapshot__membership_complete(s, "complete").
+
+.decl probe_cluster_size(profile: symbol, cell: symbol, cluster: symbol, members: number)
+probe_cluster_size(p, c, k, n) :- probe_cluster_of(p, c, k), probe_membership_complete(p, _),
+    n = count : { probe_member_of(p, c, k, _) }.
+
+.decl probe_profile_total(profile: symbol, cells: number, clusters: number, members: number)
+probe_profile_total(p, a, b, n) :- probe_membership_complete(p, _),
+    a = count : { probe_cell_of(p, _) },
+    b = count : { probe_cluster_of(p, _, _) },
+    n = count : { probe_member_of(p, _, _, _) }.
+
+// Terms are certified complete when the snapshot says the membership is complete and the register covers it.
+.decl probe_terms_certified(profile: symbol, snapshot: symbol, coverage: symbol)
+probe_terms_certified(p, s, c) :- probe_membership_complete(p, s), probe_term_coverage__snapshot(c, s).
+
+.decl has_certified_terms(profile: symbol)
+has_certified_terms(p) :- probe_terms_certified(p, _, _).
+
+// Physical requirement: the decision of the term is in force on the reference day of a snapshot of the profile.
+.decl effective_physical(profile: symbol, cell: symbol, requirement: symbol, term: symbol)
+effective_physical(p, c, req, t) :- probe_physical_requirement__profile(t, p),
+    probe_physical_requirement__cell(t, c), probe_physical_requirement__requirement(t, req),
+    probe_physical_requirement__decision(t, d), probe_cell_of(p, c),
+    probe_snapshot__profile(s, p), probe_snapshot__reference_date(s, r), in_force_on(d, r).
+
+.decl physical_conflict(profile: symbol, cell: symbol)
+physical_conflict(p, c) :- effective_physical(p, c, a, _), effective_physical(p, c, b, _), a != b.
+
+.decl has_physical(profile: symbol, cell: symbol)
+has_physical(p, c) :- effective_physical(p, c, _, _).
+
+.decl probe_physical(profile: symbol, cell: symbol, requirement: symbol)
+probe_physical(p, c, req) :- effective_physical(p, c, req, _).
+
+.decl probe_physical_status(profile: symbol, cell: symbol, status: symbol)
+probe_physical_status(p, c, "missing_requirement") :- probe_cell_of(p, c), !has_physical(p, c),
+    probe_terms_certified(p, _, _).
+probe_physical_status(p, c, "unknown") :- probe_cell_of(p, c), !has_physical(p, c), !has_certified_terms(p).
+probe_physical_status(p, c, "unknown") :- physical_conflict(p, c).
+
+// Phase budget: profile, variant and phase all match, and the decision of the term is in force.
+.decl effective_budget(profile: symbol, variant: symbol, phase: symbol, seconds: number, term: symbol)
+effective_budget(p, v, ph, n, t) :- probe_phase_budget__profile(t, p), probe_phase_budget__variant(t, v),
+    probe_phase_budget__phase(t, ph), probe_phase_budget__seconds(t, n), probe_phase_budget__decision(t, d),
+    probe_storage_variant(v), probe_phase(ph),
+    probe_snapshot__profile(s, p), probe_snapshot__reference_date(s, r), in_force_on(d, r).
+
+.decl budget_conflict(profile: symbol, variant: symbol, phase: symbol)
+budget_conflict(p, v, ph) :- effective_budget(p, v, ph, a, _), effective_budget(p, v, ph, b, _), a != b.
+
+.decl has_budget(profile: symbol, variant: symbol, phase: symbol)
+has_budget(p, v, ph) :- effective_budget(p, v, ph, _, _).
+
+.decl probe_budget(profile: symbol, variant: symbol, phase: symbol, seconds: number)
+probe_budget(p, v, ph, n) :- effective_budget(p, v, ph, n, _).
+
+.decl probe_budget_status(profile: symbol, variant: symbol, phase: symbol, status: symbol)
+probe_budget_status(p, v, ph, "missing_budget") :- probe_profile(p), probe_storage_variant(v), probe_phase(ph),
+    !has_budget(p, v, ph), probe_terms_certified(p, _, _).
+probe_budget_status(p, v, ph, "unknown") :- probe_profile(p), probe_storage_variant(v), probe_phase(ph),
+    !has_budget(p, v, ph), !has_certified_terms(p).
+probe_budget_status(p, v, ph, "unknown") :- budget_conflict(p, v, ph).
+
+// A conflict is a finding of its own. The published rows stay positive derivations: a role that reads only some
+// budgets cannot rule out a conflict, so no row may rest on the absence of one.
+
+// What a role may read: the structure of the design and the decision register are open to every reading role,
+// because a decision in force rests on the absence of a replacement. A budget only where the role holds a grant.
+.decl probe_budget_read(role: symbol, grant: symbol, budget: symbol)
+probe_budget_read(r, g, b) :- role__capability(r, "read"), probe_budget_read_grant__role(g, r),
+    probe_budget_read_grant__budget(g, b).
+
+may_read(r, "role", r) :- role__capability(r, "read").
+may_read(r, "probe_profile", p) :- role__capability(r, "read"), probe_profile(p).
+may_read(r, "probe_cell", c) :- role__capability(r, "read"), probe_cell(c).
+may_read(r, "probe_cluster", k) :- role__capability(r, "read"), probe_cluster(k).
+may_read(r, "probe_member", m) :- role__capability(r, "read"), probe_member(m).
+may_read(r, "probe_phase", ph) :- role__capability(r, "read"), probe_phase(ph).
+may_read(r, "probe_storage_variant", v) :- role__capability(r, "read"), probe_storage_variant(v).
+may_read(r, "probe_snapshot", s) :- role__capability(r, "read"), probe_snapshot(s).
+may_read(r, "probe_term_coverage", c) :- role__capability(r, "read"), probe_term_coverage(c).
+may_read(r, "reference_date", d) :- role__capability(r, "read"), reference_date(d).
+may_read(r, "probe_phase_budget", b) :- probe_budget_read(r, _, b).
+may_read(r, "probe_budget_read_grant", g) :- probe_budget_read(r, g, _).
+may_read(r, "decision", d) :- role__capability(r, "read"), decision(d).
+
+.output probe_cluster_size, probe_profile_total, probe_physical, probe_physical_status, probe_budget, probe_budget_status
