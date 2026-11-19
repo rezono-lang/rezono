@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 import pytest
 
 from test_build_selection import OBSERVED_AT, capture, published, repository
-from test_build_task_order import task_observations
+from test_build_task_order import planner_listings, task_observations
 
 
 @pytest.mark.parametrize(("case", "dates", "allowed"), [
@@ -20,7 +20,8 @@ def test_build_placement_requires_the_unique_utc_date(tmp_path, case, dates, all
     assert datetime.fromtimestamp(OBSERVED_AT, UTC).isoformat() == "2027-01-15T08:00:00+00:00"
     base, head, paths = repository(tmp_path / "source", "decisions/task-policy.md")
     data = capture(tmp_path / "source", base, head, paths)
-    task_observations(data, [(OBSERVED_AT, 29)])
+    task_observations(data)
+    evidence = planner_listings(data, [(OBSERVED_AT, 29, True)])
     data["reference_date"] = []
     data["build_policy_date"] = []
     for index, (run, day) in enumerate(dates):
@@ -33,7 +34,7 @@ def test_build_placement_requires_the_unique_utc_date(tmp_path, case, dates, all
             data["build_run"].append({**data["build_run"][0], "id": run, "receipt": "foreign-receipt"})
             data["loop_sweep_receipt"].append({"id": "foreign-receipt", "run": run, "event_time": OBSERVED_AT})
 
-    rows = published(tmp_path, data)
+    rows = published(tmp_path, data, evidence)
     actual = {
         relation: [row["key"][1:] for row in rows[relation] if row["key"][0] == "current"]
         for relation in ("build_task_precedes", "build_planner_slot", "build_planner_waiting")
