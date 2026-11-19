@@ -32,3 +32,4 @@ expect:
   witness: null
 unsupported:
   feldera: The compiler refuses the unguarded count before sending rules to the engine.
+  language: "The neutral fixture has no open many-valued slot, and the expectation combines a refused count (R004) with values that one question cannot give together. decisions/conformance-value-set-open-empty.md records the reading of any, which rezono/test/evaluate.test.ts compares."

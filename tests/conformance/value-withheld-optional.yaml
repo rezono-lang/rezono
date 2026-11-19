@@ -62,3 +62,4 @@ expect:
 unsupported:
   compiler: Compilation does not filter or serialize a role publication.
   feldera: Datalog output does not implement role-scoped publication completeness.
+  language: "The expectation compares publication bytes of two role worlds, which the publisher produces; the language answers one question over one dataset."
