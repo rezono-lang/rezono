@@ -15,6 +15,7 @@ two nested selects (first the value, then the state), so the text grows linearly
 
 from __future__ import annotations
 
+from . import feldera_names
 from .calc import BOOLEAN, BOUND, NUMBER, Node, Program, Version
 from .explain import key_text
 from .rules import calc_input_table
@@ -678,7 +679,7 @@ def feldera(prog: Program) -> str:
     for name, body, output in relations(prog):
         kind = "CREATE MATERIALIZED VIEW" if output else "CREATE VIEW"
         out.append(f"{kind} {q(name)} AS\n{body};\n")
-    return "".join(out)
+    return feldera_names.render("".join(out))
 
 
 def duckdb_prelude() -> str:

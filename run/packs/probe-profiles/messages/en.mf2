@@ -1,0 +1,15 @@
+@locale en
+---
+arrow.total = Each {$kind} has exactly one {$arrow}.
+arrow.partial = Each {$kind} has at most one {$arrow}.
+attribute.total = Each {$kind} has exactly one {$attribute}.
+attribute.partial = Each {$kind} has at most one {$attribute}.
+is_a = Each {$kind} is a {$parent}.
+unique_key = Each {$key} belongs to at most one {$kind}.
+path_equation = For each {$kind}, {$equation} holds.
+reader.probe_budget = Phase budgets
+reader.probe_budget.about = The approved time budget, in seconds, for each phase of each storage variant of a probe profile.
+reader.probe_budget.profile = Profile
+reader.probe_budget.variant = Storage variant
+reader.probe_budget.phase = Phase
+reader.probe_budget.seconds = Budget in seconds

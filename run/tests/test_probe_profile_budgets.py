@@ -74,11 +74,6 @@ def recorded_design(*, automatic_term=True, covered=True, physical=True):
     return {"profile-design.yaml": records, "profile-decisions.yaml": approved, "profile-grants.yaml": access}
 
 
-@pytest.mark.xfail(strict=True, raises=MissingReaderQuestion, reason=(
-    "Provide probe-profiles and publish probe-profile-budgets reader metadata and grounds. "
-    "Compile membership counts, phase/variant budgets, effective physical decisions and complete-scope "
-    "findings. Read decisions/run-probe-profile-budgets.md. Write in run/packs/probe-profiles/."
-))
 def test_probe_profile_budgets(tmp_path):
     registered(QUESTION, __file__, "test_probe_profile_budgets")
     checked(PACK, tmp_path / "plain").question(QUESTION)

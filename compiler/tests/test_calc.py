@@ -639,7 +639,7 @@ def test_above_the_budget_the_calculation_gets_the_last_pipeline():
     assert read and read <= set(pipe["tables"]) | set(pipe["imports"]) | own   # nothing it reads is left out
     derived, _ = run_split(PACK, files, item_rows())
     db = duckdb.connect()
-    db.execute(files["engine/tables.sql"])
+    db.execute(emit.duckdb(files["engine/tables.sql"]))
     db.execute(files["engine/calc-imports.sql"])
     db.execute(calc_sql.duckdb_prelude())
     params = {t: [tuple(r.values()) for r in rs] for t, rs in emit.parameters(PACK).items()}
@@ -712,7 +712,7 @@ def walk(e: dict) -> list[dict]:
 
 @pytest.mark.parametrize("case", ["full", "choice"])
 def test_feldera_gives_what_duckdb_gives(case):
-    from feldera import URL, deploy, processed, push, query, stop
+    from feldera import URL, comparing, deploy, processed, push, read_relation, stop
     if not URL:
         pytest.skip("set FELDERA_URL to a running Feldera")
     doc, rows = (full_program(), item_rows()) if case == "full" else choice_case()
@@ -731,6 +731,7 @@ def test_feldera_gives_what_duckdb_gives(case):
     for r in prog.rules:
         got[r] = {x["subject"]: (x["state"], value_text(prog.types[r], x["state"], x["n"], x["d"], x["b"]), x["reason"],
                                  x["definition"], x["version"])
-                  for x in query(name, f'SELECT * FROM "{prog.engine[r]}"')}
+                  for x in read_relation(name, prog.engine[r])}
     stop(name)
-    assert got == run(PACK, prog, rows)
+    with comparing():
+        assert got == run(PACK, prog, rows)

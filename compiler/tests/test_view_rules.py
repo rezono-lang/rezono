@@ -207,11 +207,8 @@ def test_source_world_and_forged_membership_plan_are_not_silently_accepted(tmp_p
         view_rules.lower(forged, d, t, program, NAMES, namespace='vmap')
 
 
-def test_unions_and_ID_type_conversion_stay_unsupported(tmp_path):
-    d, t, view, program = model(tmp_path)
-    union = replace(view, kinds=(replace(view.kinds[0], union=view.kinds[0].union * 2),))
-    with pytest.raises(view_rules.ViewRuleError, match='unsupported union'):
-        view_rules.lower(union, d, t, program, NAMES, namespace='vmap')
+def test_ID_type_conversion_stays_unsupported(tmp_path):
+    # A union of source kinds is lowered as decisions/view-source-unions.md fixes (test_view_union.py).
     other = tmp_path / 'other'; other.mkdir()
     def integers(schema):
         schema['classes']['Parent']['attributes']['id']['range'] = 'integer'

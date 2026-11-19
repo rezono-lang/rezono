@@ -17,6 +17,7 @@ from rezono_canon import sha256_hex
 from rezono_checker.canon import encode_key
 from rezono_checker.check import check_epoch
 from rezono_checker.rules import derived_relations, load_rules
+from rezono_publisher.store import FileStore
 
 
 VALUE_SOURCE = "item_values"
@@ -81,7 +82,7 @@ IR = {
 }
 
 
-def check_epoch_with_states(projected, *, role=None, source_withheld=False, bad_metadata_hash=False):
+def state_claim(projected, *, role=None, source_withheld=False, bad_metadata_hash=False):
     """Build a consistent engine claim without touching the authored evidence."""
     claimed = [{"key": [subject, state, reason],
                 "values": {"origin": {"state": "known", "value": origin}}}
@@ -116,9 +117,35 @@ def check_epoch_with_states(projected, *, role=None, source_withheld=False, bad_
             "premises": [{"row": {"relation": STATE_PROJECTION, "key": key},
                           "polarity": "positive", "stratum": 0}],
         })
+    return manifest, witnesses, files
+
+
+def check_epoch_with_states(projected, **options):
+    manifest, witnesses, files = state_claim(projected, **options)
+    full = {s["relation"] for s in manifest["snapshots"] if s["complete"]} if options.get("role") is not None else None
+    return verify(manifest, witnesses, files.__getitem__, full=full)
+
+
+def verify(manifest, witnesses, read_bytes, *, full=None):
     rules = load_rules(IR)
-    full = {s["relation"] for s in manifest["snapshots"] if s["complete"]} if role is not None else None
-    return check_epoch(witnesses, manifest, rules, files.__getitem__, derived=derived_relations(IR, rules), full=full)
+    return check_epoch(witnesses, manifest, rules, read_bytes, derived=derived_relations(IR, rules), full=full)
+
+
+def check_archived_state_claim(directory, projected, *, role=None, full=None, missing_snapshot=None):
+    manifest, witnesses, files = state_claim(projected, role=role)
+    if missing_snapshot:
+        manifest["snapshots"] = [item for item in manifest["snapshots"] if item["relation"] != missing_snapshot]
+    archive = FileStore(directory)
+    for entry in manifest["compiled"] + manifest["snapshots"]:
+        body = files[entry["uri"]]
+        key = f"state-evidence/objects/{sha256_hex(body)}.json"
+        archive.put_new(key, body)
+        entry["uri"] = archive.uri(key)
+    manifest_key, proof_key = "state-evidence/manifests/m-1.json", "state-evidence/proofs/m-1.json"
+    archive.put_new(manifest_key, json.dumps(manifest).encode("utf-8"))
+    archive.put_new(proof_key, json.dumps(witnesses).encode("utf-8"))
+    return verify(json.loads(archive.get(manifest_key)), json.loads(archive.get(proof_key)),
+                  lambda uri: archive.get(uri.removeprefix(archive.uri(""))), full=full)
 
 
 def test_native_rule_state_evidence():
@@ -147,3 +174,36 @@ def test_native_rule_state_evidence():
     }
     accepted = [name for name, result in cases.items() if result["valid"]]
     assert not accepted, f"checker accepted unsupported state claims: {', '.join(accepted)}"
+
+
+def test_complete_state_projection_refuses_omissions(tmp_path):
+    genuine = check_archived_state_claim(tmp_path / "genuine", EXPECTED)
+    assert genuine["valid"] and not genuine["findings"], genuine
+    # The omission has valid object digests and a consistent resulting conclusion set.
+    # The archived Values and descriptor are the same as in the genuine publication.
+    omitted = check_archived_state_claim(tmp_path / "omitted", [])
+    assert not omitted["valid"], omitted
+    assert any(finding["reason"] == "state_projection_incomplete" and finding["relation"] == STATE_PROJECTION
+               for finding in omitted["findings"]), omitted
+    fewer = check_archived_state_claim(tmp_path / "fewer", EXPECTED[:-1])
+    assert not fewer["valid"], fewer
+    assert any(finding["reason"] == "state_projection_incomplete" and finding["relation"] == STATE_PROJECTION
+               for finding in fewer["findings"]), fewer
+
+
+@pytest.mark.parametrize("relation", (VALUE_SOURCE, STATE_PROJECTION))
+def test_complete_state_projection_requires_named_snapshots(tmp_path, relation):
+    missing = check_archived_state_claim(tmp_path, [], missing_snapshot=relation)
+    assert not missing["valid"], missing
+    assert any(finding["reason"] == "state_projection_snapshot_missing" and finding["relation"] == relation
+               for finding in missing["findings"]), missing
+
+
+def test_state_projection_contents_respect_a_partial_scope(tmp_path):
+    # Only the first authored value is visible. The role may have a smaller projection scope.
+    assert check_archived_state_claim(tmp_path / "visible", EXPECTED[:1], role="reader", full=set())["valid"]
+    assert check_archived_state_claim(tmp_path / "empty", [], role="reader", full=set())["valid"]
+    assert check_archived_state_claim(tmp_path / "source-full", [], role="reader", full={VALUE_SOURCE})["valid"]
+    attempted = check_archived_state_claim(tmp_path / "outside", EXPECTED[:1] + EXPECTED[-1:], role="reader", full=set())
+    assert not attempted["valid"]
+    assert {finding["reason"] for finding in attempted["findings"]} == {"state_projection_evidence_mismatch"}

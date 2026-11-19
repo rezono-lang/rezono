@@ -1,0 +1,6 @@
+{
+  "vendor_default_transport__product__reference": [
+    ["ceph-19.2.0-transport-3300", "ceph"],
+    ["ceph-19.2.0-transport-6789", "ceph"]
+  ]
+}

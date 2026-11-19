@@ -1,4 +1,7 @@
-"""Theory mapping files never activate an older archived publisher."""
+"""A theory mapping that the current verifier cannot read and type never reaches an archived publisher.
+
+decisions/kept-view-mapping.md: a malformed or ill-typed views.yaml is refused before install, naming the file.
+These fixtures are malformed on purpose; a well-formed mapping is test_kept_view_mapping.py."""
 
 import json
 import shutil
@@ -38,7 +41,7 @@ def test_verified_pack_roots_refuse_mapping_presence_without_parsing(tmp_path, w
     pack_tree(tmp_path, where)
     main, errors = kept.archived_pack(tmp_path)
     assert main is None
-    assert len(errors) == 1 and "theory views.yaml execution is not supported" in errors[0]
+    assert len(errors) == 1 and "theory views.yaml" in errors[0]
     assert f"pack/{'shared' if where == 'import' else 'main'}/views.yaml" in errors[0]
 
 
@@ -54,7 +57,7 @@ def test_bad_import_pin_is_refused_before_mapping_presence(tmp_path):
     p.write_text("changed", encoding="utf-8")
     main, errors = kept.archived_pack(tmp_path)
     assert main is None and errors
-    assert all("theory views.yaml execution" not in error for error in errors)
+    assert all("theory views.yaml" not in error for error in errors)
 
 
 @pytest.mark.parametrize("where", ["main", "import", "legacy"])
@@ -86,7 +89,7 @@ def test_archive_preflight_runs_before_install_or_archived_code(tmp_path, monkey
         assert events == ["verified", "install"]
     else:
         errors = kept.replay(archived, Old(), tmp_path / "new")
-        assert any("views.yaml execution is not supported" in e for e in errors)
+        assert any("theory views.yaml" in e for e in errors)
         assert events == ["verified"]
 
 
@@ -112,7 +115,7 @@ def test_real_archive_bytes_and_closure_refuse_before_replay(tmp_path, monkeypat
     archive.write_bytes(data)
     kept.digest_path(archive).write_text(kept.digest_line(archive, data), encoding="utf-8")
     errors = kept.verify(main, old, key, tmp_path / "verified")
-    assert any("theory views.yaml execution is not supported" in e for e in errors)
+    assert any("theory views.yaml" in e for e in errors)
     monkeypatch.setattr(kept.subprocess, "run", lambda *a, **k: pytest.fail("installed archived code"))
     monkeypatch.setattr(kept, "run_archived", lambda *a: pytest.fail("ran archived code"))
-    assert any("views.yaml execution is not supported" in e for e in kept.replay(main, old, tmp_path / "replay"))
+    assert any("theory views.yaml" in e for e in kept.replay(main, old, tmp_path / "replay"))

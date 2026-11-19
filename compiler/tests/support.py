@@ -37,7 +37,7 @@ def violations(files: dict[str, str], rows: dict[str, list[tuple]]) -> dict[str,
     validation_result, (subject, value) as text (one view per check kind)."""
     db = duckdb.connect()
     db.execute(emit.DUCKDB_FUNCTIONS)
-    db.execute(files["engine/tables.sql"])
+    db.execute(emit.duckdb(files["engine/tables.sql"]))
     db.execute(emit.duckdb(files["engine/integrity.sql"]))
     params = json.loads(files["engine/parameters.json"])
     tables = {t: [tuple(r.values()) for r in rs] for t, rs in params.items()} | rows

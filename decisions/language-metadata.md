@@ -19,3 +19,26 @@ The corresponding JSON fragment is
   "language": "en"
 }
 ```
+
+## Close and broad mappings
+
+A kind, slot or enum member may also carry LinkML `close_mappings` and `broad_mappings`. Write them like an exact mapping: `close mapping "iri"` and `broad mapping "iri"`, one per line, in the metadata block of that declaration. They are encoded as `closeMappings` and `broadMappings`, ordered string lists beside `exactMappings`, and lower to the LinkML lists of the same name in written order. The three kinds stay distinct because they state different equivalences; folding a close or broad mapping into an exact one would overstate it.
+
+```rezono
+kind Ground world closed
+  close mapping "prov:Influence"
+  rests_on: Decision
+    close mapping "prov:wasInfluencedBy"
+    broad mapping "dcterms:relation"
+```
+
+The slot's JSON fragment is
+
+```json
+{
+  "slot": "rests_on",
+  "type": "Decision",
+  "closeMappings": ["prov:wasInfluencedBy"],
+  "broadMappings": ["dcterms:relation"]
+}
+```

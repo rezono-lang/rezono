@@ -257,7 +257,7 @@ def epoch(pack_dir, *, epoch: int, knowledge_time: str, sources, proposal: str =
 
     db = duckdb.connect()
     db.execute(emit.DUCKDB_FUNCTIONS)  # RLIKE for pattern checks, as in Feldera
-    db.execute(files["engine/tables.sql"])
+    db.execute(emit.duckdb(files["engine/tables.sql"]))
     db.execute(emit.duckdb(files["engine/integrity.sql"]))
     for table, rs in sorted((params | facts).items()):
         if rs:
