@@ -46,14 +46,14 @@ const isValue = (cell: unknown) => typeof cell === 'object' && cell !== null && 
 // A source cell is a text literal, or a dash for the value of the source declaration.
 const isSourceCell = (cell: unknown) => typeof cell === 'object' && cell !== null && ('boundary' in cell || ('lit' in cell && String(cell.lit).startsWith('"')));
 
-function readFactTable(line: Logical, build: Build, inDataset = false): FactTable {
+function readFactTable(line: Logical, build: Build): FactTable {
 	const lines = line.block.filter((child) => child.read!.line === 'row' || (build.refuse(child, 'a row'), false));
 	const [head = [], ...rows] = lines.map((child) => child.read!.cells as Cell[]);
 	for (const child of line.block) build.leaf(child);
 	const slots = head.filter((cell) => !isSourceHead(cell));
 	const fields = head.filter(isSourceHead).map((cell) => cell.sourceField);
 	// A header of names, source fields after them, followed by rows with exactly one value per column. A dash omits
-	// a slot only in a table of a dataset (decisions/language-facts.md), and never the row identity in the first column.
+	// a slot in any fact table (decisions/language-facts.md), but never the row identity in the first column.
 	lines.forEach((child, i) => {
 		const cells = child.read!.cells as Cell[];
 		if (i === 0) {
@@ -62,7 +62,7 @@ function readFactTable(line: Logical, build: Build, inDataset = false): FactTabl
 			else if (new Set(fields).size !== fields.length) build.refuse(child, 'each source field once', child.end);
 			else if (fields.length && line.read!.source === undefined) build.refuse(child, 'a source citation `@ name` after the fact kind to give the source columns', child.end);
 		} else if (cells.length !== head.length || isOmitted(cells[0])
-			|| !cells.every((cell, at) => (at < slots.length ? isValue(cell) && (inDataset || !isOmitted(cell)) : isSourceCell(cell)))) {
+			|| !cells.every((cell, at) => (at < slots.length ? isValue(cell) : isSourceCell(cell)))) {
 			build.refuse(child, `${head.length} values`, child.end);
 		}
 	});
@@ -94,7 +94,7 @@ function readDataset(line: Logical, build: Build): Dataset {
 			build.refuse(child, 'a fact table or a source');
 			return [];
 		}
-		const table = readFactTable(child, build, true);
+		const table = readFactTable(child, build);
 		table.rows = table.rows.map((row) => row.map((cell) => datasetCell(cell, build)));
 		return [table];
 	});
