@@ -65,6 +65,9 @@ RECEIPT_MEMBER = "verified_member"  # protected: the admitted member keys of one
 PROTECTED = {
     RECEIPT_INPUT: [("receipt", "string"), ("source", "string"), ("scope", "string"), ("cut", "string"),
                     ("inventory", "string"), ("content", "string")],
+    RECEIPT_MEMBER: [("receipt", "string"), ("member", "string"), ("part", "integer"), ("value", "string")],
+    "verified_round": [("round", "string"), ("run", "string"), ("cut", "string"), ("batch", "string")],
+    "verified_round_member": [("round", "string"), ("step", "string")],
 }
 CLOSES = re.compile(r"^//\s*@closes\s+(\S+)\s*$")
 
@@ -237,6 +240,17 @@ def body_item(p: Parser):
         return ("cmp", COMPARE[op], left, right, mode[0])
     if p.peek().kind == "ident" and p.peek().text in COMPARE_AS and p.peek(1).text == "(":
         p.fail(f"{p.peek().text}(…) on one side of a comparison only; write it on both operands")
+    if op == "=" and left[0] == "var" and nxt.text == "@":
+        p.take("@")
+        name = p.take(kind="ident")
+        if name.text != ir.DAYS:
+            p.fail(f"@{name.text} is not a functor; the only one is @{ir.DAYS}(text, \"YYYY-MM-DD\")")
+        p.take("(")
+        text_term = term(p)
+        p.take(",")
+        origin = term(p)
+        p.take(")")
+        return ("arith", left[1], ir.DAYS, text_term, origin)
     right = term(p)
     if p.peek().kind == "op" and p.peek().text in ARITH:
         if op != "=" or left[0] != "var":
@@ -860,6 +874,11 @@ def to_rule(rid, module, where, head, body, line, columns=lambda name: None) -> 
                 fail(f"{show(b[2])} {b[1]} {show(b[3])}: an order comparison needs whole numbers, not text")
             if len(kinds) > 1:
                 fail(f"{show(b[2])} and {show(b[3])} have different types")
+        elif b[0] == "arith" and b[2] == ir.DAYS:
+            if b[3][0] != "var" or typ(b[3]) == "integer":
+                fail(f"{b[1]} = @days(…): the first argument is a variable bound by a positive literal to text")
+            if b[4][0] != "const" or b[4][2] != "string":
+                fail(f"{b[1]} = @days(…): the origin is a constant ISO date in quotes")
         elif b[0] == "arith":
             for t in (b[3], b[4]):
                 if typ(t) not in (None, "integer"):

@@ -247,14 +247,6 @@ def column_of(path: Path, line: int, text: str) -> int:
     return path.read_text(encoding="utf-8").splitlines()[line - 1].index(text) + 1
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=OrderCheckMismatch,
-    reason="extra: Refuse the order-check revision with not zero(x) as R047 on the ordinary compiler path, with "
-           "x.rank = 0 and the partial rank slot as related places. Read decisions/language-expression-"
-           "semantics.md §2 rule 2 and §5. Waits for test_expression_link_partiality and "
-           "test_expression_python_negated_call.",
-)
 def test_order_check_rejects_partial_negation(tmp_path):
     directory = order_check_pack(tmp_path, "rejected")
     source = directory / "rezono/order.rezono"

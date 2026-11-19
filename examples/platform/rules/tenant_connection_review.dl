@@ -5,6 +5,7 @@
 .decl tenant_delivery_zone(tenant: symbol, number: number, zone: symbol)
 .decl tenant_connection_owner(connection: symbol, owner: symbol, zone: symbol)
 .decl tenant_connection_owned(connection: symbol)
+.decl tenant_connection_unresolved(connection: symbol)
 .decl tenant_connection_zone(connection: symbol, zone: symbol)
 .decl tenant_connection_matrix(connection: symbol)
 .decl tenant_connection_cross(connection: symbol)
@@ -33,10 +34,16 @@ tenant_connection_owner(c, owner, zone) :-
 
 tenant_connection_owned(c) :- tenant_connection_owner(c, _, _).
 
+// Only a delivered component establishes an owner. A target that names a tenant, or claims a zone that tenant
+// deliveries occupy, without one has an unknown owner and never counts as within the requesting tenant.
+tenant_connection_unresolved(c) :- tenant_request_connection__target_reference(c, _), !tenant_connection_owned(c).
+tenant_connection_unresolved(c) :-
+    tenant_request_connection__target_zone(c, zone), tenant_profile__zone(_, zone), !tenant_connection_owned(c).
+
 tenant_connection_zone(c, zone) :- tenant_connection_owner(c, _, zone).
 
 tenant_connection_zone(c, zone) :-
-    tenant_request_connection__target_zone(c, zone), !tenant_connection_owned(c).
+    tenant_request_connection__target_zone(c, zone), !tenant_connection_owned(c), !tenant_connection_unresolved(c).
 
 tenant_connection_matrix(c) :-
     tenant_connection_source(c, t, n), tenant_delivery_zone(t, n, source), tenant_connection_zone(c, target),
@@ -67,6 +74,10 @@ tenant_connection_review(t, n, target, port, "denied", "isolation") :-
     tenant_connection_source(c, t, n), tenant_request_connection__target(c, target),
     tenant_request_connection__port(c, port), tenant_connection_isolated(c).
 
+tenant_connection_review(t, n, target, port, "denied", "unresolved-owner") :-
+    tenant_connection_source(c, t, n), tenant_request_connection__target(c, target),
+    tenant_request_connection__port(c, port), tenant_connection_unresolved(c).
+
 tenant_connection_review(t, n, target, port, "standard", "matrix") :-
     tenant_connection_source(c, t, n), tenant_request_connection__target(c, target),
     tenant_request_connection__port(c, port), tenant_connection_matrix(c), !tenant_connection_isolated(c).
@@ -75,6 +86,7 @@ tenant_connection_review(t, n, target, port, decision, "profile") :-
     tenant_connection_source(c, t, n), tenant_request_connection__target(c, target),
     tenant_request_connection__port(c, port), tenant_request_connection__service(c, s),
     tenant_service_request__tenant(r, t), tenant_service_request__service(r, s),
-    tenant_service_request__profile(r, p), tenant_profile__unlisted(p, decision), !tenant_connection_matrix(c), !tenant_connection_isolated(c).
+    tenant_service_request__profile(r, p), tenant_profile__unlisted(p, decision), !tenant_connection_matrix(c), !tenant_connection_isolated(c),
+    !tenant_connection_unresolved(c).
 
 .output tenant_connection_review

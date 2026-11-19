@@ -78,3 +78,45 @@ def test_successor_on_the_first_day_without_support():
             assert {("service_product_use__product", (f"use-{p}", p)),
                     ("service_need__provider", (f"edge-{p}", f"{p}-api")),
                     ("service_need__provider", (f"path-{p}", f"{p}-client"))} <= downstream
+
+
+class SuccessorImpactStopsEarly(AssertionError):
+    pass
+
+
+@pytest.mark.xfail(strict=True, raises=SuccessorImpactStopsEarly, reason=(
+    "M2: decisions/platform-successor-window.md: Derive successor_impact in examples/platform/rules/product_succession.dl "
+    "through a recursive closure over running service_need rows, the same relation as unavailable_service in "
+    "examples/platform/rules/outage.dl, so every running consumer at any number of steps is affected and a change-only "
+    "need is not."))
+def test_successor_impact_follows_every_running_step():
+    model = pack.read(ROOT)
+    program = rules.load(model.rules)
+    chain = ["quill-api", "quill-client", "quill-sink", "quill-far", "quill-farther"]
+    needs = [{"id": f"run-{consumer}", "consumer": consumer, "provider": provider, "mode": "run"}
+             for provider, consumer in zip(chain, chain[1:])]
+    needs.append({"id": "change-quill-admin", "consumer": "quill-admin", "provider": "quill-sink", "mode": "change"})
+    needs.append({"id": "run-quill-audit", "consumer": "quill-audit", "provider": "quill-admin", "mode": "run"})
+    day = date(2026, 3, 1) + timedelta(days=19)
+    records = {"decision": [decision("phase-quill")],
+               "reference_date": [{"id": "handoff", "title": day.isoformat(), "day": int(day.strftime("%Y%m%d"))}],
+               "axis": [{"id": "days"}],
+               "reference_point": [{"id": "handoff", "on_axis": "days", "position": 20, "horizon": 0}],
+               "platform_support_period": [{"id": "old-quill", "on_axis": "days", "start": 7, "end": 20}],
+               "product_stance": [{"id": "phase-quill", "decision": "phase-quill", "product": "quill",
+                                   "stance": "phase_out", "period": "old-quill"}],
+               "product_successor": [],
+               "service_product_use": [{"id": "use-quill", "service": "quill-api", "product": "quill"}],
+               "service_need": needs}
+    state = evaluate(model, program, records)
+    assert state.derived["successor_finding"] == {("quill", "missing_successor")}
+    impact = state.derived["successor_impact"]
+    assert {("quill", service) for service in chain[:3]} <= impact
+    missing = {("quill", service) for service in chain} - impact
+    if missing:
+        raise SuccessorImpactStopsEarly(f"running consumers without impact: {sorted(missing)}")
+    assert impact == {("quill", service) for service in chain}
+    downstream = verified("successor_impact", ("quill", "quill-farther"), state=(model, state))
+    assert {("service_product_use__product", ("use-quill", "quill"))} | {
+        ("service_need__provider", (f"run-{consumer}", provider)) for provider, consumer in zip(chain, chain[1:])
+    } <= downstream
