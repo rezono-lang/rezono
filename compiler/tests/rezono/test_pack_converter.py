@@ -12,6 +12,24 @@ from scripts.convert_pack import ConversionError, candidate, compare_imported, r
 
 REPO = Path(__file__).resolve().parents[3]
 STD = REPO / "packs/std-access"
+STD_LEGACY = Path(__file__).resolve().parent / "fixtures/std-access-legacy"
+# A changed copy of std-access is an ordinary pack: the std-* names stand only for the standard packs
+# (decisions/standard-pack-names.md).
+LEGACY_PACK = "access-roles"
+
+
+def legacy_std_access(destination: Path) -> Path:
+    """Assemble the legacy std-access pack from the preserved oracle files and pack metadata."""
+    target = Path(shutil.copytree(STD, destination))
+    shutil.rmtree(target / "rezono", ignore_errors=True)
+    for name in ("schema/access.yaml", "rules/access.dl"):
+        (target / name).parent.mkdir(exist_ok=True)
+        shutil.copy(STD_LEGACY / name, target / name)
+    meta_path = target / "pack.yaml"
+    meta = yaml.safe_load(meta_path.read_bytes()) | {"name": LEGACY_PACK}
+    meta.pop("rezono", None)
+    meta_path.write_text(yaml.safe_dump(meta, sort_keys=False), encoding="utf-8")
+    return target
 
 
 def schema(directory: Path) -> Path:
@@ -60,8 +78,8 @@ def test_conversion_keeps_schema_and_rule_module_identity(tmp_path):
 
 
 def test_conversion_preserves_the_standard_access_declaration():
-    original = (STD / "rules/access.dl").read_text(encoding="utf-8")
-    header, *encoded, last = rule_lines(STD / "rules/access.dl")
+    original = (STD_LEGACY / "rules/access.dl").read_text(encoding="utf-8")
+    header, *encoded, last = rule_lines(STD_LEGACY / "rules/access.dl")
     assert header == "rules access"
     assert last == ""
     assert all(line.startswith("  | ") for line in encoded)
@@ -70,7 +88,7 @@ def test_conversion_preserves_the_standard_access_declaration():
 
 
 def test_conversion_renders_the_metadata_of_the_standard_access_pack():
-    access = sources(STD, "std-access")["access"]
+    access = sources(STD_LEGACY, "std-access")["access"]
     assert access.lines[:7] == [
         "schema std_access",
         '  iri "https://rezono.example/std-access/access"',
@@ -109,27 +127,27 @@ def test_failed_reader_does_not_leave_a_candidate(tmp_path):
 
 
 def test_imported_standard_pack_preserves_named_title_through_its_consumer(tmp_path):
-    original = Path(shutil.copytree(STD, tmp_path / "std-access"))
-    trial = Path(shutil.copytree(STD, tmp_path / "trial"))
+    original = legacy_std_access(tmp_path / LEGACY_PACK)
+    trial = Path(shutil.copytree(original, tmp_path / "trial"))
     consumer = Path(shutil.copytree(REPO / "compiler/tests/fixtures/minimal", tmp_path / "consumer"))
     metadata = consumer / "pack.yaml"
     meta = yaml.safe_load(metadata.read_bytes())
-    meta["imports"] = [{"name": "std-access", "path": "../std-access", "sha256": modules.pack_hash(original)}]
+    meta["imports"] = [{"name": LEGACY_PACK, "path": f"../{LEGACY_PACK}", "sha256": modules.pack_hash(original)}]
     contents = yaml.safe_dump(meta).encode("utf-8")
     metadata.write_bytes(contents)
-    compare_imported(consumer, original, trial, "std-access")
+    compare_imported(consumer, original, trial, LEGACY_PACK)
 
     schema_file = trial / "schema/access.yaml"
     schema = yaml.safe_load(schema_file.read_bytes())
     del schema["classes"]["Role"]["attributes"]["title"]["slot_uri"]
     schema_file.write_bytes(yaml.safe_dump(schema).encode("utf-8"))
     with pytest.raises(ConversionError, match="changed the typed schema"):
-        compare_imported(consumer, original, trial, "std-access")
+        compare_imported(consumer, original, trial, LEGACY_PACK)
 
     schema = yaml.safe_load((original / "schema/access.yaml").read_bytes())
     schema["id"] = "https://rezono.example/std-access/wrong"
     schema_file.write_bytes(yaml.safe_dump(schema).encode("utf-8"))
     with pytest.raises(ConversionError, match="changed the schema or module identity"):
-        compare_imported(consumer, original, trial, "std-access")
+        compare_imported(consumer, original, trial, LEGACY_PACK)
     assert metadata.read_bytes() == contents
     assert set(tmp_path.iterdir()) == {original, trial, consumer}
