@@ -106,18 +106,6 @@ class MissingSelectionReceipt(AssertionError):
 
 # Without an admitted receipt the publication selects full checks, while the Python selector still narrows;
 # with a verified receipt the two agree in loop/tests/test_mapped_path_requires_reader_inventory.py.
-@pytest.mark.xfail(
-    strict=True,
-    raises=MissingSelectionReceipt,
-    reason=(
-        "M2: decisions/admission-transport.md: section 6, member keys, and decisions/scoped-completeness.md "
-        "section 3. A run with a verified cut but no admitted build-selection receipt selects full checks with "
-        "build_full_selection(run, \"missing-selection-receipt\"); keep build_verified_cut and its reason "
-        "missing-observation-receipt for claims and tasks. Waits for "
-        "loop/tests/test_mapped_path_requires_reader_inventory.py--test_mapped_path_requires_reader_inventory. "
-        "Today the records alone narrow the selection."
-    ),
-)
 @pytest.mark.parametrize(("path", "legacy_wanted", "fallback"), [
     ("alpha/engine.py", {"alpha", "beta", "gamma"}, {"missing-selection-receipt"}),
     ("decisions/note.md", set(), {"missing-selection-receipt"}),
