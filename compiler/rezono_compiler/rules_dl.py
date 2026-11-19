@@ -45,6 +45,7 @@ TYPES = {"symbol": "string", "number": "integer"}
 SYMBOLS = {t: s for s, t in TYPES.items()}
 SQL = {"VARCHAR": "string", "BIGINT": "integer"}
 COMPARE = {"=": "eq", "!=": "ne", "<": "lt", "<=": "le", ">": "gt", ">=": "ge"}
+COMPARE_AS = ir.COMPARE_AS  # `binary_text(x) < binary_text(y)`: a comparison type, written on both operands
 ARITH = {"+": "add", "-": "sub", "*": "mul", "/": "div"}
 FUNCTIONS = ("count", "sum", "min", "max")
 VARIABLE = re.compile(r"^[a-z][a-z0-9_]*$")
@@ -182,14 +183,32 @@ def atom(p: Parser):
     return name.text, terms, name.line
 
 
+def annotation(p: Parser, left: bool = True):
+    """`binary_text(x)` or `utc_instant(x)` before a comparison operator: (mode, variable term)."""
+    name = p.take(kind="ident")
+    p.take("(")
+    t = term(p)
+    if t[0] != "var":
+        p.fail(f"{name.text}(…) takes one variable", name)
+    p.take(")")
+    if left and not (p.peek().kind == "op" and p.peek().text in COMPARE):
+        p.fail(f"{name.text}(…) only as an operand of a comparison", name)
+    return name.text, t
+
+
 def body_item(p: Parser):
     """One body element: ('lit', polarity, atom) | ('agg', var, fn, target, atom) | ('cmp', op, l, r) | ('arith', var, op, l, r)."""
     if p.at("!"):
         p.take("!")
         return ("lit", "negative", atom(p))
+    mode = None
     if p.peek().kind == "ident" and p.peek(1).text == "(":
-        return ("lit", "positive", atom(p))
-    left = term(p)
+        if p.peek().text not in COMPARE_AS:
+            return ("lit", "positive", atom(p))
+        mode = annotation(p)
+        left = mode[1]
+    else:
+        left = term(p)
     op = p.take(kind="op").text
     if op not in COMPARE:
         p.fail(f"'{op}' is not a comparison")
@@ -209,6 +228,15 @@ def body_item(p: Parser):
             p.fail("an aggregate ranges over one atom; derive a relation first")
         p.take("}")
         return ("agg", left[1], fn, target and target[1], a)
+    if mode:
+        if not (p.peek().kind == "ident" and p.peek().text == mode[0] and p.peek(1).text == "("):
+            p.fail(f"{mode[0]}(…) on one side of a comparison only; write it on both operands")
+        right = annotation(p, False)[1]
+        if p.peek().kind == "op" and p.peek().text in ARITH:
+            p.fail(f"{mode[0]}(…) does not take arithmetic")
+        return ("cmp", COMPARE[op], left, right, mode[0])
+    if p.peek().kind == "ident" and p.peek().text in COMPARE_AS and p.peek(1).text == "(":
+        p.fail(f"{p.peek().text}(…) on one side of a comparison only; write it on both operands")
     right = term(p)
     if p.peek().kind == "op" and p.peek().text in ARITH:
         if op != "=" or left[0] != "var":
@@ -400,12 +428,12 @@ def remap_statement(stmt, names):
         if s[0] in ("lit", "agg"):
             s = (*s[:-1], atom(s[-1]))
         elif s[0] == "cmp":
-            _, op, left, right = s
+            _, op, left, right, *typed = s
             if left[0] == "var" and left[1] in kind_vars:
                 right = kind_constant(right)
             if right[0] == "var" and right[1] in kind_vars:
                 left = kind_constant(left)
-            s = "cmp", op, left, right
+            s = "cmp", op, left, right, *typed
         body.append(s)
     return stmt[0], atom(stmt[1]), body, stmt[3]
 
@@ -826,7 +854,9 @@ def to_rule(rid, module, where, head, body, line, columns=lambda name: None) -> 
             fail("'_' only inside an aggregate, not in a comparison or arithmetic")
         if b[0] == "cmp":
             kinds = {typ(t) for t in (b[2], b[3])} - {None}
-            if b[1] not in ("eq", "ne") and kinds - {"integer"}:
+            if len(b) > 4 and kinds - {"string"}:
+                fail(f"{b[4]}(…) compares two text variables")
+            if len(b) == 4 and b[1] not in ("eq", "ne") and kinds - {"integer"}:
                 fail(f"{show(b[2])} {b[1]} {show(b[3])}: an order comparison needs whole numbers, not text")
             if len(kinds) > 1:
                 fail(f"{show(b[2])} and {show(b[3])} have different types")
@@ -900,13 +930,14 @@ def to_rule(rid, module, where, head, body, line, columns=lambda name: None) -> 
                 fail(f"{var} = …: arithmetic binds a fresh variable")
             assigns.append({"var": "?" + var, "op": op, "left": text(left), "right": text(right)})
         else:
-            _, op, left, right = b
+            _, op, left, right, *typed = b
             for t in (left, right):
                 if t[0] == "var" and t[1] not in defined:
                     fail(f"{t[1]} in a comparison is not bound (bind it with a positive literal)")
                 if t[0] == "wild":
                     fail("'_' only inside an aggregate")
-            conds.append({"op": op, "left": text(left), "right": text(right)})
+            conds.append({"op": op, "left": text(left), "right": text(right),
+                          **({"compare_as": typed[0]} if typed else {})})
     rule = {"id": rid, "module": module, "head": {"relation": head[0], "terms": [text(t) for t in head[1]]},
             "body": lits, "origin": {"file": where, "line": str(line)}}
     if aggs:

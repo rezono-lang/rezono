@@ -45,10 +45,6 @@ def evaluated(program_):
         return batch.read(db, program_, ["comparison"])["comparison"]
 
 
-@pytest.mark.xfail(strict=True, raises=rules_dl.RuleError, reason=WAIT + (
-    "Then lower `utc_instant(a) < utc_instant(b)` and `binary_text(a) < binary_text(b)` in "
-    "compiler/rezono_compiler/rules_dl.py to one condition with compare_as, refusing an annotation on one side only "
-    "or outside a comparison."))
 def test_datalog_spells_typed_comparisons():
     doc = rules_dl.read_program(datalog(), "order", {"left_value": COLUMNS, "right_value": COLUMNS}, "order")
     typed = {(c["op"], c.get("compare_as")) for rule in doc["rules"] for c in rule.get("conditions", ())
