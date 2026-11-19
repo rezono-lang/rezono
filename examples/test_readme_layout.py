@@ -192,12 +192,6 @@ def quickstart(tmp_path: Path, first: str) -> subprocess.CompletedProcess:
                           env=os.environ | {"RUNNER_TEMP": str(temp)})
 
 
-@pytest.mark.xfail(strict=True, raises=MissingOutputComparison, reason=(
-    "extra: decisions/front-door.md: Make scripts/check-quickstart.sh run each bash block of README.md on its own, "
-    "all in the same shell, and compare the standard output of a bash block with the text block that follows it "
-    "after only blank lines, byte for byte. A difference fails the check and prints the expected and the actual "
-    "output; standard error is not compared; a bash block without a text block is run and not compared. "
-    "scripts/check-quickstart.sh only."))
 def test_the_quickstart_check_compares_the_shown_output(tmp_path):
     if not (shutil.which("bash") and shutil.which("python3")):
         pytest.skip("needs bash and python3, as CI has")
