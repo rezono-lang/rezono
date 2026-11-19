@@ -502,7 +502,7 @@ def lower(pack_dir: Path, d: Declared, form: dict, pack: str, owners: dict[str, 
         range_name = module.get("defaultRange", "Text")
         schema = rezono_metadata.header(
             module, schema, d.layer,
-            rezono_slot.builtin_range(range_name, range_name in declared_names, extended_form=True), refuse,
+            rezono_slot.builtin_range(range_name, range_name in declared_names), refuse,
         )
     return Lowered(d, schema, form, sorted(uses))
 
