@@ -11,16 +11,6 @@ class MissingUnlinkedSummaryRefusal(AssertionError):
     """The native checker trusted a predicate summary without its relation, its owner or the signature's owner."""
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=MissingUnlinkedSummaryRefusal,
-    reason="extra: decisions/language-expression-semantics.md: In rezono/src/native-rule-check.ts, make relation and "
-           "owner required on PredicateSummary and owner required on a derived relation's signature, and refuse a "
-           "negation or group with R047 at the call and without related places when the summary leaves out its "
-           "relation or owner, or the signature leaves out its owner, as native_rule_lowering does. Read section "
-           "2, Linking partial predicates. Waits for test_expression_ts_forged_summary while it owns "
-           "native-rule-check.ts.",
-)
 def test_expression_ts_unlinked_summary():
     probe = Path(__file__).with_name("expression-unlinked-summary.mts")
     result = subprocess.run(["node", str(probe)], capture_output=True, encoding="utf-8")
