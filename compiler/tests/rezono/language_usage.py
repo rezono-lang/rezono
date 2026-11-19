@@ -89,6 +89,15 @@ EVIDENCE |= {
     "open-world": (BASIC_READER, lowering("lower_open_world")),
     "rule-metadata": (reader("rule_metadata"), lowering("lower_rule_metadata")),
     "relationship-kind": (reader("relationship_kind"), lowering("lower_relationship_kind")),
+    "calculation": (reader("calculation"), lowering("lower_calculation")),
+    "parameters": (reader("parameters"), lowering("lower_parameters")),
+    "module-import": (reader("module_import"), lowering("lower_module_import")),
+    "inverse-reference": (reader("inverse_reference"), lowering("lower_inverse_reference")),
+    "dated-fact": (reader("dated_fact"), lowering("lower_dated_fact")),
+    "units": (reader("units"), reader("unit_definition"), lowering("lower_units")),
+    "exceptions": (reader("exceptions"), lowering("lower_exceptions")),
+    "table-policy": (reader("table_policy"), lowering("lower_table_policy", "test_lower_table_first"),
+                     lowering("lower_table_policy", "test_lower_table_collect")),
 }
 
 KIND_FEATURES = {
