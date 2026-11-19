@@ -4,7 +4,9 @@ An outcome is either a comparison that the language runs and passes, or an expli
 `unsupported.language` reason in the case file (tests/conformance/README.md). A case with
 neither is skipped silently, and a case with both is ambiguous. Both are failures.
 A reason that starts with PENDING marks a planned comparison: its case gives its language
-spelling already, and the named task removes the reason. Until then the case has no outcome.
+spelling already, and the shared runner compares it, as a todo while the named task is an expected
+failure. The task lifts its strict xfail and changes no case file; once the comparison passes, the
+case has its outcome, and a planner may remove the reason. Until then the case has no outcome.
 """
 
 from pathlib import Path
@@ -88,7 +90,7 @@ def problems(selected: dict[str, dict]) -> list[str]:
     for case_id, case in selected.items():
         reason = (case.get("unsupported") or {}).get("language")
         stated = isinstance(reason, str) and bool(reason.strip()) and not reason.startswith(PENDING)
-        if case_id in ran and reason:
+        if case_id in ran and stated:
             out.append(f"{case_id}: compared and also unsupported ({reason.strip()[:60]})")
         elif case_id not in ran and not stated:
             out.append(f"{case_id}: no language comparison and no unsupported.language reason")
@@ -121,10 +123,11 @@ def test_language_compares_expression_cases():
 @pytest.mark.xfail(
     strict=True,
     raises=MissingLanguageOutcome,
-    reason="extra: value-two-values-single gives two rows for item-a with quantity 7 and 9; load in rezono/src keeps the "
-           "last value and the question shows 9. Make two different values of a single-valued slot invalid, "
-           "with no reason, as decisions/language-expression-semantics.md section 1 says for conflicting single "
-           "values, then remove the case's pending unsupported.language entry so the shared runner compares it.",
+    reason="extra: decisions/language-expression-semantics.md: value-two-values-single gives two rows for item-a with "
+           "quantity 7 and 9; load in rezono/src/evaluate.ts replaces the first row by the second and the question "
+           "shows 9. Merge rows with the same $id in load, and make two different values of a single-valued slot "
+           "invalid, with no reason and no cause, as section 1 says for conflicting single values. The shared "
+           "runner already compares the case while this test is red: change only rezono/src and lift this mark.",
 )
 def test_language_compares_slot_read_cases():
     cases = corpus()
@@ -134,7 +137,8 @@ def test_language_compares_slot_read_cases():
 @pytest.mark.xfail(
     strict=True,
     raises=MissingLanguageOutcome,
-    reason="extra: Compare the check and question cases in QUESTIONS_AND_CHECKS in rezono/test/shared-conformance.test.ts, "
+    reason="extra: Waits for a planner pull request, because the comparison is test code: compare the check and "
+           "question cases in QUESTIONS_AND_CHECKS in rezono/test/shared-conformance.test.ts, "
            "each as a test named `shared conformance: <id>`, exactly as the comment above QUESTIONS_AND_CHECKS in "
            "this file maps the language's results to their expectations. Read tests/conformance/README.md.",
 )
@@ -146,7 +150,9 @@ def test_language_compares_question_and_check_cases():
 @pytest.mark.xfail(
     strict=True,
     raises=MissingLanguageOutcome,
-    reason="extra: Give every remaining case exactly one language outcome. These cases concern hashes, wire snapshots, "
+    reason="extra: Waits for a planner pull request, because only case files change and the evidence guard refuses "
+           "lifting this mark beside them; give every remaining case exactly one language outcome. These cases "
+           "concern hashes, wire snapshots, "
            "publication payloads and role worlds of other engines: record in each case file under "
            "tests/conformance/ the specific reason the language does not answer it, as unsupported.language. Change "
            "only those case files, not the runner or any expectation; if the language should answer a case, say so "

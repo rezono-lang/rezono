@@ -229,8 +229,22 @@ def rule_checks(con, prog) -> list[dict]:
     return out
 
 
+def admitted_rows(evidence) -> dict[str, list[tuple]]:
+    """The rows admission gives the protected relations, by relation (decisions/admission-transport.md,
+    section 5): none without evidence. A context or an index that does not hold is the protected caller's
+    own broken input and blocks the epoch; a candidate that fails verification just gives no row."""
+    if evidence is None:
+        return {}
+    from rezono_checker import evidence as admission
+
+    try:
+        return admission.admit(evidence).rows
+    except ValueError as e:
+        raise Blocked(f"rezono:evidence: {e}") from e
+
+
 def epoch(pack_dir, *, epoch: int, knowledge_time: str, sources, proposal: str = "",
-          base_manifest: str = "") -> Epoch:
+          base_manifest: str = "", evidence=None) -> Epoch:
     import duckdb
     from rezono_compiler import batch, calc, emit, explain, scenarios, seal
     from rezono_compiler import checks as check_meta
@@ -238,6 +252,7 @@ def epoch(pack_dir, *, epoch: int, knowledge_time: str, sources, proposal: str =
     from rezono_compiler import pack as packs
     from rezono_compiler import rules as ir
     from rezono_compiler import sources as provenance
+    from rezono_compiler.rules_dl import PROTECTED
 
     timing.switch("compile")
     pack_dir = Path(pack_dir)
@@ -254,6 +269,7 @@ def epoch(pack_dir, *, epoch: int, knowledge_time: str, sources, proposal: str =
         for table, rs in fact_files.load(model, f).items():
             facts.setdefault(table, []).extend(rs)
     params = {t: [tuple(r.values()) for r in rs] for t, rs in emit.parameters(model).items()}
+    admitted = admitted_rows(evidence)  # after the facts, before the rules
 
     db = duckdb.connect()
     db.execute(emit.DUCKDB_FUNCTIONS)  # RLIKE for pattern checks, as in Feldera
@@ -284,10 +300,15 @@ def epoch(pack_dir, *, epoch: int, knowledge_time: str, sources, proposal: str =
             for t in tables}
 
     calc_program = calc.build(model, model.calc) if model.calc is not None else None
-    calc_witnesses, witnesses = [], []
+    calc_witnesses, witnesses, protected = [], [], {}
     if model.rules:  # the calculation in its phase of the rules, on the same tables
         prog = ir.load(model.rules)
-        con = batch.connect(prog, scenarios.rule_rows(model, prog, facts))
+        # The protected relations the pack declares take the admitted rows as base rows, and appear in the
+        # snapshots like any other base relation; admitted rows for an undeclared one are not inserted.
+        protected = {n: admitted.get(n, []) for n in sorted(PROTECTED) if n in prog.relations}
+        for name, rs in protected.items():
+            rows[name] = sorted({tuple(text(v) for v in r) for r in rs})
+        con = batch.connect(prog, scenarios.rule_rows(model, prog, facts | protected))
         calc_witnesses = batch.phases(con, prog, calc_program, lambda: calculate(calc_program, db, con, rows),
                                       compute_rules) or []
         derived = batch.read(con, prog)
@@ -309,7 +330,8 @@ def epoch(pack_dir, *, epoch: int, knowledge_time: str, sources, proposal: str =
     timing.switch("compile")  # the hashes of what the epoch was made with: the compiler's sources, the pack
     return Epoch(
         pack=model.meta["name"], theory=model.meta["theory"], epoch=epoch, knowledge_time=knowledge_time,
-        pack_sha256=tree_sha256(pack_dir), definition_sha256=definition_sha256(pack_dir), columns=columns(model),
+        pack_sha256=tree_sha256(pack_dir), definition_sha256=definition_sha256(pack_dir),
+        columns=columns(model) | {n: (None,) * len(PROTECTED[n]) for n in protected},  # values, no element
         compiler_sha256=canonical_sha256(compiler_parts()), build=build_record(),
         schema_version=str(model.meta.get("version", "")), engine=engine_component(),
         sources=list(sources), checks=checks, kinds=frozenset(model.kinds), rows=rows, witnesses=witnesses,
@@ -319,7 +341,8 @@ def epoch(pack_dir, *, epoch: int, knowledge_time: str, sources, proposal: str =
         rules=files.get("ir/rules.json") or EMPTY_RULES,  # never empty: see publish.verify
         sweeps=files.get("ir/sweeps.json", ""), seals=tuple(s.kind for s in model.seals),
         calc=files.get("ir/calc.json", ""), calc_witnesses=calc_witnesses, assets=asset_files(pack_dir),
-        fact_sources=provenance.read(model, pack_dir))  # where each base row comes from, never the engine's
+        fact_sources=provenance.read(model, pack_dir),  # where each base row comes from, never the engine's
+        evidence=evidence)
 
 
 def calculate(prog, db, con, rows: dict) -> list[dict]:

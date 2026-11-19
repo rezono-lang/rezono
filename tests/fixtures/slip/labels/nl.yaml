@@ -1,0 +1,19 @@
+item: item
+item.group: groep
+item.amount: bedrag
+group: groep
+hold: blokkade
+hold.item: item
+link: verbinding
+link.tail: begin
+link.head: eind
+held: geblokkeerd
+flagged: gemarkeerd
+group_size: groepsgrootte
+busy: druk
+linked: verbonden
+too_large: te groot
+may_read: mag lezen
+role: rol
+role.title: titel
+recorded_amount: vastgelegd bedrag

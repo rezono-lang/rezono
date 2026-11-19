@@ -7,6 +7,8 @@ from pathlib import Path
 
 import pytest
 
+from request_preview_case import copy_requests, preview
+
 
 HERE = Path(__file__).resolve().parent
 
@@ -46,7 +48,8 @@ def test_catalog_reference_rows_are_current():
         compare_relations(expected[scenario], actual[scenario])
 
 
-def test_tenant_publication_contains_only_owned_rows():
+def test_oracle_self_check_tenant_publication_keeps_owned_rows():
+    # Checks the standalone tenant oracle against itself; no pack rule is evaluated.
     from tenant_oracle import scenarios, tenant_publication
 
     results = scenarios()["requested"]
@@ -58,7 +61,8 @@ def test_tenant_publication_contains_only_owned_rows():
         assert entity["spec"]["owner"] == f"group:{owner}/{owner}"
 
 
-def test_tenant_decision_examples():
+def test_oracle_self_check_tenant_decision_examples():
+    # Checks the committed oracle rows against themselves; no pack rule is evaluated.
     rows = json.loads((HERE / "tenant-rows.json").read_text())
     assert rows["requested"]["monthlyCost"] == [["elm", 7505, "EUR-cent"], ["reed", 2495, "EUR-cent"]]
     assert rows["requested"]["proposal"] == [["elm", "elm-1", "review"], ["reed", "reed-1", "denied"]]
@@ -93,3 +97,46 @@ def test_monthly_cost_is_derived_by_the_pack(tmp_path):
     prices["catalog"]["cluster"]["sizes"]["small"][3] += 1
     catalog.write_text(json.dumps(prices))
     assert costs() == [["elm", 4995, "EUR-cent"], ["reed", 2496, "EUR-cent"]]
+
+
+class MonthlyCostCountsMissingOffer(AssertionError):
+    pass
+
+
+def _monthly(teams, catalog, relation):
+    try:
+        return preview(teams, catalog, "relation", relation)
+    except AssertionError as error:
+        if "unknown derived relation 'tenant_monthly_cost_unknown'" in str(error) or "unknown catalog offer" in str(error):
+            raise MonthlyCostCountsMissingOffer(str(error)) from error
+        raise
+
+
+@pytest.mark.xfail(strict=True, raises=MonthlyCostCountsMissingOffer, reason=(
+    "extra: decisions/platform-request-input.md: Derive tenant_monthly_cost_unknown(tenant, request_item, reason) "
+    "in examples/platform/rules/tenant_monthly_cost.dl with the reason 'offer-missing' for a requested item whose "
+    "item and size match no catalog offer, and derive no tenant_monthly_cost row for that tenant. "
+    "Then remove the offer check from request_rows in examples/platform/request_preview.py."))
+def test_missing_offer_makes_the_monthly_cost_unknown(tmp_path):
+    teams, catalog = copy_requests(tmp_path)
+    expected = json.loads((HERE / "tenant-rows.json").read_text())["requested"]["monthlyCost"]
+    assert _monthly(teams, catalog, "tenant_monthly_cost_unknown") == []
+    assert _monthly(teams, catalog, "tenant_monthly_cost") == expected
+    elm, reed = expected
+
+    # The catalog offers database only in size medium.
+    request = teams / "reed/studio/request.json"
+    original = request.read_text()
+    changed = json.loads(original)
+    changed["items"]["database"] = "small"
+    request.write_text(json.dumps(changed))
+    assert _monthly(teams, catalog, "tenant_monthly_cost_unknown") == [["reed", "reed/studio/database", "offer-missing"]]
+    assert _monthly(teams, catalog, "tenant_monthly_cost") == [elm]
+
+    # Withdrawing the catalog offer that elm requests makes elm's total unknown instead.
+    request.write_text(original)
+    prices = json.loads(catalog.read_text())
+    del prices["catalog"]["database"]["sizes"]["medium"]
+    catalog.write_text(json.dumps(prices))
+    assert _monthly(teams, catalog, "tenant_monthly_cost_unknown") == [["elm", "elm/ledger/database", "offer-missing"]]
+    assert _monthly(teams, catalog, "tenant_monthly_cost") == [reed]

@@ -18,6 +18,7 @@ EXPECTED = {
     ],
     "compiler-bound": [
         "compiler/tests/test_bound.py::test_the_check_view_on_feldera_holds_the_rows_past_the_bound",
+        "compiler/tests/test_boolean_rule_inputs.py::test_native_boolean_rule_inputs",
         "compiler/tests/test_recorded_dates.py::test_independent_date_equality",
     ],
     "compiler-rules": [
@@ -60,10 +61,11 @@ def evidence(tmp_path):
 
 @pytest.mark.xfail(strict=True, raises=AssertionError, reason=(
     "extra: compiler/ci/feldera_shards.py does not yet route "
+    "compiler/tests/test_boolean_rule_inputs.py::test_native_boolean_rule_inputs and "
     "compiler/tests/test_recorded_dates.py::test_independent_date_equality (compiler-bound shard) and "
     "compiler/tests/test_ordered_rule_scalars_engines.py::test_feldera_orders_typed_values (compiler-rules shard). "
-    "Lift this mark in the pull request that routes the second of the two, with its selector in "
-    "compiler/ci/run_feldera_oracle.sh; the first one leaves it."))
+    "Lift this mark in the pull request that routes the last of the three, with its selector in "
+    "compiler/ci/run_feldera_oracle.sh; the others leave it."))
 @pytest.mark.parametrize("outcome", [None, "failure", "skipped", "error"])
 def test_merge_preserves_all_live_cases_and_outcomes(evidence, outcome):
     inputs, output = evidence
@@ -80,7 +82,7 @@ def test_merge_preserves_all_live_cases_and_outcomes(evidence, outcome):
     merged = run("feldera_shards.py", "merge", inputs, output, 5)
     assert merged.returncode == 0, merged.stderr
     report = ET.parse(output / "results.xml")
-    assert len(list(report.iter("testcase"))) == 13
+    assert len(list(report.iter("testcase"))) == 14
     if outcome:
         assert report.find(f".//{outcome}").text == "original diagnostic"
     verified = run("verify_feldera_run.py", output / "collected.txt", output / "results.xml")

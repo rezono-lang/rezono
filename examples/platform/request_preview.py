@@ -154,10 +154,28 @@ def add_review_inputs(rows, catalog):
         reviewer = name(decision["reviewer"], "reviewer")
         delivery = name(decision["sourceDelivery"], "source delivery")
         target, port = target_text(decision["target"]), port_number(decision["port"])
-        rows["tenant_review_decision"].append({
-            "id": f"{reviewer}/{delivery}/{port}/{target}", "reviewer": reviewer,
-            "source_delivery": delivery, "target": target, "port": port,
-        })
+        row = {"id": f"{reviewer}/{delivery}/{port}/{target}", "reviewer": reviewer,
+               "source_delivery": delivery, "target": target, "port": port}
+        source = delivery_reference(delivery, catalog)
+        if source is not None:
+            row["source_tenant"], row["source_number"] = source
+        rows["tenant_review_decision"].append(row)
+
+
+def delivery_reference(text, catalog):
+    """Bind a delivery display key, the tenant's catalog key and a one-based ordinal, to its tenant."""
+    key, separator, number = text.rpartition("-")
+    if not separator or not re.fullmatch(r"[1-9][0-9]*", number):
+        return None
+    tenants = [tenant for tenant, entry in mapping(catalog["teams"], "teams").items()
+               if isinstance(entry, dict) and entry.get("key") == key]
+    return (tenants[0], int(number)) if len(tenants) == 1 else None
+
+
+def names_tenant(text, catalog):
+    """A target segment that is a tenant's catalog key, or begins with one and a hyphen, refers to that tenant."""
+    keys = {entry.get("key") for entry in mapping(catalog["teams"], "teams").values() if isinstance(entry, dict)}
+    return any(isinstance(key, str) and (text == key or text.startswith(key + "-")) for key in keys)
 
 
 def readable_quotas(catalog):
@@ -236,6 +254,14 @@ def request_rows(teams_path, catalog):
             port = port_number(connection["port"])
             row = {"id": f"{request_id}/{index}", **scope, "target_zone": target_zone,
                    "target": target, "port": port}
+            delivery, _, component = target.partition("/")
+            if names_tenant(delivery, catalog):
+                row["target_reference"] = delivery
+            owner = delivery_reference(delivery, catalog)
+            if owner is not None:
+                row["target_tenant"], row["target_number"] = owner
+                if component:
+                    row["target_component"] = component
             if "peer" in connection:
                 peer = name(connection["peer"], "peer")
                 if peer not in teams:
@@ -302,6 +328,8 @@ def relation_rows(model, rows, name):
             (tenant, artifact, tenant if number == 0 else f"{tenant}-{number}")
             for tenant, artifact, number in result
         ]
+    elif name == "tenant_connection_review":
+        result = [(team, f"{team}-{number}", *rest) for team, number, *rest in result]
     return sorted(result)
 
 

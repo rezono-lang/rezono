@@ -50,6 +50,7 @@ from .calc import published_views, subject_of, version_of
 from .calc import reads as calc_reads
 from .calc import sources as calc_sources
 from .canon import INTEGER, encode_key
+from .evidence import PROTECTED
 from .check import _check_witness, _rows, shaped
 from .rules import load_rules
 from .snapshots import read_rows
@@ -134,6 +135,13 @@ def withheld_seals(doc: dict, kinds_full: set) -> frozenset[str]:
         if parts and not all(p.get("kind") in kinds_full for p in parts):
             out |= {s["refused"], s["accepted"], s["row_sha256"], *(p["accepted"] for p in parts)}
     return frozenset(out)
+
+
+def withheld_admission(doc: dict) -> frozenset[str]:
+    """The protected admission inputs the rule IR declares (decisions/admission-transport.md, section 6), named
+    by the checker's own list, never by the publisher's columns: a role reads none of their rows until a decision
+    gives them a read rule or element columns."""
+    return frozenset(r["name"] for r in doc.get("relations", ()) if r.get("name") in PROTECTED)
 
 
 def full_relations(doc: dict, columns: dict, kinds_full: set, relations: set, withheld=frozenset(),
@@ -392,7 +400,7 @@ def check_role(role: str, complete: dict, snapshots: dict, claimed_full, columns
         kinds_full = {k for k, chain in chains.items() if (granted - rejected).intersection(chain)}
     if claimed_evidence is not None:
         findings += check_evidence(claimed_evidence, evidence)
-    withheld = withheld_seals(doc, kinds_full)
+    withheld = withheld_seals(doc, kinds_full) | withheld_admission(doc)
     for rel in sorted((set(every) | set(mine)) - derived):
         if rel not in columns:
             findings.append({"reason": "no_columns", "relation": rel})

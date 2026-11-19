@@ -1,0 +1,12 @@
+machine_stack_choice:
+  - {id: selected, os: Flatcar Container Linux, distribution: k0s}
+machine_bootstrap:
+  - {id: node-hub, artifact: node-hub.ign}
+  - {id: node-base, artifact: node-base.ign}
+  - {id: node-management, artifact: node-management.ign}
+  - {id: node-virtualization, artifact: node-virtualization.ign}
+  - {id: node-production, artifact: node-production.ign}
+  - {id: node-development, artifact: node-development.ign}
+  - {id: node-build, artifact: node-build.ign}
+  - {id: node-edge, artifact: node-edge.ign}
+  - {id: node-recovery, artifact: node-recovery.ign}

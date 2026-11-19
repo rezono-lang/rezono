@@ -86,10 +86,6 @@ echo second > "$RUNNER_TEMP/ran"
 """
 
 
-@pytest.mark.xfail(strict=True, raises=MissingQuickstartBlocks, reason=(
-    "M1: decisions/front-door.md: Let scripts/check-quickstart.sh run every bash block of README.md in order, "
-    "in one shell, so a later block uses the working directory and variables of an earlier one; a block in "
-    "another language, such as sh, is not run. scripts/check-quickstart.sh only."))
 def test_the_quickstart_runs_every_bash_block_in_one_shell(tmp_path):
     if not (shutil.which("bash") and shutil.which("python3")):
         pytest.skip("needs bash and python3, as CI has")
@@ -133,12 +129,6 @@ def test_the_third_step_supposes_one_change():
     assert "examples/subsidy" in steps[1]
 
 
-@pytest.mark.xfail(strict=True, raises=MissingDockerfile, reason=(
-    "extra: decisions/front-door.md: Add a Dockerfile at the root whose every FROM names its image by digest, "
-    "in which the README.md quickstart succeeds, and give the two commands that build and start it in an sh "
-    "block of README.md. The image is never published. In the same pull request, add the CI job the decision "
-    "describes: it builds the image and runs scripts/check-quickstart.sh in it, only when README.md, the "
-    "Dockerfile or requirements/ change."))
 def test_a_dockerfile_runs_the_quickstart_on_any_machine():
     path = ROOT / "Dockerfile"
     if not path.exists():
@@ -149,12 +139,6 @@ def test_a_dockerfile_runs_the_quickstart_on_any_machine():
     assert "docker build" in shell and "docker run" in shell
 
 
-@pytest.mark.xfail(strict=True, raises=MissingContributing, reason=(
-    "extra: decisions/front-door.md: Add CONTRIBUTING.md with only what holds now: a bug as an issue with the "
-    "smallest pack that shows it and a vulnerability as SECURITY.md says; the licence of the path a "
-    "contribution touches, as NOTICE says; work from a fork without claiming a task branch; outside checks "
-    "run after the maintainer approves them; only the maintainer sets the label planner. Link it from "
-    "README.md, and say in WORKER.md that its commit identity is for the project's own agents."))
 def test_contributing_says_what_holds_now():
     path = ROOT / "CONTRIBUTING.md"
     if not path.exists():

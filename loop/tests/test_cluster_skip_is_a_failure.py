@@ -23,17 +23,6 @@ SKIPS = {
 }
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=MissingClusterSkipFailure,
-    reason=(
-        "M2: decisions/cluster-test-evidence.md: section 1. With --rezono-cluster, the plugin in "
-        "loop/rezono_cluster.py reports a cluster item that ends as skipped (pytest.skip, a skipif mark or "
-        "pytest.importorskip) as failed, with a failure text that starts with 'Skipped cluster test: '. "
-        "A strict xfail that fails stays xfailed, and --rezono-report-cluster still skips. Write in "
-        "loop/rezono_cluster.py. Today loop/cluster/select_tests.py exits 0 for a suite whose cluster test skips."
-    ),
-)
 def test_cluster_skip_is_a_failure(tmp_path):
     path = component(tmp_path, "alpha", HEADER)
     env = plugin_environment()
