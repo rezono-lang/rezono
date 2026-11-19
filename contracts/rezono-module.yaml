@@ -145,6 +145,8 @@ classes:
     attributes:
       description: &metadata_description {all_of: [{range: string}]}
       exactMappings: &metadata_mappings {all_of: [{range: string, multivalued: true}], description: "Written IRIs or CURIEs, in written order."}
+      closeMappings: *metadata_mappings
+      broadMappings: *metadata_mappings
       annotations: &metadata_annotations {all_of: [{range: AnnotationMap, inlined: true}]}
 
   ModuleForm:
@@ -510,6 +512,7 @@ classes:
       world: {range: World}
       applies: {range: Applies, inlined: true}
       sealed: {range: Name, description: "The slot of `sealed at`. It has no place of its own: its kind's stands for it."}
+      relationship: {range: boolean, description: "`true` for a relationship kind; absent otherwise (decisions/language-relationship-kinds.md)."}
       slots:
         required: true
         multivalued: true
@@ -556,6 +559,8 @@ classes:
       slotUri: {all_of: [{range: string}], description: "The written slot IRI or CURIE."}
       description: *metadata_description
       exactMappings: *metadata_mappings
+      closeMappings: *metadata_mappings
+      broadMappings: *metadata_mappings
       annotations: *metadata_annotations
       card: {range: Card}
       inverse: {range: Name}
@@ -677,6 +682,8 @@ classes:
     any_of:
       - {slot_conditions: {description: {value_presence: PRESENT}}}
       - {slot_conditions: {exactMappings: {value_presence: PRESENT}}}
+      - {slot_conditions: {closeMappings: {value_presence: PRESENT}}}
+      - {slot_conditions: {broadMappings: {value_presence: PRESENT}}}
       - {slot_conditions: {annotations: {value_presence: PRESENT}}}
       - {slot_conditions: {slotUri: {value_presence: PRESENT}}}
       - {slot_conditions: {memberMetadata: {value_presence: PRESENT}}}

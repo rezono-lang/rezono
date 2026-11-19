@@ -41,13 +41,6 @@ def written(tmp_path, how):
     return directory
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=pack.CompileError,
-    reason="Resolve an otherwise unbound Int as the built-in integer when lowering an ordinary module form, "
-           "in compiler/rezono_compiler/rezono_slot.py. Read decisions/language-extended-scalars.md. "
-           "No reader dependency.",
-)
 def test_lower_extended_scalar(tmp_path):
     files = {how: compile_dir(written(tmp_path, how), tmp_path / "out" / how) for how in ("schema", "module")}
     assert sorted(files["schema"]) == sorted(files["module"])

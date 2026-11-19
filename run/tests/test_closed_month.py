@@ -98,11 +98,6 @@ def test_closed_month_reference(tmp_path):
     assert FileStore(tmp_path).get(sha256(FIRST).hexdigest()) == FIRST
 
 
-@pytest.mark.xfail(strict=True, reason=(
-    "Read decisions/run-closed-month.md, section Coverage of the intake. Waits for "
-    "test_closed_month_requires_receipt_inventory: the change to run/closed_month.py that turns it green "
-    "takes the trusted authorities and lifts this mark too."
-))
 def test_closed_month(tmp_path):
     from rezono_publisher.store import FileStore
 
@@ -162,11 +157,6 @@ def test_close_rejects_receipts_without_a_plan_digest(plan_fields):
         report({digest: FIRST}, decision, [FEE, receipt])
 
 
-@pytest.mark.xfail(strict=True, reason=(
-    "Read decisions/run-closed-month.md, section Coverage of the intake. Waits for "
-    "test_closed_month_requires_receipt_inventory: the change to run/closed_month.py that turns it green "
-    "takes the trusted authorities and lifts this mark too."
-))
 def test_close_distinguishes_a_retry_from_a_change_of_plan(tmp_path):
     from rezono_publisher.store import FileStore
 
@@ -183,11 +173,6 @@ def test_close_distinguishes_a_retry_from_a_change_of_plan(tmp_path):
         report(store, decision, [PERIOD, other_plan], trusted)
 
 
-@pytest.mark.xfail(strict=True, reason=(
-    "Read decisions/run-closed-month.md, section Coverage of the intake. Waits for "
-    "test_closed_month_requires_receipt_inventory: the change to run/closed_month.py that turns it green "
-    "takes the trusted authorities and lifts this mark too."
-))
 @pytest.mark.parametrize(
     ("received_at", "timely"),
     [
@@ -221,11 +206,6 @@ def test_close_preserves_fractional_cutoff_order(tmp_path, received_at, timely):
     }
 
 
-@pytest.mark.xfail(strict=True, reason=(
-    "Read decisions/run-closed-month.md, section Coverage of the intake. Waits for "
-    "test_closed_month_requires_receipt_inventory: the change to run/closed_month.py that turns it green "
-    "takes the trusted authorities and lifts this mark too."
-))
 def test_close_splits_a_submicrosecond_period_at_the_utc_month_edge(tmp_path):
     from rezono_publisher.store import FileStore
 
@@ -244,11 +224,6 @@ def test_close_splits_a_submicrosecond_period_at_the_utc_month_edge(tmp_path):
     assert report(store, may, [receipt], may_trusted)["lines"] == {"rental": [26, 9]}
 
 
-@pytest.mark.xfail(strict=True, reason=(
-    "Read decisions/run-closed-month.md, section Coverage of the intake. Waits for "
-    "test_closed_month_requires_receipt_inventory: the change to run/closed_month.py that turns it green "
-    "takes the trusted authorities and lifts this mark too."
-))
 def test_close_withholds_the_total_without_verified_coverage_of_the_intake(tmp_path):
     from rezono_publisher.store import FileStore
 

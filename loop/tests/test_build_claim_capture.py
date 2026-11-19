@@ -29,15 +29,6 @@ ACTIVITY = {
 }
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason=(
-        "Read decisions/build-claim-release.md section 1. Add loop/build_claim_capture.py with "
-        "claim_rows(refs, activity, *, run, observed_at, source) returning the BuildClaim and "
-        "BuildClaimActivity records. A timestamp without a UTC offset is invalid. Write only in that file."
-    ),
-)
 def test_build_claim_capture():
     assert find_spec("loop.build_claim_capture") is not None, "The claim capture adapter is missing"
     from loop.build_claim_capture import claim_rows

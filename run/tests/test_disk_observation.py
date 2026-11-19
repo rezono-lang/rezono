@@ -30,7 +30,6 @@ def encoded(devices):
     return json.dumps(devices).encode()
 
 
-@pytest.mark.xfail(strict=True, reason="Read decisions/run-cluster-shape.md, section Disk identity. Implement disks in run/disk_observation.py.")
 def test_disk_observation():
     disks = implementation("disk_observation.py", "disks")
     devices, links = observed()

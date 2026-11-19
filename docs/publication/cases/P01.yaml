@@ -1,0 +1,44 @@
+id: P01
+class: valid
+status: settled
+schema:
+  from: fixture.schema.json
+  merge:
+    imports:
+      r:
+        pack: regions
+        schema: s-3737373737373737373737373737373737373737373737373737373737373737
+        manifest: m-7
+        dataset: d-a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9
+    kinds:
+      Host:
+        slots:
+          zone:
+            card: '1'
+            ref: r.Zone
+            states:
+            - known
+form: row
+input:
+  $kind: Host
+  $id: h7
+  memory_need: 1 GiB
+  owner:
+    $na: ''
+  tags: []
+  zone:
+    $ref: regions@s-3737373737373737373737373737373737373737373737373737373737373737@m-7@d-a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9:Zone/dmz
+expect:
+  accept: true
+  payload:
+    zone: dmz
+  arrow_ref_metadata:
+    kind: Zone
+    pack: regions
+    schema: s-3737373737373737373737373737373737373737373737373737373737373737
+    manifest: m-7
+    dataset: d-a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9a9
+note: A reference into an imported pack pinned to one epoch. The column value is the target id; the Arrow field metadata carries the imported kind, pack and three pins. S05, R13, P02 and P04 each change one pin of this import or row.
+sources:
+- decisions/publication-case-pins.md
+- publication/rezono_publication/l0.py, read_rows and check_field

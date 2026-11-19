@@ -23,7 +23,7 @@ of the `integrity` pipeline: computed there once and forwarded like an exported 
 is the first producer of the chain and every part reads the same accepted rows (docs/compiler.md).
 """
 
-from . import rules_sql as sql
+from . import feldera_names, rules_sql as sql
 from .sqltext import q
 
 EXPORT = "export__out"
@@ -199,7 +199,7 @@ def plan(prog, parts, upstream=frozenset()):
     return out
 
 
-def export_select(prog, part):
+def export_select(prog, part, relation=q):
     """The export of a part: one row per exported row, tagged with its relation, every column as text
     (a0, a1, …), plus a row '#epoch' per epoch marker. The relay reads it as one ordered stream."""
     width = max(len(prog.relations[r].key) for r in part["exports"])
@@ -209,7 +209,7 @@ def export_select(prog, part):
         cols = [f"CAST({q(c.name)} AS VARCHAR)" for c in rel.key]
         cols += ["CAST('' AS VARCHAR)"] * (width - len(cols))
         columns = ", ".join(f"{c} AS a{j}" for j, c in enumerate(cols))
-        sel.append(f"SELECT CAST('{r}' AS VARCHAR) AS rel, {columns} FROM {q(sql.relation_source(rel))}")
+        sel.append(f"SELECT CAST('{r}' AS VARCHAR) AS rel, {columns} FROM {relation(sql.relation_source(rel))}")
     sel.append("SELECT CAST('#epoch' AS VARCHAR) AS rel, CAST(e AS VARCHAR) AS a0"
                + "".join(f", CAST('' AS VARCHAR) AS a{j}" for j in range(1, width))
                + f" FROM {q(EPOCH)}")
@@ -224,7 +224,7 @@ def decode(prog, relation, cells):
 def export_sql(prog, exports):
     """The epoch table and the export view of a producing pipeline."""
     return f"CREATE TABLE {q(EPOCH)} (e BIGINT NOT NULL);\n\nCREATE VIEW {q(EXPORT)} AS\n" \
-        + export_select(prog, {"exports": exports}) + ";\n"
+        + export_select(prog, {"exports": exports}, relation=feldera_names.quoted) + ";\n"
 
 
 def part_sql(prog, part, witnesses="materialize"):

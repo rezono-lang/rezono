@@ -26,7 +26,6 @@ ExecStart=/usr/bin/systemctl poweroff
 """
 
 
-@pytest.mark.xfail(strict=True, reason="Read decisions/run-server-deadline.md. Implement units in run/deadline_timer.py.")
 def test_deadline_timer():
     units = implementation("deadline_timer.py", "units")
     for instant, calendar in (("2026-11-19T23:00:00Z", "2026-11-19 23:00:00 UTC"),
