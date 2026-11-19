@@ -4,7 +4,7 @@ A Loop round decides what may run from evidence that someone submitted. Treat a 
 
 ## 1. Supplied verdicts block and never authorize
 
-`loop_step_safety_check` rows and the `verdict` of `loop_batch_candidate` stay fact inputs. A supplied `refuted` or `unknown` verdict keeps its current meaning: it yields a `waiting` row with its obligation and reason. A supplied `proved` verdict derives nothing. `safe_alone`, `loop_certified_batch`, `loop_selected_batch` and `ready` follow only from the protected inputs of section 2.
+`loop_step_safety_check` rows and the `verdict` of `loop_batch_candidate` stay fact inputs. A supplied `refuted` or `unknown` verdict keeps its current meaning: it yields a `waiting` row with its obligation and reason. A supplied `proved` verdict authorizes nothing: `safe_alone`, `loop_certified_batch`, `loop_selected_batch` and `ready` follow only from the protected inputs of section 2. A supplied claim may still withhold a conclusion that would follow from its absence, such as a fixed point, because withholding is conservative.
 
 The current meaning of `ready`, an eligible unfinished step with no waiting row, moves to `unblocked(run, step, reason)`. The fixed point, the Build task order and the typed recording read `unblocked`, so their behavior does not change when `ready` becomes certified membership.
 
