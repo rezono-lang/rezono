@@ -23,3 +23,4 @@ expect:
   witness: null
 unsupported:
   feldera: The compiler refuses unguarded open-relation negation before generating SQL.
+  language: "The case is the refusal of a Datalog rule that negates an open relation, and the neutral fixture gives a question no open relation to negate."

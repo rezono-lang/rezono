@@ -1,0 +1,20 @@
+cluster: Cluster
+cluster.plan_hash: Plan hash
+line: Cluster line
+line.cluster: Cluster
+line.sku: SKU
+line.role: Role
+line.quantity: Quantity
+machine: Machine
+machine.plan_hash: Plan hash
+machine.sku: SKU
+machine.address: Address
+machine.boot_disk: Boot disk
+machine.data_disk: Data disk
+member: Cluster member
+ceph_device: Ceph device
+api_address: API address
+shape_problem: Cluster shape problem
+cluster_role: Cluster role
+cluster_role.controller: Controller
+cluster_role.worker: Worker

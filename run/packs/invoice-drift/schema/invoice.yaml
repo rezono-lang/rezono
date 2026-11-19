@@ -3,6 +3,8 @@ name: invoice_drift
 in_language: en
 imports:
   - linkml:types
+  - std-time:time
+  - std-decision:decision
 default_range: string
 annotations:
   layer: facts
@@ -16,6 +18,10 @@ types:
     pattern: '^[A-Z]{3}$'
 
 enums:
+  CapBasis:
+    permissible_values:
+      rated:
+      billed:
   LineRoundingMode:
     permissible_values:
       half_even:
@@ -98,3 +104,118 @@ classes:
       equation: {range: RoundingEquation, required: true}
       position: {range: integer, minimum_value: 0, required: true}
       carry: {range: integer, required: true}
+  ReconciliationPlan:
+    description: An approved run plan. Its digest identifies the prediction.
+    attributes:
+      id: {identifier: true}
+      profile: {required: true}
+      window: {range: ReconciliationPlanWindow, required: true}
+      reference_date: {range: ReferenceDate, required: true}
+      sha256: {range: Digest}
+  ReconciliationPlanWindow:
+    is_a: Interval
+    description: The planned elapsed window of a run, in seconds on its axis.
+  ReconciliationPlannedLine:
+    description: One planned instance of a supplier plan in an order slot.
+    attributes:
+      id: {identifier: true}
+      plan: {range: ReconciliationPlan, required: true}
+      slot: {required: true}
+      supplier_plan: {required: true}
+      quantity: {range: integer, minimum_value: 1, required: true}
+  ReconciliationQuote:
+    description: A supplier quote, independent of the plan, valid on a reference date.
+    attributes:
+      id: {identifier: true}
+      supplier_plan: {required: true}
+      hourly_minor: {range: integer, minimum_value: 0, required: true}
+      currency: {range: CurrencyCode, required: true}
+      reference_date: {range: ReferenceDate, required: true}
+  ReconciliationRun:
+    description: A recorded run of an approved plan.
+    attributes:
+      id: {identifier: true}
+      profile: {required: true}
+      plan: {range: ReconciliationPlan, required: true}
+      window: {range: ReconciliationRunWindow, required: true}
+  ReconciliationRunWindow:
+    is_a: Interval
+    description: The measured elapsed window of a run, in seconds on its axis.
+  ReconciliationActivity:
+    is_a: Interval
+    description: The measured interval in which one resource was active in a run.
+    attributes:
+      resource: {required: true}
+      run: {range: ReconciliationRun, required: true}
+  ReconciliationDeployment:
+    description: The supplier plan a measured resource was deployed with.
+    attributes:
+      id: {identifier: true}
+      run: {range: ReconciliationRun, required: true}
+      resource: {required: true}
+      supplier_plan: {required: true}
+  ReconciliationRunCoverage:
+    description: A statement that the recorded activities cover every resource of the run.
+    attributes:
+      id: {identifier: true}
+      run: {range: ReconciliationRun, required: true}
+  ReconciliationRegistry:
+    description: A separately captured snapshot of the order registry, bound to a run and plan digest.
+    attributes:
+      id: {identifier: true}
+      run: {range: ReconciliationRun, required: true}
+      plan_hash: {range: Digest, required: true}
+      captured_at: {range: integer, required: true}
+      sha256: {range: Digest, required: true}
+  ReconciliationRegistryLine:
+    description: A registered order line with its selected plan, quantity and hourly rate.
+    attributes:
+      id: {identifier: true}
+      registry: {range: ReconciliationRegistry, required: true}
+      resource: {required: true}
+      slot: {required: true}
+      supplier_plan: {required: true}
+      quantity: {range: integer, minimum_value: 1, required: true}
+      hourly_minor: {range: integer, minimum_value: 0, required: true}
+      currency: {range: CurrencyCode, required: true}
+  ReconciliationRegistryCoverage:
+    description: A statement that the registry snapshot lists every order line of its scope.
+    attributes:
+      id: {identifier: true}
+      registry: {range: ReconciliationRegistry, required: true}
+  ReconciliationInvoiceCoverage:
+    description: A statement that the captured invoice lists every billed line of the run, with its digest.
+    attributes:
+      id: {identifier: true}
+      run: {range: ReconciliationRun, required: true}
+      lines:
+        range: InvoiceLine
+        multivalued: true
+        description: >-
+          The invoice lines the capture lists for the run. Open world: a capture without this row has lines nobody recorded.
+        annotations:
+          world: open
+      sha256: {range: Digest, required: true}
+  ReconciliationChargeTerms:
+    description: Decided terms under which usage is charged. The fee is one fixed amount per billed resource.
+    attributes:
+      id: {identifier: true}
+      run: {range: ReconciliationRun, required: true}
+      decision: {range: Decision, required: true}
+      unit: {required: true}
+      basis: {required: true}
+      fee_minor: {range: integer, minimum_value: 0, required: true}
+  ReconciliationCeiling:
+    description: An approved cap on the rated or billed total of a run.
+    attributes:
+      id: {identifier: true}
+      run: {range: ReconciliationRun, required: true}
+      basis: {range: CapBasis, required: true}
+      decision: {range: Decision, required: true}
+      currency: {range: CurrencyCode, required: true}
+      minor:
+        range: integer
+        minimum_value: 0
+        description: The approved cap. Open world, so a ceiling record without this row has a cap nobody recorded.
+        annotations:
+          world: open

@@ -18,3 +18,5 @@ expect:
   state: unknown
   reason: null
   witness: null
+unsupported:
+  language: "The neutral fixture declares Item closed, so the shared runner cannot read Item as an open kind. The open-world tests in rezono/test/evaluate.test.ts compare a missing member of an open kind."

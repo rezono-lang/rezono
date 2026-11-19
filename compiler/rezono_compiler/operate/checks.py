@@ -29,7 +29,7 @@ def violations(p: packs.Pack, rows: dict[str, list[tuple]]) -> Counter:
     db = duckdb.connect()
     try:
         db.execute(emit.DUCKDB_FUNCTIONS)
-        for script in (files["engine/tables.sql"],
+        for script in (emit.duckdb(files["engine/tables.sql"]),
                        emit.duckdb(files["engine/integrity.sql"])):
             if "CREATE" in script:  # a pack without kinds or checks has an empty script
                 db.execute(script)

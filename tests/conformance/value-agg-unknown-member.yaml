@@ -3,23 +3,12 @@ source: docs/semantics/value-cases.yaml#agg-unknown-member
 status: settled
 input:
   rows:
-  - kind: item
-    id: item-a
-    group: group-a
-    labels:
-    - first
-    - second
-    quantity: 7
-    weight: 3
-  - kind: item
-    id: item-c
-    group: group-b
-    labels:
-    - second
-    quantity: 7
-    weight:
-      state: unknown
-      reason: no_spec
+    - {$kind: Group, $id: group-a}
+    - {$kind: Group, $id: group-b}
+    - {$kind: Item, $id: item-a, group: {$ref: group-a}, labels: [first, second], quantity: "7", weight: "3"}
+    - {$kind: Item, $id: item-c, group: {$ref: group-b}, labels: [second], quantity: "7", weight: {$unknown: no_spec}}
+  select: {kind: Group, id: group-a}
+  language: "ask Group where true show Item.sum(weight)"
   expression: sum item.weight
 expect:
   value: null

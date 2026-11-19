@@ -93,7 +93,7 @@ def definition(periods, closes) -> set[tuple]:
 def sql_rows(files, rows) -> dict[str, set[tuple]]:
     db = duckdb.connect()
     db.execute(emit.DUCKDB_FUNCTIONS)
-    db.execute(files["engine/tables.sql"])
+    db.execute(emit.duckdb(files["engine/tables.sql"]))
     db.execute(emit.duckdb(files["engine/integrity.sql"]))
     for table, rs in rows.items():
         if rs:
@@ -418,7 +418,7 @@ def check_seal(model, rows) -> list:
 def sql_rows_of(files, rows, names) -> dict[str, set[tuple]]:
     db = duckdb.connect()
     db.execute(emit.DUCKDB_FUNCTIONS)
-    db.execute(files["engine/tables.sql"])
+    db.execute(emit.duckdb(files["engine/tables.sql"]))
     db.execute(emit.duckdb(files["engine/integrity.sql"]))
     for table, rs in rows.items():
         if rs:

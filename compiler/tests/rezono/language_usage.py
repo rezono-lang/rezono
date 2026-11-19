@@ -63,6 +63,43 @@ EVIDENCE = {
     "decision-table": (BASIC_READER, ("compiler/tests/test_rezono_table.py", "test_the_oracle_runs_the_text_the_compiler_reads")),
 }
 
+
+def reader(name):
+    return f"rezono/test/test_{name}.py", f"test_{name}"
+
+
+def lowering(name, test=None):
+    return f"compiler/tests/rezono/test_{name}.py", test or f"test_{name}"
+
+
+# A feature may need several reader and lowering tests; each must pass. Reader tests live under rezono/.
+EVIDENCE |= {
+    "schema-metadata": (reader("schema_metadata"), reader("schema_mappings"), lowering("lower_schema_metadata"),
+                        lowering("lower_schema_mappings"), lowering("lower_schema_annotations")),
+    "fact-table": (BASIC_READER, lowering("lower_fact_table")),
+    "named-dataset": (reader("named_dataset"), lowering("named_dataset_discovery", "test_lower_named_dataset")),
+    "extended-scalar": (BASIC_READER, lowering("lower_extended_scalar")),
+    "fact-provenance": (reader("fact_provenance"), lowering("lower_fact_provenance")),
+    "conditional-check": (reader("conditional_check"), lowering("lower_conditional_check")),
+    "enum-metadata": (reader("schema_metadata"), lowering("lower_enum_metadata")),
+    "repeated-slot": (BASIC_READER, ("compiler/tests/test_rezono_module.py",
+                                     "test_unbounded_lists_compile_like_written_linkml")),
+    "structured-fact": (reader("structured_fact"), lowering("structured_library_dataset")),
+    "time-policy": (BASIC_READER, reader("time_policy"), lowering("lower_time_policy")),
+    "open-world": (BASIC_READER, lowering("lower_open_world")),
+    "rule-metadata": (reader("rule_metadata"), lowering("lower_rule_metadata")),
+    "relationship-kind": (reader("relationship_kind"), lowering("lower_relationship_kind")),
+    "calculation": (reader("calculation"), lowering("lower_calculation")),
+    "parameters": (reader("parameters"), reader("version_replaces"), lowering("lower_parameters")),
+    "module-import": (reader("module_import"), reader("prefixed_type"), lowering("lower_module_import")),
+    "inverse-reference": (reader("inverse_reference"), lowering("lower_inverse_reference")),
+    "dated-fact": (reader("dated_fact"), reader("fact_context_axes"), lowering("lower_dated_fact")),
+    "units": (reader("units"), reader("unit_definition"), lowering("lower_units")),
+    "exceptions": (reader("exceptions"), lowering("lower_exceptions")),
+    "table-policy": (reader("table_policy"), lowering("lower_table_policy", "test_lower_table_first"),
+                     lowering("lower_table_policy", "test_lower_table_collect")),
+}
+
 KIND_FEATURES = {
     "abstract": "abstract-kind", "is_a": "parent-kind", "unique_keys": "composite-key",
     "rules": "conditional-check", "represents_relationship": "relationship-kind",
@@ -156,7 +193,7 @@ MODULE_SYNTAX = {
     "module-import": r"^use\b", "fact-table": r"^\s*fact\b", "named-dataset": r"^dataset\b",
     "dated-fact": r"^\s*fact\b.*\b(?:valid|known)\b", "fact-provenance": r"^\s*fact\b.* @ ",
     "parameters": r"^param\b", "units": r"^(?:unit|rounding)\b", "calculation": r"^\s*derived\b",
-    "exceptions": r"^\s*unless\b", "decision-table": r"^\s*table\b", "table-policy": r"^\s*table\s+(?!unique\b)\w+", "conditional-check": r"^(?:require|warn)\b",
+    "exceptions": r"^\s*unless\b", "decision-table": r"^\s*table\b", "table-policy": r"^\s*table\s+(?!unique\b)\w+", "conditional-check": r"^(?:check|require|warn)\b",
     "relational-rule": r"^rules\b", "native-rule": r"^rule\b",
     "time-policy": r"^\s+(?:applies|sealed) at:", "schema-metadata": r"^reason\b",
 }
@@ -425,8 +462,9 @@ def render(root=ROOT):
         evidence = EVIDENCE.get(name)
         status = "Pending"
         if evidence:
-            reader, lowerer = evidence
-            status = ("Supported" if name in ready else "Pending") + f" ([reader](../../{reader[0]}), [lowering](../../{lowerer[0]}))"
+            links = ", ".join(f"[{'reader' if path.startswith('rezono/') else 'lowering'}](../../{path})"
+                              for path, _ in evidence)
+            status = ("Supported" if name in ready else "Pending") + f" ({links})"
         lines.append(f"| {name} | {count} | {status} |")
     lines.extend(["", "| Pack or source directory | Direct features | Imported features | Pending features | Mixed conversion | Native conversion |",
                   "| --- | --- | --- | --- | --- | --- |"])

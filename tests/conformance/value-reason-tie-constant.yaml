@@ -3,14 +3,10 @@ source: docs/semantics/value-cases.yaml#reason-tie-constant
 status: settled
 input:
   rows:
-  - kind: item
-    id: item-c
-    group: group-b
-    labels:
-    - second
-    quantity:
-      state: unknown
-      reason: aa_early
+    - {$kind: Group, $id: group-b}
+    - {$kind: Item, $id: item-c, group: {$ref: group-b}, labels: [second], quantity: {$unknown: aa_early}}
+  select: {kind: Item, id: item-c}
+  language: "ask Item where true show quantity + unknown no_rate"
   expression: quantity + unknown no_rate
   subject: item-c
 expect:

@@ -1,0 +1,13 @@
+format: rezono.questions/1
+reader:
+  - id: run-reconciliation
+    title_message: reader.run_reconciliation
+    about_message: reader.run_reconciliation.about
+    relation: reconciliation_total
+    proof: grounds
+    columns:
+      - {column: profile, message: reader.run_reconciliation.profile}
+      - {column: run, message: reader.run_reconciliation.run}
+      - {column: basis, message: reader.run_reconciliation.basis}
+      - {column: currency, message: reader.run_reconciliation.currency}
+      - {column: amount, message: reader.run_reconciliation.amount}

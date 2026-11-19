@@ -6,6 +6,8 @@ type AnnotationValue = string | boolean | AnnotationValue[] | { [name: string]: 
 export interface Metadata {
 	description?: string;
 	exactMappings?: string[];
+	closeMappings?: string[];
+	broadMappings?: string[];
 	annotations?: Record<string, AnnotationValue>;
 }
 
@@ -19,7 +21,7 @@ export interface SchemaMetadata extends Metadata {
 }
 
 export function hasMetadata(metadata: Metadata): boolean {
-	return metadata.description !== undefined || metadata.exactMappings !== undefined || metadata.annotations !== undefined;
+	return metadata.description !== undefined || metadata.exactMappings !== undefined || metadata.closeMappings !== undefined || metadata.broadMappings !== undefined || metadata.annotations !== undefined;
 }
 
 /** Read one property shared by schema, kinds, slots and enumeration members. */
@@ -33,6 +35,14 @@ export function readMetadataLine(target: Metadata, line: Logical, build: Build):
 			break;
 		case 'exactMapping':
 			if (typeof property.value === 'string') (target.exactMappings ??= []).push(property.value);
+			else build.refuse(line, 'a JSON string');
+			break;
+		case 'closeMapping':
+			if (typeof property.value === 'string') (target.closeMappings ??= []).push(property.value);
+			else build.refuse(line, 'a JSON string');
+			break;
+		case 'broadMapping':
+			if (typeof property.value === 'string') (target.broadMappings ??= []).push(property.value);
 			else build.refuse(line, 'a JSON string');
 			break;
 		case 'annotation': {
@@ -53,6 +63,8 @@ export function printMetadata(target: Metadata): string[] {
 	return [
 		...(target.description === undefined ? [] : [`description ${JSON.stringify(target.description)}`]),
 		...(target.exactMappings ?? []).map(value => `exact mapping ${JSON.stringify(value)}`),
+		...(target.closeMappings ?? []).map(value => `close mapping ${JSON.stringify(value)}`),
+		...(target.broadMappings ?? []).map(value => `broad mapping ${JSON.stringify(value)}`),
 		...Object.keys(target.annotations ?? {}).sort().map(name => `annotation ${name} = ${canonicalJson(target.annotations![name])}`)
 	];
 }
@@ -92,7 +104,7 @@ export function printSchema(target: SchemaMetadata): string[] {
 }
 
 export const metadata = {
-	lineRules: ['SchemaLine', 'IriLine', 'LanguageLine', 'PrefixLine', 'ImportLine', 'DefaultRangeLine', 'DescriptionLine', 'ExactMappingLine', 'AnnotationLine'],
+	lineRules: ['SchemaLine', 'IriLine', 'LanguageLine', 'PrefixLine', 'ImportLine', 'DefaultRangeLine', 'DescriptionLine', 'ExactMappingLine', 'CloseMappingLine', 'BroadMappingLine', 'AnnotationLine'],
 	grammar: String.raw`
   SchemaLine = kw<"schema"> name
   IriLine = kw<"iri"> MetaString
@@ -102,6 +114,8 @@ export const metadata = {
   DefaultRangeLine = kw<"default"> kw<"range"> Type
   DescriptionLine = kw<"description"> MetaString
   ExactMappingLine = kw<"exact"> kw<"mapping"> MetaString
+  CloseMappingLine = kw<"close"> kw<"mapping"> MetaString
+  BroadMappingLine = kw<"broad"> kw<"mapping"> MetaString
   AnnotationLine = kw<"annotation"> name "=" MetaValue
   MetaValue = MetaString | metaDecimal | boolLit | MetaArray | MetaObject
   MetaArray = "[" ListOf<MetaValue, ","> "]"
@@ -121,6 +135,8 @@ export const metadata = {
 		DefaultRangeLine: (_default, _range, value) => ({ line: 'defaultRange', value: typeOf(value) }),
 		DescriptionLine: (_kw, value) => ({ line: 'description', value: value.decl() }),
 		ExactMappingLine: (_exact, _mapping, value) => ({ line: 'exactMapping', value: value.decl() }),
+		CloseMappingLine: (_close, _mapping, value) => ({ line: 'closeMapping', value: value.decl() }),
+		BroadMappingLine: (_broad, _mapping, value) => ({ line: 'broadMapping', value: value.decl() }),
 		AnnotationLine: (_kw, name, _eq, value) => ({ line: 'annotation', name: name.sourceString, value: value.decl() }),
 		MetaValue: value => value.ctorName === 'metaDecimal' ? value.sourceString : value.ctorName === 'boolLit' ? value.sourceString === 'true' : value.decl(),
 		MetaArray(_open, values, _close) {

@@ -1,0 +1,148 @@
+id: https://rezono.org/examples/run/offer-selection/allocation
+name: offer_selection_allocation
+description: >-
+  Complete physical and nested allocations of one workload for one purchase scope, with the capacities,
+  reserves, limits and charges that decide which allocation is supported. Origin of each kind: the workload
+  design, a recorded allocation proposal, supplier publications and binding quotes, and dated decisions of
+  the accountable run authority (decisions/run-physical-nested-allocation.md). Decisions and reference dates
+  are the kinds of std-decision, whose rules say which decision is in force on a day.
+in_language: en
+imports:
+  - linkml:types
+  - std-decision:decision
+default_range: string
+annotations:
+  layer: facts
+
+enums:
+  Placement:
+    description: How an allocation places the workload members on hosts.
+    permissible_values:
+      physical: {}
+      nested: {}
+  Resource:
+    description: A host resource that members demand and a decision reserves.
+    permissible_values:
+      cpu: {}
+      memory: {}
+      disk: {}
+
+classes:
+  AllocationWorkload:
+    description: A workload whose members are placed together. Origin, an approved probe design.
+    attributes:
+      id: {identifier: true}
+
+  AllocationMember:
+    description: One member of a workload and what it requires of a host. Independent of any capacity.
+    attributes:
+      id: {identifier: true}
+      workload: {range: AllocationWorkload, required: true}
+      cpu: {range: integer, minimum_value: 0, maximum_value: 1000000000, required: true}
+      memory: {range: integer, minimum_value: 0, maximum_value: 1000000000, required: true}
+      disk: {range: integer, minimum_value: 0, maximum_value: 1000000000, required: true}
+
+  AllocationScope:
+    description: A purchase scope, one order.
+    attributes:
+      id: {identifier: true}
+
+  AllocationComparison:
+    description: >-
+      The comparison of the complete allocations of one workload for one purchase scope, read on a
+      reference date.
+    attributes:
+      id: {identifier: true}
+      workload: {range: AllocationWorkload, required: true}
+      scope: {range: AllocationScope, required: true}
+      reference_date: {range: ReferenceDate, required: true}
+
+  AllocationCandidateCoverage:
+    description: >-
+      A register that states the alternatives of a comparison are complete. Without it the comparison
+      is unknown.
+    attributes:
+      id: {identifier: true}
+      comparison: {range: AllocationComparison, required: true}
+
+  AllocationCandidate:
+    description: A recorded proposal that places every member of a workload on hosts, with its own identity.
+    attributes:
+      id: {identifier: true}
+      workload: {range: AllocationWorkload, required: true}
+      scope: {range: AllocationScope, required: true}
+      placement: {range: Placement, required: true}
+
+  AllocationAssignment:
+    description: One member of a candidate placed on a host.
+    attributes:
+      id: {identifier: true}
+      candidate: {range: AllocationCandidate, required: true}
+      member: {range: AllocationMember, required: true}
+      host: {range: AllocationHost, required: true}
+
+  AllocationHost:
+    description: >-
+      A host as a supplier publishes it. A capacity that is not recorded is unknown, never zero.
+    attributes:
+      id: {identifier: true}
+      supplier: {required: true}
+      cpu: {range: integer, minimum_value: 0, maximum_value: 1000000000}
+      memory: {range: integer, minimum_value: 0, maximum_value: 1000000000}
+      disk: {range: integer, minimum_value: 0, maximum_value: 1000000000}
+
+  AllocationCharge:
+    description: >-
+      A charge of a candidate allocation in one currency, in minor units: recurring for each period, and
+      once for setup. A charge names a host or covers the whole candidate.
+    attributes:
+      id: {identifier: true}
+      candidate: {range: AllocationCandidate, required: true}
+      host: {range: AllocationHost}
+      currency: {required: true}
+      recurring_minor: {range: integer, minimum_value: 0, maximum_value: 100000000000, required: true}
+      setup_minor: {range: integer, minimum_value: 0, maximum_value: 1000000000000, required: true}
+      periods: {range: integer, minimum_value: 1, maximum_value: 10000, required: true}
+
+  AllocationSupplierLimit:
+    description: >-
+      What a supplier allows in one purchase scope: the stock, and the account and plan limits on the
+      number of hosts in the order.
+    attributes:
+      id: {identifier: true}
+      scope: {range: AllocationScope, required: true}
+      supplier: {required: true}
+      stock: {range: integer, minimum_value: 0, maximum_value: 1000000, required: true}
+      account_limit: {range: integer, minimum_value: 0, maximum_value: 1000000, required: true}
+      plan_limit: {range: integer, minimum_value: 0, maximum_value: 1000000, required: true}
+
+  AllocationReserve:
+    description: >-
+      A reserve per host and resource that a decision of the run authority sets for a purchase scope.
+    attributes:
+      id: {identifier: true}
+      decision: {range: Decision, required: true}
+      scope: {range: AllocationScope, required: true}
+      resource: {range: Resource, required: true}
+      amount: {range: integer, minimum_value: 0, maximum_value: 1000000000, required: true}
+
+  AllocationPreference:
+    description: >-
+      The alternatives a decision accepts for a workload and purchase scope. An empty list accepts none.
+    attributes:
+      id: {identifier: true}
+      decision: {range: Decision, required: true}
+      workload: {range: AllocationWorkload, required: true}
+      scope: {range: AllocationScope, required: true}
+      acceptable: {range: AllocationCandidate, multivalued: true}
+
+  AllocationPreferenceCoverage:
+    description: >-
+      A register of an authority that states every preference for a workload, purchase scope and reference
+      date is recorded. Without a scope the register is incomplete.
+    attributes:
+      id: {identifier: true}
+      authority: {required: true}
+      workload: {range: AllocationWorkload, required: true}
+      scope: {range: AllocationScope}
+      reference_date: {range: ReferenceDate, required: true}

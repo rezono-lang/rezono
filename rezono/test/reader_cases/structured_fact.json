@@ -1,0 +1,138 @@
+{
+  "source": "embedded kind Address\n  street: Text\n  city: Text\nkind Branch world closed\n  names: Text*\n  address: Address? embedded\n  note: Text?\ndataset branches\n  fact Branch\n    | id   | names           | address                                  | note |\n    | oost | [\"East\",\"Oost\"] | {street: \"Oostweg 5\", city: \"Middelburg\"} | -    |\n    | west | []              | -                                        | -    |",
+  "module": {
+    "rezono": "0",
+    "pack": "sample",
+    "use": [],
+    "decls": [
+      {
+        "kind": "Address",
+        "embedded": true,
+        "slots": [
+          {
+            "slot": "street",
+            "type": "Text"
+          },
+          {
+            "slot": "city",
+            "type": "Text"
+          }
+        ],
+        "derived": []
+      },
+      {
+        "kind": "Branch",
+        "world": "closed",
+        "slots": [
+          {
+            "slot": "names",
+            "type": "Text",
+            "card": "*"
+          },
+          {
+            "slot": "address",
+            "type": "Address",
+            "card": "?",
+            "embedded": true
+          },
+          {
+            "slot": "note",
+            "type": "Text",
+            "card": "?"
+          }
+        ],
+        "derived": []
+      },
+      {
+        "dataset": "branches",
+        "decls": [
+          {
+            "fact": "Branch",
+            "columns": [
+              "id",
+              "names",
+              "address",
+              "note"
+            ],
+            "rows": [
+              [
+                {
+                  "lit": "oost"
+                },
+                {
+                  "list": [
+                    {
+                      "lit": "\"East\""
+                    },
+                    {
+                      "lit": "\"Oost\""
+                    }
+                  ]
+                },
+                {
+                  "record": {
+                    "street": {
+                      "lit": "\"Oostweg 5\""
+                    },
+                    "city": {
+                      "lit": "\"Middelburg\""
+                    }
+                  }
+                },
+                {
+                  "boundary": "omitted"
+                }
+              ],
+              [
+                {
+                  "lit": "west"
+                },
+                {
+                  "list": []
+                },
+                {
+                  "boundary": "omitted"
+                },
+                {
+                  "boundary": "omitted"
+                }
+              ]
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "spanNames": {
+    "/decls/2": "branches",
+    "/decls/2/decls/0": "Branch"
+  },
+  "rejections": [
+    {
+      "from": "{street: \"Oostweg 5\", city: \"Middelburg\"}",
+      "to": "{street: \"Oostweg 5\", street: \"Middelburg\"}"
+    },
+    {
+      "from": "[\"East\",\"Oost\"]",
+      "to": "[\"East\",\"Oost\""
+    }
+  ],
+  "knownDiagnostics": [
+    {
+      "code": "R000",
+      "span": {
+        "text": "[",
+        "start": 279,
+        "end": 280
+      }
+    },
+    {
+      "code": "R000",
+      "span": {
+        "text": "[",
+        "start": 361,
+        "end": 362
+      }
+    }
+  ]
+}

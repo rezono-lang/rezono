@@ -1,5 +1,7 @@
 # Conditional bare-metal provider choice
 
+The Vultr preference below is superseded by [the price enforcement decision](run-price-enforcement.md): neither provider here can enforce the approved amount.
+
 Prefer Vultr for further qualification of the bounded run. Its bare-metal
 provisioning guide documents both a remote iPXE boot and a disk mode that
 leaves extra drives unformatted. Two priced offers have two physical drives.

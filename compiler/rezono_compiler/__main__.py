@@ -6,7 +6,7 @@ import json
 import sys
 from pathlib import Path
 
-from . import emit, facts, modules, pack
+from . import emit, facts, feldera_names, modules, pack
 
 
 def main(argv=None) -> int:
@@ -100,7 +100,8 @@ def main(argv=None) -> int:
             delta = seal.close(model, states[0][1] if states else {}, args.close, args.until, args.file)
             print(json.dumps(delta | {"pack": model.meta["name"]}, ensure_ascii=False, indent=1))
         else:
-            print(json.dumps(facts.ingress(model, facts.load(model, args.facts)), indent=2))
+            updates = facts.ingress(model, facts.load(model, args.facts))
+            print(json.dumps({feldera_names.physical(t): rows for t, rows in updates.items()}, indent=2))
     except (pack.CompileError, facts.LoadError) as e:
         print(f"error: {e}", file=sys.stderr)
         return 1

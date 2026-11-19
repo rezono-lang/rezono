@@ -8,7 +8,7 @@ from query_fixture import ROOT
 
 
 @pytest.mark.xfail(strict=True, raises=AssertionError, reason=(
-    "Waits for compiler/tests/test_rule_day_numbers.py--test_rules_read_a_text_date_as_a_day_number (#718): "
+    "M2: Waits for compiler/tests/test_rule_day_numbers.py--test_rules_read_a_text_date_as_a_day_number (#718): "
     "rules cannot yet turn the published text date into a day number. "
     "Then derive support_window_result(query, service, version, end, url, sha256) in rules/support_window.dl from "
     "published_series_support. Declare SupportQuery (as_of_day, horizon_days: integers the caller supplies, no "

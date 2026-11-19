@@ -17,7 +17,7 @@ import re
 from dataclasses import dataclass
 from urllib.parse import quote
 
-from .schema import PYTHON, Schema, Slot
+from .schema import INPUT_FORMATS, PYTHON, Schema, Slot
 
 ISO_DATE = re.compile(r"^[0-9]{4}-[0-9]{2}-[0-9]{2}$")
 TYPES = {"str": str, "int": int, "bool": bool, "date": datetime.date}
@@ -34,6 +34,7 @@ CODES = (
     "record_without_identifier",
     "unknown_slot",
     "dictionary_value_not_record",  # LinkML's dictionary form with a value that is not a record
+    "invalid_sha256",  # a value that is not a canonical digest on a formatted slot
     "wrong_type",  # a value that is not of its slot's type
     "decision_missing",  # a record of a control kind that names no decision (DV1)
     "source_missing",  # a batch without a source (step.py)
@@ -150,7 +151,10 @@ def _add(schema: Schema, kind: str, record, derived_id: str | None, rows: dict, 
             if s.inlined and isinstance(v, dict):
                 v = _add(schema, s.target, v, embedded_id(eid, s, n if s.multivalued else None), rows,
                          f"{where}.{name}[{n}]", watch, context)
-            row = (eid, _typed(s.type, v, f"{where}.{name}"))
+            v = _typed(s.type, v, f"{where}.{name}")
+            if s.input_format == "sha256" and not INPUT_FORMATS["sha256"].fullmatch(v):
+                raise _Refused("invalid_sha256", f"{where}.{name}")
+            row = (eid, v)
             rows.setdefault(s.table, []).append(row)
             if on_row:
                 on_row(s.table, row, kind, eid, name, context)

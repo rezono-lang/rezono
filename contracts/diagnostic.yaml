@@ -79,6 +79,14 @@ classes:
           Where it is in a file. Left out when no file text is known, as for a fact document given to
           admission as data: then `where` is the place.
       hint: {range: Text, description: "What to write instead, or how to resolve it, where the component knows."}
+      related:
+        range: Span
+        inlined: true
+        inlined_as_list: true
+        multivalued: true
+        description: >-
+          Other places that cause this diagnostic, in the order the component found them. Left out when there is
+          none.
 
   DiagnosticList:
     tree_root: true

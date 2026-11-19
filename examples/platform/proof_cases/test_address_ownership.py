@@ -6,7 +6,7 @@ from case_support import ROOT, exact, reference
 
 
 @pytest.mark.xfail(strict=True, raises=AssertionError, reason=(
-    "Derive endpoint_address_bounds(endpoint, network, address, first, last) in rules/address.dl from the derived "
+    "M2: Derive endpoint_address_bounds(endpoint, network, address, first, last) in rules/address.dl from the derived "
     "cluster_endpoint_network (test_cluster_worker_network is green). Declare NodeAddressRange (network, first, "
     "last) and EndpointAddress (endpoint, address) in schema/address.yaml with plain text network and endpoint "
     "slots, and copy the ranges and addresses of firewall-inputs.json into facts/address.yaml; that fragment "

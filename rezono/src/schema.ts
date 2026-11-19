@@ -47,6 +47,10 @@ export interface RuleDef {
 	binders: { name: string; ref: string }[];
 	/** What a missing row means: `not fits(…)` needs `closed` (§6). */
 	world: World;
+	/** The truth states a ground call can take: `known` alone for a decided rule. Without it a rule reads as decided. */
+	states?: string[];
+	/** Whether the publication carries a checked outcome for the rule, keyed by the complete invocation. */
+	outcome?: boolean;
 }
 export interface Schema {
 	rezono: '1.0';

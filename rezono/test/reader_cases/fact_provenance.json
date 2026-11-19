@@ -1,0 +1,136 @@
+{
+  "source": "kind Notice world closed\n  holder: Text\nsource notices\n  kind tool\n  name \"Release notice inspection\"\n  position \"L1\"\nfact Notice @ notices\n  | id     | holder | @ revision | @ fragment_sha256 |\n  | ceph-1 | \"Ceph\" | \"19.2.0\"   | \"85acea58\"        |\n  | pg-1   | \"PGDG\" | -          | \"0f3c11aa\"        |",
+  "module": {
+    "rezono": "0",
+    "pack": "sample",
+    "use": [],
+    "decls": [
+      {
+        "kind": "Notice",
+        "world": "closed",
+        "slots": [
+          {
+            "slot": "holder",
+            "type": "Text"
+          }
+        ],
+        "derived": []
+      },
+      {
+        "source": "notices",
+        "fields": {
+          "kind": "tool",
+          "name": "Release notice inspection",
+          "position": "L1"
+        }
+      },
+      {
+        "fact": "Notice",
+        "source": "notices",
+        "columns": [
+          "id",
+          "holder"
+        ],
+        "sourceColumns": [
+          "revision",
+          "fragment_sha256"
+        ],
+        "rows": [
+          [
+            {
+              "lit": "ceph-1"
+            },
+            {
+              "lit": "\"Ceph\""
+            },
+            {
+              "lit": "\"19.2.0\""
+            },
+            {
+              "lit": "\"85acea58\""
+            }
+          ],
+          [
+            {
+              "lit": "pg-1"
+            },
+            {
+              "lit": "\"PGDG\""
+            },
+            {
+              "boundary": "omitted"
+            },
+            {
+              "lit": "\"0f3c11aa\""
+            }
+          ]
+        ]
+      }
+    ]
+  },
+  "spanNames": {
+    "/decls/1": "notices",
+    "/decls/2": "Notice",
+    "/decls/2/rows/1/2": "-"
+  },
+  "rejections": [
+    {
+      "from": "fact Notice @ notices",
+      "to": "fact Notice"
+    },
+    {
+      "from": "  kind tool",
+      "to": "  kind \"tool\""
+    }
+  ],
+  "knownDiagnostics": [
+    {
+      "code": "R000",
+      "span": {
+        "text": "notices",
+        "start": 68,
+        "end": 75
+      }
+    },
+    {
+      "code": "R000",
+      "span": {
+        "text": "tool",
+        "start": 83,
+        "end": 87
+      }
+    },
+    {
+      "code": "R000",
+      "span": {
+        "text": "\"",
+        "start": 95,
+        "end": 96
+      }
+    },
+    {
+      "code": "R000",
+      "span": {
+        "text": "\"",
+        "start": 134,
+        "end": 135
+      }
+    },
+    {
+      "code": "R000",
+      "span": {
+        "text": "@",
+        "start": 151,
+        "end": 152
+      }
+    },
+    {
+      "code": "R000",
+      "span": {
+        "text": "@",
+        "start": 183,
+        "end": 184
+      }
+    }
+  ]
+}

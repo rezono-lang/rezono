@@ -8,7 +8,7 @@ import sys
 from dataclasses import dataclass
 
 from . import rules as ir
-from . import amounts, calc, calc_sql, checks as bundled, normalise, rules_split, rules_sql, seal, spans, types
+from . import amounts, calc, calc_sql, checks as bundled, feldera_names, normalise, rules_split, rules_sql, seal, spans, types
 from .pack import LAYERS, CompileError, Pack
 from .sqltext import literal, q
 
@@ -29,8 +29,9 @@ DUCKDB_FUNCTIONS = "CREATE OR REPLACE MACRO rlike(s, p) AS regexp_matches(s, p);
 
 
 def duckdb(sql: str) -> str:
-    """Engine SQL as DuckDB runs it: a materialised or local view becomes a plain view."""
-    return sql.replace("CREATE MATERIALIZED VIEW", "CREATE VIEW").replace("CREATE LOCAL VIEW", "CREATE VIEW")
+    """Evaluate shared engine SQL on DuckDB with logical relation names and plain views."""
+    logical = feldera_names.render(sql, feldera_names.LOGICAL)
+    return logical.replace("CREATE MATERIALIZED VIEW", "CREATE VIEW").replace("CREATE LOCAL VIEW", "CREATE VIEW")
 # Parameter tables per slot (docs/compiler.md): the facet that gives the row, and the column type.
 SLOT_PARAMETERS = (("minimum", "minimum"), ("maximum", "maximum"), ("constant", "constant"),
                    ("minimum_cardinality", "minimum_cardinality"), ("maximum_cardinality", "maximum_cardinality"))
@@ -89,8 +90,8 @@ def compile_pack(pack: Pack, max_views: int | Memory = MAX_VIEWS, previous: list
     namespace(pack, checks, prog, calc_prog)
     check_sql, check_views = bundled.views(pack, checks)  # one view per check kind
     out = {
-        "engine/tables.sql": tables(pack),
-        "engine/integrity.sql": HEADER + check_sql + seal.sql(pack),
+        "engine/tables.sql": tables(pack, relation=feldera_names.quoted),
+        "engine/integrity.sql": HEADER + feldera_names.render(check_sql + seal.sql(pack)),
         "engine/parameters.json": rows_json(parameters(pack)),
         "bundle/schema-bundle.json": json.dumps(bundle(pack, checks, prog, calc_prog), ensure_ascii=False, indent=2) + "\n",
     }
@@ -324,21 +325,21 @@ def id_type(pack: Pack, kind: str) -> str:
     return pack.kinds[pack.root(kind)].id_type
 
 
-def tables(pack: Pack) -> str:
+def tables(pack: Pack, relation=q) -> str:
     out = [HEADER]
     for k, kind in pack.kinds.items():
-        out.append(f"\nCREATE TABLE {q(k)} (id {id_type(pack, k)} NOT NULL);\n")
+        out.append(f"\nCREATE TABLE {relation(k)} (id {id_type(pack, k)} NOT NULL);\n")
         for s in kind.slots.values():
-            out.append(f"CREATE TABLE {q(s.table)} (id {id_type(pack, k)} NOT NULL, v {s.type.sql} NOT NULL);\n")
+            out.append(f"CREATE TABLE {relation(s.table)} (id {id_type(pack, k)} NOT NULL, v {s.type.sql} NOT NULL);\n")
     for s in pack.seals:  # the loader fills it with each element's row hash; the engine never hashes
         out.append(f"\n-- Seal: the canonical hash of each row of {s.kind}, from the loader.\n"
-                   f"CREATE TABLE {q(s.row_sha256)} (id {id_type(pack, s.kind)} NOT NULL, v VARCHAR NOT NULL);\n")
+                   f"CREATE TABLE {relation(s.row_sha256)} (id {id_type(pack, s.kind)} NOT NULL, v VARCHAR NOT NULL);\n")
     out.append("\n-- Parameters: enum values, bounds, constants and cardinalities are rows "
                "(engine/parameters.json), not SQL constants.\n")
     for e in pack.enums:
-        out.append(f"CREATE TABLE {q(e)} (id VARCHAR NOT NULL);\n")
+        out.append(f"CREATE TABLE {relation(e)} (id VARCHAR NOT NULL);\n")
     for table, sql_type, _ in slot_parameters(pack):
-        out.append(f"CREATE TABLE {q(table)} (v {sql_type} NOT NULL);\n")
+        out.append(f"CREATE TABLE {relation(table)} (v {sql_type} NOT NULL);\n")
     if pack.kinds:
         out.append(bundled.tables())
     return "".join(out)
@@ -598,6 +599,8 @@ def rule_body(prog, rule, order: tuple[str, ...] | None) -> tuple[dict, list[dic
                     "result": rule_term(x.var, "integer")}
         else:
             lit |= {"polarity": "positive", "op": x.op, "terms": [typed(x.left, x.right), typed(x.right, x.left)]}
+            if getattr(x, "compare_as", None):
+                lit["compare_as"] = x.compare_as
         body.append(lit)
     return {"relation": rule.head.relation, "terms": atom(rule.head)}, body
 
@@ -726,7 +729,8 @@ def bundle(pack: Pack, checks, prog=None, calc_prog=None) -> dict:
                 attributes.append(present(common | {"type": s.type.bundle, "schema_type": s.range,
                                             "derivation": "fact", "enum": s.enum,
                                             "minimum": decimal(s.minimum), "maximum": decimal(s.maximum),
-                                            "patterns": s.patterns, "constant": constant, "currency": s.currency,
+                                            "patterns": s.patterns, "input_format": s.input_format,
+                                            "constant": constant, "currency": s.currency,
                                             "sentence": owned(sentence(f"attribute.{mood}", kind=k,
                                                                        attribute=s.element), sid, s.span)}))
         for name, slots in kind.unique_keys:

@@ -4,7 +4,8 @@ import re
 
 from .rezono_lowering import Refuse
 
-FIELDS = {"description", "exactMappings", "annotations"}
+MAPPINGS = (("exactMappings", "exact_mappings"), ("closeMappings", "close_mappings"), ("broadMappings", "broad_mappings"))
+FIELDS = {"description", "annotations"} | {written for written, _ in MAPPINGS}
 HEADER = FIELDS | {"schema", "iri", "language", "prefixes", "imports", "defaultRange"}
 NAME = re.compile(r"[a-z][a-z0-9_]*")
 
@@ -28,7 +29,7 @@ def annotation_value(value: object) -> bool:
 def valid(body: dict) -> bool:
     if "description" in body and not isinstance(body["description"], str):
         return False
-    if "exactMappings" in body and not text_list(body["exactMappings"]):
+    if any(written in body and not text_list(body[written]) for written, _ in MAPPINGS):
         return False
     if "annotations" in body:
         annotations = body["annotations"]
@@ -59,8 +60,9 @@ def lower(body: dict) -> dict:
     metadata = {}
     if "description" in body:
         metadata["description"] = body["description"]
-    if "exactMappings" in body:
-        metadata["exact_mappings"] = list(body["exactMappings"])
+    for written, target in MAPPINGS:
+        if written in body:
+            metadata[target] = list(body[written])
     if "annotations" in body:
         metadata["annotations"] = {tag: {"value": value} for tag, value in body["annotations"].items()}
     return metadata

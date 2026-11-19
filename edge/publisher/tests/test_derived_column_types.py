@@ -75,8 +75,6 @@ def withheld_form(compiled, manifest, results):
     return role_objects, back["schema"]["kinds"]["RankedStage"]
 
 
-@pytest.mark.xfail(strict=True, raises=UntypedDerivedColumn,
-                   reason="Publish checked semantic columns and retain the ordered snapshot key.")
 def test_publication_derived_column_types():
     compiled = bundle()
     expected = ("stage-a", "9007199254740993", "001")

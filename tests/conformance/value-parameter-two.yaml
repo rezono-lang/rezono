@@ -37,3 +37,4 @@ unsupported:
     code.
   feldera: The calculation result carries a prose ambiguity reason instead of the specified versions_overlap
     code.
+  language: "The shared runner checks questions against the neutral fixture, which declares no versioned parameter, and a question cannot declare one. Version choice by valid and known date belongs to calculation binding; the question evaluator reads a version state only as a stored value."

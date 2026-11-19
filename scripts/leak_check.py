@@ -15,7 +15,7 @@ EXAMPLE = re.compile(rb"(?:[\w-]+\.)*(?:example\.(?:com|org|net)|example|invalid
 PATTERNS = {
     "machine_path": re.compile(rb"(?:[A-Z]:[/\\]+(?:Users|Documents and Settings)[/\\]+|/(?:Users|home)/|/mnt/[a-z]/Users/)[\w.-]+", re.I),
     "ticket": re.compile(rb"RV-[A-Z]*[0-9]+"),
-    "old_name": re.compile(rb"(?<![A-Za-z0-9])(?:re[d]e\.dev|re[d]e|rec[k]on)(?![A-Za-z0-9])", re.I),
+    "old_name": re.compile(rb"(?<![A-Za-z0-9])(?:re[d]e\.dev|re[d]e|rec[k]on|a[t]las)(?![A-Za-z0-9])", re.I),
 }
 
 

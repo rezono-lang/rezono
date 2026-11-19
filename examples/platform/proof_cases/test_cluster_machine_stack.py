@@ -5,7 +5,7 @@ from stack_support import assert_host_witness, rebound
 
 
 @pytest.mark.xfail(strict=True, raises=AssertionError, reason=(
-    "Depends on test_cluster_worker_network for cluster_worker_host and machine identities. "
+    "Build on the cluster_worker_host rows and machine identities of the green test_cluster_worker_network. "
     "Implement rules/cluster_machine_stack.dl, schema/cluster_machine_stack.yaml and "
     "facts/cluster_machine_stack.yaml. Read decisions/platform-derivation-acceptance.md."
 ))

@@ -1,0 +1,259 @@
+// Complete physical and nested allocations of one workload for one purchase scope
+// (decisions/run-physical-nested-allocation.md). A comparison names the workload, the scope and the
+// reference date; its candidates are the recorded proposals of that workload and scope.
+
+.decl alloc_comparison(comparison: symbol, workload: symbol, scope: symbol, day: symbol)
+alloc_comparison(c, w, s, r) :- allocation_comparison__workload(c, w), allocation_comparison__scope(c, s),
+    allocation_comparison__reference_date(c, r).
+
+.decl alloc_candidate(comparison: symbol, candidate: symbol)
+alloc_candidate(c, k) :- alloc_comparison(c, w, s, _), allocation_candidate__workload(k, w),
+    allocation_candidate__scope(k, s).
+
+// A register states that the alternatives of the comparison are complete.
+.decl alloc_inventory_covered(comparison: symbol)
+alloc_inventory_covered(c) :- allocation_candidate_coverage__comparison(_, c).
+
+.decl alloc_has_candidate(comparison: symbol)
+alloc_has_candidate(c) :- alloc_candidate(c, _).
+
+// Placement: every member of the workload sits on exactly one host.
+.decl alloc_placed(candidate: symbol, member: symbol)
+alloc_placed(k, m) :- allocation_assignment__candidate(a, k), allocation_assignment__member(a, m).
+
+.decl alloc_unplaced(candidate: symbol, member: symbol)
+alloc_unplaced(k, m) :- allocation_candidate__workload(k, w), allocation_member__workload(m, w),
+    !alloc_placed(k, m).
+
+.decl alloc_double(candidate: symbol, member: symbol)
+alloc_double(k, m) :- allocation_assignment__candidate(a, k), allocation_assignment__member(a, m),
+    allocation_assignment__candidate(b, k), allocation_assignment__member(b, m), a != b.
+
+// Which decision is in force on a reference day comes from std-decision: took_effect, ended, replaced and
+// in_force_on, with its checks on the decision records.
+
+// What each member demands of its host, one row per member and resource.
+.decl alloc_demand(candidate: symbol, host: symbol, member: symbol, resource: symbol, amount: number)
+alloc_demand(k, h, m, "cpu", n) :- allocation_assignment__candidate(a, k), allocation_assignment__member(a, m),
+    allocation_assignment__host(a, h), allocation_member__cpu(m, n).
+alloc_demand(k, h, m, "memory", n) :- allocation_assignment__candidate(a, k), allocation_assignment__member(a, m),
+    allocation_assignment__host(a, h), allocation_member__memory(m, n).
+alloc_demand(k, h, m, "disk", n) :- allocation_assignment__candidate(a, k), allocation_assignment__member(a, m),
+    allocation_assignment__host(a, h), allocation_member__disk(m, n).
+
+.decl alloc_load(candidate: symbol, host: symbol, resource: symbol, total: number)
+alloc_load(k, h, res, t) :- alloc_demand(k, h, _, res, _), t = sum n : { alloc_demand(k, h, _, res, n) }.
+
+.decl alloc_capacity(host: symbol, resource: symbol, amount: number)
+alloc_capacity(h, "cpu", n) :- allocation_host__cpu(h, n).
+alloc_capacity(h, "memory", n) :- allocation_host__memory(h, n).
+alloc_capacity(h, "disk", n) :- allocation_host__disk(h, n).
+
+.decl alloc_has_capacity(host: symbol, resource: symbol)
+alloc_has_capacity(h, res) :- alloc_capacity(h, res, _).
+
+// A capacity nobody recorded is unknown, never zero.
+.decl alloc_capacity_gap(candidate: symbol, host: symbol, resource: symbol)
+alloc_capacity_gap(k, h, res) :- alloc_load(k, h, res, _), !alloc_has_capacity(h, res).
+
+// The reserve a decision in force on the reference date sets per host for the purchase scope.
+.decl alloc_reserve(comparison: symbol, resource: symbol, reserve: symbol, amount: number)
+alloc_reserve(c, res, v, n) :- alloc_comparison(c, _, s, r), allocation_reserve__scope(v, s),
+    allocation_reserve__decision(v, d), in_force_on(d, r), allocation_reserve__resource(v, res),
+    allocation_reserve__amount(v, n).
+
+.decl alloc_reserved(comparison: symbol, resource: symbol)
+alloc_reserved(c, res) :- alloc_reserve(c, res, _, _).
+
+.decl alloc_reserve_conflict(comparison: symbol, resource: symbol)
+alloc_reserve_conflict(c, res) :- alloc_reserve(c, res, _, a), alloc_reserve(c, res, _, b), a != b.
+
+// Finding: demand plus reserve exceeds a host's capacity.
+.decl allocation_limit_exceeded(workload: symbol, scope: symbol, candidate: symbol, host: symbol, resource: symbol)
+allocation_limit_exceeded(w, s, k, h, res) :- alloc_comparison(c, w, s, _), alloc_candidate(c, k),
+    alloc_load(k, h, res, load), alloc_capacity(h, res, cap), alloc_reserve(c, res, _, reserve),
+    needed = load + reserve, needed > cap.
+
+// Hosts of a candidate per supplier, against the supplier's limits for the order.
+.decl alloc_supplier_host(candidate: symbol, supplier: symbol, host: symbol)
+alloc_supplier_host(k, sup, h) :- allocation_assignment__candidate(a, k), allocation_assignment__host(a, h),
+    allocation_host__supplier(h, sup).
+
+.decl alloc_supplier_hosts(candidate: symbol, supplier: symbol, hosts: number)
+alloc_supplier_hosts(k, sup, n) :- alloc_supplier_host(k, sup, _), n = count : { alloc_supplier_host(k, sup, _) }.
+
+.decl alloc_limit_for(scope: symbol, supplier: symbol, limit: symbol)
+alloc_limit_for(s, sup, v) :- allocation_supplier_limit__scope(v, s), allocation_supplier_limit__supplier(v, sup).
+
+.decl alloc_limit_known(scope: symbol, supplier: symbol)
+alloc_limit_known(s, sup) :- alloc_limit_for(s, sup, _).
+
+.decl alloc_limit_gap(comparison: symbol, candidate: symbol, supplier: symbol)
+alloc_limit_gap(c, k, sup) :- alloc_comparison(c, _, s, _), alloc_candidate(c, k), alloc_supplier_hosts(k, sup, _),
+    !alloc_limit_known(s, sup).
+
+.decl alloc_supplier_exceeded(comparison: symbol, candidate: symbol, limit: symbol)
+alloc_supplier_exceeded(c, k, v) :- alloc_comparison(c, _, s, _), alloc_candidate(c, k),
+    alloc_supplier_hosts(k, sup, n), alloc_limit_for(s, sup, v), allocation_supplier_limit__stock(v, m), n > m.
+alloc_supplier_exceeded(c, k, v) :- alloc_comparison(c, _, s, _), alloc_candidate(c, k),
+    alloc_supplier_hosts(k, sup, n), alloc_limit_for(s, sup, v), allocation_supplier_limit__account_limit(v, m), n > m.
+alloc_supplier_exceeded(c, k, v) :- alloc_comparison(c, _, s, _), alloc_candidate(c, k),
+    alloc_supplier_hosts(k, sup, n), alloc_limit_for(s, sup, v), allocation_supplier_limit__plan_limit(v, m), n > m.
+
+// Whole-order price: every charge of the candidate, recurring over its periods plus setup.
+.decl alloc_charge_amount(candidate: symbol, charge: symbol, currency: symbol, amount: number)
+alloc_charge_amount(k, g, cur, total) :- allocation_charge__candidate(g, k), allocation_charge__currency(g, cur),
+    allocation_charge__recurring_minor(g, rate), allocation_charge__periods(g, p),
+    allocation_charge__setup_minor(g, once), usage = rate * p, total = usage + once.
+
+// A charge covers the host it names; a charge that names no host covers the whole candidate.
+.decl alloc_charge_on_host(charge: symbol)
+alloc_charge_on_host(g) :- allocation_charge__host(g, _).
+
+.decl alloc_whole_charge(candidate: symbol)
+alloc_whole_charge(k) :- alloc_charge_amount(k, g, _, _), !alloc_charge_on_host(g).
+
+.decl alloc_host_charged(candidate: symbol, host: symbol)
+alloc_host_charged(k, h) :- alloc_charge_amount(k, g, _, _), allocation_charge__host(g, h).
+
+// A host the candidate occupies that no charge covers: its price is unknown, never zero.
+.decl alloc_uncharged_host(candidate: symbol, host: symbol)
+alloc_uncharged_host(k, h) :- allocation_assignment__candidate(a, k), allocation_assignment__host(a, h),
+    !alloc_host_charged(k, h), !alloc_whole_charge(k).
+
+.decl alloc_has_uncharged_host(candidate: symbol)
+alloc_has_uncharged_host(k) :- alloc_uncharged_host(k, _).
+
+// A candidate is priced when it has a charge and every host it occupies is covered by one.
+.decl alloc_priced(candidate: symbol)
+alloc_priced(k) :- alloc_charge_amount(k, _, _, _), !alloc_has_uncharged_host(k).
+
+// The payable total only of a candidate whose full price is known.
+.decl allocation_payable_total(workload: symbol, scope: symbol, candidate: symbol, currency: symbol, total: number)
+allocation_payable_total(w, s, k, cur, t) :- alloc_comparison(c, w, s, _), alloc_candidate(c, k), alloc_priced(k),
+    alloc_charge_amount(k, _, cur, _), t = sum x : { alloc_charge_amount(k, _, cur, x) }.
+
+.decl alloc_mixed_currency(candidate: symbol)
+alloc_mixed_currency(k) :- alloc_charge_amount(k, _, a, _), alloc_charge_amount(k, _, b, _), a != b.
+
+// Evidence the comparison needs and does not have: it stays unknown.
+.decl alloc_gap(comparison: symbol, candidate: symbol, reason: symbol)
+alloc_gap(c, k, "price") :- alloc_candidate(c, k), !alloc_priced(k).
+alloc_gap(c, k, "currency") :- alloc_candidate(c, k), alloc_mixed_currency(k).
+alloc_gap(c, k, "capacity") :- alloc_candidate(c, k), alloc_capacity_gap(k, _, _).
+alloc_gap(c, k, "reserve") :- alloc_candidate(c, k), alloc_load(k, _, res, _), !alloc_reserved(c, res).
+alloc_gap(c, k, "reserve") :- alloc_candidate(c, k), alloc_load(k, _, res, _), alloc_reserve_conflict(c, res).
+alloc_gap(c, k, "supplier") :- alloc_limit_gap(c, k, _).
+
+.decl alloc_currency_clash(comparison: symbol)
+alloc_currency_clash(c) :- alloc_candidate(c, k), alloc_candidate(c, l), alloc_charge_amount(k, _, a, _),
+    alloc_charge_amount(l, _, b, _), a != b.
+
+.decl alloc_unknown(comparison: symbol)
+alloc_unknown(c) :- alloc_comparison(c, _, _, _), !alloc_inventory_covered(c).
+alloc_unknown(c) :- alloc_comparison(c, _, _, _), !alloc_has_candidate(c).
+alloc_unknown(c) :- alloc_gap(c, _, _).
+alloc_unknown(c) :- alloc_currency_clash(c).
+
+.decl alloc_ready(comparison: symbol)
+alloc_ready(c) :- alloc_comparison(c, _, _, _), alloc_inventory_covered(c), !alloc_unknown(c).
+
+// A candidate that does not fit: a member unplaced or twice placed, a host over capacity, an order over a limit.
+.decl alloc_blocked(comparison: symbol, candidate: symbol)
+alloc_blocked(c, k) :- alloc_candidate(c, k), alloc_unplaced(k, _).
+alloc_blocked(c, k) :- alloc_candidate(c, k), alloc_double(k, _).
+alloc_blocked(c, k) :- alloc_comparison(c, w, s, _), allocation_limit_exceeded(w, s, k, _, _).
+alloc_blocked(c, k) :- alloc_supplier_exceeded(c, k, _).
+
+.decl alloc_feasible_total(comparison: symbol, candidate: symbol, currency: symbol, total: number)
+alloc_feasible_total(c, k, cur, t) :- alloc_ready(c), alloc_comparison(c, w, s, _),
+    allocation_payable_total(w, s, k, cur, t), !alloc_blocked(c, k).
+
+.decl alloc_lowest_total(comparison: symbol, total: number)
+alloc_lowest_total(c, t) :- alloc_feasible_total(c, _, _, _), t = min x : { alloc_feasible_total(c, _, _, x) }.
+
+.decl alloc_lowest(comparison: symbol, candidate: symbol)
+alloc_lowest(c, k) :- alloc_feasible_total(c, k, _, t), alloc_lowest_total(c, t).
+
+.decl alloc_lowest_n(comparison: symbol, lowest: number)
+alloc_lowest_n(c, n) :- alloc_lowest(c, _), n = count : { alloc_lowest(c, _) }.
+
+// Preferences: a register of the authority states which preferences exist for the workload, scope and day.
+.decl alloc_preference_covered(comparison: symbol)
+alloc_preference_covered(c) :- alloc_comparison(c, w, s, r), allocation_preference_coverage__workload(p, w),
+    allocation_preference_coverage__scope(p, s), allocation_preference_coverage__reference_date(p, r),
+    allocation_preference_coverage__authority(p, _).
+
+.decl alloc_preference_of(comparison: symbol, preference: symbol, decision: symbol)
+alloc_preference_of(c, p, d) :- alloc_comparison(c, w, s, _), allocation_preference__workload(p, w),
+    allocation_preference__scope(p, s), allocation_preference__decision(p, d).
+
+// A replacement counts for the preference only when the successor that took effect is itself a decision on a
+// preference for the same workload and scope. A successor about anything else replaces nothing here.
+.decl alloc_pref_replaced(comparison: symbol, preference: symbol)
+alloc_pref_replaced(c, p) :- alloc_preference_of(c, p, d), alloc_comparison(c, w, s, r), replaced(d, next, r),
+    allocation_preference__decision(q, next), allocation_preference__workload(q, w),
+    allocation_preference__scope(q, s).
+
+// A preference applies when its decision is in force on the day (std-decision's in_force_on). It is replaced
+// when such a successor for the same workload and scope has taken effect. A decision that is not in force
+// only because a successor about something else took effect is unsettled: the evidence does not
+// say whether the preference still stands, so a tie it could decide stays unknown.
+.decl alloc_pref_disposition(comparison: symbol, preference: symbol, standing: symbol)
+alloc_pref_disposition(c, p, "applies") :- alloc_preference_of(c, p, d), alloc_comparison(c, _, _, r),
+    in_force_on(d, r).
+alloc_pref_disposition(c, p, "replaced") :- alloc_pref_replaced(c, p).
+alloc_pref_disposition(c, p, "unsettled") :- alloc_preference_of(c, p, d), alloc_comparison(c, _, _, r),
+    took_effect(d, r), !ended(d, r), was_replaced(d, r), !alloc_pref_replaced(c, p).
+
+.decl alloc_has_unsettled(comparison: symbol)
+alloc_has_unsettled(c) :- alloc_pref_disposition(c, _, "unsettled").
+
+.decl alloc_applicable(comparison: symbol, preference: symbol)
+alloc_applicable(c, p) :- alloc_pref_disposition(c, p, "applies").
+
+.decl alloc_has_applicable(comparison: symbol)
+alloc_has_applicable(c) :- alloc_applicable(c, _).
+
+// What an applicable preference leaves of the equally priced candidates.
+.decl alloc_pref_leaves(comparison: symbol, preference: symbol, candidate: symbol)
+alloc_pref_leaves(c, p, k) :- alloc_applicable(c, p), allocation_preference__acceptable(p, k), alloc_lowest(c, k).
+
+.decl alloc_pref_clear(comparison: symbol, preference: symbol)
+alloc_pref_clear(c, p) :- alloc_pref_leaves(c, p, _), n = count : { alloc_pref_leaves(c, p, _) }, n = 1.
+
+.decl alloc_pref_unclear(comparison: symbol, preference: symbol)
+alloc_pref_unclear(c, p) :- alloc_applicable(c, p), !alloc_pref_clear(c, p).
+
+.decl alloc_has_unclear(comparison: symbol)
+alloc_has_unclear(c) :- alloc_pref_unclear(c, _).
+
+.decl alloc_vote(comparison: symbol, candidate: symbol)
+alloc_vote(c, k) :- alloc_pref_leaves(c, _, k).
+
+.decl alloc_vote_n(comparison: symbol, votes: number)
+alloc_vote_n(c, n) :- alloc_vote(c, _), n = count : { alloc_vote(c, _) }.
+
+// The chosen candidate: the only lowest price, or, at a tie, the one every applicable preference leaves.
+.decl allocation_choice(workload: symbol, scope: symbol, candidate: symbol)
+allocation_choice(w, s, k) :- alloc_comparison(c, w, s, _), alloc_lowest(c, k), alloc_lowest_n(c, 1).
+allocation_choice(w, s, k) :- alloc_comparison(c, w, s, _), alloc_lowest_n(c, n), n > 1,
+    alloc_preference_covered(c), !alloc_has_unsettled(c), alloc_vote(c, k), alloc_vote_n(c, 1),
+    !alloc_has_unclear(c),
+    standing = count : { alloc_pref_disposition(c, _, _) }, standing >= 1.
+
+// Why no candidate is chosen.
+.decl allocation_comparison_status(workload: symbol, scope: symbol, status: symbol)
+allocation_comparison_status(w, s, "unknown") :- alloc_comparison(c, w, s, _), alloc_unknown(c).
+allocation_comparison_status(w, s, "unknown") :- alloc_comparison(c, w, s, _), alloc_lowest_n(c, n), n > 1,
+    !alloc_preference_covered(c).
+allocation_comparison_status(w, s, "unknown") :- alloc_comparison(c, w, s, _), alloc_lowest_n(c, n), n > 1,
+    alloc_preference_covered(c), alloc_has_unsettled(c).
+allocation_comparison_status(w, s, "missing_preference") :- alloc_comparison(c, w, s, _), alloc_lowest_n(c, n),
+    n > 1, alloc_preference_covered(c), !alloc_has_applicable(c), !alloc_has_unsettled(c).
+allocation_comparison_status(w, s, "ambiguous_preference") :- alloc_comparison(c, w, s, _), alloc_lowest_n(c, n),
+    n > 1, alloc_preference_covered(c), alloc_pref_unclear(c, _).
+allocation_comparison_status(w, s, "ambiguous_preference") :- alloc_comparison(c, w, s, _), alloc_lowest_n(c, n),
+    n > 1, alloc_preference_covered(c), alloc_pref_leaves(c, _, a), alloc_pref_leaves(c, _, b), a != b.
+
+.output allocation_choice, allocation_comparison_status, allocation_payable_total, allocation_limit_exceeded

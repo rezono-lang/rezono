@@ -1,22 +1,26 @@
 """Retain independent positive transition evidence and reject supplied safety claims."""
 import pytest
 
-from rezono_canon import canonical_bytes
 from rezono_checker.transition import check_transition_certificate
-from round_visibility_cases import A_WITHDRAWN, OPENING, PRIORITIES, RUN, WITHDRAW_A, WITHDRAW_B
-from round_visibility_pair import MANIFEST, PROGRAM, pair_evidence
+from round_visibility_cases import A_WITHDRAWN, OPENING, RUN, WITHDRAW_A, WITHDRAW_B
+from round_visibility_pair import pair_evidence
 from round_visibility_publication import checked_loop_publication
+from round_visibility_rounds import singleton_rounds
 
 
 @pytest.mark.xfail(
     strict=True,
-    raises=AssertionError,
+    raises=(AssertionError, ImportError, TypeError),
     reason=(
-        "Read decisions/scoped-completeness.md sections 1 and 3. Only the selected members of a valid "
-        "independently checked current batch certificate enter ready. A supplied positive result "
-        "without the complete obligation inventory is not a certificate. Write in the Loop round admission path. "
-        "Waits for test_completeness_receipt_exact_inventory: ready needs the std-completeness admission that "
-        "checks submitted evidence against the retained context and only then supplies a protected rule input."
+        "Read decisions/admission-transport.md sections 6 to 8 and decisions/loop-certificate-admission.md. "
+        "Only the members of an admitted verified round for the current run and cut enter ready: "
+        "ready(run, step, reason) needs verified_round(round, run, cut, batch) and "
+        "verified_round_member(round, step), and keeps a proof reason. Of the two claims in "
+        "round_visibility_rounds only withdraw-a's is admitted. A supplied positive "
+        "result is not a certificate. Write in packs/std-loop (ready.dl, fixed_point.dl) and switch the readers "
+        "of the old ready to unblocked (loop/typed_recording.py, build/rules/tasks.dl). Waits for "
+        "test_unblocked_evidence and test_verified_round_authorizes_steps (same std-loop files). Today "
+        "rezono_checker.evidence is missing (ImportError)."
     ),
 )
 def test_ready_requires_checked_batch_member(tmp_path):
@@ -37,30 +41,14 @@ def test_ready_requires_checked_batch_member(tmp_path):
             "obligation": "at-least-one-lane-serving", "verdict": "proved", "reason": "submitted-positive",
         }],
     }
-    retained = {
-        "observed-lanes": OPENING.source_bytes(),
-        "lane-inventory": OPENING.inventory_bytes(),
-        "definition": canonical_bytes(PROGRAM),
-        "round-policy": canonical_bytes({"desired_manifest": MANIFEST, "run": RUN, "cut": OPENING.cut,
-                                         "width": 1, "effects": [WITHDRAW_A.plan, WITHDRAW_B.plan],
-                                         "priorities": PRIORITIES}),
-    }
+    retained, submitted, context, index = singleton_rounds()
     _, rows, _ = checked_loop_publication(
-        tmp_path / "without-certificate", records, retained=retained,
+        tmp_path / "without-certificate", records, retained=retained, context=context, index={},
     )
-    assert (rows("safe_alone"), rows("ready")) == (set(), set()), (
-        f"An incomplete supplied check authorized a step. safe_alone={rows('safe_alone')}. ready={rows('ready')}"
-    )
-    submitted = {
-        "batch-choice": canonical_bytes({"run": RUN, "cut": OPENING.cut, "members": [WITHDRAW_A.step]}),
-        **{
-            effect.step: canonical_bytes({"certificate": evidence.certificate, "base": evidence.base,
-                                           "variant": evidence.variant})
-            for effect, evidence in ((WITHDRAW_A, good), (WITHDRAW_B, other))
-        },
-    }
+    # safe_alone under a supplied check is test_supplied_verdicts_authorize_nothing's; this test owns ready.
+    assert rows("ready") == set(), f"An incomplete supplied check made a step ready: {rows('ready')}"
     _, rows, _ = checked_loop_publication(
-        tmp_path / "with-certificate", records, retained=retained, submitted=submitted,
+        tmp_path / "with-certificate", records, retained=retained, submitted=submitted, context=context, index=index,
     )
     assert {row[:2] for row in rows("ready")} == {(RUN, WITHDRAW_A.step)}
     assert all(row[2] for row in rows("ready")), "The selection must retain its proof reason"

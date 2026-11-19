@@ -20,11 +20,6 @@ class MissingFactTableLowering(Exception):
     pass
 
 
-@pytest.mark.xfail(strict=True, raises=MissingFactTableLowering,
-                   reason="Admit the base fact table through the ordinary compiler and fact loader. "
-                          "Read docs/rezono/publication.md §5.3. Waits for test_lower_schema_metadata and "
-                          "test_native_rule_ir_listed while they own rezono_module.py, and for "
-                          "test_lower_named_dataset while it owns facts.py.")
 def test_lower_fact_table(tmp_path, capsys):
     fixture = ROOT / "compiler/tests/fixtures/minimal"
     legacy = Path(shutil.copytree(fixture, tmp_path / "legacy"))
