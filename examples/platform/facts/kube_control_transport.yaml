@@ -1,7 +1,7 @@
 vendor_default_transport:
   - id: kube-control-1.32-transport
     product: kube-control
-    series: "1.32"
+    series: '1.32'
     protocol: TCP
     port: 6443
     source_url: 'https://raw.githubusercontent.com/kubernetes/website/release-1.32/content/en/docs/reference/networking/ports-and-protocols.md'
