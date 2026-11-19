@@ -84,12 +84,23 @@ const NOT_EXACT = 'not_exact';
 /** What a row gives for a slot: one value, or the members of a many-valued slot (a state stands for the whole set). */
 export type Cell = V | V[];
 
+/** The checked outcome of one invocation of a rule: a truth value, or a state with its reason and cause. */
+export interface Outcome {
+	key: string[];
+	state: 'known' | Held;
+	value?: boolean;
+	reason?: string;
+	cause?: RowRef;
+}
+
 /** The rows a role reads, as evaluation reads them. */
 export interface Data {
 	/** Per kind, per element, the cell of each slot its row gives. */
 	kinds: Map<string, Map<string, Map<string, Cell>>>;
 	/** Per rule, the canonical JSON of each list of ids it holds for. */
 	rules: Map<string, Set<string>>;
+	/** Per rule that publishes one, the checked outcome of each invocation by the canonical JSON of its key. */
+	outcomes: Map<string, Map<string, V>>;
 	params: Map<string, V>;
 	/** When not every kind and slot was loaded: the kinds that were, and of each its slots that were. A read of another is refused. */
 	only?: Map<string, Set<string>>;
@@ -259,9 +270,9 @@ const relationOf = (kind: string, slot: string): string => `${snake(kind)}__${sl
 export function load(
 	schema: Schema,
 	rows: Record<string, unknown>[],
-	more: { rules?: Record<string, string[][]>; params?: Record<string, unknown>; only?: Map<string, Set<string>> } = {}
+	more: { rules?: Record<string, string[][]>; outcomes?: Record<string, Outcome[]>; params?: Record<string, unknown>; only?: Map<string, Set<string>> } = {}
 ): Data {
-	const data: Data = { kinds: new Map(), rules: new Map(), params: new Map(), ...(more.only ? { only: more.only } : {}) };
+	const data: Data = { kinds: new Map(), rules: new Map(), outcomes: new Map(), params: new Map(), ...(more.only ? { only: more.only } : {}) };
 	for (const row of rows) {
 		const [kind, id] = [String(row.$kind), String(row.$id)];
 		const def = schema.kinds[kind];
@@ -278,6 +289,14 @@ export function load(
 		data.kinds.get(kind)!.set(id, cells);
 	}
 	for (const [rule, lists] of Object.entries(more.rules ?? {})) data.rules.set(rule, new Set(lists.map((ids) => canonicalJson(ids))));
+	for (const [rule, list] of Object.entries(more.outcomes ?? {})) {
+		const byKey = new Map<string, V>();
+		for (const o of list) {
+			const held = o.state === 'known' ? bool(o.value === true) : ({ s: o.state, reason: o.reason ?? '', ...(o.cause ? { cause: o.cause } : {}) } as V);
+			byKey.set(canonicalJson(o.key), held);
+		}
+		data.outcomes.set(rule, byKey);
+	}
 	for (const [name, json] of Object.entries(more.params ?? {})) {
 		const param = schema.params?.[name];
 		if (param) data.params.set(name, fromJson(schema, slotType(schema, param), json, { relation: 'param', key: [name] }));
@@ -620,6 +639,8 @@ export function reader(checked: Pick<Checked, 'typed' | 'heads'>, schema: Schema
 		return strict(args.map(ex), (...ids) => {
 			const key = ids.map((v) => (v as Ref).id);
 			note?.({ relation: name, key });
+			const outcome = data.outcomes.get(name)?.get(canonicalJson(key));
+			if (outcome) return outcome;
 			if (data.rules.get(name)?.has(canonicalJson(key))) return T;
 			// No row: false for a closed rule; for an open one unknown, with the row that would hold it as cause.
 			return rule.world === 'open' ? { s: 'unknown', reason: OPEN_WORLD, cause: { relation: name, key } } : F;

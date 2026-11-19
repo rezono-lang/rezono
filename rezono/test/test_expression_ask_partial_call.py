@@ -11,14 +11,6 @@ class PartialCallMismatch(AssertionError):
     """The question checker or evaluator disagreed with the authored predicate outcomes."""
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=PartialCallMismatch,
-    reason="Give a question's rule call its predicate states and keyed outcome in rezono/src/check.ts, "
-           "evaluate.ts and schema.ts: R047 where success rows alone must decide a partial call, and the actual "
-           "undecided row from a keyed outcome. Read decisions/question-predicate-outcomes.md and "
-           "tests/conformance/expression-ask-partial-call.yaml. No linker or compiler dependency.",
-)
 def test_expression_ask_partial_call():
     probe = Path(__file__).with_name("expression-ask-partial-call.mts")
     result = subprocess.run(["node", str(probe)], check=True, capture_output=True, encoding="utf-8")
