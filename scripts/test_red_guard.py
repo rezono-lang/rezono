@@ -86,6 +86,27 @@ def pytest_config_cases(function):
     if not any("Lift marks in a pull request of their own" in e for e in errors):
         raise AssertionError(f"lifted mark beside a pytest section: errors {errors}")
     print("DENY with planner: lifted mark beside a changed pytest section")
+    # pytest 9 reads these before pyproject.toml, as its whole configuration: an added one that
+    # collects only some names hides a red test whose mark goes.
+    narrow = b'[pytest]\npython_functions = ["test_k*"]\n'
+    for name in ("pytest.toml", ".pytest.toml", ".pytest.ini"):
+        path = f"compiler/{name}"
+        if not protected(path):
+            raise AssertionError(f"{path} is not protected")
+        for status, before, after in (("A", None, narrow), ("M", narrow, narrow + b"addopts = '-q'\n"),
+                                      ("D", narrow, None)):
+            errors, _ = review([Change(path, status, before, after)], planner=False)
+            if errors != [f"ERROR planner label required for {ascii(path)}"]:
+                raise AssertionError(f"{status} {path} without planner: errors {errors}")
+        errors, _ = review([Change("tests/test_count.py", "M", function, lifted),
+                            Change(path, "A", None, narrow)], planner=False)
+        if not errors:
+            raise AssertionError(f"lifted mark beside an added {path} without planner passed")
+        errors, _ = review([Change("tests/test_count.py", "M", function, lifted),
+                            Change(path, "A", None, narrow)], planner=True)
+        if not any("Lift marks in a pull request of their own" in e for e in errors):
+            raise AssertionError(f"lifted mark beside an added {path}: errors {errors}")
+        print(f"DENY without planner (A, M, D) and beside a lifted mark with planner: {path}")
 
 
 def green_to_red_cases():

@@ -65,6 +65,9 @@ EVIDENCE_DIRS = {
 # Expectations recorded by hand outside an evidence directory, such as the slip an example
 # must render.
 EXPECTATIONS = {"slip.yaml"}
+# Files that pytest reads as its whole configuration (pytest 9 reads pytest.toml and the
+# hidden forms before pyproject.toml): a change there can drop a test from the run.
+PYTEST_FILES = {"pytest.toml", ".pytest.toml", ".pytest.ini"}
 # Evidence data that completes a red test: a new recorded outcome, snapshot or vector, not
 # code and not configuration. Only these directories hold it; a fixture, a conformance case,
 # a schema, a pack, a contract or a list of what is blocked or not yet supported does not.
@@ -86,7 +89,7 @@ def protected(path):
             or p.name == "conftest.py" or p.name.startswith("test_")
             or p.name.endswith(("_test.py", "_support.py", ".test.ts", ".spec.ts",
                                 ".test.js", ".spec.js", ".snap", ".golden"))
-            or p.name in {"frozen_baseline.py", "reference.py", "pytest.ini"} | EXPECTATIONS
+            or p.name in {"frozen_baseline.py", "reference.py", "pytest.ini"} | PYTEST_FILES | EXPECTATIONS
             or "fixture" in p.stem or p.stem.endswith(("-cases", "_cases", "-vectors", "_vectors"))
             or p.parts[0] == "blocked")
 
