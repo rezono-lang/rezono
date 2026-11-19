@@ -45,7 +45,7 @@ class MissingSliceModule(AssertionError):
 
 
 def cases():
-    return yaml.safe_load((SLICE / "cases.yaml").read_text(encoding="utf-8"))["cases"]
+    return yaml.safe_load((SLICE / "allowance-cases.yaml").read_text(encoding="utf-8"))["cases"]
 
 
 def expected(case):

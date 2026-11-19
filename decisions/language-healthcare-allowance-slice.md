@@ -63,13 +63,13 @@ What is decided and not yet published:
 
 ## Where the slice lives
 
-The slice is a pack of its own beside the full example: `examples/zorgtoeslag-slice`. It holds the module `rezono/allowance.rezono`, the facts `facts.rezono`, the expected outcomes `cases.yaml` and the oracle `reference.py`. It gets its `pack.yaml` when its module compiles, after the third step below. Until then no pack check reads it.
+The slice is a pack of its own beside the full example: `examples/zorgtoeslag-slice`. It holds the module `rezono/allowance.rezono`, the facts `facts.rezono`, the expected outcomes `allowance-cases.yaml` and the oracle `reference.py`. It gets its `pack.yaml` when its module compiles, after the third step below. Until then no pack check reads it. Its cases are not named `cases.yaml`: that name holds the cases of the reader (`rezono/test/examples.test.ts`), with `compile` and `form` outcomes, while these are values for the oracle and the published pack.
 
 `examples/zorgtoeslag/zorgtoeslag.rezono` and its `cases.yaml` stay a design until every construct of the full example is there. Then the full example gets its own `pack.yaml`, and its cases become claims about the published pack.
 
 ## The oracle
 
-The oracle of the slice is `examples/zorgtoeslag-slice/reference.py`, an independent calculation in the manner of `examples/subsidy/reference.py`. It uses the standard library only and shares no code with the compiler or the reader. It reads the fact rows of `facts.rezono` with its own reading, and it states the parameter versions itself, from this decision, rather than reading the module. Its function `allowance(facts, household, as_of, known)` gives the monthly allowance in cents, or the pair of state and reason. The cases in `cases.yaml` were computed by hand, and the oracle must give each of them.
+The oracle of the slice is `examples/zorgtoeslag-slice/reference.py`, an independent calculation in the manner of `examples/subsidy/reference.py`. It uses the standard library only and shares no code with the compiler or the reader. It reads the fact rows of `facts.rezono` with its own reading, and it states the parameter versions itself, from this decision, rather than reading the module. Its function `allowance(facts, household, as_of, known)` gives the monthly allowance in cents, or the pair of state and reason. The cases in `allowance-cases.yaml` were computed by hand, and the oracle must give each of them.
 
 A lowering test of each building block of the slice compares what the compiler publishes with the oracle, not with the compiler's own output.
 
@@ -81,7 +81,7 @@ Each building block of the slice gets its own decision on how it lowers and publ
 2. **Ordered exceptions.** The calculation model has no operator for `unless` yet. The decision gives one, or a lowering into the existing operators that keeps the states of v0 section 5b.
 3. **Dated facts.** The fact contracts need a place for versioned values ([dated facts](language-dated-facts.md)), which is the largest change of the three.
 
-After the third, the slice gets its `pack.yaml`, and a test publishes every case of `cases.yaml` and compares it with the oracle.
+After the third, the slice gets its `pack.yaml`, and a test publishes every case of `allowance-cases.yaml` and compares it with the oracle.
 
 Here the choice of the domain goes before usage. Otherwise the order of the language follows usage: a building block publishes when the conversion of a pack waits for it, as the pack table of `scripts/language_usage.py` and [first packs](language-first-packs.md) show. These three building blocks are used by no other pack, so that order would put them last.
 
@@ -97,5 +97,5 @@ Here the choice of the domain goes before usage. Otherwise the order of the lang
 
 `compiler/tests/rezono/test_zorgtoeslag_slice.py` holds two red tests:
 
-- `test_slice_oracle_gives_the_cases`: the oracle, with the standard library only, gives every case of `cases.yaml`, and follows a change in the facts it reads.
+- `test_slice_oracle_gives_the_cases`: the oracle, with the standard library only, gives every case of `allowance-cases.yaml`, and follows a change in the facts it reads.
 - `test_slice_module_uses_only_the_first_slice`: the module reads, belongs to the pack `zorgtoeslag-slice`, uses the three building blocks with a parameter version per year and two `unless` blocks, and uses nothing outside the first slice.

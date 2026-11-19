@@ -1,7 +1,7 @@
 rezono 0
 pack zorgtoeslag-slice
 
--- Case data for cases.yaml (decisions/language-healthcare-allowance-slice.md). Households and amounts
+-- Case data for allowance-cases.yaml (decisions/language-healthcare-allowance-slice.md). Households and amounts
 -- are invented. An amount is a whole number of cents: 2400000 is EUR 24,000.00.
 
 fact Household
