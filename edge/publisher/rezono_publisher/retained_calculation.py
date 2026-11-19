@@ -8,6 +8,7 @@ from typing import Protocol
 from rezono_canon import sha256_hex
 from rezono_checker.canon import INTEGER
 from rezono_checker.check import check_epoch
+from rezono_checker.evidence import Evidence
 from rezono_checker.rules import check_calc_bindings, derived_relations, load_rules, load_seals
 from rezono_checker.snapshots import read_rows
 
@@ -90,6 +91,17 @@ def _resolve(st: StoreReader, pin: PinnedSelection, *,
             raise ValueError("invalid retained object key")
         return read(f"{pin.pack}/{suffix}")
 
+    root = st.uri("")
+
+    def read_evidence(uri: str) -> bytes:
+        """An object the admission step read: in the pinned store, outside the pack, and pinned by hash."""
+        if not uri.startswith(root):
+            raise ValueError("retained evidence leaves the pinned store")
+        key = uri[len(root):]
+        if not all(SEGMENT.fullmatch(part) for part in key.split("/")):
+            raise ValueError("invalid retained object key")
+        return read(key)
+
     def verified_bytes(entry: dict) -> bytes:
         body = read_uri(entry["uri"])
         if sha256_hex(body) != entry["sha256"]:
@@ -129,10 +141,16 @@ def _resolve(st: StoreReader, pin: PinnedSelection, *,
     proof = json.loads(verified_bytes(entry))
     rules = load_rules(rule_doc)
     check_calc_bindings(rule_doc, rules, calc_doc)
+    # The pinned manifest names the trusted context and the index its epoch was admitted with, by hash: the
+    # checker admits again from exactly those bytes. Without them nothing is admitted, and a protected row fails.
+    named = manifest.get("evidence")
+    if named is not None and not (isinstance(named, dict) and "context" in named and set(named) <= {"context", "index"}):
+        raise ValueError("malformed retained evidence")
+    evidence = None if named is None else Evidence(named["context"], named.get("index"), read_evidence)
     report = check_epoch(
         proof["witnesses"], {**manifest, "snapshots": snapshots}, rules, read_uri,
         derived=derived_relations(rule_doc, rules), seals=load_seals(rule_doc),
-        calc_ir=calc_doc, calc_witnesses=proof["calc_witnesses"],
+        calc_ir=calc_doc, calc_witnesses=proof["calc_witnesses"], evidence=evidence,
     )
     if not report["valid"]:
         reasons = sorted({f["reason"] for f in report["findings"] if f["severity"] == "error"})

@@ -801,15 +801,40 @@ def retained_native_cost():
     return archive, pin, manifest, definition
 
 
-def retained_publication(pack, calc_rule, extra_rows):
-    """One calculation reads a derived input. Use the real publisher without an engine."""
+def retained_publication(pack, calc_rule, extra_rows, admitted=False):
+    """One calculation reads a derived input. Use the real publisher without an engine. `admitted`: the epoch
+    also admitted a completeness receipt, in the archive layout of test_evidence_batch."""
+
+    class MemoryStore:
+        def __init__(self):
+            self.objects = {}
+
+        def uri(self, key):
+            return f"s3://test/{key}"
+
+        def get(self, key):
+            return self.objects.get(key)
+
+        def put_new(self, key, data):
+            assert self.objects.setdefault(key, data) == data
+
+    archive = MemoryStore()
+    evidence, protected = None, {}
+    if admitted:
+        from rezono_checker.evidence import Evidence, admit
+        from test_evidence_batch import layout, reader
+
+        context, index, _, _ = layout(archive)
+        evidence = Evidence(context, index, reader(archive))
+        protected = {relation: rows for relation, rows in admit(evidence).rows.items() if rows}
     name = f"calc__{calc_rule}"
     date = "2026-11-01"
     row = ref(name, "i0", "0", "known", "")
     early = witness("early", ["i0", "0"], "copy", [("x", "i0"), ("v", "0")], [("amount", ["i0", "0"])])
     rules_doc = {"format": "rezono.rules/1", "pack": pack,
                  "relations": [relation("amount", "base", 2), relation("early", "derived", 2),
-                               *(relation(extra, "base", 2) for extra in extra_rows)],
+                               *(relation(extra, "base", 2) for extra in extra_rows),
+                               *(relation(extra, "base", len(rows[0])) for extra, rows in protected.items())],
                  "rules": [rule("copy", ("early", "?x", "?v"), [lit("amount", "?x", "?v")])]}
     calculation = {
         "format": "rezono.calc-ir/1", "pack": pack, "subject": "item", "subject_table": "item", "as_of": "calc__as_of",
@@ -826,26 +851,13 @@ def retained_publication(pack, calc_rule, extra_rows):
                              "state": "known", "value": "0"}]}
     e = epoch(pack=pack, bundle="", rows={"item": [("i0",)], "amount": [("i0", "0")], "early": [("i0", "0")],
                                          name: [("i0", "0", "known", "")], "calc__as_of": [("as_of", date, date)],
-                                         **extra_rows},
+                                         **extra_rows, **protected},
               columns={"item": ("item",), "amount": ("item", None),
-                       **dict.fromkeys(extra_rows, ("item", None))}, witnesses=[early],
-              rules=json.dumps(rules_doc), calc=json.dumps(calculation), calc_witnesses=[calculated])
-
-    class MemoryStore:
-        def __init__(self):
-            self.objects = {}
-
-        def uri(self, key):
-            return f"s3://test/{key}"
-
-        def get(self, key):
-            return self.objects.get(key)
-
-        def put_new(self, key, data):
-            assert self.objects.setdefault(key, data) == data
-
-    archive = MemoryStore()
-    main = publish.publish(e, archive, {"checker": access.COMPLETE})
+                       **dict.fromkeys(extra_rows, ("item", None)),
+                       **{extra: (None,) * len(rows[0]) for extra, rows in protected.items()}}, witnesses=[early],
+              rules=json.dumps(rules_doc), calc=json.dumps(calculation), calc_witnesses=[calculated],
+              evidence=evidence)
+    main =publish.publish(e, archive, {"checker": access.COMPLETE})
     publish.publish(dataclasses.replace(e, epoch=3), archive, {"checker": access.COMPLETE})
     old = archive.get(f"{pack}/manifests/m-1.json")
     pin = retained_calculation.PinnedSelection(pack, 1, publish.sha256(old), **row)
@@ -862,6 +874,25 @@ def test_retained_calculation_reads_the_pinned_epoch_and_keeps_known_zero(retain
     assert retained_calculation.resolve(archive, same_selection) == 0
     with pytest.raises(ValueError):
         retained_calculation.resolve(archive, dataclasses.replace(pin, key=ref(pin.relation, "i1", "0", "known", "")["key"]))
+
+
+def test_retained_calculation_admits_the_epoch_evidence_again():
+    """An epoch that admitted a receipt is verified again from its retained publication: the complete manifest
+    names the trusted context and the submitted index by hash, so the replay rebuilds the Evidence and admits
+    again. Without the context, or without the manifest naming it, the replay fails closed."""
+    archive, pin, manifest = retained_publication("toy", "total", {}, admitted=True)
+    assert retained_calculation.resolve(archive, pin) == 0
+
+    context = manifest["evidence"]["context"]
+    assert context["file"] == "observations/retained/context.json"
+    kept = archive.objects.pop(context["uri"].removeprefix("s3://test/"))
+    with pytest.raises(ValueError, match="evidence_refused"):
+        retained_calculation.resolve(archive, pin)
+
+    archive.objects[context["uri"].removeprefix("s3://test/")] = kept
+    unnamed = {key: value for key, value in manifest.items() if key != "evidence"}
+    with pytest.raises(ValueError, match="receipt_not_admitted"):
+        retained_calculation.resolve(archive, repin_retained_manifest(archive, pin, unnamed))
 
 
 def test_retained_calculation_rejects_damaged_evidence(retained_epoch):
