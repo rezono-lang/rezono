@@ -120,3 +120,20 @@ def test_probe_profile_terms_follow_the_governing_snapshot(tmp_path):
     assert current.rows("probe_physical_status") == {(PROFILE, "cell-one", "missing_requirement")}
     assert current.rows("probe_budget") == EXPECTED_BUDGETS - {(PROFILE, "assisted", "install", "900")}
     assert current.rows("probe_budget_status") == {(PROFILE, "assisted", "install", "missing_budget")}
+
+
+def test_probe_profile_counts_and_findings_follow_the_governing_snapshot(tmp_path):
+    # An older snapshot certified the membership and the terms; the governing snapshot after it is partial and
+    # has no coverage. Counts and missing-term findings may rest only on the governing snapshot.
+    design = recorded_design(automatic_term=False)
+    records = design["profile-design.yaml"]
+    records["reference_date"].append({"id": "later-day", "title": "2026-01-20", "day": 20260120})
+    records["probe_snapshot"].append({"id": "later-cut", "profile": PROFILE, "reference_date": "later-day",
+                                      "membership_complete": "partial"})
+    current = checked(PACK, tmp_path / "later-partial", design)
+    assert current.rows("probe_cluster_size") == set()
+    assert current.rows("probe_profile_total") == set()
+    assert current.rows("probe_budget") == EXPECTED_BUDGETS - {(PROFILE, "automatic", "install", "420")}
+    assert current.rows("probe_budget_status") == {(PROFILE, "automatic", "install", "unknown")}
+    assert current.rows("probe_physical") == {(PROFILE, "cell-one", "required")}
+    assert current.rows("probe_physical_status") == set()
