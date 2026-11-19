@@ -5,13 +5,6 @@ import pytest
 from model_parity import kind, lower_declarations, schema_file, slot
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason="Admit the kind member relationship in the module/2 contract (contracts/rezono-module.yaml) and "
-           "lower it to represents_relationship in compiler/rezono_compiler/rezono_kind.py. "
-           "Read decisions/language-relationship-kinds.md. No reader dependency.",
-)
 def test_lower_relationship_kind(tmp_path):
     oracle = schema_file("packs/std-decision/schema/decision.yaml")["classes"]["Ground"]
     ground = kind("Ground", slot("decision", "Decision"), slot("rests_on", "Decision"), relationship=True)
