@@ -53,7 +53,7 @@ def clause(program, rule) -> str:
             raise ValueError(f"Soufflé comparison cannot represent assignment {assignment.op}")
         body.append(f"{term(assignment.var, 'integer')} = {term(assignment.left, 'integer')} "
                     f"{ARITHMETIC[assignment.op]} {term(assignment.right, 'integer')}")
-    for condition in rule.conditions:
+    for condition in rules.untyped_conditions(rule, "the Soufflé comparison"):
         type_ = types.get(condition.left) or types.get(condition.right) or rules.const_type(condition.left)
         body.append(f"{term(condition.left, type_)} {COMPARE[condition.op]} {term(condition.right, type_)}")
     return f"{atom(program, rule.head)} :- {', '.join(body)}."
