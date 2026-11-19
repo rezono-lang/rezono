@@ -9,7 +9,7 @@ Every row belongs to one verified `BuildRun` cut. Times are integer Unix seconds
 | Kind | Independent origin and acceptance question |
 | --- | --- |
 | `BuildClaim` | The ref listing under `refs/heads/task/` at the cut. Which claim branch existed, at which generation? The generation is the full commit ID of the ref tip. |
-| `BuildClaimActivity` | The server's activity record for the latest push to that ref. When did the push that produced this generation happen? The record supplies a lease start only when its resulting commit equals the observed generation. |
+| `BuildClaimActivity` | The server's activity records for the pushes to that ref, one row per push with the activity answer as its source and the exact whole-second push time. When did the push that produced this generation happen? The rules take the latest push, and it supplies a lease start only when its resulting commit equals the observed generation. |
 | `BuildClaimLease` | A `std-decision` decision states the lease duration in seconds. Which duration is in force on the policy date of the cut? The first decision sets four hours. |
 | `BuildClaimPullReading` | A query for pull requests whose head is the claim branch, at the cut. Is a pull request open for this claim, or did the complete answer contain none? An unreadable or mismatched answer produces no row. |
 | `BuildClaimDelete` | The conditional delete adapter's record of one attempt. Which generation of which branch did it try to delete, when, and was the answer `sent`, `refused` or `unknown`? It names the branch, not a `BuildClaim` row, because the release and its readback concern the ref. |
