@@ -64,6 +64,9 @@ RECEIPT_MEMBER = "verified_member"  # protected: the admitted member keys of one
 PROTECTED = {
     RECEIPT_INPUT: [("receipt", "string"), ("source", "string"), ("scope", "string"), ("cut", "string"),
                     ("inventory", "string"), ("content", "string")],
+    RECEIPT_MEMBER: [("receipt", "string"), ("member", "string"), ("part", "integer"), ("value", "string")],
+    "verified_round": [("round", "string"), ("run", "string"), ("cut", "string"), ("batch", "string")],
+    "verified_round_member": [("round", "string"), ("step", "string")],
 }
 CLOSES = re.compile(r"^//\s*@closes\s+(\S+)\s*$")
 
