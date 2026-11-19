@@ -42,10 +42,12 @@ Rezono {
        | group by NonemptyListOf<Expr, ",">  -- group
        | limit number                        -- limit
 
-  Suppose = "+" SupposePath "=" Unary  -- set
-          | "-" typeName rowId         -- retract_row
-          | "-" SupposePath            -- retract
+  Suppose = "+" SupposePath "=" Unary                          -- set
+          | "+" typeName rowId "{" ListOf<SupposeSlot, ","> "}"  -- insert_row
+          | "-" typeName rowId                                 -- retract_row
+          | "-" SupposePath                                    -- retract
   SupposePath = rowId ("." name)+
+  SupposeSlot = name "=" Expr
 
   Expr = Cond | Imply
   Cond = when Expr then Expr else Expr
