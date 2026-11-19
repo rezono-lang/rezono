@@ -5,10 +5,6 @@ import pytest
 from offline_cases import implementation
 
 
-@pytest.mark.xfail(strict=True, reason=(
-    "Read decisions/run-price-enforcement.md, Correlation. Implement outcome(body) in run/ovh_order_status.py: "
-    "the raw JSON body of the order status read becomes one outcome."
-))
 def test_ovh_order_status():
     outcome = implementation("ovh_order_status.py", "outcome")
 
