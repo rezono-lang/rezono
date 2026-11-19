@@ -2,6 +2,7 @@
 
 import json
 import shutil
+from pathlib import Path
 
 import pytest
 import yaml
@@ -24,7 +25,7 @@ def observation(run, sweep, step, position, second, value):
 
 
 def test_recorded_correction(monkeypatch, tmp_path, capsys):
-    from rezono_compiler import batch, modules
+    from rezono_compiler import batch, modules, pack
 
     snapshots = []
     relations = {"needed", "known", "waiting", "ready", "done", "stuck"}
@@ -86,11 +87,27 @@ def test_recorded_correction(monkeypatch, tmp_path, capsys):
         assert completed == ({"seed", "ship"} if second == 2 else {"ship"})
         assert ("active", "shipped", "sweep/last/ship") in final["known"]
 
-    # Change only the pinned theory. Both steps now derive done even before the first sweep.
-    done = theory / "rules" / "done.dl"
+    # Change only the rules of the theory read from the pinned path. Both steps now derive done even before
+    # the first sweep. Changed bytes cannot carry the name std-loop (decisions/standard-pack-names.md) and the
+    # replay requires std-loop, so the changed rules come from an ordinary copy. A replay that took its
+    # theory from anywhere but the pinned path would not see them.
+    control = tmp_path / "loop-control"
+    shutil.copytree(theory, control)
+    meta = yaml.safe_load((control / "pack.yaml").read_text(encoding="utf-8")) | {"name": "loop-control"}
+    (control / "pack.yaml").write_text(yaml.safe_dump(meta, sort_keys=False), encoding="utf-8")
+    done = control / "rules" / "done.dl"
     with done.open("a", encoding="utf-8") as stream:
         stream.write('\ndone(r, "seed", "control-seed") :- active(r).\n')
         stream.write('done(r, "ship", "control-ship") :- active(r).\n')
-    recording["pack"]["sha256"] = modules.pack_hash(theory)
+    read = pack.read
+    changed = read(control).rules
+
+    def read_pinned(directory):
+        model = read(directory)
+        if Path(directory).resolve() == theory.resolve():
+            model.rules = changed
+        return model
+
+    monkeypatch.setattr(pack, "read", read_pinned)
     status, report = run(2)
     assert (status, report["plans"], report["outcome"]) == (0, [], "success")
