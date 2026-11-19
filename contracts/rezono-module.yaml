@@ -230,6 +230,7 @@ classes:
           - {range: RulesDecl, inlined: true}
           - {range: ScalarAliasDecl, inlined: true}
           - {range: DatasetDecl, inlined: true}
+          - {range: SourceDecl, inlined: true}
 
   ModuleHeader:
     abstract: true
@@ -269,12 +270,36 @@ classes:
           - range: RulesDecl
           - &scalar_alias {range: ScalarAliasDecl}
           - range: DatasetDecl
+          - &source_decl {range: SourceDecl}
 
   DatasetDecl:
-    description: A named fact dataset with its tables in source order.
+    description: A named fact dataset with its fact tables and source declarations in source order.
     attributes:
       dataset: {required: true, range: Name}
-      decls: {required: true, range: FactTable, multivalued: true, inlined_as_list: true}
+      decls:
+        required: true
+        multivalued: true
+        inlined_as_list: true
+        any_of:
+          - *fact_table
+          - *source_decl
+
+  SourceDecl:
+    description: >-
+      The shared fields of the sources of the fact tables that cite it with `@`
+      (decisions/language-fact-provenance.md). It stands in the module or the dataset of those tables.
+    attributes:
+      source: {required: true, range: Name}
+      fields:
+        required: true
+        range: SourceFields
+        inlined: true
+        description: "The fields of the source contract (contracts/source.yaml, class `Source`) as text, keyed by their names."
+
+  SourceFields:
+    description: A map from source field names to their text.
+    extra_slots:
+      range_expression: {range: string, required: true}
 
   NativeRuleModule:
     is_a: ModuleHeader
@@ -787,8 +812,25 @@ classes:
     description: Facts as a table. Every row has one value for each column; the first column is the id.
     attributes:
       fact: {required: true, range: TypeName}
+      source: {range: Name, description: "The source declaration the table cites with `@` (decisions/language-fact-provenance.md)."}
       columns: {required: true, range: Word, multivalued: true, description: "The header: a name for each column, or a path as the text wrote it."}
-      rows: {required: true, range: Expr, array: {dimensions: [{alias: row}, {alias: cell}]}}
+      sourceColumns:
+        range: Name
+        multivalued: true
+        minimum_cardinality: 1
+        description: "The source fields of the `@` columns, which follow the slot columns in each row; only with `source`."
+      rows:
+        required: true
+        any_of:
+          - {range: Expr}
+          - {range: OmittedCell}
+        array: {dimensions: [{alias: row}, {alias: cell}]}
+        description: "Each row holds the slot cells, then the source cells: a text literal, or the omitted cell for the declaration's value."
+
+  OmittedCell:
+    description: "A dash in a source column: the value of the cited source declaration."
+    attributes:
+      boundary: {required: true, equals_string: omitted}
 
   FactRow:
     description: Facts of one element, with the contexts they hold in (v0 §5a rule 5).
