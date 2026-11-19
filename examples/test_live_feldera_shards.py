@@ -16,7 +16,10 @@ EXPECTED = {
         "compiler/tests/test_calc.py::test_feldera_gives_what_duckdb_gives[full]",
         "compiler/tests/test_calc.py::test_feldera_gives_what_duckdb_gives[choice]",
     ],
-    "compiler-bound": ["compiler/tests/test_bound.py::test_the_check_view_on_feldera_holds_the_rows_past_the_bound"],
+    "compiler-bound": [
+        "compiler/tests/test_bound.py::test_the_check_view_on_feldera_holds_the_rows_past_the_bound",
+        "compiler/tests/test_recorded_dates.py::test_independent_date_equality",
+    ],
     "compiler-rules": [
         "compiler/tests/test_rules_properties.py::test_feldera_runs_generated_programs_as_duckdb_does[0]",
         "compiler/tests/test_rules_properties.py::test_feldera_runs_generated_programs_as_duckdb_does[1]",
@@ -54,6 +57,10 @@ def evidence(tmp_path):
     return inputs, tmp_path / "aggregate"
 
 
+@pytest.mark.xfail(strict=True, raises=AssertionError, reason=(
+    "extra: The compiler-bound shard in compiler/ci/feldera_shards.py does not yet route "
+    "compiler/tests/test_recorded_dates.py::test_independent_date_equality. Lift this mark in the "
+    "pull request that makes that test green and adds it to the shard and to compiler/ci/run_feldera_oracle.sh."))
 @pytest.mark.parametrize("outcome", [None, "failure", "skipped", "error"])
 def test_merge_preserves_all_live_cases_and_outcomes(evidence, outcome):
     inputs, output = evidence
@@ -70,7 +77,7 @@ def test_merge_preserves_all_live_cases_and_outcomes(evidence, outcome):
     merged = run("feldera_shards.py", "merge", inputs, output, 5)
     assert merged.returncode == 0, merged.stderr
     report = ET.parse(output / "results.xml")
-    assert len(list(report.iter("testcase"))) == 11
+    assert len(list(report.iter("testcase"))) == 12
     if outcome:
         assert report.find(f".//{outcome}").text == "original diagnostic"
     verified = run("verify_feldera_run.py", output / "collected.txt", output / "results.xml")
