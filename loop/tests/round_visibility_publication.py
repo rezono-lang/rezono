@@ -43,18 +43,22 @@ def round_context(retained, *, run, cut, manifest, invariants, program, observat
 
 
 def round_claim(submitted, *, run, cut, batch, members, subsets):
-    """A submitted round claim: the chosen batch and, per visible subset, its variant and its certificate.
+    """A submitted round claim: the chosen batch and, per visible subset, its effects, variant and certificate.
 
-    `subsets` holds `(members, variant, certificate)` with the names of submitted objects. The claim selects
-    bytes to check and confers no authority; the round verifier decides what it proves.
+    `subsets` holds `(members, effects, variant, certificate)`. `effects` are the plan hashes the boundary
+    applies: a nonempty prefix of each member's effects, in the fixed order of the retained domain, whose
+    canonical SHA-256 the certificate binds as `effect` (decisions/admission-transport.md section 7 and
+    decisions/loop-certificate-admission.md section 4). `variant` and `certificate` name submitted objects.
+    The claim selects bytes to check and confers no authority; the round verifier decides what it proves.
     """
     def pinned(name):
         return observation_reference("submitted", name, submitted[name])
 
     return {
         "run": run, "cut": cut, "batch": batch, "members": list(members),
-        "subsets": [{"members": list(subset), "variant": pinned(variant), "certificate": pinned(certificate)}
-                    for subset, variant, certificate in subsets],
+        "subsets": [{"members": list(subset), "effects": list(effects), "variant": pinned(variant),
+                     "certificate": pinned(certificate)}
+                    for subset, effects, variant, certificate in subsets],
     }
 
 
