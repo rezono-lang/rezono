@@ -133,7 +133,7 @@ READ_FIRST_DIRS = ("checker/rezono_checker/", "packs/std-access/", "edge/gate/sr
 PUBLISHER = "edge/publisher/rezono_publisher/"
 READ_FIRST_FILES = {"contracts/proof.yaml", *(PUBLISHER + name for name in (
     "access.py", "calc_scope.py", "sources.py", "sweep.py", "difference.py", "batch.py",
-    "publish.py", "proof.py", "views.py"))}
+    "publish.py", "proof.py", "views.py", "retained_calculation.py"))}
 TEST_DIRS = {"test", "tests", "__tests__"}
 READ_LABEL = "p1-read-"
 

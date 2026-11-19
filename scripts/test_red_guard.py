@@ -251,7 +251,8 @@ def read_cases(function):
                  "edge/gate/src/ask.ts", "edge/publisher/rezono_publisher/access.py",
                  "contracts/proof.yaml", "checker/rezono_checker/fixtures.py",
                  *(f"edge/publisher/rezono_publisher/{name}.py" for name in (
-                     "calc_scope", "sources", "sweep", "difference", "batch", "publish", "proof", "views"))):
+                     "calc_scope", "sources", "sweep", "difference", "batch", "publish", "proof", "views",
+                     "retained_calculation"))):
         for status in ("M", "A", "D"):
             run(f"{status} {path} without a read label", [Change(path, status, None, None)],
                 ["planner"], True)
