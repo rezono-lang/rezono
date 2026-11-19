@@ -1,0 +1,11 @@
+// An item is held when a hold names it.
+.decl held(item: symbol)
+held(i) :- hold__item(h, i).
+
+// An item is flagged when its amount is at least ten and no hold names it.
+.decl flagged(item: symbol, amount: number)
+flagged(i, a) :- item__amount(i, a), a >= 10, !held(i).
+
+// Reading this open relation as a calculation column keeps a missing amount unknown.
+.decl recorded_amount(item: symbol, amount: number)
+recorded_amount(i, a) :- item(i), item__amount(i, a).

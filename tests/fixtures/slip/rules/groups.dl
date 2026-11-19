@@ -1,0 +1,7 @@
+// The number of items in a group.
+.decl group_size(group: symbol, size: number)
+group_size(g, n) :- group(g), n = count : { item__group(_, g) }.
+
+// A group with at least two items is busy.
+.decl busy(group: symbol)
+busy(g) :- group_size(g, n), n >= 2.
