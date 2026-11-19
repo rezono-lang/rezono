@@ -48,7 +48,7 @@ The command prints one JSON document:
 - `row` maps each column of the role's snapshot to its cell, as published. A calculated value keeps its columns `value`, `state` and `reason`.
 - `witness` is the key in the store of the proof of that row: in the assumption for `+1`, in the base for `-1`. The checker has accepted it before the answer exists.
 - A value that is unknown under the assumption has the state `unknown` and its reason. It is never zero.
-- Observations do not change under an assumption. A delta that would change an observed row is refused with a reason.
+- Observations do not change under an assumption. A delta that changes a kind whose bundle layer is `observation` is refused with that reason.
 - The role sees only the difference in what it reads.
 - A delta that may change read access (`rezono_publisher.difference.withheld`) gives no rows. `withheld` then names the reason, as text, and nothing of a difference is written.
 
