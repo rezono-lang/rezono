@@ -107,6 +107,8 @@ def calculate(model, requests):
         for connection in request["connections"]:
             links.add((key, connection["target"], connection["port"]))
 
+    tenant_zones = {profile["zone"] for profile in model["profiles"].values()}
+    tenant_keys = {entry["key"] for entry in model["teams"].values()}
     for key, request in orders.items():
         team = request["team"]
         profile = model["profiles"][request["profile"]]
@@ -114,6 +116,13 @@ def calculate(model, requests):
         for conn in request["connections"]:
             target, port = conn["target"], conn["port"]
             peer, zone = resources.get(target, (None, conn["targetZone"]))
+            # Only a delivered component gives an owner; see decisions/platform-tenants.md.
+            named = target.split("/")[0]
+            if target not in resources and (zone in tenant_zones or any(
+                    named == k or named.startswith(k + "-") for k in tenant_keys)):
+                states.add("denied")
+                rows["connections"].append([team, key, target, port, "denied", "unresolved-owner"])
+                continue
             if "peer" in conn and peer != conn["peer"]:
                 raise ValueError("Requested resource has no matching owner")
             status = "standard" if (profile["zone"], zone, port) in matrix else profile["unlisted"]

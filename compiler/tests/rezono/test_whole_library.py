@@ -29,7 +29,8 @@ def isolated(tmp_path, form):
         for name in ("schema", "facts"):
             shutil.copytree(LIBRARY / name, directory / name)
     else:
-        authored = LIBRARY / "rezono"
+        # The candidate stages outside the pack's own rezono/ (decisions/language-library-acceptance.md).
+        authored = LIBRARY / "candidate"
         modules = ["library", *sorted(DATASETS)]
         for name in modules:
             for suffix in ("rezono", "json"):
@@ -159,7 +160,7 @@ def test_authored_library_has_expected_states(tmp_path):
     check_example(isolated(tmp_path, "legacy"), "legacy")
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError, reason="M3: Migrate the complete library pack in examples/library/rezono. Read decisions/language-library-acceptance.md. Waits for library schema lowering, named typed datasets, source validation and discovery, and the conditional-rule and metadata constructs.")
+@pytest.mark.xfail(strict=True, raises=AssertionError, reason="M3: decisions/language-library-acceptance.md: Stage the complete library migration in examples/library/candidate/ (library, valid and errors, each .rezono with its form), not in examples/library/rezono/. Waits for library schema lowering, named typed datasets, source validation and discovery, and the conditional-rule and metadata constructs. The authored modules also need a dataset name in backticks (valid is a keyword), placed list and record cells, and a list cell in a single-valued slot.")
 def test_whole_library_has_the_same_meaning(tmp_path):
     expected = check_example(isolated(tmp_path, "legacy"), "legacy")
     actual = check_example(isolated(tmp_path, "rezono"), "rezono")

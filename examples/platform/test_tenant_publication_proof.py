@@ -192,3 +192,48 @@ def test_complete_tenant_publication_or_no_manifest(tmp_path):
             assert {r for r in note if r[0].endswith("_cores")} <= leaves(proofs, summary)
             assert {("capacity_reading__tenant", (f"{TENANT}-{p}", TENANT)),
                     ("capacity_reading__cores", (f"{TENANT}-{p}", own))} <= leaves(proofs, summary)
+
+
+class MissingNoticeMismatch(AssertionError):
+    pass
+
+
+MISMATCH = "capacity_notice_mismatch"
+
+
+@pytest.mark.xfail(strict=True, raises=MissingNoticeMismatch, reason=(
+    "extra: decisions/platform-tenant-proof-boundary.md: Derive "
+    "capacity_notice_mismatch(notice, period, issued_free, issued_used, free, used) in "
+    "examples/platform/rules/tenant_capacity.dl when an issued capacity notice states other amounts than "
+    "platform_capacity_basis for its period. It belongs to the complete platform publication only; the tenant "
+    "keeps reading the issued notice."))
+def test_complete_publication_reports_a_notice_that_differs_from_the_basis(tmp_path):
+    model = pack.read(ROOT)
+    if MISMATCH not in rules.load(model.rules).derived():
+        raise MissingNoticeMismatch(f"no {MISMATCH} beside {BASIS}")
+    target = prepare(tmp_path)
+    current = state(target, private=False)
+    platform, _, _ = snapshots(current, store.FileStore(tmp_path / "matching"), "platform", "complete")
+    assert not any(r[0] == MISMATCH for r in platform)
+
+    # The late notice overstates the free cores by one; the early notice still matches.
+    _, cap, own, peer = PERIODS[1]
+    free, used = cap - own - peer, own + peer
+    path = target / "facts" / "public-decisions.yaml"
+    notes = yaml.safe_load(path.read_text(encoding="utf-8"))
+    late, = [note for note in notes["capacity_notice"] if note["period"] == "late"]
+    late["free_cores"] = free + 1
+    path.write_text(yaml.safe_dump(notes), encoding="utf-8")
+    changed = batch.epoch(target, epoch=3, knowledge_time="2026-03-01T00:00:00Z",
+                          sources=[("rules", "platform-proof-example")])
+    platform, details, _ = snapshots(changed, store.FileStore(tmp_path / "differing"), "platform", "complete")
+    finding = (MISMATCH, ("note-late", "late", str(free + 1), str(used), str(free), str(used)))
+    assert {r for r in platform if r[0] == MISMATCH} == {finding}
+    assert {("capacity_notice__free_cores", ("note-late", str(free + 1))),
+            ("capacity_pool__cores", ("late", str(cap))),
+            ("capacity_reading__cores", (f"{TENANT}-late", str(own))),
+            ("capacity_reading__cores", (f"{PEER}-late", str(peer)))} <= leaves(details, finding)
+
+    visible, _, files = snapshots(changed, store.FileStore(tmp_path / "tenant"), TENANT, "may_read")
+    assert not any(r[0] in (MISMATCH, BASIS) for r in visible)
+    assert all(PEER.encode() not in raw for raw in files.values())

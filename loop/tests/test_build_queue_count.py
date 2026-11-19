@@ -38,20 +38,6 @@ def listing(records, pulls, receipt):
     ]
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason=(
-        "extra: Read decisions/build-claim-release.md section 4 and decisions/build-reconciliation.md (task and queue "
-        "observations). Declare BuildQueueListing (run, observed_at, base, source, receipt: LoopSweepReceipt) and "
-        "BuildQueuePull (listing, number, state open|closed, draft draft|ready, base) in build/schema/tasks.yaml, "
-        "and derive build_queue_at_cut in build/rules/tasks.dl by counting the open, ready pull requests against "
-        "the listing's base, only for a listing whose receipt belongs to the run at its cut. Keep "
-        "BuildQueueReading as it is; moving loop/build_queue_capture.py to the listing is a later planner step. "
-        "Write in build/schema/tasks.yaml and build/rules/tasks.dl. Today the build schema lacks the listing "
-        "kinds."
-    ),
-)
 @pytest.mark.parametrize(("pulls", "receipt", "known", "waiting"), [
     (COUNTED + EXCLUDED, "receipt", "2", None),
     (COUNTED + EXCLUDED + [(6, "open", "ready", "main")], "receipt", "3", "queue-limit"),

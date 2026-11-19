@@ -20,13 +20,15 @@ from round_visibility_publication import (
     raises=(AssertionError, ImportError, TypeError),
     reason=(
         "M2: decisions/loop-certificate-admission.md: Read it and decisions/admission-transport.md sections 3 and 7. "
-        "The round verifier rebuilds all nine visible boundaries of the two ordered steps from the plan hashes "
+        "The round verifier rebuilds the eight visible boundaries of the two ordered steps from the plan hashes "
         "in the retained domain and refuses the claim, because the violating boundary has no certificate even "
         "though every submitted pair checks. So no verified_round row is admitted and nothing is ready. "
         "Preserve observed old rows and residual effects. Waits for test_ready_requires_checked_batch_member "
         "and for a core red test in checker/tests that has the round verifier rebuild the visible boundaries "
         "of a step with ordered effects (not yet written; the checker is core's). Write in packs/std-loop only "
-        "if the ready rules still need it. Today rezono_checker.evidence is missing (ImportError)."
+        "if the ready rules still need it. Today admission already refuses the claim (round_boundary_missing "
+        "for withdraw-a with withdraw-b), but the supplied availability verdicts still make both steps ready "
+        "(AssertionError)."
     ),
 )
 def test_overlapping_withdrawals_break_availability(tmp_path):
@@ -40,6 +42,7 @@ def test_overlapping_withdrawals_break_availability(tmp_path):
     # The ordinary pair checker accepts every safe supplied pair. An exact list of
     # completed subsets, or valid proofs for eight individually safe states, misses the outage.
     progress = {"old": 0, "offline": 1, "new": 2}
+    members = ("replace-a", "replace-b")
     pairs = []
     submitted = {}
     for number, target in enumerate(sorted(ALL_STATES - {VIOLATION})):
@@ -47,17 +50,22 @@ def test_overlapping_withdrawals_break_availability(tmp_path):
             Effect(f"pair-{lane}", lane, old, new)
             for lane, old, new in zip(LANES, INITIAL, target, strict=True) if old != new
         )
-        # A subset of ordered steps names the effects applied at that boundary, and its certificate binds the
-        # digest of their plan hashes in order (decisions/admission-transport.md section 7).
-        applied = [effect for offset, phase in zip((0, 2), target, strict=True)
-                   for effect in EFFECTS[offset:offset + progress[phase]]]
+        # A subset of ordered steps names the steps it advances and the effects applied at that boundary, a
+        # prefix of each step's effects in domain order, and its certificate binds the digest of their plan
+        # hashes in order (decisions/admission-transport.md section 7).
+        advanced = [(member, EFFECTS[offset:offset + progress[phase]])
+                    for member, offset, phase in zip(members, (0, 2), target, strict=True) if progress[phase]]
+        applied = [effect for _, prefix in advanced for effect in prefix]
         pair = pair_evidence(OPENING, net_effects, target)
         pair.certificate["effect"] = canonical_sha256([effect.plan_hash for effect in applied])
         assert check_transition_certificate(*pair)["valid"]
         submitted[f"variant-{number}"] = canonical_bytes(pair.variant)
         submitted[f"certificate-{number}"] = canonical_bytes(pair.certificate)
-        pairs.append(([effect.step for effect in applied], f"variant-{number}", f"certificate-{number}"))
-    assert len(pairs) == 8
+        # The initial state applies no effect and is no visible boundary, so the claim does not name it.
+        if advanced:
+            pairs.append(([member for member, _ in advanced], [effect.plan_hash for effect in applied],
+                          f"variant-{number}", f"certificate-{number}"))
+    assert len(pairs) == 7
 
     overlap = pair_evidence(OPENING, (WITHDRAW_A, WITHDRAW_B), VIOLATION)
     assert not check_transition_certificate(*overlap)["valid"]
@@ -77,7 +85,6 @@ def test_overlapping_withdrawals_break_availability(tmp_path):
     unobserved = pair_evidence(OPENING, (ACTIVATE_A,), A_RESTORED.state)
     assert check_transition_certificate(*unobserved)["findings"] == [{"reason": "delta_old_row_missing"}]
 
-    members = ("replace-a", "replace-b")
     retained = {
         "definition": canonical_bytes(PROGRAM),
         "observed-lanes": OPENING.source_bytes(),
