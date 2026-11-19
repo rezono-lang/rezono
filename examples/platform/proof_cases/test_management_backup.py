@@ -28,9 +28,9 @@ def records():
 @pytest.mark.xfail(strict=True, raises=AssertionError, reason=(
     "Implement the platform backup-plan, scoped inventory and age rules in schema/management_backup.yaml "
     "and rules/management_backup.dl using std-time and std-decision. Read decisions/platform-management-backup.md. "
-    "Waits for test_native_boolean_rule_inputs (#347, track kern) for inventory completion, and for a view "
-    "union over several source kinds (track kern): the copy, inventory and decision dates need one std-time day "
-    "projection, and compiler/rezono_compiler/view_rules.py rejects a theory kind with more than one source branch."))
+    "Waits for test_native_boolean_rule_inputs (#347) for inventory completion, and for "
+    "compiler/tests/test_view_union.py--test_a_theory_kind_unions_disjoint_source_kinds (#716): the copy, "
+    "inventory and decision dates need one std-time day projection over several source kinds."))
 def test_management_backup_age_and_absence():
     from management_probes import compiled
 
