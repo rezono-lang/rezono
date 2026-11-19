@@ -1,0 +1,8 @@
+// The links whose tail is an item.
+.decl linked(item: symbol, link: symbol)
+linked(i, l) :- link__tail(l, i).
+
+// An invariant: no amount is above twenty-five.
+// @invariant
+.decl too_large(item: symbol)
+too_large(i) :- item__amount(i, a), a > 25.

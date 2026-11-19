@@ -1,0 +1,19 @@
+item: item
+item.group: group
+item.amount: amount
+group: group
+hold: hold
+hold.item: item
+link: link
+link.tail: tail
+link.head: head
+held: held
+flagged: flagged
+group_size: group size
+busy: busy
+linked: linked
+too_large: too large
+may_read: may read
+role: role
+role.title: title
+recorded_amount: recorded amount
