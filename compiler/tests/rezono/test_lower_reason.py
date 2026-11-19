@@ -32,7 +32,7 @@ class MissingReasonLowering(AssertionError):
            "reason.<code> = {{label}} in the messages of the pack's default language, in "
            "compiler/rezono_compiler/rezono_module.py instead of the refusal of reason in REFUSED, and refuse at "
            "the declaration a code that the message file of that language also gives. Read the sections Lowering "
-           "and Considered.",
+           "and Considered. compiler/tests/test_rezono_module.py no longer expects a reason to be refused.",
 )
 def test_lower_reason(tmp_path):
     legacy = Path(shutil.copytree(FIXTURE, tmp_path / "legacy" / "minimal"))
