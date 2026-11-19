@@ -13,7 +13,7 @@ from test_replay_fixed_point import boundary, execute, setup_recording
     strict=True,
     raises=AssertionError,
     reason=(
-        "Read decisions/safe-step-rounds.md. Extend the ordinary typed recording and replay path for certified "
+        "M2: Read decisions/safe-step-rounds.md. Extend the ordinary typed recording and replay path for certified "
         "rounds. Check each recorded certificate with rezono_checker.transition and supply only admitted ones "
         "as loop_certified_step and loop_certified_member (decisions/loop-certificate-admission.md). Preserve "
         "the selected frontier, durable attempt identity, stale-cut refusal and latest observation precedence. "

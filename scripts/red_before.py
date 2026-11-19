@@ -7,9 +7,13 @@ protected paths over it, and `run` executes only the added tests without a red m
 If every one of them passes there, they do not distinguish the old source from the
 new one, and `run` fails. A test that cannot be loaded on the base does not pass.
 `run` reads each test's outcome from a JUnit report, not from the exit code alone:
-a skipped or deselected test proves nothing, so `run` fails only when at least one
-added test really passes on the base and none fails. When none of them runs there,
-it says so and succeeds.
+a skipped or deselected test proves nothing. `run` succeeds when at least one added
+test fails on the base. It fails when one passes there and none fails, and also when
+none of them runs there: a test that is skipped on the base, such as one that always
+skips, skips itself or calls `pytest.xfail()`, does not show that it tells the base
+from the change. The one exception is a test that runs elsewhere: when every collected
+case of every added test carries the `cluster` mark, it runs on the disposable cluster
+instead, and `run` says so and succeeds.
 
 From the repository root:
   python -I scripts/red_before.py discover BASE HEAD
@@ -104,8 +108,10 @@ def prepare(base, head, selection):
     if git("status", "--porcelain", "--untracked-files=no").strip():
         raise SystemExit("ERROR the working tree has local changes")
     git("checkout", "-q", "--detach", base)
-    kept = [c.path for c in records if protected(c.path) and c.status != "D"]
-    gone = [c.path for c in records if protected(c.path) and c.status == "D"]
+    # Policy that is also source stays at the base, like any other source.
+    laid = [c for c in records if protected(c.path) and not source(c.path)]
+    kept = [c.path for c in laid if c.status != "D"]
+    gone = [c.path for c in laid if c.status == "D"]
     pathspecs("checkout", head, paths=kept)
     pathspecs("rm", "-q", "--ignore-unmatch", paths=gone)
     print(f"Checked out the base {base} with {len(kept) + len(gone)} protected path(s) from {head}.")
@@ -126,6 +132,30 @@ def outcomes(report):
     return tuple(counts)
 
 
+# Loaded into the pytest run on the base. It records each collected case and whether it
+# carries the `cluster` mark, before the cluster plugin deselects the marked ones.
+CLUSTER_PLUGIN = r"""import os
+import pytest
+
+
+@pytest.hookimpl(tryfirst=True)
+def pytest_collection_modifyitems(config, items):
+    with open(os.environ["RED_BEFORE_COLLECTED"], "a", encoding="utf-8") as out:
+        for item in items:
+            marked = item.get_closest_marker("cluster") is not None
+            out.write(("cluster" if marked else "ordinary") + "\t" + item.nodeid + "\n")
+"""
+
+
+def cluster_only(tests, collected):
+    """True when every test has collected cases and all of them carry the `cluster` mark."""
+    kinds = {}
+    for line in collected:
+        kind, _, nodeid = line.partition("\t")
+        kinds.setdefault(nodeid.split("[", 1)[0], set()).add(kind)
+    return all(kinds.get(test) == {"cluster"} for test in tests)
+
+
 def run(selection):
     with open(selection, encoding="utf-8") as lines:
         tests = [line.rstrip("\n") for line in lines if line.strip()]
@@ -141,12 +171,18 @@ def run(selection):
     failed = []
     passed = skipped = 0
     with tempfile.TemporaryDirectory() as reports:
+        (Path(reports) / "red_before_cluster.py").write_text(CLUSTER_PLUGIN, encoding="utf-8")
+        collected = Path(reports) / "collected.txt"
+        collected.touch()
+        env = dict(os.environ, RED_BEFORE_COLLECTED=str(collected),
+                   PYTHONPATH=os.pathsep.join(filter(None, [reports, os.environ.get("PYTHONPATH")])))
         for number, (path, ids) in enumerate(files.items()):
             report = Path(reports) / f"{number}.xml"
             print(f"::group::pytest {path} on the base", flush=True)
-            code = subprocess.run([sys.executable, "-m", "pytest", "-p", "no:cacheprovider", "-q", "-rA",
-                                   "--tb=short", "--rootdir", root, f"--junitxml={report}", "--", *ids],
-                                  cwd=root).returncode
+            code = subprocess.run([sys.executable, "-m", "pytest", "-p", "no:cacheprovider",
+                                   "-p", "red_before_cluster", "-q", "-rA", "--tb=short", "--rootdir", root,
+                                   f"--junitxml={report}", "--", *ids],
+                                  cwd=root, env=env).returncode
             print("::endgroup::", flush=True)
             try:
                 ok, bad, skip = outcomes(report)
@@ -162,6 +198,7 @@ def run(selection):
                 failed.append(path)
             passed += ok
             skipped += skip
+        elsewhere = cluster_only(tests, collected.read_text(encoding="utf-8").splitlines())
     if failed:
         verdict = (f"The base source fails the added tests in {', '.join(failed)}: "
                    "they tell the base from the change.")
@@ -172,11 +209,17 @@ def run(selection):
                    "Strengthen at least one until it fails on the base. Tests that do not depend on the "
                    "source change go first, in a pull request of their own.")
         status = 1
-    else:
-        verdict = (f"None of the {len(tests)} added test(s) without a red mark ran on the base source "
-                   f"({skipped} skipped, the rest not selected), so this check proves nothing about them.")
-        print(f"::warning::{verdict}")
+    elif elsewhere:
+        verdict = (f"None of the {len(tests)} added test(s) without a red mark ran on the base source, "
+                   "because every case carries the cluster mark: they run on the disposable cluster instead.")
+        print(f"::notice::{verdict}")
         status = 0
+    else:
+        verdict = (f"ERROR none of the {len(tests)} added test(s) without a red mark ran on the base source "
+                   f"({skipped} skipped, the rest not selected), so they do not show that they tell the old "
+                   "source from the new one. A test that is skipped there proves nothing. Make at least one "
+                   "run and fail on the base; only a test whose every case carries the cluster mark is exempt.")
+        status = 1
     print(verdict)
     summary = os.environ.get("GITHUB_STEP_SUMMARY")
     if summary:

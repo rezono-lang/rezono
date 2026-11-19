@@ -3,6 +3,9 @@
 .decl build_claim_superseded_push(claim: symbol, at: number)
 .decl build_claim_latest_push(claim: symbol, after: symbol, at: number)
 .decl build_claim_push_tie(claim: symbol)
+.decl build_claim_sourced_push(push: symbol)
+.decl build_claim_unsourced_push(claim: symbol, at: number)
+.decl build_claim_latest_push_unsourced(claim: symbol)
 .decl build_claim_lease_start(claim: symbol, start: number)
 .decl build_claim_has_lease_start(claim: symbol)
 .decl build_claim_duration(run: symbol, seconds: number, decision: symbol)
@@ -20,14 +23,20 @@ build_claim_at_cut(run, claim, generation, tick) :- build_verified_cut(run), bui
     build_claim__run(claim, run), build_claim__observed_at(claim, tick), build_claim__generation(claim, generation),
     build_claim__source(claim, source), source != "".
 
-// Only the latest push starts a lease. Equally recent pushes of different commits leave it undecided.
+// Only the latest push starts a lease. Every push record counts in finding the latest push, with or without a
+// source, so a push without a source still supersedes older ones. A latest push without a source, or equally
+// recent pushes of different commits, leave the lease start undecided.
 build_claim_push(claim, after, at) :- build_claim_activity__claim(push, claim), build_claim_activity__after(push, after),
-    build_claim_activity__pushed_at(push, at), build_claim_activity__source(push, source), source != "".
+    build_claim_activity__pushed_at(push, at).
+build_claim_sourced_push(push) :- build_claim_activity__source(push, source), source != "".
+build_claim_unsourced_push(claim, at) :- build_claim_activity__claim(push, claim), build_claim_activity__pushed_at(push, at),
+    !build_claim_sourced_push(push).
 build_claim_superseded_push(claim, at) :- build_claim_push(claim, _, at), build_claim_push(claim, _, later), later > at.
 build_claim_latest_push(claim, after, at) :- build_claim_push(claim, after, at), !build_claim_superseded_push(claim, at).
 build_claim_push_tie(claim) :- build_claim_latest_push(claim, a, _), build_claim_latest_push(claim, b, _), a != b.
+build_claim_latest_push_unsourced(claim) :- build_claim_latest_push(claim, _, at), build_claim_unsourced_push(claim, at).
 build_claim_lease_start(claim, at) :- build_claim_at_cut(_, claim, generation, _),
-    build_claim_latest_push(claim, generation, at), !build_claim_push_tie(claim).
+    build_claim_latest_push(claim, generation, at), !build_claim_push_tie(claim), !build_claim_latest_push_unsourced(claim).
 build_claim_has_lease_start(claim) :- build_claim_lease_start(claim, _).
 
 // Exactly one lease duration must be in force on the policy date of the cut.

@@ -7,3 +7,4 @@ attribute.partial = Each {$kind} has at most one {$attribute}.
 is_a = Each {$kind} is a {$parent}.
 unique_key = Each {$key} belongs to at most one {$kind}.
 path_equation = For each {$kind}, {$equation} holds.
+rule.platform_service_count = The platform runs {$n} services.

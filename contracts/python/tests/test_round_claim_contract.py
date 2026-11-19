@@ -20,11 +20,6 @@ def errors(document):
     return [result.message for result in validator("manifest.yaml").validate(document, "Manifest").results]
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError,
-                   reason="Waits for contracts/python/tests/test_completeness_receipt_contract.py--test_completeness_"
-                          "receipt_contract (same contracts/manifest.yaml). Then add an optional rounds list of "
-                          "ArchivedFile on Manifest, as decisions/admission-transport.md section 2 fixes, and "
-                          "regenerate the types with contracts/gen-types.sh.")
 def test_manifest_lists_round_claims():
     manifest = yaml.safe_load(EPOCH.read_text(encoding="utf-8"))
     assert errors(manifest) == []  # control: the fixture is valid as it is

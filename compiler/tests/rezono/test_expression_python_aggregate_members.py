@@ -51,16 +51,6 @@ class InapplicableMemberSkipped(AssertionError):
     """The lowering emitted an IR fold over a Value column, which drops a not_applicable member."""
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=InapplicableMemberSkipped,
-    reason="Refuse a sum, min or max whose measure is a Value column (it can hold not_applicable or unknown) "
-           "with R044 at the clause origin in _GroupClause.measure of compiler/rezono_compiler/native_rule_groups.py, "
-           "and keep lowering a ranged key-column measure. Read decisions/language-expression-semantics.md §1 and "
-           "decisions/conformance-value-agg-na-member.md. Waits for "
-           "compiler/tests/rezono/test_expression_python_filtered_count.py::test_expression_python_filtered_count, "
-           "which adds coded diagnostics to the same _GroupClause.refuse.",
-)
 def test_expression_python_aggregate_members():
     # Control: a ranged key column is always known, so the IR sum is the decided sum.
     [rule] = with_strata({**PROGRAM, "relations": deepcopy(RELATIONS), "rules": [lower("sum", "size")]})["rules"]

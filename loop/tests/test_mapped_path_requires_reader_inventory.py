@@ -66,9 +66,12 @@ def observed_receipt(source, base, head, engine):
 
     for path in paths:
         record(["changed-path", path], {"base": base, "head": head}, [path])
-        # An empty mapping has a terminal read, even though it has no reader rows.
+        # An empty mapping has a terminal read, even though it has no reader rows. Each reader edge is its own
+        # member, so the rules see it in the trusted inventory (decisions/admission-transport.md section 6).
         for kind, readers in registry["paths"][path].items():
             record(["path-readers", path, kind], {"revision": engine, "path": AUTHORITY}, readers)
+            for reader in readers:
+                record(["path-reader", path, kind, reader], {"revision": engine, "path": AUTHORITY}, [reader])
     record(["file-dependencies"], {"revision": engine, "path": AUTHORITY}, registry["file_dependencies"])
     for revision in (base, head):
         for path, entry in tree(revision).items():
@@ -168,14 +171,19 @@ def submission(source, base, head, engine, path, evidence):
 
 @pytest.mark.xfail(
     strict=True, raises=(AssertionError, ImportError, TypeError),
-    reason="Build selection trusts an emptied mapped-reader relation. Derive build_readerless_path from a verified "
-           "receipt for the build scope (verified_receipt, and verified_member for the path-readers keys) and "
-           "select full checks otherwise. Read decisions/scoped-completeness.md §3 and "
-           "decisions/admission-transport.md section 6. Write in build/ (selection.dl and its schema). Waits for "
-           "edge/publisher/tests/test_completeness_publish.py--test_publisher_admits_receipts_only_with_a_trusted_context "
-           "(the batch boundary admits the receipt and fills verified_receipt) and for "
-           "test_absent_checked_requires_readable_coverage (std-completeness supplies complete). Today "
-           "rezono_checker.evidence is missing (ImportError).",
+    reason="M2: decisions/admission-transport.md: section 6, member keys, and decisions/scoped-completeness.md "
+           "section 3. Build selection trusts an emptied mapped-reader relation. Read the admitted verified_member "
+           "keys of the build-selection receipt: [\"changed-path\", path], [\"path-readers\", path, kind] for "
+           "each mapping (also when empty) and [\"path-reader\", path, kind, reader] for each reader edge. Derive "
+           "build_readerless_path only for a changed path whose two mappings are admitted without any path-reader "
+           "member, resting on complete(source, scope, cut, receipt) derived from verified_receipt as "
+           "decisions/scoped-completeness.md section 2 shows. Select full checks when an admitted reader edge, "
+           "changed path, manifest, test file or suite has no matching record. A run with "
+           "a verified cut but no admitted build-selection receipt selects full checks with reason "
+           "missing-selection-receipt; keep build_verified_cut for claims and tasks. Write in build/ (selection.dl "
+           "and its schema). The same rule turns "
+           "loop/tests/test_build_selection.py--test_build_selection_matches_python green: remove its mark in the "
+           "same PR. Today selection.dl reads no admitted member, so the records alone decide (AssertionError: reader).",
 )
 def test_mapped_path_requires_reader_inventory(tmp_path):
     source = tmp_path / "source"
@@ -244,13 +252,17 @@ def resealed_without_reader(evidence):
     """Drop the mapped reader from the submitted receipt and recompute its digests over that subset."""
     receipt, objects = evidence
     objects = dict(objects)
-    content = deepcopy(objects["observations/submitted/content.json"])
+    content = [member for member in deepcopy(objects["observations/submitted/content.json"])
+               if member["key"][:2] != ["path-reader", SOURCE]]
     for member in content:
         if member["key"][:2] == ["path-readers", SOURCE]:
             member["rows"] = []
+    inventory = [member["key"] for member in content]
     objects["observations/submitted/content.json"] = content
+    objects["observations/submitted/inventory.json"] = inventory
     body = {field: value for field, value in receipt.items() if field != "id"}
     body["content"] = archived_json("observations/submitted/content.json", content)
+    body["inventory"] = archived_json("observations/submitted/inventory.json", inventory)
     resealed = {**body, "id": canonical_sha256(["rezono.completeness-receipt/1", body])}
     objects["observations/submitted/receipt.json"] = resealed
     return resealed, objects
@@ -258,10 +270,11 @@ def resealed_without_reader(evidence):
 
 @pytest.mark.xfail(
     strict=True, raises=(AssertionError, ImportError, TypeError),
-    reason="A receipt whose digests are recomputed over the truncated submission still narrows the selection. "
-           "Admission must compare it with the independently retained inventory and content. Read "
-           "decisions/scoped-completeness.md §1 and §3. Write in build/ (selection.dl and its schema). Waits for "
-           "test_mapped_path_requires_reader_inventory. Today rezono_checker.evidence is missing (ImportError).",
+    reason="M2: decisions/admission-transport.md: section 6, member keys. A receipt whose inventory and content "
+           "are resealed without the path-reader member still narrows the selection. Admission compares it with "
+           "the independently retained inventory, so the build rules see no admitted receipt and select full "
+           "checks. Write in build/ (selection.dl and its schema). Waits for "
+           "test_mapped_path_requires_reader_inventory. Today the records alone decide (AssertionError).",
 )
 def test_resealed_receipt_cannot_drop_mapped_reader(tmp_path):
     source = tmp_path / "source"

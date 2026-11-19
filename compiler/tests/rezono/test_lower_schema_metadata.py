@@ -10,12 +10,15 @@ from rezono_compiler import emit, modules, pack
 from support import FIXTURE
 
 STD_ACCESS = Path(__file__).resolve().parents[3] / "packs" / "std-access"
+# A changed copy of std-access is an ordinary pack: the std-* names stand only for the standard packs
+# (decisions/standard-pack-names.md). The schema keeps the standard schema's id and name.
+PACK = "access-roles"
 TITLE_DESCRIPTION = "The label of a role at the gate."
 FORM = {
     "format": "rezono.module/2",
     "module": {
         "rezono": "0",
-        "pack": "std-access",
+        "pack": PACK,
         "use": [],
         "schema": "std_access",
         "iri": "https://rezono.example/std-access/access",
@@ -80,14 +83,15 @@ def published_role_name(directory):
 
 
 def test_lower_schema_metadata(tmp_path):
-    legacy = tmp_path / "yaml" / "std-access"
-    authored = tmp_path / "module" / "std-access"
+    legacy = tmp_path / "yaml" / PACK
+    authored = tmp_path / "module" / PACK
     for directory in (legacy, authored):
         (directory / "labels").mkdir(parents=True)
         (directory / "labels/nl.yaml").write_text("role: rol\nrole.title: naam\n", encoding="utf-8")
         (directory / "messages").mkdir()
-        for path in ("pack.yaml", "channels.yaml"):
-            (directory / path).write_bytes((STD_ACCESS / path).read_bytes())
+        (directory / "channels.yaml").write_bytes((STD_ACCESS / "channels.yaml").read_bytes())
+        meta = yaml.safe_load((STD_ACCESS / "pack.yaml").read_bytes()) | {"name": PACK}
+        (directory / "pack.yaml").write_text(yaml.safe_dump(meta, sort_keys=False), encoding="utf-8")
         (directory / "messages/nl.mf2").write_bytes((FIXTURE / "messages/nl.mf2").read_bytes())
 
     # Keep the public LinkML schema's Role and its two basic attributes. A slot description exercises
@@ -112,7 +116,7 @@ def test_lower_schema_metadata(tmp_path):
 
     (authored / "rezono").mkdir()
     # Form-only input isolates the compiler's lowering from the source reader.
-    (authored / "rezono/access.rezono").write_text("rezono 0\npack std-access\n", encoding="utf-8")
+    (authored / "rezono/access.rezono").write_text(f"rezono 0\npack {PACK}\n", encoding="utf-8")
     form_path = authored / "rezono/access.json"
     form_path.write_text(json.dumps(FORM), encoding="utf-8")
     with (authored / "pack.yaml").open("a", encoding="utf-8") as manifest:

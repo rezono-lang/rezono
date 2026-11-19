@@ -68,7 +68,9 @@ updates:
         patterns: ["*"]
 
   - package-ecosystem: docker
-    directory: /deploy/profiles/kubernetes/run
+    directories:
+      - /
+      - /deploy/profiles/kubernetes/run
     schedule:
       interval: weekly
     groups:
