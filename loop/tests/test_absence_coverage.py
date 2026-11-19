@@ -1,9 +1,10 @@
-"""A recorded absence needs independent coverage for the same run, collector and sweep."""
+"""A recorded absence needs verified coverage for the same run, collector and sweep."""
 
 import json
 
 import pytest
 
+from flow_drift_cases import MissingVerifiedSweepInventory, verified_sweep
 from pack_records import LOOP, evaluate
 
 
@@ -19,6 +20,11 @@ def receipt(run=RUN, scope=SCOPE, sweep=SWEEP, lost=0, *, start=0, stop=2):
         "flow_expected_node": [dict(key, id="node-inventory", node="observer")],
         "flow_node_report": [dict(key, id="node-final", node="observer", first=start, last=stop, gaps=0, lost=lost)],
     }
+
+
+def verified(run=RUN, scope=SCOPE, sweep=SWEEP, nodes=("observer",)):
+    """The admitted rows of a verified receipt whose trusted inventory lists these sweep nodes."""
+    return verified_sweep(nodes, (run, scope, sweep), f"receipt/{run}/{scope}/{sweep}")
 
 
 def recording(coverage, **location):
@@ -41,18 +47,18 @@ def test_absence_report_alone_cannot_prove_drift(coverage):
     assert not snapshot.drift
 
 
-@pytest.mark.parametrize(("coverage", "expected"), [
-    pytest.param({}, False, id="missing"),
-    pytest.param(receipt(run="old"), False, id="other-run"),
-    pytest.param(receipt(scope="other-reader"), False, id="other-scope"),
-    pytest.param(receipt(sweep="evening"), False, id="other-sweep"),
-    pytest.param(receipt(lost=1), False, id="incomplete"),
-    pytest.param(receipt(), True, id="matching"),
+@pytest.mark.parametrize(("coverage", "admitted", "expected"), [
+    pytest.param({}, None, False, id="missing"),
+    pytest.param(receipt(run="old"), verified(run="old"), False, id="other-run"),
+    pytest.param(receipt(scope="other-reader"), verified(scope="other-reader"), False, id="other-scope"),
+    pytest.param(receipt(sweep="evening"), verified(sweep="evening"), False, id="other-sweep"),
+    pytest.param(receipt(lost=1), verified(), False, id="incomplete"),
+    pytest.param(receipt(), verified(), True, id="matching"),
 ])
-def test_absence_uses_only_matching_coverage(coverage, expected):
+def test_absence_uses_only_matching_coverage(coverage, admitted, expected):
     from rezono_compiler import pack
 
-    _, rows, explainer = evaluate(pack.read(LOOP), recording(coverage, scope=SCOPE, sweep=SWEEP))
+    _, rows, explainer = evaluate(pack.read(LOOP), recording(coverage, scope=SCOPE, sweep=SWEEP), admitted)
     assert rows["current"] == ({(RUN, TOKEN, "absent", "", REASON)} if expected else set())
     assert rows["drift"] == ({DRIFT} if expected else set())
     if expected:
@@ -73,7 +79,7 @@ def test_scope_and_sweep_belong_to_one_observation():
     data = recording(receipt(), scope=SCOPE)
     partial, = data["loop_observation"]
     data["loop_observation"].append({**partial, "id": "elsewhere", "scope": "other-reader", "sweep": SWEEP})
-    _, rows, _ = evaluate(pack.read(LOOP), data)
+    _, rows, _ = evaluate(pack.read(LOOP), data, verified())
     assert not rows["current"] and not rows["drift"]
 
 
@@ -88,7 +94,7 @@ def test_absence_is_only_proven_inside_the_complete_window(time, expected):
     from rezono_compiler import pack
 
     data = recording(receipt(start=10, stop=12), scope=SCOPE, sweep=SWEEP, event_time=time)
-    _, rows, explainer = evaluate(pack.read(LOOP), data)
+    _, rows, explainer = evaluate(pack.read(LOOP), data, verified())
     assert rows["current"] == ({(RUN, TOKEN, "absent", "", REASON)} if expected else set())
     assert rows["drift"] == ({DRIFT} if expected else set())
     if expected:
@@ -110,7 +116,7 @@ def test_incomplete_window_cannot_lend_bounds_to_the_complete_window():
     complete, = coverage["flow_sweep_window"]
     coverage["flow_sweep_window"].append({**complete, "id": "uncovered", "start": 8})
     data = recording(coverage, scope=SCOPE, sweep=SWEEP, event_time=9)
-    _, rows, _ = evaluate(pack.read(LOOP), data)
+    _, rows, _ = evaluate(pack.read(LOOP), data, verified())
     assert rows["complete_sweep"] == {(RUN, SCOPE, SWEEP, "coverage")}
     assert not rows["current"] and not rows["drift"]
 
@@ -135,7 +141,7 @@ def test_complete_windows_need_unambiguous_bounds(second_bounds, time, expected)
         coverage["flow_sweep_window"].append(dict(original, id="second", start=start, stop=stop))
 
     data = recording(coverage, scope=SCOPE, sweep=SWEEP, event_time=time)
-    _, rows, _ = evaluate(pack.read(LOOP), data)
+    _, rows, _ = evaluate(pack.read(LOOP), data, verified())
 
     assert rows["current"] == ({(RUN, TOKEN, "absent", "", REASON)} if expected else set())
     assert rows["drift"] == ({DRIFT} if expected else set())
@@ -143,3 +149,34 @@ def test_complete_windows_need_unambiguous_bounds(second_bounds, time, expected)
     assert rows["complete_sweep"] == (
         {(RUN, SCOPE, SWEEP, ref) for ref in refs} if second_bounds in (None, (10, 12)) else set()
     )
+
+
+
+@pytest.mark.xfail(
+    strict=True,
+    raises=MissingVerifiedSweepInventory,
+    reason=(
+        "M2: decisions/admission-transport.md: section 6, member keys. A recorded sweep proves absence only with "
+        "admitted sweep-node members for the same run, collector and sweep, each covered by its final report. "
+        "Waits for loop/tests/test_flow_drift_sweep.py--test_complete_flow_sweep_needs_verified_inventory. Today "
+        "complete_sweep and drift follow from the recorded inventory without any receipt."
+    ),
+)
+def test_absence_needs_verified_sweep_inventory():
+    from rezono_compiler import pack
+
+    data = recording(receipt(), scope=SCOPE, sweep=SWEEP)
+    cases = {
+        "matching": (verified(), True),
+        "no-receipt": (None, False),
+        "receipt-for-other-run": (verified(run="old"), False),
+        "receipt-for-other-scope": (verified(scope="other-reader"), False),
+        "receipt-for-other-sweep": (verified(sweep="evening"), False),
+        "unreported-member": (verified(nodes=("observer", "second")), False),
+    }
+    for name, (admitted, expected) in cases.items():
+        _, rows, _ = evaluate(pack.read(LOOP), data, admitted)
+        sweeps = {(RUN, SCOPE, SWEEP, "coverage")} if expected else set()
+        if rows["complete_sweep"] != sweeps or rows["drift"] != ({DRIFT} if expected else set()):
+            raise MissingVerifiedSweepInventory(
+                f"{name}: complete_sweep {rows['complete_sweep']}, drift {rows['drift']}")

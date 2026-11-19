@@ -88,6 +88,28 @@ The compiler reserves these exact names and signatures. A pack declares one with
 
 Content values beyond the member keys are not exposed in this version. A pack that needs a value in its rules makes that value part of the member key of its own scope, as a reader mapping does with a path and a reader. A consumer that needs the full content, such as the month close, reads it through the receipt verifier.
 
+### Member keys bind a receipt to its rule
+
+`verified_receipt` carries digests, and a rule cannot join a digest to a run or a window. A rule therefore ties an admitted receipt to its own bindings only through the member keys of the trusted inventory. The protected caller that writes the context lays out each key as follows:
+
+- Part 0 is a tag that names the kind of member. A rule reads only the members that carry its tag, so a receipt for another scope never supplies its members.
+- The next parts are the bindings that the rule joins on, in a fixed order.
+- The last parts identify the member itself.
+
+A record that names a receipt digest selects among admitted receipts and binds nothing. The submitted records can neither add nor remove a member.
+
+**Sweep nodes.** Each expected node of a flow sweep is the member `["sweep-node", run, collector, window, node]`. `complete_sweep(run, collector, window, ref)` requires:
+
+- at least one admitted member with that run, collector and window;
+- for every such member, across all admitted receipts, the single final report of that node covering the interval without gaps or lost events;
+- no recorded `expected_node` of that sweep outside those members.
+
+A recorded inventory without verified members gives no `complete_sweep`. An empty verified inventory gives none either, as an empty recorded inventory does today. The interval, terminal report, conflicting report and window bound checks stay as they are. The records still supply the reports; the receipt supplies the population that the reports must cover.
+
+**Path readers.** Each reader edge of the build reader map is its own member `["path-reader", path, kind, reader]`. The member `["path-readers", path, kind]` stays as the terminal read of one mapping, also when that mapping is empty. A changed path (`["changed-path", path]`) is readerless only when the admitted receipt lists both of its mappings and no `path-reader` member for it. An admitted member of the build scope without its matching record, such as a reader edge, a changed path, a manifest, a test file or a suite, selects full checks. The build key parts carry no run: the protected build job pins one build-selection context for its run, and a second admitted build receipt in the same epoch leaves the selection without coverage. A run with a verified cut (`build_verified_cut`) but without an admitted build-selection receipt selects full checks with the reason `missing-selection-receipt`. `build_verified_cut` and its reason `missing-observation-receipt` keep their meaning for claims and tasks.
+
+This layout needs no change to the reserved signatures or to admission: `verified_member` already exposes every part of a key. An alternative that exposes the scope bindings or the content in a new protected relation would change the reserved names and the checker, and would hand rules values that the inventory does not pin as members.
+
 The protected relations are published on the complete side only. They carry no element column, and their rows expose the trusted inventory, member keys included, so no right of a kind can decide who reads them. Until a decision gives them an explicit read rule or element columns for the member keys, every filtered role has them withheld, as the relations of a sealed kind are withheld (`access.Scope.withheld`, and independently `rezono_checker.access.withheld_admission`). A derived conclusion that rests on a withheld row reaches a role only through a proof whose grounds that role may read ([scoped completeness](scoped-completeness.md), section 2); a conclusion whose only proofs rest on a protected relation stays hidden from every filtered role.
 
 ## 7. Round verification
