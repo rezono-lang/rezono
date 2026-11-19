@@ -3,7 +3,6 @@ import pytest
 from tenant_proposal_case import load, proposal, query, write
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError, reason="M2: Depends on test_trusted_tenant_proposal_inputs and test_file_delivery_numbers. The platform compiler needs the shared tenant and delivery ordinal, with that identity bound to the legacy display key, before joining matrix eligibility, reciprocal requests and authorized reviewer decisions in rules/tenant_connection_review.dl. Read decisions/platform-tenant-proposal-relations.md.")
 def test_real_proposal_requires_both_teams_and_authorized_decision(tmp_path):
     teams, catalog = proposal(tmp_path)
     model = load(catalog)
