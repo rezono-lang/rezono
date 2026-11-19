@@ -34,18 +34,19 @@ def task_observations(data, readings):
         ],
         "build_queue_limit": [{"id": "planner-limit", "decision": "placement-policy", "limit": 30}],
         "build_queue_reading": [
+            # A reading cites the run's receipt unless the case names another, or None for no receipt.
             {"id": f"queue-{index}", "run": run, "observed_at": tick, "count": count, "source": "queue-reader",
              **({"receipt": receipt} if receipt else {})}
-            for index, (tick, count, receipt) in enumerate(readings)
+            for index, (tick, count, receipt) in enumerate((*reading, "receipt")[:3] for reading in readings)
         ],
     })
 
 
 @pytest.mark.parametrize(("readings", "waiting_reason"), [
-    ([(OBSERVED_AT, 29, "receipt")], None),
-    ([(OBSERVED_AT, 30, "receipt")], "queue-limit"),
-    ([(OBSERVED_AT - 1, 29, "receipt")], "queue-evidence-unknown"),
-    ([(OBSERVED_AT, 29, "receipt"), (OBSERVED_AT, 30, "receipt")], "queue-evidence-unknown"),
+    ([(OBSERVED_AT, 29)], None),
+    ([(OBSERVED_AT, 30)], "queue-limit"),
+    ([(OBSERVED_AT - 1, 29)], "queue-evidence-unknown"),
+    ([(OBSERVED_AT, 29), (OBSERVED_AT, 30)], "queue-evidence-unknown"),
     # A count without a receipt of its complete listing does not prove planner capacity.
     ([(OBSERVED_AT, 29, None)], "queue-evidence-unknown"),
 ])
