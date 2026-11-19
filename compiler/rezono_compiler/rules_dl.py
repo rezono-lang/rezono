@@ -55,7 +55,8 @@ RELEASE = re.compile(r"^//\s*@release\b")  # reserved (O8, delimited release): r
 OUTCOME = re.compile(r"^//\s*@outcome(?:\s+(\S+))?\s*$")
 EXTEND = re.compile(r"^//\s*@extend\s*$")
 CHECKED_ABSENCE = "absent_checked"  # reserved conclusion of decisions/scoped-completeness.md
-RECEIPT_PREMISES = frozenset({"complete", "verified_receipt"})
+RECEIPT_INPUT = "verified_receipt"  # protected: only admission fills it (decisions/admission-transport.md)
+RECEIPT_LOOKUP = "registered_match"  # the lookup over the contents of one receipt
 CLOSES = re.compile(r"^//\s*@closes\s+(\S+)\s*$")
 
 
@@ -602,10 +603,11 @@ def read(pack, pack_dir: Path, imports=None, renames=None, *, calc_inputs=None, 
                               "only its owner can mark it @extend")
                 continue
             module = owners[rel]
-        if rel == CHECKED_ABSENCE and not any(
-                s[0] == "lit" and s[1] == "positive" and s[2][0] in RECEIPT_PREMISES for s in body):
-            errors.append(f"{where}:{line}: {rel} needs a positive premise from a verified receipt "
-                          f"({' or '.join(sorted(RECEIPT_PREMISES))}); a lookup alone proves no absence")
+        if rel == CHECKED_ABSENCE and not checked_absence(head, body, rules_src):
+            errors.append(f"{where}:{line}: {rel} needs a positive premise from the verified receipt "
+                          f"({RECEIPT_INPUT}, or a projection of it such as complete) with the head's source, "
+                          f"scope, cut and receipt, and a negative {RECEIPT_LOOKUP} on that same receipt; "
+                          "a lookup alone proves no absence")
             continue
         accessible = set(renames.get(source, {}).values())
         atoms = [head] + [s[-1] for s in body if s[0] in ("lit", "agg")]
@@ -698,6 +700,42 @@ def read(pack, pack_dir: Path, imports=None, renames=None, *, calc_inputs=None, 
 
 # The kind of a body element as the bundle names it (MOD14); to_rule keeps each kind in source order.
 LITERAL = {"lit": "atom", "agg": "aggregate", "arith": "assignment", "cmp": "comparison"}
+
+
+def receipt_binding(atom, rules_src, *, unfold=True):
+    """The (source, scope, cut, receipt) terms a positive premise verifies, or None.
+
+    Only the protected admission input verified_receipt(receipt, source, scope, cut, inventory, content)
+    verifies a read; a pack cannot fill it. A derived relation such as std-completeness's `complete`
+    counts only when every clause of it merely projects that input, so naming a relation `complete`
+    and filling it proves nothing (decisions/scoped-completeness.md, section 2).
+    """
+    name, args, _ = atom
+    if name == RECEIPT_INPUT:
+        bound = (args[1], args[2], args[3], args[0]) if len(args) == 6 else None
+        return None if bound is None or ("wild",) in bound else bound
+    clauses = [(h, b) for _, _, h, b, *_ in rules_src if h[0] == name]
+    if not unfold or not clauses or len(args) != 4 or ("wild",) in args:
+        return None
+    for clause_head, clause_body in clauses:
+        if (len(clause_body) != 1 or clause_body[0][:2] != ("lit", "positive")
+                or receipt_binding(clause_body[0][2], rules_src, unfold=False) != tuple(clause_head[1])):
+            return None
+    return tuple(args)
+
+
+def checked_absence(head, body, rules_src) -> bool:
+    """absent_checked(source, scope, cut, key, receipt) holds only on a verified read of that receipt
+    and a negative lookup in the contents of that same receipt."""
+    terms = tuple(head[1])
+    if len(terms) != 5:
+        return False
+    bound = (*terms[:3], terms[4])
+    verified = any(s[:2] == ("lit", "positive") and receipt_binding(s[2], rules_src) == bound for s in body)
+    lookups = [s[2] for s in body if s[0] == "lit" and s[2][0] == RECEIPT_LOOKUP]
+    return verified and bool(lookups) and all(
+        s[:2] == ("lit", "negative") and s[2][1] and s[2][1][0] == terms[4]
+        for s in body if s[0] == "lit" and s[2][0] == RECEIPT_LOOKUP)
 
 
 def _terms(item):

@@ -84,3 +84,50 @@ def test_absent_checked_requires_readable_coverage(tmp_path):
         }
         raise UnwitnessedAbsenceReleased("full role received absent_checked without a verified read")
     assert all(w["conclusion"]["relation"] != "absent_checked" for w in whole["witnesses.json"]["witnesses"])
+
+
+FORGED_COMPLETE = """
+.decl in_scope_query(scope: symbol, key: symbol)
+in_scope_query("lookup", "missing") :- alpha("anchor").
+.decl registered_match(receipt: symbol, key: symbol)
+registered_match("unattested", item) :- alpha__title(item, "registered").
+.decl complete(scope: symbol)
+complete("lookup") :- alpha("anchor").
+.decl absent_checked(source: symbol, scope: symbol, cut: symbol, key: symbol, receipt: symbol)
+absent_checked("register", "lookup", "snapshot-17", key, "unattested") :-
+    complete("lookup"), in_scope_query("lookup", key), !registered_match("unattested", key).
+"""
+
+VERIFIED = (".decl verified_receipt(receipt: symbol, source: symbol, scope: symbol, cut: symbol, "
+            "inventory: symbol, content: symbol)\n")
+OTHER_RECEIPT = VERIFIED + """
+.decl in_scope_query(scope: symbol, key: symbol)
+in_scope_query("lookup", "missing") :- alpha("anchor").
+.decl registered_match(receipt: symbol, key: symbol)
+registered_match("unattested", item) :- alpha__title(item, "registered").
+.decl absent_checked(source: symbol, scope: symbol, cut: symbol, key: symbol, receipt: symbol)
+absent_checked(s, sc, c, key, r) :-
+    verified_receipt(r, s, sc, c, _, _), in_scope_query(sc, key), !registered_match("unattested", key).
+"""
+
+
+def test_absent_checked_refuses_an_authored_receipt_premise(tmp_path):
+    """A pack cannot vouch for its own read by declaring and filling `complete` itself (P1 counterexample)."""
+    root = Path(shutil.copytree(MINIMAL, tmp_path / "pack"))
+    (root / "facts").mkdir()
+    (root / "facts/items.yaml").write_text("alpha: [{id: anchor, title: probe}]\n", encoding="utf-8")
+    (root / "rules").mkdir()
+    (root / "rules/access.dl").write_text(GRANTS + FORGED_COMPLETE, encoding="utf-8")
+    with pytest.raises(CompileError, match="absent_checked"):
+        published(root, tmp_path / "proposed")
+
+
+def test_absent_checked_binds_the_lookup_to_the_verified_receipt(tmp_path):
+    """The negative lookup must read the contents of the same receipt the positive premise verified."""
+    root = Path(shutil.copytree(MINIMAL, tmp_path / "pack"))
+    (root / "facts").mkdir()
+    (root / "facts/items.yaml").write_text("alpha: [{id: anchor, title: probe}]\n", encoding="utf-8")
+    (root / "rules").mkdir()
+    (root / "rules/access.dl").write_text(GRANTS + OTHER_RECEIPT, encoding="utf-8")
+    with pytest.raises(CompileError, match="absent_checked.*receipt"):
+        published(root, tmp_path / "proposed")
