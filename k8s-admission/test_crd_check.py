@@ -68,11 +68,6 @@ CASES = [
 ]
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="extra: Write crd_check.check_crd as decisions/k8s-admission-binding-checks.md specifies under CRD check. "
-           "Write in k8s-admission/crd_check.py.",
-)
 def test_crd_check():
     from crd_check import check_crd
 

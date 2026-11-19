@@ -8,7 +8,6 @@
 -e ./compiler[test,batch]
 -e ./checker[test,contracts]
 -e ./edge/publisher[test,s3]
--e ./edge/githost[test]
 basedpyright==1.40.2
 cryptography==50.0.2
 linkml==1.12.1

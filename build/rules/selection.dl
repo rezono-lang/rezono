@@ -55,8 +55,8 @@ build_affected(run, consumer, path) :- build_affected(run, dependency, path),
 // ["manifest", revision, path], ["test-file", path] and ["suite", folder]. No run is part of a key: the
 // protected build job pins one build-selection context per run, so a second admitted build receipt leaves the
 // selection without coverage. The receipt the run record names only selects among admitted receipts.
-.decl verified_receipt(receipt: symbol, source: symbol, scope: symbol, cut: symbol, inventory: symbol, content: symbol)
-.decl verified_member(receipt: symbol, member: symbol, part: number, value: symbol)
+// verified_receipt and verified_member are the protected admission inputs that std-loop declares
+// (packs/std-loop/rules/complete_sweep.dl); this pack reads them and declares no second copy.
 .decl complete(source: symbol, scope: symbol, cut: symbol, receipt: symbol)
 .decl build_receipt(receipt: symbol)
 .decl build_second_receipt(receipt: symbol)

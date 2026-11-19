@@ -88,16 +88,6 @@ def test_flow_drift_rows():
     assert evaluate("flow_drift", FLOW_COLUMNS, dict(variant, bound_policy=[])) == set()
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=MissingVerifiedSweepInventory,
-    reason=(
-        "M2: decisions/admission-transport.md: section 6, member keys. Without admitted sweep-node members the "
-        "complete recorded sweep certifies nothing, so the allowed flow that was not seen stays out of flow_drift. "
-        "Waits for loop/tests/test_flow_drift_sweep.py--test_complete_flow_sweep_needs_verified_inventory. Today "
-        "complete_sweep follows from the recorded inventory without any receipt."
-    ),
-)
 def test_flow_drift_needs_verified_sweep():
     raw = flow_rows()
     for verified, complete in ((True, True), (False, False)):

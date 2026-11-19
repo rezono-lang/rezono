@@ -18,11 +18,6 @@ def finding(obj, reason, **detail):
     return {"rule": "verified-supply", "digest": DIGEST, "object": obj, "reason": reason, **detail}
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="extra: Write observed_findings.observed_findings as decisions/k8s-admission-translator.md specifies under "
-           "What CEL cannot do. Write in k8s-admission/observed_findings.py.",
-)
 def test_observed_findings():
     from observed_findings import observed_findings
 

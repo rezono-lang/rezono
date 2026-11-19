@@ -53,14 +53,6 @@ class MissingPriorityTableLowering(AssertionError):
     """The compiler refused a `table priority`, which decisions/language-tables.md lowers."""
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=MissingPriorityTableLowering,
-    reason="extra: decisions/language-tables.md: Lower a table priority to the named outcome and value relations "
-           "of a unique table, without the conflict invariant, in compiler/rezono_compiler/rezono_table.py and "
-           "rezono_extend.py. Read docs/rezono/tables.md section 3 and the section Lowering a priority table. "
-           "Waits for test_lower_table_collect while it owns rezono_table.py and rezono_extend.py.",
-)
 def test_lower_table_priority(tmp_path):
     d = written(tmp_path, LEVEL, TONE, STANDING, ETA, {"extend": "Eta", "derived": [PRIORITY]})
     try:

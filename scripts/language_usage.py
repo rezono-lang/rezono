@@ -103,6 +103,9 @@ EVIDENCE |= {
     "exceptions": (reader("exceptions"), lowering("lower_exceptions")),
     "table-policy": (reader("table_policy"), lowering("lower_table_policy", "test_lower_table_first"),
                      lowering("lower_table_policy", "test_lower_table_collect")),
+    "deprecated-declaration": (reader("deprecated_declaration"), lowering("lower_deprecated")),
+    "intermediate-invariant": (reader("invariant_intermediate"),),
+    "step-declaration": (reader("step_declaration"),),
 }
 
 KIND_FEATURES = {
@@ -200,6 +203,8 @@ MODULE_SYNTAX = {
     "parameters": r"^param\b", "units": r"^(?:unit|rounding)\b", "calculation": r"^\s*derived\b",
     "exceptions": r"^\s*unless\b", "decision-table": r"^\s*table\b", "table-policy": r"^\s*table\s+(?!unique\b)\w+", "conditional-check": r"^(?:check|require|warn)\b",
     "relational-rule": r"^rules\b", "native-rule": r"^rule\b",
+    "intermediate-invariant": r"^rule\b(?:(?!\bwhen\b).)*\binvariant\s+intermediate\b",
+    "step-declaration": r"^step\b", "deprecated-declaration": r"^deprecated\b",
     "time-policy": r"^\s+(?:applies|sealed) at:", "schema-metadata": r"^reason\b",
 }
 RULE_DECLARATION = re.compile(r"^rule\b[^\n]*(?:\n[ \t][^\n]*)*", re.MULTILINE)
