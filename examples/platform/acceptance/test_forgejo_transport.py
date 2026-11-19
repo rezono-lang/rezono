@@ -13,12 +13,6 @@ EXPECTED = [("forgejo", "9.0", "TCP", 3000,
              "77859c2080ca14c3193b8cf4a5fb161ac95cdc1a299cd83883d5c938af6d0157")]
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError, reason=(
-    "Add facts/forgejo_transport.yaml with one vendor_default_transport row id forgejo-9.0-transport and facts/forgejo_transport_source.yaml "
-    "with one vendor_default_transport_source row id forgejo-9.0-transport-source, both holding the expected values. "
-    "Give the source file a sidecar facts/forgejo_transport_source.sources.yaml whose default is a tool source named "
-    "'Vendor transport inspection' with the revision, position, url and fragment_sha256 this test states. "
-    "Write only those three files. Read decisions/platform-vendor-transport-evidence.md."))
 def test_forgejo_transport():
     check_vendor_transport("forgejo_transport", EXPECTED, revision="v9.0", line=308,
                            fragment_sha256="6a03dc8ee68c3de7024f081998d97f3662e2dac4726b8e73925e635842caede1")

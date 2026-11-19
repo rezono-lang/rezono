@@ -1,0 +1,8 @@
+vendor_default_transport:
+  - id: forgejo-9.0-transport
+    product: forgejo
+    series: '9.0'
+    protocol: TCP
+    port: 3000
+    source_url: 'https://codeberg.org/forgejo/docs/raw/branch/v9.0/docs/admin/config-cheat-sheet.md'
+    source_sha256: 77859c2080ca14c3193b8cf4a5fb161ac95cdc1a299cd83883d5c938af6d0157
