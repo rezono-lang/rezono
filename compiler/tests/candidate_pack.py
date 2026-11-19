@@ -13,7 +13,7 @@ import yaml
 from rezono_compiler import batch, emit, pack, rules as ir
 
 
-REPO = Path(__file__).resolve().parents[3]
+REPO = Path(__file__).resolve().parents[2]
 WRITE_FORM = REPO / "rezono/src/write-form.ts"
 
 
