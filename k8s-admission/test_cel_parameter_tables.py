@@ -25,7 +25,7 @@ def same_rows(table, expected):
 
 @pytest.mark.xfail(
     strict=True,
-    reason="Write cel_parameter_tables.parameter_tables as decisions/k8s-admission-translator.md specifies under "
+    reason="M4: Write cel_parameter_tables.parameter_tables as decisions/k8s-admission-translator.md specifies under "
            "Parameter table. Write in k8s-admission/cel_parameter_tables.py. Without Go the test checks the exact "
            "text; the CI also runs cel-go.",
 )

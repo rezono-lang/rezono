@@ -21,7 +21,7 @@ def errors(document):
 
 
 @pytest.mark.xfail(strict=True, raises=AssertionError,
-                   reason="Waits for contracts/python/tests/test_completeness_receipt_contract.py--test_completeness_"
+                   reason="M2: Waits for contracts/python/tests/test_completeness_receipt_contract.py--test_completeness_"
                           "receipt_contract (same contracts/manifest.yaml). Then add an optional rounds list of "
                           "ArchivedFile on Manifest, as decisions/admission-transport.md section 2 fixes, and "
                           "regenerate the types with contracts/gen-types.sh.")

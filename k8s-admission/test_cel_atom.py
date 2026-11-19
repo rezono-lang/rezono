@@ -20,7 +20,7 @@ def params_for(namespace):
 
 @pytest.mark.xfail(
     strict=True,
-    reason="Write cel_atom.bind, exists and negative as decisions/k8s-admission-translator.md specifies under Atom. "
+    reason="M4: Write cel_atom.bind, exists and negative as decisions/k8s-admission-translator.md specifies under Atom. "
            "Write in k8s-admission/cel_atom.py. Without Go the test checks the exact text; the CI also runs cel-go.",
 )
 def test_cel_atom():

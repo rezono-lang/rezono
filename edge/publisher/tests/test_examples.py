@@ -432,7 +432,7 @@ def test_a_forged_import_is_refused_before_anything_runs(tmp_path, monkeypatch, 
     assert any(named in r for r in refused), refused
 
 
-@pytest.mark.xfail(strict=True, reason="Waits for edge/publisher/tests/test_kept_view_mapping.py--test_a_typed_theory_mapping_is_admitted_before_install (the mapping boundary of decisions/kept-view-mapping.md). Then replay the subsidy archive with its theory mapping; byte equality with the kept manifest shows the view component was not dropped.")
+@pytest.mark.xfail(strict=True, reason="later: Waits for edge/publisher/tests/test_kept_view_mapping.py--test_a_typed_theory_mapping_is_admitted_before_install (the mapping boundary of decisions/kept-view-mapping.md). Then replay the subsidy archive with its theory mapping; byte equality with the kept manifest shows the view component was not dropped.")
 def test_a_kept_publication_with_imports_is_made_again_byte_for_byte(v2_imports):
     """The replay resolves the imports inside the archive, with the archived code."""
     assert kept.check(v2_imports) == []

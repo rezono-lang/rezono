@@ -121,7 +121,7 @@ def test_language_compares_expression_cases():
 @pytest.mark.xfail(
     strict=True,
     raises=MissingLanguageOutcome,
-    reason="value-two-values-single gives two rows for item-a with quantity 7 and 9; load in rezono/src keeps the "
+    reason="extra: value-two-values-single gives two rows for item-a with quantity 7 and 9; load in rezono/src keeps the "
            "last value and the question shows 9. Make two different values of a single-valued slot invalid, "
            "with no reason, as decisions/language-expression-semantics.md section 1 says for conflicting single "
            "values, then remove the case's pending unsupported.language entry so the shared runner compares it.",
@@ -134,7 +134,7 @@ def test_language_compares_slot_read_cases():
 @pytest.mark.xfail(
     strict=True,
     raises=MissingLanguageOutcome,
-    reason="Compare the check and question cases in QUESTIONS_AND_CHECKS in rezono/test/shared-conformance.test.ts, "
+    reason="extra: Compare the check and question cases in QUESTIONS_AND_CHECKS in rezono/test/shared-conformance.test.ts, "
            "each as a test named `shared conformance: <id>`, exactly as the comment above QUESTIONS_AND_CHECKS in "
            "this file maps the language's results to their expectations. Read tests/conformance/README.md.",
 )
@@ -146,7 +146,7 @@ def test_language_compares_question_and_check_cases():
 @pytest.mark.xfail(
     strict=True,
     raises=MissingLanguageOutcome,
-    reason="Give every remaining case exactly one language outcome. These cases concern hashes, wire snapshots, "
+    reason="extra: Give every remaining case exactly one language outcome. These cases concern hashes, wire snapshots, "
            "publication payloads and role worlds of other engines: record in each case file under "
            "tests/conformance/ the specific reason the language does not answer it, as unsupported.language. Change "
            "only those case files, not the runner or any expectation; if the language should answer a case, say so "

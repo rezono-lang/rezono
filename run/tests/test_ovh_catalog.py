@@ -40,7 +40,7 @@ def raw(value):
 
 
 @pytest.mark.xfail(strict=True, reason=(
-    "Read decisions/run-price-enforcement.md, The price list. Implement terms(catalog, plan_code, mode) in "
+    "M4: decisions/run-price-enforcement.md: Read the section The price list. Implement terms(catalog, plan_code, mode) in "
     "run/ovh_catalog.py; catalog is the captured response body."
 ))
 def test_ovh_catalog():
