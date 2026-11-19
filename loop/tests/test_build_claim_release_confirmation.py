@@ -86,3 +86,61 @@ def test_build_claim_release_confirmation(tmp_path):
         ("current", "task/still", "still-present"),
         ("current", "task/contradicted", "still-present"),
     }
+
+
+def test_build_claim_release_confirmation_read_order(tmp_path):
+    """A later present read or any post-delete replacement prevents release confirmation."""
+    source = tmp_path / "source"
+    base, head, paths = repository(source, "decisions/claims.md")
+    records = capture(source, base, head, paths)
+    t = OBSERVED_AT
+    records["loop_sweep_receipt"].extend([
+        {"id": "read-early", "run": "current", "event_time": t + 20},
+        {"id": "read-late", "run": "current", "event_time": t + 30},
+    ])
+    cases = {
+        "task/stale-absent": [
+            (t + 20, "absent", None, "read-early"),
+            (t + 30, "present", "task/stale-absent", "read-late"),
+        ],
+        "task/replaced-then-absent": [
+            (t + 20, "present", "task/replaced-then-absent-new", "read-early"),
+            (t + 30, "absent", None, "read-late"),
+        ],
+        "task/absent-then-replaced": [
+            (t + 20, "absent", None, "read-early"),
+            (t + 30, "present", "task/absent-then-replaced-new", "read-late"),
+        ],
+        "task/present-then-absent": [
+            (t + 20, "present", "task/present-then-absent", "read-early"),
+            (t + 30, "absent", None, "read-late"),
+        ],
+    }
+    records.update({"build_claim_delete": [], "build_claim_ref_read": []})
+    for branch, reads in cases.items():
+        records["build_claim_delete"].append({
+            "id": f"{branch}@delete", "run": "current", "branch": branch,
+            "generation": generation(branch), "sent_at": t + 10, "outcome": "sent", "source": "claim-delete",
+        })
+        for index, (tick, state, seen, receipt) in enumerate(reads):
+            records["build_claim_ref_read"].append({
+                "id": f"{branch}@read-{index}", "run": "current", "branch": branch, "observed_at": tick,
+                "state": state, **({"generation": generation(seen)} if seen else {}), "receipt": receipt,
+                "source": "ref-listing",
+            })
+
+    rows = published(tmp_path, records)
+
+    def keys(relation, width):
+        return {tuple(row["key"][:width]) for row in rows.get(relation, [])}
+
+    assert keys("build_claim_released", 3) == {
+        ("current", "task/present-then-absent", generation("task/present-then-absent")),
+    }
+    assert keys("build_claim_release_discarded", 3) == {
+        ("current", "task/replaced-then-absent", "replaced"),
+        ("current", "task/absent-then-replaced", "replaced"),
+    }
+    assert keys("build_claim_release_pending", 3) == {
+        ("current", "task/stale-absent", "still-present"),
+    }

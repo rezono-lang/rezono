@@ -2,9 +2,10 @@
 .decl build_claim_delete_effective(run: symbol, branch: symbol, generation: symbol, sent: number)
 .decl build_claim_ref_absent(run: symbol, branch: symbol, tick: number)
 .decl build_claim_ref_present(run: symbol, branch: symbol, tick: number, generation: symbol)
-.decl build_claim_ref_present_at(run: symbol, branch: symbol, tick: number)
+.decl build_claim_ref_absent_contradicted(run: symbol, branch: symbol, tick: number)
 .decl build_claim_released(run: symbol, branch: symbol, generation: symbol, reason: symbol)
 .decl build_claim_release_discarded(run: symbol, branch: symbol, reason: symbol)
+.decl build_claim_release_discarded_any(run: symbol, branch: symbol)
 .decl build_claim_release_settled(run: symbol, branch: symbol)
 .decl build_claim_still_present(run: symbol, branch: symbol)
 .decl build_claim_release_pending(run: symbol, branch: symbol, reason: symbol)
@@ -31,17 +32,19 @@ build_claim_ref_present(run, branch, tick, generation) :- build_claim_ref_read__
     build_claim_ref_read__source(read, source), source != "",
     build_claim_ref_read__receipt(read, receipt), loop_sweep_receipt__run(receipt, run),
     loop_sweep_receipt__event_time(receipt, tick).
-build_claim_ref_present_at(run, branch, tick) :- build_claim_ref_present(run, branch, tick, _).
+build_claim_ref_absent_contradicted(run, branch, tick) :- build_claim_ref_absent(run, branch, tick),
+    build_claim_ref_present(run, branch, later, _), later >= tick.
 
-// The model's Confirm: a later absent read of the same run, with no present read at that tick.
-build_claim_released(run, branch, generation, "absent-after-delete") :-
-    build_claim_delete_effective(run, branch, generation, sent), build_claim_ref_absent(run, branch, tick), tick > sent,
-    !build_claim_ref_present_at(run, branch, tick).
-
-// The model's DiscardConfirmation: a later read shows the branch at another generation.
+// The model's DiscardConfirmation: a later read shows the branch at another generation, or the delete was refused.
 build_claim_release_discarded(run, branch, "replaced") :- build_claim_delete_effective(run, branch, generation, sent),
     build_claim_ref_present(run, branch, tick, other), tick > sent, other != generation.
 build_claim_release_discarded(run, branch, "delete-refused") :- build_claim_delete_attempt(run, branch, _, _, "refused").
+build_claim_release_discarded_any(run, branch) :- build_claim_release_discarded(run, branch, _).
+
+// The model's Confirm: a later absent read of the same run, with no present read at or after that tick and no discard.
+build_claim_released(run, branch, generation, "absent-after-delete") :-
+    build_claim_delete_effective(run, branch, generation, sent), build_claim_ref_absent(run, branch, tick), tick > sent,
+    !build_claim_ref_absent_contradicted(run, branch, tick), !build_claim_release_discarded_any(run, branch).
 
 build_claim_release_settled(run, branch) :- build_claim_released(run, branch, _, _).
 build_claim_release_settled(run, branch) :- build_claim_release_discarded(run, branch, _).
