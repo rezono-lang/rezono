@@ -109,11 +109,11 @@ def main(argv=None) -> int:
 
 
 def compile_files(model, args) -> dict[str, str]:
-    import yaml
+    from . import strict_yaml
 
     budget, profile, previous = emit.MAX_VIEWS, None, None
     if args.profile:
-        doc = yaml.safe_load(args.profile.read_text(encoding="utf-8")) or {}
+        doc = strict_yaml.read(args.profile) or {}
         budget, profile = emit.view_budget(doc), str(doc.get("profile") or args.profile.stem)
     if args.max_views:
         budget = args.max_views
