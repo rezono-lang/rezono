@@ -169,12 +169,13 @@ class Scope:
 
     @staticmethod
     def _withheld_admission(rules: dict) -> frozenset[str]:
-        """The protected admission inputs the pack declares (decisions/admission-transport.md, section 6). They
-        expose the trusted inventory of a receipt or round, member keys included, and no decision gives them a
-        read rule or element columns yet: a role gets none of their rows, and nothing that rests on them."""
+        """Every protected admission input (decisions/admission-transport.md, section 6), whatever the rule IR `rules`
+        declares, as the checker withholds them. They expose the trusted inventory of a receipt or round, member
+        keys included, and no decision gives them a read rule or element columns yet: a role gets none of their
+        rows, and nothing that rests on them."""
         from rezono_compiler.rules_dl import PROTECTED
 
-        return frozenset(r["name"] for r in rules.get("relations", ()) if r["name"] in PROTECTED)
+        return frozenset(PROTECTED)
 
     def _witnessed_grants(self, rows, rules: dict, witnesses, role: str) -> list[dict]:
         """Match evaluated coverage rows to the rule substitutions that derived them."""

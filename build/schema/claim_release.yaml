@@ -1,0 +1,44 @@
+id: https://rezono.org/build/claim_release
+name: build_claim_release
+description: Recorded claim delete attempts and the complete ref reads that confirm or discard a release.
+imports: [linkml:types, selection, "std-loop:round_progress"]
+default_range: string
+annotations:
+  layer: facts
+
+enums:
+  BuildClaimDeleteOutcome:
+    permissible_values:
+      sent:
+      refused:
+      unknown:
+  BuildClaimRefState:
+    permissible_values:
+      absent:
+      present:
+
+classes:
+  BuildClaimDelete:
+    description: >-
+      One conditional delete attempt of a claim branch at a generation, as the delete adapter recorded its answer.
+    attributes:
+      id: {identifier: true}
+      run: {range: BuildRun, required: true}
+      branch: {required: true}
+      generation: {range: Commit, required: true}
+      sent_at: {range: integer, required: true}
+      outcome: {range: BuildClaimDeleteOutcome, required: true}
+      source: {required: true}
+  BuildClaimRefRead:
+    description: >-
+      A complete ref listing for a claim branch after a delete. A present read names the generation it saw; the
+      receipt attests the complete read of its run and tick.
+    attributes:
+      id: {identifier: true}
+      run: {range: BuildRun, required: true}
+      branch: {required: true}
+      observed_at: {range: integer, required: true}
+      state: {range: BuildClaimRefState, required: true}
+      generation: {range: Commit}
+      receipt: {range: LoopSweepReceipt}
+      source: {required: true}
