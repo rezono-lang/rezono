@@ -42,6 +42,7 @@ The local reader in `edge/gate/` gives a page the role's part, at `GET /<pack>/b
 - `home`: the pack's home claim, with only the relations the role reads.
 - `questions`: the questions of the bundle. A question names no element of a pack.
 
+A role reads a relation when its snapshot of it is full or holds a row. A snapshot that is empty and not full says only that nothing of the relation is granted, so the catalogue follows the same rule: a kind, slot or relation the role does not read is not in it either.
 Something left out looks the same as something that does not exist.
 This touches access: the first change that lands it is reviewed for a role that receives anything of a kind it does not read.
 
@@ -121,7 +122,7 @@ The viewer build takes `std-view` in; no pack publishes it.
 - The page lives in `viewer/slip/`, with its own `package.json`, outside `viewer/src/lib`.
 - In step 1 a local command, `node viewer/slip/bin/serve.ts --store <directory> --role <role>`, opens the local reader for the role its caller chooses, as the REPL does. It serves the page and the reader's routes on the loopback address only, while the command runs, and refuses a request whose `Host` is another name. This is local use: no gate and no hosting.
 - In a test the page gets the reader's handler directly, without a server. `viewer/slip/bin/render.ts` reads one JSON request on standard input and writes one JSON result on standard output:
-  - request: `store` (a directory the publisher wrote), `role`, `pack`, `lang`, optionally `row` (`relation` and `key`, else the slip opens as above), optionally `keys` (key presses on the line with the given index, in order, as `{"line": n, "key": "w"}`), and optionally `reader` (the path of a module whose default export takes the reader's handler and returns another; a test uses it to add or remove a question);
+  - request: `store` (a directory the publisher wrote), `role`, `pack`, `lang`, optionally `row` (`relation` and `key`, else the slip opens as above), optionally `keys` (actions on the line with the given index, in order: a key press as `{"line": n, "key": "w"}`, or the control of a sweep moved to a stop as `{"line": n, "stop": i}`, which the arrow keys do one stop at a time), and optionally `reader` (the path of a module whose default export takes the reader's handler and returns another; a test uses it to add or remove a question);
   - result: `html`, the page's document body after the keys, drawn in a simulated DOM; and `files`, the sha256 of each file of the built page, by path.
   The page installs its own dependencies from its lockfile; the tests run `npm ci` in `viewer/slip/` once before they render.
 - The same question gives the same rows in the page, in the REPL and through MCP. The same publication and the same build give the same bytes.
@@ -133,16 +134,16 @@ The text on the page comes from messages, so tests find the parts by attributes,
 | Part | Mark |
 | --- | --- |
 | the slip | `table[data-sheet="slip"]` |
-| the sentence | `[data-part="sentence"]`; a variable in it is `a[data-line]` with the index of its line |
-| a line | `tr[data-line]` with `data-relation`, `data-key` (the canonical key as JSON), `data-depth` (0 for a line of the row, one more under a total or a calculation node), `data-polarity` (`positive` or `negative`), and for a calculation step `data-path` |
+| the sentence | `[data-part="sentence"]`; a variable in it is `a[data-line]` with the index of the line it links to |
+| a line | `tr[data-line]`, whose value is its index from 0 in the slip, with `data-relation`, `data-key` (the canonical key as JSON), `data-depth` (0 for a line of the row, one more under a total or a calculation node), `data-polarity` (`positive` or `negative`), and for a calculation step `data-path` |
 | a total | `tr[data-line][data-part="total"]` |
-| a value | `td[data-part="value"]` with `data-state`; its sign is an element with `data-sign` |
+| a value | `td[data-part="value"]` with `data-state`, and `data-reason` with the published reason where the state is not `known`; its sign is an element with `data-sign`; in a fold the old value is in `del` and the new one in `ins` |
 | a verb | `button[data-verb]` with `data-key`, inside the line it acts on |
 | an answer a verb opened | `table[data-answer="<question term>"]` with a header row |
 | the seal | `[data-part="seal"]`, with one `[data-check]` per check (`reader-hashes`, `publisher-record`) and `[data-part="manifest-hash"]` |
 | the legend | `table[data-part="legend"]`, one `tr[data-sign]` per sign |
 | a reader that could not serve | `[data-part="unserved"]` |
-| a stop of a sweep | `[data-stop]` with the grid index, `data-status`, and `data-turn` (`turns`, `same` or `unknown`) |
+| a stop of a sweep | `[data-stop]` inside the line of the swept cell, with the grid index, `data-status`, and `data-turn` (`turns`, `same` or `unknown`); a red stop holds one `[data-check]` per check, with its `data-status` |
 
 ## Every example with a home claim
 
@@ -194,7 +195,7 @@ Between two stops a row turns when, anywhere in its proof back to the facts, row
 | `state` | another value state |
 | `presence` | the row, or a row of its proof, on one side only |
 | `value` | another value where the value is a reference, an enum value or a boolean |
-| `cap` | a `min` or `max` step took another argument |
+| `cap` | a `min` or `max` step took another argument (see Caps) |
 
 An amount, a quantity, a number or a date that differs along the same proof is no turning point.
 
@@ -202,18 +203,23 @@ An amount, a quantity, a number or a date that differs along the same proof is n
 
 A cap is a turning point.
 A reader who sees an amount stop growing asks where the cap took over, and without a mark the page could only show the numbers, which it may not compare.
-So `CalcStep` gains `chosen`: on a `min` or `max` step, the index from 0 of the argument whose value is the result, the lowest index on a tie; absent on every other step.
-The compiler writes it, and the checker recomputes it from the arguments as it recomputes the value.
-Leaving caps out was the alternative; it keeps the witness contract as it is, but the most common turn in a scheme with a ceiling would then go unmarked.
+
+The argument a `min` or `max` step took is the one whose value equals the step's value, the lowest index on a tie.
+Every argument's value is already published: an evaluated argument has its own step, at the step's path plus its index, and a constant stands in the program (`ir/calc.json`), which the publisher and the checker both read.
+So the publisher derives the taken argument when it writes turning points, and the checker derives it again when it checks them; the witness contract does not change.
+Two alternatives were considered.
+Adding the taken argument to `CalcStep` would change the bytes of every published witness with a `min` or `max`, for a value that follows from what is there.
+Leaving caps out would keep the work smaller, but the most common turn in a scheme with a ceiling would then go unmarked.
+A step whose value is not known took no argument, and its state decides instead.
 
 ### Publishing and serving
 
-- A variant depends on its base and its value alone, so turning points go in an object of their own, written when both stops are there: `rezono.turns/1`, one per role, per sweep and per pair of neighbouring stops that both have a variant. It names the two stops by index and manifest, and lists each row the role reads that turns between them, with its causes, in key order.
+- A variant depends on its base and its value alone, so turning points go in an object of their own, written when both stops are there: `rezono.turns/1`, one per role, per sweep and per pair of neighbouring stops that both have a variant. It names the two stops by index and manifest, and lists each conclusion the role reads that turns between them, with its causes, in key order. Only a conclusion turns: a row with a witness or a calculation witness at one of the two stops. A fact that moves is the cause of a turn, never a turning point itself.
 - A turning point is marked only between two stops that both have a variant. Where a neighbour has none, the stop says that it is not known whether the outcome turns there.
 - A role sees a turning point only where it sees the status of both stops.
 - The checker recomputes every turns object from the two variants' witnesses and blocks one that lists a row too many or too few.
 - The proof on both sides is the row's proof in the two variants.
-- `sweep` takes an optional start row. With one, each `SeriesCell` also carries the row at that stop (absent where the row is not there) and its `turn` against the stop before: `turns` with its causes, `same`, or `unknown`; the first stop has no `turn`. A new question was the alternative; it would repeat the whole series, need a start that is both a row and a sweep, and add a term to `std-explain`, while the series, its statuses and its access are already those of `sweep`.
+- `sweep` takes an optional start row, as `relation=` and `key=` beside `sweep=`. With one, the answer's `start` is that row, and each `SeriesCell` also carries `row`, the row at that stop paired as above (absent where the row is not there), and `turn` against the stop before: `turns` with its `causes`, `same`, or `unknown`; the first stop has no `turn`. A new question was the alternative; it would repeat the whole series, need a start that is both a row and a sweep, and add a term to `std-explain`, while the series, its statuses and its access are already those of `sweep`.
 
 ## Out of scope
 
