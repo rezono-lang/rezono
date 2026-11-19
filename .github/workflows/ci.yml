@@ -308,7 +308,7 @@ jobs:
           done < <(find "$RUNNER_TEMP/inventory" -name collection.xml -print0)
       - name: Save the independent pytest inventory
         if: always() && steps.matrix.outputs.has_pytest == 'true'
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: pytest-inventory
           path: ${{ runner.temp }}/inventory
@@ -481,7 +481,7 @@ jobs:
           bash run/probes/worker-join/prepare-renderer.sh "$renderer"
           test -x "$renderer"
           printf 'REZONO_WORKER_RENDERER=%s\n' "$renderer" >> "$GITHUB_ENV"
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
         with:
           name: pytest-inventory
           path: ${{ runner.temp }}/inventory
@@ -506,7 +506,7 @@ jobs:
               "$RUNNER_TEMP/inventory" "$RUNNER_TEMP/reports" "$RUNNER_TEMP/receipts"
       - name: Save execution evidence
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: pytest-execution-${{ strategy.job-index }}
           path: ${{ runner.temp }}/receipts
@@ -570,7 +570,7 @@ jobs:
         if: matrix.component.pytest && needs.queue_evidence.outputs.tested != 'true'
         with:
           editable: ${{ needs.discover.outputs.python_editable }}
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
         if: matrix.component.pytest && needs.queue_evidence.outputs.tested != 'true'
         with:
           name: pytest-inventory
@@ -587,7 +587,7 @@ jobs:
           python scripts/components.py run-shard "$COMPONENT" 0 1             "$RUNNER_TEMP/inventory" "$RUNNER_TEMP/reports" "$RUNNER_TEMP/receipts"
       - name: Save execution evidence
         if: always() && matrix.component.pytest && needs.queue_evidence.outputs.tested != 'true'
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: pytest-execution-node-${{ strategy.job-index }}
           path: ${{ runner.temp }}/receipts
@@ -622,12 +622,12 @@ jobs:
           ref: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.sha }}
           sparse-checkout: scripts
           persist-credentials: false
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
         if: always() && needs.discover.outputs.has_pytest == 'true' && needs.queue_evidence.outputs.tested != 'true'
         with:
           name: pytest-inventory
           path: ${{ runner.temp }}/inventory
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
         if: always() && needs.discover.outputs.has_pytest == 'true' && needs.queue_evidence.outputs.tested != 'true'
         with:
           pattern: pytest-execution-*
