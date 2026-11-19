@@ -17,13 +17,13 @@ The lowering tests of calculations and parameters compare with the existing `cal
 
 ## Why dated facts, exceptions and inline parameters have no lowering test yet
 
-Only `examples/zorgtoeslag` uses them. That example is already written in the language and has no file in an existing notation, so there is no oracle to lower against, and it is not a pack that a conversion waits for.
+The [first slice of the healthcare allowance](language-healthcare-allowance-slice.md) uses all three, in `examples/zorgtoeslag-slice`. Its oracle is `examples/zorgtoeslag-slice/reference.py`, an independent calculation, so their lowering tests compare with that oracle and not with the compiler's own output.
 
 - **Exceptions.** The calculation model has no operator for `unless`; [Calculated values](language-calculations.md) refuses it with `R050`.
 - **Dated facts.** The fact contracts have no place for versioned values yet ([Dated facts](language-dated-facts.md)).
 - **Inline parameter versions.** `rezono.calc/1` reads parameters as rows; lowering refuses an inline parameter with `R050`.
 
-They stay Pending. No pack of `examples/`, `packs/` or `run/packs/` uses them, so they hold back no conversion. When a pack needs one, a decision gives its lowering and its oracle first, and then its lowering test.
+They stay Pending until each has a decision on how it lowers. That decision comes first, then its lowering test, in the order the slice gives: inline parameter versions, then exceptions, then dated facts. The slice is the pack that waits for them: the choice of regulation as the first domain goes before usage.
 
 ## Why safe steps have no lowering test yet
 

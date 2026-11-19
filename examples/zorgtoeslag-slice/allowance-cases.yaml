@@ -1,0 +1,130 @@
+# Expected allowances of the first slice of the healthcare allowance
+# (decisions/language-healthcare-allowance-slice.md), for the households of facts.rezono.
+#
+# Each case evaluates one household on one day (`as_of`, the first day of a month) with what is known on
+# `known`, as one `as of DAY known DAY` line of the pack does. `expect` is the monthly allowance in whole
+# cents, rounded down to whole euros, or the state and reason of an allowance that is not known.
+# The amounts, rates and versions are those of examples/zorgtoeslag/zorgtoeslag.rezono, in cents; they are
+# illustrative, not the published figures. `note` shows the arithmetic, exact until the one rounding.
+
+version: 1
+pack: zorgtoeslag-slice
+
+cases:
+  - id: S01
+    title: a single claimant below the threshold income
+    household: ann
+    as_of: 2026-01-01
+    known: 2026-02-01
+    expect: {cents: 13500}
+    note: (218000 - 1.879 % * 2960000) / 12 = 13531.8, rounded down to 13500
+
+  - id: S02
+    title: a later known version of the standard premium replaces the earlier one on the same dates
+    household: ann
+    as_of: 2026-03-01
+    known: 2026-03-10
+    expect: {cents: 13600}
+    note: standard premium version 3 (219000, known 2026-03-02); (219000 - 55618.4) / 12 = 13615.13
+
+  - id: S03
+    title: the previous year's parameters and income apply to a month in that year
+    household: ann
+    as_of: 2025-12-01
+    known: 2026-06-01
+    expect: {cents: 13100}
+    note: (211200 - 1.879 % * 2840600) / 12 = 13152.09; the income version of 2025 (2400000)
+
+  - id: S04
+    title: partners pay a double standard premium and a higher norm percentage
+    household: bob
+    as_of: 2026-02-01
+    known: 2026-02-10
+    expect: {cents: 10500}
+    note: (2 * 218000 - (4.256 % * 2960000 + 13.7 % * 1340000)) / 12 = 10536.87
+
+  - id: S05
+    title: an income above the limit for a single claimant gives nothing
+    household: fay
+    as_of: 2026-02-01
+    known: 2026-06-01
+    expect: {cents: 0}
+    note: 4500000 > 3971900, the last exception
+
+  - id: S06
+    title: the first income estimate
+    household: gus
+    as_of: 2026-01-01
+    known: 2026-02-01
+    expect: {cents: 13500}
+    note: income 2800000 (known 2026-01-05), below the threshold
+
+  - id: S07
+    title: a corrected income estimate applies to a later month
+    household: gus
+    as_of: 2026-04-01
+    known: 2026-05-01
+    expect: {cents: 8500}
+    note: income 3400000 (known 2026-04-15); (219000 - (55618.4 + 13.7 % * 440000)) / 12 = 8591.8
+
+  - id: S08
+    title: without sealing, the corrected estimate also changes an earlier month
+    household: gus
+    as_of: 2026-01-01
+    known: 2026-05-01
+    expect: {cents: 8500}
+    note: the slice has no `sealed at`, so January takes the income and the premium known on 2026-05-01
+
+  - id: S09
+    title: no income estimate leaves the allowance unknown
+    household: hal
+    as_of: 2026-02-01
+    known: 2026-06-01
+    expect: {state: unknown, reason: no_version_applies}
+    note: the last exception cannot decide without an income
+
+  - id: S10
+    title: a claimant who is not insured in the month gets nothing
+    household: dex
+    as_of: 2026-02-01
+    known: 2026-06-01
+    expect: {cents: 0}
+    note: insured is false until 2026-03-01; without the exception the allowance would be 13600
+
+  - id: S11
+    title: insured from March, so March is paid
+    household: dex
+    as_of: 2026-03-01
+    known: 2026-03-10
+    expect: {cents: 13600}
+    note: (219000 - 55618.4) / 12 = 13615.13
+
+  - id: S12
+    title: a claimant who was never insured gets nothing
+    household: eve
+    as_of: 2026-02-01
+    known: 2026-06-01
+    expect: {cents: 0}
+
+  - id: S13
+    title: an unknown insurance leaves the allowance unknown, not a decided zero
+    household: ivy
+    as_of: 2026-02-01
+    known: 2026-06-01
+    expect: {state: unknown, reason: no_version_applies}
+    note: the income exception is false, so the insurance exception decides, and it is unknown
+
+  - id: S14
+    title: partners above their income limit get nothing, although the formula gives an amount
+    household: kim
+    as_of: 2026-02-01
+    known: 2026-06-01
+    expect: {cents: 0}
+    note: 5100000 > 5020600; the formula alone gives (436000 - 419157.6) / 12 = 1403.53
+
+  - id: S15
+    title: a month before the first parameter version has no allowance
+    household: ann
+    as_of: 2024-12-01
+    known: 2026-06-01
+    expect: {state: unknown, reason: no_version_applies}
