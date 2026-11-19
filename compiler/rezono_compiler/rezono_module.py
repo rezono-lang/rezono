@@ -108,7 +108,7 @@ def declared(meta: dict, pack_dir: Path, errors: list[str], *, reject_undeclared
             ok = False
         if not ok:
             continue
-        if not include_datasets and is_dataset_form(pack_dir / form):
+        if not include_datasets and is_dataset_form(pack_dir / form, pack_dir / module):
             if meta.get("theory") is True:
                 errors.append(f"{pack_dir.name}/{form}: a theory pack cannot contain fact files")
             continue
@@ -296,14 +296,27 @@ def named_dataset(module: dict) -> dict | None:
     return None
 
 
-def is_dataset_form(path: Path) -> bool:
-    """Dispatch only recognized dataset forms; leave other documents to ordinary schema validation."""
+def fact_tables_only(module: dict) -> bool:
+    """A module whose declarations are all fact tables (§5.3): the form of a base fact file."""
+    declarations = module["decls"]
+    return bool(declarations) and all(
+        isinstance(decl, dict) and isinstance(decl.get("fact"), str) and "columns" in decl and "rows" in decl
+        for decl in declarations)
+
+
+def is_dataset_form(path: Path, source: Path | None = None) -> bool:
+    """Dispatch only recognized dataset forms; leave other documents to ordinary schema validation. With its
+    source, an authored module of fact tables is one too; a form-only module is left to the refusal."""
     try:
         doc = json.loads(path.read_bytes())
     except (OSError, ValueError):
         return False
     module = module_body(doc, DATASET_FORMAT)
-    return module is not None and named_dataset(module) is not None
+    if module is not None and named_dataset(module) is not None:
+        return True
+    module = module_body(doc, FORMAT)
+    return (source is not None and module is not None and fact_tables_only(module)
+            and not form_only_source(source, doc))
 
 
 def header_errors(module: dict, pack: str, *, native_rules: bool = False) -> Iterator[tuple[str, str, str]]:
