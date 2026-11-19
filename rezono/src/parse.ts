@@ -10,7 +10,8 @@
 // Parse-level checks come first (§1): with an R000, R014, R016 or R018 there is no tree and no R015. A text
 // with only R015s has a tree, so it prints; it is not evaluated.
 import type { Node } from 'ohm-js';
-import { grammar } from './grammar.ts';
+import { grammar, nativeRuleGrammar } from './grammar.ts';
+import { readRuleName } from './rule-names.ts';
 import type { Ask, CheckDecl, Context, Expr, Path, Question, Suppose, Tail, TimeSel } from './tree.ts';
 
 import { placed, points, refused, reserved, run, spanAt, spanOf, startRun, type Diagnostic, type Span } from './parse-support.ts';
@@ -184,9 +185,9 @@ semantics.addOperation<unknown>('tree', {
 	},
 	Dotted_name(base, _dot, name) {
 		const b = base.tree() as Expr;
-		if ('path' in b) return placed(this, { path: [...b.path, name.sourceString] });
-		if ('lit' in b && run.ids.has(b)) return placed(this, { path: [b.lit, name.sourceString] });
-		return placed(this, { dot: [b, name.sourceString] } as Expr);
+		if ('path' in b) return placed(this, { path: [...b.path, readRuleName(name)] });
+		if ('lit' in b && run.ids.has(b)) return placed(this, { path: [b.lit, readRuleName(name)] });
+		return placed(this, { dot: [b, readRuleName(name)] } as Expr);
 	},
 	Agg: (name, _open, arg, _close) => [name.sourceString, ...arg.children.map((a) => a.tree())],
 	Atom(e) {
@@ -215,6 +216,32 @@ semantics.addOperation<unknown>('tree', {
 	}
 });
 
+const nativeRuleSemantics = nativeRuleGrammar.extendSemantics(semantics);
+nativeRuleSemantics.extendOperation<unknown>('tree', {
+	QualifiedKind(pack, _dot, kind) {
+		return placed(this, { kind: [readRuleName(pack), kind.sourceString].join('.') });
+	},
+	quotedName(_open, _first, _rest, _close) {
+		return placed(this, { path: [readRuleName(this)] });
+	},
+	wildcard(_mark) {
+		return placed(this, { wildcard: true });
+	},
+	Call(name, _open, args, _close) {
+		return placed(this, { call: [name.tree(), all(args)] } as Expr);
+	},
+	NativeCallName_schema(kind, _dot, member) {
+		return [(kind.tree() as { kind: string }).kind, readRuleName(member)].join('.');
+	},
+	NativeCallName_kind(kind, _dot, member) {
+		return [kind.sourceString, readRuleName(member)].join('.');
+	},
+	NativeCallName_imported(pack, _dot, member) {
+		return [readRuleName(pack), readRuleName(member)].join('.');
+	},
+	NativeCallName_local: readRuleName,
+});
+
 /** The token at a place where the parse could not go on: a word, or one other character; empty at the end. */
 function tokenAt(text: string, at: number): [number, number] {
 	const m = /[A-Za-z0-9_]+|\S/uy;
@@ -240,12 +267,13 @@ export { semantics, placed, refused, reserved };
  */
 export function readRule<T>(text: string, rule: string, read: (node: Node) => T, spans = new WeakMap<object, Span>(), at = points(text)): Read<T> {
 	startRun(text, spans, at);
-	const match = grammar.match(text, rule);
+	const native = rule === 'NativeRuleLine';
+	const match = (native ? nativeRuleGrammar : grammar).match(text, rule);
 	if (match.failed()) {
 		const at = Math.min(match.getRightmostFailurePosition(), text.length);
 		return { errors: [{ code: 'R000', span: spanAt(...tokenAt(text, at)), args: [match.getExpectedText()] }], reserved: [], spans };
 	}
-	const value = read(semantics(match) as unknown as Node);
+	const value = read((native ? nativeRuleSemantics : semantics)(match) as unknown as Node);
 	return { value, errors: run.errors, reserved: run.reserved, spans };
 }
 

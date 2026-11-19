@@ -25,6 +25,13 @@ RECORDED_BYTES = (
 
 
 def contract_errors(document):
+    if document["format"] == "rezono.module/3":
+        from contracts import validate as module_contract
+
+        assert hasattr(module_contract, "module_form_errors"), (
+            "Missing native ModuleForm entry point contracts.validate.module_form_errors"
+        )
+        return module_contract.module_form_errors(document)
     return [result.message for result in validate(document, str(SCHEMA), "ModuleForm").results]
 
 
@@ -40,12 +47,6 @@ def test_legacy_rule_form_contract():
         assert canonical_bytes(form) == recorded_bytes
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason="Validate native module/3 rule nodes in contracts/rezono-module.yaml. "
-    "Read decisions/language-native-rules.md and the authored form beside this test.",
-)
 def test_native_rule_form_contract():
     fixture = (NATIVE / "rules.json").read_bytes()
     form = json.loads(fixture)

@@ -7,8 +7,10 @@ from runpy import run_path
 
 import pytest
 
+from rezono_checker.calc import recorded, text
 from rezono_checker.check import check, check_epoch
 from rezono_checker.rules import derived_relations, load_rules
+from rezono_checker.snapshots import read_rows
 
 
 CORPUS = Path(__file__).resolve().parents[2] / "tests/conformance"
@@ -31,6 +33,30 @@ def selected(case):
     return [case["input"]["select"]["id"], case["expect"]["value"]]
 
 
+@pytest.mark.parametrize("case", replay["cases"]("checker", "snapshot"))
+def test_checker_replays_neutral_snapshot(case):
+    authored = case["input"]["rows"]
+    selection = case["input"]["snapshot"]
+    rejected = selection["rejected"]
+
+    rows = dict(read_rows(json.dumps(authored).encode(), "json").values())
+    assert rows == {tuple(row["key"]): row["values"] for row in authored}
+    cell = rows[tuple(selection["key"])][selection["slot"]]
+    with pytest.raises(ValueError) as error:
+        read_rows(json.dumps([rejected]).encode(), "json")
+    actual = {
+        "value": cell.get("value", cell.get("minor_units")), "state": cell["state"],
+        "reason": cell.get("reason"), "witness": None, "refusal": str(error.value).partition(": ")[0],
+    }
+    assert actual == case["expect"]
+
+    if "minor_units" in cell:
+        admitted = recorded(cell["state"], cell["minor_units"], "")
+        assert admitted is not None and text(admitted.value) == case["expect"]["value"]
+        malformed = rejected["values"][selection["slot"]]
+        assert recorded(malformed["state"], malformed["minor_units"], "") is None
+
+
 @pytest.mark.parametrize("case", replay["cases"]("checker"))
 def test_checker_replays_neutral_case(case, tmp_path):
     result = replay["play"](case, tmp_path)
@@ -47,12 +73,6 @@ def test_checker_replays_neutral_case(case, tmp_path):
     assert not report["valid"] and "aggregate_contributors" in {f["reason"] for f in report["findings"]}
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=IncompleteAggregateAccepted,
-    reason="Verify closure of a selected aggregate's complete contributor group against the admitted "
-           "base snapshots. Read tests/conformance/value-agg-sum-empty.yaml. Write in checker/.",
-)
 def test_checker_refuses_an_incomplete_conformance_aggregate_scope(tmp_path):
     case = replay["case_file"]("value-agg-sum-empty")
     result = replay["play"](case, tmp_path / "original")

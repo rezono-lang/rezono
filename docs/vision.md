@@ -57,11 +57,21 @@ The working rules in `AGENTS.md` are the short form; this page is the reason beh
 - A step is done only when an observation from the same run confirms it.
 - Desired versus observed is a rule. A difference is a finding with a proof.
 
+## What Rezono is not
+
+Ticketing systems manage incidents and work queues. Monitoring and SIEM systems collect signals and manage alerts.
+Identity services, secret stores and certificate authorities manage identities, secrets and certificates.
+Scanners inspect systems, backup tools make and restore copies, and GitOps controllers reconcile configuration.
+The CMDB maintains inventory. Procurement manages purchases and accounting maintains the ledger.
+
+Rezono publishes the typed desired state, what independent evidence establishes about the actual state, and the next safe step justified by facts and decisions.
+The reference platform reads external observations and records as evidence or comparison sources, with provenance for each.
+
 ## Two kinds of comparison
 
 - An oracle checks that Rezono computes correctly. It is independent and runs only in tests. A difference blocks: it is a bug in Rezono, unless checking both against the rule shows that the oracle was wrong.
 - A reference source checks that what Rezono derives agrees with what was observed, or with what another system registered. A difference is drift: a finding with a proof from both sides, shown to readers.
-- The two are never mixed.
+- Keep the comparisons separate. The [formal foundations](formal.md#11-independent-oracles) record which independent comparisons run and what each one checks.
 
 ## Reading
 

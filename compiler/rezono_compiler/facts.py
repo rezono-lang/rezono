@@ -11,8 +11,9 @@ from __future__ import annotations
 
 import datetime
 import json
+import os
 import re
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 import yaml
@@ -65,9 +66,15 @@ def files(pack_dir: str | Path) -> list[Path]:
 
 
 def _named_datasets(pack_dir: Path) -> list[Path]:
+    meta, modules = _module_entries(pack_dir)
+    return sorted(pack_dir / declared.form for declared in modules
+                  if _declared_dataset(pack_dir, meta, declared) is not None)
+
+
+def _module_entries(pack_dir: Path) -> tuple[dict, list[rezono_module.Declared]]:
     manifest = pack_dir / "pack.yaml"
     if not manifest.exists():
-        return []
+        return {}, []
     try:
         meta = yaml.safe_load(manifest.read_text(encoding="utf-8"))
     except (OSError, yaml.YAMLError) as error:
@@ -79,30 +86,74 @@ def _named_datasets(pack_dir: Path) -> list[Path]:
     modules = rezono_module.declared(meta, pack_dir, errors, reject_undeclared=False, include_datasets=True)
     if errors:
         raise LoadError("\n".join(errors))
+    return meta, modules
+
+
+@dataclass(frozen=True)
+class DatasetForm:
+    form: dict
+    source: str | None
+
+
+def _declared_dataset(pack_dir: Path, meta: dict, declared: rezono_module.Declared) -> DatasetForm | None:
+    path = pack_dir / declared.form
     source_dir = pack_dir.resolve() / rezono_module.DIR
-    datasets = []
-    for declared in modules:
-        path = pack_dir / declared.form
-        try:
-            if not all((pack_dir / name).resolve().is_relative_to(source_dir)
-                       for name in (declared.module, declared.form)):
-                raise LoadError(f"{declared.form}: a module or form resolves outside {rezono_module.DIR}/")
-            form = json.loads(path.read_bytes())
-        except (OSError, ValueError) as error:
-            raise LoadError(f"{declared.form}: cannot read module form ({error})") from error
-        if rezono_module.module_body(form, rezono_module.FORMAT) is not None:
-            continue
-        module = rezono_module.module_body(form, DATASET_FORMAT)
-        if module is None:
-            raise LoadError(f"{declared.form}: expected a Rezono module form")
-        if not any(isinstance(decl, dict) and "dataset" in decl for decl in module["decls"]):
-            continue
-        name = _named_dataset(module)["dataset"]
-        basename = Path(declared.module).stem
-        if name != basename:
-            raise LoadError(f"{declared.form}: module '{basename}' declares dataset '{name}'")
-        datasets.append(path)
-    return sorted(datasets)
+    try:
+        if not all((pack_dir / name).resolve().is_relative_to(source_dir)
+                   for name in (declared.module, declared.form)):
+            raise LoadError(f"{declared.form}: a module or form resolves outside {rezono_module.DIR}/")
+        submitted = json.loads(path.read_bytes())
+    except (OSError, ValueError) as error:
+        raise LoadError(f"{declared.form}: cannot read module form ({error})") from error
+    if any(rezono_module.module_body(submitted, version) is not None
+           for version in (rezono_module.FORMAT, rezono_module.NATIVE_FORMAT)):
+        return None
+    module = rezono_module.module_body(submitted, DATASET_FORMAT)
+    if module is None:
+        raise LoadError(f"{declared.form}: expected a Rezono module form")
+    if not any(isinstance(decl, dict) and "dataset" in decl for decl in module["decls"]):
+        return None
+
+    basename = Path(declared.module).stem
+    name = _named_dataset(module)["dataset"]
+    if name != basename:
+        raise LoadError(f"{declared.form}: module '{basename}' declares dataset '{name}'")
+    if submitted["spans"] and not rezono_module.valid_places(module, submitted["spans"]):
+        raise LoadError(f"{declared.form}: spans must place each module node")
+
+    errors: list[str] = []
+    pack_name = str(meta.get("name", ""))
+    effective = rezono_module.effective_dataset_form(pack_dir, declared, pack_name, submitted, errors)
+    if effective is None:
+        raise LoadError("\n".join(errors))
+    if effective is submitted:
+        return DatasetForm(submitted, None)
+    authored = rezono_module.module_body(effective, DATASET_FORMAT)
+    dataset = rezono_module.named_dataset(authored) if authored is not None else None
+    if authored is None or dataset is None:
+        raise LoadError(f"{declared.module}: expected one named dataset")
+    if dataset["dataset"] != basename:
+        raise LoadError(f"{declared.module}: module '{basename}' declares dataset '{dataset['dataset']}'")
+    errors = [message for _, message, _ in rezono_module.header_errors(authored, pack_name)]
+    if errors:
+        raise LoadError(f"{declared.module}: " + "; ".join(errors))
+    return DatasetForm(effective, declared.module)
+
+
+def dataset_at(path: Path) -> DatasetForm | None:
+    """Resolve a declared dataset's authored source while retaining standalone JSON forms."""
+    if path.suffix != ".json":
+        return None
+    for spelling in dict.fromkeys((Path(os.path.abspath(path)), path.resolve())):
+        for parent in spelling.parents:
+            if parent.name != rezono_module.DIR or not (parent.parent / "pack.yaml").is_file():
+                continue
+            pack_dir = parent.parent
+            meta, modules = _module_entries(pack_dir)
+            for declared in modules:
+                if pack_dir / declared.form == spelling:
+                    return _declared_dataset(pack_dir, meta, declared)
+    return None
 
 
 def document(path: Path, pack: Pack | None = None) -> dict[str, list]:
@@ -110,7 +161,8 @@ def document(path: Path, pack: Pack | None = None) -> dict[str, list]:
 
     A null document or section is refused. Use {} for an empty document or [] for an empty relation.
     """
-    data = yaml.safe_load(path.read_text(encoding="utf-8"))
+    dataset = dataset_at(path)
+    data = dataset.form if dataset is not None else yaml.safe_load(path.read_text(encoding="utf-8"))
     if isinstance(data, dict) and data.get("format") == DATASET_FORMAT:
         data = scalar_dataset(schema(pack), data) if pack is not None else untyped_dataset(data)
     return sections(data)
@@ -124,26 +176,37 @@ def sections(data) -> dict[str, list]:
     return data
 
 
-def schema(pack: Pack) -> Schema:
+class FactSchema(Schema):
+    """Keep module slot cardinality alongside the unchanged admission bundle."""
+
+    def __init__(self, bundle: dict, optional_slots: set[str]):
+        super().__init__(bundle)
+        self.optional_slots = frozenset(optional_slots)
+
+
+def schema(pack: Pack) -> FactSchema:
     """What admission judges a pack's facts against: the kinds, attributes and arrows of its schema bundle
     (emit.bundle), only the fields admission reads. A test holds them equal to the archived bundle's; the hash
     is of these fields, not of the archived bundle."""
     def present(d):
         return {k: v for k, v in d.items() if v is not None}
     kinds, attributes, arrows = [], [], []
+    optional_slots = set()
     for k, kind in pack.kinds.items():
         kinds.append(present({"id": k, "parent": kind.parent, "abstract": kind.abstract,
                               "identifier": kind.identifier,
                               "id_type": types.of_sql(pack.kinds[pack.root(k)].id_type).bundle,
                               "plane": kind.plane, "owner": kind.owner}))
         for s in kind.slots.values():
+            if not s.required and not s.minimum_cardinality:
+                optional_slots.add(s.table)
             common = {"kind": k, "name": s.name, "table": s.table, "multivalued": s.multivalued}
             if s.arrow:
                 arrows.append(common | {"target": s.range, "inlined": s.inlined})
             else:
                 attributes.append(common | {"type": s.type.bundle})
-    return Schema({"format": FORMAT, "pack": {"id": pack.meta["name"]}, "kinds": kinds, "attributes": attributes,
-                   "arrows": arrows})
+    return FactSchema({"format": FORMAT, "pack": {"id": pack.meta["name"]}, "kinds": kinds,
+                       "attributes": attributes, "arrows": arrows}, optional_slots)
 
 
 def load(pack: Pack, path: str | Path) -> dict[str, list[tuple]]:
@@ -166,13 +229,13 @@ def _named_dataset(module: dict) -> dict:
     return dataset
 
 
-def scalar_dataset(judged: Schema, form: dict) -> dict[str, list]:
+def scalar_dataset(judged: FactSchema, form: dict) -> dict[str, list]:
     """Decode a named module dataset into the records used by ordinary admission."""
     records, _ = located_scalar_dataset(judged, form)
     return records
 
 
-def located_scalar_dataset(judged: Schema, form: dict) -> tuple[dict[str, list], dict[str, list[str]]]:
+def located_scalar_dataset(judged: FactSchema, form: dict) -> tuple[dict[str, list], dict[str, list[str]]]:
     """Decode each record with its JSON pointer for publication provenance."""
     module = rezono_module.module_body(form, DATASET_FORMAT)
     if module is None:
@@ -245,7 +308,7 @@ def dataset_table(table) -> tuple[str, list[str], list]:
     return kind, columns, rows
 
 
-def dataset_record(entries, where: str, judged: Schema | None = None, kind: str | None = None) -> dict:
+def dataset_record(entries, where: str, judged: FactSchema | None = None, kind: str | None = None) -> dict:
     identity = judged.kinds[judged.root(kind)] if judged is not None else None
     record = {}
     seen = set()
@@ -264,6 +327,10 @@ def dataset_record(entries, where: str, judged: Schema | None = None, kind: str 
         if cell == {"boundary": "omitted"}:
             continue
         field = f"{where}.{name}"
+        if judged is not None and cell == {"lit": "n/a"}:
+            if slot is None or slot.table not in judged.optional_slots:
+                raise LoadError(f"{field}: n/a requires an optional slot")
+            continue
         if slot is not None:
             record[name] = dataset_cell(cell, field, SQL_TYPES[slot.type], slot.multivalued,
                                         judged, slot.target if slot.inlined else None)
@@ -274,7 +341,7 @@ def dataset_record(entries, where: str, judged: Schema | None = None, kind: str 
 
 
 def dataset_cell(cell, where: str, sql_type: str | None = None, repeated: bool = False,
-                 judged: Schema | None = None, target: str | None = None):
+                 judged: FactSchema | None = None, target: str | None = None):
     if isinstance(cell, dict) and cell.keys() == {"list"}:
         if (sql_type is not None and not repeated) or not isinstance(cell["list"], list):
             raise LoadError(f"{where}: expected a value of the declared slot")

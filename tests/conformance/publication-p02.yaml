@@ -1,0 +1,41 @@
+id: publication-p02
+source: decisions/publication-case-pins.md#P02
+status: settled
+input:
+  rows: []
+  schema:
+    rezono: '1.0'
+    pack: neutral
+    base: https://example.org/neutral/
+    kinds:
+      Item:
+        world: closed
+        id:
+          type: Text
+        slots:
+          label:
+            type: Text
+            card: '1'
+            states:
+            - known
+          group:
+            ref: g.Group
+            card: '1'
+            states:
+            - known
+    imports:
+      g:
+        pack: groups
+        schema: s-3737373737373737373737373737373737373737373737373737373737373737
+        manifest: m-7
+  form: schema
+expect:
+  value:
+    accepted: false
+    error_contains: epoch pin without hash pin
+  state: known
+  reason: null
+  witness: null
+unsupported:
+  feldera: Schema, hash, Arrow and Parquet pin validation belong to the publication boundary.
+  language: The language evaluator does not deserialize publication import pins.

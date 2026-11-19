@@ -1,5 +1,10 @@
 import { printMetadata, readMetadataLine, type Metadata } from './module-metadata.ts';
+import { printNumericSlotBound, readNumericSlotBound, type NumericSlotBound } from './module-slot-numeric.ts';
+import { printSlotPattern, slotPattern, type PatternConstraint } from './module-slot-pattern.ts';
 import { block, named, opt, printWorld, typeOf, type Build, type Card, type Line, type Logical, type World, type ModuleComponent } from './module-support.ts';
+
+type CardinalityConstraint = { cardinality: [minimum: string, maximum: string] };
+export type SlotConstraint = CardinalityConstraint | NumericSlotBound | PatternConstraint;
 
 export interface SlotDecl extends Metadata {
 	slot: string;
@@ -10,36 +15,65 @@ export interface SlotDecl extends Metadata {
 	identifier?: true;
 	embedded?: true;
 	slotUri?: string;
+	constraints?: SlotConstraint[];
 }
 
 export function readSlot(line: Logical, build: Build): SlotDecl {
 	const slot = build.strip<SlotDecl>(line.read!);
 	for (const child of line.block) {
 		if (readMetadataLine(slot, child, build)) continue;
-		if (child.read!.line !== 'iri') build.refuse(child, 'no line under this one');
-		else {
+		const property = child.read!;
+		if (property.line === 'iri') {
 			build.leaf(child);
 			if (slot.slotUri !== undefined) build.refuse(child, 'one slot IRI');
-			else if (typeof child.read!.value !== 'string') build.refuse(child, 'a JSON string');
-			else slot.slotUri = child.read!.value;
-		}
+			else if (typeof property.value !== 'string') build.refuse(child, 'a JSON string');
+			else slot.slotUri = property.value;
+		} else if (property.line === 'slot-cardinality') {
+			build.leaf(child);
+			const constraint = build.strip<CardinalityConstraint>(property);
+			const [minimum, maximum] = constraint.cardinality;
+			if (slot.constraints?.some(constraint => 'cardinality' in constraint)) build.refuse(child, 'one cardinality constraint per slot');
+			else if (BigInt(minimum) > BigInt(maximum)) build.refuse(child, 'a cardinality with a minimum no larger than its maximum');
+			else (slot.constraints ??= []).push(constraint);
+		} else if (property.line === 'slot-pattern') {
+			build.leaf(child);
+			if (slot.constraints?.some(constraint => 'pattern' in constraint)) build.refuse(child, 'one pattern constraint per slot');
+			else (slot.constraints ??= []).push(build.strip<PatternConstraint>(property));
+		} else if (property.line === 'slot-numeric-bound') {
+			readNumericSlotBound(child, build, slot.constraints ??= []);
+		} else build.refuse(child, 'no line under this one');
 	}
 	return slot;
+}
+
+function printConstraint(constraint: SlotConstraint): string {
+	if ('pattern' in constraint) return printSlotPattern(constraint);
+	if ('cardinality' in constraint) {
+		const [minimum, maximum] = constraint.cardinality;
+		return `cardinality ${minimum}..${maximum}`;
+	}
+	return printNumericSlotBound(constraint);
 }
 
 export function printSlot(s: SlotDecl): string[] {
 	return block(`${s.slot}: ${s.type}${s.card ?? ''}${s.inverse !== undefined ? ` inverse ${s.inverse}` : ''}${printWorld(s.world)}${s.identifier ? ' identifier' : ''}${s.embedded ? ' embedded' : ''}`, [
 		...(s.slotUri === undefined ? [] : [`iri ${JSON.stringify(s.slotUri)}`]),
-		...printMetadata(s)
+		...printMetadata(s),
+		...(s.constraints ?? []).map(printConstraint)
 	]);
 }
 
 export const slot = {
-	lineRules: ['SlotLine'],
+	lineRules: ['SlotLine', 'CardinalityLine', ...slotPattern.lineRules],
 	grammar: String.raw`
   SlotLine = name ":" Type Card? (kw<"inverse"> name)? World? kw<"identifier">? kw<"embedded">?
+  CardinalityLine = kw<"cardinality"> cardinalityBound ".." cardinalityBound
+  cardinalityBound = "0"             -- zero
+                   | ("1".."9") digit* -- positive
+  ${slotPattern.grammar}
   `,
 	actions: {
+		...slotPattern.actions,
 		SlotLine(n, _c, type, card, _inverse, inverse, world, identifier, embedded) {
 			const decl: Line = { line: 'slot', slot: n.sourceString, type: typeOf(type) };
 			if (card.numChildren) decl.card = opt(card);
@@ -48,6 +82,9 @@ export const slot = {
 			if (identifier.numChildren) decl.identifier = true;
 			if (embedded.numChildren) decl.embedded = true;
 			return named(n, decl);
+		},
+		CardinalityLine(keyword, minimum, _range, maximum) {
+			return named(keyword, { line: 'slot-cardinality', cardinality: [minimum.sourceString, maximum.sourceString] });
 		}
 	},
 } satisfies ModuleComponent;

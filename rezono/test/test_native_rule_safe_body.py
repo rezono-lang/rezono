@@ -11,11 +11,6 @@ class NativeRuleMismatch(AssertionError):
     """The typed checker is missing or differs from the authored cases."""
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=NativeRuleMismatch,
-    reason="Implement typed native rule body safety and span diagnostics in rezono/src. Read decisions/language-native-rules.md. The test supplies /3 trees and typed signatures.",
-)
 def test_native_rule_safe_body():
     probe = Path(__file__).with_name("native-rule-safe-body.mts")
     result = subprocess.run(

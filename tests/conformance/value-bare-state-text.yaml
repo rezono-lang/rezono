@@ -1,0 +1,18 @@
+id: value-bare-state-text
+source: docs/semantics/value-cases.yaml#bare-state-text
+status: settled
+input:
+  rows:
+    - {$kind: Group, $id: group-a}
+    - {$kind: Item, $id: item-a, group: {$ref: group-a}, labels: ["unknown"]}
+  select: {kind: Item, id: item-a}
+  language: "ask Item where true show labels.min()"
+expect:
+  value: "unknown"
+  state: known
+  reason: null
+  witness: null
+unsupported:
+  compiler: The batch sum replay does not project a known Text list member through a language answer.
+  checker: The shared checker replay has no rule witness for the projected Text value.
+  feldera: The SQL output does not exercise the language's decoding of the word unknown as Text.

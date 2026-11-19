@@ -24,6 +24,10 @@ def main(argv=None) -> int:
                                        "one proof per derived relation with the snapshots it needs")
     x.add_argument("pack")
     x.add_argument("out")
+    proposal = sub.add_parser("check-rule-proposal", help="compare a proposed rule against pinned, typed facts")
+    proposal.add_argument("pack", type=Path)
+    proposal.add_argument("relation")
+    proposal.add_argument("candidate", type=Path)
     k = sub.add_parser("check", help="read a pack and load its fact files, without compiling: a quick check")
     k.add_argument("pack")
     f = sub.add_parser("facts", help="print a fact file as Feldera JSON updates per table")
@@ -46,6 +50,17 @@ def main(argv=None) -> int:
     s.add_argument("--until", required=True, type=datetime.date.fromisoformat, help="the boundary, an ISO date")
     s.add_argument("--file", required=True, help="the fact file it goes in, as facts/<name>.yaml")
     args = p.parse_args(argv)
+    if args.cmd == "check-rule-proposal":
+        from .diagnostics import Diagnosed
+
+        try:
+            from . import rule_proposals
+
+            report = rule_proposals.check(args.pack, args.relation, args.candidate)
+        except (Diagnosed, ImportError, OSError, ValueError) as error:
+            report = {"status": "invalid", "relation": args.relation, "error": str(error)}
+        print(json.dumps(report, ensure_ascii=False, sort_keys=True))
+        return 0 if report["status"] == "eligible" else 1
     if args.cmd == "hash" and not args.rules:
         print(modules.pack_hash(args.pack))
         return 0

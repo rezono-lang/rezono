@@ -31,7 +31,8 @@
 //         `unknown no_version_applies` (§5a rule 4). Only that first gap is reported here; a gap between two
 //         versions needs the order of their contexts, which the checker gives later.
 // As in a question, an R000, R014, R016 or R018 leaves no module and no other diagnostic.
-import { blockSyntax, declarationActions, declarations, type Decl } from './module-components.ts';
+import { grammar } from './grammar.ts';
+import { blockSyntax, declarationActions, declarations, verbatimBlocks, type Decl } from './module-components.ts';
 import { layout, only, type Logical } from './module-layout.ts';
 import { readSchema, type SchemaMetadata } from './module-metadata.ts';
 import type { BlockSyntax, Build, Line } from './module-support.ts';
@@ -88,7 +89,10 @@ function readModule(text: string, bare: boolean): ParsedModule {
 	const later: Diagnostic[] = [];
 	const map = points(text);
 	const cp = (at: number) => (map ? map[at] : at);
-	const lines = layout(text, errors, cp);
+	const lines = layout(text, errors, cp, code => {
+		const keyword = code.split(/\s/, 1)[0];
+		return verbatimBlocks.some(block => block.keyword === keyword && grammar.match(code, block.header).succeeded());
+	});
 	const read = (line: Logical, rule = 'Line', invalidFirst?: BlockSyntax['invalidFirst']) => {
 		const cut = torn(text.slice(line.start, line.end));
 		if (cut) {
@@ -96,7 +100,8 @@ function readModule(text: string, bare: boolean): ParsedModule {
 			errors.push(tornAt(text, line.start + cut[0], line.start + cut[1], cp));
 		} else {
 			const statement = only(text, line);
-			const r = readRule(statement, rule, (m) => m.decl() as Line, spans, map);
+			const syntax = rule === 'Line' && /^rule(?![A-Za-z0-9_-])/.test(text.slice(line.start, line.end)) ? 'NativeRuleLine' : rule;
+			const r = readRule(statement, syntax, (m) => m.decl() as Line, spans, map);
 			// The rest of the source is blank here. An incomplete statement fails where its line ends.
 			for (const e of r.errors) if (e.span.start > cp(line.end)) e.span = { text: '', start: cp(line.end), end: cp(line.end) };
 			const alternative = r.errors.length && invalidFirst?.(text, line, cp, (rule) =>
@@ -107,7 +112,9 @@ function readModule(text: string, bare: boolean): ParsedModule {
 			later.push(...r.reserved);
 			line.read = r.value;
 		}
-		const block = line.read && blockSyntax.get(line.read.line);
+		const tag = line.read?.line;
+		if (verbatimBlocks.some(block => block.tag === tag)) return;
+		const block = tag === undefined ? undefined : blockSyntax.get(tag);
 		line.block.forEach((child, i) => read(child, i === 0 ? block?.first : block?.rest, i === 0 ? block?.invalidFirst : undefined));
 	};
 	for (const line of lines) read(line);
@@ -168,6 +175,11 @@ function readModule(text: string, bare: boolean): ParsedModule {
 		const declaration = declarations.get(r.line);
 		if (stage === 0 || !declaration) {
 			build.refuse(line, stage === 0 ? '`pack`' : 'a declaration');
+			continue;
+		}
+		if ((r.line === 'dataset' && (bare || module.decls.length > 0))
+			|| (module.decls.length > 0 && 'dataset' in module.decls[0])) {
+			build.refuse(line, 'one dataset on its own in a module');
 			continue;
 		}
 		stage = 2;

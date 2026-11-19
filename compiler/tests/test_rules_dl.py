@@ -9,7 +9,7 @@ import pytest
 import yaml
 
 from support import FIXTURE
-from rezono_compiler import emit, fold, modules, pack, rules_sql, view_rules
+from rezono_compiler import emit, fold, modules, pack, rules_dl, rules_sql, view_rules
 from rezono_compiler import rules as ir
 
 PROGRAM = """
@@ -49,6 +49,24 @@ def with_rules(d: Path, **files: str) -> Path:
     for name, text in files.items():
         (d / "rules" / f"{name}.dl").write_text(text)
     return d
+
+
+def test_a_legacy_rule_can_extend_an_authored_import(fixture, tmp_path):
+    model = pack.read(fixture)
+    directory = tmp_path / "foundation"
+    directory.mkdir()
+    foundation = modules.Imported("foundation", "0", modules.pack_hash(directory), directory, {}, [])
+    authored = rules_dl.Embedded(
+        "foundation", "access", "rezono/access.rezono", "\n// @extend\n.decl allowed(item: symbol)\n"
+    )
+    with_rules(fixture, extension=".decl allowed(item: symbol)\nallowed(x) :- alpha(x).\n")
+
+    document, _ = rules_dl.read(model, fixture, {"foundation": foundation}, embedded=(authored,))
+
+    [rule] = document["rules"]
+    assert rule["id"] == "allowed"
+    assert rule["module"] == "import_foundation_access"
+    assert rule["origin"] == {"file": "rules/extension.dl", "line": "2"}
 
 
 def test_a_program_becomes_the_rule_ir(fixture):

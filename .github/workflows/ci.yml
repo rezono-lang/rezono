@@ -21,6 +21,105 @@ permissions:
   contents: read
 
 jobs:
+  light_checks:
+    name: Light checks
+    if: >-
+      github.event_name == 'pull_request' ||
+      github.event_name == 'merge_group' ||
+      (github.event_name == 'push' && github.ref == 'refs/heads/main')
+    permissions:
+      contents: read
+    runs-on: ubuntu-24.04
+    timeout-minutes: 27
+    steps:
+      - id: full_checkout
+        name: Check out the candidate with history
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          path: release-source
+      - name: Check tracked files and the exception budget
+        working-directory: release-source
+        env:
+          BASE: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.event.before }}
+        run: python3 -I scripts/leak_check.py --base "$BASE"
+      - name: Check Dependabot manifest coverage
+        working-directory: release-source
+        shell: bash
+        run: |
+          set -euo pipefail
+          yq -o=json .github/dependabot.yml | python3 -I scripts/test_dependabot.py
+      - name: Warn about new literals outside packs
+        id: pack_warnings
+        if: ${{ !cancelled() && steps.full_checkout.outcome == 'success' }}
+        continue-on-error: true
+        working-directory: release-source
+        shell: bash
+        env:
+          POLICY: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.sha }}
+          BASE: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.event.before }}
+          HEAD: ${{ github.event.pull_request.head.sha || github.event.merge_group.head_sha || github.sha }}
+        run: |
+          set -euo pipefail
+          git show "$POLICY:scripts/pack_warnings.py" | python -I - "$BASE" "$HEAD"
+      - name: Check the single commit used as the squash subject
+        id: single_subject
+        if: ${{ !cancelled() && steps.full_checkout.outcome == 'success' && github.event_name == 'pull_request' && github.event.pull_request.commits == 1 }}
+        continue-on-error: true
+        working-directory: release-source
+        shell: bash
+        env:
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          python scripts/release-notes.py --subject "$(git log -1 --format=%s "$HEAD")"
+      - name: Test the candidate pack warning rules
+        id: pack_warning_tests
+        if: ${{ !cancelled() && steps.full_checkout.outcome == 'success' }}
+        continue-on-error: true
+        working-directory: release-source
+        run: python -I scripts/test_pack_warnings.py
+      - name: Report advisory release checks
+        if: ${{ !cancelled() }}
+        shell: bash
+        env:
+          PACK_WARNINGS: ${{ steps.pack_warnings.outcome }}
+          SINGLE_SUBJECT: ${{ steps.single_subject.outcome }}
+          PACK_WARNING_TESTS: ${{ steps.pack_warning_tests.outcome }}
+        run: |
+          set -euo pipefail
+          {
+            printf '| Advisory release check | Outcome |\n'
+            printf '| --- | --- |\n'
+            printf '| Pack warnings | %s |\n' "$PACK_WARNINGS"
+            printf '| Single-commit subject | %s |\n' "$SINGLE_SUBJECT"
+            printf '| Pack warning tests | %s |\n' "$PACK_WARNING_TESTS"
+          } >> "$GITHUB_STEP_SUMMARY"
+      - id: python
+        if: ${{ !cancelled() && steps.full_checkout.outcome == 'success' }}
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0
+        with:
+          python-version-file: release-source/requirements/.python-version
+      # The README makes editable installs. Give it its own checkout so the release build starts clean.
+      - id: readme_checkout
+        name: Check out the candidate for the README
+        if: ${{ !cancelled() && steps.python.outcome == 'success' }}
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+          path: readme-source
+      - name: Run the README example
+        if: ${{ !cancelled() && steps.readme_checkout.outcome == 'success' }}
+        working-directory: readme-source
+        shell: bash
+        run: bash scripts/check-quickstart.sh
+      - name: Run the release rehearsal
+        if: ${{ !cancelled() && steps.python.outcome == 'success' && github.event_name != 'push' }}
+        uses: ./release-source/.github/actions/release-rehearsal
+        with:
+          source-directory: release-source
+
   discover:
     runs-on: ubuntu-24.04
     timeout-minutes: 12
@@ -30,7 +129,9 @@ jobs:
       node: ${{ steps.matrix.outputs.node }}
       has_node: ${{ steps.matrix.outputs.has_node }}
       python_editable: ${{ steps.matrix.outputs.python_editable }}
+      cluster_mode: ${{ steps.cluster.outputs.mode }}
       cluster_tasks: ${{ steps.cluster.outputs.tasks }}
+      role_publication: ${{ steps.role_publication.outputs.required }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
@@ -41,6 +142,8 @@ jobs:
           set -euo pipefail
           python -I scripts/test_red_guard.py
           python -I scripts/test_feldera_admission.py
+          python -I scripts/test_cluster_worker_tasks.py
+          python -I scripts/test_role_publication_ci.py
       - id: matrix
         env:
           GITHUB_BASE_REF: ${{ github.base_ref }}
@@ -48,6 +151,11 @@ jobs:
           MERGE_GROUP_HEAD_SHA: ${{ github.event.merge_group.head_sha }}
           GITHUB_EVENT_BEFORE: ${{ github.event.before }}
         run: python3 scripts/components.py ci-matrix
+      - name: Select the role-publication proof
+        id: role_publication
+        env:
+          BASE: ${{ github.event.merge_group.base_sha || github.event.pull_request.base.sha }}
+        run: python3 scripts/role_publication_ci.py select --base "$BASE" >> "$GITHUB_OUTPUT"
       - uses: ./.github/workflows/python-environment
         if: steps.matrix.outputs.has_python == 'true'
         with:
@@ -78,24 +186,44 @@ jobs:
           if-no-files-found: error
           overwrite: true
           retention-days: 2
-      - name: Route assigned cluster tests from the inventory
+      - name: Route the disposable cluster from the candidate
         id: cluster
-        if: steps.matrix.outputs.has_python == 'true'
         env:
           WORKER_BRANCH: ${{ github.head_ref }}
           TASK_BASE: ${{ github.event.merge_group.base_sha || (startsWith(github.head_ref, 'task/') && github.event.pull_request.base.sha) || '' }}
+          CANDIDATE_BASE: ${{ github.event.merge_group.base_sha || github.event.pull_request.base.sha }}
+          PULL_HEAD: ${{ github.event.pull_request.head.sha }}
         run: |
           set -euo pipefail
           python scripts/cluster_worker_tasks.py "$RUNNER_TEMP/inventory" --worker "$WORKER_BRANCH" \
-            --base "$TASK_BASE" >> "$GITHUB_OUTPUT"
+            --base "$TASK_BASE" --diff-base "$CANDIDATE_BASE" --pull-head "$PULL_HEAD" >> "$GITHUB_OUTPUT"
 
   cluster_worker:
     needs: discover
-    if: needs.discover.outputs.cluster_tasks != '' && needs.discover.outputs.cluster_tasks != '[]'
+    if: needs.discover.outputs.cluster_mode == 'tasks' || needs.discover.outputs.cluster_mode == 'suite'
     uses: ./.github/workflows/disposable-cluster.yml
     with:
       tasks: ${{ needs.discover.outputs.cluster_tasks }}
       base: ${{ github.event.merge_group.base_sha || github.event.pull_request.base.sha }}
+
+  role_publication:
+    name: Published role tools
+    needs: discover
+    if: needs.discover.outputs.role_publication == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: ./.github/workflows/python-environment
+        with:
+          editable: ${{ needs.discover.outputs.python_editable }}
+          oracle: 'true'
+      - name: Install the locked MCP dependencies
+        run: npm ci --ignore-scripts --prefix tools/mcp
+      - name: Verify role-scoped current, retained and sweep publications
+        run: python scripts/role_publication_ci.py run
 
   python:
     needs: discover
@@ -168,7 +296,7 @@ jobs:
             python scripts/red_list.py --skips "$report" | tee -a "$GITHUB_STEP_SUMMARY"
           done
       - name: Measure the worker check
-        if: startsWith(github.head_ref, 'task/') && matrix.component.shard == 0 && needs.discover.outputs.cluster_tasks == '[]'
+        if: startsWith(github.head_ref, 'task/') && matrix.component.shard == 0 && needs.discover.outputs.cluster_mode != 'tasks'
         env:
           BRANCH: ${{ github.head_ref }}
           COMPONENT: ${{ matrix.component.folder }}
@@ -209,7 +337,7 @@ jobs:
   check:
     name: check
     if: always()
-    needs: [discover, python, node, cluster_worker]
+    needs: [discover, python, node, light_checks, cluster_worker, role_publication]
     permissions:
       contents: read
       actions: read
@@ -250,19 +378,34 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
       - name: Verify component jobs
         if: always()
+        shell: bash
         env:
           DISCOVER_RESULT: ${{ needs.discover.result }}
           PYTHON_RESULT: ${{ needs.python.result }}
           NODE_RESULT: ${{ needs.node.result }}
+          LIGHT_RESULT: ${{ needs.light_checks.result }}
           CLUSTER_RESULT: ${{ needs.cluster_worker.result }}
-          CLUSTER_TASKS: ${{ needs.discover.outputs.cluster_tasks }}
+          CLUSTER_MODE: ${{ needs.discover.outputs.cluster_mode }}
+          ROLE_PUBLICATION_REQUIRED: ${{ needs.discover.outputs.role_publication }}
+          ROLE_PUBLICATION_RESULT: ${{ needs.role_publication.result }}
         run: |
           set -euo pipefail
-          echo "discover=$DISCOVER_RESULT python=$PYTHON_RESULT node=$NODE_RESULT cluster=$CLUSTER_RESULT"
+          echo "discover=$DISCOVER_RESULT python=$PYTHON_RESULT node=$NODE_RESULT light=$LIGHT_RESULT cluster=$CLUSTER_RESULT role_publication=$ROLE_PUBLICATION_RESULT"
           [ "$DISCOVER_RESULT" = "success" ]
           case "$PYTHON_RESULT" in success|skipped) ;; *) exit 1 ;; esac
           case "$NODE_RESULT" in success|skipped) ;; *) exit 1 ;; esac
-          case "$CLUSTER_TASKS" in
-            ''|'[]') [ "$CLUSTER_RESULT" = skipped ] ;;
-            *) [ "$CLUSTER_RESULT" = success ] ;;
+          case "$GITHUB_EVENT_NAME" in
+            pull_request|merge_group|push) [ "$LIGHT_RESULT" = success ] ;;
+            workflow_dispatch) [ "$LIGHT_RESULT" = skipped ] ;;
+            *) exit 1 ;;
+          esac
+          case "$CLUSTER_MODE" in
+            none) [ "$CLUSTER_RESULT" = skipped ] ;;
+            suite|tasks) [ "$CLUSTER_RESULT" = success ] ;;
+            *) exit 1 ;;
+          esac
+          case "$ROLE_PUBLICATION_REQUIRED" in
+            true) [ "$ROLE_PUBLICATION_RESULT" = success ] ;;
+            false) [ "$ROLE_PUBLICATION_RESULT" = skipped ] ;;
+            *) exit 1 ;;
           esac

@@ -1,0 +1,35 @@
+.decl step_safety_receipt(run: symbol, cut: symbol, event_time: number)
+.decl step_safety_latest_time(run: symbol, event_time: number)
+.decl step_safety_current_cut(run: symbol, cut: symbol)
+.decl current_step_safety_check(run: symbol, step: symbol, cut: symbol, obligation: symbol, verdict: symbol, reason: symbol)
+.decl step_safety_blocker(run: symbol, step: symbol, cut: symbol, obligation: symbol, reason: symbol)
+.decl step_safety_blocked(run: symbol, step: symbol, cut: symbol)
+.decl safe_alone(run: symbol, step: symbol, cut: symbol)
+
+step_safety_receipt(run, cut, time) :-
+    loop_sweep_receipt__run(cut, run), loop_sweep_receipt__event_time(cut, time).
+
+step_safety_latest_time(run, latest) :-
+    active(run), step_safety_receipt(run, _, _),
+    latest = max time : { step_safety_receipt(run, _, time) }.
+
+// Require one exact cut. Equally recent receipts with different identities leave it undecided.
+step_safety_current_cut(run, cut) :-
+    step_safety_latest_time(run, latest), step_safety_receipt(run, cut, latest),
+    cuts = count : { step_safety_receipt(run, _, latest) },
+    cuts = 1.
+
+current_step_safety_check(run, step, cut, obligation, verdict, reason) :-
+    step_safety_current_cut(run, cut), loop_step(step),
+    loop_step_safety_check__run(check, run), loop_step_safety_check__step(check, step),
+    loop_step_safety_check__cut(check, cut), loop_step_safety_check__obligation(check, obligation),
+    loop_step_safety_check__verdict(check, verdict), loop_step_safety_check__reason(check, reason).
+
+step_safety_blocker(run, step, cut, obligation, reason) :-
+    current_step_safety_check(run, step, cut, obligation, verdict, reason), verdict != "proved".
+
+step_safety_blocked(run, step, cut) :- step_safety_blocker(run, step, cut, _, _).
+
+// This is individual safety from supplied checks. Batch selection remains separate.
+safe_alone(run, step, cut) :-
+    current_step_safety_check(run, step, cut, _, "proved", _), !step_safety_blocked(run, step, cut).

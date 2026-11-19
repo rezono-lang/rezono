@@ -1,0 +1,27 @@
+id: value-unknown-not-zero
+source: docs/semantics/value-cases.yaml#unknown-not-zero
+status: settled
+input:
+  rows:
+  - kind: item
+    id: item-c
+    group: group-b
+    labels:
+    - second
+    quantity: 7
+    weight:
+      state: unknown
+      reason: no_spec
+  expression: weight + 10
+  subject: item-c
+expect:
+  value: null
+  state: unknown
+  reason: no_spec
+  witness:
+    relation: item__weight
+    key:
+    - item-c
+unsupported:
+  compiler: The fact loader has no stored explicit state for an integer slot.
+  feldera: Integer input columns do not store explicit unknown states and reason codes.
