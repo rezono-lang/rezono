@@ -123,7 +123,11 @@ COUNTER_CASES = {
            "which declares verified_receipt and verified_member in build/rules/selection.dl; reuse those "
            "declarations. The same rule turns loop/tests/test_build_queue_count.py--test_build_queue_count[empty] "
            "green: remove its mark in the same PR. Today the rules count the submitted pull records, so an omitted, "
-           "emptied or unadmitted listing and a bare reading still give a planner slot (MissingVerifiedQueue).",
+           "emptied or unadmitted listing and a bare reading still give a planner slot (MissingVerifiedQueue). "
+           "Blocker: verified_member exposes part 2 of [\"queue-pull\", base, number] as symbol text while "
+           "BuildQueuePull.number is an integer, and the rule language has no number-to-symbol conversion or "
+           "mixed-type comparison. Changing BuildQueuePull.number to string in build/schema/tasks.yaml is refused "
+           "by fact admission on the integer values submitted by the tests.",
 )
 def test_planner_slot_needs_verified_pull_inventory(tmp_path):
     records = submitted(tmp_path / "admitted")
