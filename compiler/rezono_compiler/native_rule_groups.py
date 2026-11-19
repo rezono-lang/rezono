@@ -28,15 +28,19 @@ class _GroupClause:
         self.relations = {relation["name"]: relation for relation in relations}
         self.file = origin["file"]
         self.line = origin["line"]
+        self.column = origin.get("column", "1")
 
     def refuse(self, message: str) -> Never:
         raise rules_dl.RuleError(f"{self.file}:{self.line}: {message}")
 
-    def unrepresentable(self, message: str) -> Never:
+    def unrepresentable(self, message: str,
+                        hint: str = "Fix each ranged key column of the group by equality.") -> Never:
         """Refuse a sound expression that the group IR cannot hold (R044), leaving no partial rule."""
         where = f"{self.file}:{self.line}"
-        raise diagnostics.Diagnosed(f"{where}: {message}", [diagnostics.Diagnostic(
-            "R044", message, where, hint="Fix each ranged key column of the group by equality.")])
+        # A rule is a top-level declaration, so its origin starts the line unless the origin names a column.
+        span = (self.file, int(self.line), int(self.column))
+        raise diagnostics.Diagnosed(f"{where}: {message}", [
+            diagnostics.Diagnostic("R044", message, where, span, hint=hint)])
 
     def columns(self, name: str) -> list[str]:
         return [column["type"] for column in self.relations[name]["key"]]
@@ -137,11 +141,15 @@ class _GroupClause:
             self.refuse(f"{operator} needs a measure of the form it.column")
         column = path[1]
         signature = self.relations[name]
+        if any(item["name"] == column for item in signature.get("values", ())):
+            # A Value can be not_applicable or unknown, and an IR fold would silently drop such a member.
+            self.unrepresentable(f"{operator} over the value column {column!r} of {name!r} cannot keep the state "
+                                 "of a not_applicable or unknown member",
+                                 hint="Aggregate a ranged integer key column, whose members are always known.")
         ranged_types = {item["name"]: item["type"] for item, term in zip(signature["key"], terms, strict=True)
                         if term[0] == "wild"}
-        ranged_types.update({item["name"]: item["type"] for item in signature.get("values", ())})
         if ranged_types.get(column) != "integer":
-            self.refuse(f"{operator} needs a ranged integer key or value column of {name!r}")
+            self.refuse(f"{operator} needs a ranged integer key column of {name!r}")
         return column
 
     def body(self, guard: dict) -> tuple[list[tuple], list[str | None]]:
