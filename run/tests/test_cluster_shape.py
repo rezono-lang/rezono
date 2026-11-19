@@ -1,7 +1,9 @@
 """Cluster members, roles and Ceph devices from observed machines, from decisions/run-cluster-shape.md."""
 
+import pytest
 
 from offline_cases import PLAN_HASH, relation
+
 
 CLUSTER = "run-one"
 OTHER_PLAN = "b" * 64
