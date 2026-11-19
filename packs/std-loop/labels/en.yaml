@@ -4,6 +4,16 @@ loop_sweep_receipt.event_time: sweep watermark
 loop_pending_operation: outstanding operation
 loop_pending_operation.run: operation run
 loop_pending_operation.token: prospective token
+loop_goal: required outcome
+loop_goal.run: goal run
+loop_goal.token: confirming token
+loop_batch_deferral: deferral by selection
+loop_batch_deferral.run: deferral run
+loop_batch_deferral.step: deferred step
+loop_batch_deferral.cut: selection cut
+loop_batch_deferral.batch: selected batch
+goal_produced: produced goal token
+unproduced_goal: goal without a producer
 structural_stuck: declared structural blocker
 possible_progress: remaining source of progress
 fixed_point: unresolved fixed point

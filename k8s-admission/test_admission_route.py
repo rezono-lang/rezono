@@ -27,7 +27,7 @@ def observe(reason, rule=None):
 
 @pytest.mark.xfail(
     strict=True,
-    reason="Write admission_route.classify as decisions/k8s-admission-translator.md specifies under What CEL "
+    reason="M4: Write admission_route.classify as decisions/k8s-admission-translator.md specifies under What CEL "
            "cannot do. Write in k8s-admission/admission_route.py.",
 )
 def test_admission_route():
