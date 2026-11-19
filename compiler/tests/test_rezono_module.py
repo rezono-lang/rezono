@@ -476,8 +476,7 @@ REFUSALS = {
     # no slot eta, so the inverse is refused at its own line.
     "an inverse without its forward slot": pytest.param(
         [slot(slot="many", type="Zeta", card="*", inverse="eta"), eta(kind="Zeta")], 11,
-        "the inverse eta is not a slot of Zeta",
-    ),
+        "the inverse eta is not a slot of Zeta"),
     "world on a slot": ([slot(slot="note", type="Text", world="open")], 11, "a slot with world is not lowered"),
     "a DateTime slot": ([slot(slot="observed_at", type="DateTime")], 11, "DateTime is not Date, Text, or an enum or a kind of this pack"),
     "a Money slot": ([slot(slot="cost", type="Money<EUR>")], 11, "Money<EUR> is not Date, Text"),
