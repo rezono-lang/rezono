@@ -43,6 +43,8 @@ class LinkedClause:
     memberships: dict[str, str] = field(default_factory=dict)
     # The hops of each path node, as (subject type, slot), from which its possible states follow.
     hops: dict[str, tuple[tuple[str, str], ...]] = field(default_factory=dict)
+    # Path pointers whose final slot is multivalued and therefore yields a collection rather than a scalar.
+    collections: frozenset[str] = frozenset()
 
 
 @dataclass(frozen=True)
@@ -330,6 +332,7 @@ def read_clause(schema: Schema, source: Source, at: str, decl: dict, signatures:
     explicit = set(known)
     paths: dict[str, ResolvedPath] = {}
     hops: dict[str, tuple[tuple[str, str], ...]] = {}
+    collections: set[str] = set()
     calls: dict[str, str] = {}
     memberships: dict[str, str] = {}
     arguments: list[tuple[dict, str, str, bool]] = []
@@ -386,6 +389,8 @@ def read_clause(schema: Schema, source: Source, at: str, decl: dict, signatures:
                 raise Refusal("R005", f"{step!r} gives a set where a single subject is required", pointer)
         paths[pointer] = (place, value)
         hops[pointer] = tuple(visited)
+        if many:
+            collections.add(pointer)
         return value
 
     for node, expected, pointer, _ in arguments:
@@ -425,7 +430,7 @@ def read_clause(schema: Schema, source: Source, at: str, decl: dict, signatures:
         path = node.get("path", ())
         if len(path) > 1 and path[0] in known:
             value_type(node, pointer)
-    return LinkedClause(relation, signature.module, calls, paths, memberships, hops)
+    return LinkedClause(relation, signature.module, calls, paths, memberships, hops, frozenset(collections))
 
 
 def link(pack_dir: str | Path, forms: Mapping[tuple[str, str], dict]) -> Linked:
