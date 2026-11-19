@@ -1,4 +1,4 @@
-"""Lower a closed Rezono kind using the slot component."""
+"""Lower a closed or open Rezono kind using the slot component."""
 
 from collections.abc import Set
 
@@ -109,7 +109,11 @@ def lower(decl: dict, at: str, own: dict[str, str], owners: dict[str, list[str]]
     parent = parent_of(decl["parent"], decl["kind"], f"{at}/parent", own, owners, uses, refuse) if has_parent else None
     if has_parent and parent is None:
         ok = False
-    if decl.get("world") != "closed" and not (has_parent and "world" not in decl):
+    world = decl.get("world")
+    if has_parent and world == "open":
+        refuse(at, "a kind with a parent has the world of its root kind", "§5.1")
+        ok = False
+    elif not (world == "closed" or (extended_format and world == "open") or (has_parent and "world" not in decl)):
         refuse(at, "an open kind is refused: a kind says `world closed`", "§5.1")
         ok = False
     if "applies" in decl:
@@ -137,10 +141,12 @@ def lower(decl: dict, at: str, own: dict[str, str], owners: dict[str, list[str]]
         refuse(at, "a kind with a parent inherits its identifier and cannot declare its own", "§5.1")
         ok = False
     if rezono_slot.validate(
-        slots, decl["kind"], at, own, owners, uses, refuse, extended=extended_format
+        slots, decl["kind"], at, own, owners, uses, refuse, extended=extended_format, open_kind=world == "open"
     ) and ok and equations is not None and rules is not None:
         attributes = rezono_slot.lower(slots, declared, implicit_identifier=not embedded and parent is None)
         result = {"attributes": attributes} | rezono_metadata.lower(decl)
+        if world == "open":
+            result.setdefault("annotations", {})["world"] = "open"
         if parent is not None:
             result["is_a"] = parent
         if relationship:

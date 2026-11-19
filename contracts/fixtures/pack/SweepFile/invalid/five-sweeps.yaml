@@ -1,0 +1,6 @@
+sweeps:
+  - {name: first, kind: alpha, key: a1, slot: size}
+  - {name: second, kind: alpha, key: a2, slot: size}
+  - {name: third, kind: alpha, key: a3, slot: size}
+  - {name: fourth, kind: alpha, key: a4, slot: size}
+  - {name: fifth, kind: alpha, key: a5, slot: size}

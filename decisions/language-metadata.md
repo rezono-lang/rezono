@@ -20,6 +20,12 @@ The corresponding JSON fragment is
 }
 ```
 
+## A keyword as a schema name
+
+`example` is a keyword of v0, like the other words in its keyword list: it starts the declaration `example "…"` of a worked example. So `schema example` is refused with R000 at `example`, as any keyword is where a name is expected. This is intended, and the keyword list stays fixed: making `example` a contextual word would make the list depend on position for one word that a later declaration needs.
+
+A schema whose name is a keyword, such as a converted LinkML schema named `example`, writes it in backticks: `` schema `example` ``. The JSON holds the name without backticks, `"schema": "example"`, and the printer writes the backticks back. This is how a backticked rule name already denotes the exact identifier between the backticks. Renaming the schema during conversion was considered; it would change the name that publication and the schema IRI carry.
+
 ## Close and broad mappings
 
 A kind, slot or enum member may also carry LinkML `close_mappings` and `broad_mappings`. Write them like an exact mapping: `close mapping "iri"` and `broad mapping "iri"`, one per line, in the metadata block of that declaration. They are encoded as `closeMappings` and `broadMappings`, ordered string lists beside `exactMappings`, and lower to the LinkML lists of the same name in written order. The three kinds stay distinct because they state different equivalences; folding a close or broad mapping into an exact one would overstate it.

@@ -1,6 +1,6 @@
 # Standstill alert after two hours
 
-Open one issue labeled `standstill` when no pull request was opened or merged for more than two hours while red tests that are not marked `later: ` remain. The hourly cleanup workflow runs `scripts/standstill.py`, and the limit is the single constant `STANDSTILL_HOURS` in that script.
+Open one issue labeled `standstill` when no pull request was opened or merged for more than two hours while red tests that are not marked `later: ` remain. The cleanup workflow runs `scripts/standstill.py` on a schedule of four times an hour, and the limit is the single constant `STANDSTILL_HOURS` in that script.
 
 ## What counts
 
@@ -10,7 +10,11 @@ Open one issue labeled `standstill` when no pull request was opened or merged fo
 
 ## Why two hours
 
-One hour is too close to the usual time between opening a pull request and merging it through the queue. The alert would fire during ordinary review. Four hours or more lets a stall go unnoticed for half a working session, and the hourly schedule adds up to another hour before the issue appears. Two hours is the shortest window that ordinary pull request traffic does not cross, and the issue appears within three hours of the last progress.
+One hour is too close to the usual time between opening a pull request and merging it through the queue. The alert would fire during ordinary review. Four hours or more lets a stall go unnoticed for half a working session. Two hours is the shortest window that ordinary pull request traffic does not cross.
+
+## Schedule
+
+The workflow runs at minutes 7, 22, 37 and 52 of every hour. GitHub does not promise when a scheduled run starts: it delays runs and skips some, especially at the top of the hour. With one run an hour, a skipped run cost hours. With four runs an hour off the full hour, one skipped run delays the issue by a quarter of an hour, so it normally appears soon after two hours without progress. The claim cleanup in the same workflow runs as often; an inactive claim is then released closer to its inactivity limit, which is harmless. If gaps of more than two hours between runs remain, a clock outside GitHub is needed.
 
 ## Alternatives considered
 

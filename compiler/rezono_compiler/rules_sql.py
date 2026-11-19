@@ -118,9 +118,15 @@ class RuleSQL:
             self._aggregate(i, a)
         for s in rule.assignments:
             if s.op == "days":  # a view's reading: the engine's own date arithmetic, right to left
-                left, right = f"CAST({self.term(s.left, 'string')} AS DATE)", f"DATE {lit_sql(s.right, 'string')}"
+                # A text that is no calendar day written YYYY-MM-DD derives nothing: the cast is guarded by the
+                # spelling and cannot fail, and a NULL result drops the row. A date column is read as its own text.
+                text = f"CAST({self.term(s.left, 'string')} AS VARCHAR)"
+                cast, match = ("TRY_CAST", "regexp_matches") if dialect == "duckdb" else ("SAFE_CAST", "RLIKE")
+                left = f"CASE WHEN {match}({text}, '^[0-9]{{4}}-[0-9]{{2}}-[0-9]{{2}}$') THEN {cast}({text} AS DATE) END"
+                right = f"DATE {lit_sql(s.right, 'string')}"
                 diff = f"date_diff('day', {right}, {left})" if dialect == "duckdb" else f"TIMESTAMPDIFF(DAY, {right}, {left})"
                 self.env[s.var], self.types[s.var] = f"CAST({diff} AS BIGINT)", "integer"
+                self.where.append(f"{left} IS NOT NULL")
                 continue
             left, right = self.term(s.left, "integer"), self.term(s.right, "integer")
             if s.op == "div" and dialect == "duckdb":

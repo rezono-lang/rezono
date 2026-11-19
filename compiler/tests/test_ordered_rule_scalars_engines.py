@@ -84,11 +84,6 @@ def test_gap_follows_typed_comparisons():
         gap.prefix_program(prog, "comparison", [0, 1, 2])
 
 
-@pytest.mark.xfail(strict=True, raises=(rules.IRError, ValueError), reason=(
-    "M2: decisions/ordered-rule-scalars.md: Lower compare_as for the pinned Soufflé in "
-    "compiler/rezono_compiler/rule_proposal_oracle.py, without the "
-    "SQL implementation's results: prove the pinned binary's symbol order is byte order, or compare an "
-    "independently encoded byte sequence. Needs souffle on the path, as CI installs it."))
 def test_souffle_oracle_orders_typed_values():
     if shutil.which("souffle") is None:
         pytest.skip("needs the pinned souffle")

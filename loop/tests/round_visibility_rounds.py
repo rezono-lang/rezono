@@ -37,7 +37,7 @@ def singleton_rounds():
         submitted[f"variant-{effect.step}"] = canonical_bytes(pair.variant)
         submitted[f"claim-{effect.step}"] = canonical_bytes(round_claim(
             submitted, run=RUN, cut=OPENING.cut, batch=f"batch-{effect.step}", members=[effect.step],
-            subsets=[([effect.step], f"variant-{effect.step}", f"certificate-{effect.step}")],
+            subsets=[([effect.step], [effect.plan_hash], f"variant-{effect.step}", f"certificate-{effect.step}")],
         ))
     claims = [f"claim-{effect.step}" for effect in TARGETS]
     index = {"rounds": [observation_reference("submitted", name, submitted[name]) for name in claims]}

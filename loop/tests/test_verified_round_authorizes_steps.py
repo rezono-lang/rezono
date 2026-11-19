@@ -23,24 +23,6 @@ def _records(*readbacks):
     }
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=(AssertionError, ImportError, TypeError),
-    reason=(
-        "Read decisions/admission-transport.md sections 6 and 8 and decisions/loop-certificate-admission.md "
-        "section 2. Declare verified_round and verified_round_member in std-loop with the reserved signatures "
-        "and no clause. Derive safe_alone(run, step, cut) from a verified round of the current run and cut "
-        "whose batch has exactly that one member, and loop_certified_batch and loop_selected_batch from a "
-        "verified round of the current run and cut, with the round's batch as the batch column. Keep the "
-        "supplied-verdict derivations for now; test_supplied_verdicts_authorize_nothing removes them. Write in "
-        "packs/std-loop (step_safety.dl, batch_selection.dl and their schema). Waits for "
-        "edge/publisher/tests/test_round_evidence_batch.py--test_batch_admits_certified_rounds_before_the_rules, "
-        "edge/publisher/tests/test_completeness_publish.py--"
-        "test_publisher_admits_receipts_only_with_a_trusted_context (the checker admits again on publish) and "
-        "compiler/tests/test_protected_admission_relations.py--test_admission_relations_are_protected_inputs. "
-        "Today rezono_checker.evidence is missing (ImportError)."
-    ),
-)
 def test_verified_round_authorizes_steps(tmp_path):
     retained, submitted, context, index = singleton_rounds()
     _, rows, _ = checked_loop_publication(

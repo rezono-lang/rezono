@@ -60,10 +60,6 @@ def pack(tmp_path, name, rules):
     return root
 
 
-@pytest.mark.xfail(strict=True, raises=CompileError,
-                   reason="Waits for compiler/tests/test_verified_receipt_input.py--test_verified_receipt_is_a_protected_"
-                          "input (same compiler code). Then reserve verified_member/4, verified_round/4 and "
-                          "verified_round_member/2 the same way, as decisions/admission-transport.md section 6 fixes.")
 def test_admission_relations_are_protected_inputs(tmp_path):
     declared = "".join(DECLS.values())
     packs.read(pack(tmp_path, "declared", declared + USES))

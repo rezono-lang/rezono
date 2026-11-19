@@ -13,6 +13,3 @@ waiting(run, step, token, reason) :-
 
 waiting(run, step, obligation, reason) :-
     step_safety_blocker(run, step, _, obligation, reason), !waiting_done(run, step).
-
-waiting(run, step, obligation, "ambiguous-cut") :-
-    step_safety_undecided(run, step, obligation), !waiting_done(run, step).
