@@ -9,9 +9,18 @@ def _source(position):
     return {"kind": "tool", "name": "inventory-observer", "position": position}
 
 
-def _content(nodes, finals):
+def _key(scope, node):
+    """The trusted member key: tag, the bindings the rule joins on, then the node (admission-transport.md 6)."""
+    return ["sweep-node", scope["run"], scope["collector"], scope["window"], node]
+
+
+def _inventory(scope, nodes):
+    return canonical_bytes([_key(scope, node) for node in nodes])
+
+
+def _content(scope, nodes, finals):
     return canonical_bytes([
-        {"key": [node], "terminal": _source(f"final/{node}"),
+        {"key": _key(scope, node), "terminal": _source(f"final/{node}"),
          "rows": [{"key": [final["id"]], "values": final, "source": _source(final["id"])}]}
         for node, final in zip(nodes, finals, strict=True)
     ])
@@ -41,7 +50,7 @@ def _authority(scope, retained):
 
 
 def _receipt(scope, nodes, finals, retained):
-    artifacts = {"inventory": canonical_bytes([[node] for node in nodes]), "content": _content(nodes, finals)}
+    artifacts = {"inventory": _inventory(scope, nodes), "content": _content(scope, nodes, finals)}
     body = {
         **_context(scope, retained),
         **{name: observation_reference("submitted", name, data) for name, data in artifacts.items()},
@@ -60,14 +69,20 @@ def _evidence(evidence, scope, retained):
     strict=True,
     raises=(AssertionError, ImportError, TypeError),
     reason=(
-        "extra: Read decisions/scoped-completeness.md sections 1 and 3 and decisions/admission-transport.md section 6. "
-        "Derive complete_sweep only with a verified receipt for the sweep scope (verified_receipt and "
-        "verified_member), so the pinned two-node inventory decides coverage. Keep the interval, terminal "
-        "reports, gap and loss requirements. Write in packs/std-loop (complete_sweep.dl) and its schema. Waits "
-        "for edge/publisher/tests/test_completeness_publish.py--"
-        "test_publisher_admits_receipts_only_with_a_trusted_context (the batch boundary admits the receipt and "
-        "the checker admits it again) and for test_absent_checked_requires_readable_coverage (std-completeness "
-        "supplies complete). Today rezono_checker.evidence is missing (ImportError)."
+        "M2: decisions/admission-transport.md: section 6, member keys, and decisions/scoped-completeness.md "
+        "section 3. Derive complete_sweep only from admitted verified_member keys "
+        "[\"sweep-node\", run, collector, window, node] (parts 0 to 4) of a verified_receipt: at least one member "
+        "for that run, collector and window, each covered by its single final node_report over the interval "
+        "without gaps or lost events, and no recorded expected_node of that sweep outside those members. Keep the "
+        "interval, conflicting report and window bound checks and sweep_node_report_count(run, collector, window, "
+        "node, variants). Declare verified_receipt and verified_member in packs/std-loop/rules/complete_sweep.dl, "
+        "and loop/tests/flow_drift_cases.py passes them to the fragment as inputs. Write in packs/std-loop. "
+        "The same rule turns "
+        "loop/tests/test_flow_drift_sweep.py--test_complete_flow_sweep_needs_verified_inventory, "
+        "loop/tests/test_flow_drift_rows.py--test_flow_drift_needs_verified_sweep and "
+        "loop/tests/test_absence_coverage.py--test_absence_needs_verified_sweep_inventory green: remove their marks "
+        "in the same PR or in one PR per file. Today complete_sweep follows from the records alone, so the "
+        "shortened submission still completes the sweep (AssertionError)."
     ),
 )
 def test_sweep_cannot_drop_expected_node(tmp_path):
@@ -76,11 +91,11 @@ def test_sweep_cannot_drop_expected_node(tmp_path):
     expected = [dict(scope, id=f"inventory-{node}", node=node) for node in nodes]
     finals = [dict(scope, id=f"final-{node}", node=node, first=10, last=20, gaps=0, lost=0) for node in nodes]
     retained = {
-        "flow-node-inventory": canonical_bytes([[node] for node in nodes]),
+        "flow-node-inventory": _inventory(scope, nodes),
         "flow-node-finals": canonical_bytes(finals),
         "scope-definition": canonical_bytes({"query": "expected-sweep-nodes", "scope": scope, "bounds": [10, 20]}),
         "collector-authority": canonical_bytes({"issuer": "inventory-observer", "query": "expected-sweep-nodes"}),
-        "flow-node-content": _content(nodes, finals),
+        "flow-node-content": _content(scope, nodes, finals),
     }
     records = {
         "flow_sweep_window": [dict(scope, id="sweep", start=10, stop=20)],
