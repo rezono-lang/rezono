@@ -1,0 +1,36 @@
+id: https://rezono.org/fixtures/slip
+name: slip
+description: A small, domain-neutral schema for the slip of the reference viewer.
+in_language: en
+imports:
+  - linkml:types
+default_range: string
+annotations:
+  layer: facts
+
+classes:
+  Item:
+    attributes:
+      id: {identifier: true}
+      group: {range: Group, required: true}
+      amount:
+        range: integer
+        minimum_value: 0
+        annotations:
+          world: open
+          explore: {value: {min: 0, max: 30, step: 5}}
+
+  Group:
+    attributes:
+      id: {identifier: true}
+
+  Hold:
+    attributes:
+      id: {identifier: true}
+      item: {range: Item, required: true}
+
+  Link:
+    attributes:
+      id: {identifier: true}
+      tail: {range: Item, required: true}
+      head: {range: Item, required: true}

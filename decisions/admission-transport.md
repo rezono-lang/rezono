@@ -27,7 +27,7 @@ class Evidence:
 def admit(evidence: Evidence) -> Admitted   # .rows {relation: [row]}, .findings, .references
 ```
 
-`batch.epoch` gains the keyword `evidence: Evidence | None = None`. The default keeps every existing caller unchanged. `Epoch` gains the field `evidence`. `publish.verify` passes it to `check_epoch` on the complete side only, where the checker admits again and compares. `publish.plan` writes the candidate references of the admitted step to the complete manifest under `completeness_receipts` and `rounds`, each a list of archived-file references.
+`batch.epoch` gains the keyword `evidence: Evidence | None = None`. The default keeps every existing caller unchanged. `Epoch` gains the field `evidence`. `publish.verify` passes it to `check_epoch` on the complete side only, where the checker admits again and compares. `publish.plan` writes the candidate references of the admitted step to the complete manifest under `completeness_receipts` and `rounds`, each a list of archived-file references. It also names the pinned context and index under `evidence` (`{"context": reference, "index": reference}`, `index` absent when nothing was submitted). The context's bytes are not published. The manifest only names the context and confers no authority: a later replay of the publication, such as `retained_calculation`, takes the context hash from its own protected caller (section 4), refuses a manifest that names another context or none, and reads evidence only under `observations/retained/` and `observations/submitted/`. It then rebuilds the `Evidence` and admits again. A replay whose context is gone admits nothing and fails on any protected row.
 
 This replaces the three keywords `completeness_receipts`, `completeness_authority` and `archive` that an earlier draft of the receipt transport used. One object keeps the trusted and the submitted half apart by construction and carries the resolver to the checker.
 
@@ -81,14 +81,36 @@ The compiler reserves these exact names and signatures. A pack declares one with
 .decl verified_round_member(round: symbol, step: symbol)
 ```
 
-- `verified_receipt` holds the receipt digest, the source name and the digests of the bound scope, cut, inventory and content, as scoped completeness fixes.
+- `verified_receipt` holds the receipt digest, the source name and the digests of the bound scope, cut, inventory and content, as scoped completeness fixes. The scope digest takes the scope definition as the hash of the bytes it pins, not as the reference to a stored copy (`completeness.scope_digest`), so the same scope stored elsewhere gives the same row.
 - `verified_member` exposes the typed member keys of an admitted receipt's trusted inventory. `member` is the canonical JSON text of the key, `part` its zero-based position and `value` the canonical text of that part. A rule reads a one-part key as `verified_member(r, _, 0, node)` and a mapping edge as two parts of the same member. No rule parses JSON.
 - `verified_round` holds the round claim digest and the run, cut and batch that the round verifier checked and whose choice it replayed itself.
 - `verified_round_member` lists the steps of that batch.
 
 Content values beyond the member keys are not exposed in this version. A pack that needs a value in its rules makes that value part of the member key of its own scope, as a reader mapping does with a path and a reader. A consumer that needs the full content, such as the month close, reads it through the receipt verifier.
 
-The protected relations are ordinary relations for access. A role reads them only under its rights, and a role proof exposes only the evidence that role may read.
+### Member keys bind a receipt to its rule
+
+`verified_receipt` carries digests, and a rule cannot join a digest to a run or a window. A rule therefore ties an admitted receipt to its own bindings only through the member keys of the trusted inventory. The protected caller that writes the context lays out each key as follows:
+
+- Part 0 is a tag that names the kind of member. A rule reads only the members that carry its tag, so a receipt for another scope never supplies its members.
+- The next parts are the bindings that the rule joins on, in a fixed order.
+- The last parts identify the member itself.
+
+A record that names a receipt digest selects among admitted receipts and binds nothing. The submitted records can neither add nor remove a member.
+
+**Sweep nodes.** Each expected node of a flow sweep is the member `["sweep-node", run, collector, window, node]`. `complete_sweep(run, collector, window, ref)` requires:
+
+- at least one admitted member with that run, collector and window;
+- for every such member, across all admitted receipts, the single final report of that node covering the interval without gaps or lost events;
+- no recorded `expected_node` of that sweep outside those members.
+
+A recorded inventory without verified members gives no `complete_sweep`. An empty verified inventory gives none either, as an empty recorded inventory does today. The interval, terminal report, conflicting report and window bound checks stay as they are. The records still supply the reports; the receipt supplies the population that the reports must cover.
+
+**Path readers.** Each reader edge of the build reader map is its own member `["path-reader", path, kind, reader]`. The member `["path-readers", path, kind]` stays as the terminal read of one mapping, also when that mapping is empty. A changed path (`["changed-path", path]`) is readerless only when the admitted receipt lists both of its mappings and no `path-reader` member for it. An admitted member of the build scope without its matching record, such as a reader edge, a changed path, a manifest, a test file or a suite, selects full checks. The build key parts carry no run: the protected build job pins one build-selection context for its run, and a second admitted build receipt in the same epoch leaves the selection without coverage. A run with a verified cut (`build_verified_cut`) but without an admitted build-selection receipt selects full checks with the reason `missing-selection-receipt`. `build_verified_cut` and its reason `missing-observation-receipt` keep their meaning for claims and tasks.
+
+This layout needs no change to the reserved signatures or to admission: `verified_member` already exposes every part of a key. An alternative that exposes the scope bindings or the content in a new protected relation would change the reserved names and the checker, and would hand rules values that the inventory does not pin as members.
+
+The protected relations are published on the complete side only. They carry no element column, and their rows expose the trusted inventory, member keys included, so no right of a kind can decide who reads them. Until a decision gives them an explicit read rule or element columns for the member keys, every filtered role has them withheld, as the relations of a sealed kind are withheld (`access.Scope.withheld`, and independently `rezono_checker.access.withheld_admission`). All four are withheld whether or not the rule IR declares them. A derived conclusion that rests on a withheld row reaches a role only through a proof whose grounds that role may read ([scoped completeness](scoped-completeness.md), section 2); a conclusion whose only proofs rest on a protected relation stays hidden from every filtered role.
 
 ## 7. Round verification
 

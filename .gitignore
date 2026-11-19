@@ -2,6 +2,7 @@ node_modules/
 target/
 .svelte-kit/
 build/
+!/build/
 dist/
 vendor/
 generated/

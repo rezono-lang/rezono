@@ -40,9 +40,7 @@ rule unsafe(x: Stage) when x in Stage and not Stage.next(x, y)
     raises=BranchBindingMismatch,
     reason="M3: Lower conjunctions, disjunctions and assignments in compiler/rezono_compiler/native_rule_lowering.py: "
            "one rule per alternative, a computed n = k + 1 as an IR assignment, and R042 for a branch-local head "
-           "name and for an unbound negative key. Read decisions/language-expression-semantics.md §1. "
-           "Waits for test_expression_python_negated_call and test_expression_python_path_bindings, "
-           "which lower the conjunction, negated call and path premises this test combines.",
+           "name and for an unbound negative key. Read decisions/language-expression-semantics.md §1.",
 )
 def test_expression_python_branch_bindings(tmp_path):
     directory = stage_pack(tmp_path)

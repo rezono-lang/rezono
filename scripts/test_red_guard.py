@@ -3,7 +3,7 @@ from pathlib import Path
 import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from red_guard import Change, allowed, review
+from red_guard import Change, allowed, protected, review, source
 
 
 def main():
@@ -13,6 +13,8 @@ def main():
     cases = [
         ("changed test expectation", "tests/test_count.py", function, function.replace(b"== 2", b"== 3"), False),
         ("changed recorded outcome", "examples/demo/expected/rows.json", b"[2]", b"[3]", False),
+        ("changed recorded slip", "examples/platform/slip.yaml", b"sentence: two\n", b"sentence: three\n", False),
+        ("changed recorded slip of another example", "examples/subsidy/slip.yaml", b"a\n", b"b\n", False),
         ("removed policy workflow", ".github/workflows/red-policy.yml", b"policy", None, False),
         ("changed policy implementation", "scripts/red_guard.py", b"review", b"other", False),
         ("changed shared fixture", "contracts/fixtures/data.json", b"{}", b"[]", False),
@@ -42,8 +44,18 @@ def main():
 
 
 def workflow_cases():
-    """The workflows that define required checks need the planner label to change."""
-    for path in (".github/workflows/ci.yml", ".github/workflows/disposable-cluster.yml"):
+    """The workflows that define required checks, and what they run to decide, need the label."""
+    deciders = (".github/workflows/python-environment/action.yml", "loop/rezono_cluster.py",
+                "scripts/cluster_worker_tasks.py", "scripts/role_publication_ci.py",
+                "scripts/components.py")
+    for path in deciders:
+        # Protected, yet still source: red_before.py runs added tests against the base copy.
+        if not (protected(path) and source(path)):
+            raise AssertionError(f"{path}: protected {protected(path)}, source {source(path)}")
+        print(f"PROTECTED and source: {path}")
+    if source("examples/platform/slip.yaml"):
+        raise AssertionError("a recorded slip is evidence, not source")
+    for path in (".github/workflows/ci.yml", ".github/workflows/disposable-cluster.yml", *deciders):
         for status, after in (("M", b"jobs: {}\n"), ("D", None)):
             change = Change(path, status, b"jobs: {check: {}}\n", after)
             errors, notes = review([change], planner=False)
@@ -122,9 +134,10 @@ def planner_cases(reason, function):
     run("lifted mark and changed expectation in one file", [
         edit("tests/test_count.py", function, lifted.replace(b"== 2", b"== 3")),
     ], True)
-    run("lifted mark beside a changed recorded outcome", [
+    run("lifted mark beside a changed recorded outcome and a test helper", [
         edit("tests/test_count.py", function, lifted),
         edit("examples/demo/expected/rows.json", b"[2]", b"[3]"),
+        edit("tests/support.py", b"value = 2\n", b"value = 3\n"),
     ], True)
     run("lifted mark alone", [edit("tests/test_count.py", function, lifted)], False)
     strictly = "needs strict=True"
@@ -153,6 +166,8 @@ def planner_cases(reason, function):
         edit(".github/workflows/ci.yml", b"", b""),
     ], False, ["REMOVED tests/test_old.py", "CHANGED examples/demo/expected/rows.json",
                "CHANGED tests/test_total.py::test_total", "CHANGED .github/workflows/ci.yml"])
+    run("changed recorded slip", [edit("examples/platform/slip.yaml", b"sentence: two\n", b"sentence: three\n")],
+        False, ["CHANGED examples/platform/slip.yaml"])
     run("weakened expectation without a source change", [
         edit("compiler/tests/test_total.py", other, other.replace(b"== 4", b"is not None")),
     ], False, ["CHANGED compiler/tests/test_total.py::test_total"])
@@ -162,10 +177,87 @@ def planner_cases(reason, function):
         raise AssertionError(f"a lifted mark is not a change: errors {errors}, notes {notes}")
     print("ALLOW without planner: lifted mark is not reported as a change")
     milestone_cases(edit, other)
+    completion_cases(edit, function, lifted, other, reason)
+
+
+def completion_cases(edit, function, lifted, other, reason):
+    """With the label, one lifted mark may come with new evidence data its test reads."""
+    outcome = Change("examples/demo/expected/rows.json", "A", None, b"[3]")
+    case = Change("examples/demo/snapshots/count.json", "A", None, b"{\"count\": 2}\n")
+    lift = edit("tests/test_count.py", function, lifted)
+    refusal = "Lift marks in a pull request of their own"
+    # The pack roots of the reviewed revision: the directories with a pack.yaml.
+    roots = frozenset({"examples/demo", "packs/demo"})
+
+    def run(label, changes, planner, expected, packs=roots, test="tests/test_count.py"):
+        errors, notes = review(changes, planner=planner, packs=packs)
+        refused = any(refusal in e for e in errors)
+        completed = f"COMPLETED {test}::test_count" in notes
+        if refused != expected or completed == expected or (not expected and errors):
+            raise AssertionError(f"{label}: errors {errors}, notes {notes}")
+        print(f"{'DENY' if expected else 'ALLOW'} {'with' if planner else 'without'} planner: {label}")
+
+    run("one lifted mark beside evidence data only", [lift, outcome, case], True, False)
+    run("one lifted mark beside evidence data, without the label", [lift, outcome], False, True)
+    run("one lifted mark beside evidence data and another protected path",
+        [lift, outcome, edit("tests/support.py", b"value = 2\n", b"value = 3\n")], True, True)
+    marked = b"@pytest.mark.xfail(strict=True, reason=\"M2: pending\")\n" + other
+    run("one lifted mark beside evidence data and a mark of another test",
+        [lift, outcome, edit("tests/test_total.py", marked, other)], True, True)
+    pair = function + b"\n" + marked
+    run("one lifted mark beside evidence data and an explained mark of another test",
+        [edit("tests/test_count.py", pair, lifted + b"\n" + marked.replace(b"pending", b"waiting")), outcome],
+        True, True)
+    run("one lifted mark beside evidence data and source",
+        [lift, outcome, edit("src/count.py", b"", b"x = 1\n")], True, True)
+    run("one lifted mark beside removed evidence data",
+        [lift, Change("examples/demo/expected/rows.json", "D", b"[2]", None)], True, True)
+    run("one lifted mark beside a changed policy workflow",
+        [lift, outcome, edit(".github/workflows/ci.yml", b"a", b"b")], True, True)
+    run("one lifted mark beside a changed conftest",
+        [lift, edit("tests/conftest.py", b"value = 2\n", b"value = 3\n")], True, True)
+    # A changed outcome could weaken what the test already expects; only added files count.
+    run("one lifted mark beside changed evidence data",
+        [lift, edit("examples/demo/expected/rows.json", b"[2]", b"[3]")], True, True)
+    # Data outside expected/, snapshots/ and vectors/ configures what runs or is accepted.
+    for path in ("blocked/tests.txt", "tests/fixtures/rows.json", "tests/conformance/count.yaml",
+                 "examples/demo/expected/rows.schema.json", "examples/demo/expected/pack.yaml",
+                 "rezono/test/expected/not-yet.json", "contracts/expected/proof.json",
+                 "examples/demo/expected/fixtures/rows.json", "examples/demo/expected/rows.py"):
+        run(f"one lifted mark beside {path}",
+            [lift, outcome, Change(path, "A", None, b"tests/test_count.py\n")], True, True)
+    # Without readable bytes, Git recorded no regular file: a symbolic link or an executable.
+    run("one lifted mark beside an added symbolic link",
+        [lift, Change("examples/demo/expected/rows.json", "A", None, None)], True, True)
+    # pytest collects no test in a class whose name does not start with Test.
+    hidden = b"class Helper:\n    @" + reason + b"\n    def test_count(self):\n        assert count() == 2\n"
+    bare = b"class Helper:\n    def test_count(self):\n        assert count() == 2\n"
+    run("one lifted mark on a test that pytest does not collect",
+        [edit("tests/test_count.py", hidden, bare), outcome], True, True)
+    # The evidence directory sits directly in a pack root, a tests/ or test/ directory, or a
+    # directory on the path of the test file.
+    run("one lifted mark beside evidence in a tests directory",
+        [lift, Change("tests/expected/rows.json", "A", None, b"[3]")], True, False, packs=frozenset())
+    run("one lifted mark beside evidence on the path of its test file",
+        [edit("suite/checks/test_count.py", function, lifted), Change("suite/expected/rows.json", "A", None, b"[3]")],
+        True, False, packs=frozenset(), test="suite/checks/test_count.py")
+    run("one lifted mark beside evidence in a directory without pack.yaml",
+        [lift, outcome], True, True, packs=frozenset())
+    # The compiler reads these directories of a pack as its definition, so the pack would change.
+    for path in ("examples/demo/schema/expected/smokkel.yaml", "examples/demo/schema/kinds/expected/a.yaml",
+                 "examples/demo/rezono/expected/rows.json", "examples/demo/rules/expected/rows.yaml",
+                 "examples/demo/facts/expected/rows.yaml", "examples/demo/labels/expected/rows.yaml",
+                 "examples/demo/messages/expected/rows.json", "examples/demo/calc/expected/rows.yaml",
+                 "packs/demo/expected/rows.json", "examples/other/expected/rows.json",
+                 "examples/demo/notes/expected/rows.json"):
+        run(f"one lifted mark beside {path}", [lift, Change(path, "A", None, b"kind: smuggled\n")], True, True)
 
 
 def milestone_cases(edit, other):
-    """A red mark says which milestone it serves, in literal text, and keeps it."""
+    """A red mark says which milestone it serves, in literal text, and keeps one.
+
+    Only the planner label moves a mark to a later milestone.
+    """
     def red(reason):
         return b"@pytest.mark.xfail(strict=True, reason=" + reason + b")\n" + other
 
@@ -195,8 +287,25 @@ def milestone_cases(edit, other):
             ("reason loses its milestone to a computed value", computed, True),
             ("reason extends the text after its milestone", red(b'"M2: pending on the loader"'), False),
             ("reason moves to an earlier milestone", red(b'"M1: pending"'), False),
+            ("reason moves to a later milestone", red(b'"M3: pending"'), not planner),
+            ("reason moves to later: ", red(b'"later: pending"'), not planner),
         ):
             run(label, [edit("tests/test_total.py", marked, after)], expected, planner)
+    pair = red(b'"M2: pending"') + b"\n" + red(b'"later: views"').replace(b"test_total", b"test_sum")
+    run("two tests trade milestones", [
+        edit("tests/test_total.py", pair, pair.replace(b"M2: ", b"M3: ", 1).replace(b"later: views", b"M2: views")),
+    ], True, planner=False)
+    two = red(b'"M1: pending"').replace(b"def test_total():",
+                                        b"@pytest.mark.xfail(strict=True, reason=\"M2: other\")\ndef test_total():")
+    run("one of two marks on a test lifted, the other postponed", [
+        edit("tests/test_total.py", two, red(b'"later: pending"')),
+    ], True, planner=False)
+    run("one of two marks on a test lifted, the other kept", [
+        edit("tests/test_total.py", two, red(b'"M1: pending"')),
+    ], False, planner=False)
+    run("reason without a milestone gets one", [
+        edit("tests/test_total.py", red(b'"pending"'), red(b'"later: pending"')),
+    ], False, planner=False)
     run("reason without a milestone is explained",
         [edit("tests/test_total.py", red(b'"pending"'), red(b'"documented"'))], False, planner=False)
 

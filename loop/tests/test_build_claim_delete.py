@@ -21,15 +21,6 @@ class Runner:
         return subprocess.CompletedProcess(argv, self.answer[0], stdout="", stderr=self.answer[1])
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason=(
-        "extra: Read decisions/build-claim-release.md section 3. Add loop/build_claim_delete.py with "
-        "delete_claim(plan, *, recheck, push, clock, source) that rechecks the pull requests, runs the one "
-        "conditional delete and returns the BuildClaimDelete record, or None when it skips. Write only in that file."
-    ),
-)
 def test_build_claim_delete():
     assert find_spec("loop.build_claim_delete") is not None, "The conditional claim delete adapter is missing"
     from loop.build_claim_delete import delete_claim

@@ -17,14 +17,16 @@ from graphlib import CycleError, TopologicalSorter
 from rezono_canon import canonical_sha256, sha256_hex
 
 from . import calc, closure, completeness, metadata
+from . import evidence as admission
 from .canon import calc_value, encode_key, sha256_json, value_text
 from .evaluate import _arith, _fits, _fold, _holds, _value, cells
 from .snapshots import read_rows
 from .state_projections import check as check_state_projections
 
 # A role snapshot never decides validity: a bad one is reported, as a warning.
+# Every other reason blocks; an unadmitted receipt or round only leaves coverage unknown.
 WARNINGS = {"unreachable_witness", "role_snapshot_hash_mismatch", "role_malformed_snapshot",
-            "receipt_unverified"}  # every other reason blocks; an unadmitted receipt only leaves coverage unknown
+            "receipt_unverified", "round_unverified"}
 # A role's report keeps only what carries no row data, plus the keys of rows the role can read.
 PUBLIC = ("reason", "severity", "witness", "relation")
 PUBLIC_DETAIL = {"manifest_mismatch", "manifest_check_red", "unknown_rule", "unknown_variable",
@@ -61,7 +63,7 @@ def check(proof: dict, manifest: dict, rules: dict, read_bytes, role: str | None
 
 def check_epoch(witnesses: list, manifest: dict, rules: dict, read_bytes, *, derived: set, full=None,
                 seals=(), calc_witnesses=(), calc_ir=None, bundle=None, check_metadata=None,
-                completeness_authority=()) -> dict:
+                completeness_authority=(), evidence=None) -> dict:
     """Every chosen witness of an epoch at once, against the complete snapshots, before a publication.
 
     Each witness is checked as in `check`, the graph of all of them is acyclic and every derived premise
@@ -100,6 +102,9 @@ def check_epoch(witnesses: list, manifest: dict, rules: dict, read_bytes, *, der
     candidate of the manifest's `completeness_receipts` that completeness.verify admits against the trusted
     contexts in `completeness_authority` (from the verified definition or the protected caller, never from the
     manifest): `receipt_not_admitted`. A candidate that is not admitted is `receipt_unverified`, a warning.
+    With `evidence` (rezono_checker.evidence.Evidence, the one the epoch was admitted with) the checker admits
+    again instead, and every protected snapshot must be exactly its admitted rows (evidence.check). Without it,
+    no row of `verified_member`, `verified_round` or `verified_round_member` was admitted.
     """
     findings = []
     if bundle is not None or check_metadata is not None:  # either alone is refused: nothing to compare
@@ -111,8 +116,12 @@ def check_epoch(witnesses: list, manifest: dict, rules: dict, read_bytes, *, der
         return _report(proof, None, set(), findings)
     findings.extend(check_state_projections(manifest, read_bytes, snapshots, full=full))
     if full is None:  # admission is on the complete side; a role's proof only shows what it may read
-        findings += completeness.check(manifest, read_bytes, completeness_authority,
-                                       snapshots.get(completeness.RELATION))
+        if evidence is None:
+            findings += completeness.check(manifest, read_bytes, completeness_authority,
+                                           snapshots.get(completeness.RELATION))
+            findings += admission.check(None, snapshots, admission.PROTECTED[1:])
+        else:
+            findings += admission.check(evidence, snapshots)
     rows, groups = _rows(snapshots, findings), {}
     for s in seals:
         _check_seal(s, rows, findings)

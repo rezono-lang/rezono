@@ -58,6 +58,8 @@ classes:
       build: {range: ArchivedFile, inlined: true, description: "The build record (build.json): the compiler, the publisher's source, every library with its exact version, Python, platform, the hashes of the locks and the effective profile. Its hash names the build; the same build and inputs give the same bytes (docs/ci.md#8-pinned-versions)."}
       pending: {multivalued: true, range: PendingInput, inlined_as_list: true, description: "Input that waits since this epoch, per source and per offloaded step (contracts/freshness.yaml). Read at publication; the cartouche shows it."}
       completeness_receipts: {multivalued: true, range: ArchivedFile, inlined_as_list: true, description: "Optional pinned candidate completeness receipts (decisions/scoped-completeness.md). Candidates only: they confer no authority and stay on the complete verification side, never in a role's manifest."}
+      rounds: {multivalued: true, range: ArchivedFile, inlined_as_list: true, description: "Optional pinned candidate round claims (decisions/admission-transport.md). Candidates only, like completeness_receipts: they confer no authority and stay on the complete verification side, never in a role's manifest."}
+      evidence: {range: AdmittedEvidence, inlined: true, description: "Set when the epoch was admitted with evidence (decisions/admission-transport.md, section 2). It names the trusted context and the submitted index it was admitted with, by hash, so a later replay of this publication can rebuild the Evidence and admit again. The manifest only names; the authority stays with the protected caller, which pins the context hash itself and passes it to the replay (decisions/admission-transport.md, section 4). A replay refuses a context that differs from that pin or lies outside observations/retained/. The context's bytes are not published; like completeness_receipts this stays on the complete verification side, never in a role's manifest."}
       variant: {range: Variant, inlined: true, description: "Set on a variant manifest (id v-<sweep>-<index>-<epoch>): base_manifest is the main manifest it varies. Never the current state of main."}
 
   Diagnosis:
@@ -165,6 +167,12 @@ classes:
       source: {required: true, description: "Where the image comes from, pinned."}
       licence: {required: true, description: An SPDX id or a licence file in the pack.}
       uri: {required: true, description: S3 URI of the image; resolved through the storage port.}
+
+  AdmittedEvidence:
+    description: The pinned references an epoch's admission step read (decisions/admission-transport.md).
+    attributes:
+      context: {range: ArchivedFile, inlined: true, required: true, description: "The trusted context (observations/retained/context.json) by its hash."}
+      index: {range: ArchivedFile, inlined: true, description: "The submitted index (observations/submitted/index.json) by its hash; absent when nothing was submitted."}
 
   ArchivedFile:
     description: One file archived next to the publication (compiled output or the build record).

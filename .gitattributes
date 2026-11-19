@@ -76,12 +76,20 @@ tests/fixtures/neutral/messages/*.mf2 pack-definition
 tests/fixtures/neutral/rules/*.dl pack-definition
 tests/fixtures/neutral/calc/*.yaml pack-definition
 
-run/packs/invoice-drift/pack.yaml pack-definition
-run/packs/invoice-drift/channels.yaml pack-definition
-run/packs/invoice-drift/schema/**/*.yaml pack-definition
-run/packs/invoice-drift/labels/*.yaml pack-definition
-run/packs/invoice-drift/messages/*.mf2 pack-definition
-run/packs/invoice-drift/rules/*.dl pack-definition
+run/packs/*/pack.yaml pack-definition
+run/packs/*/channels.yaml pack-definition
+run/packs/*/schema/**/*.yaml pack-definition
+run/packs/*/rezono/**/*.rezono pack-definition
+run/packs/*/rezono/**/*.json pack-definition
+run/packs/*/labels/*.yaml pack-definition
+run/packs/*/messages/*.mf2 pack-definition
+run/packs/*/rules/*.dl pack-definition
+run/packs/*/calc/*.yaml pack-definition
+run/packs/*/sweeps.yaml pack-definition
+run/packs/*/questions.yaml pack-definition
+run/packs/*/views.yaml pack-definition
+run/packs/*/icons/*.svg pack-definition
+run/packs/*/icons/sources.yaml pack-definition
 
 edge/plugins/connectors/fixtures/*/pack.yaml pack-definition
 edge/plugins/connectors/fixtures/*/channels.yaml pack-definition

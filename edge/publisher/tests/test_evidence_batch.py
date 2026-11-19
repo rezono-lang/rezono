@@ -84,17 +84,13 @@ def layout(bucket, candidate_content=CONTENT):
     candidate = pin(bucket, "observations/submitted/receipt.json", submitted | {"id": identity})
     context = pin(bucket, "observations/retained/context.json", {"completeness": [trusted], "rounds": []})
     index = pin(bucket, "observations/submitted/index.json", {"completeness_receipts": [candidate], "rounds": []})
-    expected = (identity, SOURCE["name"], canonical_sha256(trusted["scope"]), canonical_sha256(trusted["cut"]),
+    # The scope digest names its definition by the hash of the bytes it pins, not by where a copy is stored.
+    scope = {**trusted["scope"], "definition": trusted["scope"]["definition"]["sha256"]}
+    expected = (identity, SOURCE["name"], canonical_sha256(scope), canonical_sha256(trusted["cut"]),
                 trusted["inventory"]["sha256"], trusted["content"]["sha256"])
     return context, index, candidate, expected
 
 
-@pytest.mark.xfail(strict=True, raises=(ImportError, CompileError, TypeError),
-                   reason="M2: Waits for checker/tests/test_evidence_admission.py--test_evidence_admits_receipts_from_the_"
-                          "pinned_context and compiler/tests/test_protected_admission_relations.py--test_admission_"
-                          "relations_are_protected_inputs. Then give batch.epoch the keyword evidence and Epoch the "
-                          "field evidence, and insert the admitted rows as base rows before the rules, as "
-                          "decisions/admission-transport.md sections 2 and 5 fix. Publisher batch only.")
 def test_batch_admits_evidence_before_the_rules(tmp_path):
     from rezono_checker.evidence import Evidence
 

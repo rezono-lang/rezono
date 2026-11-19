@@ -162,10 +162,14 @@ def _git_changed_files(root: Path, base_ref: str | None, before_sha: str | None)
 # A change to a shared library, fixture tree or unknown component runs everything.
 FILE_CONSUMERS = {
     "k8s-admission": ("loop",),
-    "loop": ("run",),
+    # A pull request also runs examples for a loop change (PR_FILE_CONSUMERS), so the queue does too.
+    "loop": ("run", "examples"),
     "run": (),
     "deploy/profiles/edge": ("edge/publisher",),
 }
+# Consumers that end a closure they are reached by. A change in such a component
+# itself still runs everything, since it is not in FILE_CONSUMERS.
+TERMINAL_CONSUMERS = frozenset({"examples"})
 
 
 def outside_cluster_plugin(path: Path, manifest: Path) -> bool:
@@ -201,6 +205,10 @@ def affected_components(
             return list(components)
         selected.add(owner.folder)
         source = Path(path)
+        # What a pull request routes a file to as its reader runs in the queue as well.
+        selected.update(reader for reader in shared_readers(path) or () if reader in by_folder)
+        if source.suffix == ".dl" and "fixtures" not in source.parts and "compiler" in by_folder:
+            selected.add("compiler")
         manifest = ROOT / owner.folder / "pyproject.toml"
         if (owner.kind == "contracts" or source.name in {"pyproject.toml", "package.json", "conftest.py"}
                 or (manifest.exists() and not (owner.folder == "loop" and outside_cluster_plugin(source, manifest)))):
@@ -211,11 +219,14 @@ def affected_components(
         # entry points and for production inputs.
         pending.append(owner.folder)
     visited: set[str] = set()
+    changed_owners = set(pending)
     while pending:
         folder = pending.pop()
         if folder in visited:
             continue
         visited.add(folder)
+        if folder in TERMINAL_CONSUMERS and folder not in changed_owners:
+            continue
         if folder not in FILE_CONSUMERS:
             return list(components)
         for consumer in FILE_CONSUMERS[folder]:
@@ -247,6 +258,11 @@ PR_FILE_CONSUMERS = {
     # examples/test_slip_claims.py draws the slip with the helpers of tests/slip (decisions/viewer-slip.md).
     "tests/slip": ("examples",),
 }
+# A pull request runs these components only when it changes them itself, a path it
+# changes is read by them, or the selection falls back to everything. As dependents
+# of another component they run in the merge queue (decisions/pr-deferred-dependents.md).
+# The empty set restores them as pull request dependents.
+PR_DEFERRED_DEPENDENTS = frozenset({"loop", "run"})
 # These are test entry points and a private subprocess helper, rather than inputs to
 # the installed packages. Their shared corpus is still routed by SHARED_READERS.
 PR_TEST_LEAVES = frozenset({
@@ -283,6 +299,7 @@ SHARED_READERS = {
     "docs/semantics/witness-alternatives-cases.yaml": ("checker", "compiler"),
     "docs/formal.md": ("examples",),
     "docs/tutorial.md": ("examples",),
+    "rezono/README.md": ("examples",),
     "decisions/language-native-rules.md": ("compiler",),
     "decisions/publication-case-pins.md": ("compiler",),
     "decisions/conformance-*.md": ("compiler",),
@@ -300,7 +317,49 @@ SHARED_READERS = {
     "edge/plugins/*/plugin.yaml": ("contracts",),
     "contracts/output-index.yaml": ("edge/publisher",),
     "viewer/src/lib/canon.ts": ("compiler", "edge/publisher", "rezono"),
+    # Directories of one component that another component's tests read as data.
+    # rezono/test/test_message_catalogue.py reads the compiler's sources for the codes they report.
+    "compiler/rezono_compiler/": ("rezono",),
+    "run/packs/": ("compiler",),
+    "contracts/fixtures/": ("edge/publisher", "examples"),
+    # compiler/tests/test_domain_free.py scans the readers' sources and tests for domain words.
+    "edge/gate/": ("compiler",),
+    "tests/slip/": ("compiler",),
+    "tools/mcp/": ("compiler",),
+    "tools/repl/": ("compiler",),
+    # The build pack: the loop tests read its schema and rules, and the converter
+    # regression parses every tracked Datalog file.
+    "build/": ("compiler", "loop"),
+    # examples/test_front_door.py runs the readme's blocks through the quickstart check.
+    "README.md": ("examples",),
+    "CONTRIBUTING.md": ("examples",),
+    "scripts/check-quickstart.sh": ("examples",),
 }
+
+# Outside every component, these run or configure each component job, so a change
+# to them keeps the full selection, also for a pull request.
+FULL_SELECTION_PATHS = (
+    ".github/workflows/ci.yml", ".github/workflows/disposable-cluster.yml",
+    ".github/workflows/python-environment/", "blocked/",
+    "scripts/check-pinned.py", "scripts/components.py", "scripts/fast_check.py",
+    "scripts/install-souffle.sh", "scripts/red_list.py",
+)
+# What scripts/components.py itself reads while it runs one component's shards.
+JOB_INPUTS = {
+    ".github/workflows/compiler-duration-profile.json": ("compiler",),
+    ".github/workflows/publication_fixture.py": ("examples",),
+}
+# Scripts, other workflows and actions select the components that name them, directly
+# or through another file of the same area. Without such a reader they select none:
+# other workflows do not run for a pull request, ci.yml runs the rest in jobs that
+# always run, and the selection's own regressions run in discover whatever it selects.
+SCRIPTS = "scripts/"
+GITHUB = ".github/"
+NAMED_AREAS = (SCRIPTS, GITHUB)
+# ci.yml names what its always-running jobs run; what its component jobs run is a
+# full-selection path (test_component_job_scripts_keep_the_full_selection).
+AREA_CALLERS_IGNORED = frozenset({".github/workflows/ci.yml"})
+TEST_FILE = re.compile(r"(?:test_[^/]*|[^/]*_test)\.py")
 
 PYTHON_NAME = r"[A-Za-z0-9](?:[A-Za-z0-9_.-]*[A-Za-z0-9])?"
 SPECIFIER = r"(?:===|==|!=|<=|>=|~=|<|>)\s*[^\s,;()]+"
@@ -400,6 +459,109 @@ def independent_test_leaves(root: Path, revision: str, leaves: dict[str, list[st
                 if name not in (manual_references or {}):
                     return False
     return True
+
+
+def files_naming(root: Path, revision: str, names: set[str], *pathspecs: str) -> set[str]:
+    """Tracked files at revision whose text contains any of the names."""
+    patterns = [arg for name in sorted(names) for arg in ("-e", name)]
+    result = subprocess.run(["git", "grep", "-F", "-I", "-l", "-z", *patterns, revision, "--", *pathspecs],
+                            cwd=root, capture_output=True, check=False)
+    if result.returncode not in (0, 1):
+        raise ValueError("cannot search the readers of a path")
+    prefix = revision + ":"
+    found = set()
+    for item in result.stdout.split(b"\0"):
+        if item:
+            entry = os.fsdecode(item)
+            if not entry.startswith(prefix):
+                raise ValueError("unexpected search result")
+            found.add(entry[len(prefix):])
+    return found
+
+
+def area_names(path: str) -> set[str]:
+    """The names by which a file of a named area is referred to."""
+    parts = Path(path).parts
+    if parts[:2] == (".github", "actions") and len(parts) > 3:
+        # An action is named by its directory; the stem of action.yml names nothing.
+        return {parts[2]} if Path(path).stem in {"action", "README"} else {parts[2], Path(path).stem}
+    return {Path(path).stem}
+
+
+def area_readers(root: Path, revisions: tuple[str, ...], path: str, folders: set[str]) -> set[str] | None:
+    """Components that name a script, workflow or action, or a file of its area that names it.
+
+    None means a full-selection path names it, so every component job may run it."""
+    area = next(prefix for prefix in NAMED_AREAS if path.startswith(prefix))
+    readers: set[str] = set()
+    for revision in revisions:
+        files, names = {path}, area_names(path)
+        while True:
+            callers = files_naming(root, revision, names, area) - files - AREA_CALLERS_IGNORED
+            if not callers:
+                break
+            if any(caller.startswith(FULL_SELECTION_PATHS) for caller in callers):
+                return None
+            files |= callers
+            for caller in callers:
+                names |= area_names(caller)
+        for reader in files_naming(root, revision, names, ".", *(f":(exclude,top){a}" for a in NAMED_AREAS)):
+            if owner := component_owner(reader, folders):
+                readers.add(owner)
+    return readers
+
+
+GENERIC_STEMS = frozenset({"__init__", "__main__", "conftest", "index", "package", "package-lock", "pyproject",
+                           "README", "setup"})
+
+
+def reference_patterns(path: str, owner: str | None) -> list[re.Pattern[str]]:
+    """How another file names a changed file: its file name, its module, or an import of it.
+
+    None of them for an entry point or a manifest, which nothing names this way."""
+    source = Path(path)
+    if source.stem in GENERIC_STEMS:
+        return []
+    stem = re.escape(source.stem)
+    patterns = [rf"(?<![\w.-]){re.escape(source.name)}\b", rf"/{stem}(?:\.\w+)?['\x22`]"]
+    if source.suffix == ".py" and owner:
+        module = ".".join(Path(path[len(owner) + 1:]).with_suffix("").parts)
+        package, _, name = module.rpartition(".")
+        if package:
+            patterns += [rf"(?<!\w){re.escape(module)}\b",
+                         rf"\bfrom\s+{re.escape(package)}\s+import\s[^\n]*\b{re.escape(name)}\b"]
+        else:
+            patterns.append(rf"^\s*(?:from\s+{stem}\s+import\b|import\s+{stem}\b)")
+    return [re.compile(pattern, re.MULTILINE) for pattern in patterns]
+
+
+def names_file(root: Path, revisions: tuple[str, ...], path: str, owner: str | None, area: str) -> bool:
+    """Whether a file under area names the changed path, in either tree."""
+    patterns = reference_patterns(path, owner)
+    if not patterns:
+        return False
+    for revision in revisions:
+        for candidate in sorted(files_naming(root, revision, {Path(path).stem}, area)):
+            text = git_output(root, "show", f"{revision}:{candidate}").decode("utf-8", "replace")
+            if any(pattern.search(text) for pattern in patterns):
+                return True
+    return False
+
+
+def own_readers(path: str) -> set[str]:
+    """The shared readers of a file inside a component, apart from the pack readers of examples/."""
+    readers: set[str] = set()
+    for pattern, owners in SHARED_READERS.items():
+        if pattern == "examples/":
+            continue
+        if path.startswith(pattern) if pattern.endswith("/") else fnmatchcase(path, pattern):
+            readers.update(owners)
+    return readers
+
+
+def independent_test_file(root: Path, revisions: tuple[str, ...], path: str, owner: str, folders: set[str]) -> bool:
+    """A test file that nothing outside its component names in either tree."""
+    return all(independent_test_leaves(root, revision, {owner: [path]}, folders) for revision in revisions)
 
 
 def language_coverage_only(root: Path, base: str, head: str, changed: list[str], folders: set[str]) -> bool | None:
@@ -542,56 +704,126 @@ def declared_dependents(root: Path, revision: str, folders: set[str],
 
 def pull_request_components(components: list[Component], root: Path, base_ref: str) -> list[Component]:
     """Select consumers of changes against the exact PR range, without executing manifests."""
+    return pull_request_selection(components, root, base_ref)[0]
+
+
+def pull_request_selection(components: list[Component], root: Path,
+                           base_ref: str) -> tuple[list[Component], dict[str, str]]:
+    """The selected components, each with the changed path that selected it and how."""
     folders = {c.folder for c in components}
+    reasons: dict[str, str] = {}
+
+    def everything(why: str) -> tuple[list[Component], dict[str, str]]:
+        return list(components), {c.folder: f"everything: {why}" for c in components}
+
+    origins: dict[str, str] = {}
+
+    def add(target: set[str], folder: str, path: str, how: str = "") -> None:
+        target.add(folder)
+        if folder not in reasons:
+            reasons[folder], origins[folder] = f"`{path}`{how}", path
+
     direct, pending = set(), set()
     leaves: dict[str, list[str]] = {}
     try:
         base, head, changed = pull_request_range(root, base_ref)
+        revisions = (base, head)
         coverage = language_coverage_only(root, base, head, changed, folders)
         if coverage is False:
-            return list(components)
+            return everything("a language coverage file has a reader outside the compiler")
         if coverage:
-            return [component for component in components if component.folder == "compiler"]
+            return ([component for component in components if component.folder == "compiler"],
+                    {"compiler": "the language coverage files only"})
         for path in changed:
             owner = component_owner(path, folders)
             readers = shared_readers(path)
+            source = Path(path)
+            # A test file that nothing outside its component names runs with that component alone.
+            if (owner and path not in PR_TEST_LEAVES and TEST_FILE.fullmatch(source.name)
+                    and not (owner == "loop" and not outside_cluster_plugin(source, root / "loop/pyproject.toml"))
+                    and independent_test_file(root, revisions, path, owner, folders)):
+                add(direct, owner, path, ", a test file named only inside its component")
+                for reader in sorted(own_readers(path) & folders - {owner}):
+                    add(direct, reader, path, ", which it reads")
+                continue
             if readers is not None:
-                direct.update(readers & folders)
+                for reader in sorted(readers & folders):
+                    add(direct, reader, path, ", which it reads")
                 if path == "viewer/src/lib/canon.ts":
-                    pending.update(readers & folders)
+                    for reader in sorted(readers & folders):
+                        add(pending, reader, path, ", which it reads")
             if owner:
-                source = Path(path)
                 # The converter regression parses every tracked non-fixture Datalog file.
                 if source.suffix == ".dl" and "fixtures" not in source.parts:
-                    direct.add("compiler")
+                    add(direct, "compiler", path, ", a Datalog file the converter regression parses")
                 if owner == "loop" and not outside_cluster_plugin(source, root / "loop/pyproject.toml"):
-                    return list(components)  # the shipped plugin runs in every pytest process
+                    return everything(f"`{path}` is in the cluster plugin that every pytest process loads")
                 if path in PR_TEST_LEAVES:
-                    direct.add(owner)
+                    add(direct, owner, path, ", a declared test leaf")
                     leaves.setdefault(owner, []).append(path)
                 else:
-                    pending.add(owner)
-            elif readers is None or path.startswith("edge/plugins/"):
-                return list(components)
+                    add(pending, owner, path)
+            elif path.startswith(FULL_SELECTION_PATHS):
+                return everything(f"`{path}` runs in or configures every component job")
+            elif path in JOB_INPUTS:
+                for reader in sorted(set(JOB_INPUTS[path]) & folders):
+                    add(direct, reader, path, ", which its shards read")
+            elif readers is not None and not path.startswith("edge/plugins/"):
+                continue
+            elif path.startswith(NAMED_AREAS):
+                found = area_readers(root, revisions, path, folders)
+                if found is None:
+                    return everything(f"`{path}` is named by a file that every component job runs")
+                for reader in sorted(found & folders):
+                    add(direct, reader, path, ", which it names")
+            else:
+                return everything(f"`{path}` has no known reader")
         if not pending and not leaves:
-            return [c for c in components if c.folder in direct]
-        if leaves and not all(independent_test_leaves(root, revision, leaves, folders) for revision in (base, head)):
-            return list(components)
+            return [c for c in components if c.folder in direct], reasons
+        if leaves and not all(independent_test_leaves(root, revision, leaves, folders) for revision in revisions):
+            return everything("a declared test leaf is named outside its component")
         cache: dict[str, bytes] = {}
         edges: dict[str, set[str]] = {}
         for graph in (FILE_CONSUMERS, PR_FILE_CONSUMERS,
                       declared_dependents(root, base, folders, cache), declared_dependents(root, head, folders, cache)):
             for source, consumers in graph.items():
                 edges.setdefault(source, set()).update(set(consumers) & folders)
-    except (OSError, ValueError, AttributeError, KeyError, TypeError, subprocess.CalledProcessError):
-        return list(components)
-    affected = set()
-    while pending:
-        folder = pending.pop()
-        if folder not in affected:
-            affected.add(folder)
-            pending.update(edges.get(folder, ()))
-    return [c for c in components if c.folder in direct | affected]
+    except (OSError, ValueError, AttributeError, KeyError, TypeError, subprocess.CalledProcessError) as error:
+        return everything(f"the selection failed ({type(error).__name__})")
+    def names_a_change(folder: str) -> str | None:
+        """A changed file of another component that the deferred component names, in either tree."""
+        for path in changed:
+            owner = component_owner(path, folders)
+            if owner != folder and names_file(root, revisions, path, owner, folder + "/"):
+                return path
+        return None
+
+    # A deferred dependent is still traversed, so what depends on it runs. It runs
+    # itself when its files name a changed file: then it reads that file directly.
+    touched = direct | pending
+    affected, deferred = set(), set()
+    queue = sorted(pending)
+    try:
+        while queue:
+            folder = queue.pop(0)
+            if folder in affected or folder in deferred:
+                continue
+            if folder in PR_DEFERRED_DEPENDENTS and folder not in touched:
+                if (path := names_a_change(folder)) is not None:
+                    reasons[folder], origins[folder] = f"`{path}`, which it names", path
+                    affected.add(folder)
+                else:
+                    deferred.add(folder)
+            else:
+                affected.add(folder)
+            for consumer in sorted(edges.get(folder, ())):
+                if consumer not in reasons:
+                    reasons[consumer] = f"`{origins[folder]}` through `{folder}`"
+                    origins[consumer] = origins[folder]
+                queue.append(consumer)
+    except (OSError, ValueError, subprocess.CalledProcessError) as error:
+        return everything(f"the selection failed ({type(error).__name__})")
+    return [c for c in components if c.folder in direct | affected], reasons
 
 
 # Files are assigned to jobs round-robin, the examples by their measured seconds.
@@ -1059,10 +1291,21 @@ def main() -> int:
         pull_request = os.environ.get("GITHUB_EVENT_NAME") == "pull_request"
         comps = discover_components(keep_invalid_node=pull_request)
         if pull_request:
-            active = pull_request_components(comps, ROOT, args.base_ref)
+            active, reasons = pull_request_selection(comps, ROOT, args.base_ref)
+            summary = ["### Component jobs and the path that selected each", ""]
+            summary += [f"- `{c.folder}`: {reasons.get(c.folder, 'selected')}" for c in active]
+            if not active:
+                summary.append("- none: every changed path has no component reader")
         else:
             changed = _git_changed_files(ROOT, args.base_ref or None, args.before or None)
             active = affected_components(comps, changed)
+            event = os.environ.get("GITHUB_EVENT_NAME") or "local"
+            summary = ["### Component jobs", "",
+                       f"The {event} selection is unchanged: {len(active)} of {len(comps)} components."]
+        summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
+        if summary_path:
+            with open(summary_path, "a", encoding="utf-8") as fh:
+                fh.write("\n".join(summary) + "\n")
         py_items = [
             {"folder": c.folder, "kind": c.kind, "shard": shard, "total": total,
              "label": c.folder if total == 1 else f"{c.folder} {shard + 1}/{total}"}
