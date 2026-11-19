@@ -52,3 +52,17 @@ def test_round_submit_follows_the_certified_claim():
     assert submit_refusal(crashed, worker="worker-1", member="protect") == "worker_stopped"
     assert submit_refusal(crashed, worker="worker-2", member="protect") == "not_claimant"
     assert submit_refusal(crashed, worker="worker-2", member="expose") is None
+
+
+def test_round_submit_refuses_an_unknown_stopped_or_submitted_set():
+    from loop.round_submit import record_submit, submit_refusal
+
+    # A missing set is unknown, not empty: the guard cannot be checked, so submission is refused.
+    no_stopped = {key: value for key, value in deepcopy(STATE).items() if key != "stopped"}
+    no_submitted = {key: value for key, value in deepcopy(STATE).items() if key != "submitted"}
+    neither = {key: value for key, value in deepcopy(STATE).items() if key not in ("stopped", "submitted")}
+    assert submit_refusal(no_stopped, worker="worker-1", member="protect") == "stopped_unknown"
+    assert submit_refusal(no_submitted, worker="worker-1", member="protect") == "submitted_unknown"
+    assert submit_refusal(neither, worker="worker-1", member="protect") == "stopped_unknown"
+    with pytest.raises(ValueError, match="submitted_unknown"):
+        record_submit(no_submitted, worker="worker-1", member="protect")

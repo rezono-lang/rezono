@@ -65,7 +65,7 @@ def release_records(records):
     strict=True,
     raises=AssertionError,
     reason=(
-        "Read decisions/build-claim-release.md sections 1 and 3. Declare BuildClaimDelete and BuildClaimRefRead "
+        "extra: Read decisions/build-claim-release.md sections 1 and 3. Declare BuildClaimDelete and BuildClaimRefRead "
         "in a new build/schema/claim_release.yaml and derive build_claim_released, build_claim_release_discarded "
         "and build_claim_release_pending in a new build/rules/claim_release.dl. Write only in those two build files."
     ),

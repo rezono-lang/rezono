@@ -60,7 +60,7 @@ def _evidence(evidence, scope, retained):
     strict=True,
     raises=(AssertionError, ImportError, TypeError),
     reason=(
-        "Read decisions/scoped-completeness.md sections 1 and 3 and decisions/admission-transport.md section 6. "
+        "extra: Read decisions/scoped-completeness.md sections 1 and 3 and decisions/admission-transport.md section 6. "
         "Derive complete_sweep only with a verified receipt for the sweep scope (verified_receipt and "
         "verified_member), so the pinned two-node inventory decides coverage. Keep the interval, terminal "
         "reports, gap and loss requirements. Write in packs/std-loop (complete_sweep.dl) and its schema. Waits "
