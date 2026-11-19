@@ -57,6 +57,12 @@ def test_disk_observation():
         changed(lambda d: d.append(second_free)),
         changed(lambda d: d[2]["children"][1].update(mountpoints=["/var"])),
         changed(lambda d: d[1]["mountpoints"].__setitem__(0, "/")),
+        # Unknown is not free: a disk without a reported file system type or mount points.
+        changed(lambda d: d[1].pop("fstype")),
+        changed(lambda d: d[1].pop("mountpoints")),
+        changed(lambda d: d[1].update(mountpoints=None)),
+        changed(lambda d: d[1].update(children=None)),
+        changed(lambda d: d.__setitem__(1, {"name": "nvme1n1", "type": "disk"})),
         b"not json",
     ]
     for raw in rejected:

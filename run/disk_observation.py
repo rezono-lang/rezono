@@ -20,7 +20,16 @@ def _has_root(node: dict) -> bool:
 
 
 def _free(node: dict) -> bool:
-    return not node.get("children") and not node.get("fstype") and not _mounts(node)
+    # Unknown is not free: lsblk reports FSTYPE and MOUNTPOINTS for every device it lists,
+    # so a missing or malformed value means the state was not observed. Only `children`
+    # is omitted by lsblk when a device has none.
+    if "fstype" not in node or not isinstance(node["fstype"], (str, type(None))):
+        return False
+    if not isinstance(node.get("mountpoints"), list):
+        return False
+    if node.get("children", []) != []:
+        return False
+    return not node["fstype"] and not _mounts(node)
 
 
 def _identity(name: str, by_id: Mapping[str, str]) -> str:
