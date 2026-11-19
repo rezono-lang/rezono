@@ -3,8 +3,9 @@
 The pack publishes nothing on its own: a consumer gives it roles and read grants. examples/subsidy is that
 consumer here. It is published twice: once over std-access with its existing schema and rule files, kept as
 the oracle in fixtures/std-access-legacy, and once over std-access as the repository holds it. The two
-publications must agree on files, bundle (places aside) and the relations each role sees
-(decisions/language-semantic-publication.md, decisions/language-first-packs.md)."""
+publications must agree on files, bundle (places and the pin of std-access aside) and the relations each role
+sees (decisions/language-semantic-publication.md, decisions/language-first-packs.md). Each publication's pin of
+std-access is checked against its own bytes before it is set aside."""
 
 from pathlib import Path
 import json
@@ -50,6 +51,7 @@ def published(tmp_path, form):
         if entry["name"] == "std-access":
             entry["sha256"] = modules.pack_hash(access)
     (consumer / "pack.yaml").write_text(yaml.safe_dump(consumer_meta, sort_keys=False), encoding="utf-8")
+    pin = modules.pack_hash(access)
     files = emit.compile_pack(pack.read(consumer))
     epoch = batch.epoch(consumer, epoch=1, knowledge_time="2026-11-10T00:00:00Z", sources=[("rules", "test")])
     bucket = store.FileStore(tmp_path / f"{form}-store")
@@ -63,12 +65,13 @@ def published(tmp_path, form):
         seen[role] = {name[len("relations/"):-len(".json")]: sorted(repr(row["key"]) for row in
                                                                      json.loads(bucket.get(key)))
                       for name, key in objects.items() if name.startswith("relations/")}
-    return files, seen
+    return files, seen, pin
 
 
 def unplaced(value):
-    """The bundle with each place in std-access reduced to one name: its file and lines may differ."""
-    sources = {MODULE, *LEGACY} | {f"std-access/{name}" for name in (MODULE, *LEGACY)}
+    """The bundle with each place in std-access reduced to one name: its file and lines may differ. An imported
+    place is named `std-access:<file>` (compiler/rezono_compiler/spans.py, `where`)."""
+    sources = {MODULE, *LEGACY} | {f"std-access{sep}{name}" for name in (MODULE, *LEGACY) for sep in "/:"}
     if isinstance(value, dict):
         if value.get("file") in sources:
             return {"file": "std-access"}
@@ -78,11 +81,21 @@ def unplaced(value):
     return value
 
 
+def unpinned(bundle, pin):
+    """The bundle with the pin of std-access set aside, after checking it against this publication's own bytes:
+    each form pins its own files, so the hashes differ while the meaning agrees."""
+    imports = [entry for entry in bundle.get("imports", []) if entry["name"] == "std-access"]
+    assert [entry["sha256"] for entry in imports] == [pin], imports
+    for entry in imports:
+        entry["sha256"] = "own bytes"
+    return bundle
+
+
 def meaning(result):
-    files, seen = result
+    files, seen, pin = result
     return {
         "files": sorted(files),
-        "bundle": unplaced(json.loads(files["bundle/schema-bundle.json"])),
+        "bundle": unplaced(unpinned(json.loads(files["bundle/schema-bundle.json"]), pin)),
         "seen": seen,
     }
 
@@ -94,7 +107,7 @@ def test_the_oracle_is_the_existing_std_access():
 
 
 def test_std_access_publishes_through_its_consumer(tmp_path):
-    _, seen = published(tmp_path, "legacy")
+    _, seen, _ = published(tmp_path, "legacy")
     # Every role reads the articles of the scheme; some roles read the applications and some read none
     # (examples/subsidy, rules/access.dl). Without these the comparison below could agree on empty worlds.
     readers = {role: relations for role, relations in seen.items() if role != "checker"}
@@ -108,13 +121,9 @@ def test_std_access_publishes_through_its_consumer(tmp_path):
     "M3: decisions/language-first-packs.md: Replace schema/access.yaml and rules/access.dl of packs/std-access "
     "with rezono/access.rezono and rezono/access.json, declared in its pack.yaml, starting from what "
     "scripts/convert_pack.py proposes, so that examples/subsidy publishes the same files, bundle (places "
-    "aside) and relations per role over it as over the oracle in "
+    "and the pin of std-access aside) and relations per role over it as over the oracle in "
     "compiler/tests/rezono/fixtures/std-access-legacy. Update the sha256 of std-access in every pack.yaml "
-    "that imports it, and onwards for their importers; this task may change those lines. Waits for "
-    "test_lower_schema_annotations, which lowers the schema metadata of the pack. Learned: the converted pack "
-    "agrees on files and role relations, but meaning() still differs on two points the decision lets differ: "
-    "imported places are named std-access:<file> (compiler/rezono_compiler/spans.py), which unplaced() does "
-    "not match, and bundle imports[].sha256 pins each form's own std-access bytes."))
+    "that imports it, and onwards for their importers; this task may change those lines."))
 def test_whole_std_access_has_the_same_meaning(tmp_path):
     expected = meaning(published(tmp_path, "legacy"))
     actual = meaning(published(tmp_path, "rezono"))
