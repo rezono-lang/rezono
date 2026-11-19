@@ -1,0 +1,36 @@
+rezono 0
+pack library
+
+-- Een kleine, geldige toestand: alle violation views zijn leeg.
+
+dataset `valid`
+  fact Branch
+    | code    | name                   | address                                                         |
+    | centrum | "Centrale bibliotheek" | {street: "Markt 1", city: "Middelburg", postcode: "4331 LK"} |
+    | oost    | "Vestiging Oost"       | {street: "Oostweg 5", city: "Middelburg"}                       |
+  fact Category
+    | id | name         | parent |
+    | c1 | "Romans"     | -      |
+    | c2 | "Detectives" | c1     |
+    | c3 | "Natuur"     | -      |
+  fact Work
+    | id | title                  | category | year | authors                          |
+    | w1 | "De avonden"           | c1       | 1947 | ["Gerard Reve"]                  |
+    | w2 | "Moord in de leeszaal" | c2       | -    | ["A. Schrijver", "B. Schrijver"] |
+  fact Copy
+    | barcode | work | branch  | reference_only |
+    | 1001    | w1   | centrum | false          |
+    | 1002    | w1   | oost    | false          |
+    | 1003    | w2   | centrum | true           |
+  fact Member
+    | id | name | membership | home_branch |
+    | m1 | "An" | adult      | centrum     |
+    | m2 | "Bo" | youth      | -           |
+  fact Staff
+    | id | name  | branch  |
+    | s1 | "Cas" | centrum |
+    | s2 | "Dee" | oost    |
+  fact Loan
+    | id | copy | member | lent_by | lent_on    |
+    | l1 | 1001 | m1     | s1      | 2026-10-01 |
+    | l2 | 1002 | m2     | s2      | 2026-10-03 |
