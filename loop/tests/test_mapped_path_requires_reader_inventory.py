@@ -174,8 +174,12 @@ def submission(source, base, head, engine, path, evidence):
            "decisions/admission-transport.md section 6. Write in build/ (selection.dl and its schema). Waits for "
            "edge/publisher/tests/test_completeness_publish.py--test_publisher_admits_receipts_only_with_a_trusted_context "
            "(the batch boundary admits the receipt and fills verified_receipt) and for "
-           "test_absent_checked_requires_readable_coverage (std-completeness supplies complete). Today "
-           "rezono_checker.evidence is missing (ImportError).",
+           "test_absent_checked_requires_readable_coverage (std-completeness supplies complete). Today the receipt "
+           "is admitted, but the fixture keys the reader map as [\"path-readers\", path, kind] with the readers only "
+           "in the content, so verified_member cannot tell the dropped reader of alpha/engine.py from the readerless "
+           "decisions/note.md (AssertionError: reader). Needs planner evidence that keys each reader edge in the "
+           "inventory (admission-transport.md section 6), and test_build_selection_matches_python still expects a "
+           "narrowed selection without any verified receipt.",
 )
 def test_mapped_path_requires_reader_inventory(tmp_path):
     source = tmp_path / "source"
