@@ -38,6 +38,7 @@ def main():
         print(f"{'ALLOW' if actual else 'DENY'} without planner: {label}")
     planner_cases(reason, function)
     workflow_cases()
+    read_cases(function)
 
 
 def workflow_cases():
@@ -52,6 +53,47 @@ def workflow_cases():
             if errors or (path.endswith("ci.yml") and f"CHANGED {path}" not in notes):
                 raise AssertionError(f"{status} {path} with planner: errors {errors}, notes {notes}")
             print(f"DENY without planner, ALLOW with planner: {status} {path}")
+
+
+def read_cases(function):
+    """A change to the checker or read access needs the read label for its head commit."""
+    head = "0123456789abcdef" * 2 + "01234567"
+    current, stale = "p1-read-0123456", "p1-read-fedcba9"
+    checker = [Change("checker/rezono_checker/proof.py", "M", None, None)]
+    lifted = function.split(b"\n", 1)[1]
+
+    def run(label, changes, labels, expected, planner=True, at=head):
+        errors, _ = review(changes, planner=planner, head=at, labels=labels)
+        refused = [e for e in errors if "p1-read-" in e]
+        if bool(refused) != expected or (not expected and errors):
+            raise AssertionError(f"{label}: errors {errors}")
+        print(f"{'DENY' if errors else 'ALLOW'}: {label}")
+
+    run("checker change without a label", checker, [], True, planner=False)
+    run("checker change with only the planner label", checker, ["planner"], True)
+    run("checker change labelled for an earlier commit", checker, ["planner", stale], True)
+    run("checker change labelled for its head commit", checker, ["planner", current], False)
+    run("checker change with a read label but a malformed head", checker, [current], True, at=head[:7])
+    run("only marks lifted in tests under the read paths", [
+        Change("checker/rezono_checker/tests/test_proof.py", "M", function, lifted),
+        Change("packs/std-access/tests/test_access.py", "M", function, lifted),
+    ], [], False, planner=False)
+    run("only tests changed under the read paths", [
+        Change("edge/gate/src/ask.test.ts", "M", b"a", b"b"),
+        Change("checker/rezono_checker/conftest.py", "M", b"a = 1\n", b"a = 2\n"),
+    ], ["planner"], False)
+    for path in ("checker/rezono_checker/proof.py", "packs/std-access/rules/access.dl",
+                 "edge/gate/src/ask.ts", "edge/publisher/rezono_publisher/access.py",
+                 "contracts/proof.yaml", "checker/rezono_checker/fixtures.py"):
+        for status in ("M", "A", "D"):
+            run(f"{status} {path} without a read label", [Change(path, status, None, None)],
+                ["planner"], True)
+    run("other contracts change without a read label",
+        [Change("contracts/facts.yaml", "M", None, None)], [], False, planner=False)
+    errors, _ = review(checker, planner=True)
+    if errors:
+        raise AssertionError(f"the merge queue reads no labels: errors {errors}")
+    print("ALLOW in the merge queue: checker change without labels")
 
 
 def planner_cases(reason, function):
