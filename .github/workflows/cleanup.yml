@@ -1,7 +1,7 @@
 name: Release inactive task claims
 on:
   schedule:
-    - cron: '17 * * * *'
+    - cron: '7,22,37,52 * * * *'
   workflow_dispatch:
 permissions: {}
 concurrency: task-claim-cleanup

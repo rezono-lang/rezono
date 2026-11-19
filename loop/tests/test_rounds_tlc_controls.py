@@ -26,7 +26,7 @@ def _invariants(config):
     strict=True,
     raises=AssertionError,
     reason=(
-        "Read decisions/safe-step-rounds.md section 6 and formal/README.md. Link the Claim row of the Rounds "
+        "M2: Read decisions/safe-step-rounds.md section 6 and formal/README.md. Link the Claim row of the Rounds "
         "table in formal/README.md to loop/tests/test_round_claim.py and the SubmitOne, Crash and LoseReply row "
         "to loop/tests/test_round_submit.py. Write in formal/. Waits for test_round_claim_is_durable_and_exclusive "
         "and test_round_submit_follows_the_certified_claim."

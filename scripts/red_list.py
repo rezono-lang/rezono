@@ -301,12 +301,57 @@ def compute_counts(root: Path = ROOT) -> list[dict[str, int | str]]:
     return rows
 
 
+MILESTONES = ("M1", "M2", "M3", "M4", "extra", "later")
+UNMARKED = "none"
+
+
+def milestone_of(reason: str) -> str:
+    """Return the milestone mark a reason starts with, or ``none`` without one."""
+    for mark in MILESTONES:
+        if reason.startswith(f"{mark}: "):
+            return mark
+    return UNMARKED
+
+
+def milestone_counts(items: list[RedTest]) -> dict[str, dict[str, int]]:
+    """Count red tests per folder and milestone mark, including the unmarked ones."""
+    columns = (*MILESTONES, UNMARKED)
+    counts: dict[str, dict[str, int]] = {}
+    for item in items:
+        row = counts.setdefault(item.folder, dict.fromkeys(columns, 0))
+        row[milestone_of(item.reason)] += 1
+    return {folder: counts[folder] for folder in sorted(counts)}
+
+
+def format_milestones(counts: dict[str, dict[str, int]]) -> str:
+    """Render the milestone counts as a Markdown table with a total row and column."""
+    columns = (*MILESTONES, UNMARKED)
+    lines = [
+        "| folder | " + " | ".join(columns) + " | total |",
+        "| --- |" + " ---: |" * (len(columns) + 1),
+    ]
+    totals = dict.fromkeys(columns, 0)
+    for folder, row in counts.items():
+        for column in columns:
+            totals[column] += row[column]
+        cells = [str(row[column]) for column in columns]
+        lines.append(f"| {folder} | " + " | ".join(cells) + f" | {sum(row.values())} |")
+    cells = [str(totals[column]) for column in columns]
+    lines.append("| total | " + " | ".join(cells) + f" | {sum(totals.values())} |")
+    return "\n".join(lines)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--counts",
         action="store_true",
         help="Print per-folder counts of red, blocked, and to-port items.",
+    )
+    parser.add_argument(
+        "--milestones",
+        action="store_true",
+        help="Print per-folder counts of red tests per milestone mark; 'none' counts reasons without one.",
     )
     parser.add_argument(
         "--json",
@@ -354,6 +399,14 @@ def main() -> int:
             if oracle_cases:
                 print(f"Passed tests naming the Souffle oracle: {len(oracle_cases)}")
                 print(f"Example: {sorted(oracle_cases)[0]}")
+        return 0
+
+    if args.milestones:
+        milestones = milestone_counts(collect_red_tests())
+        if args.json:
+            print(json.dumps(milestones, indent=2))
+        else:
+            print(format_milestones(milestones))
         return 0
 
     if args.counts:
