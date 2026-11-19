@@ -876,23 +876,67 @@ def test_retained_calculation_reads_the_pinned_epoch_and_keeps_known_zero(retain
         retained_calculation.resolve(archive, dataclasses.replace(pin, key=ref(pin.relation, "i1", "0", "known", "")["key"]))
 
 
+def retained_admitted():
+    """A retained publication whose epoch admitted a receipt, and the context hash its protected caller pinned:
+    the hash of the context the epoch was admitted with (test_evidence_batch.layout), never read from the
+    manifest."""
+    archive, pin, manifest = retained_publication("toy", "total", {}, admitted=True)
+    trusted = hashlib.sha256(archive.get("observations/retained/context.json")).hexdigest()
+    return archive, pin, manifest, trusted
+
+
 def test_retained_calculation_admits_the_epoch_evidence_again():
     """An epoch that admitted a receipt is verified again from its retained publication: the complete manifest
-    names the trusted context and the submitted index by hash, so the replay rebuilds the Evidence and admits
-    again. Without the context, or without the manifest naming it, the replay fails closed."""
-    archive, pin, manifest = retained_publication("toy", "total", {}, admitted=True)
-    assert retained_calculation.resolve(archive, pin) == 0
+    names the trusted context and the submitted index, the protected caller pins the context hash, and the
+    replay rebuilds the Evidence and admits again. Without the caller's pin, without the manifest naming the
+    context, or without the context, the replay fails closed."""
+    archive, pin, manifest, trusted = retained_admitted()
+    assert retained_calculation.resolve(archive, pin, context_sha256=trusted) == 0
+    with pytest.raises(ValueError, match="the caller did not pin"):
+        retained_calculation.resolve(archive, pin)
 
     context = manifest["evidence"]["context"]
     assert context["file"] == "observations/retained/context.json"
     kept = archive.objects.pop(context["uri"].removeprefix("s3://test/"))
     with pytest.raises(ValueError, match="evidence_refused"):
-        retained_calculation.resolve(archive, pin)
+        retained_calculation.resolve(archive, pin, context_sha256=trusted)
 
     archive.objects[context["uri"].removeprefix("s3://test/")] = kept
-    unnamed = {key: value for key, value in manifest.items() if key != "evidence"}
+    unnamed = repin_retained_manifest(archive, pin, {key: value for key, value in manifest.items() if key != "evidence"})
+    with pytest.raises(ValueError, match="names no evidence context"):
+        retained_calculation.resolve(archive, unnamed, context_sha256=trusted)
     with pytest.raises(ValueError, match="receipt_not_admitted"):
-        retained_calculation.resolve(archive, repin_retained_manifest(archive, pin, unnamed))
+        retained_calculation.resolve(archive, unnamed)
+
+
+def test_retained_calculation_refuses_a_context_the_caller_did_not_pin():
+    """The manifest names a context; it confers no authority. A context with other bytes, named by a manifest
+    that a trusted plan pins, is refused against the caller's own pin, and is not a retained observation."""
+    archive, pin, manifest, trusted = retained_admitted()
+    forged = json.loads(archive.get("observations/retained/context.json"))
+    authorization = forged["completeness"][0]["issuer"]["authorization"]
+    forged["completeness"][0]["issuer"]["authorization"] = replaced = dict(authorization, file="toy/objects/a.json",
+                                                                           uri=archive.uri("toy/objects/a.json"))
+    archive.objects["toy/objects/a.json"] = archive.get(authorization["file"])
+    context = {"file": "toy/objects/forged-context.json", "uri": archive.uri("toy/objects/forged-context.json")}
+    replace_retained_object(archive, context, forged)
+    assert context["sha256"] != trusted and replaced["sha256"] == authorization["sha256"]
+    named = repin_retained_manifest(archive, pin, manifest | {"evidence": manifest["evidence"] | {"context": context}})
+    with pytest.raises(ValueError, match="does not match the caller's pin"):
+        retained_calculation.resolve(archive, named, context_sha256=trusted)
+    with pytest.raises(ValueError, match="leaves the retained observations"):
+        retained_calculation.resolve(archive, named, context_sha256=context["sha256"])
+
+
+def test_retained_calculation_reads_evidence_only_from_the_retained_observations():
+    """The same context bytes stored outside observations/retained/, under another pack, are refused."""
+    archive, pin, manifest, trusted = retained_admitted()
+    archive.objects["otherpack/x/context.json"] = archive.get("observations/retained/context.json")
+    context = manifest["evidence"]["context"] | {"file": "otherpack/x/context.json",
+                                                 "uri": archive.uri("otherpack/x/context.json")}
+    named = repin_retained_manifest(archive, pin, manifest | {"evidence": manifest["evidence"] | {"context": context}})
+    with pytest.raises(ValueError, match="leaves the retained observations"):
+        retained_calculation.resolve(archive, named, context_sha256=trusted)
 
 
 def test_retained_calculation_rejects_damaged_evidence(retained_epoch):
