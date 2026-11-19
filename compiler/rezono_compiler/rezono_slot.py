@@ -11,12 +11,12 @@ BUILTIN_RANGES = {"Bool": "boolean", "Date": "date", "Text": "string"}
 LIST_CARDS = ("*", "+")
 
 
-def builtin_range(name: str, declared: bool, *, extended_form: bool = False) -> str | None:
+def builtin_range(name: str, declared: bool) -> str | None:
     # Bool became a built-in after modules could already declare it as a pack name.
     if name == "Bool" and declared:
         return None
     if name == "Int":
-        return "integer" if extended_form and not declared else None
+        return None if declared else "integer"
     return BUILTIN_RANGES.get(name)
 
 
@@ -68,7 +68,7 @@ def lower(slots: list[dict], declared: Set[str], *, implicit_identifier: bool = 
     for slot in slots:
         name = slot["type"]
         # Validation has already checked whether this version admits the built-in range.
-        range_name = builtin_range(name, name in declared, extended_form=True) or name
+        range_name = builtin_range(name, name in declared) or name
         attribute: dict[str, object] = {"range": range_name}
         attribute.update(rezono_metadata.lower(slot))
         if "slotUri" in slot:
@@ -139,7 +139,7 @@ def validate(slots: list, kind: str, at: str, own: Mapping[str, str], owners: Ma
             refuse(here, f"a slot `{slot['type']}{slot['card']}` is not lowered (no ticket yet)")
             ok = False
         name, found = slot["type"], owners.get(slot["type"], [])
-        range_name = builtin_range(name, name in own or bool(found), extended_form=extended)
+        range_name = builtin_range(name, name in own or bool(found))
         if has_constraints:
             try:
                 constraint_facets(slot, range_name)
