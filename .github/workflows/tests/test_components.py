@@ -24,7 +24,7 @@ class WorkflowEnvironmentTests(unittest.TestCase):
     def test_python_collection_and_execution_get_the_locked_module_reader(self):
         workflow = ROOT / ".github/workflows"
         jobs = yaml.safe_load((workflow / "ci.yml").read_text(encoding="utf-8"))["jobs"]
-        for job, command in (("discover", "scripts/components.py inventory"),
+        for job, command in (("discover", ".build-base/components.py inventory"),
                              ("python", "scripts/components.py run-shard")):
             steps = jobs[job]["steps"]
             environment, = [i for i, step in enumerate(steps)
@@ -46,6 +46,37 @@ class WorkflowEnvironmentTests(unittest.TestCase):
         for step in (runtime, steps[installation]):
             self.assertNotIn("if", step)
             self.assertNotIn("continue-on-error", step)
+
+    def test_the_base_decides_what_runs_and_counts_what_ran(self):
+        # A candidate's scripts/components.py, environment action or pytest
+        # options must not drop tests from both its inventory and its run.
+        jobs = yaml.safe_load((ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8"))["jobs"]
+        base = ("${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha "
+                "|| github.sha }}")
+
+        steps = jobs["discover"]["steps"]
+        runs = [step.get("run", "") for step in steps]
+        source, = [i for i, run in enumerate(runs) if "git archive" in run]
+        self.assertEqual(steps[source]["env"]["POLICY"], base)
+        self.assertIn('git archive "$POLICY" scripts | tar -x -C .build-base --strip-components=1', runs[source])
+        for command in ("components.py ci-matrix", "components.py inventory"):
+            uses, = [i for i, run in enumerate(runs) if command in run]
+            self.assertIn(".build-base/" + command, runs[uses])
+            self.assertNotIn("scripts/" + command, runs[uses])
+            self.assertLess(source, uses, command)
+        inventory, = [run for run in runs if "components.py inventory" in run]
+        self.assertLess(inventory.index("unset PYTEST_ADDOPTS PYTEST_PLUGINS"),
+                        inventory.index("components.py inventory"))
+
+        steps = jobs["check"]["steps"]
+        verify, = [i for i, step in enumerate(steps) if "components.py verify-execution" in step.get("run", "")]
+        checkouts = [i for i, step in enumerate(steps) if step.get("uses", "").startswith("actions/checkout@")]
+        self.assertEqual(len(checkouts), 1)
+        checkout = steps[checkouts[0]]
+        self.assertLess(checkouts[0], verify)
+        self.assertEqual(checkout["with"]["ref"], base)
+        self.assertEqual(checkout["with"]["sparse-checkout"], "scripts")
+        self.assertIn("python3 scripts/components.py verify-execution", steps[verify]["run"])
 
 
 class SelectorTests(unittest.TestCase):
