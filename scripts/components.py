@@ -162,7 +162,9 @@ def _git_changed_files(root: Path, base_ref: str | None, before_sha: str | None)
 # A change to a shared library, fixture tree or unknown component runs everything.
 FILE_CONSUMERS = {
     "k8s-admission": ("loop",),
-    "loop": ("run",),
+    # A pull request also runs examples for a loop change (PR_FILE_CONSUMERS), so the queue does too.
+    "loop": ("run", "examples"),
+    "examples": (),
     "run": (),
     "deploy/profiles/edge": ("edge/publisher",),
 }

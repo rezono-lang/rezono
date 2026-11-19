@@ -86,9 +86,9 @@ class SelectorTests(unittest.TestCase):
             return {c.folder for c in ci.affected_components(components, list(files))}
         self.assertEqual(selected("run/tests/test_quote.py"), {"run"})
         self.assertEqual(selected("run/dispatch_policy.py"), {"run"})
-        self.assertEqual(selected("loop/replay.py"), {"loop", "run"})
-        self.assertEqual(selected("loop/tests/test_case.py", "run/tests/test_quote.py"), {"loop", "run"})
-        self.assertEqual(selected("k8s-admission/parameter_reader.py"), {"k8s-admission", "loop", "run"})
+        self.assertEqual(selected("loop/replay.py"), {"loop", "run", "examples"})
+        self.assertEqual(selected("loop/tests/test_case.py", "run/tests/test_quote.py"), {"loop", "run", "examples"})
+        self.assertEqual(selected("k8s-admission/parameter_reader.py"), {"k8s-admission", "loop", "run", "examples"})
         for path in ("scripts/components.py", "packs/common/pack.yaml", "contracts/core.yaml",
                      "contracts/python/tests/test_ports.py", "loop/pyproject.toml", "unknown/resource",
                      "loop/rezono_cluster.py", "loop/tests/conftest.py", "loop/tests/wire_fixtures.py",
@@ -147,6 +147,12 @@ class RepositoryPullRequestSelectionTests(unittest.TestCase):
         self.assertLessEqual(set(ci.PR_FILE_CONSUMERS["compiler"]) & folders, selected)
         self.assertNotIn("tools/mcp", selected)
         self.assertLess(selected, folders)
+
+    def test_the_queue_runs_at_least_the_pull_request_closure(self):
+        for path in ("loop/replay.py", "loop/tests/test_case.py", "run/dispatch_policy.py",
+                     "k8s-admission/parameter_reader.py", "deploy/profiles/edge/forms_issue.py"):
+            selected, components, _ = self.selected(path)
+            self.assertLessEqual(selected, {c.folder for c in ci.affected_components(components, [path])}, path)
 
     def test_unknown_path_selects_every_component(self):
         selected, components, _ = self.selected("an-unknown-directory/resource.yaml")
