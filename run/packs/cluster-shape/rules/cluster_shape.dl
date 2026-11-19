@@ -34,6 +34,22 @@ invalid_machine(c, m) :- plan_machine(c, m), plan_machine(c, n), m != n,
 .decl valid_machine(cluster: symbol, machine: symbol)
 valid_machine(c, m) :- plan_machine(c, m), !invalid_machine(c, m).
 
+.decl line_has_sku(line: symbol)
+line_has_sku(l) :- line__sku(l, _).
+.decl line_has_role(line: symbol)
+line_has_role(l) :- line__role(l, _).
+.decl line_has_quantity(line: symbol)
+line_has_quantity(l) :- line__quantity(l, _).
+
+// A line is invalid unless each slot has exactly one value: an unknown slot never passes.
+.decl invalid_line(cluster: symbol, line: symbol)
+invalid_line(c, l) :- line__cluster(l, c), !line_has_sku(l).
+invalid_line(c, l) :- line__cluster(l, c), !line_has_role(l).
+invalid_line(c, l) :- line__cluster(l, c), !line_has_quantity(l).
+invalid_line(c, l) :- line__cluster(l, c), line__sku(l, a), line__sku(l, b), a != b.
+invalid_line(c, l) :- line__cluster(l, c), line__role(l, a), line__role(l, b), a != b.
+invalid_line(c, l) :- line__cluster(l, c), line__quantity(l, a), line__quantity(l, b), a != b.
+
 .decl named_sku(cluster: symbol, sku: symbol)
 named_sku(c, s) :- line__cluster(l, c), line__sku(l, s).
 
@@ -48,6 +64,7 @@ has_controller(c) :- line__cluster(l, c), line__role(l, "controller").
 
 .decl shape_problem(cluster: symbol, reason: symbol)
 shape_problem(c, "invalid_machine") :- invalid_machine(c, _).
+shape_problem(c, "invalid_line") :- invalid_line(c, _).
 shape_problem(c, "count") :- line__cluster(l, c), line__sku(l, s), line__quantity(l, q),
     n = count : { valid_sku(c, s, _) }, n != q.
 shape_problem(c, "count") :- line__cluster(l, c), line__sku(l, s), line__quantity(l, q),
