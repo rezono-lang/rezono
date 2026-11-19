@@ -322,10 +322,16 @@ JOB_INPUTS = {
     ".github/workflows/compiler-duration-profile.json": ("compiler",),
     ".github/workflows/publication_fixture.py": ("examples",),
 }
-# The other workflows do not run for a pull request, and the selection's own
-# regressions run in the discover job whatever it selects.
-NO_COMPONENT_PATHS = (".github/",)
+# Scripts, other workflows and actions select the components that name them, directly
+# or through another file of the same area. Without such a reader they select none:
+# other workflows do not run for a pull request, ci.yml runs the rest in jobs that
+# always run, and the selection's own regressions run in discover whatever it selects.
 SCRIPTS = "scripts/"
+GITHUB = ".github/"
+NAMED_AREAS = (SCRIPTS, GITHUB)
+# ci.yml names what its always-running jobs run; what its component jobs run is a
+# full-selection path (test_component_job_scripts_keep_the_full_selection).
+AREA_CALLERS_IGNORED = frozenset({".github/workflows/ci.yml"})
 TEST_FILE = re.compile(r"(?:test_[^/]*|[^/]*_test)\.py")
 
 PYTHON_NAME = r"[A-Za-z0-9](?:[A-Za-z0-9_.-]*[A-Za-z0-9])?"
@@ -446,23 +452,33 @@ def files_naming(root: Path, revision: str, names: set[str], *pathspecs: str) ->
     return found
 
 
-def script_readers(root: Path, revisions: tuple[str, ...], path: str, folders: set[str]) -> set[str] | None:
-    """Components that name a script, or a script that names it, in either tree.
+def area_names(path: str) -> set[str]:
+    """The names by which a file of a named area is referred to."""
+    parts = Path(path).parts
+    if parts[:2] == (".github", "actions") and len(parts) > 3:
+        # An action is named by its directory; the stem of action.yml names nothing.
+        return {parts[2]} if Path(path).stem in {"action", "README"} else {parts[2], Path(path).stem}
+    return {Path(path).stem}
 
-    None means a script that every component job runs names it. A script that no
-    component names has no component reader: the light and discover jobs run it."""
+
+def area_readers(root: Path, revisions: tuple[str, ...], path: str, folders: set[str]) -> set[str] | None:
+    """Components that name a script, workflow or action, or a file of its area that names it.
+
+    None means a full-selection path names it, so every component job may run it."""
+    area = next(prefix for prefix in NAMED_AREAS if path.startswith(prefix))
     readers: set[str] = set()
     for revision in revisions:
-        scripts, names = {path}, {Path(path).stem}
+        files, names = {path}, area_names(path)
         while True:
-            callers = files_naming(root, revision, names, SCRIPTS) - scripts
+            callers = files_naming(root, revision, names, area) - files - AREA_CALLERS_IGNORED
             if not callers:
                 break
             if any(caller.startswith(FULL_SELECTION_PATHS) for caller in callers):
                 return None
-            scripts |= callers
-            names |= {Path(caller).stem for caller in callers}
-        for reader in files_naming(root, revision, names, ".", f":(exclude,top){SCRIPTS}"):
+            files |= callers
+            for caller in callers:
+                names |= area_names(caller)
+        for reader in files_naming(root, revision, names, ".", *(f":(exclude,top){a}" for a in NAMED_AREAS)):
             if owner := component_owner(reader, folders):
                 readers.add(owner)
     return readers
@@ -675,12 +691,12 @@ def pull_request_selection(components: list[Component], root: Path,
             elif path in JOB_INPUTS:
                 for reader in sorted(set(JOB_INPUTS[path]) & folders):
                     add(direct, reader, path, ", which its shards read")
-            elif (readers is not None and not path.startswith("edge/plugins/")) or path.startswith(NO_COMPONENT_PATHS):
+            elif readers is not None and not path.startswith("edge/plugins/"):
                 continue
-            elif path.startswith(SCRIPTS):
-                found = script_readers(root, revisions, path, folders)
+            elif path.startswith(NAMED_AREAS):
+                found = area_readers(root, revisions, path, folders)
                 if found is None:
-                    return everything(f"`{path}` is named by a script that every component job runs")
+                    return everything(f"`{path}` is named by a file that every component job runs")
                 for reader in sorted(found & folders):
                     add(direct, reader, path, ", which it names")
             else:

@@ -416,7 +416,18 @@ class PullRequestSelectorTests(unittest.TestCase):
         selected, summary = self.changed_matrix({"scripts/standalone_rule.py": "RULE = 3\n"}, tree=reader)
         self.assertEqual(selected, {"run"})
         self.assertIn("- `run`: `scripts/standalone_rule.py`, which it names", summary)
-        selector = (ROOT / "scripts/components.py").read_text(encoding="utf-8") + "\n# A changed selector.\n"
+        # A workflow or an action that a component test reads selects that component.
+        readers = {
+            ".github/workflows/oracle.yml": "name: oracle\n",
+            ".github/actions/rehearse/action.yml": "name: rehearse\n",
+            "compiler/tests/test_oracle_workflow.py": 'WORKFLOW = ".github/workflows/oracle.yml"\n',
+            "run/tests/test_rehearse.py": 'ACTION = ROOT / ".github" / "actions" / "rehearse"\n',
+        }
+        for files, expected in (({".github/workflows/oracle.yml": "name: oracle 2\n"}, {"compiler"}),
+                                ({".github/actions/rehearse/action.yml": "name: rehearse 2\n"}, {"run"})):
+            with self.subTest(files=sorted(files)):
+                self.assertEqual(self.changed_matrix(files, tree=readers)[0], expected)
+        selector =(ROOT / "scripts/components.py").read_text(encoding="utf-8") + "\n# A changed selector.\n"
         selected, summary = self.changed_matrix({"scripts/components.py": selector})
         self.assertEqual(selected, LOOP_EVERYTHING)
         self.assertIn("everything: `scripts/components.py`", summary)
@@ -484,7 +495,37 @@ def source_paths(text, extension):
             yield path, rooted
 
 
+QUOTED = r"['\x22]([A-Za-z0-9_.-]+)['\x22]"
+GITHUB_PATH = re.compile(rf"\.github/([A-Za-z0-9_./-]+)|['\x22]\.github['\x22]\s*/\s*{QUOTED}\s*/\s*{QUOTED}")
+
+
 class SharedReaderTests(unittest.TestCase):
+    def test_component_files_that_name_a_github_path_are_selected_by_it(self):
+        components = ci.discover_components(ROOT, keep_invalid_node=True)
+        folders = {c.folder for c in components}
+        head = ci.git_output(ROOT, "rev-parse", "HEAD").decode().strip()
+        listing = subprocess.check_output(["git", "ls-files", "-z", ".github"], cwd=ROOT).decode()
+        tracked = set(filter(None, listing.split("\0")))
+        named: dict[str, set[str]] = {}
+        files = subprocess.check_output(["git", "ls-files", "-z"], cwd=ROOT).decode().split("\0")
+        for relative in filter(None, files):
+            owner = ci.component_owner(relative, folders)
+            if not owner or not (ROOT / relative).is_file():
+                continue
+            try:
+                text = (ROOT / relative).read_text(encoding="utf-8")
+            except (UnicodeDecodeError, OSError):
+                continue
+            for match in GITHUB_PATH.finditer(text):
+                path = ".github/" + (match[1] or f"{match[2]}/{match[3]}").rstrip("/.")
+                for target in [path] if path in tracked else [t for t in tracked if t.startswith(path + "/")]:
+                    named.setdefault(target, set()).add(owner)
+        self.assertIn(".github/workflows/feldera-oracle.yml", named)
+        for path, owners in sorted(named.items()):
+            with patch.object(ci, "pull_request_range", return_value=(head, head, [path])):
+                selected = {c.folder for c in ci.pull_request_components(components, ROOT, "main")}
+            self.assertLessEqual(owners, selected, path)
+
     def test_registered_readers_cover_tracked_test_sources(self):
         components = ci.discover_components(ROOT)
         folders = {c.folder for c in components}
