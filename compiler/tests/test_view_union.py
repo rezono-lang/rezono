@@ -23,12 +23,6 @@ def facts(*others):
             'link': [('l1',)], 'link__left': [('l1', 'a')], 'link__right': [('l1', 'b')]}
 
 
-@pytest.mark.xfail(strict=True, raises=view_rules.ViewRuleError,
-                   reason="Lower a theory kind with several source branches in compiler/rezono_compiler/view_rules.py: "
-                          "one rule per branch into the theory relation with the plain identifier, and one invariant "
-                          "relation holding identifiers that occur in two branches, as "
-                          "decisions/view-source-unions.md fixes. Compiler only. This test supersedes the union "
-                          "refusal that test_view_rules.py used to assert.")
 def test_a_theory_kind_unions_disjoint_source_kinds(tmp_path):
     d, t, view, program = model(tmp_path, domain_change=two_roots, view_change=union)
     lowered = view_rules.lower(view, d, t, program, NAMES, namespace='vmap')
