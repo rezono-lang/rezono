@@ -1,0 +1,32 @@
+manifest_id: m-1
+sweeps:
+  - name: first
+    cell: {kind: item, id: x0, slot: value}
+    min: '0'
+    max: '0'
+    step: '1'
+    cells: [{index: 0, value: '0', status: not_computed}]
+  - name: second
+    cell: {kind: item, id: x1, slot: value}
+    min: '0'
+    max: '0'
+    step: '1'
+    cells: [{index: 0, value: '0', status: not_computed}]
+  - name: third
+    cell: {kind: item, id: x2, slot: value}
+    min: '0'
+    max: '0'
+    step: '1'
+    cells: [{index: 0, value: '0', status: not_computed}]
+  - name: fourth
+    cell: {kind: item, id: x3, slot: value}
+    min: '0'
+    max: '0'
+    step: '1'
+    cells: [{index: 0, value: '0', status: not_computed}]
+  - name: fifth
+    cell: {kind: item, id: x4, slot: value}
+    min: '0'
+    max: '0'
+    step: '1'
+    cells: [{index: 0, value: '0', status: not_computed}]

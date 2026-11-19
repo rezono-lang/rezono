@@ -92,7 +92,7 @@ def _receipt_grounds(witnesses, row):
     strict=True,
     raises=AssertionError,
     reason=(
-        "Read decisions/safe-step-rounds.md sections 1 to 3. Expose a waiting reason when the latest same-run "
+        "M2: Read decisions/safe-step-rounds.md sections 1 to 3. Expose a waiting reason when the latest same-run "
         "safety cut is ambiguous, with both receipt identities as grounds in the ordinary publication. "
         "Keep unrelated steps and earlier or foreign cuts out of this result. Write in packs/std-loop "
         "and refresh its dependent Build pin."

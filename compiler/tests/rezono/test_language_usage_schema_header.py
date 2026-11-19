@@ -26,14 +26,6 @@ kind Item world closed
 """
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=MissingSchemaHeaderClassification,
-    reason="M3: decisions/language-metadata.md: compiler/tests/rezono/language_usage.py classifies the "
-           "`schema <name>` header with its indented fields, which scripts/convert_pack.py writes for every "
-           "schema with its own identity. It now reports the header as unclassified-authored-syntax, so a "
-           "converted pack never counts as converted.",
-)
 def test_converted_schema_header_is_not_unclassified_syntax(tmp_path):
     (tmp_path / "packs/sample/rezono").mkdir(parents=True)
     (tmp_path / "packs/sample/pack.yaml").write_text("name: sample\n", encoding="utf-8")
