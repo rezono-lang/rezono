@@ -52,14 +52,6 @@ def test_the_codes_are_read_from_both_sources_and_a_gap_is_found():
     assert missing({"R000"}, {"en": {"R000": "x"}, "nl": {"R000": ""}}) == {"nl": ["R000"]}
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError, reason=(
-    "extra: contracts/diagnostic.yaml: Add a sentence for R046 and R048 to rezono/messages/en.json and "
-    "rezono/messages/nl.json, in both languages, with the same arguments in each, so that every R or W code "
-    "that compiler/rezono_compiler or rezono/src reports has a sentence in each language of the catalogue. "
-    "R046 is a native rule name outside the verified imports or the public interface of its module, and "
-    "R048 a native rule signature or option that does not fit its owning head or has no defining clause "
-    "(compiler/rezono_compiler/native_rule_signatures.py and native_rule_dl.py; "
-    "docs/rezono/native-rule-pack-link.md)."))
 def test_every_reported_code_has_a_sentence_in_each_language():
     codes = set().union(*(reported(folder, pattern) for folder, pattern in SOURCES.items()))
     assert missing(codes, catalogue()) == {}

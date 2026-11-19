@@ -14,12 +14,12 @@ import re
 import yaml
 from rezono_canon import canonical_json
 
-from . import facts
+from . import facts, strict_yaml
 from .pack import Pack, contract_dir
 
 @lru_cache(None)
 def contract() -> dict:
-    return yaml.safe_load((contract_dir() / "source.yaml").read_text("utf-8"))
+    return strict_yaml.read(contract_dir() / "source.yaml")
 
 
 FIELDS = set(contract()["classes"]["Source"]["attributes"])
@@ -197,7 +197,7 @@ def file_entries(pack: Pack, path: Path, data: dict | None = None, *, metadata=U
                  relative: Path | None = None) -> list[dict]:
     companion = path.with_suffix(".sources.yaml")
     if metadata is UNSET and companion.exists():
-        metadata = yaml.safe_load(companion.read_text("utf-8"))
+        metadata = strict_yaml.read(companion)
     dataset = facts.dataset_at(path)
     return text_entries(pack, relative.as_posix() if relative is not None else path.name,
                         "" if dataset is not None else path.read_text("utf-8"), data,
@@ -213,7 +213,7 @@ def text_entries(pack: Pack, name: str, text: str, data: dict | None = None, *, 
     if dataset is not None:
         raw = dataset.form
     elif data is None or path.suffix == ".json":
-        raw = yaml.safe_load(text) or {}
+        raw = strict_yaml.load(text, name) or {}
     pointers = None
     authored_lines = {span["at"]: span["line"] for span in dataset.form["spans"]} if dataset and dataset.source else {}
     own_sources = {}

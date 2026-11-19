@@ -169,22 +169,6 @@ def submission(source, base, head, engine, path, evidence):
     return records
 
 
-@pytest.mark.xfail(
-    strict=True, raises=(AssertionError, ImportError, TypeError),
-    reason="M2: decisions/admission-transport.md: section 6, member keys, and decisions/scoped-completeness.md "
-           "section 3. Build selection trusts an emptied mapped-reader relation. Read the admitted verified_member "
-           "keys of the build-selection receipt: [\"changed-path\", path], [\"path-readers\", path, kind] for "
-           "each mapping (also when empty) and [\"path-reader\", path, kind, reader] for each reader edge. Derive "
-           "build_readerless_path only for a changed path whose two mappings are admitted without any path-reader "
-           "member, resting on complete(source, scope, cut, receipt) derived from verified_receipt as "
-           "decisions/scoped-completeness.md section 2 shows. Select full checks when an admitted reader edge, "
-           "changed path, manifest, test file or suite has no matching record. A run with "
-           "a verified cut but no admitted build-selection receipt selects full checks with reason "
-           "missing-selection-receipt; keep build_verified_cut for claims and tasks. Write in build/ (selection.dl "
-           "and its schema). The same rule turns "
-           "loop/tests/test_build_selection.py--test_build_selection_matches_python green: remove its mark in the "
-           "same PR. Today selection.dl reads no admitted member, so the records alone decide (AssertionError: reader).",
-)
 def test_mapped_path_requires_reader_inventory(tmp_path):
     source = tmp_path / "source"
     base, head, _ = repository(source, SOURCE)
@@ -268,14 +252,6 @@ def resealed_without_reader(evidence):
     return resealed, objects
 
 
-@pytest.mark.xfail(
-    strict=True, raises=(AssertionError, ImportError, TypeError),
-    reason="M2: decisions/admission-transport.md: section 6, member keys. A receipt whose inventory and content "
-           "are resealed without the path-reader member still narrows the selection. Admission compares it with "
-           "the independently retained inventory, so the build rules see no admitted receipt and select full "
-           "checks. Write in build/ (selection.dl and its schema). Waits for "
-           "test_mapped_path_requires_reader_inventory. Today the records alone decide (AssertionError).",
-)
 def test_resealed_receipt_cannot_drop_mapped_reader(tmp_path):
     source = tmp_path / "source"
     base, head, _ = repository(source, SOURCE)
