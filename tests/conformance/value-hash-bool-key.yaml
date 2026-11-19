@@ -1,0 +1,17 @@
+id: value-hash-bool-key
+source: docs/semantics/value-cases.yaml#hash-bool-key
+status: settled
+input:
+  rows:
+  - key: [true]
+  - key: [false]
+expect:
+  value:
+    key_text:
+    - true: 'true'
+    - false: 'false'
+  state: known
+  reason: null
+  witness: null
+unsupported:
+  feldera: Canonical key text is constructed outside the SQL engine.

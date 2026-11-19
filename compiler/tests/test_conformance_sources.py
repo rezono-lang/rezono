@@ -7,7 +7,6 @@ from pathlib import Path
 from typing import TypedDict
 
 import jsonschema
-import pytest
 import yaml
 
 
@@ -86,12 +85,6 @@ def check_decision(path: Path, source: str, *headings: str) -> str:
     raise AssertionError(f"{path.name} needs a {' or '.join(headings)} explanation")
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=MissingConformanceCases,
-    reason="Migrate each record in tests/conformance/sources.yaml to a neutral case or an explicit "
-           "decision under decisions/. Read tests/conformance/README.md. Update only the corpus and decisions.",
-)
 def test_every_inventory_source_has_a_case_or_decision():
     records = source_records()
     schema = validator("case.schema.json")
