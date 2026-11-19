@@ -40,6 +40,7 @@ classes:
       target_tenant:
       target_number: {range: integer, minimum_value: 1}
       target_component:
+      target_reference:
   TenantCatalogOffer:
     attributes:
       id: {identifier: true}
