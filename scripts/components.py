@@ -409,8 +409,15 @@ def git_output(root: Path, *args: str) -> bytes:
     return subprocess.check_output(["git", *args], cwd=root, stderr=subprocess.PIPE)
 
 
+def design_record(path: str) -> bool:
+    """A decision or documentation page that no test reads: citing a test name there runs nothing."""
+    return (path.startswith(("decisions/", "docs/")) and path.endswith(".md") and path != LANGUAGE_COVERAGE_REPORT
+            and not shared_readers(path))
+
+
 def independent_test_leaves(root: Path, revision: str, leaves: dict[str, list[str]], folders: set[str],
-                            *, manual_references: dict[str, str] | None = None) -> bool:
+                            *, manual_references: dict[str, str] | None = None,
+                            cited_in_records: bool = False) -> bool:
     """Refuse a narrowed test selection if either tree names an outside reader."""
     leaf_paths = {path for paths in leaves.values() for path in paths}
     tracked = sorted(leaf_paths | (manual_references or {}).keys())
@@ -454,7 +461,7 @@ def independent_test_leaves(root: Path, revision: str, leaves: dict[str, list[st
                 if not entry.startswith(prefix):
                     return False
                 name = entry[len(prefix):]
-                if component_owner(name, folders) == owner:
+                if component_owner(name, folders) == owner or (cited_in_records and design_record(name)):
                     continue
                 if name not in (manual_references or {}):
                     return False
@@ -564,8 +571,14 @@ def own_readers(path: str) -> set[str]:
 
 
 def independent_test_file(root: Path, revisions: tuple[str, ...], path: str, owner: str, folders: set[str]) -> bool:
-    """A test file that nothing outside its component names in either tree."""
-    return all(independent_test_leaves(root, revision, {owner: [path]}, folders) for revision in revisions)
+    """A test file that nothing outside its component names in either tree.
+
+    A decision or documentation page that cites a changed or added test file does not read it.
+    A deleted test file keeps every citation, since a page may link to it."""
+    kept = subprocess.run(["git", "cat-file", "-e", f"{revisions[-1]}:{path}"], cwd=root,
+                          capture_output=True, check=False).returncode == 0
+    return all(independent_test_leaves(root, revision, {owner: [path]}, folders, cited_in_records=kept)
+               for revision in revisions)
 
 
 def language_coverage_only(root: Path, base: str, head: str, changed: list[str], folders: set[str]) -> bool | None:
