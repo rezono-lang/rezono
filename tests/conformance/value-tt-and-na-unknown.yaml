@@ -2,7 +2,11 @@ id: value-tt-and-na-unknown
 source: docs/semantics/value-cases.yaml#tt-and-na-unknown
 status: settled
 input:
-  rows: []
+  rows:
+    - {$kind: Group, $id: group-a}
+    - {$kind: Item, $id: item-a, group: {$ref: group-a}, labels: [first], weight: {$unknown: ""}}
+  select: {kind: Item, id: item-a}
+  language: "ask Item where true show n/a and weight = 1"
   expression: left and right
   bindings:
     left:

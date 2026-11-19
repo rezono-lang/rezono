@@ -3,14 +3,10 @@ source: docs/semantics/value-cases.yaml#tt-when-unknown
 status: settled
 input:
   rows:
-  - kind: item
-    id: item-c
-    group: group-b
-    labels:
-    - second
-    quantity:
-      state: unknown
-      reason: not_assigned
+    - {$kind: Group, $id: group-b}
+    - {$kind: Item, $id: item-c, group: {$ref: group-b}, labels: [second], quantity: {$unknown: not_assigned}}
+  select: {kind: Item, id: item-c}
+  language: "ask Item where true show when quantity = 7 then 1 else 2"
   expression: when quantity = 7 then 1 else 2
   subject: item-c
 expect:

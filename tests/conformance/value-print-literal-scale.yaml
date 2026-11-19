@@ -13,3 +13,4 @@ expect:
   witness: null
 unsupported:
   feldera: Source printing is performed by the language reader and printer.
+  language: "The expectation is a printed literal and its scale, not an answer value, and the neutral fixture has no rate slot with a money or time unit."

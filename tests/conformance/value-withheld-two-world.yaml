@@ -68,3 +68,4 @@ expect:
 unsupported:
   compiler: Compilation does not render role-scoped pages or cursors.
   feldera: The role-scoped page and cursor are publication outputs.
+  language: "The expectation compares page bytes, cursors and dataset hashes of two worlds, which the publisher produces; the language answers one question over one dataset."
