@@ -30,7 +30,19 @@ The corresponding JSON fragment is the declaration with one more member:
 
 ## Format and meaning
 
-A module that has a deprecated line uses at least `rezono.module/2`, the format of declaration metadata ([Schema identity and metadata](language-metadata.md)); `rezono.module/1` keeps its closed shape and bytes. The member changes nothing in the meaning of the declaration. W107 at a use from another pack, and R033 for a removal before the date, are checks on top of this member and follow in their own step, as does its lowering to the LinkML `deprecated` slot of the class or enum.
+A module that has a deprecated line uses at least `rezono.module/2`, the format of declaration metadata ([Schema identity and metadata](language-metadata.md)); `rezono.module/1` keeps its closed shape and bytes. The member changes nothing in the meaning of the declaration. W107 at a use from another pack, and R033 for a removal before the date, are checks on top of this member and follow in their own step.
+
+## Lowering
+
+A deprecated kind lowers to its LinkML class, and a deprecated enum to its LinkML enum, with two additions and nothing else changed: `deprecated` holds the note, and the annotation `deprecated_until` holds the date as written. LinkML has a `deprecated` text on every element but no field for a date, and an annotation is where a module already keeps what LinkML has no field for, as `layer` shows. A schema file of a pack writes the same two entries for the same deprecation.
+
+```yaml
+classes:
+  Zone:
+    deprecated: use ProviderZone
+    annotations:
+      deprecated_until: '2027-07-01'
+```
 
 ## Considered
 
