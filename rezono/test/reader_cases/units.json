@@ -1,0 +1,33 @@
+{
+  "source": "rounding money down\nunit Cents = money minor EUR\nunit Euro = 100 Cents",
+  "format": "rezono.module/1",
+  "declarations": [
+    {
+      "rounding": "money",
+      "mode": "down"
+    },
+    {
+      "unit": "Cents",
+      "is": "money minor EUR"
+    },
+    {
+      "unit": "Euro",
+      "is": "100 Cents"
+    }
+  ],
+  "spanNames": {
+    "/decls/0": "money",
+    "/decls/1": "Cents",
+    "/decls/2": "Euro"
+  },
+  "rejections": [
+    {
+      "from": "unit Cents",
+      "to": "unit cents"
+    },
+    {
+      "from": "rounding money down",
+      "to": "rounding money"
+    }
+  ]
+}

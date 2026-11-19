@@ -1,0 +1,57 @@
+probe_profile: probe profile
+probe_cell: probe cell
+probe_cluster: probe cluster
+probe_member: probe member
+probe_phase: probe phase
+probe_storage_variant: storage variant
+probe_storage_variant.storage: storage technology
+probe_storage_variant.installation: installation method
+probe_snapshot: planning snapshot
+probe_snapshot.profile: profile
+probe_snapshot.reference_date: reference date
+probe_snapshot.membership_complete: membership coverage
+probe_phase_budget: phase budget
+probe_phase_budget.profile: profile
+probe_phase_budget.variant: storage variant
+probe_phase_budget.phase: phase
+probe_phase_budget.decision: deciding record
+probe_phase_budget.seconds: budget in seconds
+probe_physical_requirement: physical requirement
+probe_physical_requirement.profile: profile
+probe_physical_requirement.cell: cell
+probe_physical_requirement.decision: deciding record
+probe_physical_requirement.requirement: requirement
+probe_term_coverage: term coverage
+probe_term_coverage.snapshot: covered snapshot
+probe_budget_read_grant: budget read grant
+probe_budget_read_grant.role: role
+probe_budget_read_grant.budget: budget
+probe_phase.precedes: next phase
+membership_coverage: membership coverage
+membership_coverage.complete: complete
+membership_coverage.partial: partial
+physical_requirement: physical requirement
+physical_requirement.required: required
+physical_requirement.optional: optional
+role: role
+role.title: title
+may_read: may read
+budget_conflict: conflicting budgets
+effective_budget: budget in force
+effective_physical: physical requirement in force
+has_budget: has a budget
+has_certified_terms: has certified terms
+has_physical: has a physical requirement
+physical_conflict: conflicting physical requirements
+probe_budget: Phase budgets
+probe_budget_read: budget read right
+probe_budget_status: budget status
+probe_cell_of: cell of a profile
+probe_cluster_of: cluster of a cell
+probe_cluster_size: cluster size
+probe_member_of: member of a cluster
+probe_membership_complete: complete membership
+probe_physical: physical requirements
+probe_physical_status: physical requirement status
+probe_profile_total: profile totals
+probe_terms_certified: certified terms

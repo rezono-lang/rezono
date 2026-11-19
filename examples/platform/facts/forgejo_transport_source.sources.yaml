@@ -1,0 +1,7 @@
+default:
+  kind: tool
+  name: Vendor transport inspection
+  revision: v9.0
+  position: L308
+  url: https://codeberg.org/forgejo/docs/raw/branch/v9.0/docs/admin/config-cheat-sheet.md
+  fragment_sha256: 6a03dc8ee68c3de7024f081998d97f3662e2dac4726b8e73925e635842caede1

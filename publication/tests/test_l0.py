@@ -174,9 +174,6 @@ def test_every_case_file_is_a_valid_case():
     assert not validator.is_valid({**case, "expect": {"accept": "true"}})
 
 
-@pytest.mark.xfail(strict=True, raises=MissingCase, reason=(
-    "Needs settled S05, R13, P02 and P04 in docs/publication/cases. See decisions/publication-case-pins.md."
-))
 def test_every_settled_case_runs_here_or_is_named():
     runnable = {"valid", "invalid", "change", "hash", "context", "admission"}
     assert {i for i in SETTLED if FILES[i]["class"] not in runnable} == set()
@@ -235,10 +232,6 @@ def test_v02_two_versions_and_their_hash_keys():
     assert len(keys) == case["expect"]["versions"]
 
 
-@pytest.mark.xfail(strict=True, raises=MissingCase, reason=(
-    "Needs the settled P01 row in docs/publication/cases. Restore both P01 checks together. "
-    "See decisions/publication-case-pins.md."
-))
 def test_p01_the_pin_lives_in_the_import():
     case = required_case("P01")
     assert case["status"] == "settled" and case["class"] == "valid" and case["form"] == "row"

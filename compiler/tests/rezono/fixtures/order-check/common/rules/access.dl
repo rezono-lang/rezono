@@ -1,0 +1,8 @@
+// The complete role reads every stage. The limited role reads the stages a and c and their slot
+// rows, so the edge a -> c but not a -> b. The inherited slots precedes and rank are rows of the
+// root kind Ordered.
+.decl may_read(role: symbol, kind: symbol, element: symbol)
+may_read("complete", "stage", x) :- stage(x).
+may_read("complete", "ordered", x) :- ordered(x).
+may_read("limited", "stage", x) :- stage(x), x != "b".
+may_read("limited", "ordered", x) :- stage(x), x != "b".

@@ -7,3 +7,16 @@ attribute.partial = Each {$kind} has at most one {$attribute}.
 is_a = Each {$kind} is a {$parent}.
 unique_key = Each {$key} belongs to at most one {$kind}.
 path_equation = For each {$kind}, {$equation} holds.
+
+reader.physical_or_nested = Physical or nested allocation
+reader.physical_or_nested.about = The complete allocation of the workload that is supported for the purchase scope, with the evidence it rests on.
+reader.physical_or_nested.workload = Workload
+reader.physical_or_nested.scope = Purchase scope
+reader.physical_or_nested.candidate = Allocation
+explain.grounds = Grounds
+explain.grounds.question = {{What does {$element} rest on?}}
+arrow.many.partial = Each {$kind} can have more than one {$arrow}.
+attribute.many.partial = Each {$kind} can have more than one {$attribute}.
+explain.outside = Outside your view
+explain.more = More from here
+explain.empty = {{No answer for {$element}.}}

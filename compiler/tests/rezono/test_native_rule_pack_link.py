@@ -97,12 +97,26 @@ def rule_program(artifacts):
     return document, origins
 
 
+def clauses(program):
+    """Each rule's meaning without its ID or variable spelling: head and body with variables named in order."""
+    result = []
+    for rule in program["rules"]:
+        names = {}
+
+        def term(value):
+            return names.setdefault(value, f"?v{len(names)}") if value.startswith("?") else value
+
+        head = (rule["head"]["relation"], tuple(term(value) for value in rule["head"]["terms"]))
+        body = tuple(sorted((item["polarity"], item["relation"], tuple(term(value) for value in item["terms"]),
+                             item["stratum"]) for item in rule["body"]))
+        result.append((rule["module"], rule["stratum"], head, body))
+    return sorted(result)
+
+
 def test_native_rule_pack_link(tmp_path):
     legacy, _, _ = compile_fixture(tmp_path / "legacy", mixed=False)
     expected, _ = rule_program(compile_pack(legacy))
-    assert [(rule["id"], rule["body"][0]["relation"]) for rule in expected["rules"]] == [
-        ("listed_1", "alpha"), ("listed_2", "alpha__title"), ("listed_3", "beta"),
-    ]
+    assert sorted(rule["body"][0]["relation"] for rule in expected["rules"]) == ["alpha", "alpha__title", "beta"]
     [signature] = [relation for relation in expected["relations"] if relation["role"] == "derived"]
     assert (signature["name"], signature["key"], signature["module"], signature["extend"]) == (
         "listed", [{"name": "item", "type": "string"}], "import_shared_terms_core", True,
@@ -111,11 +125,15 @@ def test_native_rule_pack_link(tmp_path):
     mixed, owner, pin = compile_fixture(tmp_path / "mixed", mixed=True)
     artifacts = compile_pack(mixed)
     actual, origins = rule_program(artifacts)
-    assert actual == expected
-    assert origins == [
+    # Ownership, signatures and clause meaning must agree with the legacy oracle. Rule IDs, clause order
+    # and variable names are local choices (decisions/language-expression-semantics.md §4).
+    assert actual["relations"] == expected["relations"]
+    assert clauses(actual) == clauses(expected)
+    assert len({rule["id"] for rule in actual["rules"]}) == len(actual["rules"])
+    assert sorted(origins, key=lambda origin: origin["file"]) == [
         {"file": "rezono/a_items.rezono", "line": "4"},
-        {"file": "rules/middle.dl", "line": "1"},
         {"file": "rezono/z_items.rezono", "line": "4"},
+        {"file": "rules/middle.dl", "line": "1"},
     ]
     assert compile_pack(mixed) == artifacts
 

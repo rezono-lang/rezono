@@ -136,11 +136,11 @@ def published_selection(directory, source, submitted, evidence):
         protected_context[name] = archived_json(retained, objects[retained])
     protected_context["git_bundle"] = {"file": bundle_key, "uri": archive.uri(bundle_key),
                                        "sha256": sha256_hex(bundle_bytes)}
-    archive.put_new("observations/retained/context.json", canonical_bytes(protected_context))
-    archive.put_new("observations/submitted/index.json", canonical_bytes({"completeness_receipts": [
-        archived_json("observations/submitted/receipt.json", receipt)
-    ]}))
-    epoch = batch.epoch(build, epoch=1, knowledge_time=INSTANT, sources=[("build-observation", receipt["id"])])
+    # The protected caller hands the candidate and its trusted context to the batch boundary separately
+    # (decisions/scoped-completeness.md, admission and replay transport).
+    epoch = batch.epoch(build, epoch=1, knowledge_time=INSTANT, sources=[("build-observation", receipt["id"])],
+                        completeness_receipts=[archived_json("observations/submitted/receipt.json", receipt)],
+                        completeness_authority=[protected_context], archive=archive)
     manifest = publish.publish(epoch, archive, {"reader": "complete"})
     assert any(check["name"] == "rezono:proofs" and check["status"] == "green" for check in manifest["checks"])
     assert {"source_id": "build-observation", "position": receipt["id"]} in manifest["sources"]
@@ -165,10 +165,14 @@ def submission(source, base, head, engine, path, evidence):
 
 
 @pytest.mark.xfail(
-    strict=True, raises=AssertionError,
-    reason="Build selection trusts an emptied mapped-reader relation. Verify the pinned Git inventories and publish "
-           "a readerless witness for a certified empty mapping. Read decisions/scoped-completeness.md §3. "
-           "The implementation belongs to build/ and the trusted build observation and publication adapter.",
+    strict=True, raises=(AssertionError, TypeError),
+    reason="Build selection trusts an emptied mapped-reader relation. Derive build_readerless_path from a verified "
+           "receipt for the build scope and select full checks otherwise. Read decisions/scoped-completeness.md "
+           "§3. Write in build/ (selection.dl and its schema). Waits for "
+           "edge/publisher/tests/test_completeness_publish.py--test_publisher_admits_receipts_only_with_a_trusted_context "
+           "(the batch boundary admits the receipt and fills verified_receipt) and for "
+           "test_absent_checked_requires_readable_coverage (std-completeness supplies complete). Today batch.epoch "
+           "rejects the admission keywords with TypeError.",
 )
 def test_mapped_path_requires_reader_inventory(tmp_path):
     source = tmp_path / "source"
@@ -231,3 +235,41 @@ def test_mapped_path_requires_reader_inventory(tmp_path):
                            for premise in proof.get(ref, {}).get("premises", []) if premise["polarity"] == "positive")
     assert any(relation == "complete" and evidence[0]["id"] in json.loads(row)
                for relation, row in reached)
+
+
+def resealed_without_reader(evidence):
+    """Drop the mapped reader from the submitted receipt and recompute its digests over that subset."""
+    receipt, objects = evidence
+    objects = dict(objects)
+    content = deepcopy(objects["observations/submitted/content.json"])
+    for member in content:
+        if member["key"][:2] == ["path-readers", SOURCE]:
+            member["rows"] = []
+    objects["observations/submitted/content.json"] = content
+    body = {field: value for field, value in receipt.items() if field != "id"}
+    body["content"] = archived_json("observations/submitted/content.json", content)
+    resealed = {**body, "id": canonical_sha256(["rezono.completeness-receipt/1", body])}
+    objects["observations/submitted/receipt.json"] = resealed
+    return resealed, objects
+
+
+@pytest.mark.xfail(
+    strict=True, raises=(AssertionError, TypeError),
+    reason="A receipt whose digests are recomputed over the truncated submission still narrows the selection. "
+           "Admission must compare it with the independently retained inventory and content. Read "
+           "decisions/scoped-completeness.md §1 and §3. Write in build/ (selection.dl and its schema). Waits for "
+           "test_mapped_path_requires_reader_inventory. Today batch.epoch rejects the admission keywords with "
+           "TypeError.",
+)
+def test_resealed_receipt_cannot_drop_mapped_reader(tmp_path):
+    source = tmp_path / "source"
+    base, head, _ = repository(source, SOURCE)
+    engine = pin_reader_map(source, base, head)
+    base, head, _ = components.pull_request_range(source, "main")
+    evidence = resealed_without_reader(observed_receipt(source, base, head, engine))
+    records = submission(source, base, head, engine, SOURCE, evidence)
+    records["build_path_reader"].clear()
+    rows, _ = published_selection(tmp_path / "resealed", source, records, evidence)
+    assert {component for _, component, _ in rows["build_selected_job"]} == set(SUITES)
+    assert rows["build_full_selection"]
+    assert not rows.get("build_readerless_path")

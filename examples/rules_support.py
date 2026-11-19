@@ -17,7 +17,7 @@ RULED = sorted(p.parent for p in ROOT.rglob("pack.yaml")
 
 
 def name(p: Path) -> str:
-    return str(p.relative_to(ROOT))
+    return p.relative_to(ROOT).as_posix()
 
 
 class State:

@@ -1,0 +1,26 @@
+# The verified-supply rule in the rule IR: decisions/k8s-admission-rules.md and k8s-admission-translator.md.
+# An image is verified for a service in a namespace when it has both a build and a signature row
+# for that full key. A Pod image request is admitted when its row is verified.
+format: rezono.rules/1
+pack: admission_supply
+relations:
+  - {name: image_build, role: base, key: [{name: namespace, type: string}, {name: service, type: string}, {name: image, type: string}]}
+  - {name: image_signature, role: base, key: [{name: namespace, type: string}, {name: service, type: string}, {name: image, type: string}]}
+  - {name: pod_image, role: base, key: [{name: namespace, type: string}, {name: service, type: string}, {name: image, type: string}]}
+  - {name: verified_image, role: derived, module: supply, key: [{name: namespace, type: string}, {name: service, type: string}, {name: image, type: string}]}
+  - {name: allow_image, role: derived, module: supply, key: [{name: namespace, type: string}, {name: service, type: string}, {name: image, type: string}]}
+rules:
+  - id: verified_image
+    module: supply
+    head: {relation: verified_image, terms: ["?namespace", "?service", "?image"]}
+    body:
+      - {relation: image_build, terms: ["?namespace", "?service", "?image"], polarity: positive}
+      - {relation: image_signature, terms: ["?namespace", "?service", "?image"], polarity: positive}
+    origin: {file: supply.dl, line: "1"}
+  - id: allow_image
+    module: supply
+    head: {relation: allow_image, terms: ["?namespace", "?service", "?image"]}
+    body:
+      - {relation: pod_image, terms: ["?namespace", "?service", "?image"], polarity: positive}
+      - {relation: verified_image, terms: ["?namespace", "?service", "?image"], polarity: positive}
+    origin: {file: supply.dl, line: "2"}

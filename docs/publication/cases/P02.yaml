@@ -1,0 +1,26 @@
+id: P02
+class: invalid
+status: settled
+schema:
+  from: fixture.schema.json
+  merge:
+    imports:
+      r:
+        pack: regions
+        schema: s-3737373737373737373737373737373737373737373737373737373737373737
+        manifest: m-7
+    kinds:
+      Host:
+        slots:
+          zone:
+            card: '1'
+            ref: r.Zone
+            states:
+            - known
+form: schema
+expect:
+  accept: false
+  error: epoch pin without hash pin
+note: The import keeps the manifest pin and drops the dataset pin; an epoch requires its content hash.
+sources:
+- publication/rezono_publication/l0.py, check_schema

@@ -7,7 +7,8 @@ from rezono_checker.rules import load_rules
 from rezono_compiler import batch, pack, rules, sources
 from rules_support import states
 
-from query_fixture import ROOT, check_relation
+from query_fixture import ROOT
+from transport_support import published_for
 
 RELATION = "published_default_transport"
 OBSERVATION = "vendor_default_transport"
@@ -35,7 +36,8 @@ def _published(program, rows):
 
 
 def test_postgres_transport():
-    check_relation(RELATION, [_expected_transport()])
+    # Other products publish their own defaults; PostgreSQL publishes exactly its pinned one.
+    assert published_for("postgresql") == {tuple(map(str, _expected_transport()))}
 
 
 def test_unverified_transport_does_not_publish():
