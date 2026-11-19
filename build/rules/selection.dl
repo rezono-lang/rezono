@@ -63,6 +63,7 @@ build_affected(run, consumer, path) :- build_affected(run, dependency, path),
 .decl build_covered(run: symbol, receipt: symbol)
 .decl build_selection_covered(run: symbol)
 .decl build_mapped_reader(receipt: symbol, path: symbol)
+.decl build_path_mappings_complete(receipt: symbol, path: symbol)
 .decl build_readerless_path(run: symbol, path: symbol, receipt: symbol)
 .decl build_path_accounted(run: symbol, path: symbol)
 .decl build_recorded_member(run: symbol, member: symbol)
@@ -83,14 +84,17 @@ build_covered(run, receipt) :- build_verified_cut(run), build_run__receipt(run, 
 build_selection_covered(run) :- build_covered(run, receipt).
 build_full_selection(run, "missing-selection-receipt") :- build_verified_cut(run), !build_selection_covered(run).
 
+// A path's reader inventory is complete only when the receipt lists both its direct and transitive mappings.
+build_path_mappings_complete(receipt, path) :-
+    verified_member(receipt, direct, 0, "path-readers"), verified_member(receipt, direct, 1, path),
+    verified_member(receipt, direct, 2, "direct"),
+    verified_member(receipt, transitive, 0, "path-readers"), verified_member(receipt, transitive, 1, path),
+    verified_member(receipt, transitive, 2, "transitive").
 // A path is readerless only when the receipt lists both of its mappings and no reader edge for it.
 build_mapped_reader(receipt, path) :- verified_member(receipt, m, 0, "path-reader"), verified_member(receipt, m, 1, path).
 build_readerless_path(run, path, receipt) :- build_covered(run, receipt), complete(source, scope, cut, receipt),
     verified_member(receipt, changed, 0, "changed-path"), verified_member(receipt, changed, 1, path),
-    verified_member(receipt, direct, 0, "path-readers"), verified_member(receipt, direct, 1, path),
-    verified_member(receipt, direct, 2, "direct"),
-    verified_member(receipt, transitive, 0, "path-readers"), verified_member(receipt, transitive, 1, path),
-    verified_member(receipt, transitive, 2, "transitive"),
+    build_path_mappings_complete(receipt, path),
     !build_mapped_reader(receipt, path).
 
 // Each admitted member of the build scope needs its matching record; otherwise the selection is full.
@@ -125,8 +129,9 @@ build_full_selection(run, m) :- build_covered(run, receipt), verified_member(rec
 build_full_selection(run, m) :- build_covered(run, receipt), verified_member(receipt, m, 0, "suite"),
     !build_recorded_member(run, m).
 
-// A changed path narrows the selection only through an admitted reader edge or a readerless witness.
-build_path_accounted(run, path) :- build_covered(run, receipt), build_mapped_reader(receipt, path).
+// A changed path narrows the selection only when both reader inventories are admitted, through an admitted reader edge or a readerless witness.
+build_path_accounted(run, path) :- build_covered(run, receipt), build_path_mappings_complete(receipt, path),
+    build_mapped_reader(receipt, path).
 build_path_accounted(run, path) :- build_readerless_path(run, path, receipt).
 build_full_selection(run, path) :- build_covered(run, receipt), verified_member(receipt, m, 0, "changed-path"),
     verified_member(receipt, m, 1, path), !build_path_accounted(run, path).
