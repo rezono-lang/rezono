@@ -214,7 +214,7 @@ def test_order_check_publication(tmp_path):
     reason="M3: Lower successors(x, n) when x in Stage and n = (edge(_, _) where it.pred = x).count() through "
            "compiler/rezono_compiler/native_rule_lowering.py into native_rule_groups: one count aggregate over "
            "edge with terms [?x, _], as the legacy rule. Read decisions/language-expression-semantics.md §1 "
-           "and §5.",
+           "and §5. Waits for test_expression_python_filtered_count and test_expression_python_path_bindings.",
 )
 def test_order_check_ordinary_filtered_count(tmp_path):
     def counted(directory):
