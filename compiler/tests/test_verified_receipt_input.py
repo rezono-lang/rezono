@@ -45,11 +45,6 @@ def pack(tmp_path, name, rules):
     return root
 
 
-@pytest.mark.xfail(strict=True, raises=CompileError,
-                   reason="Accept the reserved protected input verified_receipt/6 declared without clauses, and "
-                          "refuse a clause that derives it, as decisions/scoped-completeness.md (admission and "
-                          "replay transport) fixes. Compiler only; the publisher task "
-                          "edge/publisher/tests/test_completeness_publish.py waits for this one.")
 def test_verified_receipt_is_a_protected_input(tmp_path):
     packs.read(pack(tmp_path, "declared", DECL + COMPLETE))
 
