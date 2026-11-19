@@ -795,8 +795,25 @@ classes:
       fact: {required: true, range: Name}
       id: {required: true}
       valid: {range: Date, multivalued: true, minimum_cardinality: 1, maximum_cardinality: 2}
+      during:
+        description: The stages the facts hold for, one stage or a range from a stage (decisions/language-dated-facts.md).
+        exactly_one_of:
+          - range: StageContext
+          - range: StageRange
+      in: {multivalued: true, minimum_cardinality: 1, description: "The setups the facts hold in, in the order written."}
       known: {range: Date}
       set: {required: true, range: Assignment, multivalued: true, inlined_as_list: true}
+
+  StageContext:
+    description: One stage, as a stage context.
+    attributes:
+      stage: {required: true}
+
+  StageRange:
+    description: A range of stages from one stage, closed at an exclusive end stage or open.
+    attributes:
+      from: {required: true}
+      until: {}
 
   Assignment:
     attributes:
