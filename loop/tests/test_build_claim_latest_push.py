@@ -6,7 +6,7 @@ push supplies the lease start only when its resulting commit equals the observed
 has ended when that start plus the duration is at most the cut tick.
 """
 import pytest
-from test_build_claim_release_plan import KINDS, LEASE, claim_records, declared_kinds, generation
+from test_build_claim_release_plan import CLAIM_RECEIPTS, KINDS, LEASE, claim_records, declared_kinds, generation
 from test_build_selection import OBSERVED_AT, capture, published, repository
 
 
@@ -20,6 +20,9 @@ def latest_push_records():
         "task/repushed": [("task/repushed", t - 10 * LEASE), ("task/repushed", t - LEASE + 1)],
         # The latest push made another commit than the one listed: an older matching push starts no lease.
         "task/raced": [("task/raced", t - 10 * LEASE), ("task/raced-after", t - 1)],
+        # Two equally recent pushes with different commits leave the latest push undecided, even though one of
+        # them made the observed generation long enough ago.
+        "task/tied": [("task/tied", t - LEASE), ("task/tied-other", t - LEASE)],
     }
     records = claim_records([LEASE])
     records.update(build_claim=[], build_claim_activity=[], build_claim_pull_reading=[])
@@ -33,7 +36,8 @@ def latest_push_records():
                                                     "after": after, "pushed_at": pushed_at,
                                                     "source": "push-activity"})
         records["build_claim_pull_reading"].append({"id": f"{branch}@{t}-none", "claim": branch,
-                                                    "observed_at": t, "state": "none", "source": "pull-query"})
+                                                    "observed_at": t, "state": "none", "source": "pull-query",
+                                                    "receipt": "receipt"})
     return records
 
 
@@ -42,7 +46,8 @@ def latest_push_records():
     raises=AssertionError,
     reason=(
         "Read decisions/build-claim-release.md sections 1 and 2. build_claim_activity holds every push record of "
-        "a claim. Take the latest push per claim by pushed_at; it supplies the lease start only when its after "
+        "a claim. Take the latest push per claim by pushed_at; two equally recent pushes with different commits "
+        "leave it undecided. The latest push supplies the lease start only when its after "
         "equals the observed generation. An older matching push never starts a lease. Write in "
         "build/rules/claims.dl. Waits for test_build_claim_release_plan (same file, adds the claim kinds). Today "
         "the build schema lacks the claim kinds."
@@ -54,6 +59,7 @@ def test_build_claim_latest_push(tmp_path):
     base, head, paths = repository(source, "decisions/claims.md")
     records = capture(source, base, head, paths)
     records.update(latest_push_records())
+    records["loop_sweep_receipt"].extend(CLAIM_RECEIPTS)
     rows = published(tmp_path, records)
     plans = {tuple(row["key"][:3]) for row in rows.get("build_claim_release_plan", [])}
     held = {tuple(row["key"][:3]) for row in rows.get("build_claim_held", [])}
@@ -64,4 +70,5 @@ def test_build_claim_latest_push(tmp_path):
     assert held == {
         ("current", "task/repushed", "lease-active"),
         ("current", "task/raced", "lease-unknown"),
+        ("current", "task/tied", "lease-unknown"),
     }, f"An older push must not start the lease: {held}"

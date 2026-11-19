@@ -5,6 +5,8 @@ status: settled
 # `x in Stage and x.rank = 0`, and the rank of `a` is an archived unknown. Expectations follow
 # decisions/language-expression-semantics.md §2 rule 3 and the `ask` classification after its list:
 # a keyed outcome gives the actual undecided row; success rows alone support positive matches only.
+# `zero_sparse` publishes outcomes but none for `a`: without a checked outcome at the full key the call
+# is unknown with that missing outcome row as cause, never false by absence.
 input:
   rows:
     - {$kind: Stage, $id: a, rank: {$unknown: not_measured}}
@@ -25,14 +27,19 @@ input:
     # publication carries a checked outcome keyed by the complete invocation.
     zero: {binders: [{name: x, ref: Stage}], world: closed, states: [known, unknown], outcome: false}
     zero_decided: {binders: [{name: x, ref: Stage}], world: closed, states: [known, unknown], outcome: true}
+    zero_sparse: {binders: [{name: x, ref: Stage}], world: closed, states: [known, unknown], outcome: true}
     staged: {binders: [{name: x, ref: Stage}], world: closed, states: [known], outcome: false}
   successes:
     zero: [[b]]
     zero_decided: [[b]]
+    zero_sparse: [[b]]
     staged: [[a], [b], [c]]
   outcomes:
     zero_decided:
       - {key: [a], state: unknown, reason: not_measured, cause: {relation: stage__rank, key: [a]}}
+      - {key: [b], state: known, value: true}
+      - {key: [c], state: known, value: false}
+    zero_sparse:
       - {key: [b], state: known, value: true}
       - {key: [c], state: known, value: false}
   cases:
@@ -50,6 +57,10 @@ input:
       question: "ask x: Stage where zero_decided(x)"
     - id: total-negation
       question: "ask x: Stage where not staged(x)"
+    - id: missing-outcome-negation
+      question: "ask x: Stage where not zero_sparse(x)"
+    - id: missing-outcome-positive
+      question: "ask x: Stage where zero_sparse(x)"
 expect:
   value:
     success-only-positive:
@@ -70,6 +81,16 @@ expect:
       rows: []
       undecided: []
       counts: {rows: 0, undecided: 0, not_applicable: 0}
+    missing-outcome-negation:
+      rows: [c]
+      undecided:
+        - {id: a, state: unknown, reason: no_outcome, cause_relation: zero_sparse, cause_key: '["a"]'}
+      counts: {rows: 1, undecided: 1, not_applicable: 0}
+    missing-outcome-positive:
+      rows: [b]
+      undecided:
+        - {id: a, state: unknown, reason: no_outcome, cause_relation: zero_sparse, cause_key: '["a"]'}
+      counts: {rows: 1, undecided: 1, not_applicable: 0}
   state: known
   reason: null
   witness: null
