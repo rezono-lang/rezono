@@ -10,19 +10,27 @@ from typing import Any
 
 
 def _submitted(state: dict[str, Any], member: str) -> bool:
-    return any(entry.get("member") == member for entry in state.get("submitted", []))
+    return any(entry.get("member") == member for entry in state["submitted"])
 
 
 def submit_refusal(state: dict[str, Any], *, worker: str, member: str) -> str | None:
-    """Return None when ``worker`` may submit ``member``, else the first failed guard."""
+    """Return None when ``worker`` may submit ``member``, else the first failed guard.
+
+    A missing ``stopped`` or ``submitted`` set is unknown, not empty: the guard
+    cannot be checked, so the submission is refused.
+    """
     if state["chosen"]["pin"] != state["pin"]:
         return "stale_certificate"
     if member not in state.get("pending", []):
         return "not_pending"
     if state.get("claims", {}).get(member) != worker:
         return "not_claimant"
-    if worker in state.get("stopped", []):
+    if state.get("stopped") is None:
+        return "stopped_unknown"
+    if worker in state["stopped"]:
         return "worker_stopped"
+    if state.get("submitted") is None:
+        return "submitted_unknown"
     if _submitted(state, member):
         return "already_submitted"
     return None
@@ -35,7 +43,7 @@ def record_submit(state: dict[str, Any], *, worker: str, member: str) -> dict[st
         raise ValueError(f"submit refused: {refusal}")
     after = deepcopy(state)
     after["submitted"] = [
-        *after.get("submitted", []),
+        *after["submitted"],
         {
             "member": member,
             "worker": worker,
