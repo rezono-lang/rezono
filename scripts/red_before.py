@@ -108,8 +108,10 @@ def prepare(base, head, selection):
     if git("status", "--porcelain", "--untracked-files=no").strip():
         raise SystemExit("ERROR the working tree has local changes")
     git("checkout", "-q", "--detach", base)
-    kept = [c.path for c in records if protected(c.path) and c.status != "D"]
-    gone = [c.path for c in records if protected(c.path) and c.status == "D"]
+    # Policy that is also source stays at the base, like any other source.
+    laid = [c for c in records if protected(c.path) and not source(c.path)]
+    kept = [c.path for c in laid if c.status != "D"]
+    gone = [c.path for c in laid if c.status == "D"]
     pathspecs("checkout", head, paths=kept)
     pathspecs("rm", "-q", "--ignore-unmatch", paths=gone)
     print(f"Checked out the base {base} with {len(kept) + len(gone)} protected path(s) from {head}.")

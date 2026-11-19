@@ -88,7 +88,7 @@ The compiler reserves these exact names and signatures. A pack declares one with
 
 Content values beyond the member keys are not exposed in this version. A pack that needs a value in its rules makes that value part of the member key of its own scope, as a reader mapping does with a path and a reader. A consumer that needs the full content, such as the month close, reads it through the receipt verifier.
 
-The protected relations are ordinary relations for access. A role reads them only under its rights, and a role proof exposes only the evidence that role may read.
+The protected relations are published on the complete side only. They carry no element column, and their rows expose the trusted inventory, member keys included, so no right of a kind can decide who reads them. Until a decision gives them an explicit read rule or element columns for the member keys, every filtered role has them withheld, as the relations of a sealed kind are withheld (`access.Scope.withheld`, and independently `rezono_checker.access.withheld_admission`). A derived conclusion that rests on a withheld row reaches a role only through a proof whose grounds that role may read ([scoped completeness](scoped-completeness.md), section 2); a conclusion whose only proofs rest on a protected relation stays hidden from every filtered role.
 
 ## 7. Round verification
 

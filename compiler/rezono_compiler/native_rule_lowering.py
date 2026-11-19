@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import re
 from typing import NoReturn
 
 from . import modules, native_rule_signatures, rezono_module, rules_dl, spans
@@ -63,6 +64,11 @@ def lower_source(module: modules.Module, form: dict, root: str,
             guard = declaration["when"]
             members = guard["and"] if set(guard) == {"and"} and guard["and"] else [guard]
             first = f"{at}/when/and/0" if members[0] is not guard else f"{at}/when"
+            if members[0] is guard and first not in clause.memberships:
+                atom, body = grounded(site, at, declaration, head, clause, first, guard, line)
+                statements.append(("rule", atom, body, line))
+                columns.append(column)
+                continue
             variable, table = membership(where, at, line, column, members[0], head, clause, first)
             terms = [("var", variable)]
             atom = (clause.relation, terms, line)
@@ -84,6 +90,62 @@ def membership(where: str, at: str, line: int, column: int, guard: dict,
             if head == [subject] and rules_dl.VARIABLE.fullmatch(variable):
                 return variable, table
     refuse(where, at, line, column, "This rule needs a single head variable bound by a positive kind membership")
+
+
+def grounded(site: Site, at: str, declaration: dict, head: list[dict],
+             clause: native_rule_signatures.LinkedClause, pointer: str, guard: dict, line: int) -> tuple[tuple, list]:
+    """Lower a guard of one positive path or slot-call premise to the forward row that binds it.
+
+    `x.rank = 0` reads the slot row `rank(?x, 0)`, `y in x.next` and `Stage.next(x, y)` read `next(?x, ?y)`.
+    No kind membership or identifier premise is added: the typed head only declares a type
+    (decisions/language-expression-semantics.md section 1). A head column that the row does not bind is R042.
+    """
+    table, terms = slot_row(clause, pointer, guard)
+    if table is None:
+        refuse(site.file, pointer, *site.span(pointer)[1:],
+               "This rule needs a positive kind membership, slot row or relation call that binds its head")
+    bound = {term[1] for term in terms if term[0] == "var"}
+    names = "columns" if "args" not in declaration else "args"
+    head_terms = []
+    for index, argument in enumerate(head):
+        place = f"{at}/{names}/{index}"
+        name = argument["path"][0] if argument.keys() == {"path"} and len(argument["path"]) == 1 else None
+        if name is None or not rules_dl.VARIABLE.fullmatch(name):
+            refuse(site.file, place, *site.span(place)[1:], "A native rule head takes a variable in each column")
+        if name not in bound:
+            refuse(site.file, place, *site.span(place)[1:],
+                   f"The head column {name!r} is declared with a type but no positive premise binds it", "R042")
+        head_terms.append(("var", name))
+    return (clause.relation, head_terms, line), [("lit", "positive", (table, terms, line))]
+
+
+def slot_row(clause: native_rule_signatures.LinkedClause, pointer: str, guard: dict) -> tuple[str | None, list]:
+    """The forward slot or relation row of a single positive premise, or no table when it has none."""
+    if set(guard) == {"cmp"} and guard["cmp"][0] == "=":
+        _, left, right = guard["cmp"]
+        for side, path, other in ((1, left, right), (2, right, left)):
+            table, _ = clause.paths.get(f"{pointer}/cmp/{side}", (None, None))
+            if table is not None and len(path.get("path", ())) == 2 and (value := operand(other)) is not None:
+                return table, [("var", path["path"][0]), value]
+    elif set(guard) == {"in"}:
+        subject, domain = guard["in"]
+        table, _ = clause.paths.get(f"{pointer}/in/1", (None, None))
+        if table is not None and len(domain.get("path", ())) == 2 and (value := operand(subject)) is not None:
+            return table, [("var", domain["path"][0]), value]
+    elif set(guard) == {"call"} and (table := clause.calls.get(pointer)) is not None:
+        values = [operand(argument) for argument in guard["call"][1]]
+        if all(value is not None and value[0] == "var" for value in values):
+            return table, values
+    return None, []
+
+
+def operand(node: dict) -> tuple | None:
+    """A variable or an integer literal as a rule term; anything else has no direct row term."""
+    if node.keys() == {"path"} and len(node["path"]) == 1 and rules_dl.VARIABLE.fullmatch(node["path"][0]):
+        return "var", node["path"][0]
+    if node.keys() == {"lit"} and re.fullmatch(r"-?[0-9]+", node["lit"]):
+        return "const", str(int(node["lit"])), "integer"
+    return None
 
 
 @dataclass(frozen=True)
