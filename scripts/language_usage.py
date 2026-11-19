@@ -103,6 +103,9 @@ EVIDENCE |= {
     "exceptions": (reader("exceptions"), lowering("lower_exceptions")),
     "table-policy": (reader("table_policy"), lowering("lower_table_policy", "test_lower_table_first"),
                      lowering("lower_table_policy", "test_lower_table_collect")),
+    "deprecated-declaration": (reader("deprecated_declaration"), lowering("lower_deprecated")),
+    "intermediate-invariant": (reader("invariant_intermediate"),),
+    "step-declaration": (reader("step_declaration"),),
 }
 
 KIND_FEATURES = {
@@ -200,21 +203,39 @@ MODULE_SYNTAX = {
     "parameters": r"^param\b", "units": r"^(?:unit|rounding)\b", "calculation": r"^\s*derived\b",
     "exceptions": r"^\s*unless\b", "decision-table": r"^\s*table\b", "table-policy": r"^\s*table\s+(?!unique\b)\w+", "conditional-check": r"^(?:check|require|warn)\b",
     "relational-rule": r"^rules\b", "native-rule": r"^rule\b",
+    "intermediate-invariant": r"^rule\b(?:(?!\bwhen\b).)*\binvariant\s+intermediate\b",
+    "step-declaration": r"^step\b", "deprecated-declaration": r"^deprecated\b",
     "time-policy": r"^\s+(?:applies|sealed) at:", "schema-metadata": r"^reason\b",
 }
 RULE_DECLARATION = re.compile(r"^rule\b[^\n]*(?:\n[ \t][^\n]*)*", re.MULTILINE)
 STATE_PREDICATE = re.compile(r"\bis\s+(?:known\b|unknown\b|invalid\b|n/a(?![\w/]))")
 STATE_REVIEW = "native-rule-state-review"
+LITERALS = re.compile(r'"(?:\\.|[^"\\])*"|\x60[^\x60\n]*\x60|--[^\n]*')
+# The schema header declares module identity (decisions/language-metadata.md). Its base fields match
+# BASE_SCHEMA_FIELDS of a written schema; any other header field is schema metadata.
+SCHEMA_HEADER = re.compile(r"^schema\b[^\n]*((?:\n[ \t][^\n]*)*)", re.MULTILINE)
+BASE_HEADER_FIELD = re.compile(
+    r'^\s+(?:iri\s+"|language\s|default range\s|import\s+"linkml:types"\s*(?:--|$)|annotation\s+layer\s*=)'
+)
+
+
+def header_metadata(raw):
+    return any(
+        LITERALS.sub("", line).strip() and not BASE_HEADER_FIELD.match(line)
+        for header in SCHEMA_HEADER.finditer(raw) for line in header[1].splitlines()
+    )
 
 
 def authored_features(path):
     raw = path.read_text(encoding="utf-8")
     # Look for authored syntax outside comments, literals and escaped names.
-    tokens = re.sub(r'"(?:\\.|[^"\\])*"|\x60[^\x60\n]*\x60|--[^\n]*', " ", raw)
+    tokens = LITERALS.sub(" ", raw)
     found = {name for name, pattern in MODULE_SYNTAX.items() if re.search(pattern, tokens, re.MULTILINE)}
     if any(STATE_PREDICATE.search(rule[0]) for rule in RULE_DECLARATION.finditer(tokens)):
         found.add(STATE_REVIEW)
-    known_lines = [r"^(?:rezono|pack|extend)\b", *MODULE_SYNTAX.values()]
+    if header_metadata(raw):
+        found.add("schema-metadata")
+    known_lines = [r"^(?:rezono|pack|extend|schema)\b", *MODULE_SYNTAX.values()]
     if any(line and not any(re.search(pattern, line) for pattern in known_lines)
            for line in tokens.splitlines() if not line.startswith((" ", "\t"))):
         found.add("unclassified-authored-syntax")

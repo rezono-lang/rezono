@@ -253,6 +253,19 @@ cd rezono && npm ci && npm test
 
 Not built here: the routes, the witness of each row (`$why`), the dataset hash (the reference `rezono_publication.hash` does not hash values of an imported type, and every answer has them), and `given` lines at the endpoint. No published pack uses it yet. The gate's own test job does not install the packages of `rezono/` and skips `edge/gate/test/expr.test.ts`; the workflow `rezono` runs it.
 
+## A compiler wheel with the module reader
+
+The compiler reads a pack written in Rezono through the module reader in this directory, which runs on Node 24. Put Node 24 on PATH or set `REZONO_NODE` to its executable. YAML packs and older form-only modules need Python alone.
+
+To include the reader in a standalone compiler wheel, run these commands from the root of the checkout, in one shell. The wheel is written to `$work`.
+
+```bash
+work=$(mktemp -d)
+npm ci --prefix rezono --omit=dev --ignore-scripts
+node scripts/release-language.mjs "$work/language" "$work/module-reader"
+REZONO_PREPARED_READER="$work/module-reader" python -m pip wheel --no-deps --wheel-dir "$work" ./compiler
+```
+
 ## Next
 
 The routes of the endpoint, the witness of each row (`$why`) and the dataset hash; the other value tables of v0.1 (parameter tables and rule tables), each with its text first; the declarations a module does not read yet, and the check of a module, as a pack written in Rezono needs them: with it the tables of a module are checked against its own kinds. The compiler must read the JSON form of a module and lower its decision tables.

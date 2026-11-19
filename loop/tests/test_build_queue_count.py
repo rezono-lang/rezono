@@ -1,19 +1,27 @@
-"""Count the planner queue in the rules from a receipted pull listing, not in the capture adapter.
+"""Count the planner queue in the rules from the admitted inventory of a pull listing, not from its records.
 
-The expectation is worked by hand from decisions/build-claim-release.md section 4 and
-decisions/build-reconciliation.md (task and queue observations): the queue is the open pull requests against
-the default branch that are not drafts, read from a complete listing that a receipt of the same run and cut
-attests. With a limit of three, each excluded pull request would on its own lift the count of two to the limit.
+The expectations are worked by hand from decisions/build-claim-release.md section 4,
+decisions/build-reconciliation.md (task and queue observations) and decisions/admission-transport.md section 6
+(queue pulls): the queue is the open pull requests against the default branch that are not drafts. Each is a
+member ["queue-pull", base, number] of the admitted receipt that the listing names, beside the member
+["queue-listing", base] of the read itself. With a limit of three, each excluded pull request would on its own lift
+the count of two to the limit.
 """
 import pytest
 import yaml
 from test_build_claim_release_plan import ROOT
 from test_build_selection import OBSERVED_AT, capture, published, repository
-from test_build_task_order import task_observations
+from test_build_task_order import queue_evidence, queue_listing, queue_members, task_observations
 
 KINDS = {"BuildQueueListing", "BuildQueuePull"}
 COUNTED = [(1, "open", "ready", "main"), (2, "open", "ready", "main")]
 EXCLUDED = [(3, "open", "draft", "main"), (4, "open", "ready", "release"), (5, "closed", "ready", "main")]
+SIXTH = (6, "open", "ready", "main")
+SLOT = [["current", "listing", "placement-policy"]]
+
+
+class MissingVerifiedQueue(AssertionError):
+    """The planner queue is counted from submitted records instead of the admitted pull inventory."""
 
 
 def declared_kinds():
@@ -24,56 +32,119 @@ def declared_kinds():
     }
 
 
-def listing(records, pulls, receipt):
+def listing(records, pulls, receipt, inventories=()):
+    """Record the listing with `pulls` and return the evidence of the protected reads, or None.
+
+    `receipt` is "admitted" to cite the receipt of the first of `inventories`, another receipt record, or None.
+    """
     records["build_queue_limit"] = [{"id": "planner-limit", "decision": "placement-policy", "limit": 3}]
     records["loop_sweep_receipt"].append({"id": "stale-round", "run": "current", "event_time": OBSERVED_AT - 1})
-    records["build_queue_listing"] = [{
-        "id": "listing", "run": "current", "observed_at": OBSERVED_AT, "base": "main", "source": "pull-listing",
-        **({"receipt": receipt} if receipt else {}),
-    }]
-    records["build_queue_pull"] = [
-        {"id": f"listing-{number}", "listing": "listing", "number": number, "state": state, "draft": draft,
-         "base": base}
-        for number, state, draft, base in pulls
-    ]
+    evidence = None
+    if inventories:
+        digests, evidence = queue_evidence(*inventories)
+        receipt = digests[0] if receipt == "admitted" else receipt
+    queue_listing(records, "listing", pulls, receipt=receipt)
+    return evidence
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason=(
-        "extra: Read decisions/build-claim-release.md section 4 and decisions/build-reconciliation.md (task and queue "
-        "observations). Declare BuildQueueListing (run, observed_at, base, source, receipt: LoopSweepReceipt) and "
-        "BuildQueuePull (listing, number, state open|closed, draft draft|ready, base) in build/schema/tasks.yaml, "
-        "and derive build_queue_at_cut in build/rules/tasks.dl by counting the open, ready pull requests against "
-        "the listing's base, only for a listing whose receipt belongs to the run at its cut. Keep "
-        "BuildQueueReading as it is; moving loop/build_queue_capture.py to the listing is a later planner step. "
-        "Write in build/schema/tasks.yaml and build/rules/tasks.dl. Today the build schema lacks the listing "
-        "kinds."
-    ),
-)
-@pytest.mark.parametrize(("pulls", "receipt", "known", "waiting"), [
-    (COUNTED + EXCLUDED, "receipt", "2", None),
-    (COUNTED + EXCLUDED + [(6, "open", "ready", "main")], "receipt", "3", "queue-limit"),
-    ([], "receipt", "0", None),
-    (COUNTED + EXCLUDED, None, None, "queue-evidence-unknown"),
-    (COUNTED + EXCLUDED, "stale-round", None, "queue-evidence-unknown"),
-], ids=["two-of-five", "at-limit", "empty", "no-receipt", "stale-receipt"])
-def test_build_queue_count(tmp_path, pulls, receipt, known, waiting):
-    assert KINDS <= declared_kinds(), f"The build schema lacks {sorted(KINDS - declared_kinds())}"
+def outcome(tmp_path, records, evidence):
+    rows = published(tmp_path, records, evidence)
+    return tuple([row["key"] for row in rows.get(relation, [])]
+                 for relation in ("build_queue_known", "build_planner_slot", "build_planner_waiting"))
+
+
+def expected(known, waiting):
+    return ([["current", known, "listing"]] if known is not None else [],
+            SLOT if waiting is None else [], [["current", waiting]] if waiting is not None else [])
+
+
+def submitted(tmp_path):
+    tmp_path.mkdir(exist_ok=True)
     source = tmp_path / "source"
     base, head, paths = repository(source, "decisions/task-policy.md")
     records = capture(source, base, head, paths)
-    task_observations(records, [])
-    listing(records, pulls, receipt)
-    rows = published(tmp_path, records)
+    task_observations(records)
+    return records
 
-    assert [row["key"] for row in rows.get("build_queue_known", [])] == (
-        [["current", known, "listing"]] if known is not None else []
-    )
-    assert [row["key"] for row in rows.get("build_planner_slot", [])] == (
-        [["current", "listing", "placement-policy"]] if waiting is None else []
-    )
-    assert [row["key"] for row in rows.get("build_planner_waiting", [])] == (
-        [["current", waiting]] if waiting is not None else []
-    )
+
+@pytest.mark.parametrize(("pulls", "receipt", "inventory", "known", "waiting"), [
+    pytest.param(COUNTED + EXCLUDED, "admitted", [1, 2], "2", None, id="two-of-five"),
+    pytest.param(COUNTED + EXCLUDED + [SIXTH], "admitted", [1, 2, 6], "3", "queue-limit", id="at-limit"),
+    # The submitted listing is empty while the admitted read lists three pull requests: the queue is at its limit.
+    pytest.param([], "admitted", [1, 2, 6], "3", "queue-limit", id="empty", marks=pytest.mark.xfail(
+        strict=True, raises=MissingVerifiedQueue,
+        reason="M2: decisions/admission-transport.md: section 6, queue pulls. An empty submitted listing whose "
+               "admitted read lists three open pull requests reaches the limit of three. The same rule turns "
+               "loop/tests/test_build_queue_count.py--test_planner_slot_needs_verified_pull_inventory green; "
+               "remove this mark in that PR. Today the rules count the empty records (known 0 and a planner slot, "
+               "MissingVerifiedQueue).")),
+    pytest.param([], "admitted", [], "0", None, id="verified-empty"),
+    pytest.param(COUNTED + EXCLUDED, None, None, None, "queue-evidence-unknown", id="no-receipt"),
+    pytest.param(COUNTED + EXCLUDED, "stale-round", None, None, "queue-evidence-unknown", id="stale-receipt"),
+])
+def test_build_queue_count(tmp_path, pulls, receipt, inventory, known, waiting):
+    assert KINDS <= declared_kinds(), f"The build schema lacks {sorted(KINDS - declared_kinds())}"
+    records = submitted(tmp_path)
+    evidence = listing(records, pulls, receipt, () if inventory is None else (queue_members(inventory),))
+    actual = outcome(tmp_path, records, evidence)
+    if actual != expected(known, waiting):
+        raise MissingVerifiedQueue(f"known, slot and waiting: {actual}")
+
+
+# Each case drops one ground of the count: the admitted receipt, the full population, the tag, the base, the read
+# itself, a recorded pull request, or the listing altogether. None of them may leave a planner slot.
+COUNTER_CASES = {
+    "records-only": (COUNTED, "receipt", (), (None, "queue-evidence-unknown")),
+    "omitted-pull": (COUNTED + EXCLUDED, "admitted", (queue_members([1, 2, 6]),), ("3", "queue-limit")),
+    "untagged": (COUNTED, "admitted", ([["main"], ["main", 1], ["main", 2]],), (None, "queue-evidence-unknown")),
+    "other-base": (COUNTED, "admitted", (queue_members([1, 2], base="release"),), (None, "queue-evidence-unknown")),
+    "no-listing-member": (COUNTED, "admitted", (queue_members([1, 2])[1:],), (None, "queue-evidence-unknown")),
+    "unlisted-record": (COUNTED, "admitted", (queue_members([1]),), (None, "queue-evidence-unknown")),
+    "second-receipt": (COUNTED, "admitted", (queue_members([1, 2]), queue_members([1, 2, 6])),
+                       (None, "queue-evidence-unknown")),
+}
+
+
+@pytest.mark.xfail(
+    strict=True, raises=MissingVerifiedQueue,
+    reason="M2: decisions/admission-transport.md: section 6, queue pulls, and decisions/build-reconciliation.md "
+           "(task and queue observations). A planner slot rests on the submitted pull records alone. Count the "
+           "queue from the admitted verified_member keys of the receipt that the build_queue_listing row names: "
+           "the member [\"queue-listing\", base] (parts 0 and 1) for the read itself, also when it lists nothing, "
+           "and one member [\"queue-pull\", base, number] (parts 0 to 2) per open pull request against the base "
+           "that is not a draft. Derive build_queue_at_cut(run, count, listing) only for a listing at the run's "
+           "cut whose named receipt is admitted with its queue-listing member; count is the number of its "
+           "queue-pull members for that base. Leave the count unknown when a second admitted receipt carries the "
+           "same queue-listing member, or when a recorded open pull request against the base that is not a draft "
+           "has no member. A build_queue_reading row no longer establishes a count; keep its class. Keep "
+           "build_queue_known, build_planner_slot and build_planner_waiting as they are. Write in build/ "
+           "(tasks.dl and its schema). Waits for "
+           "loop/tests/test_mapped_path_requires_reader_inventory.py--test_mapped_path_requires_reader_inventory, "
+           "which declares verified_receipt and verified_member in build/rules/selection.dl; reuse those "
+           "declarations. The same rule turns loop/tests/test_build_queue_count.py--test_build_queue_count[empty] "
+           "green: remove its mark in the same PR. Today the rules count the submitted pull records, so an omitted, "
+           "emptied or unadmitted listing and a bare reading still give a planner slot (MissingVerifiedQueue).",
+)
+def test_planner_slot_needs_verified_pull_inventory(tmp_path):
+    records = submitted(tmp_path / "admitted")
+    evidence = listing(records, COUNTED + EXCLUDED, "admitted", (queue_members([1, 2]),))
+    assert outcome(tmp_path / "admitted", records, evidence) == expected("2", None)
+
+    wrong = {}
+    for case, (pulls, receipt, inventories, want) in COUNTER_CASES.items():
+        records = submitted(tmp_path / case)
+        evidence = listing(records, pulls, receipt, inventories)
+        actual = outcome(tmp_path / case, records, evidence)
+        if actual != expected(*want):
+            wrong[case] = actual
+
+    # A reported count of the old reading path, with a receipt of the run's cut but no admitted listing.
+    records = submitted(tmp_path / "reading")
+    records["build_queue_limit"] = [{"id": "planner-limit", "decision": "placement-policy", "limit": 3}]
+    records["build_queue_reading"] = [{"id": "reading", "run": "current", "observed_at": OBSERVED_AT, "count": 0,
+                                       "source": "queue-reader", "receipt": "receipt"}]
+    actual = outcome(tmp_path / "reading", records, None)
+    if actual[1] or actual[2] != [["current", "queue-evidence-unknown"]]:
+        wrong["reading-only"] = actual
+    if wrong:
+        raise MissingVerifiedQueue(f"a planner slot or count without the admitted pull inventory: {wrong}")

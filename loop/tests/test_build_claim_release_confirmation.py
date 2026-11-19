@@ -41,6 +41,11 @@ def release_records(records):
         "task/foreign": ("sent", t + 10, [("other", t + 60, "absent", None, "other-after-delete")]),
         "task/unreceipted": ("sent", t + 10, [("current", t + 30, "absent", None, None)]),
         "task/still": ("sent", t + 10, [("current", t + 60, "present", "task/still", "after-delete")]),
+        # A present read that names no generation still shows the branch at that tick.
+        "task/unnamed": ("sent", t + 10, [
+            ("current", t + 60, "absent", None, "after-delete"),
+            ("current", t + 60, "present", None, "after-delete"),
+        ]),
         "task/contradicted": ("sent", t + 10, [
             ("current", t + 60, "absent", None, "after-delete"),
             ("current", t + 60, "present", "task/contradicted", "after-delete"),
@@ -61,15 +66,6 @@ def release_records(records):
     return records
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason=(
-        "extra: Read decisions/build-claim-release.md sections 1 and 3. Declare BuildClaimDelete and BuildClaimRefRead "
-        "in a new build/schema/claim_release.yaml and derive build_claim_released, build_claim_release_discarded "
-        "and build_claim_release_pending in a new build/rules/claim_release.dl. Write only in those two build files."
-    ),
-)
 def test_build_claim_release_confirmation(tmp_path):
     assert KINDS <= declared_kinds(), f"The build schema lacks {sorted(KINDS - declared_kinds())}"
     source = tmp_path / "source"
@@ -93,5 +89,6 @@ def test_build_claim_release_confirmation(tmp_path):
         ("current", "task/foreign", "readback-missing"),
         ("current", "task/unreceipted", "readback-missing"),
         ("current", "task/still", "still-present"),
+        ("current", "task/unnamed", "still-present"),
         ("current", "task/contradicted", "still-present"),
     }

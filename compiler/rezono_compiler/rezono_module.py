@@ -23,8 +23,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import cast
 
-import yaml
-from . import rezono_alias, rezono_enum, rezono_extend, rezono_key, rezono_kind, rezono_metadata, rezono_slot, rezono_unit
+from . import rezono_alias, rezono_enum, rezono_extend, rezono_key, rezono_kind, rezono_metadata, rezono_slot, rezono_unit, strict_yaml
 from .native_literals import NATIVE_FORMAT, native_literal_errors
 from .schemaview import SchemaView
 from linkml_runtime.linkml_model import SchemaDefinition
@@ -446,21 +445,39 @@ def lower(pack_dir: Path, d: Declared, form: dict, pack: str, owners: dict[str, 
         place = key if key.startswith("/") else header_line(pack_dir, d, key)
         refuse(place, message, section)
     pinned = pinned or {}
-    used: list[str] = []  # the pinned packs an unaliased `use` line makes visible, in the order of the lines
+    used: list[str] = []  # the pinned packs this module imports via `use`, in the order of the lines
+    unaliased: set[str] = set()
+    prefixes: dict[str, dict[str, list[str]]] = {}  # prefix -> {declared name -> [<pack>:<module>, ...]}
     if not native_rules:
         owners = {name: list(found) for name, found in owners.items()}
         for i, line_ in enumerate(module["use"]):
             at = f"/use/{i}"
             target = line_.get("use") if isinstance(line_, dict) else None
-            if not isinstance(target, str) or set(line_) - {"use"} or "." in target:
-                refuse(at, "a `use` line with a prefix or a dotted pack name is not lowered yet")
+            alias = line_.get("as") if isinstance(line_, dict) else None
+            if not isinstance(target, str) or set(line_) - {"use", "as"} or (
+                "as" in line_ and not isinstance(alias, str)
+            ):
+                refuse(at, "not a `use` line of the form")
+            elif "." in target:
+                refuse(at, "a `use` line with a dotted pack name is not lowered yet")
             elif target not in pinned:
                 refuse(at, f"{target} is not a pack that pack.yaml pins (R046)")
-            elif target not in used:
-                used.append(target)
-                for mid, ns in sorted(pinned[target].items()):
-                    for n in ns:
-                        owners.setdefault(n, []).append(f"{target}:{mid}")
+            elif alias is not None and alias in prefixes:
+                refuse(at, f"prefix {alias} is declared twice (R046)")
+            else:
+                if target not in used:
+                    used.append(target)
+                if alias is not None:
+                    prefixed: dict[str, list[str]] = {}
+                    for mid, ns in sorted(pinned[target].items()):
+                        for n in ns:
+                            prefixed.setdefault(n, []).append(f"{target}:{mid}")
+                    prefixes[alias] = prefixed
+                elif target not in unaliased:
+                    unaliased.add(target)
+                    for mid, ns in sorted(pinned[target].items()):
+                        for n in ns:
+                            owners.setdefault(n, []).append(f"{target}:{mid}")
     own = names(form)
     declared_names = own.keys() | owners.keys()
     uses: set[str] = set()
@@ -496,7 +513,7 @@ def lower(pack_dir: Path, d: Declared, form: dict, pack: str, owners: dict[str, 
                     continue
             lowered_kind = rezono_kind.lower(
                 decl, at, own, owners, declared_names, uses, refuse,
-                extended_format=extended_format,
+                extended_format=extended_format, aliases=prefixes,
             )
             if lowered_kind is not None:
                 if keys:
@@ -556,7 +573,7 @@ def schema_classes(pack_dir: Path, rel: str) -> dict:
     """The classes of a compilable pack's module, with ranges from the compiler's name resolution."""
     from . import modules  # The schema loader also calls this module's lowering functions.
 
-    meta = yaml.safe_load((pack_dir / "pack.yaml").read_text(encoding="utf-8")) or {}
+    meta = strict_yaml.read(pack_dir / "pack.yaml") or {}
     loaded, _ = modules.load(pack_dir, meta, [])
     schema = next(m.sv.schema for m in loaded if m.pack_dir == pack_dir and m.rel == rel)
     classes = {}
@@ -575,7 +592,7 @@ def schema_classes(pack_dir: Path, rel: str) -> dict:
 
 def class_slot_order(pack_dir: Path, rel: str) -> dict[str, list[str]]:
     """Read a compiled module's class and slot order from its form for the writer."""
-    meta = yaml.safe_load((pack_dir / "pack.yaml").read_text(encoding="utf-8")) or {}
+    meta = strict_yaml.read(pack_dir / "pack.yaml") or {}
     d = next(d for d in declared(meta, pack_dir, []) if d.module == rel)
     form = effective_form(pack_dir, d, []) or {"module": {"decls": []}}
     return {decl["kind"]: ([] if decl.get("embedded") is True else ["id"])

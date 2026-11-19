@@ -4,6 +4,7 @@ import { block, declaration, named, printRow, printSource, type Build, type Logi
 import { placed, refused } from './parse-support.ts';
 import { contexts, printContexts, type During, type Valid } from './module-version.ts';
 import { printExpr } from './print-expression.ts';
+import { readRuleName, spellName } from './rule-names.ts';
 import type { Expr } from './tree.ts';
 
 export interface FactTable {
@@ -45,14 +46,14 @@ const isValue = (cell: unknown) => typeof cell === 'object' && cell !== null && 
 // A source cell is a text literal, or a dash for the value of the source declaration.
 const isSourceCell = (cell: unknown) => typeof cell === 'object' && cell !== null && ('boundary' in cell || ('lit' in cell && String(cell.lit).startsWith('"')));
 
-function readFactTable(line: Logical, build: Build, inDataset = false): FactTable {
+function readFactTable(line: Logical, build: Build): FactTable {
 	const lines = line.block.filter((child) => child.read!.line === 'row' || (build.refuse(child, 'a row'), false));
 	const [head = [], ...rows] = lines.map((child) => child.read!.cells as Cell[]);
 	for (const child of line.block) build.leaf(child);
 	const slots = head.filter((cell) => !isSourceHead(cell));
 	const fields = head.filter(isSourceHead).map((cell) => cell.sourceField);
 	// A header of names, source fields after them, followed by rows with exactly one value per column. A dash omits
-	// a slot only in a table of a dataset (decisions/language-facts.md), and never the row identity in the first column.
+	// a slot in any fact table (decisions/language-facts.md), but never the row identity in the first column.
 	lines.forEach((child, i) => {
 		const cells = child.read!.cells as Cell[];
 		if (i === 0) {
@@ -61,7 +62,7 @@ function readFactTable(line: Logical, build: Build, inDataset = false): FactTabl
 			else if (new Set(fields).size !== fields.length) build.refuse(child, 'each source field once', child.end);
 			else if (fields.length && line.read!.source === undefined) build.refuse(child, 'a source citation `@ name` after the fact kind to give the source columns', child.end);
 		} else if (cells.length !== head.length || isOmitted(cells[0])
-			|| !cells.every((cell, at) => (at < slots.length ? isValue(cell) && (inDataset || !isOmitted(cell)) : isSourceCell(cell)))) {
+			|| !cells.every((cell, at) => (at < slots.length ? isValue(cell) : isSourceCell(cell)))) {
 			build.refuse(child, `${head.length} values`, child.end);
 		}
 	});
@@ -93,7 +94,7 @@ function readDataset(line: Logical, build: Build): Dataset {
 			build.refuse(child, 'a fact table or a source');
 			return [];
 		}
-		const table = readFactTable(child, build, true);
+		const table = readFactTable(child, build);
 		table.rows = table.rows.map((row) => row.map((cell) => datasetCell(cell, build)));
 		return [table];
 	});
@@ -137,7 +138,7 @@ function printFactTable(d: FactTable): string[] {
 export const facts = {
 	lineRules: ['RowLine', 'FactLine', 'DatasetLine'],
 	grammar: String.raw`
-  DatasetLine = kw<"dataset"> name
+  DatasetLine = kw<"dataset"> (name | quotedName)
   RowLine = "|" NonemptyListOf<Cell, "|"> "|"
   Cell = "->" Expr  -- out
        | dash       -- any
@@ -158,7 +159,7 @@ export const facts = {
   AssignLine = name "=" Expr Src?
   `,
 	actions: {
-		DatasetLine: (_k, n) => named(n, { line: 'dataset', dataset: n.sourceString }),
+		DatasetLine: (_k, n) => named(n, { line: 'dataset', dataset: readRuleName(n) }),
 		RowLine: (_open, cells, _close) => ({ line: 'row', cells: cells.asIteration().children.map((c: Node) => c.decl()) }),
 		Cell_out: (_arrow, e) => ({ out: e.tree() }),
 		Cell_any(_dash) {
@@ -168,7 +169,10 @@ export const facts = {
 			return placed(this, { sourceField: field.sourceString });
 		},
 		Cell_test: (value) => value.decl(),
-		CellValue_list: (_open, items, _close) => ({ list: items.asIteration().children.map((c: Node) => c.decl()) }),
+		// A list cell, a record cell and the mapping of a record are nodes of the form, so each has a place: its brackets.
+		CellValue_list(_open, items, _close) {
+			return placed(this, { list: items.asIteration().children.map((c: Node) => c.decl()) });
+		},
 		CellValue_record(_open, entries, _close) {
 			const record: Record<string, FactCell> = {};
 			for (const entry of entries.asIteration().children as Node[]) {
@@ -176,7 +180,7 @@ export const facts = {
 				if (Object.hasOwn(record, slot)) refused(entry, 'R000', ['each slot once in a record']);
 				record[slot] = value;
 			}
-			return { record };
+			return placed(this, { record: placed(this, record) });
 		},
 		CellValue_expr: (e) => e.tree(),
 		CellEntry: (slot, _colon, value) => [slot.sourceString, value.decl()],
@@ -198,7 +202,7 @@ export const facts = {
 	},
 	trailingRules: ['AssignLine'],
 	declarations: {
-		dataset: declaration<Dataset>('dataset', readDataset, d => block(`dataset ${d.dataset}`, d.decls.flatMap((decl) => ('fields' in decl ? printSourceDecl(decl) : printFactTable(decl))))),
+		dataset: declaration<Dataset>('dataset', readDataset, d => block(`dataset ${spellName(d.dataset)}`, d.decls.flatMap((decl) => ('fields' in decl ? printSourceDecl(decl) : printFactTable(decl))))),
 		facts: declaration<FactTable>('columns', readFactTable, printFactTable),
 		fact: declaration<FactRow>('set', readFactRow, d => block(`fact ${d.fact} ${d.id}${printContexts(d)}`,
 			d.set.map((s) => `${s.slot} = ${printExpr(s.value)}${printSource(s.source)}`)

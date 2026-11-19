@@ -1,5 +1,6 @@
 import { canonicalJson } from '../../viewer/src/lib/canon.ts';
 import { block, named, typeOf, type Build, type Logical, type ModuleComponent } from './module-support.ts';
+import { readRuleName, spellName } from './rule-names.ts';
 
 type AnnotationValue = string | boolean | AnnotationValue[] | { [name: string]: AnnotationValue };
 
@@ -93,7 +94,7 @@ export function readSchema(target: SchemaMetadata, line: Logical, build: Build):
 
 export function printSchema(target: SchemaMetadata): string[] {
 	if (target.schema === undefined) return [];
-	return block(`schema ${target.schema}`, [
+	return block(`schema ${spellName(target.schema)}`, [
 		...(target.iri === undefined ? [] : [`iri ${JSON.stringify(target.iri)}`]),
 		...(target.language === undefined ? [] : [`language ${target.language}`]),
 		...Object.keys(target.prefixes ?? {}).sort().map(name => `prefix ${name} = ${JSON.stringify(target.prefixes![name])}`),
@@ -106,7 +107,7 @@ export function printSchema(target: SchemaMetadata): string[] {
 export const metadata = {
 	lineRules: ['SchemaLine', 'IriLine', 'LanguageLine', 'PrefixLine', 'ImportLine', 'DefaultRangeLine', 'DescriptionLine', 'ExactMappingLine', 'CloseMappingLine', 'BroadMappingLine', 'AnnotationLine'],
 	grammar: String.raw`
-  SchemaLine = kw<"schema"> name
+  SchemaLine = kw<"schema"> rName
   IriLine = kw<"iri"> MetaString
   LanguageLine = kw<"language"> metaLanguage
   PrefixLine = kw<"prefix"> name "=" MetaString
@@ -127,7 +128,7 @@ export const metadata = {
   metaNonzero = "1".."9" d*
   `,
 	actions: {
-		SchemaLine: (_kw, name) => named(name, { line: 'schema', name: name.sourceString }),
+		SchemaLine: (_kw, name) => named(name, { line: 'schema', name: readRuleName(name) }),
 		IriLine: (_kw, value) => ({ line: 'iri', value: value.decl() }),
 		LanguageLine: (_kw, value) => ({ line: 'language', value: value.sourceString }),
 		PrefixLine: (_kw, name, _eq, value) => ({ line: 'prefix', name: name.sourceString, value: value.decl() }),

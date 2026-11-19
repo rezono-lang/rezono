@@ -11,11 +11,6 @@ MISSING = "object.spec.containers.exists(c, !has(c.image))"
 VIOLATION = "object.spec.containers.all(c, c.image in ['a'])"
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="M4: Write policy_shell.policy_shell as decisions/k8s-admission-translator.md specifies under Policy shell. "
-           "Write in k8s-admission/policy_shell.py.",
-)
 def test_policy_shell():
     from policy_renderer import render_policy
     from policy_shell import policy_shell

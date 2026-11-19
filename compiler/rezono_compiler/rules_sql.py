@@ -122,9 +122,12 @@ class RuleSQL:
             if s.op == "days":  # a view's reading: the engine's own date arithmetic, right to left
                 # A text that is no calendar day written YYYY-MM-DD derives nothing: the cast is guarded by the
                 # spelling and cannot fail, and a NULL result drops the row. A date column is read as its own text.
+                # Year 0000 is no day either, as for the checker (Python's calendar starts at year 1): with
+                # this spelling, a text at or after '0001' has a year Y >= 1.
                 text = f"CAST({self.term(s.left, 'string')} AS VARCHAR)"
                 cast, match = ("TRY_CAST", "regexp_matches") if dialect == "duckdb" else ("SAFE_CAST", "RLIKE")
-                left = f"CASE WHEN {match}({text}, '^[0-9]{{4}}-[0-9]{{2}}-[0-9]{{2}}$') THEN {cast}({text} AS DATE) END"
+                left = (f"CASE WHEN {match}({text}, '^[0-9]{{4}}-[0-9]{{2}}-[0-9]{{2}}$') AND {text} >= '0001' "
+                        f"THEN {cast}({text} AS DATE) END")
                 right = f"DATE {lit_sql(s.right, 'string')}"
                 diff = f"date_diff('day', {right}, {left})" if dialect == "duckdb" else f"TIMESTAMPDIFF(DAY, {right}, {left})"
                 self.env[s.var], self.types[s.var] = f"CAST({diff} AS BIGINT)", "integer"

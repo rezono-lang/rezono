@@ -8,7 +8,7 @@ from dataclasses import dataclass, field
 
 import yaml
 
-from .. import scenarios
+from .. import scenarios, strict_yaml
 from ..plan import Follow, Keep, Plan, Scan
 from .. import pack as packs
 
@@ -124,7 +124,7 @@ def slot_definition(m: Model, k: str, name: str) -> dict:
     """The definition of slot `name` of kind `k` as written: its attribute, or the shared slot, with an explicit
     range when the module's default_range gave it one."""
     kind = m.pack.kinds[k]
-    doc = yaml.safe_load(m.mods[kind.module].file.read_text("utf-8")) or {}
+    doc = strict_yaml.read(m.mods[kind.module].file) or {}
     attrs = ((doc.get("classes") or {}).get(kind.cls) or {}).get("attributes") or {}
     if name in attrs:
         d = dict(attrs[name] or {})
@@ -197,7 +197,7 @@ def slot_in(p: packs.Pack, table: str, rel: str, text: str, kind: str, rec, edit
 
 
 def loaded(node):
-    return yaml.safe_load(yaml.serialize(node))
+    return strict_yaml.load(yaml.serialize(node))
 
 
 def move_fact_edits(m: Model, mv: Move, edits: Edits):

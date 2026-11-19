@@ -5,9 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from pathlib import Path
 
-import yaml
 
-from .. import modules, scenarios, source_format
+from .. import modules, scenarios, source_format, strict_yaml
 from .. import pack as packs
 
 from .spec import FACT_DIRS, REF, OperationError
@@ -29,7 +28,7 @@ class Model:
 
 
 def model(pack_dir: Path, pack: packs.Pack | None = None) -> Model:
-    meta = yaml.safe_load((pack_dir / "pack.yaml").read_text("utf-8"))
+    meta = strict_yaml.read(pack_dir / "pack.yaml")
     errors: list[str] = []
     mods, _ = modules.load(pack_dir, meta, errors)
     names = modules.Names(mods, packs.snake, errors)
@@ -43,7 +42,7 @@ def model(pack_dir: Path, pack: packs.Pack | None = None) -> Model:
 
 def engine_names(pack_dir: Path) -> tuple[dict, dict]:
     """The engine names of classes and enums from the schema files alone (before the rest is consistent)."""
-    meta = yaml.safe_load((pack_dir / "pack.yaml").read_text("utf-8"))
+    meta = strict_yaml.read(pack_dir / "pack.yaml")
     errors: list[str] = []
     mods, _ = modules.load(pack_dir, meta, errors)
     names = modules.Names(mods, packs.snake, errors)

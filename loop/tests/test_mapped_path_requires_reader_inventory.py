@@ -66,9 +66,12 @@ def observed_receipt(source, base, head, engine):
 
     for path in paths:
         record(["changed-path", path], {"base": base, "head": head}, [path])
-        # An empty mapping has a terminal read, even though it has no reader rows.
+        # An empty mapping has a terminal read, even though it has no reader rows. Each reader edge is its own
+        # member, so the rules see it in the trusted inventory (decisions/admission-transport.md section 6).
         for kind, readers in registry["paths"][path].items():
             record(["path-readers", path, kind], {"revision": engine, "path": AUTHORITY}, readers)
+            for reader in readers:
+                record(["path-reader", path, kind, reader], {"revision": engine, "path": AUTHORITY}, [reader])
     record(["file-dependencies"], {"revision": engine, "path": AUTHORITY}, registry["file_dependencies"])
     for revision in (base, head):
         for path, entry in tree(revision).items():
@@ -166,17 +169,6 @@ def submission(source, base, head, engine, path, evidence):
     return records
 
 
-@pytest.mark.xfail(
-    strict=True, raises=(AssertionError, ImportError, TypeError),
-    reason="extra: decisions/scoped-completeness.md: Build selection trusts an emptied mapped-reader relation. Derive build_readerless_path from a verified "
-           "receipt for the build scope (verified_receipt, and verified_member for the path-readers keys) and "
-           "select full checks otherwise. Read decisions/scoped-completeness.md §3 and "
-           "decisions/admission-transport.md section 6. Write in build/ (selection.dl and its schema). Waits for "
-           "edge/publisher/tests/test_completeness_publish.py--test_publisher_admits_receipts_only_with_a_trusted_context "
-           "(the batch boundary admits the receipt and fills verified_receipt) and for "
-           "test_absent_checked_requires_readable_coverage (std-completeness supplies complete). Today "
-           "rezono_checker.evidence is missing (ImportError).",
-)
 def test_mapped_path_requires_reader_inventory(tmp_path):
     source = tmp_path / "source"
     base, head, _ = repository(source, SOURCE)
@@ -244,25 +236,22 @@ def resealed_without_reader(evidence):
     """Drop the mapped reader from the submitted receipt and recompute its digests over that subset."""
     receipt, objects = evidence
     objects = dict(objects)
-    content = deepcopy(objects["observations/submitted/content.json"])
+    content = [member for member in deepcopy(objects["observations/submitted/content.json"])
+               if member["key"][:2] != ["path-reader", SOURCE]]
     for member in content:
         if member["key"][:2] == ["path-readers", SOURCE]:
             member["rows"] = []
+    inventory = [member["key"] for member in content]
     objects["observations/submitted/content.json"] = content
+    objects["observations/submitted/inventory.json"] = inventory
     body = {field: value for field, value in receipt.items() if field != "id"}
     body["content"] = archived_json("observations/submitted/content.json", content)
+    body["inventory"] = archived_json("observations/submitted/inventory.json", inventory)
     resealed = {**body, "id": canonical_sha256(["rezono.completeness-receipt/1", body])}
     objects["observations/submitted/receipt.json"] = resealed
     return resealed, objects
 
 
-@pytest.mark.xfail(
-    strict=True, raises=(AssertionError, ImportError, TypeError),
-    reason="extra: decisions/scoped-completeness.md: A receipt whose digests are recomputed over the truncated submission still narrows the selection. "
-           "Admission must compare it with the independently retained inventory and content. Read "
-           "decisions/scoped-completeness.md §1 and §3. Write in build/ (selection.dl and its schema). Waits for "
-           "test_mapped_path_requires_reader_inventory. Today rezono_checker.evidence is missing (ImportError).",
-)
 def test_resealed_receipt_cannot_drop_mapped_reader(tmp_path):
     source = tmp_path / "source"
     base, head, _ = repository(source, SOURCE)

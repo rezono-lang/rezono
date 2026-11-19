@@ -112,5 +112,4 @@ def test_native_boolean_rule_inputs(observation_pack):
                 feldera.processed(name, feldera.push(name, facts.ingress(model, inputs, operation)))
                 check_observations(query, keep_false)
         finally:
-            feldera.stop(name)
-            feldera.call("DELETE", f"/v0/pipelines/{name}")
+            feldera.stop(name, delete=True)

@@ -12,7 +12,7 @@
 import type { Node } from 'ohm-js';
 import { grammar, nativeRuleGrammar } from './grammar.ts';
 import { readRuleName } from './rule-names.ts';
-import type { Ask, CheckDecl, Context, Expr, Path, Question, Suppose, Tail, TimeSel } from './tree.ts';
+import type { Ask, CheckDecl, Context, Expr, Path, Question, Suppose, SupposeSlot, Tail, TimeSel } from './tree.ts';
 
 import { placed, points, refused, reserved, run, spanAt, spanOf, startRun, type Diagnostic, type Span } from './parse-support.ts';
 
@@ -109,6 +109,13 @@ semantics.addOperation<unknown>('tree', {
 
 	Suppose_set(_plus, path, _eq, value) {
 		return placed(this, { set: [path.tree() as Path, value.tree() as Expr] } satisfies Suppose);
+	},
+	Suppose_insert_row(_plus, type, id, _open, slots, _close) {
+		const read = slots.asIteration().children.map((slot) => slot.tree() as SupposeSlot);
+		return placed(this, { insert_row: { kind: type.sourceString, key: id.sourceString, slots: read } } satisfies Suppose);
+	},
+	SupposeSlot(name, _eq, value) {
+		return { name: name.sourceString, value: value.tree() as Expr } satisfies SupposeSlot;
 	},
 	Suppose_retract_row(_minus, type, id) {
 		return placed(this, { retract_row: [type.sourceString, id.sourceString] } satisfies Suppose);
@@ -265,9 +272,11 @@ export { semantics, placed, refused, reserved };
  * of a file this way: it passes the file with every other line blanked, so that offsets are those of the file,
  * and the code points of the file itself (`at`), since a blank has none of its astral characters.
  */
+const nativeRules = new Set(['NativeRuleLine', 'StepClauseLine', 'StepChangeLine']);
+
 export function readRule<T>(text: string, rule: string, read: (node: Node) => T, spans = new WeakMap<object, Span>(), at = points(text)): Read<T> {
 	startRun(text, spans, at);
-	const native = rule === 'NativeRuleLine';
+	const native = nativeRules.has(rule);
 	const match = (native ? nativeRuleGrammar : grammar).match(text, rule);
 	if (match.failed()) {
 		const at = Math.min(match.getRightmostFailurePosition(), text.length);

@@ -19,6 +19,7 @@ Every error is an `L0Error` whose text names the element and the rule.
 
 import datetime
 import json
+import pickle
 import re
 from fractions import Fraction
 from math import gcd
@@ -159,12 +160,35 @@ def _cj(value) -> str:
         raise L0Error(str(e)) from e
 
 
+_SCHEMA_IDS: dict[bytes, str] = {}  # pickle of a schema document -> its id; see `schema_id`
+_SCHEMA_IDS_MAX = 16
+
+
 def schema_id(document: dict) -> str:
-    """`"s-" + H(document)` (§2.2)."""
+    """`"s-" + H(document)` (§2.2).
+
+    A publication asks for the id of one schema once per typed literal and per table, and hashing the whole
+    document each time cost most of a forms publication. The id is remembered by the document's content, never
+    by the object: the key is the document's pickle, which a change to any member, key or type changes (`True`
+    and `1` pickle apart, where `==` would hold them equal). Equal pickles unpickle to equal documents, so they
+    have one canonical JSON and one id. Pickling is a C-speed walk; a document that does not pickle is hashed
+    every time, as before.
+    """
     try:
-        return "s-" + canonical_sha256(document)
+        key = pickle.dumps(document, protocol=pickle.HIGHEST_PROTOCOL)
+    except Exception:  # noqa: BLE001 - not picklable: no fingerprint, hash it as before
+        key = None
+    if key is not None and (sid := _SCHEMA_IDS.get(key)) is not None:
+        return sid
+    try:
+        sid = "s-" + canonical_sha256(document)
     except CanonError as e:
         raise L0Error(f"schema: {e}") from e
+    if key is not None:
+        if len(_SCHEMA_IDS) >= _SCHEMA_IDS_MAX:
+            _SCHEMA_IDS.pop(next(iter(_SCHEMA_IDS)))
+        _SCHEMA_IDS[key] = sid
+    return sid
 
 
 # ---------------------------------------------------------------------------------------------------------------

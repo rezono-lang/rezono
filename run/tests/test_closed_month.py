@@ -68,7 +68,9 @@ def certified(store, decision, intake, *, held=None):
     body = dict(trusted, inventory=archived(store, "candidate/inventory.json", inventory),
                 content=archived(store, "candidate/contents.json", members(intake if held is None else held)))
     receipt = {"id": canonical_sha256(["rezono.completeness-receipt/1", body]), **body}
-    row = [receipt["id"], source["name"], canonical_sha256(scope), canonical_sha256(cut),
+    # The scope digest names its definition by the hash of the bytes it pins, not by where a copy is stored.
+    row = [receipt["id"], source["name"], canonical_sha256({**scope, "definition": scope["definition"]["sha256"]}),
+           canonical_sha256(cut),
            trusted["inventory"]["sha256"], trusted["content"]["sha256"]]
     pinned = dict(decision, completeness_receipts=[archived(store, "candidate/receipt.json", receipt)])
     return pinned, [trusted], row

@@ -66,7 +66,8 @@ def test_target_without_established_owner_is_never_within_one_tenant(tmp_path, t
         ["denied", "unresolved-owner"]]
 
 
-def test_ambiguous_tenant_key_resolves_no_owner(tmp_path):
+def test_catalog_team_key_must_match_its_tenant(tmp_path):
+    # A second team cannot borrow another tenant's catalog key, so an ambiguous key never reaches the rules.
     teams, catalog = proposal(tmp_path)
     model = load(catalog)
     model["teams"]["elm-twin"] = {"key": "elm"}
@@ -75,5 +76,6 @@ def test_ambiguous_tenant_key_resolves_no_owner(tmp_path):
     result = subprocess.run([sys.executable, str(entry), "--pack", str(entry.parent), "--teams", str(teams),
                              "--catalog", str(catalog), "relation", "tenant_connection_review"],
                             capture_output=True, text=True, check=False)
-    assert result.returncode != 0
+    assert result.returncode == 2
     assert result.stdout == ""
+    assert "catalog team key does not match its tenant identifier" in result.stderr
