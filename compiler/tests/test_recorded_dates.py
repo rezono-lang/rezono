@@ -141,5 +141,4 @@ def test_independent_date_equality(dated_records):
                 feldera.processed(pipeline, feldera.push(pipeline, facts.ingress(model, changes, op)))
                 check_epoch(query, witnesses, json_dates=True)
         finally:
-            feldera.stop(pipeline)
-            feldera.call("DELETE", f"/v0/pipelines/{pipeline}")
+            feldera.stop(pipeline, delete=True)

@@ -123,5 +123,4 @@ def test_feldera_orders_typed_values():
         got = {(r["mode"], r["case"], r["operator"]) for r in feldera.read_relation(pipeline, "comparison")}
         assert got == expected()
     finally:
-        feldera.stop(pipeline)
-        feldera.call("DELETE", f"/v0/pipelines/{pipeline}")
+        feldera.stop(pipeline, delete=True)
