@@ -1,0 +1,18 @@
+// Join the selected machine stack to each worker node on its derived worker host.
+.decl machine_stack_selection(os: symbol, distribution: symbol)
+machine_stack_selection(o, d) :- machine_stack_choice__os(c, o),
+    machine_stack_choice__distribution(c, d).
+
+.decl competing_machine_stack_selection(os: symbol, distribution: symbol)
+competing_machine_stack_selection(o, d) :- machine_stack_selection(o, d),
+    machine_stack_selection(other, _), o != other.
+competing_machine_stack_selection(o, d) :- machine_stack_selection(o, d),
+    machine_stack_selection(_, other), d != other.
+
+.decl cluster_machine_stack(node: symbol, owner: symbol, host: symbol, os: symbol, distribution: symbol,
+    bootstrap: symbol)
+cluster_machine_stack(n, c, h, o, d, b) :- cluster_worker_node__owner(n, c), cluster_worker_host(c, h),
+    machine_bootstrap__artifact(n, b), machine_stack_selection(o, d),
+    !competing_machine_stack_selection(o, d).
+
+.output cluster_machine_stack

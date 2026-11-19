@@ -42,7 +42,7 @@ def listing(records, pulls, receipt):
     strict=True,
     raises=AssertionError,
     reason=(
-        "Read decisions/build-claim-release.md section 4 and decisions/build-reconciliation.md (task and queue "
+        "extra: Read decisions/build-claim-release.md section 4 and decisions/build-reconciliation.md (task and queue "
         "observations). Declare BuildQueueListing (run, observed_at, base, source, receipt: LoopSweepReceipt) and "
         "BuildQueuePull (listing, number, state open|closed, draft draft|ready, base) in build/schema/tasks.yaml, "
         "and derive build_queue_at_cut in build/rules/tasks.dl by counting the open, ready pull requests against "

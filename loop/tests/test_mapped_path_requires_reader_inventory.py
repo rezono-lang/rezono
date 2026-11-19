@@ -168,7 +168,7 @@ def submission(source, base, head, engine, path, evidence):
 
 @pytest.mark.xfail(
     strict=True, raises=(AssertionError, ImportError, TypeError),
-    reason="Build selection trusts an emptied mapped-reader relation. Derive build_readerless_path from a verified "
+    reason="extra: decisions/scoped-completeness.md: Build selection trusts an emptied mapped-reader relation. Derive build_readerless_path from a verified "
            "receipt for the build scope (verified_receipt, and verified_member for the path-readers keys) and "
            "select full checks otherwise. Read decisions/scoped-completeness.md §3 and "
            "decisions/admission-transport.md section 6. Write in build/ (selection.dl and its schema). Waits for "
@@ -258,7 +258,7 @@ def resealed_without_reader(evidence):
 
 @pytest.mark.xfail(
     strict=True, raises=(AssertionError, ImportError, TypeError),
-    reason="A receipt whose digests are recomputed over the truncated submission still narrows the selection. "
+    reason="extra: decisions/scoped-completeness.md: A receipt whose digests are recomputed over the truncated submission still narrows the selection. "
            "Admission must compare it with the independently retained inventory and content. Read "
            "decisions/scoped-completeness.md §1 and §3. Write in build/ (selection.dl and its schema). Waits for "
            "test_mapped_path_requires_reader_inventory. Today rezono_checker.evidence is missing (ImportError).",
