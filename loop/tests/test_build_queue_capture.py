@@ -15,15 +15,6 @@ LISTING = [
 ]
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason=(
-        "Read decisions/build-claim-release.md section 4. Add loop/build_queue_capture.py with "
-        "queue_reading(pulls, *, run, observed_at, source, complete, base) returning one BuildQueueReading "
-        "record or None. Write only in that file."
-    ),
-)
 def test_build_queue_capture():
     assert find_spec("loop.build_queue_capture") is not None, "The queue reading adapter is missing"
     from loop.build_queue_capture import queue_reading
