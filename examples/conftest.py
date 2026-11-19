@@ -26,7 +26,8 @@ collect_ignore_glob = list(collect_ignore)
 @pytest.fixture(scope="session", autouse=True)
 def shared_builds_directory(tmp_path_factory):
     """Where examples/shared_builds.py keeps what tests share. In CI the shard's worker processes share one
-    directory (scripts/components.py sets it); a run without one gets its own, for this session alone."""
+    directory (scripts/components.py sets it); a run without one gets its own, for this session alone. A
+    directory set before the session is safe to reuse: a build's key is the contents and code it reads."""
     from shared_builds import SHARED
 
     if os.environ.get(SHARED):
