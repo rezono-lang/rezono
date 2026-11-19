@@ -81,7 +81,7 @@ types:
     description: The decoded spelling of a local or imported rule name.
   RuleType:
     typeof: string
-    pattern: '^([a-z][a-z0-9_]*.)?[A-Z][A-Za-z0-9]*(<[A-Za-z0-9<>,]+>)?$'
+    pattern: '^([a-z][a-z0-9_]*\.)?[A-Z][A-Za-z0-9]*(<[A-Za-z0-9<>,]+>)?$'
     description: A column type with an optional pack alias.
   TrueFlag:
     typeof: boolean
