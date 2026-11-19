@@ -200,6 +200,17 @@ def body_item(p: Parser):
             p.fail("an aggregate ranges over one atom; derive a relation first")
         p.take("}")
         return ("agg", left[1], fn, target and target[1], a)
+    if op == "=" and left[0] == "var" and nxt.text == "@":
+        p.take("@")
+        name = p.take(kind="ident")
+        if name.text != ir.DAYS:
+            p.fail(f"@{name.text} is not a functor; the only one is @{ir.DAYS}(text, \"YYYY-MM-DD\")")
+        p.take("(")
+        text_term = term(p)
+        p.take(",")
+        origin = term(p)
+        p.take(")")
+        return ("arith", left[1], ir.DAYS, text_term, origin)
     right = term(p)
     if p.peek().kind == "op" and p.peek().text in ARITH:
         if op != "=" or left[0] != "var":
@@ -749,6 +760,11 @@ def to_rule(rid, module, where, head, body, line, columns=lambda name: None) -> 
                 fail(f"{show(b[2])} {b[1]} {show(b[3])}: an order comparison needs whole numbers, not text")
             if len(kinds) > 1:
                 fail(f"{show(b[2])} and {show(b[3])} have different types")
+        elif b[0] == "arith" and b[2] == ir.DAYS:
+            if b[3][0] != "var" or typ(b[3]) == "integer":
+                fail(f"{b[1]} = @days(…): the first argument is a variable bound by a positive literal to text")
+            if b[4][0] != "const" or b[4][2] != "string":
+                fail(f"{b[1]} = @days(…): the origin is a constant ISO date in quotes")
         elif b[0] == "arith":
             for t in (b[3], b[4]):
                 if typ(t) not in (None, "integer"):
