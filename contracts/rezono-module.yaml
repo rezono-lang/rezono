@@ -659,6 +659,13 @@ classes:
       world: {range: World}
       values: {required: true, range: Name, multivalued: true, minimum_cardinality: 1}
       memberMetadata: {all_of: [{range: EnumMemberMetadataMap, inlined: true}]}
+      deprecated: {range: Deprecated, inlined: true}
+
+  Deprecated:
+    description: A deprecation notice on a declaration (decisions/language-deprecation.md).
+    attributes:
+      note: {required: true, range: string}
+      until: {required: true, range: Date}
 
   ReasonDecl:
     attributes:
@@ -696,6 +703,7 @@ classes:
       applies: {range: Applies, inlined: true}
       sealed: {range: Name, description: "The slot of `sealed at`. It has no place of its own: its kind's stands for it."}
       relationship: {range: boolean, description: "`true` for a relationship kind; absent otherwise (decisions/language-relationship-kinds.md)."}
+      deprecated: {range: Deprecated, inlined: true}
       slots:
         required: true
         multivalued: true
@@ -870,6 +878,7 @@ classes:
       - {slot_conditions: {annotations: {value_presence: PRESENT}}}
       - {slot_conditions: {slotUri: {value_presence: PRESENT}}}
       - {slot_conditions: {memberMetadata: {value_presence: PRESENT}}}
+      - {slot_conditions: {deprecated: {value_presence: PRESENT}}}
 
   DeclarationWithMetadataSlots:
     description: A declaration with at least one slot that has written metadata.

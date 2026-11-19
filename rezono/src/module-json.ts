@@ -38,7 +38,7 @@ function formatOf(module: Module): ModuleForm['format'] {
 		if ('dataset' in decl || 'rules' in decl || ('source' in decl && 'fields' in decl)) return true;
 		if ('kind' in decl) {
 			if (decl.parent !== undefined) return true;
-			return decl.abstract || decl.embedded || decl.relationship || decl.keys?.length || hasMetadata(decl)
+			return decl.abstract || decl.embedded || decl.relationship || decl.keys?.length || decl.deprecated !== undefined || hasMetadata(decl)
 				|| decl.slots.some(slot => slot.identifier || slot.embedded || slot.slotUri !== undefined
 					|| slot.constraints !== undefined || hasMetadata(slot))
 				|| decl.equations?.length || decl.checks?.length;
@@ -47,7 +47,7 @@ function formatOf(module: Module): ModuleForm['format'] {
 		if ('param' in decl && decl.source !== undefined) return true;
 		if ('derived' in decl && Array.isArray(decl.derived) && decl.derived.some(d => d.output !== undefined || d.definitions !== undefined
 			|| d.unit !== undefined || d.versions?.some(v => v.definitions !== undefined))) return true;
-		return 'enum' in decl && (decl.memberMetadata !== undefined || hasMetadata(decl));
+		return 'enum' in decl && (decl.deprecated !== undefined || decl.memberMetadata !== undefined || hasMetadata(decl));
 	});
 	return extended ? EXTENDED_MODULE_FORMAT : MODULE_FORMAT;
 }
