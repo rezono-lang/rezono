@@ -68,6 +68,7 @@ class Lowered:
     schema: dict
     form: dict
     uses: list[str] = field(default_factory=list)  # module ids within the pack, sorted
+    foreign: list[str] = field(default_factory=list)  # `<pack>:<module>` of the schema modules of the used packs
 
 
 def declared(meta: dict, pack_dir: Path, errors: list[str], *, reject_undeclared: bool = True,
@@ -107,7 +108,7 @@ def declared(meta: dict, pack_dir: Path, errors: list[str], *, reject_undeclared
             ok = False
         if not ok:
             continue
-        if not include_datasets and is_dataset_form(pack_dir / form):
+        if not include_datasets and is_dataset_form(pack_dir / form, pack_dir / module):
             if meta.get("theory") is True:
                 errors.append(f"{pack_dir.name}/{form}: a theory pack cannot contain fact files")
             continue
@@ -295,23 +296,37 @@ def named_dataset(module: dict) -> dict | None:
     return None
 
 
-def is_dataset_form(path: Path) -> bool:
-    """Dispatch only recognized dataset forms; leave other documents to ordinary schema validation."""
+def fact_tables_only(module: dict) -> bool:
+    """A module whose declarations are all fact tables (§5.3): the form of a base fact file."""
+    declarations = module["decls"]
+    return bool(declarations) and all(
+        isinstance(decl, dict) and isinstance(decl.get("fact"), str) and "columns" in decl and "rows" in decl
+        for decl in declarations)
+
+
+def is_dataset_form(path: Path, source: Path | None = None) -> bool:
+    """Dispatch only recognized dataset forms; leave other documents to ordinary schema validation. With its
+    source, an authored module of fact tables is one too; a form-only module is left to the refusal."""
     try:
         doc = json.loads(path.read_bytes())
     except (OSError, ValueError):
         return False
     module = module_body(doc, DATASET_FORMAT)
-    return module is not None and named_dataset(module) is not None
+    if module is not None and named_dataset(module) is not None:
+        return True
+    module = module_body(doc, FORMAT)
+    return (source is not None and module is not None and fact_tables_only(module)
+            and not form_only_source(source, doc))
 
 
-def header_errors(module: dict, pack: str, *, native_rules: bool = False) -> Iterator[tuple[str, str, str]]:
+def header_errors(module: dict, pack: str, *, native_rules: bool = False,
+                  schema: bool = False) -> Iterator[tuple[str, str, str]]:
     """Header refusals shared by schema lowering and dataset admission."""
     if module.get("rezono") != "0":
         yield "rezono", f"the `rezono` line says 0, not {module.get('rezono', 'nothing')}", "§3"
     if module["pack"] != pack:
         yield "pack", f"the `pack` line names {module['pack']}, not this pack, {pack}", "§3"
-    if not native_rules:
+    if not native_rules and not schema:
         for i in range(len(module["use"])):
             yield f"/use/{i}", "a `use` line is not lowered", "§6"
 
@@ -392,8 +407,10 @@ def names(form: dict) -> dict[str, str]:
 
 
 def lower_pack(pack_dir: Path, meta: dict, pack: str, declared_by: Mapping[str, Set[str]],
-               errors: list[str], imported: bool = False) -> list[Lowered]:
-    """Lower every module of one pack. `pack` is the pack's name, `declared_by` the LinkML names each schema
+               errors: list[str], imported: bool = False,
+               pinned: Mapping[str, Mapping[str, Set[str]]] | None = None) -> list[Lowered]:
+    """Lower every module of one pack. `pinned` holds, by pack name, the names each schema module declares of every
+    pack that pack.yaml pins (the packs a `use` line may name). `pack` is the pack's name, `declared_by` the LinkML names each schema
     module of the pack declares, by module id within the pack, `imported` whether another pack imports it. Every
     refusal names the module's file and line."""
     forms = {d: effective_form(pack_dir, d, errors) for d in declared(meta, pack_dir, errors)}
@@ -406,11 +423,13 @@ def lower_pack(pack_dir: Path, meta: dict, pack: str, declared_by: Mapping[str, 
             errors.append(f"{pack_dir.name}/{d.module}: module '{d.id}' is also a schema module (schema/{d.id}.yaml)")
         for n in names(form) if form else {}:
             owners.setdefault(n, []).append(d.id)
-    return [lower(pack_dir, d, form, pack, owners, errors, imported) for d, form in forms.items() if form is not None]
+    return [lower(pack_dir, d, form, pack, owners, errors, imported, pinned or {})
+            for d, form in forms.items() if form is not None]
 
 
 def lower(pack_dir: Path, d: Declared, form: dict, pack: str, owners: dict[str, list[str]],
-          errors: list[str], imported: bool = False) -> Lowered:
+          errors: list[str], imported: bool = False,
+          pinned: Mapping[str, Mapping[str, Set[str]]] | None = None) -> Lowered:
     """One module's form as the LinkML schema that says the same (§5.1, §5.2), or a refusal at a line. An `extend`
     adds nothing to the schema: its tables are rules, which rezono_table writes once the pack's model is read
     (§9.1)."""
@@ -423,9 +442,25 @@ def lower(pack_dir: Path, d: Declared, form: dict, pack: str, owners: dict[str, 
 
     native_rules = form["format"] == NATIVE_FORMAT
     extended_format = form["format"] in (IDENTIFIER_FORMAT, NATIVE_FORMAT)
-    for key, message, section in header_errors(module, pack, native_rules=native_rules):
+    for key, message, section in header_errors(module, pack, native_rules=native_rules, schema=True):
         place = key if key.startswith("/") else header_line(pack_dir, d, key)
         refuse(place, message, section)
+    pinned = pinned or {}
+    used: list[str] = []  # the pinned packs an unaliased `use` line makes visible, in the order of the lines
+    if not native_rules:
+        owners = {name: list(found) for name, found in owners.items()}
+        for i, line_ in enumerate(module["use"]):
+            at = f"/use/{i}"
+            target = line_.get("use") if isinstance(line_, dict) else None
+            if not isinstance(target, str) or set(line_) - {"use"} or "." in target:
+                refuse(at, "a `use` line with a prefix or a dotted pack name is not lowered yet")
+            elif target not in pinned:
+                refuse(at, f"{target} is not a pack that pack.yaml pins (R046)")
+            elif target not in used:
+                used.append(target)
+                for mid, ns in sorted(pinned[target].items()):
+                    for n in ns:
+                        owners.setdefault(n, []).append(f"{target}:{mid}")
     own = names(form)
     declared_names = own.keys() | owners.keys()
     uses: set[str] = set()
@@ -506,7 +541,9 @@ def lower(pack_dir: Path, d: Declared, form: dict, pack: str, owners: dict[str, 
             module, schema, d.layer,
             rezono_slot.builtin_range(range_name, range_name in declared_names), refuse,
         )
-    return Lowered(d, schema, form, sorted(uses))
+    foreign = [f"{u}:{mid}" for u in used for mid in sorted(pinned[u])]
+    schema["imports"] += foreign
+    return Lowered(d, schema, form, sorted(u for u in uses if u.partition(":")[2] == ""), foreign)
 
 
 def view(schema: dict, importmap: dict) -> SchemaView:

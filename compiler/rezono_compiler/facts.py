@@ -105,6 +105,10 @@ def _declared_dataset(pack_dir: Path, meta: dict, declared: rezono_module.Declar
         submitted = json.loads(path.read_bytes())
     except (OSError, ValueError) as error:
         raise LoadError(f"{declared.form}: cannot read module form ({error})") from error
+    plain = rezono_module.module_body(submitted, rezono_module.FORMAT)
+    if (plain is not None and rezono_module.fact_tables_only(plain)
+            and not rezono_module.form_only_source(pack_dir / declared.module, submitted)):
+        return _fact_tables(pack_dir, meta, declared, submitted)
     if any(rezono_module.module_body(submitted, version) is not None
            for version in (rezono_module.FORMAT, rezono_module.NATIVE_FORMAT)):
         return None
@@ -138,6 +142,23 @@ def _declared_dataset(pack_dir: Path, meta: dict, declared: rezono_module.Declar
     if errors:
         raise LoadError(f"{declared.module}: " + "; ".join(errors))
     return DatasetForm(effective, declared.module)
+
+
+def _fact_tables(pack_dir: Path, meta: dict, declared: rezono_module.Declared, submitted: dict) -> DatasetForm:
+    """A module of fact tables, read from its authored source, as the named dataset of its file name."""
+    errors: list[str] = []
+    effective = rezono_module.source_form(pack_dir, declared, submitted, errors, lambda source: False)
+    if effective is None:
+        raise LoadError("\n".join(errors))
+    authored = rezono_module.module_body(effective, rezono_module.FORMAT)
+    if authored is None or not rezono_module.fact_tables_only(authored):
+        raise LoadError(f"{declared.module}: a module of fact tables declares nothing else")
+    problems = [message for _, message, _ in rezono_module.header_errors(authored, str(meta.get("name", "")))]
+    if problems:
+        raise LoadError(f"{declared.module}: " + "; ".join(problems))
+    spans = [span | {"at": re.sub(r"^/decls/", "/decls/0/decls/", span["at"])} for span in effective["spans"]]
+    module = authored | {"decls": [{"dataset": Path(declared.module).stem, "decls": authored["decls"]}]}
+    return DatasetForm({"format": DATASET_FORMAT, "module": module, "spans": spans}, declared.module)
 
 
 def dataset_at(path: Path) -> DatasetForm | None:
