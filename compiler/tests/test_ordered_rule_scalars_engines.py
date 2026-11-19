@@ -65,10 +65,6 @@ def test_datalog_spells_typed_comparisons():
         rules_dl.read_program(outside, "order", {"left_value": COLUMNS}, "order")
 
 
-@pytest.mark.xfail(strict=True, raises=rules.IRError, reason=WAIT + (
-    "Then carry compare_as into the bundle's rule body in compiler/rezono_compiler/emit.py (rule_body refuses it "
-    "through untyped_conditions(rule, \"the bundle\")): the comparison literal names its compare_as, and two rules "
-    "that differ only in it have different stable ids."))
 def test_the_bundle_keeps_typed_comparisons():
     from rezono_compiler import emit
     prog = rules.load(program())
