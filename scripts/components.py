@@ -205,6 +205,10 @@ def affected_components(
             return list(components)
         selected.add(owner.folder)
         source = Path(path)
+        # What a pull request routes a file to as its reader runs in the queue as well.
+        selected.update(reader for reader in shared_readers(path) or () if reader in by_folder)
+        if source.suffix == ".dl" and "fixtures" not in source.parts and "compiler" in by_folder:
+            selected.add("compiler")
         manifest = ROOT / owner.folder / "pyproject.toml"
         if (owner.kind == "contracts" or source.name in {"pyproject.toml", "package.json", "conftest.py"}
                 or (manifest.exists() and not (owner.folder == "loop" and outside_cluster_plugin(source, manifest)))):
@@ -511,10 +515,48 @@ GENERIC_STEMS = frozenset({"__init__", "__main__", "conftest", "index", "package
                            "README", "setup"})
 
 
-def changed_file_names(path: str) -> set[str]:
-    """The name by which another file refers to a changed file; none for an entry point or manifest."""
-    stem = Path(path).stem
-    return set() if stem in GENERIC_STEMS else {stem}
+def reference_patterns(path: str, owner: str | None) -> list[re.Pattern[str]]:
+    """How another file names a changed file: its file name, its module, or an import of it.
+
+    None of them for an entry point or a manifest, which nothing names this way."""
+    source = Path(path)
+    if source.stem in GENERIC_STEMS:
+        return []
+    stem = re.escape(source.stem)
+    patterns = [rf"(?<![\w.-]){re.escape(source.name)}\b", rf"/{stem}(?:\.\w+)?['\x22`]"]
+    if source.suffix == ".py" and owner:
+        module = ".".join(Path(path[len(owner) + 1:]).with_suffix("").parts)
+        package, _, name = module.rpartition(".")
+        if package:
+            patterns += [rf"(?<!\w){re.escape(module)}\b",
+                         rf"\bfrom\s+{re.escape(package)}\s+import\s[^\n]*\b{re.escape(name)}\b"]
+        else:
+            patterns.append(rf"^\s*(?:from\s+{stem}\s+import\b|import\s+{stem}\b)")
+    return [re.compile(pattern, re.MULTILINE) for pattern in patterns]
+
+
+def names_file(root: Path, revisions: tuple[str, ...], path: str, owner: str | None, area: str) -> bool:
+    """Whether a file under area names the changed path, in either tree."""
+    patterns = reference_patterns(path, owner)
+    if not patterns:
+        return False
+    for revision in revisions:
+        for candidate in sorted(files_naming(root, revision, {Path(path).stem}, area)):
+            text = git_output(root, "show", f"{revision}:{candidate}").decode("utf-8", "replace")
+            if any(pattern.search(text) for pattern in patterns):
+                return True
+    return False
+
+
+def own_readers(path: str) -> set[str]:
+    """The shared readers of a file inside a component, apart from the pack readers of examples/."""
+    readers: set[str] = set()
+    for pattern, owners in SHARED_READERS.items():
+        if pattern == "examples/":
+            continue
+        if path.startswith(pattern) if pattern.endswith("/") else fnmatchcase(path, pattern):
+            readers.update(owners)
+    return readers
 
 
 def independent_test_file(root: Path, revisions: tuple[str, ...], path: str, owner: str, folders: set[str]) -> bool:
@@ -701,6 +743,8 @@ def pull_request_selection(components: list[Component], root: Path,
                     and not (owner == "loop" and not outside_cluster_plugin(source, root / "loop/pyproject.toml"))
                     and independent_test_file(root, revisions, path, owner, folders)):
                 add(direct, owner, path, ", a test file named only inside its component")
+                for reader in sorted(own_readers(path) & folders - {owner}):
+                    add(direct, reader, path, ", which it reads")
                 continue
             if readers is not None:
                 for reader in sorted(readers & folders):
@@ -749,9 +793,8 @@ def pull_request_selection(components: list[Component], root: Path,
     def names_a_change(folder: str) -> str | None:
         """A changed file of another component that the deferred component names, in either tree."""
         for path in changed:
-            names = changed_file_names(path)
-            if names and component_owner(path, folders) != folder and any(
-                    files_naming(root, revision, names, folder + "/") for revision in revisions):
+            owner = component_owner(path, folders)
+            if owner != folder and names_file(root, revisions, path, owner, folder + "/"):
                 return path
         return None
 

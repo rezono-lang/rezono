@@ -196,10 +196,27 @@ class RepositoryPullRequestSelectionTests(unittest.TestCase):
         self.assertEqual(restored, selected | {"loop", "run"})
         # A change to the loop itself still runs it, and run/tests/test_offline_run.py executes loop/replay.py.
         self.assertLessEqual({"loop", "run"}, self.selected("loop/replay.py")[0])
+        # A module whose bare stem is a common word in loop and run, but which they do not import or name.
+        self.assertTrue(self.selected("compiler/rezono_compiler/emit.py")[0].isdisjoint({"loop", "run"}))
+
+    def test_a_test_file_leaf_keeps_the_readers_of_its_directory(self):
+        # compiler/tests/test_domain_free.py scans tests/slip.
+        self.assertIn("compiler", self.selected("tests/slip/test_stops_only.py")[0])
+        # Under examples/ a leaf test file skips the pack readers of examples/.
+        selected = self.selected("examples/a_new_directory/test_a_new_leaf.py")[0]
+        self.assertTrue(selected.isdisjoint(set(ci.PACK_READERS) - {"examples"}), selected)
 
     def test_the_queue_runs_at_least_the_pull_request_closure(self):
+        components = ci.discover_components(ROOT, keep_invalid_node=True)
+        folders = {c.folder for c in components}
+        # Every directory route inside a component, and the files this selection routes.
+        routes = [pattern + "probe.yaml" for pattern in ci.SHARED_READERS
+                  if pattern.endswith("/") and ci.component_owner(pattern + "probe.yaml", folders)]
+        self.assertIn("run/packs/probe.yaml", routes)
         for path in ("loop/replay.py", "loop/tests/test_case.py", "run/dispatch_policy.py",
-                     "k8s-admission/parameter_reader.py", "deploy/profiles/edge/forms_issue.py"):
+                     "k8s-admission/parameter_reader.py", "deploy/profiles/edge/forms_issue.py",
+                     "run/packs/cleanup-deadline/pack.yaml", "run/packs/dispatch/rules/authorization.dl",
+                     "tests/slip/test_stops_only.py", "compiler/rezono_compiler/emit.py", *routes):
             selected, components, _ = self.selected(path)
             self.assertLessEqual(selected, {c.folder for c in ci.affected_components(components, [path])}, path)
         # A change in examples itself still runs everything in the queue, also together with a loop change.
@@ -405,7 +422,7 @@ class PullRequestSelectorTests(unittest.TestCase):
             self.write(root, {"run/packs/dispatch/rules/authorization.dl": ".decl grant(item: symbol)\n"})
             self.commit(root)
             self.assertEqual(self.matrix(root, "pull_request", base), {"compiler", "run"})
-            self.assertEqual(self.matrix(root, "merge_group", base), {"run"})
+            self.assertEqual(self.matrix(root, "merge_group", base), {"compiler", "run"})
 
     def test_malformed_manifest_keeps_the_full_matrix(self):
         with tempfile.TemporaryDirectory() as directory:
