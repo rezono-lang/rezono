@@ -21,6 +21,12 @@ loop_certified_batch(b, d, n) :-
     loop_batch_candidate__domain(e, d), loop_batch_candidate__size(e, 0),
     !loop_batch_unproved(b), !loop_batch_write_conflict(b).
 
+// The round verifier replayed the choice, so an admitted batch of the current cut is certified and selected.
+// Its domain column is the round digest, which a witness cites.
+loop_certified_batch(b, round, n) :-
+    current_verified_round(round, _, _, b),
+    n = count : { verified_round_member(round, _) }.
+
 .decl loop_batch_priority(batch: symbol, position: number, priority: number)
 loop_batch_priority(b, i, p) :-
     loop_batch_member__batch(m, b), loop_batch_member__position(m, i),
@@ -44,6 +50,7 @@ loop_batch_preceded(b) :-
 
 .decl loop_selected_batch(batch: symbol)
 loop_selected_batch(b) :- loop_certified_batch(b, _, _), !loop_batch_preceded(b).
+loop_selected_batch(b) :- current_verified_round(_, _, _, b).
 
 .output loop_certified_batch
 .output loop_selected_batch
