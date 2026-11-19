@@ -1,0 +1,156 @@
+{
+  "source": "kind Application world closed\n  income: Int\n  costs: Int\nextend Application\n  derived cost_share: Int\n    output cost_share.cents\n    unit cents\n    version 2026, valid 2026-01-01..<2027-01-01, known 2025-12-09\n      definition full_rate when income <= 100 then round(costs * 3 / 10)\n      definition reduced when income <= 200 then 0 overrides full_rate because \"Article 5(2)\"",
+  "module": {
+    "rezono": "0",
+    "pack": "sample",
+    "use": [],
+    "decls": [
+      {
+        "kind": "Application",
+        "world": "closed",
+        "slots": [
+          {
+            "slot": "income",
+            "type": "Int"
+          },
+          {
+            "slot": "costs",
+            "type": "Int"
+          }
+        ],
+        "derived": []
+      },
+      {
+        "extend": "Application",
+        "derived": [
+          {
+            "derived": "cost_share",
+            "type": "Int",
+            "output": {
+              "relation": "cost_share",
+              "slot": "cents"
+            },
+            "unit": "cents",
+            "versions": [
+              {
+                "version": "2026",
+                "valid": [
+                  "2026-01-01",
+                  "2027-01-01"
+                ],
+                "known": "2025-12-09",
+                "definitions": [
+                  {
+                    "name": "full_rate",
+                    "when": {
+                      "cmp": [
+                        "<=",
+                        {
+                          "path": [
+                            "income"
+                          ]
+                        },
+                        {
+                          "lit": "100"
+                        }
+                      ]
+                    },
+                    "value": {
+                      "call": [
+                        "round",
+                        [
+                          {
+                            "arith": [
+                              "/",
+                              {
+                                "arith": [
+                                  "*",
+                                  {
+                                    "path": [
+                                      "costs"
+                                    ]
+                                  },
+                                  {
+                                    "lit": "3"
+                                  }
+                                ]
+                              },
+                              {
+                                "lit": "10"
+                              }
+                            ]
+                          }
+                        ]
+                      ]
+                    }
+                  },
+                  {
+                    "name": "reduced",
+                    "when": {
+                      "cmp": [
+                        "<=",
+                        {
+                          "path": [
+                            "income"
+                          ]
+                        },
+                        {
+                          "lit": "200"
+                        }
+                      ]
+                    },
+                    "value": {
+                      "lit": "0"
+                    },
+                    "overrides": [
+                      {
+                        "definition": "full_rate",
+                        "reason": "Article 5(2)"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "spanNames": {
+    "/decls/1/derived/0": "cost_share",
+    "/decls/1/derived/0/versions/0/definitions/1": "reduced"
+  },
+  "rejections": [
+    {
+      "from": "    version 2026, valid 2026-01-01..<2027-01-01, known 2025-12-09\n",
+      "to": "    definition plain when true then 0\n    version 2026, valid 2026-01-01..<2027-01-01, known 2025-12-09\n"
+    },
+    {
+      "from": "overrides full_rate because",
+      "to": "overrides missing_rate because"
+    },
+    {
+      "from": "overrides full_rate because \"Article 5(2)\"",
+      "to": "overrides full_rate"
+    }
+  ],
+  "knownDiagnostics": [
+    {
+      "code": "R000",
+      "span": {
+        "text": "cents",
+        "start": 160,
+        "end": 165
+      }
+    },
+    {
+      "code": "R000",
+      "span": {
+        "text": "full_rate",
+        "start": 366,
+        "end": 375
+      }
+    }
+  ]
+}
