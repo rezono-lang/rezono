@@ -49,15 +49,6 @@ def sample(directory: Path) -> Path:
     return directory
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=MissingRuleOnlyModule,
-    reason="M3: decisions/language-native-rules.md: conversion gives the native module the old rule-module stem, "
-           "so a rules file named after no schema becomes a module that only holds rules. scripts/convert_pack.py "
-           "accepts that candidate when its schemas and typed interface are those of the original; it now refuses "
-           "it with 'the candidate changed the schema or module identity', because the rule-only module is "
-           "compared as an extra schema.",
-)
 def test_rules_file_without_a_schema_of_its_name_converts(tmp_path):
     original = sample(tmp_path / "sample")
     destination = tmp_path / "trial"

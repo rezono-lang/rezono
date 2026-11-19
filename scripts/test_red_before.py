@@ -19,10 +19,33 @@ TESTS = b"from pkg.calc import double\n\n\ndef test_double_two():\n    assert do
 # Both pass on the fixed source. Only the second fails on the buggy base (6 is even; 5 is not 6).
 STILL_PASSES = TESTS + b"\n\ndef test_double_is_even():\n    assert double(4) % 2 == 0\n"
 FAILS_ON_BASE = TESTS + b"\n\ndef test_double_three():\n    assert double(3) == 6\n"
-# The only added test is skipped: it runs nowhere, so it proves nothing on the base either.
+# The only added test is skipped on the base, so it does not show that it tells the base
+# from the fix: always skipped, skipped by itself, or turned into an expected failure there.
 ONLY_SKIPPED = (b"import pytest\n" + TESTS + b"\n\n"
                 + b"@pytest.mark.skip(reason='needs a cluster')\n"
                 + b"def test_double_three():\n    assert double(3) == 6\n")
+SKIPS_ITSELF = (b"import pytest\n" + TESTS + b"\n\n"
+                + b"def test_double_three():\n    pytest.importorskip('absent_module_for_this_check')\n"
+                + b"    assert double(3) == 6\n")
+XFAIL_CALL = (b"import pytest\n" + TESTS + b"\n\n"
+              + b"def test_double_three():\n    if double(3) != 6:\n        pytest.xfail('old source')\n"
+              + b"    assert double(3) == 6\n")
+# A test whose every case carries the cluster mark runs on the disposable cluster instead.
+ONLY_CLUSTER = (b"import pytest\n" + TESTS + b"\n\n"
+                + b"@pytest.mark.cluster\n"
+                + b"def test_double_three():\n    assert double(3) == 6\n")
+CLUSTER_AND_SKIPPED = (ONLY_CLUSTER + b"\n\n"
+                       + b"@pytest.mark.skip(reason='later')\n"
+                       + b"def test_double_four():\n    assert double(4) == 8\n")
+# Stands in for the cluster plugin, so the cases do not depend on whether it is installed:
+# cluster cases are deselected outside the disposable cluster.
+CONFTEST = (b"def pytest_configure(config):\n"
+            b"    config.addinivalue_line('markers', 'cluster: runs on the disposable cluster')\n\n\n"
+            b"def pytest_collection_modifyitems(config, items):\n"
+            b"    cluster = [item for item in items if item.get_closest_marker('cluster')]\n"
+            b"    if cluster:\n"
+            b"        items[:] = [item for item in items if not item.get_closest_marker('cluster')]\n"
+            b"        config.hook.pytest_deselected(items=cluster)\n")
 
 
 def git(repo, *args):
@@ -51,7 +74,7 @@ def end_to_end(label, added, expected_code, verdict):
         repo = Path(directory)
         git(repo, "init", "-q")
         git(repo, "config", "core.autocrlf", "false")
-        base = commit(repo, {"pytest.ini": b"[pytest]\n", "pkg/__init__.py": b"",
+        base = commit(repo, {"pytest.ini": b"[pytest]\n", "conftest.py": CONFTEST, "pkg/__init__.py": b"",
                              "pkg/calc.py": BUGGY, "tests/test_calc.py": TESTS})
         head = commit(repo, {"pkg/calc.py": FIXED, "tests/test_calc.py": added})
         found = script(repo, "discover", base, head)
@@ -130,8 +153,16 @@ def main():
                "pass on the base source")
     end_to_end("source fix with an added test that fails on the base", FAILS_ON_BASE, 0,
                "The base source fails the added tests")
-    end_to_end("source fix with only a skipped added test", ONLY_SKIPPED, 0,
-               "ran on the base source")
+    end_to_end("source fix with only an always skipped added test", ONLY_SKIPPED, 1,
+               "ERROR none of the 1 added test(s)")
+    end_to_end("source fix with only an added test that skips itself", SKIPS_ITSELF, 1,
+               "ERROR none of the 1 added test(s)")
+    end_to_end("source fix with only an added test that calls pytest.xfail on the base", XFAIL_CALL, 1,
+               "ERROR none of the 1 added test(s)")
+    end_to_end("source fix with a skipped added test beside a cluster test", CLUSTER_AND_SKIPPED, 1,
+               "ERROR none of the 2 added test(s)")
+    end_to_end("source fix with only an added cluster test", ONLY_CLUSTER, 0,
+               "they run on the disposable cluster instead")
 
 
 if __name__ == "__main__":

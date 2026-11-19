@@ -480,7 +480,7 @@ REFUSALS = {
         marks=pytest.mark.xfail(
             strict=True,
             raises=AssertionError,
-            reason="Refuses every inverse with 'a slot with inverse is not lowered' today. Goes green with "
+            reason="extra: Refuses every inverse with 'a slot with inverse is not lowered' today. Goes green with "
                    "compiler/tests/rezono/test_lower_inverse_reference.py::test_lower_inverse_reference; the worker "
                    "of that task removes this mark too.",
         )),
