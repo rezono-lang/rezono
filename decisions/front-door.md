@@ -1,3 +1,11 @@
+---
+decider: [core]
+decided_on: 2026-11-19
+valid_from: 2026-11-19
+state: in_force
+subject: front-door
+---
+
 # The front door: readme, quickstart, container and contributing
 
 A newcomer should see what Rezono is, try it, and know under which terms. The readme, its quickstart, a container to run the quickstart in, and a contributing guide are the front door. Each says only what is true at the commit it is read from, and a test holds each to that.
@@ -13,8 +21,8 @@ The first release adds its section to `CHANGELOG.md`; the same pull request rewr
 The quickstart is the sequence of `bash` blocks in `README.md`, in order. `scripts/check-quickstart.sh` runs every block in order in one shell, so a later block uses the working directory and the variables of an earlier one. A block in another language, such as `sh`, is not run.
 
 1. **`library`.** Publish the example and select the green proof check from its manifest. This is the smallest publication.
-2. **`subsidy`.** Publish the example in the same working directory and end with a `jq -e` that selects one derived row and its witness. `library` has no rules, so without this step a reader sees no derived row and no witness: the first step shows that Rezono publishes, the second that it computes and proves. The row and the witness it selects carry no hash and no path, so its output is the same on every run.
-3. **One assumption and its difference.** Added with the local suppose command; see [local suppose](local-suppose.md).
+2. **`subsidy`.** Publish the example in the same working directory and print the same two answers shown in `## Example`: the calculated award and calculation steps for `A001` (together with the article and council decision read from the parameter row, using a second `jq`), and the `assessment` row and unknown award for `A003`. `scripts/check-quickstart.sh` compares the printed output byte for byte with the `text` block below this step. The final command in this block remains a `jq -e` invocation mentioning `witness` so the quickstart proves both computation and witnessed proofs. Neither answer carries a hash or a path, so the output is the same on every run.
+3. **One assumption and its difference.** Builds on the `subsidy` publication produced by step 2, in that order; added with the local suppose command; see [local suppose](local-suppose.md).
 
 The check that runs the quickstart in CI is the proof with a clean copy: what the readme lets a newcomer do must succeed.
 
@@ -33,7 +41,11 @@ Someone who opens the repository sees, in the first screen, what Rezono does, wh
 
 1. **`# Rezono`.** One sentence of at most 25 words that says in plain words what Rezono does. It says what the repository's About says: *Facts and rules in, answers with proof out. Every conclusion carries a witness an independent checker verifies.*
 2. **`## What you get`.** At most five short lines, each naming something that works at this commit.
-3. **`## Example`.** Before the first command: three blocks from `examples/subsidy`. A `yaml` block with a few facts; one rule, in the notation the pack is written in at that commit, copied from the pack's own rule files; and a `text` block with the answer and its witness. The answer is the row that step 2 of the quickstart selects, and it appears word for word in the `text` block under that step.
+3. **`## Example`.** Before the first command: a worked calculation from `examples/subsidy` (replacing the earlier requirement of a single rule copied from the pack's rule files). A `yaml` block shows a few facts from `examples/subsidy/facts/*.yaml` (including `A001` and `A003`), and a `text` block shows two answers in plain words and euro amounts, with no hash and no path:
+   - **`A001`:** the award (€ 2,694: cost share € 2,544 at the 24% partial rate for income € 31,400 between the € 30,000 threshold for 3 persons and the € 42,000 limit, plus € 150 advice allowance) and the calculation steps it rests on, each step naming its calculation rule, version, evaluation date, definition and parameter; plus the article and council decision of a read parameter (from the parameter row, printed by a second `jq` in step 2).
+   - **`A003`:** the derived `assessment` row (`unknown`, reason `income_statement_not_received`) and an unknown calculated award (never zero). Because the example's separate payment ledger did record a payment for `A003`, the wording states explicitly that the *calculated award* is unknown while the income statement is missing, so a reader who later inspects the ledger is not misled.
+
+   One sentence states that the independent checker verified the witness before publication and that an independent computation (`examples/subsidy/reference.py`) produces the same amount. The `text` block appears word for word in the `text` block under step 2 of the quickstart.
 4. **`## Try it`.** The quickstart steps, each `bash` block followed by a `text` block with the output it prints, and the two container commands in an `sh` block.
 5. **`## Read further`.** Links to the tutorial (`docs/tutorial.md`), the language guide (`rezono/README.md`), the examples (`examples/`) and `docs/vision.md`.
 6. **`## Status`.** "There is no release yet.", and what works at this commit.
@@ -82,3 +94,4 @@ So the output the readme shows is the output a newcomer gets, and the answer in 
 - **Show the output in prose instead of a `text` block.** Prose cannot be compared with what the command prints, so it drifts unseen.
 - **Run the whole quickstart as one script and compare the total output.** One changed line would fail every step at once and not say which.
 - **Build the image on every pull request.** It takes minutes and only the readme, the `Dockerfile` and the pinned requirements can break it.
+- **Keep a single Datalog membership rule (`advised`) as the readme example.** It does not show a real calculation, an explicit `unknown` with its reason, or how a parameter links back to its article and council decision. Showing both `A001` and `A003` from `examples/subsidy` demonstrates known amounts with steps and explicit unknowns in one screen.
