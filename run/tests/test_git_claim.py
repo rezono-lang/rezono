@@ -19,7 +19,6 @@ def git(remote, *args):
                           capture_output=True, text=True).stdout
 
 
-@pytest.mark.xfail(strict=True, reason="Read decisions/run-shared-claim.md. Implement claim_once and holder in run/git_claim.py.")
 def test_git_claim(tmp_path):
     claim = implementation("git_claim.py", "claim_once")
     holder = implementation("git_claim.py", "holder")
