@@ -38,13 +38,6 @@ def published(directory, tmp_path, capsys):
     return {(entry["row"]["relation"], entry["row"]["key"]): entry["sources"] for entry in entries}
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason="M3: Admit source declarations and cited fact tables in the module/2 contract (contracts/rezono-module.yaml) and "
-           "publish their row sources through compiler/rezono_compiler/sources.py, as the sidecar does. "
-           "Read decisions/language-fact-provenance.md. Waits for test_lower_fact_table while it owns facts.py.",
-)
 def test_lower_fact_provenance(tmp_path, capsys):
     legacy = Path(shutil.copytree(FIXTURE, tmp_path / "legacy" / "minimal"))
     (legacy / "facts").mkdir()

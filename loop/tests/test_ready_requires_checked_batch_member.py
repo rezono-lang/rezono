@@ -12,7 +12,7 @@ from round_visibility_rounds import singleton_rounds
     strict=True,
     raises=(AssertionError, ImportError, TypeError),
     reason=(
-        "Read decisions/admission-transport.md sections 6 to 8 and decisions/loop-certificate-admission.md. "
+        "M2: decisions/loop-certificate-admission.md: Read it and decisions/admission-transport.md sections 6 to 8. "
         "Only the members of an admitted verified round for the current run and cut enter ready: "
         "ready(run, step, reason) needs verified_round(round, run, cut, batch) and "
         "verified_round_member(round, step), and keeps a proof reason. Of the two claims in "

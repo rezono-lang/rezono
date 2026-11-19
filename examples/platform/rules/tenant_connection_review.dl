@@ -1,0 +1,80 @@
+// Review each requested connection of a delivery: zone policy first, then cross-tenant isolation.
+// A delivery is its tenant and one-based ordinal; the preview shows it with the tenant's display key.
+.decl tenant_connection_source(connection: symbol, tenant: symbol, number: number)
+.decl tenant_delivery_component(tenant: symbol, number: number, component: symbol)
+.decl tenant_delivery_zone(tenant: symbol, number: number, zone: symbol)
+.decl tenant_connection_owner(connection: symbol, owner: symbol, zone: symbol)
+.decl tenant_connection_owned(connection: symbol)
+.decl tenant_connection_zone(connection: symbol, zone: symbol)
+.decl tenant_connection_matrix(connection: symbol)
+.decl tenant_connection_cross(connection: symbol)
+.decl tenant_connection_reciprocal(connection: symbol)
+.decl tenant_connection_approved(connection: symbol)
+.decl tenant_connection_isolated(connection: symbol)
+.decl tenant_connection_review(team: symbol, delivery: number, target: symbol, port: number, decision: symbol, reason: symbol)
+
+tenant_connection_source(c, t, n) :-
+    tenant_request_connection__tenant(c, t), tenant_request_connection__service(c, s),
+    tenant_delivery_number(t, s, n).
+
+tenant_delivery_component(t, n, component) :-
+    tenant_delivery_number(t, s, n), tenant_request_item__tenant(i, t), tenant_request_item__service(i, s),
+    tenant_request_item__item(i, item), tenant_catalog_item__component(item, component).
+
+tenant_delivery_zone(t, n, zone) :-
+    tenant_delivery_number(t, s, n), tenant_service_request__tenant(r, t), tenant_service_request__service(r, s),
+    tenant_service_request__profile(r, p), tenant_profile__zone(p, zone).
+
+// A target naming a delivered component lies in its owner's profile zone.
+tenant_connection_owner(c, owner, zone) :-
+    tenant_request_connection__target_tenant(c, owner), tenant_request_connection__target_number(c, n),
+    tenant_request_connection__target_component(c, component), tenant_delivery_component(owner, n, component),
+    tenant_delivery_zone(owner, n, zone).
+
+tenant_connection_owned(c) :- tenant_connection_owner(c, _, _).
+
+tenant_connection_zone(c, zone) :- tenant_connection_owner(c, _, zone).
+
+tenant_connection_zone(c, zone) :-
+    tenant_request_connection__target_zone(c, zone), !tenant_connection_owned(c).
+
+tenant_connection_matrix(c) :-
+    tenant_connection_source(c, t, n), tenant_delivery_zone(t, n, source), tenant_connection_zone(c, target),
+    tenant_request_connection__port(c, port), tenant_zone_link__source(l, source),
+    tenant_zone_link__target(l, target), tenant_zone_link__port(l, port).
+
+tenant_connection_cross(c) :- tenant_connection_owner(c, owner, _), tenant_request_connection__tenant(c, t), owner != t.
+
+// The owner of the target asks for the reverse direction on the same port from that delivery.
+tenant_connection_reciprocal(c) :-
+    tenant_connection_source(c, t, n), tenant_request_connection__target_tenant(c, owner),
+    tenant_request_connection__target_number(c, owned), tenant_request_connection__port(c, port),
+    tenant_connection_source(back, owner, owned), tenant_request_connection__target_tenant(back, t),
+    tenant_request_connection__target_number(back, n), tenant_request_connection__port(back, port).
+
+// Only a reviewer granted approve-connection authorizes this direction, target and port.
+tenant_connection_approved(c) :-
+    tenant_connection_source(c, t, n), tenant_request_connection__target(c, target),
+    tenant_request_connection__port(c, port), tenant_review_decision__source_tenant(d, t),
+    tenant_review_decision__source_number(d, n), tenant_review_decision__target(d, target),
+    tenant_review_decision__port(d, port), tenant_review_decision__reviewer(d, reviewer),
+    tenant_reviewer__action(reviewer, "approve-connection").
+
+tenant_connection_isolated(c) :- tenant_connection_cross(c), !tenant_connection_reciprocal(c).
+tenant_connection_isolated(c) :- tenant_connection_cross(c), !tenant_connection_approved(c).
+
+tenant_connection_review(t, n, target, port, "denied", "isolation") :-
+    tenant_connection_source(c, t, n), tenant_request_connection__target(c, target),
+    tenant_request_connection__port(c, port), tenant_connection_isolated(c).
+
+tenant_connection_review(t, n, target, port, "standard", "matrix") :-
+    tenant_connection_source(c, t, n), tenant_request_connection__target(c, target),
+    tenant_request_connection__port(c, port), tenant_connection_matrix(c), !tenant_connection_isolated(c).
+
+tenant_connection_review(t, n, target, port, decision, "profile") :-
+    tenant_connection_source(c, t, n), tenant_request_connection__target(c, target),
+    tenant_request_connection__port(c, port), tenant_request_connection__service(c, s),
+    tenant_service_request__tenant(r, t), tenant_service_request__service(r, s),
+    tenant_service_request__profile(r, p), tenant_profile__unlisted(p, decision), !tenant_connection_matrix(c), !tenant_connection_isolated(c).
+
+.output tenant_connection_review

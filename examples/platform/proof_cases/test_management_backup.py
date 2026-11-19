@@ -28,10 +28,11 @@ def records():
 @pytest.mark.xfail(strict=True, raises=AssertionError, reason=(
     "M2: Implement the platform backup-plan, scoped inventory and age rules in schema/management_backup.yaml "
     "and rules/management_backup.dl using std-time and std-decision. Read decisions/platform-management-backup.md. "
-    "Requires native boolean rules for inventory completion and a common day projection for the copy, "
-    "inventory, and decision dates; the existing std-time view accepts one source kind per theory kind. "
-    "Confirmed: a rule reading the boolean backup_inventory__complete is refused with 'rules cannot read it yet', "
-    "and a date column is readable only through a single-source view reading, so the compiler needs both first."))
+    "Waits for compiler/tests/test_boolean_rule_inputs.py--test_native_boolean_rule_inputs (track kern) for "
+    "inventory completion: a rule reading the boolean backup_inventory__complete is refused with 'rules cannot "
+    "read it yet'. The copy, inventory and decision dates need one std-time day projection over several source "
+    "kinds; compiler/tests/test_view_union.py--test_a_theory_kind_unions_disjoint_source_kinds (#716) is green, "
+    "so a theory kind can union them now."))
 def test_management_backup_age_and_absence():
     from management_probes import compiled
 

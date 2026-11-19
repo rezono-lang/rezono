@@ -245,7 +245,7 @@ test('the reader refuses what its tree could only hold by dropping a part', () =
 	assert.deepEqual(refused(['pack lab', 'param rate: Ratio', '  version 1, valid 2025-01-01.., valid 2026-01-01.. = 1']), ['R018 line 3']);
 	assert.deepEqual(refused(['pack lab', 'fact host host-a, known 2026-01-01, known 2026-01-02', '  a = 1']), ['R018 line 2']);
 	assert.deepEqual(refused(['pack lab', 'fact Host', '  | id | 3 |', '  | host-a | 1 |']), ['R000 line 3']);
-	assert.deepEqual(refused(['pack lab', 'fact Host', '  | id | a |', '  | host-a | 1 | 2 |', '  | host-b | - |', '  | host-c | -> a |']), ['R000 line 4', 'R000 line 5', 'R000 line 6']);
+	assert.deepEqual(refused(['pack lab', 'fact Host', '  | id | a |', '  | host-a | 1 | 2 |', '  | - | 1 |', '  | host-c | -> a |']), ['R000 line 4', 'R000 line 5', 'R000 line 6']);
 	const [d] = parseModule('pack lab\nfact Host\n  | id | a |\n  | host-a |\n').diagnostics;
 	assert.deepEqual([d.code, d.span.text, d.args], ['R000', '| host-a |', ['2 values']]);
 	// A line under a `when` line of an `unless` block is a clause of no block: it is refused where it stands, and
