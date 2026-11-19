@@ -39,7 +39,7 @@ The delete adapter rechecks the pull requests for the branch immediately before 
 
 ## 4. Queue reading
 
-The planner queue in [build reconciliation](build-reconciliation.md#task-and-queue-observations) counts the open pull requests against the default branch that are not drafts. Read it from a complete listing. An incomplete listing produces no `BuildQueueReading`, so the existing rules report `queue-evidence-unknown`.
+The planner queue in [build reconciliation](build-reconciliation.md#task-and-queue-observations) counts the open pull requests against the default branch that are not drafts. Read it from a complete listing. The reading names the `LoopSweepReceipt` of its run and cut that attests the complete listing, and the rules count it only with that receipt. An incomplete listing, or a pull request whose number, state, draft flag or base is missing, produces no `BuildQueueReading`, so the existing rules report `queue-evidence-unknown`.
 
 ## 5. Acceptance
 
@@ -50,7 +50,7 @@ The planner queue in [build reconciliation](build-reconciliation.md#task-and-que
 | `test_build_claim_capture` | Hand-written ref listing and activity answers in GitHub's documented JSON shape. Only task refs become claims; a stale activity record gives no lease start. |
 | `test_build_claim_pull_capture` | Hand-written pull answers. An open pull request, an empty answer, an unreadable answer and an answer for another head each give their own reading or none. An empty answer without a receipt of the same run and cut gives none. |
 | `test_build_claim_delete` | A recorded fake Git runner. The adapter issues exactly the conditional delete, skips it on an open or unreadable recheck, and records `sent`, `refused` and `unknown` as defined above. |
-| `test_build_queue_capture` | A hand-written pull listing. Drafts, other base branches and closed pull requests do not count; an incomplete listing gives no reading. |
+| `test_build_queue_capture` | A hand-written pull listing. Drafts, other base branches and closed pull requests do not count; an incomplete listing, a listing without a receipt of the same run and cut, and a pull request with a missing field give no reading. |
 
 ## Alternatives
 
