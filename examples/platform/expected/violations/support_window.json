@@ -1,0 +1,8 @@
+{
+  "supported_service_release__product__reference": [
+    ["cp-kubernetes-1.32.13", "kubernetes"]
+  ],
+  "supported_service_release__service__reference": [
+    ["cp-kubernetes-1.32.13", "cp"]
+  ]
+}

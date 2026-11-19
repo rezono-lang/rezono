@@ -62,7 +62,7 @@ The four [language value states](v0.md#7b-truth-and-value-states) correspond to 
 1. **A result for each element.** A set-valued rule drops a binding with a missing premise. A derived value must record a state for each element of its kind. Its named outcome has exactly one row per element. An unknown or inapplicable value keeps its reason and proof on that row.
 2. **Violations block publication.** The [expression truth tables](expressions.md#appendix-a-truth-tables-normative) give `false and invalid` as `false` and `true or invalid` as `true`. A violation of an input to a publication blocks it even if the expression could short-circuit over the invalid value.
 3. **Version gaps and overlaps.** The [language's validity and applicability rules](v0.md) give `unknown no_version_applies` for a gap and `invalid versions_overlap` for an overlap that the rules cannot resolve. The base subset refuses versioned declarations.
-4. **Closed kinds.** This lowering needs the author to say `world closed`. The compiler's default for a schema relation does not select the world of a Rezono kind.
+4. **Explicit worlds.** This lowering needs the author to say `world closed` or `world open` on a root kind. The compiler's default for a schema relation does not select the world of a Rezono kind.
 5. **Reason and cause.** A named outcome supplies a reason code for each non-known state. The pack renders it with `reason.<code>`. When a read found a missing slot, `no_value` is the reason and the missing fact row is the absent premise of the proof.
 
 If a numeric lowering computes a result outside its representable range, it yields `unknown` with a reason. A numeric result is never substituted for it.
@@ -97,7 +97,8 @@ Inspection:
 
 - The compiler derives kind, slot and relation identifiers from their names. For example, `InspectionBatch` gives `inspection_batch`, with slot identifier `inspection_batch.inspected_on`.
 - In this base form an element has a textual identifier supplied by its fact row. A slot `s: T` is required and `s: T?` is optional. A slot may refer to another kind, `Date`, `Text` or an enum.
-- The compiler produces the ordinary kind and slot tables `k(id)` and `k__s(id, v)`, with the identification, totality, functionality, reference and range checks. Open kinds are outside this base lowering.
+- The compiler produces the ordinary kind and slot tables `k(id)` and `k__s(id, v)`, with the identification, totality, functionality, reference and range checks.
+- In the `rezono.module/2` form, `world open` on a root kind lowers to the LinkML annotation `world: open` on its class, and `world open` on a slot to the same annotation on its attribute. `world closed` is the LinkML default and adds no annotation. A subkind has the world of its root kind, an identifier has the world of its kind, and every slot of an open kind is open. The base `rezono.module/1` form refuses an open kind and a slot world.
 - For an element in a closed kind, one value is known. Zero values are `n/a` for an optional slot and unknown for a required slot. Two values in a single-valued slot or an arrow to a missing element are invalid.
 
 ### 5.2 Enums

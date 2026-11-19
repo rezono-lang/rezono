@@ -33,13 +33,6 @@ def schema(directory: Path, members: str) -> None:
     )
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=MissingBodilessEnumMember,
-    reason="M3: decisions/language-enums.md: scripts/convert_pack.py converts an enum member written without a "
-           "body (`pending:`, which YAML reads as null) exactly like `pending: {}`, keeping the member order and "
-           "the metadata of its neighbours. It now refuses the schema with 'expected a named mapping'.",
-)
 def test_bodiless_enum_member_converts_like_an_empty_one(tmp_path):
     bare, empty = tmp_path / "bare", tmp_path / "empty"
     schema(bare, "      pending:\n      ready:\n        description: the item can be read\n")

@@ -3,7 +3,7 @@ from pathlib import Path
 import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from red_guard import Change, allowed, review
+from red_guard import Change, allowed, protected, review, source
 
 
 def main():
@@ -13,6 +13,8 @@ def main():
     cases = [
         ("changed test expectation", "tests/test_count.py", function, function.replace(b"== 2", b"== 3"), False),
         ("changed recorded outcome", "examples/demo/expected/rows.json", b"[2]", b"[3]", False),
+        ("changed recorded slip", "examples/platform/slip.yaml", b"sentence: two\n", b"sentence: three\n", False),
+        ("changed recorded slip of another example", "examples/subsidy/slip.yaml", b"a\n", b"b\n", False),
         ("removed policy workflow", ".github/workflows/red-policy.yml", b"policy", None, False),
         ("changed policy implementation", "scripts/red_guard.py", b"review", b"other", False),
         ("changed shared fixture", "contracts/fixtures/data.json", b"{}", b"[]", False),
@@ -42,8 +44,18 @@ def main():
 
 
 def workflow_cases():
-    """The workflows that define required checks need the planner label to change."""
-    for path in (".github/workflows/ci.yml", ".github/workflows/disposable-cluster.yml"):
+    """The workflows that define required checks, and what they run to decide, need the label."""
+    deciders = (".github/workflows/python-environment/action.yml", "loop/rezono_cluster.py",
+                "scripts/cluster_worker_tasks.py", "scripts/role_publication_ci.py",
+                "scripts/components.py")
+    for path in deciders:
+        # Protected, yet still source: red_before.py runs added tests against the base copy.
+        if not (protected(path) and source(path)):
+            raise AssertionError(f"{path}: protected {protected(path)}, source {source(path)}")
+        print(f"PROTECTED and source: {path}")
+    if source("examples/platform/slip.yaml"):
+        raise AssertionError("a recorded slip is evidence, not source")
+    for path in (".github/workflows/ci.yml", ".github/workflows/disposable-cluster.yml", *deciders):
         for status, after in (("M", b"jobs: {}\n"), ("D", None)):
             change = Change(path, status, b"jobs: {check: {}}\n", after)
             errors, notes = review([change], planner=False)
@@ -153,6 +165,8 @@ def planner_cases(reason, function):
         edit(".github/workflows/ci.yml", b"", b""),
     ], False, ["REMOVED tests/test_old.py", "CHANGED examples/demo/expected/rows.json",
                "CHANGED tests/test_total.py::test_total", "CHANGED .github/workflows/ci.yml"])
+    run("changed recorded slip", [edit("examples/platform/slip.yaml", b"sentence: two\n", b"sentence: three\n")],
+        False, ["CHANGED examples/platform/slip.yaml"])
     run("weakened expectation without a source change", [
         edit("compiler/tests/test_total.py", other, other.replace(b"== 4", b"is not None")),
     ], False, ["CHANGED compiler/tests/test_total.py::test_total"])
@@ -165,7 +179,10 @@ def planner_cases(reason, function):
 
 
 def milestone_cases(edit, other):
-    """A red mark says which milestone it serves, in literal text, and keeps it."""
+    """A red mark says which milestone it serves, in literal text, and keeps one.
+
+    Only the planner label moves a mark to a later milestone.
+    """
     def red(reason):
         return b"@pytest.mark.xfail(strict=True, reason=" + reason + b")\n" + other
 
@@ -195,8 +212,25 @@ def milestone_cases(edit, other):
             ("reason loses its milestone to a computed value", computed, True),
             ("reason extends the text after its milestone", red(b'"M2: pending on the loader"'), False),
             ("reason moves to an earlier milestone", red(b'"M1: pending"'), False),
+            ("reason moves to a later milestone", red(b'"M3: pending"'), not planner),
+            ("reason moves to later: ", red(b'"later: pending"'), not planner),
         ):
             run(label, [edit("tests/test_total.py", marked, after)], expected, planner)
+    pair = red(b'"M2: pending"') + b"\n" + red(b'"later: views"').replace(b"test_total", b"test_sum")
+    run("two tests trade milestones", [
+        edit("tests/test_total.py", pair, pair.replace(b"M2: ", b"M3: ", 1).replace(b"later: views", b"M2: views")),
+    ], True, planner=False)
+    two = red(b'"M1: pending"').replace(b"def test_total():",
+                                        b"@pytest.mark.xfail(strict=True, reason=\"M2: other\")\ndef test_total():")
+    run("one of two marks on a test lifted, the other postponed", [
+        edit("tests/test_total.py", two, red(b'"later: pending"')),
+    ], True, planner=False)
+    run("one of two marks on a test lifted, the other kept", [
+        edit("tests/test_total.py", two, red(b'"M1: pending"')),
+    ], False, planner=False)
+    run("reason without a milestone gets one", [
+        edit("tests/test_total.py", red(b'"pending"'), red(b'"later: pending"')),
+    ], False, planner=False)
     run("reason without a milestone is explained",
         [edit("tests/test_total.py", red(b'"pending"'), red(b'"documented"'))], False, planner=False)
 
