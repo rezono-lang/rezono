@@ -6,16 +6,6 @@ import pytest
 UNIVERSE = frozenset({"alpha", "beta", "gamma", "viewer"})
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason=(
-        "Read decisions/build-reconciliation.md, section Transition evidence. Add loop/build_transition_choice.py "
-        "with transition_choice(*, run, pack, python, universe) that keeps the Python result, records a "
-        "disagreement with both sides, and requests every suite when the pack result is unverified. "
-        "Write only in that file."
-    ),
-)
 def test_build_transition_choice():
     assert find_spec("loop.build_transition_choice") is not None, "The build transition choice is missing"
     from loop.build_transition_choice import transition_choice
