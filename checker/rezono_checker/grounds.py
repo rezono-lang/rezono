@@ -33,7 +33,8 @@ def aggregate_grounds(spec, theta, rows, groups) -> set[Ground]:
     members = aggregate_members(spec, fixed, rows(relation, None), groups)
     if not members:
         return {("empty-group", relation, encoded(fixed))}
-    return {("read", relation, key) for key, _ in members}
+    # The group scope (relation and fixed terms) is a ground of its own, next to the contributor keys.
+    return {("group-scope", relation, encoded(fixed)), *(("read", relation, key) for key, _ in members)}
 
 
 def comparison(condition, theta):
