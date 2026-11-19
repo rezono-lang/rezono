@@ -91,8 +91,11 @@ word_part.units: Minor units per billing unit
 word_step: One checked constant-division step
 
 activity_count: Activity count
+billed_blocked: Billed blocked
+billed_gap: Billed gap
 billed_line: Billed line
 billed_line_count: Billed line count
+billed_resource: Billed resource
 billed_total: Billed total
 bound_line: Bound line
 bound_line_count: Bound line count
@@ -100,23 +103,36 @@ bound_registry: Bound registry
 cap_basis: Cap basis
 cap_basis.billed: Billed
 cap_basis.rated: Rated
+cap_gap: Cap gap
 ceiling_count: Ceiling count
 ceiling_match: Ceiling match
+charge_terms_count: Charge terms count
+charge_terms_in_force: Charge terms in force
+charged_resource: Charged resource
+covered_line: Covered line
 deployed: Deployed
 deployed_count: Deployed count
+forecast_gap: Forecast gap
 forecast_line: Forecast line
 forecast_line_count: Forecast line count
 forecast_total: Forecast total
 has_billed_line: Has billed line
+has_bound_line: Has bound line
+has_bound_registry: Has bound registry
 has_cap_result: Has cap result
 has_forecast_line: Has forecast line
 has_usage_charge: Has usage charge
+latest_capture: Latest capture
+latest_capture_count: Latest capture count
 plan_hours: Plan hours
 plan_seconds: Plan seconds
 planned_line_count: Planned line count
 quote_count: Quote count
 quote_match: Quote match
+rated_blocked: Rated blocked
+rated_gap: Rated gap
 rated_total: Rated total
+rated_unresolved: Rated unresolved
 reconciliation_activity: Reconciliation activity
 reconciliation_activity.resource: Resource
 reconciliation_activity.run: Run
@@ -186,7 +202,9 @@ reconciliation_run_coverage.run: Run
 reconciliation_run_window: Reconciliation run window
 reconciliation_status: Reconciliation status
 reconciliation_total: Reconciliation total
+reconciliation_unresolved: Reconciliation unresolved
 reconciliation_usage_charge: Reconciliation usage charge
+registry_capture: Registry capture
 registry_line_count: Registry line count
 registry_resource_line: Registry resource line
 run_activity: Run activity
