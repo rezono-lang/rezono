@@ -81,11 +81,6 @@ POLICY_CASES = [
 ]
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="Write request_rows.read_request_rows as decisions/k8s-admission-translator.md specifies under The "
-           "binding. Write in k8s-admission/request_rows.py.",
-)
 def test_request_rows(monkeypatch):
     from request_rows import read_request_rows
 
