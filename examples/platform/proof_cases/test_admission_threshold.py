@@ -74,7 +74,7 @@ def scenario(path, values, initial):
 
 
 @pytest.mark.xfail(strict=True, raises=MissingThresholdPublication,
-                   reason="Depends on ordinary admission outputs. Add the written capacity exploration and checked threshold publication under examples/platform. Read decisions/platform-admission-threshold.md.")
+                   reason="M2: Depends on ordinary admission outputs. Add the written capacity exploration and checked threshold publication under examples/platform. Read decisions/platform-admission-threshold.md.")
 def test_first_threshold_is_between_two_real_assumptions(tmp_path):
     runner = ROOT / "portal" / "capacity_exploration.py"
     if not runner.exists():
