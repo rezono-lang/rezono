@@ -1,0 +1,7 @@
+default:
+  kind: tool
+  name: Vendor transport inspection
+  revision: '4.6'
+  position: L1840
+  url: 'https://gitlab.com/chrony/chrony/-/raw/4.6/doc/chrony.conf.adoc'
+  fragment_sha256: 5358e031b8bcd603bbd7ed2279e0e7c8da3f09a8148f109a5a1b46422fb8337b
