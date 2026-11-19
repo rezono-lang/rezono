@@ -16,7 +16,7 @@ import re
 from typing import Literal, NotRequired, Protocol, TypedDict
 
 from rezono_canon import canonical_sha256
-from rezono_checker.completeness import admit
+from rezono_checker.completeness import admit, scope_digest
 
 
 _EPOCH = datetime(1970, 1, 1, tzinfo=timezone.utc)
@@ -222,7 +222,7 @@ def _coverage(store: PublicationReader, decision: CloseDecision, authorities, cu
     for parts in admitted.values():
         receipt, source, scope, cut, inventory, content = parts
         # The admitted row names its trusted context; the receipt counts only for this close's cutoff.
-        matches = [a for a in trusted if a["source"]["name"] == source and canonical_sha256(a["scope"]) == scope
+        matches = [a for a in trusted if a["source"]["name"] == source and scope_digest(a["scope"]) == scope
                    and canonical_sha256(a["cut"]) == cut and a["inventory"]["sha256"] == inventory
                    and a["content"]["sha256"] == content]
         if matches and _binds_close(matches[0]["scope"], cutoff):

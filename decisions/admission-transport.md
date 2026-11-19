@@ -27,7 +27,7 @@ class Evidence:
 def admit(evidence: Evidence) -> Admitted   # .rows {relation: [row]}, .findings, .references
 ```
 
-`batch.epoch` gains the keyword `evidence: Evidence | None = None`. The default keeps every existing caller unchanged. `Epoch` gains the field `evidence`. `publish.verify` passes it to `check_epoch` on the complete side only, where the checker admits again and compares. `publish.plan` writes the candidate references of the admitted step to the complete manifest under `completeness_receipts` and `rounds`, each a list of archived-file references.
+`batch.epoch` gains the keyword `evidence: Evidence | None = None`. The default keeps every existing caller unchanged. `Epoch` gains the field `evidence`. `publish.verify` passes it to `check_epoch` on the complete side only, where the checker admits again and compares. `publish.plan` writes the candidate references of the admitted step to the complete manifest under `completeness_receipts` and `rounds`, each a list of archived-file references. It also names the pinned context and index under `evidence` (`{"context": reference, "index": reference}`, `index` absent when nothing was submitted). The context's bytes are not published. The manifest only names the context and confers no authority: a later replay of the publication, such as `retained_calculation`, takes the context hash from its own protected caller (section 4), refuses a manifest that names another context or none, and reads evidence only under `observations/retained/` and `observations/submitted/`. It then rebuilds the `Evidence` and admits again. A replay whose context is gone admits nothing and fails on any protected row.
 
 This replaces the three keywords `completeness_receipts`, `completeness_authority` and `archive` that an earlier draft of the receipt transport used. One object keeps the trusted and the submitted half apart by construction and carries the resolver to the checker.
 
@@ -81,7 +81,7 @@ The compiler reserves these exact names and signatures. A pack declares one with
 .decl verified_round_member(round: symbol, step: symbol)
 ```
 
-- `verified_receipt` holds the receipt digest, the source name and the digests of the bound scope, cut, inventory and content, as scoped completeness fixes.
+- `verified_receipt` holds the receipt digest, the source name and the digests of the bound scope, cut, inventory and content, as scoped completeness fixes. The scope digest takes the scope definition as the hash of the bytes it pins, not as the reference to a stored copy (`completeness.scope_digest`), so the same scope stored elsewhere gives the same row.
 - `verified_member` exposes the typed member keys of an admitted receipt's trusted inventory. `member` is the canonical JSON text of the key, `part` its zero-based position and `value` the canonical text of that part. A rule reads a one-part key as `verified_member(r, _, 0, node)` and a mapping edge as two parts of the same member. No rule parses JSON.
 - `verified_round` holds the round claim digest and the run, cut and batch that the round verifier checked and whose choice it replayed itself.
 - `verified_round_member` lists the steps of that batch.
@@ -110,7 +110,7 @@ A recorded inventory without verified members gives no `complete_sweep`. An empt
 
 This layout needs no change to the reserved signatures or to admission: `verified_member` already exposes every part of a key. An alternative that exposes the scope bindings or the content in a new protected relation would change the reserved names and the checker, and would hand rules values that the inventory does not pin as members.
 
-The protected relations are published on the complete side only. They carry no element column, and their rows expose the trusted inventory, member keys included, so no right of a kind can decide who reads them. Until a decision gives them an explicit read rule or element columns for the member keys, every filtered role has them withheld, as the relations of a sealed kind are withheld (`access.Scope.withheld`, and independently `rezono_checker.access.withheld_admission`). A derived conclusion that rests on a withheld row reaches a role only through a proof whose grounds that role may read ([scoped completeness](scoped-completeness.md), section 2); a conclusion whose only proofs rest on a protected relation stays hidden from every filtered role.
+The protected relations are published on the complete side only. They carry no element column, and their rows expose the trusted inventory, member keys included, so no right of a kind can decide who reads them. Until a decision gives them an explicit read rule or element columns for the member keys, every filtered role has them withheld, as the relations of a sealed kind are withheld (`access.Scope.withheld`, and independently `rezono_checker.access.withheld_admission`). All four are withheld whether or not the rule IR declares them. A derived conclusion that rests on a withheld row reaches a role only through a proof whose grounds that role may read ([scoped completeness](scoped-completeness.md), section 2); a conclusion whose only proofs rest on a protected relation stays hidden from every filtered role.
 
 ## 7. Round verification
 

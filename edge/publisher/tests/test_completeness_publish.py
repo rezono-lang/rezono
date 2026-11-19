@@ -2,8 +2,8 @@
 
 The caller passes the pinned trusted context and the submitted index as one `Evidence`; only admitted
 candidates fill the protected input `verified_receipt`; the complete manifest lists the candidates; the
-checker admits again and refuses a protected row that admission did not produce. The trusted context is
-never published. The archive layout, the receipt and the expected conclusion come from
+checker admits again and refuses a protected row that admission did not produce. The trusted context's
+bytes are never published; the complete manifest names it by hash. The archive layout, the receipt and the expected conclusion come from
 test_evidence_batch, written by hand.
 """
 
@@ -41,7 +41,10 @@ def test_publisher_admits_receipts_only_with_a_trusted_context(tmp_path):
     manifest, rows = published(epoch, bucket)
     assert rows == [{"key": [expected[1], expected[2], expected[3], expected[0]]}]
     assert (manifest["completeness_receipts"], manifest.get("rounds", [])) == ([candidate], [])
-    assert context["sha256"] not in json.dumps(manifest)
+    # The manifest names the trusted context by hash for a later replay; its bytes are never a published object.
+    assert manifest["evidence"] == {"context": context, "index": index}
+    assert bucket.get(context["file"]) not in {bucket.get(key) for key in
+                                               publish.role_objects(bucket, epoch.pack, manifest["id"], "checker").values()}
 
     # A mutated candidate: still listed, a warning only, no conclusion.
     bucket = store.FileStore(tmp_path / "mutated")
