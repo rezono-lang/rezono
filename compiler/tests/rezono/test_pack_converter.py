@@ -107,9 +107,14 @@ def test_conversion_renders_the_metadata_of_the_standard_access_pack():
     assert "  | // @extend" in access.lines
 
 
-def test_unrepresented_mappings_are_never_silently_discarded():
-    with pytest.raises(ConversionError, match=r"Constituent.part_of: no conversion for broad_mappings, close_mappings"):
-        sources(REPO / "packs/std-part", "std-part")
+def test_unrepresented_mappings_are_never_silently_discarded(tmp_path):
+    path = schema(tmp_path)
+    path.write_text(
+        path.read_text(encoding="utf-8") + "      extra: {narrow_mappings: ['skos:narrowMatch']}\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(ConversionError, match=r"Item\.extra: no conversion for narrow_mappings"):
+        sources(tmp_path, "sample")
 
 
 def test_failed_reader_does_not_leave_a_candidate(tmp_path):
