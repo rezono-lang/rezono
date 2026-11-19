@@ -142,7 +142,7 @@ class Scope:
             for r in rows.get(k, ()):
                 if not self.reads(k, r[0]):
                     raise Uncovered(f"role {role}: the read rules give kind {k} in full, but not every element")
-        self.withheld = self._withheld_seals(rules) | self._withheld_admission()
+        self.withheld = self._withheld_seals(rules) | self._withheld_admission(rules)
         # What each calculation view rests on, as `with_calc` gave it; without a program there is none.
         self.calc_sources = getattr(columns, "calc_sources", {})
         self.full = Full(self._full_relations(rules, rows))
@@ -168,8 +168,8 @@ class Scope:
         return frozenset(out)
 
     @staticmethod
-    def _withheld_admission() -> frozenset[str]:
-        """Every protected admission input (decisions/admission-transport.md, section 6), whatever the rule IR
+    def _withheld_admission(rules: dict) -> frozenset[str]:
+        """Every protected admission input (decisions/admission-transport.md, section 6), whatever the rule IR `rules`
         declares, as the checker withholds them. They expose the trusted inventory of a receipt or round, member
         keys included, and no decision gives them a read rule or element columns yet: a role gets none of their
         rows, and nothing that rests on them."""
