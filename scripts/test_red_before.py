@@ -158,7 +158,7 @@ READS_CASE = (b"import json\nfrom pathlib import Path\n\nimport pytest\n\nfrom p
 PARAM_MARK = b'pytest.mark.xfail(strict=True, raises=FileNotFoundError, reason="M1: needs the case")'
 # A smoke case that passes anywhere, and a red case that reads the evidence.
 PARAM_CASE = (b"import json\nfrom pathlib import Path\n\nimport pytest\n\nfrom pkg.calc import double\n\n\n"
-              b'@pytest.mark.parametrize("case", ["smoke", pytest.param("case", marks=' + PARAM_MARK + b")])\n"
+              b"@pytest.mark.parametrize('case', ['smoke', pytest.param('case', marks=" + PARAM_MARK + b")])\n"
               b"def test_double_case(case):\n"
               b"    if case == 'smoke':\n"
               b"        assert double(1) == 2\n"
@@ -213,7 +213,7 @@ def main():
                                   b"    pytest." + outcome + b"('evidence present')\n")
         completion(f"evidence completion whose case calls pytest.{outcome.decode()} with the evidence",
                    test, b"[4]\n", 0, 1, "ERROR the completed test does not pass in every case with the new evidence",
-                   lifted=test.replace(b'pytest.param("case", marks=' + PARAM_MARK + b")", b'pytest.param("case")'))
+                   lifted=test.replace(b"pytest.param('case', marks=" + PARAM_MARK + b")", b"pytest.param('case')"))
     completion("evidence completion whose test passes on the base without the evidence",
                READS_CASE.replace(b"    expected = json.loads", b"    return\n    expected = json.loads"),
                b"[4]\n", 1, 1, "pass on the base source")
