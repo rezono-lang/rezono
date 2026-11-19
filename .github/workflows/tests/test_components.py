@@ -168,9 +168,10 @@ class RepositoryPullRequestSelectionTests(unittest.TestCase):
         with patch.object(ci, "pull_request_range", return_value=(head, head, list(changed))):
             return {c.folder for c in ci.pull_request_components(components, ROOT, "main")}, components, head
 
-    def test_decision_only_change_selects_no_component_job(self):
+    def test_decision_only_change_selects_the_decision_head_reader(self):
+        # The loop component reads every decision head (decisions/decision-heads.md); a docs page has no reader.
         selected, _, _ = self.selected("decisions/a-new-decision.md", "docs/a-new-page.md")
-        self.assertEqual(selected, set())
+        self.assertEqual(selected, {"loop"})
 
     def test_compiler_change_selects_the_compiler_and_its_dependents_only(self):
         selected, components, head = self.selected("compiler/rezono_compiler/__init__.py")

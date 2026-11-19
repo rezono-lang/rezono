@@ -311,6 +311,9 @@ SHARED_READERS = {
     # The build pack: the loop tests read its schema and rules, and the converter
     # regression parses every tracked Datalog file.
     "build/": ("compiler", "loop"),
+    # The build pack reads the head of every decision, and loop/tests/test_decision_heads.py holds
+    # the budget of decisions without one (decisions/decision-heads.md).
+    "decisions/": ("loop",),
     # examples/test_front_door.py runs the readme's blocks through the quickstart check.
     "README.md": ("examples",),
     "CONTRIBUTING.md": ("examples",),
