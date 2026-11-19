@@ -83,7 +83,7 @@ def parent_of(value: object, kind: str, at: str, own: dict[str, str],
 def lower(decl: dict, at: str, own: dict[str, str], owners: dict[str, list[str]],
           declared: Set[str], uses: set[str], refuse: Refuse, *, extended_format: bool = False) -> dict | None:
     ok = True
-    allowed = (MEMBERS | {"checks", "embedded", "equations", "parent", "relationship"} | rezono_metadata.FIELDS
+    allowed = (MEMBERS | {"checks", "deprecated", "embedded", "equations", "parent", "relationship"} | rezono_metadata.FIELDS
                if extended_format else MEMBERS)
     if extra := set(decl) - allowed:
         refuse(at, f"a kind with {', '.join(sorted(extra))} is not lowered", "§5.1")
@@ -91,6 +91,7 @@ def lower(decl: dict, at: str, own: dict[str, str], owners: dict[str, list[str]]
     if not rezono_metadata.valid(decl):
         refuse(at, "invalid kind metadata", "§5.1")
         ok = False
+    deprecated = rezono_metadata.deprecated(decl, at, refuse, "§5.1") if extended_format else ()
     embedded = decl.get("embedded") is True
     if extended_format and "embedded" in decl and not embedded:
         refuse(at, "an embedded kind must be marked true", "§5.1")
@@ -142,7 +143,7 @@ def lower(decl: dict, at: str, own: dict[str, str], owners: dict[str, list[str]]
         ok = False
     if rezono_slot.validate(
         slots, decl["kind"], at, own, owners, uses, refuse, extended=extended_format, open_kind=world == "open"
-    ) and ok and equations is not None and rules is not None:
+    ) and ok and equations is not None and rules is not None and deprecated is not None:
         attributes = rezono_slot.lower(slots, declared, implicit_identifier=not embedded and parent is None)
         result = {"attributes": attributes} | rezono_metadata.lower(decl)
         if world == "open":
@@ -157,7 +158,7 @@ def lower(decl: dict, at: str, own: dict[str, str], owners: dict[str, list[str]]
             result.setdefault("annotations", {})["path_equations"] = equations
         if rules:
             result["rules"] = rules
-        return result
+        return rezono_metadata.with_deprecated(result, deprecated)
     return None
 
 

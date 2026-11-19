@@ -502,7 +502,7 @@ def lower(pack_dir: Path, d: Declared, form: dict, pack: str, owners: dict[str, 
                     lowered_kind["unique_keys"] = keys
                 classes[decl["kind"]] = lowered_kind | kind_fields
         elif "enum" in decl:
-            lowered_enum = rezono_enum.lower(decl, at, refuse, extended=metadata_format)
+            lowered_enum = rezono_enum.lower(decl, at, refuse, extended=extended_format)
             if lowered_enum is not None:
                 enums[decl["enum"]] = lowered_enum
         elif "rule" in decl and native_rules:
