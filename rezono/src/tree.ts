@@ -48,7 +48,20 @@ export interface Ask {
 	show?: Expr[];
 	tail?: Tail[];
 }
-export type Suppose = { set: [Path, Expr] } | { retract: Path } | { retract_row: [string, string] };
+/** One named slot of a whole-record insertion: `name = value`. */
+export interface SupposeSlot {
+	name: string;
+	value: Expr;
+}
+/**
+ * A suppose line (§8): `+ path = value`, `- path`, `- Kind id`, and `+ Kind id {slot = value, ...}`, which
+ * inserts a whole record with its slots in authored order (decisions/language-safe-steps.md §1).
+ */
+export type Suppose =
+	| { set: [Path, Expr] }
+	| { retract: Path }
+	| { retract_row: [string, string] }
+	| { insert_row: { kind: string; key: string; slots: SupposeSlot[] } };
 /**
  * A check statement (v0 §5): `check`, `require` and `warn` decide at publication (v0 §7b); `norm` is reserved.
  * `name` is the name written before the colon, `cond` the condition. It ranges over every element of the kind

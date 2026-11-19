@@ -645,6 +645,12 @@ export function typing(text: string, schema: Schema, spans: WeakMap<object, Span
 		return { binder, kind: q.ask, shown };
 	}
 	function suppose(q: Exclude<Question, Ask | CheckDecl>): void {
+		// A whole-record insertion reads and prints (decisions/language-safe-steps.md §1); checking it against the
+		// schema is not done yet, so it is refused at its span rather than read as a change it does not make.
+		if ('insert_row' in q) {
+			report('R015', spanOf(q), ['a whole-record insertion']);
+			return;
+		}
 		if ('retract_row' in q) {
 			const [kind] = q.retract_row;
 			if (!schema.kinds[kind]) report('R001', within(q, kind, 'start'), [kind], { suggest: near(kind, Object.keys(schema.kinds)) });
