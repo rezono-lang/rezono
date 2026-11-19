@@ -5,12 +5,18 @@ With it, protected paths may change, but a lifted mark must stand alone and ever
 or changed mark must be strict. Either way, the reason of every added or changed mark is
 literal text that starts with a milestone, and a changed reason keeps the milestone it had.
 Removed and changed evidence is reported either way.
+
+A pull request that changes the checker or read access in a file that is not a test is
+read before it lands: it needs the label `p1-read-` plus the first seven characters of its
+head commit, whatever other labels it carries. A new push therefore needs a new label.
+In the merge queue no labels are read and this rule does not apply.
 """
 import argparse
 import ast
 from collections import Counter, namedtuple
 import copy
 import io
+import json
 from pathlib import PurePosixPath
 import subprocess
 import sys
@@ -42,6 +48,36 @@ def protected(path):
             or p.name in {"frozen_baseline.py", "reference.py", "pytest.ini"}
             or "fixture" in p.stem or p.stem.endswith(("-cases", "_cases", "-vectors", "_vectors"))
             or p.parts[0] == "blocked")
+
+
+# Changes here decide whether a proof is accepted or what a role may see. Nothing downstream
+# catches a mistake in them, so a reviewer reads them before they land.
+READ_FIRST_DIRS = ("checker/rezono_checker/", "packs/std-access/", "edge/gate/src/")
+READ_FIRST_FILES = {"edge/publisher/rezono_publisher/access.py", "contracts/proof.yaml"}
+TEST_DIRS = {"test", "tests", "__tests__"}
+READ_LABEL = "p1-read-"
+
+
+def is_test(path):
+    """A test module or a file in a test directory; fixtures and helpers elsewhere are not."""
+    p = PurePosixPath(path.lower())
+    return (bool(TEST_DIRS.intersection(p.parts[:-1])) or p.name == "conftest.py"
+            or (p.name.startswith("test_") and p.suffix == ".py")
+            or p.name.endswith(("_test.py", ".test.ts", ".spec.ts", ".test.js", ".spec.js")))
+
+
+def read_first(path):
+    """A changed path that a reviewer reads before the pull request lands."""
+    p = path.lower()
+    return (p.startswith(READ_FIRST_DIRS) or p in READ_FIRST_FILES) and not is_test(path)
+
+
+def read_label(head):
+    """The label that says the change at `head` has been read, or None for a malformed head."""
+    if not (isinstance(head, str) and len(head) == 40
+            and all(ch in "0123456789abcdef" for ch in head)):
+        return None
+    return READ_LABEL + head[:7]
 
 
 def is_red(node):
@@ -267,10 +303,16 @@ def milestone(mark):
                for kw in mark.keywords)
 
 
-def review(changes, planner=False):
-    """Return (errors, notes) for a sequence of Change records."""
-    errors, notes, lifted, other = [], [], [], []
+def review(changes, planner=False, head=None, labels=()):
+    """Return (errors, notes) for a sequence of Change records.
+
+    `head` and `labels` describe a pull request. Without `head`, as in the merge queue,
+    labels are not read and changes to the checker or read access are not refused.
+    """
+    errors, notes, lifted, other, unread = [], [], [], [], []
     for c in changes:
+        if read_first(c.path):
+            unread.append(ascii(c.path))
         if c.path == CI_WORKFLOW:
             notes.append(f"CHANGED {CI_WORKFLOW}")
         if not protected(c.path):
@@ -327,6 +369,15 @@ def review(changes, planner=False):
     if lifted and other:
         errors.append(f"ERROR red marks are lifted in {', '.join(lifted)} while protected paths "
                       f"also change: {', '.join(other)}. Lift marks in a pull request of their own.")
+    if head is not None and unread:
+        label = read_label(head)
+        if label is None:
+            errors.append(f"ERROR the head commit {ascii(head)} is not a full commit id, "
+                          f"so no {READ_LABEL} label can apply to it")
+        elif label not in labels:
+            errors.append(f"ERROR the checker or read access changes in {', '.join(unread)}: a reviewer "
+                          f"reads it before it lands and then sets the label {label} for the head "
+                          "commit. The planner label does not replace it, and a new push needs a new label.")
     return errors, notes
 
 
@@ -348,17 +399,32 @@ def changes(base, head):
         yield Change(path, status[0], *sides)
 
 
-def check(base, head, planner=False):
-    return review(list(changes(base, head)), planner)
+def check(base, head, planner=False, labels=None):
+    """Review base..head. With `labels`, head is the head commit of a pull request."""
+    pr_head = None
+    if labels is not None:
+        pr_head = git("rev-parse", "--verify", "--end-of-options", head + "^{commit}").decode().strip()
+    return review(list(changes(base, head)), planner, pr_head, labels or ())
+
+
+def label_list(text):
+    """Parse a JSON array of label names."""
+    names = json.loads(text)
+    if not (isinstance(names, list) and all(isinstance(name, str) for name in names)):
+        raise argparse.ArgumentTypeError("labels must be a JSON array of strings")
+    return names
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--planner", action="store_true", help="the pull request carries the planner label")
+    parser.add_argument("--labels", type=label_list,
+                        help="the labels of the pull request whose head commit is `head`, as a JSON "
+                             "array of names; omitted in the merge queue, where labels are not read")
     parser.add_argument("base")
     parser.add_argument("head")
     args = parser.parse_args()
-    errors, notes = check(args.base, args.head, args.planner)
+    errors, notes = check(args.base, args.head, args.planner, args.labels)
     for line in notes + errors:
         print(line)
     sys.exit(bool(errors))

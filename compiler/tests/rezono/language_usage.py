@@ -89,7 +89,7 @@ EVIDENCE |= {
     "open-world": (BASIC_READER, lowering("lower_open_world")),
     "rule-metadata": (reader("rule_metadata"), lowering("lower_rule_metadata")),
     "relationship-kind": (reader("relationship_kind"), lowering("lower_relationship_kind")),
-    "calculation": (reader("calculation"), lowering("lower_calculation")),
+    "calculation": (reader("calculation"), reader("calculation_versions"), lowering("lower_calculation")),
     "parameters": (reader("parameters"), reader("version_replaces"), lowering("lower_parameters")),
     "module-import": (reader("module_import"), reader("prefixed_type"), lowering("lower_module_import")),
     "inverse-reference": (reader("inverse_reference"), lowering("lower_inverse_reference")),
