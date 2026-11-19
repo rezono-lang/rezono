@@ -1,9 +1,10 @@
 """Regression cases for the policy, using inert bytes without executing proposed changes."""
+import ast
 from pathlib import Path
 import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from red_guard import Change, allowed, protected, review, source
+from red_guard import DEFINITION, Change, Tree, allowed, pack_hash, pin_update, protected, review, source
 
 
 def main():
@@ -41,6 +42,74 @@ def main():
     planner_cases(reason, function)
     workflow_cases()
     read_cases(function)
+    pin_cases(function)
+
+
+def pin_cases(function):
+    """With the label, a fixture pack may re-pin an import to the hash the guard computes."""
+    source_of = Path(__file__).resolve().parent.parent / "compiler/rezono_compiler/modules.py"
+    tree_of = ast.parse(source_of.read_text(encoding="utf-8"))
+    compiled = next(ast.literal_eval(node.value) for node in tree_of.body if isinstance(node, ast.Assign)
+                    and [getattr(t, "id", None) for t in node.targets] == ["DEFINITION"])
+    if compiled != DEFINITION:
+        raise AssertionError(f"red_guard.DEFINITION differs from the compiler's: {compiled}")
+    print("SAME: the pack definition files of the guard and the compiler")
+
+    lifted = function.split(b"\n", 1)[1]
+    lift = Change("tests/test_count.py", "M", function, lifted)
+    access, explain = "packs/std-access", "packs/std-explain"
+    files = {f"{access}/pack.yaml": b"name: std-access\n", f"{access}/rules/access.dl": b"may_read(r, k).\n",
+             f"{access}/expected/out.json": b"[]\n", f"{explain}/pack.yaml": b"name: std-explain\n"}
+    tree = Tree.of(files)
+    new, other = pack_hash(tree, access), pack_hash(tree, explain)
+    old = "cc" * 32
+
+    def fixture(digest, extra=b""):
+        return (b"name: neutral\nimports:\n  - name: std-access\n    path: ../../../packs/std-access\n"
+                b"    sha256: " + digest.encode() + b"\n" + extra
+                + b"  - name: std-explain\n    path: ../../../packs/std-explain\n"
+                b"    sha256: " + other.encode() + b"\n")
+
+    pinned = Change("tests/fixtures/neutral/pack.yaml", "M", fixture(old), fixture(new))
+    changed = Change(f"{access}/rules/access.dl", "M", None, None)
+
+    def run(label, changes, expected, planner=True, at=tree):
+        paths = {c.path for c in changes}
+        pins = frozenset(c.path for c in changes if pin_update(c, at, paths))
+        errors, notes = review(changes, planner=planner, pins=pins)
+        allowed_ = not errors and "PINNED tests/fixtures/neutral/pack.yaml" in notes
+        if allowed_ != expected:
+            raise AssertionError(f"{label}: errors {errors}, notes {notes}")
+        print(f"{'ALLOW' if expected else 'DENY'} {'with' if planner else 'without'} planner: {label}")
+
+    run("a pin update to the computed hash beside a lifted mark", [lift, changed, pinned], True)
+    run("a pin update to the computed hash, without the label", [lift, changed, pinned], False, planner=False)
+    run("a pin update to another hash", [lift, changed, Change(pinned.path, "M", fixture(old), fixture("ab" * 32))],
+        False)
+    run("a pin update with an added line beside it",
+        [lift, changed, Change(pinned.path, "M", fixture(old), fixture(new, b"  # moved\n"))], False)
+    run("a pin update whose other lines change too", [lift, changed, Change(
+        pinned.path, "M", fixture(old), fixture(new).replace(b"name: neutral", b"name: neutral2"))], False)
+    run("a pin update without a change in the imported pack", [lift, pinned], False)
+    run("a pin update beside a change outside the imported pack",
+        [lift, Change("packs/std-time/rules/time.dl", "M", None, None), pinned], False)
+    run("a new fixture pack.yaml", [lift, changed, Change(pinned.path, "A", None, fixture(new))], False)
+    run("a pin update outside a fixture or test directory",
+        [lift, changed, Change("examples/demo/expected/pack.yaml", "M", fixture(old), fixture(new))], False)
+    # The pinned pack imports the changed one: its hash moves with its own new pin.
+    middle = "packs/std-middle"
+    deep = dict(files, **{f"{middle}/pack.yaml": b"name: std-middle\nimports:\n  - name: std-access\n"
+                          b"    path: ../std-access\n    sha256: " + new.encode() + b"\n"})
+    deep_tree = Tree.of(deep)
+    via = (b"name: neutral\nimports:\n  - name: std-middle\n    path: ../../../packs/std-middle\n    sha256: ")
+    run("a pin update of a pack that imports the changed pack", [lift, changed, Change(
+        pinned.path, "M", via + old.encode() + b"\n", via + pack_hash(deep_tree, middle).encode() + b"\n")],
+        True, at=deep_tree)
+    flow = b"imports:\n  - {name: std-access, path: ../../../packs/std-access, sha256: %s}\n"
+    run("a pin update in a flow mapping", [lift, changed, Change(
+        pinned.path, "M", flow % old.encode(), flow % new.encode())], True)
+    linked = Tree(dict(Tree.of(files).modes, **{f"{access}/rules/link.dl": "120000"}), files.__getitem__)
+    run("a pin update of a pack that holds a symbolic link", [lift, changed, pinned], False, at=linked)
 
 
 def workflow_cases():
