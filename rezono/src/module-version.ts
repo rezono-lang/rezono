@@ -16,10 +16,19 @@ export interface VersionDecl {
 	source?: string;
 }
 
-export function contexts(nodes: Node): { valid?: Valid; known?: string } {
-	const out: { valid?: Valid; known?: string } = {};
+/** A stage context: one stage, or a range from a stage, closed at an exclusive end stage or open. */
+export type During = { stage: string } | { from: string; until?: string };
+export interface Contexts {
+	valid?: Valid;
+	during?: During;
+	in?: string[];
+	known?: string;
+}
+
+export function contexts(nodes: Node): Contexts {
+	const out: Contexts = {};
 	for (const c of nodes.children) {
-		const context = c.decl() as { valid?: Valid; known?: string };
+		const context = c.decl() as Contexts;
 		// A second `valid` or `known` would replace the first one unseen.
 		if (Object.keys(context).some((axis) => axis in out)) refused(c, 'R018', Object.keys(context));
 		Object.assign(out, context);
@@ -32,8 +41,9 @@ export function readVersion(line: Logical, build: Build): VersionDecl {
 	return build.strip(line.read!);
 }
 
-export const printContexts = (c: { valid?: Valid; known?: string }) =>
-	`${c.valid ? `, valid ${c.valid[0]}..${c.valid.length === 2 ? `<${c.valid[1]}` : ''}` : ''}${c.known !== undefined ? `, known ${c.known}` : ''}`;
+const printDuring = (d: During) => ('stage' in d ? d.stage : `${d.from}..${d.until === undefined ? '' : `<${d.until}`}`);
+export const printContexts = (c: Contexts) =>
+	`${c.valid ? `, valid ${c.valid[0]}..${c.valid.length === 2 ? `<${c.valid[1]}` : ''}` : ''}${c.during ? `, during ${printDuring(c.during)}` : ''}${c.in ? `, in ${c.in.join(' | ')}` : ''}${c.known !== undefined ? `, known ${c.known}` : ''}`;
 export const printVersion = (v: VersionDecl) => `version ${v.version}${printContexts(v)}${printValue(v.value)}${printSource(v.source)}`;
 
 /** W108: a declaration whose versions all start at a `valid` date has no value before the earliest one. */

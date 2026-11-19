@@ -1,6 +1,6 @@
 import type { Node } from 'ohm-js';
 import { block, declaration, named, printRow, printSource, type Build, type Logical, type ModuleComponent } from './module-support.ts';
-import { contexts, printContexts, type Valid } from './module-version.ts';
+import { contexts, printContexts, type During, type Valid } from './module-version.ts';
 import { printExpr } from './print-expression.ts';
 import type { Expr } from './tree.ts';
 
@@ -13,6 +13,8 @@ export interface FactRow {
 	fact: string;
 	id: string;
 	valid?: Valid;
+	during?: During;
+	in?: string[];
 	known?: string;
 	set: { slot: string; value: Expr; source?: string }[];
 }
@@ -93,7 +95,12 @@ export const facts = {
        | dash       -- any
        | Expr       -- test
   FactLine = kw<"fact"> typeName                    -- table
-           | kw<"fact"> name rowId ("," VContext)*  -- row
+           | kw<"fact"> name rowId ("," FactContext)*  -- row
+  FactContext = VContext                            -- plain
+              | kw<"during"> rowId "..<" rowId      -- during_closed
+              | kw<"during"> rowId ".."             -- during_open
+              | kw<"during"> rowId                  -- during_one
+              | kw<"in"> NonemptyListOf<rowId, "|"> -- in
   AssignLine = name "=" Expr Src?
   `,
 	actions: {
@@ -104,6 +111,11 @@ export const facts = {
 		Cell_test: (e) => e.tree(),
 		FactLine_table: (_k, t) => named(t, { line: 'facts', fact: t.sourceString }),
 		FactLine_row: (_k, n, id, _commas, ctxs) => named(n, { line: 'fact', fact: n.sourceString, id: id.sourceString, ...contexts(ctxs) }),
+		FactContext_plain: (c) => c.decl(),
+		FactContext_during_closed: (_k, from, _op, until) => ({ during: { from: from.sourceString, until: until.sourceString } }),
+		FactContext_during_open: (_k, from, _op) => ({ during: { from: from.sourceString } }),
+		FactContext_during_one: (_k, stage) => ({ during: { stage: stage.sourceString } }),
+		FactContext_in: (_k, setups) => ({ in: setups.asIteration().children.map((c: Node) => c.sourceString) }),
 		AssignLine(n, _eq, value, src) {
 			const set: FactRow['set'][number] = { slot: n.sourceString, value: value.tree() as Expr };
 			if (src.numChildren) set.source = src.child(0).decl();
