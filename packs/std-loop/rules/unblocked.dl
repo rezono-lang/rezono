@@ -1,0 +1,10 @@
+// Block only within the same run, regardless of the blocker witness.
+.decl unblocked_excluded(run: symbol, step: symbol)
+unblocked_excluded(r, s) :- waiting(r, s, _, _).
+unblocked_excluded(r, s) :- done(r, s, _).
+
+// Keep each eligibility witness for an unfinished step with no waiting row in the same run.
+.decl unblocked(run: symbol, step: symbol, reason: symbol)
+unblocked(r, s, w) :- eligible(r, s, w), !unblocked_excluded(r, s).
+
+.output unblocked
