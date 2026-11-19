@@ -34,7 +34,8 @@ XFAIL_CALL = (b"import pytest\n" + TESTS + b"\n\n"
 ONLY_CLUSTER = (b"import pytest\n" + TESTS + b"\n\n"
                 + b"@pytest.mark.cluster\n"
                 + b"def test_double_three():\n    assert double(3) == 6\n")
-CLUSTER_AND_SKIPPED = (ONLY_CLUSTER + b"\n\n@pytest.mark.skip(reason='later')\n"
+CLUSTER_AND_SKIPPED = (ONLY_CLUSTER + b"\n\n"
+                       + b"@pytest.mark.skip(reason='later')\n"
                        + b"def test_double_four():\n    assert double(4) == 8\n")
 # Stands in for the cluster plugin, so the cases do not depend on whether it is installed:
 # cluster cases are deselected outside the disposable cluster.
