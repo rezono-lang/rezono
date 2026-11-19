@@ -13,6 +13,9 @@ One SELECT per rule; the rules of a relation are a UNION, so the relation is a s
   (Feldera is the reference, E10). DuckDB's `/` gives a DOUBLE, so the batch backend divides with the macro
   `rezono_quotient` on 128 bits (`DUCKDB_MACROS`). The divisor is a non-zero constant (the IR checks it), so no
   engine ever divides by zero;
+- a condition with compare_as (decisions/ordered-rule-scalars.md): on DuckDB an explicit comparison of the
+  UTF-8 bytes, of the text or of the validated UTC key. Feldera's collation has no evidence yet, so the
+  Feldera translation refuses such a rule rather than compare raw text;
 - recursion (linear, one relation): Feldera DECLARE RECURSIVE VIEW; DuckDB WITH RECURSIVE ... UNION;
 - a counter with an explicit bound (rules.Bound): no recursion on either engine. The rule is
   unrolled into one level per time it can fire, and what it would add beyond the bound is the check
@@ -25,7 +28,7 @@ and WHERE as the rule. It reads the final relations, so it is never part of a re
 from dataclasses import replace
 
 from . import feldera_names
-from .rules import Condition, calc_input_table, const_type, is_var, upper
+from .rules import Condition, calc_input_table, const_type, is_var, untyped_conditions, upper
 from .sqltext import literal, q
 
 OPS = {"eq": "=", "ne": "<>", "lt": "<", "le": "<=", "gt": ">", "ge": ">=", "add": "+", "sub": "-", "mul": "*", "div": "/"}
@@ -34,6 +37,36 @@ SQL_TYPE = {"string": "VARCHAR", "integer": "BIGINT"}
 # negative operand; HUGEINT, so that abs(-2^63) fits. Only the quotient -2^63 / -1 does not fit a BIGINT.
 DUCKDB_MACROS = ("CREATE OR REPLACE MACRO rezono_quotient(a, b) AS CAST(CASE WHEN (a < 0) = (b < 0) "
                  "THEN abs(a::HUGEINT) // abs(b::HUGEINT) ELSE -(abs(a::HUGEINT) // abs(b::HUGEINT)) END AS BIGINT);")
+
+
+# A UTC instant as the request input spells it: YYYY-MM-DDTHH:mm:ss[.digits]Z, ASCII digits only.
+UTC_PATTERN = r"[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])T([01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]([.][0-9]+)?Z"
+UTC_WHOLE = len("0001-01-01T00:00:00Z")
+
+
+def utc_valid(x):
+    """DuckDB: TRUE if the text is a UTC instant in years 0001 to 9999 on a Gregorian calendar day."""
+    year, month, day = (f"TRY_CAST(substr({x}, {i}, {n}) AS INTEGER)" for i, n in ((1, 4), (6, 2), (9, 2)))
+    leap = f"(({year} % 4 = 0 AND {year} % 100 <> 0) OR {year} % 400 = 0)"
+    last = (f"CASE {month} WHEN 2 THEN CASE WHEN {leap} THEN 29 ELSE 28 END "
+            "WHEN 4 THEN 30 WHEN 6 THEN 30 WHEN 9 THEN 30 WHEN 11 THEN 30 ELSE 31 END")
+    return (f"COALESCE(regexp_full_match({x}, {literal(UTC_PATTERN)}) AND {year} >= 1 "
+            f"AND {day} <= {last}, FALSE)")
+
+
+def utc_key(x):
+    """DuckDB: the comparison key of a valid UTC instant. Without the terminal Z, trailing zeros of the
+    fraction and a fraction that becomes empty; its bytes order the instants exactly."""
+    return (f"CASE WHEN length({x}) > {UTC_WHOLE} THEN rtrim(rtrim(substr({x}, 1, length({x}) - 1), '0'), '.') "
+            f"ELSE substr({x}, 1, {UTC_WHOLE - 1}) END")
+
+
+def typed_condition(c, left, right):
+    """DuckDB: a condition with compare_as, an explicit comparison of bytes (decisions/ordered-rule-scalars.md)."""
+    if c.compare_as == "binary_text":
+        return f"encode({left}) {OPS[c.op]} encode({right})"
+    return (f"({utc_valid(left)} AND {utc_valid(right)} "
+            f"AND encode({utc_key(left)}) {OPS[c.op]} encode({utc_key(right)}))")
 
 
 def lit_sql(term, typ):
@@ -96,6 +129,11 @@ class RuleSQL:
                 self.env[s.var] = f"({left} {OPS[s.op]} {right})"
             self.types[s.var] = "integer"
         for c in rule.conditions:
+            if c.compare_as is not None:
+                if dialect != "duckdb":  # Feldera's collation and functions have no evidence yet
+                    untyped_conditions(rule, f"{dialect} SQL")
+                self.where.append(typed_condition(c, self.term(c.left, "string"), self.term(c.right, "string")))
+                continue
             t = self.types.get(c.left) or self.types.get(c.right) or const_type(c.left)
             self.where.append(f"{self.term(c.left, t)} {OPS[c.op]} {self.term(c.right, t)}")
         for i, b in enumerate(x for x in rule.body if x.polarity == "negative"):

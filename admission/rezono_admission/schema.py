@@ -11,12 +11,14 @@ multivalued, and for an arrow its target and whether it is inlined.
 from __future__ import annotations
 
 from dataclasses import dataclass
+import re
 
 from rezono_canon import canonical_sha256
 
 # The bundle's attribute types and the Python type a fact value has in each (contracts/bundle.yaml). An enum
 # value is text; money and quantities are integers of their unit.
 PYTHON = {"text": "str", "enum": "str", "integer": "int", "boolean": "bool", "date": "date"}
+INPUT_FORMATS = {"sha256": re.compile(r"[0-9a-f]{64}")}
 
 
 @dataclass(frozen=True)
@@ -28,6 +30,7 @@ class Slot:
     type: str  # one of PYTHON's keys; for an arrow the id type of its target's root kind
     target: str | None = None  # an arrow's target kind
     inlined: bool = False
+    input_format: str | None = None
 
     @property
     def element(self) -> str:
@@ -57,8 +60,12 @@ class Schema:
                                     k["id_type"], k.get("plane"), k.get("owner")) for k in bundle["kinds"]}
         self.slots: dict[str, dict[str, Slot]] = {k: {} for k in self.kinds}
         for a in bundle.get("attributes", []):
+            input_format = a.get("input_format")
+            if input_format is not None and (not isinstance(input_format, str)
+                                             or input_format not in INPUT_FORMATS or a["type"] != "text"):
+                raise ValueError(f"invalid input format for {a['kind']}.{a['name']}")
             self.slots[a["kind"]][a["name"]] = Slot(a["kind"], a["name"], a["table"], bool(a.get("multivalued")),
-                                                    a["type"])
+                                                    a["type"], input_format=input_format)
         for a in bundle.get("arrows", []):
             target = a["target"]
             self.slots[a["kind"]][a["name"]] = Slot(a["kind"], a["name"], a["table"], bool(a.get("multivalued")),

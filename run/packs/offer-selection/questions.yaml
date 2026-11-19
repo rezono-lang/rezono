@@ -1,5 +1,5 @@
 # The explanation question every answer rests on, and the reader question of the physical and nested
-# allocation example. The pack is self-contained like the other Run packs, so it states the grounds question
+# allocation example. The pack does not import std-explain, so it states the grounds question
 # itself, as std-explain does.
 format: rezono.questions/1
 questions:

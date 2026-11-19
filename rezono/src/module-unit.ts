@@ -8,6 +8,8 @@ export const unit = {
   UnitLine = kw<"unit"> typeName "=" UnitBody
   UnitBody = kw<"money"> kw<"minor">? typeName (kw<"per"> name)?  -- money
            | kw<"integer">                                         -- integer
+           | number "^" number typeName                             -- power
+           | typeName kw<"per"> typeName                            -- per
            | Expr                                                   -- quantity
   `,
 	actions: {

@@ -43,11 +43,6 @@ def without(document, key):
     return {k: v for k, v in document.items() if k != key}
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError,
-                   reason="Declare CompletenessReceipt in contracts/observation.yaml and an optional "
-                          "completeness_receipts list of ArchivedFile on Manifest in contracts/manifest.yaml, "
-                          "as decisions/scoped-completeness.md section 1 and its admission transport fix them. "
-                          "Regenerate the types with contracts/gen-types.sh. No other dependency.")
 def test_completeness_receipt_contract():
     manifest = yaml.safe_load(EPOCH.read_text(encoding="utf-8"))
     assert errors(manifest, "manifest.yaml", "Manifest") == []  # control: the fixture is valid as it is

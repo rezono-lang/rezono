@@ -168,3 +168,70 @@ def test_run_reconciliation(tmp_path):
     matched, _ = replay("matched", (("forecast", "180"), ("rated", "180"), ("billed", "180")),
                         elapsed="7200", matched=True)
     assert matched.rows("reconciliation_rate_difference") == matched.rows("reconciliation_plan_difference") == set()
+
+
+def test_run_reconciliation_refuses_ambiguous_evidence(tmp_path):
+    def run(name, files):
+        return checked(PACK, tmp_path / name, files)
+
+    def unresolved(report, subject):
+        return {row[3] for row in report.rows("reconciliation_unresolved") if row[:3] == SCOPE + (subject,)}
+
+    def totals(report):
+        return {row[2]: row[4] for row in report.rows("reconciliation_total")}
+
+    def second_terms(files):
+        files["reconciliation-decisions.yaml"]["reconciliation_charge_terms"].append(
+            {"id": "usage-terms-2", "run": RUN, "decision": "decision-usage-terms", "unit": "hour",
+             "basis": "active_interval", "fee_minor": 10})
+        return files
+
+    # Two charge terms in force: a doubled a1 charge must not stand in for a missing b1.
+    doubled = run("doubled-terms", second_terms(inputs(second_stop=None)))
+    assert "rated" not in totals(doubled)
+    assert doubled.rows("reconciliation_usage_charge") == set()
+    assert {"several_charge_terms", "resource_without_charge"} <= unresolved(doubled, "rated")
+    assert SCOPE + ("rated", "unknown") in doubled.rows("reconciliation_status")
+    assert not any(row[2] == "rated" for row in doubled.rows("reconciliation_cap_result"))
+    complete = run("doubled-terms-complete", second_terms(inputs()))
+    assert "rated" not in totals(complete) and "several_charge_terms" in unresolved(complete, "rated")
+
+    # A covered invoice line that does not bind leaves the billed total unknown, never smaller.
+    files = inputs()
+    billing = files["order-invoice.yaml"]
+    plan_hash = billing["invoice_line"][0]["plan_hash"]
+    billing["invoice_line"] += [{"id": "billed-a1-surcharge", "item": "a1", "currency": "EUR", "minor": 20},
+                                {"id": "billed-z9", "plan_hash": plan_hash, "item": "z9", "currency": "EUR",
+                                 "minor": 500}]
+    billing["reconciliation_invoice_coverage"][0]["lines"] += ["billed-a1-surcharge", "billed-z9"]
+    unbound = run("unbound-lines", files)
+    assert "billed" not in totals(unbound) and totals(unbound)["rated"] == "345"
+    assert "unbound_invoice_line" in unresolved(unbound, "billed")
+
+    # Covered activity of a resource without a deployment record leaves the rated total unknown.
+    files = inputs()
+    files["recorded-run.yaml"]["reconciliation_activity"].append(
+        interval("usage-c1", "00:00", "03:00") | {"resource": "c1", "run": RUN})
+    undeployed = run("undeployed-activity", files)
+    assert "rated" not in totals(undeployed)
+    assert "activity_without_deployment" in unresolved(undeployed, "rated")
+
+    # Only the latest registry capture counts; an older one adds no differences beside it.
+    def older_capture(files, offset):
+        order = files["order-registry.yaml"]
+        old = dict(order["reconciliation_registry"][0], id="old-capture")
+        old["captured_at"] -= offset
+        order["reconciliation_registry"].append(old)
+        order["reconciliation_registry_coverage"].append({"id": "old-coverage", "registry": "old-capture"})
+        order["reconciliation_registry_line"].append(
+            {"id": "old-a1", "registry": "old-capture", "resource": "a1", "slot": "first", "supplier_plan": "plan-z",
+             "quantity": 1, "hourly_minor": 70, "currency": "EUR"})
+        return files
+
+    latest = run("older-capture", older_capture(inputs(), 7200))
+    assert latest.rows("reconciliation_plan_difference") == {SCOPE + ("second", "plan-a", "plan-b")}
+    assert latest.rows("reconciliation_rate_difference") == {SCOPE + ("plan-a", "EUR", "45", "50")}
+    assert totals(latest)["rated"] == "345"
+    tied = run("tied-capture", older_capture(inputs(), 0))
+    assert "rated" not in totals(tied) and "registry_not_bound" in unresolved(tied, "rated")
+    assert tied.rows("reconciliation_plan_difference") == set()

@@ -2,7 +2,10 @@ id: value-tt-not-na
 source: docs/semantics/value-cases.yaml#tt-not-na
 status: settled
 input:
-  rows: []
+  rows:
+    - {$kind: Group, $id: group-a}
+  select: {kind: Group, id: group-a}
+  language: "ask Group where true show not n/a"
   expression: not value
   bindings:
     value:

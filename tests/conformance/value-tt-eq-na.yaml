@@ -3,14 +3,11 @@ source: docs/semantics/value-cases.yaml#tt-eq-na
 status: settled
 input:
   rows:
-  - kind: item
-    id: item-b
-    group: group-a
-    labels:
-    - first
-    weight: 3
-  - kind: item
-    id: item-x
+    - {$kind: Group, $id: group-a}
+    - {$kind: Item, $id: item-b, group: {$ref: group-a}, labels: [first], weight: "3"}
+    - {$kind: Item, $id: item-x, group: {$ref: group-a}, labels: [first]}
+  select: {kind: Group, id: group-a}
+  language: "ask Group where true show item-b.quantity = item-x.quantity"
   expression: item-b.quantity = item-x.quantity
 expect:
   value: null

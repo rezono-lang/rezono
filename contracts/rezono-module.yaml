@@ -711,6 +711,8 @@ classes:
       unless: {range: Clause, array: {dimensions: [{alias: unless}, {alias: clause}]}, description: "Each `unless`, in the order of the text: its one clause, or the clauses of its block (v0 §5b)."}
       versions: {range: Version, multivalued: true, inlined_as_list: true, minimum_cardinality: 1}
       table: {range: Table, inlined: true}
+      output: {range: DerivedOutput, inlined: true}
+      definitions: {range: Definition, multivalued: true, inlined_as_list: true, minimum_cardinality: 1}
 
   Table:
     description: >-
@@ -754,6 +756,19 @@ classes:
     description: "A value of a decision table: read by the type of its input or of the derived value, which is the check's and not the parse's."
     attributes:
       lit: {required: true, description: "A literal, an id or a value of an enum as a bare word, as the text wrote it; never a state."}
+
+  DerivedOutput:
+    description: "The explicit output of a calculation: `output relation.slot`."
+    attributes:
+      relation: {required: true, range: Name}
+      slot: {required: true, range: Name}
+
+  Definition:
+    description: "One named definition of a calculation: `definition name when condition then expression`."
+    attributes:
+      name: {required: true, range: Name}
+      when: {required: true, range: Expr, inlined: true}
+      value: {required: true, range: Expr, inlined: true}
 
   Clause:
     attributes:

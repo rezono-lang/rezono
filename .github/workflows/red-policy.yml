@@ -48,18 +48,36 @@ jobs:
             gh api "repos/$GITHUB_REPOSITORY/pulls/$PR" \
               --jq '[.head.sha, any(.labels[]; .name == "planner")] | @tsv'
           }
+          report="$RUNNER_TEMP/test-evidence.txt"
           for attempt in 1 2 3; do
             state=$(current_state)
             IFS=$'\t' read -r sha planner <<< "$state"
             [[ "$sha" == "$HEAD" ]]
             result=0
+            label=()
             case "$planner" in
-              true) echo "Planner review authorizes protected changes." ;;
-              false) python -I scripts/red_guard.py "$base" "$HEAD" || result=$? ;;
+              true)
+                label=(--planner)
+                echo "Planner label: protected paths may change; red marks are still reviewed."
+                ;;
+              false) ;;
               *) exit 1 ;;
             esac
+            python -I scripts/red_guard.py "${label[@]}" "$base" "$HEAD" > "$report" || result=$?
+            cat "$report"
             latest=$(current_state)
             if [[ "$state" == "$latest" ]]; then
+              {
+                echo "### Test evidence (planner label: $planner)"
+                echo
+                if [[ -s "$report" ]]; then
+                  echo '```text'
+                  cat "$report"
+                  echo '```'
+                else
+                  echo "No protected evidence was removed or changed."
+                fi
+              } >> "$GITHUB_STEP_SUMMARY"
               exit "$result"
             fi
             echo "PR state changed during review; checking again."

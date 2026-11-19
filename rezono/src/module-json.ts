@@ -33,15 +33,16 @@ const NATIVE_RULE_MODULE_FORMAT = 'rezono.module/3';
 function formatOf(module: Module): ModuleForm['format'] {
 	if (module.decls.some(decl => 'rule' in decl)) return NATIVE_RULE_MODULE_FORMAT;
 	const extended = module.schema !== undefined || module.decls.some(decl => {
-		if ('dataset' in decl || 'rules' in decl) return true;
+		if ('dataset' in decl || 'rules' in decl || ('source' in decl && 'fields' in decl)) return true;
 		if ('kind' in decl) {
 			if (decl.parent !== undefined) return true;
-			return decl.abstract || decl.embedded || decl.keys?.length || hasMetadata(decl)
+			return decl.abstract || decl.embedded || decl.relationship || decl.keys?.length || hasMetadata(decl)
 				|| decl.slots.some(slot => slot.identifier || slot.embedded || slot.slotUri !== undefined
 					|| slot.constraints !== undefined || hasMetadata(slot))
 				|| decl.equations?.length || decl.checks?.length;
 		}
 		if ('base' in decl) return true;
+		if ('derived' in decl && Array.isArray(decl.derived) && decl.derived.some(d => d.output !== undefined || d.definitions !== undefined)) return true;
 		return 'enum' in decl && (decl.memberMetadata !== undefined || hasMetadata(decl));
 	});
 	return extended ? EXTENDED_MODULE_FORMAT : MODULE_FORMAT;

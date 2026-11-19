@@ -38,7 +38,7 @@ input:
     - {id: total, relation: settled, guard: 'not settled(g)', summary: settled, polarity: negative}
     - {id: positive, relation: active, guard: 'active(g)', summary: active, polarity: positive}
     - {id: open, relation: live, guard: 'not live(g)', summary: live, error: R004}
-    - {id: unchecked, relation: active, guard: 'not active(g)', error: R047, lowering_only: true}
+    - {id: unchecked, relation: active, guard: 'not active(g)', error: R047}
     - {id: forged, relation: active, guard: 'not active(g)', summary: settled, error: R047, lowering_only: true}
 expect:
   state: known

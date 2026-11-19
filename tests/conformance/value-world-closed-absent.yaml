@@ -3,14 +3,10 @@ source: docs/semantics/value-cases.yaml#world-closed-absent
 status: settled
 input:
   rows:
-  - kind: item
-    id: item-a
-    group: group-a
-    labels:
-    - first
-    - second
-    quantity: 7
-    weight: 3
+    - {$kind: Group, $id: group-a}
+    - {$kind: Item, $id: item-a, group: {$ref: group-a}, labels: [first, second], quantity: "7", weight: "3"}
+  select: {kind: Group, id: group-a}
+  language: "ask Group where true show item-x in Item"
   expression: item-x in Item
   world: closed
 expect:

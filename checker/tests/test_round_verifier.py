@@ -68,16 +68,6 @@ def fixture(step="replace-link-a", run=RUN, **changes):
     return archive, context, archive.pin("claim.json", claim)
 
 
-@pytest.mark.xfail(strict=True, raises=ImportError,
-                   reason="Add rezono_checker.rounds with verify_round(reference, contexts, receipts, read_bytes) and "
-                          "Unverified(code, detail), as decisions/admission-transport.md section 7 fixes: build the "
-                          "certificate context from the retained round context only, check each subset with "
-                          "check_transition_certificate (archived JSON spells integers as text: decode the delta "
-                          "weights first), replay the selection of decisions/safe-step-rounds.md and "
-                          "fail closed on an unrefuted preceding alternative. A certificate's effect is the SHA-256 of the ordered "
-                          "plan hashes it applies, from the retained domain. Checker only; wiring into the evidence "
-                          "admission is the task checker/tests/test_evidence_admission.py--"
-                          "test_evidence_admits_rounds_after_receipts.")
 def test_round_verifier_replays_the_choice():
     # Control: the fixture's certificate is valid on its own, before it is archived.
     from rezono_checker.transition import check_transition_certificate

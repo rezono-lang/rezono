@@ -1,4 +1,4 @@
-"""Every example pack under examples/, at any depth: golden bytes, determinism, and for every fact
+"""Recorded byte comparisons, determinism for every example pack, and for every fact
 file in facts/ its hand-written expected violations (on DuckDB). A file in diagnostics/ is a known bad
 import, kept to show what the checks find; it is no fact state and is never published, so it must
 give violations, exactly those in expected/diagnostics/."""
@@ -12,10 +12,17 @@ import pytest
 from calcsupport import run_both
 from golden import differences, golden
 from rezono_compiler import calc, calc_sql, pack, scenarios
-from support import REPO, compile_dir, expected, load, violations
+from support import FIXTURE, REPO, compile_dir, expected, load, violations
 
 ROOT = Path(__file__).parent
-EXAMPLES = sorted(p.parent for p in ROOT.rglob("pack.yaml") if (p.parent / "facts").is_dir())
+RECORDED_OUTPUT = ROOT / "fixtures" / "recorded-output"
+
+
+def discover_examples(root: Path) -> list[Path]:
+    return sorted(p.parent for p in root.rglob("pack.yaml") if (p.parent / "facts").is_dir())
+
+
+EXAMPLES = discover_examples(ROOT)
 FACT_FILES = [(e, f.stem) for e in EXAMPLES for f in sorted((e / "facts").glob("*.yaml"))
               if not f.name.endswith(".sources.yaml")]  # a sidecar is metadata of its fact file
 DIAGNOSTICS = [(e, f.stem) for e in EXAMPLES for f in sorted((e / "diagnostics").glob("*.yaml"))]
@@ -29,18 +36,41 @@ def tree(d: Path) -> dict[str, bytes]:
     return {p.relative_to(d).as_posix(): p.read_bytes() for p in sorted(d.rglob("*")) if p.is_file()}
 
 
-@pytest.mark.xfail(strict=True, reason="generated expected/compiled goldens are not stored in git")
-def test_examples_are_found():
-    assert EXAMPLES and all((e / "expected" / "compiled").is_dir() for e in EXAMPLES), \
-        [name(e) for e in EXAMPLES if not (e / "expected" / "compiled").is_dir()]
+def test_examples_are_found(tmp_path):
+    files = {
+        "first/pack.yaml": "name: first\n",
+        "first/facts/items.yaml": "item: [{id: first-item}]\n",
+        "group/second/pack.yaml": "name: second\n",
+        "group/second/facts/items.yaml": "item: [{id: second-item}]\n",
+        "schema-only/pack.yaml": "name: schema-only\n",
+        "unowned/facts/items.yaml": "item: [{id: orphan}]\n",
+    }
+    for name, contents in files.items():
+        path = tmp_path / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(contents, encoding="utf-8")
+    assert discover_examples(tmp_path) == [tmp_path / "first", tmp_path / "group" / "second"]
+    assert EXAMPLES
 
 
-@pytest.mark.xfail(strict=True, reason="generated expected/compiled goldens are not stored in git")
-@pytest.mark.parametrize("example", EXAMPLES, ids=name)
-def test_golden_bytes(example, tmp_path):
-    """The golden form: every file, but a large one by its hash (compiler/tests/golden.py)."""
-    diff = differences(golden(compile_dir(example, tmp_path)), tree(example / "expected" / "compiled"))
+def test_golden_bytes(tmp_path):
+    """Check the small recorded output and any complete example snapshots."""
+    files = compile_dir(FIXTURE, tmp_path / "recorded")
+    path = "engine/parameters.json"
+    recorded = (RECORDED_OUTPUT / "parameters.json").read_text(encoding="utf-8").encode("utf-8")
+    diff = differences(golden({path: files[path]}), {path: recorded})
     assert not diff, diff
+    assert violations(files, load(FIXTURE, RECORDED_OUTPUT / "rows.yaml")) == {
+        "alpha__size__value_range": {("outside", "10")},
+    }
+
+    for example in EXAMPLES:
+        snapshot = example / "expected" / "compiled"
+        if not snapshot.is_dir():
+            continue
+        output = tmp_path / "examples" / example.relative_to(ROOT)
+        diff = differences(golden(compile_dir(example, output)), tree(snapshot))
+        assert not diff, f"{name(example)}:\n{diff}"
 
 
 @pytest.mark.parametrize("example", EXAMPLES, ids=name)

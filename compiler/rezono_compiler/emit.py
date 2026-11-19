@@ -577,7 +577,7 @@ def rule_body(prog, rule, order: tuple[str, ...] | None) -> tuple[dict, list[dic
         return rule_term(t, types[source] if source else ir.const_type(t))
 
     parts = {"atom": list(rule.body), "aggregate": list(enumerate(rule.aggregates)),
-             "assignment": list(rule.assignments), "comparison": list(rule.conditions)}
+             "assignment": list(rule.assignments), "comparison": list(ir.untyped_conditions(rule, "the bundle"))}
     if order is None:
         order = tuple(k for k in LITERAL_ORDER for _ in parts[k])
     if sorted(order) != sorted(k for k in LITERAL_ORDER for _ in parts[k]):
@@ -727,7 +727,8 @@ def bundle(pack: Pack, checks, prog=None, calc_prog=None) -> dict:
                 attributes.append(present(common | {"type": s.type.bundle, "schema_type": s.range,
                                             "derivation": "fact", "enum": s.enum,
                                             "minimum": decimal(s.minimum), "maximum": decimal(s.maximum),
-                                            "patterns": s.patterns, "constant": constant, "currency": s.currency,
+                                            "patterns": s.patterns, "input_format": s.input_format,
+                                            "constant": constant, "currency": s.currency,
                                             "sentence": owned(sentence(f"attribute.{mood}", kind=k,
                                                                        attribute=s.element), sid, s.span)}))
         for name, slots in kind.unique_keys:

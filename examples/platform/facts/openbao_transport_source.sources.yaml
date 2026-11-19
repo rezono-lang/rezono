@@ -1,0 +1,7 @@
+default:
+  kind: tool
+  name: Vendor transport inspection
+  revision: v2.3.0
+  position: L50
+  url: https://raw.githubusercontent.com/openbao/openbao/v2.3.0/website/content/docs/configuration/listener/tcp.mdx
+  fragment_sha256: 6df1d88d9b8f39c172bfa12d18f84bba515e0fc14500b95e0b48d3d9d2405b93

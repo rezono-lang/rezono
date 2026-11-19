@@ -286,6 +286,7 @@ SHARED_READERS = {
     "examples/": PACK_READERS,
     "examples/**/expected/**": ("contracts",),
     "edge/plugins/*/plugin.yaml": ("contracts",),
+    "contracts/output-index.yaml": ("edge/publisher",),
     "viewer/src/lib/canon.ts": ("compiler", "edge/publisher", "rezono"),
 }
 
