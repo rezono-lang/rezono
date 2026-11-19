@@ -1,9 +1,7 @@
 """Cluster members, roles and Ceph devices from observed machines, from decisions/run-cluster-shape.md."""
 
-import pytest
 
 from offline_cases import PLAN_HASH, relation
-
 
 CLUSTER = "run-one"
 OTHER_PLAN = "b" * 64
@@ -73,7 +71,6 @@ COUNTER_CASES = {
 }
 
 
-@pytest.mark.xfail(strict=True, reason="Read decisions/run-cluster-shape.md, section Cluster shape. Write the fact-free pack run/packs/cluster-shape/ with its schema and rules.")
 def test_cluster_shape():
     result = shape(machines(), lines())
     assert result["member"] == {(CLUSTER, "m-a", "worker"), (CLUSTER, "m-b", "worker"),
