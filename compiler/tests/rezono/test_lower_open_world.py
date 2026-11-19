@@ -13,7 +13,7 @@ def world(definition):
 @pytest.mark.xfail(
     strict=True,
     raises=AssertionError,
-    reason="M3: Lower world open on a kind and on a slot to the LinkML annotation world: open instead of refusing it, "
+    reason="M3: decisions/language-relations.md: Lower world open on a kind and on a slot to the LinkML annotation world: open instead of refusing it, "
            "in compiler/rezono_compiler/rezono_kind.py and rezono_slot.py, and update docs/rezono/publication.md 5.1. "
            "Read decisions/language-relations.md and docs/rezono/v0.md (world open). Waits for test_lower_time_policy "
            "while it owns rezono_kind.py and for test_lower_extended_scalar while it owns rezono_slot.py.",
