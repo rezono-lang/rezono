@@ -186,11 +186,13 @@ def completion_cases(edit, function, lifted, other, reason):
     case = Change("examples/demo/snapshots/count.json", "A", None, b"{\"count\": 2}\n")
     lift = edit("tests/test_count.py", function, lifted)
     refusal = "Lift marks in a pull request of their own"
+    # The pack roots of the reviewed revision: the directories with a pack.yaml.
+    roots = frozenset({"examples/demo", "packs/demo"})
 
-    def run(label, changes, planner, expected):
-        errors, notes = review(changes, planner=planner)
+    def run(label, changes, planner, expected, packs=roots, test="tests/test_count.py"):
+        errors, notes = review(changes, planner=planner, packs=packs)
         refused = any(refusal in e for e in errors)
-        completed = "COMPLETED tests/test_count.py::test_count" in notes
+        completed = f"COMPLETED {test}::test_count" in notes
         if refused != expected or completed == expected or (not expected and errors):
             raise AssertionError(f"{label}: errors {errors}, notes {notes}")
         print(f"{'DENY' if expected else 'ALLOW'} {'with' if planner else 'without'} planner: {label}")
@@ -232,6 +234,23 @@ def completion_cases(edit, function, lifted, other, reason):
     bare = b"class Helper:\n    def test_count(self):\n        assert count() == 2\n"
     run("one lifted mark on a test that pytest does not collect",
         [edit("tests/test_count.py", hidden, bare), outcome], True, True)
+    # The evidence directory sits directly in a pack root, a tests/ or test/ directory, or a
+    # directory on the path of the test file.
+    run("one lifted mark beside evidence in a tests directory",
+        [lift, Change("tests/expected/rows.json", "A", None, b"[3]")], True, False, packs=frozenset())
+    run("one lifted mark beside evidence on the path of its test file",
+        [edit("suite/checks/test_count.py", function, lifted), Change("suite/expected/rows.json", "A", None, b"[3]")],
+        True, False, packs=frozenset(), test="suite/checks/test_count.py")
+    run("one lifted mark beside evidence in a directory without pack.yaml",
+        [lift, outcome], True, True, packs=frozenset())
+    # The compiler reads these directories of a pack as its definition, so the pack would change.
+    for path in ("examples/demo/schema/expected/smokkel.yaml", "examples/demo/schema/kinds/expected/a.yaml",
+                 "examples/demo/rezono/expected/rows.json", "examples/demo/rules/expected/rows.yaml",
+                 "examples/demo/facts/expected/rows.yaml", "examples/demo/labels/expected/rows.yaml",
+                 "examples/demo/messages/expected/rows.json", "examples/demo/calc/expected/rows.yaml",
+                 "packs/demo/expected/rows.json", "examples/other/expected/rows.json",
+                 "examples/demo/notes/expected/rows.json"):
+        run(f"one lifted mark beside {path}", [lift, Change(path, "A", None, b"kind: smuggled\n")], True, True)
 
 
 def milestone_cases(edit, other):

@@ -37,7 +37,8 @@ import xml.etree.ElementTree as ET
 
 # Read the guard beside this file, which in CI is the base copy of both.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from red_guard import EMPTY, UNREADABLE, changes, collectable, completion, git, inventory, protected, source
+from red_guard import (EMPTY, UNREADABLE, changes, collectable, completion, git, inventory, pack_roots,
+                       protected, source)
 
 
 def pytest_file(path):
@@ -73,9 +74,9 @@ def decide(base, head):
     return records, edited, tests
 
 
-def completed_tests(records):
+def completed_tests(records, head):
     """Node IDs of the tests an evidence completion turns green, or [] for any other change."""
-    found = completion(records)
+    found = completion(records, pack_roots(head))
     if not found:
         return []
     path, names = found
@@ -95,7 +96,7 @@ def report(edited, tests, completed=()):
 
 def discover(base, head):
     records, edited, tests = decide(base, head)
-    completed = completed_tests(records)
+    completed = completed_tests(records, head)
     report(edited, tests, completed)
     print(f"required={'true' if (edited and tests) or completed else 'false'}")
     return 0
@@ -109,7 +110,7 @@ def pathspecs(*args, paths):
 
 def prepare(base, head, selection):
     records, edited, tests = decide(base, head)
-    completed = completed_tests(records)
+    completed = completed_tests(records, head)
     report(edited, tests, completed)
     if completed:
         tests = completed
@@ -267,7 +268,7 @@ def run(selection):
 def green(base, head, selection):
     """After `run`, lay the evidence of a completion over the base too: the test must pass."""
     records, edited, _ = decide(base, head)
-    completed = completed_tests(records)
+    completed = completed_tests(records, head)
     if edited or not completed:
         print("Not an evidence completion: nothing runs with the new evidence.")
         return 0

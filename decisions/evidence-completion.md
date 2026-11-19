@@ -23,6 +23,13 @@ that its test reads. This is an evidence completion. It applies when all of thes
   link, not executable), in a directory named `expected/`, `snapshots/` or `vectors/`,
   with a data suffix (`.json`, `.yaml`, `.csv` and the like), such as
   `examples/*/expected/calc/*.json`.
+- That directory sits directly in a pack root (a directory with `pack.yaml` at the head),
+  in a `tests/` or `test/` directory, or in a directory on the path of the test file. The
+  compiler reads a pack's `schema/`, `rezono/`, `facts/`, `labels/`, `messages/`, `rules/`,
+  `calc/` and `icons/` as its definition (`DEFINITION` in
+  `compiler/rezono_compiler/modules.py`), `schema/` and `rezono/` at any depth. An
+  `expected/` inside one of them would change the pack, so no path below such a directory
+  counts, and nothing under `packs/` does.
 - Nothing else counts as evidence, even inside those directories: no fixture, no
   `*.schema.json`, no `pack.yaml`, no `not-yet.json`, nothing under `blocked/`,
   `contracts/` or `.github/`. These configure what runs or what is accepted.
