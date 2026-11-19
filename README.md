@@ -20,6 +20,13 @@ jq -e '.checks[] | select(.name == "rezono:proofs" and .status == "green" and .v
 
 The final command prints the recorded proof check. Open the same manifest to see the snapshot hashes and witness references. Explore other [examples](examples/) or read the [language guide](rezono/README.md).
 
+On any other machine with Docker, build an image from the checkout with the same Ubuntu, Python and jq, start a shell in it, and run the commands above there. The image stays on your machine; it is never published.
+
+```sh
+docker build --tag rezono-quickstart .
+docker run --rm -it rezono-quickstart
+```
+
 ## Compile an authored Rezono pack
 
 The released Python wheel includes the module reader. Put Node 24 on PATH or set `REZONO_NODE` to its

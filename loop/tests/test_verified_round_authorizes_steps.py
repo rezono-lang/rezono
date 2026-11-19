@@ -27,7 +27,7 @@ def _records(*readbacks):
     strict=True,
     raises=(AssertionError, ImportError, TypeError),
     reason=(
-        "Read decisions/admission-transport.md sections 6 and 8 and decisions/loop-certificate-admission.md "
+        "M2: Read decisions/admission-transport.md sections 6 and 8 and decisions/loop-certificate-admission.md "
         "section 2. Declare verified_round and verified_round_member in std-loop with the reserved signatures "
         "and no clause. Derive safe_alone(run, step, cut) from a verified round of the current run and cut "
         "whose batch has exactly that one member, and loop_certified_batch and loop_selected_batch from a "

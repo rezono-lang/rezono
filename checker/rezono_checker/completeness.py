@@ -83,8 +83,9 @@ def verify(reference, authorities, read_bytes) -> tuple[str, ...]:
     changed = sorted(key for key in expected if submitted[key] != trusted[key])
     if changed:
         raise Unverified("receipt_content_mismatch", "members " + ", ".join(changed))
-    return (receipt["id"], body["source"]["name"], canonical_sha256(body["scope"]), canonical_sha256(body["cut"]),
-            authority["inventory"]["sha256"], authority["content"]["sha256"])
+    # The scope and cut as the trusted context binds them: a candidate's own references confer nothing.
+    return (receipt["id"], body["source"]["name"], canonical_sha256(authority["scope"]),
+            canonical_sha256(authority["cut"]), authority["inventory"]["sha256"], authority["content"]["sha256"])
 
 
 def admit(references, authorities, read_bytes) -> tuple[dict, list]:
@@ -180,6 +181,22 @@ def _shape(body, what) -> None:
         raise Unverified(f"{what}_malformed", ", ".join(bad))
 
 
+# The archived-file references inside the bound fields, by field and key: the only places a candidate and its
+# trusted context may cite different stored copies of the same bytes. Everything else compares exactly.
+PINNED = {"issuer": "authorization", "scope": "definition"}
+
+
+def _by_hash(field, value):
+    """The bound `field` with its one fixed archived-file reference (`PINNED`) reduced to the hash of the bytes
+    it pins. The candidate and the trusted context each cite their own stored copy
+    (decisions/admission-transport.md, section 3); where a copy is stored does not change what it pins, and only
+    the trusted context's copy is read. `_shape` has made sure the reference is one."""
+    key = PINNED.get(field)
+    if key is None:
+        return value
+    return value | {key: value[key]["sha256"]}
+
+
 def _authority(body, authorities) -> dict:
     """The one trusted context that allows this source, scope, cut and issuer."""
     for authority in authorities:
@@ -188,7 +205,7 @@ def _authority(body, authorities) -> dict:
         _shape(authority, "authority")
 
     def same(authority, *fields):
-        return all(canonical_json(authority[f]) == canonical_json(body[f]) for f in fields)
+        return all(canonical_json(_by_hash(f, authority[f])) == canonical_json(_by_hash(f, body[f])) for f in fields)
 
     scoped = [a for a in authorities if same(a, "source", "scope")]
     if not scoped:

@@ -3,7 +3,8 @@
 Without the planner label, only existing pytest xfail marks may be lifted or explained.
 With it, protected paths may change, but a lifted mark must stand alone and every added
 or changed mark must be strict. Either way, the reason of every added or changed mark is
-literal text that starts with a milestone, and a changed reason keeps the milestone it had.
+literal text that starts with a milestone, and a changed reason keeps a milestone. Without
+the label, a changed reason may move its mark to an earlier milestone but not to a later one.
 Removed and changed evidence is reported either way.
 
 A pull request that changes the checker or read access in a file that is not a test is
@@ -26,7 +27,14 @@ import tokenize
 # The merge queue runs a candidate's own workflow files, so the workflows that define the
 # required checks (`check` and `Light checks` in ci.yml, and the reusable cluster workflow
 # that `check` aggregates) are policy as much as the guard that reviews them.
-POLICY = {
+# So is what those workflows run from the candidate to decide which suites run and whether
+# the cluster tests ran. These paths stay source as well: a pull request that changes them
+# and adds a test still shows in red_before.py that the test fails on the base copy.
+SOURCE_POLICY = {
+    ".github/workflows/python-environment/action.yml", "loop/rezono_cluster.py",
+    "scripts/cluster_worker_tasks.py", "scripts/role_publication_ci.py", "scripts/components.py",
+}
+POLICY = SOURCE_POLICY | {
     ".github/workflows/red-policy.yml",
     ".github/workflows/ci.yml", ".github/workflows/disposable-cluster.yml",
     ".github/workflows/resume-feldera-review.yml", "scripts/feldera_admission.py",
@@ -37,6 +45,9 @@ EVIDENCE_DIRS = {
     "test", "tests", "__tests__", "__snapshots__", "fixture", "fixtures",
     "expected", "golden", "goldens", "snapshots", "cases", "vectors", "testdata",
 }
+# Expectations recorded by hand outside an evidence directory, such as the slip an example
+# must render.
+EXPECTATIONS = {"slip.yaml"}
 
 
 def protected(path):
@@ -45,7 +56,7 @@ def protected(path):
             or p.name == "conftest.py" or p.name.startswith("test_")
             or p.name.endswith(("_test.py", "_support.py", ".test.ts", ".spec.ts",
                                 ".test.js", ".spec.js", ".snap", ".golden"))
-            or p.name in {"frozen_baseline.py", "reference.py", "pytest.ini"}
+            or p.name in {"frozen_baseline.py", "reference.py", "pytest.ini"} | EXPECTATIONS
             or "fixture" in p.stem or p.stem.endswith(("-cases", "_cases", "-vectors", "_vectors"))
             or p.parts[0] == "blocked")
 
@@ -196,9 +207,9 @@ UNREADABLE = (SyntaxError, ValueError, UnicodeError, RecursionError)
 
 
 def source(path):
-    """A path the guard does not protect and that is not documentation."""
-    return not (protected(path) or path.endswith(".md")
-                or PurePosixPath(path).parts[0] in {"docs", "decisions"})
+    """A path the guard does not protect, or policy that is also source; not documentation."""
+    return path in SOURCE_POLICY or not (protected(path) or path.endswith(".md")
+                                         or PurePosixPath(path).parts[0] in {"docs", "decisions"})
 
 
 def is_param(node):
@@ -303,6 +314,40 @@ def milestone(mark):
                for kw in mark.keywords)
 
 
+def rank(mark):
+    """The position of a red mark's milestone, or the last position for a mark without one."""
+    for kw in mark.keywords if isinstance(mark, ast.Call) else ():
+        if kw.arg == "reason" and isinstance(kw.value, ast.Constant) and isinstance(kw.value.value, str):
+            for position, prefix in enumerate(MILESTONES):
+                if kw.value.value.startswith(prefix):
+                    return position
+    return len(MILESTONES)
+
+
+def postponed(old, new):
+    """Per owner and mark without its reason, whether some mark moved to a later milestone.
+
+    Marks keep their owner and signature when only their reasons change, so the new marks must
+    fit into the old ones with each new milestone no later than the one it replaces. A mark
+    without a milestone may take any milestone; a new mark without one is refused elsewhere.
+    """
+    def ranks(inv):
+        found = {}
+        for owner, mark in inv.marks:
+            found.setdefault((owner, mark_signature(copy.deepcopy(mark))), []).append(rank(mark))
+        return found
+
+    old_ranks, moved = ranks(old), set()
+    for key, after in ranks(new).items():
+        after = sorted((r for r in after if r < len(MILESTONES)), reverse=True)
+        before = sorted(old_ranks.get(key, ()), reverse=True)
+        # The k-th latest new milestone may be no later than the k-th latest old one. A mark
+        # beyond the old ones is new, and needs the planner label whatever its milestone.
+        if any(r > b for r, b in zip(after, before)):
+            moved.add(key[0])
+    return sorted(moved)
+
+
 def review(changes, planner=False, head=None, labels=()):
     """Return (errors, notes) for a sequence of Change records.
 
@@ -343,14 +388,18 @@ def review(changes, planner=False, head=None, labels=()):
         signed = lambda inv: Counter((o, mark_signature(copy.deepcopy(m))) for o, m in inv.marks)
         old_marks, seen = signed(old), Counter()
         # Per owner and mark without its reason, the marks without a milestone may not grow:
-        # a new mark needs one, and a changed reason keeps the milestone it had.
+        # a new mark needs one, and a changed reason keeps a milestone.
         unmarked = lambda inv: Counter((o, mark_signature(copy.deepcopy(m)))
                                        for o, m in inv.marks if not milestone(m))
         old_unmarked, new_unmarked = unmarked(old), unmarked(new)
         for owner, _ in sorted(key for key, n in new_unmarked.items() if n > old_unmarked[key]):
             errors.append(f"ERROR red mark on {ascii(c.path + '::' + owner)} needs a reason that is "
                           f"literal text starting with one of {', '.join(map(repr, MILESTONES))}; "
-                          "a changed reason keeps the milestone it had")
+                          "a changed reason keeps a milestone")
+        if not planner:
+            for owner in postponed(old, new):
+                errors.append(f"ERROR red mark on {ascii(c.path + '::' + owner)} moves to a later "
+                              "milestone; only a pull request with the planner label postpones a mark")
         old_count = Counter(owner for owner, _ in old.marks)
         new_count = Counter(owner for owner, _ in new.marks)
         if any(new_count[owner] < n for owner, n in old_count.items() if owner in new.owners):
