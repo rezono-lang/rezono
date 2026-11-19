@@ -54,11 +54,6 @@ def rows(admitted, relation):
     return {tuple(row) for row in admitted.rows.get(relation, ())}
 
 
-@pytest.mark.xfail(strict=True, raises=ImportError,
-                   reason="Waits for compiler/tests/test_completeness_receipt.py--test_completeness_receipt_exact_"
-                          "inventory, which adds rezono_checker.completeness. Then add rezono_checker.evidence with "
-                          "Evidence(context, candidates, read_bytes) and admit(evidence) -> Admitted(rows, findings, "
-                          "references), as decisions/admission-transport.md sections 2 to 6 fix. Checker only.")
 def test_evidence_admits_receipts_from_the_pinned_context():
     from rezono_checker.evidence import Evidence, admit
 
