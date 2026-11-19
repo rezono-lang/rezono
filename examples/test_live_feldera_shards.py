@@ -57,10 +57,6 @@ def evidence(tmp_path):
     return inputs, tmp_path / "aggregate"
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError, reason=(
-    "extra: The compiler-bound shard in compiler/ci/feldera_shards.py does not yet route "
-    "compiler/tests/test_boolean_rule_inputs.py::test_native_boolean_rule_inputs. Lift this mark in the "
-    "pull request that makes that test green and adds it to the shard and to compiler/ci/run_feldera_oracle.sh."))
 @pytest.mark.parametrize("outcome", [None, "failure", "skipped", "error"])
 def test_merge_preserves_all_live_cases_and_outcomes(evidence, outcome):
     inputs, output = evidence
