@@ -7,7 +7,6 @@ the fixture convention of decisions/scoped-completeness.md; the expected rows ar
 """
 
 import pytest
-
 from rezono_canon import canonical_bytes, canonical_json, canonical_sha256, sha256_hex
 
 SOURCE = {"kind": "query", "name": "example-register", "revision": "snapshot-17", "position": "/enumeration"}

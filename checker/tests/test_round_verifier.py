@@ -9,9 +9,18 @@ without it the round is not verified. The certificates reuse the hand-authored t
 """
 
 import pytest
-
 from rezono_canon import canonical_bytes, canonical_sha256, sha256_hex
-from test_transition_certificate import CUT, DELTA, INVARIANTS, NEW, OBSERVATIONS, OLD, PROGRAM, row_ref, snapshot
+from test_transition_certificate import (
+    CUT,
+    DELTA,
+    INVARIANTS,
+    NEW,
+    OBSERVATIONS,
+    OLD,
+    PROGRAM,
+    row_ref,
+    snapshot,
+)
 
 RUN = CUT["run"]
 MANIFEST = "desired-a"
@@ -34,7 +43,7 @@ def certificate(step, base, variant, **changes):
         "base": canonical_sha256(base), "variant": canonical_sha256(variant),
         "rule": "replace_tail", "bindings": {"link": "link-a"}, "effect": step,
         "expected_old": [row_ref("link__tail", OLD)], "delta": DELTA,
-        "invariants": dict.fromkeys(INVARIANTS, {"rows": [], "count": "0"}),
+        "invariants": {name: {"rows": [], "count": "0"} for name in INVARIANTS},
     } | changes
 
 
