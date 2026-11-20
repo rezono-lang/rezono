@@ -487,6 +487,12 @@ def _decode_fact_row(decl: dict, index: int, judged: FactSchema | None) -> _Pars
             raise _load_error("invalid_date_range", f"{where}: valid must be one or two ISO dates", kind)
         start = _parse_iso_date(raw_valid[0], f"{where}.valid[0]")
         end = _parse_iso_date(raw_valid[1], f"{where}.valid[1]") if len(raw_valid) == 2 else None
+        if end is not None and end <= start:
+            raise _load_error(
+                "invalid_date_range",
+                f"{where}: valid end date {raw_valid[1]!r} must be after start date {raw_valid[0]!r}",
+                f"{where}.valid",
+            )
         valid_range = (start, end)
 
     row_known: datetime.date | None = None
@@ -613,8 +619,14 @@ def _resolve_fact_rows(
                 f"{row.kind}[{row.eid}]: dated fact row with known date requires known",
                 row.kind,
             )
-        for _, table_name, _ in row.assignments:
+        for slot_name, table_name, _ in row.assignments:
             dated_tables.add(table_name)
+            if any(slot_name in rec for _, rec in matches):
+                raise _load_error(
+                    "versions_overlap",
+                    f"{table_name}: versions_overlap between undated and dated assignments for record {row.eid!r}",
+                    table_name,
+                )
         valid_ok = row.valid is None or (
             row.valid[0] <= as_of and (row.valid[1] is None or as_of < row.valid[1])  # type: ignore[operator]
         )
@@ -624,10 +636,7 @@ def _resolve_fact_rows(
         rank = (1, row.known) if row.known is not None else (0, datetime.date.min)
         for slot_name, table_name, val in row.assignments:
             key = (row.root, row.eid, table_name)
-            entries = applying.setdefault(key, [])
-            if not entries and any(slot_name in rec for _, rec in matches):
-                entries.append(((0, datetime.date.min), slot_name, _OMITTED, []))
-            entries.append((rank, slot_name, val, matches))
+            applying.setdefault(key, []).append((rank, slot_name, val, matches))
 
     for (root, eid, table_name), candidates in applying.items():
         best_rank = max(item[0] for item in candidates)
@@ -639,8 +648,6 @@ def _resolve_fact_rows(
                 table_name,
             )
         _, slot_name, val, matches = winners[0]
-        if not matches:
-            continue
         for _, rec in matches:
             if val is _OMITTED:
                 rec.pop(slot_name, None)
