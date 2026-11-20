@@ -55,7 +55,15 @@ managed_backup_state(plan, "too-old") :-
     backup_plan_latest_day(plan, latest_num),
     backup_plan_copy(plan, _, latest_num),
     age = as_of_num - latest_num,
-    age > max_age.
+    age > max_age,
+    backup_inventory_complete(plan).
+managed_backup_state(plan, "unknown") :-
+    backup_plan_eval(plan, _, as_of_num, max_age),
+    backup_plan_latest_day(plan, latest_num),
+    backup_plan_copy(plan, _, latest_num),
+    age = as_of_num - latest_num,
+    age > max_age,
+    !backup_inventory_complete(plan).
 managed_backup_state(plan, "missing") :-
     backup_plan_eval(plan, _, _, _),
     !backup_plan_has_copy(plan),

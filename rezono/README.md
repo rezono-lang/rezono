@@ -1,6 +1,31 @@
 # rezono
 
-Rezono is the language of Rezono's control plane. The [language reference](../docs/rezono/v0.md) describes its declarations. This directory implements the part that questions use, documented in the [expression specification](../docs/rezono/expressions.md). It also reads the `check`, `require` and `warn` declarations from [v0 §5](../docs/rezono/v0.md#checks-norms-and-requirements). The [publication specification](../docs/rezono/publication.md) explains how their results reach published data.
+Rezono is the language of Rezono's control plane; these calculation rules from [`examples/subsidy-scheme/rezono/award.rezono`](../examples/subsidy-scheme/rezono/award.rezono) show the language itself:
+
+```haskell
+  -- What the household would receive without a maximum.
+  derived entitlement: Int
+    output entitlement.cents
+    unit cents
+    version 2026, valid 2026-01-01..<2027-01-01, known 2025-12-09
+      definition share_plus_allowance when true then cost_share + Application.advice_allowance
+
+  -- Article 7: the award is the entitlement, at most the maximum.
+  derived award: Int
+    output award.cents
+    unit cents
+    version 2026, valid 2026-01-01..<2027-01-01, known 2025-12-09
+      definition at_most_the_maximum when true then min(entitlement, maximum_award)
+```
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/excerpt-dark.svg">
+  <img alt="Syntax-highlighted Rezono excerpt of the subsidy award calculation rules" src="assets/excerpt-light.svg">
+</picture>
+
+Token colors: red for `keyword`, teal for `type`, blue for `number`, purple for `function`, orange for `operator`, amber for `state`, and grey for `comment`.
+
+The [language reference](../docs/rezono/v0.md) describes its declarations. This directory implements the part that questions use, documented in the [expression specification](../docs/rezono/expressions.md). It also reads the `check`, `require` and `warn` declarations from [v0 §5](../docs/rezono/v0.md#checks-norms-and-requirements). The [publication specification](../docs/rezono/publication.md) explains how their results reach published data.
 
 It is plain TypeScript that Node 24 runs as it is, like the gate and the REPL, because those two and the tools for agents are what read a question. Nothing here knows a domain: no kind, unit, currency or label is named in the code.
 

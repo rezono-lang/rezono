@@ -115,6 +115,32 @@ def test_generic_sweep_still_requires_computed_status():
         pilot.check_sweeps(None, "viewer", "example", [{"name": "size", "cells": [{"status": "unavailable"}]}])
 
 
+def test_red_sweep_cell_requires_diagnosis_value_and_coordinates():
+    pilot.check_sweeps(None, "viewer", "example", [{
+        "name": "size", "kind": "item", "slot": "size", "key": "i",
+        "cells": [{"status": "red", "diagnosis": "v-size-00-4", "value": "0"}],
+    }])
+    for bad_cell in (
+        {"status": "red", "value": "0"},
+        {"status": "red", "diagnosis": "", "value": "0"},
+        {"status": "red", "diagnosis": 123, "value": "0"},
+        {"status": "red", "diagnosis": "v-size-00-4"},
+        {"status": "red", "diagnosis": "v-size-00-4", "value": 0},
+    ):
+        with pytest.raises(SystemExit):
+            pilot.check_sweeps(None, "viewer", "example", [{
+                "name": "size", "kind": "item", "slot": "size", "key": "i",
+                "cells": [bad_cell],
+            }])
+    for missing_field in ("kind", "slot", "key"):
+        sweep = {"name": "size", "kind": "item", "slot": "size", "key": "i",
+                 "cells": [{"status": "red", "diagnosis": "v-size-00-4", "value": "0"}]}
+        for bad_part in (None, ""):
+            broken = {**sweep, missing_field: bad_part}
+            with pytest.raises(SystemExit, match="kind, slot or key"):
+                pilot.check_sweeps(None, "viewer", "example", [broken])
+
+
 # AUD-E1: the gate shows a check's status only to a role that reads every relation in full; any other
 # role gets each check as `unavailable`. The pilot decides who reads in full from the unscoped manifest in the
 # store (`truth`), not from the role's own scoped snapshots.

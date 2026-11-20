@@ -1,4 +1,4 @@
-"""Replay real platform grants against the released, hand-written CEL rule."""
+"""Replay real platform grants against the released CEL rule."""
 
 import json
 from hashlib import sha256
@@ -73,8 +73,9 @@ def test_transport_coverage_in_both_released_directions(tmp_path, monkeypatch):
                     expected.append(baseline or (published == (requested or "TCP") and end <= 54 and not reverse))
                     preflight.append(evaluate_network_policy(obj, parameters)["allowed"])
                     identities.append((published, requested, end, reverse, directions))
-                    samples.append({"object": obj, "params": publication, "variables": policy["variables"],
-                                    "validations": policy["validations"]})
+                    samples.append({"object": obj, "params": publication,
+                                    "request": {"namespace": obj["metadata"]["namespace"]},
+                                    "variables": policy["variables"], "validations": policy["validations"]})
     probe = subprocess.run(["go", "run", "-mod=readonly", "."], cwd=ROOT / "oracles" / "flow-expression",
                            input=json.dumps(samples), text=True, capture_output=True, timeout=180)
     assert probe.returncode == 0, probe.stderr

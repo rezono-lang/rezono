@@ -217,7 +217,7 @@ def text_entries(pack: Pack, name: str, text: str, data: dict | None = None, *, 
     pointers = None
     authored_lines = {span["at"]: span["line"] for span in dataset.form["spans"]} if dataset and dataset.source else {}
     own_sources = {}
-    if isinstance(raw, dict) and raw.get("format") == facts.DATASET_FORMAT:
+    if isinstance(raw, dict) and raw.get("format") in facts.DATASET_FORMATS:
         data, pointers = facts.located_scalar_dataset(judged, raw)
         own_sources = cited(raw, path.name)
     elif data is None:

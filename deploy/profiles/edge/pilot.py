@@ -126,15 +126,19 @@ def _check_sweep_cell(reader, role: str, pack: str, sweep_name: object,
         raise SystemExit(f"{role} sweeps: sweep {sweep_name!r} cell is unavailable")
     if status not in ("green", "warning", "red"):
         raise SystemExit(f"{role} sweeps: sweep {sweep_name!r} cell has non-computed status {status!r}")
-    if status == "red":
-        return
-    manifest, value = cell.get("manifest"), cell.get("value")
-    if not isinstance(manifest, str) or not manifest:
-        raise SystemExit(f"{role} sweeps: sweep {sweep_name!r} computed cell is missing manifest")
+    value = cell.get("value")
     if not isinstance(value, str):
         raise SystemExit(f"{role} sweeps: sweep {sweep_name!r} cell is missing value")
     if not all(isinstance(part, str) and part for part in (kind, slot, key)):
         raise SystemExit(f"{role} sweeps: sweep {sweep_name!r} is missing kind, slot or key")
+    if status == "red":
+        diagnosis = cell.get("diagnosis")
+        if not isinstance(diagnosis, str) or not diagnosis:
+            raise SystemExit(f"{role} sweeps: sweep {sweep_name!r} red cell is missing diagnosis")
+        return
+    manifest = cell.get("manifest")
+    if not isinstance(manifest, str) or not manifest:
+        raise SystemExit(f"{role} sweeps: sweep {sweep_name!r} computed cell is missing manifest")
     if reader is None:
         raise SystemExit(f"{role} sweeps: missing reader for sweep {sweep_name!r}")
     rows = reader.get(f"/{pack}/{manifest}/snapshots/{kind}__{slot}")

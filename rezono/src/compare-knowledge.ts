@@ -264,7 +264,7 @@ function moduleToSchema(module: Module): {
 			});
 		}
 		derived.set(k.kind, derivedMap);
-		kinds[k.kind] = { world: k.world ?? 'closed', id: { type: idType }, slots };
+		kinds[k.kind] = { world: k.world ?? (module.rezono === '1' ? 'closed' : 'open'), id: { type: idType }, slots };
 	}
 
 	for (const ext of extendDecls) {
