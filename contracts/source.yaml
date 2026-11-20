@@ -31,6 +31,7 @@ enums:
       tool: {description: A tool that reports a status or a measurement.}
       person: {description: A recorded fact or observation by a person.}
       document: {description: "A document outside Git, with an anchored fragment, its hash, a version or retrieval instant, and its licence and attribution."}
+      synthetic: {description: "Example data made up to exercise rules, not taken from the world: name is its generator, position the seed and the part of its output."}
   SourceOwnership:
     description: Declared by the ingester; ownership is not inferred from a hostname or source kind.
     permissible_values:

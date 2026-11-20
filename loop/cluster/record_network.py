@@ -76,12 +76,23 @@ class Cluster:
             raise RuntimeError("Expected exactly one ready Cilium agent on the fixture node")
         return candidates[0]
 
+    def _hubble_ready(self) -> bool:
+        try:
+            cilium = self.read("get", "daemonset", "cilium", namespace="kube-system")
+            relay = self.read("get", "deployment", "hubble-relay", namespace="kube-system")
+        except (subprocess.SubprocessError, json.JSONDecodeError, OSError):
+            return False
+        return (
+            (cilium.get("status", {}).get("numberReady") or 0) >= 1
+            and (relay.get("status", {}).get("readyReplicas") or 0) >= 1
+        )
+
     def hubble(self) -> Hubble:
         # The node agent's Unix socket gives the original node stream, including loss records.
         command = [*self.command, "-n", "kube-system", "exec", self.cilium, "-c", "cilium-agent", "--",
                    "hubble", "observe", "--server", "unix:///var/run/cilium/hubble.sock",
                    "--follow", "--output", "jsonpb"]
-        return Hubble(command)
+        return Hubble(command, readiness_check=self._hubble_ready)
 
     def node_pid(self, name: str) -> str:
         label = run("docker", "inspect", "-f", '{{index .Config.Labels "io.x-k8s.kind.cluster"}}', name).strip()

@@ -8,41 +8,50 @@ export interface Logical {
 	end: number;
 	/** The last physical line's code, or its full text within a verbatim block. */
 	last: string;
-	/** Parentheses left open, outside text literals and comments. */
+	/** Delimiters left open, outside text literals, backtick-quoted identifiers, and comments. */
 	depth: number;
 	block: Logical[];
 	read?: Line;
 }
 
-/** A line's code without its comment: `--` outside a text literal ends it (§3). */
+/** A line's code without its comment: `--` outside a text literal or backtick-quoted identifier ends it (§3). */
 export function codeOf(line: string): string {
 	let inText = false;
+	let inTick = false;
 	for (let i = 0; i < line.length; i++) {
 		const c = line[i];
 		if (inText) {
 			if (c === '\\') i++;
 			else if (c === '"') inText = false;
+		} else if (inTick) {
+			if (c === '`') inTick = false;
 		} else if (c === '"') inText = true;
+		else if (c === '`') inTick = true;
 		else if (c === '-' && line[i + 1] === '-') return line.slice(0, i).trimEnd();
 	}
 	return line.trimEnd();
 }
-function depthOf(code: string): number {
+export function depthOf(code: string): number {
 	let depth = 0;
 	let inText = false;
+	let inTick = false;
 	for (let i = 0; i < code.length; i++) {
 		const c = code[i];
 		if (inText) {
 			if (c === '\\') i++;
 			else if (c === '"') inText = false;
+		} else if (inTick) {
+			if (c === '`') inTick = false;
 		} else if (c === '"') inText = true;
-		else if (c === '(') depth++;
-		else if (c === ')') depth--;
+		else if (c === '`') inTick = true;
+		else if (c === '-' && code[i + 1] === '-') break;
+		else if (c === '(' || c === '[' || c === '{') depth++;
+		else if (c === ')' || c === ']' || c === '}') depth--;
 	}
 	return depth;
 }
-const OPEN_END = /(?:=|(?:^|\s)[+\-*/]|[(,]|\b(?:when|then|else|and|or|not))$/;
-const GOES_ON = /^(?:(?:then|else|and|or)\b|=>|[+*/)]|-(?!-))/;
+const OPEN_END = /(?:=>|=|(?:^|\s)[+\-*/]|[(,]|\b(?:when|then|else|otherwise|and|or|not))$/;
+const GOES_ON = /^(?:(?:then|else|otherwise|and|or)\b|=>|[+*/).]|-(?!-))/;
 const EFFECT_HEADER = /^effect\s+(?:[a-z][a-z0-9_]*|`[a-z][a-z0-9_]*`)$/;
 
 /** Splits a file into logical lines and their blocks (§11); a tab in an indent is an R000. */
@@ -83,8 +92,7 @@ export function layout(
 	}
 	return top;
 }
-/** The file with all but one logical line blanked: offsets stay those of the file. */
-export function only(text: string, line: Logical): string {
-	const blank = (s: string) => s.replace(/[^\n]/g, ' ');
-	return blank(text.slice(0, line.start)) + text.slice(line.start, line.end) + blank(text.slice(line.end));
+/** The text slice of one logical line and its UTF-16 base offset in the file. */
+export function sliceOf(text: string, line: Logical): { text: string; offset: number } {
+	return { text: text.slice(line.start, line.end), offset: line.start };
 }

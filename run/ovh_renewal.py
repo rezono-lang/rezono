@@ -1,15 +1,27 @@
 """Check whether an OVHcloud service's renewal and commitment bound the run, per decisions/run-price-enforcement.md."""
 
 from collections.abc import Mapping
-from datetime import date, datetime, time, timezone
+from contextlib import closing
+from datetime import date, datetime, time, timedelta, timezone
+from functools import cache
+from pathlib import Path
 import re
 
+from rezono_compiler import batch, facts, pack, rules, scenarios
+
 _DAY_RE = re.compile(r"\d{4}-\d{2}-\d{2}")
-_RENEW_BLOCKS: tuple[tuple[str, bool, str], ...] = (
-    ("automatic", True, "renews_automatically"),
-    ("forced", True, "renewal_forced"),
-    ("deleteAtExpiration", False, "not_deleted_at_expiration"),
-)
+_EPOCH = datetime(1970, 1, 1, tzinfo=timezone.utc)
+_MICROSECOND = timedelta(microseconds=1)
+_PACK_DIR = Path(__file__).resolve().parent / "packs" / "provider-terms"
+
+
+@cache
+def _provider_terms() -> tuple[pack.Pack, rules.Program, dict[str, list[tuple]]]:
+    model = pack.read(_PACK_DIR)
+    program = rules.load(model.rules)
+    states = scenarios.fact_states(model, _PACK_DIR, diagnostics=False)
+    pack_facts = states[0][3] if states else {}
+    return model, program, pack_facts
 
 
 def _utc_timestamp(value: object, label: str) -> datetime:
@@ -33,17 +45,51 @@ def _parse_day(value: object) -> date | None:
         return None
 
 
-def _check_renew(service: Mapping[str, object], codes: set[str]) -> None:
+def _to_microseconds(instant: datetime) -> int:
+    return (instant - _EPOCH) // _MICROSECOND
+
+
+def _day_microseconds(day: date) -> int:
+    return _to_microseconds(datetime.combine(day, time.min, timezone.utc))
+
+
+def _service_facts(service: Mapping[str, object], deadline_utc: datetime) -> dict[str, list[dict[str, object]]]:
+    service_row: dict[str, object] = {
+        "id": "service",
+        "deadline_us": _to_microseconds(deadline_utc),
+    }
+    expiration_date = _parse_day(service.get("expiration"))
+    if expiration_date is not None:
+        service_row["expiration_us"] = _day_microseconds(expiration_date)
+
+    engaged_known = False
+    if "engagedUpTo" in service:
+        engaged_raw = service["engagedUpTo"]
+        if engaged_raw is None:
+            engaged_known = True
+        else:
+            engaged_date = _parse_day(engaged_raw)
+            if engaged_date is not None:
+                engaged_known = True
+                service_row["engaged_up_to_us"] = _day_microseconds(engaged_date)
+    service_row["engaged_known"] = engaged_known
+
+    renew_rows: list[dict[str, object]] = []
     renew = service.get("renew")
-    if not isinstance(renew, Mapping):
-        codes.add("renewal_unknown")
-        return
-    for field, blocked_when, code in _RENEW_BLOCKS:
-        value = renew.get(field)
-        if type(value) is not bool:
-            codes.add("renewal_unknown")
-        elif value is blocked_when:
-            codes.add(code)
+    if isinstance(renew, Mapping):
+        for field, value in renew.items():
+            if isinstance(field, str) and field.strip() and type(value) is bool:
+                renew_rows.append({
+                    "id": f"service/{field}",
+                    "service": "service",
+                    "field": field,
+                    "value": value,
+                })
+
+    return {
+        "service": [service_row],
+        "service_renew_flag": renew_rows,
+    }
 
 
 def blocks(service: Mapping[str, object], deadline: str) -> list[str]:
@@ -52,26 +98,14 @@ def blocks(service: Mapping[str, object], deadline: str) -> list[str]:
         raise ValueError("service must be a mapping")
     deadline_utc = _utc_timestamp(deadline, "deadline")
 
-    codes: set[str] = set()
-    _check_renew(service, codes)
-
-    expiration_date = _parse_day(service.get("expiration"))
-    if expiration_date is None:
-        codes.add("expiration_unknown")
-    else:
-        expiration_utc = datetime.combine(expiration_date, time.min, timezone.utc)
-        if expiration_utc <= deadline_utc:
-            codes.add("period_ends_before_deadline")
-
-    if "engagedUpTo" not in service:
-        codes.add("engagement_unknown")
-    else:
-        engaged_raw = service["engagedUpTo"]
-        if engaged_raw is not None:
-            engaged_date = _parse_day(engaged_raw)
-            if engaged_date is None:
-                codes.add("engagement_unknown")
-            elif expiration_date is not None and engaged_date > expiration_date:
-                codes.add("engaged_beyond_expiration")
-
-    return sorted(codes)
+    model, program, pack_facts = _provider_terms()
+    runtime_rows = facts.rows_of(model, _service_facts(service, deadline_utc))
+    merged = {
+        table: [*pack_facts.get(table, ()), *runtime_rows.get(table, ())]
+        for table in pack_facts.keys() | runtime_rows.keys()
+    }
+    inputs = scenarios.rule_rows(model, program, merged)
+    with closing(batch.connect(program, inputs)) as connection:
+        batch.compute(connection, program)
+        derived = batch.read(connection, program, ["renewal_block"])["renewal_block"]
+    return sorted(code for _, code in derived)

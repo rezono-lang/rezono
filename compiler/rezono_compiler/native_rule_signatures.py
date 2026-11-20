@@ -10,7 +10,7 @@ import re
 
 import yaml
 
-from . import modules, pack, rezono_module, rules, rules_dl, spans, types
+from . import modules, pack, rezono_module, rezono_step, rules, rules_dl, spans, types
 from .diagnostics import Diagnostic
 
 Column = tuple[str, str, str]
@@ -54,6 +54,8 @@ class Linked:
     signatures: dict[str, Signature]
     clauses: dict[ClauseKey, LinkedClause]
     intermediate_invariants: tuple[pack.IntermediateInvariant, ...] = ()
+    steps: tuple[pack.CompiledStep, ...] = ()
+    step_clauses: dict[ClauseKey, str] = field(default_factory=dict)
 
 
 class Refusal(Exception):
@@ -119,7 +121,15 @@ class Schema:
         candidates = [engine for owner in owners for engine in self.by_owner.get((owner, authored), ())]
         aliases = [definition for owner in owners for definition in self.aliases.get((owner, authored), ())]
         if len(candidates) + len(aliases) > 1:
-            raise Refusal("R046", f"{spelling!r} is ambiguous; qualify it with an import alias", at)
+            found = sorted({
+                *((self.classes if engine in self.classes else self.enums)[engine][0].id for engine in candidates),
+                *(definition.id for definition in aliases),
+            })
+            raise Refusal(
+                "R046",
+                f"{spelling!r} is ambiguous (declared in {' and '.join(found)}); qualify it with an import alias",
+                at,
+            )
         if candidates:
             name = candidates[0]
             definition, _ = (self.classes if name in self.classes else self.enums)[name]
@@ -178,49 +188,76 @@ class Schema:
     def storage(self, name: str, at: str) -> str:
         if name in self.enums:
             return "string"
-        definition, authored = self.classes[name]
-        view = definition.sv
-        identifiers = [slot for slot in view.class_induced_slots(authored) if slot.identifier]
+        _, authored = self.classes[name]
+        identifiers: list[tuple[modules.Module, str, object]] = []
+        seen_slots: set[str] = set()
+        for _, owner_mod, ancestor in self._ancestors(name):
+            cls = owner_mod.sv.get_class(ancestor, imports=False)
+            if cls is None:
+                continue
+            for slot in pack.own_class_slots(owner_mod.sv, cls):
+                if slot.name in seen_slots:
+                    continue
+                seen_slots.add(slot.name)
+                if slot.identifier:
+                    identifiers.append((owner_mod, ancestor, slot))
         if len(identifiers) != 1:
             raise Refusal("R049", f"{authored} needs exactly one identifier to be used in a rule", at)
-        identifier = identifiers[0]
+        id_mod, id_cls, identifier = identifiers[0]
+        slot_owner = id_mod.slot_targets.get((id_cls, identifier.name))
+        id_view = self.names.modules[slot_owner].sv if slot_owner in self.names.modules else id_mod.sv
         errors: list[str] = []
-        sql = pack.identifier_type(view, identifier, identifier.range or view.schema.default_range,
+        sql = pack.identifier_type(id_view, identifier, identifier.range or id_mod.sv.schema.default_range,
                                    f"{authored}.{identifier.name}", errors)
         storage = types.rule_type(sql)
         if errors or storage is None:
             raise Refusal("R049", f"{authored} has no supported identifier: {'; '.join(errors)}", at)
         return storage
 
+    def _ancestors(self, subject: str) -> Iterator[tuple[str, modules.Module, str]]:
+        """Yield `(engine_name, module, authored_name)` for `subject` and each ancestor in order."""
+        current = subject
+        seen: set[str] = set()
+        while current in self.classes and current not in seen:
+            seen.add(current)
+            definition, authored = self.classes[current]
+            yield current, definition, authored
+            cls = definition.sv.get_class(authored, imports=False)
+            if cls is None or not cls.is_a:
+                break
+            parent_owner = definition.parent_targets.get(authored)
+            parent = self.names.resolve(definition.id, cls.is_a, owner=parent_owner)
+            if parent is None:
+                break
+            current = parent
+
     def assignable(self, actual: str, expected: str) -> bool:
         if actual == expected:
             return True
         if actual not in self.classes or expected not in self.classes:
             return False
-        definition, authored = self.classes[actual]
-        return any(self.names.resolve(definition.id, ancestor) == expected
-                   for ancestor in definition.sv.class_ancestors(authored, mixins=False))
+        return any(engine == expected for engine, _, _ in self._ancestors(actual))
 
     def slot(self, subject: str, name: str, at: str) -> tuple[ResolvedPath, bool]:
         if subject not in self.classes:
             raise Refusal("R003", f"{subject} is a value and has no slot {name!r}", at)
-        definition, authored = self.classes[subject]
-        view = definition.sv
-        for ancestor in view.class_ancestors(authored, mixins=False):
-            kind = view.get_class(ancestor)
-            if name in (kind.attributes or {}) or name in (kind.slots or []):
+        _, authored = self.classes[subject]
+        for owner, owner_mod, ancestor in self._ancestors(subject):
+            kind = owner_mod.sv.get_class(ancestor, imports=False)
+            if kind is not None and (name in (kind.attributes or {}) or name in (kind.slots or [])):
                 break
         else:
             raise Refusal("R001", f"{authored} has no slot {name!r}", at)
-        owner = self.names.resolve(definition.id, ancestor)
-        slot = view.induced_slot(name, ancestor)
+        slot = pack.own_class_slot(owner_mod.sv, kind, name)
         if slot.identifier:
             scalar = "Int" if self.storage(subject, at) == "integer" else "Text"
             return (None, scalar), False
-        rng = slot.range or view.schema.default_range
-        target = self.names.resolve(definition.id, rng)
+        rng = slot.range or owner_mod.sv.schema.default_range
+        slot_owner = owner_mod.slot_targets.get((ancestor, name))
+        target = self.names.resolve(owner_mod.id, rng, owner=slot_owner)
         if target is None:
-            target, _ = self.scalar_type(definition, rng, at)
+            target_mod = self.names.modules[slot_owner] if slot_owner in self.names.modules else owner_mod
+            target, _ = self.scalar_type(target_mod, rng, at)
         return (f"{owner}__{name}", target), bool(slot.multivalued)
 
     def slot_states(self, subject: str, name: str) -> tuple[tuple[str, ...], Place | None]:
@@ -228,16 +265,17 @@ class Schema:
 
         A missing required scalar is unknown and a missing optional one is not applicable. An identifier is
         always known, and a multivalued hop gives a collection whose fold decides its own state."""
-        definition, authored = self.classes[subject]
-        view = definition.sv
-        ancestor = next(ancestor for ancestor in view.class_ancestors(authored, mixins=False)
-                        if name in (view.get_class(ancestor).attributes or {})
-                        or name in (view.get_class(ancestor).slots or []))
-        slot = view.induced_slot(name, ancestor)
-        if slot.identifier or slot.multivalued:
-            return ("known",), None
-        owner, written = self.classes.get(self.names.resolve(definition.id, ancestor) or "", (definition, ancestor))
-        return ("known", "unknown" if slot.required else "not_applicable"), self.slot_place(owner, written, name)
+        for _, owner_mod, ancestor in self._ancestors(subject):
+            kind = owner_mod.sv.get_class(ancestor, imports=False)
+            if kind is not None and (name in (kind.attributes or {}) or name in (kind.slots or [])):
+                slot = pack.own_class_slot(owner_mod.sv, kind, name)
+                if slot.identifier or slot.multivalued:
+                    return ("known",), None
+                return (
+                    ("known", "unknown" if slot.required else "not_applicable"),
+                    self.slot_place(owner_mod, ancestor, name),
+                )
+        return ("known",), None
 
     def slot_place(self, module: modules.Module, kind: str, name: str) -> Place | None:
         key = module.pack, module.rel
@@ -264,6 +302,7 @@ def source_for(owner: str, path: str, form: dict, root: str, allowed: list[str],
     body = (
         rezono_module.module_body(form, rezono_module.NATIVE_FORMAT)
         or rezono_module.module_body(form, rezono_module.SAFE_STEP_FORMAT)
+        or rezono_module.module_body(form, rezono_module.REZONO_1_FORMAT)
     )
     form_format = form.get("format", rezono_module.NATIVE_FORMAT) if isinstance(form, dict) else rezono_module.NATIVE_FORMAT
     source = Source(owner, path, spans.where(owner, root, path), rules_dl.module_of(owner, root, name.stem),
@@ -350,7 +389,7 @@ def literal_type(schema: Schema, source: Source, literal: str, at: str) -> str |
                 member = json.loads(match[2])
             except ValueError:
                 raise Refusal("R012", f"Invalid literal of type {match[1]}", at) from None
-            if member not in (definition.sv.get_enum(authored).permissible_values or {}):
+            if member not in (definition.sv.get_enum(authored, imports=False).permissible_values or {}):
                 raise Refusal("R012", f"{member!r} is not a member of {match[1]}", at)
             return name
     return None
@@ -584,21 +623,75 @@ def resolve_intermediate_invariants(
     return tuple(resolved), found
 
 
+def _register_steps(
+    root: str,
+    schema: Schema,
+    step_decls_raw: list[tuple[Source, str, dict]],
+    signatures: dict[str, Signature],
+    owners: dict[str, tuple[Source, str]],
+    rules_list: list[tuple[Source, str, dict]],
+) -> tuple[list[tuple[Source, str, dict, str, tuple[Column, ...]]], dict[ClauseKey, str], list[Diagnostic]]:
+    """Register positive-match signatures for step declarations and report any header diagnostics."""
+    step_specs: list[tuple[Source, str, dict, str, tuple[Column, ...]]] = []
+    step_clauses: dict[ClauseKey, str] = {}
+    seen_steps: dict[tuple[str, str, str], tuple[Source, str]] = {}
+    found: list[Diagnostic] = []
+    for source, at, decl in step_decls_raw:
+        try:
+            if source.format not in (rezono_module.SAFE_STEP_FORMAT, rezono_module.REZONO_1_FORMAT):
+                raise Refusal("R048", "Step declaration requires rezono.module/4 or rezono.module/5", at)
+            if (set(decl) - {"step", "columns", "when", "forbid", "effect", "confirm"}
+                    or not {"step", "columns", "when", "effect", "confirm"} <= set(decl)):
+                raise Refusal("R048", "Invalid step declaration shape", at)
+            step_name = decl["step"]
+            if not rules.NAME.match(step_name) or "__" in step_name:
+                raise Refusal("R040", f"Step name {step_name!r} must be lower snake case without '__'", at)
+            step_key = (source.owner, source.path, step_name)
+            if step_key in seen_steps:
+                other, pointer = seen_steps[step_key]
+                found.append(other.diagnose(Refusal("R040", f"Duplicate step {step_name!r} in module", pointer)))
+                raise Refusal("R040", f"Duplicate step {step_name!r} in module", at)
+            seen_steps[step_key] = (source, at)
+            key = columns(schema, source, decl["columns"], f"{at}/columns")
+            semantics = tuple(schema.column_semantic(logical, physical, f"{at}/columns/{index}")
+                              for index, (_, logical, physical) in enumerate(key))
+            try:
+                match_relation = rezono_step.match_relation_name(
+                    source.owner, root, source.path, step_name, signatures,
+                )
+            except ValueError as error:
+                raise Refusal("R040", str(error), at) from None
+            owners[match_relation] = source, at
+            signatures[match_relation] = Signature(
+                key, source.module, source.owner, source.path, semantics=semantics,
+            )
+            step_specs.append((source, at, decl, match_relation, key))
+            step_clauses[source.owner, source.path, at] = match_relation
+            rules_list.append((source, at, {"rule": match_relation, "columns": decl["columns"], "when": decl["when"]}))
+        except Refusal as error:
+            found.append(source.diagnose(error))
+    return step_specs, step_clauses, found
+
+
 def link_modules(meta: dict, definitions: list[modules.Module], imported: dict[str, modules.Imported],
-                 names: modules.Names, forms: Mapping[tuple[str, str], dict]) -> Linked:
+                 names: modules.Names, forms: Mapping[tuple[str, str], dict],
+                 *, pack_dir: Path | None = None,
+                 pack_kinds: Mapping[str, pack.Kind] | None = None) -> Linked:
     """Link native forms using the schema and import pins already read by pack compilation."""
     root = meta["name"]
     schema_errors = names.errors
     schema = Schema(definitions, names, root)
     errors: list[Diagnostic] = []
-    rules: list[tuple[Source, str, dict]] = []
+    rules_list: list[tuple[Source, str, dict]] = []
+    step_decls_raw: list[tuple[Source, str, dict]] = []
     for (owner, path), form in sorted(forms.items()):
         dependencies = modules.direct(meta) if owner == root else imported[owner].imports if owner in imported else []
         source, declarations = source_for(owner, path, form, root, modules.dependency_order(imported, dependencies), errors)
         if owner != root and owner not in imported:
             errors.append(source.diagnose(Refusal("R046", f"{owner!r} is not a pinned pack", "/decls/0")))
             continue
-        rules.extend((source, f"/decls/{i}", decl) for i, decl in enumerate(declarations) if "rule" in decl)
+        rules_list.extend((source, f"/decls/{i}", decl) for i, decl in enumerate(declarations) if "rule" in decl)
+        step_decls_raw.extend((source, f"/decls/{i}", decl) for i, decl in enumerate(declarations) if "step" in decl)
     if schema_errors:
         errors.extend(Diagnostic("R046", message) for message in schema_errors)
     if errors:
@@ -607,7 +700,7 @@ def link_modules(meta: dict, definitions: list[modules.Module], imported: dict[s
     signatures: dict[str, Signature] = {}
     owners: dict[str, tuple[Source, str]] = {}
     intermediate_specs: list[tuple[str, Source, str, str]] = []
-    for source, at, declaration in rules:
+    for source, at, declaration in rules_list:
         if "columns" not in declaration:
             continue
         rule = declaration["rule"]
@@ -633,11 +726,16 @@ def link_modules(meta: dict, definitions: list[modules.Module], imported: dict[s
         except Refusal as error:
             errors.append(source.diagnose(error))
 
+    step_specs, step_clauses, step_errors = _register_steps(
+        root, schema, step_decls_raw, signatures, owners, rules_list,
+    )
+    errors.extend(step_errors)
+
     intermediate, intermediate_errors = resolve_intermediate_invariants(intermediate_specs, signatures)
     errors.extend(intermediate_errors)
 
     clauses: dict[ClauseKey, LinkedClause] = {}
-    for source, at, decl in rules:
+    for source, at, decl in rules_list:
         try:
             if "when" in decl:
                 clauses[source.owner, source.path, at] = read_clause(schema, source, at, decl, signatures)
@@ -645,6 +743,9 @@ def link_modules(meta: dict, definitions: list[modules.Module], imported: dict[s
                 raise Refusal("R040", "A positional rule head needs a guard", at)
         except Refusal as error:
             errors.append(source.diagnose(error))
+    compiled_steps = rezono_step.lower_steps(
+        meta, pack_dir, imported, schema, signatures, step_specs, pack_kinds, errors,
+    )
     errors.extend(Diagnostic("R046", message) for message in schema_errors)
     defined = {clause.relation for clause in clauses.values()}
     if not errors:
@@ -655,9 +756,15 @@ def link_modules(meta: dict, definitions: list[modules.Module], imported: dict[s
     if errors:
         raise pack.CompileError("\n".join(map(str, errors)), errors)
     places = Places(definitions, forms)
-    guards = {key: (source, decl["when"]) for source, at, decl in rules
+    guards = {key: (source, decl["when"]) for source, at, decl in rules_list
               if (key := (source.owner, source.path, at)) in clauses}
-    return Linked(predicates(schema, signatures, clauses, guards, places, defined), clauses, intermediate)
+    return Linked(
+        predicates(schema, signatures, clauses, guards, places, defined),
+        clauses,
+        intermediate,
+        compiled_steps,
+        step_clauses,
+    )
 
 
 class Places:

@@ -113,7 +113,7 @@ _CURRENCY_SIGN = {"EUR": "€", "GBP": "£", "INR": "₹", "KRW": "₩", "ILS": 
                   "RUB": "₽", "TRY": "₺", "UAH": "₴", "VND": "₫", "KZT": "₸", "GEL": "₾", "AZN": "₼"}
 # contracts/source.yaml `Source`, restated (as checker/rezono_checker/sources.py does) so the reader imports no
 # contract code (§1).
-_SOURCE_KINDS = {"git", "pack", "scenario", "proposal", "query", "tool", "person", "document"}
+_SOURCE_KINDS = {"git", "pack", "scenario", "proposal", "query", "tool", "person", "document", "synthetic"}
 _SOURCE_FIELDS = {"kind", "name", "revision", "position", "url", "retrieved_at", "fragment_sha256", "ownership",
                   "licence", "attribution"}
 _URL = re.compile(r"https?://[^\s/?#]+([/?#][^\s]*)?")
@@ -398,7 +398,7 @@ def check_schema(doc: dict, *, versioned: bool = True, allow_legacy: bool = Fals
     """Validate a schema document (§2.1–§2.3, §3.6, §3.7) and return its schema id.
 
     `versioned=False` is a reader that does not implement versioned kinds: it rejects the schema, never ignores
-    the member (V07). `allow_legacy=True` accepts a pre-rename sealed publication's `reckon` member.
+    the member (V07). `allow_legacy=True` accepts a pre-rename sealed publication's legacy schema key (`LEGACY_SCHEMA_KEY`).
     """
     if not isinstance(doc, dict):
         _fail("schema", "a schema document is an object")
@@ -546,6 +546,8 @@ def _tuple_id(kind: dict, row: dict, payloads: dict, where: str):
     parts = []
     for column in kind["tuple_key"]:
         part = row[column]["$ref"] if "ref" in kind["slots"][column] else payloads[column]
+        if isinstance(part, bool):
+            part = "true" if part else "false"
         if not isinstance(part, str):
             _fail(f"{where}.{column}", "a tuple cell is text in the row key")
         parts.append(part)

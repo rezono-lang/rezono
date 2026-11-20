@@ -47,18 +47,6 @@ def service(**changes):
     return body
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason=(
-        "M4: decisions/code-does-not-decide.md, row run/ovh_renewal.py, and section 3. Create run/packs/provider-terms "
-        "with the renewal vocabulary as facts (which renew field blocks at which value, with which code) and a rule "
-        "renewal_block(service, code). run/ovh_renewal.py keeps blocks(service, deadline) as the reader: it turns "
-        "the recorded serviceInfo and the deadline into facts, with dates as UTC microseconds, and returns the "
-        "sorted codes it reads from renewal_block through rezono_compiler.batch.read. No code is a literal in the "
-        "module. Keep run/tests/test_ovh_renewal.py green. Today the pack does not exist (AssertionError)."
-    ),
-)
 def test_renewal_blocks_come_from_provider_terms(monkeypatch):
     assert (RUN / "packs" / "provider-terms" / "pack.yaml").is_file(), "run/packs/provider-terms is missing"
     assert not literals("ovh_renewal.py") & CODES, "the blocking codes are written in code, not in the pack"

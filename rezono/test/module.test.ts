@@ -14,6 +14,7 @@ const decls = (text: string) => {
 test('the header: an optional language line, `pack`, then `use` lines', () => {
 	const m = parseModule('rezono 0\npack p\nuse std.money\nuse a.b as c\n').module!;
 	assert.deepEqual(m, { rezono: '0', pack: 'p', use: [{ use: 'std.money' }, { use: 'a.b', as: 'c' }], decls: [] });
+	assert.deepEqual(codes('pack p\n'), ['W106 pack']);
 	assert.deepEqual(codes('use a\npack p\n'), ['R000 use']);
 	assert.deepEqual(codes('pack p\nenum E = a\nuse a\n'), ['R000 use']);
 	assert.deepEqual(codes('enum E = a\n'), ['R000 enum']);
@@ -23,6 +24,7 @@ test('the header: an optional language line, `pack`, then `use` lines', () => {
 test('a deeper line goes on with the statement when either line shows it is not finished', () => {
 	const [ext] = decls(
 		[
+			'rezono 0',
 			'pack p',
 			'extend K',
 			'  derived a: Bool =',
@@ -47,7 +49,7 @@ test('a deeper line goes on with the statement when either line shows it is not 
 });
 
 test('a card at the end of a type does not continue the line; a block under it is a block', () => {
-	const r = parseModule('pack p\nkind K world open\n  xs: T*\n  derived ys: T*\n    table collect\n      | a | -> ys |\n      | - | b |\n');
+	const r = parseModule('rezono 0\npack p\nkind K world open\n  xs: T*\n  derived ys: T*\n    table collect\n      | a | -> ys |\n      | - | b |\n');
 	assert.deepEqual(r.diagnostics, []);
 	const [kind] = r.module!.decls as KindDecl[];
 	assert.deepEqual(kind.slots, [{ slot: 'xs', type: 'T', card: '*' }]);
@@ -56,6 +58,7 @@ test('a card at the end of a type does not continue the line; a block under it i
 
 test('a decision table is read into the tree of tables.md §2: its policy, its inputs, its rows of tests', () => {
 	const text = [
+		'rezono 0',
 		'pack p',
 		'extend Claim',
 		'  total derived band: Band',
@@ -92,7 +95,7 @@ test('a decision table is read into the tree of tables.md §2: its policy, its i
 });
 
 test('what a table could only hold by dropping a part is refused, each at its line', () => {
-	const under = (...lines: string[]) => codes(['pack p', 'extend K', ...lines, ''].join('\n'));
+	const under = (...lines: string[]) => codes(['rezono 0', 'pack p', 'extend K', ...lines, ''].join('\n'));
 	const table = ['  derived a: T', '    table unique', '      | x | -> a |', '      | 1 | y |'];
 	assert.deepEqual(under(...table), []);
 	// A table has a header, and each row one cell for each input and then its value.
@@ -117,17 +120,17 @@ test('what a table could only hold by dropping a part is refused, each at its li
 	assert.deepEqual(under(...table, '    unless z then 3'), ['R000 table']);
 	assert.deepEqual(under(...table, '    x: T'), ['R000 x:']);
 	// The name after `->` is the derived value's own: the tree is kept, the name is reported.
-	const other = parseModule('pack p\nextend K\n  derived a: T\n    table unique\n      | x | -> b |\n');
+	const other = parseModule('rezono 0\npack p\nextend K\n  derived a: T\n    table unique\n      | x | -> b |\n');
 	assert.deepEqual(other.diagnostics.map((d) => [d.code, d.span.text, d.suggest]), [['R001', 'b', ['a']]]);
 	assert.equal((other.module!.decls[0] as ExtendDecl).derived[0].table!.output, 'b');
 	// `total` is read on a value with a table: only there is its promise checked (table.ts).
 	assert.deepEqual(under('  total derived a: T = 1'), ['R000 total']);
 	assert.deepEqual(under('  total derived a: T', ...table.slice(1)), []);
-	assert.deepEqual(codes('pack p\nkind K\n  total: T\n'), []);
+	assert.deepEqual(codes('rezono 0\npack p\nkind K\n  total: T\n'), []);
 });
 
 test('`unless`: one clause on its line, or a block of `when` lines, each with its source', () => {
-	const [ext] = decls('pack p\nextend K\n  derived a: Int = 1\n    unless x then 0\n    unless\n      when y then 2  @ src#1\n      when z then 3\n') as ExtendDecl[];
+	const [ext] = decls('rezono 0\npack p\nextend K\n  derived a: Int = 1\n    unless x then 0\n    unless\n      when y then 2  @ src#1\n      when z then 3\n') as ExtendDecl[];
 	assert.deepEqual((ext.derived[0] as DerivedDecl).unless, [
 		[{ when: { path: ['x'] }, then: { lit: '0' } }],
 		[
@@ -174,7 +177,7 @@ test('a line under a line that has no block of its own is an R000 where it stand
 });
 
 test('a decision table is read whole or refused: a second table, and a header that does not end in its output', () => {
-	const table = (...lines: string[]) => codes(['pack p', 'extend K', '  derived a: T', ...lines, ''].join('\n'));
+	const table = (...lines: string[]) => codes(['rezono 0', 'pack p', 'extend K', '  derived a: T', ...lines, ''].join('\n'));
 	// A table is read (docs/rezono/tables.md): it is no longer R015.
 	assert.deepEqual(table('    table first', '      | b | -> a |', '      | - | c |'), []);
 	// A second table would replace the first one unseen.
@@ -185,7 +188,7 @@ test('a decision table is read whole or refused: a second table, and a header th
 });
 
 test('a comment ends the code of its line, except inside a text', () => {
-	assert.deepEqual(decls('pack p\nreason r = "a -- b"  -- the label\n'), [{ reason: 'r', text: '"a -- b"' }]);
+	assert.deepEqual(decls('rezono 0\npack p\nreason r = "a -- b"  -- the label\n'), [{ reason: 'r', text: '"a -- b"' }]);
 });
 
 test('a text and an id between backticks end on the line they start on: a line end inside one is an R000', () => {
@@ -205,13 +208,14 @@ test('a text and an id between backticks end on the line they start on: a line e
 	// A statement that goes on over lines keeps the texts that end on their line, whatever stands in them or in
 	// a comment between them.
 	assert.deepEqual(
-		decls(['pack p', 'fact k k-a', '  a = near("x, -- `", -- it\'s "odd', '      K:`a"b`,', '      "y")', ''].join('\n')),
+		decls(['rezono 0', 'pack p', 'fact k k-a', '  a = near("x, -- `", -- it\'s "odd', '      K:`a"b`,', '      "y")', ''].join('\n')),
 		[{ fact: 'k', id: 'k-a', set: [{ slot: 'a', value: { call: ['near', [{ lit: '"x, -- `"' }, { lit: 'K:`a"b`' }, { lit: '"y"' }]] } }] }]
 	);
 });
 
 test('W108: versions that all start at a `valid` date leave the time before the earliest one without a value', () => {
 	const text = [
+		'rezono 0',
 		'pack p',
 		'param a: Int per K',
 		'  version 2, valid 2026-01-01.. = 2',
@@ -236,7 +240,7 @@ test('W108: versions that all start at a `valid` date leave the time before the 
 });
 
 test('offsets are those of the file, in code points', () => {
-	const text = 'pack p\n-- 😀\nextend K\n  derived a: Int = x at y\n';
+	const text = 'rezono 0\npack p\n-- 😀\nextend K\n  derived a: Int = x at y\n';
 	const [d] = parseModule(text).diagnostics;
 	assert.equal(d.code, 'R015');
 	assert.equal([...text].slice(d.span.start, d.span.end).join(''), 'at y');

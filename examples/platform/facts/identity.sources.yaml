@@ -1,0 +1,4 @@
+default:
+  kind: synthetic
+  name: decisions/platform-identity-diagnostic.md
+  position: exercise-conflicting-identity-evidence-in-an-isolated-fact-state

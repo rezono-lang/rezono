@@ -155,11 +155,12 @@ test('R003: a test that does not go with its input, a range without an order, an
 	assert.deepEqual(of('day', '3..'), ['R003 at 3..: Date | number']);
 	// Each test of a cell on its own, and both ends of a range.
 	assert.deepEqual(of('n', '1, true..2, € 1.00'), ['R003 at true..2: Count | Bool', 'R003 at € 1.00: Count | money EUR']);
-	// A range needs an order: a number and a date have one, an enum, a truth value, a text and a moment have not.
+	// A range needs an order: a number, a date and a moment have one; an enum, a truth value and a text have not.
 	assert.deepEqual(of('lv', 'high..low'), ['R003 at high..low: Level | ..']);
 	assert.deepEqual(of('flag', '..<true'), ['R003 at ..<true: Bool | ..<']);
 	assert.deepEqual(of('label', '"a".."b"'), ['R003 at "a".."b": Text | ..']);
-	assert.deepEqual(of('stamp', '2026-01-01T00:00.., 2026-01-01T00:00'), ['R003 at 2026-01-01T00:00..: DateTime | ..']);
+	assert.deepEqual(of('stamp', '2026-01-01T00:00.., 2026-01-01T00:00'), []);
+	assert.deepEqual(of('stamp', '2026-02-30T00:00..'), ['R012 at 2026-02-30T00:00: 2026-02-30T00:00 | DateTime']);
 	assert.deepEqual(of('day', '2026-01-01..<2026-02-01, 2026-03-01'), []);
 	assert.deepEqual(of('ratio', '..<12 %, 0.5, 1/3..'), []);
 	// A date that is no day of the calendar has no place in the order.
@@ -250,7 +251,7 @@ test('W112: the rows leave a gap, with an example; the pieces follow the type of
 	assert.deepEqual(gap('lv', 'high', 'rest, low'), []);
 	assert.deepEqual(gap('mood', 'up', 'down'), ['gap: mood != up and mood != down']);
 	assert.deepEqual(gap('label', '"a"'), ['gap: label != "a"']);
-	assert.deepEqual(gap('stamp', '2026-01-01T00:00'), ['gap: stamp != 2026-01-01T00:00']);
+	assert.deepEqual(gap('stamp', '2026-01-01T00:00'), ['gap: stamp < 2026-01-01T00:00']);
 	// Column by column: the first combination of pieces that no row takes.
 	const two = (...rows: string[]) => found(tableOf('Thing', 'derived v: Level', 'unique', '| flag | n | -> v |', ...rows));
 	assert.deepEqual(two('| true | ..<10 | low |', '| true | 10.. | high |', '| false | ..<10 | rest |'), ['W112 at table unique: unique | v | flag = false and n = 10']);
@@ -681,4 +682,44 @@ test('a question over the declared schema reads the derived value as any other s
 	// Without the table's values the slot is read as any missing value: the question still never guesses.
 	const bare = (await answer(check('ask Host where size = medium', schema), schema, appendixB))!;
 	assert.deepEqual([bare.rows.length, bare.undecided.map((u) => `${u.$id} ${u.state} ${u.reason}`)], [0, ['host-a unknown ', 'host-b unknown ', 'host-c unknown ', 'host-d unknown ']]);
+});
+
+test('priority table evaluation propagates non-known outputs and ranks out-of-enum known outputs last', () => {
+	const d = valid(tableOf('Thing', 'derived v: Level', 'priority', '| a | b | -> v |', '| true | - | high |', '| - | true | low |'));
+	const [baseTable] = d.tables;
+	const stateLit = (lit: string) => {
+		const node = { lit };
+		const state = lit === 'n/a' ? 'not_applicable' : lit.startsWith('invalid') ? 'invalid' : 'unknown';
+		d.typed.set(node, { ty: { t: 'state' }, states: new Set([state]), set: false, opens: [] });
+		return node;
+	};
+	const enumLit = (lit: string) => {
+		const node = { lit };
+		d.typed.set(node, { ty: { t: 'val', name: 'Level' }, states: new Set(['known']), set: false, opens: [] });
+		return node;
+	};
+	const rows = load(lab, [
+		{ $kind: 'Thing', $id: 'both', a: true, b: true },
+		{ $kind: 'Thing', $id: 'undec', a: { $unknown: 'pending' }, b: true }
+	]);
+	const run = (out0: { lit: string }, out1: { lit: string }) => {
+		const modified: Declared = {
+			...d,
+			tables: [{ ...baseTable, rows: [{ ...baseTable.rows[0], value: out0 }, { ...baseTable.rows[1], value: out1 }] }]
+		};
+		return Object.fromEntries([...tabulate(modified, rows).data.kinds.get('Thing')!].map(([id, r]) => [id, show(r.get('v')!)]));
+	};
+
+	assert.deepEqual(run(stateLit('unknown missing'), enumLit('low')), {
+		both: 'unknown missing',
+		undec: 'unknown pending @ thing__a ["undec"]'
+	});
+	assert.deepEqual(run(stateLit('unknown missing'), stateLit('invalid bad')), {
+		both: 'invalid bad',
+		undec: 'invalid bad'
+	});
+	assert.deepEqual(run(enumLit('high'), enumLit('"other"')), {
+		both: 'high',
+		undec: 'unknown pending @ thing__a ["undec"]'
+	});
 });

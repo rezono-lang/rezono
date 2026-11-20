@@ -4,10 +4,11 @@ from __future__ import annotations
 
 import re
 import sys
+from copy import copy
 from dataclasses import dataclass, field
 from importlib import resources
 from pathlib import Path
-from typing import TypedDict
+from typing import Literal, TypedDict
 
 import yaml
 from rezono_admission.schema import INPUT_FORMATS
@@ -234,6 +235,91 @@ class IntermediateInvariant:
     key_binding: tuple[tuple[str, str], ...]
 
 
+@dataclass(frozen=True)
+class StepOperand:
+    """A typed expression operand inside a compiled step declaration."""
+    expr: dict
+    type: str
+
+
+@dataclass(frozen=True)
+class StepCall:
+    """A resolved relation call with typed operands."""
+    relation: str
+    operands: tuple[StepOperand, ...]
+
+
+@dataclass(frozen=True)
+class StepBlocker:
+    """A scoped forbid clause pairing a forbidden pattern with its coverage call."""
+    pattern: StepCall
+    coverage: StepCall
+
+
+@dataclass(frozen=True)
+class StepOperation:
+    """The resolved effect port operation and optional atomic boundary evidence."""
+    port: str
+    apply: str
+    boundary: str | None = None
+    evidence: dict[str, str] | None = None
+
+
+@dataclass(frozen=True)
+class StepChange:
+    """One typed delta change template produced by a step effect."""
+    op: Literal["insert", "delete", "set", "unset"]
+    kind: str
+    key: StepOperand
+    slot: str | None = None
+    value: StepOperand | None = None
+    values: dict[str, StepOperand] | None = None
+
+
+@dataclass(frozen=True)
+class StepAttribute:
+    """Target attribute of a confirmation postcondition (slot None means record identity)."""
+    kind: str
+    slot: str | None = None
+
+
+@dataclass(frozen=True)
+class StepPostcondition:
+    """One expected post-state observation derived from a step's declared writes."""
+    subject: StepOperand
+    attribute: StepAttribute
+    state: Literal["present", "absent"]
+    value: StepOperand | None = None
+
+
+@dataclass(frozen=True)
+class StepReader:
+    """The resolved input port, call and scope columns for step confirmation."""
+    port: str
+    call: StepCall
+    scope: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class StepConfirmation:
+    """The confirmation reader, prerequisite token and derived postconditions of a step."""
+    reader: StepReader
+    token: StepOperand
+    postconditions: tuple[StepPostcondition, ...]
+
+
+@dataclass(frozen=True)
+class CompiledStep:
+    """A compiled safe-step declaration exposed on Pack.steps."""
+    id: tuple[str, str, str]
+    match_relation: str
+    columns: tuple[tuple[str, str, str], ...]
+    blockers: tuple[StepBlocker, ...]
+    operation: StepOperation
+    changes: tuple[StepChange, ...]
+    confirmation: StepConfirmation
+
+
 @dataclass
 class Pack:
     meta: dict
@@ -265,6 +351,7 @@ class Pack:
     units: dict[str, types.Unit] = field(default_factory=dict)
     acceptance_questions: list[AcceptanceQuestion] = field(default_factory=list)  # own source inventory
     intermediate_invariants: tuple[IntermediateInvariant, ...] = ()
+    steps: tuple[CompiledStep, ...] = ()
     language_version: str = "0"
 
     def ancestors(self, kind: str) -> list[str]:
@@ -528,7 +615,7 @@ def iris(pack: Pack, meta: dict, packs: dict, owner: dict, errors: list[str]) ->
 
 def read(pack_dir: str | Path) -> Pack:
     pack_dir = Path(pack_dir)
-    errors: list[str] = []
+    errors: list[str | diagnostics.Diagnostic] = []
     typed: dict[str, tuple[diagnostics.Diagnostic, ...]] = {}  # D15: the diagnostics of an error that has its own
     warnings: list[str] = []
     meta = read_meta(pack_dir)
@@ -543,7 +630,10 @@ def read(pack_dir: str | Path) -> Pack:
         raise CompileError("\n".join(errors))
     mods, packs = modules.load(pack_dir, meta, errors)
     if errors:
-        raise CompileError("\n".join(errors))
+        raise CompileError(
+            "\n".join(map(str, errors)),
+            [d for e in errors for d in ((e,) if isinstance(e, diagnostics.Diagnostic) else diagnostics.of_text(e))],
+        )
     names = modules.Names(mods, snake, errors, warnings=warnings)
     found: dict = {}
 
@@ -563,6 +653,7 @@ def read(pack_dir: str | Path) -> Pack:
     kinds: dict[str, Kind] = {}
     enums: dict[str, list[str]] = {}
     owner: dict[str, modules.Module] = {}
+    chains: dict[str, list[tuple[modules.Module, str, object]]] = {}
     for m in mods:
         sv = m.sv
         default_layer = ann(sv.schema, "layer")
@@ -570,7 +661,7 @@ def read(pack_dir: str | Path) -> Pack:
         if "world" in tags(sv.schema):
             errors.append(f"{m.rel}: world goes on a class or a slot, not on a schema")
         for cname in sorted(sv.all_classes(imports=False)):
-            c = sv.get_class(cname)
+            c = sv.get_class(cname, imports=False)
             k = names.name(m.id, cname)
             if not NAME.match(k) or "__" in k:
                 errors.append(f"class {cname}: name '{k}' is not a valid kind name")
@@ -584,33 +675,44 @@ def read(pack_dir: str | Path) -> Pack:
             layer = ann(c, "layer", default_layer)
             if layer not in LAYERS:
                 errors.append(f"class {cname}: layer must be one of {LAYERS}, not {layer!r}")
-            parent = names.resolve(m.id, c.is_a) if c.is_a else None
+            parent_owner = m.parent_targets.get(cname)
+            parent = names.resolve(m.id, c.is_a, owner=parent_owner) if c.is_a else None
             if c.is_a and parent is None:  # LinkML cannot induce its slots either: nothing more to check
                 errors.append(f"class {cname}: parent {c.is_a} is not in the import closure of {m.id}")
                 continue
-            ancestors = {cname}
-            ancestor = c
-            while ancestor.is_a:
-                if ancestor.is_a in ancestors:
-                    errors.append(f"class {cname}: inheritance forms a cycle through {ancestor.is_a}")
-                    break
-                parent_class = sv.get_class(ancestor.is_a)
+            chain = [(m, cname, c)]
+            seen_ancestors = {(m.id, cname)}
+            cur_mod, cur_cname, cur_cls = m, cname, c
+            broken = False
+            while cur_cls.is_a:
+                p_name = cur_cls.is_a
+                p_owner = cur_mod.parent_targets.get(cur_cname)
+                if p_owner is None:
+                    p_owner = names.owner(cur_mod.id, p_name)
+                p_mod = names.modules.get(p_owner) if p_owner is not None else None
+                parent_class = p_mod.sv.get_class(p_name, imports=False) if p_mod is not None else None
                 if parent_class is None:
-                    errors.append(f"class {cname}: parent {ancestor.is_a} is not a kind")
+                    errors.append(f"class {cname}: parent {p_name} is not a kind")
+                    broken = True
                     break
-                ancestors.add(ancestor.is_a)
-                ancestor = parent_class
-            if ancestor.is_a:
+                if (p_mod.id, p_name) in seen_ancestors:
+                    errors.append(f"class {cname}: inheritance forms a cycle through {p_name}")
+                    broken = True
+                    break
+                seen_ancestors.add((p_mod.id, p_name))
+                chain.append((p_mod, p_name, parent_class))
+                cur_mod, cur_cname, cur_cls = p_mod, p_name, parent_class
+            if broken:
                 continue
-            induced = sv.class_induced_slots(cname)
+            induced = induced_class_slots(chain)
             if any(s.key for s in induced):
                 errors.append(f"class {cname}: use 'identifier', not 'key'")
             ident = [s.name for s in induced if s.identifier]
             if len(ident) > 1:
                 errors.append(f"class {cname}: more than one identifier ({', '.join(sorted(ident))})")
             relationship = False
-            for ancestor in sv.class_ancestors(cname, mixins=False):
-                marker = sv.get_class(ancestor).represents_relationship
+            for _, _, ancestor_cls in chain:
+                marker = ancestor_cls.represents_relationship
                 if marker is not None:
                     relationship = bool(marker)
                     break
@@ -619,6 +721,7 @@ def read(pack_dir: str | Path) -> Pack:
             kinds[k] = Kind(k, cname, layer, parent, bool(c.abstract), ident[0] if ident else None, module=m.id,
                             world=world(c, cname, errors), relationship=relationship, fold="explain" in tags(c))
             owner[k] = m
+            chains[k] = chain
             kinds[k].span = placed(m, ("classes", cname))
             kinds[k].renamed_from = renamed_from(c, f"class {cname}", errors)
         for ename in sorted(sv.all_enums(imports=False)):
@@ -627,11 +730,11 @@ def read(pack_dir: str | Path) -> Pack:
                 errors.append(f"enum {ename}: name '{e}' is not a valid name")
             if e in enums:
                 errors.append(f"enum {ename}: defined twice")
-            enums[e] = list(sv.get_enum(ename).permissible_values or {})
+            enums[e] = list(sv.get_enum(ename, imports=False).permissible_values or {})
     declared = units(mods, placed, errors)
 
     for k, kind in kinds.items():  # the root kind has the world; a subkind shares its tables, so its world too
-        if kind.parent and "world" in tags(owner[k].sv.get_class(kind.cls)):
+        if kind.parent and "world" in tags(owner[k].sv.get_class(kind.cls, imports=False)):
             errors.append(f"class {kind.cls}: world goes on the root kind; a subkind has the world of {kind.parent}")
         root, seen = kind, {k}
         while root.parent in kinds and root.parent not in seen:
@@ -644,9 +747,24 @@ def read(pack_dir: str | Path) -> Pack:
         if kind.parent and kind.parent not in kinds:
             errors.append(f"class {cname}: parent {kind.parent} is not a kind of this pack")
             continue
-        c = sv.get_class(cname)
-        inherited = {s.name for s in sv.class_induced_slots(c.is_a)} if kind.parent else set()
-        for s in sv.class_induced_slots(cname):
+        if (
+            kind.layer == "observation"
+            and kind.world != "open"
+            and m.form is not None
+            and m.form.get("format") == rezono_module.REZONO_1_FORMAT
+        ):
+            errors.append(
+                diagnostics.Diagnostic(
+                    "R051",
+                    f"class {cname}: `{cname}` is observed: declare `world open`, and `complete by` the scope in which it is complete (R051)",
+                    where=f"class {cname}",
+                    span=kind.span,
+                )
+            )
+        c = sv.get_class(cname, imports=False)
+        chain = chains[k]
+        inherited = {s.name for s in induced_class_slots(chain[1:])} if kind.parent else set()
+        for s in induced_class_slots(chain):
             rng = s.range or sv.schema.default_range
             where = f"{cname}.{s.name}"
             if s.name in inherited and s.name in set(c.attributes or {}) | set(c.slots or []):
@@ -666,43 +784,53 @@ def read(pack_dir: str | Path) -> Pack:
             if not NAME.match(s.name) or "__" in s.name or s.name == "is_a":
                 errors.append(f"{where}: '{s.name}' is not a valid slot name")
             warnings += [f"{where}: unknown annotation '{t}'" for t in tags(s) if t not in ANNOTATIONS]
+            slot_owner = m.slot_targets.get((cname, s.name))
+            target_sv = names.modules[slot_owner].sv if slot_owner in names.modules else sv
             if s.identifier:
                 if not kind.parent:  # a subkind that declares one is refused above
-                    kind.id_type = identifier_type(sv, s, rng, where, errors)
+                    kind.id_type = identifier_type(target_sv, s, rng, where, errors)
                     if kind.id_type == "VARCHAR":
-                        kind.id_patterns = patterns(sv, s, rng, where, errors)
+                        kind.id_patterns = patterns(target_sv, s, rng, where, errors)
                 continue
             slot = Slot(s.name, k, bool(s.required), False, rng, "VARCHAR", multivalued=bool(s.multivalued))
             own = world(s, where, errors)
             if kind.world == "open" and "world" in tags(s) and own != "open":
                 errors.append(f"{where}: a slot of an open kind is open")
             slot.world = "open" if kind.world == "open" else own
-            if rng in sv.all_classes():
-                slot.arrow, slot.range, slot.inlined = True, names.resolve(m.id, rng), bool(s.inlined or s.inlined_as_list)
-                if open_value(sv, rng):
+            is_class = rng in (
+                target_sv.all_classes(imports=False) if slot_owner in names.modules else sv.all_classes()
+            )
+            is_enum = rng in (
+                target_sv.all_enums(imports=False) if slot_owner in names.modules else sv.all_enums()
+            )
+            if is_class:
+                slot.arrow, slot.range, slot.inlined = (
+                    True, names.resolve(m.id, rng, owner=slot_owner), bool(s.inlined or s.inlined_as_list)
+                )
+                if open_value(target_sv, rng, imports=slot_owner not in names.modules):
                     errors.append(f"{where}: range {rng} is linkml:Any, an open value; Rezono types every value")
                 if s.pattern:
                     errors.append(f"{where}: a pattern applies to text and enums, not to an arrow")
                 if "explore" in tags(s):
                     errors.append(f"{where}: explore goes on a slot of whole numbers, not on an arrow")
-            elif rng in sv.all_enums():
-                slot.enum = slot.range = names.resolve(m.id, rng)
-                slot.patterns = patterns(sv, s, rng, where, errors)  # enum values are text
+            elif is_enum:
+                slot.enum = slot.range = names.resolve(m.id, rng, owner=slot_owner)
+                slot.patterns = patterns(target_sv, s, rng, where, errors)  # enum values are text
                 if "explore" in tags(s):
                     errors.append(f"{where}: explore goes on a slot of whole numbers, not on an enum")
             else:
-                slot.sql_type = sql_type(sv, rng, where, errors)
-                slot.minimum, slot.maximum = limits(sv, s, rng)
+                slot.sql_type = sql_type(target_sv, rng, where, errors)
+                slot.minimum, slot.maximum = limits(target_sv, s, rng)
                 bounds(slot, where, errors)
                 if "explore" in tags(s):
                     slot.explore = explore(slot, plain(ann(s, "explore")), where, errors)
-                slot.patterns = patterns(sv, s, rng, where, errors)
+                slot.patterns = patterns(target_sv, s, rng, where, errors)
                 if slot.patterns and slot.sql_type != "VARCHAR":
                     errors.append(f"{where}: a pattern applies to text only")
-                slot.currency = currency(sv, s, rng, where, errors)
+                slot.currency = currency(target_sv, s, rng, where, errors)
                 if slot.currency and slot.sql_type != "BIGINT":
                     errors.append(f"{where}: a currency goes on whole numbers (minor units), not on {rng}")
-                slot.unit = slot_unit(sv, rng, declared) if isinstance(rng, str) else None
+                slot.unit = slot_unit(target_sv, rng, declared) if isinstance(rng, str) else None
             if "input_format" in tags(s):
                 form = ann(s, "input_format")
                 if not isinstance(form, str) or form not in INPUT_FORMATS:
@@ -749,7 +877,10 @@ def read(pack_dir: str | Path) -> Pack:
             kind.owner = plain(ann(c, "owner"))
 
     pack_language_version = rezono_module.pack_language_version(
-        m.form for m in mods if m.pack_dir == pack_dir and m.form is not None
+        [
+            *(m.form for m in mods if m.pack_dir == pack_dir and m.form is not None),
+            *rezono_module.dataset_forms(pack_dir, meta).values(),
+        ]
     )
     pack = Pack({"name": meta["name"], "version": str(meta["version"]), "default_language": meta["default_language"],
                  "theory": is_theory},
@@ -786,14 +917,22 @@ def read(pack_dir: str | Path) -> Pack:
         forms = {m.rel: m.form for m in mods if m.pack_dir == pack_dir and m.form is not None}
         generated = rezono_table.lower_pack(pack, meta, pack_dir, errors, forms=forms)
     if not errors:
-        from . import native_rule_lowering
+        from . import native_rule_lowering, rezono_step
 
         try:
             intermediate_invariants: list[IntermediateInvariant] = []
+            steps: list[CompiledStep] = []
             native = native_rule_lowering.lower_modules(
-                meta, mods, packs, names, intermediate_invariants=intermediate_invariants,
+                meta, mods, packs, names,
+                intermediate_invariants=intermediate_invariants,
+                pack_dir=pack_dir,
+                pack_kinds=pack.kinds,
+                steps=steps,
             )
+            if not native:
+                rezono_step.validate_pack_bindings(pack_dir, meta, packs, pack.kinds)
             pack.intermediate_invariants = tuple(intermediate_invariants)
+            pack.steps = tuple(steps)
             pack.rules, rule_warnings = rules_dl.read(pack, pack_dir, ordered, renames, calc_inputs=calc_inputs,
                                                       calc_parts=calc_parts, folds=pack.folds,
                                                       bodies=pack.rule_bodies, spans=pack.rule_spans,
@@ -883,10 +1022,51 @@ def read(pack_dir: str | Path) -> Pack:
     if not errors:
         fold.check(pack, errors)
     if errors:
-        raise CompileError("\n".join(errors), [d for e in errors for d in typed.get(e) or diagnostics.of_text(e)])
+        raise CompileError(
+            "\n".join(map(str, errors)),
+            [
+                d
+                for e in errors
+                for d in ((e,) if isinstance(e, diagnostics.Diagnostic) else typed.get(e) or diagnostics.of_text(e))
+            ],
+        )
     for w in pack.warnings:
         print(f"warning: {w}", file=sys.stderr)
     return pack
+
+
+def own_class_slot(sv: SchemaView, cls, name: str):
+    """Materialize one slot declared directly on `cls` (`attributes` or `slots`) without flat `class_ancestors`."""
+    attrs = cls.attributes or {}
+    if name in attrs:
+        slot = copy(attrs[name])
+        slot.pattern = sv.resolve_pattern(slot)
+        if slot.range is None:
+            slot.range = sv.schema.default_range
+        if slot.inlined_as_list:
+            slot.inlined = True
+        if slot.identifier or slot.key:
+            slot.required = True
+        return slot
+    return sv.induced_slot(name, None)
+
+
+def own_class_slots(sv: SchemaView, cls) -> list:
+    """Materialize every slot declared directly on `cls` in LinkML declaration order (`slots`, then `attributes`)."""
+    slot_names = list(dict.fromkeys([*(cls.slots or ()), *(cls.attributes or ())]))
+    return [own_class_slot(sv, cls, name) for name in slot_names]
+
+
+def induced_class_slots(chain: list[tuple[modules.Module, str, object]]) -> list:
+    """All slots along a resolved `(module, class_name, ClassDefinition)` ancestor chain, child-first."""
+    out = []
+    seen: set[str] = set()
+    for anc_mod, _, anc_cls in chain:
+        for s in own_class_slots(anc_mod.sv, anc_cls):
+            if s.name not in seen:
+                seen.add(s.name)
+                out.append(s)
+    return out
 
 
 def slot_role(sv: SchemaView, s) -> str | None:
@@ -984,7 +1164,7 @@ def units(mods, placed, errors: list[str]) -> dict[str, types.Unit]:
     found: dict[str, tuple] = {}  # name -> (tag, value, where)
     for m in mods:
         for tname in sorted(m.sv.all_types(imports=False)):
-            t = m.sv.get_type(tname)
+            t = m.sv.get_type(tname, imports=False)
             given = [tag for tag in UNIT_TAGS if tag in tags(t)]
             if not given:
                 continue
@@ -1048,9 +1228,10 @@ def slot_unit(sv: SchemaView, rng: str, declared: dict[str, types.Unit]) -> str 
     return None
 
 
-def open_value(sv: SchemaView, cname: str) -> bool:
+def open_value(sv: SchemaView, cname: str, *, imports: bool = True) -> bool:
     """Whether a class is LinkML's open value (class_uri linkml:Any)."""
-    uri = sv.get_class(cname).class_uri
+    cls = sv.get_class(cname) if imports else sv.get_class(cname, imports=False)
+    uri = cls.class_uri
     if uri in ("linkml:Any", ANY_URI):  # also when the schema declares no linkml prefix
         return True
     try:

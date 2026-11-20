@@ -32,12 +32,6 @@ def _derive(model, prog, label, rows):
     return State(model, prog, label, rows).derived
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError, reason=(
-    "M2: decisions/platform-facts-not-conclusions.md, section 7. Add schema/artifact_signature.yaml in the layer "
-    "observation (ArtifactSignature, world open, with artifact and scan; SignatureScan with covers), the scenario's "
-    "observations in facts/artifact_signature.yaml with a synthetic sidecar, and rules in which verified reads the "
-    "observed signature, supply_unknown names a service whose artifact no scan covers, and unverified_supply leaves "
-    "those out. Keep Artifact.signed: a planner retires it."))
 def test_supply_is_verified_from_observed_signatures():
     reference = {tuple(row) for row in
                  json.loads((PLATFORM / "oracle-rows.json").read_text(encoding="utf-8"))["unverified_supply"]}

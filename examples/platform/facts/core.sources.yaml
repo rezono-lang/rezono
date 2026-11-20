@@ -1,0 +1,171 @@
+default:
+  kind: git
+  name: rezono-lang/rezono
+  revision: 19949a346deba8fb46578da60148cba776a355d6
+  position: decisions/platform-inventory.md
+records:
+  - of: {kind: release, id: distribution-3.0.0}
+    kind: git
+    name: rezono-lang/rezono
+    revision: 0b9e8ffe2e9475f9591f58ea75d966de93818d1a
+    position: decisions/platform-registry-reference.md
+  - of: {kind: release, id: keycloak-27rc}
+    kind: synthetic
+    name: decisions/platform-facts-not-conclusions.md
+    revision: dbac8a77492843cfe1532f60e2959e3a9dd9696e
+    position: 4-release-dates-point-2
+  - of: {kind: pin, id: pin-reg}
+    kind: git
+    name: rezono-lang/rezono
+    revision: 0b9e8ffe2e9475f9591f58ea75d966de93818d1a
+    position: decisions/platform-registry-reference.md
+  - of: {kind: artifact, id: a-shop}
+    kind: synthetic
+    name: decisions/platform-facts-not-conclusions.md
+    revision: dbac8a77492843cfe1532f60e2959e3a9dd9696e
+    position: 7-signatures-point-5
+  - of: {kind: artifact, id: a-lab}
+    kind: synthetic
+    name: decisions/platform-facts-not-conclusions.md
+    revision: dbac8a77492843cfe1532f60e2959e3a9dd9696e
+    position: 7-signatures-point-5
+  - of: {kind: demand, id: d-client-ingress}
+    kind: git
+    name: rezono-lang/rezono
+    revision: 19949a346deba8fb46578da60148cba776a355d6
+    position: decisions/platform-inventory.md
+  - of: {kind: demand, id: d-idp-db}
+    kind: tool
+    name: Vendor demand inspection
+    revision: '26.0.0'
+    position: L31
+    url: 'https://raw.githubusercontent.com/keycloak/keycloak/26.0.0/docs/guides/server/db.adoc'
+    fragment_sha256: 082e624af4ae9d16a484dcd3bc621f7719ab1bbcef6f9a2fea1dfa04247ff4cf
+  - of: {kind: demand, id: d-idp-dns}
+    kind: git
+    name: rezono-lang/rezono
+    revision: 19949a346deba8fb46578da60148cba776a355d6
+    position: decisions/platform-inventory.md
+  - of: {kind: demand, id: d-reg-s3}
+    kind: git
+    name: rezono-lang/rezono
+    revision: 19949a346deba8fb46578da60148cba776a355d6
+    position: decisions/platform-inventory.md
+  - of: {kind: demand, id: d-reg-id}
+    kind: git
+    name: rezono-lang/rezono
+    revision: dbac8a77492843cfe1532f60e2959e3a9dd9696e
+    position: decisions/platform-facts-not-conclusions.md#8-origins-of-design-facts-and-demands-points-6-and-7
+  - of: {kind: demand, id: d-vault-id}
+    kind: git
+    name: rezono-lang/rezono
+    revision: dbac8a77492843cfe1532f60e2959e3a9dd9696e
+    position: decisions/platform-facts-not-conclusions.md#8-origins-of-design-facts-and-demands-points-6-and-7
+  - of: {kind: demand, id: d-cp-id}
+    kind: git
+    name: rezono-lang/rezono
+    revision: dbac8a77492843cfe1532f60e2959e3a9dd9696e
+    position: decisions/platform-facts-not-conclusions.md#8-origins-of-design-facts-and-demands-points-6-and-7
+  - of: {kind: demand, id: d-ceph-id}
+    kind: git
+    name: rezono-lang/rezono
+    revision: dbac8a77492843cfe1532f60e2959e3a9dd9696e
+    position: decisions/platform-facts-not-conclusions.md#8-origins-of-design-facts-and-demands-points-6-and-7
+  - of: {kind: demand, id: d-ceph-time}
+    kind: tool
+    name: Vendor demand inspection
+    revision: v19.2.0
+    position: L555
+    url: 'https://raw.githubusercontent.com/ceph/ceph/v19.2.0/doc/rados/configuration/mon-config-ref.rst'
+    fragment_sha256: 3476241d7ae6143e5cf4228d46eedc30915c83893b9599bd65ec29ab5038bcbe
+  - of: {kind: demand, id: d-argo-git}
+    kind: tool
+    name: Vendor demand inspection
+    revision: v3.0.0
+    position: L33
+    url: 'https://raw.githubusercontent.com/argoproj/argo-cd/v3.0.0/docs/index.md'
+    fragment_sha256: "151e7631f092b96016d343c4dfcf4593c51bd7de00b6335ae8368a30d5935927"
+  - of: {kind: demand, id: d-argo-cp}
+    kind: tool
+    name: Vendor demand inspection
+    revision: v3.0.0
+    position: L56
+    url: 'https://raw.githubusercontent.com/argoproj/argo-cd/v3.0.0/docs/index.md'
+    fragment_sha256: ba73f64014ad932a315451750fdde3b6da49d247a08cad937472733bcb42b375
+  - of: {kind: demand, id: d-argo-id}
+    kind: git
+    name: rezono-lang/rezono
+    revision: dbac8a77492843cfe1532f60e2959e3a9dd9696e
+    position: decisions/platform-facts-not-conclusions.md#8-origins-of-design-facts-and-demands-points-6-and-7
+  - of: {kind: demand, id: d-forgejo-db}
+    kind: tool
+    name: Vendor demand inspection
+    revision: v9.0
+    position: L7
+    url: 'https://codeberg.org/forgejo/docs/raw/branch/v9.0/docs/admin/database-preparation.md'
+    fragment_sha256: dac2f804a52cc4947d17dec764a80792d84e9bd230e2af8862c123836d1705e0
+  - of: {kind: demand, id: d-forgejo-id}
+    kind: git
+    name: rezono-lang/rezono
+    revision: dbac8a77492843cfe1532f60e2959e3a9dd9696e
+    position: decisions/platform-facts-not-conclusions.md#8-origins-of-design-facts-and-demands-points-6-and-7
+  - of: {kind: demand, id: d-app-id}
+    kind: git
+    name: rezono-lang/rezono
+    revision: 19949a346deba8fb46578da60148cba776a355d6
+    position: decisions/platform-inventory.md
+  - of: {kind: demand, id: d-app-dns}
+    kind: git
+    name: rezono-lang/rezono
+    revision: 19949a346deba8fb46578da60148cba776a355d6
+    position: decisions/platform-inventory.md
+  - of: {kind: demand, id: d-app-time}
+    kind: git
+    name: rezono-lang/rezono
+    revision: 19949a346deba8fb46578da60148cba776a355d6
+    position: decisions/platform-inventory.md
+  - of: {kind: demand, id: d-app-reg}
+    kind: git
+    name: rezono-lang/rezono
+    revision: 19949a346deba8fb46578da60148cba776a355d6
+    position: decisions/platform-inventory.md
+  - of: {kind: demand, id: d-build-git}
+    kind: git
+    name: rezono-lang/rezono
+    revision: 19949a346deba8fb46578da60148cba776a355d6
+    position: decisions/platform-inventory.md
+  - of: {kind: demand, id: d-build-reg}
+    kind: git
+    name: rezono-lang/rezono
+    revision: 19949a346deba8fb46578da60148cba776a355d6
+    position: decisions/platform-inventory.md
+  - of: {kind: demand, id: d-build-sign}
+    kind: git
+    name: rezono-lang/rezono
+    revision: 19949a346deba8fb46578da60148cba776a355d6
+    position: decisions/platform-inventory.md
+  - of: {kind: demand, id: d-rec-cp}
+    kind: git
+    name: rezono-lang/rezono
+    revision: 19949a346deba8fb46578da60148cba776a355d6
+    position: decisions/platform-inventory.md
+  - of: {kind: demand, id: d-rec-reg}
+    kind: git
+    name: rezono-lang/rezono
+    revision: 19949a346deba8fb46578da60148cba776a355d6
+    position: decisions/platform-inventory.md
+  - of: {kind: demand, id: d-rec-secrets}
+    kind: git
+    name: rezono-lang/rezono
+    revision: 19949a346deba8fb46578da60148cba776a355d6
+    position: decisions/platform-inventory.md
+  - of: {kind: demand, id: d-rec-dns}
+    kind: git
+    name: rezono-lang/rezono
+    revision: 19949a346deba8fb46578da60148cba776a355d6
+    position: decisions/platform-inventory.md
+  - of: {kind: demand, id: d-rec-s3}
+    kind: git
+    name: rezono-lang/rezono
+    revision: 313322c946d24b139956cd4edb54d64b11462bd4
+    position: decisions/platform-management-backup.md

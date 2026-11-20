@@ -1,0 +1,9 @@
+{
+  "artifact_signature__artifact__reference": [
+    ["sig-1", "a-shop"]
+  ],
+  "signature_scan__covers__reference": [
+    ["scan-1", "a-lab"],
+    ["scan-1", "a-shop"]
+  ]
+}

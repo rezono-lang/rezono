@@ -96,24 +96,41 @@ def lower_checks(checks: object, at: str, refuse: Refuse) -> list[dict] | None:
 
 def parent_of(value: object, kind: str, at: str, own: dict[str, str],
               owners: dict[str, list[str]], uses: set[str], refuse: Refuse,
-              aliases: Mapping[str, Mapping[str, list[str]]] | None = None) -> str | None:
+              aliases: Mapping[str, Mapping[str, list[str]]] | None = None, *,
+              own_module: str = "",
+              parent_targets: dict[str, str] | None = None) -> str | None:
     """Resolve a parent using the same module imports as a slot reference."""
     if not isinstance(value, str) or not value:
         refuse(at, "a parent needs a kind name", "§5.1")
         return None
     if "." in value:
-        return rezono_slot.resolve_prefixed(value, aliases, at, refuse, role="parent")
+        resolved = rezono_slot.resolve_prefixed_target(value, aliases, at, refuse, role="parent")
+        if resolved is None:
+            return None
+        if parent_targets is not None:
+            parent_targets[kind] = resolved[1]
+        return resolved[0]
     if value == kind:
         refuse(at, "a kind cannot be its own parent", "§5.1")
         return None
     if value in own:
+        if parent_targets is not None and own_module:
+            parent_targets[kind] = own_module
         return value
     modules = owners.get(value, [])
     if len(modules) == 1:
         uses.add(modules[0])
+        if parent_targets is not None:
+            parent_targets[kind] = modules[0]
         return value
-    reason = (f"parent {value} is declared by modules {' and '.join(modules)} of this pack" if modules else
-              f"parent {value} is not declared in this pack")
+    if modules:
+        reason = (
+            f"parent {value} is declared by modules {' and '.join(modules)}; qualify it with an import alias"
+            if any(":" in module for module in modules)
+            else f"parent {value} is declared by modules {' and '.join(modules)} of this pack"
+        )
+    else:
+        reason = f"parent {value} is not declared in this pack"
     refuse(at, reason, "§5.1")
     return None
 
@@ -124,7 +141,10 @@ def lower(decl: dict, at: str, own: dict[str, str], owners: dict[str, list[str]]
           kinds: Mapping[str, list] | None = None,
           integer_types: Mapping[str, Set[str]] | None = None,
           own_module: str = "",
-          rezono_1: bool = False) -> dict | None:
+          rezono_1: bool = False,
+          layer: str = "",
+          slot_targets: dict[tuple[str, str], str] | None = None,
+          parent_targets: dict[str, str] | None = None) -> dict | None:
     """`kinds` holds the slots of each kind of the module, which an inverse slot reads."""
     ok = True
     allowed = (MEMBERS | {"checks", "deprecated", "embedded", "equations", "parent", "relationship"} | rezono_metadata.FIELDS
@@ -153,13 +173,32 @@ def lower(decl: dict, at: str, own: dict[str, str], owners: dict[str, list[str]]
     if embedded and has_parent:
         refuse(at, "an embedded kind cannot inherit an identifier from a parent", "§5.1")
         ok = False
-    parent = parent_of(decl["parent"], decl["kind"], f"{at}/parent", own, owners, uses, refuse, aliases) if has_parent else None
+    parent = (
+        parent_of(
+            decl["parent"], decl["kind"], f"{at}/parent", own, owners, uses, refuse, aliases,
+            own_module=own_module, parent_targets=parent_targets,
+        )
+        if has_parent else None
+    )
     if has_parent and parent is None:
         ok = False
+    annotations = decl.get("annotations")
+    kind_layer = annotations.get("layer", layer) if isinstance(annotations, dict) else layer
     world = decl.get("world")
-    if has_parent and world == "open":
+    if has_parent and (world == "open" or (rezono_1 and "world" in decl)):
         refuse(at, "a kind with a parent has the world of its root kind", "§5.1")
         ok = False
+    elif rezono_1:
+        if "world" in decl and world not in ("closed", "open"):
+            refuse(at, "a kind world is `open` or `closed`", "§5.1")
+            ok = False
+        elif kind_layer == "observation" and not has_parent and world != "open":
+            refuse(
+                at,
+                f"`{decl['kind']}` is observed: declare `world open`, and `complete by` the scope in which it is complete (R051)",
+                "§5.1",
+            )
+            ok = False
     elif not (world == "closed" or (extended_format and world == "open") or (has_parent and "world" not in decl)):
         refuse(at, "an open kind is refused: a kind says `world closed`", "§5.1")
         ok = False
@@ -203,7 +242,7 @@ def lower(decl: dict, at: str, own: dict[str, str], owners: dict[str, list[str]]
     if rezono_slot.validate(
         slots, decl["kind"], at, own, owners, uses, refuse,
         extended=extended_format, open_kind=world == "open", aliases=aliases, kinds=kinds,
-        integer_types=integer_types, own_module=own_module,
+        integer_types=integer_types, own_module=own_module, targets=slot_targets,
     ) and ok and equations is not None and rules is not None:
         attributes = rezono_slot.lower(slots, declared, implicit_identifier=not embedded and parent is None)
         result = {"attributes": attributes} | rezono_metadata.lower(decl)

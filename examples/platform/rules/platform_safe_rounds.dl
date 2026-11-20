@@ -1,0 +1,172 @@
+// Bind platform steps to std-loop certified rounds, scoped completeness receipts,
+// and platform startup and offline management dataset restore goals.
+
+// Confirmed prerequisites of a step in a run.
+.decl platform_step_confirmed_need(run: symbol, step: symbol, token: symbol, reason: symbol)
+platform_step_confirmed_need(run, step, token, reason) :-
+    needed(run, step, token, _),
+    known(run, token, reason).
+
+// A scoped empty-inventory observation established at a cut through an admitted completeness receipt.
+.decl platform_cut_empty_scope(run: symbol, cut: symbol, token: symbol, reason: symbol)
+platform_cut_empty_scope(run, cut, token, reason) :-
+    current(run, token, "absent", "empty", reason),
+    loop_observation__run(ev, run),
+    loop_observation__token(ev, token),
+    loop_observation__sweep(ev, cut),
+    loop_observation__reason(ev, reason).
+
+// A step's needed token observed absent at a cut through an admitted completeness receipt.
+.decl platform_step_absent_need(run: symbol, step: symbol, cut: symbol, token: symbol, reason: symbol)
+platform_step_absent_need(run, step, cut, token, reason) :-
+    needed(run, step, token, _),
+    current(run, token, "absent", _, reason),
+    loop_observation__run(ev, run),
+    loop_observation__token(ev, token),
+    loop_observation__sweep(ev, cut),
+    loop_observation__reason(ev, reason).
+
+// Safe frontier: only steps admitted into std-loop's certified ready relation at the current cut,
+// citing either all confirmed prerequisites or, for an opening step with no prerequisites,
+// the admitted empty-scope receipt at that cut.
+.decl platform_safe_frontier(run: symbol, cut: symbol, step: symbol)
+platform_safe_frontier(run, cut, step) :-
+    step_safety_current_cut(run, cut),
+    ready(run, step, _),
+    confirmed = count : { platform_step_confirmed_need(run, step, _, _) },
+    confirmed > 0.
+platform_safe_frontier(run, cut, step) :-
+    step_safety_current_cut(run, cut),
+    ready(run, step, _),
+    confirmed = count : { platform_step_confirmed_need(run, step, _, _) },
+    confirmed = 0,
+    empty_scopes = count : { platform_cut_empty_scope(run, cut, _, _) },
+    empty_scopes > 0.
+
+// Safe blocker: steps blocked by a step safety obligation at the current cut,
+// retaining any admitted scoped-absence grounds for the step's missing prerequisites.
+.decl platform_safe_blocker(run: symbol, cut: symbol, step: symbol, obligation: symbol)
+platform_safe_blocker(run, cut, step, obligation) :-
+    step_safety_blocker(run, step, cut, obligation, reason),
+    waiting(run, step, obligation, reason),
+    absent_needs = count : { platform_step_absent_need(run, step, cut, _, _) },
+    absent_needs >= 0.
+
+// Safe platform startup goal: protection and entry exposure completed and observed ready
+// at the current cut, alongside a confirmed denial of the deliberate recovery-isolation probe.
+.decl platform_startup_goal(run: symbol, cut: symbol, target: symbol, status: symbol)
+platform_startup_goal(run, cut, "platform", status) :-
+    step_safety_current_cut(run, cut),
+    done(run, "protect-entry", _),
+    done(run, "expose-entry", _),
+    completion(run, "expose-entry", "lb/listener", status),
+    known(run, "lb/network-policy", _),
+    known(run, "lb/router-policy", _),
+    known(run, "restore-bad/network-probe", _).
+
+// A restore trial whose control plane is outside the recovery target.
+.decl platform_restore_foreign_control(trial: symbol)
+platform_restore_foreign_control(trial) :-
+    restore_foreign_control(trial, _).
+
+// A restore dependency binding that still depends on the source cluster.
+.decl platform_restore_binding_on_source(trial: symbol, source: symbol)
+platform_restore_binding_on_source(trial, source) :-
+    restore_dependency_binding__trial(binding, trial),
+    restore_dependency_binding__cluster(binding, source).
+
+// Dataset-to-copy binding matched to a trial, backup and capture.
+.decl platform_restore_dataset_match(trial: symbol, backup: symbol, capture: symbol, dataset: symbol)
+platform_restore_dataset_match(trial, backup, capture, dataset) :-
+    restore_dataset_binding(binding),
+    restore_dataset_binding__trial(binding, trial),
+    restore_dataset_binding__dataset(binding, dataset),
+    restore_dataset_binding__backup(binding, backup),
+    restore_dataset_binding__capture(binding, capture).
+
+// Verified isolated restore copy linked to its source cluster and dataset binding.
+.decl platform_restore_bound_copy(run: symbol, trial: symbol, source: symbol, dataset: symbol, readback: symbol, digest: symbol)
+platform_restore_bound_copy(run, trial, source, dataset, readback, digest) :-
+    backup_trial__run(trial, run),
+    backup_trial__backup(trial, backup),
+    backup_trial__cluster(trial, recovery),
+    backup_capture__backup(capture, backup),
+    backup_capture__run(capture, run),
+    backup_capture__source_cluster(capture, source),
+    backup_readback__trial(readback, trial),
+    backup_readback__backup(readback, backup),
+    backup_readback__run(readback, run),
+    backup_readback__cluster(readback, recovery),
+    backup_readback__source_evidence(readback, capture),
+    backup_readback__payload_sha256(readback, digest),
+    managed_backup_restored(backup, trial),
+    platform_restore_dataset_match(trial, backup, capture, dataset).
+
+// Management unreachable observation with its event time.
+.decl platform_restore_offline_obs(run: symbol, ev: symbol, event_time: number)
+platform_restore_offline_obs(run, ev, event_time) :-
+    loop_observation__run(ev, run),
+    loop_observation__token(ev, "management/availability"),
+    loop_observation__state(ev, "known"),
+    loop_observation__value(ev, "unreachable"),
+    loop_observation__event_time(ev, event_time).
+
+// An offline interval invalidated by any same-run observation that management was not unreachable.
+.decl platform_restore_interval_broken(fence_interval: symbol)
+platform_restore_interval_broken(fence_interval) :-
+    restore_offline_interval(fence_interval),
+    restore_offline_interval__run(fence_interval, run),
+    restore_offline_interval__start_evidence(fence_interval, start_ev),
+    restore_offline_interval__end_evidence(fence_interval, end_ev),
+    loop_observation__run(start_ev, run),
+    loop_observation__event_time(start_ev, t_start),
+    loop_observation__run(end_ev, run),
+    loop_observation__event_time(end_ev, t_end),
+    loop_observation__run(ev, run),
+    loop_observation__token(ev, "management/availability"),
+    loop_observation__event_time(ev, t_ev),
+    t_start <= t_ev,
+    t_ev <= t_end,
+    loop_observation__value(ev, val),
+    val != "unreachable".
+
+// Verified offline fence interval covering the opening probe, readback and closing probe.
+.decl platform_restore_interval_verified(run: symbol, trial: symbol, readback: symbol, digest: symbol)
+platform_restore_interval_verified(run, trial, readback, digest) :-
+    restore_offline_interval(fence_interval),
+    restore_offline_interval__run(fence_interval, run),
+    restore_offline_interval__trial(fence_interval, trial),
+    restore_offline_interval__start_evidence(fence_interval, start_ev),
+    restore_offline_interval__end_evidence(fence_interval, end_ev),
+    restore_offline_interval__readback_evidence(fence_interval, readback),
+    start_ev != end_ev,
+    start_ev != readback,
+    end_ev != readback,
+    platform_restore_offline_obs(run, start_ev, t_start),
+    platform_restore_offline_obs(run, end_ev, t_end),
+    loop_observation__run(readback, run),
+    loop_observation__state(readback, "known"),
+    loop_observation__value(readback, digest),
+    loop_observation__event_time(readback, t_readback),
+    t_start <= t_readback,
+    t_readback <= t_end,
+    known(run, "management/availability", end_ev),
+    !platform_restore_interval_broken(fence_interval).
+
+// Offline management dataset restore goal: matching isolated copy bound to the named dataset,
+// independent recovery prerequisites, completed restore step, and full offline fence interval
+// covering the opening probe, readback and closing probe.
+.decl platform_restore_goal(run: symbol, cut: symbol, dataset: symbol, readback: symbol)
+platform_restore_goal(run, cut, dataset, readback) :-
+    step_safety_current_cut(run, cut),
+    platform_restore_bound_copy(run, trial, source, dataset, readback, digest),
+    restore_trial_bound(trial),
+    !platform_restore_foreign_control(trial),
+    !platform_restore_binding_on_source(trial, source),
+    done(run, _, readback),
+    platform_restore_interval_verified(run, trial, readback, digest).
+
+.output platform_safe_frontier
+.output platform_safe_blocker
+.output platform_startup_goal
+.output platform_restore_goal

@@ -53,6 +53,8 @@ class Explainer:
         self.rows = {n: set(rs) for n, rs in rows.items()}
         self.witnesses = witnesses
         self._chosen = None
+        self._groups: dict[tuple[str, tuple[int, ...]], dict[tuple, list[tuple[str, tuple]]]] = {}
+        self._aggregates: dict[tuple[str, str, str | None, tuple[int, ...], tuple], tuple[str, int, str, str]] = {}
 
     # One rule instance -------------------------------------------------------------------------
     def _subst(self, terms, theta):
@@ -73,23 +75,43 @@ class Explainer:
             w["aggregates"] = [self._aggregate(i, a, theta) for i, a in enumerate(rule.aggregates)]
         return w
 
+    def _group_index(self, relation: str, positions: tuple[int, ...]) -> dict[tuple, list[tuple[str, tuple]]]:
+        """Group a relation's rows once per (relation, fixed positions), sorted by canonical key."""
+        key = (relation, positions)
+        index = self._groups.get(key)
+        if index is None:
+            nk = len(self.prog.relations[relation].key)
+            index = {}
+            for r in self.rows.get(relation, ()):
+                index.setdefault(tuple(r[i] for i in positions), []).append((key_text(r[:nk]), r))
+            for members in index.values():
+                members.sort()
+            self._groups[key] = index
+        return index
+
     def _aggregate(self, position, a, theta) -> dict:
         rel = self.prog.relations[a.atom.relation]
-        nk = len(rel.key)
         fixed = [(i, theta[t] if is_var(t) else t) for i, t in enumerate(a.atom.terms) if t != "_"]
-        members = sorted((key_text(r[:nk]), r) for r in self.rows.get(rel.name, ())
-                         if all(r[i] == v for i, v in fixed))
-        group = key_text(v for _, v in fixed)
-        if a.function == "count":
-            contributors, result = [[k] for k, _ in members], str(len(members))
-        else:
-            contributors = [[k, contribution(self.prog, a, r)] for k, r in members]
-            numbers = [int(v.removeprefix("known:")) for _, v in contributors]
-            result = str({"sum": sum, "min": min, "max": max}[a.function](numbers)) if numbers or a.function == "sum" else None
-            if result is None:
-                raise NoProof(f"{a.function} over an empty group has no conclusion")
-        return {"relation": rel.name, "position": position, "group_key": group, "count": len(members),
-                "contributors_sha256": canonical_sha256(contributors), "result": f"known:{result}"}
+        positions = tuple(i for i, _ in fixed)
+        values = tuple(v for _, v in fixed)
+        cache_key = (rel.name, a.function, a.over, positions, values)
+        cached = self._aggregates.get(cache_key)
+        if cached is None:
+            members = self._group_index(rel.name, positions).get(values, ())
+            group = key_text(values)
+            if a.function == "count":
+                contributors, result = [[k] for k, _ in members], str(len(members))
+            else:
+                contributors = [[k, contribution(self.prog, a, r)] for k, r in members]
+                numbers = [int(v.removeprefix("known:")) for _, v in contributors]
+                result = str({"sum": sum, "min": min, "max": max}[a.function](numbers)) if numbers or a.function == "sum" else None
+                if result is None:
+                    raise NoProof(f"{a.function} over an empty group has no conclusion")
+            cached = (group, len(members), canonical_sha256(contributors), f"known:{result}")
+            self._aggregates[cache_key] = cached
+        group, count, contributors_sha256, result = cached
+        return {"relation": rel.name, "position": position, "group_key": group, "count": count,
+                "contributors_sha256": contributors_sha256, "result": result}
 
     # Choice --------------------------------------------------------------------------------------
     def _choose(self):

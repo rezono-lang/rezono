@@ -26,17 +26,6 @@ def pack_reads(monkeypatch):
     return seen
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason=(
-        "M4: decisions/code-does-not-decide.md, row run/ovh_inventory.py. Derive still_listed(listing, service) in "
-        "run/packs/cleanup from a complete unfiltered listing and the delivered services. run/ovh_inventory.py "
-        "keeps request() and the parsing of the listing, which refuses anything but a complete list of names, and "
-        "returns the sorted services it reads from still_listed through rezono_compiler.batch.read. Keep "
-        "run/tests/test_ovh_inventory.py green. Today remaining() intersects the sets in Python (AssertionError)."
-    ),
-)
 def test_still_listed_services_come_from_the_cleanup_pack(monkeypatch):
     seen = pack_reads(monkeypatch)
     remaining = implementation("ovh_inventory.py", "remaining")

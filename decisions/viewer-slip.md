@@ -1,3 +1,11 @@
+---
+decider: [core]
+decided_on: 2026-11-19
+valid_from: 2026-11-19
+state: in_force
+subject: viewer-slip
+---
+
 # The slip: the first sheet of the reference viewer
 
 A reader takes one conclusion, sees what it rests on, moves a fact, and checks the result without trusting the engine or the page.
@@ -42,7 +50,13 @@ The local reader in `edge/gate/` gives a page the role's part, at `GET /<pack>/b
 - `home`: the pack's home claim, with only the relations the role reads.
 - `questions`: the questions of the bundle. A question names no element of a pack.
 
-A role reads a relation when its snapshot of it is full or holds a row. A snapshot that is empty and not full says only that nothing of the relation is granted, so the catalogue follows the same rule: a kind, slot or relation the role does not read is not in it either.
+The catalogue part of the response carries the type and naming fields the slip needs to name elements, format amounts and semantic values, and tell calculated and outcome rows apart without guessing, scoped strictly to what the role reads:
+
+- **Kinds (`kinds`):** `name_attribute` when that attribute is in the role's `attributes`; and `name_arrows` restricted to arrows in the role's `arrows`, in bundle order (omitted when none are visible).
+- **Attributes and arrows (`attributes`, `arrows`):** `semantic` on each slot in the role's catalogue, and `currency` on an attribute when declared.
+- **Relations (`relations`):** `calc` when the relation is a calculation's view (so the slip knows a row carries calculation steps rather than rule premises), `outcome` when the relation is a named outcome and its named kind is in the role's `kinds`, `semantic` on the relation when present (the calculation view's value type), and per column `currency` and `semantic` when present (omitting a column's `semantic` if its `target` names a kind the role does not read).
+
+A role reads a relation when its snapshot of it is full or holds a row. A snapshot that is empty and not full says only that nothing of the relation is granted, so the catalogue follows the same rule: a kind, slot or relation the role does not read is not in it either, and none of its type fields, currencies or semantics appear anywhere in the response.
 Something left out looks the same as something that does not exist.
 This touches access: the first change that lands it is reviewed for a role that receives anything of a kind it does not read.
 
@@ -126,6 +140,11 @@ The viewer build takes `std-view` in; no pack publishes it.
   - result: `html`, the page's document body after the keys, drawn in a simulated DOM; and `files`, the sha256 of each file of the built page, by path.
   The page installs its own dependencies from its lockfile; the tests run `npm ci` in `viewer/slip/` once before they render.
 - The same question gives the same rows in the page, in the REPL and through MCP. The same publication and the same build give the same bytes.
+
+### Generated contract types
+
+Both `viewer/messages/` and `viewer/slip/` import their generated TypeScript contract types (`import type`) directly from `contracts/typescript/generated/`, the directory `contracts/gen-types.sh` already writes for `edge/gate/` and `tools/repl/`.
+Neither package writes into or reads generated types from `viewer/src/lib/contract/generated/`, and `contracts/gen-types.sh` does not write into `viewer/src/lib/` for them: every file under `viewer/src/lib/` is an input of a kept view's build hash (`edge/publisher/rezono_publisher/view_build.py`), so generated output for the slip and message filler stays outside `viewer/src/lib/`.
 
 ### Marks in the drawn page
 
@@ -230,7 +249,7 @@ Positions and the drawing views. Hosting, and a gate with sign-in. Signing a sta
 Each test below is a red test first, with its expectation written by hand in a fixture or computed by an oracle in the test.
 The tests of the page use `tests/fixtures/slip`, a small pack with two roles, and name no example pack.
 
-Step 1: `verb-bar-in-std-view`, `role-part-of-bundle`, `head-status-and-hash`, `message-filled`, `slip-rule-row`, `slip-calculated-row`, `unknown-shows-no-digit`, `verbs-that-answer`, `tables-and-legend`, `unserved-publication`, `one-build-every-claim`, `no-pack-word`.
+Step 1: `verb-bar-in-std-view`, `role-part-of-bundle`, `role-bundle-type-fields`, `head-status-and-hash`, `message-filled`, `slip-rule-row`, `slip-calculated-row`, `unknown-shows-no-digit`, `verbs-that-answer`, `tables-and-legend`, `unserved-publication`, `one-build-every-claim`, `no-pack-word`.
 
 Step 2: `several-sweeps`, `variant-difference-local`, `turning-points`, `turn-unknown-neighbour`, `stops-only`.
 

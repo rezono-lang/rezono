@@ -322,3 +322,24 @@ acceptance:
     question: Which allocated address belongs to each workload and what address range proves its ownership?
     tests:
       - proof_cases/test_address_ownership.py::test_address_ownership
+reader:
+  - id: safe-platform-startup
+    title_message: reader.safe_platform_startup
+    about_message: reader.safe_platform_startup.about
+    relation: platform_startup_goal
+    proof: grounds
+    columns:
+      - {column: run, message: reader.safe_platform_startup.run}
+      - {column: cut, message: reader.safe_platform_startup.cut}
+      - {column: target, message: reader.safe_platform_startup.target}
+      - {column: status, message: reader.safe_platform_startup.status}
+  - id: offline-management-dataset-restore
+    title_message: reader.offline_management_dataset_restore
+    about_message: reader.offline_management_dataset_restore.about
+    relation: platform_restore_goal
+    proof: grounds
+    columns:
+      - {column: run, message: reader.offline_management_dataset_restore.run}
+      - {column: cut, message: reader.offline_management_dataset_restore.cut}
+      - {column: dataset, message: reader.offline_management_dataset_restore.dataset}
+      - {column: readback, message: reader.offline_management_dataset_restore.readback}

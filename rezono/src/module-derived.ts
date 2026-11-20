@@ -325,7 +325,8 @@ export const derived = {
 		DerivedOption_explain(_keyword, mode) {
 			return named(this, { explain: mode.sourceString });
 		},
-		OutputLine: (_k, relation, _dot, slot) => ({ line: 'output', relation: relation.sourceString, slot: slot.sourceString }),
+		OutputLine: (_k, relation, _dot, slot) =>
+			named(relation, { line: 'output', relation: relation.sourceString, slot: slot.sourceString }),
 		DerivedUnitLine: (_k, unit) => ({ line: 'derivedUnit', unit: unit.sourceString }),
 		DefinitionLine(_k, n, _when, cond, _then, value, overrides) {
 			const decl: Line = { line: 'definition', name: n.sourceString, when: cond.tree() as Expr, value: value.tree() as Expr };

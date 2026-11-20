@@ -53,6 +53,23 @@ test('where the canonical name is a slot of a kind in scope, the binder takes th
 	assert.equal(normal('ask h: Host where owner = host'), 'ask host_2: Host where host = host_2.owner');
 });
 
+test('where an explicit method binder uses the canonical name, the ask binder takes the next free one', async () => {
+	for (const text of [
+		'ask h: Host where clusters.any(host: count > 1)',
+		'ask h: Host where clusters.any(host: true)',
+		'ask h: Host where clusters.where(host: count > 1).count() > 0',
+	]) {
+		const checked = valid(text);
+		const normalized = print(normalQuestion(checked, fixture));
+		assert.match(normalized, /^ask host_2: Host where /);
+		assert.deepEqual(check(normalized, fixture).diagnostics.filter(isError), [], normalized);
+	}
+	assert.equal(
+		await hash('ask h: Host where clusters.any(host: count > 1)'),
+		await hash('ask x: Host where x.clusters.any(host: 1 < host.count)')
+	);
+});
+
 test('one question asked by two roles has one hash: the binder avoids the names of the pack, not of the role', async () => {
 	// A role that does not read the relation of `HostCluster.host` and `Host.clusters`: its schema names neither.
 	const role = structuredClone(fixture);

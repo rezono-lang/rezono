@@ -62,3 +62,18 @@ eligible_offer: eligible candidate
 comparison: candidate comparison
 excluded: candidate lacking eligibility
 selected: selected offer
+preflight_offer: preflight offer
+preflight_offer.expected_price: expected price
+preflight_offer.required_stock: required stock
+preflight_offer.observed_price: observed price
+preflight_offer.observed_stock: observed stock
+preflight_has_expected_price: offer with expected price
+preflight_has_required_stock: offer with required stock
+preflight_has_observed_price: offer with observed price
+preflight_has_observed_stock: offer with observed stock
+preflight_price_conflict: conflicting preflight price
+preflight_stock_conflict: conflicting preflight stock
+preflight_price_finding: preflight price finding
+preflight_stock_finding: preflight stock finding
+preflight_finding: preflight finding
+preflight_finding_rank: preflight finding rank

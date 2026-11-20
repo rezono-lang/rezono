@@ -2,11 +2,11 @@ name: subsidy
 version: 0.1.2
 default_language: en
 imports:
-  - {name: std-access, path: ../../packs/std-access, sha256: 90e8804a88fc48d19044c58d6d52710140cc75737d4e2c5cc7091f6e3853c37d}
+  - {name: std-access, path: ../../packs/std-access, sha256: 8e004b9bd062be365acfb3db30d9bb26fe393c3b979bd77e8d69fc60aae111e6}
   - {name: std-decision, path: ../../packs/std-decision, sha256: 2fd4cc60cc4f1c7dca42da2f5368a08a992de39df7cd7db205b9118dd1b8fe5a}
   - {name: std-time, path: ../../packs/std-time, sha256: bb2863a03792228005fa6784ed1022c07ac82139cdbf0ff7914cd273b3e046a7}
   - {name: std-explain, path: ../../packs/std-explain, sha256: 72e2897cd9baaa4962cf2235f83a332262b4da1e6d34e82d5f64d8335e27be0b}
   # The scheme's definition, fact-free: its kinds, rules, calculation, labels and messages.
-  - {name: subsidy-scheme, path: ../subsidy-scheme, sha256: 1befdec55e46bee0ecd1f3fd142eed66320acd3cf73db13217401cda7cbe3a04}
+  - {name: subsidy-scheme, path: ../subsidy-scheme, sha256: 99e1474205a13174515b910080c97bbcb9cdfef472b0a5327ff5d92c889ba30b}
 iri:
   base: https://rezono.org/example/subsidy/  # a synthetic example of the Rezono project (docs/ring2/iris.md section 3)

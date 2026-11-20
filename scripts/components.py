@@ -244,7 +244,7 @@ PR_FILE_CONSUMERS = {
     "canon": ("edge/plugins/connectors", "examples", "k8s-admission", "loop"),
     "checker": ("compiler", "examples", "k8s-admission", "loop", "run", "tests/slip"),
     "compiler": ("admission", "checker", "edge/plugins/connectors", "examples", "loop", "publication", "run",
-                 "tests/slip"),
+                 "tests/slip", "tools/explain-lint"),
     "edge/plugins/connectors": ("examples",),
     "contracts": ("admission", "canon", "checker", "compiler", "edge/plugins/connectors", "loop", "publication", "rezono",
                   "tests/slip"),
@@ -254,6 +254,7 @@ PR_FILE_CONSUMERS = {
     "loop": ("examples",),
     "publication": ("checker", "compiler", "edge/plugins/connectors", "edge/publisher", "examples", "tests/slip"),
     "rezono": ("compiler", "tests/slip"),
+    "tools/explain-lint": ("compiler",),
     "tools/repl": ("tests/slip", "tools/mcp"),
     # examples/test_slip_claims.py draws the slip with the helpers of tests/slip (decisions/viewer-slip.md).
     "tests/slip": ("examples",),
@@ -316,7 +317,11 @@ SHARED_READERS = {
     "examples/**/expected/**": ("contracts",),
     "edge/plugins/*/plugin.yaml": ("contracts",),
     "contracts/output-index.yaml": ("edge/publisher",),
-    "viewer/src/lib/canon.ts": ("compiler", "edge/publisher", "rezono"),
+    "viewer/src/lib/canon.ts": ("compiler", "edge/publisher", "examples", "rezono"),
+    # examples/test_role_schema_parity.py checks gate roleSchema against publication.schema_document.
+    "edge/gate/src/ask.ts": ("examples",),
+    "edge/gate/src/expr.ts": ("examples",),
+    "rezono/src/answer-schema.ts": ("examples",),
     # Directories of one component that another component's tests read as data.
     # rezono/test/test_message_catalogue.py reads the compiler's sources for the codes they report.
     "compiler/rezono_compiler/": ("rezono",),

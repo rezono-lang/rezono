@@ -28,6 +28,7 @@ release.series: selected release series
 pin: pin
 pin.service: service
 pin.release: release
+pin.same_product: the service product equals the release product
 choice: choice
 choice.service: service
 choice.function: function
@@ -36,6 +37,11 @@ artifact: artifact
 artifact.for_service: for service
 artifact.built_by: built by
 artifact.signed: signed
+artifact_signature: artifact signature
+artifact_signature.artifact: artifact
+artifact_signature.scan: scan
+signature_scan: signature scan
+signature_scan.covers: covers
 provides: provides
 provider: provider
 asks: asks
@@ -66,7 +72,10 @@ recovery_reached: recovery reached
 recovery_reaches_out: recovery reaches out
 authenticates: authenticates
 unauthenticated_target: unauthenticated target
+scanned: scanned
+could_verify: could verify
 verified: verified
+supply_unknown: supply unknown
 unverified_supply: unverified supply
 build_reaches_tenant: build reaches tenant
 vendor_licence_notice: supplier licence notice
@@ -102,3 +111,22 @@ product_licence_gap_reason: reason for missing product evidence
 product_has_licence_gap: product has an identified evidence gap
 component_product_licence: component source licence
 component_licence_state: component licence evidence status
+cluster_worker_node: cluster worker node
+cluster_worker_node.owner: owner cluster
+cluster_worker_node.endpoint: worker endpoint
+cluster_worker_node.same_cluster: the worker endpoint belongs to the owner cluster
+restore_dataset_binding: restore dataset binding
+restore_dataset_binding.trial: trial
+restore_dataset_binding.dataset: dataset
+restore_dataset_binding.backup: backup
+restore_dataset_binding.capture: capture
+restore_offline_interval: restore offline interval
+restore_offline_interval.run: run
+restore_offline_interval.trial: trial
+restore_offline_interval.start_evidence: start evidence
+restore_offline_interval.end_evidence: end evidence
+restore_offline_interval.readback_evidence: readback evidence
+platform_safe_frontier: platform safe frontier
+platform_safe_blocker: platform safe blocker
+platform_startup_goal: platform startup goal
+platform_restore_goal: platform restore goal

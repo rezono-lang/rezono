@@ -2,14 +2,16 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 import json
+from pathlib import Path
 import re
 from typing import NoReturn
 
 from . import diagnostics, modules, native_rule_groups, native_rule_signatures, rezono_module, rules, rules_dl, spans
 from .diagnostics import Diagnostic
-from .pack import CompileError, IntermediateInvariant
+from .pack import CompileError, CompiledStep, IntermediateInvariant, Kind
 
 
 def lower_modules(
@@ -19,15 +21,28 @@ def lower_modules(
     names: modules.Names,
     *,
     intermediate_invariants: list[IntermediateInvariant] | None = None,
+    pack_dir: Path | None = None,
+    pack_kinds: Mapping[str, Kind] | None = None,
+    steps: list[CompiledStep] | None = None,
 ) -> tuple[rules_dl.NativeSource, ...]:
-    authored = [(m, form) for m in definitions
-                if (form := m.form) is not None and form["format"] in rezono_module.NATIVE_FORMATS]
+    authored = [
+        (m, form) for m in definitions
+        if (form := m.form) is not None and (
+            form["format"] in rezono_module.NATIVE_FORMATS
+            or (form["format"] == rezono_module.REZONO_1_FORMAT
+                and any(isinstance(d, dict) and "step" in d for d in form["module"]["decls"]))
+        )
+    ]
     if not authored:
         return ()
     forms = {(m.pack, m.rel): form for m, form in authored}
-    linked = native_rule_signatures.link_modules(meta, definitions, imports, names, forms)
+    linked = native_rule_signatures.link_modules(
+        meta, definitions, imports, names, forms, pack_dir=pack_dir, pack_kinds=pack_kinds,
+    )
     if intermediate_invariants is not None:
         intermediate_invariants.extend(linked.intermediate_invariants)
+    if steps is not None:
+        steps.extend(linked.steps)
     result = []
     for module, form in authored:
         if source := lower_source(module, form, meta["name"], linked):
@@ -37,7 +52,7 @@ def lower_modules(
 
 def lower_source(module: modules.Module, form: dict, root: str,
                  linked: native_rule_signatures.Linked) -> rules_dl.NativeSource | None:
-    declarations = [(f"/decls/{i}", d) for i, d in enumerate(form["module"]["decls"]) if "rule" in d]
+    declarations = [(f"/decls/{i}", d) for i, d in enumerate(form["module"]["decls"]) if "rule" in d or "step" in d]
     if not declarations:
         return None
     where = spans.where(module.pack, root, module.rel)
@@ -64,6 +79,12 @@ def lower_source(module: modules.Module, form: dict, root: str,
 def lower_declaration(site: Site, linked: native_rule_signatures.Linked, module: modules.Module, at: str,
                       declaration: dict, statements: list, columns: list,
                       semantics: dict[str, tuple[dict | None, ...]]) -> None:
+    if "step" in declaration:
+        declaration = {
+            "rule": linked.step_clauses[module.pack, module.rel, at],
+            "columns": declaration["columns"],
+            "when": declaration["when"],
+        }
     where, text, offsets = site.file, site.text, site.offsets
     start = offsets[at]
     if len(start) > len(str(len(text))) or int(start) >= len(text):

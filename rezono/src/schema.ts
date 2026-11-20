@@ -29,9 +29,16 @@ export interface KindDef {
 	world: World;
 	id: { type: string };
 	slots: Record<string, SlotDef>;
+	iri?: string;
+	parent?: string;
+	plane?: 'control';
+	owner?: string;
+	tuple_key?: string[];
 }
 export interface TypeDef {
 	of: 'Text' | 'Bool' | 'Integer' | 'Ratio' | 'Date' | 'DateTime' | 'Quantity' | 'Money' | 'Period' | 'Enum' | (string & {});
+	min?: string;
+	max?: string;
 	dimension?: string;
 	unit?: string;
 	storage_unit?: string;
@@ -67,6 +74,8 @@ export interface Schema {
 	symbols?: Record<string, string>;
 	/** Beyond the publication: the pack's one named rounding, which `round(x)` uses (v0 §5f). */
 	rounding?: { money?: 'half_even' | 'half_up' | 'down' | 'up' };
+	/** Beyond the publication: the pack's declared default type per dimension (`default unit <Type>`). */
+	default_units?: Record<string, string>;
 	/**
 	 * Beyond the publication: per kind, the slots over a relation the role reads in part, or not at all (§7a rule 1).
 	 * It follows from the shape of the role's read rules, never from the rows. The document itself
@@ -169,6 +178,14 @@ export function unitOf(schema: Schema, word: string): { name: string; dim: Dim }
 
 /** The type of a slot or a parameter. */
 export const slotType = (schema: Schema, slot: Pick<SlotDef, 'type' | 'ref'>): Ty => (slot.ref !== undefined ? { t: 'ref', kind: slot.ref } : typeOf(schema, slot.type ?? 'Text'));
+
+/** Whether a type has a built-in total order: numbers (including quantities and money), dates, and instants. */
+export function isOrdered(schema: Schema, ty: Ty): boolean {
+	if (ty.t === 'num') return true;
+	if (ty.t !== 'val') return false;
+	const base = baseTypeOf(schema, ty.name);
+	return base === 'Date' || base === 'DateTime';
+}
 
 /** The implicit binder of a kind: its name in snake case (§5 rule 1). */
 export const snake = (kind: string): string => kind.replace(/(?<=[a-z0-9])(?=[A-Z])/g, '_').toLowerCase();

@@ -32,6 +32,8 @@ ENGINE = {"period_close"}
 # test_operate.py). catlab.yml runs compiler/tests/test_catlab.py alone with Julia, so the sample stays there
 # until that workflow also runs a case from the example; every other line of these files is scanned.
 SAMPLE = {"compiler/tests/test_operate.py": "STEEL_THREAD = REPO / "}
+# Example-specific language slice test kept under compiler/tests/rezono/ by decisions/language-healthcare-allowance-slice.md.
+EXAMPLE_TESTS = {"compiler/tests/rezono/test_zorgtoeslag_slice.py"}
 ENTRY_TEXT = re.compile(r"^[a-z][a-z0-9_.]*\s*=\s*")
 
 
@@ -43,7 +45,7 @@ def vocabulary() -> set[str]:
         name = str((yaml.safe_load(meta.read_text(encoding="utf-8")) or {}).get("name", ""))
         if "-" in name:
             terms.add(name)
-        if meta.parent.parent != ROOT / "examples":  # examples/<use case>/<pack>/
+        if meta.parent.parent != ROOT / "examples" and ("-" in meta.parent.parent.name or "_" in meta.parent.parent.name):
             terms.add(meta.parent.parent.name)
         for schema in sorted((meta.parent / "schema").glob("*.yaml")):
             classes = (yaml.safe_load(schema.read_text(encoding="utf-8")) or {}).get("classes") or {}
@@ -74,6 +76,8 @@ def core_files():
     for root in (*CORE, *READERS):
         for path in sorted(root.rglob("*")):
             if path.suffix not in SUFFIXES or "node_modules" in path.parts:
+                continue
+            if path.relative_to(ROOT).as_posix() in EXAMPLE_TESTS:
                 continue
             if ".test." not in path.name or root in READERS:
                 yield path

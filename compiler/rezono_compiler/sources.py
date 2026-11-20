@@ -5,6 +5,9 @@ Only main's facts are read here. The canonical writer changes a fact file and it
 """
 from __future__ import annotations
 
+from collections import deque
+from collections.abc import Iterable
+from dataclasses import dataclass
 from functools import lru_cache
 from datetime import datetime
 import json
@@ -15,6 +18,7 @@ import yaml
 from rezono_canon import canonical_json
 
 from . import facts, strict_yaml
+from .diagnostics import Diagnostic
 from .pack import Pack, contract_dir
 
 @lru_cache(None)
@@ -135,20 +139,25 @@ def sidecar(pack: Pack, path: Path, doc) -> tuple[dict | None, dict, dict]:
     return default, entries, {(e["row"]["relation"], e["row"]["key"]): e for e in exact}
 
 
-def cited(form: dict, where: str) -> dict[tuple[str, int], dict]:
-    """The source of each row of a fact table that cites a source declaration (decisions/language-fact-provenance.md),
-    by kind and record index in the order of facts.located_scalar_dataset: the declaration's fields overridden by
-    the row's source cells, validated as a sidecar default and a record of that row would be."""
-    tables = facts.named_dataset_decls(form)
+def _declared_sources(tables: list, where: str) -> dict[str, dict]:
     declared = {}
     for decl in filter(facts.source_decl, tables):
         name, fields, at = decl["source"], decl["fields"], f"{where} source {decl['source']}"
         if not isinstance(name, str) or name in declared or not isinstance(fields, dict):
             raise facts.LoadError(f"{at}: a source is declared once, with its fields")
         declared[name] = source(fields, at)
+    return declared
+
+
+def cited(form: dict, where: str) -> dict[tuple[str, int], dict]:
+    """The source of each row of a fact table that cites a source declaration (decisions/language-fact-provenance.md),
+    by kind and record index in the order of facts.located_scalar_dataset: the declaration's fields overridden by
+    the row's source cells, validated as a sidecar default and a record of that row would be."""
+    tables = facts.named_dataset_decls(form)
+    declared = _declared_sources(tables, where)
     out, counts = {}, {}
     for decl in tables:
-        if facts.source_decl(decl):
+        if facts.source_decl(decl) or facts.fact_row_decl(decl) or facts.decide_decl(decl):
             continue
         kind, columns, rows, fields = facts.dataset_table(decl)
         start = counts.get(kind, 0)
@@ -174,6 +183,97 @@ def cited(form: dict, where: str) -> dict[tuple[str, int], dict]:
     return out
 
 
+def _resolve_decide_source_ref(ref: str, declared: dict[str, dict], at: str) -> dict:
+    if ref in declared:
+        return declared[ref]
+    src_name, sep, frag = ref.partition("#")
+    if sep:
+        if src_name not in declared:
+            msg = f"{at}: cites {src_name!r}, which is no source of its dataset"
+            raise facts.LoadError(msg, [Diagnostic("unknown_source", msg, at)])
+        if not frag.strip():
+            msg = f"{at}: source citation {ref!r} has an empty fragment"
+            raise facts.LoadError(msg, [Diagnostic("invalid_source", msg, at)])
+        base = declared[src_name]
+        pos = f"{base['position'].partition('#')[0]}#{frag}" if base["kind"] in FILE_KINDS else frag
+        return source(base | {"position": pos}, at)
+    msg = f"{at}: cites {ref!r}, which is no source of its dataset"
+    raise facts.LoadError(msg, [Diagnostic("unknown_source", msg, at)])
+
+
+def _decide_sources(
+    form: dict,
+    where: str,
+    decided_cells: dict[tuple[str, int, str | None], tuple[int, int]],
+    dataset: facts.DatasetForm | None,
+    authored_lines: dict[str, str],
+    path: Path,
+) -> dict[tuple[str, int, str | None], list[dict]]:
+    """Sources for values set by `decide` blocks (decisions/fact-origin-required.md §1)."""
+    tables = facts.named_dataset_decls(form)
+    declared = _declared_sources(tables, where)
+    cited_by_decl: dict[int, dict] = {}
+    for decl_index, decl in enumerate(tables):
+        if facts.decide_decl(decl) and isinstance(decl.get("source"), str):
+            cited_by_decl[decl_index] = _resolve_decide_source_ref(
+                decl["source"], declared, f"{where} decide {decl_index + 1}",
+            )
+    file_name = path.as_posix() if path.parent.parts else f"rezono/{path.name}"
+    out: dict[tuple[str, int, str | None], list[dict]] = {}
+    for cell_key, (decl_index, assign_index) in decided_cells.items():
+        decl = tables[decl_index]
+        assign_pointer = f"/decls/0/decls/{decl_index}/set/{assign_index}"
+        decl_pointer = f"/decls/0/decls/{decl_index}"
+        if dataset is not None and dataset.source is not None:
+            line_no = authored_lines.get(assign_pointer) or authored_lines.get(decl_pointer) or "1"
+            position = f"{dataset.source}:{line_no}"
+        else:
+            position = f"{file_name}#/module{assign_pointer}"
+        at = f"{where} decide {decl_index + 1}"
+        entry_sources = [source(
+            {"kind": "person", "name": decl["by"], "revision": decl["on"], "position": position},
+            at,
+        )]
+        if decl_index in cited_by_decl:
+            entry_sources.append(cited_by_decl[decl_index])
+        out[cell_key] = entry_sources
+    return out
+
+
+def _direct_inlined_decides(
+    judged: facts.FactSchema,
+    kind: str,
+    record: dict,
+    record_index: int,
+    decided_sources: dict[tuple[str, int, str | None], list[dict]],
+) -> deque[list[dict] | None]:
+    """Decide sources for direct inlined child records of `record`, in admission's walk order."""
+    queue: deque[list[dict] | None] = deque()
+    id_key = judged.kinds[judged.root(kind)].identifier
+    for name, value in record.items():
+        if name == id_key:
+            continue
+        s = judged.slot(kind, name)
+        if s is None:
+            break
+        if not s.inlined:
+            continue
+        decided = decided_sources.get((kind, record_index, name))
+        ident = judged.kinds[judged.root(s.target)].identifier if s.target else None
+        if isinstance(value, list):
+            for item in value:
+                if isinstance(item, dict):
+                    queue.append(decided)
+        elif s.multivalued and ident and isinstance(value, dict) and ident not in value:
+            if any(rest is not None and not isinstance(rest, dict) for rest in value.values()):
+                break
+            for _ in value:
+                queue.append(decided)
+        elif isinstance(value, dict):
+            queue.append(decided)
+    return queue
+
+
 def collected(entries) -> list[dict]:
     """One entry per RowRef, sources in canonical order without duplicates; conflicting reasons block."""
     rows = {}
@@ -194,14 +294,14 @@ def collected(entries) -> list[dict]:
 
 
 def file_entries(pack: Pack, path: Path, data: dict | None = None, *, metadata=UNSET,
-                 relative: Path | None = None) -> list[dict]:
+                 relative: Path | None = None, dataset=UNSET) -> list[dict]:
     companion = path.with_suffix(".sources.yaml")
     if metadata is UNSET and companion.exists():
         metadata = strict_yaml.read(companion)
-    dataset = facts.dataset_at(path)
+    resolved_dataset = facts.dataset_at(path) if dataset is UNSET else dataset
     return text_entries(pack, relative.as_posix() if relative is not None else path.name,
-                        "" if dataset is not None else path.read_text("utf-8"), data,
-                        metadata=metadata, dataset=dataset)
+                        "" if resolved_dataset is not None else path.read_text("utf-8"), data,
+                        metadata=metadata, dataset=resolved_dataset)
 
 
 def text_entries(pack: Pack, name: str, text: str, data: dict | None = None, *, metadata=UNSET,
@@ -217,9 +317,11 @@ def text_entries(pack: Pack, name: str, text: str, data: dict | None = None, *, 
     pointers = None
     authored_lines = {span["at"]: span["line"] for span in dataset.form["spans"]} if dataset and dataset.source else {}
     own_sources = {}
-    if isinstance(raw, dict) and raw.get("format") == facts.DATASET_FORMAT:
-        data, pointers = facts.located_scalar_dataset(judged, raw)
+    decided_sources: dict[tuple[str, int, str | None], list[dict]] = {}
+    if isinstance(raw, dict) and raw.get("format") in facts.DATASET_FORMATS:
+        data, pointers, decided_cells = facts.located_scalar_dataset_with_decides(judged, raw)
         own_sources = cited(raw, path.name)
+        decided_sources = _decide_sources(raw, path.name, decided_cells, dataset, authored_lines, path)
     elif data is None:
         data = raw
     if not isinstance(data, dict):
@@ -259,7 +361,8 @@ def text_entries(pack: Pack, name: str, text: str, data: dict | None = None, *, 
                     name, position = f"facts/{path.name}", str(nodes[i].start_mark.line + 1)
                 elif dataset is not None and dataset.source is not None:
                     pointer = pointers[kind][i].removeprefix("/module")
-                    name, position = dataset.source, authored_lines[f"{pointer}/0"]
+                    name = dataset.source
+                    position = authored_lines.get(f"{pointer}/0") or authored_lines[pointer]
                 else:
                     name = path.as_posix() if path.parent.parts else f"rezono/{path.name}"
                     position = f"{name}#{pointers[kind][i]}"
@@ -269,14 +372,28 @@ def text_entries(pack: Pack, name: str, text: str, data: dict | None = None, *, 
                 if default:
                     raise both(kind, i)
                 fallback = [([own], None)]
+            if not explicit and own is None and (kind, i, None) in decided_sources:
+                fallback = [(decided_sources[(kind, i, None)], None)]
+            direct_child_decides = (
+                _direct_inlined_decides(judged, kind, record, i, decided_sources)
+                if decided_sources else deque()
+            )
 
             def record_context(row_kind, row_key, parent):
+                parent_entries, depth, inherited_decided = parent
                 selected = choices(row_kind, row_key, None)
                 if selected and own is not None:
                     raise both(kind, i)
-                return selected or parent
+                slot_decided = direct_child_decides.popleft() if depth == 1 and direct_child_decides else None
+                if slot_decided is not None:
+                    entries = (selected or []) + [(slot_decided, None)]
+                    return entries, depth + 1, slot_decided
+                if inherited_decided is not None and selected is not None:
+                    return selected + [(inherited_decided, None)], depth + 1, inherited_decided
+                return selected or parent_entries, depth + 1, inherited_decided
 
             def row(table, values, row_kind, row_key, slot, context):
+                context_entries, depth, inherited_decided = context
                 ref = {"relation": table, "key": canonical_json(values)}
                 exact_key = (table, ref["key"])
                 if exact_key in exact:
@@ -291,14 +408,23 @@ def text_entries(pack: Pack, name: str, text: str, data: dict | None = None, *, 
                 selected = choices(row_kind, row_key, slot) if slot is not None else None
                 if selected and own is not None:
                     raise both(kind, i)
-                selected = selected or context
+                if depth == 1:
+                    decided = decided_sources.get((kind, i, slot))
+                    if decided is not None:
+                        selected = (selected or []) + [(decided, None)]
+                    else:
+                        selected = selected or context_entries
+                elif inherited_decided is not None and selected is not None:
+                    selected = selected + [(inherited_decided, None)]
+                else:
+                    selected = selected or context_entries
                 if not selected:
                     raise facts.LoadError(f"{companion.name}: no source for {row_kind} {row_key!r}")
                 for sources, reason in selected:
                     out.append({"row": ref, "sources": sources,
                                 **({"reason": reason} if reason else {})})
 
-            facts.walk(judged, kind, record, on_row=row, on_record=record_context, context=fallback)
+            facts.walk(judged, kind, record, on_row=row, on_record=record_context, context=(fallback, 0, None))
     if set(overrides) - matched:
         raise Unmatched(f"{companion.name}: source entry names no fact record or cell: {sorted(set(overrides) - matched, key=repr)}",
                         set(overrides) - matched)
@@ -309,12 +435,223 @@ def text_entries(pack: Pack, name: str, text: str, data: dict | None = None, *, 
 
 def read(pack: Pack, pack_dir: str | Path) -> list[dict]:
     pack_dir = Path(pack_dir)
-    return collected(e for path in facts.files(pack_dir)
-                     for e in file_entries(pack, path, relative=path.relative_to(pack_dir)))
+    return collected(e for path, dataset in facts.files_with_datasets(pack_dir)
+                     for e in file_entries(pack, path, relative=path.relative_to(pack_dir), dataset=dataset))
 
 
 def compile_sources(pack: Pack, pack_dir: str | Path) -> str:
     return canonical_json(read(pack, pack_dir)) + "\n"
+
+
+NO_ORIGIN = frozenset({"pack", "scenario"})
+ORIGIN_WARNING_CODE = "W113"
+ORIGIN_ERROR_CODE = "R053"
+ORIGIN_MESSAGES = {
+    ORIGIN_WARNING_CODE: (
+        "`{0}` `{1}` has no origin: only its file and line name it; give it an `@` citation, "
+        "a `decide` block, a `Decision` it is bound to, or an entry in its `.sources.yaml` "
+        "(kind `synthetic` for generated example data)"
+    ),
+    ORIGIN_ERROR_CODE: (
+        "`{0}` `{1}` has no origin, and a `rezono 1` pack refuses a fact without one; give it an `@` citation, "
+        "a `decide` block, a `Decision` it is bound to, or an entry in its `.sources.yaml` "
+        "(kind `synthetic` for generated example data)"
+    ),
+}
+
+
+@dataclass(frozen=True)
+class MissingOrigin:
+    """Base rows of one record at one place that have no origin (decisions/fact-origin-required.md)."""
+    kind: str
+    identifier: str
+    file: str
+    position: str
+    rows: tuple[dict, ...]
+
+    @property
+    def place(self) -> str:
+        if self.position.isdecimal():
+            return f"{self.file}:{self.position}"
+        if self.position.startswith((f"{self.file}#", f"{self.file}:")) or self.position == self.file:
+            return self.position
+        return f"{self.file}:{self.position}" if self.file and self.position else (self.file or self.position)
+
+    @property
+    def span(self) -> tuple[str, int, int] | None:
+        if self.file and self.position.isdecimal() and int(self.position) >= 1:
+            return (self.file, int(self.position), 1)
+        return None
+
+
+_GIT_LINE_SUFFIX = re.compile(r":L?[0-9]+(?:[-:]L?[0-9]+)*$")
+
+
+def _git_position_path(position: str) -> str:
+    """The file path part of a `git` source position, before `#...` or a trailing `:line` suffix."""
+    return _GIT_LINE_SUFFIX.sub("", position.partition("#")[0])
+
+
+def _own_fact_files(pack_dir: str | Path | None) -> list[tuple[tuple[str, ...], int]]:
+    """Resolved (or logical, for external symlinks) path parts and pack-relative depth of the pack's own fact files."""
+    if pack_dir is None:
+        return []
+    resolved_pack = Path(pack_dir).resolve()
+    out: list[tuple[tuple[str, ...], int]] = []
+    seen: set[tuple[tuple[str, ...], int]] = set()
+    for path in facts.source_paths(resolved_pack):
+        resolved = path.resolve()
+        if resolved.is_relative_to(resolved_pack):
+            candidate = (resolved.parts, len(resolved.relative_to(resolved_pack).parts))
+        elif path.is_relative_to(resolved_pack):
+            candidate = (path.parts, len(path.relative_to(resolved_pack).parts))
+        else:
+            continue
+        if candidate not in seen:
+            seen.add(candidate)
+            out.append(candidate)
+    return out
+
+
+def _is_own_fact_file(src: dict, own_files: list[tuple[tuple[str, ...], int]]) -> bool:
+    """A `git` source whose position before `#` or `:line` names one of this pack's own fact files."""
+    if src.get("kind") != "git" or not own_files:
+        return False
+    raw_path = _git_position_path(str(src.get("position", "")))
+    if not raw_path or raw_path.startswith(("/", "\\")):
+        return False
+    parts = tuple(p for p in Path(raw_path.replace("\\", "/")).parts if p not in ("", "."))
+    if not parts or ".." in parts:
+        return False
+    return any(len(parts) >= min_depth and file_parts[-len(parts):] == parts for file_parts, min_depth in own_files)
+
+
+def _has_origin_source(entry: dict, own_files: list[tuple[tuple[str, ...], int]]) -> bool:
+    return any(
+        src.get("kind") not in NO_ORIGIN and not _is_own_fact_file(src, own_files)
+        for src in entry.get("sources", [])
+    )
+
+
+def _record_key(pack: Pack, relation: str, key: list) -> tuple[str, str]:
+    owner = relation.split("__", 1)[0]
+    root = pack.root(owner) if owner in pack.kinds else owner
+    identifier = str(key[0]) if key else ""
+    return root, identifier
+
+
+def _decision_roots(pack: Pack) -> set[str]:
+    """std-decision's Decision root kind(s) present in this pack."""
+    return {
+        k for k, kind in pack.kinds.items()
+        if kind.cls == "Decision"
+        and (kind.module.startswith("std-decision:") or pack.meta.get("name") == "std-decision")
+    }
+
+
+def _source_places(entry: dict) -> list[tuple[str, str]]:
+    """Distinct (file, position) places of an entry's non-origin sources, in order."""
+    places: list[tuple[str, str]] = []
+    seen: set[tuple[str, str]] = set()
+    for src in entry.get("sources", []):
+        if src.get("kind") == "git":
+            pos = str(src.get("position", ""))
+            file_part = _git_position_path(pos)
+            line = pos[len(file_part) + 1:] if file_part and pos.startswith(f"{file_part}:") else ""
+            if line.isdecimal():
+                pair = (file_part, line)
+            else:
+                pair = (file_part or str(src.get("name", "")), pos)
+        else:
+            pair = (str(src.get("name", "")), str(src.get("position", "")))
+        if pair not in seen:
+            seen.add(pair)
+            places.append(pair)
+    return places or [(entry["row"]["relation"], "")]
+
+
+def missing_origins(pack: Pack, entries: list[dict], pack_dir: str | Path | None = None) -> list[MissingOrigin]:
+    """Main base rows without an origin, grouped by record and place (decisions/fact-origin-required.md §§1, 2, 4, 5)."""
+    if not entries:
+        return []
+    own_files = _own_fact_files(pack_dir)
+    parsed_rows = [(e["row"]["relation"], json.loads(e["row"]["key"])) for e in entries]
+    decision_roots = _decision_roots(pack)
+    decision_kinds = {k for k in pack.kinds if any(r in pack.ancestors(k) for r in decision_roots)}
+    decision_arrows = {
+        slot.table
+        for k, kind in pack.kinds.items()
+        if k not in decision_kinds
+        for slot in kind.slots.values()
+        if slot.arrow and slot.range in decision_kinds
+    }
+    bound = {_record_key(pack, rel, key) for rel, key in parsed_rows if rel in decision_arrows}
+    for root in decision_roots:
+        deciders = {str(key[0]) for rel, key in parsed_rows if rel == f"{root}__decider" and key}
+        dates = {str(key[0]) for rel, key in parsed_rows if rel == f"{root}__decided_on" and key}
+        bound |= {(root, identifier) for identifier in deciders & dates}
+
+    groups: dict[tuple[str, str, str, str], list[dict]] = {}
+    specific_kind: dict[tuple[str, str, str, str], str] = {}
+    for entry, (rel, key) in zip(entries, parsed_rows, strict=True):
+        rec_root, identifier = _record_key(pack, rel, key)
+        if (rec_root, identifier) in bound or _has_origin_source(entry, own_files):
+            continue
+        owner = rel.split("__", 1)[0]
+        for file, position in _source_places(entry):
+            group_key = (rec_root, identifier, file, position)
+            groups.setdefault(group_key, []).append(entry["row"])
+            current = specific_kind.get(group_key)
+            if owner in pack.kinds and (
+                current is None
+                or current not in pack.kinds
+                or len(pack.ancestors(owner)) > len(pack.ancestors(current))
+            ):
+                specific_kind[group_key] = owner
+            elif current is None:
+                specific_kind[group_key] = owner
+
+    out = [
+        MissingOrigin(
+            kind=specific_kind[group_key],
+            identifier=group_key[1],
+            file=group_key[2],
+            position=group_key[3],
+            rows=tuple(rows),
+        )
+        for group_key, rows in groups.items()
+    ]
+    out.sort(key=lambda item: (item.file, int(item.position) if item.position.isdecimal() else 0,
+                               item.position, item.kind, item.identifier))
+    return out
+
+
+def missing_origin_count(missing: Iterable[MissingOrigin]) -> int:
+    """Count of distinct main base rows (by RowRef) without an origin (decisions/fact-origin-required.md §5)."""
+    return len({(row["relation"], row["key"]) for item in missing for row in item.rows})
+
+
+def origin_diagnostics(pack: Pack, missing: Iterable[MissingOrigin]) -> tuple[Diagnostic, ...]:
+    """W113 warnings on rezono 0, R053 refusals from rezono 1 on (decisions/fact-origin-required.md §4)."""
+    refuse = pack.language_version != "0"
+    code = ORIGIN_ERROR_CODE if refuse else ORIGIN_WARNING_CODE
+    severity = "error" if refuse else "warning"
+    template = ORIGIN_MESSAGES[code]
+    return tuple(
+        Diagnostic(
+            code=code,
+            message=template.format(item.kind, item.identifier),
+            where=f"{item.kind} {item.identifier}",
+            span=item.span,
+            severity=severity,
+        )
+        for item in missing
+    )
+
+
+def format_origin_diagnostic(item: MissingOrigin, diagnostic: Diagnostic) -> str:
+    """One command-line line without severity prefix: `<code> <place>: <sentence>`."""
+    return f"{diagnostic.code} {item.place}: {diagnostic.message}"
 
 
 def canonical_sidecar(pack: Pack, path: Path, entries: list[dict]) -> str:

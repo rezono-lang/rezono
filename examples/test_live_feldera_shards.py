@@ -29,8 +29,10 @@ EXPECTED = {
     "tenant-capacity-interface": [
         "examples/test_feldera_rules.py::test_incremental_on_feldera_equals_batch[platform/tenant-capacity/interface]",
     ],
-    "platform": [
+    "platform-incremental": [
         "examples/test_feldera_rules.py::test_incremental_on_feldera_equals_batch[platform]",
+    ],
+    "platform-e2e": [
         "examples/test_platform_incremental_proof.py::test_platform_incremental_delta_and_witnesses_match_batch",
     ],
     "subsidy": [
@@ -63,7 +65,7 @@ def evidence(tmp_path):
 
 
 @pytest.mark.xfail(strict=True, raises=AssertionError, reason=(
-    "extra: compiler/ci/feldera_shards.py does not yet route "
+    "M3: compiler/ci/feldera_shards.py does not yet route "
     "compiler/tests/test_recorded_dates.py::test_independent_date_equality (compiler-bound shard) and "
     "examples/test_calculation_engine_parity.py::test_feldera_calculations_match_duckdb_and_checker[subsidy] (subsidy shard). "
     "Lift this mark in the pull request that routes the last of the two, with its selector in "
@@ -118,3 +120,43 @@ def test_partial_or_mismatched_shard_cannot_produce_evidence(evidence, mutation)
         subsidy.rename(inputs / "feldera-shard-4-subsidy")
     assert run("feldera_shards.py", "merge", inputs, output, 5).returncode != 0
     assert not output.exists()
+
+
+def test_platform_is_split_into_parallel_incremental_and_e2e_shards(tmp_path):
+    sys.path.insert(0, str(CI))
+    try:
+        import feldera_shards
+    finally:
+        sys.path.pop(0)
+
+    assert "platform" not in feldera_shards.SHARDS
+    assert feldera_shards.SHARDS["platform-incremental"] == (
+        "examples/test_feldera_rules.py::test_incremental_on_feldera_equals_batch[platform]",
+    )
+    assert feldera_shards.SHARDS["platform-e2e"] == (
+        "examples/test_platform_incremental_proof.py::test_platform_incremental_delta_and_witnesses_match_batch",
+    )
+
+    inputs = tmp_path / "shards"
+    output = tmp_path / "aggregate"
+    nodes = sorted(feldera_shards.EXPECTED)
+    for shard, selected in feldera_shards.SHARDS.items():
+        folder = inputs / f"feldera-shard-7-{shard}"
+        folder.mkdir(parents=True)
+        (folder / "collection.txt").write_text("\n".join(nodes) + "\n", encoding="utf-8")
+        chosen = run("feldera_shards.py", "select", shard, folder / "collection.txt")
+        assert chosen.returncode == 0, chosen.stderr
+        assert sorted(chosen.stdout.splitlines()) == sorted(selected)
+        (folder / "collected.txt").write_text("\n".join(selected) + "\n", encoding="utf-8")
+        suite = ET.Element("testsuite", name=shard)
+        for node in selected:
+            path, name = node.split("::")
+            ET.SubElement(suite, "testcase", classname=path[:-3].replace("/", "."), name=name)
+        ET.ElementTree(suite).write(folder / "results.xml", encoding="utf-8")
+
+    merged = run("feldera_shards.py", "merge", inputs, output, 7)
+    assert merged.returncode == 0, merged.stderr
+    report = ET.parse(output / "results.xml")
+    assert len(list(report.iter("testcase"))) == len(feldera_shards.EXPECTED)
+    verified = run("verify_feldera_run.py", output / "collected.txt", output / "results.xml")
+    assert verified.returncode == 0, verified.stderr

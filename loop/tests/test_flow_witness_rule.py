@@ -27,19 +27,6 @@ def judge(cases, witnesses):
     return rows["flow_case_verdict"], rows["flow_case_incomplete"]
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason=(
-        "M2: decisions/code-does-not-decide.md, row loop/flow_evidence.py. Add the kinds loop_flow_case (id, run, "
-        "source, destination, protocol, port, expected) and loop_flow_witness (id as the evidence reference, run, "
-        "case, source, destination, protocol, port, witness, outcome) to packs/std-loop and derive "
-        "flow_case_verdict(run, case, state, probe, hubble) with state confirmed or disagreement, and "
-        "flow_case_incomplete(run, case). A witness counts only with the case's run and exact tuple; exactly one "
-        "probe and one hubble witness are needed. loop/flow_evidence.py then moves to loop/tests as the oracle of "
-        "this rule. Today std-loop derives neither relation (AssertionError)."
-    ),
-)
 def test_flow_witnesses_are_judged_by_the_loop_pack():
     probe, hubble = witness("p", "probe", "allow"), witness("h", "hubble", "allow")
     assert judge([CASE], [probe, hubble]) == ({("r", "echo-ok", "confirmed", "p", "h")}, set())
