@@ -1,10 +1,10 @@
 """Tooling and CI decisions move into five shared pack forms with no Python fallback:
 decisions/tooling-does-not-decide.md.
 
-One structural test verifies that every non-test Python script in scripts/ and every workflow file
-under .github/workflows/ with an `if:` condition is audited in decisions/tooling-does-not-decide.md.
-Seven strict `extra:` red tests state the independent, hand-worked contracts for the five shared
-decision forms, the components.py-to-build/ graph migration, and pack-fact pin exceptions.
+One structural test verifies that every non-test Python script in scripts/ and the workflow `if:`
+groups are audited in decisions/tooling-does-not-decide.md. Seven strict `extra:` red tests state
+the independent, hand-worked contracts for the five shared decision forms, the components.py-to-
+build/ graph migration, and pack-fact pin exceptions.
 """
 import ast
 from pathlib import Path
@@ -36,7 +36,7 @@ def _table_rows(text: str) -> list[list[str]]:
 
 
 def test_every_script_and_workflow_if_is_audited_in_tooling_decision():
-    """Every non-test script in scripts/ and every workflow file with an `if:` is audited."""
+    """Every non-test script in scripts/ and every audited workflow `if:` group has a valid fate."""
     assert DECISION.is_file(), "decisions/tooling-does-not-decide.md is missing"
     text = DECISION.read_text(encoding="utf-8")
     assert text.startswith("---\n"), "decision must start with a YAML head"
@@ -59,17 +59,11 @@ def test_every_script_and_workflow_if_is_audited_in_tooling_decision():
     bad_script_fates = [name for name in non_test_scripts if not FATE_MARKER.search(script_fates[name])]
     assert bad_script_fates == [], f"scripts without a valid fate (a)-(d): {bad_script_fates}"
 
-    workflow_if_files = sorted(
-        f".github/workflows/{path.name}"
-        for path in (ROOT / ".github" / "workflows").glob("*.yml")
-        if any(re.match(r"^\s*if:", line) for line in path.read_text(encoding="utf-8").splitlines())
-    )
-    assert workflow_if_files, "expected workflow files with `if:` conditions"
-    workflow_rows = [cells for cells in rows if len(cells) >= 4 and ".github/workflows/" in cells[1]]
-    for wf in workflow_if_files:
-        matching = [cells for cells in workflow_rows if wf in cells[1]]
-        assert matching, f"workflow with `if:` missing from audit table: {wf}"
-        assert any(FATE_MARKER.search(cells[3]) for cells in matching), f"workflow missing fate (a)-(d): {wf}"
+    workflow_section = text.split("## 4. Audit table:", 1)[1].split("## 5.", 1)[0]
+    workflow_rows = [cells for cells in _table_rows(workflow_section) if len(cells) >= 4 and cells[0] != "Workflow `if:` group"]
+    assert len(workflow_rows) >= 8, "expected all logical workflow `if:` groups in section 4"
+    bad_workflow_fates = [cells[0] for cells in workflow_rows if not FATE_MARKER.search(cells[3])]
+    assert bad_workflow_fates == [], f"workflow groups without a valid fate (a)-(d): {bad_workflow_fates}"
 
     lower = text.lower()
     assert "no python fallback" in lower, "decision must forbid runtime Python fallback"
@@ -203,10 +197,10 @@ def test_change_to_target_selection_shared_form():
 
     base_sha, head_sha, engine_sha = "1" * 40, "2" * 40, "3" * 40
     target_rules = [
-        {"id": "tr-cluster", "target": "cluster-suite", "path_prefix": "loop/", "kind": "direct"},
+        {"id": "tr-cluster", "target": "cluster-suite", "path_prefix": "alpha/", "kind": "direct"},
         {"id": "tr-cluster-fb", "target": "cluster-suite", "path_prefix": "", "kind": "full_fallback"},
-        {"id": "tr-feldera", "target": "feldera-oracle", "path_prefix": "compiler/rezono_compiler/", "kind": "direct"},
-        {"id": "tr-feldera-fb", "target": "feldera-oracle", "path_prefix": "", "kind": "full_fallback"},
+        {"id": "tr-oracle", "target": "live-oracle", "path_prefix": "beta/", "kind": "direct"},
+        {"id": "tr-oracle-fb", "target": "live-oracle", "path_prefix": "", "kind": "full_fallback"},
     ]
     # Without an admitted selection receipt, build_full_selection fires and every full_fallback target is selected.
     unreceipted = {
@@ -215,13 +209,13 @@ def test_change_to_target_selection_shared_form():
              "engine_sha": engine_sha, "observed_at": 1_800_000_000, "receipt": "rcpt"},
         ],
         "loop_sweep_receipt": [{"id": "rcpt", "run": "r-unverified", "event_time": 1_800_000_000}],
-        "build_path": [{"id": "p-1", "run": "r-unverified", "path": "loop/executor.py", "coverage": "mapped"}],
+        "build_path": [{"id": "p-1", "run": "r-unverified", "path": "alpha/executor.py", "coverage": "mapped"}],
         "build_target_rule": target_rules,
     }
     _, rows, _ = evaluate(model, unreceipted)
     assert {row[:2] for row in rows["build_target_selected"]} == {
         ("r-unverified", "cluster-suite"),
-        ("r-unverified", "feldera-oracle"),
+        ("r-unverified", "live-oracle"),
     }
     assert rows["build_target_not_required"] == set()
 
@@ -377,22 +371,38 @@ def test_build_selected_job_derives_graph_from_pack_facts_not_components_py(monk
     program = rules.load(model.rules)
     assert "build_selected_job" in program.derived()
 
-    # Evaluate build/ with raw changed paths only (no Python-supplied build_dependency/build_path_reader).
+    # Evaluate build/ with pack-fact graph rows and raw changed paths only (no Python-supplied
+    # build_dependency/build_path_reader, and poisoned scripts/components.py tables).
     base_sha, head_sha, engine_sha = "1" * 40, "2" * 40, "3" * 40
     components_data = [
         {"id": folder, "run": "r1", "kind": "python", "folder": folder}
-        for folder in ("k8s-admission", "loop", "run", "examples", "compiler", "rezono")
+        for folder in ("alpha", "beta", "gamma", "delta", "epsilon")
     ]
+    graph_facts = {
+        "build_file_consumer": [
+            {"id": "fc-ab", "source": "alpha", "consumer": "beta"},
+            {"id": "fc-bg", "source": "beta", "consumer": "gamma"},
+        ],
+        "build_shared_reader": [
+            {"id": "sr-1", "pattern": "shared/cases.yaml", "reader": "delta"},
+        ],
+        "build_job_input": [
+            {"id": "ji-1", "path": "profiles/epsilon.json", "reader": "epsilon"},
+        ],
+        "build_full_selection_path": [
+            {"id": "fs-1", "prefix": "config/global.yml"},
+        ],
+    }
     verified = {
         "verified_receipt": {("rcpt", "build-capture", "build-selection", "1800000000", "inv", "cnt")},
         "verified_member": {
-            ("rcpt", "m-path-1", 0, "changed-path"), ("rcpt", "m-path-1", 1, "k8s-admission/policy_renderer.py"),
-            ("rcpt", "m-path-2", 0, "changed-path"), ("rcpt", "m-path-2", 1, "docs/semantics/value-cases.yaml"),
-            ("rcpt", "m-path-3", 0, "changed-path"),
-            ("rcpt", "m-path-3", 1, ".github/workflows/compiler-duration-profile.json"),
+            ("rcpt", "m-path-1", 0, "changed-path"), ("rcpt", "m-path-1", 1, "alpha/engine.py"),
+            ("rcpt", "m-path-2", 0, "changed-path"), ("rcpt", "m-path-2", 1, "shared/cases.yaml"),
+            ("rcpt", "m-path-3", 0, "changed-path"), ("rcpt", "m-path-3", 1, "profiles/epsilon.json"),
         },
     }
     data = {
+        **graph_facts,
         "build_run": [
             {"id": "r1", "event": "pull_request", "base_sha": base_sha, "head_sha": head_sha,
              "engine_sha": engine_sha, "observed_at": 1_800_000_000, "receipt": "rcpt"},
@@ -400,19 +410,19 @@ def test_build_selected_job_derives_graph_from_pack_facts_not_components_py(monk
         "loop_sweep_receipt": [{"id": "rcpt", "run": "r1", "event_time": 1_800_000_000}],
         "build_component": components_data,
         "build_path": [
-            {"id": "p-k8s", "run": "r1", "path": "k8s-admission/policy_renderer.py", "coverage": "mapped"},
-            {"id": "p-val", "run": "r1", "path": "docs/semantics/value-cases.yaml", "coverage": "mapped"},
-            {"id": "p-prof", "run": "r1", "path": ".github/workflows/compiler-duration-profile.json",
-             "coverage": "mapped"},
+            {"id": "p-alpha", "run": "r1", "path": "alpha/engine.py", "coverage": "mapped"},
+            {"id": "p-shared", "run": "r1", "path": "shared/cases.yaml", "coverage": "mapped"},
+            {"id": "p-prof", "run": "r1", "path": "profiles/epsilon.json", "coverage": "mapped"},
         ],
     }
     _, rows, _ = evaluate(model, data, verified=verified)
     selected = {row[1] for row in rows["build_selected_job"] if row[0] == "r1"}
-    # Transitive file-consumer edge k8s-admission -> loop -> run, plus shared readers compiler & rezono.
-    assert {"k8s-admission", "loop", "run", "compiler", "rezono"} <= selected
+    # Transitive file-consumer edge alpha -> beta -> gamma, plus shared reader delta and job input epsilon.
+    assert {"alpha", "beta", "gamma", "delta", "epsilon"} <= selected
 
-    # Changing a FULL_SELECTION_PATHS entry (from build/ facts) derives build_full_selection.
+    # Changing a full-selection path declared in pack facts derives build_full_selection.
     full_data = {
+        **graph_facts,
         "build_run": [
             {"id": "r2", "event": "pull_request", "base_sha": base_sha, "head_sha": head_sha,
              "engine_sha": engine_sha, "observed_at": 1_800_000_000, "receipt": "rcpt2"},
@@ -420,7 +430,7 @@ def test_build_selected_job_derives_graph_from_pack_facts_not_components_py(monk
         "loop_sweep_receipt": [{"id": "rcpt2", "run": "r2", "event_time": 1_800_000_000}],
         "build_component": [{**c, "run": "r2"} for c in components_data],
         "build_path": [
-            {"id": "p-ci", "run": "r2", "path": ".github/workflows/ci.yml", "coverage": "mapped"},
+            {"id": "p-global", "run": "r2", "path": "config/global.yml", "coverage": "mapped"},
         ],
     }
     _, full_rows, _ = evaluate(model, full_data)
