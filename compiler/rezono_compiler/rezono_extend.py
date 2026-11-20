@@ -10,7 +10,8 @@ def refuse_derived(at: str, refuse: Refuse) -> None:
     refuse(at, "a derived value is not lowered yet", "§5.4")
 
 
-def validate(decl: dict, at: str, imported: bool, refuse: Refuse, *, extended_format: bool = False) -> None:
+def validate(decl: dict, at: str, imported: bool, refuse: Refuse, *,
+             extended_format: bool = False, rezono_1: bool = False) -> None:
     """Check the form. `rezono_table` lowers tables and `rezono_calc` lowers calculated values against the pack."""
     from . import rezono_calc
 
@@ -30,6 +31,8 @@ def validate(decl: dict, at: str, imported: bool, refuse: Refuse, *, extended_fo
                 refuse_derived(here, refuse)
         elif imported:
             refuse(at, "a decision table in a module of an imported pack is not lowered yet", "§9.1")
+        elif rezono_1 and table.get("table") == "priority":
+            refuse(here, "`table priority` is removed in `rezono 1` (R028); use `table first` instead", "§9.1")
         elif table.get("table") not in ("unique", "first", "priority", "collect"):
             refuse(here, f"a table `{table.get('table')}` is not lowered yet", "§9.1")
         elif "totality" in derived:
