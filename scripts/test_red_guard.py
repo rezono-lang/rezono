@@ -194,16 +194,16 @@ def table_form_cases():
          top + b"pytestmark = pytest.mark.parametrize('x', [1, 2])\n\n\ndef test_a(x):\n    assert x\n",
          b"[1, 2]", b"[1]", "test_a", "2", False),
         ("a table derived from another",
-         top + b"BASE = [1, 2]\nCASES = BASE + [3]\n\n\n@pytest.mark.parametrize('x', CASES)\ndef test_a(x):\n"
+         top + b"BASE = [1, 2]\nCASES = BASE + [3]\n\n\n\x40pytest.mark.parametrize('x', CASES)\ndef test_a(x):\n"
          b"    assert x\n", b"BASE = [1, 2]", b"BASE = [1]", "test_a", "2", "CASES"),
         ("a module-level += that goes",
-         top + b"CASES = [1]\nCASES += [2]\n\n\n@pytest.mark.parametrize('x', CASES)\ndef test_a(x):\n    assert x\n",
+         top + b"CASES = [1]\nCASES += [2]\n\n\n\x40pytest.mark.parametrize('x', CASES)\ndef test_a(x):\n    assert x\n",
          b"CASES += [2]\n", b"", "test_a", "2", "CASES"),
         ("a module-level append that goes",
-         top + b"CASES = [1]\nCASES.append(2)\n\n\n@pytest.mark.parametrize('x', CASES)\ndef test_a(x):\n"
+         top + b"CASES = [1]\nCASES.append(2)\n\n\n\x40pytest.mark.parametrize('x', CASES)\ndef test_a(x):\n"
          b"    assert x\n", b"CASES.append(2)\n", b"", "test_a", "2", "CASES"),
         ("a table read through .values()",
-         top + b"T = {'a': 1, 'b': 2}\n\n\n@pytest.mark.parametrize('x', T.values(), ids=T)\ndef test_a(x):\n"
+         top + b"T = {'a': 1, 'b': 2}\n\n\n\x40pytest.mark.parametrize('x', T.values(), ids=T)\ndef test_a(x):\n"
          b"    assert x\n", b"'b': 2", b"'c': 3", "test_a", "'b'", "T"),
     ]
     for label, before, old, new, test, case, name in forms:
@@ -220,7 +220,7 @@ def table_form_cases():
     if errors or f"CHANGED {path}::test_a reads the changed rows" not in notes:
         raise AssertionError(f"a helper that returns a table: errors {errors}, notes {notes}")
     print("REPORTED: a test that calls a helper whose table changes")
-    deleted = top + b"T = {'a': 1, 'b': 2}\n\n\n@pytest.mark.parametrize('x', T)\ndef test_a(x):\n    assert x\n"
+    deleted = top + b"T = {'a': 1, 'b': 2}\n\n\n\x40pytest.mark.parametrize('x', T)\ndef test_a(x):\n    assert x\n"
     errors, notes = review([Change(path, "M", deleted, deleted.replace(b"\n\n\n@", b"\ndel T['b']\n\n\n@"))],
                            planner=True)
     if f"REMOVED {path}::test_a['b']" not in notes:
