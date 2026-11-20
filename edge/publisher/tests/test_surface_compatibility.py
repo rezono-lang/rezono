@@ -186,18 +186,6 @@ def test_compatibility_names_the_class_against_the_newest_main(tmp_path):
     assert publish.newest_main(archive, "minimal")["id"] == "m-3"
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason=(
-        "M3: decisions/language-surface-compatibility.md: Builds on "
-        "test_compatibility_names_the_class_against_the_newest_main. In publish.plan, before anything is written, "
-        "refuse a main publication whose compatibility class is major with Blocked naming R033 and the first major "
-        "change by its element id in the earlier bundle, when the newest main manifest's bundle has a pack.version "
-        "of 1.0.0 or later (section 4); a pack at 0.y.z publishes. The acceptance of section 5, deprecation dates "
-        "(section 6) and the language migration (section 8) are later steps."
-    ),
-)
 def test_a_removed_or_renamed_public_slot_is_refused_with_r033(tmp_path):
     folder = with_facts(tmp_path / "stable", "1.0.0")
     assert publish.publish(epoch_of(folder, 1), store.FileStore(tmp_path / "archive"), ROLES)["id"] == "m-1"
@@ -221,18 +209,6 @@ def test_a_removed_or_renamed_public_slot_is_refused_with_r033(tmp_path):
     assert publish.newest_main(archive, "minimal")["id"] == "m-2"
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason=(
-        "M3: decisions/language-surface-compatibility.md: Builds on "
-        "test_a_removed_or_renamed_public_slot_is_refused_with_r033. In publish.plan, before anything is written, "
-        "refuse a main publication that changes the definition of a pack whose newest main manifest's bundle has a "
-        "pack.version of 1.0.0 or later, when the new pack.version moves less far than the compatibility class "
-        "(section 4: a new major version for major, a new minor or major version for minor, any higher version for "
-        "patch), with Blocked naming the class and both versions."
-    ),
-)
 def test_a_pack_version_that_moves_less_than_the_class_is_refused(tmp_path):
     folder = with_facts(tmp_path / "stable", "1.0.0")
     assert publish.publish(epoch_of(folder, 1), store.FileStore(tmp_path / "archive"), ROLES)["id"] == "m-1"
