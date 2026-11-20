@@ -125,7 +125,9 @@ COUNTER_CASES = {
            "build/rules/selection.dl. Write in build/ (schema/tasks.yaml and rules/tasks.dl). The same rule turns "
            "loop/tests/test_build_queue_count.py--test_build_queue_count[empty] green: remove its mark in the same "
            "PR. Today the rules count the submitted pull records, so an omitted, emptied or unadmitted listing and "
-           "a bare reading still give a planner slot (MissingVerifiedQueue).",
+           "a bare reading still give a planner slot (MissingVerifiedQueue). The rule of #1102 passes this test in "
+           "the loop suite, but the test publishes nine times and needs more than the 115 s fast check on CI, so "
+           "a task branch for it stays red until the test is lighter or split.",
 )
 def test_planner_slot_needs_verified_pull_inventory(tmp_path):
     records = submitted(tmp_path / "admitted")
