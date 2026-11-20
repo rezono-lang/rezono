@@ -395,7 +395,7 @@ def check_schema(doc: dict, *, versioned: bool = True, allow_legacy: bool = Fals
     """Validate a schema document (§2.1–§2.3, §3.6, §3.7) and return its schema id.
 
     `versioned=False` is a reader that does not implement versioned kinds: it rejects the schema, never ignores
-    the member (V07). `allow_legacy=True` accepts a pre-rename sealed publication's `reckon` member.
+    the member (V07). `allow_legacy=True` accepts a pre-rename sealed publication's legacy schema key (`LEGACY_SCHEMA_KEY`).
     """
     if not isinstance(doc, dict):
         _fail("schema", "a schema document is an object")
