@@ -43,7 +43,7 @@ import subprocess
 import sys
 import tempfile
 import time
-from collections.abc import Iterable
+from collections.abc import Mapping
 from contextlib import contextmanager
 from pathlib import Path
 
@@ -91,12 +91,14 @@ def roles_of(e: publish.Epoch, roles: dict[str, str], kind: str, key: str) -> tu
 
 def verify_status_readers(e: publish.Epoch, roles: dict[str, str], variant: dict) -> None:
     """Verify variant `status_readers` through the independent checker before writing a manifest or diagnosis."""
+    if not isinstance(roles, Mapping):
+        raise publish.Blocked(f"{publish.ACCESS_CHECK}: malformed roles")
     complete_roles = frozenset(role for role, mode in roles.items() if mode == access.COMPLETE)
     role_full: dict[str, frozenset[str]] = {}
-    raw_status = variant.get("status_readers", ()) if isinstance(variant, dict) else ()
+    raw_status = variant.get("status_readers", ()) if isinstance(variant, Mapping) else ()
     filtered_status = (
-        sorted({r for r in raw_status if isinstance(r, str) and roles.get(r) == access.FILTERED})
-        if not isinstance(raw_status, (str, bytes)) and isinstance(raw_status, Iterable)
+        sorted({r for r in raw_status if isinstance(r, str) and r and roles.get(r) == access.FILTERED})
+        if isinstance(raw_status, (list, tuple))
         else []
     )
     all_relations = frozenset(e.rows)

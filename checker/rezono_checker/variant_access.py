@@ -2,15 +2,16 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Mapping, Set as AbstractSet
+from collections.abc import Mapping, Set as AbstractSet
 
 
-def _string_set(value: object) -> frozenset[str] | None:
-    """Return a frozenset of strings, or None when `value` is not an iterable of strings."""
-    if isinstance(value, (str, bytes)) or not isinstance(value, Iterable):
+def _string_set(value: object, *, allow_set: bool = True) -> frozenset[str] | None:
+    """Return a frozenset of non-empty strings from a concrete non-mapping collection, or None."""
+    allowed = (list, tuple, AbstractSet) if allow_set else (list, tuple)
+    if not isinstance(value, allowed) or isinstance(value, Mapping):
         return None
     items = list(value)
-    if not all(isinstance(item, str) for item in items):
+    if not all(isinstance(item, str) and bool(item) for item in items):
         return None
     return frozenset(items)
 
@@ -28,15 +29,15 @@ def check_variant_status_readers(
     - either belong to `complete_roles`, or appear in `role_full` and cover every relation
       in `all_relations` (`status_reader_incomplete`).
 
-    Malformed inputs fail closed with an error finding.
+    Malformed inputs and an empty `all_relations` set fail closed with an error finding.
     """
     if not isinstance(variant, Mapping):
         return [{"severity": "error", "reason": "status_reader_incomplete", "detail": "malformed variant"}]
 
-    readers = _string_set(variant.get("readers", ()))
-    status_readers = _string_set(variant.get("status_readers", ()))
-    required = _string_set(all_relations)
-    complete = _string_set(complete_roles)
+    readers = _string_set(variant.get("readers", ()), allow_set=False)
+    status_readers = _string_set(variant.get("status_readers", ()), allow_set=False)
+    required = _string_set(all_relations, allow_set=True)
+    complete = _string_set(complete_roles, allow_set=True)
 
     if status_readers is None:
         return [{"severity": "error", "reason": "status_reader_incomplete", "detail": "malformed status_readers"}]
@@ -47,8 +48,8 @@ def check_variant_status_readers(
             {"severity": "error", "reason": "status_reader_not_reader", "role": role, "detail": "malformed readers"}
             for role in sorted(status_readers)
         ]
-    if required is None:
-        return [{"severity": "error", "reason": "status_reader_incomplete", "detail": "malformed all_relations"}]
+    if required is None or not required:
+        return [{"severity": "error", "reason": "status_reader_incomplete", "detail": "missing or empty all_relations"}]
     if complete is None:
         return [{"severity": "error", "reason": "status_reader_incomplete", "detail": "malformed complete_roles"}]
     if not isinstance(role_full, Mapping):
@@ -73,7 +74,7 @@ def check_variant_status_readers(
                 "detail": "status reader has no checker-derived full relation set",
             })
             continue
-        covered = _string_set(role_full[role])
+        covered = _string_set(role_full[role], allow_set=True)
         if covered is None:
             findings.append({
                 "severity": "error",
