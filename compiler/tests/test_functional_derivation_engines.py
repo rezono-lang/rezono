@@ -1,7 +1,8 @@
 """Co-located NOT NULL functional derivation views `(key..., state, reason, value)` on DuckDB, Soufflé (oracle for
-the non-rational fragment), and Feldera (incremental target engine): known, unknown (`no_value`), not_applicable
-(`empty`), invalid (`multiple_values` with all competing candidates), strict four-state aggregation (Appendix A.3),
-and exact rational `(n BIGINT, d BIGINT)` columns (decisions/language-rezono-1.md, sections 2, 4, 5.2, 5.4 and 8)."""
+the non-rational fragment), and Feldera (incremental target engine): known, unknown (`no_match`), not_applicable
+(`no_match` for optional `.one()`), invalid (`multiple_values` with all competing candidates), strict four-state
+aggregation (Appendix A.3), and exact rational `(n BIGINT, d BIGINT)` columns
+(decisions/language-rezono-1.md, sections 2, 4, 5.2, 5.4 and 8)."""
 
 from __future__ import annotations
 
@@ -44,8 +45,8 @@ def _rule(rid: str, head_rel: str, head_terms: list[str], body: list[dict], *,
 
 
 def _non_rational_program() -> dict:
-    """Covers known, unknown (no_value), not_applicable (empty), invalid (multiple_values), boolean functional
-    values, conflict_policy publish vs block, downstream Bool reads, and strict 4-state sum aggregation."""
+    """Covers known, unknown (`no_match`), not_applicable (`no_match`), invalid (`multiple_values`), boolean
+    functional values, conflict_policy publish vs block, downstream Bool reads, and strict 4-state sum aggregation."""
     return {
         "format": "rezono.rules/2",
         "pack": "sample",
@@ -72,7 +73,7 @@ def _non_rational_program() -> dict:
                 "name": "opt_val", "role": "functional", "module": "core", "explain": "on_demand",
                 "key": [_col("id")], "domain": "item",
                 "value": _col("value", "string"), "conflict_policy": "publish",
-                "empty_state": "not_applicable", "empty_reason": "empty",
+                "empty_state": "not_applicable", "empty_reason": "no_match",
             },
             {
                 "name": "flag_val", "role": "functional", "module": "core", "explain": "on_demand",
@@ -88,7 +89,7 @@ def _non_rational_program() -> dict:
                 "name": "opt_score", "role": "functional", "module": "core", "explain": "on_demand",
                 "key": [_col("id")], "domain": "item",
                 "value": _col("value", "integer"), "conflict_policy": "publish",
-                "empty_state": "not_applicable", "empty_reason": "empty",
+                "empty_state": "not_applicable", "empty_reason": "no_match",
             },
             {
                 "name": "group_total", "role": "functional", "module": "core", "explain": "on_demand",
@@ -194,10 +195,11 @@ FACTS = {
     strict=True,
     raises=MissingFunctionalDerivationEngines,
     reason="M3: decisions/language-rezono-1.md: Lower rezono.rules/2 functional derivations to one co-located NOT NULL "
-           "`(key..., state, reason, value)` view on DuckDB and Feldera (with rational `(n BIGINT, d BIGINT)` columns "
-           "using calc_sql/udf.rs, never inside DECLARE RECURSIVE VIEW, LEFT JOIN over closed domain, and strict "
-           "four-state aggregate propagation per Appendix A.3), plus Soufflé test oracle lowering for the non-rational "
-           "fragment (`string`/`integer`/`boolean`) in compiler/tests/souffle.py. Read sections 2, 4, 5.2, 5.4 and 8. "
+           "`(key..., state, reason, value)` view on DuckDB and Feldera (with `no_match` for empty candidate sets, "
+           "`multiple_values` for conflicts, rational `(n BIGINT, d BIGINT)` columns using calc_sql/udf.rs, never "
+           "inside DECLARE RECURSIVE VIEW, LEFT JOIN over closed domain, and strict four-state aggregate propagation "
+           "per Appendix A.3), plus Soufflé test oracle lowering for the non-rational fragment "
+           "(`string`/`integer`/`boolean`) in compiler/tests/souffle.py. Read sections 2, 4, 5.2, 5.4 and 8. "
            "Waits for compiler/tests/test_functional_derivation_ir.py--test_functional_derivation_ir_and_stratification "
            "and examples/test_calculation_engine_parity.py.",
 )
@@ -288,13 +290,13 @@ def test_functional_derivation_duckdb_souffle_and_feldera():
         pair_rows = {(r[0], r[1]): (r[2], r[3], r[4]) for r in duckdb_results.get("pair_val", ())}
         if pair_rows.get(("g1", "k_known")) != ("known", "", "v1"):
             problems.append(f"pair_val known mismatch: {pair_rows.get(('g1', 'k_known'))!r}")
-        if pair_rows.get(("g1", "k_missing"), (None, None))[0:2] != ("unknown", "no_value"):
+        if pair_rows.get(("g1", "k_missing"), (None, None))[0:2] != ("unknown", "no_match"):
             problems.append(f"pair_val unknown mismatch: {pair_rows.get(('g1', 'k_missing'))!r}")
         if pair_rows.get(("g1", "k_conflict"), (None, None))[0:2] != ("invalid", "multiple_values"):
             problems.append(f"pair_val invalid mismatch: {pair_rows.get(('g1', 'k_conflict'))!r}")
 
         opt_rows = {r[0]: (r[1], r[2]) for r in duckdb_results.get("opt_val", ())}
-        if opt_rows.get("i_ok1") != ("known", "") or opt_rows.get("i_empty") != ("not_applicable", "empty"):
+        if opt_rows.get("i_ok1") != ("known", "") or opt_rows.get("i_empty") != ("not_applicable", "no_match"):
             problems.append(f"opt_val mismatch: {opt_rows!r}")
 
         if duckdb_results.get("resolved_pair") != {("g1", "k_known", "v1")}:

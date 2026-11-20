@@ -1,15 +1,14 @@
 """Independent checker verification for rezono.rules/2 functional derivations: multi-key `outcome_total` /
-`outcome_state`, `conflict_policy` (`publish` vs `block`), closure coverage over `domain` + candidate/guard inputs,
-strict four-state `_fold`, `may_read` / `may_read_full` refusal + filtered-role `access.py` full-read requirement
-(preserving the checker/publisher boundary), proof-tree reconstruction (`proof.py`), and `transition.py` support
+`outcome_state` over mandatory closed domains (refusing open domains), `no_match` / `multiple_values` reason codes,
+`conflict_policy` (`publish` vs `block`), closure coverage over `domain` + candidate/guard inputs, strict four-state
+`_fold`, `may_read` / `may_read_full` refusal + filtered-role `access.py` full-read requirement (preserving the
+checker/publisher boundary), proof-tree reconstruction (`proof.py`), and `transition.py` support
 (decisions/language-rezono-1.md, sections 2, 3.5, 4, 5.4 and 8)."""
 
 from __future__ import annotations
 
 import ast
 from copy import deepcopy
-import hashlib
-import json
 from pathlib import Path
 
 import pytest
@@ -138,7 +137,8 @@ def _checker_imports_publisher() -> list[str]:
     strict=True,
     raises=MissingFunctionalDerivationChecker,
     reason="M3: decisions/language-rezono-1.md: Extend checker/rezono_checker/ for rezono.rules/2 `role: functional`: "
-           "generalize outcome_total/outcome_state to multi-key closed domains in check.py, allow `invalid` with "
+           "generalize outcome_total/outcome_state to multi-key closed domains (refusing open domains) in check.py/"
+           "rules.py, verify `no_match` (empty candidate set) and `multiple_values` (conflict), allow `invalid` with "
            "complete conflict witness under conflict_policy=publish while failing rezono:proofs under block, cover "
            "domain + candidate/guard inputs in closure.py, align evaluate._fold to strict four-state propagation "
            "(Appendix A.3), refuse may_read AND may_read_full on functional/calc in rules.py, enforce full-read "
@@ -185,7 +185,7 @@ def test_checker_verifies_functional_derivation_and_access():
         "cand": [["g1", "k1", "v1"], ["g1", "k3", "v1"], ["g1", "k3", "v2"]],
         "pick": [
             ["g1", "k1", "known", "", "v1"],
-            ["g1", "k2", "unknown", "no_value", ""],
+            ["g1", "k2", "unknown", "no_match", ""],
             ["g1", "k3", "invalid", "multiple_values", ""],
         ],
     }
@@ -194,7 +194,7 @@ def test_checker_verifies_functional_derivation_and_access():
         _cand_witness("g1", "k3", "v1"),
         _cand_witness("g1", "k3", "v2"),
         _pick_witness("g1", "k1", "known", "", "v1", ["v1"]),
-        _pick_witness("g1", "k2", "unknown", "no_value", "", []),
+        _pick_witness("g1", "k2", "unknown", "no_match", "", []),
         _pick_witness("g1", "k3", "invalid", "multiple_values", "", ["v1", "v2"]),
     ]
 
@@ -216,7 +216,7 @@ def test_checker_verifies_functional_derivation_and_access():
     # 2c. Multi-key outcome_total: dropping one domain key row from `pick` must fail with outcome_total.
     missing_row = deepcopy(base_rows)
     missing_row["pick"] = [row for row in missing_row["pick"] if row[:2] != ["g1", "k2"]]
-    missing_w = [w for w in base_witnesses if w["conclusion"] != _ref("pick", "g1", "k2", "unknown", "no_value", "")]
+    missing_w = [w for w in base_witnesses if w["conclusion"] != _ref("pick", "g1", "k2", "unknown", "no_match", "")]
     rep_missing = _epoch(publish_doc, missing_row, missing_w)
     if "outcome_total" not in _error_reasons(rep_missing):
         problems.append(f"missing multi-key domain row did not trigger outcome_total: {rep_missing['findings']}")
@@ -225,7 +225,7 @@ def test_checker_verifies_functional_derivation_and_access():
     forged_known = deepcopy(base_rows)
     forged_known["pick"] = [
         ["g1", "k1", "known", "", "v1"],
-        ["g1", "k2", "unknown", "no_value", ""],
+        ["g1", "k2", "unknown", "no_match", ""],
         ["g1", "k3", "known", "", "v1"],
     ]
     forged_known_w = [
@@ -246,6 +246,16 @@ def test_checker_verifies_functional_derivation_and_access():
     rep_drop = _epoch(publish_doc, dropped_cand, dropped_cand_w)
     if "underived_row" not in _error_reasons(rep_drop):
         problems.append(f"dropping candidate row from cand was not caught by closure (underived_row): {rep_drop['findings']}")
+
+    # 2f. Open domain refusal: checker_rules.load_rules must refuse a functional relation over an open domain.
+    open_domain_doc = deepcopy(publish_doc)
+    open_domain_doc["relations"][0]["world"] = "open"
+    try:
+        checker_rules.load_rules(open_domain_doc)
+    except ValueError:
+        pass
+    else:
+        problems.append("checker_rules.load_rules accepted a functional relation over an open domain")
 
     # 3. rules.py: refuse may_read and may_read_full depending on functional or calc.
     for access_rel, cols, head_terms in (
@@ -328,23 +338,23 @@ def test_checker_verifies_functional_derivation_and_access():
             {"name": "item", "role": "base", "key": [_col("id")]},
             {"name": "item__tag", "role": "base", "key": [_col("id"), _col("tag")]},
             {
-                "name": "tag_fn", "role": "functional",
+                "name": "item_tag", "role": "functional",
                 "key": [_col("id")], "domain": "item",
                 "value": _col("value", "string"), "conflict_policy": "publish",
             },
             {"name": "bad_tag", "role": "derived", "key": [_col("id")], "invariant": True},
         ],
         "rules": [
-            _rule("tag_fn_r", "tag_fn", ["?x", "?t"], [_lit("item", "?x"), _lit("item__tag", "?x", "?t")], stratum="1"),
-            _rule("bad_tag_r", "bad_tag", ["?x"], [_lit("tag_fn", "?x", "known", "", "blocked", stratum="1")], stratum="2"),
+            _rule("item_tag_r", "item_tag", ["?x", "?t"], [_lit("item", "?x"), _lit("item__tag", "?x", "?t")], stratum="1"),
+            _rule("bad_tag_r", "bad_tag", ["?x"], [_lit("item_tag", "?x", "known", "", "blocked", stratum="1")], stratum="2"),
         ],
     }
 
     def _state(sid: str, tag: str) -> dict:
         digest = sha256_hex(canonical_bytes([{"key": ["i1", tag]}]))
         w = {
-            "conclusion": _ref("tag_fn", "i1", "known", "", tag),
-            "rule_id": "tag_fn_r",
+            "conclusion": _ref("item_tag", "i1", "known", "", tag),
+            "rule_id": "item_tag_r",
             "bindings": [{"variable": "?x", "value": "i1"}],
             "premises": [
                 {"row": _ref("item", "i1"), "polarity": "positive", "stratum": 0},
@@ -360,7 +370,7 @@ def test_checker_verifies_functional_derivation_and_access():
             "rows": {
                 "item": [("i1",)],
                 "item__tag": [("i1", tag)],
-                "tag_fn": [("i1", "known", "", tag)],
+                "item_tag": [("i1", "known", "", tag)],
                 "bad_tag": [],
             },
             "witnesses": [w],

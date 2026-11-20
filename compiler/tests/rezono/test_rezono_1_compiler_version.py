@@ -1,7 +1,8 @@
 """Compiler version switch and contracts for rezono 1: rezono.module/5, side-by-side rezono 0 and rezono 1 packs,
-pack-wide version enforcement (R027), missing rezono line refusal (R028), table priority refusal in rezono 1 (R028),
-and pack language version in contracts/bundle.yaml / bundle/schema-bundle.json
-(decisions/language-rezono-1.md, sections 1, 3.2, 5.8 and 8)."""
+pack-wide version enforcement (R027), missing rezono line refusal (R028), table priority and dotted `use` refusal
+in rezono 1 (R028, while keeping table priority silent with no W107 in rezono 0), and pack language version plus
+derived-property metadata (`kind`, `property`) in contracts/bundle.yaml / bundle/schema-bundle.json
+(decisions/language-rezono-1.md, sections 1, 2, 3.2, 5.8, 5.9 and 8)."""
 
 from __future__ import annotations
 
@@ -53,8 +54,9 @@ def _add_reason_messages(directory: Path) -> None:
     )
 
 
-def _form(fmt: str, *, rezono: str | None, pack_name: str = "minimal", decls: list[dict]) -> dict:
-    module: dict = {"pack": pack_name, "use": [], "decls": decls}
+def _form(fmt: str, *, rezono: str | None, pack_name: str = "minimal", decls: list[dict],
+          use: list[dict] | None = None) -> dict:
+    module: dict = {"pack": pack_name, "use": use if use is not None else [], "decls": decls}
     if rezono is not None:
         module["rezono"] = rezono
     spans = [{"at": at, "line": "1", "start": "0", "end": "1"} for at in rezono_module.place_pointers(module)]
@@ -132,29 +134,47 @@ NOTE_KIND = {
     strict=True,
     raises=MissingRezono1CompilerVersion,
     reason="M3: decisions/language-rezono-1.md: Admit rezono.module/5 (module.rezono == '1', excluding rezono 0-only "
-           "constructs) in contracts/rezono-module.yaml; accept rezono 0 and rezono 1 side by side in "
-           "compiler/rezono_compiler/rezono_module.py with pack-wide version consistency (R027), missing rezono line "
-           "refusal in rezono 1 (R028), and table priority refusal in rezono 1 (R028, hint: table first); and record "
-           "the pack language version ('0' or '1') on PackInfo in contracts/bundle.yaml and bundle/schema-bundle.json. "
-           "Read sections 1, 3.2, 5.8 and 8.",
+           "constructs including rules pipe blocks, table priority, and dotted `use` pack names) in "
+           "contracts/rezono-module.yaml; accept rezono 0 (keeping table priority silent with no W107) and rezono 1 "
+           "side by side in compiler/rezono_compiler/rezono_module.py with pack-wide version consistency (R027), "
+           "missing rezono line refusal in rezono 1 (R028), and table priority refusal in rezono 1 (R028, hint: "
+           "table first); and record pack language version ('0' or '1') on PackInfo plus derived-property metadata "
+           "(`kind`, `property` for `<k>_<d>` relations) on DerivedRelation in contracts/bundle.yaml and "
+           "bundle/schema-bundle.json. Read sections 1, 2, 3.2, 5.8, 5.9 and 8.",
 )
 def test_compiler_admits_rezono_module_5_and_enforces_pack_version(tmp_path):
-    # Counter-case: a rezono 0 module with `table priority` still validates against rezono.module/1 and compiles.
+    # Counter-case: a rezono 0 module with `table priority` still validates against rezono.module/1 and compiles
+    # silently (no W107 warning).
     v0_form = _form("rezono.module/1", rezono="0", decls=[LEVEL_ENUM, ITEM_KIND, PRIORITY_EXTEND])
     assert _validate("rezono-module.yaml", v0_form, "ModuleForm") == []
     v0_dir = Path(shutil.copytree(FIXTURE, tmp_path / "pack_v0"))
     _add_reason_messages(v0_dir)
     v0_entry = _write_form_module(v0_dir, "items", v0_form)
     _write_metadata(v0_dir, rezono=[v0_entry])
-    v0_files = emit.compile_pack(pack.read(v0_dir))
+    v0_model = pack.read(v0_dir)
+    assert not any("W107" in str(w) for w in getattr(v0_model, "warnings", ())), getattr(v0_model, "warnings", ())
+    v0_files = emit.compile_pack(v0_model)
     v0_bundle = json.loads(v0_files["bundle/schema-bundle.json"])
     assert _validate("bundle.yaml", v0_bundle, "Bundle") == []
 
     problems: list[str] = []
 
-    # 1. contracts/bundle.yaml + bundle/schema-bundle.json must record pack language version ("0" for rezono 0).
+    # 1. contracts/bundle.yaml + bundle/schema-bundle.json must record pack language version ("0" for rezono 0)
+    #    and admit derived-property metadata (`kind`, `property` on `<k>_<d>` DerivedRelation).
     if _pack_language_version(v0_bundle) != "0":
         problems.append(f"rezono 0 bundle.pack did not record language version '0': {v0_bundle['pack']!r}")
+    prop_rel = {
+        "id": "item_tier",
+        "kind": "item",
+        "property": "tier",
+        "module": "items",
+        "explain": "on_demand",
+        "columns": [{"name": "item", "type": "string"}, {"name": "state", "type": "string"},
+                    {"name": "reason", "type": "string"}, {"name": "value", "type": "string"}],
+    }
+    prop_errs = _validate("bundle.yaml", prop_rel, "DerivedRelation")
+    if prop_errs:
+        problems.append(f"contracts/bundle.yaml DerivedRelation rejected <k>_<d> kind/property metadata: {prop_errs}")
 
     # 2. contracts/rezono-module.yaml must admit rezono.module/5 (with rezono == "1") and reject invalid v5 forms.
     valid_v5 = _form("rezono.module/5", rezono="1", decls=[PANEL_KIND])
@@ -173,6 +193,9 @@ def test_compiler_admits_rezono_module_5_and_enforces_pack_version(tmp_path):
         prio_v5 = _form("rezono.module/5", rezono="1", decls=[LEVEL_ENUM, ITEM_KIND, PRIORITY_EXTEND])
         if not _validate("rezono-module.yaml", prio_v5, "ModuleForm"):
             problems.append("contracts/rezono-module.yaml admitted `table priority` inside rezono.module/5")
+        dotted_use_v5 = _form("rezono.module/5", rezono="1", use=[{"use": "std.money"}], decls=[PANEL_KIND])
+        if not _validate("rezono-module.yaml", dotted_use_v5, "ModuleForm"):
+            problems.append("contracts/rezono-module.yaml admitted dotted pack name in `use` inside rezono.module/5")
 
     # 3. Compiler accepts a rezono 1 pack side by side with rezono 0 and records language version "1" in bundle.
     v1_dir = Path(shutil.copytree(FIXTURE, tmp_path / "pack_v1"))
