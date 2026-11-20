@@ -70,7 +70,7 @@ classes:
     attributes:
       id: {identifier: true}
       listing: {range: BuildQueueListing, required: true}
-      number: {range: integer, minimum_value: 0, required: true}
+      number: {required: true}
       state: {range: BuildQueuePullState, required: true}
       draft: {range: BuildQueueDraft, required: true}
       base: {required: true}

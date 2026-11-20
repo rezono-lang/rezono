@@ -26,7 +26,7 @@
 import { canonicalJson } from '../../viewer/src/lib/canon.ts';
 import { outputSchema, schemaId, type AnswerSchema } from './answer-schema.ts';
 import { isError, type Checked } from './check.ts';
-import { inPart, NOT_READ_IN_FULL, sameDim, slotType, snake, typeOf, type Schema, type SlotDef, type Ty, type TypeDef } from './schema.ts';
+import { baseTypeOf, inPart, NOT_READ_IN_FULL, sameDim, slotType, snake, typeOf, type Schema, type SlotDef, type Ty, type TypeDef } from './schema.ts';
 import type { Declared } from './table.ts';
 import { isAsk, isCheck, type Expr } from './tree.ts';
 
@@ -705,8 +705,7 @@ function cellValue(v: V, relation: string, key: string): Cell {
 /** Canonicalizes an integer record key so equivalent spellings address the same row. */
 function canonicalKey(schema: Schema, kind: string, key: string): string {
 	const typeName = schema.kinds[kind]?.id?.type ?? 'Text';
-	const of = schema.types?.[typeName]?.of ?? typeName;
-	if (of === 'Integer' && /^-?[0-9]+$/.test(key)) return BigInt(key).toString();
+	if (baseTypeOf(schema, typeName) === 'Integer' && /^-?[0-9]+$/.test(key)) return BigInt(key).toString();
 	return key;
 }
 

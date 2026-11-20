@@ -6,10 +6,25 @@ tenant_monthly_cost_term(t, s, r, o, n) :-
     tenant_catalog_offer__item(o, i), tenant_catalog_offer__size(o, z),
     tenant_catalog_offer__monthly_cents(o, n).
 
+.decl tenant_monthly_cost_priced(request_item: symbol)
+tenant_monthly_cost_priced(r) :-
+    tenant_monthly_cost_term(_, _, r, _, _).
+
+.decl tenant_monthly_cost_unknown(tenant: symbol, request_item: symbol, reason: symbol)
+tenant_monthly_cost_unknown(t, r, "offer-missing") :-
+    tenant_request_item__tenant(r, t),
+    !tenant_monthly_cost_priced(r).
+
+.decl tenant_monthly_cost_has_unknown(tenant: symbol)
+tenant_monthly_cost_has_unknown(t) :-
+    tenant_monthly_cost_unknown(t, _, _).
+
 .decl tenant_monthly_cost(tenant: symbol, cents: number, unit: symbol)
 tenant_monthly_cost(t, total, "EUR-cent") :-
     tenant_service_request__tenant(_, t),
+    !tenant_monthly_cost_has_unknown(t),
     total = sum n : { tenant_monthly_cost_term(t, _, _, _, n) }.
 
 .output tenant_monthly_cost_term
+.output tenant_monthly_cost_unknown
 .output tenant_monthly_cost

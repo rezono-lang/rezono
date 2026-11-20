@@ -12,6 +12,7 @@ tenant_delivery_request_order(t, s, submitted) :-
 tenant_delivery_predecessor(t, s, prior) :-
     tenant_delivery_request_order(t, s, submitted),
     tenant_delivery_request_order(t, prior, earlier),
+    prior != s,
     utc_instant(earlier) < utc_instant(submitted).
 
 tenant_delivery_predecessor(t, s, prior) :-

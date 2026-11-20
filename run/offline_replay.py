@@ -94,6 +94,8 @@ def _dispatch_authorized(
 ) -> bool:
     if not isinstance(approval, Mapping) or not _APPROVAL_VALIDATOR.is_valid(dict(approval)):
         raise ValueError("approval does not match schema")
+    if type(cost_micros) is not int or not (0 <= cost_micros <= pack.BIGINT[1]):
+        raise ValueError("cost_micros must be within the supported integer range")
 
     cap_micros = min(approval["budget_cents"] * 10_000, pack.BIGINT[1])
     sources = {
@@ -282,7 +284,7 @@ def replay(
         and isinstance(installation, Mapping)
         and installation.get("ready") is True
         and installation.get("request_id") == request_id
-        and plan.get("request_id", request_id) == request_id
+        and plan.get("request_id") == request_id
     )
 
     raw_inventory = scenario.get("inventory", ())
@@ -290,9 +292,9 @@ def replay(
         raise ValueError("scenario inventory must be a list of pages")
     sweep_id = "after"
     delete_receipt = scenario.get("delete_receipt")
-    cleanup = (
+    cleanup_evidence = (
         _cleanup_status(raw_inventory, sweep_id, plan_hash, plan_hash, delete_receipt, event_us)
-        if order_outcome == "success"
+        if delivered
         else "unknown"
     )
 
@@ -303,9 +305,9 @@ def replay(
             install_obs.append(("delivery_observed", request_id))
             if isinstance(delete_receipt, Mapping) and delete_receipt.get("accepted") is True:
                 install_obs.append(("resources_deleted", str(delete_receipt.get("id"))))
-                if cleanup == "cleaned":
+                if cleanup_evidence == "cleaned":
                     install_obs.append(("inventory_cleaned", sweep_id))
-    install_trace, _ = _run_phase(
+    install_trace, install_outcome = _run_phase(
         loop_execute,
         plan_hash,
         _INSTALL_STEPS,
@@ -314,6 +316,11 @@ def replay(
     )
 
     operations = [step for step_list in (*order_trace, *install_trace) for step in step_list]
+    cleanup = (
+        cleanup_evidence
+        if install_outcome == "success" and "delete_resources" in operations and "list_inventory" in operations
+        else "unknown"
+    )
     return {
         "plan_hash": plan_hash,
         "cost_micros": cost_micros,

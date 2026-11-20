@@ -452,19 +452,24 @@ def type_bases(form: dict) -> dict[str, str]:
 
 def integer_type_names(tnames: Iterable[str], bases: Mapping[str, str],
                        known_ints: Set[str] = frozenset()) -> set[str]:
-    """Return the type names whose base chain in `bases` reaches `integer` or `known_ints`."""
+    """Return the type names whose base chain in `bases` reaches `integer` or an external `known_ints`."""
     ints: set[str] = set()
     for tname in tnames:
         cur: str | None = bases.get(tname)
         seen: set[str] = {tname}
         while cur:
-            if cur == "integer" or cur in known_ints:
+            if cur == "integer":
                 ints.add(tname)
                 break
             if cur in seen:
                 break
             seen.add(cur)
-            cur = bases.get(cur)
+            if cur in bases:
+                cur = bases[cur]
+                continue
+            if cur in known_ints:
+                ints.add(tname)
+            break
     return ints
 
 
