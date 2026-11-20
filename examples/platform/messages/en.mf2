@@ -2,6 +2,7 @@
 ---
 arrow.total = Each {$kind} has exactly one {$arrow}.
 arrow.partial = Each {$kind} has at most one {$arrow}.
+arrow.many.total = Each {$kind} has at least one {$arrow}.
 attribute.total = Each {$kind} has exactly one {$attribute}.
 attribute.partial = Each {$kind} has at most one {$attribute}.
 is_a = Each {$kind} is a {$parent}.

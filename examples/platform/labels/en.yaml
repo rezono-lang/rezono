@@ -37,6 +37,11 @@ artifact: artifact
 artifact.for_service: for service
 artifact.built_by: built by
 artifact.signed: signed
+artifact_signature: artifact signature
+artifact_signature.artifact: artifact
+artifact_signature.scan: scan
+signature_scan: signature scan
+signature_scan.covers: covers
 provides: provides
 provider: provider
 asks: asks
@@ -67,7 +72,10 @@ recovery_reached: recovery reached
 recovery_reaches_out: recovery reaches out
 authenticates: authenticates
 unauthenticated_target: unauthenticated target
+scanned: scanned
+could_verify: could verify
 verified: verified
+supply_unknown: supply unknown
 unverified_supply: unverified supply
 build_reaches_tenant: build reaches tenant
 vendor_licence_notice: supplier licence notice
