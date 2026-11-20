@@ -346,50 +346,53 @@ def schema_names(pack_dir: Path) -> dict[str, set[str]]:
     return out
 
 
-def _integer_type_names(tnames: list[str] | set[str], bases: dict[str, str]) -> set[str]:
-    """Return the type names whose typeof chain in `bases` reaches `integer`."""
-    ints: set[str] = set()
-    for tname in tnames:
-        cur, seen = bases.get(tname), set()
-        while cur and cur not in seen:
-            if cur == "integer":
-                ints.add(tname)
-                break
-            seen.add(cur)
-            cur = bases.get(cur)
-    return ints
-
-
 def _integer_types(local: dict[str, Module], packs: dict[str, Imported] | None,
                    pinned: dict[str, dict[str, set[str]]]) -> dict[str, set[str]]:
-    """Scalar types in local or pinned LinkML schemas whose typeof chain reaches integer."""
+    """Scalar types in local or pinned LinkML and Rezono schemas whose typeof chain reaches integer."""
     out: dict[str, set[str]] = {}
+    pack_map = packs or {}
+    pinned_ints: dict[str, set[str]] = {}
+    for n in dependency_order(pack_map, list(pinned)) if pack_map else []:
+        bases: dict[str, str] = {}
+        by_module: dict[str, list[str]] = {}
+        for f in sorted((pack_map[n].dir / "schema").rglob("*.yaml")):
+            try:
+                doc = strict_yaml.read(f) or {}
+            except (OSError, ValueError, yaml.YAMLError):
+                continue
+            if isinstance(doc, dict) and isinstance(doc.get("types"), dict):
+                mid = f.relative_to(pack_map[n].dir / "schema").with_suffix("").as_posix()
+                for tname, body in doc["types"].items():
+                    if isinstance(body, dict) and isinstance(body.get("typeof"), str):
+                        bases[str(tname)] = body["typeof"]
+                        by_module.setdefault(mid, []).append(str(tname))
+        for d in rezono_module.declared(pack_map[n].meta, pack_map[n].dir, [], reject_undeclared=False):
+            form = rezono_module.effective_form(pack_map[n].dir, d, [])
+            if form is None:
+                continue
+            for tname, base in rezono_module.type_bases(form).items():
+                bases[tname] = base
+                by_module.setdefault(d.id, []).append(tname)
+        known_ints = {tname for dep in pack_map[n].imports for tname in pinned_ints.get(dep, ())}
+        pack_ints: set[str] = set()
+        for mid, tnames in by_module.items():
+            if ints := rezono_module.integer_type_names(tnames, bases, known_ints):
+                pack_ints.update(ints)
+                if n in pinned:
+                    out[f"{n}:{mid}"] = ints
+        pinned_ints[n] = pack_ints
     local_bases = {
         str(tname): body.typeof
         for m in local.values()
         for tname, body in (m.sv.schema.types or {}).items()
         if body.typeof
     }
+    local_known = {tname for n in pinned for tname in pinned_ints.get(n, ())}
     for mid, m in local.items():
-        if ints := _integer_type_names({str(tname) for tname in (m.sv.schema.types or {})}, local_bases):
+        if ints := rezono_module.integer_type_names(
+            {str(tname) for tname in (m.sv.schema.types or {})}, local_bases, local_known
+        ):
             out[mid] = ints
-    for n in pinned:
-        bases: dict[str, str] = {}
-        by_module: dict[str, list[str]] = {}
-        for f in sorted((packs[n].dir / "schema").rglob("*.yaml")):
-            try:
-                doc = strict_yaml.read(f) or {}
-            except (OSError, ValueError, yaml.YAMLError):
-                continue
-            if isinstance(doc, dict) and isinstance(doc.get("types"), dict):
-                mid = f.relative_to(packs[n].dir / "schema").with_suffix("").as_posix()
-                for tname, body in doc["types"].items():
-                    if isinstance(body, dict) and isinstance(body.get("typeof"), str):
-                        bases[str(tname)] = body["typeof"]
-                        by_module.setdefault(mid, []).append(str(tname))
-        for mid, tnames in by_module.items():
-            if ints := _integer_type_names(tnames, bases):
-                out[f"{n}:{mid}"] = ints
     return out
 
 

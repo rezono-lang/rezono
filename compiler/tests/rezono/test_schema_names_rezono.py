@@ -152,3 +152,97 @@ def test_rezono_consumer_imports_rezono_only_pack(tmp_path, prefixed):
     bundle = json.loads(compile_dir(consumer, root / "out")["bundle/schema-bundle.json"])
     assert ("grant.role", "role", True) in {(a["id"], a["target"], a["required"]) for a in bundle["arrows"]}
     assert any(s["module"] == "lib:access" and s["file"] == "rezono/access.rezono" for s in bundle["schemas"])
+
+
+@pytest.mark.parametrize("prefixed", [False, True])
+def test_rezono_consumer_numeric_limits_on_imported_rezono_integer_types(tmp_path, prefixed):
+    """Numeric limits accept integer units and aliases imported from a Rezono-only pack without schema/*.yaml."""
+    root = tmp_path / ("limits-prefixed" if prefixed else "limits-plain")
+    lib = root / "lib"
+    (lib / "labels").mkdir(parents=True)
+    (lib / "pack.yaml").write_text("name: lib\nversion: '0.1.0'\ndefault_language: nl\nimports: []\n", encoding="utf-8")
+    (lib / "labels" / "nl.yaml").write_text("{}\n", encoding="utf-8")
+    rezono_v2(
+        lib,
+        [
+            {"unit": "Cents", "is": "money minor EUR"},
+            {"type": "Whole", "base": "Int"},
+            {"type": "TagCode", "base": "Text"},
+        ],
+        pack_name="lib",
+        name="types",
+    )
+    assert not (lib / "schema").exists()
+
+    consumer = Path(shutil.copytree(FIXTURE, root / "main"))
+    meta = yaml.safe_load((consumer / "pack.yaml").read_bytes())
+    meta["imports"] = [{"name": "lib", "path": "../lib", "sha256": modules.pack_hash(lib)}]
+    (consumer / "pack.yaml").write_bytes(yaml.safe_dump(meta, sort_keys=False).encode("utf-8"))
+    add(consumer / "labels" / "nl.yaml", "grant: toekenning\ngrant.fee: tarief\ngrant.quota: quotum\n")
+    prefix = "acc." if prefixed else ""
+    use = [{"use": "lib", "as": "acc"}] if prefixed else [{"use": "lib"}]
+    rezono_v2(
+        consumer,
+        [
+            {
+                "kind": "Grant",
+                "world": "closed",
+                "slots": [
+                    {"slot": "fee", "type": f"{prefix}Cents", "constraints": [{"minimum": "0"}]},
+                    {"slot": "quota", "type": f"{prefix}Whole", "constraints": [{"minimum": "1"}]},
+                ],
+                "derived": [],
+            },
+        ],
+        pack_name="minimal",
+        name="grants",
+        use=use,
+    )
+
+    loaded = pack.read(consumer)
+    grant_slots = loaded.kinds["grant"].slots
+    assert grant_slots["fee"].sql_type == "BIGINT" and grant_slots["fee"].minimum == 0
+    assert grant_slots["quota"].sql_type == "BIGINT" and grant_slots["quota"].minimum == 1
+
+
+def test_local_chained_integer_aliases_are_recognized(tmp_path):
+    """Chained scalar aliases over Int are recognized as integer types across local Rezono modules, and cycles stop."""
+    pack_dir = Path(shutil.copytree(FIXTURE, tmp_path / "chained"))
+    rezono_v2(
+        pack_dir,
+        [
+            {"type": "BaseWhole", "base": "Int"},
+            {"type": "MidWhole", "base": "BaseWhole"},
+            {"type": "LoopA", "base": "LoopB"},
+            {"type": "LoopB", "base": "LoopA"},
+        ],
+        pack_name="minimal",
+        name="types_a",
+    )
+    rezono_v2(
+        pack_dir,
+        [
+            {"type": "LeafWhole", "base": "MidWhole"},
+            {
+                "kind": "Item",
+                "world": "closed",
+                "slots": [
+                    {"slot": "amount", "type": "LeafWhole", "constraints": [{"minimum": "0"}]},
+                    {"slot": "bad", "type": "LoopA", "constraints": [{"minimum": "0"}]},
+                ],
+                "derived": [],
+            },
+        ],
+        pack_name="minimal",
+        name="types_b",
+    )
+    meta = yaml.safe_load((pack_dir / "pack.yaml").read_bytes())
+    errors: list[str] = []
+    rezono_module.lower_pack(pack_dir, meta, "minimal", {}, errors)
+    limit_errors = [err for err in errors if "integer limits need an Int slot" in err]
+    assert len(limit_errors) == 1
+    assert "types_b.rezono:14:" in limit_errors[0]
+    assert rezono_module.integer_type_names(
+        ["BaseWhole", "MidWhole", "LeafWhole", "LoopA"],
+        {"BaseWhole": "integer", "MidWhole": "BaseWhole", "LeafWhole": "MidWhole", "LoopA": "LoopB", "LoopB": "LoopA"},
+    ) == {"BaseWhole", "MidWhole", "LeafWhole"}
