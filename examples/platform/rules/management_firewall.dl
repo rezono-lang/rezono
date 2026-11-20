@@ -1,0 +1,67 @@
+.decl managed_router_scope(mgmt: symbol, run: symbol, router: symbol, table: symbol)
+managed_router_scope(mgmt, run, router, table) :-
+    router_management__run(mgmt, run),
+    router_management__router(mgmt, router),
+    router_management__table(mgmt, table).
+
+.decl complete_router_sweep(sweep: symbol, run: symbol, router: symbol, table: symbol)
+complete_router_sweep(sweep, run, router, table) :-
+    router_sweep__run(sweep, run),
+    router_sweep__router(sweep, router),
+    router_sweep__table(sweep, table),
+    router_sweep__complete(sweep, complete),
+    complete = TRUE.
+
+.decl has_complete_router_sweep(run: symbol, router: symbol, table: symbol)
+has_complete_router_sweep(run, router, table) :-
+    complete_router_sweep(_, run, router, table).
+
+.decl managed_router_unknown(run: symbol, router: symbol, table: symbol)
+managed_router_unknown(run, router, table) :-
+    managed_router_scope(_, run, router, table),
+    !has_complete_router_sweep(run, router, table).
+
+.decl scoped_router_desired(desired: symbol, run: symbol, router: symbol, table: symbol, source: symbol, destination: symbol, protocol: symbol, first_port: number, last_port: number)
+scoped_router_desired(desired, run, router, table, source, destination, protocol, first_port, last_port) :-
+    router_desired__run(desired, run),
+    router_desired__router(desired, router),
+    router_desired__table(desired, table),
+    router_desired__source(desired, source),
+    router_desired__destination(desired, destination),
+    router_desired__protocol(desired, protocol),
+    router_desired__first_port(desired, first_port),
+    router_desired__last_port(desired, last_port).
+
+.decl scoped_router_seen(seen: symbol, run: symbol, router: symbol, table: symbol, source: symbol, destination: symbol, protocol: symbol, first_port: number, last_port: number)
+scoped_router_seen(seen, run, router, table, source, destination, protocol, first_port, last_port) :-
+    router_seen__run(seen, run),
+    router_seen__router(seen, router),
+    router_seen__table(seen, table),
+    router_seen__source(seen, source),
+    router_seen__destination(seen, destination),
+    router_seen__protocol(seen, protocol),
+    router_seen__first_port(seen, first_port),
+    router_seen__last_port(seen, last_port).
+
+.decl router_desired_tuple(run: symbol, router: symbol, table: symbol, source: symbol, destination: symbol, protocol: symbol, first_port: number, last_port: number)
+router_desired_tuple(run, router, table, source, destination, protocol, first_port, last_port) :-
+    scoped_router_desired(_, run, router, table, source, destination, protocol, first_port, last_port).
+
+.decl router_seen_tuple(run: symbol, router: symbol, table: symbol, source: symbol, destination: symbol, protocol: symbol, first_port: number, last_port: number)
+router_seen_tuple(run, router, table, source, destination, protocol, first_port, last_port) :-
+    scoped_router_seen(_, run, router, table, source, destination, protocol, first_port, last_port).
+
+.decl managed_router_drift(direction: symbol, allowance: symbol, sweep: symbol)
+managed_router_drift("missing", desired, sweep) :-
+    managed_router_scope(_, run, router, table),
+    complete_router_sweep(sweep, run, router, table),
+    scoped_router_desired(desired, run, router, table, source, destination, protocol, first_port, last_port),
+    !router_seen_tuple(run, router, table, source, destination, protocol, first_port, last_port).
+managed_router_drift("extra", seen, sweep) :-
+    managed_router_scope(_, run, router, table),
+    complete_router_sweep(sweep, run, router, table),
+    scoped_router_seen(seen, run, router, table, source, destination, protocol, first_port, last_port),
+    !router_desired_tuple(run, router, table, source, destination, protocol, first_port, last_port).
+
+.output managed_router_drift
+.output managed_router_unknown
