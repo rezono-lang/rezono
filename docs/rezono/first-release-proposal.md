@@ -335,15 +335,23 @@ Making `rezono 1` the **first publicly released language** while keeping `rezono
 
 ### 12. Cold-read check
 
-Before merging this proposal, an independent reviewer unfamiliar with Rezono will read the following five representative derivations from [Section 3](#3-the-platform-trial-examplesplatformrulescoredl) and state in one sentence per derivation what it means. All five sentences will be recorded verbatim below, including any misunderstandings.
+An independent reviewer unfamiliar with Rezono (fresh context, no repository access, no language docs) read five representative derivations from [Section 3](#3-the-platform-trial-examplesplatformrulescoredl) (`needs` with `chosen`, `Product.newest_day`, `Service.runs` with `Service.pin`, `flow_from_step`, and `unauthenticated_target`) and stated in one sentence per derivation what it means. All five sentences are recorded verbatim below, including every caveat and uncertainty:
 
-1. `needs(a: Service, f: Function): Service` (with `chosen`) — multi-key functional derivation with explicit domain `over asks(a, f)`, `.one()` and `unless` testing `is n/a`.
-2. `Product.newest_day: Int` — derived property on a kind using `.where(...)` and `.max(...)`.
-3. `Service.runs: Release` (with `Service.pin`) — derived property combining `.where(...).one()` with `unless` precedence.
-4. `flow_from_step(a: Service, b: Service): Int` — multi-key functional arithmetic derivation over `over needs_service(a, b)`.
-5. `unauthenticated_target(target: Service, fn: Function): Bool` — `Bool` derivation combining `.where(...).any(...)`, enum comparison and negation of a derived Boolean property.
+1. **(`needs` with `chosen`):** "For every `(a, f)` pair satisfying `asks(a, f)`, `chosen(a, f)` finds the optional single `provider` in `Choice` matching `a` and `f`, and `needs(a, f)` returns that `chosen(a, f)` provider when present or otherwise falls back to the unique `Service` matching `provides(it, f, _)` (which looks risky with `.one()` if zero or multiple services provide `f`)."
+2. **(`Product.newest_day`):** "This extends every `Product` `p` with a derived `newest_day` integer equal to the maximum `released_on_day` among `p`'s stable `Release` records, though it is unclear what happens if `p` has no stable releases since the return type is `Int` rather than `Int?`."
+3. **(`Service.runs` with `Service.pin`):** "This extends every `Service` `s` with an optional `pin` release looked up from `Pin` for `s`, and a `runs` release that uses `pin` when present or otherwise selects the unique stable `Release` for `s.product` released on `s.product.newest_day` (notably qualifying `it.product` explicitly here and assuming a single stable release on that day)."
+4. **(`flow_from_step`):** "For each pair of services `(a, b)` where `needs_service(a, b)` holds, `flow_from_step(a, b)` evaluates to the greater of `a.step` and `b.step`."
+5. **(`unauthenticated_target`):** "`unauthenticated_target(target, fn)` is true when `fn.open_by_design` is `no`, `target.authenticates` is false, and at least one element of `crossing` with `dst = target` satisfies `provides(target, fn, port)` (where lowercase `crossing` looks like a collection or relation rather than a capitalized entity type, and `port` appears to be implicitly drawn from that `crossing` element)."
 
-_Pending cold-read review before merge._
+#### What matched and what surprised the cold reader
+
+| Derivation | Matched intended semantics | What surprised or stayed opaque without docs |
+|---|---|---|
+| 1. `needs` / `chosen` | Correctly read `over asks(a, f)`, optional `Service?`, `.where(...)`, `unless` precedence, and `provides(it, f, _)`. | Read `.one()` as "risky" on 0 or 2+ matches rather than producing explicit `unknown no_value` / `invalid multiple_values` states with candidate witnesses; also read `not (chosen(a, f) is n/a)` simply as "when present", missing that it also forwards `invalid` conflicts on `chosen`. |
+| 2. `Product.newest_day` | Correctly read `extend p: Product`, `.where(...)`, and `.max(released_on_day)`. | Expected `Int` (without `?`) to forbid an empty result; syntax alone did not signal that *every* Rezono value type `T` carries four states (`known`, `unknown`, `n/a`, `invalid`), with `.max(...)` on an empty set returning `n/a empty` (whereas `T?` only marks absence as `n/a` rather than `unknown`). |
+| 3. `Service.runs` / `Service.pin` | Correctly read `extend s: Service`, `pin` fallback, `s.product.newest_day`, and `it.product`. | Read `.one()` as "assuming a single stable release on that day" rather than enforcing uniqueness and reporting a conflict on a tie. |
+| 4. `flow_from_step` | Exact match, with no hesitation. | None. |
+| 5. `unauthenticated_target` | Correctly read `crossing.where(dst = target).any(...)`, enum comparison `= no`, and `not target.authenticates`. | Correctly guessed that `port` came from the `crossing` element, but paused on the implicit field binding. This bears directly on [Section 9](#9-small-spelling-improvements): element-first bare names worked in practice, yet an explicit element marker (`it.port` or leading dot `.port`) would have removed that hesitation when a bare column name appears inside a nested relation call `provides(target, fn, port)`. |
 
 ---
 
