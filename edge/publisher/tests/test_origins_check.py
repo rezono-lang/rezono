@@ -54,15 +54,6 @@ def manifest_checks(tmp: Path, d: Path) -> list:
     return publish.publish(e, store.FileStore(tmp / "store"), ROLES, None)["checks"]
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=MissingOriginsCheck,
-    reason="M3: decisions/fact-origin-required.md: Add the check row rezono:origins to every epoch's checks in "
-           "edge/publisher/rezono_publisher/batch.py, from the compiler's one origin judgment in "
-           "compiler/rezono_compiler/sources.py: violations is the number of main's fact rows without origin; "
-           "status green with 0, warning with more on a rezono 0 pack, red on a rezono 1 pack. publish.py and the "
-           "publisher's sources.py need no change. Read section 5.",
-)
 def test_the_manifest_counts_fact_rows_without_origin(tmp_path):
     warn_dir = origin_pack(tmp_path / "warn", {"b.sources.yaml": {"default": TOOL}})
     # Independent of the publisher: the rows that a.yaml gives with only its own file and line as source.
