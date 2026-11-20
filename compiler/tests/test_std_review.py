@@ -220,15 +220,6 @@ class MissingReviewStates(AssertionError):
     """std-review is missing, or derives the review state of a change otherwise than the decision gives."""
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=MissingReviewStates,
-    reason="extra: decisions/review-and-rights.md: Create the standard pack packs/std-review, importing "
-           "packs/std-access: its whole schema with the tables of the section The standard pack std-review, and "
-           "rules/state.dl with review_active, review_current, review_valid (for now: active), change_accepted, "
-           "change_rejected, change_stale, change_proposed and review_due. "
-           "Add its row to compiler/rezono_compiler/standard_packs.py. Read sections 2 and 6.",
-)
 def test_review_states(tmp_path):
     p = Probe(tmp_path, MissingReviewStates)
     grants = [SCRIBE_YEAR]
