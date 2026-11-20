@@ -1,0 +1,58 @@
+# Neutral labels of std-review. A domain gives its own words in its own labels and messages.
+change: change
+change.author: author
+change.content_sha256: content hash
+change.support_sha256: support hash
+change_member: element the change touches
+change_member.change: change
+change_member.kind: kind
+change_member.element: element
+change_support: element the change rests on
+change_support.change: change
+change_support.kind: kind
+change_support.element: element
+review: review
+review.change: change
+review.reviewer: reviewer
+review.role: role
+review.verdict: verdict
+review.reason: reason
+review.day: day number
+review.content_sha256: content hash seen
+review.support_sha256: support hash seen
+review_dismissal: dismissal of a review
+review_dismissal.review: review
+role_grant: role grant
+role_grant.subject: subject
+role_grant.role: role
+role_grant.from_day: first day
+role_grant.until_day: last day (exclusive)
+role_grant.change: introduced by
+review_phase: review phase
+review_phase.phase: phase
+review_phase.owner: owner
+review_policy: review policy
+review_policy.kind: kind
+review_policy.policy: policy
+review_dismissed: dismissed
+review_active: active
+review_current: current
+review_valid: valid
+valid_current_verdict: valid current verdict
+change_accepted: accepted
+change_rejected: rejected
+accepted_before: accepted before
+change_settled: settled
+change_stale: stale
+change_proposed: proposed
+review_due: due for review
+verdict: verdict
+verdict.accepted: accepted
+verdict.rejected: rejected
+phase: phase
+phase.lab: lab
+phase.strict: strict
+policy: publication policy
+policy.require: review required
+policy.mark: marked when not accepted
+policy.none: no review needed

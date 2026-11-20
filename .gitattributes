@@ -16,6 +16,7 @@ packs/std-explain/rules/*.dl pack-definition
 packs/std-identity/rules/*.dl pack-definition
 packs/std-order/rules/*.dl pack-definition
 packs/std-part/rules/*.dl pack-definition
+packs/std-review/rules/*.dl pack-definition
 packs/std-time/rules/*.dl pack-definition
 packs/std-view/rules/*.dl pack-definition
 packs/*/calc/*.yaml pack-definition
