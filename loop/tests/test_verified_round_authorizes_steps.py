@@ -7,8 +7,9 @@ round_visibility_rounds; no supplied verdict is present, so only admission can a
 """
 import pytest
 
+from rezono_canon import canonical_bytes
 from round_visibility_cases import A_WITHDRAWN, OPENING, RUN, WITHDRAW_A, WITHDRAW_B
-from round_visibility_publication import checked_loop_publication
+from round_visibility_publication import checked_loop_publication, observation_reference, round_claim
 from round_visibility_rounds import singleton_rounds
 
 AUTHORIZED = ("safe_alone", "loop_certified_batch", "loop_selected_batch")
@@ -48,3 +49,20 @@ def test_verified_round_authorizes_steps(tmp_path):
     )
     authorized = {relation: rows(relation) for relation in AUTHORIZED}
     assert authorized == {relation: set() for relation in AUTHORIZED}, f"A stale round authorized: {authorized}"
+
+    # Counterexample: a second admitted claim of the same run and cut that names another batch leaves the
+    # choice undecided, so neither batch is selected.
+    relabelled = dict(submitted)
+    relabelled["claim-relabelled"] = canonical_bytes(round_claim(
+        relabelled, run=RUN, cut=OPENING.cut, batch="batch-relabelled", members=[WITHDRAW_A.step],
+        subsets=[([WITHDRAW_A.step], [WITHDRAW_A.plan_hash], f"variant-{WITHDRAW_A.step}",
+                  f"certificate-{WITHDRAW_A.step}")],
+    ))
+    both = {"rounds": [*index["rounds"],
+                       observation_reference("submitted", "claim-relabelled", relabelled["claim-relabelled"])]}
+    _, rows, _ = checked_loop_publication(
+        tmp_path / "relabelled", _records(OPENING), retained=retained, submitted=relabelled, context=context,
+        index=both,
+    )
+    assert {row[0] for row in rows("loop_certified_batch")} == {f"batch-{WITHDRAW_A.step}", "batch-relabelled"}
+    assert rows("loop_selected_batch") == set(), f"Two admitted rounds selected: {rows('loop_selected_batch')}"

@@ -509,6 +509,11 @@ def lower(pack_dir: Path, d: Declared, form: dict, pack: str, owners: dict[str, 
     enums: dict[str, dict] = {}
     classes: dict[str, dict] = {}
     aliases: dict[str, dict] = {}
+    # The slots of each kind of this module, which an inverse slot reads (decisions/language-inverse-references.md).
+    kinds: dict[str, list] = {}
+    for decl in module["decls"]:
+        if isinstance(decl, dict) and isinstance(decl.get("kind"), str):
+            kinds.setdefault(decl["kind"], decl.get("slots") or [])
     for i, decl in enumerate(module["decls"]):
         at = f"/decls/{i}"
         if not isinstance(decl, dict):
@@ -538,7 +543,7 @@ def lower(pack_dir: Path, d: Declared, form: dict, pack: str, owners: dict[str, 
                     continue
             lowered_kind = rezono_kind.lower(
                 decl, at, own, owners, declared_names, uses, refuse,
-                extended_format=extended_format, aliases=prefixes,
+                extended_format=extended_format, aliases=prefixes, kinds=kinds,
             )
             if lowered_kind is not None:
                 if keys:
