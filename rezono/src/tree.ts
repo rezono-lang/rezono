@@ -27,6 +27,7 @@ export type Expr =
 	| { or: Expr[] }
 	| { not: Expr }
 	| { imply: [Expr, Expr] }
+	| { otherwise: [Expr, Expr] }
 	| { arith: [string, Expr, Expr] }
 	| { neg: Expr }
 	| { when: [Expr, Expr, Expr] }

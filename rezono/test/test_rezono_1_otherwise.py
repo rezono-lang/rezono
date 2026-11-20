@@ -204,15 +204,6 @@ class MissingOtherwiseEvaluation(AssertionError):
     """Four-state evaluation or typechecking of `a otherwise b` in rezono/src/ is missing or wrong."""
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=MissingOtherwiseOperator,
-    reason="M3: decisions/language-rezono-1-refinements.md: Implement the `otherwise` operator in rezono/src/ "
-           "(grammar.ts, parse.ts, tree.ts, print-expression.ts, module-json.ts, checkModule) with AST "
-           "`{\"otherwise\": [a, b]}` and right-associative chaining, and emit warning W115 (with hint.use_instead "
-           "naming `otherwise`) when a rezono 1 `unless` clause tests `x is known` and `x` can be `invalid`, while "
-           "emitting no W115 for `otherwise`, `unless not (x is n/a)`, or a non-invalid slot. Read section 2.",
-)
 def test_rezono_1_otherwise_syntax_and_w115():
     payload = run_node(
         MODULE_PROBE,
@@ -256,14 +247,6 @@ def test_rezono_1_otherwise_syntax_and_w115():
         raise MissingOtherwiseOperator(json.dumps(problems, indent=2))
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=MissingOtherwiseEvaluation,
-    reason="M3: decisions/language-rezono-1-refinements.md: Implement `a otherwise b` in rezono/src/ (grammar.ts, "
-           "parse.ts, tree.ts, check.ts, evaluate.ts, print-expression.ts): fall back to `b` only when `a` is `n/a`, "
-           "preserving `known`, `unknown`, and `invalid` of `a` unchanged (short-circuiting `b`), and report R003 on "
-           "incompatible operand types. Read section 2.",
-)
 def test_otherwise_four_state_evaluation():
     result = run_node(EVAL_PROBE)
     problems = []

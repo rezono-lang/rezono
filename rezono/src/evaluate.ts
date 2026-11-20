@@ -695,6 +695,10 @@ export function reader(checked: Pick<Checked, 'typed' | 'heads'>, schema: Schema
 		if ('not' in e) return not(ex(e.not));
 		// `a => b` is `not a or b` (§7); its operands keep their places.
 		if ('imply' in e) return or([not(ex(e.imply[0])), ex(e.imply[1])]);
+		if ('otherwise' in e) {
+			const a = ex(e.otherwise[0]);
+			return a.s === 'not_applicable' ? ex(e.otherwise[1]) : a;
+		}
 		if ('neg' in e) return strict([ex(e.neg)], (x) => known(frac(-number(x).n, number(x).d)));
 		if ('arith' in e) {
 			const [op, a, b] = e.arith;

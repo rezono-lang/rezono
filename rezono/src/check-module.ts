@@ -10,6 +10,7 @@ import { formOfModule, type FormOf } from './module-json.ts';
 import type { SlotDecl } from './module-slot.ts';
 import type { StepDecl } from './module-step.ts';
 import type { TableValue } from './module-table.ts';
+import { warnUnlessMasksInvalid } from './module-unless.ts';
 import { parseModule, type Module, type ParseModuleOptions } from './module.ts';
 import { inOrder, type Span } from './parse.ts';
 import { isOrdered, slotType, snake, STATES, typeOf, type KindDef, type Schema, type SlotDef, type StateName, type Ty, type TypeDef } from './schema.ts';
@@ -496,6 +497,7 @@ export function checkModule(text: string, options?: CheckModuleOptions): FormOf 
 				checkDerivedExpr(clause.then, expectedTy, expectedSet);
 			}
 		}
+		if (d.unless?.length) warnUnlessMasksInvalid(d.unless, t.typed, t.spanOf, t.found);
 		for (const def of d.definitions ?? []) {
 			t.truth(def.when);
 			checkDerivedExpr(def.value, expectedTy, expectedSet);
@@ -508,6 +510,7 @@ export function checkModule(text: string, options?: CheckModuleOptions): FormOf 
 					checkDerivedExpr(clause.then, expectedTy, expectedSet);
 				}
 			}
+			if (ver.unless?.length) warnUnlessMasksInvalid(ver.unless, t.typed, t.spanOf, t.found);
 			for (const def of ver.definitions ?? []) {
 				t.truth(def.when);
 				checkDerivedExpr(def.value, expectedTy, expectedSet);

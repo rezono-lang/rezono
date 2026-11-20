@@ -9,20 +9,22 @@ import { spellName, spellQualifiedName } from './rule-names.ts';
 
 // Precedence, lowest first (§4). A node prints in parentheses where the place it stands in needs a higher level.
 const COND = 0;
-const IMPLY = 1;
-const OR = 2;
-const AND = 3;
-const NOT = 4;
-const TEST = 5;
-const RANGE = 6;
-const ADD = 7;
-const MUL = 8;
-const UNARY = 9;
-const POST = 10;
-const DOTTED = 11;
+const OTHERWISE = 1;
+const IMPLY = 2;
+const OR = 3;
+const AND = 4;
+const NOT = 5;
+const TEST = 6;
+const RANGE = 7;
+const ADD = 8;
+const MUL = 9;
+const UNARY = 10;
+const POST = 11;
+const DOTTED = 12;
 
 function level(e: Expr): number {
 	if ('when' in e) return COND;
+	if ('otherwise' in e) return OTHERWISE;
 	if ('imply' in e) return IMPLY;
 	if ('or' in e) return OR;
 	if ('and' in e) return AND;
@@ -88,6 +90,7 @@ function bare(e: Expr, last: boolean): string {
 	if ('and' in e) return e.and.map((x, i) => expr(x, NOT, last && i === e.and.length - 1)).join(' and ');
 	if ('or' in e) return e.or.map((x, i) => expr(x, AND, last && i === e.or.length - 1)).join(' or ');
 	if ('imply' in e) return `${expr(e.imply[0], OR, false)} => ${expr(e.imply[1], IMPLY, last)}`;
+	if ('otherwise' in e) return `${expr(e.otherwise[0], IMPLY, false)} otherwise ${expr(e.otherwise[1], COND, last)}`;
 	const [c, a, b] = e.when;
 	return `when ${whole(c)} then ${whole(a)} else ${whole(b)}`;
 }
@@ -141,6 +144,7 @@ export function grouping(e: Expr): string {
 	if ('or' in e) return e.or.map(g).join(' or ');
 	if ('not' in e) return `not ${g(e.not)}`;
 	if ('imply' in e) return `${g(e.imply[0])} => ${g(e.imply[1])}`;
+	if ('otherwise' in e) return `${g(e.otherwise[0])} otherwise ${g(e.otherwise[1])}`;
 	if ('cmp' in e) return `${g(e.cmp[1])} ${e.cmp[0]} ${g(e.cmp[2])}`;
 	if ('in' in e) return `${g(e.in[0])} in ${g(e.in[1])}`;
 	if ('is' in e) return `${g(e.is[0])} is ${e.is[1]}`;

@@ -49,8 +49,10 @@ Rezono {
   SupposePath = rowId ("." identWord)+
   SupposeSlot = identWord "=" Expr
 
-  Expr = Cond | Imply
+  Expr = Cond | Otherwise
   Cond = when Expr then Expr else Expr
+  Otherwise = Imply otherwise Expr  -- otherwise
+            | Imply
   Imply = Or "=>" Imply  -- imply
         | Or
   Or = NonemptyListOf<And, or>
@@ -119,6 +121,7 @@ ${moduleGrammar}
   when = "when" wordEnd
   then = "then" wordEnd
   else = "else" wordEnd
+  otherwise = "otherwise" wordEnd
   not = "not" wordEnd
   and = "and" wordEnd
   or = "or" wordEnd
