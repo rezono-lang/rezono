@@ -179,7 +179,13 @@ def test_boolean_attributes_write_bool_slots_and_exact_boolean_values():
     assert by_id(out)["h1"]["active"] is True
     assert publication.differences(doc, plan, out, rows) == []
 
-    # Invalid boolean cell text fails closed instead of coercing.
-    bad_rows = {**WIDE["rows"], "holder__active": [("h1", "yes")]}
-    with pytest.raises(publication.FormError, match="holder__active.*not a boolean value"):
-        publication.row_json(doc, plan, {"rows": bad_rows, "witnesses": [], "sources": []})
+    for literal, expected in (("false", False), (True, True), (False, False)):
+        alt_rows = {**WIDE["rows"], "holder__active": [("h1", literal)]}
+        _, _, alt_out = form_of({**WIDE, "rows": alt_rows}, bundle=bundle, full=None)
+        assert by_id(alt_out)["h1"]["active"] is expected
+
+    # Invalid boolean values (including ints, None, and non-canonical case) fail closed instead of coercing.
+    for bad in ("yes", "True", "False", 0, 1, None):
+        bad_rows = {**WIDE["rows"], "holder__active": [("h1", bad)]}
+        with pytest.raises(publication.FormError, match="holder__active.*not a boolean value"):
+            publication.row_json(doc, plan, {"rows": bad_rows, "witnesses": [], "sources": []})

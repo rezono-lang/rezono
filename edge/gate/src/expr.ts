@@ -143,7 +143,7 @@ export function roleSchema(bundle: Bundle, snapshots: Listed[]): View {
 	}
 	// Every kind of a tree that has a subkind: an element of a subkind is an element of each kind above it, which
 	// the evaluation does not read yet, so a question that reads any kind of such a tree is not answered (`ask`).
-	const roots = new Set(visible.filter((k) => k.parent && reads.has(k.parent)).map((k) => chain(k.id).at(-1)));
+	const roots = new Set(visible.filter((k) => chain(k.id).slice(1).some((c) => reads.has(c))).map((k) => chain(k.id).at(-1)));
 	for (const k of visible) if (roots.has(chain(k.id).at(-1))) view.trees.add(k.class);
 	const byId = (x: { id: string }, y: { id: string }): number => (x.id < y.id ? -1 : x.id > y.id ? 1 : 0);
 	const allSlots = [...((bundle.attributes ?? []) as unknown as BundleSlot[]), ...((bundle.arrows ?? []) as unknown as BundleSlot[])];
@@ -297,7 +297,7 @@ export class Cut extends Error {}
 
 /** The largest integer a JSON number holds exactly (Rezono Data §3.2, LD2). */
 const SAFE = 9007199254740991n;
-const INT = /^-?[0-9]+$/;
+const INT = /^(?:0|-?[1-9][0-9]*)$/;
 type BoundedType = TypeDef & { min?: unknown; max?: unknown };
 
 /**
@@ -396,6 +396,7 @@ export async function rowsOf(view: View, want: Map<string, Set<string>>, read: R
 		if (columns) {
 			const slots = view.schema.kinds[kind].slots;
 			for (const parts of await all(relation)) {
+				if (parts.length !== columns.length) throw new AskError(500, `${relation} holds a malformed derived row`);
 				out.push({
 					$kind: kind,
 					$id: canonicalJson(parts),
