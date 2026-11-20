@@ -45,9 +45,8 @@ def vocabulary() -> set[str]:
         name = str((yaml.safe_load(meta.read_text(encoding="utf-8")) or {}).get("name", ""))
         if "-" in name:
             terms.add(name)
-        rel_parts = meta.relative_to(ROOT / "examples").parts
-        if len(rel_parts) > 2:  # examples/<use case>/.../pack.yaml
-            terms.add(rel_parts[0])
+        if meta.parent.parent != ROOT / "examples" and ("-" in meta.parent.parent.name or "_" in meta.parent.parent.name):
+            terms.add(meta.parent.parent.name)
         for schema in sorted((meta.parent / "schema").glob("*.yaml")):
             classes = (yaml.safe_load(schema.read_text(encoding="utf-8")) or {}).get("classes") or {}
             terms |= {snake(c) for c in classes if "_" in snake(c)}
