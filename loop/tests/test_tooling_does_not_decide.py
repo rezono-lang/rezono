@@ -29,7 +29,7 @@ def _table_rows(text: str) -> list[list[str]]:
     for line in text.splitlines():
         if not line.startswith("|"):
             continue
-        cells = [cell.strip() for cell in line.strip("|").split("|")]
+        cells = [cell.strip() for cell in re.split(r"(?<!\\)\|", line.strip("|"))]
         if cells and not all(set(cell) <= {"-", ":", " "} for cell in cells):
             rows.append(cells)
     return rows
