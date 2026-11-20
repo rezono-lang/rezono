@@ -63,17 +63,22 @@ keeps its meaning and its relation `offers`, and gives W107 at its name with the
 **Adopted within the method form.** A count or a sum over a relation fixes columns in the call and names the measured column bare:
 
 ```rezono
-rule line(order: Order, item: Line, cents: Int) when Line.order(item, order) and Line.cents(item, cents)
+rule order_line(order: Order, item: Line, cents: Int) when Line.order(item, order) and Line.cents(item, cents)
 
 rule line_count(o: Order, n: Int) when o in Order
-  and n = line(o, _, _).count()
+  and n = order_line(o, _, _).count()
 
 rule order_total(o: Order, total: Int) when o in Order
-  and total = line(o, _, _).sum(cents)
+  and total = order_line(o, _, _).sum(cents)
 ```
 
-- **Fixed columns go in the call.** A relation call already matches rows, with constants and bound names fixing columns and `_` leaving them open ([native rules](language-native-rules.md), section 1). Inside a rule, an aggregate filter can only fix key columns by equality (native rules, section 5), so `(line(_, _, _) where it.order = o).count()` says nothing that `line(o, _, _).count()` does not. Both lower to one aggregate with the terms `[?o, _, _]`. The filter form is deprecated: W107 at the whole aggregate expression, from its opening parenthesis to the closing parenthesis of `count()`, naming the call form. Filters keep every other use: in a question, and in a derived value.
+- **Fixed columns go in the call.** A relation call already matches rows, with constants and bound names fixing columns and `_` leaving them open ([native rules](language-native-rules.md), section 1). Inside a rule, an aggregate filter can only fix key columns by equality (native rules, section 5), so `(order_line(_, _, _) where it.order = o).count()` says nothing that `order_line(o, _, _).count()` does not. Both lower to one aggregate with the terms `[?o, _, _]`. The filter form is deprecated: W107 at the whole aggregate expression, from its opening parenthesis to the closing parenthesis of `count()`, naming the call form. Filters keep every other use: in a question, and in a derived value.
 - **Element names resolve bare.** Inside the parentheses of an aggregate in a rule, the columns of the aggregated relation resolve first, as they already do in a question ([expressions](../docs/rezono/expressions.md), section 5, rule 2). So `sum(cents)` measures the column `cents`; `sum(it.cents)` stays valid and means the same. A name that is both a column of the aggregated relation and a name bound outside is R011, at the bare name, as in a question; `it.cents` names the column. Today a bare name there is refused, so no valid text changes meaning. This replaces the measure form `it.c` in the lowering table of native rules, section 5.
+
+**Whole rows and empty groups.** Both points follow from [native rules](language-native-rules.md), sections 4 and 5. They are stated here because a reader who does not know the language can doubt them.
+
+- **A count or a sum ranges over whole rows.** `_` leaves a column open in the match; it does not take the column out of the row. `order_line(o, _, _)` matches every line of `o`, and each of those lines is one member, also when two lines have the same amount. Two lines of 250 cents give `count()` = 2 and `sum(cents)` = 500, never 250. To count distinct amounts, write a rule whose columns are the amounts, and count its rows.
+- **An empty group gives zero.** In `rule order_total(o: Order, total: Int) when o in Order and total = order_line(o, _, _).sum(cents)`, an order without lines gives `total` = 0, and `line_count` gives `n` = 0. It is not left out. The group is bound by a positive premise (`o in Order`), and the aggregated relation is complete, so "no rows" is known. A rule that should give no result for an order without lines says so with its own premise, such as `has_line(o)`, as the subsidy scheme does with `has_quote(a)` before it sums. An aggregate over an open relation is refused (R004, [expressions](../docs/rezono/expressions.md), section 6), so a 0 never comes from rows that are merely absent.
 
 **A second form is rejected.** `count edge where pred = x`, or any comprehension next to the method form, would reopen v0 §2 ("method form only") and the rejected "new comprehension" of native rules. It buys nothing the call form does not already give, and it would give every count two spellings.
 

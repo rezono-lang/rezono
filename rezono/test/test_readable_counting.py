@@ -7,13 +7,13 @@ import pytest
 from reader_probe import at, read_modules
 
 HEADER = ("rezono 0\npack sample\n\nkind Order world closed\n\nkind Line world closed\n  order: Order\n  cents: Int\n\n"
-          "rule line(order: Order, item: Line, cents: Int) when Line.order(item, order) and Line.cents(item, cents)\n")
-FILTER = "(line(_, _, _) where it.order = o).count()"
+          "rule order_line(order: Order, item: Line, cents: Int) when Line.order(item, order) and Line.cents(item, cents)\n")
+FILTER = "(order_line(_, _, _) where it.order = o).count()"
 OLD = HEADER + f"rule line_count(o: Order, n: Int) when o in Order\n  and n = {FILTER}\n"
-NEW = (HEADER + "rule line_count(o: Order, n: Int) when o in Order\n  and n = line(o, _, _).count()\n"
-       + "rule order_total(o: Order, total: Int) when o in Order\n  and total = line(o, _, _).sum(cents)\n")
+NEW = (HEADER + "rule line_count(o: Order, n: Int) when o in Order\n  and n = order_line(o, _, _).count()\n"
+       + "rule order_total(o: Order, total: Int) when o in Order\n  and total = order_line(o, _, _).sum(cents)\n")
 # Counter-case: the measure with `it.` stays valid and quiet.
-WITH_IT = HEADER + "rule order_total(o: Order, total: Int) when o in Order\n  and total = line(o, _, _).sum(it.cents)\n"
+WITH_IT = HEADER + "rule order_total(o: Order, total: Int) when o in Order\n  and total = order_line(o, _, _).sum(it.cents)\n"
 
 
 class MissingCountingHint(AssertionError):
