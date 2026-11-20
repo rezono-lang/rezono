@@ -86,7 +86,11 @@ STANDINGS = {(*DB, "allow-db", ON, "in_force"),
     "FlowPolicyBinding (decision: Decision, source: ListenerCaseSource, destination: ListenerCaseDestination, "
     "protocol, port), PolicyApplication (the same tuple, decision, enforcement_point) and PolicyMatrixEntry (the "
     "same tuple, revision, verdict) in schema/network_policy_provenance.yaml; no fact rows. "
-    "Read decisions/platform-network-policy-provenance.md."))
+    "Read decisions/platform-network-policy-provenance.md. "
+    "Note: Blocked on a kind name clash because platform-core imports std-loop, which already declares "
+    "FlowPolicyBinding(run, collector, window, snapshot). Declaring FlowPolicyBinding in "
+    "schema/network_policy_provenance.yaml qualifies both engine names to remove flow_policy_binding, breaking "
+    "std-loop rules and this test's input and witness expectations."))
 def test_network_policy_provenance():
     data = records()
     model, state, (standing, applied, unapplied, drift) = outcome(data)

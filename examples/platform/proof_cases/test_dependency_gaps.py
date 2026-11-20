@@ -109,3 +109,30 @@ def test_dependency_gaps():
     # An alternate whose failure domain nobody recorded cannot establish continuity.
     _, _, gaps, unknown = outcome(lose(without(data, "failure_domain_membership", "m-west"), "east"))
     assert (gaps, unknown) == (base_gaps, {("shop", "login", "domain-not-recorded")})
+
+
+def test_withdrawn_cluster_without_domain_does_not_mask_disqualified_alternate():
+    data = records()
+    base_gaps = {("shop", "queue", "no-placement"), ("shop", "search", "no-solution")}
+
+    # Provider idp runs on east (withdrawn, room-a), south (withdrawn, no domain), and north (surviving, room-a).
+    # north is already disqualified by sharing room-a with east, so south's missing domain must not suppress the gap.
+    case = copy.deepcopy(data)
+    case["cluster"].append({"id": "south", "role": "worker-role"})
+    next(b for b in case["cluster_service_binding"] if b["id"] == "b-idp-alt")["cluster"] = "north"
+    case["cluster_service_binding"].append({"id": "b-idp-south", "service": "idp", "cluster": "south"})
+    case["cluster_withdrawal"] = [
+        {"id": "loss-east", "cluster": "east"},
+        {"id": "loss-south", "cluster": "south"},
+    ]
+    _, _, gaps, unknown = outcome(case)
+    assert gaps == base_gaps | {("shop", "login", "no-independent-placement")}
+    assert unknown == set()
+
+    # Adding a surviving placement on west (room-b) that does not share east's domain leaves continuity genuinely
+    # unknown because south's unrecorded domain could still match west.
+    with_candidate = copy.deepcopy(case)
+    with_candidate["cluster_service_binding"].append({"id": "b-idp-west", "service": "idp", "cluster": "west"})
+    _, _, gaps, unknown = outcome(with_candidate)
+    assert gaps == base_gaps
+    assert unknown == {("shop", "login", "domain-not-recorded")}

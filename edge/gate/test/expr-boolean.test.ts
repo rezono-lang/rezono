@@ -13,13 +13,13 @@ const pack = 'sample';
 const baseBundle = {
 	pack: { id: pack, base: 'https://example.org/sample/' },
 	kinds: [
-		{ id: 'service', class: 'Service', world: 'closed' },
-		{ id: 'tls_read', class: 'TlsRead', world: 'closed' }
+		{ id: 'widget', class: 'Widget', world: 'closed' },
+		{ id: 'probe_read', class: 'ProbeRead', world: 'closed' }
 	],
 	attributes: [
-		{ id: 'service__name', kind: 'service', name: 'name', table: 'service__name', type: 'text', required: false },
-		{ id: 'tls_read__complete', kind: 'tls_read', name: 'complete', table: 'tls_read__complete', type: 'boolean', required: false },
-		{ id: 'tls_read__verified', kind: 'tls_read', name: 'verified', table: 'tls_read__verified', type: 'boolean', required: false }
+		{ id: 'widget__name', kind: 'widget', name: 'name', table: 'widget__name', type: 'text', required: false },
+		{ id: 'probe_read__complete', kind: 'probe_read', name: 'complete', table: 'probe_read__complete', type: 'boolean', required: false },
+		{ id: 'probe_read__verified', kind: 'probe_read', name: 'verified', table: 'probe_read__verified', type: 'boolean', required: false }
 	]
 };
 
@@ -52,13 +52,13 @@ async function publishFixture(options: {
 	const completeRows = options.completeRows ?? [['r1', 'true'], ['r2', 'false']];
 	const verifiedRows = options.verifiedRows ?? [['r1', 'true'], ['r2', 'false']];
 	const snapshots = [
-		await snap('service', 'reader', true, [['svc-1'], ['svc-2']]),
-		await snap('service__name', 'reader', true, [['svc-1', 'api'], ['svc-2', 'web']]),
-		await snap('tls_read', 'reader', true, [['r1'], ['r2'], ['r3']]),
-		await snap('tls_read__complete', 'reader', true, completeRows),
-		await snap('tls_read__verified', 'reader', false, verifiedRows),
-		await snap('service', 'scoped', true, [['svc-1']]),
-		await snap('service__name', 'scoped', true, [['svc-1', 'api']])
+		await snap('widget', 'reader', true, [['w-1'], ['w-2']]),
+		await snap('widget__name', 'reader', true, [['w-1', 'api'], ['w-2', 'web']]),
+		await snap('probe_read', 'reader', true, [['r1'], ['r2'], ['r3']]),
+		await snap('probe_read__complete', 'reader', true, completeRows),
+		await snap('probe_read__verified', 'reader', false, verifiedRows),
+		await snap('widget', 'scoped', true, [['w-1']]),
+		await snap('widget__name', 'scoped', true, [['w-1', 'api']])
 	];
 	const bundleKey = pack + '/bundles/definition.json';
 	const manifest = {
@@ -95,37 +95,37 @@ test('bundles with boolean attributes serve /ask on other kinds and on boolean s
 	const scoped = await openLocalGate(root, 'scoped');
 
 	// Querying a different kind succeeds even though the role schema includes boolean attributes.
-	const serviceRes = await reader(postAsk('ask Service where name = "api"'));
-	const serviceAnswer = await serviceRes.json();
-	assert.equal(serviceRes.status, 200, JSON.stringify(serviceAnswer));
-	assert.deepEqual(serviceAnswer.nodes.map((n: { key: string }) => JSON.parse(n.key)), [['svc-1']]);
+	const widgetRes = await reader(postAsk('ask Widget where name = "api"'));
+	const widgetAnswer = await widgetRes.json();
+	assert.equal(widgetRes.status, 200, JSON.stringify(widgetAnswer));
+	assert.deepEqual(widgetAnswer.nodes.map((n: { key: string }) => JSON.parse(n.key)), [['w-1']]);
 
 	// Filtering directly on a closed optional boolean attribute: true matches, false excludes, absent is n/a.
-	const trueRes = await reader(postAsk('ask TlsRead where complete'));
+	const trueRes = await reader(postAsk('ask ProbeRead where complete'));
 	const trueAnswer = await trueRes.json();
 	assert.equal(trueRes.status, 200, JSON.stringify(trueAnswer));
 	assert.deepEqual(trueAnswer.nodes.map((n: { key: string }) => JSON.parse(n.key)), [['r1']]);
 	assert.equal(trueAnswer.counts.not_applicable, 1);
 	assert.deepEqual(trueAnswer.undecided, []);
 
-	const falseRes = await reader(postAsk('ask TlsRead where complete = false'));
+	const falseRes = await reader(postAsk('ask ProbeRead where complete = false'));
 	const falseAnswer = await falseRes.json();
 	assert.equal(falseRes.status, 200, JSON.stringify(falseAnswer));
 	assert.deepEqual(falseAnswer.nodes.map((n: { key: string }) => JSON.parse(n.key)), [['r2']]);
 	assert.equal(falseAnswer.counts.not_applicable, 1);
 
-	const notRes = await reader(postAsk('ask TlsRead where not complete'));
+	const notRes = await reader(postAsk('ask ProbeRead where not complete'));
 	const notAnswer = await notRes.json();
 	assert.equal(notRes.status, 200, JSON.stringify(notAnswer));
 	assert.deepEqual(notAnswer.nodes.map((n: { key: string }) => JSON.parse(n.key)), [['r2']]);
 
-	const naRes = await reader(postAsk('ask TlsRead where complete is n/a'));
+	const naRes = await reader(postAsk('ask ProbeRead where complete is n/a'));
 	const naAnswer = await naRes.json();
 	assert.equal(naRes.status, 200, JSON.stringify(naAnswer));
 	assert.deepEqual(naAnswer.nodes.map((n: { key: string }) => JSON.parse(n.key)), [['r3']]);
 
 	// Showing a boolean slot emits JS booleans under a Bool output slot.
-	const showRes = await reader(postAsk('ask TlsRead where true show complete'));
+	const showRes = await reader(postAsk('ask ProbeRead where true show complete'));
 	const showAnswer = await showRes.json();
 	assert.equal(showRes.status, 200, JSON.stringify(showAnswer));
 	assert.equal(showAnswer.dataset.schema.kinds.Answer.slots.c1.type, 'Bool');
@@ -135,7 +135,7 @@ test('bundles with boolean attributes serve /ask on other kinds and on boolean s
 	);
 
 	// Partial boolean snapshot treats missing rows as unknown not_read_in_full.
-	const partialRes = await reader(postAsk('ask TlsRead where verified'));
+	const partialRes = await reader(postAsk('ask ProbeRead where verified'));
 	const partialAnswer = await partialRes.json();
 	assert.equal(partialRes.status, 200, JSON.stringify(partialAnswer));
 	assert.deepEqual(partialAnswer.nodes.map((n: { key: string }) => JSON.parse(n.key)), [['r1']]);
@@ -144,9 +144,9 @@ test('bundles with boolean attributes serve /ask on other kinds and on boolean s
 		[['r3', 'unknown', 'not_read_in_full']]
 	);
 
-	// Role without access to the boolean kind still queries its own kind and cannot see TlsRead.
-	assert.equal((await scoped(postAsk('ask Service where name = "api"'))).status, 200);
-	assert.equal((await scoped(postAsk('ask TlsRead where complete'))).status, 400);
+	// Role without access to the boolean kind still queries its own kind and cannot see ProbeRead.
+	assert.equal((await scoped(postAsk('ask Widget where name = "api"'))).status, 200);
+	assert.equal((await scoped(postAsk('ask ProbeRead where complete'))).status, 400);
 });
 
 test('invalid boolean cell text fails closed without leaking or coercing', async (t) => {
@@ -156,7 +156,7 @@ test('invalid boolean cell text fails closed without leaking or coercing', async
 		const reader = await openLocalGate(root, 'reader');
 
 		// Querying the boolean slot with corrupt cell text returns 500 without exposing raw cell text.
-		const res = await reader(postAsk('ask TlsRead where complete'));
+		const res = await reader(postAsk('ask ProbeRead where complete'));
 		const body = await res.json();
 		assert.equal(res.status, 500, `expected 500 for ${JSON.stringify(bad)}, got ${res.status}`);
 		assert.deepEqual(body, { error: 'publication unavailable' });
@@ -164,10 +164,10 @@ test('invalid boolean cell text fails closed without leaking or coercing', async
 
 	// Direct rowsOf / ask check rejects malformed row arities and unexpected text with AskError(500).
 	const view = roleSchema(baseBundle as unknown as Bundle, [
-		{ relation: 'tls_read', complete: true },
-		{ relation: 'tls_read__complete', complete: true }
+		{ relation: 'probe_read', complete: true },
+		{ relation: 'probe_read__complete', complete: true }
 	]);
-	assert.equal(view.schema.kinds.TlsRead.slots.complete.type, 'Bool');
+	assert.equal(view.schema.kinds.ProbeRead.slots.complete.type, 'Bool');
 
 	const cases: string[][][] = [
 		[['r1', 'yes']],
@@ -177,10 +177,10 @@ test('invalid boolean cell text fails closed without leaking or coercing', async
 	];
 	for (const badRows of cases) {
 		const read = async (relation: string) => ({
-			rows: (relation === 'tls_read' ? [['r1']] : badRows).map((key) => ({ key }))
+			rows: (relation === 'probe_read' ? [['r1']] : badRows).map((key) => ({ key }))
 		});
 		await assert.rejects(
-			rowsOf(view, new Map([['TlsRead', new Set(['complete'])]]), read, { left: 100 }),
+			rowsOf(view, new Map([['ProbeRead', new Set(['complete'])]]), read, { left: 100 }),
 			(err: unknown) => err instanceof AskError && err.status === 500
 		);
 	}

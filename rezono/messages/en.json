@@ -37,6 +37,7 @@
 	"W105": "`{0}` may be unknown; unknown values print with their reason",
 	"W107": "`{0}` is deprecated",
 	"W108": "`{0}` has no version before {1}; there it is unknown (`no_version_applies`)",
+	"W109": "`{0}` in `{1}` is exercised by no example",
 	"W112": "`table {0}` in `{1}`: no row applies when `{2}`; there it is unknown (`no_row_applies`)",
 	"hint.leave_out": "leave it out",
 	"hint.question_as_known": "to set what the question knows, write `{0}`",

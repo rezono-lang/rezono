@@ -156,7 +156,7 @@ class Kind:
     spans: dict = field(default_factory=dict)  # MOD2: where its unique keys (`key:<name>`) and path equations (`eq:<name>`) are
 
 
-ACCESS = ("may_read", "may_propose", "may_review", "may_publish")  # std-access; their `kind` column names kinds
+ACCESS = ("may_read", "may_read_full", "may_propose", "may_review", "may_publish")  # std-access; their `kind` column names kinds
 CLOSE = "period_close"  # the kind of the closing fact of a seal, with these slots
 CLOSED_UNTIL, COVERS, ELEMENT, SHA256 = "closed_until", "covers", "element", "sha256"
 
@@ -259,6 +259,8 @@ class Pack:
     rule_bodies: dict[str, tuple[str, ...]] = field(default_factory=dict)
     # Per rule id, where the rule is written (MOD2, spans.py): its head in a rule file, or the view that made it.
     rule_spans: dict[str, tuple | None] = field(default_factory=dict)
+    # Per derived relation name, the SemanticType of each column when richer than its physical rule type.
+    rule_semantics: dict[str, tuple[dict | None, ...]] = field(default_factory=dict)
     # P10.3: the units the pack and the packs it imports declare, by the name of their LinkML type (`units`).
     units: dict[str, types.Unit] = field(default_factory=dict)
     acceptance_questions: list[AcceptanceQuestion] = field(default_factory=list)  # own source inventory
@@ -791,7 +793,7 @@ def read(pack_dir: str | Path) -> Pack:
                                                       calc_parts=calc_parts, folds=pack.folds,
                                                       bodies=pack.rule_bodies, spans=pack.rule_spans,
                                                       generated=generated, embedded=rezono_relational.sources(mods),
-                                                      native=native)
+                                                      native=native, semantics=pack.rule_semantics)
             pack.warnings += rule_warnings
             if pack.rules:   # a variable or a column that joins two currencies is an error
                 amounts.columns(pack.rules, amounts.tables(pack))
@@ -842,8 +844,9 @@ def read(pack_dir: str | Path) -> Pack:
                     raise CompileError(f"rules: a calculation input needs a numeric selection: {', '.join(sorted(invalid))}")
                 program = rule_ir.load(pack.rules)
                 _, after = program.partition_at_calc(used, calc_sql.derived_reads(calculation))
-                if "may_read" in after:
-                    raise CompileError("rules: may_read cannot depend on a calculation selection")
+                for rel in ("may_read", "may_read_full"):
+                    if rel in after:
+                        raise CompileError(f"rules: {rel} cannot depend on a calculation selection")
         except (CompileError, rule_ir.IRError) as e:
             errors.append(str(e))
             if isinstance(e, CompileError):

@@ -75,6 +75,8 @@ build_affected(run, consumer, path) :- build_affected(run, dependency, path),
 .decl build_reader_member(receipt: symbol, path: symbol, kind: symbol, folder: symbol)
 .decl build_manifest_dependency_member(receipt: symbol, revision: symbol, path: symbol, folder: symbol)
 .decl build_file_dependency_member(receipt: symbol, dependency: symbol, consumer: symbol)
+.decl build_manifest_dependencies_read(receipt: symbol, revision: symbol, path: symbol)
+.decl build_file_dependencies_read(receipt: symbol)
 
 complete(source, scope, cut, receipt) :- verified_receipt(receipt, source, scope, cut, inventory, content).
 
@@ -159,6 +161,28 @@ build_full_selection(run, m) :- build_covered(run, receipt), verified_member(rec
     !build_recorded_member(run, m).
 build_full_selection(run, m) :- build_covered(run, receipt), verified_member(receipt, m, 0, "suite"),
     !build_recorded_member(run, m).
+
+// Each admitted manifest and manifest-dependency member requires its manifest-dependencies terminal read;
+// each admitted file-dependency member requires the file-dependencies terminal read.
+build_manifest_dependencies_read(receipt, revision, path) :-
+    verified_member(receipt, m, 0, "manifest-dependencies"),
+    verified_member(receipt, m, 1, revision),
+    verified_member(receipt, m, 2, path).
+build_file_dependencies_read(receipt) :-
+    verified_member(receipt, m, 0, "file-dependencies").
+build_full_selection(run, m) :- build_covered(run, receipt),
+    verified_member(receipt, m, 0, "manifest"),
+    verified_member(receipt, m, 1, revision),
+    verified_member(receipt, m, 2, path),
+    !build_manifest_dependencies_read(receipt, revision, path).
+build_full_selection(run, m) :- build_covered(run, receipt),
+    verified_member(receipt, m, 0, "manifest-dependency"),
+    verified_member(receipt, m, 1, revision),
+    verified_member(receipt, m, 2, path),
+    !build_manifest_dependencies_read(receipt, revision, path).
+build_full_selection(run, m) :- build_covered(run, receipt),
+    verified_member(receipt, m, 0, "file-dependency"),
+    !build_file_dependencies_read(receipt).
 
 // Each recorded changed path, reader edge and dependency edge needs its admitted member; otherwise the
 // selection is full (decisions/scoped-completeness.md section 3 compares both directions).
