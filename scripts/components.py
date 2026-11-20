@@ -348,6 +348,7 @@ FULL_SELECTION_PATHS = (
 JOB_INPUTS = {
     ".github/workflows/compiler-duration-profile.json": ("compiler",),
     ".github/workflows/examples-duration-profile.json": ("examples",),
+    ".github/workflows/loop-duration-profile.json": ("loop",),
     ".github/workflows/publication_fixture.py": ("examples",),
 }
 # Scripts, other workflows and actions select the components that name them, directly
@@ -850,9 +851,12 @@ FORMS_MODULE = "examples/subsidy/test_subsidy_forms.py"
 INDEPENDENT_PUBLICATIONS = "examples/subsidy/test_subsidy.py"
 FORMS_READER = ("test_a_ledger_payment_does_not_change_the_policy_adviser_s_form",
                 "test_each_role_s_standards_exports_pass_their_readers")
-SHARDS = {"compiler": 3, "edge/publisher": 2}
+SHARDS = {"compiler": 3, "edge/publisher": 2, "loop": 3}
 PARALLEL = {"compiler", "examples", "edge/publisher"}
 EXAMPLE_PROFILE = ROOT / ".github/workflows/examples-duration-profile.json"
+# Seconds per test file, as `run-shard` prints them for each shard of a hosted run. A component with
+# such a profile places its files longest first on the least loaded shard instead of round-robin.
+FILE_PROFILES = {"loop": ROOT / ".github/workflows/loop-duration-profile.json"}
 
 
 def test_files(folder: str) -> list[str]:
@@ -1131,8 +1135,19 @@ def collect_matrix(matrix: list[dict], directory: Path) -> int:
         return next((code for code in statuses if code), 0)
 
 
-def shard_items(plan: dict, shard: int, total: int) -> list[str]:
-    files = set(plan["files"][shard::total])
+def shard_files(folder: str, files: list[str], total: int) -> list[list[str]]:
+    """Every test file in exactly one shard. Without a profile, round-robin in name order; with one,
+    longest first onto the least loaded shard, ties in name order, so the split depends only on the
+    profile and the file list. A file the profile does not know costs its default."""
+    profile = FILE_PROFILES.get(folder)
+    if profile is None or not profile.is_file():
+        return [files[n::total] for n in range(total)]
+    data = json.loads(profile.read_text(encoding="utf-8"))
+    return weighted_workers(sorted(files), total, data["seconds"], data["default_s"])
+
+
+def shard_items(plan: dict, folder: str, shard: int, total: int) -> list[str]:
+    files = set(shard_files(folder, plan["files"], total)[shard])
     return [node for node in plan["items"] if node.split("::", 1)[0] in files]
 
 
@@ -1234,7 +1249,7 @@ def run_shard(folder: str, shard: int, total: int, plans: Path, reports: Path, r
     reports.mkdir(parents=True, exist_ok=True)
     evidence = receipts / folder
     evidence.mkdir(parents=True, exist_ok=True)
-    selected = shard_items(plan, shard, total)
+    selected = shard_items(plan, folder, shard, total)
     groups = worker_items(folder, selected, runner_cores() if folder in PARALLEL else 1)
     if Counter(i for group in groups for i in group) != Counter(selected):
         raise ValueError("Worker assignments differ from the shard inventory")
@@ -1282,6 +1297,16 @@ def run_shard(folder: str, shard: int, total: int, plans: Path, reports: Path, r
                     seconds[node if paired else example_unit(node)] += spent
         print("Example seconds per unit: " + json.dumps({u: round(t, 1) for u, t in sorted(seconds.items())}),
               flush=True)
+    if folder in FILE_PROFILES:
+        # The seconds per test file of this shard, for the component's duration profile.
+        seconds = Counter()
+        for index in range(len(groups)):
+            measured = reports / f"pytest-{index}.seconds.json"
+            if measured.is_file():
+                for node, spent in json.loads(measured.read_text(encoding="utf-8")).items():
+                    seconds[node.partition("::")[0]] += spent
+        print(f"{folder} seconds per test file: "
+              + json.dumps({f: round(t, 1) for f, t in sorted(seconds.items())}), flush=True)
     # Write the expected number of journals even on failure, for diagnosis.
     (evidence / f"{shard}.json").write_text(json.dumps(len(groups)), encoding="utf-8")
     return status
@@ -1299,7 +1324,7 @@ def verify_execution(matrix: list[dict], plans: Path, receipts: Path) -> int:
         for row in rows:
             shard, total = row["shard"], row["total"]
             directory = receipts / folder
-            expected = Counter(shard_items(plan, shard, total))
+            expected = Counter(shard_items(plan, folder, shard, total))
             shard_counts = {event: Counter() for event in expected_events}
             try:
                 workers = json.loads((directory / f"{shard}.json").read_text(encoding="utf-8"))
