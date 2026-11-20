@@ -24,7 +24,7 @@ No earlier file defines them. `scripts/red_list.py` and `scripts/red_guard.py` k
 | `later` | Not a task. It waits for a decision, an outside dependency, or a release after the first. | |
 
 - **Release 1 is the milestone path.** It carries what `M1` to `M4` mark, and it is complete for its scope when no red test carries one of them. `python scripts/red_list.py --milestones` shows how far it is.
-- **A test is never on an earlier milestone than a test it waits for.** A reason that says "Waits for" another test names one on the same milestone or an earlier one, so a worker who takes the earliest mark is never stopped by a task that comes later. That is why sections 3, 6 and 7 move some tests that are not themselves the part they serve.
+- **A test is never on an earlier milestone than a test it waits for.** A reason that says "Waits for" another test names one on the same milestone or an earlier one, so a worker who takes the earliest mark is never stopped by a task that comes later. That is why sections 3 and 6 move some tests that are not themselves the part they serve.
 - **Moving a mark is planner work.** A planner moves a red test onto the milestone path, or off it, in a pull request that names the decision. `scripts/red_guard.py` refuses a postponed mark without the planner label. It lets a changed reason move to an earlier milestone, because a worker who extends a reason keeps its mark (worker card, "If it does not work"); a worker does not move it.
 - **Only the mark changes.** The rest of a reason says what to build and stays as its planner wrote it.
 
@@ -34,7 +34,7 @@ No earlier file defines them. `scripts/red_list.py` and `scripts/red_guard.py` k
 | --- | --- |
 | Proof | Built (`M1`), except that the two engines agree on conclusions and witnesses: section 6. |
 | Exact and deterministic, Unknown is explicit | Built (`M1`). |
-| Access | What is built (`M1`). The hardening of section 8 stays `extra`. |
+| Access | Built (`M1`). The hardening the audit found on `extra` (the checker's own reading of a role bundle and of an access change, `may_read_full`, the rights to propose and review, the partial reader of the edge pilot profile) landed on `main` on the day of this decision. |
 | What if | The local answer with weights `+1` and `−1` and a witness per row, observations that do not change, and turning points with the proof on both sides (section 5). |
 | The loop | `M2`. |
 | Two kinds of comparison | Not changed by this decision. |
@@ -100,21 +100,13 @@ Release 1 says that the engines agree only when these four are green.
 
 ## 7. The language at the front door
 
-A newcomer meets Rezono in the root `README.md` and in the language guide `rezono/README.md`, and neither shows the language yet. [The front door](front-door.md) lets the readme show only what compiles and runs at the commit. Release 1 carries the language at the front door, in this order:
+A newcomer meets Rezono in the root `README.md` and in the language guide `rezono/README.md`. [The front door](front-door.md) lets the readme show only what compiles and runs at the commit. Release 1 carries the language at the front door, in this order:
 
 1. **The first real pack on the live path in Rezono.** `examples/subsidy-scheme` replaces `calc/award.yaml` with the module `rezono/award.rezono`, declared under `rezono:` in its `pack.yaml`, with the same `ir/calc.json` and the same outcomes under `expected/calc/` of `examples/subsidy` ([calculations in Rezono](language-calculations.md)). Its test (`examples/subsidy/test_subsidy_scheme_award.py::test_subsidy_scheme_award_in_rezono`) is already green on `main`.
 2. **The rules in the readme.** `### The rules in Rezono` under `## Example`, as [the front door](front-door.md#the-language-in-the-readme) specifies: a literal excerpt of two `A001` rules, the same excerpt with one changed line beside its `R050` refusal, and one sentence that names the four value states. Each of its tests waits for step 1.
 3. **The language guide opens with the language.** `rezono/README.md` starts with a copyable excerpt of `examples/subsidy-scheme/rezono/award.rezono`, and its light and dark highlighted SVG with a colour legend ([language guide highlight](language-guide-highlight.md)). Its tests wait for step 1 and for `rezono/test/test_rezono_syntax_grammar.py::test_generated_syntax_highlighting_grammar`, which is green, as is the theme that colours every token kind (`test_highlight_theme_covers_every_token_kind_in_light_and_dark`).
 
-These red tests move from `extra` to `M3`:
-
-- `examples/test_readme_layout.py::test_the_readme_shows_a_literal_rezono_excerpt_of_a001_rules`
-- `examples/test_readme_layout.py::test_the_readme_changed_excerpt_is_refused_by_the_compiler`
-- `examples/test_readme_layout.py::test_the_readme_names_the_four_value_states_in_one_sentence`
-- `rezono/test/test_language_guide_excerpt.py::test_language_guide_starts_with_subsidy_award_excerpt`
-- `rezono/test/test_language_guide_highlight.py::test_regenerating_excerpt_svgs_produces_identical_bytes`
-- `rezono/test/test_language_guide_highlight.py::test_excerpt_svg_text_matches_the_excerpt`
-- `rezono/test/test_language_guide_highlight.py::test_language_guide_displays_highlighted_picture_and_color_legend`
+All three steps landed on `main` on the day of this decision, so their tests are green and this decision moves none of them: the three in `examples/test_readme_layout.py`, `rezono/test/test_language_guide_excerpt.py::test_language_guide_starts_with_subsidy_award_excerpt` and the four in `rezono/test/test_language_guide_highlight.py`. They stay part of release 1: a change that takes the language off the front door again fails them.
 
 An excerpt follows the language version of the pack it quotes: while `award.rezono` is written in `rezono 0`, the readme does not mention `rezono 1` ([the front door](front-door.md#the-language-in-the-readme)).
 
@@ -124,8 +116,7 @@ An excerpt follows the language version of the pack it quotes: while `award.rezo
 
 - **Drawn views with positions** (`later: tekenweergaven`). [EPL-2.0 and generic views](runtime-epl-and-generic-views.md) already puts published positions and the drawing views after the first installable release. They need a layout engine and positions in the publication; the table twin reads the same rows without them.
 - **Hosted identity and the gate** (`blocked/edge-gate-hosted.txt`, `blocked/edge-gate-variant-queries.txt`, `blocked/edge-gate-indexed-publications.txt`, `blocked/edge-gate-inheritance-ask.txt`, `blocked/edge-gate-other-publication-routes.txt`). Release 1 reads through the local reader, for the role its caller chooses, on the loopback address. Sign-in, visitor access and writes through the gate are a hosted service, which [the slip decision](viewer-slip.md#out-of-scope) leaves out too.
-- **The verbs missing, compare and propose on a page** (step 4 of the slip). They need questions the local reader does not answer yet, and propose needs the gate and the rights to propose and review. A reader that answers one more question makes one more verb appear without a change to the page, so they can come after release 1 without a new page.
-- **Access hardening** beyond what section 2 names stays `extra`: the checker deriving the schema of a role bundle itself, its own reading of whether a delta may change access, and `may_read_full` ([central read access](central-read-access.md)); the rights to propose and review ([review and rights](review-and-rights.md)); and the partial reader of the edge pilot profile (`deploy/profiles/edge/test_pilot.py`). They make the checker derive on its own what the batch path already keeps, or they serve propose, which is outside.
+- **The verbs missing, compare and propose on a page** (step 4 of the slip). They need questions the local reader does not answer yet, and propose needs the gate. A reader that answers one more question makes one more verb appear without a change to the page, so they can come after release 1 without a new page.
 
 ## Alternatives
 
