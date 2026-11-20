@@ -122,7 +122,7 @@ def lower(slots: list[dict], declared: Set[str], *, implicit_identifier: bool = 
 
 def inverse_points_back(slot: dict, kind: str, here: str, kinds: Mapping[str, list], own: Mapping[str, str],
                         owners: Mapping[str, list[str]], refuse: Refuse) -> bool:
-    """An inverse names a slot of the kind its type names, and that slot's type is the kind that declares the
+    """An inverse names a forward slot of the kind its type names, and that slot's type is the kind that declares the
     inverse (decisions/language-inverse-references.md). `kinds` holds the slots of each kind of this module."""
     forward, target = slot["inverse"], slot["type"]
     if not isinstance(forward, str):
@@ -137,6 +137,12 @@ def inverse_points_back(slot: dict, kind: str, here: str, kinds: Mapping[str, li
         return False
     if found[0].get("type") != kind:
         refuse(here, f"the inverse {forward} of {target} is a {found[0].get('type')}, not a {kind}", "§5.1")
+        return False
+    if found[0] is slot or (target == kind and forward == slot.get("slot")):
+        refuse(here, f"the inverse {forward} of {target} cannot be the slot itself", "§5.1")
+        return False
+    if "inverse" in found[0]:
+        refuse(here, f"the inverse {forward} of {target} is itself an inverse, not a forward slot", "§5.1")
         return False
     return True
 
