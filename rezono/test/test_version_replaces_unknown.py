@@ -21,18 +21,6 @@ class MissingR021Sentence(AssertionError):
     """A message catalogue has no sentence for R021 with its three arguments."""
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=MissingReplacedVersionCheck,
-    reason="extra: decisions/language-parameters.md: In rezono/src/module-version.ts, refuse with R021 a number after "
-           "replaces that names no version of the same declaration, at that number, and replaces lines that form a "
-           "cycle, at the number after replaces of the first version of the cycle, with no module, as R018 is "
-           "refused. Read section R021. The sentence is "
-           "test_r021_has_a_sentence. "
-           "Blocked on planner fix: the control VALID sets valid 2026-01-01.. on every version, which emits W108 "
-           "(versionGaps in rezono/src/module-version.ts), so `if read['diagnostics']` fails even with R021 implemented. "
-           "Omit valid on one version of VALID or ignore W108 in the control check.",
-)
 def test_reader_refuses_a_missing_or_cyclic_replacement():
     unknown = VALID.replace("replaces 1", "replaces 4")
     cycle = VALID.replace("version 1,", "version 1 replaces 2,")

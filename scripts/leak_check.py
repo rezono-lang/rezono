@@ -4,7 +4,9 @@ In a pull request or merge-group run it also refuses commit messages, and the pu
 title and body, that contain a Co-authored-by trailer or an address other than the author's.
 
 The budget is a ceiling per file and kind that may only fall: more findings than listed, or a listed number
-above the base budget, is red. Fewer findings than listed is green with a hint to lower the budget, so two
+above the base budget, is red. With a base, it is also a ratchet: more findings in a listed file than that
+file holds on the base is red, even while the listed number leaves room, so slack left behind by a removed
+finding cannot hide a new one. Fewer findings than listed is green with a hint to lower the budget, so two
 changes that each remove a finding from the same file stay green when they are merged together.
 """
 
@@ -50,7 +52,7 @@ def counts(data):
 
 
 def addressed(match):
-    """A local part without a letter or digit, such as the backtick of `@pytest.mark.xfail`, names no one."""
+    """A local part without a letter or digit, such as a backtick before a Python decorator, names no one."""
     return any(c.isalnum() for c in match.rpartition(b"@")[0].decode("utf-8", "replace"))
 
 
@@ -104,6 +106,13 @@ def branch_finding(name):
     return None
 
 
+def file_counts(raw, data):
+    """Count the findings in a file's name and contents; a symlink's contents are its target."""
+    if data.startswith((b"\xff\xfe", b"\xfe\xff")):
+        data = data.decode("utf-16", errors="replace").encode()
+    return counts(raw + b"\n" + data)
+
+
 def scan():
     paths = subprocess.check_output(["git", "ls-files", "-z"]).split(b"\0")
     result = {}
@@ -111,11 +120,22 @@ def scan():
         name = raw.decode("utf-8")
         path = Path(name)
         data = str(path.readlink()).encode() if path.is_symlink() else path.read_bytes()
-        if data.startswith((b"\xff\xfe", b"\xfe\xff")):
-            data = data.decode("utf-16", errors="replace").encode()
-        findings = counts(raw + b"\n" + data)
+        findings = file_counts(raw, data)
         if findings:
             result[name] = findings
+    return result
+
+
+def scan_base(base, names):
+    """Count the findings each named file holds on the base commit; a file the base lacks holds none."""
+    result = {}
+    for name in names:
+        entry = subprocess.check_output(["git", "ls-tree", "-z", base, "--", name]).split(b"\0")
+        if any(line.endswith(b"\t" + name.encode("utf-8")) for line in entry):
+            data = subprocess.check_output(["git", "cat-file", "blob", f"{base}:{name}"])
+            result[name] = file_counts(name.encode("utf-8"), data)
+        else:
+            result[name] = {}
     return result
 
 
@@ -140,8 +160,9 @@ def main():
     args = parser.parse_args()
     actual = scan()
     budget = read_budget(Path(BUDGET).read_bytes())
-    previous = budget
+    previous, held = budget, None
     if args.base:
+        held = scan_base(args.base, sorted(budget))
         tree = subprocess.check_output(["git", "ls-tree", args.base, "--", BUDGET])
         if tree:
             previous = read_budget(subprocess.check_output(["git", "show", f"{args.base}:{BUDGET}"]))
@@ -159,6 +180,11 @@ def main():
             label = "[redacted filename]" if counts(path.encode()) else path
             if number > limit or limit > previous.get(path, {}).get(kind, 0):
                 print(f"{label} {kind}: observed={number} listed={limit}")
+                failed = True
+            elif held is not None and number > held[path].get(kind, 0):
+                # Compare with what the base holds, not with the listed number, so slack hides no new finding.
+                print(f"{label} {kind}: observed={number} base={held[path].get(kind, 0)} listed={limit}; "
+                      "a new finding is not allowed")
                 failed = True
             elif number < limit:
                 print(f"{label} {kind}: observed={number} listed={limit}; lower the budget in {BUDGET}")

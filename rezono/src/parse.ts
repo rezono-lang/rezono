@@ -115,7 +115,7 @@ semantics.addOperation<unknown>('tree', {
 		return placed(this, { insert_row: { kind: type.sourceString, key: id.sourceString, slots: read } } satisfies Suppose);
 	},
 	SupposeSlot(name, _eq, value) {
-		return { name: name.sourceString, value: value.tree() as Expr } satisfies SupposeSlot;
+		return placed(this, { name: name.sourceString, value: value.tree() as Expr } satisfies SupposeSlot);
 	},
 	Suppose_retract_row(_minus, type, id) {
 		return placed(this, { retract_row: [type.sourceString, id.sourceString] } satisfies Suppose);

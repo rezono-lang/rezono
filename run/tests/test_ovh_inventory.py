@@ -7,10 +7,6 @@ from offline_cases import implementation
 DELIVERED = ["srv-2.example.org", "srv-1.example.org"]
 
 
-@pytest.mark.xfail(strict=True, reason=(
-    "M4: decisions/run-price-enforcement.md: Read the section Cleanup. Implement request() and remaining(listing, delivered) in "
-    "run/ovh_inventory.py: an unfiltered account-wide list, compared with the services the plan's orders delivered."
-))
 def test_ovh_inventory():
     request = implementation("ovh_inventory.py", "request")
     remaining = implementation("ovh_inventory.py", "remaining")

@@ -61,6 +61,47 @@ runs:
         read -ra packages <<< "$EDITABLE"
         python -m pip install -q --no-deps --no-build-isolation "${packages[@]}"
         python scripts/check-pinned.py requirements/dev.txt
+    # A pytest plugin loads in every test run once it is installed, and its hooks could drop a
+    # red test from the collection. Only the plugins that the base lists may be installed; the
+    # list comes from the base, so the candidate cannot extend it.
+    - name: Allow only the pytest plugins the base lists
+      env:
+        POLICY: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.sha }}
+      shell: bash
+      run: |
+        set -euo pipefail
+        if ! git cat-file -e "$POLICY^{commit}" 2>/dev/null; then
+          for attempt in 1 2 3; do
+            git fetch --no-tags --depth=1 origin "$POLICY" && break
+            echo "Fetching the base $POLICY failed (attempt $attempt)"
+            sleep 10
+          done
+        fi
+        # Fail closed: without the base, or without its list, no plugin may be trusted.
+        if ! git cat-file -e "$POLICY^{commit}" 2>/dev/null; then
+          echo "::error::The base $POLICY could not be fetched, so the installed pytest plugins cannot be checked."
+          exit 1
+        fi
+        if ! git cat-file -e "$POLICY:scripts/pytest-plugins.txt" 2>/dev/null; then
+          echo "::error::The base $POLICY has no scripts/pytest-plugins.txt, so the installed pytest plugins cannot be checked."
+          exit 1
+        fi
+        git show "$POLICY:scripts/pytest-plugins.txt" > "$RUNNER_TEMP/pytest-plugins.txt"
+        # scripts/components.py and red_before.py read the same list from the base
+        # themselves, so a later step cannot point them elsewhere.
+        python -I -c '
+        import sys
+        from importlib.metadata import entry_points
+        with open(sys.argv[1], encoding="utf-8") as listed:
+            allowed = {line.strip() for line in listed if line.strip() and not line.lstrip().startswith("#")}
+        found = sorted({f"{e.name} = {e.value}" for e in entry_points(group="pytest11")})
+        print("Installed pytest plugins:", *found, sep="\n  ")
+        extra = [plugin for plugin in found if plugin not in allowed]
+        if extra:
+            print("::error::pytest plugins that the base does not list in scripts/pytest-plugins.txt: "
+                  + ", ".join(extra))
+            sys.exit(1)
+        ' "$RUNNER_TEMP/pytest-plugins.txt"
     - name: Cache generated contract types
       id: types
       uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0

@@ -1,0 +1,59 @@
+rezono 0
+pack cleanup
+
+rules pages
+  | // Tokens are local to a sweep. A terminal is an explicit null successor.
+  | .decl recorded_page(sweep: symbol, page: symbol, token: symbol, successor: symbol)
+  | recorded_page(s, r, t, n) :- page(r), page__sweep(r, s), page__token(r, t),
+  |     t != "", page__next_token(r, n).
+  | 
+  | .decl reached_page(sweep: symbol, page: symbol)
+  | reached_page(s, r) :- sweep__root_token(s, t), recorded_page(s, r, t, _).
+  | reached_page(s, r) :- reached_page(s, previous), recorded_page(s, previous, _, t),
+  |     recorded_page(s, r, t, _).
+  | 
+  | .decl observed_item(sweep: symbol, page: symbol, resource: symbol)
+  | observed_item(s, r, i) :- resource(i), resource__page(i, r), resource__sweep(i, s),
+  |     page__sweep(r, s), resource__plan_hash(i, _).
+  | observed_item(s, r, i) :- resource(i), resource__page(i, r), resource__sweep(i, s),
+  |     page__sweep(r, s), resource__tag_state(i, "untagged").
+  | 
+  | .decl recorded_token(sweep: symbol, token: symbol)
+  | recorded_token(s, t) :- recorded_page(s, _, t, _).
+  | 
+  | .decl counted_page(page: symbol)
+  | counted_page(r) :- page__item_count(r, _).
+  | 
+  | .decl located_item(sweep: symbol, resource: symbol)
+  | located_item(s, i) :- observed_item(s, _, i).
+  | 
+  | .decl invalid_pages(sweep: symbol)
+  | invalid_pages(s) :- page__sweep(r, s), !reached_page(s, r).
+  | invalid_pages(s) :- page__sweep(r, s), page__sweep(r, other), other != s.
+  | invalid_pages(s) :- page__sweep(r, s), page__token(r, a), page__token(r, b), a != b.
+  | invalid_pages(s) :- page__sweep(r, s), page__next_token(r, a), page__next_token(r, b), a != b.
+  | invalid_pages(s) :- recorded_page(s, a, t, _), recorded_page(s, b, t, _), a != b.
+  | invalid_pages(s) :- sweep__root_token(s, a), sweep__root_token(s, b), a != b.
+  | invalid_pages(s) :- recorded_page(s, _, _, t), t != "", !recorded_token(s, t).
+  | invalid_pages(s) :- page__sweep(r, s), !counted_page(r).
+  | invalid_pages(s) :- page__sweep(r, s), page__item_count(r, expected),
+  |     actual = count : { observed_item(s, r, _) }, actual != expected.
+  | invalid_pages(s) :- page__sweep(r, s), resource__page(i, r), !observed_item(s, r, i).
+  | invalid_pages(s) :- resource__sweep(i, s), !located_item(s, i).
+  | invalid_pages(s) :- observed_item(s, a, i), resource__page(i, b), a != b.
+  | invalid_pages(s) :- observed_item(s, _, i), resource__sweep(i, other), other != s.
+  | invalid_pages(s) :- observed_item(s, _, i), resource__plan_hash(i, a), resource__plan_hash(i, b), a != b.
+  | invalid_pages(s) :- observed_item(s, _, i), resource__plan_hash(i, _), resource__tag_state(i, "untagged").
+  | 
+  | // Repeated resource observations must agree on the provider tag.
+  | invalid_pages(s) :- resource__sweep(i, s), resource__sweep(j, s), resource__provider_id(i, id),
+  |     resource__provider_id(j, id), resource__plan_hash(i, a), resource__plan_hash(j, b), a != b.
+  | invalid_pages(s) :- resource__sweep(i, s), resource__sweep(j, s), resource__provider_id(i, id),
+  |     resource__provider_id(j, id), resource__plan_hash(i, _), resource__tag_state(j, "untagged").
+  | 
+  | // With one successor per page, a reached terminal excludes every reachable cycle.
+  | .decl complete_inventory(sweep: symbol, terminal: symbol)
+  | complete_inventory(s, r) :- sweep(s), reached_page(s, r), recorded_page(s, r, _, ""),
+  |     !invalid_pages(s).
+  | 
+  | .output complete_inventory

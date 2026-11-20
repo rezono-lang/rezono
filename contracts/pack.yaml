@@ -179,10 +179,11 @@ classes:
   SweepFile:
     description: >-
       sweeps.yaml: the fact cells a sweep moves over a grid (docs/interaction.md, section 1). Each names one
-      cell as a delta `set` does; the grid comes from the slot's `explore` annotation. v1 allows one sweep
-      per pack. The compiler checks that the kind, the slot and the record exist.
+      cell as a delta `set` does; the grid comes from the slot's `explore` annotation. A pack has at most
+      four sweeps (decisions/viewer-slip.md, section Several sweeps). The compiler checks that the kind,
+      the slot and the record exist.
     attributes:
-      sweeps: {range: Sweep, multivalued: true, inlined_as_list: true, required: true, maximum_cardinality: 1}
+      sweeps: {range: Sweep, multivalued: true, inlined_as_list: true, required: true, maximum_cardinality: 4}
 
   Sweep:
     description: One fact cell to sweep.

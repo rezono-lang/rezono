@@ -2,12 +2,15 @@
 program (decisions/language-calculations.md, section Parameters). The oracle is calc/award.yaml of the
 scheme that examples/subsidy imports: two of its rules move to a module form, the rest stays in the YAML file."""
 
+from types import SimpleNamespace
+
 import pytest
 import yaml
 
 from calc_packs import (SCHEME, MissingCalculationLowering, calc_ir, definition, derived, examples, form, lit,
                         lowered, path, row_parameter)
-from rezono_compiler import pack
+from rezono_compiler import pack, rezono_calc, rezono_module
+from support import FIXTURE
 
 
 MOVED = ("income_threshold@2026", "income_limit@2026")
@@ -32,13 +35,6 @@ def split(root):
     return scheme, parameters, values
 
 
-@pytest.mark.xfail(strict=True, raises=MissingCalculationLowering, reason=(
-    "M3: decisions/language-calculations.md: Lower param NAME: T from Kind.slot by nameSlot to the program "
-    "members parameters (kind.slot) and parameter_choice ({name: nameSlot}), and each leaf that names it to "
-    "{parameter: NAME}, in compiler/rezono_compiler/rezono_calc.py instead of the parameter refusal of "
-    "rezono_module.py; a module program merges with the calc/*.yaml files of the pack as another calc file "
-    "does. Refuse a second source as R050 two parameter sources. Waits for test_lower_calculation, which adds "
-    "rezono_calc.py."))
 def test_lower_parameters(tmp_path):
     expected = calc_ir(examples(tmp_path / "legacy") / SCHEME)
     assert expected["ir/calc.json"]["parameter_choice"]["name"] == "scheme_parameter__name"
@@ -53,3 +49,39 @@ def test_lower_parameters(tmp_path):
     form(other, [*parameters, {"extend": "Application", "derived": values}])
     with pytest.raises(pack.CompileError, match="two parameter sources"):
         calc_ir(other)
+
+
+def test_parameter_source_unknown_kind_reports_located_r050_and_collects_errors():
+    """An unresolved kind in a row-backed parameter source produces a located R050 and still collects later errors."""
+    model = pack.read(FIXTURE)
+    decls = [
+        {
+            "param": "rate",
+            "type": "Int",
+            "source": {"kind": "MissingKind", "slot": "size", "nameSlot": "title"},
+        },
+        {
+            "param": "rate",
+            "type": "Int",
+            "source": {"kind": "Alpha", "slot": "size", "nameSlot": "title"},
+        },
+    ]
+    body = {"rezono": "0", "pack": model.meta["name"], "use": [], "decls": decls}
+    spans = [
+        {"at": at, "line": "10" if at.startswith("/decls/0") else "11", "start": "0", "end": "1"}
+        for at in rezono_module.place_pointers(body)
+    ]
+    mod = SimpleNamespace(
+        pack=model.meta["name"],
+        pack_dir=FIXTURE,
+        rel="rezono/params.rezono",
+        form={"format": rezono_module.IDENTIFIER_FORMAT, "module": body, "spans": spans},
+    )
+    with pytest.raises(pack.CompileError) as caught:
+        rezono_calc.lower_module(model, mod, {})
+    diags = caught.value.diagnostics
+    assert [d.code for d in diags] == ["R050", "R050"]
+    assert "minimal/rezono/params.rezono:10:" in diags[0].message
+    assert "MissingKind" in diags[0].message
+    assert "minimal/rezono/params.rezono:11:" in diags[1].message
+    assert "declared twice" in diags[1].message

@@ -1,3 +1,11 @@
+---
+decider: [owner]
+decided_on: 2026-11-19
+valid_from: 2026-11-19
+state: in_force
+subject: fixture-pin-update
+---
+
 # A planner may re-pin the imports of a fixture pack
 
 The owner approved this exception on 19-11-2026.

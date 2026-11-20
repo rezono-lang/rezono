@@ -44,6 +44,10 @@ LEAF = {"format", "tree", "relation", "level", "rows"}
 PAGE = {"format", "tree", "relation", "level", "children"}
 CHILD = {"first", "last", "file", "sha256"}
 SHA256 = re.compile(r"^[0-9a-f]{64}$")
+# The checker's own bounds (decisions/central-read-access.md): a caller may pass stricter ones, never looser.
+MAX_PIECE = 64 * 1024  # bytes per piece, at most
+MAX_FANOUT = 128  # children per page, at most
+MAX_LEVELS = 8  # levels per tree, at most
 
 
 def steps(rules_doc: dict, witnesses: list[dict], rows: dict) -> set[tuple]:
@@ -131,6 +135,10 @@ class _Walk:
     def __init__(self, pieces: dict, limit: int, fanout: int, problems: list):
         self.pieces, self.limit, self.fanout, self.problems = pieces, limit, fanout, problems
         self.reached: set = set()
+        if type(limit) is not int or not 1 <= limit <= MAX_PIECE:
+            problems.append(f"proof: a piece limit of {limit!r} bytes, not 1 to {MAX_PIECE}")
+        if type(fanout) is not int or not 2 <= fanout <= MAX_FANOUT:
+            problems.append(f"proof: a fanout of {fanout!r} children per page, not 2 to {MAX_FANOUT}")
 
     def read(self, path, digest, tree, relation, level):
         problems = self.problems
@@ -182,6 +190,9 @@ class _Walk:
         """The rows of one tree down from its root, or None (a problem) if the root is not well-formed."""
         if not isinstance(root, dict) or set(root) != keys or type(root["levels"]) is not int or root["levels"] < 1:
             self.problems.append(f"{name}: the root is not exactly {sorted(keys)}")
+            return None
+        if root["levels"] > MAX_LEVELS:
+            self.problems.append(f"{name}: {root['levels']} levels, more than {MAX_LEVELS}")
             return None
         tree, relation = name.split("/", 1)
         return self.read(root["file"], root["sha256"], tree, relation, root["levels"] - 1)

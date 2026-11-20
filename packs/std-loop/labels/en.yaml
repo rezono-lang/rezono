@@ -84,3 +84,26 @@ status_contender: current or undated status reading
 status_disagreement: contradictory status evidence
 status_conflict: conflicted delivery step
 current_delivery_status: current delivery status
+loop_sweep: dated observation sweep
+loop_sweep.run: swept run
+loop_sweep.event_time: sweep event time
+loop_sweep.complete: complete sweep
+loop_deadline: step deadline
+loop_deadline.run: deadline run
+loop_deadline.step: bounded step
+loop_deadline.start: start observation
+loop_deadline.budget: budget in event-time units
+loop_expected_difference: declared expected difference
+loop_expected_difference.run: difference run
+loop_expected_difference.token: compared token
+loop_expected_difference.observed: excused observed value
+dated_sweep: consumed sweep of the run
+latest_sweep: time of the latest sweep
+current_sweep: current sweep
+sweep_flag: sweep completeness flag
+complete_current_sweep: complete current sweep
+deadline_expired: expired step deadline
+expected_drift: declared expected drift
+round_failed: failed round
+round_unfinished: unfinished round
+round_outcome: round outcome

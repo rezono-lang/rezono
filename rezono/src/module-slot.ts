@@ -2,6 +2,7 @@ import { printMetadata, readMetadataLine, type Metadata } from './module-metadat
 import { printNumericSlotBound, readNumericSlotBound, type NumericSlotBound } from './module-slot-numeric.ts';
 import { printSlotPattern, slotPattern, type PatternConstraint } from './module-slot-pattern.ts';
 import { block, named, opt, printWorld, typeOf, type Build, type Card, type Line, type Logical, type World, type ModuleComponent } from './module-support.ts';
+import { readRuleName, spellName } from './rule-names.ts';
 
 type CardinalityConstraint = { cardinality: [minimum: string, maximum: string] };
 export type SlotConstraint = CardinalityConstraint | NumericSlotBound | PatternConstraint;
@@ -56,7 +57,7 @@ function printConstraint(constraint: SlotConstraint): string {
 }
 
 export function printSlot(s: SlotDecl): string[] {
-	return block(`${s.slot}: ${s.type}${s.card ?? ''}${s.inverse !== undefined ? ` inverse ${s.inverse}` : ''}${printWorld(s.world)}${s.identifier ? ' identifier' : ''}${s.embedded ? ' embedded' : ''}`, [
+	return block(`${spellName(s.slot)}: ${s.type}${s.card ?? ''}${s.inverse !== undefined ? ` inverse ${spellName(s.inverse)}` : ''}${printWorld(s.world)}${s.identifier ? ' identifier' : ''}${s.embedded ? ' embedded' : ''}`, [
 		...(s.slotUri === undefined ? [] : [`iri ${JSON.stringify(s.slotUri)}`]),
 		...printMetadata(s),
 		...(s.constraints ?? []).map(printConstraint)
@@ -66,7 +67,7 @@ export function printSlot(s: SlotDecl): string[] {
 export const slot = {
 	lineRules: ['SlotLine', 'CardinalityLine', ...slotPattern.lineRules],
 	grammar: String.raw`
-  SlotLine = name ":" SlotType Card? (kw<"inverse"> name)? World? kw<"identifier">? kw<"embedded">?
+  SlotLine = rName ":" SlotType Card? (kw<"inverse"> rName)? World? kw<"identifier">? kw<"embedded">?
   SlotType = (name ".")? Type
   CardinalityLine = kw<"cardinality"> cardinalityBound ".." cardinalityBound
   cardinalityBound = "0"             -- zero
@@ -76,9 +77,9 @@ export const slot = {
 	actions: {
 		...slotPattern.actions,
 		SlotLine(n, _c, type, card, _inverse, inverse, world, identifier, embedded) {
-			const decl: Line = { line: 'slot', slot: n.sourceString, type: typeOf(type) };
+			const decl: Line = { line: 'slot', slot: readRuleName(n), type: typeOf(type) };
 			if (card.numChildren) decl.card = opt(card);
-			if (inverse.numChildren) decl.inverse = opt(inverse);
+			if (inverse.numChildren) decl.inverse = readRuleName(inverse.child(0));
 			if (world.numChildren) decl.world = world.child(0).decl();
 			if (identifier.numChildren) decl.identifier = true;
 			if (embedded.numChildren) decl.embedded = true;

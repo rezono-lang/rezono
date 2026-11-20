@@ -1,0 +1,10 @@
+rezono 0
+pack std-loop
+
+rules drift
+  | // Current evidence can establish a different value or explicitly attest absence.
+  | .decl drift(run: symbol, token: symbol, desired_ref: symbol, observed_ref: symbol)
+  | drift(r, t, d, o) :- desired(r, t, expected, d), current(r, t, "known", observed, o), expected != observed.
+  | drift(r, t, d, o) :- desired(r, t, _, d), current(r, t, "absent", _, o).
+  | 
+  | .output drift

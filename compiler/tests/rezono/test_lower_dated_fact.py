@@ -69,16 +69,6 @@ DATED_ROWS = [
 ]
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=MissingDatedFactLowering,
-    reason="M3: decisions/language-dated-facts.md: Support dated FactRow declarations in named datasets inside "
-           "compiler/rezono_compiler/facts.py via facts.load(pack, path, *, as_of=None, known=None): verify that "
-           "each dated row targets an existing record created by a fact table or undated row, type-check its slot "
-           "assignments, select the applying version on (as_of, known) by latest known date (half-open valid range "
-           "or open end), omit the slot row when no version applies, and raise LoadError with versions_overlap on "
-           "a same-known overlap.",
-)
 def test_lower_dated_fact(tmp_path):
     model, form_path = make_pack(tmp_path, "valid", DATED_ROWS)
     try:
@@ -116,3 +106,54 @@ def test_lower_dated_fact(tmp_path):
     orphan_model, orphan_path = make_pack(tmp_path, "orphan", orphan_rows)
     with pytest.raises(facts.LoadError):
         facts.load(orphan_model, orphan_path, as_of="2026-07-01", known="2026-08-01")
+
+
+@pytest.mark.parametrize("bounds", [
+    ["2026-01-01", "2026-01-01"],
+    ["2027-01-01", "2026-01-01"],
+])
+def test_dated_fact_rejects_empty_and_reversed_valid_ranges(tmp_path, bounds):
+    rows = [
+        {"fact": "alpha", "id": "a-one", "valid": bounds, "known": "2025-12-01",
+         "set": [{"slot": "size", "value": {"lit": "3"}}]},
+    ]
+    model, form_path = make_pack(tmp_path, f"bad-range-{bounds[0]}-{bounds[1]}", rows)
+    with pytest.raises(facts.LoadError) as caught:
+        facts.load(model, form_path, as_of="2026-06-01", known="2026-06-01")
+    assert [d.code for d in caught.value.diagnostics] == ["invalid_date_range"]
+
+
+def test_dated_fact_rejects_mixing_undated_and_dated_slot(tmp_path):
+    # Undated row + dated row with explicit known must fail consistently with versions_overlap,
+    # both when the dated row applies and when as_of falls outside its valid range.
+    with_known = [
+        {"fact": "alpha", "id": "a-one", "set": [{"slot": "size", "value": {"lit": "1"}}]},
+        {"fact": "alpha", "id": "a-one", "valid": ["2026-01-01", "2027-01-01"], "known": "2025-12-01",
+         "set": [{"slot": "size", "value": {"lit": "3"}}]},
+    ]
+    model, form_path = make_pack(tmp_path, "mix-with-known", with_known)
+    for as_of in ("2026-02-01", "2025-06-01"):
+        with pytest.raises(facts.LoadError, match="versions_overlap") as caught:
+            facts.load(model, form_path, as_of=as_of, known="2026-02-15")
+        assert [d.code for d in caught.value.diagnostics] == ["versions_overlap"]
+
+    # Undated row + dated row without known also fails with versions_overlap.
+    without_known = [
+        {"fact": "alpha", "id": "a-one", "set": [{"slot": "size", "value": {"lit": "1"}}]},
+        {"fact": "alpha", "id": "a-one", "valid": ["2026-01-01", "2027-01-01"],
+         "set": [{"slot": "size", "value": {"lit": "3"}}]},
+    ]
+    model2, form_path2 = make_pack(tmp_path, "mix-without-known", without_known)
+    with pytest.raises(facts.LoadError, match="versions_overlap") as caught:
+        facts.load(model2, form_path2, as_of="2026-02-01", known="2026-02-15")
+    assert [d.code for d in caught.value.diagnostics] == ["versions_overlap"]
+
+    # Separate records may still use undated and dated values for the same slot.
+    separate_records = [
+        {"fact": "alpha", "id": "a-two", "set": [{"slot": "size", "value": {"lit": "2"}}]},
+        {"fact": "alpha", "id": "a-one", "valid": ["2026-01-01", "2027-01-01"], "known": "2025-12-01",
+         "set": [{"slot": "size", "value": {"lit": "3"}}]},
+    ]
+    model3, form_path3 = make_pack(tmp_path, "separate-records", separate_records)
+    loaded = facts.load(model3, form_path3, as_of="2026-02-01", known="2026-02-15")
+    assert loaded["alpha__size"] == [("a-one", 3), ("a-two", 2)]

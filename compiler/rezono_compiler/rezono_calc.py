@@ -11,7 +11,7 @@ import re
 from collections.abc import Iterable, Mapping, Sequence, Set
 from typing import TYPE_CHECKING
 
-from . import rezono_module
+from . import rezono_exceptions, rezono_module
 from .diagnostics import Diagnostic
 from .names import ISO_DATE
 from .rezono_lowering import Refuse
@@ -37,9 +37,22 @@ DIRECT_CMP = {"=": "eq", "<": "lt", "<=": "lte", ">=": "gte"}
 DERIVED_MEMBERS = frozenset({
     "derived", "type", "card", "value", "unless", "versions", "output", "unit", "definitions", "totality",
 })
-VERSION_MEMBERS = frozenset({"version", "replaces", "valid", "known", "value", "source", "definitions"})
+VERSION_MEMBERS = frozenset({"version", "valid", "known", "value", "definitions"})
 DEFINITION_MEMBERS = frozenset({"name", "when", "value", "overrides"})
 OVERRIDE_MEMBERS = frozenset({"definition", "reason"})
+CLAUSE_MEMBERS = frozenset({"when", "then", "source"})
+PARAM_MEMBERS = frozenset({"param", "type", "per", "value", "source", "versions"})
+PARAM_SOURCE_MEMBERS = frozenset({"kind", "slot", "nameSlot"})
+
+
+def _param_source(decl: object) -> tuple[str, str, str] | None:
+    if not isinstance(decl, dict) or not isinstance(decl.get("param"), str) or not decl["param"]:
+        return None
+    src = decl.get("source")
+    if (isinstance(src, dict) and set(src) == PARAM_SOURCE_MEMBERS
+            and all(isinstance(src.get(k), str) and src[k] for k in ("kind", "slot", "nameSlot"))):
+        return src["kind"], src["slot"], src["nameSlot"]
+    return None
 
 
 def _is_calc_derived(item: object) -> bool:
@@ -57,15 +70,24 @@ def _subject_of_decl(decl: object) -> tuple[str, list[tuple[int, dict]]] | None:
 
 
 def has_calculation(form: dict) -> bool:
-    """Whether a module form carries an `as of` line or any non-table derived value."""
-    if form.get("format") not in (rezono_module.IDENTIFIER_FORMAT, rezono_module.NATIVE_FORMAT):
+    """Whether a module form carries an `as of` line, a row-backed parameter, or any non-table derived value."""
+    if form.get("format") not in (rezono_module.IDENTIFIER_FORMAT, *rezono_module.NATIVE_FORMATS):
         return False
     for decl in form["module"]["decls"]:
-        if isinstance(decl, dict) and "asOf" in decl:
+        if isinstance(decl, dict) and ("asOf" in decl or "param" in decl):
             return True
         if _subject_of_decl(decl) is not None:
             return True
     return False
+
+
+def module_parameters(form: dict) -> set[str]:
+    """The row-backed parameter names declared by a module form."""
+    out: set[str] = set()
+    for decl in form["module"]["decls"]:
+        if _param_source(decl) is not None:
+            out.add(decl["param"])
+    return out
 
 
 def calc_modules(mods: Iterable[Module], pack_name: str) -> list[Module]:
@@ -107,6 +129,40 @@ def validate_as_of(decl: dict, at: str, refuse: Refuse) -> bool:
     return ok
 
 
+def validate_param(decl: object, at: str, refuse: Refuse) -> bool:
+    """Check a parameter declaration during module loading (decisions/language-calculations.md)."""
+    if not isinstance(decl, dict):
+        refuse(at, "a parameter must be an object (R050)", SECTION)
+        return False
+    if extra := set(decl) - PARAM_MEMBERS:
+        refuse(at, f"a parameter with {', '.join(sorted(extra))} is not lowered (R050)", SECTION)
+        return False
+    ok = True
+    if not isinstance(decl.get("param"), str) or not decl["param"]:
+        refuse(at, "a parameter needs a name (R050)", SECTION)
+        ok = False
+    if not isinstance(decl.get("type"), str) or not decl["type"]:
+        refuse(at, "a parameter needs a type (R050)", SECTION)
+        ok = False
+    if "value" in decl or "versions" in decl:
+        refuse(at, "inline parameter is not lowered (R050)", SECTION)
+        ok = False
+    if "per" in decl:
+        refuse(at, "a parameter with `per` is not lowered (R050)", SECTION)
+        ok = False
+    if "source" not in decl:
+        if "value" not in decl and "versions" not in decl:
+            refuse(at, "inline parameter needs `from Kind.slot by nameSlot` (R050)", SECTION)
+            ok = False
+    else:
+        src = decl["source"]
+        if (not isinstance(src, dict) or set(src) != PARAM_SOURCE_MEMBERS
+                or not all(isinstance(src.get(k), str) and src[k] for k in ("kind", "slot", "nameSlot"))):
+            refuse(f"{at}/source", "parameter source needs kind, slot and nameSlot (R050)", SECTION)
+            ok = False
+    return ok
+
+
 def _validate_definition(defn: object, at: str, refuse: Refuse) -> bool:
     if not isinstance(defn, dict):
         refuse(at, "a definition must be an object (R050)", SECTION)
@@ -140,6 +196,38 @@ def _validate_definition(defn: object, at: str, refuse: Refuse) -> bool:
     return ok
 
 
+def _validate_unless(unless_blocks: object, at: str, refuse: Refuse) -> bool:
+    if not isinstance(unless_blocks, list) or not unless_blocks:
+        refuse(at, "unless must be a non-empty list of blocks (R050)", SECTION)
+        return False
+    ok = True
+    for bi, block in enumerate(unless_blocks):
+        bat = f"{at}/{bi}"
+        if not isinstance(block, list) or not block:
+            refuse(bat, "an unless block must be a non-empty list of clauses (R050)", SECTION)
+            ok = False
+            continue
+        for ci, clause in enumerate(block):
+            cat = f"{bat}/{ci}"
+            if not isinstance(clause, dict):
+                refuse(cat, "an unless clause must be an object (R050)", SECTION)
+                ok = False
+                continue
+            if extra := set(clause) - CLAUSE_MEMBERS:
+                refuse(cat, f"an unless clause with {', '.join(sorted(extra))} is not lowered (R050)", SECTION)
+                ok = False
+            if not isinstance(clause.get("when"), dict):
+                refuse(f"{cat}/when", "an unless clause needs a `when` expression (R050)", SECTION)
+                ok = False
+            if not isinstance(clause.get("then"), dict):
+                refuse(f"{cat}/then", "an unless clause needs a `then` expression (R050)", SECTION)
+                ok = False
+            if "source" in clause and (not isinstance(clause["source"], str) or not clause["source"]):
+                refuse(cat, "an unless source must be non-empty text (R050)", SECTION)
+                ok = False
+    return ok
+
+
 def validate_derived(dv: object, at: str, refuse: Refuse) -> bool:
     """Check the structure of a calculated derived value during module loading."""
     if not isinstance(dv, dict):
@@ -162,8 +250,14 @@ def validate_derived(dv: object, at: str, refuse: Refuse) -> bool:
         refuse(at, f"a derived value `{dv.get('type', '')}{dv['card']}` is not lowered in a calculation (R050)", SECTION)
         ok = False
     if "unless" in dv:
-        refuse(f"{at}/unless", "`unless` under a calculated value is not lowered (R050)", SECTION)
-        ok = False
+        if "definitions" in dv:
+            refuse(f"{at}/unless", "unless beside definitions (R050)", SECTION)
+            ok = False
+        if "versions" in dv:
+            refuse(f"{at}/unless", "unless beside versions (R050)", SECTION)
+            ok = False
+        if not _validate_unless(dv["unless"], f"{at}/unless", refuse):
+            ok = False
     if "definitions" in dv and "versions" in dv:
         refuse(at, "definitions beside versions (R050)", SECTION)
         ok = False
@@ -237,8 +331,10 @@ def validate_derived(dv: object, at: str, refuse: Refuse) -> bool:
 
 
 def validate_module(decls: list, refuse: Refuse) -> None:
-    """Check module-level calculation constraints: one subject per module and at most one `as of`."""
+    """Check module-level calculation constraints: one subject, one parameter source, at most one `as of`."""
     first_subject: str | None = None
+    first_source: tuple[str, str, str] | None = None
+    seen_params: set[str] = set()
     seen_as_of = False
     for index, decl in enumerate(decls):
         at = f"/decls/{index}"
@@ -248,6 +344,20 @@ def validate_module(decls: list, refuse: Refuse) -> None:
             if seen_as_of:
                 refuse(at, "two evaluation dates in one module (R050)", SECTION)
             seen_as_of = True
+        if (src := _param_source(decl)) is not None:
+            pname = decl["param"]
+            if pname in seen_params:
+                refuse(at, f"parameter {pname!r} is declared twice (R050)", SECTION)
+            seen_params.add(pname)
+            if first_source is None:
+                first_source = src
+            elif src != first_source:
+                refuse(
+                    at,
+                    f"two parameter sources: {first_source[0]}.{first_source[1]} by {first_source[2]} "
+                    f"and {src[0]}.{src[1]} by {src[2]} (R050)",
+                    SECTION,
+                )
         found = _subject_of_decl(decl)
         if found is None:
             continue
@@ -260,19 +370,25 @@ def validate_module(decls: list, refuse: Refuse) -> None:
 
 def resolve_subject(pack: Pack, pack_name: str, cls_name: str,
                     renames: Mapping[str, Mapping[str, str]] | None = None) -> tuple[str, str]:
-    """Return `(own_id, root_id)` for a subject class name in `pack_name`."""
-    from .pack import snake
+    """Return `(own_id, root_id)` for a subject class name in `pack_name`, or raise R050 if unresolved."""
+    from .pack import CompileError
 
     if pack_name == pack.meta["name"]:
-        found = next((k for k, kind in pack.kinds.items() if kind.cls == cls_name), None)
-        own = found if found is not None else snake(cls_name)
-        return own, own
-    mapping = (renames or {}).get(pack_name, {})
-    for own_id, root_id in mapping.items():
-        if root_id in pack.kinds and pack.kinds[root_id].cls == cls_name:
-            return own_id, root_id
-    own = snake(cls_name)
-    return own, mapping.get(own, own)
+        matches = [(k, k) for k, kind in pack.kinds.items() if kind.cls == cls_name]
+    else:
+        mapping = (renames or {}).get(pack_name, {})
+        matches = [
+            (own_id, root_id)
+            for own_id, root_id in mapping.items()
+            if root_id in pack.kinds and pack.kinds[root_id].cls == cls_name
+        ]
+    if len(matches) == 1:
+        return matches[0]
+    if len(matches) > 1:
+        msg = f"subject kind {cls_name!r} is ambiguous in pack {pack_name} (R050)"
+    else:
+        msg = f"subject kind {cls_name!r} is not declared in pack {pack_name} (R050)"
+    raise CompileError(msg, [Diagnostic("R050", msg)])
 
 
 def _place(line_map: Mapping[str, int], at: str) -> int:
@@ -513,6 +629,45 @@ def lower_module(
         errors.append(Diagnostic("R050", f"{where}:{_place(line_map, at)}: {what} (R050)"))
 
     doc: dict = {"format": FORMAT, "pack": module.pack, "rules": [], "templates": []}
+    local_params: set[str] = set()
+    for decl_idx, decl in enumerate(form["module"]["decls"]):
+        decl_at = f"/decls/{decl_idx}"
+        if not isinstance(decl, dict) or "param" not in decl:
+            continue
+        src = _param_source(decl)
+        if src is None:
+            if "value" in decl or "versions" in decl or "source" not in decl:
+                refuse(decl_at, "inline parameter is not lowered")
+            else:
+                refuse(f"{decl_at}/source", "parameter source needs kind, slot and nameSlot")
+            continue
+        pname = decl["param"]
+        if pname in local_params:
+            refuse(decl_at, f"parameter {pname!r} is declared twice")
+            continue
+        local_params.add(pname)
+        kind_cls, slot_name, name_slot = src
+        try:
+            own_kind, _ = resolve_subject(pack, module.pack, kind_cls, renames)
+        except CompileError as err:
+            detail = err.diagnostics[0].message.removesuffix(" (R050)") if err.diagnostics else str(err)
+            refuse(decl_at, detail)
+            continue
+        param_binding = f"{own_kind}.{slot_name}"
+        choice_binding = {"name": name_slot}
+        if ("parameters" in doc and doc["parameters"] != param_binding) or (
+            "parameter_choice" in doc and doc["parameter_choice"] != choice_binding
+        ):
+            refuse(
+                decl_at,
+                f"two parameter sources: {doc['parameters']} by {doc['parameter_choice']['name']} "
+                f"and {param_binding} by {name_slot}",
+            )
+            continue
+        doc["parameters"] = param_binding
+        doc["parameter_choice"] = choice_binding
+
+    in_scope_params = set(parameters) | local_params
     subject_cls: str | None = None
     own_subject: str | None = None
     root_subject: str | None = None
@@ -533,10 +688,17 @@ def lower_module(
         kind_name, derived_list = found
         if subject_cls is None:
             subject_cls = kind_name
-            own_subject, root_subject = resolve_subject(pack, module.pack, kind_name, renames)
+            try:
+                own_subject, root_subject = resolve_subject(pack, module.pack, kind_name, renames)
+            except CompileError as err:
+                detail = err.diagnostics[0].message.removesuffix(" (R050)") if err.diagnostics else str(err)
+                refuse(decl_at, detail)
+                continue
             doc["subject"] = own_subject
         elif kind_name != subject_cls:
             refuse(decl_at, f"two subjects: {subject_cls} and {kind_name}")
+            continue
+        elif own_subject is None or root_subject is None:
             continue
 
         assert own_subject is not None and root_subject is not None
@@ -558,18 +720,21 @@ def lower_module(
                 continue
 
             if "versions" in dv:
-                version_specs = [
-                    (
-                        f"{dv_at}/versions/{vi}",
+                version_specs = []
+                for vi, ver in enumerate(dv["versions"]):
+                    ver_at = f"{dv_at}/versions/{vi}"
+                    if extra := set(ver) - VERSION_MEMBERS:
+                        refuse(ver_at, f"a version with {', '.join(sorted(extra))} is not lowered")
+                        continue
+                    version_specs.append((
+                        ver_at,
                         str(ver["version"]),
                         ver["valid"][0] if ver.get("valid") else DEFAULT_VALID_FROM,
                         ver["valid"][1] if ver.get("valid") and len(ver["valid"]) > 1 else DEFAULT_VALID_UNTIL,
                         ver.get("known") or DEFAULT_KNOWN_FROM,
                         ver.get("definitions"),
                         ver.get("value"),
-                    )
-                    for vi, ver in enumerate(dv["versions"])
-                ]
+                    ))
             else:
                 version_specs = [
                     (
@@ -590,12 +755,12 @@ def lower_module(
                         def_at = f"{ver_at}/definitions/{di}"
                         when = lower_expression(
                             defn["when"], f"{def_at}/when", pack, subject_cls, own_subject, root_subject,
-                            rule_name, subject_rules, parameters, refuse,
+                            rule_name, subject_rules, in_scope_params, refuse,
                             where_prefix=where, line_map=line_map, bare_leaves=bare_leaves,
                         )
                         val = lower_expression(
                             defn["value"], f"{def_at}/value", pack, subject_cls, own_subject, root_subject,
-                            rule_name, subject_rules, parameters, refuse,
+                            rule_name, subject_rules, in_scope_params, refuse,
                             where_prefix=where, line_map=line_map, bare_leaves=bare_leaves,
                         )
                         if when is None or val is None:
@@ -608,13 +773,35 @@ def lower_module(
                             ]
                         lowered_defs.append(entry)
                 elif raw_val is not None:
-                    val = lower_expression(
-                        raw_val, f"{ver_at}/value", pack, subject_cls, own_subject, root_subject,
-                        rule_name, subject_rules, parameters, refuse,
-                        where_prefix=where, line_map=line_map, bare_leaves=bare_leaves,
-                    )
-                    if val is not None:
-                        lowered_defs.append({"name": rule_name, "when": {"boolean": True}, "value": val})
+                    if "unless" in dv and raw_val is dv.get("value"):
+                        expr_at: dict[int, str] = {id(raw_val): f"{ver_at}/value"}
+                        for bi, block in enumerate(dv["unless"]):
+                            for ci, clause in enumerate(block):
+                                expr_at[id(clause["when"])] = f"{dv_at}/unless/{bi}/{ci}/when"
+                                expr_at[id(clause["then"])] = f"{dv_at}/unless/{bi}/{ci}/then"
+
+                        def lower_expr(node: object) -> dict:
+                            result = lower_expression(
+                                node, expr_at.get(id(node), dv_at), pack, subject_cls, own_subject,
+                                root_subject, rule_name, subject_rules, in_scope_params, refuse,
+                                where_prefix=where, line_map=line_map, bare_leaves=bare_leaves,
+                            )
+                            return {} if result is None else result
+
+                        before_errors = len(errors)
+                        lowered = rezono_exceptions.lower_unless(
+                            f"{rule_name}@{v_str}", raw_val, dv["unless"], lower_expr,
+                        )
+                        if len(errors) == before_errors:
+                            lowered_defs.extend(lowered)
+                    else:
+                        val = lower_expression(
+                            raw_val, f"{ver_at}/value", pack, subject_cls, own_subject, root_subject,
+                            rule_name, subject_rules, in_scope_params, refuse,
+                            where_prefix=where, line_map=line_map, bare_leaves=bare_leaves,
+                        )
+                        if val is not None:
+                            lowered_defs.append({"name": rule_name, "when": {"boolean": True}, "value": val})
                 doc["rules"].append({
                     "id": f"{rule_name}@{v_str}",
                     "rule": rule_name,
@@ -654,5 +841,37 @@ def check_relation_ambiguity(
                 "R050",
                 f"{where}: ambiguous leaf {name!r} (both {kind_tag} and relation {name}) (R050)",
             ))
+    if found:
+        raise CompileError("\n".join(d.message for d in found), found)
+
+
+def check_parameter_sources(
+    yaml_entries: Sequence[tuple[str, dict]],
+    mod_entries: Sequence[tuple[str, dict]],
+) -> None:
+    """Raise R050 if lowered Rezono modules disagree on their parameter source with each other or with calc/*.yaml."""
+    from .pack import CompileError
+
+    if not mod_entries:
+        return
+    expected_params: str | None = None
+    expected_choice: object = None
+    for _, doc in yaml_entries:
+        if "parameters" in doc and expected_params is None:
+            expected_params = doc["parameters"]
+        if "parameter_choice" in doc and expected_choice is None:
+            expected_choice = doc["parameter_choice"]
+    found: list[Diagnostic] = []
+    for rel, doc in mod_entries:
+        if "parameters" not in doc and "parameter_choice" not in doc:
+            continue
+        params = doc.get("parameters")
+        choice = doc.get("parameter_choice")
+        if expected_params is None and expected_choice is None:
+            expected_params, expected_choice = params, choice
+        elif (params is not None and expected_params is not None and params != expected_params) or (
+            choice is not None and expected_choice is not None and choice != expected_choice
+        ):
+            found.append(Diagnostic("R050", f"{rel}: two parameter sources (R050)"))
     if found:
         raise CompileError("\n".join(d.message for d in found), found)

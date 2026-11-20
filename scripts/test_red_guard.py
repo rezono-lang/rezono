@@ -44,6 +44,9 @@ def main():
     workflow_cases()
     read_cases(function)
     pin_cases(function)
+    table_cases()
+    table_form_cases()
+    plugin_cases(function)
     pytest_config_cases(function)
     green_to_red_cases()
 
@@ -141,6 +144,195 @@ def green_to_red_cases():
     if any("from green to red" in n for n in notes):
         raise AssertionError(f"a red test that stays red is not green to red: notes {notes}")
     print("ALLOW: a red test that stays red is not reported as green to red")
+
+
+def table_cases():
+    """A case that goes from a parametrize table is REMOVED, at module level or inline."""
+    path = "compiler/tests/test_module.py"
+    table = (b"import pytest\n\nREFUSALS = {\n    'a check': (1, 'check'),\n    'a reason': (2, 'reason'),\n}\n\n\n"
+             b"@pytest.mark.parametrize('name', REFUSALS)\ndef test_refused(name):\n    assert REFUSALS[name]\n")
+    shorter = table.replace(b"    'a reason': (2, 'reason'),\n", b"")
+    longer = table.replace(b"    'a reason'", b"    'a third': (3, 'third'),\n    'a reason'")
+    listed = b"import pytest\n\n\n" + b"@pytest.mark.parametrize('v', [1, 2, 3])\ndef test_v(v):\n    assert v\n"
+    marked = table.replace(b"(2, 'reason')", b"pytest.param(2, 'reason', marks=pytest.mark.xfail("
+                           b"strict=True, reason='M1: x'))")
+    lifted = table.replace(b"(2, 'reason')", b"pytest.param(2, 'reason')")
+    cases = [
+        ("a case removed from a module-level table", table, shorter,
+         [f"CHANGED {path}::test_refused reads the changed REFUSALS", f"REMOVED {path}::test_refused['a reason']"]),
+        ("a case added to a module-level table", table, longer,
+         [f"CHANGED {path}::test_refused reads the changed REFUSALS"]),
+        ("a case removed from an inline parametrize list", listed, listed.replace(b"[1, 2, 3]", b"[1, 3]"),
+         [f"CHANGED {path}::test_v", f"REMOVED {path}::test_v[2]"]),
+    ]
+    for label, before, after, expected in cases:
+        change = Change(path, "M", before, after)
+        errors, notes = review([change], planner=True)
+        if errors or sorted(notes) != sorted(expected):
+            raise AssertionError(f"{label}: errors {errors}, notes {notes}")
+        errors, _ = review([change], planner=False)
+        if errors != [f"ERROR planner label required for {ascii(path)}"]:
+            raise AssertionError(f"{label} without planner: errors {errors}")
+        print(f"REPORTED, and DENY without planner: {label}")
+    errors, notes = review([Change(path, "M", marked, lifted)], planner=False)
+    if errors or notes:
+        raise AssertionError(f"a lifted mark in a table: errors {errors}, notes {notes}")
+    print("ALLOW without planner, nothing reported: a lifted mark in a module-level table")
+
+
+def table_form_cases():
+    """Each way to give or build a parametrize table reports the case it loses."""
+    path = "x/tests/test_t.py"
+    top = b"import pytest\n\n"
+    forms = [
+        ("argvalues as a keyword",
+         top + b"@pytest.mark.parametrize(argnames='x', argvalues=[1, 2])\ndef test_a(x):\n    assert x\n",
+         b"[1, 2]", b"[1]", "test_a", "2", False),
+        ("parametrize on a test class",
+         top + b"@pytest.mark.parametrize('x', [1, 2])\nclass TestA:\n    def test_a(self, x):\n        assert x\n",
+         b"[1, 2]", b"[1]", "TestA::test_a", "2", False),
+        ("a module pytestmark",
+         top + b"pytestmark = pytest.mark.parametrize('x', [1, 2])\n\n\ndef test_a(x):\n    assert x\n",
+         b"[1, 2]", b"[1]", "test_a", "2", False),
+        ("a table derived from another",
+         top + b"BASE = [1, 2]\nCASES = BASE + [3]\n\n\n\x40pytest.mark.parametrize('x', CASES)\ndef test_a(x):\n"
+         b"    assert x\n", b"BASE = [1, 2]", b"BASE = [1]", "test_a", "2", "CASES"),
+        ("a module-level += that goes",
+         top + b"CASES = [1]\nCASES += [2]\n\n\n\x40pytest.mark.parametrize('x', CASES)\ndef test_a(x):\n"
+         b"    assert x\n",
+         b"CASES += [2]\n", b"", "test_a", "2", "CASES"),
+        ("a module-level append that goes",
+         top + b"CASES = [1]\nCASES.append(2)\n\n\n\x40pytest.mark.parametrize('x', CASES)\ndef test_a(x):\n"
+         b"    assert x\n", b"CASES.append(2)\n", b"", "test_a", "2", "CASES"),
+        ("a table read through .values()",
+         top + b"T = {'a': 1, 'b': 2}\n\n\n\x40pytest.mark.parametrize('x', T.values(), ids=T)\ndef test_a(x):\n"
+         b"    assert x\n", b"'b': 2", b"'c': 3", "test_a", "'b'", "T"),
+    ]
+    for label, before, old, new, test, case, name in forms:
+        after = before.replace(old, new, 1)
+        errors, notes = review([Change(path, "M", before, after)], planner=True)
+        if errors or f"REMOVED {path}::{test}[{case}]" not in notes or (
+                name and f"CHANGED {path}::{test} reads the changed {name}" not in notes):
+            raise AssertionError(f"{label}: errors {errors}, notes {notes}")
+        print(f"REPORTED: a case lost through {label}")
+    # A helper that returns the table: the test reads it, so it reads the change.
+    helper = (top + b"T = {'a': 1, 'b': 2}\n\n\ndef rows():\n    return T\n\n\ndef test_a():\n"
+              b"    assert rows()\n")
+    errors, notes = review([Change(path, "M", helper, helper.replace(b", 'b': 2", b""))], planner=True)
+    if errors or f"CHANGED {path}::test_a reads the changed rows" not in notes:
+        raise AssertionError(f"a helper that returns a table: errors {errors}, notes {notes}")
+    print("REPORTED: a test that calls a helper whose table changes")
+    # A fixture's params parametrize every test that takes it, directly or through another fixture.
+    fixture = (top + b"\x40pytest.fixture(params=['a', 'b'])\ndef letter(request):\n    return request.param\n\n\n"
+               b"\x40pytest.fixture\ndef word(letter):\n    return letter * 2\n\n\n"
+               b"def test_letter(letter):\n    assert letter\n\n\ndef test_word(word):\n    assert word\n")
+    errors, notes = review([Change(path, "M", fixture, fixture.replace(b"['a', 'b']", b"['a']"))], planner=True)
+    for test, name in (("test_letter", "letter"), ("test_word", "word")):
+        if (errors or f"REMOVED {path}::{test}['b']" not in notes
+                or f"CHANGED {path}::{test} reads the changed {name}" not in notes):
+            raise AssertionError(f"a case lost from fixture params: errors {errors}, notes {notes}")
+    print("REPORTED: a case lost from the params of a fixture a test takes, directly or not")
+    at = b"\x40pytest."
+    params = at + b"fixture(params=['a', 'b']"
+    forms = [
+        ("a fixture named with name=", top + params + b", name='letter')\ndef make_letter(request):\n"
+         b"    return request.param\n\n\ndef test_a(letter):\n    assert letter\n", "test_a"),
+        ("a fixture named in usefixtures", top + params + b")\ndef letter(request):\n    return request.param\n\n\n"
+         + at + b"mark.usefixtures('letter')\ndef test_a():\n    assert True\n", "test_a"),
+        ("an autouse fixture", top + params + b", autouse=True)\ndef letter(request):\n    return request.param\n\n\n"
+         b"def test_a():\n    assert True\n", "test_a"),
+        ("a fixture defined in the test class", top + b"class TestA:\n    " + params
+         + b")\n    def letter(self, request):\n        return request.param\n\n"
+         b"    def test_a(self, letter):\n        assert letter\n", "TestA::test_a"),
+        ("pytest_generate_tests", top + b"def pytest_generate_tests(metafunc):\n"
+         b"    metafunc.parametrize('letter', ['a', 'b'])\n\n\ndef test_a(letter):\n    assert letter\n", "test_a"),
+    ]
+    for label, before, test in forms:
+        after = before.replace(b"['a', 'b']", b"['a']")
+        errors, notes = review([Change(path, "M", before, after)], planner=True)
+        if errors or f"REMOVED {path}::{test}['b']" not in notes or not any(
+                n.startswith(f"CHANGED {path}::{test} ") for n in notes):
+            raise AssertionError(f"{label}: errors {errors}, notes {notes}")
+        print(f"REPORTED: a case lost through {label}")
+    deleted = top + b"T = {'a': 1, 'b': 2}\n\n\n\x40pytest.mark.parametrize('x', T)\ndef test_a(x):\n    assert x\n"
+    errors, notes = review([Change(path, "M", deleted, deleted.replace(b"\n\n\n@", b"\ndel T['b']\n\n\n@"))],
+                           planner=True)
+    if f"REMOVED {path}::test_a['b']" not in notes:
+        raise AssertionError(f"a module-level del: errors {errors}, notes {notes}")
+    print("REPORTED: a case lost through a module-level del")
+    # Any other module-level change to a table, however it is written, reports the tests.
+    base = top + b"CASES = [1, 2]\n\n\n\x40pytest.mark.parametrize('x', CASES)\ndef test_a(x):\n    assert x\n"
+    under = f"CHANGED {path}::test_a under a changed module-level statement"
+    reads = f"CHANGED {path}::test_a reads the changed CASES"
+    for label, line, expected in (
+            ("CASES.remove(2)", b"CASES.remove(2)\n", [reads, f"REMOVED {path}::test_a[2]"]),
+            ("CASES.pop()", b"CASES.pop()\n", [reads]),
+            ("an if that rebinds CASES", b"if True:\n    CASES = [1]\n", [reads]),
+            ("a for loop that removes from CASES", b"for _c in [2]:\n    CASES.remove(_c)\n", [reads]),
+            ("globals() that rebinds CASES", b"globals()['CASES'] = [1]\n", [under]),
+            ("exec at module level", b"exec('CASES = [1]')\n", [under])):
+        after = base.replace(b"\n\n\n\x40", b"\n" + line + b"\n\n\x40")
+        errors, notes = review([Change(path, "M", base, after)], planner=True)
+        if errors or any(note not in notes for note in expected):
+            raise AssertionError(f"{label}: errors {errors}, notes {notes}")
+        print(f"REPORTED: a module-level {label}")
+
+
+def plugin_cases(function):
+    """A package that registers a pytest plugin can drop a red test from the collection."""
+    lifted = function.split(b"\n", 1)[1]
+    lift = Change("tests/test_count.py", "M", function, lifted)
+    project = b'[project]\nname = "rezono-compiler"\n'
+    plugin = project + b'\n[project.entry-points.pytest11]\nx = "rezono_compiler.tidy"\n'
+    poetry = project + b'\n[tool.poetry.plugins."pytest11"]\nx = "rezono_compiler.tidy"\n'
+    config = b"[metadata]\nname = demo\n"
+    entry = config + b"\n[options.entry_points]\npytest11 =\n    x = demo.tidy\n"
+    hook = Change("compiler/rezono_compiler/tidy.py", "A", None, None)
+    cases = [
+        ("pytest11 entry point added to pyproject.toml", "compiler/pyproject.toml", project, plugin, True),
+        ("pytest11 plugin added in poetry's table", "compiler/pyproject.toml", project, poetry, True),
+        ("pytest11 entry point removed from pyproject.toml", "loop/pyproject.toml", plugin, project, True),
+        ("pytest11 entry point added to setup.cfg", "demo/setup.cfg", config, entry, True),
+        ("other metadata of pyproject.toml", "compiler/pyproject.toml", plugin,
+         plugin.replace(b"rezono-compiler", b"rezono-compiler2"), False),
+        ("pyproject.toml that no longer parses", "compiler/pyproject.toml", plugin, plugin + b"[[[\n", True),
+        ("pyproject.toml replaced by a link", "compiler/pyproject.toml", plugin, UNREADABLE_CONFIG, True),
+        # Entry points from elsewhere: the file they come from is not read, so the switch counts.
+        ("dynamic entry points in pyproject.toml", "compiler/pyproject.toml", project,
+         project + b'dynamic = ["entry-points"]\n\n[tool.setuptools.dynamic]\nentry-points = {file = ["eps.ini"]}\n',
+         True),
+        ("entry points from a file in setup.cfg", "demo/setup.cfg", config,
+         config + b"\n[options]\nentry_points = file: eps.cfg\n", True),
+    ]
+    for label, path, before, after, expected in cases:
+        change = Change(path, "M", before, after)
+        errors, notes = review([change], planner=False)
+        if bool(errors) != expected or (f"CHANGED {path} pytest plugins" in notes) != expected:
+            raise AssertionError(f"{label}: errors {errors}, notes {notes}")
+        errors, _ = review([lift, hook, change], planner=True)
+        refused = any("Lift marks in a pull request of their own" in e for e in errors)
+        if refused != expected:
+            raise AssertionError(f"{label} beside a lifted mark: errors {errors}")
+        print(f"{'DENY' if expected else 'ALLOW'} without planner and beside a lifted mark: {label}")
+    # Python runs these before pytest starts; setup.py stays source as well.
+    # Package metadata on sys.path registers plugins too, such as a *.dist-info in scripts/.
+    for path in ("compiler/sitecustomize.py", "src/usercustomize.py", "compiler/rezono.pth", "compiler/setup.py",
+                 "scripts/tidy-1.0.dist-info/entry_points.txt", "scripts/tidy-1.0.dist-info/METADATA",
+                 "compiler/tidy.egg-info/PKG-INFO", "loop/entry_points.txt"):
+        errors, _ = review([Change(path, "A", None, b"import tidy\n")], planner=False)
+        if errors != [f"ERROR planner label required for {ascii(path)}"]:
+            raise AssertionError(f"{path} without planner: errors {errors}")
+        errors, _ = review([lift, Change(path, "A", None, b"import tidy\n")], planner=True)
+        if not any("Lift marks in a pull request of their own" in e for e in errors):
+            raise AssertionError(f"lifted mark beside {path}: errors {errors}")
+        print(f"DENY without planner and beside a lifted mark: {path}")
+    # CI reads the allowed plugins from the base; a change to the list is policy.
+    errors, _ = review([Change("scripts/pytest-plugins.txt", "M", b"a = a\n", b"a = a\nx = tidy\n")], planner=False)
+    if errors != ["ERROR planner label required for 'scripts/pytest-plugins.txt'"]:
+        raise AssertionError(f"scripts/pytest-plugins.txt without planner: errors {errors}")
+    print("DENY without planner: scripts/pytest-plugins.txt")
+    if not source("compiler/setup.py"):
+        raise AssertionError("setup.py is source as well")
 
 
 def pin_cases(function):

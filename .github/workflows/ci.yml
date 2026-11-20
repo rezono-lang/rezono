@@ -217,8 +217,25 @@ jobs:
         with:
           persist-credentials: false
           path: readme-source
-      - name: Run the README example
+      # The compiler reads authored .rezono pack sources through Node from the
+      # editable checkout, so the README example needs the runtime and the
+      # reader's locked packages in readme-source/rezono.
+      - id: readme_node
+        name: Set up Node for the README example
         if: ${{ !cancelled() && steps.readme_checkout.outcome == 'success' }}
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1  # v7.1.0
+        with:
+          node-version-file: readme-source/.node-version
+          cache: npm
+          cache-dependency-path: readme-source/rezono/package-lock.json
+      - id: readme_reader
+        name: Install the Rezono reader for the README example
+        if: ${{ !cancelled() && steps.readme_node.outcome == 'success' }}
+        working-directory: readme-source/rezono
+        shell: bash
+        run: npm ci
+      - name: Run the README example
+        if: ${{ !cancelled() && steps.readme_reader.outcome == 'success' }}
         working-directory: readme-source
         shell: bash
         run: bash scripts/check-quickstart.sh
@@ -568,6 +585,9 @@ jobs:
             exit 1
           fi
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          # The loop compares the decisions with the base (DECISION_HEADS_BASE below), so it needs the history.
+          fetch-depth: ${{ matrix.component.folder == 'loop' && '0' || '1' }}
       - uses: ./.github/workflows/python-environment
         with:
           editable: ${{ needs.discover.outputs.python_editable }}
@@ -609,6 +629,8 @@ jobs:
         env:
           REZONO_HYPOTHESIS_PROFILE: ci
           PYTHONHASHSEED: '0'
+          # The base of loop/tests/test_decision_heads.py: the pull request's base, or the merge group's base.
+          DECISION_HEADS_BASE: ${{ matrix.component.folder == 'loop' && (github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.event.before) || '' }}
           COMPONENT: ${{ matrix.component.folder }}
           KIND: ${{ matrix.component.kind }}
           SHARD: ${{ matrix.component.shard }}

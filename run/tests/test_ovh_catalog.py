@@ -39,10 +39,6 @@ def raw(value):
     return json.dumps(value).encode()
 
 
-@pytest.mark.xfail(strict=True, reason=(
-    "M4: decisions/run-price-enforcement.md: Read the section The price list. Implement terms(catalog, plan_code, mode) in "
-    "run/ovh_catalog.py; catalog is the captured response body."
-))
 def test_ovh_catalog():
     terms = implementation("ovh_catalog.py", "terms")
 
@@ -76,3 +72,36 @@ def test_ovh_catalog():
     blocked(lambda value: first(value)[1].update(price=89.99))
     blocked(lambda value: first(value)[1].update(price=True))
     blocked(lambda value: value["locale"].pop("currencyCode"))
+
+
+def test_ovh_catalog_rejects_duplicate_json_keys():
+    terms = implementation("ovh_catalog.py", "terms")
+    body = raw(catalog())
+
+    dup_locale = body.replace(b'"currencyCode": "EUR"', b'"currencyCode": "USD", "currencyCode": "EUR"', 1)
+    assert dup_locale != body
+    with pytest.raises(ValueError):
+        terms(dup_locale, "example-plan", "default")
+
+    dup_price = body.replace(b'"price": 8999000000', b'"price": 100000000, "price": 8999000000', 1)
+    assert dup_price != body
+    with pytest.raises(ValueError):
+        terms(dup_price, "example-plan", "default")
+
+
+def test_ovh_catalog_rejects_combined_installation_and_renew_pricing():
+    terms = implementation("ovh_catalog.py", "terms")
+
+    # A single monthly entry carrying both installation and renew capacities must not serve as both.
+    combined_only = catalog()
+    entry = deepcopy(combined_only["plans"][0]["pricings"][1])
+    entry["capacities"] = ["installation", "renew"]
+    combined_only["plans"][0]["pricings"] = [entry]
+    with pytest.raises(ValueError):
+        terms(raw(combined_only), "example-plan", "default")
+
+    # An installation entry that also carries renew capacity is ambiguous even beside a monthly renew.
+    combined_install = catalog()
+    combined_install["plans"][0]["pricings"][0]["capacities"] = ["installation", "renew"]
+    with pytest.raises(ValueError):
+        terms(raw(combined_install), "example-plan", "default")

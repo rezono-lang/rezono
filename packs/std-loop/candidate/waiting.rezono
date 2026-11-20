@@ -1,0 +1,19 @@
+rezono 0
+pack std-loop
+
+rules waiting
+  | .decl waiting_done(run: symbol, step: symbol)
+  | .decl waiting_known(run: symbol, token: symbol)
+  | .decl waiting(run: symbol, step: symbol, token: symbol, reason: symbol)
+  | 
+  | waiting_done(run, step) :- done(run, step, _).
+  | waiting_known(run, token) :- known(run, token, _).
+  | 
+  | // Preserve each requirement witness when the step and its prerequisite remain unconfirmed.
+  | waiting(run, step, token, reason) :-
+  |     needed(run, step, token, reason),
+  |     !waiting_done(run, step),
+  |     !waiting_known(run, token).
+  | 
+  | waiting(run, step, obligation, reason) :-
+  |     step_safety_blocker(run, step, _, obligation, reason), !waiting_done(run, step).

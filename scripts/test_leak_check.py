@@ -20,13 +20,23 @@ GIT = ["git", "-c", "user.name=vdo89", "-c", f"user.email={AUTHOR}", "-c", "comm
 
 
 class LeakCheck(unittest.TestCase):
-    def run_check(self, files, messages=(), event=None, budget="{}\n"):
-        """Commit the files and one empty commit per message, then check that range as the event."""
+    def run_check(self, files, budget="{}\n", base_files=None, messages=(), event=None):
+        """Check the files; with base_files, first commit those under the same budget and check against that base.
+        With event, also commit one empty commit per message and check that range as the event."""
         with tempfile.TemporaryDirectory() as temp, tempfile.TemporaryDirectory() as outside:
             root = Path(temp)
             subprocess.check_call(["git", "init", "-q"], cwd=root)
             (root / "scripts").mkdir()
             (root / "scripts" / "leak-budget.json").write_text(budget)
+            options = []
+            if base_files is not None:
+                for name, text in base_files.items():
+                    (root / name).write_text(text)
+                subprocess.check_call(["git", "add", "-A"], cwd=root)
+                git = ["git", "-c", "user.name=Base", "-c", "user.email=base@example.org", "-c", "commit.gpgsign=false"]
+                subprocess.check_call([*git, "commit", "-q", "-m", "Base"], cwd=root)
+                base = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root, text=True).strip()
+                options = ["--base", base]
             for name, text in files.items():
                 (root / name).write_text(text)
             subprocess.check_call(["git", "add", "-A"], cwd=root)
@@ -46,7 +56,7 @@ class LeakCheck(unittest.TestCase):
                 path.write_text(json.dumps(payload))
                 env.update(GITHUB_EVENT_NAME=name, GITHUB_EVENT_PATH=str(path))
             return subprocess.run(
-                [sys.executable, "-I", str(SCRIPT)], cwd=root, capture_output=True, text=True, env=env
+                [sys.executable, "-I", str(SCRIPT), *options], cwd=root, capture_output=True, text=True, env=env
             )
 
     def run_pull_request(self, messages, title="Add a pack reader", body=""):
@@ -54,7 +64,7 @@ class LeakCheck(unittest.TestCase):
             pull = {"base": {"sha": base}, "head": {"sha": head}, "title": title, "body": body}
             return "pull_request", {"pull_request": pull}
 
-        return self.run_check({"pack.yaml": "pack: neutral\n"}, messages, event)
+        return self.run_check({"pack.yaml": "pack: neutral\n"}, messages=messages, event=event)
 
     def test_clean_commit_messages_and_pull_request_pass(self):
         result = self.run_pull_request([CLEAN, "Fix the reader\n"], body="Generated with Claude Code\n")
@@ -87,7 +97,8 @@ class LeakCheck(unittest.TestCase):
         self.assertIn("pull request body email: observed=1 allowed=0", result.stdout)
 
     def test_a_decorator_in_backticks_is_not_an_address(self):
-        text = "Lift the `@pytest.mark.xfail` mark and keep '@pytest.mark.skip' as it is.\n"
+        # Assembled at run time so the base leak check does not count the decorator as an address.
+        text = "Lift the `" + "@" + "pytest.mark.xfail` mark and keep '" + "@" + "pytest.mark.skip' as it is.\n"
         result = self.run_pull_request([f"Lift a mark\n\n{text}"], body=text)
         self.assertEqual(result.returncode, 0, result.stdout)
         self.assertNotIn("email", result.stdout.replace("email=0", ""))
@@ -99,7 +110,7 @@ class LeakCheck(unittest.TestCase):
             group = {"base_sha": base, "head_sha": head, "head_commit": {"message": squash}}
             return "merge_group", {"merge_group": group}
 
-        result = self.run_check({"pack.yaml": "pack: neutral\n"}, [squash], event)
+        result = self.run_check({"pack.yaml": "pack: neutral\n"}, messages=[squash], event=event)
         self.assertEqual(result.returncode, 1, result.stdout)
         self.assertIn("merge group message co_author: observed=1 allowed=0", result.stdout)
         self.assertRegex(result.stdout, r"commit [0-9a-f]+ message email: observed=1 allowed=0")
@@ -129,6 +140,22 @@ class LeakCheck(unittest.TestCase):
         self.assertEqual(result.returncode, 1)
         self.assertIn("pack.yaml old_name: observed=3 listed=2", result.stdout)
         self.assertNotIn(PACK_NAME, result.stdout.lower())
+
+    def test_a_new_finding_in_a_file_with_slack_is_refused(self):
+        # The budget still lists 2 after one finding was removed; a new one may not fill that slack.
+        budget = '{"pack.yaml": {"old_name": 2}}\n'
+        result = self.run_check({"pack.yaml": f"pack: {PACK_NAME}\nalso: {PACK_NAME}\n"}, budget,
+                                base_files={"pack.yaml": f"pack: {PACK_NAME}\n"})
+        self.assertEqual(result.returncode, 1, result.stdout)
+        self.assertIn("pack.yaml old_name: observed=2 base=1 listed=2; a new finding is not allowed", result.stdout)
+        self.assertNotIn(PACK_NAME, result.stdout.lower())
+
+    def test_an_unchanged_count_against_the_base_passes(self):
+        budget = '{"pack.yaml": {"old_name": 2}}\n'
+        result = self.run_check({"pack.yaml": f"pack: {PACK_NAME}\nnote: changed\n"}, budget,
+                                base_files={"pack.yaml": f"pack: {PACK_NAME}\n"})
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertIn("pack.yaml old_name: observed=1 listed=2; lower the budget", result.stdout)
 
     def test_longer_words_are_not_findings(self):
         result = self.run_check({"pack.yaml": f"pack: {PACK_NAME}es x{PACK_NAME}\n"})

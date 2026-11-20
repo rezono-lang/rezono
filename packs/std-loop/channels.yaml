@@ -14,8 +14,13 @@ kinds:
   - {kind: loop_pending_operation, shape: rect}
   - {kind: loop_goal, shape: rect}
   - {kind: loop_batch_deferral, shape: rect}
+  - {kind: loop_sweep, shape: rect}
+  - {kind: loop_deadline, shape: rect}
+  - {kind: loop_expected_difference, shape: rect}
 arrows:
   - {arrow: loop_completion.step, dash: none}
   - {arrow: loop_requirement.step, dash: none}
   - {arrow: loop_refusal.step, dash: none}
   - {arrow: loop_batch_deferral.step, dash: none}
+  - {arrow: loop_deadline.step, dash: none}
+  - {arrow: loop_deadline.start, dash: none}

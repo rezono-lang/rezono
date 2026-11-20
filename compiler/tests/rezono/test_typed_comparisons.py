@@ -79,19 +79,6 @@ def typed_condition(rule, slot, mode):
         raise TypedComparisonMismatch(f"{rule['head']['relation']} compares with {rule.get('conditions')!r}")
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=TypedComparisonMismatch,
-    reason="extra: Waits for test_expression_python_scalar_negation (comparisons in native lowering) and "
-           "compiler/tests/test_ordered_rule_scalars_engines.py--test_feldera_orders_typed_values (compile_rules "
-           "runs emit.compile_pack -> rules_sql.feldera, which raises IRError compare_as_unsupported until Feldera "
-           "lowers compare_as). Then skip signature lookup for utc_instant/binary_text in "
-           "compiler/rezono_compiler/native_rule_signatures.py and lower "
-           "utc_instant(x) and "
-           "binary_text(x) on both sides of a comparison in compiler/rezono_compiler/native_rule_lowering.py to one "
-           "condition with compare_as over the two slot values, and refuse an annotation on one side only. Read "
-           "decisions/ordered-rule-scalars.md.",
-)
 def test_native_typed_comparisons(tmp_path):
     try:
         program = compile_rules(request_pack(tmp_path / "typed", SOURCE))

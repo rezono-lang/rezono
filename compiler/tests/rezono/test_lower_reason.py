@@ -25,17 +25,6 @@ class MissingReasonLowering(AssertionError):
     """The compiler refused a reason declaration, or lowered it otherwise than the decision gives."""
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=MissingReasonLowering,
-    reason="extra: decisions/language-reasons.md: Lower a reason declaration of a module to the sentence "
-           "reason.<code> = {{label}} in the messages of the pack's default language, in "
-           "compiler/rezono_compiler/rezono_module.py instead of the refusal of reason in REFUSED, and refuse at "
-           "the declaration a code that the message file of that language also gives. Read the sections Lowering "
-           "and Considered. Waits for a planner to drop the case 'a reason' from REFUSALS in "
-           "compiler/tests/test_rezono_module.py, which still expects a reason declaration to be refused as not "
-           "lowered.",
-)
 def test_lower_reason(tmp_path):
     legacy = Path(shutil.copytree(FIXTURE, tmp_path / "legacy" / "minimal"))
     add(legacy / "messages" / "nl.mf2", LINE)

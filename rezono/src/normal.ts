@@ -115,7 +115,7 @@ export function normalQuestion(checked: Checked, pack: Schema): Question {
 	};
 	// The question's row: the kind of an `ask`, or the kind a check statement ranges over, when it names one.
 	const row = !named ? undefined : isAsk(tree) ? tree.ask : isCheck(tree) ? checked.publication?.kind : undefined;
-	const exprs: Expr[] = isAsk(tree) ? [tree.where, ...(tree.show ?? [])] : isCheck(tree) ? [tree.cond] : 'set' in tree ? [tree.set[1]] : [];
+	const exprs: Expr[] = isAsk(tree) ? [tree.where, ...(tree.show ?? [])] : isCheck(tree) ? [tree.cond] : 'set' in tree ? [tree.set[1]] : 'insert_row' in tree ? tree.insert_row.slots.map((s) => s.value) : [];
 	const top: Levels = row === undefined ? [] : [row];
 
 	/** How a path is written in full: from the binder, from `it`, or as it stands. */
@@ -171,6 +171,7 @@ export function normalQuestion(checked: Checked, pack: Schema): Question {
 	}
 	if (isCheck(tree)) return { ...structuredClone(tree), cond: normal(tree.cond) } satisfies CheckDecl;
 	if ('set' in tree) return { set: [structuredClone(tree.set[0]), normal(tree.set[1])] };
+	if ('insert_row' in tree) return { insert_row: { ...tree.insert_row, slots: tree.insert_row.slots.map((s) => ({ name: s.name, value: normal(s.value) })) } };
 	return structuredClone(tree);
 }
 
