@@ -151,15 +151,6 @@ def _columns_by_name(relation: dict) -> dict[str, dict]:
     return {column["name"]: column for column in relation["columns"]}
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason=(
-        "extra: decisions/viewer-slip.md: Include currency and semantic on visible attributes, semantic on visible "
-        "arrows, and visible name_attribute and name_arrows on kinds in the role's bundle response from "
-        "edge/gate/src/catalogue.ts (decisions/viewer-slip.md, section The role's part of the bundle)."
-    ),
-)
 def test_role_bundle_exposes_money_attribute_and_kind_naming_fields(published_bundle_store):
     store, manifest = published_bundle_store
     reader = _role_bundle(store, "reader", manifest["id"])
@@ -197,15 +188,6 @@ def test_role_bundle_exposes_money_attribute_and_kind_naming_fields(published_bu
     assert "name_arrows" not in kinds["group"]
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason=(
-        "extra: decisions/viewer-slip.md: Include calc, outcome, relation semantic, and column currency and semantic "
-        "on readable relations in the role's bundle response from edge/gate/src/catalogue.ts "
-        "(decisions/viewer-slip.md, section The role's part of the bundle)."
-    ),
-)
 def test_role_bundle_exposes_calc_outcome_and_column_type_fields(published_bundle_store):
     store, manifest = published_bundle_store
     reader = _role_bundle(store, "reader", manifest["id"])
@@ -249,16 +231,6 @@ def test_role_bundle_exposes_calc_outcome_and_column_type_fields(published_bundl
     assert "outcome" not in flagged
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason=(
-        "extra: decisions/viewer-slip.md: Scope kind naming fields, attribute/arrow currency and semantic, and "
-        "relation calc/outcome/semantic/column type fields strictly to what the role reads in "
-        "edge/gate/src/catalogue.ts and edge/gate/src/local.ts, so unreadable kinds, slots, relations and "
-        "currencies never leak (decisions/viewer-slip.md, section The role's part of the bundle)."
-    ),
-)
 def test_role_bundle_hides_unreadable_type_fields_without_leak(published_bundle_store):
     store, manifest = published_bundle_store
     reader = _role_bundle(store, "reader", manifest["id"])
