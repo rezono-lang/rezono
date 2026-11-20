@@ -118,17 +118,6 @@ def _setup_store(tmp_path) -> store.FileStore:
     return st
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=MissingAccessChangeCheck,
-    reason=(
-        "extra: decisions/central-read-access.md: Add independent may_change_access(rules_doc, bundle, delta) "
-        "to checker/rezono_checker/access.py (covering both may_read and may_read_full without sharing code "
-        "with the publisher), extend rezono_publisher.difference.withheld for may_read_full, and verify "
-        "agreement in rezono_publisher.difference.plan so any disagreement between publisher and checker "
-        "raises views.Blocked."
-    ),
-)
 def test_publisher_and_checker_disagreement_on_access_change_blocks(tmp_path, monkeypatch):
     checker_fn = getattr(checker_access, "may_change_access", None)
     if checker_fn is None:
