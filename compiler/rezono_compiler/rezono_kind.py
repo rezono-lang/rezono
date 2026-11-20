@@ -18,6 +18,47 @@ def bare_name(expr: object) -> str | None:
     return None
 
 
+def _condition_terms(expr: object) -> list[dict] | None:
+    match expr:
+        case {"and": list(items), **other} if not other and items:
+            terms: list[dict] = []
+            for item in items:
+                part = _condition_terms(item)
+                if part is None:
+                    return None
+                terms.extend(part)
+            return terms
+        case dict():
+            return [expr]
+    return None
+
+
+def _lower_conditions(expr: object, *, presence: dict[str, object]) -> dict[str, dict] | None:
+    terms = _condition_terms(expr)
+    if terms is None:
+        return None
+    conditions: dict[str, dict] = {}
+    for term in terms:
+        match term:
+            case {"cmp": ["=", left, right], **other} if not other:
+                slot, value = bare_name(left), bare_name(right)
+                if slot is None or value is None:
+                    return None
+                facet_name, facet_value = "equals_string", value
+            case {"is": [target, "known"], **other} if not other:
+                slot = bare_name(target)
+                if slot is None:
+                    return None
+                facet_name, facet_value = next(iter(presence.items()))
+            case _:
+                return None
+        slot_facets = conditions.setdefault(slot, {})
+        if facet_name in slot_facets:
+            return None
+        slot_facets[facet_name] = facet_value
+    return conditions
+
+
 def lower_checks(checks: object, at: str, refuse: Refuse) -> list[dict] | None:
     """Lower the supported class requirements in order, using the existing rule facets."""
     if not isinstance(checks, list):
@@ -38,23 +79,17 @@ def lower_checks(checks: object, at: str, refuse: Refuse) -> list[dict] | None:
             continue
         names.add(name)
 
-        when_slot = value = None
-        match check.get("when"):
-            case {"cmp": ["=", left, right], **other} if not other:
-                when_slot, value = bare_name(left), bare_name(right)
-        if when_slot is None or value is None:
-            refuse(f"{here}/when", "expected one slot equated to a bare value", "§5.1")
+        when_conditions = _lower_conditions(check.get("when"), presence={"value_presence": "PRESENT"})
+        if when_conditions is None:
+            refuse(f"{here}/when", "expected slot equality or presence conditions", "§5.1")
             continue
-        then_slot = None
-        match check.get("then"):
-            case {"is": [target, "known"], **other} if not other:
-                then_slot = bare_name(target)
-        if then_slot is None:
-            refuse(f"{here}/then", "expected one slot required to be known", "§5.1")
+        then_conditions = _lower_conditions(check.get("then"), presence={"required": True})
+        if then_conditions is None:
+            refuse(f"{here}/then", "expected slot equality or presence conditions", "§5.1")
             continue
         rules.append(rezono_metadata.lower(check) | {
-            "preconditions": {"slot_conditions": {when_slot: {"equals_string": value}}},
-            "postconditions": {"slot_conditions": {then_slot: {"required": True}}},
+            "preconditions": {"slot_conditions": when_conditions},
+            "postconditions": {"slot_conditions": then_conditions},
         })
     return rules if len(rules) == len(checks) else None
 
