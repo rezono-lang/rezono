@@ -140,10 +140,6 @@ def test_contributing_says_what_holds_now():
     assert "(CONTRIBUTING.md)" in readme()
 
 
-@pytest.mark.xfail(strict=True, raises=MissingOracleStatus, reason=(
-    "extra: decisions/local-suppose.md: Say in the row Change streams of docs/formal.md that the incremental "
-    "oracle has no green run on main yet, with a link to the open issue. The sentence goes with the first "
-    "green nightly run, and this test with it. docs/formal.md only."))
 def test_change_streams_names_the_oracle_status():
     text = (ROOT / "docs" / "formal.md").read_text(encoding="utf-8")
     row, = [line for line in text.splitlines() if line.startswith("| Change streams |")]

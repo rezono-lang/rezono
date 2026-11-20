@@ -46,6 +46,7 @@ import json
 from collections import defaultdict
 from collections.abc import Set as AbstractSet
 
+from .access_change import may_change_access as may_change_access
 from .calc import published_views, subject_of, version_of
 from .calc import reads as calc_reads
 from .calc import sources as calc_sources
@@ -171,12 +172,21 @@ def _schema_from_bundle(bundle, doc: dict) -> tuple[frozenset[str], dict[str, st
         if not isinstance(seal, dict):
             raise ValueError("seal entry must be a mapping")
         kind = _non_empty_str(seal.get("kind"), "seal kind")
+        if kind not in kinds:
+            raise ValueError(f"seal references unknown kind {kind!r}")
+        if "period_close" not in kinds:
+            raise ValueError("seal requires kind 'period_close'")
         refused = _non_empty_str(seal.get("refused"), "seal refused")
         accepted = _non_empty_str(seal.get("accepted"), "seal accepted")
         row_sha = _non_empty_str(seal.get("row_sha256"), "seal row_sha256")
-        columns[refused] = (kind, "period_close")
-        columns[accepted] = (kind,)
-        columns[row_sha] = (kind, None)
+        for table, cols in (
+            (refused, (kind, "period_close")),
+            (accepted, (kind,)),
+            (row_sha, (kind, None)),
+        ):
+            if table in columns:
+                raise ValueError(f"duplicate table {table!r}")
+            columns[table] = cols
         parts = seal.get("parts")
         if parts is None:
             parts = ()
@@ -186,7 +196,11 @@ def _schema_from_bundle(bundle, doc: dict) -> tuple[frozenset[str], dict[str, st
             if not isinstance(part, dict):
                 raise ValueError("seal part must be a mapping")
             p_kind = _non_empty_str(part.get("kind"), "seal part kind")
+            if p_kind not in kinds:
+                raise ValueError(f"seal part references unknown kind {p_kind!r}")
             p_accepted = _non_empty_str(part.get("accepted"), "seal part accepted")
+            if p_accepted in columns:
+                raise ValueError(f"duplicate table {p_accepted!r}")
             columns[p_accepted] = (p_kind,)
 
     return frozenset(kinds), parents, columns
@@ -466,8 +480,7 @@ def _calc(ir: dict, views: set, every_witness, role_witnesses, derivable: set, f
 
 def check_role(role: str, complete: dict, snapshots: dict, claimed_full, bundle: dict,
                doc: dict, calc_ir: dict | None = None, instances=(), calc_all=(),
-               calc_witnesses=(), witnesses=(), claimed_evidence=None, *,
-               columns=None) -> tuple[frozenset, list[dict]]:
+               calc_witnesses=(), witnesses=(), claimed_evidence=None) -> tuple[frozenset, list[dict]]:
     """(the relations `role` reads in full, findings) for one filtered role.
 
     `complete` and `snapshots` are {relation: snapshot bytes}: every row, and the role's. `bundle` is the
@@ -476,8 +489,6 @@ def check_role(role: str, complete: dict, snapshots: dict, claimed_full, bundle:
     witness instance of the engine; `calc_all` every calculation witness and `calc_witnesses` the role's;
     `witnesses` the role's chosen proofs; `claimed_evidence` the publisher's evidence for the role's full kinds
     (`grants`), compared when given."""
-    if columns is not None:
-        raise TypeError("check_role derives schema columns from bundle; do not pass columns")
     try:
         kinds, parents, columns = _schema_from_bundle(bundle, doc)
     except ValueError as err:

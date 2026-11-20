@@ -21,6 +21,36 @@ def reads_all_in_full(manifest: dict, role: str) -> bool:
     return bool(relations) and full == relations
 
 
+def check_statuses(role: str, manifest: dict, truth: dict | None = None) -> None:
+    """Check that check statuses match the store's unscoped manifest or all-or-nothing without one."""
+    checks = manifest.get("checks")
+    if truth is not None:
+        if manifest.get("id") is None or manifest.get("id") != truth.get("id"):
+            raise SystemExit(f"{role} checks: manifest {manifest.get('id')!r} checked against {truth.get('id')!r}")
+        full = reads_all_in_full(truth, role)
+        expected = [
+            {"name": check["name"], "status": check["status"] if full else "unavailable"}
+            for check in truth.get("checks", [])
+        ]
+        if checks != expected:
+            raise SystemExit(f"{role} checks: expected {expected!r}, got {checks!r}")
+        return
+
+    if not isinstance(checks, list):
+        raise SystemExit(f"{role} checks: expected a list, got {checks!r}")
+    for check in checks:
+        if (not isinstance(check, dict) or set(check) != {"name", "status"}
+                or not isinstance(check["name"], str) or not check["name"]):
+            raise SystemExit(f"{role} checks: invalid check entry {check!r}")
+    statuses = {check["status"] for check in checks}
+    if not statuses <= {"green", "warning", "unavailable"}:
+        raise SystemExit(f"{role} checks: unexpected status in {checks!r}")
+    if "unavailable" in statuses and statuses != {"unavailable"}:
+        raise SystemExit(f"{role} checks: mixed unavailable and shown statuses in {checks!r}")
+    if statuses and statuses != {"unavailable"} and not reads_all_in_full(manifest, role):
+        raise SystemExit(f"{role} checks: status shown to a role that reads in part")
+
+
 def asked(gate, role: str, pack: str, manifest: str, question: str) -> list[dict]:
     """Read all pages of one typed question from a role-scoped gate."""
     path = f"/{pack}/{manifest}/ask"

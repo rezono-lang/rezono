@@ -189,6 +189,9 @@ semantics.addOperation<unknown>('tree', {
 	TimeAt: (_at, atom) => atom.tree(),
 	TimeKnown: (_as, _known, atom) => atom.tree(),
 	Filter: (_where, e) => e.tree(),
+	Dotted_where(base, _dot, _where, _open, cond, _close) {
+		return placed(this, { filter: [base.tree(), cond.tree()] } as Expr);
+	},
 	Dotted_agg(base, _dot, agg) {
 		const [name, ...arg] = agg.tree() as [string, ...Expr[]];
 		return placed(this, { agg: [name, base.tree(), ...arg] } as Expr);
@@ -199,7 +202,10 @@ semantics.addOperation<unknown>('tree', {
 		if ('lit' in b && run.ids.has(b)) return placed(this, { path: [b.lit, readRuleName(name)] });
 		return placed(this, { dot: [b, readRuleName(name)] } as Expr);
 	},
-	Agg: (name, _open, arg, _close) => [name.sourceString, ...arg.children.map((a) => a.tree())],
+	Agg(name, _open, arg, _close) {
+		if (name.sourceString === 'one' && arg.numChildren) refused(arg.child(0), 'R000', ['`)`']);
+		return [name.sourceString, ...arg.children.map((a) => a.tree())];
+	},
 	Atom(e) {
 		const text = e.sourceString;
 		switch (e.ctorName) {
@@ -277,9 +283,15 @@ export { semantics, placed, refused, reserved };
  */
 const nativeRules = new Set(['NativeRuleLine', 'StepClauseLine', 'StepChangeLine']);
 
-export function readRule<T>(text: string, rule: string, read: (node: Node) => T, spans = new WeakMap<object, Span>(), at = points(text)): Read<T> {
+export function readRule<T>(
+	text: string,
+	rule: string,
+	read: (node: Node) => T,
+	spans = new WeakMap<object, Span>(),
+	at = points(text),
+	native = nativeRules.has(rule)
+): Read<T> {
 	startRun(text, spans, at);
-	const native = nativeRules.has(rule);
 	const match = (native ? nativeRuleGrammar : grammar).match(text, rule);
 	if (match.failed()) {
 		const at = Math.min(match.getRightmostFailurePosition(), text.length);

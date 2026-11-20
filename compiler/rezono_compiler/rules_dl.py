@@ -313,7 +313,7 @@ def parse_file(text: str, where: str, columns: list | None = None):
                     if re.match(r"^//\s*@extend\b", c.strip()) and not EXTEND.match(c.strip()):
                         p.fail(f"{name}: @extend takes no argument", t)
                     if RELEASE.match(c.strip()):
-                        p.fail(f"{name}: @release is not supported yet: a role reads a negation or an aggregate only over relations it reads in full (docs/architecture.md, delimited release)", t)
+                        p.fail(f"{name}: @release is not supported yet: a role reads a negation or an aggregate only over relations it reads in full (docs/formal.md, section 3; decisions/language-native-rules.md: delimited release stays reserved)", t)
                     m = EXPLAIN.match(c.strip())
                     if m and m.group(1) == FOLD:
                         fold = True

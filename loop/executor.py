@@ -74,6 +74,8 @@ def execute(
             raise ValueError("read must return a dated sweep")
         plain = _plain_json(raw, "dated sweep")
         sweep = read_sweep(plain, readers, expectations)
+        if plain["run"] != run:
+            raise ValueError(f"dated sweep belongs to run {plain['run']!r}, expected {run!r}")
         sweep_key = (plain["run"], plain["id"])
         if sweep_key in sweep_ids:
             raise ValueError(f"duplicate dated sweep {sweep_key!r}")

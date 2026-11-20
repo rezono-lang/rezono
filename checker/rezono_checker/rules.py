@@ -180,19 +180,27 @@ PART_KEYS = ("kind", "arrow", "owner", "tables", "accepted")
 
 def _names(value, keys) -> bool:
     return (isinstance(value, dict) and set(value) == set(keys)
-            and all(isinstance(value[k], str) for k in keys if k != "tables")
-            and isinstance(value["tables"], list) and all(isinstance(t, str) for t in value["tables"]))
+            and all(isinstance(value[k], str) and value[k] for k in keys if k != "tables")
+            and isinstance(value["tables"], list) and all(isinstance(t, str) and t for t in value["tables"]))
 
 
 def load_seals(doc: dict) -> list[dict]:
     """The sealed kind of a rule IR: the tables to recompute row hashes and refused and accepted
     input from, and its parts (`parts`, optional): each with the arrow to its owner, the sealed kind or an
     earlier part. Raises ValueError on bad input."""
+    raw = doc.get("seals", [])
+    if not isinstance(raw, list):
+        raise ValueError(f"seals must be a list: {raw!r}")
     out = []
-    for s in doc.get("seals", []):
+    seen_tables: set[str] = set()
+    for s in raw:
         parts = s.get("parts") if isinstance(s, dict) else None
         if not _names({k: v for k, v in s.items() if k != "parts"} if isinstance(s, dict) else s, SEAL_KEYS):
             raise ValueError(f"a seal names the tables {', '.join(SEAL_KEYS)}: {s!r}")
+        for table in (s["refused"], s["accepted"], s["row_sha256"]):
+            if table in seen_tables:
+                raise ValueError(f"duplicate seal table {table!r}")
+            seen_tables.add(table)
         if "parts" in s:
             placed = {s["kind"]}
             if not isinstance(parts, list) or not parts:
@@ -200,6 +208,9 @@ def load_seals(doc: dict) -> list[dict]:
             for p in parts:
                 if not _names(p, PART_KEYS) or p["owner"] not in placed or p["kind"] in placed:
                     raise ValueError(f"a part names {', '.join(PART_KEYS)}, with an owner before it: {p!r}")
+                if p["accepted"] in seen_tables:
+                    raise ValueError(f"duplicate seal table {p['accepted']!r}")
+                seen_tables.add(p["accepted"])
                 placed.add(p["kind"])
         out.append(dict(s))
     return out
@@ -475,8 +486,9 @@ def check_calc_bindings(doc: dict, rules: dict, calculation: dict | None) -> Non
         new = consumers.get(todo.pop(), set()) - after
         after.update(new)
         todo.extend(sorted(new))
-    if "may_read" in after:
-        raise ValueError("may_read cannot depend on a calculation selection")
+    for rel in ("may_read", "may_read_full"):
+        if rel in after:
+            raise ValueError(f"{rel} cannot depend on a calculation selection")
     if cycle := after.intersection(f["table"] for f in program.get("facts", ())):
         raise ValueError(f"calculation reads its downstream relations: {', '.join(sorted(cycle))}")
     for rule in rules.values():

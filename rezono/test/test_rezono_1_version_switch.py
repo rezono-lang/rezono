@@ -33,7 +33,7 @@ rule listed(item: Item) when item in Item
 REZONO_1_BASIC = """\
 rezono 1
 pack sample
-kind Item world closed
+kind Item
   active: Bool
   derived flagged: Bool = active
 """
@@ -42,7 +42,7 @@ REZONO_1_TABLE_PRIORITY = """\
 rezono 1
 pack sample
 enum Level = low | high
-kind Item world closed
+kind Item
   flag: Bool
   derived tier: Level
     table priority
@@ -54,7 +54,7 @@ kind Item world closed
 REZONO_1_LEGACY_RULE = """\
 rezono 1
 pack sample
-kind Item world closed
+kind Item
 rule listed(item: Item) when item in Item
 """
 
