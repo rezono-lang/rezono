@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 import sys
+from copy import copy
 from dataclasses import dataclass, field
 from importlib import resources
 from pathlib import Path
@@ -652,6 +653,7 @@ def read(pack_dir: str | Path) -> Pack:
     kinds: dict[str, Kind] = {}
     enums: dict[str, list[str]] = {}
     owner: dict[str, modules.Module] = {}
+    chains: dict[str, list[tuple[modules.Module, str, object]]] = {}
     for m in mods:
         sv = m.sv
         default_layer = ann(sv.schema, "layer")
@@ -659,7 +661,7 @@ def read(pack_dir: str | Path) -> Pack:
         if "world" in tags(sv.schema):
             errors.append(f"{m.rel}: world goes on a class or a slot, not on a schema")
         for cname in sorted(sv.all_classes(imports=False)):
-            c = sv.get_class(cname)
+            c = sv.get_class(cname, imports=False)
             k = names.name(m.id, cname)
             if not NAME.match(k) or "__" in k:
                 errors.append(f"class {cname}: name '{k}' is not a valid kind name")
@@ -678,29 +680,39 @@ def read(pack_dir: str | Path) -> Pack:
             if c.is_a and parent is None:  # LinkML cannot induce its slots either: nothing more to check
                 errors.append(f"class {cname}: parent {c.is_a} is not in the import closure of {m.id}")
                 continue
-            ancestors = {cname}
-            ancestor = c
-            while ancestor.is_a:
-                if ancestor.is_a in ancestors:
-                    errors.append(f"class {cname}: inheritance forms a cycle through {ancestor.is_a}")
-                    break
-                parent_class = sv.get_class(ancestor.is_a)
+            chain = [(m, cname, c)]
+            seen_ancestors = {(m.id, cname)}
+            cur_mod, cur_cname, cur_cls = m, cname, c
+            broken = False
+            while cur_cls.is_a:
+                p_name = cur_cls.is_a
+                p_owner = cur_mod.parent_targets.get(cur_cname)
+                if p_owner is None:
+                    p_owner = names.owner(cur_mod.id, p_name)
+                p_mod = names.modules.get(p_owner) if p_owner is not None else None
+                parent_class = p_mod.sv.get_class(p_name, imports=False) if p_mod is not None else None
                 if parent_class is None:
-                    errors.append(f"class {cname}: parent {ancestor.is_a} is not a kind")
+                    errors.append(f"class {cname}: parent {p_name} is not a kind")
+                    broken = True
                     break
-                ancestors.add(ancestor.is_a)
-                ancestor = parent_class
-            if ancestor.is_a:
+                if (p_mod.id, p_name) in seen_ancestors:
+                    errors.append(f"class {cname}: inheritance forms a cycle through {p_name}")
+                    broken = True
+                    break
+                seen_ancestors.add((p_mod.id, p_name))
+                chain.append((p_mod, p_name, parent_class))
+                cur_mod, cur_cname, cur_cls = p_mod, p_name, parent_class
+            if broken:
                 continue
-            induced = sv.class_induced_slots(cname)
+            induced = induced_class_slots(chain)
             if any(s.key for s in induced):
                 errors.append(f"class {cname}: use 'identifier', not 'key'")
             ident = [s.name for s in induced if s.identifier]
             if len(ident) > 1:
                 errors.append(f"class {cname}: more than one identifier ({', '.join(sorted(ident))})")
             relationship = False
-            for ancestor in sv.class_ancestors(cname, mixins=False):
-                marker = sv.get_class(ancestor).represents_relationship
+            for _, _, ancestor_cls in chain:
+                marker = ancestor_cls.represents_relationship
                 if marker is not None:
                     relationship = bool(marker)
                     break
@@ -709,6 +721,7 @@ def read(pack_dir: str | Path) -> Pack:
             kinds[k] = Kind(k, cname, layer, parent, bool(c.abstract), ident[0] if ident else None, module=m.id,
                             world=world(c, cname, errors), relationship=relationship, fold="explain" in tags(c))
             owner[k] = m
+            chains[k] = chain
             kinds[k].span = placed(m, ("classes", cname))
             kinds[k].renamed_from = renamed_from(c, f"class {cname}", errors)
         for ename in sorted(sv.all_enums(imports=False)):
@@ -717,11 +730,11 @@ def read(pack_dir: str | Path) -> Pack:
                 errors.append(f"enum {ename}: name '{e}' is not a valid name")
             if e in enums:
                 errors.append(f"enum {ename}: defined twice")
-            enums[e] = list(sv.get_enum(ename).permissible_values or {})
+            enums[e] = list(sv.get_enum(ename, imports=False).permissible_values or {})
     declared = units(mods, placed, errors)
 
     for k, kind in kinds.items():  # the root kind has the world; a subkind shares its tables, so its world too
-        if kind.parent and "world" in tags(owner[k].sv.get_class(kind.cls)):
+        if kind.parent and "world" in tags(owner[k].sv.get_class(kind.cls, imports=False)):
             errors.append(f"class {kind.cls}: world goes on the root kind; a subkind has the world of {kind.parent}")
         root, seen = kind, {k}
         while root.parent in kinds and root.parent not in seen:
@@ -748,9 +761,10 @@ def read(pack_dir: str | Path) -> Pack:
                     span=kind.span,
                 )
             )
-        c = sv.get_class(cname)
-        inherited = {s.name for s in sv.class_induced_slots(c.is_a)} if kind.parent else set()
-        for s in sv.class_induced_slots(cname):
+        c = sv.get_class(cname, imports=False)
+        chain = chains[k]
+        inherited = {s.name for s in induced_class_slots(chain[1:])} if kind.parent else set()
+        for s in induced_class_slots(chain):
             rng = s.range or sv.schema.default_range
             where = f"{cname}.{s.name}"
             if s.name in inherited and s.name in set(c.attributes or {}) | set(c.slots or []):
@@ -793,7 +807,7 @@ def read(pack_dir: str | Path) -> Pack:
                 slot.arrow, slot.range, slot.inlined = (
                     True, names.resolve(m.id, rng, owner=slot_owner), bool(s.inlined or s.inlined_as_list)
                 )
-                if open_value(target_sv, rng):
+                if open_value(target_sv, rng, imports=slot_owner not in names.modules):
                     errors.append(f"{where}: range {rng} is linkml:Any, an open value; Rezono types every value")
                 if s.pattern:
                     errors.append(f"{where}: a pattern applies to text and enums, not to an arrow")
@@ -1021,6 +1035,40 @@ def read(pack_dir: str | Path) -> Pack:
     return pack
 
 
+def own_class_slot(sv: SchemaView, cls, name: str):
+    """Materialize one slot declared directly on `cls` (`attributes` or `slots`) without flat `class_ancestors`."""
+    attrs = cls.attributes or {}
+    if name in attrs:
+        slot = copy(attrs[name])
+        slot.pattern = sv.resolve_pattern(slot)
+        if slot.range is None:
+            slot.range = sv.schema.default_range
+        if slot.inlined_as_list:
+            slot.inlined = True
+        if slot.identifier or slot.key:
+            slot.required = True
+        return slot
+    return sv.induced_slot(name, None)
+
+
+def own_class_slots(sv: SchemaView, cls) -> list:
+    """Materialize every slot declared directly on `cls` in LinkML declaration order (`slots`, then `attributes`)."""
+    slot_names = list(dict.fromkeys([*(cls.slots or ()), *(cls.attributes or ())]))
+    return [own_class_slot(sv, cls, name) for name in slot_names]
+
+
+def induced_class_slots(chain: list[tuple[modules.Module, str, object]]) -> list:
+    """All slots along a resolved `(module, class_name, ClassDefinition)` ancestor chain, child-first."""
+    out = []
+    seen: set[str] = set()
+    for anc_mod, _, anc_cls in chain:
+        for s in own_class_slots(anc_mod.sv, anc_cls):
+            if s.name not in seen:
+                seen.add(s.name)
+                out.append(s)
+    return out
+
+
 def slot_role(sv: SchemaView, s) -> str | None:
     """Recognise the S26 role from the module's CURIE prefixes or a full IRI, never from a slot name."""
     uri = s.slot_uri
@@ -1116,7 +1164,7 @@ def units(mods, placed, errors: list[str]) -> dict[str, types.Unit]:
     found: dict[str, tuple] = {}  # name -> (tag, value, where)
     for m in mods:
         for tname in sorted(m.sv.all_types(imports=False)):
-            t = m.sv.get_type(tname)
+            t = m.sv.get_type(tname, imports=False)
             given = [tag for tag in UNIT_TAGS if tag in tags(t)]
             if not given:
                 continue
@@ -1180,9 +1228,10 @@ def slot_unit(sv: SchemaView, rng: str, declared: dict[str, types.Unit]) -> str 
     return None
 
 
-def open_value(sv: SchemaView, cname: str) -> bool:
+def open_value(sv: SchemaView, cname: str, *, imports: bool = True) -> bool:
     """Whether a class is LinkML's open value (class_uri linkml:Any)."""
-    uri = sv.get_class(cname).class_uri
+    cls = sv.get_class(cname) if imports else sv.get_class(cname, imports=False)
+    uri = cls.class_uri
     if uri in ("linkml:Any", ANY_URI):  # also when the schema declares no linkml prefix
         return True
     try:
