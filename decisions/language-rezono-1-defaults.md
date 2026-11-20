@@ -14,7 +14,7 @@ subject: language-rezono-1-defaults
 |---|---|---|
 | 1. The world of a kind without a world line | `closed`; `open` stays the default in `rezono 0` | the compiler lowers by version; the form does not change |
 | 2. A kind whose rows are observed | `world open`, optionally `complete by <relation>`; otherwise R051 | a new refusal, a new kind clause and the core reason `incomplete_read` |
-| 3. `world closed` written on a kind | W107, hint "leave it out" | a new warning |
+| 3. `world closed` written on a kind | W114, hint "leave it out" | a new warning |
 | 4. The LinkML boundary | an optional slot becomes `T?`; an open class becomes `world open` | a conversion rule |
 | 5. Precedence of `unless` and `table first` | unchanged: a later `unless` wins, the first applying row wins | the language guide |
 | 6. Several values from `.one()` | unchanged: an `invalid multiple_values` finding | the language guide |
@@ -75,12 +75,12 @@ derived in_scope(export: CmdbExport, service: Text): Bool = CmdbScope.any(it.exp
 - **Receipts and epochs.** A relation derived from `verified_receipt` holds only for receipts that admission verified in that epoch ([admission transport](admission-transport.md)). In an epoch without an admitted receipt it is empty, so every key lies outside the scope. A receipt therefore never closes the kind as such: it closes it within its scope, at its cut, in its epoch.
 - **Functional domains.** A functional derivation that reads the kind declares `over <relation>(…)`, so its domain is the covered keys, a closed `Bool` relation as [Rezono 1 §2](language-rezono-1.md#2-one-derivation-form-derived) asks. A key outside the scope is outside the domain and has no row. A question that reads the derivation for such a key gets `unknown incomplete_read`, never `known`, also in an epoch whose coverage relation is empty.
 
-## 3. `world closed` on a kind in `rezono 1` gives W107
+## 3. `world closed` on a kind in `rezono 1` gives W114
 
-A kind line in a `rezono 1` module that writes `world closed` gives **W107** at the words `world closed`, with the hint "leave it out" (`hint.leave_out`), as a header line that writes its default does in [readable rules §1](language-readable-rules.md#1-a-shorter-header). The module still reads. Its form keeps `"world": "closed"` as written and prints it back, so the form, its bytes and the pack hash do not change, and the kind means what it means without the line.
+A kind line in a `rezono 1` module that writes `world closed` gives **W114** at the words `world closed`, with the hint "leave it out" (`hint.leave_out`). The module still reads. Its form keeps `"world": "closed"` as written and prints it back, so the form, its bytes and the pack hash do not change, and the kind means what it means without the line.
 
 - `world open` on a kind gives no warning: it deviates from the default. In `rezono 0`, `world closed` is not the default and gives no warning.
-- This is the deprecated phase of v0 §4b in `rezono 1`: W107 at every use, meaning unchanged. A later language version may remove the line (R028). The header lines of readable rules are a phase further: they were deprecated in `rezono 0` and are R028 in `rezono 1`. `world closed` on a kind was not a default before `rezono 1`, so it starts at W107.
+- **Why W114, not W107.** W107 is reserved strictly for deprecated declarations with a replacement (v0 §4b, §10; `decisions/language-surface-compatibility.md`, section 6). Writing a redundant default is not a deprecation, so it takes its own warning code: **W114**, the next free code after v0 §10 (W101 to W112) and the missing-origin warning W113 (`decisions/fact-origin-required.md`). Its English and Dutch sentences (`{0}` writes the default / `{0}` schrijft de standaardwaarde) go into `rezono/messages/en.json` and `rezono/messages/nl.json`, and W114 enters v0 §10 when it is built. The redundant schema-header warning of [readable rules §1](language-readable-rules.md#1-a-shorter-header) moves from W107 to its own redundant-default code in a follow-up. A later language version may remove redundant `world closed` (R028); because `world closed` on a kind was not a default before `rezono 1`, it starts as a warning.
 - A slot line that writes `world closed` gets no warning from this decision.
 - Reader tests whose `rezono 1` sources expect no diagnostic do not write the line. `rezono/test/test_rezono_1_version_switch.py`, `test_rezono_1_derived.py` and `test_rezono_1_literals.py` leave it out with their expectations unchanged; `test_rezono_1_examples.py` keeps it until its example runner reads an absent world as closed (Order, below).
 
@@ -146,7 +146,7 @@ A file without a `rezono` line is read as `rezono 0` with W106; in a pack on `re
 | `compiler/tests/rezono/test_rezono_1_world_default.py::test_rezono_0_kind_without_world_stays_open` | a `rezono 0` kind without a world line is never lowered as closed; with `world closed` it lowers closed | green |
 | `compiler/tests/rezono/test_rezono_1_world_default.py::test_rezono_1_kind_without_world_lowers_closed` | section 1: closed without the line, `world open` kept on a kind and a slot, a slot with its kind's world, the written line lowered byte for byte the same | `M3`, waits for the compiler version switch |
 | `compiler/tests/rezono/test_rezono_1_world_default.py::test_rezono_1_observed_kind_needs_open_world` | section 2: R051 names each kind of an `observation` module without `world open`, also with `world closed` written; the same kind in a `facts` module is closed | `M3`, waits for the default |
-| `rezono/test/test_rezono_1_world_line.py::test_rezono_1_world_closed_gives_w107` | section 3: W107 with "leave it out" at `world closed`, the form and its print as written, no warning without the line, for `world open` or in `rezono 0` | `M3`, waits for the default and the examples test |
+| `rezono/test/test_rezono_1_world_line.py::test_rezono_1_world_closed_gives_w114` | section 3: W114 with "leave it out" at `world closed`, the form and its print as written, no warning without the line, for `world open` or in `rezono 0` | `M3`, waits for the default and the examples test |
 | `rezono/test/test_rezono_1_complete_by.py::test_rezono_1_complete_by_reads_into_the_form` | section 2: `world open, complete by <relation>` reads into the members `world` and `complete` and prints back as written; `complete by` without `world open` before it is R000 | `M3` |
 
 Specified here and not tested: what the compiler and the checker do with `complete by` (the relation's columns and R003, the closed reading inside the scope with its coverage premise, `unknown incomplete_read` outside it, the functional domain `over <relation>(…)`), the conversion rule of section 4 (it runs with the conversion), and the language guide examples of sections 5 and 6. Those tests need module-level `derived` relations, which the reader does not read yet (`rezono/test/test_rezono_1_derived.py`).
@@ -166,7 +166,8 @@ Specified here and not tested: what the compiler and the checker do with `comple
 - **Name the scope in `pack.yaml` beside the layer.** Rejected: the scope is a relation with a key, which the rules already read; written on the kind line, it stands where a reader looks for the kind's world.
 - **`complete by` on a closed kind.** Rejected: a closed kind is complete everywhere, so a scope would say nothing; the clause follows `world open`.
 - **`open_world` outside the scope.** Rejected: outside a declared scope the remedy is to widen the scope or admit a receipt, so the reason names it (`incomplete_read`).
-- **R028 for `world closed` in `rezono 1`.** Rejected: v0 §4b deprecates before it removes, and the line was never a default before `rezono 1`.
+- **Reuse W107 for `world closed`.** Rejected: W107 is strictly for deprecated declarations with a replacement (`decisions/language-surface-compatibility.md`, section 6). A redundant default is not a deprecation and gets its own code (W114).
+- **R028 for `world closed` in `rezono 1`.** Rejected: `world closed` was never a default before `rezono 1`, so a redundant-default warning (W114) comes before any later removal.
 - **Write the default into the form.** Rejected, as in readable rules: every form, and every pack hash, would change without a change of meaning.
 - **One direction for `unless` and `table first`.** Rejected in section 5.
 - **Block on `.one()` conflicts by default.** Rejected in section 6: a pack that wants it says so with `check`, `require` or `total`.

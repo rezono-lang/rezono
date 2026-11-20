@@ -1,4 +1,4 @@
-"""`world closed` written on a kind in a rezono 1 module gives W107 with the hint "leave it out", and the form keeps
+"""`world closed` written on a kind in a rezono 1 module gives W114 with the hint "leave it out", and the form keeps
 the line as written (decisions/language-rezono-1-defaults.md, section 3). The sources, the span and the hint are
 written from that decision; the hint's text is the English message of `hint.leave_out`."""
 
@@ -71,11 +71,12 @@ class MissingWorldLineHint(AssertionError):
     reason="M3: decisions/language-rezono-1-defaults.md: Waits for "
            "compiler/tests/rezono/test_rezono_1_world_default.py--test_rezono_1_kind_without_world_lowers_closed and "
            "for a planner to remove `world closed` from the rezono 1 source of rezono/test/test_rezono_1_examples.py. "
-           "In rezono/src/, give W107 with the hint `hint.leave_out` at the words `world closed` on a kind line of a "
-           "rezono 1 module; keep `world: closed` in the form and its printed text as written; give no warning for a "
+           "In rezono/src/, give W114 with the hint `hint.leave_out` at the words `world closed` on a kind line of a "
+           "rezono 1 module (adding W114 to rezono/messages/en.json and nl.json; W107 stays reserved for deprecated "
+           "declarations); keep `world: closed` in the form and its printed text as written; give no warning for a "
            "kind without the line, for `world open`, or in rezono 0. Read section 3.",
 )
-def test_rezono_1_world_closed_gives_w107():
+def test_rezono_1_world_closed_gives_w114():
     result = subprocess.run(
         ["node", "--input-type=module", "-e", PROBE, json.dumps([REZONO_0, WRITTEN, LEFT_OUT])],
         cwd=ROOT,
@@ -90,7 +91,7 @@ def test_rezono_1_world_closed_gives_w107():
     assert kinds(rezono_0)["Zone"].get("world") == "closed", rezono_0["module"]
 
     problems = []
-    want = [{"code": "W107", "hint": "leave it out", "span": at(WRITTEN, "world closed")}]
+    want = [{"code": "W114", "hint": "leave it out", "span": at(WRITTEN, "world closed")}]
     if written["module"] is None or written["format"] != "rezono.module/5" or written["diagnostics"] != want:
         problems.append({"written": written, "want": want})
     else:
