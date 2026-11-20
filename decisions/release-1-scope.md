@@ -104,7 +104,7 @@ A newcomer meets Rezono in the root `README.md` and in the language guide `rezon
 
 1. **The first real pack on the live path in Rezono.** `examples/subsidy-scheme` replaces `calc/award.yaml` with the module `rezono/award.rezono`, declared under `rezono:` in its `pack.yaml` and started from the candidate, with the same `ir/calc.json` and the same outcomes under `expected/calc/` of `examples/subsidy` ([calculations in Rezono](language-calculations.md)).
 2. **The rules in the readme.** `### The rules in Rezono` under `## Example`, as [the front door](front-door.md#the-language-in-the-readme) specifies: a literal excerpt of two `A001` rules, the same excerpt with one changed line beside its `R050` refusal, and one sentence that names the four value states. Each of its tests waits for step 1.
-3. **The language guide opens with the language.** `rezono/README.md` starts with a copyable excerpt of `examples/subsidy-scheme/rezono/award.rezono`, and its light and dark highlighted SVG with a colour legend ([language guide highlight](language-guide-highlight.md)). Its tests wait for step 1 and for `rezono/test/test_rezono_syntax_grammar.py::test_generated_syntax_highlighting_grammar`, which is green.
+3. **The language guide opens with the language.** `rezono/README.md` starts with a copyable excerpt of `examples/subsidy-scheme/rezono/award.rezono`, and its light and dark highlighted SVG with a colour legend ([language guide highlight](language-guide-highlight.md)). Its tests wait for step 1 and for `rezono/test/test_rezono_syntax_grammar.py::test_generated_syntax_highlighting_grammar`, which is green, as is the theme that colours every token kind (`test_highlight_theme_covers_every_token_kind_in_light_and_dark`).
 
 These red tests move from `extra` to `M3`:
 
@@ -115,7 +115,6 @@ These red tests move from `extra` to `M3`:
 - `rezono/test/test_language_guide_excerpt.py::test_language_guide_starts_with_subsidy_award_excerpt`
 - `rezono/test/test_language_guide_highlight.py::test_regenerating_excerpt_svgs_produces_identical_bytes`
 - `rezono/test/test_language_guide_highlight.py::test_excerpt_svg_text_matches_the_excerpt`
-- `rezono/test/test_language_guide_highlight.py::test_highlight_theme_covers_every_token_kind_in_light_and_dark`
 - `rezono/test/test_language_guide_highlight.py::test_language_guide_displays_highlighted_picture_and_color_legend`
 
 An excerpt follows the language version of the pack it quotes: while `award.rezono` is written in `rezono 0`, the readme does not mention `rezono 1` ([the front door](front-door.md#the-language-in-the-readme)).
