@@ -34,7 +34,8 @@ def classes():
     "M3: decisions/standard-packs-everywhere.md, section 1.4, step 4, after "
     "compiler/tests/test_std_decision_dates.py::test_std_decision_rules_read_dates. Remove the *_day slots "
     "from examples/subsidy/schema/credentials.yaml and the numbers from its facts, make rules/credentials.dl "
-    "read the dates through @days, and let views.yaml read the evaluation day's `date` with reading: days."))
+    "compare the dates in their native order, and let views.yaml read the evaluation day's `date` with "
+    "reading: days."))
 def test_subsidy_schema_has_no_day_numbers():
     found = classes()
     numbers = sorted(f"{where}: {kind}.{slot}" for kind, (where, slots) in found.items()

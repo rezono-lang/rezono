@@ -30,14 +30,16 @@ The [day-number decision](rule-day-numbers.md) rejects a precomputed day-number 
 
 ### 1.2 How a rule reads a date
 
-A `.dl` rule may pass a variable that a positive literal binds to a native `date` column to `@days`:
+A rule compares two dates in their native order. In a `.dl` rule both sides are variables that positive literals bind to native `date` columns:
 
 ```prolog
-took_effect(d, r) :- decision(d), reference_date__date(r, on), decision__valid_from(d, from),
-    n = @days(on, "1970-01-01"), f = @days(from, "1970-01-01"), f <= n, !decision__state(d, "proposed").
+took_effect(d, r) :- decision(d), reference_date__date(r, on), decision__valid_from(d, from), from <= on,
+    !decision__state(d, "proposed").
 ```
 
-Today `@days` takes text only, and the reader refuses a `date` table. The step lowers to the rule IR's `days` assignment over a date column, which a view with `reading: days` already produces (`compiler/rezono_compiler/view_rules.py`), so the DuckDB and Feldera SQL, the Soufflé helper and the checker's recomputation need nothing new. The witness binds the date and its number, so the proof ends in the date as recorded. An order comparison between two dates needs no other construct, and a distance in days (the build pack's tick, a horizon) uses the same numbers. Equality of two dates stays as the [date equality decision](independent-date-equality.md) has it. A `rezono 1` comparison of two `Date` values lowers to the same assignment, so the staged Rezono candidate of `std-decision` and its Datalog form keep one meaning.
+Today the reader refuses a `date` table, and an order comparison takes whole numbers only. The [date equality decision](independent-date-equality.md) admits `date` columns in the rule IR and equality between two of them; its red test, `compiler/tests/test_recorded_dates.py::test_independent_date_equality`, comes first. This step extends it to `<`, `<=`, `>` and `>=` between two `date` variables. Both SQL engines compare `DATE` values, the Soufflé helper compares a date by its day number, and the checker compares the two dates of the witness, so the proof ends in the dates as recorded. A text or a number cannot stand in for a date, and no date literal comes in. `rezono 1` reads `Date` directly and compares two `Date` values with the same operators, which lower to the same comparison, so the staged Rezono candidate of `std-decision` and its Datalog form keep one meaning.
+
+`@days` stays for day arithmetic, where a number of days is needed: a horizon in days, or a tick read as a day, as in the build pack's policy date. For that it also takes a variable bound to a `date` column, and lowers to the `days` assignment that a view with `reading: days` already produces (`compiler/rezono_compiler/view_rules.py`). A plain comparison of two dates never goes through it.
 
 ### 1.3 `std-decision` after the change
 
@@ -49,10 +51,10 @@ Today `@days` takes text only, and the reader refuses a `date` table. The step l
 
 Every pack that imports `std-decision` pins it by the hash of its definition files (`pack_hash` in `compiler/rezono_compiler/modules.py`), and the compiler refuses a pin that does not match. So each step that changes `std-decision` re-pins, in the same pull request, the `sha256` of its import in each of `build/pack.yaml`, `examples/platform/pack.yaml`, `examples/subsidy/pack.yaml`, `examples/subsidy-scheme/pack.yaml`, `run/packs/invoice-drift/pack.yaml`, `run/packs/offer-selection/pack.yaml` and `run/packs/probe-profiles/pack.yaml`. No fixture pack imports `std-decision`.
 
-1. **Compiler.** `@days` takes a variable bound to a `date` column (section 1.2). It is part of the task of step 3, which names it.
+1. **Compiler.** Order comparisons between two `date` variables, on top of date equality, and `@days` on a `date` column for day arithmetic (section 1.2). They are part of the task of step 3, which names them.
 2. **Planner: both spellings.** `std-decision` gains `ReferenceDate.date` as an optional slot, and its importers are re-pinned. Every test, oracle and fact file that writes `std-decision` rows or reads their numbers then writes the dates beside the numbers, and an independent oracle reads the dates. Decision rows already carry both, because the schema requires them together; raw table rows and reference dates do not. The tests are `compiler/tests/test_std_decision.py`, `compiler/tests/rezono/test_whole_std_decision.py`, `examples/platform/test_five_scenes.py`, `examples/platform/proof_cases/test_decision_standing.py`, `test_network_policy_provenance.py`, `test_norm_standing.py`, `test_successor_window.py` and `test_support_version_policy.py`, `examples/subsidy/test_subsidy.py` and `test_local_suppose.py`, `loop/tests/test_build_claim_release_plan.py`, `test_build_decision_capture.py`, `test_build_decision_rules.py` and `test_build_task_order.py`, and `run/tests/test_physical_nested_allocation.py`, `test_probe_profile_budgets.py` and `test_run_reconciliation.py`. A worker cannot change them, and a pull request that lifts a mark changes nothing else that is protected, so this comes first.
-3. **`std-decision` reads dates** (red test A). Its rules, its staged candidate and its README read the dates as in section 1.3; the build pack's `policy_date.dl` and probe-profiles' `budgets.dl` read `reference_date__date`; the importers are re-pinned.
-4. **Subsidy** (red test B). The credentials schema loses its `*_day` slots, `rules/credentials.dl` reads the dates through `@days`, the facts drop the numbers, and `views.yaml` reads `EvaluationDay.date` with `reading: days`. The subsidy scheme follows where it shares the kinds.
+3. **`std-decision` reads dates** (red test A). Its rules, its staged candidate and its README read the dates as in section 1.3; the build pack's `policy_date.dl` reads `reference_date__date` through `@days`, because it compares the date with a tick, and probe-profiles' `budgets.dl` orders reference dates by `reference_date__date`; the importers are re-pinned.
+4. **Subsidy** (red test B). The credentials schema loses its `*_day` slots, `rules/credentials.dl` compares the dates in their native order, the facts drop the numbers, and `views.yaml` reads `EvaluationDay.date` with `reading: days`. The subsidy scheme follows where it shares the kinds.
 5. **Every other consumer**, each in its own pull request after the planner has prepared its tests as in step 2: the platform (`released_on_day`, `as_of_day` and its `std-decision` rows), `std-review` (`Review.day`, `RoleGrant.from_day`, `until_day`), the build capture adapter, which stops writing `*_day`, and the run packs.
 6. **Contract.** `std-decision` removes `valid_from_day`, `valid_until_day` and `ReferenceDate.day`, and every importer is re-pinned. This is a planner pull request that lifts no mark, so it may also remove the numbers from the remaining test rows, among them the `valid_from_day` check of `test_scene_decisions_are_std_decision_facts`, which is right until this step.
 
@@ -100,9 +102,11 @@ What is domain stays: the step's binding (expose a listener, retire a provider, 
 | Item | Choice | Why |
 | --- | --- | --- |
 | `run/packs/offer-selection/questions.yaml` copies the `grounds` question of `std-explain`, because the pack does not import it | **Import `std-explain`** and drop the copy; the reader keeps `proof: grounds` (red test D) | `invoice-drift` already does this. |
-| `run/packs/cleanup-deadline` keeps `deadline_us` and `watermark_us` | **Keep, for now** | The cleanup deadline is an approved absolute instant ([server deadline](run-server-deadline.md)). `std-loop`'s `LoopDeadline` counts a budget from a start observation of the same run, so mapping onto it would compute a budget from two instants, a supplied value that a rule should derive. Revisit when `LoopDeadline` can name an absolute boundary: then the attempt is a step, `cleaned` its completion and the watermark the current complete sweep. |
-| `run/packs/dispatch` has its own approval, decision and expiry | **Keep, for now** | An approval authorizes one attempt bound to a plan hash, a currency and a cost cap, and expires at an instant in microseconds. `std-decision` has validity in days and no bound object or amount, so an approval as a `Decision` would decide differently at the day it expires. Revisit when `std-decision` reads instants. |
-| `std-review` is imported by no pack | **The platform imports it** (red test E) | Scene 2 has review as a required area, and the platform already imports `std-access` at the pin `std-review` uses. Reading the tenant connection reviews (`TenantReviewDecision`) as `std-review` reviews is the next step, in its own decision, because it changes the tenant request contract. |
+| `run/packs/cleanup-deadline` keeps `deadline_us` and `watermark_us` | **Keep, for now; map onto `std-loop` later** (red test F) | The cleanup deadline is an approved absolute instant ([server deadline](run-server-deadline.md)). `std-loop`'s `LoopDeadline` counts a budget from a start observation of the same run, so mapping onto it today would compute a budget from two instants, a supplied value that a rule should derive. The mapping waits until `LoopDeadline` can name an absolute boundary, a decision of the loop track. Then the attempt is a `LoopStep`, `cleaned` its completion, the watermark the event time of the current complete `LoopSweep`, and `overdue` is `std-loop`'s `deadline_expired`. |
+| `run/packs/dispatch` has its own approval, decision and expiry | **Keep, for now; map onto `std-decision` later** (red test G) | An approval authorizes one attempt bound to a plan hash, a currency and a cost cap, and expires at an instant in microseconds. `std-decision` has validity in days and no bound object or amount, so an approval as a `Decision` today would decide differently on the day it expires. The mapping waits until `std-decision` can bound a decision's validity at an instant, a decision of the language track. Then an approval is a kind of the pack that is a `Decision`: the approver is its `decider`, its expiry its validity, and the plan hash, currency, cap and outcome stay its own slots. |
+| `std-review` is imported by no pack | **The platform imports it** (red test E) | Scene 2 has review as a required area, and the platform already imports `std-access` at the pin `std-review` uses. Reading the tenant connection reviews (`TenantReviewDecision`) as `std-review` reviews is a follow-up with its own decision, because it changes the tenant request contract. |
+
+F and G stay red until their prerequisite has its own decision and implementation. Their present tests, `run/tests/test_cleanup_deadline.py` and `run/tests/test_dispatch_policy.py` with the offline replay case in `run/fixtures/offline/`, write the slots that go, so a planner restates them first, as in step 2 of section 1.4.
 
 ## 4. Red tests
 
@@ -113,11 +117,22 @@ Each test takes its expectation from this decision and from the contracts of the
 - **C** `M2:` `examples/platform/proof_cases/test_startup_transition_cases.py::test_startup_transition_cases`: `safe_step.dl` and `safe_step.yaml` are gone, and the startup, retirement and restore cases give the `std-loop` rows of section 2.2.
 - **D** `extra:` `run/tests/test_offer_selection_std_explain.py::test_offer_selection_imports_std_explain`.
 - **E** `extra:` `examples/platform/test_platform_std_review.py::test_platform_imports_std_review`.
+- **F** `extra:` `run/tests/test_cleanup_deadline_std_loop.py::test_cleanup_deadline_is_a_std_loop_deadline`: cleanup-deadline imports `std-loop` pinned to its hash, has no `deadline_us` or `watermark_us` slot, and its compiled pack derives `deadline_expired`.
+- **G** `extra:` `run/tests/test_dispatch_std_decision.py::test_dispatch_approval_is_a_std_decision`: dispatch imports `std-decision` pinned to its hash, its approval kind is a `Decision`, it has no `expires_us` slot, and its compiled pack derives `in_force_on`.
+
+## 5. Settled by the owner
+
+The owner settled the open choices of the draft pull request on 20-11-2026 by following the advice:
+
+1. **Dates.** Rules compare dates in their native order; `rezono 1` and the `.dl` rules read `Date` directly. `@days` is only for day arithmetic, such as a horizon in days (section 1.2).
+2. **Slot name.** The reference date's date is `ReferenceDate.date`; `on` is a keyword.
+3. **`cleanup-deadline` and `dispatch`** stay as they are for now, each with a red test for its later mapping (F and G, section 3).
+4. **`std-review`.** The platform is its first consumer (E). Reading `TenantReviewDecision` as `std-review` reviews is a follow-up with its own decision.
 
 ## Alternatives
 
 - **Keep the day numbers until Rezono 1 replaces the Datalog rules.** The stopgap would then live on in every pack written before that, and the numbers would be carried into the Rezono form by the candidate acceptance tests, which compare the two forms row by row.
-- **Order comparison on native dates** instead of `@days`. It reads well for two dates, but it is a second construct beside equality, while the build pack and the probe profiles also need a distance in days; `@days` gives both, and its IR, SQL and checker exist.
+- **`@days` for every comparison of dates.** It needs no construct beyond the `days` assignment, but a plain comparison would then go through a number that each witness carries beside the date, and the `.dl` form would read differently from `rezono 1`, which compares `Date` values directly. Native order keeps the two forms alike; `@days` stays where a number of days is the point.
 - **Retire the slots in one pull request.** The rules, the schema, seven pins and the test rows of four tracks would land together, and a lifted mark may not stand beside the test changes. The steps of section 1.4 keep every pull request inside the policy.
 - **Map the platform's `safe_*` kinds onto `std-loop` with a view and keep them.** That keeps the variant the vision rules out, and a view cannot supply what `std-loop` requires and the platform kinds lack: an event time, a state and a token.
 - **Let the platform derive its own verdicts and also publish `std-loop` rows.** Two rule sets would answer the same question, and the reader would have to know which one binds.
