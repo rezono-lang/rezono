@@ -737,7 +737,9 @@ def read(pack_dir: str | Path) -> Pack:
     pack = Pack({"name": meta["name"], "version": str(meta["version"]), "default_language": meta["default_language"],
                  "theory": is_theory},
                 [{"name": m.sv.schema.name, "id": m.sv.schema.id, "file": m.rel, "module": m.id, "pack": m.pack}
-                 for m in mods],
+                 for m in mods
+                 if m.form is None or "schema" in m.form["module"]
+                 or m.sv.schema.classes or m.sv.schema.enums or m.sv.schema.types],
                 dict(sorted(kinds.items())), dict(sorted(enums.items())), warnings=warnings, units=declared,
                 imports=[{"name": p.name, "version": p.version, "sha256": p.sha256} for p in packs.values()])
     if not errors:

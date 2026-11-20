@@ -56,7 +56,7 @@ POLICY = SOURCE_POLICY | {
     ".github/workflows/ci.yml", ".github/workflows/disposable-cluster.yml",
     ".github/workflows/resume-feldera-review.yml", "scripts/feldera_admission.py",
     "scripts/red_guard.py", "scripts/test_red_guard.py",
-    "scripts/red_before.py", "scripts/test_red_before.py",
+    "scripts/red_before.py", "scripts/test_red_before.py", "scripts/pytest-plugins.txt",
 }
 EVIDENCE_DIRS = {
     "test", "tests", "__tests__", "__snapshots__", "fixture", "fixtures",
@@ -89,7 +89,9 @@ def protected(path):
             or p.name == "conftest.py" or p.name.startswith("test_")
             or p.name.endswith(("_test.py", "_support.py", ".test.ts", ".spec.ts",
                                 ".test.js", ".spec.js", ".snap", ".golden"))
-            or p.name in {"frozen_baseline.py", "reference.py", "pytest.ini"} | PYTEST_FILES | EXPECTATIONS
+            or p.name in {"frozen_baseline.py", "reference.py", "pytest.ini"} | PYTEST_FILES | STARTUP | EXPECTATIONS
+            or p.suffix == ".pth" or p.name == "entry_points.txt"
+            or any(part.endswith((".dist-info", ".egg-info")) for part in p.parts[:-1])
             or "fixture" in p.stem or p.stem.endswith(("-cases", "_cases", "-vectors", "_vectors"))
             or p.parts[0] == "blocked")
 
@@ -285,10 +287,52 @@ LIMIT = 2_000_000
 UNREADABLE = (SyntaxError, ValueError, UnicodeError, RecursionError)
 
 
+# Python runs these at start-up, before pytest collects anything; a .pth file may run a line of
+# code as well. setup.py is protected as well as source: it can register a pytest plugin.
+STARTUP = {"sitecustomize.py", "usercustomize.py", "setup.py"}
+# A package's metadata can register a pytest plugin (the `pytest11` entry point). CI installs
+# the candidate, so the plugin loads and its hooks can drop a red test from the collection.
+PLUGIN_CONFIG = {"pyproject.toml", "setup.cfg"}
+
+
+def plugin_config(path):
+    return PurePosixPath(path.lower()).name in PLUGIN_CONFIG
+
+
+def pytest_plugins(path, blob):
+    """What in a pyproject.toml or setup.cfg blob can register a pytest plugin.
+
+    That is the pytest11 entry points, and every way to give entry points from elsewhere:
+    `dynamic` entry points and their source in pyproject.toml, `entry_points` under
+    `[options]` in setup.cfg (`file: ...`). A blob that does not parse gives its bytes, so that
+    any change to it counts. CI also compares the installed plugins with a list from the base
+    (scripts/pytest-plugins.txt), which covers any other way.
+    """
+    if blob is None:
+        return None
+    try:
+        text = blob.decode("utf-8")
+        if PurePosixPath(path.lower()).name == "pyproject.toml":
+            data = tomllib.loads(text)
+            project, tool = data.get("project", {}), data.get("tool", {})
+            dynamic = project.get("dynamic", [])
+            return json.dumps([project.get("entry-points", {}).get("pytest11"),
+                               tool.get("poetry", {}).get("plugins", {}).get("pytest11"),
+                               "entry-points" in dynamic,
+                               tool.get("setuptools", {}).get("dynamic", {}).get("entry-points")], sort_keys=True)
+        parser = configparser.ConfigParser(interpolation=None, strict=False)
+        parser.read_string(text)
+        return json.dumps([parser.get(section, option, fallback=None) for section, option in (
+            ("options.entry_points", "pytest11"), ("options", "entry_points"))])
+    except (UnicodeError, tomllib.TOMLDecodeError, configparser.Error, AttributeError, TypeError, ValueError):
+        return blob
+
+
 def source(path):
     """A path the guard does not protect, or policy that is also source; not documentation."""
-    return path in SOURCE_POLICY or not (protected(path) or path.endswith(".md")
-                                         or PurePosixPath(path).parts[0] in {"docs", "decisions"})
+    if path in SOURCE_POLICY or PurePosixPath(path).name == "setup.py":
+        return True
+    return not (protected(path) or path.endswith(".md") or PurePosixPath(path).parts[0] in {"docs", "decisions"})
 
 
 def is_param(node):
@@ -690,12 +734,15 @@ def review(changes, planner=False, head=None, labels=(), packs=frozenset(), pins
             unread.append(ascii(c.path))
         if c.path == CI_WORKFLOW:
             notes.append(f"CHANGED {CI_WORKFLOW}")
-        if (not protected(c.path) and pytest_config(c.path)
-                and pytest_section(c.path, c.before) != pytest_section(c.path, c.after)):
+        section = pytest_config(c.path) and pytest_section(c.path, c.before) != pytest_section(c.path, c.after)
+        plugins = plugin_config(c.path) and pytest_plugins(c.path, c.before) != pytest_plugins(c.path, c.after)
+        if not protected(c.path) and (section or plugins):
             other.append(ascii(c.path))
-            notes.append(f"CHANGED {c.path} pytest configuration")
-            if not planner:
-                errors.append(f"ERROR planner label required for the pytest configuration in {ascii(c.path)}")
+            for changed, what in ((section, "pytest configuration"), (plugins, "pytest plugins")):
+                if changed:
+                    notes.append(f"CHANGED {c.path} {what}")
+                    if not planner:
+                        errors.append(f"ERROR planner label required for the {what} in {ascii(c.path)}")
             continue
         if not protected(c.path):
             continue
@@ -798,14 +845,14 @@ def changes(base, head):
         path = raw_path.decode("utf-8", "surrogateescape")
         old_mode, new_mode, old_id, new_id, status = header.decode().lstrip(":").split()
         sides = [None, None]
-        if protected(path) or pytest_config(path):
+        if protected(path) or pytest_config(path) or plugin_config(path):
             # Git objects are data. Never open a path in the proposed revision.
             for i, (mode, oid) in enumerate(((old_mode, old_id), (new_mode, new_id))):
                 if mode == "100644" and int(git("cat-file", "-s", oid)) <= LIMIT:
                     sides[i] = git("cat-file", "blob", oid)
-                elif mode != "000000" and pytest_config(path):
+                elif mode != "000000" and (pytest_config(path) or plugin_config(path)):
                     # A link or an oversized file: not readable as configuration, so it counts
-                    # as a change of its pytest section (bytes that are not UTF-8).
+                    # as a change of its pytest section and plugins (bytes that are not UTF-8).
                     sides[i] = UNREADABLE_CONFIG
         yield Change(path, status[0], *sides)
 
