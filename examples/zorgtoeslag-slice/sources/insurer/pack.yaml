@@ -1,0 +1,8 @@
+name: zorgtoeslag-insurer
+version: 0.1.0
+default_language: en
+theory: true
+imports:
+  - {name: zorgtoeslag-person, path: ../person, sha256: b570b0fae6cc95636501c5a6a92c25704bcf34291a1da0c7123b3b31899b8888}
+rezono:
+  - {module: rezono/insurer.rezono, form: rezono/insurer.json, layer: facts}

@@ -1,0 +1,24 @@
+rezono 0
+pack zorgtoeslag-tax
+
+use zorgtoeslag-person
+
+--- Tax authority source: taxable income (toetsingsinkomen) and fiscal partnership.
+--- tax.Partner is distinct from civil.Partner and is never read as a benefit-partner fact.
+
+unit Cents = money minor EUR
+
+kind Inkomen world closed
+  persoon: Persoon
+  bedrag: Cents
+  valid_from_day: Int
+  valid_until_day: Int
+  known_from_day: Int
+
+kind Partner world closed
+  persoon_a: Persoon
+  persoon_b: Persoon
+  grond: Text
+  valid_from_day: Int
+  valid_until_day: Int
+  known_from_day: Int

@@ -1,0 +1,10 @@
+name: zorgtoeslag-slice
+version: 0.1.0
+default_language: en
+imports:
+  - {name: zorgtoeslag-person, path: sources/person, sha256: b570b0fae6cc95636501c5a6a92c25704bcf34291a1da0c7123b3b31899b8888}
+  - {name: zorgtoeslag-civil, path: sources/civil, sha256: c201dbf2ebaf0371120cd026d08d75f45b562eb837e56b9ce93a41e126a909ee}
+  - {name: zorgtoeslag-tax, path: sources/tax, sha256: b42d293f2047d206e39e2175d8ac329e50ff8291a69f82c8e9b36bbb88ef9622}
+  - {name: zorgtoeslag-insurer, path: sources/insurer, sha256: afb21db93ce6dfee6175cd1755a6d28507d5b0d9825903590571342f90e8d44d}
+rezono:
+  - {module: rezono/allowance.rezono, form: rezono/allowance.json, layer: conclusions}

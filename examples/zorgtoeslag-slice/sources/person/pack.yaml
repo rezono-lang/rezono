@@ -1,0 +1,6 @@
+name: zorgtoeslag-person
+version: 0.1.0
+default_language: en
+theory: true
+rezono:
+  - {module: rezono/person.rezono, form: rezono/person.json, layer: facts}

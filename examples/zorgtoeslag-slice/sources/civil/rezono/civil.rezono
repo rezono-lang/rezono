@@ -1,0 +1,29 @@
+rezono 0
+pack zorgtoeslag-civil
+
+use zorgtoeslag-person
+
+--- Civil registry source: residential addresses, civil marriage or registered partnership,
+--- and legal parent-child relations.
+
+enum VerbintenisSoort = huwelijk | geregistreerd_partnerschap
+
+kind Adres world closed
+  persoon: Persoon
+  woonadres: Text
+  valid_from_day: Int
+  valid_until_day: Int
+  known_from_day: Int
+
+kind Partner world closed
+  persoon_a: Persoon
+  persoon_b: Persoon
+  soort: VerbintenisSoort
+  echtscheidingsverzoek: Bool
+  valid_from_day: Int
+  valid_until_day: Int
+  known_from_day: Int
+
+kind Ouder world closed
+  ouder: Persoon
+  kind: Persoon

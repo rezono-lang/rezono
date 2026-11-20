@@ -1,0 +1,30 @@
+scheme_parameter: statutory parameter
+scheme_parameter.name: parameter name
+scheme_parameter.value: parameter value
+scheme_parameter.valid_from: valid from
+scheme_parameter.valid_until: valid until
+scheme_parameter.known_from: known from
+evaluation_day: evaluation day
+evaluation_day.as_of_day: valid-at day
+evaluation_day.known_day: known-at day
+adres_active: active address registration
+adres_superseded: superseded address registration
+current_adres: current residential address
+same_adres: shared residential address
+living_apart: living at different addresses
+civil_partner_active: active civil partnership
+civil_partner_excluded: excluded civil partnership
+civil_toeslagpartner: benefit partner by civil union
+cohabiting_parents: cohabiting parents of a joint child
+toeslagpartner: benefit partner (toeslagpartner)
+has_toeslagpartner: has a benefit partner
+polis_active: active insurance policy
+polis_superseded: superseded insurance policy
+current_polis: current insurance policy
+has_basis_polis: holds basic health insurance
+has_any_polis: has reported insurance policy
+insured_flag: derived basic health insurance flag
+inkomen_active: active taxable income record
+inkomen_superseded: superseded taxable income record
+own_income: own taxable income
+joint_income: joint taxable income

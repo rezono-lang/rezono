@@ -195,14 +195,6 @@ def _assert_no_bsn_like_identifiers(pack_dir: Path) -> None:
         assert not hits, f"{path.relative_to(ROOT).as_posix()} contains 9-digit BSN-like numbers: {hits}"
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason="extra: decisions/healthcare-allowance-three-sources.md: Expand examples/zorgtoeslag-slice/ into "
-           "four packs (shared Persoon + civil, tax, insurer sources) with distinct civil.Partner and "
-           "tax.Partner kinds, Polis with soort basis|aanvullend, no stored partner:Bool or insured:Bool, "
-           "synthetic person keys, and toeslagpartner rules citing @ awr#art-5a and @ awir#art-3.",
-)
 def test_three_source_packs_and_schema_drop_stored_partner_and_insured(tmp_path: Path):
     assert PACK.is_file(), f"{PACK.relative_to(ROOT).as_posix()} does not exist yet"
     for folder, expected_name in SOURCE_PACKS.items():
@@ -280,14 +272,6 @@ def test_three_source_packs_and_schema_drop_stored_partner_and_insured(tmp_path:
     _assert_no_bsn_like_identifiers(SLICE)
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason="extra: decisions/healthcare-allowance-three-sources.md: Extend examples/zorgtoeslag-slice/reference.py "
-           "(stdlib-only, no shared compiler code) and allowance-cases.yaml with Case A (S16: married, living "
-           "apart with divorce petition -> 13500) and Case B (S17: unmarried, same address, joint child -> 11600), "
-           "preserve S01–S15 exactly, and match the compiled three-source pack against the oracle on all 17 cases.",
-)
 def test_three_source_allowance_matches_extended_oracle_for_all_17_cases():
     assert PACK.is_file(), f"{PACK.relative_to(ROOT).as_posix()} does not exist yet"
     cases = yaml.safe_load(CASES_FILE.read_text(encoding="utf-8"))["cases"]
@@ -368,14 +352,6 @@ def test_three_source_allowance_matches_extended_oracle_for_all_17_cases():
             assert state == want[0] and reason, (cid, state, value, reason, want)
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason="extra: decisions/healthcare-allowance-three-sources.md: Counterexample test proving that silently "
-           "merging civil.Partner and tax.Partner by bare name produces the wrong toeslagpartner outcome and "
-           "wrong allowance for Case A (S16: flips from 13500 cents single to 0 cents partnered), while "
-           "removing tax.Partner rows leaves the real derivation unchanged.",
-)
 def test_silently_merging_civil_and_tax_partner_gives_wrong_toeslagpartner_outcome(tmp_path: Path):
     assert PACK.is_file(), f"{PACK.relative_to(ROOT).as_posix()} does not exist yet"
     oracle = _load_oracle()
@@ -419,14 +395,6 @@ def test_silently_merging_civil_and_tax_partner_gives_wrong_toeslagpartner_outco
     )
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason="extra: decisions/healthcare-allowance-three-sources.md: Give examples/zorgtoeslag-slice/ its "
-           "pack.yaml and README.md explaining in ~5 lines why 'partner' means three different things here "
-           "(civil, fiscal, benefit partner) and marking the toeslagpartner rule as a simplification, and "
-           "add examples/README.md placing zorgtoeslag-slice on the learning ladder of examples.",
-)
 def test_zorgtoeslag_slice_readme_and_examples_learning_ladder():
     assert PACK.is_file(), f"{PACK.relative_to(ROOT).as_posix()} does not exist yet"
     meta = yaml.safe_load(PACK.read_text(encoding="utf-8"))

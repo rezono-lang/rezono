@@ -1,0 +1,4 @@
+kinds:
+  - {kind: polis, shape: rect}
+arrows:
+  - {arrow: polis.persoon, dash: none}

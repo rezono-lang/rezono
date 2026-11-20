@@ -1,0 +1,10 @@
+kinds:
+  - {kind: adres, shape: rect}
+  - {kind: partner, shape: diamond}
+  - {kind: ouder, shape: rect}
+arrows:
+  - {arrow: adres.persoon, dash: none}
+  - {arrow: partner.persoon_a, dash: none}
+  - {arrow: partner.persoon_b, dash: none}
+  - {arrow: ouder.ouder, dash: none}
+  - {arrow: ouder.kind, dash: none}

@@ -1,57 +1,65 @@
 rezono 0
 pack zorgtoeslag-slice
 
---- The first slice of the healthcare allowance (decisions/language-healthcare-allowance-slice.md): ordered
---- exceptions, dated facts and parameter versions per year, and nothing else the reader does not lower yet.
---- Amounts, rates and article numbers are those of examples/zorgtoeslag. They are illustrative, not the
---- published figures. An amount is a whole number of cents: 218000 is EUR 2,180.00.
+use zorgtoeslag-person
+use zorgtoeslag-civil as civil
+use zorgtoeslag-tax as tax
+use zorgtoeslag-insurer as insurer
 
-unit Cents = money minor EUR
+--- Three-source healthcare allowance slice (decisions/healthcare-allowance-three-sources.md).
+--- Combines independent civil, tax, and insurer sources along shared synthetic Persoon keys.
+--- Statutory benefit partnership (toeslagpartner) is derived in rules/allowance.dl citing
+--- @ awr#art-5a and @ awir#art-3; civil.Partner and tax.Partner remain distinct kinds.
+--- Amounts, rates and versions are synthetic test figures in whole cents (218000 is EUR 2,180.00).
 
-kind Household  world closed
-  partner: Bool                        -- a fact of the household: the claimant has a toeslagpartner
-  insured: Bool                        -- dated: a version per period of health insurance cover
-  joint_income: Cents                  -- dated: the toetsingsinkomen, a version per calendar year
+kind SchemeParameter world closed
+  name: Text
+  value: Int
+  valid_from: Date
+    iri "http://schema.org/validFrom"
+  valid_until: Date
+    iri "http://schema.org/validThrough"
+  known_from: Date
+    iri "http://www.w3.org/ns/prov#generatedAtTime"
 
-param standard_premium: Cents
-  version 1, valid 2025-01-01..<2026-01-01, known 2024-09-17  = 211200  @ regeling-zt#art-1
-  version 2, valid 2026-01-01.., known 2025-09-16             = 218000  @ regeling-zt#art-1
-  version 3, valid 2026-01-01.., known 2026-03-02             = 219000  @ wijziging-zt#art-I
+kind EvaluationDay world closed
+  as_of_day: Int
+  known_day: Int
 
-param threshold_income: Cents
-  version 1, valid 2025-01-01..<2026-01-01, known 2024-09-17  = 2840600  @ awir#art-2.1
-  version 2, valid 2026-01-01.., known 2025-09-16             = 2960000  @ awir#art-2.1
+param standard_premium: Int from SchemeParameter.value by name
+param threshold_income: Int from SchemeParameter.value by name
+param income_limit_single: Int from SchemeParameter.value by name
+param income_limit_partner: Int from SchemeParameter.value by name
 
-param income_limit_single: Cents
-  version 1, valid 2025-01-01..<2026-01-01, known 2024-09-17  = 3852000  @ wzt#art-2.2
-  version 2, valid 2026-01-01.., known 2025-09-16             = 3971900  @ wzt#art-2.2
+extend Persoon
+  derived insured: Bool = insured_flag.value = 1
+    unit flag
 
-param income_limit_partner: Cents
-  version 1, valid 2025-01-01..<2026-01-01, known 2024-09-17  = 4822400  @ wzt#art-2.2
-  version 2, valid 2026-01-01.., known 2025-09-16             = 5020600  @ wzt#art-2.2
-
-param rate_above: Ratio = 13.7 %
-
-extend Household
-  derived income_limit: Cents =
-      when partner then income_limit_partner else income_limit_single
+  derived income_limit: Int =
+      when has_toeslagpartner then income_limit_partner else income_limit_single
+    unit cents
 
   derived threshold_rate: Ratio =
-      when partner then 4.256 % else 1.879 %
+      when has_toeslagpartner then 4.256 % else 1.879 %
+    unit ratio
 
-  derived household_premium: Cents =
-      when partner then 2 * standard_premium else standard_premium
+  derived household_premium: Int =
+      when has_toeslagpartner then 2 * standard_premium else standard_premium
+    unit cents
 
-  derived norm_premium: Cents =
+  derived norm_premium: Int =
       threshold_rate * threshold_income
-      + rate_above * (when joint_income > threshold_income then joint_income - threshold_income else 0)
+      + 13.7 % * (when joint_income.cents > threshold_income then joint_income.cents - threshold_income else 0)
+    unit cents
 
-  derived yearly_amount: Cents =
+  derived yearly_amount: Int =
       when household_premium > norm_premium then household_premium - norm_premium else 0
+    unit cents
 
   -- The monthly allowance, rounded down to whole euros. The lower block is read first (v0 section 5b).
-  derived allowance: Cents = floor(yearly_amount / 1200) * 100
+  derived allowance: Int = floor(yearly_amount / 1200) * 100
+    unit cents
     unless
       when not insured then 0                            @ wzt#art-2.1
     unless
-      when joint_income > income_limit then 0            @ wzt#art-2.2
+      when joint_income.cents > income_limit then 0      @ wzt#art-2.2

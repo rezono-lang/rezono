@@ -1,0 +1,173 @@
+// Three-source healthcare allowance derivations (decisions/healthcare-allowance-three-sources.md).
+// Derives toeslagpartner (@ awr#art-5a, @ awir#art-3), insured_flag, and joint_income
+// from civil (Adres, Partner, Ouder), tax (Inkomen), and insurer (Polis) sources.
+// Crucially, toeslagpartner reads only civil.Partner (zorgtoeslag_civil_civil_partner),
+// civil.Adres, and civil.Ouder; it never reads tax.Partner (zorgtoeslag_tax_tax_partner).
+
+.decl adres_active(id: symbol, persoon: symbol, woonadres: symbol, known_from: number)
+adres_active(r, p, addr, kf) :-
+  adres__persoon(r, p),
+  adres__woonadres(r, addr),
+  adres__valid_from_day(r, vf),
+  adres__valid_until_day(r, vu),
+  adres__known_from_day(r, kf),
+  evaluation_day__as_of_day(e, as_of),
+  evaluation_day__known_day(e, known),
+  vf <= as_of,
+  as_of < vu,
+  kf <= known.
+
+.decl adres_superseded(persoon: symbol, known_from: number)
+adres_superseded(p, kf) :-
+  adres_active(_, p, _, kf),
+  adres_active(_, p, _, kf2),
+  kf < kf2.
+
+.decl current_adres(persoon: symbol, woonadres: symbol)
+current_adres(p, addr) :-
+  adres_active(_, p, addr, kf),
+  !adres_superseded(p, kf).
+
+.decl same_adres(a: symbol, b: symbol)
+same_adres(a, b) :-
+  current_adres(a, addr),
+  current_adres(b, addr),
+  a != b.
+
+.decl living_apart(a: symbol, b: symbol)
+living_apart(a, b) :-
+  current_adres(a, addr_a),
+  current_adres(b, addr_b),
+  a != b,
+  addr_a != addr_b.
+
+// Active civil partnerships from zorgtoeslag-civil only (@ awr#art-5a, @ awir#art-3).
+.decl civil_partner_active(id: symbol, a: symbol, b: symbol, petition: boolean)
+civil_partner_active(r, a, b, petition) :-
+  zorgtoeslag_civil_civil_partner__persoon_a(r, a),
+  zorgtoeslag_civil_civil_partner__persoon_b(r, b),
+  zorgtoeslag_civil_civil_partner__echtscheidingsverzoek(r, petition),
+  zorgtoeslag_civil_civil_partner__valid_from_day(r, vf),
+  zorgtoeslag_civil_civil_partner__valid_until_day(r, vu),
+  zorgtoeslag_civil_civil_partner__known_from_day(r, kf),
+  evaluation_day__as_of_day(e, as_of),
+  evaluation_day__known_day(e, known),
+  vf <= as_of,
+  as_of < vu,
+  kf <= known,
+  a != b.
+civil_partner_active(r, b, a, petition) :-
+  zorgtoeslag_civil_civil_partner__persoon_a(r, a),
+  zorgtoeslag_civil_civil_partner__persoon_b(r, b),
+  zorgtoeslag_civil_civil_partner__echtscheidingsverzoek(r, petition),
+  zorgtoeslag_civil_civil_partner__valid_from_day(r, vf),
+  zorgtoeslag_civil_civil_partner__valid_until_day(r, vu),
+  zorgtoeslag_civil_civil_partner__known_from_day(r, kf),
+  evaluation_day__as_of_day(e, as_of),
+  evaluation_day__known_day(e, known),
+  vf <= as_of,
+  as_of < vu,
+  kf <= known,
+  a != b.
+
+// Statutory exclusion (@ awr#art-5a, @ awir#art-3): divorce petition filed AND living apart.
+.decl civil_partner_excluded(id: symbol, a: symbol, b: symbol)
+civil_partner_excluded(r, a, b) :-
+  civil_partner_active(r, a, b, petition),
+  petition = TRUE,
+  living_apart(a, b).
+
+.decl civil_toeslagpartner(a: symbol, b: symbol)
+civil_toeslagpartner(a, b) :-
+  civil_partner_active(r, a, b, _),
+  !civil_partner_excluded(r, a, b).
+
+// Unmarried cohabiting parents of a joint child (@ awir#art-3, simplified).
+.decl cohabiting_parents(a: symbol, b: symbol)
+cohabiting_parents(a, b) :-
+  ouder__ouder(r1, a),
+  ouder__kind(r1, c),
+  ouder__ouder(r2, b),
+  ouder__kind(r2, c),
+  same_adres(a, b),
+  a != b.
+
+// Derived benefit partner relation (@ awr#art-5a, @ awir#art-3).
+.decl toeslagpartner(a: symbol, b: symbol)
+toeslagpartner(a, b) :- civil_toeslagpartner(a, b).
+toeslagpartner(a, b) :- cohabiting_parents(a, b).
+
+.decl has_toeslagpartner(persoon: symbol)
+has_toeslagpartner(p) :- toeslagpartner(p, _).
+
+// Derived health insurance status from insurer.Polis (basis -> 1, non-basis -> 0, none -> no row / unknown).
+.decl polis_active(id: symbol, persoon: symbol, soort: symbol, known_from: number)
+polis_active(r, p, soort, kf) :-
+  polis__persoon(r, p),
+  polis__soort(r, soort),
+  polis__valid_from_day(r, vf),
+  polis__valid_until_day(r, vu),
+  polis__known_from_day(r, kf),
+  evaluation_day__as_of_day(e, as_of),
+  evaluation_day__known_day(e, known),
+  vf <= as_of,
+  as_of < vu,
+  kf <= known.
+
+.decl polis_superseded(persoon: symbol, known_from: number)
+polis_superseded(p, kf) :-
+  polis_active(_, p, _, kf),
+  polis_active(_, p, _, kf2),
+  kf < kf2.
+
+.decl current_polis(persoon: symbol, soort: symbol)
+current_polis(p, soort) :-
+  polis_active(_, p, soort, kf),
+  !polis_superseded(p, kf).
+
+.decl has_basis_polis(persoon: symbol)
+has_basis_polis(p) :- current_polis(p, "basis").
+
+.decl has_any_polis(persoon: symbol)
+has_any_polis(p) :- current_polis(p, _).
+
+.decl insured_flag(persoon: symbol, value: number)
+insured_flag(p, 1) :- has_basis_polis(p).
+insured_flag(p, 0) :- has_any_polis(p), !has_basis_polis(p).
+
+// Derived taxable income and joint income from tax.Inkomen.
+.decl inkomen_active(id: symbol, persoon: symbol, bedrag: number, known_from: number)
+inkomen_active(r, p, bedrag, kf) :-
+  inkomen__persoon(r, p),
+  inkomen__bedrag(r, bedrag),
+  inkomen__valid_from_day(r, vf),
+  inkomen__valid_until_day(r, vu),
+  inkomen__known_from_day(r, kf),
+  evaluation_day__as_of_day(e, as_of),
+  evaluation_day__known_day(e, known),
+  vf <= as_of,
+  as_of < vu,
+  kf <= known.
+
+.decl inkomen_superseded(persoon: symbol, known_from: number)
+inkomen_superseded(p, kf) :-
+  inkomen_active(_, p, _, kf),
+  inkomen_active(_, p, _, kf2),
+  kf < kf2.
+
+.decl own_income(persoon: symbol, cents: number)
+own_income(p, bedrag) :-
+  inkomen_active(_, p, bedrag, kf),
+  !inkomen_superseded(p, kf).
+
+.decl joint_income(persoon: symbol, cents: number)
+joint_income(p, bedrag) :-
+  own_income(p, bedrag),
+  !has_toeslagpartner(p).
+joint_income(p, total) :-
+  toeslagpartner(p, q),
+  own_income(p, own),
+  own_income(q, other),
+  total = own + other.
+
+.output toeslagpartner, has_toeslagpartner, insured_flag, joint_income

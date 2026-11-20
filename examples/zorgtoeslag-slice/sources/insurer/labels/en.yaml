@@ -1,0 +1,9 @@
+polis: health insurance policy
+polis.persoon: person
+polis.soort: cover kind
+polis.valid_from_day: valid from day
+polis.valid_until_day: valid until day
+polis.known_from_day: known from day
+polis_soort: policy cover kind
+polis_soort.basis: basic health insurance
+polis_soort.aanvullend: supplementary insurance

@@ -1,0 +1,15 @@
+rezono 0
+pack zorgtoeslag-insurer
+
+use zorgtoeslag-person
+
+--- Health insurer source: insurance policies by cover kind (basis or aanvullend).
+
+enum PolisSoort = basis | aanvullend
+
+kind Polis world closed
+  persoon: Persoon
+  soort: PolisSoort
+  valid_from_day: Int
+  valid_until_day: Int
+  known_from_day: Int

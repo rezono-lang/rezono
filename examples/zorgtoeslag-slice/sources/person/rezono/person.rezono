@@ -1,0 +1,7 @@
+rezono 0
+pack zorgtoeslag-person
+
+--- Shared synthetic person identity for the three-source healthcare allowance slice.
+--- Keys are invented synthetic strings (for example p-ann), never real BSNs.
+
+kind Persoon world closed

@@ -1,0 +1,13 @@
+inkomen: taxable income
+inkomen.persoon: person
+inkomen.bedrag: amount
+inkomen.valid_from_day: valid from day
+inkomen.valid_until_day: valid until day
+inkomen.known_from_day: known from day
+partner: fiscal partner
+partner.persoon_a: person a
+partner.persoon_b: person b
+partner.grond: fiscal basis
+partner.valid_from_day: valid from day
+partner.valid_until_day: valid until day
+partner.known_from_day: known from day

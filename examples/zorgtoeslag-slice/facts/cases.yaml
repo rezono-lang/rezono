@@ -1,0 +1,99 @@
+# Three-source synthetic case facts for allowance-cases.yaml (S01-S17).
+# All person keys are synthetic identifiers (p-ann .. p-pip), never real BSNs.
+# Amounts are whole euro cents (2500000 is EUR 25,000.00). Day numbers are YYYYMMDD.
+evaluation_day:
+  - {"id": "as_of", "as_of_day": 20260201, "known_day": 20260210}
+
+scheme_parameter:
+  - {"id": "standard-premium-2025", "name": "standard_premium", "value": 211200, "valid_from": "2025-01-01", "valid_until": "2026-01-01", "known_from": "2024-09-17"}
+  - {"id": "standard-premium-2026-v1", "name": "standard_premium", "value": 218000, "valid_from": "2026-01-01", "valid_until": "9999-12-31", "known_from": "2025-09-16"}
+  - {"id": "standard-premium-2026-v2", "name": "standard_premium", "value": 219000, "valid_from": "2026-01-01", "valid_until": "9999-12-31", "known_from": "2026-03-02"}
+  - {"id": "threshold-income-2025", "name": "threshold_income", "value": 2840600, "valid_from": "2025-01-01", "valid_until": "2026-01-01", "known_from": "2024-09-17"}
+  - {"id": "threshold-income-2026", "name": "threshold_income", "value": 2960000, "valid_from": "2026-01-01", "valid_until": "9999-12-31", "known_from": "2025-09-16"}
+  - {"id": "income-limit-single-2025", "name": "income_limit_single", "value": 3852000, "valid_from": "2025-01-01", "valid_until": "2026-01-01", "known_from": "2024-09-17"}
+  - {"id": "income-limit-single-2026", "name": "income_limit_single", "value": 3971900, "valid_from": "2026-01-01", "valid_until": "9999-12-31", "known_from": "2025-09-16"}
+  - {"id": "income-limit-partner-2025", "name": "income_limit_partner", "value": 4822400, "valid_from": "2025-01-01", "valid_until": "2026-01-01", "known_from": "2024-09-17"}
+  - {"id": "income-limit-partner-2026", "name": "income_limit_partner", "value": 5020600, "valid_from": "2026-01-01", "valid_until": "9999-12-31", "known_from": "2025-09-16"}
+
+persoon:
+  - {"id": "p-ann"}
+  - {"id": "p-bea"}
+  - {"id": "p-bob"}
+  - {"id": "p-dex"}
+  - {"id": "p-eve"}
+  - {"id": "p-fay"}
+  - {"id": "p-gus"}
+  - {"id": "p-hal"}
+  - {"id": "p-ivy"}
+  - {"id": "p-kai"}
+  - {"id": "p-kim"}
+  - {"id": "p-leo"}
+  - {"id": "p-mia"}
+  - {"id": "p-noa"}
+  - {"id": "p-pip"}
+  - {"id": "p-sam"}
+
+adres:
+  - {"id": "adr-rec-ann", "persoon": "p-ann", "woonadres": "adr-ann", "valid_from_day": 20200101, "valid_until_day": 99991231, "known_from_day": 20200105}
+  - {"id": "adr-rec-bob", "persoon": "p-bob", "woonadres": "adr-bob-bea", "valid_from_day": 20150101, "valid_until_day": 99991231, "known_from_day": 20150105}
+  - {"id": "adr-rec-bea", "persoon": "p-bea", "woonadres": "adr-bob-bea", "valid_from_day": 20150101, "valid_until_day": 99991231, "known_from_day": 20150105}
+  - {"id": "adr-rec-dex", "persoon": "p-dex", "woonadres": "adr-dex", "valid_from_day": 20080229, "valid_until_day": 99991231, "known_from_day": 20080305}
+  - {"id": "adr-rec-eve", "persoon": "p-eve", "woonadres": "adr-eve", "valid_from_day": 19700101, "valid_until_day": 99991231, "known_from_day": 19700105}
+  - {"id": "adr-rec-fay", "persoon": "p-fay", "woonadres": "adr-fay", "valid_from_day": 20100101, "valid_until_day": 99991231, "known_from_day": 20100105}
+  - {"id": "adr-rec-gus", "persoon": "p-gus", "woonadres": "adr-gus", "valid_from_day": 20180101, "valid_until_day": 99991231, "known_from_day": 20180105}
+  - {"id": "adr-rec-hal", "persoon": "p-hal", "woonadres": "adr-hal", "valid_from_day": 20190101, "valid_until_day": 99991231, "known_from_day": 20190105}
+  - {"id": "adr-rec-ivy", "persoon": "p-ivy", "woonadres": "adr-ivy", "valid_from_day": 20200101, "valid_until_day": 99991231, "known_from_day": 20200105}
+  - {"id": "adr-rec-kim", "persoon": "p-kim", "woonadres": "adr-kim-kai", "valid_from_day": 20120101, "valid_until_day": 99991231, "known_from_day": 20120105}
+  - {"id": "adr-rec-kai", "persoon": "p-kai", "woonadres": "adr-kim-kai", "valid_from_day": 20120101, "valid_until_day": 99991231, "known_from_day": 20120105}
+  - {"id": "adr-rec-leo", "persoon": "p-leo", "woonadres": "adr-leo", "valid_from_day": 20250601, "valid_until_day": 99991231, "known_from_day": 20250605}
+  - {"id": "adr-rec-mia", "persoon": "p-mia", "woonadres": "adr-mia", "valid_from_day": 20250601, "valid_until_day": 99991231, "known_from_day": 20250605}
+  - {"id": "adr-rec-noa", "persoon": "p-noa", "woonadres": "adr-noa-sam", "valid_from_day": 20220101, "valid_until_day": 99991231, "known_from_day": 20220105}
+  - {"id": "adr-rec-sam", "persoon": "p-sam", "woonadres": "adr-noa-sam", "valid_from_day": 20220101, "valid_until_day": 99991231, "known_from_day": 20220105}
+  - {"id": "adr-rec-pip", "persoon": "p-pip", "woonadres": "adr-noa-sam", "valid_from_day": 20220101, "valid_until_day": 99991231, "known_from_day": 20220105}
+
+zorgtoeslag_civil_civil_partner:
+  - {"id": "cp-bob-bea", "persoon_a": "p-bob", "persoon_b": "p-bea", "soort": "huwelijk", "echtscheidingsverzoek": false, "valid_from_day": 20150101, "valid_until_day": 99991231, "known_from_day": 20150105}
+  - {"id": "cp-kim-kai", "persoon_a": "p-kim", "persoon_b": "p-kai", "soort": "geregistreerd_partnerschap", "echtscheidingsverzoek": false, "valid_from_day": 20120101, "valid_until_day": 99991231, "known_from_day": 20120105}
+  - {"id": "cp-leo-mia", "persoon_a": "p-leo", "persoon_b": "p-mia", "soort": "huwelijk", "echtscheidingsverzoek": true, "valid_from_day": 20200101, "valid_until_day": 99991231, "known_from_day": 20250610}
+
+ouder:
+  - {"id": "ouder-noa-pip", "ouder": "p-noa", "kind": "p-pip"}
+  - {"id": "ouder-sam-pip", "ouder": "p-sam", "kind": "p-pip"}
+
+zorgtoeslag_tax_tax_partner:
+  - {"id": "tp-leo-mia-2026", "persoon_a": "p-leo", "persoon_b": "p-mia", "grond": "voljaar_fiscaal_partnerschap", "valid_from_day": 20260101, "valid_until_day": 20270101, "known_from_day": 20260105}
+
+inkomen:
+  - {"id": "inc-ann-2025", "persoon": "p-ann", "bedrag": 2400000, "valid_from_day": 20250101, "valid_until_day": 20260101, "known_from_day": 20250110}
+  - {"id": "inc-ann-2026", "persoon": "p-ann", "bedrag": 2500000, "valid_from_day": 20260101, "valid_until_day": 20270101, "known_from_day": 20251201}
+  - {"id": "inc-bob-2026", "persoon": "p-bob", "bedrag": 2500000, "valid_from_day": 20260101, "valid_until_day": 20270101, "known_from_day": 20251201}
+  - {"id": "inc-bea-2026", "persoon": "p-bea", "bedrag": 1800000, "valid_from_day": 20260101, "valid_until_day": 20270101, "known_from_day": 20251201}
+  - {"id": "inc-dex-2026", "persoon": "p-dex", "bedrag": 400000, "valid_from_day": 20260101, "valid_until_day": 20270101, "known_from_day": 20251201}
+  - {"id": "inc-eve-2026", "persoon": "p-eve", "bedrag": 2000000, "valid_from_day": 20260101, "valid_until_day": 20270101, "known_from_day": 20251201}
+  - {"id": "inc-fay-2026", "persoon": "p-fay", "bedrag": 4500000, "valid_from_day": 20260101, "valid_until_day": 20270101, "known_from_day": 20251201}
+  - {"id": "inc-gus-2026-v1", "persoon": "p-gus", "bedrag": 2800000, "valid_from_day": 20260101, "valid_until_day": 20270101, "known_from_day": 20260105}
+  - {"id": "inc-gus-2026-v2", "persoon": "p-gus", "bedrag": 3400000, "valid_from_day": 20260101, "valid_until_day": 20270101, "known_from_day": 20260415}
+  - {"id": "inc-ivy-2026", "persoon": "p-ivy", "bedrag": 2000000, "valid_from_day": 20260101, "valid_until_day": 20270101, "known_from_day": 20251201}
+  - {"id": "inc-kim-2026", "persoon": "p-kim", "bedrag": 2700000, "valid_from_day": 20260101, "valid_until_day": 20270101, "known_from_day": 20251201}
+  - {"id": "inc-kai-2026", "persoon": "p-kai", "bedrag": 2400000, "valid_from_day": 20260101, "valid_until_day": 20270101, "known_from_day": 20251201}
+  - {"id": "inc-leo-2026", "persoon": "p-leo", "bedrag": 2600000, "valid_from_day": 20260101, "valid_until_day": 20270101, "known_from_day": 20251201}
+  - {"id": "inc-mia-2026", "persoon": "p-mia", "bedrag": 3000000, "valid_from_day": 20260101, "valid_until_day": 20270101, "known_from_day": 20251201}
+  - {"id": "inc-noa-2026", "persoon": "p-noa", "bedrag": 2200000, "valid_from_day": 20260101, "valid_until_day": 20270101, "known_from_day": 20251201}
+  - {"id": "inc-sam-2026", "persoon": "p-sam", "bedrag": 2000000, "valid_from_day": 20260101, "valid_until_day": 20270101, "known_from_day": 20251201}
+
+polis:
+  - {"id": "pol-ann", "persoon": "p-ann", "soort": "basis", "valid_from_day": 20200101, "valid_until_day": 99991231, "known_from_day": 20200105}
+  - {"id": "pol-bob", "persoon": "p-bob", "soort": "basis", "valid_from_day": 20150101, "valid_until_day": 99991231, "known_from_day": 20150105}
+  - {"id": "pol-bea", "persoon": "p-bea", "soort": "basis", "valid_from_day": 20150101, "valid_until_day": 99991231, "known_from_day": 20150105}
+  - {"id": "pol-dex-pre", "persoon": "p-dex", "soort": "aanvullend", "valid_from_day": 20080229, "valid_until_day": 20260301, "known_from_day": 20080305}
+  - {"id": "pol-dex-mar", "persoon": "p-dex", "soort": "basis", "valid_from_day": 20260301, "valid_until_day": 99991231, "known_from_day": 20260220}
+  - {"id": "pol-eve", "persoon": "p-eve", "soort": "aanvullend", "valid_from_day": 19700101, "valid_until_day": 99991231, "known_from_day": 19700105}
+  - {"id": "pol-fay", "persoon": "p-fay", "soort": "basis", "valid_from_day": 20100101, "valid_until_day": 99991231, "known_from_day": 20100105}
+  - {"id": "pol-gus", "persoon": "p-gus", "soort": "basis", "valid_from_day": 20180101, "valid_until_day": 99991231, "known_from_day": 20180105}
+  - {"id": "pol-hal", "persoon": "p-hal", "soort": "basis", "valid_from_day": 20190101, "valid_until_day": 99991231, "known_from_day": 20190105}
+  - {"id": "pol-kim", "persoon": "p-kim", "soort": "basis", "valid_from_day": 20120101, "valid_until_day": 99991231, "known_from_day": 20120105}
+  - {"id": "pol-kai", "persoon": "p-kai", "soort": "basis", "valid_from_day": 20120101, "valid_until_day": 99991231, "known_from_day": 20120105}
+  - {"id": "pol-leo", "persoon": "p-leo", "soort": "basis", "valid_from_day": 20200101, "valid_until_day": 99991231, "known_from_day": 20200105}
+  - {"id": "pol-mia", "persoon": "p-mia", "soort": "basis", "valid_from_day": 20200101, "valid_until_day": 99991231, "known_from_day": 20200105}
+  - {"id": "pol-noa", "persoon": "p-noa", "soort": "basis", "valid_from_day": 20200101, "valid_until_day": 99991231, "known_from_day": 20200105}
+  - {"id": "pol-sam", "persoon": "p-sam", "soort": "basis", "valid_from_day": 20200101, "valid_until_day": 99991231, "known_from_day": 20200105}

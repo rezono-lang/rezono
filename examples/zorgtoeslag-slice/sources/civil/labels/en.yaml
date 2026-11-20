@@ -1,0 +1,20 @@
+adres: civil address registration
+adres.persoon: person
+adres.woonadres: residential address
+adres.valid_from_day: valid from day
+adres.valid_until_day: valid until day
+adres.known_from_day: known from day
+partner: civil partner
+partner.persoon_a: person a
+partner.persoon_b: person b
+partner.soort: union kind
+partner.echtscheidingsverzoek: divorce petition
+partner.valid_from_day: valid from day
+partner.valid_until_day: valid until day
+partner.known_from_day: known from day
+ouder: legal parent-child relation
+ouder.ouder: parent
+ouder.kind: child
+verbintenis_soort: civil union kind
+verbintenis_soort.huwelijk: marriage
+verbintenis_soort.geregistreerd_partnerschap: registered partnership
