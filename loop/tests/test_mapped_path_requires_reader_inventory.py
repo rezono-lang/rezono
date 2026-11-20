@@ -126,9 +126,9 @@ def published_selection(directory, source, submitted, evidence):
     receipt, objects = evidence
     build = directory / "build"
     shutil.copytree(ROOT / "build", build)
-    for name in ("std-decision", "std-loop", "std-order"):
+    for name in ("std-decision", "std-loop", "std-order", "std-access"):
         shutil.copytree(ROOT / "packs" / name, directory / "packs" / name)
-    (build / "facts").mkdir()
+    (build / "facts").mkdir(exist_ok=True)
     (build / "facts/input.yaml").write_text(yaml.safe_dump(submitted), encoding="utf-8")
     # The protected job derives the trusted inventory and content from the pinned repository bundle
     # (decisions/admission-transport.md section 4); it retains the bundle beside them.
