@@ -75,6 +75,23 @@ def files_with_datasets(pack_dir: str | Path) -> list[tuple[Path, DatasetForm | 
     return legacy + [(p, dataset) for p, dataset in _named_dataset_forms(pack_dir)]
 
 
+def source_paths(pack_dir: str | Path) -> list[Path]:
+    """Legacy fact files plus both the JSON forms and authored .rezono sources of declared fact/dataset modules."""
+    pack_dir = Path(pack_dir)
+    out: list[Path] = []
+    facts_dir = pack_dir / "facts"
+    if facts_dir.is_dir():
+        out.extend(p for p in sorted(facts_dir.glob("*.yaml")) if not p.name.endswith(".sources.yaml"))
+    meta, modules = _module_entries(pack_dir)
+    rezono_module.warm_pack_modules(pack_dir, meta, modules, datasets_only=True)
+    for declared in sorted(modules, key=lambda d: (d.form, d.module)):
+        dataset = _declared_dataset(pack_dir, meta, declared)
+        if dataset is not None:
+            out.append(pack_dir / declared.form)
+            out.append(pack_dir / (dataset.source or declared.module))
+    return out
+
+
 def _named_dataset_forms(pack_dir: Path) -> list[tuple[Path, DatasetForm]]:
     meta, modules = _module_entries(pack_dir)
     rezono_module.warm_pack_modules(pack_dir, meta, modules, datasets_only=True)

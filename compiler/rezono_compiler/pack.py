@@ -629,7 +629,10 @@ def read(pack_dir: str | Path) -> Pack:
         raise CompileError("\n".join(errors))
     mods, packs = modules.load(pack_dir, meta, errors)
     if errors:
-        raise CompileError("\n".join(errors))
+        raise CompileError(
+            "\n".join(map(str, errors)),
+            [d for e in errors for d in ((e,) if isinstance(e, diagnostics.Diagnostic) else diagnostics.of_text(e))],
+        )
     names = modules.Names(mods, snake, errors, warnings=warnings)
     found: dict = {}
 
@@ -849,7 +852,10 @@ def read(pack_dir: str | Path) -> Pack:
             kind.owner = plain(ann(c, "owner"))
 
     pack_language_version = rezono_module.pack_language_version(
-        m.form for m in mods if m.pack_dir == pack_dir and m.form is not None
+        [
+            *(m.form for m in mods if m.pack_dir == pack_dir and m.form is not None),
+            *rezono_module.dataset_forms(pack_dir, meta).values(),
+        ]
     )
     pack = Pack({"name": meta["name"], "version": str(meta["version"]), "default_language": meta["default_language"],
                  "theory": is_theory},
