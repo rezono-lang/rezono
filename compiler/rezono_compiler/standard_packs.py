@@ -16,7 +16,7 @@ from pathlib import Path
 PREFIX = "std-"
 
 TABLE: dict[str, str] = {
-    "std-access": "cc117210daed394ec6ebbf7b270215c95c418865dd5292091e8315f428f5ee70",
+    "std-access": "54c8a70d5c7108422fa02ac46d924c11d429b5fda79f20c33d4bc6505e53243d",
     "std-decision": "2fd4cc60cc4f1c7dca42da2f5368a08a992de39df7cd7db205b9118dd1b8fe5a",
     "std-explain": "72e2897cd9baaa4962cf2235f83a332262b4da1e6d34e82d5f64d8335e27be0b",
     "std-identity": "129e5321602dea3b58ea5220103c4d313237d0dbf5e640c677b24fc98e5d265b",
