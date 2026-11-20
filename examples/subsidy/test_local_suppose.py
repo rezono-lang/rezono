@@ -71,12 +71,6 @@ def awards(answer):
     return [r for r in answer["rows"] if r["relation"] == AWARD]
 
 
-@pytest.mark.xfail(strict=True, raises=MissingLocalSuppose, reason=(
-    "M3: decisions/local-suppose.md: Add rezono_publisher.suppose.suppose(pack_dir, store, base_manifest, "
-    "role, delta) and the console script rezono-suppose in edge/publisher, as the decision fixes: copy the pack "
-    "and its relative imports to a working directory, rezono_compiler.writer.apply_delta, publish next to the "
-    "base as a proposal named local-<12 hex of the delta's SHA-256>, rezono_publisher.difference.publish with "
-    "the delta, and answer rezono.supposition/1. Only examples/subsidy/reference.py gives the expected sum."))
 def test_a_local_assumption_moves_the_awards_as_the_reference_does(tmp_path_factory):
     suppose = command()
     base = published_base(tmp_path_factory)
@@ -98,12 +92,6 @@ def test_a_local_assumption_moves_the_awards_as_the_reference_does(tmp_path_fact
     assert sum(r["weight"] * Fraction(r["row"]["value"]) for r in rows if r["row"]["state"] == "known") == want
 
 
-@pytest.mark.xfail(strict=True, raises=MissingLocalSuppose, reason=(
-    "M3: decisions/local-suppose.md: Waits for examples/subsidy/test_local_suppose.py--"
-    "test_a_local_assumption_moves_the_awards_as_the_reference_does. Every row of the answer has weight +1 or "
-    "-1, a changed row counts once on each side, its witness is a key in the store that the checker accepted, "
-    "and the role gets nothing of what it does not read (the ledger). If that task's change already makes this "
-    "test pass, remove this mark in the same pull request."))
 def test_every_row_of_an_assumption_has_a_weight_and_a_witness(tmp_path_factory):
     suppose = command()
     base = published_base(tmp_path_factory)
@@ -125,12 +113,6 @@ def test_every_row_of_an_assumption_has_a_weight_and_a_witness(tmp_path_factory)
     assert out == into
 
 
-@pytest.mark.xfail(strict=True, raises=MissingLocalSuppose, reason=(
-    "M3: decisions/local-suppose.md: Waits for examples/subsidy/test_local_suppose.py--"
-    "test_a_local_assumption_moves_the_awards_as_the_reference_does. A value that is unknown under the "
-    "assumption is answered with the state unknown and its reason, never zero; an award that does not rest "
-    "on the parameter does not move. If that task's change already makes this test pass, remove this mark in "
-    "the same pull request."))
 def test_an_award_that_becomes_unknown_is_answered_with_its_reason(tmp_path_factory):
     suppose = command()
     base = published_base(tmp_path_factory)
@@ -150,11 +132,6 @@ def test_an_award_that_becomes_unknown_is_answered_with_its_reason(tmp_path_fact
     assert not apart & {r["row"]["subject"] for r in awards(answer)}
 
 
-@pytest.mark.xfail(strict=True, raises=MissingLocalSuppose, reason=(
-    "M3: decisions/local-suppose.md: Waits for examples/subsidy/test_local_suppose.py--"
-    "test_a_local_assumption_moves_the_awards_as_the_reference_does. A delta that may change read access "
-    "(rezono_publisher.difference.withheld) gives no rows, and withheld names the reason. If that task's change "
-    "already makes this test pass, remove this mark in the same pull request."))
 def test_an_assumption_that_may_change_access_gives_no_difference(tmp_path_factory):
     suppose = command()
     base = published_base(tmp_path_factory)
