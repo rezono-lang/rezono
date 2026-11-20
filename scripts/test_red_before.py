@@ -202,34 +202,63 @@ def completion(label, test, case, run_code, green_code, verdict, lifted=None):
 
 
 def base_list_cases():
-    """In CI the plugin list comes from the base revision that the event names, not the checkout."""
+    """In CI the plugin list comes from the base revision under GITHUB_SHA, not the checkout."""
+    keys = ("GITHUB_ACTIONS", "GITHUB_EVENT_PATH", "GITHUB_SHA", "GITHUB_EVENT_NAME")
+    saved = {key: os.environ.get(key) for key in keys}
     with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as directory:
         repo = Path(directory)
         git(repo, "init", "-q")
         git(repo, "config", "core.autocrlf", "false")
         base = commit(repo, {"scripts/pytest-plugins.txt": b"# allowed\nlisted = listed\n"})
-        (repo / "scripts/pytest-plugins.txt").write_text("listed = listed\nadded = added\n", encoding="utf-8")
-        event = repo / "event.json"
-        local = repo / "scripts/pytest-plugins.txt"
-        try:
-            for name, data in (("pull request", {"pull_request": {"base": {"sha": base}}}),
-                               ("merge group", {"merge_group": {"base_sha": base}})):
-                event.write_text(json.dumps(data), encoding="utf-8")
-                os.environ["GITHUB_EVENT_PATH"] = str(event)
-                if listed_plugins(local, repo) != {"listed = listed"}:
-                    raise AssertionError(f"{name}: the list does not come from the base")
-                print(f"BASE: the plugin list of a {name} comes from its base")
-        finally:
+        head = commit(repo, {"scripts/pytest-plugins.txt": b"listed = listed\nadded = added\n"})
+        git(repo, "checkout", "-q", base)
+        git(repo, "merge", "-q", "--no-ff", "-m", "merge", head)
+        merge = git(repo, "rev-parse", "HEAD")
+        event, local = repo / "event.json", repo / "scripts/pytest-plugins.txt"
+
+        def listed(name, data, sha=merge, actions="true", path=event):
+            event.write_text(json.dumps(data), encoding="utf-8")
+            os.environ.update(GITHUB_ACTIONS=actions, GITHUB_SHA=sha, GITHUB_EVENT_NAME=name)
             os.environ.pop("GITHUB_EVENT_PATH", None)
-        if listed_plugins(local, repo) != {"listed = listed", "added = added"}:
-            raise AssertionError("outside CI the checkout's list applies")
-        print("LOCAL: outside CI the checkout's plugin list applies")
+            if path:
+                os.environ["GITHUB_EVENT_PATH"] = str(path)
+            return listed_plugins(local, repo)
+
+        def refused(label, *args, **kwargs):
+            try:
+                listed(*args, **kwargs)
+            except SystemExit as error:
+                print(f"REFUSED: {label}: {error}")
+                return
+            raise AssertionError(f"{label} was not refused")
+
+        try:
+            for name, data in (("pull_request", {"pull_request": {"base": {"sha": base}}}),
+                               ("merge_group", {"merge_group": {"base_sha": base}})):
+                if listed(name, data) != {"listed = listed"}:
+                    raise AssertionError(f"{name}: the list does not come from the first parent of GITHUB_SHA")
+                print(f"BASE: the plugin list of a {name} comes from the first parent of GITHUB_SHA")
+            if listed("push", {}, sha=base) != {"listed = listed"}:
+                raise AssertionError("push: the list does not come from GITHUB_SHA")
+            print("BASE: the plugin list of a push comes from GITHUB_SHA")
+            refused("an event that names another base", "pull_request", {"pull_request": {"base": {"sha": head}}})
+            refused("GitHub Actions without an event file", "pull_request", {}, path=None)
+            if listed("pull_request", {}, actions="false", path=None) != {"listed = listed", "added = added"}:
+                raise AssertionError("outside CI the checkout's list applies")
+            print("LOCAL: outside CI the checkout's plugin list applies")
+        finally:
+            for key, value in saved.items():
+                if value is None:
+                    os.environ.pop(key, None)
+                else:
+                    os.environ[key] = value
 
 
 def main():
-    # The cases below run in repositories of their own, without the job's base revision.
-    os.environ.pop("GITHUB_EVENT_PATH", None)
     base_list_cases()
+    # The cases below run in repositories of their own, without the job's base revision, so
+    # they read the plugin list from their checkout.
+    os.environ.pop("GITHUB_ACTIONS", None)
     selection_cases()
     not_mixed()
     completion("evidence completion: red on the base, green with the new evidence", READS_CASE, b"[4]\n",

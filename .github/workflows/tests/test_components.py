@@ -964,5 +964,5 @@ class InventoryTests(unittest.TestCase):
 if __name__ == "__main__":
     # The inventory cases run in repositories of their own, without the job's base revision, so
     # the plugin list comes from their checkout (scripts/components.py, listed_plugins).
-    os.environ.pop("GITHUB_EVENT_PATH", None)
+    os.environ.pop("GITHUB_ACTIONS", None)
     unittest.main()

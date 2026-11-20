@@ -982,24 +982,37 @@ PLUGIN_LIST = ROOT / "scripts/pytest-plugins.txt"
 def listed_plugins(local, root):
     """The allowed pytest plugins (`name = value`): from the base revision in CI, else `local`.
 
-    In GitHub Actions the base is read from the event file: the pull request's base, the merge
-    group's base, else the commit itself. A step can set no GITHUB_* variable, so a candidate
-    script that runs earlier in the job cannot point the list elsewhere.
+    In GitHub Actions the base is the first parent of GITHUB_SHA for a pull request (whose
+    GITHUB_SHA merges it into its base) and for a merge group (whose commit sits on its
+    base), and GITHUB_SHA itself otherwise. A step can set no GITHUB_* variable, so nothing
+    a candidate runs earlier in the job can redirect it; the event file, which the job could
+    rewrite, only has to agree. Replace refs are ignored. In GitHub Actions without an event
+    file this fails rather than trusting the checkout.
     """
-    event = os.environ.get("GITHUB_EVENT_PATH")
-    if event:
+    if os.environ.get("GITHUB_ACTIONS") != "true":
+        text = Path(local).read_text(encoding="utf-8")
+    else:
+        event, sha = os.environ.get("GITHUB_EVENT_PATH"), os.environ.get("GITHUB_SHA")
+        if not (event and sha):
+            raise SystemExit("ERROR GitHub Actions without GITHUB_EVENT_PATH and GITHUB_SHA: "
+                             "no base revision for the list of allowed pytest plugins")
+        env = dict(os.environ, GIT_NO_REPLACE_OBJECTS="1")
+
+        def run(*args, check=True):
+            return subprocess.run(["git", *args], cwd=root, env=env, capture_output=True, text=True, check=check)
+
         with open(event, encoding="utf-8") as handle:
             data = json.load(handle)
-        base = ((data.get("pull_request") or {}).get("base", {}).get("sha")
-                or (data.get("merge_group") or {}).get("base_sha") or os.environ.get("GITHUB_SHA"))
-        if not base:
-            raise SystemExit("ERROR no base revision for the list of allowed pytest plugins")
-        if subprocess.run(["git", "cat-file", "-e", f"{base}^{{commit}}"], cwd=root, capture_output=True).returncode:
-            subprocess.run(["git", "fetch", "--no-tags", "--depth=1", "origin", base], cwd=root, check=True)
-        text = subprocess.run(["git", "show", f"{base}:scripts/pytest-plugins.txt"], cwd=root,
-                              capture_output=True, text=True, check=True).stdout
-    else:
-        text = Path(local).read_text(encoding="utf-8")
+        claimed = ((data.get("pull_request") or {}).get("base", {}).get("sha")
+                   or (data.get("merge_group") or {}).get("base_sha"))
+        merged = os.environ.get("GITHUB_EVENT_NAME") in {"pull_request", "pull_request_target", "merge_group"}
+        target = f"{sha}^1" if merged else sha
+        if run("cat-file", "-e", f"{target}^{{commit}}", check=False).returncode:
+            run("fetch", "--no-tags", "--depth=2", "origin", sha)
+        base = run("rev-parse", "--verify", "--end-of-options", f"{target}^{{commit}}").stdout.strip()
+        if merged and claimed != base:
+            raise SystemExit(f"ERROR the event names the base {claimed}, but {sha} sits on {base}")
+        text = run("show", f"{base}:scripts/pytest-plugins.txt").stdout
     return {line.strip() for line in text.splitlines() if line.strip() and not line.lstrip().startswith("#")}
 
 
