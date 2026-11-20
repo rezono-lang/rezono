@@ -89,7 +89,9 @@ def violation_rule(options: list[dict]) -> dict:
            "coverage_relation, key_binding) entry in Pack.intermediate_invariants (empty tuple when unused). "
            "Require every violation column to match a coverage key column in name and resolved schema type, "
            "allowing extra coverage columns for scopes/readings; refuse missing or incompatible coverage with "
-           "CompileError.",
+           "CompileError. Note: make_pack writes wrong_coverage into labels/nl.yaml for every pack, including "
+           "intermediate which declares only alpha_coverage and missing_guard, causing pack.language to fail "
+           "with unknown element 'wrong_coverage' (test_compiler.py enforces that check).",
 )
 def test_lower_intermediate_invariant(tmp_path):
     # Counter-case 1: a bare publication invariant lowers as before and leaves intermediate_invariants empty.
