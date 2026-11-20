@@ -98,3 +98,44 @@ def test_translated_policy(tmp_path):
                     rule = "verified-supply" if obj["kind"] == "Pod" else "in-zone-flow"
                     assert rule in response["status"]["message"] and digest in response["status"]["message"], label
             assert outcomes == [expected, expected], (driver, label)
+
+
+@pytest.mark.xfail(
+    strict=True,
+    raises=AssertionError,
+    reason=(
+        "M2: decisions/code-does-not-decide.md, section 4, and decisions/k8s-admission-translator.md, 'Order'. "
+        "render_release in k8s-admission/admission_release.py renders each ValidatingAdmissionPolicy with "
+        "admission_translator.translate from the checked rule program and binding of its rule "
+        "(fixtures/translator/<rule>.rules.yaml and <rule>.binding.yaml), no longer with "
+        "policy_renderer.render_policy, which then stays only as the expectation of test_translated_policy. The "
+        "outcomes are the hand-calculated cases of decisions/k8s-admission-rules.md. admission_release.py is not a "
+        "test: if k8s-admission/ is on the review-before-landing list by then, the switch is read before it "
+        "lands. Today the release ships the hand-written policy (AssertionError)."
+    ),
+)
+def test_release_renders_the_translated_policy(tmp_path):
+    from admission_release import render_release
+    from admission_translator import translate
+
+    publication = load("publication.yaml")
+    store = publish_evidence(tmp_path / "checked")
+    release = render_release(["admission-blue", "admission-green"], [publication], store=store,
+                             manifest_key=MANIFEST_KEY)
+    digest, = {item["spec"]["digest"] for item in release if item["kind"] == "NamespacePublication"}
+    policies = {item["metadata"]["name"].split(".")[0]: item for item in release
+                if item["kind"] == "ValidatingAdmissionPolicy"}
+    assert sorted(policies) == ["in-zone-flow", "verified-supply"]
+    for rule, policy in sorted(policies.items()):
+        expected = translate(load_program(f"{rule}.rules.yaml"), fixture(f"{rule}.binding.yaml"), digest)
+        assert policy == expected, f"{rule}: the release does not ship the translated policy"
+
+    path = tmp_path / "release.json"
+    path.write_text(json.dumps({"apiVersion": "v1", "kind": "List", "items": release}), encoding="utf-8")
+    for driver in ("cel", "apiserver"):
+        for label, obj, expected in cases():
+            proc = subprocess.run(["go", "run", ".", "--release", str(path)], cwd=ROOT / "oracles" / driver,
+                                  input=json.dumps(review(obj)), text=True, capture_output=True, timeout=300,
+                                  check=False)
+            assert proc.returncode == 0, proc.stderr
+            assert json.loads(proc.stdout)["response"]["allowed"] is expected, (driver, label)
