@@ -226,15 +226,15 @@ Two semantic observations surfaced by the trial:
 Two existing pieces already model a functional value with a state for a single subject kind:
 
 - **`outcome` in `rezono.rules/1` ([`contracts/rules.yaml`](../../contracts/rules.yaml)):** A derived relation with 3 key columns `(element, state, reason)` over a 1-column base kind. `rules_sql.py` adds 2 check views (`<name>__total`, `<name>__state`), and `checker/rezono_checker/check.py` verifies `outcome_total` and `outcome_state` (each element has one state: `known` with `""`, or `unknown`/`not_applicable` with one or more reasons).
-- **Decision-table lowering (`compiler/rezono_compiler/rezono_table.py`, [`docs/rezono/publication.md`](publication.md#91-a-decision-table-under-unique) §9.1):** Lowers a 1-key enum table to Datalog rules emitting `P` (`@outcome`), `P_value`, `P_conflict` (`@invariant` for `unique`), `P_row`, `P_cell`, `P_applies`, and (when testing required slots) `P_has`, `P_missing`, `P_false`, `P_open`, `P_undecided` — **6 to 11 derived relations per value**, before counting outcome checks and witnesses.
-- **Calculation SQL (`compiler/rezono_compiler/calc_sql.py`):** Co-locates value, state and reason `(subject, state, n, d, b, reason, definition, version)` in **one view per calculation rule** for a single subject kind, using DuckDB 128-bit macros and Feldera Rust UDFs (`udf/udf.rs`).
+- **Decision-table lowering (`compiler/rezono_compiler/rezono_table.py`, [`docs/rezono/publication.md`](publication.md#91-a-decision-table-under-unique) §9.1):** Lowers a 1-key enum table to Datalog rules emitting `P` (`@outcome`), `P_value`, `P_conflict` (`@invariant` for `unique`), `P_row`, `P_cell`, `P_applies`, and (when testing required slots) `P_has`, `P_missing`, `P_false`, `P_open`, `P_undecided` — **6 to 11 derived relations per value under `unique`** (`priority` and `collect` add up to five more), before counting outcome checks and witnesses.
+- **Calculation SQL (`compiler/rezono_compiler/calc_sql.py`):** Keeps value, state and reason in the same row `(subject, n, d, b, state, reason, definition)` for a single subject kind. Per rule version it emits a witness view and a version view, and per rule one selection view that picks the version; DuckDB uses 128-bit macros, Feldera Rust UDFs (`udf/udf.rs`).
 
 #### Does existing Rule IR + `rezono.calc/1` suffice?
 
 **No — pure desugaring to `rezono.rules/1` and `rezono.calc/1` does not suffice**, for four concrete reasons:
 
 1. **`outcome` is restricted to one base kind and three states:** `checker/rezono_checker/rules.py` requires `outcome` to target a 1-column base kind and accepts only `known`, `unknown` and `not_applicable` — not a multi-key derived domain like `asks(a, f)` or `needs_service(a, b)`, and not a published `invalid` finding state.
-2. **Datalog view explosion breaks Feldera's budget:** Lowering each functional derivation the way `rezono_table.py` lowers a table (6–11 relations + 2 outcome checks) blows past Feldera's 64-view pipeline budget (`emit.MAX_VIEWS = 64`) on a single module (quantified below).
+2. **Datalog lowering multiplies views:** Lowering each functional derivation the way `rezono_table.py` lowers a table (6–11 relations + 2 outcome checks) multiplies the views of a module. The 64-view budget (`emit.MAX_VIEWS`) is per pipeline, and the partitioner splits a module across pipelines (`core` already spans five), so this compiles, but it costs more pipelines and cross-pipeline imports. Only a recursive core above the budget is refused (`rules_split.partition`). This is a cost argument, not a hard limit.
 3. **`rezono.calc/1` is single-subject, single-phase and numeric/Boolean-only:** It fixes one `subject` kind per program, runs in a single phase between pre-calc and post-calc rules (`partition_at_calc`), and cannot represent multi-key functional derivations, kind/enum outputs, or set aggregates.
 4. **Multi-candidate conflict witnesses:** A functional conflict must carry *every* candidate value and its proof, not only a pair of conflicting row numbers.
 
@@ -243,14 +243,14 @@ Two existing pieces already model a functional value with a state for a single s
 - **`contracts/rules.yaml` (additive `functional` relation role, e.g. `rezono.rules/2`):**
   - Keep `derived` unchanged for `Bool` (and `T*`) sets.
   - Add a `functional` derived relation carrying: `key` (1+ typed columns), `domain` (mandatory name of a closed base or lower-stratum derived relation matching `key`, enforcing Feldera rule 2 in the IR), `value` (one typed column: `string` for refs/enums/text, `integer`, `rational`, or `boolean`) with co-located `state` and `reason`, `conflict_policy` (`block` for rule-structure conflicts vs `publish` for `.one()` multiplicity conflicts), and ordered precedence/version/candidate rules strictly in a higher stratum than `domain` and outside recursion (enforcing Feldera rule 1).
-  - Replace the single-cut `partition_at_calc` with per-derivation stratification (still rejecting cycles through functional derivations, negation or aggregation, and still rejecting any `may_read` / `may_read_full` dependency on a functional derivation).
+  - Replace the single-cut `partition_at_calc` with per-derivation stratification (still rejecting cycles through functional derivations, negation or aggregation; today the compiler refuses a `may_read` that depends on a calculation selection (`pack.py`), and the new form extends that refusal to `may_read_full` and to every functional derivation).
 - **Witnesses (`contracts/proof.yaml`):**
   - `known(v)`: winning clause/version/candidate plus absent higher-precedence guards; for `.one()`, the single candidate plus the candidate-group digest (`count = 1`, `contributors_sha256`, reusing the existing aggregate witness shape).
   - `unknown(reason)` / `not_applicable`: domain key plus the cause (empty candidate group `count = 0`, absent version, or upstream non-known state row).
   - `invalid(reason)`: all competing candidates (group digest + candidate rows, resolved on demand from the candidate query or from one candidate view when materialized).
 - **Checker (`checker/rezono_checker/`):**
   - Generalize `outcome_total` and `outcome_state` from 1-column base kinds to any declared `domain` relation (including multi-key derived domains), verify `state` against the candidate set (`count = 0` -> `unknown`/`n/a`, `count = 1` -> `known` matching the unique value, `count > 1` -> `invalid` with all distinct candidates matching the conflict witness), and reject publication when `conflict_policy = block` has any `invalid` row.
-  - Keep `checker/rezono_checker/access.py` unchanged in trust boundary: verify that `may_read` and `may_read_full` depend only on `Bool` / base relations.
+  - Add one check to `checker/rezono_checker/access.py`: `may_read` and `may_read_full` depend only on base relations and `Bool` derivations. This mirrors, independently, the refusal the compiler makes today for calculation selections.
 - **Three engines:**
   - **DuckDB (batch & publisher):** Emit one `CREATE OR REPLACE TABLE` per functional derivation: `LEFT JOIN` `domain` with a `GROUP BY key` over the candidate query (`COUNT(DISTINCT val)`, `MIN(val)` when `count = 1`, `CASE` producing `(key..., state, reason, value)`). Exact rationals keep using `DUCKDB_MACROS` (`HUGEINT`).
   - **Soufflé (independent oracle):** Inside `compiler/tests/souffle.py` only, lower the non-rational fragment of each functional derivation to standard Datalog relations (candidate relation + `count` + `(key, state, reason, value)` projection) and compare projected tuples against DuckDB and Feldera. Soufflé stays an independent oracle without forcing Datalog view proliferation onto Feldera.
@@ -262,13 +262,15 @@ Compiling `examples/platform` with `python -m rezono_compiler compile examples/p
 
 | View category (module `core`) | Current `core.dl` (measured) | `rezono 1` — naive table-style Datalog desugaring | `rezono 1` — co-located functional views (proposed) |
 |---|---:|---:|---:|
-| `Bool` derived relation views | 30 | 17 | 17 |
+| Derived relations (sets; `Bool` in `rezono 1`) | 30 | 17 | 17 |
 | Functional derived views | 0 | 48–88 (8 × 6–11 relations) | 8 (1 combined view each) |
-| Materialized witness / candidate views | 3 (`flow`, `newest_day`, `providers`) | ~2–10 | 2 (`flow`, `needs_service`) to 6 (if 4 `.one()` candidate views are materialized) |
+| Materialized witness / candidate views\* | 3 (`flow`, `newest_day`, `providers`) | ~2–10 | 2 (`flow`, `needs_service`) to 6 (if 4 `.one()` candidate views are materialized) |
 | Outcome / conflict check views | 0 | 16 (8 × 2 outcome checks) | 0 (published conflicts) to 2 (if `chosen`/`pin` block) |
 | **Total budget views for `core`** | **33** | **~83–131** | **27–33** |
 
-Co-locating `(key..., state, reason, value)` in one view keeps module `core` at **27–33 views** (at or below today's 33), whereas naive Datalog desugaring explodes to **83–131 views** — more than double Feldera's 64-view pipeline budget on one module alone.
+\* Assumes the default explain mode (`materialize` unless a rule projects a variable away, `rules_dl.py`); `needs_service` would be `on_demand` by that default, and `Product.newest_day` keeps its witness only if it is declared `materialize`.
+
+Keeping `(key..., state, reason, value)` in one view per unversioned functional derivation keeps module `core` at an estimated **27–33 views** (today: 33, measured). A versioned derivation adds two views per version, as calculations do now. Naive Datalog lowering would cost **83–131 views** for `core`: this still compiles, because the budget is per pipeline, but it spreads the module over more pipelines with more cross-pipeline imports.
 
 ---
 
