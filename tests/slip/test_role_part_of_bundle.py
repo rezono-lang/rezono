@@ -46,7 +46,7 @@ def part(store, role, manifest_id) -> dict:
     strict=True,
     raises=(MissingRolePartOfBundle, AssertionError),
     reason=(
-        "extra: decisions/viewer-slip.md: Give the role's part of the bundle at GET /<pack>/bundle?m= in edge/gate/src/catalogue.ts and "
+        "M3: decisions/viewer-slip.md: Give the role's part of the bundle at GET /<pack>/bundle?m= in edge/gate/src/catalogue.ts and "
         "edge/gate/src/local.ts: the rules, labels, messages, home claim and questions of what the role reads, "
         "as decisions/viewer-slip.md, section The role's part of the bundle, says. A role reads a relation when "
         "its snapshot is full or holds a row, and the catalogue follows the same rule, so a kind the role does "

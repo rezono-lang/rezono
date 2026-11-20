@@ -63,7 +63,7 @@ def evidence(tmp_path):
 
 
 @pytest.mark.xfail(strict=True, raises=AssertionError, reason=(
-    "extra: compiler/ci/feldera_shards.py does not yet route "
+    "M3: compiler/ci/feldera_shards.py does not yet route "
     "compiler/tests/test_recorded_dates.py::test_independent_date_equality (compiler-bound shard) and "
     "examples/test_calculation_engine_parity.py::test_feldera_calculations_match_duckdb_and_checker[subsidy] (subsidy shard). "
     "Lift this mark in the pull request that routes the last of the two, with its selector in "

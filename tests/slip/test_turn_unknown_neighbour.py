@@ -31,7 +31,7 @@ EXPECTED = [  # (index, status, turn, causes, row key at the stop)
     strict=True,
     raises=(MissingServedTurns, AssertionError),
     reason=(
-        "extra: decisions/viewer-slip.md: Waits for edge/publisher/tests/test_turning_points.py--test_turning_points and "
+        "M3: decisions/viewer-slip.md: Waits for edge/publisher/tests/test_turning_points.py--test_turning_points and "
         "checker/tests/test_turn_check.py--test_turning_points_checked. Then write a rezono.turns/1 object per "
         "role, sweep and pair of neighbouring stops in a sweep run (edge/publisher/rezono_publisher/sweep.py), "
         "check it with the checker, and let sweep in the local reader (edge/gate/src/sweep.ts) take a start row "
