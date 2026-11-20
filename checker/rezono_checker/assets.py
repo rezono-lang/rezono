@@ -15,11 +15,11 @@ blocks.
 from __future__ import annotations
 
 import hashlib
-import json
 import re
 import struct
 import xml.etree.ElementTree as ET
 
+from .canon import strict_json_loads
 from .snapshots import read_rows
 
 MEDIA_TYPES = {"image/svg+xml", "image/png"}
@@ -48,7 +48,7 @@ def named_files(bundle, snapshots: dict) -> set:
     """The files the image cells name in these snapshots: for every slot the bundle binds as an image
     (`channels.images`, by element id, through `attributes` to its table), the value of each row of that
     table the role has, `[id, file]`. A binding to an unknown slot or a row of another shape is an error."""
-    doc = json.loads(bundle) if isinstance(bundle, (str, bytes)) else bundle
+    doc = strict_json_loads(bundle) if isinstance(bundle, (str, bytes)) else bundle
     table = {a["id"]: a["table"] for a in doc.get("attributes") or []}
     named = set()
     for b in (doc.get("channels") or {}).get("images") or []:

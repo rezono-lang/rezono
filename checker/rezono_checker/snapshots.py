@@ -4,12 +4,11 @@ A JSON snapshot is a list of rows: {"key": [<string>, ...], "values": {<column>:
 with Value as in contracts/value.yaml. Parquet is not read yet.
 """
 
-import json
 import re
 from math import gcd
 from pathlib import Path
 
-from .canon import INTEGER, encode_key
+from .canon import INTEGER, encode_key, strict_json_loads
 
 STATES = ("known", "unknown", "not_applicable", "invalid")  # ValueState in contracts/value.yaml
 REASON = re.compile(r"[a-z][a-z0-9_]*")  # a reason code; an empty reason is written by leaving it out
@@ -76,7 +75,7 @@ def read_rows(data: bytes, fmt: str) -> dict:
     """Return {canonical key: (key parts, values)}. Raises ValueError on a malformed snapshot."""
     if fmt != "json":
         raise ValueError(f"unsupported snapshot format {fmt}")
-    return rows_of(json.loads(data))  # bad JSON or bad UTF-8 raises a ValueError too
+    return rows_of(strict_json_loads(data))  # bad JSON or bad UTF-8 raises a ValueError too
 
 
 def rows_of(table) -> dict:
