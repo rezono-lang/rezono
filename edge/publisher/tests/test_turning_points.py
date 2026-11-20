@@ -24,18 +24,6 @@ def between():
         raise MissingTurningPoints(str(error)) from error
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=(MissingTurningPoints, AssertionError),
-    reason=(
-        "M3: decisions/viewer-slip.md: Write edge/publisher/rezono_publisher/turns.py with between(columns, program, before, after): the "
-        "conclusions the role reads that turn between two stops, with their causes, as decisions/viewer-slip.md, "
-        "section Turning points, defines them (the same row by relation and key prefix, or by rule and subject "
-        "for a calculation; the ten causes; the argument a min or max took derived from its steps and the "
-        "program's constants). The signature and the stop format are in tests/fixtures/turns/cases.py. "
-        "Writing the rezono.turns/1 objects in a sweep run is the next task (test_turn_unknown_neighbour)."
-    ),
-)
 def test_turning_points():
     turns = between()
     got = {case: turns(FIXTURE["COLUMNS"], FIXTURE["PROGRAM"], given["before"], given["after"])
