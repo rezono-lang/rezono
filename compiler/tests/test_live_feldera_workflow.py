@@ -24,8 +24,8 @@ def test_live_oracle_workflow_runs_the_compiler_entrypoint():
     assert job.get("permissions", job_file.get("permissions")) == {"contents": "read"}
     assert (ROOT / "compiler/ci/run_feldera_oracle.sh").is_file()
     assert job["strategy"]["matrix"]["shard"] == [
-        "library", "projects", "platform", "tenant-capacity-interface", "subsidy",
-        "compiler-calc", "compiler-bound", "compiler-rules",
+        "library", "projects", "platform-incremental", "platform-e2e", "tenant-capacity-interface",
+        "subsidy", "compiler-calc", "compiler-bound", "compiler-rules",
     ]
     assert job["strategy"]["fail-fast"] == "false"
     assert job["needs"] == "seed"
@@ -43,7 +43,9 @@ def test_live_oracle_workflow_runs_the_compiler_entrypoint():
     assert stock_build["run"] == entry + " --seed-dependencies"
     archive = seed["steps"][-1]["with"]
     download = next(step for step in job["steps"] if step.get("name") == "Download same-attempt Feldera dependencies")
-    assert download["if"] == "matrix.shard == 'platform' || matrix.shard == 'subsidy'"
+    assert download["if"] == (
+        "matrix.shard == 'platform-incremental' || matrix.shard == 'platform-e2e' || matrix.shard == 'subsidy'"
+    )
     assert download["with"]["name"] == archive["name"] == "feldera-dependencies-${{ github.run_id }}-${{ github.run_attempt }}"
     setup, = [step["run"] for step in job["steps"] if "--pull" in step.get("run", "")]
     assert setup.index("bash compiler/ci/run_feldera_oracle.sh --pull") < setup.index("python -m venv")

@@ -18,10 +18,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        shard: [library, projects, platform, tenant-capacity-interface, subsidy, compiler-calc, compiler-bound, compiler-rules]
+        shard: [library, projects, platform-incremental, platform-e2e, tenant-capacity-interface, subsidy, compiler-calc, compiler-bound, compiler-rules]
     runs-on: ubuntu-24.04
-    # Platform builds about 2,300 generated operator crates on four cores; its integrity program
-    # alone takes about 19 minutes. The other shards finish within 30 minutes.
+    # Platform-incremental builds about 2,300 generated operator crates on four cores; its integrity
+    # program alone takes about 19 minutes. The other shards finish within 30 minutes.
     timeout-minutes: 60
     defaults:
       run:
@@ -87,7 +87,7 @@ jobs:
           trap - EXIT
           echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
       - name: Download same-attempt Feldera dependencies
-        if: matrix.shard == 'platform' || matrix.shard == 'subsidy'
+        if: matrix.shard == 'platform-incremental' || matrix.shard == 'platform-e2e' || matrix.shard == 'subsidy'
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333  # v8.0.2
         with:
           name: feldera-dependencies-${{ github.run_id }}-${{ github.run_attempt }}
