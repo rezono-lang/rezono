@@ -29,9 +29,16 @@ export interface KindDef {
 	world: World;
 	id: { type: string };
 	slots: Record<string, SlotDef>;
+	iri?: string;
+	parent?: string;
+	plane?: 'control';
+	owner?: string;
+	tuple_key?: string[];
 }
 export interface TypeDef {
 	of: 'Text' | 'Bool' | 'Integer' | 'Ratio' | 'Date' | 'DateTime' | 'Quantity' | 'Money' | 'Period' | 'Enum' | (string & {});
+	min?: string;
+	max?: string;
 	dimension?: string;
 	unit?: string;
 	storage_unit?: string;
