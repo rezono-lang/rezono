@@ -258,6 +258,8 @@ class Pack:
     rule_bodies: dict[str, tuple[str, ...]] = field(default_factory=dict)
     # Per rule id, where the rule is written (MOD2, spans.py): its head in a rule file, or the view that made it.
     rule_spans: dict[str, tuple | None] = field(default_factory=dict)
+    # Per rule id, the optional source reference carried by a native rule clause (`@ <source>`).
+    rule_sources: dict[str, str] = field(default_factory=dict)
     # P10.3: the units the pack and the packs it imports declare, by the name of their LinkML type (`units`).
     units: dict[str, types.Unit] = field(default_factory=dict)
     acceptance_questions: list[AcceptanceQuestion] = field(default_factory=list)  # own source inventory
@@ -777,6 +779,7 @@ def read(pack_dir: str | Path) -> Pack:
         from . import rezono_relational, rezono_table  # table lowering reads the pack's model
         forms = {m.rel: m.form for m in mods if m.pack_dir == pack_dir and m.form is not None}
         generated = rezono_table.lower_pack(pack, meta, pack_dir, errors, forms=forms)
+    rule_sentences: dict[str, tuple[str, rules_dl.RuleNote, str]] = {}
     if not errors:
         from . import native_rule_lowering
 
@@ -789,11 +792,14 @@ def read(pack_dir: str | Path) -> Pack:
             pack.rules, rule_warnings = rules_dl.read(pack, pack_dir, ordered, renames, calc_inputs=calc_inputs,
                                                       calc_parts=calc_parts, folds=pack.folds,
                                                       bodies=pack.rule_bodies, spans=pack.rule_spans,
+                                                      rule_sources=pack.rule_sources,
+                                                      rule_sentences=rule_sentences,
                                                       generated=generated, embedded=rezono_relational.sources(mods),
                                                       native=native)
             pack.warnings += rule_warnings
             if pack.rules:   # a variable or a column that joins two currencies is an error
                 amounts.columns(pack.rules, amounts.tables(pack))
+            check_rule_sentences(meta, pack_dir, ordered, rule_sentences)
         except (rules_dl.RuleError, CompileError) as e:
             errors.append(str(e))
             if isinstance(e, Diagnosed):
@@ -869,7 +875,12 @@ def read(pack_dir: str | Path) -> Pack:
         for m in mods:
             if m.reasons:
                 pack_reasons.setdefault(m.pack, []).extend(m.reasons)
-        language(pack, pack_dir, ordered, renames, errors, reasons=pack_reasons)
+        pack_rule_sentences: dict[str, list[tuple[str, str]]] = {}
+        for rid, (owner_pack, note, _) in sorted(rule_sentences.items()):
+            if note.means is not None:
+                pack_rule_sentences.setdefault(owner_pack, []).append((f"rule.{rid}", note.means))
+        language(pack, pack_dir, ordered, renames, errors, reasons=pack_reasons,
+                 rule_sentences=pack_rule_sentences)
         pack.iri = iris(pack, meta, packs, owner, errors)
     if not errors:
         fold.check(pack, errors)
@@ -2619,8 +2630,33 @@ def named(values, known: set, where: str, errors: list[str]) -> None:
     errors += [f"{where}: '{v}' does not exist in this pack" for v in values if v not in known]
 
 
+def check_rule_sentences(meta: dict, pack_dir: Path, packs: dict,
+                         rule_sentences: dict[str, tuple[str, rules_dl.RuleNote, str]]) -> None:
+    """Refuse a rule clause's `means` when the pack's default language catalog already defines `rule.<id>`."""
+    if not rule_sentences:
+        return
+    catalogs: dict[tuple[Path, str], set[str]] = {}
+    found: list[diagnostics.Diagnostic] = []
+    root = meta["name"]
+    for rid, (owner, note, where) in sorted(rule_sentences.items()):
+        directory = pack_dir if owner == root else packs[owner].dir
+        default_lang = str((meta if owner == root else packs[owner].meta).get("default_language", ""))
+        key = (directory, default_lang)
+        if key not in catalogs:
+            catalogs[key] = rezono_reason.defined_in_catalog(directory, default_lang)
+        if f"rule.{rid}" in catalogs[key]:
+            message = (f"{where}:{note.means_line}: rule {rid} sentence is also given in "
+                       f"messages/{default_lang}.mf2; a rule sentence has one source")
+            found.append(diagnostics.Diagnostic(
+                "R040", message, f"{where}#{note.means_at}", (where, note.means_line, note.means_column),
+            ))
+    if found:
+        raise CompileError("\n".join(map(str, found)), found)
+
+
 def language(pack: Pack, pack_dir: Path, packs: dict, renames: dict, errors: list[str], *,
-             reasons: dict[str, list[tuple[str, str]]] | None = None) -> None:
+             reasons: dict[str, list[tuple[str, str]]] | None = None,
+             rule_sentences: dict[str, list[tuple[str, str]]] | None = None) -> None:
     """Labels (facts per language) and message resources (MessageFormat 2, carried as text).
     Imported packs' labels come first, a dependency before the pack that imports it, under this pack's names;
     the pack's own labels win."""
@@ -2665,10 +2701,12 @@ def language(pack: Pack, pack_dir: Path, packs: dict, renames: dict, errors: lis
         if text and (not sep or f"@locale {lang}" not in head.splitlines()):
             errors.append(f"messages/{lang}.mf2: a resource starts with '@locale {lang}' and a '---' line")
         extra = reasons.get(pack.meta["name"], []) if reasons and lang == default else []
-        if extra and (not text or sep):
+        extra_rules = rule_sentences.get(pack.meta["name"], []) if rule_sentences and lang == default else []
+        if (extra or extra_rules) and (not text or sep):
             if not sep:
                 head, sep = f"@locale {lang}", "\n---\n"
             body = rezono_reason.append_entries(body, extra)
+            body = rezono_reason.append_messages(body, extra_rules, keep_placeholders=True)
             text = f"{head}{sep}{body}"
         # An imported pack's messages come first, a dependency before the pack that imports it; an entry of
         # the pack itself wins (S14). The pack's own resource stays as written, after them.
@@ -2683,6 +2721,8 @@ def language(pack: Pack, pack_dir: Path, packs: dict, renames: dict, errors: lis
                     continue
             if reasons and lang == p.meta.get("default_language") and name in reasons:
                 ibody = rezono_reason.append_entries(ibody, reasons[name])
+            if rule_sentences and lang == p.meta.get("default_language") and name in rule_sentences:
+                ibody = rezono_reason.append_messages(ibody, rule_sentences[name], keep_placeholders=True)
             if ibody:
                 imported.update({mid: block for mid, block in entries(ibody) if mid not in own})
         ids = own | set(imported)

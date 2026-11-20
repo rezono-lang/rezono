@@ -636,6 +636,7 @@ def rule_bundle(pack: Pack, prog) -> tuple[list, list]:
         meaning[sense] = r.id
         rules.append(present({"id": r.id, "stable_id": stable, "span": placed(pack.rule_spans.get(r.id)),
                               "relation": r.head.relation, "module": r.module, "message": f"rule.{r.id}",
+                              "source": pack.rule_sources.get(r.id),
                               "variables": variable_types(prog, r),
                               "aggregates": [present({"position": i, "relation": a.atom.relation,
                                                       "function": a.function, "over": a.over})

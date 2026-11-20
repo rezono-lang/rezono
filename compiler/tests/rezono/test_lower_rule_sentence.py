@@ -57,15 +57,6 @@ class MissingRuleSentenceLowering(AssertionError):
     """The sentence or source of a rule clause was not published as the decision gives, or a repeated one passed."""
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=MissingRuleSentenceLowering,
-    reason="extra: decisions/language-readable-rules.md: Lower the member means of a rule clause to the line "
-           "`<message> = {{TEXT}}` in the messages of the default language and its member source to source in the "
-           "bundle's rule entry, in compiler/rezono_compiler/rezono_module.py and the bundle writer; refuse a "
-           "means whose message key messages/<default_language>.mf2 also gives. Read section 2. Waits for "
-           "test_rule_sentence, which reads the members.",
-)
 def test_lower_rule_sentence(tmp_path):
     # Counter-case: without a sentence the clause keeps its message key and has no source.
     plain, lines = published(compiled(tmp_path / "plain", KINDS + "\n" + RULE + "\n"))
