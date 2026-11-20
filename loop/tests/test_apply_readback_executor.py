@@ -9,8 +9,6 @@ from loop.recording_cli import main
 from test_recorded_correction import observation
 from test_replay_fixed_point import LOOP, boundary, setup_recording
 
-DECISION = "decisions/loop-apply-readback.md"
-
 
 class MissingApplyReadbackExecutor(AssertionError):
     """loop/executor.py does not apply a frontier and read back each round."""
@@ -81,7 +79,7 @@ def run(tmp_path, missing, values):
     strict=True,
     raises=MissingApplyReadbackExecutor,
     reason=(
-        f"M2: {DECISION}: add loop/executor.py with execute(directory, data, *, apply, read). Each round evaluates "
+        "M2: decisions/loop-apply-readback.md: add loop/executor.py with execute(directory, data, *, apply, read). Each round evaluates "
         "the pinned std-loop pack through the replay path, applies the ready frontier in step-key order, reads one "
         "sweep and evaluates again; it reports plans, outcome, rounds and findings."
     ),
@@ -102,7 +100,7 @@ def test_executor_applies_then_reads_back(tmp_path):
     strict=True,
     raises=MissingReadbackCompletion,
     reason=(
-        f"M2: {DECISION}: in loop/executor.py a step is done only when the pack derives done from matching "
+        "M2: decisions/loop-apply-readback.md: in loop/executor.py a step is done only when the pack derives done from matching "
         "read-back evidence; the apply result is never evidence. Waits for test_executor_applies_then_reads_back."
     ),
 )
@@ -119,7 +117,7 @@ def test_apply_result_is_not_evidence(tmp_path):
     strict=True,
     raises=MissingReadbackFinding,
     reason=(
-        f"M2: {DECISION}: in loop/executor.py a read-back value that differs from the expectation is a drift "
+        "M2: decisions/loop-apply-readback.md: in loop/executor.py a read-back value that differs from the expectation is a drift "
         "finding with both references and a failed outcome, and no later step is applied. "
         "Waits for test_executor_applies_then_reads_back."
     ),
@@ -142,7 +140,7 @@ def test_readback_mismatch_is_a_finding(tmp_path):
     strict=True,
     raises=MissingOfflineReplay,
     reason=(
-        f"M2: {DECISION}: the recording that loop/executor.py returns is plain JSON and replays with "
+        "M2: decisions/loop-apply-readback.md: the recording that loop/executor.py returns is plain JSON and replays with "
         "loop/recording_cli.py, without a cluster, to the same plans, outcome and rounds. "
         "Waits for test_apply_result_is_not_evidence and test_readback_mismatch_is_a_finding."
     ),
