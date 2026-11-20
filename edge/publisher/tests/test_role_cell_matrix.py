@@ -86,7 +86,7 @@ def publication_inputs(cell_pack):
             epoch.rows, epoch.kinds, epoch.parents, epoch.columns, rule_ir, epoch.witnesses, role)
         snapshots = {name: publish.snapshot(rows) for name, rows in readable.items()}
         verified, findings = checker_access.check_role(
-            role, complete, snapshots, full, epoch.columns, epoch.kinds, epoch.parents, rule_ir,
+            role, complete, snapshots, full, bundle, rule_ir,
             instances=epoch.witnesses, witnesses=proofs["witnesses"], claimed_evidence=full.evidence)
         assert findings == [] and verified == full
         form = publication.form({}, bundle, readable, full, proofs["witnesses"], [], role)
