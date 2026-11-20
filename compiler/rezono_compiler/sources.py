@@ -5,6 +5,7 @@ Only main's facts are read here. The canonical writer changes a fact file and it
 """
 from __future__ import annotations
 
+from collections import deque
 from collections.abc import Iterable
 from dataclasses import dataclass
 from functools import lru_cache
@@ -182,6 +183,24 @@ def cited(form: dict, where: str) -> dict[tuple[str, int], dict]:
     return out
 
 
+def _resolve_decide_source_ref(ref: str, declared: dict[str, dict], at: str) -> dict:
+    if ref in declared:
+        return declared[ref]
+    src_name, sep, frag = ref.partition("#")
+    if sep:
+        if src_name not in declared:
+            msg = f"{at}: cites {src_name!r}, which is no source of its dataset"
+            raise facts.LoadError(msg, [Diagnostic("unknown_source", msg, at)])
+        if not frag.strip():
+            msg = f"{at}: source citation {ref!r} has an empty fragment"
+            raise facts.LoadError(msg, [Diagnostic("invalid_source", msg, at)])
+        base = declared[src_name]
+        pos = f"{base['position'].partition('#')[0]}#{frag}" if base["kind"] in FILE_KINDS else frag
+        return source(base | {"position": pos}, at)
+    msg = f"{at}: cites {ref!r}, which is no source of its dataset"
+    raise facts.LoadError(msg, [Diagnostic("unknown_source", msg, at)])
+
+
 def _decide_sources(
     form: dict,
     where: str,
@@ -193,6 +212,12 @@ def _decide_sources(
     """Sources for values set by `decide` blocks (decisions/fact-origin-required.md §1)."""
     tables = facts.named_dataset_decls(form)
     declared = _declared_sources(tables, where)
+    cited_by_decl: dict[int, dict] = {}
+    for decl_index, decl in enumerate(tables):
+        if facts.decide_decl(decl) and isinstance(decl.get("source"), str):
+            cited_by_decl[decl_index] = _resolve_decide_source_ref(
+                decl["source"], declared, f"{where} decide {decl_index + 1}",
+            )
     file_name = path.as_posix() if path.parent.parts else f"rezono/{path.name}"
     out: dict[tuple[str, int, str | None], list[dict]] = {}
     for cell_key, (decl_index, assign_index) in decided_cells.items():
@@ -209,17 +234,44 @@ def _decide_sources(
             {"kind": "person", "name": decl["by"], "revision": decl["on"], "position": position},
             at,
         )]
-        ref = decl.get("source")
-        if isinstance(ref, str):
-            src_name, sep, frag = ref.partition("#")
-            if ref in declared:
-                entry_sources.append(declared[ref])
-            elif sep and src_name in declared and frag:
-                base = declared[src_name]
-                pos = f"{base['position'].partition('#')[0]}#{frag}" if base["kind"] in FILE_KINDS else frag
-                entry_sources.append(source(base | {"position": pos}, at))
+        if decl_index in cited_by_decl:
+            entry_sources.append(cited_by_decl[decl_index])
         out[cell_key] = entry_sources
     return out
+
+
+def _direct_inlined_decides(
+    judged: facts.FactSchema,
+    kind: str,
+    record: dict,
+    record_index: int,
+    decided_sources: dict[tuple[str, int, str | None], list[dict]],
+) -> deque[list[dict] | None]:
+    """Decide sources for direct inlined child records of `record`, in admission's walk order."""
+    queue: deque[list[dict] | None] = deque()
+    id_key = judged.kinds[judged.root(kind)].identifier
+    for name, value in record.items():
+        if name == id_key:
+            continue
+        s = judged.slot(kind, name)
+        if s is None:
+            break
+        if not s.inlined:
+            continue
+        decided = decided_sources.get((kind, record_index, name))
+        ident = judged.kinds[judged.root(s.target)].identifier if s.target else None
+        if isinstance(value, list):
+            for item in value:
+                if isinstance(item, dict):
+                    queue.append(decided)
+        elif s.multivalued and ident and isinstance(value, dict) and ident not in value:
+            if any(rest is not None and not isinstance(rest, dict) for rest in value.values()):
+                break
+            for _ in value:
+                queue.append(decided)
+        elif isinstance(value, dict):
+            queue.append(decided)
+    return queue
 
 
 def collected(entries) -> list[dict]:
@@ -269,8 +321,7 @@ def text_entries(pack: Pack, name: str, text: str, data: dict | None = None, *, 
     if isinstance(raw, dict) and raw.get("format") in facts.DATASET_FORMATS:
         data, pointers, decided_cells = facts.located_scalar_dataset_with_decides(judged, raw)
         own_sources = cited(raw, path.name)
-        if decided_cells:
-            decided_sources = _decide_sources(raw, path.name, decided_cells, dataset, authored_lines, path)
+        decided_sources = _decide_sources(raw, path.name, decided_cells, dataset, authored_lines, path)
     elif data is None:
         data = raw
     if not isinstance(data, dict):
@@ -321,18 +372,28 @@ def text_entries(pack: Pack, name: str, text: str, data: dict | None = None, *, 
                 if default:
                     raise both(kind, i)
                 fallback = [([own], None)]
-            id_key = judged.kinds[judged.root(kind)].identifier
-            rec_id = record.get(id_key) if id_key else None
             if not explicit and own is None and (kind, i, None) in decided_sources:
                 fallback = [(decided_sources[(kind, i, None)], None)]
+            direct_child_decides = (
+                _direct_inlined_decides(judged, kind, record, i, decided_sources)
+                if decided_sources else deque()
+            )
 
             def record_context(row_kind, row_key, parent):
+                parent_entries, depth, inherited_decided = parent
                 selected = choices(row_kind, row_key, None)
                 if selected and own is not None:
                     raise both(kind, i)
-                return selected or parent
+                slot_decided = direct_child_decides.popleft() if depth == 1 and direct_child_decides else None
+                if slot_decided is not None:
+                    entries = (selected or []) + [(slot_decided, None)]
+                    return entries, depth + 1, slot_decided
+                if inherited_decided is not None and selected is not None:
+                    return selected + [(inherited_decided, None)], depth + 1, inherited_decided
+                return selected or parent_entries, depth + 1, inherited_decided
 
             def row(table, values, row_kind, row_key, slot, context):
+                context_entries, depth, inherited_decided = context
                 ref = {"relation": table, "key": canonical_json(values)}
                 exact_key = (table, ref["key"])
                 if exact_key in exact:
@@ -347,21 +408,23 @@ def text_entries(pack: Pack, name: str, text: str, data: dict | None = None, *, 
                 selected = choices(row_kind, row_key, slot) if slot is not None else None
                 if selected and own is not None:
                     raise both(kind, i)
-                decided = (
-                    decided_sources.get((kind, i, slot))
-                    if row_kind == kind and row_key == rec_id else None
-                )
-                if decided is not None:
-                    selected = (selected or []) + [(decided, None)]
+                if depth == 1:
+                    decided = decided_sources.get((kind, i, slot))
+                    if decided is not None:
+                        selected = (selected or []) + [(decided, None)]
+                    else:
+                        selected = selected or context_entries
+                elif inherited_decided is not None and selected is not None:
+                    selected = selected + [(inherited_decided, None)]
                 else:
-                    selected = selected or context
+                    selected = selected or context_entries
                 if not selected:
                     raise facts.LoadError(f"{companion.name}: no source for {row_kind} {row_key!r}")
                 for sources, reason in selected:
                     out.append({"row": ref, "sources": sources,
                                 **({"reason": reason} if reason else {})})
 
-            facts.walk(judged, kind, record, on_row=row, on_record=record_context, context=fallback)
+            facts.walk(judged, kind, record, on_row=row, on_record=record_context, context=(fallback, 0, None))
     if set(overrides) - matched:
         raise Unmatched(f"{companion.name}: source entry names no fact record or cell: {sorted(set(overrides) - matched, key=repr)}",
                         set(overrides) - matched)

@@ -429,9 +429,9 @@ def _located_scalar_dataset(
                 raise LoadError(f"{where}: row width does not match the fact table header")
             output.append(dataset_record(zip(columns, row[:len(columns)], strict=True), where, judged, kind))
             places.append(f"/module/decls/0/decls/{table_index}/rows/{row_index}")
-    dated_tables = _resolve_fact_rows(fact_rows, records, pointers, judged, as_of, known)
-    decide_dated, decided_cells = _resolve_decides(decides, records, pointers, judged, as_of, known)
-    dated_tables |= decide_dated
+    dated_tables, decided_cells = _resolve_fact_rows_and_decides(
+        fact_rows, decides, records, pointers, judged, as_of, known,
+    )
     return records, pointers, dated_tables, decided_cells
 
 
@@ -472,8 +472,7 @@ def untyped_dataset(form: dict, *,
                 raise LoadError(f"{where}: row width does not match the fact table header")
             output.append(dataset_record(zip(columns, row[:len(columns)], strict=True), where))
             places.append(f"/module/decls/0/decls/{index}/rows/{row_index}")
-    _resolve_fact_rows(fact_rows, records, pointers, None, as_of, known)
-    _resolve_decides(decides, records, pointers, None, as_of, known)
+    _resolve_fact_rows_and_decides(fact_rows, decides, records, pointers, None, as_of, known)
     return records
 
 
@@ -631,119 +630,6 @@ def _decode_fact_row(decl: dict, index: int, judged: FactSchema | None) -> _Pars
     return _ParsedFactRow(index, kind, root, id_key, eid, valid_range, row_known, assignments)
 
 
-def _resolve_fact_rows(
-    fact_rows: list[_ParsedFactRow],
-    records: dict[str, list],
-    pointers: dict[str, list[str]],
-    judged: FactSchema | None,
-    as_of: datetime.date | None,
-    known: datetime.date | None,
-) -> set[str]:
-    if not fact_rows:
-        return set()
-
-    def ancestors(rec_kind: str) -> list[str]:
-        return judged.ancestors(rec_kind) if judged is not None else [rec_kind]
-
-    by_root: dict[tuple[str, object], list[tuple[str, dict]]] = {}
-    for rec_kind, rec_list in records.items():
-        root = judged.root(rec_kind) if judged is not None else rec_kind
-        id_key = judged.kinds[root].identifier if judged is not None else "id"
-        if id_key is None:
-            continue
-        for rec in rec_list:
-            if id_key in rec:
-                by_root.setdefault((root, rec[id_key]), []).append((rec_kind, rec))
-
-    def matching_records(row: _ParsedFactRow) -> list[tuple[str, dict]]:
-        return [(rk, rec) for rk, rec in by_root.get((row.root, row.eid), []) if row.kind in ancestors(rk)]
-
-    for row in fact_rows:
-        if row.dated:
-            continue
-        matches = matching_records(row)
-        if matches:
-            for _, rec in matches:
-                for slot_name, _, val in row.assignments:
-                    if slot_name in rec:
-                        raise _load_error(
-                            "duplicate_slot",
-                            f"{row.kind}[{row.eid}]: duplicate field '{slot_name}'",
-                            f"{row.kind}.{slot_name}",
-                        )
-                    if val is not _OMITTED:
-                        rec[slot_name] = val
-        else:
-            new_rec: dict[str, object] = {row.id_key: row.eid}
-            for slot_name, _, val in row.assignments:
-                if val is not _OMITTED:
-                    new_rec[slot_name] = val
-            records.setdefault(row.kind, []).append(new_rec)
-            pointers.setdefault(row.kind, []).append(f"/module/decls/0/decls/{row.index}")
-            by_root.setdefault((row.root, row.eid), []).append((row.kind, new_rec))
-
-    dated_tables: set[str] = set()
-    applying: dict[tuple[str, object, str], list[tuple[tuple[int, datetime.date], str, object, list[tuple[str, dict]]]]] = {}
-    for row in fact_rows:
-        if not row.dated:
-            continue
-        matches = matching_records(row)
-        if not matches:
-            raise _load_error(
-                "unknown_record",
-                f"{row.kind}: dated fact row references unknown record {row.eid!r}",
-                row.kind,
-            )
-        if row.valid is not None and as_of is None:
-            raise _load_error(
-                "missing_as_of",
-                f"{row.kind}[{row.eid}]: dated fact row with valid range requires as_of",
-                row.kind,
-            )
-        if row.known is not None and known is None:
-            raise _load_error(
-                "missing_known",
-                f"{row.kind}[{row.eid}]: dated fact row with known date requires known",
-                row.kind,
-            )
-        for slot_name, table_name, _ in row.assignments:
-            dated_tables.add(table_name)
-            if any(slot_name in rec for _, rec in matches):
-                raise _load_error(
-                    "versions_overlap",
-                    f"{table_name}: versions_overlap between undated and dated assignments for record {row.eid!r}",
-                    table_name,
-                )
-        valid_ok = row.valid is None or (
-            row.valid[0] <= as_of and (row.valid[1] is None or as_of < row.valid[1])  # type: ignore[operator]
-        )
-        known_ok = row.known is None or row.known <= known  # type: ignore[operator]
-        if not (valid_ok and known_ok):
-            continue
-        rank = (1, row.known) if row.known is not None else (0, datetime.date.min)
-        for slot_name, table_name, val in row.assignments:
-            key = (row.root, row.eid, table_name)
-            applying.setdefault(key, []).append((rank, slot_name, val, matches))
-
-    for (root, eid, table_name), candidates in applying.items():
-        best_rank = max(item[0] for item in candidates)
-        winners = [item for item in candidates if item[0] == best_rank]
-        if len(winners) > 1:
-            raise _load_error(
-                "versions_overlap",
-                f"{table_name}: versions_overlap for record {eid!r}",
-                table_name,
-            )
-        _, slot_name, val, matches = winners[0]
-        for _, rec in matches:
-            if val is _OMITTED:
-                rec.pop(slot_name, None)
-            else:
-                rec[slot_name] = val
-
-    return dated_tables
-
-
 def decide_decl(decl) -> bool:
     """A decide block in a dataset (docs/rezono/v0.md §5; decisions/fact-origin-required.md §1)."""
     return isinstance(decl, dict) and "decide" in decl
@@ -838,7 +724,8 @@ def _decode_decide_value(slot, raw_value, field_where: str, judged: FactSchema) 
     return decoded
 
 
-def _resolve_decides(
+def _resolve_fact_rows_and_decides(
+    fact_rows: list[_ParsedFactRow],
     decides: list[_ParsedDecide],
     records: dict[str, list],
     pointers: dict[str, list[str]],
@@ -846,17 +733,25 @@ def _resolve_decides(
     as_of: datetime.date | None,
     known: datetime.date | None,
 ) -> tuple[set[str], dict[tuple[str, int, str | None], tuple[int, int]]]:
-    if not decides:
+    if not fact_rows and not decides:
         return set(), {}
 
-    decided_cells: dict[tuple[str, int, str | None], tuple[int, int]] = {}
-    dated_tables: set[str] = set()
-    applying: dict[
-        tuple[str, object, str],
-        list[tuple[tuple[int, datetime.date], str, object, list[tuple[str, int, dict]], tuple[int, int]]],
-    ] = {}
+    def ancestors(rec_kind: str) -> list[str]:
+        return judged.ancestors(rec_kind) if judged is not None else [rec_kind]
 
-    def find_matches(raw_id: str, slot_name: str) -> list[tuple[str, int, dict, object]]:
+    def build_by_root() -> dict[tuple[str, object], list[tuple[str, int, dict]]]:
+        index: dict[tuple[str, object], list[tuple[str, int, dict]]] = {}
+        for rec_kind, rec_list in records.items():
+            root = judged.root(rec_kind) if judged is not None else rec_kind
+            id_key = judged.kinds[root].identifier if judged is not None else "id"
+            if id_key is None:
+                continue
+            for rec_idx, rec in enumerate(rec_list):
+                if id_key in rec:
+                    index.setdefault((root, rec[id_key]), []).append((rec_kind, rec_idx, rec))
+        return index
+
+    def find_decide_matches(raw_id: str, slot_name: str) -> list[tuple[str, int, dict, object]]:
         found: list[tuple[str, int, dict, object]] = []
         for rec_kind, rec_list in records.items():
             if judged is not None:
@@ -875,9 +770,45 @@ def _resolve_decides(
                     found.append((rec_kind, rec_idx, rec, eid))
         return found
 
+    # Phase 1: apply all undated fact rows, then all undated decide blocks.
+    # Records hold only undated slot values until Phase 2 finishes.
+    if fact_rows:
+        by_root = build_by_root()
+        for row in fact_rows:
+            if row.dated:
+                continue
+            matches = [
+                (rk, r_idx, rec) for rk, r_idx, rec in by_root.get((row.root, row.eid), [])
+                if row.kind in ancestors(rk)
+            ]
+            if matches:
+                for _, _, rec in matches:
+                    for slot_name, _, val in row.assignments:
+                        if slot_name in rec:
+                            raise _load_error(
+                                "duplicate_slot",
+                                f"{row.kind}[{row.eid}]: duplicate field '{slot_name}'",
+                                f"{row.kind}.{slot_name}",
+                            )
+                        if val is not _OMITTED:
+                            rec[slot_name] = val
+            else:
+                new_rec: dict[str, object] = {row.id_key: row.eid}
+                for slot_name, _, val in row.assignments:
+                    if val is not _OMITTED:
+                        new_rec[slot_name] = val
+                out_list = records.setdefault(row.kind, [])
+                rec_idx = len(out_list)
+                out_list.append(new_rec)
+                pointers.setdefault(row.kind, []).append(f"/module/decls/0/decls/{row.index}")
+                by_root.setdefault((row.root, row.eid), []).append((row.kind, rec_idx, new_rec))
+
+    decided_cells: dict[tuple[str, int, str | None], tuple[int, int]] = {}
     for decide in decides:
+        if decide.dated:
+            continue
         for assign_index, raw_id, slot_name, raw_value in decide.assignments:
-            matches = find_matches(raw_id, slot_name)
+            matches = find_decide_matches(raw_id, slot_name)
             if matches:
                 if judged is not None:
                     roots = {judged.root(rk) for rk, _, _, _ in matches}
@@ -888,65 +819,28 @@ def _resolve_decides(
                             f"{raw_id}.{slot_name}",
                         )
                     rec_kind, _, _, eid = matches[0]
-                    root = judged.root(rec_kind)
                     slot = judged.slot(rec_kind, slot_name)
                     assert slot is not None
                     field_where = f"{rec_kind}[{eid}].{slot_name}"
                     decoded = _decode_decide_value(slot, raw_value, field_where, judged)
-                    table_name = slot.table
                 else:
                     rec_kind, _, _, eid = matches[0]
-                    root = rec_kind
                     field_where = f"{rec_kind}[{eid}].{slot_name}"
                     decoded = _OMITTED if raw_value == {"lit": "n/a"} else dataset_cell(_normalize_fact_expr(raw_value), field_where)
-                    table_name = f"{rec_kind}__{slot_name}"
 
-                if not decide.dated:
-                    for mk, m_idx, rec, _ in matches:
-                        if slot_name in rec:
-                            raise _load_error(
-                                "duplicate_slot",
-                                f"{mk}[{eid}]: duplicate field '{slot_name}'",
-                                f"{mk}.{slot_name}",
-                            )
-                        if decoded is not _OMITTED:
-                            rec[slot_name] = decoded
-                            decided_cells[(mk, m_idx, slot_name)] = (decide.index, assign_index)
-                    continue
-
-                if decide.valid is not None and as_of is None:
-                    raise _load_error(
-                        "missing_as_of",
-                        f"{rec_kind}[{eid}]: dated decide block with valid range requires as_of",
-                        rec_kind,
-                    )
-                if decide.known is not None and known is None:
-                    raise _load_error(
-                        "missing_known",
-                        f"{rec_kind}[{eid}]: dated decide block with known date requires known",
-                        rec_kind,
-                    )
-                dated_tables.add(table_name)
-                if any(slot_name in rec for _, _, rec, _ in matches):
-                    raise _load_error(
-                        "versions_overlap",
-                        f"{table_name}: versions_overlap between undated and dated assignments for record {eid!r}",
-                        table_name,
-                    )
-                valid_ok = decide.valid is None or (
-                    decide.valid[0] <= as_of and (decide.valid[1] is None or as_of < decide.valid[1])  # type: ignore[operator]
-                )
-                known_ok = decide.known is None or decide.known <= known  # type: ignore[operator]
-                if not (valid_ok and known_ok):
-                    continue
-                rank = (1, decide.known) if decide.known is not None else (0, datetime.date.min)
-                target_recs = [(mk, m_idx, rec) for mk, m_idx, rec, _ in matches]
-                applying.setdefault((root, eid, table_name), []).append(
-                    (rank, slot_name, decoded, target_recs, (decide.index, assign_index))
-                )
+                for mk, m_idx, rec, _ in matches:
+                    if slot_name in rec:
+                        raise _load_error(
+                            "duplicate_slot",
+                            f"{mk}[{eid}]: duplicate field '{slot_name}'",
+                            f"{mk}.{slot_name}",
+                        )
+                    if decoded is not _OMITTED:
+                        rec[slot_name] = decoded
+                        decided_cells[(mk, m_idx, slot_name)] = (decide.index, assign_index)
                 continue
 
-            if decide.dated or judged is None:
+            if judged is None:
                 raise _load_error(
                     "unknown_record",
                     f"{raw_id}.{slot_name}: decide block references unknown record {raw_id!r}",
@@ -984,7 +878,7 @@ def _resolve_decides(
             slot = judged.slot(kind, slot_name)
             assert slot is not None
             decoded = _decode_decide_value(slot, raw_value, f"{kind}[{eid}].{slot_name}", judged)
-            new_rec: dict[str, object] = {identity.identifier: eid}
+            new_rec = {identity.identifier: eid}
             if decoded is not _OMITTED:
                 new_rec[slot_name] = decoded
             out_list = records.setdefault(kind, [])
@@ -994,6 +888,123 @@ def _resolve_decides(
             decided_cells[(kind, rec_idx, None)] = (decide.index, assign_index)
             if decoded is not _OMITTED:
                 decided_cells[(kind, rec_idx, slot_name)] = (decide.index, assign_index)
+
+    # Phase 2: unify dated fact rows and dated decide assignments in one joint known-rank resolution.
+    dated_tables: set[str] = set()
+    applying: dict[
+        tuple[str, object, str],
+        list[tuple[tuple[int, datetime.date], str, object, list[tuple[str, int, dict]], tuple[int, int] | None]],
+    ] = {}
+
+    if any(row.dated for row in fact_rows):
+        by_root = build_by_root()
+        for row in fact_rows:
+            if not row.dated:
+                continue
+            matches = [
+                (rk, r_idx, rec) for rk, r_idx, rec in by_root.get((row.root, row.eid), [])
+                if row.kind in ancestors(rk)
+            ]
+            if not matches:
+                raise _load_error(
+                    "unknown_record",
+                    f"{row.kind}: dated fact row references unknown record {row.eid!r}",
+                    row.kind,
+                )
+            if row.valid is not None and as_of is None:
+                raise _load_error(
+                    "missing_as_of",
+                    f"{row.kind}[{row.eid}]: dated fact row with valid range requires as_of",
+                    row.kind,
+                )
+            if row.known is not None and known is None:
+                raise _load_error(
+                    "missing_known",
+                    f"{row.kind}[{row.eid}]: dated fact row with known date requires known",
+                    row.kind,
+                )
+            for slot_name, table_name, _ in row.assignments:
+                dated_tables.add(table_name)
+                if any(slot_name in rec for _, _, rec in matches):
+                    raise _load_error(
+                        "versions_overlap",
+                        f"{table_name}: versions_overlap between undated and dated assignments for record {row.eid!r}",
+                        table_name,
+                    )
+            valid_ok = row.valid is None or (
+                row.valid[0] <= as_of and (row.valid[1] is None or as_of < row.valid[1])  # type: ignore[operator]
+            )
+            known_ok = row.known is None or row.known <= known  # type: ignore[operator]
+            if not (valid_ok and known_ok):
+                continue
+            rank = (1, row.known) if row.known is not None else (0, datetime.date.min)
+            for slot_name, table_name, val in row.assignments:
+                key = (row.root, row.eid, table_name)
+                applying.setdefault(key, []).append((rank, slot_name, val, matches, None))
+
+    for decide in decides:
+        if not decide.dated:
+            continue
+        for assign_index, raw_id, slot_name, raw_value in decide.assignments:
+            matches = find_decide_matches(raw_id, slot_name)
+            if not matches:
+                raise _load_error(
+                    "unknown_record",
+                    f"{raw_id}.{slot_name}: decide block references unknown record {raw_id!r}",
+                    raw_id,
+                )
+            if judged is not None:
+                roots = {judged.root(rk) for rk, _, _, _ in matches}
+                if len(roots) > 1:
+                    raise _load_error(
+                        "ambiguous_decide_target",
+                        f"{raw_id}.{slot_name}: matches multiple kinds {sorted(roots)}",
+                        f"{raw_id}.{slot_name}",
+                    )
+                rec_kind, _, _, eid = matches[0]
+                root = judged.root(rec_kind)
+                slot = judged.slot(rec_kind, slot_name)
+                assert slot is not None
+                field_where = f"{rec_kind}[{eid}].{slot_name}"
+                decoded = _decode_decide_value(slot, raw_value, field_where, judged)
+                table_name = slot.table
+            else:
+                rec_kind, _, _, eid = matches[0]
+                root = rec_kind
+                field_where = f"{rec_kind}[{eid}].{slot_name}"
+                decoded = _OMITTED if raw_value == {"lit": "n/a"} else dataset_cell(_normalize_fact_expr(raw_value), field_where)
+                table_name = f"{rec_kind}__{slot_name}"
+
+            if decide.valid is not None and as_of is None:
+                raise _load_error(
+                    "missing_as_of",
+                    f"{rec_kind}[{eid}]: dated decide block with valid range requires as_of",
+                    rec_kind,
+                )
+            if decide.known is not None and known is None:
+                raise _load_error(
+                    "missing_known",
+                    f"{rec_kind}[{eid}]: dated decide block with known date requires known",
+                    rec_kind,
+                )
+            dated_tables.add(table_name)
+            if any(slot_name in rec for _, _, rec, _ in matches):
+                raise _load_error(
+                    "versions_overlap",
+                    f"{table_name}: versions_overlap between undated and dated assignments for record {eid!r}",
+                    table_name,
+                )
+            valid_ok = decide.valid is None or (
+                decide.valid[0] <= as_of and (decide.valid[1] is None or as_of < decide.valid[1])  # type: ignore[operator]
+            )
+            known_ok = decide.known is None or decide.known <= known  # type: ignore[operator]
+            if not (valid_ok and known_ok):
+                continue
+            rank = (1, decide.known) if decide.known is not None else (0, datetime.date.min)
+            target_recs = [(mk, m_idx, rec) for mk, m_idx, rec, _ in matches]
+            applying.setdefault((root, eid, table_name), []).append(
+                (rank, slot_name, decoded, target_recs, (decide.index, assign_index))
+            )
 
     for (root, eid, table_name), candidates in applying.items():
         best_rank = max(item[0] for item in candidates)
@@ -1010,7 +1021,8 @@ def _resolve_decides(
                 rec.pop(slot_name, None)
             else:
                 rec[slot_name] = val
-                decided_cells[(mk, m_idx, slot_name)] = origin
+                if origin is not None:
+                    decided_cells[(mk, m_idx, slot_name)] = origin
 
     return dated_tables, decided_cells
 
