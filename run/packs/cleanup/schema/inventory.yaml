@@ -58,3 +58,20 @@ classes:
       page: {range: Page}
       tag_state: {range: ObservedTagState}
       provider_id: {description: The resource identifier in the original page.}
+  Listing:
+    description: An account-wide provider server listing observed for cleanup.
+    attributes:
+      id: {identifier: true}
+      coverage: {range: InventoryCoverage}
+      unfiltered: {range: boolean}
+  ListedService:
+    description: A service name observed in a provider server listing.
+    attributes:
+      id: {identifier: true}
+      listing: {range: Listing, required: true}
+      service: {required: true}
+  DeliveredService:
+    description: A service name delivered by the plan's orders.
+    attributes:
+      id: {identifier: true}
+      service: {required: true}

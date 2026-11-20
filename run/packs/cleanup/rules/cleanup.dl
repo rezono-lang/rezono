@@ -34,4 +34,36 @@ cleanup_page_evidence(s, d, r) :- cleanup_evidence(s, d, _), reached_page(s, r).
 .decl cleaned(sweep: symbol)
 cleaned(s) :- cleanup_evidence(s, _, _).
 
-.output cleaned, cleanup_evidence, cleanup_page_evidence
+.decl invalid_listing(listing: symbol)
+invalid_listing(l) :- listing(l), !listing__coverage(l, "complete").
+invalid_listing(l) :- listing(l), listing__coverage(l, c), c != "complete".
+invalid_listing(l) :- listing(l), !listing__unfiltered(l, TRUE).
+invalid_listing(l) :- listing(l), listing__unfiltered(l, FALSE).
+
+.decl conflicting_listed_service(item: symbol)
+conflicting_listed_service(i) :- listed_service__listing(i, a), listed_service__listing(i, b), a != b.
+conflicting_listed_service(i) :- listed_service__service(i, a), listed_service__service(i, b), a != b.
+
+.decl has_listed_service_name(item: symbol)
+has_listed_service_name(i) :- listed_service__service(i, _).
+invalid_listing(l) :- listed_service__listing(i, l), !has_listed_service_name(i).
+invalid_listing(l) :- listed_service__listing(i, l), conflicting_listed_service(i).
+
+.decl conflicting_delivered_service(item: symbol)
+conflicting_delivered_service(d) :- delivered_service__service(d, a), delivered_service__service(d, b), a != b.
+
+// A delivered service that appears in a complete unfiltered listing is still listed.
+.decl still_listed(listing: symbol, service: symbol)
+still_listed(l, s) :-
+    listing(l),
+    !invalid_listing(l),
+    listed_service(i),
+    !conflicting_listed_service(i),
+    listed_service__listing(i, l),
+    listed_service__service(i, s),
+    s != "",
+    delivered_service(d),
+    !conflicting_delivered_service(d),
+    delivered_service__service(d, s).
+
+.output cleaned, cleanup_evidence, cleanup_page_evidence, still_listed

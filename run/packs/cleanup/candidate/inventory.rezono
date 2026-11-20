@@ -59,3 +59,20 @@ kind Resource world closed
   tag_state: ObservedTagState?
   provider_id: Text?
     description "The resource identifier in the original page."
+
+kind Listing world closed
+  description "An account-wide provider server listing observed for cleanup."
+  id: Text identifier
+  coverage: InventoryCoverage?
+  unfiltered: Bool?
+
+kind ListedService world closed
+  description "A service name observed in a provider server listing."
+  id: Text identifier
+  listing: Listing
+  service: Text
+
+kind DeliveredService world closed
+  description "A service name delivered by the plan's orders."
+  id: Text identifier
+  service: Text
