@@ -8,12 +8,12 @@ subject: language-rezono-1-defaults
 
 # Close kinds by default in Rezono 1, guard observed kinds, and keep both precedence rules
 
-[Rezono 1](language-rezono-1.md) is the first released language. Before packs convert to it, this decision settles seven of its defaults. Two change the language: a kind without a world line is closed, and a kind whose rows are observed must say `world open` or show completeness. One adds a warning. Four keep what exists and say why, so the language guide can explain them. Nothing here changes the meaning of a `rezono 0` text ([language reference §4b](../docs/rezono/v0.md#4b-language-version-and-deprecation)).
+[Rezono 1](language-rezono-1.md) is the first released language. Before packs convert to it, this decision settles seven of its defaults. Two change the language: a kind without a world line is closed, and a kind whose rows are observed must say `world open`, closed only within a scope it names with `complete by`. One adds a warning. Four keep what exists and say why, so the language guide can explain them. Nothing here changes the meaning of a `rezono 0` text ([language reference §4b](../docs/rezono/v0.md#4b-language-version-and-deprecation)).
 
 | Point | Outcome in `rezono 1` | What changes |
 |---|---|---|
 | 1. The world of a kind without a world line | `closed`; `open` stays the default in `rezono 0` | the compiler lowers by version; the form does not change |
-| 2. A kind whose rows are observed | `world open`, or covered by a completeness receipt; otherwise R051 | a new refusal |
+| 2. A kind whose rows are observed | `world open`, optionally `complete by <relation>`; otherwise R051 | a new refusal, a new kind clause and the core reason `incomplete_read` |
 | 3. `world closed` written on a kind | W107, hint "leave it out" | a new warning |
 | 4. The LinkML boundary | an optional slot becomes `T?`; an open class becomes `world open` | a conversion rule |
 | 5. Precedence of `unless` and `table first` | unchanged: a later `unless` wins, the first applying row wins | the language guide |
@@ -39,25 +39,41 @@ What follows from it:
 - **One lowering.** The compiler applies the default once, when it lowers a form, by the module's version: an absent kind world is `open` in `rezono.module/1` to `/4`, where the compiler refuses it as today, and `closed` in `rezono.module/5`. A closed kind lowers to a LinkML class without a `world` annotation, so a `rezono 1` kind without the line and the same kind with `world closed` lower to the same schema, byte for byte. Every other reader that builds a schema from a module form, such as an example runner in `rezono/src/`, applies the same rule.
 - **No published world changes.** Every lowered `rezono 0` kind states its world, and the conversion keeps each world (section 4). Moving a pack to `rezono 1` therefore closes no open world; it is not the major change "close an open world" of v0 §4c.
 
-## 2. An observed kind says `world open` or shows completeness
+## 2. An observed kind is open, and closed only within a scope it names
 
-A closed default must not let observed data be read as complete by accident: unknown stays explicit ([AGENTS.md](../AGENTS.md), rule 4). In a `rezono 1` module, an **observed kind** declares `world open`, or it is covered by a scoped completeness receipt. Otherwise the compiler refuses it with **R051** at its kind line, naming the kind. Writing `world closed` does not satisfy the guard: it only repeats the default (section 3).
+A closed default must not let observed data be read as complete by accident: unknown stays explicit ([AGENTS.md](../AGENTS.md), rule 4). In a `rezono 1` module, an **observed kind** declares `world open`. Where completeness is shown, it adds the scope in which it is closed: `world open, complete by <relation>`. Otherwise the compiler refuses it with **R051** at its kind line, naming the kind. Writing `world closed` does not satisfy the guard: it only repeats the default (section 3).
 
 - **Which kinds are observed.** A kind whose rows come from observations or from another party's records: a measurement, a reported status, a register, an export, the ledger of another system ([observation contract](../contracts/observation.yaml); a reference source in [AGENTS.md](../AGENTS.md), rule 6). The compiler knows this from the layer: v0 §5d calls it the source class `observation`, and [`contracts/pack.yaml`](../contracts/pack.yaml) gives each module registration a `layer`, one of which is `observation` (`LAYERS` in `pack.py`). The layer is the pack's declaration of where a kind's rows come from. The source of a row ([`contracts/source.yaml`](../contracts/source.yaml): `query`, `tool`, `person`, `document`, `third_party`) describes that row at publication, not the kind when it compiles, so the guard reads the layer. A definition that reads an observed kind has the effect class `reads` (v0 §5d).
-- **What a receipt covers.** A [completeness receipt](scoped-completeness.md) attests that one read covered a whole population within a scope at a cut. Admission verifies it before rules read it ([admission transport](admission-transport.md)), and a role relies on it only with witnessed full-read authority ([witnessed read completeness](witnessed-read-completeness.md)). Coverage never closes the kind as such: a missing row is a known absence only within the receipt's scope, at its cut, and only in an epoch whose admitted receipts include one for that scope. In any other epoch it stays unknown, as in an open kind. This is the reading [scoped completeness §2](scoped-completeness.md#2-shared-rule-interface) gives an open observation relation.
-- **Not decided here: how a kind names its scope.** `rezono 1` has no spelling yet for "this kind is covered by scope S", and none is chosen here. Until a decision gives one, the compiler knows no covering scope, so an observed kind declares `world open` and a pack states completeness in its rules, as the receipt rules (`complete`, `absent_checked`) and the platform's CMDB scope do. That decision also says how a covered kind serves as the domain of a functional derivation in an epoch without an admitted receipt. It is needed before a pack converts a kind that is both observed and closed (section 4).
-- **The code.** R051 is the next code after the registers in the repository: R001 to R034 in v0 §10, R035 to R037 in `rezono/messages/`, R040 to R049 in [native rules §6](language-native-rules.md#6-diagnostics) and R050 in [calculated values](language-calculations.md). R038 and R039 have never been assigned and are left alone. The English sentence is "`{0}` is observed: declare `world open`, or cover it with a completeness receipt"; its English and Dutch templates go into `rezono/messages/`, as native rules §6 asks of every new code.
+- **The code.** R051 is the next code after the registers in the repository: R001 to R034 in v0 §10, R035 to R037 in `rezono/messages/`, R040 to R049 in [native rules §6](language-native-rules.md#6-diagnostics) and R050 in [calculated values](language-calculations.md). R038 and R039 have never been assigned and are left alone. R051 refuses an observed kind that is neither `world open` nor `complete by` a scope; since `complete by` follows `world open`, that is a kind without `world open`. The English sentence is "`{0}` is observed: declare `world open`, and `complete by` the scope in which it is complete"; its English and Dutch templates go into `rezono/messages/`, as native rules §6 asks of every new code.
 
 What the guard keeps true, in four examples from the repository:
 
 | Kind | Its rows | In `rezono 1` | What stays explicit |
 |---|---|---|---|
 | `IncomeStatement` ([subsidy scheme](../examples/subsidy-scheme/candidate/subsidy.rezono)) | the income register's statement | `world open`, as it is written today | H003 has no statement, so the income for A003 is unknown: its assessment stays `unknown income_statement_not_received` and its award unknown, never computed from an income of zero ([subsidy](../examples/subsidy/README.md)) |
-| `CmdbObservation` ([CMDB reference](../examples/platform/schema/cmdb_reference/inventory.yaml)) | another party's inventory export | open; complete only within a declared scope | a service missing from the export is a finding inside the scope and unknown outside it ([CMDB scope](platform-cmdb-scope.md)) |
+| `CmdbObservation` ([CMDB reference](../examples/platform/schema/cmdb_reference/inventory.yaml)) | another party's inventory export | `world open, complete by` its scope relation (below) | a service missing from the export is a finding inside the scope and `unknown incomplete_read` outside it ([CMDB scope](platform-cmdb-scope.md)) |
 | `HealthProbe` ([management health](../examples/platform/schema/management_health.yaml)) | a probe's reading | `world open` | a missing or undated reading leaves the health step unknown |
 | `Decision.decider` ([`std-decision`](../packs/std-decision/candidate/decision.rezono)) | a slot of the pack's own record | the kind is closed, the slot `decider: Text* world open` | `in_force_without_decider` stays an `@absence` finding: somebody decided, and the record does not say who |
 
-`CmdbObservation` and `HealthProbe` are LinkML classes in a `facts` layer today, closed, and their rules read the scope or the reading's time to keep the absence explicit. When they convert, they move to an `observation` layer; the CMDB export then needs the scope spelling above, and any result that changes is listed as section 4 says.
+`CmdbObservation` and `HealthProbe` are LinkML classes in a `facts` layer today, closed, and their rules read the scope or the reading's time to keep the absence explicit. When they convert, they move to an `observation` layer: the CMDB export names its scope with `complete by`, the probes stay plainly open, and any result that changes is listed as section 4 says.
+
+### The scope: `complete by`
+
+```rezono
+kind CmdbObservation world open, complete by in_scope
+  export: CmdbExport
+  service: Text
+  cluster: Text
+
+derived in_scope(export: CmdbExport, service: Text): Bool = CmdbScope.any(it.export = export and it.service = service)
+```
+
+- **Spelling.** On the kind line of a `rezono 1` module, after `world open`: a comma, `complete by` and the name of a relation. The reader reads the name into the kind's form member `complete`, beside `"world": "open"`, and prints the line back as `kind <K> world open, complete by <relation>`. It resolves no name, as for every declaration. Without `world open` before it, `complete by` is R000: a closed kind needs no scope. A subkind has the completeness of its root kind, as it has its world.
+- **The relation.** `<relation>` is a `Bool` relation whose key binds the scope: a `derived …: Bool` of the pack, as above over the CMDB scope rows ([CMDB scope](platform-cmdb-scope.md)); a covered sweep of `std-loop` (`covered_sweep_node`, [complete sweep](../packs/std-loop/rules/complete_sweep.dl)); or a relation derived from the protected `verified_receipt` ([scoped completeness §2](scoped-completeness.md#2-shared-rule-interface)). Each of its columns is named after a slot of the kind, the identifier included, and has that slot's type; a row of the kind falls in the scope when its values in those slots form a key for which the relation holds. The compiler refuses a relation that is not `Bool`, or a column that names no slot of the kind, with R003 at the relation's name.
+- **Inside the scope the kind is closed.** For a key where `<relation>` holds, a missing row of the kind is false. Negation, aggregation and `.one()` over the kind are admitted when the expression binds every column of `<relation>`; otherwise the kind is open there and R004 applies, as for any open kind. The coverage row is a positive premise of every witness that relies on the closed reading, so the independent checker checks it with the absence it supports, and a role that reads the conclusion must read the coverage row ([witnessed read completeness](witnessed-read-completeness.md)).
+- **Outside the scope the kind stays open.** For a key where `<relation>` does not hold, a missing row is `unknown` with the new core reason **`incomplete_read`**: the read that would show the absence is not known to be complete for that key. `contracts/value.yaml` has no such code (its core codes are `no_version_applies`, `versions_overlap`, `exception_conflict`, `no_row_applies`, `ambiguous_date`, `empty` and `added_later`). `incomplete_read` labels `unknown` only, and enters `contracts/value.yaml`, [publication L0 §2.3](../docs/publication/l0.md#23-reasons) and `CORE_REASONS` in `publication/rezono_publication/l0.py`, as `no_match` does in [Rezono 1 §2](language-rezono-1.md#2-one-derivation-form-derived). The evaluation reason `open_world` ([expressions §7](../docs/rezono/expressions.md)) keeps labelling a kind without `complete by`: there no scope could be widened, so its remedy differs.
+- **Receipts and epochs.** A relation derived from `verified_receipt` holds only for receipts that admission verified in that epoch ([admission transport](admission-transport.md)). In an epoch without an admitted receipt it is empty, so every key lies outside the scope. A receipt therefore never closes the kind as such: it closes it within its scope, at its cut, in its epoch.
+- **Functional domains.** A functional derivation that reads the kind declares `over <relation>(…)`, so its domain is the covered keys, a closed `Bool` relation as [Rezono 1 §2](language-rezono-1.md#2-one-derivation-form-derived) asks. A key outside the scope is outside the domain and has no row. A question that reads the derivation for such a key gets `unknown incomplete_read`, never `known`, also in an epoch whose coverage relation is empty.
 
 ## 3. `world closed` on a kind in `rezono 1` gives W107
 
@@ -86,7 +102,7 @@ The one-time conversion of a pack to `rezono 1` ([Rezono 1 §6](language-rezono-
 
 This is a conversion rule, not an intended difference. It stands beside the tables of [Rezono 1 §5.5](language-rezono-1.md#5-cross-module-readers-acceptance-tests-oraclepy-and-the-external-reader-contract) and [§7](language-rezono-1.md#7-per-derivation-intended-semantic-differences-for-examplesplatformrulescoredl): the whole-pack equivalence test treats a changed value state caused by converting a slot or a world as a test error, as §7 treats every difference it does not list.
 
-One case cannot keep its meaning: a closed class whose rows are observed. Today these are the classes of `examples/subsidy/schema/reference.yaml` and `examples/subsidy/schema/credentials.yaml`, one class of `examples/library/schema/library.yaml` (all in an `observation` layer), and the observed classes of the platform example in section 2. Converted as closed, such a class meets R051. The conversion stops at it and names it. The pack then covers it with a scope once that spelling exists, or opens it and lists every result that changes as an intended difference, in the form of Rezono 1 §7.
+One case cannot keep its meaning: a closed class whose rows are observed. Today these are the classes of `examples/subsidy/schema/reference.yaml` and `examples/subsidy/schema/credentials.yaml`, one class of `examples/library/schema/library.yaml` (all in an `observation` layer), and the observed classes of the platform example in section 2. Converted as closed, such a class meets R051. The conversion stops at it and names it. The pack then writes `world open, complete by` the scope in which its rows are complete, or opens it without a scope; either way it lists every result that changes as an intended difference, in the form of Rezono 1 §7.
 
 ## 5. Precedence stays as it is
 
@@ -131,15 +147,15 @@ A file without a `rezono` line is read as `rezono 0` with W106; in a pack on `re
 | `compiler/tests/rezono/test_rezono_1_world_default.py::test_rezono_1_kind_without_world_lowers_closed` | section 1: closed without the line, `world open` kept on a kind and a slot, a slot with its kind's world, the written line lowered byte for byte the same | `M3`, waits for the compiler version switch |
 | `compiler/tests/rezono/test_rezono_1_world_default.py::test_rezono_1_observed_kind_needs_open_world` | section 2: R051 names each kind of an `observation` module without `world open`, also with `world closed` written; the same kind in a `facts` module is closed | `M3`, waits for the default |
 | `rezono/test/test_rezono_1_world_line.py::test_rezono_1_world_closed_gives_w107` | section 3: W107 with "leave it out" at `world closed`, the form and its print as written, no warning without the line, for `world open` or in `rezono 0` | `M3`, waits for the default and the examples test |
+| `rezono/test/test_rezono_1_complete_by.py::test_rezono_1_complete_by_reads_into_the_form` | section 2: `world open, complete by <relation>` reads into the members `world` and `complete` and prints back as written; `complete by` without `world open` before it is R000 | `M3` |
 
-Specified here and not tested: the receipt branch of the guard (its spelling is open), the conversion rule of section 4 (it runs with the conversion), and the language guide examples of sections 5 and 6.
+Specified here and not tested: what the compiler and the checker do with `complete by` (the relation's columns and R003, the closed reading inside the scope with its coverage premise, `unknown incomplete_read` outside it, the functional domain `over <relation>(…)`), the conversion rule of section 4 (it runs with the conversion), and the language guide examples of sections 5 and 6. Those tests need module-level `derived` relations, which the reader does not read yet (`rezono/test/test_rezono_1_derived.py`).
 
 ## Order
 
 1. The default of section 1, in the compiler and in every reader in `rezono/src/` that builds a schema from a module form.
-2. The guard of section 2.
+2. The guard of section 2 and the reading of `complete by`; then its lowering, the core reason `incomplete_read` and the checker's coverage premise, before a pack converts a kind that is observed and closed.
 3. The warning of section 3. Before it lands, a planner removes `world closed` from the `rezono 1` source of `rezono/test/test_rezono_1_examples.py`, which expects no diagnostic, once that test is green and its runner reads the default of section 1.
-4. The spelling of a covering scope, in its own decision, before a pack converts a kind that is observed and closed.
 
 ## Considered
 
@@ -147,6 +163,9 @@ Specified here and not tested: the receipt branch of the guard (its spelling is 
 - **A closed default without a guard.** Rejected: an observed kind without a world line would read a missing observation as false, and unknown would no longer be explicit.
 - **Recognize observed kinds by the sources of their rows.** Rejected: a source describes one row when it is published; a theory pack declares kinds and has no rows. The layer is known when the pack compiles.
 - **Let a receipt close an observed kind as such.** Rejected: a receipt covers one scope at one cut; the same kind in another epoch, or outside the scope, is not complete.
+- **Name the scope in `pack.yaml` beside the layer.** Rejected: the scope is a relation with a key, which the rules already read; written on the kind line, it stands where a reader looks for the kind's world.
+- **`complete by` on a closed kind.** Rejected: a closed kind is complete everywhere, so a scope would say nothing; the clause follows `world open`.
+- **`open_world` outside the scope.** Rejected: outside a declared scope the remedy is to widen the scope or admit a receipt, so the reason names it (`incomplete_read`).
 - **R028 for `world closed` in `rezono 1`.** Rejected: v0 §4b deprecates before it removes, and the line was never a default before `rezono 1`.
 - **Write the default into the form.** Rejected, as in readable rules: every form, and every pack hash, would change without a change of meaning.
 - **One direction for `unless` and `table first`.** Rejected in section 5.
