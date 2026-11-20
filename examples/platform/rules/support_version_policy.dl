@@ -1,0 +1,156 @@
+// Support severity of a pinned service release follows vendor cycle dates and the policy in force, beside the register.
+
+.decl vendor_cycle_entry(cycle: symbol, product: symbol, series: symbol)
+vendor_cycle_entry(c, p, series) :-
+    vendor_cycle_support(c),
+    vendor_cycle_support__product(c, p),
+    vendor_cycle_support__series(c, series).
+
+.decl vendor_cycle_disagreement(product: symbol, series: symbol)
+vendor_cycle_disagreement(p, series) :-
+    vendor_cycle_entry(c1, p, series), vendor_cycle_entry(c2, p, series), c1 != c2,
+    interval__on_axis(c1, a1), interval__on_axis(c2, a2), a1 != a2.
+vendor_cycle_disagreement(p, series) :-
+    vendor_cycle_entry(c1, p, series), vendor_cycle_entry(c2, p, series), c1 != c2,
+    interval__start(c1, s1), interval__start(c2, s2), s1 != s2.
+vendor_cycle_disagreement(p, series) :-
+    vendor_cycle_entry(c1, p, series), vendor_cycle_entry(c2, p, series), c1 != c2,
+    interval__end(c1, e1), interval__end(c2, e2), e1 != e2.
+vendor_cycle_disagreement(p, series) :-
+    vendor_cycle_entry(c1, p, series), vendor_cycle_entry(c2, p, series), c1 != c2,
+    interval__start(c1, _), start_not_recorded(c2).
+vendor_cycle_disagreement(p, series) :-
+    vendor_cycle_entry(c1, p, series), vendor_cycle_entry(c2, p, series), c1 != c2,
+    interval__start(c1, _), interval__unbounded(c2, "start").
+vendor_cycle_disagreement(p, series) :-
+    vendor_cycle_entry(c1, p, series), vendor_cycle_entry(c2, p, series), c1 != c2,
+    interval__end(c1, _), end_not_recorded(c2).
+vendor_cycle_disagreement(p, series) :-
+    vendor_cycle_entry(c1, p, series), vendor_cycle_entry(c2, p, series), c1 != c2,
+    interval__end(c1, _), interval__unbounded(c2, "end").
+vendor_cycle_disagreement(p, series) :-
+    vendor_cycle_entry(c1, p, series), vendor_cycle_entry(c2, p, series), c1 != c2,
+    interval__unbounded(c1, side), !interval__unbounded(c2, side).
+
+// @absence
+.decl cycle_consistent(product: symbol, series: symbol)
+cycle_consistent(p, series) :-
+    vendor_cycle_entry(_, p, series),
+    !vendor_cycle_disagreement(p, series).
+
+.decl supported_cycle_candidate(reference: symbol, product: symbol, cycle: symbol, start: number)
+supported_cycle_candidate(ref, p, c, start) :-
+    support_reference(ref),
+    support_reference__point(ref, pt),
+    vendor_cycle_entry(c, p, series),
+    cycle_consistent(p, series),
+    holds_at(c, pt),
+    interval__start(c, start).
+
+.decl has_supported_cycle_candidate(reference: symbol, product: symbol)
+has_supported_cycle_candidate(ref, p) :- supported_cycle_candidate(ref, p, _, _).
+
+// @absence
+.decl latest_supported_cycle_start(reference: symbol, product: symbol, start: number)
+latest_supported_cycle_start(ref, p, m) :-
+    has_supported_cycle_candidate(ref, p),
+    m = max s : { supported_cycle_candidate(ref, p, _, s) }.
+
+.decl latest_supported_cycle(reference: symbol, product: symbol, cycle: symbol)
+latest_supported_cycle(ref, p, c) :-
+    latest_supported_cycle_start(ref, p, m),
+    supported_cycle_candidate(ref, p, c, m).
+
+.decl pinned_service_series(service: symbol, product: symbol, series: symbol)
+pinned_service_series(svc, p, series) :-
+    service(svc),
+    service__product(svc, p),
+    pin__service(pin, svc),
+    pin__release(pin, rel),
+    release__product(rel, p),
+    release__series(rel, series).
+
+.decl service_mapped_cycle(service: symbol, product: symbol, series: symbol, cycle: symbol)
+service_mapped_cycle(svc, p, series, c) :-
+    pinned_service_series(svc, p, series),
+    vendor_cycle_entry(c, p, series).
+
+.decl service_has_mapped_cycle(service: symbol)
+service_has_mapped_cycle(svc) :- service_mapped_cycle(svc, _, _, _).
+
+.decl effective_support_policy(reference: symbol, product: symbol, policy: symbol, warning_days: number)
+effective_support_policy(ref, p, sp, w) :-
+    support_reference(ref),
+    support_reference__standing_on(ref, on),
+    support_policy(sp),
+    support_policy__decision(sp, d),
+    support_policy__product(sp, p),
+    support_policy__warning_days(sp, w),
+    w >= 0,
+    in_force_on(d, on).
+
+.decl product_has_effective_policy(reference: symbol, product: symbol)
+product_has_effective_policy(ref, p) :- effective_support_policy(ref, p, _, _).
+
+.decl support_severity(reference: symbol, service: symbol, cycle: symbol, severity: symbol)
+support_severity(ref, svc, c, "warning") :-
+    support_reference__point(ref, pt),
+    reference_point__position(pt, pos),
+    service_mapped_cycle(svc, p, series, c),
+    cycle_consistent(p, series),
+    effective_support_policy(ref, p, _, w),
+    holds_at(c, pt),
+    interval__end(c, end),
+    cutoff = pos + w,
+    end <= cutoff.
+support_severity(ref, svc, c, "ok") :-
+    support_reference__point(ref, pt),
+    reference_point__position(pt, pos),
+    service_mapped_cycle(svc, p, series, c),
+    cycle_consistent(p, series),
+    effective_support_policy(ref, p, _, w),
+    holds_at(c, pt),
+    interval__end(c, end),
+    cutoff = pos + w,
+    cutoff < end.
+support_severity(ref, svc, c, "ok") :-
+    support_reference__point(ref, pt),
+    service_mapped_cycle(svc, p, series, c),
+    cycle_consistent(p, series),
+    effective_support_policy(ref, p, _, _),
+    holds_at(c, pt),
+    interval__unbounded(c, "end").
+support_severity(ref, svc, c, "critical") :-
+    support_reference__point(ref, pt),
+    service_mapped_cycle(svc, p, series, c),
+    cycle_consistent(p, series),
+    effective_support_policy(ref, p, _, _),
+    ended_at(c, pt).
+
+.decl support_severity_unknown(reference: symbol, service: symbol, reason: symbol)
+support_severity_unknown(ref, svc, "pin-unmapped") :-
+    support_reference(ref),
+    service(svc),
+    pin__service(_, svc),
+    !service_has_mapped_cycle(svc).
+support_severity_unknown(ref, svc, "cycle-conflict") :-
+    support_reference(ref),
+    pinned_service_series(svc, p, series),
+    vendor_cycle_disagreement(p, series).
+support_severity_unknown(ref, svc, "policy-missing") :-
+    support_reference(ref),
+    service_mapped_cycle(svc, p, series, _),
+    cycle_consistent(p, series),
+    !product_has_effective_policy(ref, p).
+
+.decl support_severity_drift(reference: symbol, service: symbol, cycle: symbol, derived: symbol, registered: symbol, entry: symbol)
+support_severity_drift(ref, svc, c, derived, registered, entry) :-
+    support_severity(ref, svc, c, derived),
+    vendor_cycle_support__series(c, series),
+    support_assessment_entry(entry),
+    support_assessment_entry__service(entry, svc),
+    support_assessment_entry__series(entry, series),
+    support_assessment_entry__severity(entry, registered),
+    derived != registered.
+
+.output latest_supported_cycle, support_severity, support_severity_unknown, support_severity_drift
