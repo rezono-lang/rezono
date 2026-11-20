@@ -24,23 +24,110 @@ class Report(NamedTuple):
     findings: tuple[Finding, ...]
 
 
+def _folded_lines(lines: list[str]) -> set[str]:
+    marks: set[str] = set()
+    for previous, current in zip(lines, lines[1:]):
+        if FOLD.fullmatch(previous) and (declaration := DECLARATION.match(current)):
+            marks.add(declaration[1])
+    return marks
+
+
+def _annotation_value(annotations: object, key: str) -> object:
+    if not isinstance(annotations, dict):
+        return None
+    value = annotations.get(key)
+    if isinstance(value, dict):
+        return value.get("value")
+    return value
+
+
+def _rezono_forms(pack: Path) -> list[dict]:
+    """Read declared native Rezono module forms, using rezono_module when available."""
+    meta_path = pack / "pack.yaml"
+    meta = yaml.safe_load(meta_path.read_text(encoding="utf-8")) if meta_path.is_file() else None
+    if isinstance(meta, dict) and meta.get("rezono"):
+        try:
+            from rezono_compiler import rezono_module
+        except ImportError:
+            rezono_module = None
+        if rezono_module is not None:
+            forms: list[dict] = []
+            for entry in rezono_module.declared(meta, pack, [], reject_undeclared=False):
+                form = rezono_module.effective_form(pack, entry, [])
+                if form is None:
+                    form = rezono_module.read_form(pack, entry, [])
+                if form is not None:
+                    forms.append(form)
+            return forms
+        forms = []
+        for entry in meta.get("rezono") or ():
+            if not isinstance(entry, dict) or not isinstance(entry.get("form"), str):
+                continue
+            form_path = pack / entry["form"]
+            if form_path.is_file():
+                doc = json.loads(form_path.read_text(encoding="utf-8"))
+                if isinstance(doc, dict) and isinstance(doc.get("module"), dict):
+                    forms.append(doc)
+        return forms
+    rezono_dir = pack / "rezono"
+    if not rezono_dir.is_dir():
+        return []
+    forms = []
+    for path in sorted(rezono_dir.rglob("*.json")):
+        doc = json.loads(path.read_text(encoding="utf-8"))
+        if isinstance(doc, dict) and isinstance(doc.get("module"), dict):
+            forms.append(doc)
+    return forms
+
+
+def _fold_marks_from_form(form: dict) -> set[str]:
+    marks: set[str] = set()
+    module = form.get("module")
+    if not isinstance(module, dict):
+        return marks
+    for decl in module.get("decls") or ():
+        if not isinstance(decl, dict):
+            continue
+        if isinstance(decl.get("kind"), str) and _annotation_value(decl.get("annotations"), "explain") == "fold":
+            marks.add(decl["kind"])
+        if "rules" in decl and isinstance(decl.get("lines"), list):
+            marks.update(_folded_lines([line for line in decl["lines"] if isinstance(line, str)]))
+        for key in ("rule", "derived"):
+            name = decl.get(key)
+            if isinstance(name, str) and any(
+                isinstance(opt, dict) and opt.get("explain") == "fold"
+                for opt in (decl.get("options") or ())
+            ):
+                marks.add(name)
+    return marks
+
+
+def _decl_has_rules(decl: object) -> bool:
+    if not isinstance(decl, dict):
+        return False
+    if any(key in decl for key in ("rules", "rule", "step")):
+        return True
+    if isinstance(decl.get("derived"), str):
+        return any(key in decl for key in ("params", "options", "over"))
+    if "extend" in decl:
+        return any(isinstance(item, dict) and "table" in item for item in (decl.get("derived") or ()))
+    return False
+
+
 def folded(pack: Path) -> set[str]:
     """Read the class names and relation IDs marked for folding in the pack sources."""
-    marks = set()
+    marks: set[str] = set()
     for path in sorted((pack / "schema").rglob("*.yaml")):
         document = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
         for name, definition in (document.get("classes") or {}).items():
-            annotation = ((definition or {}).get("annotations") or {}).get("explain")
-            if isinstance(annotation, dict):
-                annotation = annotation.get("value")
-            if annotation == "fold":
+            if _annotation_value((definition or {}).get("annotations"), "explain") == "fold":
                 marks.add(name)
 
     for path in sorted((pack / "rules").rglob("*.dl")):
-        lines = path.read_text(encoding="utf-8").splitlines()
-        for previous, current in zip(lines, lines[1:]):
-            if FOLD.fullmatch(previous) and (declaration := DECLARATION.match(current)):
-                marks.add(declaration[1])
+        marks.update(_folded_lines(path.read_text(encoding="utf-8").splitlines()))
+
+    for form in _rezono_forms(pack):
+        marks.update(_fold_marks_from_form(form))
     return marks
 
 
@@ -54,7 +141,11 @@ def _read_products(directory: Path, requires_rules: bool) -> tuple[dict, dict] |
 
 
 def _products(pack: Path) -> tuple[dict, dict]:
-    requires_rules = any((pack / "rules").rglob("*.dl"))
+    requires_rules = any((pack / "rules").rglob("*.dl")) or any(
+        _decl_has_rules(decl)
+        for form in _rezono_forms(pack)
+        for decl in (form.get("module") or {}).get("decls") or ()
+    )
     committed = _read_products(pack / "expected" / "compiled", requires_rules)
     if committed is not None:
         return committed

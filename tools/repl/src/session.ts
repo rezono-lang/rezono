@@ -66,6 +66,7 @@ export class Session {
 	private fetcher?: Promise<Fetch>;
 	private selected?: Pin;
 	private page?: Page;
+	private last?: Answer;
 	done = false;
 
 	constructor(connection: Connection, role: string, locked?: LockedPin, options: { pageSize?: number; rowSourceLimit?: number } = {}) {
@@ -78,6 +79,10 @@ export class Session {
 
 	get pin(): Pin | undefined {
 		return this.selected;
+	}
+
+	get lastAnswer(): Answer | undefined {
+		return this.last;
 	}
 
 	private fetch(): Promise<Fetch> {
@@ -93,6 +98,7 @@ export class Session {
 	}
 
 	async use(pack: string, chosen: string): Promise<Pin> {
+		this.last = undefined;
 		if (this.locked && this.locked.pack !== pack) throw new ReplError('publication does not match the locked pin');
 		const manifest = chosen === 'latest'
 			? await this.head(pack)
@@ -126,6 +132,7 @@ export class Session {
 		if (answer.format !== 'rezono.answer/1' || answer.manifest_id !== pin.manifest || !Array.isArray(answer.nodes))
 			throw new ReplError('gate returned an answer for a different publication or format');
 		this.page = answer.next || rowSource ? { pin, head, next: answer.next, request, rowSource } : undefined;
+		this.last = answer;
 		return answer;
 	}
 
@@ -195,6 +202,7 @@ export class Session {
 	}
 
 	async search(relation: string, prefix: string): Promise<string[]> {
+		this.last = undefined;
 		const pin = this.current();
 		const head = await this.head(pin.pack);
 		const query = new URLSearchParams({ starts: prefix, limit: '50' });
@@ -258,10 +266,12 @@ export class Session {
 	}
 
 	async exec(line: string): Promise<string[]> {
+		this.last = undefined;
 		try {
 			if (this.done) throw new ReplError('the session has ended');
 			return (await this.run(line)).map(terminalLine);
 		} catch (error) {
+			this.last = undefined;
 			return [`error: ${error instanceof ReplError ? error.message : 'gate request failed'}`];
 		}
 	}
