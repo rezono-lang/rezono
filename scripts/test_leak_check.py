@@ -13,12 +13,12 @@ PACK_NAME = "".join(("at", "las"))
 
 
 class LeakCheck(unittest.TestCase):
-    def run_check(self, files):
+    def run_check(self, files, budget="{}\n"):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
             subprocess.check_call(["git", "init", "-q"], cwd=root)
             (root / "scripts").mkdir()
-            (root / "scripts" / "leak-budget.json").write_text("{}\n")
+            (root / "scripts" / "leak-budget.json").write_text(budget)
             for name, text in files.items():
                 (root / name).write_text(text)
             subprocess.check_call(["git", "add", "-A"], cwd=root)
@@ -40,10 +40,61 @@ class LeakCheck(unittest.TestCase):
         self.assertIn("[redacted filename] old_name: observed=1 listed=0", result.stdout)
         self.assertNotIn(PACK_NAME, result.stdout.lower())
 
+    def test_budget_is_a_ceiling_that_may_fall(self):
+        # Two changes that each remove a finding from one file merge into fewer findings than listed: still green.
+        budget = '{"pack.yaml": {"old_name": 2}}\n'
+        result = self.run_check({"pack.yaml": f"pack: {PACK_NAME}\n"}, budget)
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertIn("pack.yaml old_name: observed=1 listed=2; lower the budget", result.stdout)
+        result = self.run_check({"pack.yaml": f"pack: {PACK_NAME}\nalso: {PACK_NAME}\nand: {PACK_NAME}\n"}, budget)
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("pack.yaml old_name: observed=3 listed=2", result.stdout)
+        self.assertNotIn(PACK_NAME, result.stdout.lower())
+
     def test_longer_words_are_not_findings(self):
         result = self.run_check({"pack.yaml": f"pack: {PACK_NAME}es x{PACK_NAME}\n"})
         self.assertEqual(result.returncode, 0, result.stdout)
         self.assertIn("old_name=0", result.stdout)
+
+
+class BranchName(unittest.TestCase):
+    def run_branch(self, branch):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            subprocess.check_call(["git", "init", "-q"], cwd=root)
+            (root / "scripts").mkdir()
+            (root / "scripts" / "leak-budget.json").write_text("{}\n")
+            subprocess.check_call(["git", "add", "-A"], cwd=root)
+            return subprocess.run(
+                [sys.executable, "-I", str(SCRIPT), "--branch", branch], cwd=root, capture_output=True, text=True
+            )
+
+    def test_names_after_a_subject_pass(self):
+        for branch in ("fix/scripts-leak_check.py", "fix/scripts-red_guard.py-pins", "fix/github-workflows-ci.yml",
+                       "fix/decisions-run-closed-month.md", "task/examples/platform/test_x.py--test_run_order",
+                       "note/compiler/tests/test_lower_reason.py--test_lower_reason", "golf1/planner-decision-heads",
+                       "test/std-access-oracle-trial", "dependabot/github_actions/actions-0984fe3082",
+                       "golf1/planner-runtime-kernel"):
+            with self.subTest(branch=branch):
+                result = self.run_branch(branch)
+                self.assertEqual(result.returncode, 0, result.stdout)
+                self.assertNotIn("branch ", result.stdout)
+
+    def test_a_stream_followed_by_a_number_is_refused(self):
+        for branch in ("golf1/planner-kern-67-error-codes", "golf1/planner-taal-48-reasons", "golf-2/subject",
+                       "fix/run-12-subject", "task/platform-62-capacity", "Kring-3-subject"):
+            with self.subTest(branch=branch):
+                result = self.run_branch(branch)
+                self.assertEqual(result.returncode, 1, result.stdout)
+                self.assertIn(f"branch {branch}: numbered_stream", result.stdout)
+
+    def test_a_stream_as_a_segment_of_its_own_is_refused(self):
+        for branch in ("golf1/planner-kern-std-table", "golf1/kern-ci-dedupe-impl", "kring-p14-keys",
+                       "subject/run/fix", "golf1/planner-platform-subject"):
+            with self.subTest(branch=branch):
+                result = self.run_branch(branch)
+                self.assertEqual(result.returncode, 1, result.stdout)
+                self.assertIn(f"branch {branch}: stream_segment", result.stdout)
 
 
 if __name__ == "__main__":

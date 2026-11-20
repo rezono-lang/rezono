@@ -1,10 +1,14 @@
 """Publish task and planner decisions through the real loop and decision libraries."""
+from pathlib import Path
+
 import pytest
+import yaml
 
 from rezono_canon import canonical_bytes, canonical_json, canonical_sha256
 from round_visibility_publication import observation_reference, pinned_evidence
 from test_build_selection import OBSERVED_AT, capture, published, repository
 
+ROOT = Path(__file__).resolve().parents[2]
 QUEUE_READER = "pull-listing"
 OPEN = [(number, "open", "ready", "main") for number in range(1, 31)]
 
@@ -47,6 +51,13 @@ def queue_members(numbers, base="main"):
     return [["queue-listing", base], *(["queue-pull", base, number] for number in numbers)]
 
 
+def _pull_number_is_text():
+    """Return True once BuildQueuePull.number uses string range to match verified_member part 2."""
+    schema = yaml.safe_load((ROOT / "build" / "schema" / "tasks.yaml").read_text(encoding="utf-8"))
+    slot = (schema.get("classes") or {}).get("BuildQueuePull", {}).get("attributes", {}).get("number") or {}
+    return slot.get("range", schema.get("default_range", "string")) == "string"
+
+
 def queue_listing(data, listing, pulls, *, observed_at=OBSERVED_AT, receipt=None, base="main"):
     """Record one submitted listing of the run with its `(number, state, draft, base)` pulls. `receipt` names the
     receipt the listing cites, if any; a cited receipt without a record is recorded at the listing's cut."""
@@ -56,9 +67,10 @@ def queue_listing(data, listing, pulls, *, observed_at=OBSERVED_AT, receipt=None
     })
     if receipt and all(row["id"] != receipt for row in data["loop_sweep_receipt"]):
         data["loop_sweep_receipt"].append({"id": receipt, "run": "current", "event_time": observed_at})
+    as_text = _pull_number_is_text()
     data.setdefault("build_queue_pull", []).extend(
-        {"id": f"{listing}-{number}", "listing": listing, "number": number, "state": state, "draft": draft,
-         "base": pull_base}
+        {"id": f"{listing}-{number}", "listing": listing, "number": str(number) if as_text else number,
+         "state": state, "draft": draft, "base": pull_base}
         for number, state, draft, pull_base in pulls
     )
 

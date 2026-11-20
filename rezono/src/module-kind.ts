@@ -1,4 +1,5 @@
 import { block, declaration, named, opt, printWorld, type Build, type Line, type Logical, type World, type ModuleComponent } from './module-support.ts';
+import { printDeprecated, type Deprecation } from './module-deprecation.ts';
 import { printDerived, readDerived, type DerivedDecl } from './module-derived.ts';
 import { key, printKey, type KeyDecl } from './module-key.ts';
 import { printMetadata, readMetadataLine, type Metadata } from './module-metadata.ts';
@@ -16,6 +17,7 @@ interface ConditionalCheckDecl extends Pick<Metadata, 'description'> {
 
 export interface KindDecl extends Metadata {
 	kind: string;
+	deprecated?: Deprecation;
 	embedded?: true;
 	abstract?: true;
 	relationship?: true;
@@ -88,19 +90,22 @@ function readExtension(line: Logical, build: Build): ExtendDecl {
 
 function printKind(d: KindDecl): string[] {
 	const parent = d.parent === undefined ? '' : ` is ${d.parent}`;
-	return block(`${d.embedded ? 'embedded ' : d.abstract ? 'abstract ' : ''}${d.relationship ? 'relationship ' : ''}kind ${d.kind}${parent}${printWorld(d.world)}`, [
-		...printMetadata(d),
-		...(d.applies ? [`applies ${d.applies.axis}: ${d.applies.slot}`] : []),
-		...(d.sealed !== undefined ? [`sealed at: ${d.sealed}`] : []),
-		...d.slots.flatMap(printSlot),
-		...(d.equations ?? []).map(printPathEquation),
-		...d.derived.flatMap(printDerived),
-		...(d.keys ?? []).map(printKey),
-		...(d.checks ?? []).flatMap(check => block(
-			`${check.check} ${check.name} when ${printExpr(check.when)} then ${printExpr(check.then)}`,
-			printMetadata(check)
-		))
-	]);
+	return [
+		...printDeprecated(d.deprecated),
+		...block(`${d.embedded ? 'embedded ' : d.abstract ? 'abstract ' : ''}${d.relationship ? 'relationship ' : ''}kind ${d.kind}${parent}${printWorld(d.world)}`, [
+			...printMetadata(d),
+			...(d.applies ? [`applies ${d.applies.axis}: ${d.applies.slot}`] : []),
+			...(d.sealed !== undefined ? [`sealed at: ${d.sealed}`] : []),
+			...d.slots.flatMap(printSlot),
+			...(d.equations ?? []).map(printPathEquation),
+			...d.derived.flatMap(printDerived),
+			...(d.keys ?? []).map(printKey),
+			...(d.checks ?? []).flatMap(check => block(
+				`${check.check} ${check.name} when ${printExpr(check.when)} then ${printExpr(check.then)}`,
+				printMetadata(check)
+			))
+		])
+	];
 }
 
 export const kind = {

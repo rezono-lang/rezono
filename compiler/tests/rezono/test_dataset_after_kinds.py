@@ -75,14 +75,6 @@ def gauges(directory):
     return {name: sorted(value) for name, value in rows.items() if name.startswith("gauge")}
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=MissingKindsBeforeDataset,
-    reason="M3: decisions/language-library-datasets.md: In compiler/rezono_compiler/rezono_module.py and "
-           "compiler/rezono_compiler/facts.py, lower the declarations before the dataset of a module like any "
-           "other module at its declared layer, and load the dataset's tables as its facts, instead of expecting "
-           "the dataset as the only declaration.",
-)
 def test_dataset_after_kinds(tmp_path, capsys):
     expected_dir = separate(tmp_path)
     expected_files = compile_dir(expected_dir, tmp_path / "out" / "separate")

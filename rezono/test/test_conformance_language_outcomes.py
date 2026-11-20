@@ -128,10 +128,9 @@ def test_language_compares_slot_read_cases():
 @pytest.mark.xfail(
     strict=True,
     raises=MissingLanguageOutcome,
-    reason="extra: Waits for a planner pull request, because the comparison is test code: compare the check and "
-           "question cases in QUESTIONS_AND_CHECKS in rezono/test/shared-conformance.test.ts, "
-           "each as a test named `shared conformance: <id>`, exactly as the comment above QUESTIONS_AND_CHECKS in "
-           "this file maps the language's results to their expectations. Read tests/conformance/README.md.",
+    reason="extra: rezono/test/shared-conformance.test.ts now compares the five QUESTIONS_AND_CHECKS cases as todo "
+           "while this mark stands; verify they pass (fixing rezono/src/ if any fails) and lift this mark. Read "
+           "tests/conformance/README.md.",
 )
 def test_language_compares_question_and_check_cases():
     cases = corpus()

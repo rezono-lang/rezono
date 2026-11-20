@@ -48,12 +48,6 @@ class SupportStatementRecordedTwice(AssertionError):
     pass
 
 
-@pytest.mark.xfail(strict=True, raises=SupportStatementRecordedTwice, reason=(
-    "M2: decisions/platform-vendor-support-statement.md: Publish published_series_support in "
-    "examples/platform/rules/kubernetes_support.dl from the registered product and the pinned series_support_source "
-    "statement alone. Remove the series_support_evidence rows from facts/kubernetes_support.yaml and the class from "
-    "schema/kubernetes_support.yaml, and give facts/kubernetes_support_source.sources.yaml a source that carries the "
-    "statement's page URL instead of acceptance/product-evidence.json."))
 def test_support_requires_each_independent_ground():
     model, program, (state,) = states(ROOT)
     support = _published_support()
