@@ -3,7 +3,7 @@
 import json
 import re
 from collections.abc import Iterator
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from fractions import Fraction
 from itertools import chain
@@ -21,6 +21,12 @@ if TYPE_CHECKING:
 RELATIONS = ("declared", "needed", "known", "waiting", "unblocked", "done", "stuck", "drift")
 INSTANT = re.compile(r"(\d{4}-\d\d-\d\d[Tt]\d\d:\d\d:\d\d)(?:\.(\d+))?([Zz]|[+-]\d\d:\d\d)")
 EPOCH = datetime(1970, 1, 1, tzinfo=timezone.utc)
+ARCHIVE_ROOT = "s3://rezono/"
+RETAINED_PREFIX = "observations/retained/"
+SUBMITTED_PREFIX = "observations/submitted/"
+KEY_SEGMENT = re.compile(r"[A-Za-z0-9._-]+")
+PLAN_HASH = re.compile(r"[0-9a-f]{64}")
+ATTEMPT_STATES = frozenset({"planned", "applying", "unknown", "applied", "failed", "cleaned"})
 TICK_COLUMNS = {
     "loop_observation": ("event_time",),
     "loop_sweep": ("event_time",),
@@ -145,6 +151,110 @@ def read_sweep(raw: list | dict, readers: set[str], expectations: set[str]) -> S
     return Sweep(events, receipt, dated)
 
 
+@dataclass(frozen=True)
+class AttemptRecord:
+    step: str
+    plan_hash: str
+    state: str
+
+
+@dataclass(frozen=True)
+class CertifiedRound:
+    run: str
+    cut: str
+    attempts: tuple[AttemptRecord, ...]
+
+
+def _admit_evidence(directory: Path, raw: object, model: "Pack", program: "Program") -> dict[str, list[tuple]]:
+    """Admit archived Evidence via rezono_checker.evidence.admit and return declared protected rows."""
+    from rezono_checker.evidence import Evidence, admit
+    from rezono_compiler import rules_dl
+
+    if not isinstance(raw, dict) or set(raw) not in ({"archive", "context"}, {"archive", "context", "index"}):
+        raise ValueError("evidence must contain archive, context and optional index")
+    archive_rel = raw["archive"]
+    if (not isinstance(archive_rel, str) or not archive_rel.strip()
+            or Path(archive_rel).anchor or ".." in Path(archive_rel).parts):
+        raise ValueError("evidence archive must be a relative directory inside the recording directory")
+    base_dir = directory.resolve()
+    archive_dir = (directory / archive_rel).resolve()
+    if not archive_dir.is_relative_to(base_dir) or not archive_dir.is_dir():
+        raise ValueError("evidence archive directory does not exist inside the recording directory")
+
+    context_ref = raw["context"]
+    if not isinstance(context_ref, dict) or not isinstance(context_ref.get("uri"), str):
+        raise ValueError("evidence context must be an archived-file reference")
+    if not context_ref["uri"].startswith(ARCHIVE_ROOT + RETAINED_PREFIX):
+        raise ValueError("evidence context must reside under observations/retained/")
+
+    index_ref = raw.get("index")
+    if index_ref is not None:
+        if not isinstance(index_ref, dict) or not isinstance(index_ref.get("uri"), str):
+            raise ValueError("evidence index must be an archived-file reference or null")
+        if not index_ref["uri"].startswith(ARCHIVE_ROOT + SUBMITTED_PREFIX):
+            raise ValueError("evidence index must reside under observations/submitted/")
+
+    def read_bytes(uri: str) -> bytes | None:
+        if not isinstance(uri, str) or not uri.startswith(ARCHIVE_ROOT):
+            return None
+        key = uri.removeprefix(ARCHIVE_ROOT)
+        if not key.startswith((RETAINED_PREFIX, SUBMITTED_PREFIX)):
+            return None
+        parts = key.split("/")
+        if not all(KEY_SEGMENT.fullmatch(part) and part not in (".", "..") for part in parts):
+            return None
+        target = (archive_dir / key).resolve()
+        if not target.is_relative_to(archive_dir) or not target.is_file():
+            return None
+        return target.read_bytes()
+
+    admitted = admit(Evidence(context_ref, index_ref, read_bytes))
+    protected = {name: admitted.rows.get(name, []) for name in sorted(rules_dl.PROTECTED) if name in program.relations}
+    base_tables = rules_dl.base_tables(model)
+    for name in protected:
+        key = [(col.name, col.type) for col in program.relations[name].key]
+        if name in base_tables or key != rules_dl.PROTECTED[name]:
+            raise ValueError(f"{name} is a protected admission input and must be declared with its fixed signature")
+    return protected
+
+
+def read_certified_rounds(raw: object, run: str, rounds: list[Sweep]) -> list[CertifiedRound]:
+    """Validate recorded certified-round cut bindings and attempt states against the observation rounds."""
+    if not isinstance(raw, list) or len(raw) != len(rounds):
+        raise ValueError("certified_rounds must provide one entry per observation round")
+    parsed: list[CertifiedRound] = []
+    for entry, sweep in zip(raw, rounds, strict=True):
+        if not isinstance(entry, dict) or set(entry) != {"run", "cut", "attempts"}:
+            raise ValueError("a certified round needs run, cut and attempts")
+        entry_run, cut, raw_attempts = entry["run"], entry["cut"], entry["attempts"]
+        if not isinstance(entry_run, str) or entry_run != run:
+            raise ValueError("certified round belongs to another run")
+        if not isinstance(cut, str) or not cut.strip():
+            raise ValueError("certified round requires a nonempty cut")
+        if sweep.receipt is None or sweep.receipt["run"] != run or sweep.receipt["id"] != cut:
+            raise ValueError(f"certified round cut {cut!r} does not match the sweep cut")
+        if not isinstance(raw_attempts, list):
+            raise ValueError("certified round attempts must be a list")
+        attempts: list[AttemptRecord] = []
+        seen_hashes: set[str] = set()
+        for item in raw_attempts:
+            if not isinstance(item, dict) or set(item) != {"step", "plan_hash", "state"}:
+                raise ValueError("an attempt needs step, plan_hash and state")
+            step, plan_hash, state = item["step"], item["plan_hash"], item["state"]
+            if not isinstance(step, str) or not step.strip():
+                raise ValueError("attempt step must be a nonempty string")
+            if not isinstance(plan_hash, str) or not PLAN_HASH.fullmatch(plan_hash):
+                raise ValueError("attempt plan_hash must be a lowercase SHA-256 digest")
+            if not isinstance(state, str) or state not in ATTEMPT_STATES:
+                raise ValueError(f"invalid attempt state {state!r}")
+            if plan_hash in seen_hashes:
+                raise ValueError(f"duplicate attempt plan_hash {plan_hash!r} in round cut {cut!r}")
+            seen_hashes.add(plan_hash)
+            attempts.append(AttemptRecord(step, plan_hash, state))
+        parsed.append(CertifiedRound(entry_run, cut, tuple(attempts)))
+    return parsed
+
+
 @dataclass
 class TypedRecording:
     run: str
@@ -154,6 +264,8 @@ class TypedRecording:
     records: dict
     rounds: list[Sweep]
     clock: RunClock | None = None
+    admitted: dict[str, list[tuple]] = field(default_factory=dict)
+    certified_rounds: list[CertifiedRound] | None = None
 
     def snapshots(self) -> Iterator[Snapshot]:
         from rezono_compiler import batch, facts, scenarios
@@ -175,8 +287,10 @@ class TypedRecording:
         for optional in ("fixed_point", "round_outcome"):
             if optional in self.program.derived():
                 relations.append(optional)
+        if self.certified_rounds is not None:
+            relations.extend(("ready", "step_safety_current_cut"))
         try:
-            for sweep in self.rounds:
+            for round_index, sweep in enumerate(self.rounds):
                 if sweep.dated is not None:
                     key = (sweep.dated["run"], sweep.dated["id"])
                     if sweeps.setdefault(key, sweep.dated) != sweep.dated:
@@ -210,7 +324,10 @@ class TypedRecording:
                     if observed.setdefault(key, row) != row:
                         raise ValueError(f"conflicting records for observation {row['id']!r}")
                 records["loop_observation"] = list(observed.values())
-                inputs = scenarios.rule_rows(self.model, self.program, facts.rows_of(self.model, records))
+                fact_rows = facts.rows_of(self.model, records)
+                if self.admitted:
+                    fact_rows = fact_rows | self.admitted
+                inputs = scenarios.rule_rows(self.model, self.program, fact_rows)
                 with batch.connect(self.program, inputs) as connection:
                     batch.compute(connection, self.program)
                     rows = batch.read(connection, self.program, relations)
@@ -222,7 +339,17 @@ class TypedRecording:
                     if len(outcomes) != 1 or not outcomes <= {"pending", "success", "failure"}:
                         raise ValueError(f"expected one round outcome for {self.run!r}, got {sorted(outcomes)}")
                     round_outcome = next(iter(outcomes))
-                yield Snapshot({row[1] for row in selected["declared"]}, selected["unblocked"],
+                if self.certified_rounds is not None:
+                    expected_cut = self.certified_rounds[round_index].cut
+                    current_cuts = {row[1] for row in selected["step_safety_current_cut"]}
+                    if current_cuts != {expected_cut}:
+                        raise ValueError(
+                            f"certified round cut {expected_cut!r} does not match current cut {sorted(current_cuts)}"
+                        )
+                    frontier_rows = selected["ready"]
+                else:
+                    frontier_rows = selected["unblocked"]
+                yield Snapshot({row[1] for row in selected["declared"]}, frontier_rows,
                                {row[1] for row in selected["done"]}, {row[1] for row in selected["stuck"]},
                                selected["drift"], selected.get("fixed_point", ()), round_outcome)
         except Diagnosed as error:
@@ -269,7 +396,7 @@ def typed_recording(directory: Path, data: dict) -> TypedRecording:
     if not isinstance(data["sweeps"], list):
         raise ValueError("sweeps must be an ordered list")
     rounds = []
-    if not isinstance(data["initial"], list) or data["records"].get("loop_sweep_receipt"):
+    if not isinstance(data["initial"], (list, dict)) or data["records"].get("loop_sweep_receipt"):
         raise ValueError("a sweep receipt must arrive with its observation round")
     identities = {}
     sweep_ids = set()
@@ -291,4 +418,13 @@ def typed_recording(directory: Path, data: dict) -> TypedRecording:
             if identities.setdefault(key, identity) != identity:
                 raise ValueError(f"conflicting observations with event ID {key[1]!r}")
         rounds.append(sweep)
-    return TypedRecording(data["run"], data["limit"], model, program, data["records"], rounds, clock)
+
+    admitted_rows = _admit_evidence(directory, data["evidence"], model, program) if "evidence" in data else {}
+    certified_rounds = None
+    if "certified_rounds" in data:
+        if not {"ready", "step_safety_current_cut"}.issubset(program.derived()):
+            raise ValueError("the loop theory lacks certified round relations")
+        certified_rounds = read_certified_rounds(data["certified_rounds"], data["run"], rounds)
+    return TypedRecording(
+        data["run"], data["limit"], model, program, data["records"], rounds, clock, admitted_rows, certified_rounds
+    )
