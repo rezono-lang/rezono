@@ -1,8 +1,8 @@
 import type { Node } from 'ohm-js';
 
-/** The 15 hard expression keywords reserved as bare identifiers in expression and declaration-name positions. */
+/** The 16 hard expression keywords reserved as bare identifiers in expression and declaration-name positions. */
 export const keywords = [
-	'when', 'then', 'else', 'unless', 'where', 'show',
+	'when', 'then', 'else', 'otherwise', 'unless', 'where', 'show',
 	'not', 'and', 'or', 'in', 'is', 'at', 'as', 'true', 'false'
 ] as const;
 

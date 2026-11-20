@@ -98,6 +98,7 @@ function rebuild(e: Expr, levels: Levels, kindOf: (e: Expr) => string | undefine
 	if ('or' in e) return { or: sorted(e.or.map((x) => at(x))) };
 	if ('not' in e) return { not: at(e.not) };
 	if ('imply' in e) return { imply: [at(e.imply[0]), at(e.imply[1])] };
+	if ('otherwise' in e) return { otherwise: [at(e.otherwise[0]), at(e.otherwise[1])] };
 	if ('arith' in e) return { arith: [e.arith[0], at(e.arith[1]), at(e.arith[2])] };
 	if ('neg' in e) return { neg: at(e.neg) };
 	if ('when' in e) return { when: [at(e.when[0]), at(e.when[1]), at(e.when[2])] };

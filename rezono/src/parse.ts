@@ -136,6 +136,9 @@ semantics.addOperation<unknown>('tree', {
 	Cond(_when, c, _then, a, _else, b) {
 		return placed(this, { when: [c.tree(), a.tree(), b.tree()] } as Expr);
 	},
+	Otherwise_otherwise(a, _op, b) {
+		return placed(this, { otherwise: [a.tree(), b.tree()] } as Expr);
+	},
 	Imply_imply(a, _op, b) {
 		return placed(this, { imply: [a.tree(), b.tree()] } as Expr);
 	},

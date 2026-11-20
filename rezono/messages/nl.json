@@ -44,6 +44,7 @@
 	"W112": "`table {0}` in `{1}`: geen rij geldt als `{2}`; daar is het onbekend (`no_row_applies`)",
 	"W113": "`{0}` `{1}` heeft geen herkomst: alleen het bestand en de regel noemen het; geef het een `@`-bron, een `decide`-blok, een `Decision` waaraan het gebonden is, of een regel in zijn `.sources.yaml` (soort `synthetic` voor gegenereerde voorbeelddata)",
 	"W114": "`{0}` schrijft de standaardwaarde",
+	"W115": "`{0} is known` in `unless` slaat `invalid`-waarden van `{0}` over",
 	"hint.leave_out": "laat dit weg",
 	"hint.question_as_known": "schrijf `{0}` om te kiezen wat de vraag weet",
 	"hint.question_at": "schrijf `{0}` om de datum van de vraag te kiezen",
