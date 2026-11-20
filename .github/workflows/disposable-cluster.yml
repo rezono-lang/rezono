@@ -111,12 +111,14 @@ jobs:
           || contains(fromJSON(inputs.tasks || '[]'), 'loop/tests/test_shared_admission_handoff.py--test_shared_admission_handoff')
           || contains(fromJSON(inputs.tasks || '[]'), 'k8s-admission/test_server_release.py--test_reconciled_admission_release_on_the_api_server')
           || contains(fromJSON(inputs.tasks || '[]'), 'loop/tests/test_live_network_pairs.py--test_live_network_pairs')
+          || contains(fromJSON(inputs.tasks || '[]'), 'loop/tests/test_startup_safe_rounds_live.py--test_startup_safe_rounds_live')
         shell: bash
         run: bash loop/cluster/prepare-admission.sh
       - name: Record the fixture network pairs
         if: >-
           inputs.tasks == ''
           || contains(fromJSON(inputs.tasks || '[]'), 'loop/tests/test_live_network_pairs.py--test_live_network_pairs')
+          || contains(fromJSON(inputs.tasks || '[]'), 'loop/tests/test_startup_safe_rounds_live.py--test_startup_safe_rounds_live')
         shell: bash
         run: |
           set -euo pipefail

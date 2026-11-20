@@ -11,14 +11,14 @@ from math import lcm
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from loop.replay import Snapshot
+from loop.replay import Snapshot, snapshot_from_rows
 
 if TYPE_CHECKING:
     from rezono_compiler.pack import Pack
     from rezono_compiler.rules import Program
 
 
-RELATIONS = ("declared", "needed", "known", "waiting", "unblocked", "done", "stuck", "drift")
+RELATIONS = ("declared", "needed", "known", "waiting", "unblocked", "done", "stuck", "drift", "round_outcome")
 INSTANT = re.compile(r"(\d{4}-\d\d-\d\d[Tt]\d\d:\d\d:\d\d)(?:\.(\d+))?([Zz]|[+-]\d\d:\d\d)")
 EPOCH = datetime(1970, 1, 1, tzinfo=timezone.utc)
 ARCHIVE_ROOT = "s3://rezono/"
@@ -289,9 +289,8 @@ class TypedRecording:
         clock = self.clock
         arrived: list[tuple[Event, Fraction]] = []
         relations = list(RELATIONS)
-        for optional in ("fixed_point", "round_outcome"):
-            if optional in self.program.derived():
-                relations.append(optional)
+        if "fixed_point" in self.program.derived():
+            relations.append("fixed_point")
         if self.certified_rounds is not None:
             relations.extend(("ready", "step_safety_current_cut"))
         try:
@@ -352,12 +351,6 @@ class TypedRecording:
                     rows = batch.read(connection, self.program, relations)
                 selected = {name: {row for row in relation if row[0] == self.run}
                             for name, relation in rows.items()}
-                round_outcome = None
-                if "round_outcome" in selected:
-                    outcomes = {row[1] for row in selected["round_outcome"]}
-                    if len(outcomes) != 1 or not outcomes <= {"pending", "success", "failure"}:
-                        raise ValueError(f"expected one round outcome for {self.run!r}, got {sorted(outcomes)}")
-                    round_outcome = next(iter(outcomes))
                 if self.certified_rounds is not None:
                     expected_cut = self.certified_rounds[round_index].cut
                     current_cuts = {row[1] for row in selected["step_safety_current_cut"]}
@@ -365,12 +358,10 @@ class TypedRecording:
                         raise ValueError(
                             f"certified round cut {expected_cut!r} does not match current cut {sorted(current_cuts)}"
                         )
-                    frontier_rows = selected["ready"]
+                    frontier_relation = "ready"
                 else:
-                    frontier_rows = selected["unblocked"]
-                yield Snapshot({row[1] for row in selected["declared"]}, frontier_rows,
-                               {row[1] for row in selected["done"]}, {row[1] for row in selected["stuck"]},
-                               selected["drift"], selected.get("fixed_point", ()), round_outcome)
+                    frontier_relation = "unblocked"
+                yield snapshot_from_rows(self.run, selected, frontier_relation=frontier_relation)
         except Diagnosed as error:
             raise ValueError(str(error)) from error
 
