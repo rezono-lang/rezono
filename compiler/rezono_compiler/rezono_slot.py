@@ -20,7 +20,7 @@ def builtin_range(name: str, declared: bool) -> str | None:
     return BUILTIN_RANGES.get(name)
 
 
-def constraint_facets(slot: dict, range_name: str | None) -> dict[str, str | int | bool]:
+def constraint_facets(slot: dict, is_integer: bool) -> dict[str, str | int | bool]:
     """Keep the written pattern and let the pack loader validate it as a LinkML facet."""
     facets: dict[str, str | int | bool] = {}
     constraints = slot["constraints"]
@@ -40,11 +40,11 @@ def constraint_facets(slot: dict, range_name: str | None) -> dict[str, str | int
                 raise ValueError("an identifier cannot be multivalued")
             return facets
         constraints = bounds
-    facets.update(bound_facets(slot, range_name, constraints))
+    facets.update(bound_facets(slot, is_integer, constraints))
     return facets
 
 
-def bound_facets(slot: dict, range_name: str | None, constraints: object) -> dict[str, int | bool]:
+def bound_facets(slot: dict, is_integer: bool, constraints: object) -> dict[str, int | bool]:
     """Resolve the authored bounds for a list or a single integer value."""
     card = slot.get("card", "?")
     explicit = slot.get("identifier") is True
@@ -55,7 +55,7 @@ def bound_facets(slot: dict, range_name: str | None, constraints: object) -> dic
         if explicit:
             raise ValueError("a bounded list cannot be an identifier")
         return facets
-    if range_name != "integer" or explicit or card != "?":
+    if not is_integer or explicit or card != "?":
         raise ValueError("integer limits need an Int slot that is single-valued and is not an identifier")
     return rezono_numeric_limits.lower(constraints)
 
@@ -144,7 +144,9 @@ def inverse_points_back(slot: dict, kind: str, here: str, kinds: Mapping[str, li
 def validate(slots: list, kind: str, at: str, own: Mapping[str, str], owners: Mapping[str, list[str]],
              uses: set[str], refuse: Refuse, *, extended: bool = False, open_kind: bool = False,
              aliases: Mapping[str, Mapping[str, list[str]]] | None = None,
-             kinds: Mapping[str, list] | None = None) -> bool:
+             kinds: Mapping[str, list] | None = None,
+             integer_types: Mapping[str, Set[str]] | None = None,
+             own_module: str = "") -> bool:
     """Check slot forms and resolve references against all the modules of the pack."""
     ok = True
     seen: set[str] = set()
@@ -208,21 +210,31 @@ def validate(slots: list, kind: str, at: str, own: Mapping[str, str], owners: Ma
         if "inverse" in slot and not inverse_points_back(slot, kind, here, kinds or {}, own, owners, refuse):
             ok = False
         name = slot["type"]
+        ints = integer_types or {}
         if "." in name:
+            resolved = resolve_prefixed(name, aliases, here, refuse)
+            if resolved is None:
+                ok = False
             if has_constraints:
+                prefix, _, local = name.partition(".")
+                targets = (aliases or {}).get(prefix, {}).get(local, [])
+                is_integer = len(targets) == 1 and local in ints.get(targets[0], ())
                 try:
-                    constraint_facets(slot, None)
+                    constraint_facets(slot, is_integer)
                 except ValueError as error:
                     refuse(here, str(error), "§5.1")
                     ok = False
-            if resolve_prefixed(name, aliases, here, refuse) is None:
-                ok = False
             continue
         found = owners.get(name, [])
         range_name = builtin_range(name, name in own or bool(found))
+        is_integer = (
+            range_name == "integer"
+            or (name in own and name in ints.get(own_module, ()))
+            or (len(found) == 1 and name in ints.get(found[0], ()))
+        )
         if has_constraints:
             try:
-                constraint_facets(slot, range_name)
+                constraint_facets(slot, is_integer)
             except ValueError as error:
                 refuse(here, str(error), "§5.1")
                 ok = False
