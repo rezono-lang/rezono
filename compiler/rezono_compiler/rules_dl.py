@@ -87,6 +87,16 @@ class ProtectedTable(RuleError, Diagnosed):
         Diagnosed.__init__(self, "\n".join(messages), tuple(Diagnostic(self.CODE, message) for message in messages))
 
 
+class PersonalSlotError(RuleError, Diagnosed):
+    """A rule reads a slot marked `personal` (decisions/personal-data-handling.md, R054)."""
+    CODE = "R054"
+
+    def __init__(self, items: list[tuple[str, str, tuple[str, int, int] | None]]):
+        messages = [message for message, _, _ in items]
+        diags = tuple(Diagnostic(self.CODE, message, where=where, span=span) for message, where, span in items)
+        Diagnosed.__init__(self, "\n".join(messages), diags)
+
+
 @dataclass(frozen=True)
 class Embedded:
     """Rule text placed at its original source lines and columns."""
@@ -675,6 +685,8 @@ def read(pack, pack_dir: Path, imports=None, renames=None, *, calc_inputs=None, 
         count[head[0]] = count.get(head[0], 0) + 1
     seen, used = {}, set()
     relations, rules = {}, []
+    personal_tables = {s.table: s.element for kind in pack.kinds.values() for s in kind.slots.values() if s.personal}
+    personal_errors: list[tuple[str, str, tuple[str, int, int] | None]] = []
     for module, where, head, body, line, source, column in rules_src:
         rel = head[0]
         if rel not in decls:
@@ -699,7 +711,14 @@ def read(pack, pack_dir: Path, imports=None, renames=None, *, calc_inputs=None, 
             continue
         accessible = set(renames.get(source, {}).values())
         atoms = [head] + [s[-1] for s in body if s[0] in ("lit", "agg")]
-        for n, _, _ in atoms:
+        for n, _, atom_line in atoms:
+            if n in personal_tables:
+                personal_errors.append((
+                    f"{where}:{atom_line}: rule cannot read personal slot `{personal_tables[n]}` ({n}) (R054); "
+                    "personal slots live outside the reasoning layer so discarding a person's key erases their data",
+                    f"{where}:{atom_line}",
+                    (where, atom_line, 1),
+                ))
             if n in decls and declared_in[n] not in visible[source]:
                 errors.append(f"{where}:{line}: {source} does not import the owner of {n}")
             if n in calc_inputs and not visible[source].intersection(givers.get(n, [root])):
@@ -720,6 +739,8 @@ def read(pack, pack_dir: Path, imports=None, renames=None, *, calc_inputs=None, 
             spans[rid] = (where, line, column)
         for a in [rule["head"], *rule["body"], *rule.get("aggregates", [])]:
             used.add(a["relation"])
+    if personal_errors:
+        raise PersonalSlotError(personal_errors)
     used |= {k for k in outcomes.values() if k in tables}  # totality reads every element of the kind
     for name in sorted(used):
         if name in decls:

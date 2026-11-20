@@ -29,6 +29,7 @@ export interface PredicateSummary {
 // A derived relation names the owner it was linked for, so its predicate summary can be matched against it.
 type Signature = {
 	columns: Column[]; world: World; absence?: true;
+	personal?: boolean;
 	predicate?: PredicateSummary;
 } & ({ role: 'input'; owner?: string } | { role: 'derived'; owner: string });
 
@@ -222,6 +223,7 @@ class ClauseCheck {
 		return {
 			columns: [{ name: 'subject', type: owner }, { name: member, type: slot.ref ?? slot.type ?? 'Text' }],
 			world: slot.world ?? kind.world,
+			...(slot.personal ? { personal: true } : {}),
 			role: 'input',
 		};
 	}
@@ -255,6 +257,7 @@ class ClauseCheck {
 		const [name, terms] = call;
 		const signature = this.relation(name);
 		if (!signature) refuse('R001', at, name);
+		if (signature.personal) refuse('R054', at, name);
 		this.arity(name, terms.length, signature, at);
 		terms.forEach((term, index) => {
 			const pointer = at + '/call/1/' + index;
@@ -496,6 +499,7 @@ class ClauseCheck {
 			}
 			if (!Object.hasOwn(kind.slots, member)) refuse('R001', at, member);
 			const slot = kind.slots[member];
+			if (slot.personal) refuse('R054', at, `${type}.${member}`);
 			type = slot.ref ?? slot.type ?? 'Text';
 			set ||= slot.card === '*' || slot.card === '+';
 		}

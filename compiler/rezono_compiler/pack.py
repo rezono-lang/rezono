@@ -24,7 +24,7 @@ from . import rezono_reason
 LAYERS = ("source", "facts", "conclusions", "plan", "output", "observation")
 # Annotations the compiler reads now, or in a later milestone (then ignored without warning).
 ANNOTATIONS = {"layer", "path_equations", "outcome", "explain", "invariants", "seal", "sealed_with", "world", "explore",
-               "currency", "plane", "owner", "renamed_from", "input_format"}
+               "currency", "plane", "owner", "renamed_from", "input_format", "personal"}
 CURRENCY = re.compile(r"^[A-Z]{3}$")  # ISO 4217
 CLASS = re.compile(r"[a-z][a-z0-9]*(-[a-z0-9]+)*")  # a pack's class (pack.yaml, SO-5), as contracts/pack.yaml says
 # What a missing row means: closed, not true; open, unknown.
@@ -114,6 +114,7 @@ class Slot:
     role: str | None = None  # S26: the recognised role of slot_uri, independent of the slot's name
     span: tuple | None = None  # MOD2: where it is declared (spans.py)
     renamed_from: str | None = None  # MOD2: annotation `renamed_from`, its first name, which its stable id keeps
+    personal: bool = False  # decisions/personal-data-handling.md: excluded from rules, calculations and public roles
 
     @property
     def table(self) -> str:
@@ -660,6 +661,9 @@ def read(pack_dir: str | Path) -> Pack:
         warnings += [f"{m.rel}: unknown annotation '{t}'" for t in tags(sv.schema) if t not in ANNOTATIONS]
         if "world" in tags(sv.schema):
             errors.append(f"{m.rel}: world goes on a class or a slot, not on a schema")
+        if "personal" in tags(sv.schema):
+            errors.append(diagnostics.Diagnostic("invalid_personal_annotation",
+                                                 f"{m.rel}: personal goes on an attribute slot, not on a schema"))
         for cname in sorted(sv.all_classes(imports=False)):
             c = sv.get_class(cname, imports=False)
             k = names.name(m.id, cname)
@@ -672,6 +676,9 @@ def read(pack_dir: str | Path) -> Pack:
             if c.extra_slots is not None and c.extra_slots.allowed is not False:
                 errors.append(f"class {cname}: extra_slots (an open structure) is not supported yet")
             warnings += [f"class {cname}: unknown annotation '{t}'" for t in tags(c) if t not in ANNOTATIONS]
+            if "personal" in tags(c):
+                errors.append(diagnostics.Diagnostic("invalid_personal_annotation",
+                                                     f"class {cname}: personal goes on an attribute slot, not on a class"))
             layer = ann(c, "layer", default_layer)
             if layer not in LAYERS:
                 errors.append(f"class {cname}: layer must be one of {LAYERS}, not {layer!r}")
@@ -777,6 +784,9 @@ def read(pack_dir: str | Path) -> Pack:
                 errors.append(f"{where}: input_format goes on a text attribute, not on an identifier")
             if s.identifier and "explore" in tags(s):
                 errors.append(f"{where}: explore goes on a slot of whole numbers, not on an identifier")
+            if s.identifier and "personal" in tags(s):
+                errors.append(diagnostics.Diagnostic("invalid_personal_annotation",
+                                                     f"{where}: personal goes on an attribute slot, not on an identifier"))
             if s.name not in inherited:  # an inherited slot is checked where it is declared
                 errors += [f"{where}: '{f}' is not supported yet" for f in UNSUPPORTED if getattr(s, f, None)]
             if s.name in inherited:
@@ -813,6 +823,9 @@ def read(pack_dir: str | Path) -> Pack:
                     errors.append(f"{where}: a pattern applies to text and enums, not to an arrow")
                 if "explore" in tags(s):
                     errors.append(f"{where}: explore goes on a slot of whole numbers, not on an arrow")
+                if "personal" in tags(s):
+                    errors.append(diagnostics.Diagnostic("invalid_personal_annotation",
+                                                         f"{where}: personal goes on a scalar attribute, not on an arrow"))
             elif is_enum:
                 slot.enum = slot.range = names.resolve(m.id, rng, owner=slot_owner)
                 slot.patterns = patterns(target_sv, s, rng, where, errors)  # enum values are text
@@ -839,6 +852,13 @@ def read(pack_dir: str | Path) -> Pack:
                     errors.append(f"{where}: input_format goes on a text attribute")
                 else:
                     slot.input_format = form
+            if not slot.arrow and "personal" in tags(s):
+                raw_personal = plain(ann(s, "personal"))
+                if type(raw_personal) is not bool:
+                    errors.append(diagnostics.Diagnostic("invalid_personal_annotation",
+                                                         f"{where}: personal must be a boolean, not {raw_personal!r}"))
+                else:
+                    slot.personal = raw_personal
             cardinality(slot, s, where, errors)
             constant(slot, s, where, errors)
             slot.role = slot_role(sv, s)
@@ -852,6 +872,16 @@ def read(pack_dir: str | Path) -> Pack:
                                 or slot.type.base != SLOT_ROLE_TYPES[slot.role]):
                 want = {types.STRING: "text", types.INTEGER: "whole-number", types.DATE: "date"}[SLOT_ROLE_TYPES[slot.role]]
                 errors.append(f"{where}: role {slot.role} is one {want} value, not an arrow, enum or list")
+            if slot.personal:
+                if "explore" in tags(s) or slot.explore is not None:
+                    errors.append(diagnostics.Diagnostic("personal_slot_disallowed",
+                                                         f"{where}: a personal slot cannot be swept with explore"))
+                if slot.constant is not None:
+                    errors.append(diagnostics.Diagnostic("personal_slot_disallowed",
+                                                         f"{where}: a personal slot cannot have a public constant"))
+                if slot.names:
+                    errors.append(diagnostics.Diagnostic("personal_slot_disallowed",
+                                                         f"{where}: a personal slot cannot be the rdfs:label name attribute"))
             kind.slots[s.name] = slot
         kind.slots = dict(sorted(kind.slots.items()))
         for kname, uk in sorted((c.unique_keys or {}).items()):
@@ -1403,6 +1433,9 @@ def seals(pack: Pack, errors: list[str]) -> list[Seal]:
             errors.append(f"{where}: the closing fact itself cannot be sealed")
         elif not single(period, "DATE"):
             errors.append(f"{where} names the period: one required, single date slot of {kind.cls}, not {kind.seal!r}")
+        elif period.personal:
+            errors.append(diagnostics.Diagnostic("personal_slot_disallowed",
+                                                 f"{where}: personal slot {period.element} cannot participate in a seal"))
         else:
             out.append(Seal(k, period))
     if len(out) > 1:
@@ -1433,6 +1466,14 @@ def seals(pack: Pack, errors: list[str]) -> list[Seal]:
     # that membership of a subkind is part of the row a close holds.
     s.tables = family_tables(pack, s.kind)
     s.parts = parts(pack, s, errors)
+    for sealed_kind in [s.kind, *(p.kind for p in s.parts)]:
+        for k_in_fam in [fk for fk in pack.kinds if pack.root(fk) == sealed_kind]:
+            for slot_in_fam in pack.kinds[k_in_fam].slots.values():
+                if slot_in_fam.personal:
+                    errors.append(diagnostics.Diagnostic(
+                        "personal_slot_disallowed",
+                        f"class {pack.kinds[k_in_fam].cls}: personal slot {slot_in_fam.element} cannot participate in a seal",
+                    ))
     return out
 
 
@@ -1637,8 +1678,14 @@ def check(pack: Pack, errors: list[str]) -> None:
             s.sql_type = pack.kinds[pack.root(s.range)].id_type
         for name, slots in kind.unique_keys:
             for sn in slots:
-                if pack.slot(kind.name, sn) is None:
+                uk_slot = pack.slot(kind.name, sn)
+                if uk_slot is None:
                     errors.append(f"{kind.cls} unique key {name}: unknown slot {sn}")
+                elif uk_slot.personal:
+                    errors.append(diagnostics.Diagnostic(
+                        "personal_slot_disallowed",
+                        f"{kind.cls} unique key {name}: personal slot {sn} cannot participate in a unique_key",
+                    ))
         for name, left, right in kind.path_equations:
             ends = [path_end(pack, kind.name, p, f"{kind.cls} path equation {name}", errors) for p in (left, right)]
             if None not in ends and pack.root(ends[0]) != pack.root(ends[1]):
@@ -1676,6 +1723,13 @@ def condition(pack: Pack, kind: Kind, rule: ClassRule, c: Condition, errors: lis
     s = pack.slot(kind.name, c.slot)
     if s is None:
         errors.append(f"{where}: not a slot of {kind.name} (the identifier cannot be a condition)")
+        return
+    if s.personal:
+        errors.append(diagnostics.Diagnostic(
+            "R054",
+            f"{where}: rule cannot read personal slot `{s.element}` (R054); "
+            "personal slots live outside the reasoning layer so discarding a person's key erases their data",
+        ))
         return
     f = c.facets
     if ("equals_string" in f or "pattern" in f) and (s.arrow or s.sql_type != "VARCHAR"):

@@ -36,6 +36,7 @@
 	"R050": "`{0}` cannot be lowered to a calculation",
 	"R051": "`{0}` is observed: declare `world open`, and `complete by` the scope in which it is complete",
 	"R053": "`{0}` `{1}` has no origin, and a `rezono 1` pack refuses a fact without one; give it an `@` citation, a `decide` block, a `Decision` it is bound to, or an entry in its `.sources.yaml` (kind `synthetic` for generated example data)",
+	"R054": "rule cannot read personal slot `{0}`; personal slots live outside the reasoning layer so discarding a person's key erases their data",
 	"W105": "`{0}` may be unknown; unknown values print with their reason",
 	"W106": "no `rezono` line; read as `rezono 0`",
 	"W107": "`{0}` is deprecated",

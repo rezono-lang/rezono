@@ -249,6 +249,12 @@ class Schema:
         else:
             raise Refusal("R001", f"{authored} has no slot {name!r}", at)
         slot = pack.own_class_slot(owner_mod.sv, kind, name)
+        if pack.ann(slot, "personal") is True:
+            raise Refusal(
+                "R054",
+                f"rule cannot read personal slot `{owner}.{name}`; personal slots live outside the reasoning layer so discarding a person's key erases their data",
+                at,
+            )
         if slot.identifier:
             scalar = "Int" if self.storage(subject, at) == "integer" else "Text"
             return (None, scalar), False

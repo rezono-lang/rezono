@@ -929,6 +929,7 @@ classes:
       card: {range: Card}
       inverse: {range: Name}
       world: {range: World}
+      personal: {range: boolean, description: "Present as true when the slot holds personal data (decisions/personal-data-handling.md)."}
 
   Slot:
     description: A slot with no written constraints.

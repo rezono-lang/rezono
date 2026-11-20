@@ -19,6 +19,7 @@ export interface SlotDef {
 	states: StateName[];
 	world?: World;
 	derived?: boolean;
+	personal?: boolean;
 	inverse?: string;
 	min?: string;
 	max?: string;

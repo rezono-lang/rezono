@@ -127,6 +127,8 @@ def lower(slots: list[dict], declared: Set[str], *, implicit_identifier: bool = 
             attribute["inlined"] = True
         if slot.get("world") == "open":
             attribute.setdefault("annotations", {})["world"] = "open"
+        if slot.get("personal") is True:
+            attribute.setdefault("annotations", {})["personal"] = True
         if "inverse" in slot:
             attribute["inverse"] = slot["inverse"]
         out[slot["slot"]] = attribute
@@ -171,7 +173,7 @@ def validate(slots: list, kind: str, at: str, own: Mapping[str, str], owners: Ma
     ok = True
     seen: set[str] = set()
     identifier_seen = False
-    allowed = (MEMBERS | {"identifier", "slotUri", "constraints", "embedded", "world"} | rezono_metadata.FIELDS
+    allowed = (MEMBERS | {"identifier", "slotUri", "constraints", "embedded", "world", "personal"} | rezono_metadata.FIELDS
                if extended else MEMBERS)
     for index, slot in enumerate(slots):
         here = f"{at}/slots/{index}"
@@ -191,11 +193,21 @@ def validate(slots: list, kind: str, at: str, own: Mapping[str, str], owners: Ma
         seen.add(slot["slot"])
         explicit = slot.get("identifier") is True
         embedded = slot.get("embedded") is True
+        personal = slot.get("personal") is True
         if "embedded" in slot and not embedded:
             refuse(here, "an embedded reference must be marked true", "§5.1")
             ok = False
         if "identifier" in slot and not explicit:
             refuse(here, "an explicit identifier must be marked true", "§5.1")
+            ok = False
+        if "personal" in slot and not personal:
+            refuse(here, "a personal slot must be marked true", "§5.1")
+            ok = False
+        if personal and explicit:
+            refuse(here, "an identifier cannot be marked personal", "§5.1")
+            ok = False
+        if personal and embedded:
+            refuse(here, "an embedded reference cannot be marked personal", "§5.1")
             ok = False
         if "world" in slot:
             # The pack loader keeps the world of an identifier on its kind and an open kind's slots open.

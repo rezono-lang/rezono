@@ -15,6 +15,7 @@ export interface SlotDecl extends Metadata {
 	world?: World;
 	identifier?: true;
 	embedded?: true;
+	personal?: true;
 	slotUri?: string;
 	constraints?: SlotConstraint[];
 }
@@ -63,7 +64,7 @@ function printInverse(inverse: string): string {
 }
 
 export function printSlot(s: SlotDecl): string[] {
-	return block(`${spellName(s.slot)}: ${s.type}${s.card ?? ''}${s.inverse !== undefined ? ` inverse ${printInverse(s.inverse)}` : ''}${printWorld(s.world)}${s.identifier ? ' identifier' : ''}${s.embedded ? ' embedded' : ''}`, [
+	return block(`${spellName(s.slot)}: ${s.type}${s.card ?? ''}${s.inverse !== undefined ? ` inverse ${printInverse(s.inverse)}` : ''}${printWorld(s.world)}${s.identifier ? ' identifier' : ''}${s.embedded ? ' embedded' : ''}${s.personal ? ' personal' : ''}`, [
 		...(s.slotUri === undefined ? [] : [`iri ${JSON.stringify(s.slotUri)}`]),
 		...printMetadata(s),
 		...(s.constraints ?? []).map(printConstraint)
@@ -73,7 +74,7 @@ export function printSlot(s: SlotDecl): string[] {
 export const slot = {
 	lineRules: ['SlotLine', 'CardinalityLine', ...slotPattern.lineRules],
 	grammar: String.raw`
-  SlotLine = rName ":" SlotType Card? (kw<"inverse"> InverseTarget)? World? kw<"identifier">? kw<"embedded">?
+  SlotLine = rName ":" SlotType Card? (kw<"inverse"> InverseTarget)? World? kw<"identifier">? kw<"embedded">? kw<"personal">?
   InverseTarget = typeName "." rName  -- qualified
                 | rName               -- local
   SlotType = (name ".")? Type
@@ -84,13 +85,14 @@ export const slot = {
   `,
 	actions: {
 		...slotPattern.actions,
-		SlotLine(n, _c, type, card, _inverse, inverse, world, identifier, embedded) {
+		SlotLine(n, _c, type, card, _inverse, inverse, world, identifier, embedded, personal) {
 			const decl: Line = { line: 'slot', slot: readRuleName(n), type: typeOf(type) };
 			if (card.numChildren) decl.card = opt(card);
 			if (inverse.numChildren) decl.inverse = inverse.child(0).decl() as string;
 			if (world.numChildren) decl.world = world.child(0).decl();
 			if (identifier.numChildren) decl.identifier = true;
 			if (embedded.numChildren) decl.embedded = true;
+			if (personal.numChildren) decl.personal = true;
 			return named(n, decl);
 		},
 		InverseTarget_qualified: (kind, _dot, name) => `${kind.sourceString}.${readRuleName(name)}`,
