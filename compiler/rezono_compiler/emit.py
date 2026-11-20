@@ -649,7 +649,9 @@ def rule_bundle(pack: Pack, prog) -> tuple[list, list]:
                           "world": r.world, "absence": True if r.absence else None, "outcome": r.outcome,
                           "extend": True if r.extend else None, "closes": r.closes,
                           "checks": [v for v, _ in rules_sql.checks(prog, n)] or None,
-                          "fold": True if n in folds else None})
+                          "fold": True if n in folds else None,
+                          "kind": getattr(r, "kind", None),
+                          "property": getattr(r, "property", None)})
                  for n, r in sorted(prog.relations.items()) if r.role == "derived"]
     return rules, relations
 
@@ -744,7 +746,9 @@ def bundle(pack: Pack, checks, prog=None, calc_prog=None) -> dict:
     return {
         "format": "rezono.schema-bundle/1",
         "pack": present({"id": pack.meta["name"], "version": pack.meta["version"],
-                         "default_language": pack.meta["default_language"], "base": pack.iri.get("base")}),
+                         "default_language": pack.meta["default_language"],
+                         "language_version": pack.language_version,
+                         "base": pack.iri.get("base")}),
         "imports": pack.imports,
         "schemas": pack.schemas,
         "layers": list(LAYERS),

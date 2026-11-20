@@ -263,6 +263,7 @@ class Pack:
     units: dict[str, types.Unit] = field(default_factory=dict)
     acceptance_questions: list[AcceptanceQuestion] = field(default_factory=list)  # own source inventory
     intermediate_invariants: tuple[IntermediateInvariant, ...] = ()
+    language_version: str = "0"
 
     def ancestors(self, kind: str) -> list[str]:
         """The kind itself, then its parent, up to the root."""
@@ -745,6 +746,9 @@ def read(pack_dir: str | Path) -> Pack:
         if "owner" in tags(c):
             kind.owner = plain(ann(c, "owner"))
 
+    pack_language_version = rezono_module.pack_language_version(
+        m.form for m in mods if m.pack_dir == pack_dir and m.form is not None
+    )
     pack = Pack({"name": meta["name"], "version": str(meta["version"]), "default_language": meta["default_language"],
                  "theory": is_theory},
                 [{"name": m.sv.schema.name, "id": m.sv.schema.id, "file": m.rel, "module": m.id, "pack": m.pack}
@@ -752,7 +756,8 @@ def read(pack_dir: str | Path) -> Pack:
                  if m.form is None or "schema" in m.form["module"]
                  or m.sv.schema.classes or m.sv.schema.enums or m.sv.schema.types],
                 dict(sorted(kinds.items())), dict(sorted(enums.items())), warnings=warnings, units=declared,
-                imports=[{"name": p.name, "version": p.version, "sha256": p.sha256} for p in packs.values()])
+                imports=[{"name": p.name, "version": p.version, "sha256": p.sha256} for p in packs.values()],
+                language_version=pack_language_version)
     if not errors:
         check(pack, errors)
     if not errors:

@@ -125,6 +125,7 @@ classes:
       id: {required: true}
       version: {required: true}
       default_language: {required: true, description: BCP 47 code.}
+      language_version: {pattern: "^(0|1)$", description: "The declared Rezono language version of the pack ('0' or '1'; decisions/language-rezono-1.md section 5.8). Absent in historical bundles written before the version switch."}
       base: {pattern: "^https://[^ #?]+/$", description: "The pack's `base` as pack.yaml `iri:` declares it (contracts/pack.yaml, PackIri): the IRI under which one publication's names hang (docs/ring2/iris.md section 4). Absent: the pack declares none, and a reader takes its stand-in."}
 
   ReasonIri:
@@ -381,6 +382,13 @@ classes:
       checks: {multivalued: true, description: "The engine views that check a named outcome (`<relation>__total`, `<relation>__state`); a row in one is a red check."}
       fold: {range: boolean, description: "Present as true for a helper relation the pack folds (`// @explain fold`): an explanation shows the premises of its step in its place and no step named after it. Display only, and apart from `explain`, which says how its witnesses are kept; the rule IR does not carry it. Left out: not folded."}
       calc: {description: "A calculation's view: the rule, or rule@version for a version another rule names. Its rows are (subject, value, state, reason), each explained by a CalcWitness; module calc."}
+      kind: {description: "For a single-key derived property `K.d` (relation `<k>_<d>`): the snake_case id `<k>` of the owning kind (decisions/language-rezono-1.md section 2). Left out for module-level relations."}
+      property: {description: "For a single-key derived property `K.d` (relation `<k>_<d>`): the property name `<d>` on `kind` (decisions/language-rezono-1.md section 2). Left out for module-level relations."}
+    rules:
+      - preconditions: {slot_conditions: {kind: {value_presence: PRESENT}}}
+        postconditions: {slot_conditions: {property: {required: true}}}
+      - preconditions: {slot_conditions: {property: {value_presence: PRESENT}}}
+        postconditions: {slot_conditions: {kind: {required: true}}}
 
   RuleColumn:
     attributes:
