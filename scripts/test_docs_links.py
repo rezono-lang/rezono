@@ -92,6 +92,7 @@ class DocsLinks(unittest.TestCase):
 
     def test_a_generated_module_form_counts_once_with_its_source(self):
         files = {
+            "packs/p/pack.yaml": "name: p\n",
             # The form written from its source beside it: counted once, through the source.
             "packs/p/rezono/access.rezono": f"// See {DOCS}/guide.md\n",
             "packs/p/rezono/access.json": f'{{"doc": "See {DOCS}/guide.md"}}\n',
@@ -99,10 +100,35 @@ class DocsLinks(unittest.TestCase):
             "packs/p/rezono/other.json": f'{{"doc": "See {DOCS}/guide.md"}}\n',
             "packs/p/schema/access.json": f'{{"doc": "See {DOCS}/guide.md"}}\n',
             "packs/p/schema/access.rezono": f"// See {DOCS}/guide.md\n",
+            # The language package at the top level is no pack's rezono/ folder: both files count.
+            "rezono/access.json": f'{{"doc": "See {DOCS}/guide.md"}}\n',
+            "rezono/access.rezono": f"// See {DOCS}/guide.md\n",
         }
         result = self.run_check(files)
         self.assertEqual(result.returncode, 1, result.stdout)
-        self.assertIn(f"{DOCS}/guide.md: observed=4 listed=0", result.stdout)
+        self.assertIn(f"{DOCS}/guide.md: observed=6 listed=0", result.stdout)
+
+    def test_a_form_beside_a_header_only_source_still_counts(self):
+        files = {
+            "packs/p/pack.yaml": "name: p\n",
+            # A source with only its header leaves the content, and its references, to the form.
+            "packs/p/rezono/access.rezono": "rezono 0\npack p\n",
+            "packs/p/rezono/access.json": f'{{"doc": "See {DOCS}/guide.md and {DOCS}/other.md"}}\n',
+        }
+        result = self.run_check(files)
+        self.assertEqual(result.returncode, 1, result.stdout)
+        self.assertIn(f"{DOCS}/guide.md: observed=1 listed=0", result.stdout)
+        self.assertIn(f"{DOCS}/other.md: observed=1 listed=0", result.stdout)
+
+    def test_a_form_counts_what_it_adds_to_its_source(self):
+        files = {
+            "packs/p/pack.yaml": "name: p\n",
+            "packs/p/rezono/access.rezono": f"// See {DOCS}/guide.md\n",
+            "packs/p/rezono/access.json": f'{{"doc": "{DOCS}/guide.md {DOCS}/guide.md"}}\n',
+        }
+        result = self.run_check(files)
+        self.assertEqual(result.returncode, 1, result.stdout)
+        self.assertIn(f"{DOCS}/guide.md: observed=2 listed=0", result.stdout)
 
 
 if __name__ == "__main__":

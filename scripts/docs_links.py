@@ -1,6 +1,7 @@
 """Compare references to missing pages under docs/ with a per-page budget that may only fall."""
 
 import argparse
+from collections import Counter
 import json
 import posixpath
 import re
@@ -33,15 +34,32 @@ def references(path, text):
             yield target
 
 
-def generated_form(name, tracked):
-    """Whether a tracked file is the JSON form of a module whose `.rezono` source sits beside it.
+def module_source(name, tracked):
+    """The tracked `.rezono` source of a module form, or None when the file is not such a form.
 
-    The compiler writes a module's form `rezono/<path>.json` from its source `rezono/<path>.rezono`
-    (compiler/rezono_compiler/rezono_module.py), so the form repeats every reference of the source.
-    Only such a pair is skipped: a JSON file without a tracked source still counts.
+    A pack names a module `rezono/<path>.rezono` and its JSON form `rezono/<path>.json`, both under the
+    pack's folder (compiler/rezono_compiler/rezono_module.py). Only a `rezono/` folder beside a tracked
+    `pack.yaml` counts, so the language package at the top level is never matched.
     """
-    folders = name.split("/")[:-1]
-    return name.endswith(".json") and "rezono" in folders and name[: -len(".json")] + ".rezono" in tracked
+    if not name.endswith(".json"):
+        return None
+    parts = name.split("/")
+    for at in range(1, len(parts) - 1):
+        pack = "/".join(parts[:at])
+        if parts[at] == "rezono" and f"{pack}/pack.yaml" in tracked:
+            source = name[: -len(".json")] + ".rezono"
+            return source if source in tracked else None
+    return None
+
+
+def text_of(path):
+    """The text of a file, or None for a symlink, a folder or a binary file."""
+    if path.is_symlink() or not path.is_file():
+        return None
+    data = path.read_bytes()
+    if b"\0" in data:
+        return None
+    return data.decode("utf-8", errors="replace")
 
 
 def scan(root=Path(".")):
@@ -51,15 +69,17 @@ def scan(root=Path(".")):
     folders = {"/".join(name.split("/")[:depth]) for name in tracked for depth in range(1, name.count("/") + 1)}
     found = {}
     for name in sorted(tracked - {BUDGET}):
-        path = root / name
-        if path.is_symlink() or not path.is_file() or generated_form(name, tracked):
+        text = text_of(root / name)
+        if text is None:
             continue
-        data = path.read_bytes()
-        if b"\0" in data:
-            continue
-        for target in references(name, data.decode("utf-8", errors="replace")):
+        counts = Counter(references(name, text))
+        source = module_source(name, tracked)
+        if source is not None:
+            # A form written from its source repeats the source's references: count only what it adds.
+            counts -= Counter(references(source, text_of(root / source) or ""))
+        for target, number in counts.items():
             if target not in tracked and target not in folders:
-                found[target] = found.get(target, 0) + 1
+                found[target] = found.get(target, 0) + number
     return dict(sorted(found.items()))
 
 
