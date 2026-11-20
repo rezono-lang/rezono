@@ -1,3 +1,11 @@
+---
+decider: [loop]
+decided_on: 2026-11-18
+valid_from: 2026-11-18
+state: in_force
+subject: quiet-observation-rounds
+---
+
 # Quiet observation rounds
 
 Preserve the sweep identifier, run, recorded event time and completeness even
