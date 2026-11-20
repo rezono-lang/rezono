@@ -118,10 +118,12 @@ round_failed: failed round
 round_unfinished: unfinished round
 round_outcome: round outcome
 delivery_done_reading: dated completion status reading
+delivery_done_undated: undated completion status reading
 delivery_waiting_reading: dated waiting status reading
+delivery_waiting_undated: undated waiting status reading
 delivery_done_earliest: earliest completion instant
 delivery_completed_at: recorded delivery completion time
-delivery_has_done: step with dated completion
+delivery_has_done: step with recorded completion
 delivery_waiting_end: end of waiting interval
 delivery_waiting_before_end: waiting reading at or before interval end
 delivery_waiting_start: start of waiting interval
