@@ -167,7 +167,8 @@ def make_pack(
            "Blocked for a worker PR: scripts/test_red_guard.py requires scripts/red_guard.py DEFINITION to match "
            "compiler/rezono_compiler/modules.py DEFINITION, while scripts/red_guard.py is a POLICY file that cannot "
            "be changed without planner or alongside a lifted xfail mark; a planner must add ports/*.yaml to DEFINITION "
-           "in both files first (and PR #1089 is open for rezono.module/4 admission).",
+           "in both files first (rezono.module/4 admission already landed in #1089, and no packs/std-* pack currently "
+           "carries ports/ files so standard_packs.py hashes are unchanged).",
 )
 def test_lower_step_declaration(tmp_path):
     # Counter-case 1: an ordinary pack without steps exposes an empty Pack.steps tuple.
