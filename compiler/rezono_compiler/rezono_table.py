@@ -89,6 +89,10 @@ def lower(pack, pack_dir: Path, d, form: dict, gen: Generated, errors: list[str]
     for i, decl in enumerate(form["module"]["decls"]):
         if not isinstance(decl, dict) or "extend" not in decl:
             continue
+        derived_tables = [(j, dv) for j, dv in enumerate(decl.get("derived") or [])
+                          if isinstance(dv, dict) and isinstance(dv.get("table"), dict)]
+        if not derived_tables:
+            continue
         at = f"/decls/{i}"
         k = next((n for n, kind in pack.kinds.items() if kind.cls == decl["extend"]), None)
         if k is None:
@@ -102,7 +106,7 @@ def lower(pack, pack_dir: Path, d, form: dict, gen: Generated, errors: list[str]
             refuse(at, f"{decl['extend']} is sealed: a table on a sealed kind is not lowered yet")
             continue
         slots = {s.name: s for a in reversed(pack.ancestors(k)) for s in pack.kinds[a].slots.values()}
-        for j, dv in enumerate(decl.get("derived") or []):
+        for j, dv in derived_tables:
             table(pack, k, slots, dv, f"{at}/derived/{j}", place, refuse, gen)
 
 

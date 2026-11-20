@@ -104,8 +104,8 @@ EVIDENCE |= {
     "table-policy": (reader("table_policy"), lowering("lower_table_policy", "test_lower_table_first"),
                      lowering("lower_table_policy", "test_lower_table_collect")),
     "deprecated-declaration": (reader("deprecated_declaration"), lowering("lower_deprecated")),
-    "intermediate-invariant": (reader("invariant_intermediate"),),
-    "step-declaration": (reader("step_declaration"),),
+    "intermediate-invariant": (reader("invariant_intermediate"), lowering("lower_intermediate_invariant")),
+    "step-declaration": (reader("step_declaration"), lowering("lower_step_declaration")),
 }
 
 KIND_FEATURES = {

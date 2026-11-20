@@ -2,21 +2,25 @@
 
 from hashlib import sha256
 import json
+from pathlib import Path
 
 import pytest
 import yaml
 
 from examples.platform.test_tenant_publication_proof import leaves
+from rezono_compiler.modules import pack_hash
 from rezono_publisher import batch, pointers, publish, store
 from test_standard_access import copy_pack, role_evidence
 
 
 ROLES = {"elm": "may_read", "reed": "may_read"}
 ABSENT_REQUEST = "unused-request"
+# The import pins the standard pack's bytes at this revision, computed rather than copied, so a change to
+# packs/std-explain does not also have to edit this test.
 STD_EXPLAIN = {
     "name": "std-explain",
     "path": "../../packs/std-explain",
-    "sha256": "72e2897cd9baaa4962cf2235f83a332262b4da1e6d34e82d5f64d8335e27be0b",
+    "sha256": pack_hash(Path(__file__).resolve().parents[3] / "packs" / "std-explain"),
 }
 
 
