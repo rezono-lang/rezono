@@ -196,7 +196,7 @@ function buildSchema(module: Module): {
 			for (const d of decl.derived) {
 				slots[d.derived] = slotDefFor(d.type, d.card, undefined, undefined, true);
 			}
-			kinds[decl.kind] = { world: decl.world ?? 'open', id: { type: 'Text' }, slots };
+			kinds[decl.kind] = { world: decl.world ?? (module.rezono === '1' ? 'closed' : 'open'), id: { type: 'Text' }, slots };
 		} else if ('extend' in decl) {
 			const k = kinds[decl.extend];
 			if (k) {
