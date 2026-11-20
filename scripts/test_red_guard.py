@@ -43,6 +43,41 @@ def main():
     workflow_cases()
     read_cases(function)
     pin_cases(function)
+    table_cases()
+
+
+def table_cases():
+    """A case that goes from a parametrize table is REMOVED, at module level or inline."""
+    path = "compiler/tests/test_module.py"
+    table = (b"import pytest\n\nREFUSALS = {\n    'a check': (1, 'check'),\n    'a reason': (2, 'reason'),\n}\n\n\n"
+             b"@pytest.mark.parametrize('name', REFUSALS)\ndef test_refused(name):\n    assert REFUSALS[name]\n")
+    shorter = table.replace(b"    'a reason': (2, 'reason'),\n", b"")
+    longer = table.replace(b"    'a reason'", b"    'a third': (3, 'third'),\n    'a reason'")
+    listed = b"import pytest\n\n\n@pytest.mark.parametrize('v', [1, 2, 3])\ndef test_v(v):\n    assert v\n"
+    marked = table.replace(b"(2, 'reason')", b"pytest.param(2, 'reason', marks=pytest.mark.xfail("
+                           b"strict=True, reason='M1: x'))")
+    lifted = table.replace(b"(2, 'reason')", b"pytest.param(2, 'reason')")
+    cases = [
+        ("a case removed from a module-level table", table, shorter,
+         [f"CHANGED {path}::test_refused reads the changed REFUSALS", f"REMOVED {path}::test_refused['a reason']"]),
+        ("a case added to a module-level table", table, longer,
+         [f"CHANGED {path}::test_refused reads the changed REFUSALS"]),
+        ("a case removed from an inline parametrize list", listed, listed.replace(b"[1, 2, 3]", b"[1, 3]"),
+         [f"CHANGED {path}::test_v", f"REMOVED {path}::test_v[2]"]),
+    ]
+    for label, before, after, expected in cases:
+        change = Change(path, "M", before, after)
+        errors, notes = review([change], planner=True)
+        if errors or sorted(notes) != sorted(expected):
+            raise AssertionError(f"{label}: errors {errors}, notes {notes}")
+        errors, _ = review([change], planner=False)
+        if errors != [f"ERROR planner label required for {ascii(path)}"]:
+            raise AssertionError(f"{label} without planner: errors {errors}")
+        print(f"REPORTED, and DENY without planner: {label}")
+    errors, notes = review([Change(path, "M", marked, lifted)], planner=False)
+    if errors or notes:
+        raise AssertionError(f"a lifted mark in a table: errors {errors}, notes {notes}")
+    print("ALLOW without planner, nothing reported: a lifted mark in a module-level table")
 
 
 def pin_cases(function):

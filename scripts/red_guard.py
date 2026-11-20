@@ -648,6 +648,86 @@ def pin_updates(changes, rev):
     return frozenset(c.path for c in candidates if pin_update(c, tree, changed))
 
 
+def module_constants(tree):
+    """Each name that a module-level assignment binds, with the value it binds."""
+    found = {}
+    for node in tree.body:
+        if isinstance(node, ast.Assign):
+            found.update((t.id, node.value) for t in node.targets if isinstance(t, ast.Name))
+        elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name) and node.value is not None:
+            found[node.target.id] = node.value
+    return found
+
+
+def cases(value):
+    """The cases of a literal table: its keys for a dict, its items otherwise; None if not literal."""
+    value = bare(value)
+    if isinstance(value, ast.Dict) and None not in value.keys:
+        return {ast.unparse(k): ast.dump(v) for k, v in zip(value.keys, value.values)}
+    if isinstance(value, (ast.List, ast.Tuple, ast.Set)):
+        return {ast.unparse(e): ast.dump(e) for e in value.elts}
+    return None
+
+
+def bare(node):
+    """A copy of the node without red marks: lifting a mark changes no table."""
+    return _Unmark().visit(copy.deepcopy(node))
+
+
+def test_nodes(tree):
+    """Each test function by qualified name, as `inventory` names them."""
+    found = {}
+
+    def visit(body, scope):
+        for node in body:
+            name = f"{scope}::{node.name}" if scope and hasattr(node, "name") else getattr(node, "name", None)
+            if isinstance(node, ast.ClassDef):
+                visit(node.body, name)
+            elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name.startswith("test"):
+                found[name] = node
+
+    visit(tree.body, "")
+    return found
+
+
+def table_changes(path, before, after):
+    """Notes for the cases a test loses when a table it reads changes, at module level or inline.
+
+    A test that reads a module-level name whose value changes is CHANGED; each case that goes
+    from a literal table it reads, or from a literal list in its own parametrize decorator, is
+    REMOVED as `path::test[case]`.
+    """
+    try:
+        old_tree, new_tree = ast.parse(before.decode("utf-8")), ast.parse(after.decode("utf-8"))
+    except UNREADABLE:
+        return []
+    old_constants, new_constants = module_constants(old_tree), module_constants(new_tree)
+    changed = {name for name, value in old_constants.items()
+               if name not in new_constants or ast.dump(bare(new_constants[name])) != ast.dump(bare(value))}
+    old_tests, notes = test_nodes(old_tree), []
+    for test, node in test_nodes(new_tree).items():
+        if test not in old_tests:
+            continue
+        read = {n.id for n in ast.walk(node) if isinstance(n, ast.Name)}
+        for name in sorted(changed & read):
+            notes.append(f"CHANGED {path}::{test} reads the changed {name}")
+            old_cases = cases(old_constants[name]) or {}
+            new_cases = cases(new_constants[name]) if name in new_constants else {}
+            notes.extend(f"REMOVED {path}::{test}[{case}]" for case in old_cases if case not in (new_cases or {}))
+
+        def inline(fn):
+            found = {}
+            for d in fn.decorator_list:
+                if (isinstance(d, ast.Call) and ast.unparse(d.func).endswith("parametrize") and len(d.args) > 1
+                        and (table := cases(d.args[1])) is not None):
+                    found.update(table)
+            return found
+
+        before_cases, after_cases = inline(old_tests[test]), inline(node)
+        notes.extend(f"REMOVED {path}::{test}[{case}]" for case in before_cases if case not in after_cases)
+    return notes
+
+
 def review(changes, planner=False, head=None, labels=(), packs=frozenset(), pins=frozenset()):
     """Return (errors, notes) for a sequence of Change records.
 
@@ -717,6 +797,8 @@ def review(changes, planner=False, head=None, labels=(), packs=frozenset(), pins
                 errors.append(f"ERROR new or changed red mark on {ascii(c.path + '::' + owner)} "
                               "needs strict=True and must not set run=False")
         notes.extend(f"REMOVED {c.path}::{name}" for name in old.tests if name not in new.tests)
+        if c.before is not None:
+            notes.extend(table_changes(c.path, c.before, c.after))
         # Report every changed green test, whether or not the pull request also changes source:
         # weakening an expectation on its own is the change a reviewer most needs to see.
         notes.extend(f"CHANGED {c.path}::{name}" for name, (shape, red) in new.tests.items()
