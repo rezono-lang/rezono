@@ -109,13 +109,7 @@ def submitted(tmp_path):
     pytest.param(COUNTED + EXCLUDED, "admitted", [1, 2], "2", None, id="two-of-five"),
     pytest.param(COUNTED + EXCLUDED + [SIXTH], "admitted", [1, 2, 6], "3", "queue-limit", id="at-limit"),
     # The submitted listing is empty while the admitted read lists three pull requests: the queue is at its limit.
-    pytest.param([], "admitted", [1, 2, 6], "3", "queue-limit", id="empty", marks=pytest.mark.xfail(
-        strict=True, raises=MissingVerifiedQueue,
-        reason="M2: decisions/admission-transport.md: section 6, queue pulls. An empty submitted listing whose "
-               "admitted read lists three open pull requests reaches the limit of three. The same rule turns "
-               "loop/tests/test_build_queue_count.py--test_planner_slot_needs_verified_pull_inventory green; "
-               "remove this mark in that PR. Today the rules count the empty records (known 0 and a planner slot, "
-               "MissingVerifiedQueue).")),
+    pytest.param([], "admitted", [1, 2, 6], "3", "queue-limit", id="empty"),
     pytest.param([], "admitted", [], "0", None, id="verified-empty"),
     pytest.param(COUNTED + EXCLUDED, None, None, None, "queue-evidence-unknown", id="no-receipt"),
     pytest.param(COUNTED + EXCLUDED, "stale-round", None, None, "queue-evidence-unknown", id="stale-receipt"),

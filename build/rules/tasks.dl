@@ -7,7 +7,7 @@
 .decl build_task_precedes(run: symbol, first: symbol, second: symbol)
 .decl build_queue_at_cut(run: symbol, count: number, reading: symbol)
 .decl build_queue_listing_at_cut(run: symbol, listing: symbol)
-.decl build_queue_counted(listing: symbol, number: number)
+.decl build_queue_counted(listing: symbol, number: symbol)
 .decl build_queue_conflict(run: symbol)
 .decl build_queue_known(run: symbol, count: number, reading: symbol)
 .decl build_has_queue_count(run: symbol)
@@ -44,9 +44,10 @@ build_queue_listing_at_cut(run, listing) :- build_verified_cut(run), build_run__
     build_queue_listing__run(listing, run), build_queue_listing__observed_at(listing, tick),
     build_queue_listing__receipt(listing, receipt), loop_sweep_receipt__run(receipt, run),
     loop_sweep_receipt__event_time(receipt, tick), build_queue_listing__source(listing, source), source != "".
-build_queue_counted(listing, number) :- build_queue_listing__base(listing, base), build_queue_pull__listing(pull, listing),
-    build_queue_pull__number(pull, number), build_queue_pull__state(pull, "open"),
-    build_queue_pull__draft(pull, "ready"), build_queue_pull__base(pull, base).
+build_queue_counted(listing, number) :- build_queue_listing__base(listing, base),
+    build_queue_listing__receipt(listing, receipt), verified_receipt(receipt, _, _, _, _, _),
+    verified_member(receipt, m, 0, "queue-pull"), verified_member(receipt, m, 1, base),
+    verified_member(receipt, m, 2, number).
 build_queue_at_cut(run, count, listing) :- build_queue_listing_at_cut(run, listing),
     count = count : { build_queue_counted(listing, _) }.
 build_queue_conflict(run) :- build_queue_at_cut(run, a, _), build_queue_at_cut(run, b, _), a != b.
