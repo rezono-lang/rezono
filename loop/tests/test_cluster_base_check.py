@@ -40,12 +40,9 @@ CASES = [
         "SELECTION, which runs the cluster items of a selection file (one pytest node id per line, as "
         "scripts/red_before.py prepare writes it) with --rezono-cluster -m cluster and reads each outcome from "
         "a JUnit report: 0 without a cluster item or when one fails and none skips, 1 when one skips or all "
-        "pass. Call it in .github/workflows/disposable-cluster.yml on pull requests, after the candidate's "
-        "cluster run, on the base with the pull request's protected paths laid over it. Waits for "
-        "test_cluster_skip_is_a_failure, whose skip report this check must not count as the base failing. "
-        "Blocked on planner review: .github/workflows/disposable-cluster.yml is in POLICY in scripts/red_guard.py, "
-        "so a worker PR cannot edit it and red_guard.py forbids lifting a red mark alongside a POLICY change; "
-        "a planner PR must update .github/workflows/disposable-cluster.yml first."
+        "pass (counting a Skipped cluster test: report from loop/rezono_cluster.py as a skip, not as the base "
+        "failing). .github/workflows/disposable-cluster.yml already calls loop/cluster/base_check.py on pull "
+        "requests once it exists, so write only in loop/cluster/base_check.py."
     ),
 )
 def test_cluster_base_check(tmp_path):

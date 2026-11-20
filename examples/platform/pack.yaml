@@ -6,6 +6,7 @@ imports:
   - {name: std-part, path: ../../packs/std-part, sha256: 207f4f097f68e6dade792b714754e0f279ce2c948be8adce82108a3abc18cca9}
   - {name: std-identity, path: ../../packs/std-identity, sha256: 129e5321602dea3b58ea5220103c4d313237d0dbf5e640c677b24fc98e5d265b}
   - {name: std-time, path: ../../packs/std-time, sha256: bb2863a03792228005fa6784ed1022c07ac82139cdbf0ff7914cd273b3e046a7}
-  - {name: std-access, path: ../../packs/std-access, sha256: 54c8a70d5c7108422fa02ac46d924c11d429b5fda79f20c33d4bc6505e53243d}
+  - {name: std-access, path: ../../packs/std-access, sha256: 90e8804a88fc48d19044c58d6d52710140cc75737d4e2c5cc7091f6e3853c37d}
   - {name: std-decision, path: ../../packs/std-decision, sha256: 2fd4cc60cc4f1c7dca42da2f5368a08a992de39df7cd7db205b9118dd1b8fe5a}
+  - {name: std-loop, path: ../../packs/std-loop, sha256: 5b47528b70ea8ab3f02525499a8e9c63c1aa19b38837be61b4b282db98844346}
   - {name: platform-capacity-interface, path: tenant-capacity/interface, sha256: 70f4ddbc8cebdcd40f5deb95ddb90165e964012bc04d5225998e49f65014befb}

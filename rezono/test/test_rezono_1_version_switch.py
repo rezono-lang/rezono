@@ -96,14 +96,6 @@ class MissingRezono1VersionSwitch(AssertionError):
     """The reader did not dispatch rezono 0 vs rezono 1, emit rezono.module/5, or refuse removed forms with R028."""
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=MissingRezono1VersionSwitch,
-    reason="M3: decisions/language-rezono-1.md: Dispatch the reader and module form by declared rezono version (0 vs 1) "
-           "in rezono/src/, emit rezono.module/5 for rezono 1 modules while keeping rezono 0 formats /1-/4 unchanged, "
-           "and refuse `table priority` (with `table first` hint), `rule ... when ...`, and `rules` pipe blocks in "
-           "rezono 1 with R028. Add R028 to rezono/messages/en.json and nl.json. Read sections 1, 3.2 and 5.8.",
-)
 def test_rezono_1_version_switch():
     sources = [
         REZONO_0_TABLE_PRIORITY,

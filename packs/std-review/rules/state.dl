@@ -8,9 +8,9 @@ review_active(r) :- review(r), !review_dismissed(r).
 .decl review_current(review: symbol)
 review_current(r) :- review_active(r), review__change(r, c), review__content_sha256(r, h), change__content_sha256(c, h),
     review__support_sha256(r, s), change__support_sha256(c, s).
-// For now a review is valid while it is active; the checks of section 8 each add their negation to this one rule.
+// A review is valid while it is active and no check of section 8 holds for it; each check adds its negation here.
 .decl review_valid(review: symbol)
-review_valid(r) :- review_active(r).
+review_valid(r) :- review_active(r), !review_self(r).
 .decl valid_current_verdict(change: symbol, verdict: symbol)
 valid_current_verdict(c, v) :- review_valid(r), review_current(r), review__change(r, c), review__verdict(r, v).
 .decl change_accepted(change: symbol)

@@ -7,7 +7,7 @@ import pytest
 
 from rezono_publisher import __main__ as publisher
 from rezono_publisher import batch, forms, publish, store
-from test_publish import epoch
+from test_publish import TOY_ARROWS, TOY_ATTRIBUTES, epoch
 
 
 BUILD = {"compiler": "synthetic-build-a"}
@@ -26,7 +26,7 @@ def local(tmp_path, monkeypatch):
         bundle = {"format": "rezono.schema-bundle/1", "pack": {"id": "toy"},
                   "kinds": [{"id": "node", "class": "Node", "world": "closed"},
                             {"id": "role", "class": "Role", "world": "closed"}],
-                  "attributes": [], "arrows": [], "relations": [], "checks": []}
+                  "attributes": TOY_ATTRIBUTES, "arrows": TOY_ARROWS, "relations": [], "checks": []}
         return epoch(epoch=args["epoch"], knowledge_time=args["knowledge_time"], build=dict(BUILD),
                      nodes=["amber", "blue"], edges=[], salaries=[], grants=[("east", "amber"), ("west", "blue")],
                      roles=("east", "west"), bundle=json.dumps(bundle))

@@ -49,3 +49,11 @@ may_read("platform-catalogue", "pin", k) :- pin(k).
 may_read("platform-catalogue", "vendor_licence_notice", n) :- vendor_licence_notice(n).
 may_read("platform-catalogue", "licence_release_binding", b) :- licence_release_binding(b).
 may_read("platform-catalogue", "product_licence_gap", g) :- product_licence_gap(g).
+
+may_read_full("platform-catalogue", "product") :- capability("read").
+may_read_full("platform-catalogue", "service") :- capability("read").
+may_read_full("platform-catalogue", "release") :- capability("read").
+may_read_full("platform-catalogue", "pin") :- capability("read").
+may_read_full("platform-catalogue", "vendor_licence_notice") :- capability("read").
+may_read_full("platform-catalogue", "licence_release_binding") :- capability("read").
+may_read_full("platform-catalogue", "product_licence_gap") :- capability("read").

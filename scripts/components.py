@@ -292,7 +292,7 @@ PACK_READERS = ("admission", "checker", "compiler", "edge/plugins/connectors", "
 SHARED_READERS = {
     "examples/platform/proof_cases/role-publication-cases.ts": ("tools/repl", "tools/mcp"),
     "docs/compiler/pack.md": ("compiler",),
-    "docs/publication/l0.md": ("edge/plugins/connectors",),
+    "docs/publication/l0.md": ("compiler", "edge/plugins/connectors"),
     "docs/publication/cases/": ("compiler", "edge/plugins/connectors", "publication"),
     "docs/rezono/cases/": ("compiler", "rezono"),
     "docs/semantics/value-cases.yaml": ("compiler", "rezono"),
@@ -344,8 +344,9 @@ SHARED_READERS = {
 FULL_SELECTION_PATHS = (
     ".github/workflows/ci.yml", ".github/workflows/disposable-cluster.yml",
     ".github/workflows/python-environment/", "blocked/",
-    "scripts/check-pinned.py", "scripts/components.py", "scripts/fast_check.py",
-    "scripts/install-souffle.sh", "scripts/pytest-plugins.txt", "scripts/red_list.py",
+    "scripts/check-pinned.py", "scripts/components.py", "scripts/examples-duration-profile.json",
+    "scripts/fast_check.py", "scripts/install-souffle.sh", "scripts/loop-duration-profile.json",
+    "scripts/pytest-plugins.txt", "scripts/red_before.py", "scripts/red_guard.py", "scripts/red_list.py",
 )
 # What scripts/components.py itself reads while it runs one component's shards.
 JOB_INPUTS = {
@@ -853,9 +854,17 @@ FORMS_MODULE = "examples/subsidy/test_subsidy_forms.py"
 INDEPENDENT_PUBLICATIONS = "examples/subsidy/test_subsidy.py"
 FORMS_READER = ("test_a_ledger_payment_does_not_change_the_policy_adviser_s_form",
                 "test_each_role_s_standards_exports_pass_their_readers")
-SHARDS = {"compiler": 3, "edge/publisher": 2}
+SHARDS = {"compiler": 3, "edge/publisher": 2, "examples": 3, "loop": 3}
 PARALLEL = {"compiler", "examples", "edge/publisher"}
 EXAMPLE_PROFILE = ROOT / ".github/workflows/examples-duration-profile.json"
+# Seconds per test file, as `run-shard` prints them for each shard of a hosted run. A component with
+# such a profile places its files longest first on the least loaded shard instead of round-robin. The
+# profile sits beside this script, so the base's copy (which builds the matrix and the inventory, and
+# verifies the execution) reads the base's profile, never the candidate's.
+FILE_PROFILES = {
+    "examples": Path(__file__).resolve().parent / "examples-duration-profile.json",
+    "loop": Path(__file__).resolve().parent / "loop-duration-profile.json",
+}
 
 
 def test_files(folder: str) -> list[str]:
@@ -1034,7 +1043,7 @@ def plugin_arguments() -> tuple[list[str], object]:
     return [arg for name in names for arg in ("-p", name)], PluginGuard()
 
 
-def collect_component(folder: str, directory: Path) -> int:
+def collect_component(folder: str, directory: Path, total: int = 1) -> int:
     import pytest
 
     sys.path.insert(0, str(ROOT))
@@ -1095,8 +1104,10 @@ def collect_component(folder: str, directory: Path) -> int:
                   file=sys.stderr)
             return 1
     files = sorted(set(test_files(folder)) | collected)
-    dest.write_text(json.dumps({"items": items, "cluster": cluster, "files": files, "config": config_path}),
-                    encoding="utf-8")
+    # The split into the matrix's shards, made here by the same script and profile as the matrix.
+    shards = shard_files(folder, files, total)
+    dest.write_text(json.dumps({"items": items, "cluster": cluster, "files": files, "shards": shards,
+                                "config": config_path}), encoding="utf-8")
     print(f"{folder}: inventoried {len(items)} node IDs from {len(files)} test files", flush=True)
     return 0
 
@@ -1106,16 +1117,36 @@ def pytest_folder(component: dict) -> str:
 
 
 def collect_matrix(matrix: list[dict], directory: Path) -> int:
-    folders = sorted({pytest_folder(c) for c in matrix})
+    totals = {pytest_folder(c): c.get("total", 1) for c in matrix}
     def collect(folder: str) -> int:
-        return subprocess.call([sys.executable, __file__, "collect-component", folder, str(directory)])
+        return subprocess.call([sys.executable, __file__, "collect-component", folder, str(directory),
+                                str(totals[folder])])
     with ThreadPoolExecutor(max_workers=runner_cores()) as pool:
-        statuses = list(pool.map(collect, folders))
+        statuses = list(pool.map(collect, sorted(totals)))
         return next((code for code in statuses if code), 0)
 
 
+def shard_files(folder: str, files: list[str], total: int) -> list[list[str]]:
+    """Every test file in exactly one shard. Without a profile, round-robin in name order; with one,
+    longest first onto the least loaded shard, ties in name order, so the split depends only on the
+    profile and the file list. A file the profile does not know costs its default."""
+    profile = FILE_PROFILES.get(folder)
+    if profile is None or not profile.is_file():
+        return [files[n::total] for n in range(total)]
+    data = json.loads(profile.read_text(encoding="utf-8"))
+    return weighted_workers(sorted(files), total, data["seconds"], data["default_s"])
+
+
 def shard_items(plan: dict, shard: int, total: int) -> list[str]:
-    files = set(plan["files"][shard::total])
+    """The IDs of one shard. The inventory records the split of the script that also built the matrix,
+    so the candidate's shards and the base's verification share it. An inventory without a recorded split
+    comes from a base before it: that base verifies round-robin, so the shards run round-robin too."""
+    split = plan.get("shards")
+    if split is None:
+        split = [plan["files"][n::total] for n in range(total)]
+    elif len(split) != total:
+        raise ValueError(f"The inventory splits into {len(split)} shards, the matrix into {total}")
+    files = set(split[shard])
     return [node for node in plan["items"] if node.split("::", 1)[0] in files]
 
 
@@ -1265,6 +1296,16 @@ def run_shard(folder: str, shard: int, total: int, plans: Path, reports: Path, r
                     seconds[node if paired else example_unit(node)] += spent
         print("Example seconds per unit: " + json.dumps({u: round(t, 1) for u, t in sorted(seconds.items())}),
               flush=True)
+    if folder in FILE_PROFILES:
+        # The seconds per test file of this shard, for the component's duration profile.
+        seconds = Counter()
+        for index in range(len(groups)):
+            measured = reports / f"pytest-{index}.seconds.json"
+            if measured.is_file():
+                for node, spent in json.loads(measured.read_text(encoding="utf-8")).items():
+                    seconds[node.partition("::")[0]] += spent
+        print(f"{folder} seconds per test file: "
+              + json.dumps({f: round(t, 1) for f, t in sorted(seconds.items())}), flush=True)
     # Write the expected number of journals even on failure, for diagnosis.
     (evidence / f"{shard}.json").write_text(json.dumps(len(groups)), encoding="utf-8")
     return status
@@ -1326,6 +1367,7 @@ def main() -> int:
     collect = sub.add_parser("collect-component")
     collect.add_argument("folder")
     collect.add_argument("plans", type=Path)
+    collect.add_argument("total", type=int, nargs="?", default=1)
     for name in ("inventory", "verify-execution"):
         command = sub.add_parser(name)
         command.add_argument("plans", type=Path)
@@ -1346,7 +1388,7 @@ def main() -> int:
     if args.cmd == "inventory":
         return collect_matrix(json.loads(os.environ["PYTHON_MATRIX"]), args.plans)
     if args.cmd == "collect-component":
-        return collect_component(args.folder, args.plans)
+        return collect_component(args.folder, args.plans, args.total)
     if args.cmd == "execute-worker":
         return execute_worker(args.assignment, args.journal, args.report)
     if args.cmd == "verify-execution":

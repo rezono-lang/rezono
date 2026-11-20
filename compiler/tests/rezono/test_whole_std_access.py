@@ -103,11 +103,60 @@ def unpinned(bundle, pin):
     return bundle
 
 
+# Extensible right relations added to std-access after its Rezono conversion
+# (decisions/central-read-access.md, decisions/review-and-rights.md). The frozen legacy oracle
+# only declares may_read; comparing the live Rezono pack against it normalizes these post-conversion
+# declarations while keeping all legacy schema, rule and role-visibility comparisons strict.
+POST_CONVERSION_RIGHTS = frozenset({
+    "may_read_full",
+    "may_propose",
+    "may_review",
+    "may_publish",
+    "may_execute",
+})
+
+
+def legacy_scope(bundle, seen):
+    """Project the bundle and visible relations onto what the frozen legacy std-access oracle defines.
+
+    Any post-conversion @extend relation declared by std-access is checked to remain extensible and
+    set aside from the relation list; rules targeting such a relation keep all fields compared while
+    ignoring only whether std-access or the consumer owns its module; empty snapshots of those
+    relations are omitted so unpopulated declarations do not skew the legacy comparison.
+    """
+    relations = []
+    for rel in bundle.get("relations", []):
+        if rel["id"] in POST_CONVERSION_RIGHTS:
+            if rel.get("module") == "import_std_access_access":
+                assert rel.get("extend") is True, rel
+            continue
+        relations.append(rel)
+    rules = []
+    for rule in bundle.get("rules", []):
+        if rule.get("relation") in POST_CONVERSION_RIGHTS and rule.get("module") in {
+            "access", "import_std_access_access",
+        }:
+            rule = {**rule, "module": "std-access-right"}
+        rules.append(rule)
+    projected_bundle = {**bundle, "relations": relations, "rules": rules}
+    projected_seen = {
+        role: {
+            rel: rows
+            for rel, rows in rels.items()
+            if not (rel in POST_CONVERSION_RIGHTS and not rows)
+        }
+        for role, rels in seen.items()
+    }
+    return projected_bundle, projected_seen
+
+
 def meaning(result):
     files, seen, pin = result
+    bundle = unplaced(unpinned(json.loads(files["bundle/schema-bundle.json"]), pin))
+    bundle, seen = legacy_scope(bundle, seen)
     return {
         "files": sorted(files),
-        "bundle": unplaced(unpinned(json.loads(files["bundle/schema-bundle.json"]), pin)),
+        "bundle": bundle,
         "seen": seen,
     }
 

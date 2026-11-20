@@ -75,15 +75,6 @@ def run(tmp_path, missing, values):
     return data, world, report, recording
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=MissingApplyReadbackExecutor,
-    reason=(
-        "M2: decisions/loop-apply-readback.md: add loop/executor.py with execute(directory, data, *, apply, read). Each round evaluates "
-        "the pinned std-loop pack through the replay path, applies the ready frontier in step-key order, reads one "
-        "sweep and evaluates again; it reports plans, outcome, rounds and findings."
-    ),
-)
 def test_executor_applies_then_reads_back(tmp_path):
     _, world, report, _ = run(tmp_path, MissingApplyReadbackExecutor, {"seed": "yes", "ship": "yes"})
     observed = (world.applied, world.read_rounds, report)
@@ -96,14 +87,6 @@ def test_executor_applies_then_reads_back(tmp_path):
         raise MissingApplyReadbackExecutor(f"{observed!r} is not {expected!r}")
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=MissingReadbackCompletion,
-    reason=(
-        "M2: decisions/loop-apply-readback.md: in loop/executor.py a step is done only when the pack derives done from matching "
-        "read-back evidence; the apply result is never evidence. Waits for test_executor_applies_then_reads_back."
-    ),
-)
 def test_apply_result_is_not_evidence(tmp_path):
     data, world, report, _ = run(tmp_path, MissingReadbackCompletion, {})
     limit = data["limit"]
@@ -113,15 +96,6 @@ def test_apply_result_is_not_evidence(tmp_path):
         raise MissingReadbackCompletion(f"a silent read-back gave {observed!r}, not {expected!r}")
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=MissingReadbackFinding,
-    reason=(
-        "M2: decisions/loop-apply-readback.md: in loop/executor.py a read-back value that differs from the expectation is a drift "
-        "finding with both references and a failed outcome, and no later step is applied. "
-        "Waits for test_executor_applies_then_reads_back."
-    ),
-)
 def test_readback_mismatch_is_a_finding(tmp_path):
     _, world, report, _ = run(tmp_path, MissingReadbackFinding, {"seed": "no", "ship": "yes"})
     observed = (world.applied, report)
@@ -136,15 +110,6 @@ def test_readback_mismatch_is_a_finding(tmp_path):
 
 @pytest.mark.parametrize("values", [{"seed": "yes", "ship": "yes"}, {"seed": "no"}, {}],
                          ids=["converges", "mismatch", "silent"])
-@pytest.mark.xfail(
-    strict=True,
-    raises=MissingOfflineReplay,
-    reason=(
-        "M2: decisions/loop-apply-readback.md: the recording that loop/executor.py returns is plain JSON and replays with "
-        "loop/recording_cli.py, without a cluster, to the same plans, outcome and rounds. "
-        "Waits for test_apply_result_is_not_evidence and test_readback_mismatch_is_a_finding."
-    ),
-)
 def test_executed_run_replays_offline(tmp_path, capsys, values):
     data, _, report, recording = run(tmp_path, MissingOfflineReplay, values)
     if json.loads(json.dumps(recording)) != recording or {**recording, "sweeps": []} != {**data, "sweeps": []}:

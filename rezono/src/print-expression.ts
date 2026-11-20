@@ -3,7 +3,7 @@
 // flat, a literal as it was written, the question context after the kind in the order `at`, `during`, `in`,
 // `as known`. So `print(parse(t))` is stable and `parse(print(tree))` is the tree.
 // Module declarations are assembled separately (`printModule`).
-import type { Ask, Expr, Question, Tail } from './tree.ts';
+import type { Ask, Context, Expr, Question, Tail } from './tree.ts';
 import { isAsk, isCheck } from './tree.ts';
 import { spellName, spellQualifiedName } from './rule-names.ts';
 
@@ -95,14 +95,21 @@ const atom = (e: Expr): string => (('path' in e && e.path.length === 1) || 'lit'
 const list = (es: Expr[]) => es.map(whole).join(', ');
 const tail = (t: Tail) => ('order' in t ? `order by ${list(t.order)}` : 'group' in t ? `group by ${list(t.group)}` : `limit ${t.limit}`);
 
-function ask(q: Ask): string {
-	const c = q.context ?? {};
+/** Formats a question or example context clause in canonical axis order: `at`, `during`, `in`, `as known`. */
+export function printContext(c?: Context): string[] {
+	if (!c) return [];
 	return [
-		`ask ${q.binder ? `${q.binder}: ` : ''}${q.ask}${(q.more ?? []).map(([name, kind]) => `, ${name}: ${kind}`).join('')}`,
 		...(c.at ? [`at ${atom(c.at)}`] : []),
 		...(c.during ? [`during ${atom(c.during)}`] : []),
 		...(c.in ? [`in ${atom(c.in)}`] : []),
 		...(c.as_known ? [`as known ${atom(c.as_known)}`] : []),
+	];
+}
+
+function ask(q: Ask): string {
+	return [
+		`ask ${q.binder ? `${q.binder}: ` : ''}${q.ask}${(q.more ?? []).map(([name, kind]) => `, ${name}: ${kind}`).join('')}`,
+		...printContext(q.context),
 		`where ${whole(q.where)}`,
 		...(q.show ? [`show ${list(q.show)}`] : []),
 		...(q.tail ?? []).map(tail)

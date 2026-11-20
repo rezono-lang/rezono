@@ -1,6 +1,6 @@
 """Staged schema-and-rules candidate acceptance for examples/subsidy-scheme.
 
-Compares examples/subsidy-scheme in its existing LinkML + Datalog form (keeping calc/award.yaml intact in both
+Compares examples/subsidy-scheme in its existing LinkML + Datalog form (keeping the award calculation intact in both
 forms while calculations lower separately) against the staged Rezono candidate in
 examples/subsidy-scheme/candidate/ holding subsidy.{rezono,json} and the rule modules
 assessment, costs, findings and scheme.
@@ -43,12 +43,19 @@ def isolated(tmp_path: Path, form: str) -> Path:
     verify_candidate_forms(SCHEME, MODULES, tmp_path)
     shutil.rmtree(target / "schema", ignore_errors=True)
     shutil.rmtree(target / "rules", ignore_errors=True)
-    shutil.copytree(SCHEME / "candidate", target / "rezono")
+    rezono_dir = target / "rezono"
+    rezono_dir.mkdir(exist_ok=True)
+    for name in MODULES:
+        shutil.copy2(SCHEME / "candidate" / f"{name}.rezono", rezono_dir / f"{name}.rezono")
+        shutil.copy2(SCHEME / "candidate" / f"{name}.json", rezono_dir / f"{name}.json")
     meta_path = target / "pack.yaml"
     meta = yaml.safe_load(meta_path.read_bytes())
-    meta["rezono"] = [
+    existing = list(meta.get("rezono") or [])
+    existing_modules = {entry["module"] for entry in existing}
+    meta["rezono"] = existing + [
         {"module": f"rezono/{name}.rezono", "form": f"rezono/{name}.json", "layer": "facts"}
         for name in MODULES
+        if f"rezono/{name}.rezono" not in existing_modules
     ]
     meta_path.write_text(yaml.safe_dump(meta, sort_keys=False), encoding="utf-8")
     return target

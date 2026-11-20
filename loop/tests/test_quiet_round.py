@@ -140,9 +140,9 @@ def test_quiet_round_rules():
     model = pack.read(LOOP)
     for settings, *_ in CASES:
         records = scenario(**settings)
-        ready, proof, outcome, drift = reference(records)
+        unblocked, proof, outcome, drift = reference(records)
         program, rows, explainer = evaluate(model, records)
-        assert any(row[:2] == (RUN, "publish") for row in rows["ready"]) is ready
+        assert any(row[:2] == (RUN, "publish") for row in rows["unblocked"]) is unblocked
         blocked = [row for row in rows["stuck"] if row[:2] == (RUN, "publish")]
         assert bool(blocked) is bool(proof)
         if blocked:
@@ -155,7 +155,6 @@ def test_quiet_round_rules():
             assert any({"probe", "probe-reading"} <= ground_ids(program, explainer, "drift", row) for row in findings)
 
 
-@pytest.mark.xfail(strict=True, reason="M2: Read decisions/quiet-observation-rounds.md. Waits for test_quiet_round_rules and test_recorded_correction. Extend loop/recording_input.py and the shared executor to preserve empty dated sweeps and use the admitted theory for each round.")
 def test_quiet_round_recording(monkeypatch, tmp_path, capsys):
     from rezono_compiler import batch, modules
 
