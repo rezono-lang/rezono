@@ -23,6 +23,7 @@ function stripIt(e: Expr): Expr {
 	if ('or' in e) return { or: e.or.map(stripIt) };
 	if ('not' in e) return { not: stripIt(e.not) };
 	if ('imply' in e) return { imply: [stripIt(e.imply[0]), stripIt(e.imply[1])] };
+	if ('otherwise' in e) return { otherwise: [stripIt(e.otherwise[0]), stripIt(e.otherwise[1])] };
 	if ('arith' in e) return { arith: [e.arith[0], stripIt(e.arith[1]), stripIt(e.arith[2])] };
 	if ('neg' in e) return { neg: stripIt(e.neg) };
 	if ('when' in e) return { when: [stripIt(e.when[0]), stripIt(e.when[1]), stripIt(e.when[2])] };

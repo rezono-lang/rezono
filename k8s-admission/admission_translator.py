@@ -579,18 +579,24 @@ def _homogeneous_parameter_tables(
     """Build CEL parameter tables whose map literals satisfy HomogeneousAggregateLiterals.
 
     Kubernetes ValidatingAdmissionPolicy enables cel.HomogeneousAggregateLiterals(), which
-    rejects map literals mixing `dyn` field selections (`x.<col>`) with concrete fixed
-    literals (`"TCP"`). Wrapping fixed literals in `dyn(...)` keeps every map value `dyn`
+    rejects map literals mixing distinct concrete column types (such as `string` and `int`
+    under the CRD OpenAPI schema) or mixing `dyn` field selections with concrete fixed
+    literals (`"TCP"`). Wrapping every map value in `dyn(...)` whenever a table has mixed
+    column types or fixed values keeps every map literal homogeneous (`map(string, dyn)`)
     in both plain cel-go and Kubernetes apiserver environments.
     """
     tables = parameter_tables(binding, program, namespace)
     for name, spec in binding["parameters"].items():
         lists = spec["lists"]
-        if not any(entry.get("fixed") for entry in lists):
-            continue
         relation = program.relations[name]
         scope = spec["scope"]
         non_scope = [col for col in (relation.key + relation.values) if col.name != scope]
+        needs_dyn = (
+            any(entry.get("fixed") for entry in lists)
+            or len({col.type for col in non_scope}) > 1
+        )
+        if not needs_dyn:
+            continue
         items = []
         for entry in lists:
             field = entry["field"]
@@ -604,7 +610,7 @@ def _homogeneous_parameter_tables(
             parts = []
             for col in non_scope:
                 if col.name in written:
-                    parts.append(f'"{col.name}": x.{col.name}')
+                    parts.append(f'"{col.name}": dyn(x.{col.name})')
                 else:
                     parts.append(f'"{col.name}": {_fixed_dyn_literal(fixed[col.name], col.type)}')
             items.append(f"{base}.map(x, {{{', '.join(parts)}}})")
@@ -654,7 +660,7 @@ def translate(program: rules.Program, binding: Mapping[str, Any], digest: str) -
     tables = _homogeneous_parameter_tables(binding, program, _NAMESPACE_EXPR)
     roots = {
         "object": "object",
-        "request": _request_root_expression(binding),
+        "request": "request",
     }
 
     base_relations = {name for name, rel in request_program.relations.items() if rel.role == "base"}
