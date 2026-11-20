@@ -42,6 +42,7 @@ CHECKOUT_READER = Path(__file__).resolve().parents[2] / DIR / "src" / "write-for
 KEY = "rezono"  # the key of pack.yaml (contract RezonoModule in contracts/pack.yaml)
 PAGE = "docs/rezono/publication.md"
 DATASET_FORMAT = "rezono.module/2"
+DATASET_FORMATS = (DATASET_FORMAT, REZONO_1_FORMAT)
 PATH = re.compile(r"^rezono/[a-z][a-z0-9_]*(/[a-z][a-z0-9_]*)*\.(rezono|json)$")
 # Declarations this slice does not lower, by the member that names them: what, and where the page says so.
 REFUSED = {
@@ -182,8 +183,10 @@ def effective_dataset_form(pack_dir: Path, d: Declared, pack: str, submitted: di
     """Read authored dataset tables unless the exact historical form-only declaration is present."""
     module = submitted["module"]
     name = Path(d.module).stem
-    matches_legacy = not submitted["spans"] and not any(header_errors(module, pack))
-    header = f"rezono 0\npack {pack}\ndataset {name}"
+    fmt = submitted["format"]
+    version = "1" if fmt == REZONO_1_FORMAT else "0"
+    matches_legacy = not submitted["spans"] and not any(header_errors(module, pack, form_format=fmt))
+    header = f"rezono {version}\npack {pack}\ndataset {name}"
     return source_form(pack_dir, d, submitted, errors,
                        lambda source: matches_legacy and source.replace("\r\n", "\n").removesuffix("\n") == header)
 
@@ -325,7 +328,7 @@ def _pending_authored(pack_dir: Path, meta: dict, decls: Iterable[Declared],
         if module_body(submitted, fmt) is None:
             continue
         if datasets_only:
-            plain = module_body(submitted, FORMAT)
+            plain = module_body(submitted, FORMAT) or module_body(submitted, REZONO_1_FORMAT)
             if plain is not None and fact_tables_only(plain):
                 if form_only_source(mod_path, submitted):
                     continue
@@ -336,8 +339,9 @@ def _pending_authored(pack_dir: Path, meta: dict, decls: Iterable[Declared],
                 ds_only = dataset_only(submitted)
                 ds_mod = ds_only["module"]
                 name = Path(d.module).stem
-                if (not ds_only["spans"] and not any(header_errors(ds_mod, pack_name))
-                        and source.replace("\r\n", "\n").removesuffix("\n") == f"rezono 0\npack {pack_name}\ndataset {name}"):
+                version = "1" if fmt == REZONO_1_FORMAT else "0"
+                if (not ds_only["spans"] and not any(header_errors(ds_mod, pack_name, form_format=fmt))
+                        and source.replace("\r\n", "\n").removesuffix("\n") == f"rezono {version}\npack {pack_name}\ndataset {name}"):
                     continue
         elif fmt != NATIVE_FORMAT:
             try:
@@ -348,8 +352,9 @@ def _pending_authored(pack_dir: Path, meta: dict, decls: Iterable[Declared],
             ds_mod = module_body(submitted, DATASET_FORMAT) or module_body(submitted, REZONO_1_FORMAT)
             if ds_mod is not None and named_dataset(ds_mod) is not None:
                 name = Path(d.module).stem
-                if (not submitted["spans"] and not any(header_errors(ds_mod, pack_name))
-                        and source.replace("\r\n", "\n").removesuffix("\n") == f"rezono 0\npack {pack_name}\ndataset {name}"):
+                version = "1" if fmt == REZONO_1_FORMAT else "0"
+                if (not submitted["spans"] and not any(header_errors(ds_mod, pack_name, form_format=fmt))
+                        and source.replace("\r\n", "\n").removesuffix("\n") == f"rezono {version}\npack {pack_name}\ndataset {name}"):
                     continue
         key = _cache_key(pack_dir, d, reader, node, data)
         if _cache_get(key) is None:
@@ -520,13 +525,16 @@ def is_dataset_form(path: Path, source: Path | None = None) -> bool:
         doc = json.loads(path.read_bytes())
     except (OSError, ValueError):
         return False
-    for fmt in (DATASET_FORMAT, REZONO_1_FORMAT):
+    for fmt in DATASET_FORMATS:
         module = module_body(doc, fmt)
         if module is not None and named_dataset(module) is not None:
             return True
-    module = module_body(doc, FORMAT)
-    return (source is not None and module is not None and fact_tables_only(module)
-            and not form_only_source(source, doc))
+    for fmt in (FORMAT, REZONO_1_FORMAT):
+        module = module_body(doc, fmt)
+        if (source is not None and module is not None and fact_tables_only(module)
+                and not form_only_source(source, doc)):
+            return True
+    return False
 
 
 def pack_language_version(forms: Iterable[dict]) -> str:
