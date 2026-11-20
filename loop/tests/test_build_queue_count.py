@@ -193,8 +193,8 @@ def counter_outcomes(tmp_path, cases):
            "build/rules/selection.dl. Write in build/ (schema/tasks.yaml and rules/tasks.dl). The same rule turns "
            "loop/tests/test_build_queue_count.py--test_build_queue_count[empty] and "
            "loop/tests/test_build_queue_count.py--test_planner_count_needs_the_listing_member green: remove their "
-           "marks in the same PR. Today the rules count the submitted pull records, so an omitted, emptied or unadmitted listing and "
-           "a bare reading still give a planner slot (MissingVerifiedQueue).",
+           "marks in the same PR. Today the rules count the submitted pull records, so an omitted, emptied or "
+           "unadmitted listing and a bare reading still give a planner slot (MissingVerifiedQueue).",
 )
 def test_planner_slot_needs_verified_pull_inventory(tmp_path):
     records = submitted(tmp_path / "admitted")

@@ -23,7 +23,7 @@ TABLE: dict[str, str] = {
     "std-loop": "f2cbf29c931e031ee692df95b17849f3ed370153e74f9b63fd9e7006f2f8e500",
     "std-order": "4d119b21fa769b810dae065d4fc4ab5aaa1c2ada76b042052a4e4fcdd1031557",
     "std-part": "207f4f097f68e6dade792b714754e0f279ce2c948be8adce82108a3abc18cca9",
-    "std-review": "a1b656fd682a6993e949a6c1b8c684f02b3fc96125979b847197d6322222a69f",
+    "std-review": "3202d07cafc83257bf172e0894c41b2bedcf4ced8d172863a4a36e5e0d683377",
     "std-time": "bb2863a03792228005fa6784ed1022c07ac82139cdbf0ff7914cd273b3e046a7",
     "std-view": "a544468e9e64efbe31dfc5ccf72f1eccbf508dafc55f7087a39ab9b4dd4bff60",
 }
