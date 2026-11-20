@@ -59,15 +59,6 @@ class MissingRezono1DerivedSyntax(AssertionError):
     """The reader did not parse, round-trip, or enforce domain/leading-dot rules for rezono 1 derived syntax."""
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=MissingRezono1DerivedSyntax,
-    reason="M3: decisions/language-rezono-1.md: Waits for rezono/test/test_rezono_1_version_switch.py. "
-           "Implement rezono 1 unified `derived` syntax in rezono/src/ (named `extend s: K`, multi-key module-level "
-           "`derived` with mandatory `over <domain>` for functional values, `.one()`, method-form `.where(...)` and "
-           "`.count(pred)` with bare relation column names, and `means`/`@` on `derived`), rejecting multi-key "
-           "functional derivations without `over` and rejecting leading-dot `.pred`. Read sections 1, 2 and 3.4.",
-)
 def test_rezono_1_unified_derived_reader():
     unified, missing_domain, leading_dot = read_modules(
         UNIFIED_DERIVED,
