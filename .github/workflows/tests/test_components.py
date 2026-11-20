@@ -797,7 +797,8 @@ class InventoryTests(unittest.TestCase):
             base, candidate = root / ".build-base", root / "scripts"
             for scripts in (base, candidate, check / "scripts"):
                 scripts.mkdir(parents=True)
-                for name in ("components.py", "pytest-plugins.txt", "red_guard.py", "red_list.py"):
+                for name in ("components.py", "examples-duration-profile.json", "pytest-plugins.txt",
+                             "red_guard.py", "red_list.py"):
                     shutil.copyfile(ROOT / "scripts" / name, scripts / name)
             names = [f"loop/test_{letter}.py" for letter in "abcde"]
             # The base weighs test_e heavily; the candidate has no profile and would split round-robin.
@@ -864,10 +865,28 @@ class InventoryTests(unittest.TestCase):
         # The profile shapes the matrix, so a change to it selects every component.
         self.assertTrue(ci.FILE_PROFILES["loop"].relative_to(ROOT).as_posix().startswith(ci.FULL_SELECTION_PATHS))
 
+    def test_examples_shards_hold_every_test_file_exactly_once_within_budget(self):
+        files = ci.test_files("examples")
+        total = ci.shard_count("examples")
+        self.assertEqual(total, 3)
+        groups = ci.shard_files("examples", files, total)
+        placed = [name for group in groups for name in group]
+        self.assertEqual(sorted(placed), files)
+        self.assertEqual(len(placed), len(set(placed)))
+        profile = json.loads(ci.FILE_PROFILES["examples"].read_text(encoding="utf-8"))
+        loads = [sum(profile["seconds"].get(name, profile["default_s"]) for name in group) for group in groups]
+        # Examples run across 4 cores per shard, so keeping each shard's total CPU seconds below 1200 s
+        # keeps wall-clock time well inside the python job's 20-minute timeout.
+        self.assertLess(max(loads), 1200, loads)
+        # The profile shapes the matrix, so a change to it selects every component.
+        self.assertTrue(ci.FILE_PROFILES["examples"].relative_to(ROOT).as_posix().startswith(ci.FULL_SELECTION_PATHS))
+
     def test_publication_fixture_is_built_once_and_read_from_isolated_stores(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            for rel in ("scripts/components.py", "scripts/pytest-plugins.txt", "scripts/red_guard.py",
+            for rel in ("scripts/components.py", "scripts/examples-duration-profile.json",
+                        "scripts/loop-duration-profile.json", "scripts/pytest-plugins.txt",
+                        "scripts/red_guard.py", "scripts/red_list.py",
                         ".github/workflows/publication_fixture.py"):
                 (root / rel).parent.mkdir(parents=True, exist_ok=True)
                 shutil.copyfile(ROOT / rel, root / rel)
@@ -936,9 +955,9 @@ class InventoryTests(unittest.TestCase):
             root = Path(tmp)
             (root / "scripts").mkdir()
             script = root / "scripts/components.py"
-            shutil.copyfile(ROOT / "scripts/components.py", script)
-            shutil.copyfile(ROOT / "scripts/pytest-plugins.txt", root / "scripts/pytest-plugins.txt")
-            shutil.copyfile(ROOT / "scripts/red_guard.py", root / "scripts/red_guard.py")
+            for name in ("components.py", "examples-duration-profile.json", "loop-duration-profile.json",
+                         "pytest-plugins.txt", "red_guard.py", "red_list.py"):
+                shutil.copyfile(ROOT / "scripts" / name, root / "scripts" / name)
             profile = Path(".github/workflows/compiler-duration-profile.json")
             (root / profile.parent).mkdir(parents=True)
             shutil.copyfile(ROOT / profile, root / profile)
@@ -1035,7 +1054,8 @@ class InventoryTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             (root / "scripts").mkdir()
-            for name in ("components.py", "red_list.py", "pytest-plugins.txt", "red_guard.py"):
+            for name in ("components.py", "examples-duration-profile.json", "loop-duration-profile.json",
+                         "pytest-plugins.txt", "red_guard.py", "red_list.py"):
                 shutil.copyfile(ROOT / "scripts" / name, root / "scripts" / name)
             component = root / "probe"
             component.mkdir()
