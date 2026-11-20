@@ -81,14 +81,14 @@ def _setup_store(tmp_path) -> store.FileStore:
     rules_bytes = json.dumps(RULES).encode("utf-8")
     bundle_key = "sample/bundles/bundle.json"
     rules_key = "sample/bundles/rules.json"
-    st.put(bundle_key, bundle_bytes)
-    st.put(rules_key, rules_bytes)
+    st.put_new(bundle_key, bundle_bytes)
+    st.put_new(rules_key, rules_bytes)
     snap_before = json.dumps([{"key": ["i1", "before"]}]).encode("utf-8")
     snap_after = json.dumps([{"key": ["i1", "after"]}]).encode("utf-8")
     obj_before = f"sample/objects/{_sha256(snap_before)}.json"
     obj_after = f"sample/objects/{_sha256(snap_after)}.json"
-    st.put(obj_before, snap_before)
-    st.put(obj_after, snap_after)
+    st.put_new(obj_before, snap_before)
+    st.put_new(obj_after, snap_after)
     compiled = [
         {"file": "bundle/schema-bundle.json", "uri": st.uri(bundle_key), "sha256": _sha256(bundle_bytes)},
         {"file": "ir/rules.json", "uri": st.uri(rules_key), "sha256": _sha256(rules_bytes)},
@@ -113,8 +113,8 @@ def _setup_store(tmp_path) -> store.FileStore:
              "uri": st.uri(obj_after), "sha256": _sha256(snap_after)},
         ],
     }
-    st.put("sample/manifests/m-1.json", json.dumps(base).encode("utf-8"))
-    st.put("sample/manifests/p-local-1-2.json", json.dumps(proposal).encode("utf-8"))
+    st.put_new("sample/manifests/m-1.json", json.dumps(base).encode("utf-8"))
+    st.put_new("sample/manifests/p-local-1-2.json", json.dumps(proposal).encode("utf-8"))
     return st
 
 

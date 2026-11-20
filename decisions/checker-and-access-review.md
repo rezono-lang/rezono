@@ -1,6 +1,14 @@
+---
+decider: [owner]
+decided_on: 2026-11-19
+valid_from: 2026-11-19
+state: in_force
+subject: pre-landing-review
+---
+
 # Review of the checker and access before they land
 
-A change to the independent checker or to read access is read by a reviewer before it lands. A change to the workflows or to the meaning of the compiler is still read after it lands. Every other change lands when the check is green, as before.
+A change to the independent checker, to read access or to what a cluster admits is read by a reviewer before it lands. A change to the workflows or to the meaning of the compiler is still read after it lands. Every other change lands when the check is green, as before.
 
 ## The paths read first
 
@@ -23,6 +31,8 @@ A pull request needs a review before it lands when it changes a file that is not
 | `edge/publisher/rezono_publisher/views.py` | which views a role gets, and the proof bounds it hands to the checker |
 | `edge/publisher/rezono_publisher/retained_calculation.py` | whether a selection from a retained publication is accepted: what it hands to the checker's `check_epoch` and `check_calc_bindings` |
 | `contracts/proof.yaml` | the witnesses and proofs the engine produces and the checker verifies |
+| `k8s-admission/` | which Pods and NetworkPolicies the API server admits in a managed namespace: the admission translator and its CEL, the rendered `ValidatingAdmissionPolicy`, the `NamespacePublication` parameter schema, and the fixtures and oracles they are checked against |
+| `examples/platform/network_policy.py` | which NetworkPolicies a namespace gets from a checked listener publication |
 
 An evidence completion (`decisions/evidence-completion.md`) is read before it lands as well, because nothing else checks where its evidence came from.
 
@@ -30,7 +40,7 @@ A test is a file that `scripts/red_guard.py` treats as test evidence: a `test_*`
 
 ## Why these and not the rest
 
-An error in the engine is caught by the tests, by the oracles that compute the same result independently, and by the checker, which refuses a witness that does not hold. An error in the checker is caught by none of these: an unsound proof is then accepted and published as checked. An error in read access is not caught either: a role then sees rows it may not read, and nothing downstream compares what it saw with what it should have seen. Both failures are silent, and both are hard to undo once a publication has been read.
+An error in the engine is caught by the tests, by the oracles that compute the same result independently, and by the checker, which refuses a witness that does not hold. An error in the checker is caught by none of these: an unsound proof is then accepted and published as checked. An error in read access is not caught either: a role then sees rows it may not read, and nothing downstream compares what it saw with what it should have seen. Both failures are silent, and both are hard to undo once a publication has been read. An error in admission is silent as well: a policy that fails open admits a NetworkPolicy wider than the published flows, or an image without build and signature evidence, and the cluster enforces it without a finding. The fail-open miscompilation repaired in #1082 had landed before anyone read it.
 
 The workflows and the compiler's semantics stay with review after landing. A wrong workflow shows up as a red or skipped check, and a wrong compiler result is caught by the oracles and by the checker. Reading them before they land would slow most of the work and add little.
 
@@ -47,3 +57,4 @@ The workflows and the compiler's semantics stay with review after landing. A wro
 - **Review everything before landing.** Most changes are covered by tests and oracles, and the queue would wait on reviewers for no gain.
 - **A code owner file.** It would require a second identity with review rights and a repository setting; a label bound to a commit hash needs neither and expires on every push.
 - **Only the checker.** Read access fails just as silently, so it is included.
+- **Only the admission translator.** The policy renderer, the parameter schema and the NetworkPolicy renderer decide as much about what a cluster admits, so the whole folder and the renderer are read.

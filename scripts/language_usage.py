@@ -16,7 +16,7 @@ import yaml
 
 
 ROOT = Path(__file__).resolve().parents[1]
-SCOPES = ("examples", "packs", "run")
+SCOPES = ("build", "examples", "packs", "run")
 BASIC_READER = ("rezono/test/module-json.test.ts", "the same text gives the same bytes, and they are the bytes of the contract fixture")
 BASIC_LOWERER = ("compiler/tests/test_rezono_module.py", "test_a_module_gives_the_bundle_and_the_engine_of_the_schema_file_that_says_the_same")
 NATIVE_RULE_EVIDENCE = (
@@ -31,6 +31,10 @@ NATIVE_PACK_EVIDENCE = {
     "native-rule-signatures": ("compiler/tests/rezono/test_native_rule_signatures.py", "test_native_rule_signatures"),
     "native-rule-publication-parity": (
         "compiler/tests/rezono/test_native_rule_publication_parity.py", "test_native_rule_publication_parity",
+    ),
+    "rezono-1-derived-reader": ("rezono/test/test_rezono_1_derived.py", "test_rezono_1_unified_derived_reader"),
+    "rezono-1-derivation-lowering": (
+        "compiler/tests/rezono/test_lower_rezono_1_derived.py", "test_lower_rezono_1_derived",
     ),
 }
 RULE_SPELLINGS = {"relational-rule", "native-rule"}
@@ -482,7 +486,8 @@ def render(root=ROOT):
              "Support requires the applicable reader, form and lowering tests without expected-failure markers.",
              "Pack readiness includes transitive local imports.",
              "Mixed conversion uses legacy pipe blocks. Native conversion uses typed rules.",
-             "Native conversion requires reader, form, IR, signature and publication evidence. Review explicit state predicates.",
+             "Native conversion requires reader, form, IR, signature, publication and rezono 1 derivation lowering evidence. "
+             "Review explicit state predicates.",
              "", "| Feature | Files | Reader and lowering |", "| --- | ---: | --- |"]
     for name, count in sorted(counts.items(), key=lambda item: (-item[1], item[0])):
         evidence = EVIDENCE.get(name)

@@ -28,7 +28,7 @@
 build_task_scope(run, task, step, track) :- build_verified_cut(run),
     build_task__run(task, run), build_task__step(task, step), build_task__track(task, track),
     build_task__source(task, source), source != "".
-build_task_ready(run, task, reason) :- build_task_scope(run, task, step, _), ready(run, step, reason).
+build_task_ready(run, task, reason) :- build_task_scope(run, task, step, _), unblocked(run, step, reason).
 build_task_waiting(run, task, token, reason) :- build_task_scope(run, task, step, _), waiting(run, step, token, reason).
 build_task_stuck(run, task, reason) :- build_task_scope(run, task, step, _), stuck(run, step, reason).
 

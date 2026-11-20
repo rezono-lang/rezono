@@ -130,15 +130,17 @@ def pytest_section(path, blob):
         return blob
 
 
-# Changes here decide whether a proof is accepted or what a role may see. Nothing downstream
-# catches a mistake in them, so a reviewer reads them before they land. The checker hashes
-# and encodes through rezono_canon, so that package decides as much as the checker itself.
+# Changes here decide whether a proof is accepted, what a role may see or what a cluster admits.
+# Nothing downstream catches a mistake in them, so a reviewer reads them before they land. The
+# checker hashes and encodes through rezono_canon, so that package decides as much as the checker
+# itself. An admission policy that is translated wrong fails open, and the cluster enforces it.
 READ_FIRST_DIRS = ("checker/rezono_checker/", "packs/std-access/", "edge/gate/src/",
-                   "canon/rezono_canon/")
+                   "canon/rezono_canon/", "k8s-admission/")
 # In the publisher, these decide what a role reads or what the checker is handed to check
-# it by; decisions/checker-and-access-review.md says what each decides.
+# it by; network_policy.py renders the NetworkPolicies a namespace gets from a checked
+# publication. decisions/checker-and-access-review.md says what each decides.
 PUBLISHER = "edge/publisher/rezono_publisher/"
-READ_FIRST_FILES = {"contracts/proof.yaml", *(PUBLISHER + name for name in (
+READ_FIRST_FILES = {"contracts/proof.yaml", "examples/platform/network_policy.py", *(PUBLISHER + name for name in (
     "access.py", "calc_scope.py", "sources.py", "sweep.py", "difference.py", "batch.py",
     "publish.py", "proof.py", "views.py", "retained_calculation.py"))}
 TEST_DIRS = {"test", "tests", "__tests__"}

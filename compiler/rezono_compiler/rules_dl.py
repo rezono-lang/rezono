@@ -107,6 +107,7 @@ class NativeSource:
     text: str
     statements: tuple[tuple, ...]
     columns: tuple[int, ...]
+    semantics: tuple[tuple[str, tuple[dict | None, ...]], ...] = ()
 
 
 @dataclass
@@ -431,7 +432,7 @@ def remap_statement(stmt, names):
         n, terms, line = a
         terms = list(terms)
         # The access vocabulary's second column names a schema kind, rather than an ordinary value.
-        if n in ("may_read", "may_propose", "may_review", "may_publish") and len(terms) > 1:
+        if n in ("may_read", "may_read_full", "may_propose", "may_review", "may_publish") and len(terms) > 1:
             t = terms[1]
             terms[1] = kind_constant(t)
         return name(n), terms, line
@@ -447,7 +448,7 @@ def remap_statement(stmt, names):
     if stmt[0] == "io":
         return stmt[0], stmt[1], [name(n) for n in stmt[2]], stmt[3]
     atoms = [stmt[1]] + [s[-1] for s in stmt[2] if s[0] in ("lit", "agg")]
-    kind_vars = {a[1][1][1] for a in atoms if a[0] in ("may_read", "may_propose", "may_review", "may_publish")
+    kind_vars = {a[1][1][1] for a in atoms if a[0] in ("may_read", "may_read_full", "may_propose", "may_review", "may_publish")
                  and len(a[1]) > 1 and a[1][1][0] == "var"}
     # Equality aliases keep the typed meaning of an access-kind column.
     changed = True
@@ -490,7 +491,8 @@ def module_of(source: str, root: str, stem: str) -> str:
 def read(pack, pack_dir: Path, imports=None, renames=None, *, calc_inputs=None, calc_parts=None,
          folds: dict | None = None, bodies: dict | None = None, spans: dict | None = None,
          generated: list | None = None, embedded: tuple[Embedded, ...] = (),
-         native: tuple[NativeSource, ...] = ()) -> tuple[dict | None, list[str]]:
+         native: tuple[NativeSource, ...] = (),
+         semantics: dict | None = None) -> tuple[dict | None, list[str]]:
     """The IR of the pinned rule closure (None when every rules/ is empty), and warnings. Raises RuleError.
 
     `calc_parts` is each imported pack's part of the calculation (`calc.read_closure`): a rule reads a
@@ -550,6 +552,8 @@ def read(pack, pack_dir: Path, imports=None, renames=None, *, calc_inputs=None, 
         try:
             if isinstance(contents, NativeSource):
                 text, stmts, starts = contents.text, contents.statements, list(contents.columns)
+                if semantics is not None:
+                    semantics.update(contents.semantics)
             else:
                 text = contents.read_text(encoding="utf-8") if isinstance(contents, Path) else contents
                 starts = []

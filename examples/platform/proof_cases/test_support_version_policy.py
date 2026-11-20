@@ -118,3 +118,40 @@ def test_support_version_policy():
     assert (severity, drift) == ({(REF, "svc", "kp-1.9", "warning")}, {row})
     leaves = verified(DRIFT, row, state=(model, state))
     assert leaf(leaves, "support_assessment_entry__severity", "reg-svc") and leaf(leaves, "pin__release", "pin-svc")
+
+
+def test_support_policy_conflict_and_unrecorded_bounds():
+    data = records()
+
+    # Two simultaneously active policies with different warning_days produce policy-conflict, not both severities.
+    conflicting = copy.deepcopy(data)
+    conflicting["decision"].append(decision("policy-10"))
+    conflicting["support_policy"].append({"id": "sp-10", "decision": "policy-10", "product": "kp", "warning_days": 10})
+    _, _, (_, severity, unknown, _) = outcome(conflicting)
+    assert severity == set()
+    assert unknown == {(REF, "svc-new", "pin-unmapped"), (REF, "svc", "policy-conflict")}
+
+    # A cycle with an unrecorded end bound yields an explicit unknown instead of silently disappearing.
+    no_end = copy.deepcopy(data)
+    target = next(c for c in no_end["vendor_cycle_support"] if c["id"] == "kp-1.9")
+    del target["end"]
+    _, _, (_, severity, unknown, _) = outcome(no_end)
+    assert severity == set()
+    assert unknown == {(REF, "svc-new", "pin-unmapped"), (REF, "svc", "end-not-recorded")}
+
+    # A cycle with an unrecorded start bound whose end still lies ahead also yields an explicit unknown.
+    no_start = copy.deepcopy(data)
+    target = next(c for c in no_start["vendor_cycle_support"] if c["id"] == "kp-1.9")
+    del target["start"]
+    _, _, (_, severity, unknown, _) = outcome(no_start)
+    assert severity == set()
+    assert unknown == {(REF, "svc-new", "pin-unmapped"), (REF, "svc", "start-not-recorded")}
+
+    # A cycle with an unrecorded start bound whose end has already passed is still critical, not unknown.
+    ended_no_start = copy.deepcopy(data)
+    target = next(c for c in ended_no_start["vendor_cycle_support"] if c["id"] == "kp-1.9")
+    del target["start"]
+    target["end"] = 250
+    _, _, (_, severity, unknown, _) = outcome(ended_no_start)
+    assert severity == {(REF, "svc", "kp-1.9", "critical")}
+    assert unknown == {(REF, "svc-new", "pin-unmapped")}

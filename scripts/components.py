@@ -344,9 +344,9 @@ SHARED_READERS = {
 FULL_SELECTION_PATHS = (
     ".github/workflows/ci.yml", ".github/workflows/disposable-cluster.yml",
     ".github/workflows/python-environment/", "blocked/",
-    "scripts/check-pinned.py", "scripts/components.py", "scripts/fast_check.py",
-    "scripts/install-souffle.sh", "scripts/loop-duration-profile.json", "scripts/pytest-plugins.txt",
-    "scripts/red_list.py",
+    "scripts/check-pinned.py", "scripts/components.py", "scripts/examples-duration-profile.json",
+    "scripts/fast_check.py", "scripts/install-souffle.sh", "scripts/loop-duration-profile.json",
+    "scripts/pytest-plugins.txt", "scripts/red_before.py", "scripts/red_guard.py", "scripts/red_list.py",
 )
 # What scripts/components.py itself reads while it runs one component's shards.
 JOB_INPUTS = {
@@ -854,14 +854,17 @@ FORMS_MODULE = "examples/subsidy/test_subsidy_forms.py"
 INDEPENDENT_PUBLICATIONS = "examples/subsidy/test_subsidy.py"
 FORMS_READER = ("test_a_ledger_payment_does_not_change_the_policy_adviser_s_form",
                 "test_each_role_s_standards_exports_pass_their_readers")
-SHARDS = {"compiler": 3, "edge/publisher": 2, "loop": 3}
+SHARDS = {"compiler": 3, "edge/publisher": 2, "examples": 3, "loop": 3}
 PARALLEL = {"compiler", "examples", "edge/publisher"}
 EXAMPLE_PROFILE = ROOT / ".github/workflows/examples-duration-profile.json"
 # Seconds per test file, as `run-shard` prints them for each shard of a hosted run. A component with
 # such a profile places its files longest first on the least loaded shard instead of round-robin. The
 # profile sits beside this script, so the base's copy (which builds the matrix and the inventory, and
 # verifies the execution) reads the base's profile, never the candidate's.
-FILE_PROFILES = {"loop": Path(__file__).resolve().parent / "loop-duration-profile.json"}
+FILE_PROFILES = {
+    "examples": Path(__file__).resolve().parent / "examples-duration-profile.json",
+    "loop": Path(__file__).resolve().parent / "loop-duration-profile.json",
+}
 
 
 def test_files(folder: str) -> list[str]:

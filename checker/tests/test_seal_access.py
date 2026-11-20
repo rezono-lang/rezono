@@ -38,9 +38,14 @@ ROWS = {"run": [["r1"]], "step": [["s1"], ["s2"]], "role": [["guest"], ["host"]]
         "may_read": [[r, k, x] for r in ("guest", "host") for k, x in (("run", "r1"), ("role", "guest"),
                                                                       ("role", "host"), ("step", "s1"))]
         + [["host", "step", "s2"]]}
-COLUMNS = {"run": ("run",), "step": ("step",), "role": ("role",), "run__month": ("run", None),
-           "step__run": ("step", "run"), "step__label": ("step", None), "run__row_sha256": ("run", None), "run__refused": ("run", "period_close"),
-           "run__accepted": ("run",), "step__accepted": ("step",), "may_read": ("role", None, None)}
+BUNDLE = {
+    "kinds": [{"id": "run"}, {"id": "step"}, {"id": "role"}, {"id": "period_close"}],
+    "arrows": [{"table": "step__run", "kind": "step", "target": "run"}],
+    "attributes": [
+        {"table": "run__month", "kind": "run"},
+        {"table": "step__label", "kind": "step"},
+    ],
+}
 
 
 def snaps(rows: dict) -> dict:
@@ -50,8 +55,7 @@ def snaps(rows: dict) -> dict:
 def check(role: str, mine: dict):
     """The role's full relations and the findings on base relations (may_read, derived, has no proofs here)."""
     mine = {rel: rs for rel, rs in mine.items() if rel != "may_read"}
-    full, findings = check_role(role, snaps(ROWS), snaps(mine), None, COLUMNS, ["run", "step", "role", "period_close"],
-                                {}, DOC)
+    full, findings = check_role(role, snaps(ROWS), snaps(mine), None, BUNDLE, DOC)
     return full, [f for f in findings if f["relation"] != "may_read"]
 
 

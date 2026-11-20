@@ -8,7 +8,7 @@ unproduced_goal(run, goal, token) :-
     !waiting_known(run, token), !goal_produced(run, token).
 
 .decl possible_progress(run: symbol)
-possible_progress(run) :- ready(run, _, _).
+possible_progress(run) :- unblocked(run, _, _).
 possible_progress(run) :-
     waiting(run, _, token, _),
     loop_pending_operation__run(operation, run), loop_pending_operation__token(operation, token).
