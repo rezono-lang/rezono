@@ -1,6 +1,6 @@
 // Translate the role's schema and bounded snapshot reader to the Rezono question evaluator.
 import { answer, check, isAsk, isError, load, NotEvaluated, page, print, questionHash, type AnswerRow, type AnswerSchema, type Checked, type Cursor, type Diagnostic, type Schema, type SlotDef, type TypeDef, type UndecidedRow, type World } from '../../../rezono/src/index.ts';
-import { NOT_READ_IN_FULL, snake } from '../../../rezono/src/schema.ts';
+import { baseTypeOf, NOT_READ_IN_FULL, snake } from '../../../rezono/src/schema.ts';
 import { canonicalJson } from '../../../viewer/src/lib/canon.ts';
 import type { Bundle } from '../../../contracts/typescript/generated/bundle.ts';
 import { roleCatalogue } from './catalogue.ts';
@@ -204,13 +204,28 @@ export class Cut extends Error {}
 
 /** The largest integer a JSON number holds exactly (Rezono Data §3.2, LD2). */
 const SAFE = 9007199254740991n;
+const INT = /^-?[0-9]+$/;
 /** LD2: a value of an integer type that declares both bounds within ±(2⁵³ − 1) is a JSON number; every other integer is a string. */
 function asNumber(schema: Schema, slot: SlotDef): boolean {
-	const type = schema.types?.[slot.type ?? ''] as (TypeDef & { min?: string; max?: string }) | undefined;
-	return type?.of === 'Integer' && type.min !== undefined && type.max !== undefined && -SAFE <= BigInt(type.min) && BigInt(type.max) <= SAFE;
+	if (slot.ref !== undefined || slot.type === undefined || baseTypeOf(schema, slot.type) !== 'Integer') return false;
+	const types = schema.types;
+	let cur: string | undefined = slot.type;
+	let min: string | undefined;
+	let max: string | undefined;
+	const seen = new Set<string>();
+	while (cur !== undefined) {
+		if (seen.has(cur)) return false;
+		seen.add(cur);
+		const type = types && Object.hasOwn(types, cur) ? (types[cur] as TypeDef & { min?: string; max?: string }) : undefined;
+		if (!type) break;
+		min ??= type.min;
+		max ??= type.max;
+		cur = type.of;
+	}
+	return min !== undefined && max !== undefined && INT.test(min) && INT.test(max) && -SAFE <= BigInt(min) && BigInt(max) <= SAFE;
 }
 function asBoolean(schema: Schema, slot: SlotDef): boolean {
-	return slot.ref === undefined && (slot.type === 'Bool' || (slot.type !== undefined && schema.types?.[slot.type]?.of === 'Bool'));
+	return slot.ref === undefined && slot.type !== undefined && baseTypeOf(schema, slot.type) === 'Bool';
 }
 function parseBoolean(relation: string, parts: string[]): boolean {
 	if (parts.length !== 2) throw new AskError(500, `${relation} holds a malformed boolean row`);
