@@ -68,6 +68,11 @@ classes:
       version: {description: Exact version selected by the scenario when known.}
       series: {description: Release series selected by the scenario when known.}
   Pin:
+    annotations:
+      path_equations:
+        - name: same_product
+          left: service.product
+          right: release.product
     attributes:
       id: {identifier: true}
       service: {range: Service, required: true}
