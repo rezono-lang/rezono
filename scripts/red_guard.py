@@ -675,44 +675,62 @@ def pin_updates(changes, base, rev):
     return frozenset(c.path for c in candidates if pin_update(c, tree, before))
 
 
-MUTATORS = {"append", "extend", "insert", "update", "add", "__setitem__"}
-
-
 def bare(node):
     """A copy of the node without red marks: lifting a mark changes no table."""
     return _Unmark().visit(copy.deepcopy(node))
 
 
-def definitions(tree):
-    """Each module-level name with the statements that give it its value, in order.
+COMPOUND = (ast.If, ast.For, ast.AsyncFor, ast.While, ast.With, ast.AsyncWith, ast.Try, ast.TryStar, ast.Match)
 
-    That is an assignment, an augmented assignment, a call that mutates it
-    (`NAME.append(...)` and the like), a subscript assignment or `del`, and a function or class
-    definition: a helper that returns a table is part of what a test reads.
+
+def base_name(target):
+    """The name a target writes through (`NAME`, `NAME[k]`, `NAME.attr`), or None."""
+    while isinstance(target, (ast.Subscript, ast.Attribute, ast.Starred)):
+        target = target.value
+    return target.id if isinstance(target, ast.Name) else None
+
+
+def definitions(tree):
+    """Each module-level name with the statements that give it its value, in order, and the rest.
+
+    A statement counts toward a name when it assigns, augments or deletes it or an item of it,
+    calls any method on it (`NAME.remove(...)`, `NAME.pop()`), defines it as a function or
+    class (a helper that returns a table is part of what a test reads), or is a compound
+    statement (if, for, while, with, try, match) that mentions it. A statement that counts
+    toward no name, such as `globals()[...] = ...`, `exec(...)` or `setattr(...)`, is
+    returned apart: the guard cannot tell which test it reaches.
     """
-    found = {}
+    found, rest = {}, []
     for node in tree.body:
         names = []
-        if isinstance(node, (ast.Assign, ast.AnnAssign, ast.AugAssign)):
-            for target in node.targets if isinstance(node, ast.Assign) else [node.target]:
-                for t in ast.walk(target):
-                    if isinstance(t, ast.Name):
-                        names.append(t.id)
-                    elif isinstance(t, ast.Subscript) and isinstance(t.value, ast.Name):
-                        names.append(t.value.id)
-        elif isinstance(node, ast.Delete):
-            names.extend(t.value.id if isinstance(t, ast.Subscript) else t.id for t in node.targets
-                         if isinstance(getattr(t, "value", t), ast.Name))
-        elif (isinstance(node, ast.Expr) and isinstance(node.value, ast.Call)
-              and isinstance(node.value.func, ast.Attribute) and node.value.func.attr in MUTATORS
-              and isinstance(node.value.func.value, ast.Name)):
-            names.append(node.value.func.value.id)
+        if isinstance(node, (ast.Assign, ast.AnnAssign, ast.AugAssign, ast.Delete)):
+            targets = (node.targets if isinstance(node, (ast.Assign, ast.Delete)) else [node.target])
+            flat = [e for target in targets for e in (target.elts if isinstance(target, (ast.Tuple, ast.List))
+                                                      else [target])]
+            names = [base_name(target) for target in flat]
+            if None in names:
+                rest.append(node)
+            names = [name for name in names if name]
+        elif isinstance(node, ast.Expr) and isinstance(node.value, ast.Call):
+            name = base_name(node.value.func.value) if isinstance(node.value.func, ast.Attribute) else None
+            if name:
+                names.append(name)
+            else:
+                rest.append(node)
         elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
             if not node.name.startswith(("test", "Test")):
                 names.append(node.name)
+        elif isinstance(node, COMPOUND):
+            names = sorted({n.id for n in ast.walk(node) if isinstance(n, ast.Name)})
+            if not names:
+                rest.append(node)
+        elif isinstance(node, (ast.Import, ast.ImportFrom)):
+            names = [(alias.asname or alias.name).split(".")[0] for alias in node.names]
+        elif not (isinstance(node, ast.Expr) and isinstance(node.value, ast.Constant)):
+            rest.append(node)  # Anything else at module level, but a docstring.
         for name in names:
             found.setdefault(name, []).append(node)
-    return found
+    return found, rest
 
 
 def changed_names(old_defs, new_defs):
@@ -772,7 +790,11 @@ def table(expr, defs, seen=frozenset()):
                         found.pop(ast.unparse(bare(target.slice)), None)
             elif isinstance(node, ast.Expr):
                 call = node.value
-                if call.func.attr in {"append", "add"} and call.args:
+                if not isinstance(call.func, ast.Attribute):
+                    continue
+                if call.func.attr in {"remove", "discard"} and call.args:
+                    found.pop(ast.unparse(bare(call.args[0])), None)
+                elif call.func.attr in {"append", "add"} and call.args:
                     found[ast.unparse(bare(call.args[0]))] = ast.dump(bare(call.args[0]))
                 elif call.func.attr == "insert" and len(call.args) > 1:
                     found[ast.unparse(bare(call.args[1]))] = ast.dump(bare(call.args[1]))
@@ -846,8 +868,10 @@ def table_changes(path, before, after):
         old_tree, new_tree = ast.parse(before.decode("utf-8")), ast.parse(after.decode("utf-8"))
     except UNREADABLE:
         return []
-    old_defs, new_defs = definitions(old_tree), definitions(new_tree)
+    (old_defs, old_rest), (new_defs, new_rest) = definitions(old_tree), definitions(new_tree)
     changed = changed_names(old_defs, new_defs)
+    # A changed statement that counts toward no name could reach any test of the module.
+    unknown = [ast.dump(bare(n)) for n in old_rest] != [ast.dump(bare(n)) for n in new_rest]
     old_scopes, notes = test_scopes(old_tree), []
     for test, nodes in test_scopes(new_tree).items():
         if test not in old_scopes:
@@ -858,6 +882,8 @@ def table_changes(path, before, after):
                      if isinstance(node, ast.ClassDef) else [node])
             read |= {n.id for part in parts for n in ast.walk(part) if isinstance(n, ast.Name)}
         notes.extend(f"CHANGED {path}::{test} reads the changed {name}" for name in sorted(changed & read))
+        if unknown:
+            notes.append(f"CHANGED {path}::{test} under a changed module-level statement")
 
         def cases_of(scope, defs):
             marks = []

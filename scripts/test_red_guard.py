@@ -197,7 +197,8 @@ def table_form_cases():
          top + b"BASE = [1, 2]\nCASES = BASE + [3]\n\n\n\x40pytest.mark.parametrize('x', CASES)\ndef test_a(x):\n"
          b"    assert x\n", b"BASE = [1, 2]", b"BASE = [1]", "test_a", "2", "CASES"),
         ("a module-level += that goes",
-         top + b"CASES = [1]\nCASES += [2]\n\n\n\x40pytest.mark.parametrize('x', CASES)\ndef test_a(x):\n    assert x\n",
+         top + b"CASES = [1]\nCASES += [2]\n\n\n\x40pytest.mark.parametrize('x', CASES)\ndef test_a(x):\n"
+         b"    assert x\n",
          b"CASES += [2]\n", b"", "test_a", "2", "CASES"),
         ("a module-level append that goes",
          top + b"CASES = [1]\nCASES.append(2)\n\n\n\x40pytest.mark.parametrize('x', CASES)\ndef test_a(x):\n"
@@ -226,6 +227,22 @@ def table_form_cases():
     if f"REMOVED {path}::test_a['b']" not in notes:
         raise AssertionError(f"a module-level del: errors {errors}, notes {notes}")
     print("REPORTED: a case lost through a module-level del")
+    # Any other module-level change to a table, however it is written, reports the tests.
+    base = top + b"CASES = [1, 2]\n\n\n\x40pytest.mark.parametrize('x', CASES)\ndef test_a(x):\n    assert x\n"
+    under = f"CHANGED {path}::test_a under a changed module-level statement"
+    reads = f"CHANGED {path}::test_a reads the changed CASES"
+    for label, line, expected in (
+            ("CASES.remove(2)", b"CASES.remove(2)\n", [reads, f"REMOVED {path}::test_a[2]"]),
+            ("CASES.pop()", b"CASES.pop()\n", [reads]),
+            ("an if that rebinds CASES", b"if True:\n    CASES = [1]\n", [reads]),
+            ("a for loop that removes from CASES", b"for _c in [2]:\n    CASES.remove(_c)\n", [reads]),
+            ("globals() that rebinds CASES", b"globals()['CASES'] = [1]\n", [under]),
+            ("exec at module level", b"exec('CASES = [1]')\n", [under])):
+        after = base.replace(b"\n\n\n\x40", b"\n" + line + b"\n\n\x40")
+        errors, notes = review([Change(path, "M", base, after)], planner=True)
+        if errors or any(note not in notes for note in expected):
+            raise AssertionError(f"{label}: errors {errors}, notes {notes}")
+        print(f"REPORTED: a module-level {label}")
 
 
 def pin_cases(function):
