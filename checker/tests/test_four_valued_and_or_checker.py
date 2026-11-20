@@ -119,15 +119,6 @@ def _run_check(ir_doc: dict, tables: dict[str, list[tuple[str, ...]]], witnesses
     return calc.check(witnesses, ir_doc, lambda rel: encoded.get(rel, {}))
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=CheckerFourValuedParityError,
-    reason="M1: decisions/four-valued-and-or-parity.md: Align checker/rezono_checker/calc.py `logic` and `worst_of` "
-           "with docs/rezono/expressions.md Appendix A.1 (`false and invalid = false`, `true or invalid = true`, "
-           "symmetric and multi-arity) and Appendix A.4 (commutative UTF-8 byte-order least reason selection in "
-           "`and`, `or`, and strict operators), matching tests/conformance/value-tt-and-false-invalid.yaml and "
-           "tests/conformance/value-tt-or-true-invalid.yaml.",
-)
 def test_checker_calc_follows_four_valued_and_or_conformance():
     and_case = _load_case("value-tt-and-false-invalid")
     or_case = _load_case("value-tt-or-true-invalid")
