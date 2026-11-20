@@ -8,10 +8,13 @@ function stripIt(e: Expr): Expr {
 	if ('path' in e) return e.path.length > 1 && e.path[0] === 'it' ? { path: e.path.slice(1) } : e;
 	if ('dot' in e) return { dot: [stripIt(e.dot[0]), e.dot[1]] };
 	if ('agg' in e) {
-		const [name, of, arg] = e.agg;
-		return arg === undefined ? { agg: [name, stripIt(of)] } : { agg: [name, stripIt(of), arg] };
+		const [name, of, arg, binder] = e.agg;
+		return arg === undefined ? { agg: [name, stripIt(of)] } : binder === undefined ? { agg: [name, stripIt(of), arg] } : { agg: [name, stripIt(of), arg, binder] };
 	}
-	if ('filter' in e) return { filter: [stripIt(e.filter[0]), e.filter[1]] };
+	if ('filter' in e) {
+		const [set, cond, binder] = e.filter;
+		return binder === undefined ? { filter: [stripIt(set), cond] } : { filter: [stripIt(set), cond, binder] };
+	}
 	if ('cmp' in e) return { cmp: [e.cmp[0], stripIt(e.cmp[1]), stripIt(e.cmp[2])] };
 	if ('in' in e) return { in: [stripIt(e.in[0]), stripIt(e.in[1])] };
 	if ('is' in e) return { is: [stripIt(e.is[0]), e.is[1]] };
