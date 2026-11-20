@@ -8,5 +8,5 @@ imports:
   - {name: std-time, path: ../../packs/std-time, sha256: bb2863a03792228005fa6784ed1022c07ac82139cdbf0ff7914cd273b3e046a7}
   - {name: std-access, path: ../../packs/std-access, sha256: 54c8a70d5c7108422fa02ac46d924c11d429b5fda79f20c33d4bc6505e53243d}
   - {name: std-decision, path: ../../packs/std-decision, sha256: 2fd4cc60cc4f1c7dca42da2f5368a08a992de39df7cd7db205b9118dd1b8fe5a}
-  - {name: std-loop, path: ../../packs/std-loop, sha256: 540bfe7462bc61e36e1bed81b2f4d8e377b8b0bd56105799c83a563eff10c23e}
+  - {name: std-loop, path: ../../packs/std-loop, sha256: a9228c666424f293db74a7291069f455a1af7f9075f31bd52a65128d7e8674f9}
   - {name: platform-capacity-interface, path: tenant-capacity/interface, sha256: 70f4ddbc8cebdcd40f5deb95ddb90165e964012bc04d5225998e49f65014befb}
