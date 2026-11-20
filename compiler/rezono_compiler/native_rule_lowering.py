@@ -25,8 +25,14 @@ def lower_modules(
     pack_kinds: Mapping[str, Kind] | None = None,
     steps: list[CompiledStep] | None = None,
 ) -> tuple[rules_dl.NativeSource, ...]:
-    authored = [(m, form) for m in definitions
-                if (form := m.form) is not None and form["format"] in rezono_module.NATIVE_FORMATS]
+    authored = [
+        (m, form) for m in definitions
+        if (form := m.form) is not None and (
+            form["format"] in rezono_module.NATIVE_FORMATS
+            or (form["format"] == rezono_module.REZONO_1_FORMAT
+                and any(isinstance(d, dict) and "step" in d for d in form["module"]["decls"]))
+        )
+    ]
     if not authored:
         return ()
     forms = {(m.pack, m.rel): form for m, form in authored}

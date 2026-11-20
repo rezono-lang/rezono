@@ -270,15 +270,6 @@ def test_scene_decisions_are_std_decision_facts(tmp_path):
     )
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason=(
-        "M2: decisions/platform-five-scenes.md: Add examples/platform/README.md naming all five scenes and "
-        "reporting '<D> decisions produce <O> produced objects' matching the complete live publication "
-        "(depends on test_scene_decisions_are_std_decision_facts)."
-    ),
-)
 def test_platform_readme_names_five_scenes_and_matches_publication_counts(tmp_path):
     assert README_FILE.is_file(), "examples/platform/README.md must exist"
     text = README_FILE.read_text(encoding="utf-8")

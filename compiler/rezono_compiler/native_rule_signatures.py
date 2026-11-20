@@ -266,6 +266,7 @@ def source_for(owner: str, path: str, form: dict, root: str, allowed: list[str],
     body = (
         rezono_module.module_body(form, rezono_module.NATIVE_FORMAT)
         or rezono_module.module_body(form, rezono_module.SAFE_STEP_FORMAT)
+        or rezono_module.module_body(form, rezono_module.REZONO_1_FORMAT)
     )
     form_format = form.get("format", rezono_module.NATIVE_FORMAT) if isinstance(form, dict) else rezono_module.NATIVE_FORMAT
     source = Source(owner, path, spans.where(owner, root, path), rules_dl.module_of(owner, root, name.stem),
@@ -644,8 +645,8 @@ def link_modules(meta: dict, definitions: list[modules.Module], imported: dict[s
     seen_steps: dict[tuple[str, str, str], tuple[Source, str]] = {}
     for source, at, decl in step_decls_raw:
         try:
-            if source.format != rezono_module.SAFE_STEP_FORMAT:
-                raise Refusal("R048", "Step declaration requires rezono.module/4", at)
+            if source.format not in (rezono_module.SAFE_STEP_FORMAT, rezono_module.REZONO_1_FORMAT):
+                raise Refusal("R048", "Step declaration requires rezono.module/4 or rezono.module/5", at)
             if (set(decl) - {"step", "columns", "when", "forbid", "effect", "confirm"}
                     or not {"step", "columns", "when", "effect", "confirm"} <= set(decl)):
                 raise Refusal("R048", "Invalid step declaration shape", at)
