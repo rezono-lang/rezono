@@ -15,7 +15,7 @@ param cap: Int
   version 2, valid 2026-03 = 38_520
   version 3, valid 2024-02 = 1_000
   version 4, valid 2026-12 = 50_000
-kind Item world closed
+kind Item
   amount: Money<EUR>
   derived high: Bool = amount > € 38_520.50
 """
@@ -29,7 +29,7 @@ param cap: Int
   version 2, valid 2026-03-01..<2026-04-01 = 38520
   version 3, valid 2024-02-01..<2024-03-01 = 1000
   version 4, valid 2026-12-01..<2027-01-01 = 50000
-kind Item world closed
+kind Item
   amount: Money<EUR>
   derived high: Bool = amount > € 38520.50
 """

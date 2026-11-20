@@ -10,14 +10,14 @@ from reader_probe import read_modules
 UNIFIED_DERIVED = """\
 rezono 1
 pack sample
-kind Group world closed
-kind Item world closed
+kind Group
+kind Item
   group: Group
   parent: Item?
-kind Link world closed
+kind Link
   src: Item
   dst: Item
-kind Choice world closed
+kind Choice
   item: Item
   group: Group
   target: Item
@@ -39,17 +39,17 @@ derived within(part: Item, whole: Item): Bool = part.parent = whole or within(pa
 MISSING_DOMAIN = """\
 rezono 1
 pack sample
-kind Group world closed
-kind Item world closed
+kind Group
+kind Item
 derived needs(a: Item, g: Group): Item = Item.where(it = a).one()
 """
 
 LEADING_DOT_REFUSED = """\
 rezono 1
 pack sample
-kind Edge world closed
+kind Edge
   pred: Text
-kind Item world closed
+kind Item
   tag: Text
   derived matches: Int = Edge.count(.pred = tag)
 """
