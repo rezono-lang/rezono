@@ -32,6 +32,11 @@ XLINK = "{http://www.w3.org/1999/xlink}"
 # allows none; still nothing that could act or reach outside the file is allowed in it.
 FORBIDDEN = {"script", "foreignObject", "image", "iframe", "embed", "object", "a", "animate", "animateMotion",
              "animateTransform", "set", "handler", "listener", "feImage"}
+FORBIDDEN_LOWER = {name.lower() for name in FORBIDDEN}
+BOMS = (b"\xef\xbb\xbf", b"\xff\xfe", b"\xfe\xff")
+XML_DECL = re.compile(r"<\?xml(?=\s)([\s\S]*?)\?>", re.IGNORECASE)
+XML_ENCODING = re.compile(r"""\bencoding\s*=\s*(?:"([^"]*)"|'([^']*)')""", re.IGNORECASE)
+CSS_COMMENT = re.compile(r"/\*.*?\*/", re.DOTALL)
 PNG = b"\x89PNG\r\n\x1a\n"
 
 
@@ -108,17 +113,33 @@ def check_assets(index: list, named: set, read_object) -> list[dict]:
 
 def svg_problem(data: bytes) -> str:
     """Why an SVG may not be served, or ''."""
-    if b"<!DOCTYPE" in data or b"<!ENTITY" in data:
-        return "DOCTYPE or ENTITY"
+    if data.startswith(BOMS) or b"\x00" in data:
+        return "non-UTF-8 encoding or BOM"
     try:
-        root = ET.fromstring(data)
+        text = data.decode("utf-8")
+    except UnicodeDecodeError:
+        return "not valid UTF-8"
+    lowered = text.lower()
+    if "<!doctype" in lowered or "<!entity" in lowered:
+        return "DOCTYPE or ENTITY"
+    if "<?xml-stylesheet" in lowered:
+        return "processing instruction <?xml-stylesheet>"
+    for decl in XML_DECL.finditer(text):
+        body = decl.group(1)
+        if "encoding" in body.lower():
+            encs = [a or b for a, b in XML_ENCODING.findall(body)]
+            if len(encs) != 1 or encs[0].lower() != "utf-8":
+                return "non-UTF-8 XML declaration"
+    try:
+        root = ET.fromstring(text)
     except ET.ParseError as e:
         return f"not well-formed ({e})"
     if root.tag not in ("svg", f"{SVG}svg"):
         return "the root is not <svg>"
     for el in root.iter():
         tag = el.tag.rsplit("}", 1)[-1]
-        if tag in FORBIDDEN:
+        tag_lower = tag.lower()
+        if tag_lower in FORBIDDEN_LOWER:
             return f"element <{tag}>"
         for name, value in el.attrib.items():
             local = name.rsplit("}", 1)[-1].lower()
@@ -126,11 +147,24 @@ def svg_problem(data: bytes) -> str:
                 return f"event attribute {local}"
             if local == "href" and not value.startswith("#"):
                 return "a reference outside the file"
+            if local == "style" and unsafe_css(value):
+                return "a reference outside the file in style"
             if external(value):
                 return f"a reference outside the file in {local}"
-        if tag == "style" and (external(el.text or "") or "@import" in (el.text or "")):
+        if tag_lower == "style" and unsafe_css("".join(el.itertext())):
             return "a reference outside the file in <style>"
     return ""
+
+
+def unsafe_css(text: str) -> bool:
+    """CSS that uses escapes, @import, or an external reference."""
+    if "\\" in text:
+        return True
+    stripped = CSS_COMMENT.sub("", text)
+    for candidate in (text, stripped):
+        if "@import" in candidate.lower() or external(candidate):
+            return True
+    return False
 
 
 def external(text: str) -> bool:
@@ -138,7 +172,7 @@ def external(text: str) -> bool:
     lowered = text.lower()
     if "javascript:" in lowered or "data:" in lowered:
         return True
-    return any(not u.strip(" '\"").startswith("#") for u in re.findall(r"url\(([^)]*)\)", lowered))
+    return any(not u.strip(" '\"\t\r\n").startswith("#") for u in re.findall(r"url\s*\(([^)]*)", lowered))
 
 
 def png_problem(data: bytes) -> str:
