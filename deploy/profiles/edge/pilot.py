@@ -40,7 +40,8 @@ def check_statuses(role: str, manifest: dict, truth: dict | None = None) -> None
         raise SystemExit(f"{role} checks: expected a list, got {checks!r}")
     for check in checks:
         if (not isinstance(check, dict) or set(check) != {"name", "status"}
-                or not isinstance(check["name"], str) or not check["name"]):
+                or not isinstance(check["name"], str) or not check["name"]
+                or not isinstance(check["status"], str)):
             raise SystemExit(f"{role} checks: invalid check entry {check!r}")
     statuses = {check["status"] for check in checks}
     if not statuses <= {"green", "warning", "unavailable"}:

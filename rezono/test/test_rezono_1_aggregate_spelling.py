@@ -19,8 +19,8 @@ ROOT = Path(__file__).resolve().parents[2]
 COUNT = """\
 rezono 1
 pack sample
-kind Household world closed
-kind Application world closed
+kind Household
+kind Application
   household: Household
 extend h: Household
   derived applications: Int = {aggregate}
@@ -29,9 +29,9 @@ extend h: Household
 FILTERED_COUNT = """\
 rezono 1
 pack sample
-kind Application world closed
-kind CostItem world closed
-kind CostLine world closed
+kind Application
+kind CostItem
+kind CostLine
   application: Application
   item: CostItem
   amount: Int
@@ -44,8 +44,8 @@ extend a: Application
 SUM = """\
 rezono 1
 pack sample
-kind Application world closed
-kind LedgerPayment world closed
+kind Application
+kind LedgerPayment
   accepted: Bool
   application: Application
   amount: Int
