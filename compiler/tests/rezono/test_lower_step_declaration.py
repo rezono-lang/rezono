@@ -154,21 +154,6 @@ def make_pack(
     return directory
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=MissingStepDeclarationLowering,
-    reason="extra: decisions/language-safe-steps.md: Include ports/<name>.yaml in compiler/rezono_compiler/modules.py "
-           "DEFINITION (note: adding ports/ to DEFINITION changes pack import pins and the standard pack hash table "
-           "in compiler/rezono_compiler/standard_packs.py for packs carrying ports/), load ports via rezono_ports.load "
-           "and safe_steps bindings in pack.yaml, admit step declarations in rezono.module/4, and expose Pack.steps "
-           "(empty tuple when unused) with CompiledStep (id, match_relation emitted in Pack.rules/ir/rules.json, "
-           "typed columns, blockers, operation, changes, confirmation with derived identity and slot postconditions). "
-           "Refuse unresolved operations and incomplete reader targets with CompileError. "
-           "Blocked for a worker PR: scripts/test_red_guard.py requires scripts/red_guard.py DEFINITION to match "
-           "compiler/rezono_compiler/modules.py DEFINITION, while scripts/red_guard.py is a POLICY file that cannot "
-           "be changed without planner or alongside a lifted xfail mark; a planner must add ports/*.yaml to DEFINITION "
-           "in both files first (and PR #1089 is open for rezono.module/4 admission).",
-)
 def test_lower_step_declaration(tmp_path):
     # Counter-case 1: an ordinary pack without steps exposes an empty Pack.steps tuple.
     plain_dir = Path(shutil.copytree(FIXTURE, tmp_path / "plain" / "minimal"))
