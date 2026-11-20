@@ -10,12 +10,6 @@ S = "string"
 KEY = [("namespace", S), ("service", S)]
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="M4: Name each request relation and its object kind in partition_rule's refusal, as "
-           "decisions/k8s-admission-translator.md specifies under What CEL cannot do. "
-           "Write in k8s-admission/admission_rule_partition.py.",
-)
 def test_partition_diagnostic():
     from admission_rule_partition import partition_rule
 

@@ -1,7 +1,7 @@
 """Hold the compiler's error-code budget to the budget on the base, cell by cell, using only the standard library.
 
-compiler/tests/test_error_codes.py requires the error sites without a code to match
-compiler/error-code-budget.json exactly. This check requires each cell of that budget (one file, one
+compiler/tests/test_error_codes.py requires the error sites without a code to stay within
+compiler/error-code-budget.json, cell by cell. This check requires each cell of that budget (one file, one
 class) to be at most the same cell on the base commit, so the budget never rises and a new site in one
 cell cannot be paid for by a code in another (decisions/compiler-error-codes.md).
 

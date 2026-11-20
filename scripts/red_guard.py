@@ -10,20 +10,26 @@ Removed and changed evidence is reported either way.
 One exception lets a planner complete evidence: with the label, a pull request may lift one
 red mark beside new evidence data that test reads (added files under expected/, snapshots/
 or vectors/), if it changes nothing else. red_before.py
-then shows that the test is red on the base and green with the new evidence.
+then shows that the test is red on the base and green with the new evidence. A second one
+lets a planner re-pin the imports of a fixture pack beside a lifted mark, to the hash the
+guard computes for the imported pack at the head (decisions/fixture-pin-update.md).
 
 A pull request that changes the checker or read access in a file that is not a test is
-read before it lands: it needs the label `p1-read-` plus the first seven characters of its
-head commit, whatever other labels it carries. A new push therefore needs a new label.
+read before it lands: it needs the label `p1-read-` plus the full id of its head commit
+(40 hex characters), whatever other labels it carries. A new push therefore needs a new label.
 In the merge queue no labels are read and this rule does not apply.
 """
 import argparse
 import ast
 from collections import Counter, namedtuple
 import copy
+from fnmatch import fnmatchcase
+import hashlib
 import io
 import json
 from pathlib import PurePosixPath
+import posixpath
+import re
 import subprocess
 import sys
 import tokenize
@@ -38,6 +44,10 @@ import tokenize
 SOURCE_POLICY = {
     ".github/workflows/python-environment/action.yml", "loop/rezono_cluster.py",
     "scripts/cluster_worker_tasks.py", "scripts/role_publication_ci.py", "scripts/components.py",
+    # The cluster task split imports fast_check.py, and the cluster workflow runs it for a
+    # task; for a suite, select_tests.py chooses the cluster tests and nothing counts them.
+    # ci.yml runs red_list.py to decide whether the milestones and skips hold.
+    "scripts/fast_check.py", "loop/cluster/select_tests.py", "scripts/red_list.py",
 }
 POLICY = SOURCE_POLICY | {
     ".github/workflows/red-policy.yml",
@@ -80,9 +90,16 @@ def protected(path):
 
 
 # Changes here decide whether a proof is accepted or what a role may see. Nothing downstream
-# catches a mistake in them, so a reviewer reads them before they land.
-READ_FIRST_DIRS = ("checker/rezono_checker/", "packs/std-access/", "edge/gate/src/")
-READ_FIRST_FILES = {"edge/publisher/rezono_publisher/access.py", "contracts/proof.yaml"}
+# catches a mistake in them, so a reviewer reads them before they land. The checker hashes
+# and encodes through rezono_canon, so that package decides as much as the checker itself.
+READ_FIRST_DIRS = ("checker/rezono_checker/", "packs/std-access/", "edge/gate/src/",
+                   "canon/rezono_canon/")
+# In the publisher, these decide what a role reads or what the checker is handed to check
+# it by; decisions/checker-and-access-review.md says what each decides.
+PUBLISHER = "edge/publisher/rezono_publisher/"
+READ_FIRST_FILES = {"contracts/proof.yaml", *(PUBLISHER + name for name in (
+    "access.py", "calc_scope.py", "sources.py", "sweep.py", "difference.py", "batch.py",
+    "publish.py", "proof.py", "views.py"))}
 TEST_DIRS = {"test", "tests", "__tests__"}
 READ_LABEL = "p1-read-"
 
@@ -112,7 +129,8 @@ def read_label(head):
     if not (isinstance(head, str) and len(head) == 40
             and all(ch in "0123456789abcdef" for ch in head)):
         return None
-    return READ_LABEL + head[:7]
+    # The full id: a prefix is cheap to match with another commit, which would inherit the label.
+    return READ_LABEL + head
 
 
 def is_red(node):
@@ -456,12 +474,187 @@ def pack_roots(rev):
                      for n in names if n.endswith(b"/pack.yaml"))
 
 
-def review(changes, planner=False, head=None, labels=(), packs=frozenset()):
+# A pin update: a pack that changes gets a new hash, and every pack.yaml that imports it pins
+# the new one. In a fixture or test pack that is a protected change, yet it holds no
+# expectation of its own. With the planner label it may come beside a lifted mark when the
+# guard computes the new hash itself (decisions/fixture-pin-update.md).
+# The files that make up a pack's hash, as compiler/rezono_compiler/modules.py defines them
+# (DEFINITION and pack_hash); scripts/test_red_guard.py keeps the two the same.
+DEFINITION = ("pack.yaml", "channels.yaml", "schema/**/*.yaml", "rezono/**/*.rezono", "rezono/**/*.json",
+              "labels/*.yaml", "messages/*.mf2", "rules/*.dl", "calc/*.yaml", "sweeps.yaml", "questions.yaml",
+              "views.yaml", "icons/*.svg", "icons/sources.yaml")
+PIN_DIRS = {"fixture", "fixtures", "test", "tests"}
+PIN = re.compile(r"sha256:[ \t]*([0-9a-f]{64})\b")
+REGULAR = {"100644", "100755"}
+
+
+class Tree:
+    """The files of one revision: `modes` maps each path to its Git mode, `read` gives its bytes."""
+
+    def __init__(self, modes, read):
+        self.modes, self.read = modes, read
+
+    @classmethod
+    def of(cls, files):
+        """A tree of regular files from {path: bytes}, for tests."""
+        return cls({path: "100644" for path in files}, files.__getitem__)
+
+    @classmethod
+    def at(cls, rev):
+        """The tree of a revision, read from Git objects only."""
+        modes, oids = {}, {}
+        for entry in filter(None, git("ls-tree", "-r", "-z", "--full-tree", rev).split(b"\0")):
+            meta, raw = entry.split(b"\t", 1)
+            mode, _, oid = meta.decode().split()
+            path = raw.decode("utf-8", "surrogateescape")
+            modes[path], oids[path] = mode, oid
+        return cls(modes, lambda path: git("cat-file", "blob", oids[path]))
+
+
+def definition_file(rel):
+    """Whether a path relative to a pack root matches DEFINITION, as pathlib's glob does."""
+    parts = rel.split("/")
+    for pattern in DEFINITION:
+        pp = pattern.split("/")
+        if "**" not in pp:
+            if len(parts) == len(pp) and all(map(fnmatchcase, parts, pp)):
+                return True
+            continue
+        at = pp.index("**")
+        head, tail = pp[:at], pp[at + 1:]
+        if (len(parts) >= len(head) + len(tail) and all(map(fnmatchcase, parts[:len(head)], head))
+                and all(map(fnmatchcase, parts[len(parts) - len(tail):], tail))):
+            return True
+    return False
+
+
+def canonical_hash(files):
+    """rezono_canon.canonical_sha256 of a {str: str} mapping: RFC 8785 keys in UTF-16 order."""
+    text = "{" + ",".join(json.dumps(k, ensure_ascii=False) + ":" + json.dumps(files[k], ensure_ascii=False)
+                          for k in sorted(files, key=lambda k: k.encode("utf-16-be"))) + "}"
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def pack_hash(tree, pack_dir):
+    """The pack's hash at `tree`, or None when a file in the pack is not a regular file."""
+    prefix, files = pack_dir + "/", {}
+    for path, mode in tree.modes.items():
+        if not path.startswith(prefix):
+            continue
+        if mode not in REGULAR:
+            return None  # A link or a submodule: what pathlib reads there is not in the tree.
+        rel = path[len(prefix):]
+        if definition_file(rel):
+            files[rel] = hashlib.sha256(tree.read(path)).hexdigest()
+    return canonical_hash(files)
+
+
+def import_pins(text):
+    """{line number: (name, path, sha256)} for each pin in the imports of a pack.yaml text.
+
+    An import is a sequence item under the top-level `imports:` key, written as a block or a
+    flow mapping. Its sha256 sits on one line; an item with no or several pins is left out.
+    """
+    lines, pins, item, inside = text.splitlines(), {}, [], False
+
+    def close():
+        found = [i for i in item if PIN.search(lines[i])]
+        body = "\n".join(lines[i] for i in item)
+        name = re.search(r"\bname:[ \t]*['\"]?([a-z0-9-]+)", body)
+        path = re.search(r"\bpath:[ \t]*['\"]?([^\s,}'\"]+)", body)
+        if len(found) == 1 and len(PIN.findall(body)) == 1 and name and path:
+            pins[found[0]] = (name.group(1), path.group(1), PIN.search(lines[found[0]]).group(1))
+
+    for i, line in enumerate(lines):
+        if not line.strip() or line.lstrip().startswith("#"):
+            continue
+        if not line[0].isspace() and not line.startswith("-"):
+            if item:
+                close()
+            item, inside = [], bool(re.match(r"imports:[ \t]*(#.*)?$", line))
+            continue
+        if inside:
+            if line.lstrip().startswith("-"):
+                if item:
+                    close()
+                item = []
+            item.append(i)
+    if inside and item:
+        close()
+    return pins
+
+
+def imported_dirs(tree, pack_dir, seen=None):
+    """The pack directories that `pack_dir` imports at `tree`, directly or not."""
+    seen = set() if seen is None else seen
+    try:
+        text = tree.read(pack_dir + "/pack.yaml").decode("utf-8")
+    except (KeyError, UnicodeError, subprocess.CalledProcessError):
+        return seen
+    for _, path, _ in import_pins(text).values():
+        target = posixpath.normpath(posixpath.join(pack_dir, path))
+        if target not in seen and not target.startswith("../"):
+            seen.add(target)
+            imported_dirs(tree, target, seen)
+    return seen
+
+
+def pin_update(change, tree, changed):
+    """Whether a change only re-pins imports of a fixture or test pack to their hash at `tree`.
+
+    The pack.yaml exists already (status M) under a fixture or test directory. Only lines with
+    `sha256: <64 hex>` in its imports differ, each only in that value, and each new value is
+    the hash of the imported pack at `tree`. That pack, or one it imports, changes in this pull
+    request (`changed` holds every changed path).
+    """
+    p = PurePosixPath(change.path)
+    if not (change.status == "M" and p.name == "pack.yaml" and change.before is not None
+            and change.after is not None and PIN_DIRS.intersection(part.lower() for part in p.parts[:-1])):
+        return False
+    try:
+        before, after = change.before.decode("utf-8"), change.after.decode("utf-8")
+    except UnicodeError:
+        return False
+    old_lines, new_lines = before.splitlines(keepends=True), after.splitlines(keepends=True)
+    if len(old_lines) != len(new_lines):
+        return False
+    differ = [i for i, (a, b) in enumerate(zip(old_lines, new_lines)) if a != b]
+    old_pins, new_pins = import_pins(before), import_pins(after)
+    if not differ:
+        return False
+    for i in differ:
+        if (i not in old_pins or i not in new_pins or old_pins[i][:2] != new_pins[i][:2]
+                or PIN.sub("", old_lines[i]) != PIN.sub("", new_lines[i])):
+            return False
+        _, path, digest = new_pins[i]
+        target = posixpath.normpath(posixpath.join(str(p.parent), path))
+        if target.startswith("../") or target + "/pack.yaml" not in tree.modes:
+            return False
+        if pack_hash(tree, target) != digest:
+            return False
+        dirs = {target} | imported_dirs(tree, target)
+        if not any(c.startswith(d + "/") for d in dirs for c in changed):
+            return False
+    return True
+
+
+def pin_updates(changes, rev):
+    """The paths of the changes that are pin updates at `rev`."""
+    candidates = [c for c in changes if c.status == "M" and PurePosixPath(c.path).name == "pack.yaml"
+                  and protected(c.path)]
+    if not candidates:
+        return frozenset()
+    tree, changed = Tree.at(rev), {c.path for c in changes}
+    return frozenset(c.path for c in candidates if pin_update(c, tree, changed))
+
+
+def review(changes, planner=False, head=None, labels=(), packs=frozenset(), pins=frozenset()):
     """Return (errors, notes) for a sequence of Change records.
 
     `head` and `labels` describe a pull request. Without `head`, as in the merge queue,
     labels are not read and changes to the checker or read access are not refused.
-    `packs` holds the pack roots of the reviewed revision, for an evidence completion.
+    `packs` holds the pack roots of the reviewed revision, for an evidence completion, and
+    `pins` the paths whose change is a pin update (`pin_update`).
     """
     changes = list(changes)
     errors, notes, lifted, other, unread = [], [], [], [], []
@@ -473,6 +666,9 @@ def review(changes, planner=False, head=None, labels=(), packs=frozenset()):
         if not protected(c.path):
             continue
         quoted = ascii(c.path)
+        if planner and c.path in pins:
+            notes.append(f"PINNED {c.path}")
+            continue
         if not (c.path.endswith(".py") and allowed(c.path, c.before, c.after)):
             other.append(quoted)
             if not planner:
@@ -569,7 +765,9 @@ def check(base, head, planner=False, labels=None):
     pr_head = None
     if labels is not None:
         pr_head = git("rev-parse", "--verify", "--end-of-options", head + "^{commit}").decode().strip()
-    return review(list(changes(base, head)), planner, pr_head, labels or (), pack_roots(head))
+    records = list(changes(base, head))
+    pins = pin_updates(records, head) if planner else frozenset()
+    return review(records, planner, pr_head, labels or (), pack_roots(head), pins)
 
 
 def label_list(text):

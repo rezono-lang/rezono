@@ -86,12 +86,6 @@ def match(var, columns):
     return " && ".join(parts)
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="M4: Write cel_request.quantify and cel_request.missing as decisions/k8s-admission-translator.md specifies "
-           "under The binding and Request sources. Write in k8s-admission/cel_request.py. Needs Go: the cel-go "
-           "oracle decides, so run it where Go is installed or rely on the CI.",
-)
 def test_cel_request_sources():
     from cel_request import missing, quantify
 
