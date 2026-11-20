@@ -189,3 +189,26 @@ def test_boolean_attributes_write_bool_slots_and_exact_boolean_values():
         bad_rows = {**WIDE["rows"], "holder__active": [("h1", bad)]}
         with pytest.raises(publication.FormError, match="holder__active.*not a boolean value"):
             publication.row_json(doc, plan, {"rows": bad_rows, "witnesses": [], "sources": []})
+
+    # Derived relations with boolean columns round-trip through schema, rows, and differences.
+    bundle["relations"] = [
+        *bundle.get("relations", []),
+        {"id": "flag_check", "world": "closed", "columns": [
+            {"name": "subject", "type": "string"},
+            {"name": "complete", "type": "boolean"},
+        ]},
+    ]
+    derived_rows = {**rows, "flag_check": [("h1", "true"), ("h2", "false")]}
+    doc2, plan2, out2 = form_of({**WIDE, "rows": derived_rows}, bundle=bundle, full=None)
+    assert doc2["kinds"]["FlagCheck"]["slots"]["complete"] == {
+        "type": "Bool", "card": "1", "states": ["known"], "derived": True,
+    }
+    flag_rows = [r for r in out2 if r["$kind"] == "FlagCheck"]
+    assert flag_rows == [
+        {"$kind": "FlagCheck", "$id": '["h1","true"]', "subject": "h1", "complete": True},
+        {"$kind": "FlagCheck", "$id": '["h2","false"]', "subject": "h2", "complete": False},
+    ]
+    assert publication.differences(doc2, plan2, out2, derived_rows) == []
+    with pytest.raises(publication.FormError, match=r"flag_check\.complete.*not a boolean value"):
+        publication.row_json(doc2, plan2, {"rows": {**rows, "flag_check": [("h1", "yes")]},
+                                           "witnesses": [], "sources": []})

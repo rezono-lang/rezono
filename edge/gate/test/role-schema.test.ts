@@ -100,21 +100,42 @@ test('roleSchema names pattern-text types after schema_type and refuses collidin
 	assert.equal(view.schema.kinds.Item.slots.alias.type, 'ItemCode');
 	assert.deepEqual(view.schema.types, { ItemCode: { of: 'Text', pattern: '^[a-z]+$' } });
 
-	const colliding = {
+	const collidingNamed = {
+		...bundle,
+		attributes: [
+			{ ...bundle.attributes[0], schema_type: 'item_code', patterns: ['^[a-z]+$'] },
+			{ ...bundle.attributes[1], schema_type: 'item_code', patterns: ['^[0-9]+$'] }
+		]
+	};
+	assert.throws(
+		() => roleSchema(collidingNamed as unknown as Bundle, [
+			{ relation: 'item', complete: true, full: true },
+			{ relation: 'item__code', complete: true, full: true },
+			{ relation: 'item__alias', complete: true, full: true }
+		]),
+		(err: unknown) => err instanceof AskError && err.status === 501 && /second type named ItemCode/.test(err.message)
+	);
+
+	// Plain `string` inline patterns share `String` when identical and isolate to `${Kind}${Slot}` when distinct.
+	// Slots are processed in sorted `id` order, so `item.alias` claims `String` and `item.code` isolates to `ItemCode`.
+	const inlineStrings = {
 		...bundle,
 		attributes: [
 			{ ...bundle.attributes[0], schema_type: 'string', patterns: ['^[a-z]+$'] },
 			{ ...bundle.attributes[1], schema_type: 'string', patterns: ['^[0-9]+$'] }
 		]
 	};
-	assert.throws(
-		() => roleSchema(colliding as unknown as Bundle, [
-			{ relation: 'item', complete: true, full: true },
-			{ relation: 'item__code', complete: true, full: true },
-			{ relation: 'item__alias', complete: true, full: true }
-		]),
-		(err: unknown) => err instanceof AskError && err.status === 501 && /second type named String/.test(err.message)
-	);
+	const inlineView = roleSchema(inlineStrings as unknown as Bundle, [
+		{ relation: 'item', complete: true, full: true },
+		{ relation: 'item__code', complete: true, full: true },
+		{ relation: 'item__alias', complete: true, full: true }
+	]);
+	assert.equal(inlineView.schema.kinds.Item.slots.alias.type, 'String');
+	assert.equal(inlineView.schema.kinds.Item.slots.code.type, 'ItemCode');
+	assert.deepEqual(inlineView.schema.types, {
+		String: { of: 'Text', pattern: '^[0-9]+$' },
+		ItemCode: { of: 'Text', pattern: '^[a-z]+$' }
+	});
 });
 
 test('roleSchema preserves derived column types, semantic refs, and tuple_key', async () => {
@@ -128,7 +149,8 @@ test('roleSchema preserves derived column types, semantic refs, and tuple_key', 
 			columns: [
 				{ name: 'stage', type: 'string', semantic: { case: 'ref', base: 'string', target: 'stage' } },
 				{ name: 'count', type: 'integer', semantic: { case: 'scalar', base: 'integer' } },
-				{ name: 'label', type: 'string' }
+				{ name: 'label', type: 'string' },
+				{ name: 'active', type: 'boolean' }
 			]
 		}]
 	};
@@ -139,7 +161,7 @@ test('roleSchema preserves derived column types, semantic refs, and tuple_key', 
 	assert.deepEqual(view.schema.kinds.Ranked, {
 		world: 'closed',
 		id: { type: 'Text' },
-		tuple_key: ['stage', 'count', 'label'],
+		tuple_key: ['stage', 'count', 'label', 'active'],
 		slots: {
 			stage: { ref: 'Stage', card: '1', states: ['known'], derived: true },
 			count: {
@@ -150,29 +172,43 @@ test('roleSchema preserves derived column types, semantic refs, and tuple_key', 
 				states: ['known'],
 				derived: true
 			},
-			label: { type: 'Text', card: '1', states: ['known'], derived: true }
+			label: { type: 'Text', card: '1', states: ['known'], derived: true },
+			active: { type: 'Bool', card: '1', states: ['known'], derived: true }
 		}
 	});
 
 	const rows = await rowsOf(
 		view,
-		new Map([['Ranked', new Set(['stage', 'count', 'label'])]]),
+		new Map([['Ranked', new Set(['stage', 'count', 'label', 'active'])]]),
 		async (relation) => ({
-			rows: relation === 'ranked' ? [{ key: ['s-1', '9007199254740993', 'first'] }] : []
+			rows: relation === 'ranked' ? [{ key: ['s-1', '9007199254740993', 'first', 'true'] }] : []
 		}),
 		{ left: 100 }
 	);
 	assert.deepEqual(rows, [{
 		$kind: 'Ranked',
-		$id: '["s-1","9007199254740993","first"]',
+		$id: '["s-1","9007199254740993","first","true"]',
 		stage: { $ref: 's-1' },
 		count: '9007199254740993',
-		label: 'first'
+		label: 'first',
+		active: true
 	}]);
+
+	await assert.rejects(
+		rowsOf(
+			view,
+			new Map([['Ranked', new Set(['stage', 'count', 'label', 'active'])]]),
+			async (relation) => ({
+				rows: relation === 'ranked' ? [{ key: ['s-1', '1', 'first', 'yes'] }] : []
+			}),
+			{ left: 100 }
+		),
+		(err: unknown) => err instanceof AskError && err.status === 500
+	);
 
 	const badCol = {
 		...bundle,
-		relations: [{ id: 'ranked', world: 'closed', columns: [{ name: 'flag', type: 'boolean' }] }]
+		relations: [{ id: 'ranked', world: 'closed', columns: [{ name: 'ratio', type: 'float' }] }]
 	};
 	assert.throws(
 		() => roleSchema(badCol as unknown as Bundle, [

@@ -14,7 +14,7 @@ export { NOT_READ_IN_FULL };
 const PAGE = 1000;
 /** Rezono's integer storage (docs/compiler.md, Tables): the bounds of an integer type that declares none. */
 const BIGINT = ['-9223372036854775808', '9223372036854775807'];
-const RULE_COLUMN_TYPES: Record<string, string> = { string: 'Text', integer: 'Integer' };
+const RULE_COLUMN_TYPES: Record<string, string> = { string: 'Text', integer: 'Integer', boolean: 'Bool' };
 const ID_STORAGE: Record<string, string> = { text: 'string', integer: 'integer' };
 
 type BundleKind = {
@@ -165,9 +165,16 @@ export function roleSchema(bundle: Bundle, snapshots: Listed[]): View {
 			if (a.patterns?.length) {
 				if (a.patterns.length !== 1) throw notYet(`${a.id} has more than one pattern`);
 				if (!a.schema_type) throw notYet(`${a.id} has no schema_type`);
-				slot.type = pascal(a.schema_type);
 				const type: TypeDef = { of: 'Text', pattern: a.patterns[0] };
-				if (Object.hasOwn(types, slot.type) && canonicalJson(types[slot.type]) !== canonicalJson(type)) throw notYet(`${a.id}: a second type named ${slot.type}`);
+				let typeName = pascal(a.schema_type);
+				if (Object.hasOwn(types, typeName) && canonicalJson(types[typeName]) !== canonicalJson(type)) {
+					if (a.schema_type !== 'string') throw notYet(`${a.id}: a second type named ${typeName}`);
+					typeName = `${declared}${pascal(a.name)}`;
+					if (Object.hasOwn(types, typeName) && canonicalJson(types[typeName]) !== canonicalJson(type)) {
+						throw notYet(`${a.id}: a second type named ${typeName}`);
+					}
+				}
+				slot.type = typeName;
 				types[slot.type] = type;
 			} else slot.type = 'Text';
 		} else throw notYet(`${a.id} has type ${a.type}`);
@@ -355,11 +362,14 @@ function asBoolean(schema: Schema, slot: SlotDef): boolean {
 	if (slot.ref !== undefined || slot.type === undefined) return false;
 	return resolveTypeChain(schema, slot.type)?.base === 'Bool';
 }
+function parseBooleanValue(where: string, raw: string): boolean {
+	if (raw === 'true') return true;
+	if (raw === 'false') return false;
+	throw new AskError(500, `${where} holds an invalid boolean value`);
+}
 function parseBoolean(relation: string, parts: string[]): boolean {
 	if (parts.length !== 2) throw new AskError(500, `${relation} holds a malformed boolean row`);
-	if (parts[1] === 'true') return true;
-	if (parts[1] === 'false') return false;
-	throw new AskError(500, `${relation} holds an invalid boolean value`);
+	return parseBooleanValue(relation, parts[1]);
 }
 function parseSafeInteger(relation: string, parts: string[]): number {
 	if (parts.length !== 2) throw new AskError(500, `${relation} holds a malformed integer row`);
@@ -400,7 +410,14 @@ export async function rowsOf(view: View, want: Map<string, Set<string>>, read: R
 				out.push({
 					$kind: kind,
 					$id: canonicalJson(parts),
-					...Object.fromEntries(columns.map((c, i) => [c, slots[c].ref !== undefined ? { $ref: parts[i] } : parts[i]]))
+					...Object.fromEntries(columns.map((c, i) => [
+						c,
+						slots[c].ref !== undefined
+							? { $ref: parts[i] }
+							: asBoolean(view.schema, slots[c])
+								? parseBooleanValue(`${relation}.${c}`, parts[i])
+								: parts[i]
+					]))
 				});
 			}
 			continue;

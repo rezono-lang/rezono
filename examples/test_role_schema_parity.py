@@ -29,18 +29,30 @@ PACKS = sorted(
 
 NODE_SCRIPT = """
 import { readFileSync } from 'node:fs';
-import { roleSchema } from '__EXPR__';
+import { ask, roleSchema } from '__EXPR__';
 import { AskError } from '__ASK__';
 import { dataSchema, schemaId } from '__ANSWER_SCHEMA__';
 import { canonicalJson } from '__CANON__';
 
-const { bundle, snapshots } = JSON.parse(readFileSync(0, 'utf8'));
+const { bundle, snapshots, query } = JSON.parse(readFileSync(0, 'utf8'));
 try {
 \tconst view = roleSchema(bundle, snapshots);
 \tconst doc = dataSchema(view.schema);
 \tconst canonical = canonicalJson(doc);
 \tconst sid = await schemaId(doc);
-\tprocess.stdout.write(JSON.stringify({ ok: true, schema_id: sid, canonical }));
+\tlet answered;
+\tif (query) {
+\t\tconst tables = query.rows ?? {};
+\t\tanswered = await ask({
+\t\t\ttext: query.text,
+\t\t\tmanifest: 'm-1',
+\t\t\tview,
+\t\t\tread: async (relation) => ({ rows: (tables[relation] ?? []).map((key) => ({ key })) }),
+\t\t\tbudget: { rows: 1000, steps: 50000 },
+\t\t\tlimit: 50,
+\t\t});
+\t}
+\tprocess.stdout.write(JSON.stringify({ ok: true, schema_id: sid, canonical, answered }));
 } catch (err) {
 \tif (err instanceof AskError) {
 \t\tprocess.stdout.write(JSON.stringify({ ok: false, status: err.status, message: err.message }));
@@ -67,7 +79,7 @@ def _bundle_relations(bundle: dict) -> list[str]:
     return rels
 
 
-def _run_ts_role_schema(bundle: dict, snapshots: list[dict]) -> dict:
+def _run_ts_role_schema(bundle: dict, snapshots: list[dict], *, query: dict | None = None) -> dict:
     script = (
         NODE_SCRIPT
         .replace("__EXPR__", (ROOT / "edge/gate/src/expr.ts").as_uri())
@@ -78,10 +90,13 @@ def _run_ts_role_schema(bundle: dict, snapshots: list[dict]) -> dict:
     with tempfile.TemporaryDirectory() as tmp:
         driver = Path(tmp) / "driver.mjs"
         driver.write_text(script, encoding="utf-8")
+        payload = {"bundle": bundle, "snapshots": snapshots}
+        if query is not None:
+            payload["query"] = query
         run = subprocess.run(
             [os.environ.get("REZONO_NODE", "node"), str(driver)],
             cwd=ROOT,
-            input=json.dumps({"bundle": bundle, "snapshots": snapshots}),
+            input=json.dumps(payload),
             capture_output=True,
             encoding="utf-8",
             timeout=30,
@@ -91,9 +106,9 @@ def _run_ts_role_schema(bundle: dict, snapshots: list[dict]) -> dict:
 
 
 def _publishable_subset(bundle: dict) -> dict:
-    """Drop only attributes with colliding inline patterns on plain string and derived relations
-    with unsupported physical column types, keeping every other kind, boolean slot, control kind,
-    open relation, integer bound, named pattern, and derived relation intact."""
+    """Drop only attributes with colliding inline patterns on plain `string` (which L0 forms
+    refuse with FormError), keeping every other kind, boolean slot, boolean derived column,
+    control kind, open relation, integer bound, named pattern, and derived relation intact."""
     sub = copy.deepcopy(bundle)
     seen_patterns: dict[str, str] = {}
     kept_attrs = []
@@ -108,16 +123,14 @@ def _publishable_subset(bundle: dict) -> dict:
             seen_patterns[name] = pat
         kept_attrs.append(attr)
     sub["attributes"] = kept_attrs
-    sub["relations"] = [
-        r for r in sub.get("relations", [])
-        if all(c.get("type") in publication.RULE_COLUMN_TYPES for c in r.get("columns", []))
-    ]
     return sub
 
 
 def _assert_parity(bundle: dict, *, full: set[str] | None, label: str) -> bool:
-    """Assert Python schema_document and TS roleSchema agree on outcome, schema_id, and bytes.
-    Returns True if both succeeded, False if both refused."""
+    """Assert Python schema_document and TS roleSchema agree on schema_id and canonical bytes.
+    When Python refuses solely because of colliding inline patterns on plain `string`, verify TS
+    still builds a valid role schema for gate queries and return False so the caller also checks
+    exact parity on the publishable subset."""
     rels = _bundle_relations(bundle)
     if full is None:
         snapshots = [{"relation": rel, "complete": True, "full": True} for rel in rels]
@@ -128,6 +141,9 @@ def _assert_parity(bundle: dict, *, full: set[str] | None, label: str) -> bool:
     try:
         py_doc, _ = publication.schema_document(bundle, full)
     except publication.FormError as err:
+        if "a second type named String" in str(err):
+            assert ts["ok"], f"{label}: TS should serve packs with colliding plain-string inline patterns: {ts}"
+            return False
         assert not ts["ok"], f"{label}: Python refused ({err}) but TS succeeded with {ts['schema_id']}"
         assert ts["status"] == 501, f"{label}: expected TS AskError(501), got {ts}"
         return False
@@ -158,6 +174,29 @@ def test_role_schema_matches_publication_schema_document(pack_dir):
         subset = _publishable_subset(bundle)
         assert _assert_parity(subset, full=None, label=f"{pack_label} subset (complete)")
         assert _assert_parity(subset, full=set(), label=f"{pack_label} subset (partial)")
+
+    # For a pack with a partial tenant role reading `request` (like Published role tools),
+    # verify an ordinary language `/ask` over the full manifest's partial snapshots succeeds.
+    if any(k["id"] == "request" for k in bundle.get("kinds", [])) and any(
+        a["table"] == "request__cores" for a in bundle.get("attributes", [])
+    ):
+        rels = _bundle_relations(bundle)
+        partial_snaps = [{"relation": rel, "complete": False, "full": False} for rel in rels]
+        res = _run_ts_role_schema(
+            bundle,
+            partial_snaps,
+            query={
+                "text": "ask Request where request.cores > 0 show request.cores",
+                "rows": {
+                    "request": [["r-1"], ["r-2"]],
+                    "request__cores": [["r-1", "2"], ["r-2", "3"]],
+                },
+            },
+        )
+        assert res["ok"], f"{pack_label} partial tenant ask failed: {res}"
+        assert "answer" in res["answered"], f"{pack_label} partial tenant ask refused: {res['answered']}"
+        keys = [json.loads(n["key"]) for n in res["answered"]["answer"]["nodes"]]
+        assert keys == [["r-1"], ["r-2"]]
 
 
 def test_role_schema_parity_covers_all_schema_features():
@@ -199,6 +238,7 @@ def test_role_schema_parity_covers_all_schema_features():
                 {"name": "rank", "type": "integer",
                  "semantic": {"case": "scalar", "base": "integer"}},
                 {"name": "tag", "type": "string"},
+                {"name": "complete", "type": "boolean"},
             ]},
         ],
         "enums": [
