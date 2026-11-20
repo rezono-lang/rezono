@@ -31,7 +31,10 @@ const semantics = grammar.createSemantics();
 
 /** The text of a literal as it prints: its parts one space apart, digits normalized without grouping underscores (§9). */
 semantics.addOperation<string>('lit', {
-	num(_whole, _dot, _part, _slash, _under) {
+	num(_whole, _sep, _rest) {
+		if (run.version === '0' && this.sourceString.includes('_')) {
+			refused(this, 'R000', ['a number without digit grouping']);
+		}
 		return this.sourceString.replaceAll('_', '');
 	},
 	quantity: (n, _sp, unit) => `${n.lit()} ${unit.sourceString}`,
@@ -99,7 +102,7 @@ semantics.addOperation<unknown>('tree', {
 	Show: (_show, list) => all(list),
 	Tail_order: (_order, _by, list) => ({ order: all(list) }),
 	Tail_group: (_group, _by, list) => ({ group: all(list) }),
-	Tail_limit: (_limit, n) => ({ limit: n.sourceString }),
+	Tail_limit: (_limit, n) => ({ limit: n.lit() }),
 
 	Check(verb, name, _colon, cond) {
 		const decl: CheckDecl = { check: verb.sourceString as CheckDecl['check'], cond: undefined as unknown as Expr };
@@ -289,9 +292,10 @@ export function readRule<T>(
 	read: (node: Node) => T,
 	spans = new WeakMap<object, Span>(),
 	at = points(text),
-	native = nativeRules.has(rule)
+	native = nativeRules.has(rule),
+	version?: '0' | '1'
 ): Read<T> {
-	startRun(text, spans, at);
+	startRun(text, spans, at, version);
 	const match = (native ? nativeRuleGrammar : grammar).match(text, rule);
 	if (match.failed()) {
 		const at = Math.min(match.getRightmostFailurePosition(), text.length);

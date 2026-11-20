@@ -156,7 +156,7 @@ ${moduleGrammar}
   literal (a value) = stateLit | boolLit | datetime | date | money | percent | quantity | number | text | typedText
           | typedId | numTok
   digits = d ("_"? d)*
-  num = digits ("." digits)? ("/" digits)?
+  num = digits ("." digits | "/" digits)?
   tokCont = wordChar | joint
   joint = ("-" | "." | "/" | ":") wordChar
   number (a number) = num ~tokCont
@@ -181,7 +181,7 @@ ${moduleGrammar}
            | "invalid" hsp+ reasonCode           -- invalid
   reasonCode = ~keyword az (az | d | "_")* ~wordChar
   boolLit = ("true" | "false") wordEnd
-  numTok = d (az | cap | d | inner)*
+  numTok = ~(digits "." digits "/" digits ~tokCont) d (az | cap | d | inner)*
   inner = ("-" | "." | "/" | ":") &(az | cap | d)
 }
 `;

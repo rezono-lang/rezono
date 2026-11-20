@@ -16,7 +16,12 @@ export const unit = {
 		UnitLine(_k, t, _eq, body) {
 			// A quantity is an expression: read as one, so that what v0 reserves in it is an R015 at its span. The form
 			// keeps its text.
-			if (body.child(0).ctorName === 'UnitBody_quantity') body.child(0).child(0).tree();
+			const kind = body.child(0);
+			if (kind.ctorName === 'UnitBody_quantity') kind.child(0).tree();
+			else if (kind.ctorName === 'UnitBody_power') {
+				kind.child(0).lit();
+				kind.child(2).lit();
+			}
 			return named(t, { line: 'unit', unit: t.sourceString, is: bare(body).replace(/\s+/g, ' ') });
 		}
 	},
