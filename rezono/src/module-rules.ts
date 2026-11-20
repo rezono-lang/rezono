@@ -16,6 +16,10 @@ export const rules = {
 	},
 	declarations: {
 		rules: declaration<RulesDecl>('rules', (line, build) => {
+			if (build.version === '1') {
+				build.removed(line, 'rules', undefined, { id: 'hint.use_instead', args: ['derived'] });
+				return Object.assign(build.strip<Pick<RulesDecl, 'rules'>>(line.read!), { lines: [] });
+			}
 			if (!line.block.length) build.refuse(line, 'an indented rule block');
 			const lines: string[] = [];
 			for (const child of line.block) {
