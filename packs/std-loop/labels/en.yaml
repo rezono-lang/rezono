@@ -117,3 +117,37 @@ expected_drift: declared expected drift
 round_failed: failed round
 round_unfinished: unfinished round
 round_outcome: round outcome
+delivery_done_reading: dated completion status reading
+delivery_waiting_reading: dated waiting status reading
+delivery_done_earliest: earliest completion instant
+delivery_completed_at: recorded delivery completion time
+delivery_has_done: step with dated completion
+delivery_waiting_end: end of waiting interval
+delivery_waiting_before_end: waiting reading at or before interval end
+delivery_waiting_start: start of waiting interval
+delivery_waiting_time: elapsed delivery waiting time
+loop_flow_case: flow test case
+loop_flow_case.run: case run
+loop_flow_case.source: source workload
+loop_flow_case.destination: destination workload
+loop_flow_case.protocol: network protocol
+loop_flow_case.port: destination port
+loop_flow_case.expected: expected flow verdict
+loop_flow_witness: flow witness observation
+loop_flow_witness.run: witness run
+loop_flow_witness.case: observed flow case
+loop_flow_witness.source: source workload
+loop_flow_witness.destination: destination workload
+loop_flow_witness.protocol: network protocol
+loop_flow_witness.port: destination port
+loop_flow_witness.witness: witness kind
+loop_flow_witness.outcome: observed flow outcome
+flow_case_declared: declared flow case
+flow_case_expected: declared flow case with valid expected verdict
+flow_case_witness: scoped flow case witness
+flow_case_valid_witness: valid scoped flow case witness
+flow_case_witness_count: witness count per flow case and kind
+flow_case_pair: independent witness pair for a flow case
+flow_case_verdict: flow case verdict
+flow_case_decided: flow case with a verdict
+flow_case_incomplete: flow case with incomplete evidence

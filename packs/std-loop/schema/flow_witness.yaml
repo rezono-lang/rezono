@@ -1,0 +1,31 @@
+id: https://rezono.org/std-loop/flow-witness
+name: std_loop_flow_witness
+description: Flow test cases and independent probe and Hubble witness observations.
+imports: [linkml:types]
+default_range: string
+annotations:
+  layer: facts
+
+classes:
+  LoopFlowCase:
+    description: One expected service-to-service flow decision in a run.
+    attributes:
+      id: {identifier: true}
+      run: {required: true}
+      source: {required: true}
+      destination: {required: true}
+      protocol: {required: true}
+      port: {range: integer, required: true}
+      expected: {required: true}
+  LoopFlowWitness:
+    description: One independent probe or Hubble observation for a flow case.
+    attributes:
+      id: {identifier: true}
+      run: {required: true}
+      case: {required: true}
+      source: {required: true}
+      destination: {required: true}
+      protocol: {required: true}
+      port: {range: integer, required: true}
+      witness: {required: true}
+      outcome: {required: true}
