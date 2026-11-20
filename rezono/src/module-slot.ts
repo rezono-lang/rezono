@@ -56,8 +56,14 @@ function printConstraint(constraint: SlotConstraint): string {
 	return printNumericSlotBound(constraint);
 }
 
+function printInverse(inverse: string): string {
+	const dot = inverse.indexOf('.');
+	if (dot < 0) return spellName(inverse);
+	return `${inverse.slice(0, dot + 1)}${spellName(inverse.slice(dot + 1))}`;
+}
+
 export function printSlot(s: SlotDecl): string[] {
-	return block(`${spellName(s.slot)}: ${s.type}${s.card ?? ''}${s.inverse !== undefined ? ` inverse ${spellName(s.inverse)}` : ''}${printWorld(s.world)}${s.identifier ? ' identifier' : ''}${s.embedded ? ' embedded' : ''}`, [
+	return block(`${spellName(s.slot)}: ${s.type}${s.card ?? ''}${s.inverse !== undefined ? ` inverse ${printInverse(s.inverse)}` : ''}${printWorld(s.world)}${s.identifier ? ' identifier' : ''}${s.embedded ? ' embedded' : ''}`, [
 		...(s.slotUri === undefined ? [] : [`iri ${JSON.stringify(s.slotUri)}`]),
 		...printMetadata(s),
 		...(s.constraints ?? []).map(printConstraint)
@@ -67,7 +73,9 @@ export function printSlot(s: SlotDecl): string[] {
 export const slot = {
 	lineRules: ['SlotLine', 'CardinalityLine', ...slotPattern.lineRules],
 	grammar: String.raw`
-  SlotLine = rName ":" SlotType Card? (kw<"inverse"> rName)? World? kw<"identifier">? kw<"embedded">?
+  SlotLine = rName ":" SlotType Card? (kw<"inverse"> InverseTarget)? World? kw<"identifier">? kw<"embedded">?
+  InverseTarget = typeName "." rName  -- qualified
+                | rName               -- local
   SlotType = (name ".")? Type
   CardinalityLine = kw<"cardinality"> cardinalityBound ".." cardinalityBound
   cardinalityBound = "0"             -- zero
@@ -79,12 +87,14 @@ export const slot = {
 		SlotLine(n, _c, type, card, _inverse, inverse, world, identifier, embedded) {
 			const decl: Line = { line: 'slot', slot: readRuleName(n), type: typeOf(type) };
 			if (card.numChildren) decl.card = opt(card);
-			if (inverse.numChildren) decl.inverse = readRuleName(inverse.child(0));
+			if (inverse.numChildren) decl.inverse = inverse.child(0).decl() as string;
 			if (world.numChildren) decl.world = world.child(0).decl();
 			if (identifier.numChildren) decl.identifier = true;
 			if (embedded.numChildren) decl.embedded = true;
 			return named(n, decl);
 		},
+		InverseTarget_qualified: (kind, _dot, name) => `${kind.sourceString}.${readRuleName(name)}`,
+		InverseTarget_local: (name) => readRuleName(name),
 		CardinalityLine(keyword, minimum, _range, maximum) {
 			return named(keyword, { line: 'slot-cardinality', cardinality: [minimum.sourceString, maximum.sourceString] });
 		}
