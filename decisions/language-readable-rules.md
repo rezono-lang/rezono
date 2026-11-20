@@ -8,6 +8,8 @@ subject: readable-rules
 
 # Readable rules: the module header and the rule's sentence
 
+> **Follow-up in `rezono 1`:** The shorter header and `means` / `@` carry forward into `rezono 1`, and the two candidates left open below (single-key derived properties and method-form filtering/counting) are adopted in [`decisions/language-rezono-1.md`](language-rezono-1.md#3-effect-on-prior-decisions).
+
 The first goal of the [language reference](../docs/rezono/v0.md), section 1, is that a rule reads like the thought behind it. Schemas, facts, parameters and tables mostly do. A module still opens with header lines that only repeat defaults, and a rule's sentence for readers and its article live in other files. No pack in `examples/`, `packs/` or `run/packs/` writes native rules yet, so a change of spelling costs little now and much after the packs are converted.
 
 This decision adopts two changes: a shorter header, and the sentence and source next to the rule. Two further candidates, a derived property where a relation has one subject and a simpler spelling for counting and summing, stay open for a proposal on one form of derivation in a following language version; this decision neither adopts nor rejects them. Conversion of rules does not wait for it: a module that already uses a spelling this decision replaces gets a warning with the new spelling as its hint.

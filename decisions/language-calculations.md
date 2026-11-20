@@ -1,4 +1,14 @@
+---
+decider: [language]
+decided_on: 2026-11-17
+valid_from: 2026-11-17
+state: in_force
+subject: language-calculations
+---
+
 # Calculated values
+
+> **Scope across language versions:** This decision remains in force for `rezono 0` and legacy `calc/*.yaml` files. For `rezono 1`, value-bearing derivations (including `unless`, `version`, `table`, state tests, and set aggregates) lower uniformly through `rezono.rules/2` rather than `rezono.calc/1`; see [`decisions/language-rezono-1.md`](language-rezono-1.md#3-effect-on-prior-decisions).
 
 Retain the derived expression tree and the existing version, valid, known and source members. Named outputs in a legacy calculation use 'output relation.slot' under the derived declaration, stored as output with relation and slot. Ordered, named definitions use 'definition name when condition then expression', stored under definitions as name, when and value. An explicit output prevents guessing a relation from a display name.
 

@@ -1,0 +1,46 @@
+id: https://rezono.org/examples/platform-support-version-policy
+name: platform_support_version_policy
+description: Vendor support cycles, dated evaluation references, support policies, and registered assessments.
+in_language: en
+imports:
+  - linkml:types
+  - core
+  - std-time:time
+  - std-decision:decision
+default_range: string
+annotations:
+  layer: facts
+
+classes:
+  VendorCycleSupport:
+    is_a: Interval
+    description: A vendor's published support interval for one release series of a product.
+    attributes:
+      product: {range: Product, required: true}
+      series: {required: true}
+      source_url: {required: true, pattern: '^https?://[^ ]+$'}
+      source_sha256: {required: true, pattern: '^[0-9a-f]{64}$'}
+
+  SupportReference:
+    description: A dated evaluation reference pairing a support axis point with a decision standing date.
+    attributes:
+      id: {identifier: true}
+      point: {range: ReferencePoint, required: true}
+      standing_on: {range: ReferenceDate, required: true}
+
+  SupportPolicy:
+    description: A product support severity threshold established by a governance decision.
+    attributes:
+      id: {identifier: true}
+      decision: {range: Decision, required: true}
+      product: {range: Product, required: true}
+      warning_days: {range: integer, minimum_value: 0, required: true}
+
+  SupportAssessmentEntry:
+    description: An independently recorded support severity entry in the platform assessment register.
+    attributes:
+      id: {identifier: true}
+      revision: {required: true}
+      service: {range: Service, required: true}
+      series: {required: true}
+      severity: {required: true}

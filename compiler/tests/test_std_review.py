@@ -435,3 +435,22 @@ def test_review_policy(tmp_path):
              {"require_in_lab": {("pol",)}})
     p.expect("mark in the lab phase", p.run(world(phase=("lab", "una"), policies=[("pol", "note", "mark")])),
              {"require_in_lab": set()})
+
+
+class MissingPhaseAmbiguity(AssertionError):
+    """std-review lets two phase facts with different phases stand side by side without blocking."""
+
+
+def test_review_phase_ambiguous(tmp_path):
+    p = Probe(tmp_path, MissingPhaseAmbiguity)
+    p.invariant("review_phase_ambiguous")
+    both = world([NOTE_CHANGE], grants=[SCRIBE_YEAR], phase=("strict", "una"))
+    both.setdefault("review_phase", set()).add(("phase-lab",))
+    both.setdefault("review_phase__phase", set()).add(("phase-lab", "lab"))
+    both.setdefault("review_phase__owner", set()).add(("phase-lab", "una"))
+    p.expect("a lab fact beside a strict fact", p.run(both),
+             {"review_phase_ambiguous": {("phase",), ("phase-lab",)}})
+    for phase in ("lab", "strict"):
+        p.expect(f"one {phase} fact", p.run(world([NOTE_CHANGE], grants=[SCRIBE_YEAR], phase=(phase, "una"))),
+                 {"review_phase_ambiguous": set()})
+    p.expect("no phase fact", p.run(world([NOTE_CHANGE], grants=[SCRIBE_YEAR])), {"review_phase_ambiguous": set()})
