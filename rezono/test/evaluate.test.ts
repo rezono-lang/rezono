@@ -401,6 +401,52 @@ test('suppose lines: states on many-valued slots and canonical Integer keys', as
 	assert.throws(() => suppose(base, crafted, keyed), /Ticket 7 already exists/);
 });
 
+test('suppose lines: multi-hop Integer alias keys validate and canonicalize cleanly', async () => {
+	const keyed = schemaWith((s) => {
+		s.types = {
+			...(s.types ?? {}),
+			TicketNo: { of: 'Integer' },
+			SubTicketNo: { of: 'TicketNo' },
+			LoopA: { of: 'LoopB' },
+			LoopB: { of: 'LoopA' },
+		};
+		s.kinds.Ticket = {
+			world: 'closed',
+			id: { type: 'SubTicketNo' },
+			slots: {
+				title: { type: 'Text', card: '1', states: ['known'] },
+			},
+		};
+		s.kinds.LoopKind = {
+			world: 'closed',
+			id: { type: 'LoopA' },
+			slots: {},
+		};
+	});
+	assert.deepEqual(
+		check('+ Ticket 007 {title = "bad"}', keyed).diagnostics.filter(isError).map((d) => d.code),
+		['R012'],
+	);
+	assert.deepEqual(
+		check('+ Ticket abc {title = "bad"}', keyed).diagnostics.filter(isError).map((d) => d.code),
+		['R012'],
+	);
+	assert.deepEqual(check('+ Ticket 8 {title = "ok"}', keyed).diagnostics.filter(isError), []);
+	assert.deepEqual(check('+ LoopKind k1 {}', keyed).diagnostics.filter(isError), []);
+
+	const base = load(keyed, [
+		{ $kind: 'Ticket', $id: '7', title: 'open' },
+		{ $kind: 'LoopKind', $id: 'k1' },
+	]);
+	const retracted = suppose(base, check('- Ticket 007', keyed), keyed);
+	assert.deepEqual((await ask('ask Ticket where true', retracted, keyed)).rows, []);
+	const crafted = check('+ Ticket 8 {title = "dup"}', keyed);
+	if (crafted.tree && 'insert_row' in crafted.tree) crafted.tree.insert_row.key = '007';
+	assert.throws(() => suppose(base, crafted, keyed), /Ticket 7 already exists/);
+	const loopRetracted = suppose(base, check('- LoopKind k1', keyed), keyed);
+	assert.deepEqual((await ask('ask LoopKind where true', loopRetracted, keyed)).rows, []);
+});
+
 // ---- the answer as a dataset ----
 
 test('an answer is Row JSON of its output schema: values in their normal form, states with their reason', async () => {
