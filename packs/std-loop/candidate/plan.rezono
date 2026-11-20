@@ -16,6 +16,9 @@ rules plan
   |     loop_refusal__run(record, run), loop_refusal__step(record, step),
   |     loop_refusal__reason(record, reason).
   | 
+  | // An expired deadline refuses its unfinished step at the inclusive boundary: the step is stuck and cannot be ready.
+  | refusal(run, step, deadline) :- deadline_expired(run, step, _, deadline, _).
+  | 
   | .decl blocked_step(run: symbol, step: symbol)
   | blocked_step(run, step) :- structural_stuck(run, step, _).
   | 
