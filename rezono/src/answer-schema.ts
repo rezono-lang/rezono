@@ -30,7 +30,7 @@ export const schemaId = async (document: object): Promise<string> => `s-${await 
 
 /** The the publication document of a schema: without what a question needs beyond it. */
 export function dataSchema(schema: Schema): object {
-	const { rules: _rules, params: _params, symbols: _symbols, rounding: _rounding, in_part: _inPart, ...document } = schema;
+	const { rules: _rules, params: _params, symbols: _symbols, rounding: _rounding, default_units: _defaultUnits, in_part: _inPart, ...document } = schema;
 	return document;
 }
 
@@ -57,19 +57,26 @@ export async function outputSchema(q: Ask, checked: Checked, schema: Schema, pac
 		if (ty.t !== 'num') return { type: 'Text', ...of };
 		if (ty.name !== undefined) return { type: named(ty.name), ...of };
 		if (!Object.keys(ty.dim).length) return { type: 'Ratio', ...of };
-		// A computed quantity takes the pack's first type of its dimension; without one, a type of its own.
-		const declared = Object.keys(schema.types ?? {})
-			.sort()
-			.find((n) => {
-				const t = typeOf(schema, n);
-				return t.t === 'num' && sameDim(t.dim, ty.dim);
-			});
-		if (declared !== undefined) return { type: named(declared), ...of };
+		// A computed quantity uses the schema's declared `default_units` for its dimension when present;
+		// otherwise it gets a deterministic anonymous quantity type in the canonical storage units of its parts.
+		const dim = dimText(ty.dim);
+		const declared = schema.default_units?.[dim];
+		if (declared !== undefined) {
+			const declaredTy = typeOf(schema, declared);
+			if (declaredTy.t === 'num' && sameDim(declaredTy.dim, ty.dim)) return { type: named(declared), ...of };
+		}
 		// Its unit is the product of the storage units of its dimensions, so its values are exact as they stand.
-		const base = (dimension: string) => Object.values(schema.types ?? {}).find((t) => t.dimension === dimension)?.storage_unit ?? dimension.replace(/^money /, '');
+		const base = (dimension: string) => {
+			const units = [...new Set(
+				Object.values(schema.types ?? {})
+					.filter((t) => t.dimension === dimension && t.storage_unit !== undefined)
+					.map((t) => t.storage_unit!)
+			)].sort();
+			return units[0] ?? dimension.replace(/^money /, '');
+		};
 		const unit = dimText(Object.fromEntries(Object.entries(ty.dim).map(([d, n]) => [base(d), n])));
 		const own = `Q${Object.keys(types).length - 1}`;
-		types[own] = { of: 'Quantity', dimension: dimText(ty.dim), unit, storage_unit: unit, factor: '1' };
+		types[own] = { of: 'Quantity', dimension: dim, unit, storage_unit: unit, factor: '1' };
 		return { type: own, ...of };
 	}
 	const id = { type: named(schema.kinds[answer.kind].id.type) };

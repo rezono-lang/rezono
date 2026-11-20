@@ -116,6 +116,8 @@ type ProjectionContext = { kind: 'agg'; name: string; arg?: Expr } | { kind: 'in
 const AGGREGATES = new Set(['sum', 'count', 'min', 'max']);
 /** The roundings `round(x, mode)` can name (v0 §5f). */
 const ROUNDINGS = ['half_even', 'half_up', 'down', 'up'];
+/** The built-in rounding functions that accept an optional `as TargetType` specifier. */
+const ROUND_FNS = new Set(['round', 'floor', 'ceil']);
 
 /** The edits between two words: a letter added, left out or changed, or two neighbours swapped. */
 function distance(a: string, b: string): number {
@@ -799,16 +801,66 @@ export function typing(text: string, schema: Schema, spans: WeakMap<object, Span
 			v.sure = new Set();
 			return v;
 		}
+		if ('as' in e) return report('R003', spanOf(e), [printExpr(e.as[0]), e.as[1]]);
 		const [name, args] = e.call;
-		if (name === 'round') {
-			// `round(x)` or `round(x, mode)`: the mode is a name of the pack's rounding (v0 §5f), not a value.
-			const v = args.length ? settled(args[0]) : value({ t: 'err' });
+		if (ROUND_FNS.has(name)) {
+			// `round(x [as TargetType][, mode])`, `floor(x [as TargetType])`, `ceil(x [as TargetType])`.
+			const arg0 = args[0];
+			const inner = arg0 && 'as' in arg0 ? arg0.as[0] : arg0;
+			const targetName = arg0 && 'as' in arg0 ? arg0.as[1] : undefined;
+			const v = inner ? settled(inner) : value({ t: 'err' });
+			if (arg0 && 'as' in arg0) typed.set(arg0, v);
 			if (v.set) return report('R005', spanOf(e), []);
-			if (args.length < 1 || args.length > 2 || (v.ty.t !== 'num' && v.ty.t !== 'err' && v.ty.t !== 'state')) return report('R003', spanOf(e), [name, args.length ? describe(v.ty) : '']);
+			const badArity = name === 'round' ? args.length < 1 || args.length > 2 : args.length !== 1;
+			if (badArity || (v.ty.t !== 'num' && v.ty.t !== 'err' && v.ty.t !== 'state')) {
+				return report('R003', spanOf(e), [name, args.length ? describe(v.ty) : '']);
+			}
 			// The mode is one of the four roundings by its bare name; it is not looked up or typed as a value.
-			const mode = args[1];
-			if (mode !== undefined && !('path' in mode && mode.path.length === 1 && ROUNDINGS.includes(mode.path[0]))) return report('R030', spanOf(mode), [printExpr(mode)]);
-			const rounded = value(v.ty, [v]);
+			const mode = name === 'round' ? args[1] : undefined;
+			if (mode !== undefined && !('path' in mode && mode.path.length === 1 && ROUNDINGS.includes(mode.path[0]))) {
+				return report('R030', spanOf(mode), [printExpr(mode)]);
+			}
+			if (v.ty.t === 'err') return value({ t: 'err' });
+			let outTy: Ty = v.ty;
+			if (targetName !== undefined) {
+				const targetTy = typeOf(schema, targetName);
+				if (targetTy.t !== 'num' || baseTypeOf(schema, targetName) === 'Ratio') {
+					return report('R003', spanOf(e), [describe(v.ty), targetName]);
+				}
+				if (v.ty.t === 'num' && !sameDim(v.ty.dim, targetTy.dim)) {
+					return report('R003', spanOf(e), [describe(v.ty), targetName]);
+				}
+				outTy = targetTy;
+			} else if (v.ty.t === 'num') {
+				if (v.ty.name !== undefined) {
+					outTy =
+						Object.keys(v.ty.dim).length === 0 && baseTypeOf(schema, v.ty.name) === 'Ratio'
+							? { t: 'num', dim: {}, name: 'Integer' }
+							: v.ty;
+				} else if (Object.keys(v.ty.dim).length === 0) {
+					outTy = { t: 'num', dim: {}, name: 'Integer' };
+				} else {
+					const dim = dimText(v.ty.dim);
+					const declared = schema.default_units?.[dim];
+					const declaredTy = declared === undefined ? undefined : typeOf(schema, declared);
+					if (declaredTy?.t === 'num' && sameDim(declaredTy.dim, v.ty.dim)) {
+						outTy = declaredTy;
+					} else {
+						const sample =
+							Object.keys(schema.types ?? {})
+								.sort()
+								.find((n) => {
+									const t = typeOf(schema, n);
+									return t.t === 'num' && sameDim(t.dim, v.ty.dim);
+								}) ?? 'Type';
+						const rest = mode !== undefined ? `, ${printExpr(mode)}` : '';
+						return report('R013', spanOf(e), [printExpr(inner)], {
+							hint: { id: 'hint.use_instead', args: [`${name}(${printExpr(inner)} as ${sample}${rest})`] }
+						});
+					}
+				}
+			}
+			const rounded = value(outTy, [v]);
 			// A rounded amount has the places of its type.
 			rounded.inexact = false;
 			return rounded;
@@ -903,7 +955,7 @@ export function typing(text: string, schema: Schema, spans: WeakMap<object, Span
 			// A computed amount that its type cannot hold exactly is shown as `unknown not_exact` (§8a): every shown
 			// amount but a stored value and a rounded one lists that state, and one that divides, or multiplies by
 			// anything but a whole number, warns.
-			if (stored(v.ty) && !('path' in expr || 'dot' in expr || ('call' in expr && expr.call[0] === 'round'))) v.states.add('unknown');
+			if (stored(v.ty) && !('path' in expr || 'dot' in expr || ('call' in expr && ROUND_FNS.has(expr.call[0])))) v.states.add('unknown');
 			if (v.set) report('R005', spanOf(expr), []);
 			else if ((mayBeUnknown(expr, known) || (stored(v.ty) && v.inexact)) && q.show) found.push({ code: 'W105', span: spanOf(expr), args: [printExpr(expr)] });
 			return { expr, text: printExpr(expr), typed: v };

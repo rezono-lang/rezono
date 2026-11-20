@@ -13,7 +13,7 @@ import type { TableValue } from './module-table.ts';
 import { warnUnlessMasksInvalid } from './module-unless.ts';
 import { parseModule, type Module, type ParseModuleOptions } from './module.ts';
 import { inOrder, type Span } from './parse.ts';
-import { isOrdered, slotType, snake, STATES, typeOf, type KindDef, type Schema, type SlotDef, type StateName, type Ty, type TypeDef } from './schema.ts';
+import { dimText, isOrdered, slotType, snake, STATES, typeOf, type KindDef, type Schema, type SlotDef, type StateName, type Ty, type TypeDef } from './schema.ts';
 import type { Expr } from './tree.ts';
 
 export interface CheckModuleOptions extends ParseModuleOptions {
@@ -251,6 +251,18 @@ function buildModuleSchema(module: Module, extraSymbols?: Record<string, string>
 		symbols,
 		...(rounding ? { rounding } : {}),
 	};
+
+	// Pass 2c: resolve declared `default unit <Type>` entries into `schema.default_units`.
+	const defaultUnits: Record<string, string> = {};
+	for (const decl of module.decls) {
+		if ('default_unit' in decl) {
+			const ty = typeOf(schema, decl.default_unit);
+			if (ty.t === 'num' && Object.keys(ty.dim).length > 0) {
+				defaultUnits[dimText(ty.dim)] = decl.default_unit;
+			}
+		}
+	}
+	if (Object.keys(defaultUnits).length) schema.default_units = defaultUnits;
 
 	// Pass 3: module-level derived relations.
 	for (const decl of module.decls) {

@@ -88,7 +88,11 @@ Rezono {
        | typeName
        | name
        | oddWord
-  Call = name "(" ListOf<Expr, ","> ")"
+  Call = RoundCall
+       | name "(" ListOf<Expr, ","> ")"  -- plain
+  RoundCall = ("round" | "floor" | "ceil") wordEnd "(" RoundArg ("," Expr)* ")"
+  RoundArg = Expr as typeName  -- as
+           | Expr
 
   // One logical line of a module (v0 §5, §11). module.ts splits a file into lines by their indentation (the
   // layout tokens of §11) and reads each with this rule; which line may stand under which is module.ts's.
@@ -201,7 +205,8 @@ export const nativeRuleGrammar = ohm.grammar(String.raw`
 NativeRules <: Rezono {
   Dotted_name := Dotted "." (identWord | quotedName)
   Atom := literal | Call | QualifiedKind | quotedName | wildcard | Atom_paren | idTok | typeName | name | oddWord
-  Call := NativeCallName "(" ListOf<Expr, ","> ")"
+  Call := RoundCall
+        | NativeCallName "(" ListOf<Expr, ","> ")"  -- native
   NativeCallName = QualifiedKind "." RuleCallMember    -- schema
                  | typeName "." RuleCallMember         -- kind
                  | rName "." RuleCallMember            -- imported

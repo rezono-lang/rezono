@@ -74,6 +74,8 @@ export interface Schema {
 	symbols?: Record<string, string>;
 	/** Beyond the publication: the pack's one named rounding, which `round(x)` uses (v0 §5f). */
 	rounding?: { money?: 'half_even' | 'half_up' | 'down' | 'up' };
+	/** Beyond the publication: the pack's declared default type per dimension (`dimText(dim) -> TypeName`). */
+	default_units?: Record<string, string>;
 	/**
 	 * Beyond the publication: per kind, the slots over a relation the role reads in part, or not at all (§7a rule 1).
 	 * It follows from the shape of the role's read rules, never from the rows. The document itself

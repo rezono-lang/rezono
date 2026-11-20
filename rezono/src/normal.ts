@@ -103,6 +103,7 @@ function rebuild(e: Expr, levels: Levels, kindOf: (e: Expr) => string | undefine
 	if ('neg' in e) return { neg: at(e.neg) };
 	if ('when' in e) return { when: [at(e.when[0]), at(e.when[1]), at(e.when[2])] };
 	if ('call' in e) return { call: [e.call[0], e.call[1].map((x) => at(x))] };
+	if ('as' in e) return { as: [at(e.as[0]), e.as[1]] };
 	// A time selection is reserved (§1): a question that holds one does not check, so it is kept as written.
 	return structuredClone(e);
 }
