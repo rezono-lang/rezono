@@ -320,12 +320,7 @@ def relation_rows(model, rows, name):
     connection, _, _ = batch.run(model, program, rows, calculation)
     with closing(connection):
         result = connection.execute(f"SELECT * FROM {q(name)}").fetchall()
-    if name == "tenant_delivery_scope":
-        result = [
-            (tenant, artifact, tenant if number == 0 else f"{tenant}-{number}")
-            for tenant, artifact, number in result
-        ]
-    elif name == "tenant_connection_review":
+    if name == "tenant_connection_review":
         result = [(team, f"{team}-{number}", *rest) for team, number, *rest in result]
     return sorted(result)
 
