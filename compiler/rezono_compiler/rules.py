@@ -26,7 +26,8 @@ ARITHMETIC = ("add", "sub", "mul", "div")
 # variable), in the proleptic Gregorian calendar. Only a view's reading makes it: no rule file can
 # write it, so hand-written rules still read text and whole numbers (R4).
 DAYS = "days"
-TYPES = ("string", "integer")
+TYPES = ("string", "integer", "boolean")
+BOOLEAN = {"true": True, "false": False}
 WORLDS = ("closed", "open")
 # The states of a named outcome; invalid comes from the violation views.
 STATES = ("known", "unknown", "not_applicable")
@@ -526,6 +527,8 @@ def _check_rule(rule, relations):
             raise IRError("bad_constant", f"{rule.id}: {t!r} is not an integer")
         if col.type == "integer":
             fits(t)
+        if col.type == "boolean" and t not in BOOLEAN:
+            raise IRError("bad_constant", f"{rule.id}: {t!r} is not a boolean")
 
     def fits(t):
         if not BIGINT[0] <= int(t) <= BIGINT[1]:
@@ -632,6 +635,8 @@ def _check_rule(rule, relations):
         if len(kinds) > 1:
             raise IRError("type_mismatch", f"{rule.id}: {c.left} and {c.right} have different types")
         for t in (c.left, c.right):
+            if not is_var(t) and kinds == {"boolean"} and t not in BOOLEAN:
+                raise IRError("bad_constant", f"{rule.id}: {t!r} is compared with a boolean")
             if not is_var(t) and kinds == {"integer"} and not INT.match(t):
                 raise IRError("bad_constant", f"{rule.id}: {t!r} is compared with an integer")
             if not is_var(t) and kinds == {"integer"}:

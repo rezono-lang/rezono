@@ -314,7 +314,7 @@ nav.views = Weergaven
 nav.schema = Schema en elementen
 packs.knowledge = {{kennis van {$date}}}
 
-# Voorstellen (docs/lifecycle.md): een nieuwe waarde wordt een pull request, via de toegangspoort en CI.
+# Voorstellen (decisions/review-and-rights.md): een nieuwe waarde wordt een pull request, via de toegangspoort en CI.
 enum.true = ja
 enum.false = nee
 propose.submit = Voorstellen

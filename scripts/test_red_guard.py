@@ -44,6 +44,7 @@ def main():
     workflow_cases()
     read_cases(function)
     pin_cases(function)
+    plugin_cases(function)
     pytest_config_cases(function)
     green_to_red_cases()
 
@@ -141,6 +142,63 @@ def green_to_red_cases():
     if any("from green to red" in n for n in notes):
         raise AssertionError(f"a red test that stays red is not green to red: notes {notes}")
     print("ALLOW: a red test that stays red is not reported as green to red")
+
+
+def plugin_cases(function):
+    """A package that registers a pytest plugin can drop a red test from the collection."""
+    lifted = function.split(b"\n", 1)[1]
+    lift = Change("tests/test_count.py", "M", function, lifted)
+    project = b'[project]\nname = "rezono-compiler"\n'
+    plugin = project + b'\n[project.entry-points.pytest11]\nx = "rezono_compiler.tidy"\n'
+    poetry = project + b'\n[tool.poetry.plugins."pytest11"]\nx = "rezono_compiler.tidy"\n'
+    config = b"[metadata]\nname = demo\n"
+    entry = config + b"\n[options.entry_points]\npytest11 =\n    x = demo.tidy\n"
+    hook = Change("compiler/rezono_compiler/tidy.py", "A", None, None)
+    cases = [
+        ("pytest11 entry point added to pyproject.toml", "compiler/pyproject.toml", project, plugin, True),
+        ("pytest11 plugin added in poetry's table", "compiler/pyproject.toml", project, poetry, True),
+        ("pytest11 entry point removed from pyproject.toml", "loop/pyproject.toml", plugin, project, True),
+        ("pytest11 entry point added to setup.cfg", "demo/setup.cfg", config, entry, True),
+        ("other metadata of pyproject.toml", "compiler/pyproject.toml", plugin,
+         plugin.replace(b"rezono-compiler", b"rezono-compiler2"), False),
+        ("pyproject.toml that no longer parses", "compiler/pyproject.toml", plugin, plugin + b"[[[\n", True),
+        ("pyproject.toml replaced by a link", "compiler/pyproject.toml", plugin, UNREADABLE_CONFIG, True),
+        # Entry points from elsewhere: the file they come from is not read, so the switch counts.
+        ("dynamic entry points in pyproject.toml", "compiler/pyproject.toml", project,
+         project + b'dynamic = ["entry-points"]\n\n[tool.setuptools.dynamic]\nentry-points = {file = ["eps.ini"]}\n',
+         True),
+        ("entry points from a file in setup.cfg", "demo/setup.cfg", config,
+         config + b"\n[options]\nentry_points = file: eps.cfg\n", True),
+    ]
+    for label, path, before, after, expected in cases:
+        change = Change(path, "M", before, after)
+        errors, notes = review([change], planner=False)
+        if bool(errors) != expected or (f"CHANGED {path} pytest plugins" in notes) != expected:
+            raise AssertionError(f"{label}: errors {errors}, notes {notes}")
+        errors, _ = review([lift, hook, change], planner=True)
+        refused = any("Lift marks in a pull request of their own" in e for e in errors)
+        if refused != expected:
+            raise AssertionError(f"{label} beside a lifted mark: errors {errors}")
+        print(f"{'DENY' if expected else 'ALLOW'} without planner and beside a lifted mark: {label}")
+    # Python runs these before pytest starts; setup.py stays source as well.
+    # Package metadata on sys.path registers plugins too, such as a *.dist-info in scripts/.
+    for path in ("compiler/sitecustomize.py", "src/usercustomize.py", "compiler/rezono.pth", "compiler/setup.py",
+                 "scripts/tidy-1.0.dist-info/entry_points.txt", "scripts/tidy-1.0.dist-info/METADATA",
+                 "compiler/tidy.egg-info/PKG-INFO", "loop/entry_points.txt"):
+        errors, _ = review([Change(path, "A", None, b"import tidy\n")], planner=False)
+        if errors != [f"ERROR planner label required for {ascii(path)}"]:
+            raise AssertionError(f"{path} without planner: errors {errors}")
+        errors, _ = review([lift, Change(path, "A", None, b"import tidy\n")], planner=True)
+        if not any("Lift marks in a pull request of their own" in e for e in errors):
+            raise AssertionError(f"lifted mark beside {path}: errors {errors}")
+        print(f"DENY without planner and beside a lifted mark: {path}")
+    # CI reads the allowed plugins from the base; a change to the list is policy.
+    errors, _ = review([Change("scripts/pytest-plugins.txt", "M", b"a = a\n", b"a = a\nx = tidy\n")], planner=False)
+    if errors != ["ERROR planner label required for 'scripts/pytest-plugins.txt'"]:
+        raise AssertionError(f"scripts/pytest-plugins.txt without planner: errors {errors}")
+    print("DENY without planner: scripts/pytest-plugins.txt")
+    if not source("compiler/setup.py"):
+        raise AssertionError("setup.py is source as well")
 
 
 def pin_cases(function):

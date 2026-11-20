@@ -1,0 +1,8 @@
+# The pytest plugins (entry point group pytest11) that CI may find installed, as `name = value`.
+# .github/workflows/python-environment reads this list from the base revision after it
+# installs the candidate, and fails on any other plugin: a plugin's hooks could drop a red
+# test from the collection. A change here needs the planner label (scripts/red_guard.py).
+hypothesispytest = _hypothesis_pytestplugin
+logging = pytest_logging.plugin
+platformdirs = platformdirs.pytest_plugin
+rezono_cluster = rezono_cluster

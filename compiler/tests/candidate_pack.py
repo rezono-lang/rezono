@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from contextlib import AbstractContextManager, nullcontext
 import json
 import os
 from pathlib import Path
@@ -10,7 +11,7 @@ import subprocess
 
 import yaml
 
-from rezono_compiler import batch, emit, pack, rules as ir
+from rezono_compiler import batch, emit, modules, pack, rules as ir, standard_packs
 
 
 REPO = Path(__file__).resolve().parents[2]
@@ -79,10 +80,18 @@ def isolated_standard_pack(pack_dir: Path, tmp_path: Path, form: str, module_nam
     return target
 
 
+def admitted(pack_dir: Path) -> AbstractContextManager:
+    """Admit a staged candidate under its standard name for this comparison only (standard_packs.trial)."""
+    name = (yaml.safe_load((pack_dir / "pack.yaml").read_bytes()) or {}).get("name", pack_dir.name)
+    if not standard_packs.is_standard_name(name):
+        return nullcontext()
+    return standard_packs.trial(name, modules.pack_hash(pack_dir))
+
+
 def compiled_meaning(pack_dir: Path, pack_name: str, module_name: str) -> dict:
     """Compile an isolated standard pack and return its normalised bundle, IR and SQL outputs."""
-    model = pack.read(pack_dir)
-    files = emit.compile_pack(model)
+    with admitted(pack_dir):
+        files = emit.compile_pack(pack.read(pack_dir))
     names = (f"schema/{module_name}.yaml", f"rules/{module_name}.dl", f"rezono/{module_name}.rezono")
     sources = set(names) | {f"{pack_name}{sep}{item}" for item in names for sep in "/:"}
     return {
@@ -100,7 +109,8 @@ def compiled_meaning(pack_dir: Path, pack_name: str, module_name: str) -> dict:
 
 def evaluate_batch(pack_dir: Path, tables: dict[str, list[tuple]]) -> dict[str, set[tuple[str, ...]]]:
     """Run the DuckDB batch backend on the pack's compiled rules over the supplied base tables."""
-    prog = ir.load(pack.read(pack_dir).rules)
+    with admitted(pack_dir):
+        prog = ir.load(pack.read(pack_dir).rules)
     con = batch.connect(prog, {name: sorted(rows) for name, rows in tables.items()})
     batch.compute(con, prog)
     return {name: {tuple(str(v) for v in row) for row in rows} for name, rows in batch.read(con, prog).items()}

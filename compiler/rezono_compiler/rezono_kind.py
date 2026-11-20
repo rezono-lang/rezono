@@ -122,16 +122,20 @@ def lower(decl: dict, at: str, own: dict[str, str], owners: dict[str, list[str]]
           declared: Set[str], uses: set[str], refuse: Refuse, *, extended_format: bool = False,
           aliases: Mapping[str, Mapping[str, list[str]]] | None = None,
           kinds: Mapping[str, list] | None = None,
-          integer_types: Set[str] = frozenset()) -> dict | None:
+          integer_types: Mapping[str, Set[str]] | None = None,
+          own_module: str = "") -> dict | None:
     """`kinds` holds the slots of each kind of the module, which an inverse slot reads."""
     ok = True
-    allowed = (MEMBERS | {"checks", "embedded", "equations", "parent", "relationship"} | rezono_metadata.FIELDS
+    allowed = (MEMBERS | {"checks", "deprecated", "embedded", "equations", "parent", "relationship"} | rezono_metadata.FIELDS
                if extended_format else MEMBERS)
     if extra := set(decl) - allowed:
         refuse(at, f"a kind with {', '.join(sorted(extra))} is not lowered", "§5.1")
         ok = False
     if not rezono_metadata.valid(decl):
         refuse(at, "invalid kind metadata", "§5.1")
+        ok = False
+    deprecated = rezono_metadata.deprecated(decl, at, refuse, "§5.1") if extended_format else ()
+    if deprecated is None:
         ok = False
     embedded = decl.get("embedded") is True
     if extended_format and "embedded" in decl and not embedded:
@@ -195,11 +199,9 @@ def lower(decl: dict, at: str, own: dict[str, str], owners: dict[str, list[str]]
     if rezono_slot.validate(
         slots, decl["kind"], at, own, owners, uses, refuse,
         extended=extended_format, open_kind=world == "open", aliases=aliases, kinds=kinds,
-        integer_types=integer_types,
+        integer_types=integer_types, own_module=own_module,
     ) and ok and equations is not None and rules is not None:
-        attributes = rezono_slot.lower(
-            slots, declared, implicit_identifier=not embedded and parent is None, integer_types=integer_types,
-        )
+        attributes = rezono_slot.lower(slots, declared, implicit_identifier=not embedded and parent is None)
         result = {"attributes": attributes} | rezono_metadata.lower(decl)
         if world == "open":
             result.setdefault("annotations", {})["world"] = "open"
@@ -213,7 +215,7 @@ def lower(decl: dict, at: str, own: dict[str, str], owners: dict[str, list[str]]
             result.setdefault("annotations", {})["path_equations"] = equations
         if rules:
             result["rules"] = rules
-        return result
+        return rezono_metadata.with_deprecated(result, deprecated or ())
     return None
 
 

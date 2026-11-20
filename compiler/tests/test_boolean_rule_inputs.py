@@ -67,10 +67,6 @@ def check_observations(query, keep_false):
         assert all(type(row[1]) is bool for row in rows if len(row) == 2), relation
 
 
-@pytest.mark.xfail(strict=True, raises=pack.CompileError, reason=(
-    "Read decisions/boolean-rule-inputs.md. Admit native boolean columns and constants through "
-    "contracts/rules.yaml and compiler/rezono_compiler, including both SQL backends and witnesses. "
-    "Select this same case in compiler/ci/run_feldera_oracle.sh when enabling it."))
 def test_native_boolean_rule_inputs(observation_pack):
     folder = observation_pack / "rules"
     folder.mkdir()
