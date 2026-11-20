@@ -17,3 +17,9 @@ unreviewed_marked(c) :- change_policy(c, "mark"), !change_accepted(c).
 // @invariant
 .decl require_in_lab(policy: symbol)
 require_in_lab(q) :- review_policy__policy(q, "require"), review_phase__phase(_, "lab").
+
+// Exactly one phase holds. Two phase facts with different phases make the phase ambiguous; that blocks, so no check
+// can read a lab exception beside a strict fact. Each such fact is named.
+// @invariant
+.decl review_phase_ambiguous(phase_fact: symbol)
+review_phase_ambiguous(f) :- review_phase__phase(f, p), review_phase__phase(_, q), p != q.
