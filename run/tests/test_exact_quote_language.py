@@ -1,9 +1,10 @@
-"""The exact-quote pack is written in Rezono and means what its LinkML and Datalog form meant.
+"""The exact-quote pack's quote module is written in Rezono and means what its LinkML and Datalog form meant.
 
-See decisions/run-exact-quote-language.md. `run/fixtures/exact-quote-linkml/` keeps the replaced
-schema and rules byte for byte. The comparison follows the whole-pack test of `scripts/convert_pack.py`:
-the typed schema and presentation, and for recorded quotes the facts, the conclusions, the union of
-checked grounds per conclusion and what each role sees.
+See decisions/run-exact-quote-language.md and decisions/code-does-not-decide.md.
+`run/fixtures/exact-quote-linkml/` keeps the replaced schema and rules byte for byte. The comparison
+follows the whole-pack test of `scripts/convert_pack.py` scoped to `rezono/quote.rezono` and its
+legacy conclusions, so the pack can carry additional Rezono modules and derived relations (such as
+`effective_amount` and rate/currency facts) while keeping the quote module equivalent to the oracle.
 """
 
 import hashlib
@@ -13,7 +14,7 @@ from pathlib import Path
 
 import pytest
 import yaml
-from rezono_compiler import batch, pack
+from rezono_compiler import batch, pack, rules_dl
 from rezono_publisher import batch as publisher_batch
 
 from run import exact_quote
@@ -22,6 +23,7 @@ from scripts import convert_pack
 RUN = Path(__file__).resolve().parents[1]
 PACK = RUN / "packs" / "exact-quote"
 ORACLE = RUN / "fixtures" / "exact-quote-linkml"
+QUOTE_MODULE = "rezono/quote.rezono"
 ROLES = {"checker": "complete"}
 TIME = "2026-01-01T00:00:00Z"
 CARRY = ("quote_carry", "quote_carry__amount", "quote_carry__position", "quote_carry__value")
@@ -36,14 +38,92 @@ QUOTES = {
 }
 
 
+def _oracle_scope() -> tuple[set[str], set[str], set[str]]:
+    """The kinds, arrows and labelable elements defined by the retained legacy oracle."""
+    schema = yaml.safe_load((ORACLE / "schema" / "quote.yaml").read_text(encoding="utf-8"))
+    classes = schema.get("classes") or {}
+    kinds = {pack.snake(name) for name in classes}
+    slots = set()
+    arrows = set()
+    for cls, body in classes.items():
+        kind = pack.snake(cls)
+        for slot, spec in (body.get("attributes") or {}).items():
+            if isinstance(spec, dict) and spec.get("identifier"):
+                continue
+            element = f"{kind}.{slot}"
+            slots.add(element)
+            if isinstance(spec, dict) and spec.get("range") in classes:
+                arrows.add(element)
+    enum_elements = set()
+    for enum, body in (schema.get("enums") or {}).items():
+        name = pack.snake(enum)
+        enum_elements.add(name)
+        for value in body.get("permissible_values") or {}:
+            enum_elements.add(f"{name}.{value}")
+    rule_items = rules_dl.parse_file((ORACLE / "rules" / "amount.dl").read_text(encoding="utf-8"), "rules/amount.dl")
+    derived_rels = {item[1] for item in rule_items if item[0] == "decl"}
+    return kinds, arrows | derived_rels, kinds | slots | enum_elements | derived_rels
+
+
+def _copy_presentation(target: Path) -> None:
+    """Copy the pack's presentation files, scoped to the elements of the legacy quote oracle."""
+    target.mkdir(parents=True, exist_ok=True)
+    kinds, arrows, elements = _oracle_scope()
+    labels_dir = PACK / "labels"
+    if labels_dir.is_dir():
+        dest = target / "labels"
+        dest.mkdir(parents=True, exist_ok=True)
+        for path in sorted(labels_dir.glob("*.yaml")):
+            data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+            scoped = {key: value for key, value in data.items() if key in elements}
+            (dest / path.name).write_text(yaml.safe_dump(scoped, sort_keys=False), encoding="utf-8")
+    messages_dir = PACK / "messages"
+    if messages_dir.is_dir():
+        shutil.copytree(messages_dir, target / "messages")
+    channels_path = PACK / "channels.yaml"
+    if channels_path.is_file():
+        data = yaml.safe_load(channels_path.read_text(encoding="utf-8")) or {}
+        scoped = dict(data)
+        if isinstance(scoped.get("kinds"), list):
+            scoped["kinds"] = [entry for entry in scoped["kinds"]
+                               if isinstance(entry, dict) and entry.get("kind") in kinds]
+        if isinstance(scoped.get("arrows"), list):
+            scoped["arrows"] = [entry for entry in scoped["arrows"]
+                                if isinstance(entry, dict) and entry.get("arrow") in arrows]
+        if isinstance(scoped.get("images"), list):
+            scoped["images"] = [entry for entry in scoped["images"]
+                                if isinstance(entry, dict) and entry.get("kind") in kinds]
+        (target / "channels.yaml").write_text(yaml.safe_dump(scoped, sort_keys=False), encoding="utf-8")
+
+
 def legacy(directory: Path) -> Path:
-    """The pack as it was: the retained schema and rules beside the unchanged presentation files."""
+    """The pack as it was: the retained schema and rules beside the scoped presentation files."""
     target = directory / "exact-quote"
-    shutil.copytree(PACK, target, ignore=shutil.ignore_patterns("rezono"))
+    _copy_presentation(target)
     meta = yaml.safe_load((PACK / "pack.yaml").read_text(encoding="utf-8"))
-    meta.pop("rezono")
+    meta.pop("rezono", None)
+    meta["imports"] = []
     (target / "pack.yaml").write_text(yaml.safe_dump(meta, sort_keys=False), encoding="utf-8")
     shutil.copytree(ORACLE, target, dirs_exist_ok=True)
+    return target
+
+
+def quote_only(directory: Path) -> Path:
+    """The Rezono quote module alone beside the scoped presentation files."""
+    target = directory / "exact-quote"
+    _copy_presentation(target)
+    meta = yaml.safe_load((PACK / "pack.yaml").read_text(encoding="utf-8"))
+    entries = [entry for entry in meta.get("rezono", ()) if entry.get("module") == QUOTE_MODULE]
+    assert len(entries) == 1, f"{QUOTE_MODULE} must be declared once in pack.yaml"
+    entry = entries[0]
+    for key in ("module", "form"):
+        rel = Path(entry[key])
+        destination = target / rel
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(PACK / rel, destination)
+    meta["imports"] = []
+    meta["rezono"] = [entry]
+    (target / "pack.yaml").write_text(yaml.safe_dump(meta, sort_keys=False), encoding="utf-8")
     return target
 
 
@@ -104,25 +184,29 @@ def epoch(directory: Path, target: Path, rows: dict):
 
 def test_exact_quote_pack_is_written_in_rezono():
     meta = yaml.safe_load((PACK / "pack.yaml").read_text(encoding="utf-8"))
-    assert [entry["module"] for entry in meta.get("rezono", ())] == ["rezono/quote.rezono"]
+    assert QUOTE_MODULE in [entry["module"] for entry in meta.get("rezono", ())]
     assert not (PACK / "schema").exists() and not (PACK / "rules").exists()
 
 
 def test_exact_quote_pack_keeps_its_schema_and_presentation(tmp_path):
-    convert_pack.compare(pack.read(legacy(tmp_path)), pack.read(PACK))
+    convert_pack.compare(pack.read(legacy(tmp_path / "legacy")), pack.read(quote_only(tmp_path / "rezono")))
 
 
 @pytest.mark.parametrize("name", sorted(QUOTES))
 def test_exact_quote_pack_keeps_its_conclusions(tmp_path, name):
     lines = QUOTES[name]
-    assert derived(PACK, lines) == derived(legacy(tmp_path), lines)
+    pack_derived = derived(PACK, lines)
+    legacy_derived = derived(legacy(tmp_path), lines)
+    assert legacy_derived.keys() <= pack_derived.keys()
+    for relation, rows in legacy_derived.items():
+        assert pack_derived[relation] == rows
 
 
 @pytest.mark.parametrize("name", ["priced", "repeated"])
 def test_exact_quote_pack_keeps_its_publication(tmp_path, name):
     rows = facts(QUOTES[name])
-    baseline = epoch(legacy(tmp_path / "source"), tmp_path / "legacy" / "exact-quote", rows)
-    trial = epoch(PACK, tmp_path / "rezono" / "exact-quote", rows)
+    baseline = epoch(legacy(tmp_path / "legacy-source"), tmp_path / "legacy" / "exact-quote", rows)
+    trial = epoch(quote_only(tmp_path / "rezono-source"), tmp_path / "rezono" / "exact-quote", rows)
     convert_pack.compare_publications(baseline, trial, ROLES)
 
 
