@@ -241,7 +241,10 @@ def base_list_cases():
             if listed("push", {}, sha=base) != {"listed = listed"}:
                 raise AssertionError("push: the list does not come from GITHUB_SHA")
             print("BASE: the plugin list of a push comes from GITHUB_SHA")
-            refused("an event that names another base", "pull_request", {"pull_request": {"base": {"sha": head}}})
+            # The event file does not decide the base: one that names another commit changes nothing.
+            if listed("pull_request", {"pull_request": {"base": {"sha": head}}}) != {"listed = listed"}:
+                raise AssertionError("an event that names another base moved the list")
+            print("BASE: an event that names another base does not move the list")
             refused("GitHub Actions without an event file", "pull_request", {}, path=None)
             if listed("pull_request", {}, actions="false", path=None) != {"listed = listed", "added = added"}:
                 raise AssertionError("outside CI the checkout's list applies")
