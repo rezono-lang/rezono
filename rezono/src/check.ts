@@ -462,7 +462,7 @@ export function typing(text: string, schema: Schema, spans: WeakMap<object, Span
 				return [row, inner.at];
 			}
 			const row = inner?.binder ?? levels[0]?.binder;
-			return [report('R001', within(node, name, 'start'), [name], row ? { hint: { id: 'hint.row', args: [row] } } : {}), ''];
+			return [report('R001', within(node, name, 'start'), [name], row && row !== 'it' ? { hint: { id: 'hint.row', args: [row] } } : {}), ''];
 		}
 		const hits: (() => [Typed, string])[] = [];
 		for (const [level, l] of [...levels.entries()].reverse()) {
@@ -476,10 +476,11 @@ export function typing(text: string, schema: Schema, spans: WeakMap<object, Span
 				});
 			}
 			if (slotsOfLevel(l)[name]) {
+				const shadowedByMethodBinder = levels.slice(level).some((inner) => inner.methodBinder && inner.binder === name);
 				const shadowedByOuterVar =
 					l.methodBinder &&
-					(levels.slice(0, level).some((outer) => outer.binder === name) || schema.params?.[name] !== undefined);
-				if (!shadowedByOuterVar) {
+					(levels.slice(0, level).some((outer) => outer.binder === name) || Object.hasOwn(schema.params ?? {}, name));
+				if (!shadowedByMethodBinder && !shadowedByOuterVar) {
 					hits.push(() => {
 						heads.set(node, { as: 'slot', level });
 						const row = value(l.ty);
@@ -587,15 +588,21 @@ export function typing(text: string, schema: Schema, spans: WeakMap<object, Span
 	}
 	/** The scope of an element: inside an aggregate, a quantifier or a filter (§5 rule 2). */
 	function inside<T>(element: Typed, body: () => T, binder?: string, bSpan?: Span): T {
+		let effectiveBinder = binder;
 		if (binder !== undefined) {
-			const duplicate = levels.some((l) => l.binder === binder || (binder === 'it' && !l.binder));
+			const reserved = binder === 'it';
+			const duplicate =
+				reserved ||
+				levels.some((l) => l.binder === binder) ||
+				Object.hasOwn(schema.params ?? {}, binder);
 			if (duplicate) report('R011', bSpan ?? { text: binder, start: 0, end: binder.length }, [binder]);
+			if (reserved) effectiveBinder = undefined;
 		}
 		const fields = tupleFields.get(element);
 		levels.push({
 			ty: element.ty,
 			at: `~${levels.length}`,
-			...(binder !== undefined ? { binder, methodBinder: true as const } : {}),
+			...(effectiveBinder !== undefined ? { binder: effectiveBinder, methodBinder: true as const } : {}),
 			...(fields ? { fields } : {}),
 		});
 		try {
