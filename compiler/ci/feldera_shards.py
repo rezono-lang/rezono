@@ -18,7 +18,8 @@ BOOLEAN = "compiler/tests/test_boolean_rule_inputs.py::test_native_boolean_rule_
 SHARDS = {
     "library": (f"{EXAMPLE}[library]",),
     "projects": (f"{EXAMPLE}[projects]",),
-    "platform": (f"{INCREMENTAL}[platform]", PLATFORM_TEST),
+    "platform-incremental": (f"{INCREMENTAL}[platform]",),
+    "platform-e2e": (PLATFORM_TEST,),
     "tenant-capacity-interface": (INTERFACE,),
     "subsidy": (f"{INCREMENTAL}[subsidy]",),
     "compiler-calc": (f"{CALC}[full]", f"{CALC}[choice]"),
