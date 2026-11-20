@@ -405,3 +405,227 @@ def test_products_requires_rule_ir_for_native_rezono_rules(tmp_path, monkeypatch
         "helper relation ends is not folded (explain: fold)",
         "kind beta is only reached through joins and is not folded (explain: fold)",
     ]
+
+
+KIND_DERIVED_FOLDED_TEXT = """\
+rezono 1
+pack sample
+kind Alpha
+kind Beta
+  annotation explain = "fold"
+  first: Alpha
+  second: Alpha
+  derived ends: Bool explain fold = true
+"""
+
+KIND_DERIVED_FOLDED_FORM = {
+    "format": "rezono.module/5",
+    "module": {
+        "decls": [
+            {"derived": [], "kind": "Alpha", "slots": []},
+            {
+                "annotations": {"explain": "fold"},
+                "derived": [
+                    {
+                        "derived": "ends",
+                        "options": [{"explain": "fold"}],
+                        "type": "Bool",
+                        "value": {"lit": "true"},
+                    }
+                ],
+                "kind": "Beta",
+                "slots": [
+                    {"slot": "first", "type": "Alpha"},
+                    {"slot": "second", "type": "Alpha"},
+                ],
+            },
+        ],
+        "pack": "sample",
+        "rezono": "1",
+        "use": [],
+    },
+    "spans": [
+        {"at": "/decls/0", "end": "31", "line": "3", "start": "26"},
+        {"at": "/decls/1", "end": "41", "line": "4", "start": "37"},
+        {"at": "/decls/1/derived/0", "end": "117", "line": "8", "start": "113"},
+        {"at": "/decls/1/derived/0/options/0", "end": "136", "line": "8", "start": "124"},
+        {"at": "/decls/1/derived/0/value", "end": "143", "line": "8", "start": "139"},
+        {"at": "/decls/1/slots/0", "end": "79", "line": "6", "start": "74"},
+        {"at": "/decls/1/slots/1", "end": "95", "line": "7", "start": "89"},
+    ],
+}
+
+KIND_DERIVED_UNFOLDED_TEXT = """\
+rezono 1
+pack sample
+kind Alpha
+kind Beta
+  first: Alpha
+  second: Alpha
+  derived ends: Bool = true
+"""
+
+KIND_DERIVED_UNFOLDED_FORM = {
+    "format": "rezono.module/5",
+    "module": {
+        "decls": [
+            {"derived": [], "kind": "Alpha", "slots": []},
+            {
+                "derived": [
+                    {
+                        "derived": "ends",
+                        "type": "Bool",
+                        "value": {"lit": "true"},
+                    }
+                ],
+                "kind": "Beta",
+                "slots": [
+                    {"slot": "first", "type": "Alpha"},
+                    {"slot": "second", "type": "Alpha"},
+                ],
+            },
+        ],
+        "pack": "sample",
+        "rezono": "1",
+        "use": [],
+    },
+    "spans": [
+        {"at": "/decls/0", "end": "31", "line": "3", "start": "26"},
+        {"at": "/decls/1", "end": "41", "line": "4", "start": "37"},
+        {"at": "/decls/1/derived/0", "end": "87", "line": "7", "start": "83"},
+        {"at": "/decls/1/derived/0/value", "end": "100", "line": "7", "start": "96"},
+        {"at": "/decls/1/slots/0", "end": "49", "line": "5", "start": "44"},
+        {"at": "/decls/1/slots/1", "end": "65", "line": "6", "start": "59"},
+    ],
+}
+
+EXTEND_DERIVED_FOLDED_TEXT = """\
+rezono 1
+pack sample
+kind Alpha
+kind Beta
+  first: Alpha
+  second: Alpha
+extend Beta
+  derived ends: Bool explain fold = true
+"""
+
+EXTEND_DERIVED_FOLDED_FORM = {
+    "format": "rezono.module/5",
+    "module": {
+        "decls": [
+            {"derived": [], "kind": "Alpha", "slots": []},
+            {
+                "derived": [],
+                "kind": "Beta",
+                "slots": [
+                    {"slot": "first", "type": "Alpha"},
+                    {"slot": "second", "type": "Alpha"},
+                ],
+            },
+            {
+                "derived": [
+                    {
+                        "derived": "ends",
+                        "options": [{"explain": "fold"}],
+                        "type": "Bool",
+                        "value": {"lit": "true"},
+                    }
+                ],
+                "extend": "Beta",
+            },
+        ],
+        "pack": "sample",
+        "rezono": "1",
+        "use": [],
+    },
+    "spans": [
+        {"at": "/decls/0", "end": "31", "line": "3", "start": "26"},
+        {"at": "/decls/1", "end": "41", "line": "4", "start": "37"},
+        {"at": "/decls/1/slots/0", "end": "49", "line": "5", "start": "44"},
+        {"at": "/decls/1/slots/1", "end": "65", "line": "6", "start": "59"},
+        {"at": "/decls/2", "end": "84", "line": "7", "start": "80"},
+        {"at": "/decls/2/derived/0", "end": "99", "line": "8", "start": "95"},
+        {"at": "/decls/2/derived/0/options/0", "end": "118", "line": "8", "start": "106"},
+        {"at": "/decls/2/derived/0/value", "end": "125", "line": "8", "start": "121"},
+    ],
+}
+
+
+def test_kind_and_extend_nested_derived_fold_marks_and_rule_ir(tmp_path, monkeypatch):
+    # _decl_has_rules recognizes non-empty derived lists on kind and extend declarations,
+    # while ignoring kinds/extends with an empty derived list.
+    assert not EXPLAIN_LINT._decl_has_rules({"kind": "Alpha", "derived": [], "slots": []})
+    assert EXPLAIN_LINT._decl_has_rules(KIND_DERIVED_UNFOLDED_FORM["module"]["decls"][1])
+    assert EXPLAIN_LINT._decl_has_rules(EXTEND_DERIVED_FOLDED_FORM["module"]["decls"][2])
+
+    # Folded nested derived items under kind and extend are extracted via options and annotations.
+    kind_folded = _write_native_pack(
+        tmp_path / "kind-folded", KIND_DERIVED_FOLDED_TEXT, KIND_DERIVED_FOLDED_FORM
+    )
+    assert EXPLAIN_LINT.folded(kind_folded) == {"Beta", "ends"}
+    assert EXPLAIN_LINT.lint(kind_folded, tmp_path).findings == ()
+
+    extend_folded = _write_native_pack(
+        tmp_path / "extend-folded",
+        EXTEND_DERIVED_FOLDED_TEXT,
+        EXTEND_DERIVED_FOLDED_FORM,
+        write_bundle=False,
+        write_rules=False,
+    )
+    assert EXPLAIN_LINT.folded(extend_folded) == {"ends"}
+
+    # Annotation-based fold marks on nested derived items and table-backed extend items are also recognized.
+    annotated_form = {
+        "module": {
+            "decls": [
+                {
+                    "kind": "Beta",
+                    "derived": [
+                        {"derived": "via_ann", "annotations": {"explain": "fold"}},
+                        {"derived": "plain"},
+                    ],
+                },
+                {
+                    "extend": "Beta",
+                    "derived": [
+                        {"derived": "band", "options": [{"explain": "fold"}], "table": {"table": "unique"}},
+                    ],
+                },
+            ]
+        }
+    }
+    assert EXPLAIN_LINT._fold_marks_from_form(annotated_form) == {"via_ann", "band", "beta_band"}
+
+    # A pack whose only rule-bearing decl is a kind with a non-empty derived list must
+    # require ir/rules.json and trigger compilation when it is absent.
+    missing_ir = _write_native_pack(
+        tmp_path / "kind-derived-missing-ir",
+        KIND_DERIVED_UNFOLDED_TEXT,
+        KIND_DERIVED_UNFOLDED_FORM,
+        write_bundle=True,
+        write_rules=False,
+    )
+    invoked: list[list[str]] = []
+    real_run = EXPLAIN_LINT.subprocess.run
+
+    def fake_compile(cmd, *args, **kwargs):
+        if len(cmd) >= 4 and cmd[1:4] == ["-m", "rezono_compiler", "compile"]:
+            invoked.append(cmd)
+            out = Path(cmd[-1])
+            (out / "bundle").mkdir(parents=True, exist_ok=True)
+            (out / "ir").mkdir(parents=True, exist_ok=True)
+            (out / "bundle" / "schema-bundle.json").write_text(
+                json.dumps(BUNDLE), encoding="utf-8"
+            )
+            (out / "ir" / "rules.json").write_text(json.dumps(RULE_IR), encoding="utf-8")
+            return None
+        return real_run(cmd, *args, **kwargs)
+
+    monkeypatch.setattr(EXPLAIN_LINT.subprocess, "run", fake_compile)
+    findings = sorted(f.what for f in EXPLAIN_LINT.lint(missing_ir, tmp_path).findings)
+    assert len(invoked) == 1
+    assert findings == [
+        "helper relation ends is not folded (explain: fold)",
+        "kind beta is only reached through joins and is not folded (explain: fold)",
+    ]
