@@ -866,21 +866,78 @@ def argument_names(function):
     return [arg.arg for arg in (*a.posonlyargs, *a.args, *a.kwonlyargs)]
 
 
-def fixture_cases(function, defs, seen=frozenset()):
-    """The cases of the `params=` of each module-level fixture a test or fixture takes, at any depth."""
-    found = {}
-    for name in argument_names(function):
-        if name in seen:
+def fixture_calls(node):
+    """The `pytest.fixture` decorators of a function, as (call or None, keywords)."""
+    found = []
+    for decorator in getattr(node, "decorator_list", []):
+        call = decorator if isinstance(decorator, ast.Call) else None
+        if ast.unparse(call.func if call else decorator).endswith("fixture"):
+            found.append({k.arg: k.value for k in call.keywords} if call else {})
+    return found
+
+
+def fixtures_in(body):
+    """The fixtures a module or class body defines, by the name tests use, and those used always.
+
+    A fixture's name is its `name=`, else its function's. An `autouse=True` fixture applies
+    to every test in its scope.
+    """
+    found, autouse = {}, []
+    for node in body:
+        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             continue
-        for node in defs.get(name, []):
-            if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                continue
-            for decorator in node.decorator_list:
-                if isinstance(decorator, ast.Call) and ast.unparse(decorator.func).endswith("fixture"):
-                    params = next((k.value for k in decorator.keywords if k.arg == "params"), None)
-                    if params is not None:
-                        found.update(table(params, defs, frozenset()))
-            found.update(fixture_cases(node, defs, seen | {name}))
+        for keywords in fixture_calls(node):
+            alias = keywords.get("name")
+            name = alias.value if isinstance(alias, ast.Constant) and isinstance(alias.value, str) else node.name
+            found[name] = node
+            used = keywords.get("autouse")
+            if isinstance(used, ast.Constant) and used.value is True:
+                autouse.append(name)
+    return found, autouse
+
+
+def used_fixtures(marks):
+    """The fixture names that `usefixtures` marks name, among decorators or `pytestmark` values."""
+    found = []
+    for mark in marks:
+        for call in mark.elts if isinstance(mark, (ast.List, ast.Tuple)) else [mark]:
+            if isinstance(call, ast.Call) and ast.unparse(call.func).endswith("usefixtures"):
+                found.extend(a.value for a in call.args if isinstance(a, ast.Constant) and isinstance(a.value, str))
+    return found
+
+
+def test_fixtures(tree, scope):
+    """The fixtures of this module that a test uses, by name, with the function of each.
+
+    That is each fixture it takes as an argument, names in `usefixtures` or gets by autouse,
+    from its classes or its module (a class's fixture hides the module's of the same name),
+    and each fixture those take in turn.
+    """
+    available, autouse = fixtures_in(tree.body)
+    marks = []
+    for node in scope:
+        if isinstance(node, ast.ClassDef):
+            inner, always = fixtures_in(node.body)
+            available = {**available, **inner}
+            autouse = autouse + always
+        marks.extend(getattr(node, "decorator_list", None) or ([] if hasattr(node, "body") else [node]))
+    wanted = [*argument_names(scope[-1]), *used_fixtures(marks), *autouse]
+    found = {}
+    while wanted:
+        name = wanted.pop()
+        if name in found or name not in available:
+            continue
+        found[name] = available[name]
+        wanted.extend(argument_names(available[name]))
+    return found
+
+
+def generated_cases(tree, defs):
+    """The cases a module-level `pytest_generate_tests` gives through `metafunc.parametrize`."""
+    found = {}
+    for node in tree.body:
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name == "pytest_generate_tests":
+            found.update(parametrized([n for n in ast.walk(node) if isinstance(n, ast.Call)], defs))
     return found
 
 
@@ -948,18 +1005,34 @@ def table_changes(path, before, after):
             parts = (node.decorator_list + [n for n in node.body if isinstance(n, ast.Assign)]
                      if isinstance(node, ast.ClassDef) else [node])
             read |= {n.id for part in parts for n in ast.walk(part) if isinstance(n, ast.Name)}
-        read |= set(argument_names(nodes[-1]))  # A fixture it takes is a name it reads.
+        # A fixture it uses is a name it reads, and so is pytest_generate_tests, which pytest
+        # calls for every test of the module.
+        old_fixtures, new_fixtures = test_fixtures(old_tree, old_scopes[test]), test_fixtures(new_tree, nodes)
+        read |= set(argument_names(nodes[-1])) | set(new_fixtures) | {"pytest_generate_tests"}
+        for node in new_fixtures.values():
+            read |= {n.id for n in ast.walk(node) if isinstance(n, ast.Name)}
         notes.extend(f"CHANGED {path}::{test} reads the changed {name}" for name in sorted(changed & read))
+        notes.extend(f"CHANGED {path}::{test} uses the changed fixture {name}"
+                     for name in sorted(old_fixtures.keys() | new_fixtures.keys())
+                     if name not in changed and (name not in old_fixtures or name not in new_fixtures
+                                                 or ast.dump(bare(old_fixtures[name]))
+                                                 != ast.dump(bare(new_fixtures[name]))))
         if unknown:
             notes.append(f"CHANGED {path}::{test} under a changed module-level statement")
 
-        def cases_of(scope, defs):
+        def cases_of(tree, scope, defs, fixtures):
             marks = []
             for node in scope:
                 marks.extend(getattr(node, "decorator_list", None) or ([] if hasattr(node, "body") else [node]))
-            return {**parametrized(marks, defs), **fixture_cases(scope[-1], defs)}
+            found = {**parametrized(marks, defs), **generated_cases(tree, defs)}
+            for node in fixtures.values():
+                for keywords in fixture_calls(node):
+                    if "params" in keywords:
+                        found.update(table(keywords["params"], defs, frozenset()))
+            return found
 
-        lost = cases_of(old_scopes[test], old_defs).keys() - cases_of(nodes, new_defs).keys()
+        lost = (cases_of(old_tree, old_scopes[test], old_defs, old_fixtures).keys()
+                - cases_of(new_tree, nodes, new_defs, new_fixtures).keys())
         notes.extend(f"REMOVED {path}::{test}[{case}]" for case in sorted(lost))
     return notes
 
