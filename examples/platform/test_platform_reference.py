@@ -31,7 +31,9 @@ def test_rule_results_match_independent_platform_rows():
 
     expected = json.loads((HERE / "oracle-rows.json").read_text())
     names = sorted(k for k in expected if not k.startswith("cluster_"))
-    assert len(names) == 20
+    # A floor, not an exact count: dropping an oracle relation is red, while two changes that each add one
+    # still agree once they are merged.
+    assert len(names) >= 20
     want = {k: {tuple(map(str, row)) for row in expected[k]} for k in names}
     _, _, fact_states = states(HERE)
     state, = fact_states

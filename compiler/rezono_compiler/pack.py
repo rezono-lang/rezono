@@ -733,7 +733,9 @@ def read(pack_dir: str | Path) -> Pack:
     pack = Pack({"name": meta["name"], "version": str(meta["version"]), "default_language": meta["default_language"],
                  "theory": is_theory},
                 [{"name": m.sv.schema.name, "id": m.sv.schema.id, "file": m.rel, "module": m.id, "pack": m.pack}
-                 for m in mods],
+                 for m in mods
+                 if m.form is None or "schema" in m.form["module"]
+                 or m.sv.schema.classes or m.sv.schema.enums or m.sv.schema.types],
                 dict(sorted(kinds.items())), dict(sorted(enums.items())), warnings=warnings, units=declared,
                 imports=[{"name": p.name, "version": p.version, "sha256": p.sha256} for p in packs.values()])
     if not errors:
@@ -743,16 +745,19 @@ def read(pack_dir: str | Path) -> Pack:
     if not errors:
         pack.sweeps = sweeps(pack, pack_dir, errors)
     calc_inputs, calc_parts, ordered, renames = {}, {}, {}, {}
+    calc_bare_leaves: list[tuple[str, str, str, str]] = []
     if not errors:
         from . import calc  # calc reads the IR of this module, so it is imported here
         ordered = {n: packs[n] for n in modules.dependency_order(packs, modules.direct(meta))}
         renames = {p.name: rename(mods, p, names) for p in packs.values()}
         try:
-            pack.calc, calc_parts = calc.read_closure(pack, pack_dir, ordered, renames)
+            pack.calc, calc_parts = calc.read_closure(pack, pack_dir, ordered, renames, mods=mods,
+                                                      bare_leaves=calc_bare_leaves)
             if pack.calc is not None:
                 calc_inputs = calc.rule_input_columns(pack, pack.calc)
         except CompileError as e:
             errors.append(str(e))
+            typed[str(e)] = e.diagnostics
     generated = []
     if not errors:
         from . import rezono_relational, rezono_table  # table lowering reads the pack's model
@@ -804,8 +809,10 @@ def read(pack_dir: str | Path) -> Pack:
         from . import seal
         seal.check_rules(pack, pack.rules, errors)
     if not errors and pack.calc is not None:
-        from . import calc, calc_sql, rules as rule_ir
+        from . import calc, calc_sql, rezono_calc, rules as rule_ir
         try:
+            if calc_bare_leaves and pack.rules:
+                rezono_calc.check_relation_ambiguity(pack, calc_bare_leaves)
             # every check now, so `check` reports it in seconds, a unit error at its place in a calc file (P10.3)
             calculation = calc.build(pack, pack.calc, files=calc.files_of(pack_dir, meta["name"], ordered))
             calc.check_imports(pack, calculation, calc_parts, ordered, renames)
@@ -820,6 +827,8 @@ def read(pack_dir: str | Path) -> Pack:
                     raise CompileError("rules: may_read cannot depend on a calculation selection")
         except (CompileError, rule_ir.IRError) as e:
             errors.append(str(e))
+            if isinstance(e, CompileError):
+                typed[str(e)] = e.diagnostics
         subject = (pack.calc or {}).get("subject")
         inputs = ((pack.calc or {}).get("inputs") or {}).get("kind")
         # A part counts only when its sealed element does (docs/compiler.md#parts): the same refusal holds for it.

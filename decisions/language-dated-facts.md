@@ -55,3 +55,16 @@ fact party p3, valid 2026-01-01.., in setup-a | setup-b
 ```
 
 A stage context is an object, not a list like `valid`: one stage and an open range starting at that stage are different contexts, and a list of one would not tell them apart. The stage and setup names are record identifiers, written as a fact row writes its record. The module form contract gains the two members on `FactRow`.
+
+## Lowering
+
+`facts.load(pack, path, *, as_of: str | None = None, known: str | None = None)` in `compiler/rezono_compiler/facts.py` lowers dated `FactRow` declarations inside a named dataset (`rezono.module/2`) alongside its base fact tables:
+
+- **Existing records only.** Every dated row must reference a record identifier created by a fact table or undated row in the same dataset. A dated row for an unknown record is refused with `LoadError`.
+- **Typed slot admission.** Each assignment in `set` names a declared slot of the kind and its value is decoded and checked under the same schema admission rules as fact tables.
+- **Version selection on `(as_of, known)`.** When `as_of` and `known` are ISO dates (`YYYY-MM-DD`), a dated row applies to `(record, slot)` when `valid[0] <= as_of`, `as_of < valid[1]` if an end date is given, and `row.known <= known` if the row specifies `known`.
+  - If no dated row applies to `(record, slot)`, no row is emitted in `kind__slot` for that record (unknown / `no_version_applies`).
+  - If one applying row has a strictly later `known` date than all other applying rows (with an explicit `known` date preferred over an omitted one), its typed value is emitted as `(record, value)` in `kind__slot`.
+  - If two or more applying rows tie on the latest `known` date on an overlap, `facts.load` refuses the dataset with `LoadError` naming `versions_overlap`.
+
+The lowering test is `compiler/tests/rezono/test_lower_dated_fact.py`.

@@ -8,9 +8,12 @@ MEMBERS = {"enum", "world", "values"}
 
 
 def lower(decl: dict, at: str, refuse: Refuse, *, extended: bool = False) -> dict | None:
-    allowed = MEMBERS | {"memberMetadata"} | rezono_metadata.FIELDS if extended else MEMBERS
+    allowed = MEMBERS | {"deprecated", "memberMetadata"} | rezono_metadata.FIELDS if extended else MEMBERS
     if extra := set(decl) - allowed:
         refuse(at, f"an enum with {', '.join(sorted(extra))} is not lowered", "§5.2")
+        return None
+    deprecated = rezono_metadata.deprecated(decl, at, refuse, "§5.2") if extended else ()
+    if deprecated is None:
         return None
     if decl.get("world") == "open":
         refuse(at, "an open enum (`world open`) is refused", "§5.2")
@@ -31,4 +34,4 @@ def lower(decl: dict, at: str, refuse: Refuse, *, extended: bool = False) -> dic
             refuse(f"{at}/memberMetadata/{name}", f"invalid metadata for enum member {name}", "§5.2")
             return None
     permissible = {value: rezono_metadata.lower(members.get(value, {})) for value in values}
-    return {"permissible_values": permissible} | rezono_metadata.lower(decl)
+    return rezono_metadata.with_deprecated({"permissible_values": permissible} | rezono_metadata.lower(decl), deprecated)

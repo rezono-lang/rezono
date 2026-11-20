@@ -20,7 +20,7 @@ def builtin_range(name: str, declared: bool) -> str | None:
     return BUILTIN_RANGES.get(name)
 
 
-def constraint_facets(slot: dict, range_name: str | None) -> dict[str, str | int | bool]:
+def constraint_facets(slot: dict, is_integer: bool) -> dict[str, str | int | bool]:
     """Keep the written pattern and let the pack loader validate it as a LinkML facet."""
     facets: dict[str, str | int | bool] = {}
     constraints = slot["constraints"]
@@ -40,11 +40,11 @@ def constraint_facets(slot: dict, range_name: str | None) -> dict[str, str | int
                 raise ValueError("an identifier cannot be multivalued")
             return facets
         constraints = bounds
-    facets.update(bound_facets(slot, range_name, constraints))
+    facets.update(bound_facets(slot, is_integer, constraints))
     return facets
 
 
-def bound_facets(slot: dict, range_name: str | None, constraints: object) -> dict[str, int | bool]:
+def bound_facets(slot: dict, is_integer: bool, constraints: object) -> dict[str, int | bool]:
     """Resolve the authored bounds for a list or a single integer value."""
     card = slot.get("card", "?")
     explicit = slot.get("identifier") is True
@@ -55,7 +55,7 @@ def bound_facets(slot: dict, range_name: str | None, constraints: object) -> dic
         if explicit:
             raise ValueError("a bounded list cannot be an identifier")
         return facets
-    if range_name != "integer" or explicit or card != "?":
+    if not is_integer or explicit or card != "?":
         raise ValueError("integer limits need an Int slot that is single-valued and is not an identifier")
     return rezono_numeric_limits.lower(constraints)
 
@@ -86,8 +86,7 @@ def resolve_prefixed(
     return None
 
 
-def lower(slots: list[dict], declared: Set[str], *, implicit_identifier: bool = True,
-          scalar_bases: Mapping[str, str] | None = None) -> dict[str, dict]:
+def lower(slots: list[dict], declared: Set[str], *, implicit_identifier: bool = True) -> dict[str, dict]:
     """Lower slots in written order, using an implicit identifier only when needed."""
     out: dict[str, dict] = {}
     if implicit_identifier and not any(slot.get("identifier") is True for slot in slots):
@@ -104,8 +103,7 @@ def lower(slots: list[dict], declared: Set[str], *, implicit_identifier: bool = 
         if "slotUri" in slot:
             attribute["slot_uri"] = slot["slotUri"]
         if "constraints" in slot:
-            facet_range = scalar_bases.get(range_name, range_name) if scalar_bases else range_name
-            attribute.update(constraint_facets(slot, facet_range))
+            attribute.update(constraint_facets(slot, range_name))
         if slot.get("identifier") is True:
             attribute["identifier"] = True
         elif "card" not in slot or slot["card"] == "+":
@@ -124,7 +122,7 @@ def lower(slots: list[dict], declared: Set[str], *, implicit_identifier: bool = 
 
 def inverse_points_back(slot: dict, kind: str, here: str, kinds: Mapping[str, list], own: Mapping[str, str],
                         owners: Mapping[str, list[str]], refuse: Refuse) -> bool:
-    """An inverse names a slot of the kind its type names, and that slot's type is the kind that declares the
+    """An inverse names a forward slot of the kind its type names, and that slot's type is the kind that declares the
     inverse (decisions/language-inverse-references.md). `kinds` holds the slots of each kind of this module."""
     forward, target = slot["inverse"], slot["type"]
     if not isinstance(forward, str):
@@ -140,14 +138,21 @@ def inverse_points_back(slot: dict, kind: str, here: str, kinds: Mapping[str, li
     if found[0].get("type") != kind:
         refuse(here, f"the inverse {forward} of {target} is a {found[0].get('type')}, not a {kind}", "§5.1")
         return False
+    if found[0] is slot or (target == kind and forward == slot.get("slot")):
+        refuse(here, f"the inverse {forward} of {target} cannot be the slot itself", "§5.1")
+        return False
+    if "inverse" in found[0]:
+        refuse(here, f"the inverse {forward} of {target} is itself an inverse, not a forward slot", "§5.1")
+        return False
     return True
 
 
 def validate(slots: list, kind: str, at: str, own: Mapping[str, str], owners: Mapping[str, list[str]],
              uses: set[str], refuse: Refuse, *, extended: bool = False, open_kind: bool = False,
              aliases: Mapping[str, Mapping[str, list[str]]] | None = None,
-             scalar_bases: Mapping[str, str] | None = None,
-             kinds: Mapping[str, list] | None = None) -> bool:
+             kinds: Mapping[str, list] | None = None,
+             integer_types: Mapping[str, Set[str]] | None = None,
+             own_module: str = "") -> bool:
     """Check slot forms and resolve references against all the modules of the pack."""
     ok = True
     seen: set[str] = set()
@@ -211,22 +216,31 @@ def validate(slots: list, kind: str, at: str, own: Mapping[str, str], owners: Ma
         if "inverse" in slot and not inverse_points_back(slot, kind, here, kinds or {}, own, owners, refuse):
             ok = False
         name = slot["type"]
+        ints = integer_types or {}
         if "." in name:
+            resolved = resolve_prefixed(name, aliases, here, refuse)
+            if resolved is None:
+                ok = False
             if has_constraints:
+                prefix, _, local = name.partition(".")
+                targets = (aliases or {}).get(prefix, {}).get(local, [])
+                is_integer = len(targets) == 1 and local in ints.get(targets[0], ())
                 try:
-                    constraint_facets(slot, None)
+                    constraint_facets(slot, is_integer)
                 except ValueError as error:
                     refuse(here, str(error), "§5.1")
                     ok = False
-            if resolve_prefixed(name, aliases, here, refuse) is None:
-                ok = False
             continue
         found = owners.get(name, [])
         range_name = builtin_range(name, name in own or bool(found))
-        facet_range = scalar_bases.get(name, range_name) if range_name is None and scalar_bases else range_name
+        is_integer = (
+            range_name == "integer"
+            or (name in own and name in ints.get(own_module, ()))
+            or (len(found) == 1 and name in ints.get(found[0], ()))
+        )
         if has_constraints:
             try:
-                constraint_facets(slot, facet_range)
+                constraint_facets(slot, is_integer)
             except ValueError as error:
                 refuse(here, str(error), "§5.1")
                 ok = False
