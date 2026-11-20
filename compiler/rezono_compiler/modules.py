@@ -238,6 +238,9 @@ def imported_packs(pack_dir: Path, meta: dict, errors: list[str]) -> dict[str, I
 def load(pack_dir: Path, meta: dict, errors: list[str]) -> tuple[list[Module], dict[str, Imported]]:
     """The modules of the pack and of every imported pack, with their imports resolved to module ids."""
     packs = imported_packs(pack_dir, meta, errors)
+    rezono_module.warm_packs(
+        [(pack_dir, meta, True), *((p.dir, p.meta, False) for p in packs.values())]
+    )
     sources = [(None, pack_dir, [p for p in packs if p in direct(meta)])] + \
               [(name, p.dir, p.imports) for name, p in packs.items()]
     modules: dict[str, Module] = {}

@@ -13,7 +13,7 @@ import { parse as parseYaml } from 'yaml';
 import { canonicalJson } from '../../viewer/src/lib/canon.ts';
 import { JsonFormError, MODULE_FORMAT, moduleForm, moduleFromJson, moduleToJson, parse, parseModule, printModule, type Expr } from '../src/index.ts';
 import { lineOf } from '../src/module-json.ts';
-import { writeForm } from '../src/write-form.ts';
+import { writeForm, writeForms } from '../src/write-form.ts';
 
 const source = fileURLToPath(new URL('module.rezono', import.meta.url));
 // The form counts offsets, so a checkout that turned the line ends into CRLF would be another text.
@@ -413,4 +413,45 @@ test('the contract reads a label as the reader does, in either dialect: a line e
 	// ECMA-262's `.` and Python's differ on U+2028, U+2029 and a bare CR: the pattern names what it refuses.
 	assert.equal(label.test('"a b c"'), true);
 	for (const end of ['\n', '\r', '\r\n']) assert.equal(label.test(`"a${end}b"`), false, JSON.stringify(end));
+});
+
+test('batch writeForms matches single writeForm byte-for-byte and isolates refused modules', () => {
+	const dir = mkdtempSync(join(tmpdir(), 'rezono-batch-'));
+	const srcA = join(dir, 'a.rezono');
+	const srcB = join(dir, 'b.rezono');
+	const srcBad = join(dir, 'bad.rezono');
+	writeFileSync(srcA, 'rezono 0\npack lab\nunit GiB = 1024 MiB\n');
+	writeFileSync(srcB, 'rezono 0\npack lab\nkind Item world closed\n  label: Text\n');
+	writeFileSync(srcBad, 'rezono 0\npack lab\nextend Item\n  derived before: GiB = size at since\n');
+
+	const singleA = join(dir, 'single-a.json');
+	const singleB = join(dir, 'single-b.json');
+	const singleBad = join(dir, 'single-bad.json');
+	const singleBadLines: string[] = [];
+	assert.equal(writeForm(srcA, singleA), 0);
+	assert.equal(writeForm(srcB, singleB), 0);
+	assert.equal(writeForm(srcBad, singleBad, (line) => singleBadLines.push(line)), 1);
+
+	const batchA = join(dir, 'batch-a.json');
+	const batchB = join(dir, 'batch-b.json');
+	assert.equal(writeForms([[srcA, batchA], [srcB, batchB]]), 0);
+	assert.equal(readFileSync(batchA, 'utf8'), readFileSync(singleA, 'utf8'));
+	assert.equal(readFileSync(batchB, 'utf8'), readFileSync(singleB, 'utf8'));
+
+	const mixedA = join(dir, 'mixed-a.json');
+	const mixedB = join(dir, 'mixed-b.json');
+	const mixedBad = join(dir, 'mixed-bad.json');
+	writeFileSync(mixedBad, 'stale');
+	const mixedLines: string[] = [];
+	assert.equal(
+		writeForms(
+			[[srcA, mixedA], [srcBad, mixedBad], [srcB, mixedB]],
+			(line) => mixedLines.push(line),
+		),
+		1,
+	);
+	assert.equal(readFileSync(mixedA, 'utf8'), readFileSync(singleA, 'utf8'));
+	assert.equal(readFileSync(mixedB, 'utf8'), readFileSync(singleB, 'utf8'));
+	assert.equal(existsSync(mixedBad), false);
+	assert.deepEqual(mixedLines, singleBadLines);
 });
