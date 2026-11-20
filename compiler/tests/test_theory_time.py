@@ -207,7 +207,7 @@ def evaluate(intervals, references, tmp_path):
     assert as_text(batch_eval(prog, data)) == want
     if shutil.which("souffle"):
         import souffle
-        text = souffle.source(prog, [p.read_text("utf-8") for p in sorted((THEORY / "rules").glob("*.dl"))])
+        text = souffle.pack_source(prog, THEORY)
         assert souffle.run(prog, data, tmp_path, program_text=text) == want
     return want
 

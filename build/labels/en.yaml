@@ -19,3 +19,6 @@ build_task_stuck: Blocked task
 build_task_precedes: Ready task order
 build_planner_slot: Planner slot available
 build_planner_waiting: Planner waiting
+build_citation_scan: Citation scan
+build_red_citation: Red test decision citation
+build_red_cites_replaced: Red test cites replaced decision

@@ -6,7 +6,7 @@ from . import rezono_cardinality, rezono_metadata, rezono_numeric_limits
 from .rezono_lowering import Refuse
 
 
-MEMBERS = {"slot", "type", "card"}
+MEMBERS = {"slot", "type", "card", "inverse"}
 BUILTIN_RANGES = {"Bool": "boolean", "Date": "date", "Text": "string"}
 LIST_CARDS = ("*", "+")
 
@@ -60,6 +60,32 @@ def bound_facets(slot: dict, range_name: str | None, constraints: object) -> dic
     return rezono_numeric_limits.lower(constraints)
 
 
+def resolve_prefixed(
+    name: str,
+    aliases: Mapping[str, Mapping[str, list[str]]] | None,
+    at: str,
+    refuse: Refuse,
+    *,
+    role: str = "",
+) -> str | None:
+    """Resolve `prefix.Name` against the module's aliased `use` packs, returning `Name` or refusing at `at`."""
+    prefix, _, local = name.partition(".")
+    if aliases is None or prefix not in aliases:
+        refuse(at, f"prefix {prefix} is not declared by a `use` line", "§5.1")
+        return None
+    found = aliases[prefix].get(local, [])
+    if len(found) == 1:
+        return local
+    subject = f"{role} {name}" if role else name
+    reason = (
+        f"{subject} is declared by modules {' and '.join(found)}"
+        if found
+        else f"{subject} is not declared by the pack imported as {prefix}"
+    )
+    refuse(at, reason, "§5.1")
+    return None
+
+
 def lower(slots: list[dict], declared: Set[str], *, implicit_identifier: bool = True) -> dict[str, dict]:
     """Lower slots in written order, using an implicit identifier only when needed."""
     out: dict[str, dict] = {}
@@ -67,8 +93,11 @@ def lower(slots: list[dict], declared: Set[str], *, implicit_identifier: bool = 
         out["id"] = {"identifier": True}
     for slot in slots:
         name = slot["type"]
-        # Validation has already checked whether this version admits the built-in range.
-        range_name = builtin_range(name, name in declared) or name
+        if "." in name:
+            range_name = name.partition(".")[2]
+        else:
+            # Validation has already checked whether this version admits the built-in range.
+            range_name = builtin_range(name, name in declared) or name
         attribute: dict[str, object] = {"range": range_name}
         attribute.update(rezono_metadata.lower(slot))
         if "slotUri" in slot:
@@ -85,12 +114,37 @@ def lower(slots: list[dict], declared: Set[str], *, implicit_identifier: bool = 
             attribute["inlined"] = True
         if slot.get("world") == "open":
             attribute.setdefault("annotations", {})["world"] = "open"
+        if "inverse" in slot:
+            attribute["inverse"] = slot["inverse"]
         out[slot["slot"]] = attribute
     return out
 
 
+def inverse_points_back(slot: dict, kind: str, here: str, kinds: Mapping[str, list], own: Mapping[str, str],
+                        owners: Mapping[str, list[str]], refuse: Refuse) -> bool:
+    """An inverse names a slot of the kind its type names, and that slot's type is the kind that declares the
+    inverse (decisions/language-inverse-references.md). `kinds` holds the slots of each kind of this module."""
+    forward, target = slot["inverse"], slot["type"]
+    if not isinstance(forward, str):
+        refuse(here, "an inverse names the forward slot", "§5.1")
+        return False
+    if target not in own and owners.get(target):
+        refuse(here, f"an inverse of a slot of {target}, which another module declares, is not lowered yet", "§5.1")
+        return False
+    found = [s for s in kinds.get(target, []) if isinstance(s, dict) and s.get("slot") == forward]
+    if not found:
+        refuse(here, f"the inverse {forward} is not a slot of {target}", "§5.1")
+        return False
+    if found[0].get("type") != kind:
+        refuse(here, f"the inverse {forward} of {target} is a {found[0].get('type')}, not a {kind}", "§5.1")
+        return False
+    return True
+
+
 def validate(slots: list, kind: str, at: str, own: Mapping[str, str], owners: Mapping[str, list[str]],
-             uses: set[str], refuse: Refuse, *, extended: bool = False, open_kind: bool = False) -> bool:
+             uses: set[str], refuse: Refuse, *, extended: bool = False, open_kind: bool = False,
+             aliases: Mapping[str, Mapping[str, list[str]]] | None = None,
+             kinds: Mapping[str, list] | None = None) -> bool:
     """Check slot forms and resolve references against all the modules of the pack."""
     ok = True
     seen: set[str] = set()
@@ -151,7 +205,20 @@ def validate(slots: list, kind: str, at: str, own: Mapping[str, str], owners: Ma
         elif card not in ("?", *LIST_CARDS):
             refuse(here, f"a slot `{slot['type']}{slot['card']}` is not lowered (no ticket yet)")
             ok = False
-        name, found = slot["type"], owners.get(slot["type"], [])
+        if "inverse" in slot and not inverse_points_back(slot, kind, here, kinds or {}, own, owners, refuse):
+            ok = False
+        name = slot["type"]
+        if "." in name:
+            if has_constraints:
+                try:
+                    constraint_facets(slot, None)
+                except ValueError as error:
+                    refuse(here, str(error), "§5.1")
+                    ok = False
+            if resolve_prefixed(name, aliases, here, refuse) is None:
+                ok = False
+            continue
+        found = owners.get(name, [])
         range_name = builtin_range(name, name in own or bool(found))
         if has_constraints:
             try:

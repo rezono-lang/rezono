@@ -18,11 +18,6 @@ def params_for(namespace):
     return {"rows": [{"service": s, "port": p} for n, s, p in MODEL if n == namespace]}
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="M4: Write cel_atom.bind, exists and negative as decisions/k8s-admission-translator.md specifies under Atom. "
-           "Write in k8s-admission/cel_atom.py. Without Go the test checks the exact text; the CI also runs cel-go.",
-)
 def test_cel_atom():
     from cel_atom import bind, exists, negative
 

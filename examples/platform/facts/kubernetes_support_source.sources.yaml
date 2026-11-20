@@ -1,5 +1,5 @@
 default:
-  kind: git
-  name: rezono-lang/rezono
-  revision: 90b056e6ef1d1034bb53ccac8620961150545b0f
-  position: examples/platform/acceptance/product-evidence.json#/kubernetes
+  kind: tool
+  name: Vendor support inspection
+  position: whole page
+  url: 'https://kubernetes.io/releases/1.32/'

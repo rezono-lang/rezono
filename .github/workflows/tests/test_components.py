@@ -461,6 +461,22 @@ class PullRequestSelectorTests(unittest.TestCase):
         selected, _ = self.changed_matrix({"examples/demo/test_demo_reader.py": "def test_demo(): assert 1\n"})
         self.assertEqual(selected, {"examples"})
 
+    def test_a_decision_that_cites_a_test_file_does_not_read_it(self):
+        cited = {"decisions/choice.md": "Covered by `loop/tests/test_build_choice.py`.\n"}
+        change = {"loop/tests/test_build_choice.py": "def test_choice(): pass\n"}
+        self.assertEqual(self.changed_matrix(change, tree=cited)[0], {"loop"})
+        # A documentation page that a test reads still counts as a reader.
+        read = {"docs/compiler/pack.md": "See test_build_choice.\n"}
+        selected, summary = self.changed_matrix(change, tree=read)
+        self.assertEqual(selected, {"loop"})  # examples is a deferred dependent
+        self.assertNotIn("named only inside its component", summary)
+        # A deleted test file keeps every citation, so its component's closure runs.
+        with tempfile.TemporaryDirectory() as directory:
+            root, base = self.repository(directory, {**LOOP_TREE, **cited}, selector=False)
+            (root / "loop/tests/test_build_choice.py").unlink()
+            self.commit(root)
+            self.assertEqual(self.matrix(root, "pull_request", base), {"loop"})
+
     def test_a_test_file_named_elsewhere_keeps_its_component_closure(self):
         reader = {"run/tests/test_replay.py": "from loop.tests.test_build_choice import CHOICE\n"}
         selected, summary = self.changed_matrix({"loop/tests/test_build_choice.py": "def test_choice(): pass\n"},

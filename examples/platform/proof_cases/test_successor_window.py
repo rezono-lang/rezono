@@ -84,11 +84,6 @@ class SuccessorImpactStopsEarly(AssertionError):
     pass
 
 
-@pytest.mark.xfail(strict=True, raises=SuccessorImpactStopsEarly, reason=(
-    "M2: decisions/platform-successor-window.md: Derive successor_impact in examples/platform/rules/product_succession.dl "
-    "through a recursive closure over running service_need rows, the same relation as unavailable_service in "
-    "examples/platform/rules/outage.dl, so every running consumer at any number of steps is affected and a change-only "
-    "need is not."))
 def test_successor_impact_follows_every_running_step():
     model = pack.read(ROOT)
     program = rules.load(model.rules)
