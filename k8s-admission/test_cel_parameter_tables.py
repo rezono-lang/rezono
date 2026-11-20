@@ -10,9 +10,9 @@ from translator_support import IMAGE_A, IMAGE_B, fixture, load_program, run_cel
 
 SUPPLY_LIST = 'params.spec.images.map(x, {"service": x.service, "image": x.image})'
 FLOW_LIST = (
-    'params.spec.flows.map(x, {"source": x.source, "destination": x.destination, "protocol": "TCP", "port": x.port})'
+    '(params.spec.flows.map(x, {"source": x.source, "destination": x.destination, "protocol": "TCP", "port": x.port})'
     ' + (has(params.spec.transportFlows) ? params.spec.transportFlows : [])'
-    '.map(x, {"source": x.source, "destination": x.destination, "protocol": x.protocol, "port": x.port})'
+    '.map(x, {"source": x.source, "destination": x.destination, "protocol": x.protocol, "port": x.port}))'
 )
 
 
@@ -23,12 +23,6 @@ def same_rows(table, expected):
     return f"size({mapped}) == {len(expected)} && {mapped}.all(r, r in {literal}) && {literal}.all(r, r in {mapped})"
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="M4: Write cel_parameter_tables.parameter_tables as decisions/k8s-admission-translator.md specifies under "
-           "Parameter table. Write in k8s-admission/cel_parameter_tables.py. Without Go the test checks the exact "
-           "text; the CI also runs cel-go.",
-)
 def test_cel_parameter_tables():
     from cel_parameter_tables import parameter_tables
 

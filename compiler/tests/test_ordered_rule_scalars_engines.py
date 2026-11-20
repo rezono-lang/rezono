@@ -92,11 +92,6 @@ def test_souffle_oracle_orders_typed_values():
     assert oracle.evaluate(rules.load(program()), inputs(), "comparison") == expected()
 
 
-@pytest.mark.xfail(strict=True, raises=rules.IRError, reason=(
-    "M2: decisions/ordered-rule-scalars.md: Lower compare_as in Feldera SQL in "
-    "compiler/rezono_compiler/rules_sql.py, by a byte comparison or a pure "
-    "typed sign function. Select this test in compiler/ci/run_feldera_oracle.sh and provide the hosted dispatch for "
-    "the implementation commit, as the decision requires before the platform rule uses it."))
 def test_feldera_orders_typed_values():
     import feldera
     sql = rules_sql.feldera(rules.load(program()), witnesses=True)
@@ -116,5 +111,4 @@ def test_feldera_orders_typed_values():
         got = {(r["mode"], r["case"], r["operator"]) for r in feldera.read_relation(pipeline, "comparison")}
         assert got == expected()
     finally:
-        feldera.stop(pipeline)
-        feldera.call("DELETE", f"/v0/pipelines/{pipeline}")
+        feldera.stop(pipeline, delete=True)

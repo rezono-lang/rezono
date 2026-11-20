@@ -1,0 +1,23 @@
+id: https://rezono.org/examples/platform-core/address
+name: platform_address
+description: Declared network address ranges and endpoint addresses.
+in_language: en
+imports: [linkml:types]
+default_range: string
+annotations:
+  layer: facts
+
+classes:
+  NodeAddressRange:
+    description: Inclusive IPv4 address bounds declared for one network.
+    attributes:
+      id: {identifier: true}
+      network: {required: true}
+      first: {range: integer, minimum_value: 0, maximum_value: 4294967295, required: true}
+      last: {range: integer, minimum_value: 0, maximum_value: 4294967295, required: true}
+  EndpointAddress:
+    description: IPv4 address declared for one endpoint.
+    attributes:
+      id: {identifier: true}
+      endpoint: {required: true}
+      address: {range: integer, minimum_value: 0, maximum_value: 4294967295, required: true}

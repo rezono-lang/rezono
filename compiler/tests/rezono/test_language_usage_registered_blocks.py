@@ -4,7 +4,7 @@ decisions/language-deprecation.md), instead of as unclassified syntax."""
 
 import pytest
 
-from language_usage import render
+from language_usage import EVIDENCE, render
 
 
 class MissingRegisteredBlock(AssertionError):
@@ -30,20 +30,13 @@ step install_policy(change: PolicyChange)
 EXPECTED = [
     "| deprecated-declaration | 1 | Pending ([reader](../../rezono/test/test_deprecated_declaration.py), "
     "[lowering](../../compiler/tests/rezono/test_lower_deprecated.py)) |",
-    "| intermediate-invariant | 1 | Pending ([reader](../../rezono/test/test_invariant_intermediate.py)) |",
-    "| step-declaration | 1 | Pending ([reader](../../rezono/test/test_step_declaration.py)) |",
+    "| intermediate-invariant | 1 | Pending ([reader](../../rezono/test/test_invariant_intermediate.py), "
+    "[lowering](../../compiler/tests/rezono/test_lower_intermediate_invariant.py)) |",
+    "| step-declaration | 1 | Pending ([reader](../../rezono/test/test_step_declaration.py), "
+    "[lowering](../../compiler/tests/rezono/test_lower_step_declaration.py)) |",
 ]
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=MissingRegisteredBlock,
-    reason="extra: decisions/language-pending-building-blocks.md: In scripts/language_usage.py, add the features "
-           "deprecated-declaration (a deprecated line), intermediate-invariant (invariant intermediate on a rule "
-           "head) and step-declaration (a step line) to MODULE_SYNTAX and their evidence to EVIDENCE: "
-           "test_deprecated_declaration and test_lower_deprecated, test_invariant_intermediate, and "
-           "test_step_declaration. Read the rows for safe steps and deprecation in that decision.",
-)
 def test_language_usage_registered_blocks(tmp_path):
     (tmp_path / "packs/sample/rezono").mkdir(parents=True)
     (tmp_path / "packs/sample/pack.yaml").write_text("name: sample\n", encoding="utf-8")
@@ -55,3 +48,12 @@ def test_language_usage_registered_blocks(tmp_path):
             if line.startswith(("| deprecated-declaration |", "| intermediate-invariant |", "| step-declaration |"))]
     if sorted(rows) != EXPECTED or "unclassified-authored-syntax" in output:
         raise MissingRegisteredBlock(output)
+
+
+def test_safe_step_blocks_require_lowering_evidence():
+    assert ("compiler/tests/rezono/test_lower_intermediate_invariant.py", "test_lower_intermediate_invariant") in (
+        EVIDENCE["intermediate-invariant"]
+    )
+    assert ("compiler/tests/rezono/test_lower_step_declaration.py", "test_lower_step_declaration") in (
+        EVIDENCE["step-declaration"]
+    )

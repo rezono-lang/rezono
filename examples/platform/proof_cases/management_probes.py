@@ -1,7 +1,9 @@
 """Exercise platform rules on caller-supplied facts and read the live loop recorder in the fixture."""
 
+import copy
 import json
 import os
+from functools import cache
 from pathlib import Path
 import subprocess
 
@@ -10,8 +12,14 @@ from rezono_compiler import calc, facts, pack, rules
 from rules_support import State
 
 
+@cache
+def _committed():
+    """The committed platform pack, read once per process: its files do not change during a run."""
+    return pack.read(ROOT)
+
+
 def compiled(records):
-    model = pack.read(ROOT)
+    model = copy.deepcopy(_committed())  # each caller its own copy
     assert set(records) <= set(model.kinds), f"Missing management input kinds: {sorted(records.keys() - set(model.kinds))}"
     program = rules.load(model.rules)
     calculation = calc.build(model, model.calc) if program.calc_inputs() else None

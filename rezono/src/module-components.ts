@@ -1,6 +1,7 @@
 import type { ActionDict } from 'ohm-js';
 import { check } from './module-check.ts';
 import { context } from './module-context.ts';
+import { deprecation } from './module-deprecation.ts';
 import { derived } from './module-derived.ts';
 import { enumeration } from './module-enum.ts';
 import { facts } from './module-facts.ts';
@@ -16,6 +17,7 @@ import { scalarAlias } from './module-scalar-alias.ts';
 import { source } from './module-source.ts';
 import { slot } from './module-slot.ts';
 import { numericSlotBounds } from './module-slot-numeric.ts';
+import { step, stepEffect } from './module-step.ts';
 import { table } from './module-table.ts';
 import { unit } from './module-unit.ts';
 import { unless } from './module-unless.ts';
@@ -23,12 +25,12 @@ import { version } from './module-version.ts';
 import type { BlockSyntax, Declaration, ModuleComponent } from './module-support.ts';
 
 // Ohm tries these alternatives in order. Generic assignments stand after slots and specific statements.
-const components = [header, context, metadata, rounding, reason, unit, enumeration, parameter, kind, derived, version, unless, table, source, facts, check, rules, slot, numericSlotBounds] as const;
+const components = [header, context, metadata, deprecation, rounding, reason, unit, enumeration, parameter, kind, derived, version, unless, table, source, facts, check, rules, slot, numericSlotBounds] as const;
 // Native signatures have columns, so their printer must precede the fact table printer.
-const registered: readonly ModuleComponent[] = [nativeRule, scalarAlias, ...components];
+const registered: readonly ModuleComponent[] = [nativeRule, scalarAlias, step, stepEffect, ...components];
 
 type DeclOf<T> = T extends { declarations: infer Entries } ? Entries[keyof Entries] extends Declaration<infer D> ? D : never : never;
-export type Decl = DeclOf<typeof components[number] | typeof nativeRule | typeof scalarAlias>;
+export type Decl = DeclOf<typeof components[number] | typeof nativeRule | typeof scalarAlias | typeof step>;
 
 const lines = [...registered.flatMap(c => c.lineRules), ...registered.flatMap(c => c.trailingRules ?? [])];
 export const moduleGrammar = `  Line = ${lines.join(' | ')}

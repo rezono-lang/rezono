@@ -1,0 +1,50 @@
+rezono 0
+pack std-part
+
+schema std_part
+  iri "https://rezono.example/std-part/part"
+  language en
+  prefix linkml = "https://w3id.org/linkml/"
+  prefix skos = "http://www.w3.org/2004/02/skos/core#"
+  prefix dcterms = "http://purl.org/dc/terms/"
+  import "linkml:types"
+  default range Text
+  description "Part and whole. A constituent is part of at most one direct whole, and may occur in it more than once. The axioms make the parts a forest: nothing is part of itself, directly or through others. The derived relations are in rules/part.dl. The mapping annotations compare with SKOS and Dublin Core; no rule reads them."
+  annotation layer = "facts"
+
+abstract kind Constituent world closed
+  description "Anything a domain reads as a part of a whole, as a whole with parts, or as both. A view supplies its elements."
+  id: Text identifier
+  part_of: Constituent?
+    description "The direct whole this is a part of. At most one: the parts form a forest. Absent for a whole that is part of nothing."
+    close mapping "dcterms:isPartOf"
+    broad mapping "skos:broader"
+  repeat: Int?
+    description "How many times this part occurs in its direct whole. Absent when it occurs once."
+    minimum 1
+
+rules part
+  | // Rules of std-part, in the Datalog subset, so Soufflé is the oracle.
+  | // The base relations are the theory's tables: constituent__part_of(part, whole) and
+  | // constituent__repeat(part, n). Two axioms are checks of the schema: a constituent has at most one direct
+  | // whole (part_of is single-valued), and repeat is at least 1.
+  | 
+  | // within: the transitive closure of part_of. x is part of w, directly or through wholes in between.
+  | .decl within(part: symbol, whole: symbol)
+  | within(x, w) :- constituent__part_of(x, w).
+  | within(x, w) :- within(x, v), constituent__part_of(v, w).
+  | 
+  | // has_whole: x is a part of some whole. Its absence is the ground of outermost: "w is a part of nothing".
+  | .decl has_whole(part: symbol)
+  | has_whole(x) :- constituent__part_of(x, w).
+  | 
+  | // outermost: the whole x is within that is itself part of nothing. In a forest every part has exactly one.
+  | .decl outermost(part: symbol, whole: symbol)
+  | outermost(x, w) :- within(x, w), !has_whole(w).
+  | 
+  | // Axiom: part_of is irreflexive and acyclic. Nothing is part of itself, directly or through others.
+  | // @invariant
+  | .decl part_cycle(part: symbol)
+  | part_cycle(x) :- within(x, x).
+  | 
+  | .output within, has_whole, outermost, part_cycle

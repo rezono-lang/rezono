@@ -1,5 +1,5 @@
 """Every compiler error has a code (decisions/compiler-error-codes.md): an IRError keeps its own code in the
-diagnostic list, and the error sites without a code are a budget that only goes down."""
+diagnostic list, and the error sites without a code stay at or below a budget that only goes down."""
 
 import ast
 import json
@@ -15,6 +15,7 @@ from rezono_compiler import pack
 SOURCE = REPO / "compiler" / "rezono_compiler"
 BUDGET = REPO / "compiler" / "error-code-budget.json"
 CEILING = 869  # the total when the budget was set; a lower budget replaces it, a higher one is a new decision
+# Each cell (file, class) may not rise above the same cell on the base: scripts/test_error_code_budget.py in CI.
 COUNTED = ("CompileError", "LoadError", "OperationError", "WriteError", "RuleError", "ViewError", "ViewRuleError",
            "PatternError", "IdentityError", "Unmatched")
 FORWARDS = {"CompileError", "LoadError"}  # Diagnosed(message, diagnostics): a second argument forwards diagnostics
@@ -70,9 +71,13 @@ def test_the_count_sees_each_form():
 
 
 def test_error_sites_without_a_code_stay_within_the_budget():
-    """A new site without a code is red. A pull request that gives sites a code lowers the budget with them."""
+    """A new site without a code is red. Each cell (file x class) stays at or below the budget, so a pull request
+    that gives sites a code is green without touching the budget file, and so are two such changes merged together."""
     budget = json.loads(BUDGET.read_text("utf-8"))
-    assert counts() == budget
+    over = {(path, name): (n, budget.get(path, {}).get(name, 0))
+            for path, found in counts().items() for name, n in found.items()
+            if n > budget.get(path, {}).get(name, 0)}
+    assert not over, f"error sites without a code above the budget (found, budget): {over}"
     assert sum(per_class(budget).values()) <= CEILING
 
 

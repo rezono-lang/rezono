@@ -121,3 +121,28 @@ def test_batch_admits_evidence_before_the_rules(tmp_path):
     with pytest.raises(Blocked):
         batch.epoch(root, epoch=1, knowledge_time=INSTANT, sources=[],
                     evidence=Evidence(context | {"sha256": "0" * 64}, index, reader(bucket)))
+
+
+CLASH = SCHEMA + """  VerifiedMember:
+    attributes:
+      id: {identifier: true}
+"""
+
+
+def test_a_kind_with_a_protected_name_blocks_the_epoch(tmp_path, monkeypatch):
+    # Counterexample of #816: the kind VerifiedMember makes the table verified_member. batch.epoch replaced its
+    # rows by the admitted ones (none without evidence), so `seen` lost every row and the checker said valid.
+    root = pack(tmp_path / "pack")
+    (root / "schema/receipts.yaml").write_text(CLASH, encoding="utf-8")
+    (root / "rules/complete.dl").write_text(".decl seen(x: symbol)\nseen(x) :- verified_member(x).\n",
+                                            encoding="utf-8")
+    (root / "labels/nl.yaml").write_text("item: Item\nverified_member: Lid\nseen: Gezien\n", encoding="utf-8")
+    (root / "facts/members.yaml").write_text("verified_member: [{id: a}, {id: b}]\n", encoding="utf-8")
+    with pytest.raises(CompileError, match="verified_member .*reserved"):
+        batch.epoch(root, epoch=1, knowledge_time=INSTANT, sources=[])
+
+    # Defence in depth: with the compiler's refusal taken away, the epoch still refuses to publish.
+    from rezono_compiler import rules_dl
+    monkeypatch.setattr(rules_dl, "reserved", lambda _: [])
+    with pytest.raises(Blocked, match="verified_member is a protected admission input"):
+        batch.epoch(root, epoch=1, knowledge_time=INSTANT, sources=[])

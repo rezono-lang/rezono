@@ -30,6 +30,7 @@ def release_records(records):
     records["loop_sweep_receipt"].extend([
         {"id": "after-delete", "run": "current", "event_time": t + 60},
         {"id": "other-after-delete", "run": "other", "event_time": t + 60},
+        {"id": "later", "run": "current", "event_time": t + 90},
     ])
     cases = {
         # branch: (delete outcome, sent_at, ref reads as (run, tick, state, generation name, receipt))
@@ -41,9 +42,23 @@ def release_records(records):
         "task/foreign": ("sent", t + 10, [("other", t + 60, "absent", None, "other-after-delete")]),
         "task/unreceipted": ("sent", t + 10, [("current", t + 30, "absent", None, None)]),
         "task/still": ("sent", t + 10, [("current", t + 60, "present", "task/still", "after-delete")]),
+        # A present read that names no generation still shows the branch at that tick.
+        "task/unnamed": ("sent", t + 10, [
+            ("current", t + 60, "absent", None, "after-delete"),
+            ("current", t + 60, "present", None, "after-delete"),
+        ]),
         "task/contradicted": ("sent", t + 10, [
             ("current", t + 60, "absent", None, "after-delete"),
             ("current", t + 60, "present", "task/contradicted", "after-delete"),
+        ]),
+        # The first settling read after the delete decides, as Confirm or DiscardConfirmation does in the model.
+        "task/absent-then-back": ("sent", t + 10, [
+            ("current", t + 60, "absent", None, "after-delete"),
+            ("current", t + 90, "present", "task/absent-then-back", "later"),
+        ]),
+        "task/replaced-then-absent": ("sent", t + 10, [
+            ("current", t + 60, "present", "task/replaced-then-absent-again", "after-delete"),
+            ("current", t + 90, "absent", None, "later"),
         ]),
     }
     records.update({"build_claim_delete": [], "build_claim_ref_read": []})
@@ -73,16 +88,21 @@ def test_build_claim_release_confirmation(tmp_path):
     assert keys("build_claim_released", 3) == {
         ("current", "task/released", generation("task/released")),
         ("current", "task/uncertain", generation("task/uncertain")),
+        ("current", "task/absent-then-back", generation("task/absent-then-back")),
     }, f"Only a same-run, receipted absent read after the delete confirms a release: {keys('build_claim_released', 3)}"
     assert all(row["key"][3] for row in rows["build_claim_released"]), "A release must retain its reason"
     assert keys("build_claim_release_discarded", 3) == {
         ("current", "task/replaced", "replaced"),
         ("current", "task/refused", "delete-refused"),
+        ("current", "task/replaced-then-absent", "replaced"),
     }
+    both = keys("build_claim_released", 2) & keys("build_claim_release_discarded", 2)
+    assert not both, f"A delete is either released or discarded, never both: {both}"
     assert keys("build_claim_release_pending", 3) == {
         ("current", "task/early", "readback-missing"),
         ("current", "task/foreign", "readback-missing"),
         ("current", "task/unreceipted", "readback-missing"),
         ("current", "task/still", "still-present"),
+        ("current", "task/unnamed", "still-present"),
         ("current", "task/contradicted", "still-present"),
     }

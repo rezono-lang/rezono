@@ -9,7 +9,7 @@ from reader_probe import at, read_modules
 
 HEADER = "rezono 0\npack sample\n"
 VALID = (HEADER + "param quota: Int\n"
-         "  version 1, valid 2026-01-01.., known 2025-09-16 = 5\n"
+         "  version 1, known 2025-09-16 = 5\n"
          "  version 2 replaces 1, valid 2026-01-01.., known 2025-09-16 = 6\n")
 
 
@@ -28,7 +28,10 @@ class MissingR021Sentence(AssertionError):
            "replaces that names no version of the same declaration, at that number, and replaces lines that form a "
            "cycle, at the number after replaces of the first version of the cycle, with no module, as R018 is "
            "refused. Read section R021. The sentence is "
-           "test_r021_has_a_sentence.",
+           "test_r021_has_a_sentence. "
+           "Blocked on planner fix: the control VALID sets valid 2026-01-01.. on every version, which emits W108 "
+           "(versionGaps in rezono/src/module-version.ts), so `if read['diagnostics']` fails even with R021 implemented. "
+           "Omit valid on one version of VALID or ignore W108 in the control check.",
 )
 def test_reader_refuses_a_missing_or_cyclic_replacement():
     unknown = VALID.replace("replaces 1", "replaces 4")
@@ -54,13 +57,6 @@ def test_reader_refuses_a_missing_or_cyclic_replacement():
         raise MissingReplacedVersionCheck(json.dumps(differences, indent=2))
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=MissingR021Sentence,
-    reason="extra: decisions/language-parameters.md: Add the sentence of R021 to rezono/messages/en.json and "
-           "rezono/messages/nl.json, with the replacing version as {0}, the number it names as {1} and the "
-           "declaration as {2}, covering both a missing version and a cycle. Read section R021.",
-)
 def test_r021_has_a_sentence():
     messages = Path(__file__).parents[1] / "messages"
     missing = []

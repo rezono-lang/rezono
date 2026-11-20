@@ -94,7 +94,7 @@ def evaluate(data, tmp_path):
     assert as_text(batch_eval(prog, data)) == want
     if shutil.which("souffle"):
         import souffle
-        source = souffle.source(prog, [p.read_text("utf-8") for p in sorted((STD / "rules").glob("*.dl"))])
+        source = souffle.pack_source(prog, STD)
         rows = {k: sorted(data.get(k, ())) for k in BASE}
         assert souffle.run(prog, rows, tmp_path, program_text=source) == want
     return want
@@ -132,8 +132,10 @@ def test_the_pack_compiles_on_its_own_and_carries_roles_and_questions():
     derived = {r.name: r for r in prog.relations.values() if r.role == "derived"}
     assert sorted(derived) == sorted(reference({}))
     # No rule reads the justification layer: it is shown beside the proof and changes no conclusion.
+    import souffle
     unread = layer | {"decision__warrant", "decision__owner", "decision__review_on"}
-    source = "".join(p.read_text("utf-8") for p in sorted((STD / "rules").glob("*.dl")))
+    source = "".join(souffle.closure(STD))
+    assert source
     assert not [n for n in sorted(unread) if re.search(rf"\b{n}(__\w+)?\(", source)]
     assert sorted(n for n, r in derived.items() if r.invariant) == [
         "ground_cycle", "superseded_in_force", "supersession_cycle", "window_inverted"]

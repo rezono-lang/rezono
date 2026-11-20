@@ -66,18 +66,6 @@ def observations(tmp_path, decisions, scans, citations=(), red=()):
     return published(tmp_path, records)
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=MissingRedCitationRule,
-    reason=(
-        "extra: decisions/decision-heads.md: section 5. Declare BuildCitationScan {id, run: BuildRun, observed_at: "
-        "integer, source} and BuildRedCitation {id, scan: BuildCitationScan, test, decision: Decision}, all "
-        "required, in build/schema, and derive build_red_cites_replaced(run, test, decision, successor) in "
-        "build/rules: a scan of a verified run whose observed_at is the run's cut tick, a red citation of that "
-        "scan, and replaced(decision, successor, day) of std-decision on build_policy_date_at_cut(run, day). "
-        "Add labels for the new kinds and the relation to build/labels/en.yaml."
-    ),
-)
 def test_red_test_citing_a_replaced_decision_is_a_finding(tmp_path):
     kinds = {"BuildCitationScan", "BuildRedCitation"}
     if not kinds <= declared_kinds():
