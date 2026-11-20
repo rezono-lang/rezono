@@ -31,7 +31,7 @@ export interface KindDef {
 	slots: Record<string, SlotDef>;
 }
 export interface TypeDef {
-	of: 'Text' | 'Bool' | 'Integer' | 'Ratio' | 'Date' | 'DateTime' | 'Quantity' | 'Money' | 'Period' | 'Enum';
+	of: 'Text' | 'Bool' | 'Integer' | 'Ratio' | 'Date' | 'DateTime' | 'Quantity' | 'Money' | 'Period' | 'Enum' | (string & {});
 	dimension?: string;
 	unit?: string;
 	storage_unit?: string;
@@ -120,9 +120,32 @@ export function dimText(d: Dim): string {
 /** Whether a type name means something in a schema: a core type, a type of `types`, or a kind. */
 export const knownType = (schema: Schema, name: string): boolean => Object.hasOwn(CORE, name) || Object.hasOwn(schema.types ?? {}, name) || Object.hasOwn(schema.kinds, name);
 
+/** Follows `schema.types[name].of` through any alias chain to its base type name (cycle-safe). */
+export function baseTypeOf(schema: Schema, name: string): string {
+	let cur = name;
+	const seen = new Set<string>();
+	while (!seen.has(cur)) {
+		seen.add(cur);
+		const next = schema.types?.[cur]?.of;
+		if (!next) break;
+		cur = next;
+	}
+	return cur;
+}
+
 /** The type that a type name of the schema stands for; a name the schema does not explain is a type of its own. */
 export function typeOf(schema: Schema, name: string): Ty {
-	const def: TypeDef | undefined = schema.types?.[name] ?? (CORE[name] ? { of: CORE[name] } : undefined);
+	let cur = name;
+	let def: TypeDef | undefined;
+	const seen = new Set<string>();
+	while (!seen.has(cur)) {
+		seen.add(cur);
+		const next = schema.types?.[cur];
+		if (!next) break;
+		def = next;
+		cur = next.of;
+	}
+	def ??= CORE[name] ? { of: CORE[name] } : undefined;
 	if (!def) return schema.kinds[name] ? { t: 'ref', kind: name } : { t: 'val', name };
 	if (def.of === 'Bool') return { t: 'bool' };
 	if (def.of === 'Integer' || def.of === 'Ratio') return { t: 'num', dim: {}, name };

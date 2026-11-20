@@ -57,6 +57,12 @@ jobs:
         with:
           python-version-file: requirements/.python-version
           cache: ''
+      # The compiler reads authored .rezono pack sources through Node from the checkout.
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1  # v7.1.0
+        with:
+          node-version-file: .node-version
+          cache: npm
+          cache-dependency-path: rezono/package-lock.json
       - name: Install the locked dependencies and generate contract types
         run: |
           set -euo pipefail
@@ -72,6 +78,7 @@ jobs:
             python -m pip install --no-deps --no-build-isolation -e "$package"
           done
           bash contracts/gen-types.sh
+          (cd rezono && npm ci)
           bash scripts/install-souffle.sh
           if ! wait "$pull_pid"; then
             cat "$pull_log" >&2

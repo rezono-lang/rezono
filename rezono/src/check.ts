@@ -21,7 +21,7 @@
 import { grammar } from './grammar.ts';
 import { parse, type Diagnostic, type Span } from './parse.ts';
 import { printExpr } from './print.ts';
-import { dimText, inPart, mulDim, sameDim, slotType, snake, typeOf, unitOf, type Schema, type StateName, type Ty } from './schema.ts';
+import { baseTypeOf, dimText, inPart, mulDim, sameDim, slotType, snake, typeOf, unitOf, type Schema, type StateName, type Ty } from './schema.ts';
 import { isAsk, isCheck, type Ask, type CheckDecl, type Expr, type Question } from './tree.ts';
 
 /** What is known of an expression once its names and types are. */
@@ -178,7 +178,7 @@ export function typing(text: string, schema: Schema, spans: WeakMap<object, Span
 	const whole = (v: Typed, node: Expr): boolean =>
 		v.ty.t === 'num' &&
 		Object.keys(v.ty.dim).length === 0 &&
-		(('lit' in node && /^[0-9]+$/.test(node.lit)) || ('agg' in node && node.agg[0] === 'count') || (v.ty.name !== undefined && (schema.types?.[v.ty.name]?.of ?? v.ty.name) === 'Integer'));
+		(('lit' in node && /^[0-9]+$/.test(node.lit)) || ('agg' in node && node.agg[0] === 'count') || (v.ty.name !== undefined && baseTypeOf(schema, v.ty.name) === 'Integer'));
 	/** An amount of money or a quantity: a number with a dimension, which its type stores as an integer (publication §3.2). */
 	const stored = (ty: Ty): boolean => ty.t === 'num' && Object.keys(ty.dim).length > 0;
 	const describe = (ty: Ty): string => (ty.t === 'bool' ? 'Bool' : ty.t === 'num' ? (ty.name ?? dimText(ty.dim)) : ty.t === 'ref' ? ty.kind : ty.t === 'val' ? ty.name : ty.t === 'id' || ty.t === 'tok' ? ty.text : '');
@@ -663,7 +663,7 @@ export function typing(text: string, schema: Schema, spans: WeakMap<object, Span
 	/** Whether an authored record key matches the schema's identifier type (canonical decimal text for Integer). */
 	function validKey(key: string, typeName: string): boolean {
 		const ty = typeOf(schema, typeName);
-		const of = schema.types?.[typeName]?.of ?? typeName;
+		const of = baseTypeOf(schema, typeName);
 		if (ty.t === 'bool') return key === 'true' || key === 'false';
 		if (ty.t === 'num') return of === 'Integer' ? /^(?:0|-?[1-9][0-9]*)$/.test(key) : grammar.match(key, 'number').succeeded();
 		if (ty.t === 'val') {

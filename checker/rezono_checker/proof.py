@@ -133,12 +133,18 @@ class _Walk:
     pieces it reached."""
 
     def __init__(self, pieces: dict, limit: int, fanout: int, problems: list):
-        self.pieces, self.limit, self.fanout, self.problems = pieces, limit, fanout, problems
+        self.pieces, self.problems = pieces, problems
         self.reached: set = set()
         if type(limit) is not int or not 1 <= limit <= MAX_PIECE:
             problems.append(f"proof: a piece limit of {limit!r} bytes, not 1 to {MAX_PIECE}")
+            self.limit = MAX_PIECE
+        else:
+            self.limit = limit
         if type(fanout) is not int or not 2 <= fanout <= MAX_FANOUT:
             problems.append(f"proof: a fanout of {fanout!r} children per page, not 2 to {MAX_FANOUT}")
+            self.fanout = MAX_FANOUT
+        else:
+            self.fanout = fanout
 
     def read(self, path, digest, tree, relation, level):
         problems = self.problems
@@ -152,6 +158,7 @@ class _Walk:
             return None
         if len(data) > self.limit:
             problems.append(f"{path}: {len(data)} bytes, more than {self.limit}")
+            return None
         piece = json.loads(data)
         if not isinstance(piece, dict) or set(piece) != (LEAF if level == 0 else PAGE):
             problems.append(f"{path}: fields {sorted(piece) if isinstance(piece, dict) else type(piece).__name__}, "

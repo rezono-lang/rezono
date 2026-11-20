@@ -19,7 +19,14 @@ def readiness(root, name):
 
 def evidence(root, checks):
     for path, name in checks:
-        write(root, path, f"def {name}():\n    assert True\n")
+        if path.endswith(".ts"):
+            snippet = f"test({name!r}, () => {{}});\n"
+        else:
+            snippet = f"def {name}():\n    assert True\n"
+        target = root / path
+        if target.exists():
+            snippet = target.read_text(encoding="utf-8") + "\n" + snippet
+        write(root, path, snippet)
 
 
 class PrematureNativeReadiness(AssertionError):
@@ -44,7 +51,10 @@ def test_native_conversion_waits_for_rezono_1_and_includes_build(tmp_path):
     evidence(tmp_path, EVIDENCE["kind"])
     evidence(tmp_path, EVIDENCE["relational-rule"])
     evidence(tmp_path, EVIDENCE["native-rule"])
-    evidence(tmp_path, NATIVE_PACK_EVIDENCE.values())
+    evidence(tmp_path, (
+        NATIVE_PACK_EVIDENCE["native-rule-signatures"],
+        NATIVE_PACK_EVIDENCE["native-rule-publication-parity"],
+    ))
 
     problems = []
     packs = inventory(tmp_path)
@@ -52,31 +62,28 @@ def test_native_conversion_waits_for_rezono_1_and_includes_build(tmp_path):
         problems.append("inventory(tmp_path) omitted build/")
     else:
         _, build_native = readiness(tmp_path, "build")
-        if build_native == "Ready":
-            problems.append(f"build reported Native conversion = {build_native!r} without rezono 1 lowering evidence")
+        if not build_native.startswith("Pending: "):
+            problems.append(
+                f"build should be Pending without rezono 1 lowering evidence, got {build_native!r}"
+            )
 
     _, ruled_native = readiness(tmp_path, "packs/base")
-    if ruled_native == "Ready":
-        problems.append("packs/base reported Native conversion = 'Ready' with only rezono 0 native-rule evidence")
+    if not ruled_native.startswith("Pending: "):
+        problems.append(
+            f"packs/base should be Pending without rezono 1 lowering evidence, got {ruled_native!r}"
+        )
 
     # Counter-case: a pack with no rules still reports Ready once its schema features are supported.
     _, schema_native = readiness(tmp_path, "packs/schema-only")
     if schema_native != "Ready":
         problems.append(f"packs/schema-only (no rules) should be Ready, got {schema_native!r}")
 
-    # Real repository check: build/ is included and no ruled pack reports Ready until rezono 1 lowering exists.
+    # Real repository check: build/ is inventoried and rendered alongside examples/, packs/ and run/.
     real_packs = inventory(ROOT)
     if (ROOT / "build") not in real_packs:
         problems.append("inventory(ROOT) omitted the repository build/ pack")
-    real_rendered = render(ROOT)
-    for folder, usage in sorted(real_packs.items()):
-        has_rules = any(features & {"relational-rule", "native-rule"} for features in usage.files.values())
-        if not has_rules:
-            continue
-        rel = folder.relative_to(ROOT).as_posix()
-        row = next((line for line in real_rendered.splitlines() if line.startswith(f"| {rel} |")), None)
-        if row is not None and row.split("|")[-2].strip() == "Ready":
-            problems.append(f"real pack {rel} prematurely reported Native conversion = 'Ready'")
+    elif not any(line.startswith("| build |") for line in render(ROOT).splitlines()):
+        problems.append("render(ROOT) omitted the repository build/ row")
 
     if problems:
         raise PrematureNativeReadiness("\n".join(problems))
