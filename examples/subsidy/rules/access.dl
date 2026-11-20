@@ -104,4 +104,73 @@ may_read("policy_adviser", "identity_statement", x) :- identity_statement(x).
 may_read("viewer", "identity_statement", x) :- identity_statement(x).
 may_read("propose", "identity_statement", x) :- identity_statement(x).
 
+// Explicit full-kind read coverage (decisions/central-read-access.md): each full-kind grant above
+// carries a matching may_read_full(role, kind) clause.
+.decl may_read_full(role: symbol, kind: symbol)
+may_read_full(r, "article") :- role(r).
+may_read_full(r, "decision") :- role(r).
+may_read_full(r, "purpose") :- role(r).
+may_read_full(r, "principle") :- role(r).
+may_read_full(r, "alternative") :- role(r).
+may_read_full(r, "exception") :- role(r).
+may_read_full(r, "scheme_parameter") :- role(r).
+may_read_full(r, "cost_item") :- role(r).
+may_read_full(r, "reference_date") :- role(r).
+may_read_full(r, "role") :- role(r).
+may_read_full(r, "calendar") :- role(r).
+may_read_full(r, "interval") :- role(r).
+may_read_full(r, "axis") :- role(r).
+may_read_full(r, "reference_point") :- role(r).
+may_read_full(r, "series") :- role(r).
+
+may_read_full("case_officer", "household") :- role("case_officer").
+may_read_full("case_officer", "application") :- role("case_officer").
+may_read_full("case_officer", "cost_line") :- role("case_officer").
+may_read_full("case_officer", "income_statement") :- role("case_officer").
+may_read_full("case_officer", "advice_report") :- role("case_officer").
+may_read_full("policy_adviser", "household") :- role("policy_adviser").
+may_read_full("policy_adviser", "application") :- role("policy_adviser").
+may_read_full("policy_adviser", "cost_line") :- role("policy_adviser").
+may_read_full("policy_adviser", "income_statement") :- role("policy_adviser").
+may_read_full("policy_adviser", "advice_report") :- role("policy_adviser").
+
+may_read_full("case_officer", "ledger_payment") :- role("case_officer").
+may_read_full("case_officer", "period_close") :- role("case_officer").
+may_read_full("case_officer", "closed_payment") :- role("case_officer").
+
+may_read_full("viewer", "household") :- role("viewer").
+may_read_full("viewer", "application") :- role("viewer").
+may_read_full("viewer", "cost_line") :- role("viewer").
+may_read_full("viewer", "income_statement") :- role("viewer").
+may_read_full("viewer", "advice_report") :- role("viewer").
+may_read_full("propose", "household") :- role("propose").
+may_read_full("propose", "application") :- role("propose").
+may_read_full("propose", "cost_line") :- role("propose").
+may_read_full("propose", "income_statement") :- role("propose").
+may_read_full("propose", "advice_report") :- role("propose").
+may_read_full("propose", "ledger_payment") :- role("propose").
+may_read_full("propose", "period_close") :- role("propose").
+may_read_full("propose", "closed_payment") :- role("propose").
+
+may_read_full("case_officer", "trust_entry") :- role("case_officer").
+may_read_full("case_officer", "credential") :- role("case_officer").
+may_read_full("case_officer", "credential_claim") :- role("case_officer").
+may_read_full("case_officer", "status_lookup") :- role("case_officer").
+may_read_full("policy_adviser", "trust_entry") :- role("policy_adviser").
+may_read_full("policy_adviser", "credential") :- role("policy_adviser").
+may_read_full("policy_adviser", "credential_claim") :- role("policy_adviser").
+may_read_full("policy_adviser", "status_lookup") :- role("policy_adviser").
+may_read_full("viewer", "trust_entry") :- role("viewer").
+may_read_full("viewer", "credential") :- role("viewer").
+may_read_full("viewer", "credential_claim") :- role("viewer").
+may_read_full("viewer", "status_lookup") :- role("viewer").
+may_read_full("propose", "trust_entry") :- role("propose").
+may_read_full("propose", "credential") :- role("propose").
+may_read_full("propose", "credential_claim") :- role("propose").
+may_read_full("propose", "status_lookup") :- role("propose").
+may_read_full("case_officer", "identity_statement") :- role("case_officer").
+may_read_full("policy_adviser", "identity_statement") :- role("policy_adviser").
+may_read_full("viewer", "identity_statement") :- role("viewer").
+may_read_full("propose", "identity_statement") :- role("propose").
+
 .output may_read

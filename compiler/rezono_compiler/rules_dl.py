@@ -432,7 +432,7 @@ def remap_statement(stmt, names):
         n, terms, line = a
         terms = list(terms)
         # The access vocabulary's second column names a schema kind, rather than an ordinary value.
-        if n in ("may_read", "may_propose", "may_review", "may_publish") and len(terms) > 1:
+        if n in ("may_read", "may_read_full", "may_propose", "may_review", "may_publish") and len(terms) > 1:
             t = terms[1]
             terms[1] = kind_constant(t)
         return name(n), terms, line
@@ -448,7 +448,7 @@ def remap_statement(stmt, names):
     if stmt[0] == "io":
         return stmt[0], stmt[1], [name(n) for n in stmt[2]], stmt[3]
     atoms = [stmt[1]] + [s[-1] for s in stmt[2] if s[0] in ("lit", "agg")]
-    kind_vars = {a[1][1][1] for a in atoms if a[0] in ("may_read", "may_propose", "may_review", "may_publish")
+    kind_vars = {a[1][1][1] for a in atoms if a[0] in ("may_read", "may_read_full", "may_propose", "may_review", "may_publish")
                  and len(a[1]) > 1 and a[1][1][0] == "var"}
     # Equality aliases keep the typed meaning of an access-kind column.
     changed = True

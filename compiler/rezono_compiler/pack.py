@@ -156,7 +156,7 @@ class Kind:
     spans: dict = field(default_factory=dict)  # MOD2: where its unique keys (`key:<name>`) and path equations (`eq:<name>`) are
 
 
-ACCESS = ("may_read", "may_propose", "may_review", "may_publish")  # std-access; their `kind` column names kinds
+ACCESS = ("may_read", "may_read_full", "may_propose", "may_review", "may_publish")  # std-access; their `kind` column names kinds
 CLOSE = "period_close"  # the kind of the closing fact of a seal, with these slots
 CLOSED_UNTIL, COVERS, ELEMENT, SHA256 = "closed_until", "covers", "element", "sha256"
 
@@ -844,8 +844,9 @@ def read(pack_dir: str | Path) -> Pack:
                     raise CompileError(f"rules: a calculation input needs a numeric selection: {', '.join(sorted(invalid))}")
                 program = rule_ir.load(pack.rules)
                 _, after = program.partition_at_calc(used, calc_sql.derived_reads(calculation))
-                if "may_read" in after:
-                    raise CompileError("rules: may_read cannot depend on a calculation selection")
+                for rel in ("may_read", "may_read_full"):
+                    if rel in after:
+                        raise CompileError(f"rules: {rel} cannot depend on a calculation selection")
         except (CompileError, rule_ir.IRError) as e:
             errors.append(str(e))
             if isinstance(e, CompileError):
