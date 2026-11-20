@@ -8,6 +8,7 @@
 	"scripts": {
 		"test": "node --test test/*.test.ts",
 		"form": "node src/write-form.ts",
+		"fmt": "node src/fmt.ts",
 		"syntax-grammar": "node src/syntax-grammar.ts"
 	},
 	"dependencies": {

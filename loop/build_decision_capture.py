@@ -134,3 +134,46 @@ def decision_rows(root: str | Path) -> dict[str, list[dict[str, Any]]]:
         "decision": decisions,
         "subject": [{"id": slug, "title": slug} for slug in sorted(subjects)],
     }
+
+
+def _named(text: str, ids: list[str], *, in_decisions: bool) -> list[str]:
+    """Return the decision ids a text names, in id order."""
+    return [
+        ident for ident in ids
+        if f"decisions/{ident}.md" in text or (in_decisions and f"]({ident}.md" in text)
+    ]
+
+
+def citation_rows(
+    root: str | Path,
+    paths: list[str],
+    red_tests: list[dict[str, Any]],
+    *,
+    run: str,
+    observed_at: int,
+    source: str,
+) -> dict[str, list[dict[str, Any]]]:
+    """Say which tracked file and which red test names which decision with a head (decision-heads.md section 4)."""
+    base = Path(root)
+    ids = [row["id"] for row in decision_rows(base)["decision"]]
+    scan = f"citations@{run}@{observed_at}"
+    files: list[dict[str, Any]] = []
+    for rel in sorted(set(paths)):
+        try:
+            text = (base / rel).read_bytes().decode("utf-8")
+        except (OSError, UnicodeDecodeError):
+            continue
+        folder, _, name = rel.rpartition("/")
+        own = name[:-3] if folder == "decisions" and name.endswith(".md") else None
+        for ident in _named(text, ids, in_decisions=folder == "decisions"):
+            if ident != own:
+                files.append({"id": f"{scan}@{rel}@{ident}", "scan": scan, "path": rel, "decision": ident})
+    reds: list[dict[str, Any]] = []
+    for test in sorted({str(item["id"]): str(item.get("reason", "")) for item in red_tests}.items()):
+        for ident in _named(test[1], ids, in_decisions=False):
+            reds.append({"id": f"{scan}@{test[0]}@{ident}", "scan": scan, "test": test[0], "decision": ident})
+    return {
+        "build_citation_scan": [{"id": scan, "run": run, "observed_at": observed_at, "source": source}],
+        "build_decision_citation": files,
+        "build_red_citation": reds,
+    }

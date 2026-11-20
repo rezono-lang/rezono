@@ -52,9 +52,12 @@ build_affected(run, consumer, path) :- build_affected(run, dependency, path),
 // Coverage of the build scope comes only from an admitted receipt (decisions/scoped-completeness.md section 3).
 // Its member keys carry a tag in part 0 and the bound values after it (decisions/admission-transport.md
 // section 6): ["changed-path", path], ["path-readers", path, kind], ["path-reader", path, kind, reader],
-// ["manifest", revision, path], ["test-file", path] and ["suite", folder]. No run is part of a key: the
-// protected build job pins one build-selection context per run, so a second admitted build receipt leaves the
-// selection without coverage. The receipt the run record names only selects among admitted receipts.
+// ["manifest", revision, path], ["manifest-dependencies", revision, path],
+// ["manifest-dependency", revision, path, folder], ["file-dependencies"], ["file-dependency", dependency, consumer],
+// ["test-file", path] and ["suite", folder]. A dependency edge names the folders of its components. No run is
+// part of a key: the protected build job pins one build-selection context per run, so a second admitted build
+// receipt leaves the selection without coverage. The receipt the run record names only selects among admitted
+// receipts.
 // verified_receipt and verified_member are the protected admission inputs that std-loop declares
 // (packs/std-loop/rules/complete_sweep.dl); this pack reads them and declares no second copy.
 .decl complete(source: symbol, scope: symbol, cut: symbol, receipt: symbol)
@@ -68,6 +71,10 @@ build_affected(run, consumer, path) :- build_affected(run, dependency, path),
 .decl build_path_accounted(run: symbol, path: symbol)
 .decl build_recorded_member(run: symbol, member: symbol)
 .decl build_known_folder(run: symbol, folder: symbol)
+.decl build_changed_member(receipt: symbol, path: symbol)
+.decl build_reader_member(receipt: symbol, path: symbol, kind: symbol, folder: symbol)
+.decl build_manifest_dependency_member(receipt: symbol, revision: symbol, path: symbol, folder: symbol)
+.decl build_file_dependency_member(receipt: symbol, dependency: symbol, consumer: symbol)
 
 complete(source, scope, cut, receipt) :- verified_receipt(receipt, source, scope, cut, inventory, content).
 
@@ -75,6 +82,10 @@ build_receipt(receipt) :- complete(source, scope, cut, receipt), verified_member
 build_receipt(receipt) :- complete(source, scope, cut, receipt), verified_member(receipt, m, 0, "path-readers").
 build_receipt(receipt) :- complete(source, scope, cut, receipt), verified_member(receipt, m, 0, "path-reader").
 build_receipt(receipt) :- complete(source, scope, cut, receipt), verified_member(receipt, m, 0, "manifest").
+build_receipt(receipt) :- complete(source, scope, cut, receipt), verified_member(receipt, m, 0, "manifest-dependencies").
+build_receipt(receipt) :- complete(source, scope, cut, receipt), verified_member(receipt, m, 0, "manifest-dependency").
+build_receipt(receipt) :- complete(source, scope, cut, receipt), verified_member(receipt, m, 0, "file-dependencies").
+build_receipt(receipt) :- complete(source, scope, cut, receipt), verified_member(receipt, m, 0, "file-dependency").
 build_receipt(receipt) :- complete(source, scope, cut, receipt), verified_member(receipt, m, 0, "test-file").
 build_receipt(receipt) :- complete(source, scope, cut, receipt), verified_member(receipt, m, 0, "suite").
 build_second_receipt(receipt) :- build_receipt(receipt), build_receipt(other), receipt != other.
@@ -110,6 +121,20 @@ build_recorded_member(run, m) :- build_covered(run, receipt), verified_member(re
     verified_member(receipt, m, 1, revision), verified_member(receipt, m, 2, path),
     build_manifest__revision(manifest, revision), build_manifest__path(manifest, path),
     build_manifest_revision(manifest, run).
+build_recorded_member(run, m) :- build_covered(run, receipt), verified_member(receipt, m, 0, "manifest-dependencies"),
+    verified_member(receipt, m, 1, revision), verified_member(receipt, m, 2, path),
+    build_manifest__revision(manifest, revision), build_manifest__path(manifest, path),
+    build_manifest_revision(manifest, run).
+build_recorded_member(run, m) :- build_covered(run, receipt), verified_member(receipt, m, 0, "manifest-dependency"),
+    verified_member(receipt, m, 1, revision), verified_member(receipt, m, 2, path),
+    verified_member(receipt, m, 3, folder), build_manifest__revision(manifest, revision),
+    build_manifest__path(manifest, path), build_dependency__kind(edge, "manifest"),
+    build_dependency__manifest(edge, manifest), build_valid_dependency(edge, run, dependency, consumer),
+    build_component__folder(dependency, folder).
+build_recorded_member(run, m) :- build_covered(run, receipt), verified_member(receipt, m, 0, "file-dependency"),
+    verified_member(receipt, m, 1, dependency_folder), verified_member(receipt, m, 2, consumer_folder),
+    build_dependency__kind(edge, "file_reader"), build_valid_dependency(edge, run, dependency, consumer),
+    build_component__folder(dependency, dependency_folder), build_component__folder(consumer, consumer_folder).
 build_recorded_member(run, m) :- build_covered(run, receipt), verified_member(receipt, m, 0, "test-file"),
     verified_member(receipt, m, 1, path), build_test_file__path(file, path), build_test_file__component(file, component),
     build_component__run(component, run).
@@ -124,10 +149,41 @@ build_full_selection(run, m) :- build_covered(run, receipt), verified_member(rec
     !build_recorded_member(run, m).
 build_full_selection(run, m) :- build_covered(run, receipt), verified_member(receipt, m, 0, "manifest"),
     !build_recorded_member(run, m).
+build_full_selection(run, m) :- build_covered(run, receipt), verified_member(receipt, m, 0, "manifest-dependencies"),
+    !build_recorded_member(run, m).
+build_full_selection(run, m) :- build_covered(run, receipt), verified_member(receipt, m, 0, "manifest-dependency"),
+    !build_recorded_member(run, m).
+build_full_selection(run, m) :- build_covered(run, receipt), verified_member(receipt, m, 0, "file-dependency"),
+    !build_recorded_member(run, m).
 build_full_selection(run, m) :- build_covered(run, receipt), verified_member(receipt, m, 0, "test-file"),
     !build_recorded_member(run, m).
 build_full_selection(run, m) :- build_covered(run, receipt), verified_member(receipt, m, 0, "suite"),
     !build_recorded_member(run, m).
+
+// Each recorded changed path, reader edge and dependency edge needs its admitted member; otherwise the
+// selection is full (decisions/scoped-completeness.md section 3 compares both directions).
+build_changed_member(receipt, path) :- verified_member(receipt, m, 0, "changed-path"),
+    verified_member(receipt, m, 1, path).
+build_reader_member(receipt, path, kind, folder) :- verified_member(receipt, m, 0, "path-reader"),
+    verified_member(receipt, m, 1, path), verified_member(receipt, m, 2, kind), verified_member(receipt, m, 3, folder).
+build_manifest_dependency_member(receipt, revision, path, folder) :-
+    verified_member(receipt, m, 0, "manifest-dependency"), verified_member(receipt, m, 1, revision),
+    verified_member(receipt, m, 2, path), verified_member(receipt, m, 3, folder).
+build_file_dependency_member(receipt, dependency, consumer) :- verified_member(receipt, m, 0, "file-dependency"),
+    verified_member(receipt, m, 1, dependency), verified_member(receipt, m, 2, consumer).
+build_full_selection(run, change) :- build_covered(run, receipt), build_path__run(change, run),
+    build_path__path(change, path), !build_changed_member(receipt, path).
+build_full_selection(run, reader) :- build_covered(run, receipt), build_path_read(reader, run, change, component, kind),
+    build_path__path(change, path), build_component__folder(component, folder),
+    !build_reader_member(receipt, path, kind, folder).
+build_full_selection(run, edge) :- build_covered(run, receipt), build_valid_dependency(edge, run, dependency, consumer),
+    build_dependency__kind(edge, "manifest"), build_dependency__manifest(edge, manifest),
+    build_manifest__revision(manifest, revision), build_manifest__path(manifest, path),
+    build_component__folder(dependency, folder), !build_manifest_dependency_member(receipt, revision, path, folder).
+build_full_selection(run, edge) :- build_covered(run, receipt), build_valid_dependency(edge, run, dependency, consumer),
+    build_dependency__kind(edge, "file_reader"), build_component__folder(dependency, dependency_folder),
+    build_component__folder(consumer, consumer_folder),
+    !build_file_dependency_member(receipt, dependency_folder, consumer_folder).
 
 // A changed path narrows the selection only when both reader inventories are admitted, through an admitted reader edge or a readerless witness.
 build_path_accounted(run, path) :- build_covered(run, receipt), build_path_mappings_complete(receipt, path),
