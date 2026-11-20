@@ -1,0 +1,57 @@
+rezono 0
+pack std-order
+
+schema std_order
+  iri "https://rezono.example/std-order/order"
+  language en
+  prefix linkml = "https://w3id.org/linkml/"
+  prefix schema = "http://schema.org/"
+  import "linkml:types"
+  default range Text
+  description "Order and rank. An ordered element may come before others (precedes), may carry a whole-number rank, and may lie on a named scale. The axioms are rule invariants (rules/order.dl): precedes is a strict partial order, and a rank never contradicts it. The mapping annotations compare with schema.org's item lists; no rule reads them."
+  annotation layer = "facts"
+
+abstract kind Ordered world closed
+  description "Anything a domain places in an order. A view supplies its elements."
+  close mapping "schema:ListItem"
+  precedes: Ordered*
+    description "This element comes directly before the target. The closure is the rule before."
+    close mapping "schema:nextItem"
+  rank: Int?
+    description "An optional whole-number position; it increases along before wherever both ends have one."
+    close mapping "schema:position"
+  on_scale: Scale?
+    description "The named ordering this element belongs to."
+
+kind Scale world closed
+  description "A named ordering, such as a sequence or a hierarchy of levels."
+  close mapping "schema:ItemList"
+
+rules order
+  | // Rules of std-order, in the Datalog subset, so Soufflé is the oracle.
+  | // The base relations are the theory's tables: ordered__precedes(a, b) and ordered__rank(a, n).
+  | 
+  | // before: the transitive closure of precedes.
+  | .decl before(a: symbol, b: symbol)
+  | before(a, b) :- ordered__precedes(a, b).
+  | before(a, c) :- before(a, b), ordered__precedes(b, c).
+  | 
+  | // comparable: two elements of which one comes before the other, in either direction.
+  | .decl comparable(a: symbol, b: symbol)
+  | comparable(a, b) :- before(a, b).
+  | comparable(a, b) :- before(b, a).
+  | 
+  | // Axiom: precedes is a strict partial order. Irreflexive and acyclic together: nothing comes before itself.
+  | // @invariant
+  | .decl order_cycle(element: symbol)
+  | order_cycle(a) :- before(a, a).
+  | 
+  | // Axiom: rank is consistent with the order. If a comes before b (directly or through others) and both
+  | // have a rank, rank(a) < rank(b). So a -> b -> c with rank(a) = 9, no rank for b and rank(c) = 2 is a
+  | // conflict. An element without a rank is not a conflict itself: the rank is optional.
+  | // @invariant
+  | // @explain on_demand
+  | .decl rank_conflict(a: symbol, b: symbol)
+  | rank_conflict(a, b) :- before(a, b), ordered__rank(a, x), ordered__rank(b, y), x >= y.
+  | 
+  | .output before, comparable, order_cycle, rank_conflict

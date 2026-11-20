@@ -432,13 +432,15 @@ def names(form: dict) -> dict[str, str]:
 
 def lower_pack(pack_dir: Path, meta: dict, pack: str, declared_by: Mapping[str, Set[str]],
                errors: list[str], imported: bool = False,
-               pinned: Mapping[str, Mapping[str, Set[str]]] | None = None) -> list[Lowered]:
+               pinned: Mapping[str, Mapping[str, Set[str]]] | None = None,
+               integer_types: Mapping[str, Set[str]] | None = None) -> list[Lowered]:
     """Lower every module of one pack. `pinned` holds, by pack name, the names each schema module declares of every
     pack that pack.yaml pins (the packs a `use` line may name). `pack` is the pack's name, `declared_by` the LinkML names each schema
     module of the pack declares, by module id within the pack, `imported` whether another pack imports it. Every
     refusal names the module's file and line."""
     forms = {d: effective_form(pack_dir, d, errors) for d in declared(meta, pack_dir, errors)}
     owners: dict[str, list[str]] = {}
+    ints: dict[str, set[str]] = {mid: set(ns) for mid, ns in (integer_types or {}).items()}
     for mid, ns in sorted(declared_by.items()):
         for n in ns:
             owners.setdefault(n, []).append(mid)
@@ -450,16 +452,25 @@ def lower_pack(pack_dir: Path, meta: dict, pack: str, declared_by: Mapping[str, 
             owners.setdefault(n, []).append(d.id)
         for code in rezono_reason.codes(form) if form else ():
             reason_owners.setdefault(code, []).append(d.id)
+        if form:
+            local_ints = {
+                str(decl.get("unit") or decl.get("type"))
+                for decl in form["module"]["decls"]
+                if isinstance(decl, dict) and ("unit" in decl or (decl.get("base") == "Int" and "type" in decl))
+            }
+            if local_ints:
+                ints.setdefault(d.id, set()).update(local_ints)
     default_lang = str(meta.get("default_language", ""))
     defined_reasons = rezono_reason.defined_in_catalog(pack_dir, default_lang)
-    return [lower(pack_dir, d, form, pack, owners, errors, imported, pinned or {},
+    return [lower(pack_dir, d, form, pack, owners, errors, imported, pinned or {}, ints,
                   reason_owners=reason_owners, defined_reasons=defined_reasons, default_language=default_lang)
             for d, form in forms.items() if form is not None]
 
 
 def lower(pack_dir: Path, d: Declared, form: dict, pack: str, owners: dict[str, list[str]],
           errors: list[str], imported: bool = False,
-          pinned: Mapping[str, Mapping[str, Set[str]]] | None = None, *,
+          pinned: Mapping[str, Mapping[str, Set[str]]] | None = None,
+          integer_types: Mapping[str, Set[str]] | None = None, *,
           reason_owners: Mapping[str, list[str]] | None = None,
           defined_reasons: Set[str] = frozenset(),
           default_language: str = "") -> Lowered:
@@ -556,13 +567,14 @@ def lower(pack_dir: Path, d: Declared, form: dict, pack: str, owners: dict[str, 
             lowered_kind = rezono_kind.lower(
                 decl, at, own, owners, declared_names, uses, refuse,
                 extended_format=extended_format, aliases=prefixes, kinds=kinds,
+                integer_types=integer_types, own_module=d.id,
             )
             if lowered_kind is not None:
                 if keys:
                     lowered_kind["unique_keys"] = keys
                 classes[decl["kind"]] = lowered_kind | kind_fields
         elif "enum" in decl:
-            lowered_enum = rezono_enum.lower(decl, at, refuse, extended=metadata_format)
+            lowered_enum = rezono_enum.lower(decl, at, refuse, extended=extended_format)
             if lowered_enum is not None:
                 enums[decl["enum"]] = lowered_enum
         elif "rule" in decl and native_rules:

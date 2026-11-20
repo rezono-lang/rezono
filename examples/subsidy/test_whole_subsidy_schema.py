@@ -100,17 +100,6 @@ def test_subsidy_legacy_compiles_and_checks_facts(tmp_path):
     assert set(got["violations"]) == {"applications", "credentials", "ledger", "population", "roles", "scheme"}
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=MissingCandidatePack,
-    reason="M3: decisions/language-standard-pack-candidates.md: Author examples/subsidy/candidate/ holding "
-           "credentials.rezono (schema/credentials.yaml + rules/credentials.dl, layer observation), "
-           "reference.rezono (schema/reference.yaml, layer observation), and access.rezono, home.rezono and "
-           "ledger.rezono (from rules/*.dl, layer facts), and generate their .json forms with node "
-           "rezono/src/write-form.ts, so that the isolated candidate (keeping facts/*.yaml and calc/*.yaml) "
-           "matches examples/subsidy on semantic bundle, rule IR, calc IR, compiled SQL and fact violations. "
-           "Keep schema/ and rules/ untouched as the oracle.",
-)
 def test_whole_subsidy_schema_and_rules_candidate(tmp_path):
     actual = check_pack(tmp_path, "candidate")
     expected = check_pack(tmp_path, "legacy")
