@@ -837,16 +837,22 @@ function evaluateSnapshot(
 			(x) => !applying.some((other) => other !== x && overrides.get(other.def.name)!.has(x.def.name))
 		);
 
-		if (undecided.length) {
-			const blockingUndecided = undecided.filter(
-				(u) => !applying.some((a) => overrides.get(a.def.name)!.has(u.def.name))
-			);
-			if (blockingUndecided.length && unoverridden.length <= 1) {
-				return worstOf(blockingUndecided.map((u) => u.cond))!;
-			}
-		}
+		const blockingUndecided = undecided.filter(
+			(u) => !applying.some((a) => overrides.get(a.def.name)!.has(u.def.name))
+		);
 
-		if (unoverridden.length > 1) return { s: 'invalid', reason: 'exception_conflict', cause };
+		if (unoverridden.length > 1) {
+			const resolvingUndecided = blockingUndecided.filter((u) =>
+				unoverridden.every((w) => overrides.get(u.def.name)!.has(w.def.name))
+			);
+			if (resolvingUndecided.length) {
+				return worstOf(resolvingUndecided.map((u) => u.cond))!;
+			}
+			return { s: 'invalid', reason: 'exception_conflict', cause };
+		}
+		if (blockingUndecided.length) {
+			return worstOf(blockingUndecided.map((u) => u.cond))!;
+		}
 		if (!unoverridden.length) return { s: 'unknown', reason: 'no_row_applies', cause };
 		const chosen = unoverridden[0].def;
 		trace.definitions.set(`derived:${kindName}.${propName}`, chosen.name);
@@ -1020,7 +1026,13 @@ function evaluateSnapshot(
 				const slotTy = slotType(schema, schema.kinds[kindName].slots[propName]);
 				const ev = slotTy.t === 'val' ? schema.enums?.[schema.types?.[slotTy.name]?.enum ?? slotTy.name] : undefined;
 				const orderList = ev === undefined ? undefined : Array.isArray(ev) ? ev : ev.values;
-				const rank = (idx: number) => (orderList ? orderList.indexOf(outputs[idx].v as string) : idx);
+				const rank = (idx: number): number => {
+					const out: V = outputs[idx];
+					if (out.s !== 'known') return Number.POSITIVE_INFINITY;
+					if (!orderList) return idx;
+					const pos = orderList.indexOf(out.v as string);
+					return pos < 0 ? Number.POSITIVE_INFINITY : pos;
+				};
 				const picked = applying.reduce((best, d) => (rank(d.idx) < rank(best.idx) ? d : best));
 				const wins = undecided.filter((d) => rank(d.idx) < rank(picked.idx));
 				v = wins.length ? worstOf(wins.map((d) => d.v))! : outputs[picked.idx];

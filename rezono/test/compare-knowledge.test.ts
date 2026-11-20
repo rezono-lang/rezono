@@ -150,3 +150,80 @@ fact item i1, valid 2026-01-01.., known 2026-02-01
 		assert.ok(fc.slot, 'fact cause must carry slot');
 	}
 });
+
+test('compareAsKnown: undecided definition overriding every conflicting winner yields undecided instead of exception_conflict', () => {
+	const src = `rezono 1
+pack sample
+kind Item world closed
+  a: Bool
+  b: Bool
+  c: Bool
+  d: Bool
+  derived resolved: Int
+    definition first when a then 10
+    definition second when b then 20
+    definition mid when false then 30 overrides first because "mid beats first" overrides second because "mid beats second"
+    definition top when c then 40 overrides mid because "top transitively beats both"
+  derived partial_override: Int
+    definition first when a then 10
+    definition second when b then 20
+    definition only_first when d then 30 overrides first because "only beats first"
+fact Item
+  | id | a    | b    | c               | d               |
+  | i1 | true | true | unknown pending | unknown pending |
+fact item i1, valid 2026-01-01.., known 2026-02-01
+  c = true
+`;
+	// Before 2026-02-01:
+	// - resolved: first and second both apply, but top (unknown pending) transitively overrides both -> unknown pending!
+	// - partial_override: first and second both apply, and only_first (unknown) does NOT override second -> invalid exception_conflict!
+	// After 2026-02-01:
+	// - resolved: c = true so top wins -> known 40!
+	const res = compareAsKnown(src, {
+		question: 'ask Item at 2026-06-01 where a show resolved, partial_override',
+		beforeKnown: '2026-01-15',
+		afterKnown: '2026-02-15',
+	});
+
+	assert.equal(res.turns.length, 1);
+	const turn = res.turns[0];
+	assert.equal(turn.key, 'i1');
+	assert.deepEqual(turn.before.states?.resolved, { state: 'unknown', reason: 'pending' });
+	assert.equal(turn.after.values?.resolved, '40');
+	assert.deepEqual(turn.after.states?.resolved, { state: 'known' });
+	assert.deepEqual(turn.before.states?.partial_override, { state: 'invalid', reason: 'exception_conflict' });
+	assert.deepEqual(turn.after.states?.partial_override, { state: 'invalid', reason: 'exception_conflict' });
+});
+
+test('compareAsKnown: table priority does not let non-enum or non-known outputs outrank valid enum entries', () => {
+	const src = `rezono 0
+pack sample
+enum Tier = high | low
+kind Item world closed
+  a: Bool
+  b: Bool
+  derived tier: Tier
+    table priority
+      | a    | b    | -> tier |
+      | true | -    | high    |
+      | -    | true | "other" |
+fact Item
+  | id | a    | b     |
+  | i1 | true | false |
+  | i2 | true | false |
+fact item i1, valid 2026-01-01.., known 2026-02-01
+  b = true
+fact item i2, valid 2026-01-01.., known 2026-02-01
+  b = unknown pending
+`;
+	// Row 1 gives the highest-priority valid enum value `high` (rank 0).
+	// Row 2 gives `"other"`, which is not in `Tier` (indexOf === -1) and must rank after all valid entries (+Infinity).
+	// Neither applying row 2 (i1) nor an undecided row 2 (i2) may beat `high`.
+	const res = compareAsKnown(src, {
+		question: 'ask Item at 2026-06-01 where a show tier',
+		beforeKnown: '2026-01-15',
+		afterKnown: '2026-02-15',
+	});
+
+	assert.equal(res.turns.length, 0, 'invalid/out-of-enum priority output must not beat valid enum entry high');
+});

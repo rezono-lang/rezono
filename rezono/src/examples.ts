@@ -864,18 +864,22 @@ export function runExamples(module: Module): ExamplesResult {
 					const winners = trueIndices.filter(
 						(di) => !trueIndices.some((other) => other !== di && overrides.get(defs[other].name)!.has(defs[di].name))
 					);
-					if (undecided.length) {
-						const blockingUndecided = undecided.filter(
-							(u) => !trueIndices.some((ai) => overrides.get(defs[ai].name)!.has(defs[u.idx].name))
-						);
-						if (blockingUndecided.length && winners.length <= 1) {
-							return worstV(blockingUndecided.map((u) => u.v))!;
-						}
-					}
+					const blockingUndecided = undecided.filter(
+						(u) => !trueIndices.some((ai) => overrides.get(defs[ai].name)!.has(defs[u.idx].name))
+					);
 					if (winners.length > 1) {
+						const resolvingUndecided = blockingUndecided.filter((u) =>
+							winners.every((w) => overrides.get(defs[u.idx].name)!.has(defs[w].name))
+						);
+						if (resolvingUndecided.length) {
+							return worstV(resolvingUndecided.map((u) => u.v))!;
+						}
 						for (const di of winners) flags[di] = true;
 						addCoreViolation('exception_conflict', id);
 						return { s: 'invalid', reason: 'exception_conflict', cause: { relation, key: [id] } };
+					}
+					if (blockingUndecided.length) {
+						return worstV(blockingUndecided.map((u) => u.v))!;
 					}
 					if (winners.length === 1) {
 						const winIdx = winners[0];
