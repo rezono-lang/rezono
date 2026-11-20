@@ -17,18 +17,13 @@ from round_visibility_rounds import singleton_rounds
         "ready(run, step, reason) needs current_verified_round(round, run, cut, batch) and "
         "verified_round_member(round, step), and keeps a proof reason. Of the two claims in "
         "round_visibility_rounds only withdraw-a's is admitted. A supplied positive "
-        "result is not a certificate. Write in packs/std-loop (ready.dl, fixed_point.dl) and switch the readers "
+        "result is not a certificate. Write in packs/std-loop (ready.dl, fixed_point.dl, and candidate/ ready "
+        "and fixed_point) and switch the readers "
         "of the old ready to unblocked (loop/typed_recording.py, build/rules/tasks.dl, and refresh the std-loop "
         "pin in build/pack.yaml and the table in compiler/rezono_compiler/standard_packs.py). The same change turns "
         "loop/tests/test_overlapping_withdrawals_break_availability.py::"
         "test_overlapping_withdrawals_break_availability green: remove both marks in the same PR. Today ready.dl "
-        "still derives ready from eligible without a verified round (AssertionError). "
-        "Note: switching ready.dl to current_verified_round and verified_round_member (with fixed_point.dl, "
-        "loop/typed_recording.py, and build/rules/tasks.dl switched to unblocked) makes this test and "
-        "test_overlapping_withdrawals_break_availability pass, but breaks the green test "
-        "loop/tests/test_quiet_round.py::test_quiet_round_rules because it checks rows['ready'] instead of "
-        "rows['unblocked'] without a verified round. A planner PR must switch test_quiet_round_rules to "
-        "unblocked (and packs/std-loop/candidate/ also needs ready and fixed_point updated)."
+        "still derives ready from eligible without a verified round (AssertionError)."
     ),
 )
 def test_ready_requires_checked_batch_member(tmp_path):
