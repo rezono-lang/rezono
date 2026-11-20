@@ -1,0 +1,11 @@
+// The read-to-judge check (decisions/review-and-rights.md, sections 4 and 8).
+// Whoever accepts or rejects must be able to read every element the change touches and every element it rests on,
+// through may_read of the role the review names. A dismissed review is not active, so it triggers no check.
+// @invariant
+.decl review_blind(review: symbol)
+review_blind(r) :- review_active(r), review__change(r, c), review__role(r, role),
+    change_member__change(m, c), change_member__kind(m, k), change_member__element(m, e),
+    !may_read(role, k, e).
+review_blind(r) :- review_active(r), review__change(r, c), review__role(r, role),
+    change_support__change(s, c), change_support__kind(s, k), change_support__element(s, e),
+    !may_read(role, k, e).
