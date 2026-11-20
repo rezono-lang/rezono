@@ -5,6 +5,8 @@ Only main's facts are read here. The canonical writer changes a fact file and it
 """
 from __future__ import annotations
 
+from collections.abc import Iterable
+from dataclasses import dataclass
 from functools import lru_cache
 from datetime import datetime
 import json
@@ -15,6 +17,7 @@ import yaml
 from rezono_canon import canonical_json
 
 from . import facts, strict_yaml
+from .diagnostics import Diagnostic
 from .pack import Pack, contract_dir
 
 @lru_cache(None)
@@ -315,6 +318,200 @@ def read(pack: Pack, pack_dir: str | Path) -> list[dict]:
 
 def compile_sources(pack: Pack, pack_dir: str | Path) -> str:
     return canonical_json(read(pack, pack_dir)) + "\n"
+
+
+NO_ORIGIN = frozenset({"pack", "scenario"})
+ORIGIN_WARNING_CODE = "W113"
+ORIGIN_ERROR_CODE = "R053"
+ORIGIN_MESSAGES = {
+    ORIGIN_WARNING_CODE: (
+        "`{0}` `{1}` has no origin: only its file and line name it; give it an `@` citation, "
+        "a `decide` block, a `Decision` it is bound to, or an entry in its `.sources.yaml` "
+        "(kind `synthetic` for generated example data)"
+    ),
+    ORIGIN_ERROR_CODE: (
+        "`{0}` `{1}` has no origin, and a `rezono 1` pack refuses a fact without one; give it an `@` citation, "
+        "a `decide` block, a `Decision` it is bound to, or an entry in its `.sources.yaml` "
+        "(kind `synthetic` for generated example data)"
+    ),
+}
+
+
+@dataclass(frozen=True)
+class MissingOrigin:
+    """Base rows of one record at one place that have no origin (decisions/fact-origin-required.md)."""
+    kind: str
+    identifier: str
+    file: str
+    position: str
+    rows: tuple[dict, ...]
+
+    @property
+    def place(self) -> str:
+        if self.position.isdecimal():
+            return f"{self.file}:{self.position}"
+        if self.position.startswith(f"{self.file}#") or self.position == self.file:
+            return self.position
+        return f"{self.file}:{self.position}" if self.file and self.position else (self.file or self.position)
+
+    @property
+    def span(self) -> tuple[str, int, int] | None:
+        if self.file and self.position.isdecimal() and int(self.position) >= 1:
+            return (self.file, int(self.position), 1)
+        return None
+
+
+def _own_fact_files(pack_dir: str | Path | None) -> list[tuple[tuple[str, ...], int]]:
+    """Resolved path parts and pack-relative depth of the pack's own fact files."""
+    if pack_dir is None:
+        return []
+    resolved_pack = Path(pack_dir).resolve()
+    facts_dir = resolved_pack / "facts"
+    if not facts_dir.is_dir():
+        return []
+    out = []
+    for path in sorted(facts_dir.glob("*.yaml")):
+        if path.name.endswith(".sources.yaml"):
+            continue
+        resolved = path.resolve()
+        out.append((resolved.parts, len(resolved.relative_to(resolved_pack).parts)))
+    return out
+
+
+def _is_own_fact_file(src: dict, own_files: list[tuple[tuple[str, ...], int]]) -> bool:
+    """A `git` source whose position before `#` names one of this pack's own fact files."""
+    if src.get("kind") != "git" or not own_files:
+        return False
+    raw_path = str(src.get("position", "")).partition("#")[0]
+    if not raw_path or raw_path.startswith(("/", "\\")):
+        return False
+    parts = tuple(p for p in Path(raw_path).parts if p not in ("", "."))
+    if not parts or ".." in parts:
+        return False
+    return any(len(parts) >= min_depth and file_parts[-len(parts):] == parts for file_parts, min_depth in own_files)
+
+
+def _has_origin_source(entry: dict, own_files: list[tuple[tuple[str, ...], int]]) -> bool:
+    return any(
+        src.get("kind") not in NO_ORIGIN and not _is_own_fact_file(src, own_files)
+        for src in entry.get("sources", [])
+    )
+
+
+def _record_key(pack: Pack, relation: str, key: list) -> tuple[str, str]:
+    owner = relation.split("__", 1)[0]
+    root = pack.root(owner) if owner in pack.kinds else owner
+    identifier = str(key[0]) if key else ""
+    return root, identifier
+
+
+def _decision_roots(pack: Pack) -> set[str]:
+    """std-decision's Decision root kind(s) present in this pack."""
+    return {
+        k for k, kind in pack.kinds.items()
+        if kind.cls == "Decision"
+        and (kind.module.startswith("std-decision:") or pack.meta.get("name") == "std-decision")
+    }
+
+
+def _source_places(entry: dict) -> list[tuple[str, str]]:
+    """Distinct (file, position) places of an entry's non-origin sources, in order."""
+    places: list[tuple[str, str]] = []
+    seen: set[tuple[str, str]] = set()
+    for src in entry.get("sources", []):
+        if src.get("kind") == "git":
+            pos = str(src.get("position", ""))
+            pair = (pos.partition("#")[0] or str(src.get("name", "")), pos)
+        else:
+            pair = (str(src.get("name", "")), str(src.get("position", "")))
+        if pair not in seen:
+            seen.add(pair)
+            places.append(pair)
+    return places or [(entry["row"]["relation"], "")]
+
+
+def missing_origins(pack: Pack, entries: list[dict], pack_dir: str | Path | None = None) -> list[MissingOrigin]:
+    """Main base rows without an origin, grouped by record and place (decisions/fact-origin-required.md §§1, 2, 4, 5)."""
+    if not entries:
+        return []
+    own_files = _own_fact_files(pack_dir)
+    parsed_rows = [(e["row"]["relation"], json.loads(e["row"]["key"])) for e in entries]
+    decision_roots = _decision_roots(pack)
+    decision_kinds = {k for k in pack.kinds if any(r in pack.ancestors(k) for r in decision_roots)}
+    decision_arrows = {
+        slot.table
+        for k, kind in pack.kinds.items()
+        if k not in decision_kinds
+        for slot in kind.slots.values()
+        if slot.arrow and slot.range in decision_kinds
+    }
+    bound = {_record_key(pack, rel, key) for rel, key in parsed_rows if rel in decision_arrows}
+    for root in decision_roots:
+        deciders = {str(key[0]) for rel, key in parsed_rows if rel == f"{root}__decider" and key}
+        dates = {str(key[0]) for rel, key in parsed_rows if rel == f"{root}__decided_on" and key}
+        bound |= {(root, identifier) for identifier in deciders & dates}
+
+    groups: dict[tuple[str, str, str, str], list[dict]] = {}
+    specific_kind: dict[tuple[str, str, str, str], str] = {}
+    for entry, (rel, key) in zip(entries, parsed_rows, strict=True):
+        rec_root, identifier = _record_key(pack, rel, key)
+        if (rec_root, identifier) in bound or _has_origin_source(entry, own_files):
+            continue
+        owner = rel.split("__", 1)[0]
+        for file, position in _source_places(entry):
+            group_key = (rec_root, identifier, file, position)
+            groups.setdefault(group_key, []).append(entry["row"])
+            current = specific_kind.get(group_key)
+            if owner in pack.kinds and (
+                current is None
+                or current not in pack.kinds
+                or len(pack.ancestors(owner)) > len(pack.ancestors(current))
+            ):
+                specific_kind[group_key] = owner
+            elif current is None:
+                specific_kind[group_key] = owner
+
+    out = [
+        MissingOrigin(
+            kind=specific_kind[group_key],
+            identifier=group_key[1],
+            file=group_key[2],
+            position=group_key[3],
+            rows=tuple(rows),
+        )
+        for group_key, rows in groups.items()
+    ]
+    out.sort(key=lambda item: (item.file, int(item.position) if item.position.isdecimal() else 0,
+                               item.position, item.kind, item.identifier))
+    return out
+
+
+def missing_origin_count(missing: Iterable[MissingOrigin]) -> int:
+    """Count of distinct main base rows (by RowRef) without an origin (decisions/fact-origin-required.md §5)."""
+    return len({(row["relation"], row["key"]) for item in missing for row in item.rows})
+
+
+def origin_diagnostics(pack: Pack, missing: Iterable[MissingOrigin]) -> tuple[Diagnostic, ...]:
+    """W113 warnings on rezono 0, R053 refusals from rezono 1 on (decisions/fact-origin-required.md §4)."""
+    refuse = pack.language_version != "0"
+    code = ORIGIN_ERROR_CODE if refuse else ORIGIN_WARNING_CODE
+    severity = "error" if refuse else "warning"
+    template = ORIGIN_MESSAGES[code]
+    return tuple(
+        Diagnostic(
+            code=code,
+            message=template.format(item.kind, item.identifier),
+            where=f"{item.kind} {item.identifier}",
+            span=item.span,
+            severity=severity,
+        )
+        for item in missing
+    )
+
+
+def format_origin_diagnostic(item: MissingOrigin, diagnostic: Diagnostic) -> str:
+    """One command-line line without severity prefix: `<code> <place>: <sentence>`."""
+    return f"{diagnostic.code} {item.place}: {diagnostic.message}"
 
 
 def canonical_sidecar(pack: Pack, path: Path, entries: list[dict]) -> str:
