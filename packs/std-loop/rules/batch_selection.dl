@@ -48,9 +48,16 @@ loop_batch_preceded(b) :-
     loop_batch_difference(a, b, i), !loop_batch_earlier_difference(a, b, i),
     loop_batch_priority(a, i, p), loop_batch_priority(b, i, q), p < q.
 
+// The round verifier replays the choice for each claim on its own, and the batch is the label its claim gives.
+// Two admitted rounds of one run and cut that name different batches leave the choice undecided, so neither is
+// selected: a round's batch is certified in the domain of its own round, where nothing else can precede it.
+.decl loop_batch_undecided(batch: symbol)
+loop_batch_undecided(b) :-
+    current_verified_round(_, run, cut, b), current_verified_round(_, run, cut, c), b != c.
+
+// A verified round's batch is certified above, so this one rule also selects it.
 .decl loop_selected_batch(batch: symbol)
-loop_selected_batch(b) :- loop_certified_batch(b, _, _), !loop_batch_preceded(b).
-loop_selected_batch(b) :- current_verified_round(_, _, _, b).
+loop_selected_batch(b) :- loop_certified_batch(b, _, _), !loop_batch_preceded(b), !loop_batch_undecided(b).
 
 .output loop_certified_batch
 .output loop_selected_batch

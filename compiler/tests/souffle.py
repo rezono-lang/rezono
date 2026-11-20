@@ -205,28 +205,44 @@ def lowered(prog):
 
 def closure(pack_dir, prog=None):
     """The rule texts of a pack's import closure (an imported pack brings its rules, and the
-    program is the union over the closure): rules/*.dl of every imported pack, each pack after the packs it
-    imports and under the importing pack's names (`bound`), then the pack's own, then the rules of the pack's
-    decision tables (rezono_table, docs/rezono/publication.md §9.1): a table is a rule file of its pack whose
-    text the compiler makes, so the oracle runs that text too. The names come from the compiler's binding of
-    the schemas, as the tables in `source` do; what a rule says comes from its text.
+    program is the union over the closure): rules/*.dl and authored relational rule blocks in rezono/*.rezono
+    of every imported pack, each pack after the packs it imports and under the importing pack's names (`bound`),
+    then the pack's own, then the rules of the pack's decision tables (rezono_table, docs/rezono/publication.md
+    §9.1): a table is a rule file of its pack whose text the compiler makes, so the oracle runs that text too.
+    The names come from the compiler's binding of the schemas, as the tables in `source` do; what a rule says
+    comes from its text.
     With `prog`, the compiled program, the texts read the relations of a view where the compiler bound them
     (`view_bound`), and the rules of the view follow (`lowered`)."""
-    from rezono_compiler import modules, pack, rezono_table
+    from rezono_compiler import modules, pack, rezono_relational, rezono_table
 
     pack_dir = Path(pack_dir)
     meta, errors = pack.read_meta(pack_dir), []
     mods, imported = modules.load(pack_dir, meta, errors)
     names = modules.Names(mods, pack.snake, errors)
     assert not errors, errors
+    embedded = {}
+    for item in rezono_relational.sources(mods):
+        embedded.setdefault(item.pack, []).append(item)
     texts = []  # (the file's name in a rule's origin, as rules_dl.read gives it; its text)
     for name in modules.dependency_order(imported, modules.direct(meta)):
-        renames = pack.rename(mods, imported[name], names)
-        texts += [(f"{imported[name].name}:rules/{f.name}", bound(f.read_text(encoding="utf-8"), renames))
-                  for f in sorted((imported[name].dir / "rules").glob("*.dl"))]
-    texts += [(f"rules/{f.name}", f.read_text(encoding="utf-8")) for f in sorted((pack_dir / "rules").glob("*.dl"))]
+        owner = imported[name]
+        renames = pack.rename(mods, owner, names)
+        entries = [(f.stem, f"{owner.name}:rules/{f.name}", f.read_text(encoding="utf-8"))
+                   for f in sorted((owner.dir / "rules").glob("*.dl"))]
+        entries += [(item.stem, f"{item.pack}:{item.file}", item.text) for item in embedded.get(owner.name, ())]
+        entries.sort(key=lambda entry: entry[0])
+        texts += [(where, bound(text, renames)) for _, where, text in entries]
+    own = [(f.stem, f"rules/{f.name}", f.read_text(encoding="utf-8"))
+           for f in sorted((pack_dir / "rules").glob("*.dl"))]
+    own += [(item.stem, item.file, item.text) for item in embedded.get(meta["name"], ())]
+    own.sort(key=lambda entry: entry[0])
+    texts += [(where, text) for _, where, text in own]
     # A table reads the tables of its kind, never a view, so its text is not bound to one (`view_bound`).
-    tables = [g.text for g in rezono_table.lower_pack(pack.read(pack_dir), meta, pack_dir, errors)] if meta.get("rezono") else []
+    forms = {m.rel: m.form for m in mods if m.pack_dir == pack_dir and m.form is not None}
+    has_tables = any(isinstance(decl, dict) and "extend" in decl
+                     for form in forms.values() for decl in form.get("module", {}).get("decls", ()))
+    tables = ([g.text for g in rezono_table.lower_pack(pack.read(pack_dir), meta, pack_dir, errors, forms=forms)]
+              if has_tables else [])
     assert not errors, errors
     if prog is None:
         return [text for _, text in texts] + tables

@@ -83,6 +83,14 @@ class MissingMaintainerMove(AssertionError):
     pass
 
 
+class MissingCalculationExample(AssertionError):
+    pass
+
+
+class MissingCalculationQuickstartOutput(AssertionError):
+    pass
+
+
 def test_the_readme_has_seven_parts_in_one_screen():
     text = readme()
     parts = sections(text)
@@ -111,30 +119,67 @@ def test_the_example_answers_what_the_second_step_prints():
     example = dict(sections(text)).get("Example", "")
     shown = FENCE.findall(example)
     first_bash = text.find("```bash\n")
-    if len(shown) != 3 or [shown[0][0], shown[2][0]] != ["yaml", "text"] or text.find(example) > first_bash:
-        raise MissingReadmeExample("README.md has no example of facts, one rule and an answer before the first command")
-    (_, facts), (notation, rule), (_, answer) = shown
+    if len(shown) < 2 or shown[0][0] != "yaml" or shown[-1][0] != "text" or text.find(example) > first_bash:
+        raise MissingReadmeExample("README.md has no example of facts and an answer before the first command")
+    facts = shown[0][1]
+    answer = shown[-1][1]
 
     fact_lines = {line for path in (ROOT / "examples" / "subsidy" / "facts").glob("*.yaml")
                   for line in stripped(path.read_text(encoding="utf-8"))}
     missing = [line for line in stripped(facts) if line not in fact_lines]
     assert not missing, missing
 
-    excerpt = stripped(rule)
-    sources = [path for folder in ("subsidy", "subsidy-scheme")
-               for path in (ROOT / "examples" / folder / "rules").rglob("*") if path.is_file()]
-    found = [path for path in sources if any(
-        stripped(path.read_text(encoding="utf-8"))[start:start + len(excerpt)] == excerpt
-        for start in range(len(stripped(path.read_text(encoding="utf-8")))))]
-    assert excerpt and found, f"the {notation} rule is not copied from a rule file of examples/subsidy"
-    if found[0].suffix == ".dl":
-        assert rule.count(":-") == 1, rule
-
     assert answer.strip(), "the example shows no answer"
     assert not re.search(r"\b[0-9a-f]{64}\b|/tmp/|\$work|/store/|/manifests/", answer), answer
     pairs = shown_outputs(text)
     assert len(pairs) >= 2 and pairs[1][1] is not None, "the second step shows no output"
     assert answer in pairs[1][1], (answer, pairs[1][1])
+
+
+EURO_A001 = re.compile(r"(?:€\s*|EUR\s*)2[,.]694(?:\.00|,00)?\b")
+
+
+def _has_a001_and_a003(text: str) -> bool:
+    return (
+        "A001" in text
+        and EURO_A001.search(text) is not None
+        and "A003" in text
+        and "unknown" in text
+        and "income_statement_not_received" in text
+    )
+
+
+def test_the_example_shows_a001_award_and_a003_unknown():
+    text = readme()
+    example = dict(sections(text)).get("Example", "")
+    shown = FENCE.findall(example)
+    if not shown or shown[-1][0] != "text":
+        raise MissingCalculationExample("README.md ## Example has no text block with the answer")
+    answer = shown[-1][1]
+    if not _has_a001_and_a003(example) or not _has_a001_and_a003(answer):
+        raise MissingCalculationExample(
+            "README.md ## Example must show A001 with its euro award and A003 as unknown "
+            "(income_statement_not_received)")
+    if "examples/subsidy/reference.py" not in example or "checker" not in example.lower():
+        raise MissingCalculationExample(
+            "README.md ## Example must state that the checker verified the witness and "
+            "examples/subsidy/reference.py computes the same amount")
+    assert not re.search(r"\b[0-9a-f]{64}\b|/tmp/|\$work|/store/|/manifests/", answer), answer
+
+
+def test_the_second_step_prints_a001_and_a003_answers():
+    text = readme()
+    example = dict(sections(text)).get("Example", "")
+    shown = FENCE.findall(example)
+    pairs = shown_outputs(text)
+    if len(pairs) < 2 or pairs[1][1] is None:
+        raise MissingCalculationQuickstartOutput("README.md step 2 has no text output block")
+    output = pairs[1][1]
+    if not _has_a001_and_a003(output):
+        raise MissingCalculationQuickstartOutput(
+            "README.md step 2 text block must contain the A001 euro award and the A003 unknown "
+            "(income_statement_not_received) answer")
+    assert shown and shown[-1][0] == "text" and shown[-1][1] in output, (shown[-1][1], output)
 
 
 COMPARED = """# Probe

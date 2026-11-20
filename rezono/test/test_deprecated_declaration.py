@@ -18,14 +18,6 @@ class MissingDeprecatedDeclaration(AssertionError):
     """The module reader did not read, print or refuse a deprecated line as the decision gives it."""
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=MissingDeprecatedDeclaration,
-    reason="extra: decisions/language-deprecation.md: Read a line deprecated \"TEXT\" until DATE directly above a "
-           "kind or an enum as the member deprecated: {note, until} of that declaration in rezono/src/module.ts, "
-           "print it back above its declaration, refuse the forms of the section Reading, and admit the member in "
-           "rezono.module/2 in contracts/rezono-module.yaml. Read the sections Reading and Format and meaning.",
-)
 def test_deprecated_declaration():
     plain, read, *refused = read_modules(
         HEADER + ZONE + MODE,

@@ -25,7 +25,7 @@ MAY_READ = ".decl may_read(r: symbol, k: symbol, x: symbol)\n"
 
 
 def decls(text: str) -> list[str]:
-    return re.findall(r"^\.decl\s+([a-z0-9_]+)", text, flags=re.M)
+    return re.findall(r"^\s*\.decl\s+([a-z0-9_]+)", text, flags=re.M)
 
 
 def test_the_source_is_the_union_over_the_import_closure(imported):
@@ -160,3 +160,44 @@ def test_the_union_on_souffle_equals_the_batch_backend_and_a_planted_difference_
     assert planted != texts
     got = souffle.run(prog, data, tmp_path, program_text=souffle.source(prog, planted))
     assert got != derived and got["missing"] == {("a",), ("b",)}
+
+
+def _write_rezono_rules(pack_dir, pack_name: str, module_name: str, lines: list[str]) -> None:
+    import json
+    from rezono_compiler import rezono_module
+
+    header = f"rezono 0\npack {pack_name}\n"
+    block = f"rules {module_name}\n" + "".join(f"  | {line}\n" for line in lines)
+    text = header + block
+    (pack_dir / "rezono").mkdir(exist_ok=True)
+    (pack_dir / "rezono" / f"{module_name}.rezono").write_text(text, encoding="utf-8", newline="\n")
+    body = {"rezono": "0", "pack": pack_name, "use": [], "decls": [{"rules": module_name, "lines": lines}]}
+    start = len(header) + len("rules ")
+    spans = [{"at": "/decls/0", "line": "3", "start": str(start), "end": str(start + len(module_name))}]
+    form = {"format": rezono_module.IDENTIFIER_FORMAT, "module": body, "spans": spans}
+    (pack_dir / "rezono" / f"{module_name}.json").write_text(json.dumps(form, sort_keys=True), encoding="utf-8")
+    meta_path = pack_dir / "pack.yaml"
+    meta = yaml.safe_load(meta_path.read_text(encoding="utf-8"))
+    meta["rezono"] = [{"module": f"rezono/{module_name}.rezono", "form": f"rezono/{module_name}.json", "layer": "facts"}]
+    meta_path.write_text(yaml.safe_dump(meta, sort_keys=False), encoding="utf-8")
+
+
+def test_closure_reads_rezono_rule_blocks_from_imported_and_own_packs(imported):
+    owner, consumer = imported
+    shutil.rmtree(owner / "rules")
+    shutil.rmtree(consumer / "rules", ignore_errors=True)
+    clash(consumer)
+    _write_rezono_rules(owner, "shared-terms", "owner_rules", [
+        ".decl registered(x: symbol)",
+        "registered(x) :- party(x).",
+    ])
+    _write_rezono_rules(consumer, "minimal", "core", [
+        ".decl missing(x: symbol)",
+        "missing(x) :- alpha(x), !registered(x).",
+    ])
+    pin(consumer, owner)
+    prog = program(consumer)
+    text = souffle.pack_source(prog, consumer)
+    assert "registered(x) :- shared_terms_terms_party(x)." in text
+    assert "missing(x) :- alpha(x), !registered(x)." in text
+    assert sorted(decls(text)) == sorted(prog.relations)

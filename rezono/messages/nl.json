@@ -27,6 +27,7 @@
 	"R047": "de toestand `{0}` vraagt bewijs dat deze regelinvoer niet levert",
 	"R048": "`{0}` past niet bij zijn eigen signatuur; zet opties op de getypeerde kop en geef het een definiërende clausule",
 	"R049": "`{0}` heeft geen ondersteunde regelrepresentatie",
+	"R050": "`{0}` kan niet worden omgezet naar een berekening",
 	"W105": "`{0}` kan onbekend zijn; onbekende waarden worden met hun reden getoond",
 	"W108": "`{0}` heeft geen versie vóór {1}; daar is het onbekend (`no_version_applies`)",
 	"W112": "`table {0}` in `{1}`: geen rij geldt als `{2}`; daar is het onbekend (`no_row_applies`)",

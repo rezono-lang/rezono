@@ -85,7 +85,9 @@ def parent_of(value: object, kind: str, at: str, own: dict[str, str],
 
 def lower(decl: dict, at: str, own: dict[str, str], owners: dict[str, list[str]],
           declared: Set[str], uses: set[str], refuse: Refuse, *, extended_format: bool = False,
-          aliases: Mapping[str, Mapping[str, list[str]]] | None = None) -> dict | None:
+          aliases: Mapping[str, Mapping[str, list[str]]] | None = None,
+          kinds: Mapping[str, list] | None = None) -> dict | None:
+    """`kinds` holds the slots of each kind of the module, which an inverse slot reads."""
     ok = True
     allowed = (MEMBERS | {"checks", "embedded", "equations", "parent", "relationship"} | rezono_metadata.FIELDS
                if extended_format else MEMBERS)
@@ -130,9 +132,19 @@ def lower(decl: dict, at: str, own: dict[str, str], owners: dict[str, list[str]]
     elif "sealed" in decl and not (isinstance(sealed, str) and NAME.fullmatch(sealed)):
         refuse(f"{at}/sealed", "`sealed at` names the period slot of the kind", "§5a")
         ok = False
-    for index, _ in enumerate(decl.get("derived") or []):
-        refuse_derived(f"{at}/derived/{index}", refuse)
-        ok = False
+    for index, derived in enumerate(decl.get("derived") or []):
+        here = f"{at}/derived/{index}"
+        if not extended_format:
+            refuse_derived(here, refuse)
+            ok = False
+        elif isinstance(derived, dict) and isinstance(derived.get("table"), dict):
+            refuse(here, "a decision table under a kind is not lowered (R050)", "§5.4")
+            ok = False
+        else:
+            from . import rezono_calc
+
+            if not rezono_calc.validate_derived(derived, here, refuse):
+                ok = False
     equations = rezono_equation.lower(decl.get("equations", []), f"{at}/equations", refuse) if extended_format else []
     rules = lower_checks(decl.get("checks", []), f"{at}/checks", refuse) if extended_format else []
     slots = decl.get("slots") or []
@@ -146,7 +158,7 @@ def lower(decl: dict, at: str, own: dict[str, str], owners: dict[str, list[str]]
         ok = False
     if rezono_slot.validate(
         slots, decl["kind"], at, own, owners, uses, refuse,
-        extended=extended_format, open_kind=world == "open", aliases=aliases,
+        extended=extended_format, open_kind=world == "open", aliases=aliases, kinds=kinds,
     ) and ok and equations is not None and rules is not None:
         attributes = rezono_slot.lower(slots, declared, implicit_identifier=not embedded and parent is None)
         result = {"attributes": attributes} | rezono_metadata.lower(decl)
