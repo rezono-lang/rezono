@@ -37,19 +37,6 @@ def constant(value):
     return lambda _sku: value
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason=(
-        "M4: decisions/code-does-not-decide.md, row run/read_only_preflight.py. Derive "
-        "preflight_finding(sku, finding) in run/packs/offer-selection from the expected price, the required "
-        "stock and the observed price and stock, an unread observation being absent. "
-        "run/read_only_preflight.py keeps inspect_offer as the reader that invokes each reader once and reads "
-        "the findings through rezono_compiler.batch.read. No finding is a literal in the module. Keep "
-        "run/tests/test_read_only_preflight.py green, which fixes the order price before stock. Today the "
-        "findings are written in Python (AssertionError)."
-    ),
-)
 def test_preflight_findings_come_from_offer_selection(monkeypatch):
     assert not literals("read_only_preflight.py") & FINDINGS, "the findings are written in code, not in the pack"
     seen = pack_reads(monkeypatch)

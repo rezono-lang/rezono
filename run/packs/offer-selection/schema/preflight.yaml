@@ -1,0 +1,21 @@
+id: https://rezono.org/examples/run/offer-selection/preflight
+name: offer_selection_preflight
+description: >-
+  Read-only offer preflight inputs comparing expected price and required stock
+  against observed price and stock for a SKU.
+in_language: en
+imports:
+  - linkml:types
+default_range: string
+annotations:
+  layer: facts
+
+classes:
+  PreflightOffer:
+    description: Expected offer terms and optional observed price and stock for a SKU.
+    attributes:
+      id: {identifier: true}
+      expected_price: {range: integer, minimum_value: 0, required: true}
+      required_stock: {range: integer, minimum_value: 0, required: true}
+      observed_price: {range: integer, minimum_value: 0}
+      observed_stock: {range: integer, minimum_value: 0}

@@ -1,0 +1,67 @@
+// Read-only offer preflight: compare expected price and required stock against
+// observed price and stock for a SKU, keeping an unread observation absent.
+
+.decl preflight_has_expected_price(sku: symbol)
+preflight_has_expected_price(sku) :- preflight_offer__expected_price(sku, _).
+
+.decl preflight_has_required_stock(sku: symbol)
+preflight_has_required_stock(sku) :- preflight_offer__required_stock(sku, _).
+
+.decl preflight_has_observed_price(sku: symbol)
+preflight_has_observed_price(sku) :- preflight_offer__observed_price(sku, _).
+
+.decl preflight_has_observed_stock(sku: symbol)
+preflight_has_observed_stock(sku) :- preflight_offer__observed_stock(sku, _).
+
+.decl preflight_price_conflict(sku: symbol)
+preflight_price_conflict(sku) :- preflight_offer__expected_price(sku, a), preflight_offer__expected_price(sku, b), a != b.
+preflight_price_conflict(sku) :- preflight_offer__observed_price(sku, a), preflight_offer__observed_price(sku, b), a != b.
+
+.decl preflight_stock_conflict(sku: symbol)
+preflight_stock_conflict(sku) :- preflight_offer__required_stock(sku, a), preflight_offer__required_stock(sku, b), a != b.
+preflight_stock_conflict(sku) :- preflight_offer__observed_stock(sku, a), preflight_offer__observed_stock(sku, b), a != b.
+
+.decl preflight_price_finding(sku: symbol, finding: symbol)
+preflight_price_finding(sku, "price_unknown") :-
+    preflight_offer(sku),
+    !preflight_has_expected_price(sku).
+preflight_price_finding(sku, "price_unknown") :-
+    preflight_offer(sku),
+    !preflight_has_observed_price(sku).
+preflight_price_finding(sku, "price_unknown") :-
+    preflight_offer(sku),
+    preflight_price_conflict(sku).
+preflight_price_finding(sku, "price_changed") :-
+    preflight_offer(sku),
+    preflight_offer__expected_price(sku, expected),
+    preflight_offer__observed_price(sku, observed),
+    !preflight_price_conflict(sku),
+    observed != expected.
+
+.decl preflight_stock_finding(sku: symbol, finding: symbol)
+preflight_stock_finding(sku, "stock_unknown") :-
+    preflight_offer(sku),
+    !preflight_has_required_stock(sku).
+preflight_stock_finding(sku, "stock_unknown") :-
+    preflight_offer(sku),
+    !preflight_has_observed_stock(sku).
+preflight_stock_finding(sku, "stock_unknown") :-
+    preflight_offer(sku),
+    preflight_stock_conflict(sku).
+preflight_stock_finding(sku, "insufficient_stock") :-
+    preflight_offer(sku),
+    preflight_offer__required_stock(sku, required),
+    preflight_offer__observed_stock(sku, observed),
+    !preflight_stock_conflict(sku),
+    observed < required.
+
+.decl preflight_finding(sku: symbol, finding: symbol)
+preflight_finding(sku, finding) :- preflight_price_finding(sku, finding).
+preflight_finding(sku, finding) :- preflight_stock_finding(sku, finding).
+
+.decl preflight_finding_rank(sku: symbol, rank: number, finding: symbol)
+preflight_finding_rank(sku, 0, finding) :- preflight_price_finding(sku, finding).
+preflight_finding_rank(sku, 1, finding) :- preflight_stock_finding(sku, finding).
+
+.output preflight_finding
+.output preflight_finding_rank
