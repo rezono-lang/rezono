@@ -70,11 +70,12 @@ Rezono {
   Unary = "-" Unary  -- neg
         | Post
   Post = Dotted TimeAt? TimeKnown? Filter?
-  Dotted = Dotted "." where "(" Expr ")"  -- where
-         | Dotted "." Agg                 -- agg
-         | Dotted "." identWord           -- name
+  Dotted = Dotted "." where "(" AggArg ")"  -- where
+         | Dotted "." Agg                   -- agg
+         | Dotted "." identWord             -- name
          | Atom
-  Agg = aggName "(" Expr? ")"
+  Agg = aggName "(" AggArg? ")"
+  AggArg = (name ":")? Expr
   TimeAt = at Atom
   TimeKnown = as known Atom
   Filter = where Expr

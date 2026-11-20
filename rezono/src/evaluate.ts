@@ -563,7 +563,7 @@ export function reader(checked: Pick<Checked, 'typed' | 'heads'>, schema: Schema
 		});
 	}
 
-	function aggregate(e: { agg: [string, Expr] | [string, Expr, Expr] }): V {
+	function aggregate(e: { agg: [string, Expr] | [string, Expr, Expr] | [string, Expr, Expr, string] }): V {
 		const [name, of, arg] = e.agg;
 		const base = ex(of);
 		const set = members(base);
