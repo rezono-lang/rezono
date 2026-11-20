@@ -9,7 +9,7 @@ from reader_probe import at, read_modules
 
 HEADER = "rezono 0\npack sample\n"
 VALID = (HEADER + "param quota: Int\n"
-         "  version 1, valid 2026-01-01.., known 2025-09-16 = 5\n"
+         "  version 1, known 2025-09-16 = 5\n"
          "  version 2 replaces 1, valid 2026-01-01.., known 2025-09-16 = 6\n")
 
 
