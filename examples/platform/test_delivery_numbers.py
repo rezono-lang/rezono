@@ -33,12 +33,6 @@ ADAPTER_KEYS = {
 }
 
 
-@pytest.mark.xfail(strict=True, raises=AdapterKeyDecidesDeliveryNumber, reason=(
-    "M2: decisions/ordered-rule-scalars.md: Waits for examples/platform/test_global_request_order.py"
-    "--test_adapter_rank_keys_do_not_decide_the_global_request_order. Then number deliveries in "
-    "examples/platform/rules/tenant_delivery_number.dl on the source submission instant and the service within the "
-    "tenant (decisions/platform-delivery-inventory.md), not on the adapter keys "
-    "tenant_service_request__submitted_at_key and tenant_service_request__service_key."))
 def test_delivery_numbers_ignore_adapter_rank_keys(tmp_path):
     from rezono_compiler import pack
     from request_preview import preview_inputs, relation_rows
