@@ -36,7 +36,7 @@ from linkml_runtime.linkml_model import SchemaDefinition
 from .schemaview import SchemaView
 from rezono_canon import canonical_sha256, sha256_hex
 
-from . import rezono_module, strict_yaml
+from . import rezono_module, standard_packs, strict_yaml
 
 # The files that define a pack: everything the compiler reads but facts, scenarios and diagnostics (data)
 # and expected output. Its hash covers exactly these: the import pin and the publication's
@@ -217,8 +217,10 @@ def imported_packs(pack_dir: Path, meta: dict, errors: list[str]) -> dict[str, I
                 errors.append(f"{where}: the pack in {imp['path']} is named {sub.get('name')!r}")
                 continue
             digest = pack_hash(d)
-            if digest != imp["sha256"]:
-                errors.append(f"{where}: the files hash to {digest}, not the pinned {imp['sha256']}")
+            why = (f"the files hash to {digest}, not the pinned {imp['sha256']}" if digest != imp["sha256"]
+                   else standard_packs.refusal(name, digest))
+            if why:
+                errors.append(f"{where}: {why}")
                 continue
             if name in found and found[name].sha256 != digest:
                 errors.append(f"{where}: pack {name} is imported twice with different contents")
