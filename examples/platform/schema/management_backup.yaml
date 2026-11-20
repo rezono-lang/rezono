@@ -1,0 +1,50 @@
+id: https://rezono.org/examples/platform-core/management-backup
+name: platform_management_backup
+description: Backup plans, evaluation decisions, scoped inventories and recorded copies.
+in_language: en
+imports: [linkml:types]
+default_range: string
+annotations:
+  layer: facts
+
+types:
+  BackupCalendarDate:
+    description: Calendar date in YYYY-MM-DD form for backup copies, inventories and evaluation days.
+    typeof: string
+    pattern: '^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$'
+
+classes:
+  BackupPlan:
+    description: A service's declared dataset backup plan, target, schedule and governing decision.
+    attributes:
+      id: {identifier: true}
+      service: {required: true}
+      dataset: {required: true}
+      target: {required: true}
+      decided_by: {required: true}
+      interval_days: {range: integer, minimum_value: 1, required: true}
+      retention_days: {range: integer, minimum_value: 1, required: true}
+
+  BackupDecision:
+    description: The evaluation date and maximum backup age in days for a backup plan.
+    attributes:
+      id: {identifier: true}
+      as_of: {range: BackupCalendarDate, required: true}
+      max_age_days: {range: integer, minimum_value: 0, required: true}
+
+  BackupInventory:
+    description: A scoped inventory scan of a service and storage target on a calendar day.
+    attributes:
+      id: {identifier: true}
+      service: {required: true}
+      target: {required: true}
+      day: {range: BackupCalendarDate, required: true}
+      complete: {range: boolean}
+
+  BackupCopy:
+    description: An observed backup copy of a service on a storage target and the day it was taken.
+    attributes:
+      id: {identifier: true}
+      service: {required: true}
+      target: {required: true}
+      taken: {range: BackupCalendarDate, required: true}
