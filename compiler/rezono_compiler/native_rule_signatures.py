@@ -29,6 +29,7 @@ class Signature:
     owner: str
     source: str
     extend: bool = False
+    invariant: bool = False
     # Linked evidence for a ground call: relation, owner, columns, world, the states it can take and the
     # places that explain each undecided state (decisions/language-expression-semantics.md section 2).
     predicate: dict | None = None
@@ -51,6 +52,7 @@ class LinkedClause:
 class Linked:
     signatures: dict[str, Signature]
     clauses: dict[ClauseKey, LinkedClause]
+    intermediate_invariants: tuple[pack.IntermediateInvariant, ...] = ()
 
 
 class Refusal(Exception):
@@ -68,6 +70,7 @@ class Source:
     lines: dict[str, int]
     aliases: dict[str, str]
     unqualified: tuple[str, ...]
+    format: str = rezono_module.NATIVE_FORMAT
 
     def diagnose(self, error: Refusal) -> Diagnostic:
         at = error.at
@@ -229,9 +232,13 @@ def source_for(owner: str, path: str, form: dict, root: str, allowed: list[str],
     name = PurePosixPath(path)
     aliases: dict[str, str] = {}
     unqualified: list[str] = []
-    body = rezono_module.module_body(form, rezono_module.NATIVE_FORMAT)
+    body = (
+        rezono_module.module_body(form, rezono_module.NATIVE_FORMAT)
+        or rezono_module.module_body(form, rezono_module.SAFE_STEP_FORMAT)
+    )
+    form_format = form.get("format", rezono_module.NATIVE_FORMAT) if isinstance(form, dict) else rezono_module.NATIVE_FORMAT
     source = Source(owner, path, spans.where(owner, root, path), rules_dl.module_of(owner, root, name.stem),
-                    rezono_module.lines(form) if body is not None else {}, aliases, ())
+                    rezono_module.lines(form) if body is not None else {}, aliases, (), form_format)
     if (body is None or body["pack"] != owner or name.is_absolute() or name.suffix != ".rezono"
             or ".." in name.parts or "\\" in path or name.as_posix() != path):
         errors.append(source.diagnose(Refusal("R046", "The native form does not identify this pack and source", "")))
@@ -248,7 +255,7 @@ def source_for(owner: str, path: str, form: dict, root: str, allowed: list[str],
             if "as" not in use:
                 unqualified.append(target)
     return Source(owner, path, source.file, source.module, source.lines, aliases,
-                  tuple(dict.fromkeys(unqualified))), body["decls"]
+                  tuple(dict.fromkeys(unqualified)), form_format), body["decls"]
 
 
 def columns(schema: Schema, source: Source, given: list[dict], at: str) -> tuple[Column, ...]:
@@ -327,7 +334,7 @@ def read_clause(schema: Schema, source: Source, at: str, decl: dict, signatures:
             raise Refusal("R046", f"{decl['rule']!r} is not an extendable imported relation", at)
     elif signature.source != source.path or signature.owner != source.owner:
         raise Refusal("R046", f"A clause for {relation!r} must be in its owning module", at)
-    if "args" in decl and decl.get("options"):
+    if "columns" not in decl and decl.get("options"):
         raise Refusal("R048", "Rule options belong on the owning typed head", at)
 
     locals_ = columns(schema, source, decl.get("locals", []), f"{at}/locals")
@@ -466,6 +473,88 @@ def link(pack_dir: str | Path, forms: Mapping[tuple[str, str], dict]) -> Linked:
     return link_modules(meta, definitions, imported, names, forms)
 
 
+def read_head_options(source: Source, at: str, declaration: dict) -> tuple[bool, bool, tuple[str, str] | None]:
+    """Validate and extract extend, invariant and intermediate coverage options from an owning typed head."""
+    extend = False
+    invariant = False
+    intermediate_within: tuple[str, str] | None = None
+    for index, option in enumerate(declaration.get("options") or []):
+        opt_at = f"{at}/options/{index}"
+        if not isinstance(option, dict):
+            raise Refusal("R048", "Invalid rule option on rule head", opt_at)
+        if "extend" in option:
+            if set(option) != {"extend"} or option["extend"] is not True:
+                raise Refusal("R048", "Invalid extend option on rule head", opt_at)
+            if extend:
+                raise Refusal("R048", "Repeated extend option on rule head", opt_at)
+            extend = True
+        elif "invariant" in option:
+            if invariant:
+                raise Refusal("R048", "Repeated invariant option on rule head", opt_at)
+            invariant = True
+            if set(option) == {"invariant"} and option["invariant"] is True:
+                continue
+            if set(option) == {"invariant", "within"} and option["invariant"] == "intermediate":
+                if source.format != rezono_module.SAFE_STEP_FORMAT:
+                    raise Refusal("R048", "Intermediate invariant requires rezono.module/4", opt_at)
+                within = option["within"]
+                within_at = f"{opt_at}/within"
+                if (not isinstance(within, dict) or set(within) != {"relation"}
+                        or not isinstance(within["relation"], str) or not within["relation"]):
+                    raise Refusal("R048", "Intermediate invariant requires within.relation", within_at)
+                intermediate_within = (within["relation"], within_at)
+                continue
+            raise Refusal("R048", "Invalid invariant option on rule head", opt_at)
+    return extend, invariant, intermediate_within
+
+
+def bind_intermediate_coverage(
+    relation: str,
+    violation: Signature,
+    coverage_relation: str,
+    coverage: Signature,
+    at: str,
+) -> tuple[tuple[str, str], ...]:
+    """Bind each violation column to a coverage column of the same name and resolved schema type."""
+    coverage_columns = {name: schema_type for name, schema_type, _ in coverage.key}
+    binding: list[tuple[str, str]] = []
+    for name, schema_type, _ in violation.key:
+        if name not in coverage_columns:
+            raise Refusal(
+                "R003",
+                f"Coverage relation {coverage_relation!r} for {relation!r} is missing key column {name!r}",
+                at,
+            )
+        cov_type = coverage_columns[name]
+        if cov_type != schema_type:
+            raise Refusal(
+                "R003",
+                f"Coverage column {name!r} of {coverage_relation!r} has type {cov_type}, expected {schema_type}",
+                at,
+            )
+        binding.append((name, name))
+    return tuple(binding)
+
+
+def resolve_intermediate_invariants(
+    specs: list[tuple[str, Source, str, str]],
+    signatures: Mapping[str, Signature],
+) -> tuple[tuple[pack.IntermediateInvariant, ...], list[Diagnostic]]:
+    """Resolve and validate intermediate invariant coverage relations and key bindings."""
+    resolved: list[pack.IntermediateInvariant] = []
+    found: list[Diagnostic] = []
+    for relation, source, cov_ref, within_at in specs:
+        try:
+            coverage_relation, coverage_sig = signature_of(source, cov_ref, signatures, within_at)
+            key_binding = bind_intermediate_coverage(
+                relation, signatures[relation], coverage_relation, coverage_sig, within_at,
+            )
+            resolved.append(pack.IntermediateInvariant(relation, coverage_relation, key_binding))
+        except Refusal as error:
+            found.append(source.diagnose(error))
+    return tuple(resolved), found
+
+
 def link_modules(meta: dict, definitions: list[modules.Module], imported: dict[str, modules.Imported],
                  names: modules.Names, forms: Mapping[tuple[str, str], dict]) -> Linked:
     """Link native forms using the schema and import pins already read by pack compilation."""
@@ -488,11 +577,14 @@ def link_modules(meta: dict, definitions: list[modules.Module], imported: dict[s
 
     signatures: dict[str, Signature] = {}
     owners: dict[str, tuple[Source, str]] = {}
+    intermediate_specs: list[tuple[str, Source, str, str]] = []
     for source, at, declaration in rules:
         if "columns" not in declaration:
             continue
         rule = declaration["rule"]
         try:
+            if "args" in declaration:
+                raise Refusal("R048", "A rule head cannot have both columns and positional arguments", at)
             if "." in rule:
                 raise Refusal("R046", "Only the owning pack can declare a rule signature", at)
             if rule in owners:
@@ -501,11 +593,16 @@ def link_modules(meta: dict, definitions: list[modules.Module], imported: dict[s
                 errors.append(other.diagnose(Refusal("R040", message, pointer)))
                 raise Refusal("R040", message, at)
             key = columns(schema, source, declaration["columns"], f"{at}/columns")
-            extend = any(option.get("extend") is True for option in declaration.get("options", []))
+            extend, invariant, intermediate_within = read_head_options(source, at, declaration)
             owners[rule] = source, at
-            signatures[rule] = Signature(key, source.module, source.owner, source.path, extend)
+            signatures[rule] = Signature(key, source.module, source.owner, source.path, extend, invariant)
+            if intermediate_within is not None:
+                intermediate_specs.append((rule, source, *intermediate_within))
         except Refusal as error:
             errors.append(source.diagnose(error))
+
+    intermediate, intermediate_errors = resolve_intermediate_invariants(intermediate_specs, signatures)
+    errors.extend(intermediate_errors)
 
     clauses: dict[ClauseKey, LinkedClause] = {}
     for source, at, decl in rules:
@@ -528,7 +625,7 @@ def link_modules(meta: dict, definitions: list[modules.Module], imported: dict[s
     places = Places(definitions, forms)
     guards = {key: (source, decl["when"]) for source, at, decl in rules
               if (key := (source.owner, source.path, at)) in clauses}
-    return Linked(predicates(schema, signatures, clauses, guards, places, defined), clauses)
+    return Linked(predicates(schema, signatures, clauses, guards, places, defined), clauses, intermediate)
 
 
 class Places:
