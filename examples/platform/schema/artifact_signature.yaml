@@ -1,0 +1,23 @@
+id: https://rezono.org/examples/platform-core/artifact-signature
+name: platform_artifact_signature
+description: Observed artifact signatures and the verifier scans within which their absence is complete.
+in_language: en
+imports: [linkml:types, core]
+default_range: string
+annotations:
+  layer: observation
+
+classes:
+  ArtifactSignature:
+    description: A valid signature that a verifier's scan observed on an artifact.
+    annotations:
+      world: open
+    attributes:
+      id: {identifier: true}
+      artifact: {range: Artifact, required: true}
+      scan: {range: SignatureScan, required: true}
+  SignatureScan:
+    description: One verifier run over the artifacts it lists.
+    attributes:
+      id: {identifier: true}
+      covers: {range: Artifact, multivalued: true, required: true}

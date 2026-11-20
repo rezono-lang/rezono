@@ -322,13 +322,27 @@ def load_startup_topology(
     pack_dir: Path = PLATFORM_PACK,
 ) -> StartupTopology:
     """Evaluate the platform pack via rezono_compiler and derive the startup topology."""
-    model, program, needed_derived = _load_platform_pack(Path(pack_dir).resolve())
-    fact_rows = compiler_facts.load(model, Path(facts_path))
+    pack_root = Path(pack_dir).resolve()
+    facts_file = Path(facts_path)
+    model, program, needed_derived = _load_platform_pack(pack_root)
+    fact_rows = compiler_facts.load(model, facts_file)
+    sig_facts = pack_root / "facts" / "artifact_signature.yaml"
+    if (
+        sig_facts.is_file()
+        and facts_file.resolve() != sig_facts.resolve()
+        and not any(k in fact_rows for k in ("artifact_signature", "signature_scan"))
+    ):
+        for table, rows in compiler_facts.load(model, sig_facts).items():
+            fact_rows.setdefault(table, []).extend(rows)
     inputs = compiler_scenarios.rule_rows(model, program, fact_rows)
-    requested = (*TOPOLOGY_DERIVED_RELATIONS, *TOPOLOGY_BASE_RELATIONS)
+    base_requested = tuple(rel for rel in TOPOLOGY_BASE_RELATIONS if rel in program.relations)
+    requested = (*TOPOLOGY_DERIVED_RELATIONS, *base_requested)
     with compiler_batch.connect(program, inputs) as con:
         compiler_batch.compute(con, program, relations=needed_derived)
         relations = compiler_batch.read(con, program, requested)
+    for rel in TOPOLOGY_BASE_RELATIONS:
+        if rel not in relations:
+            relations[rel] = {tuple(map(str, row)) for row in fact_rows.get(rel, ())}
     return _select_topology_from_relations(relations)
 
 
