@@ -31,16 +31,6 @@ class MissingConverterConstruct(AssertionError):
     """scripts/convert_pack.py refused a supported LinkML construct used by a ready pack."""
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=MissingConverterConstruct,
-    reason="M3: decisions/language-first-packs.md: Extend scripts/convert_pack.py to convert close_mappings, "
-           "broad_mappings, class annotations (such as explain: fold), represents_relationship, unique_keys, "
-           "class rules (conditional checks), scalar types and path_equations so candidate() converts "
-           "packs/std-identity, packs/std-order, packs/std-part, packs/std-time, packs/std-decision and "
-           "examples/projects cleanly against their existing packs, while still refusing unknown mapping fields. "
-           "Read decisions/language-first-packs.md and compiler/tests/rezono/test_pack_converter.py.",
-)
 def test_pack_converter_converts_standard_pack_constructs(tmp_path):
     node = os.environ.get("REZONO_NODE", "node")
     for relative in PACKS:
