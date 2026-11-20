@@ -22,8 +22,9 @@ slots:
     description: >-
       Why the value has its state: a reason code, never free text. Core codes need no declaration
       (no_version_applies, versions_overlap, exception_conflict, no_row_applies, ambiguous_date,
-      empty, added_later); a pack declares its own. Absent when no reason is given: a writer omits
-      an empty reason. A known value carries none, except added_later (docs/semantics/values.md §2.3).
+      empty, no_value, no_match, multiple_values, added_later); a pack declares its own. Absent
+      when no reason is given: a writer omits an empty reason. A known value carries none, except
+      added_later (docs/semantics/values.md §2.3).
 
 enums:
   ValueState:

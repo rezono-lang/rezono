@@ -22,7 +22,8 @@ MAX_VIEWS = 64
 # and batch/rules.sql fails with the reason when it runs.
 BATCH_REFUSES = "batch_refuses_rules"
 # The kinds of view a pipeline holds; `base` is the build of a pipeline without views.
-VIEW_KINDS = ("base", "check", "seal", "relation", "witness", "outcome", "calc", "export")
+VIEW_KINDS = ("base", "check", "seal", "relation", "functional", "functional_aggregate",
+              "witness", "outcome", "calc", "export")
 # Patterns are matched with RLIKE(text, pattern), as in Feldera (Rust regex, search). DuckDB runs the same
 # SQL after this macro (RE2, search); regex.portable keeps patterns to the subset on which both agree.
 DUCKDB_FUNCTIONS = "CREATE OR REPLACE MACRO rlike(s, p) AS regexp_matches(s, p);\n"
@@ -239,7 +240,7 @@ class Cost:
                       "calc": len(calc_sql.relations(calc_prog)) if calc_prog else 0}
         if self.memory is None:
             self.part = self.whole = budget
-            self.relation, self.unit = None, "views"
+            self.relation, self.unit = (lambda n: rules_split.view_weight(self.prog, n)), "views"
             return
         c = self.memory.cost
         self.part = self.memory.build_mb - c("base") - c("export")
@@ -302,7 +303,7 @@ def namespace(pack: Pack, checks, prog=None, calc_prog=None) -> None:
     if calc_prog:
         names += [name for name, _, _ in calc_sql.relations(calc_prog)] + [calc_sql.AS_OF]
     if prog:
-        names += [n for n, r in prog.relations.items() if r.role == "derived"]
+        names += [n for n, r in prog.relations.items() if r.role in ("derived", "functional")]
         names += [ir.calc_input_table(n) for n, r in prog.relations.items() if r.role == "calc"]
         names += [r.witness_relation for r in prog.rules.values()] + [rules_split.EPOCH, rules_split.EXPORT]
         names += [v for n in prog.relations for v, _ in rules_sql.checks(prog, n)]
@@ -542,7 +543,7 @@ def variable_types(prog, rule) -> list[dict]:
     """The type of each variable of a rule: from the column it binds, or integer for a result."""
     typed = {}
     for x in (*rule.body, *rule.aggregates):
-        for t, c in zip(x.atom.terms, prog.relations[x.atom.relation].key):
+        for t, c in zip(x.atom.terms, prog.relations[x.atom.relation].row_columns):
             if ir.is_var(t):
                 typed.setdefault(t, c.type)
     for a in rule.aggregates:
@@ -569,8 +570,10 @@ def rule_body(prog, rule, order: tuple[str, ...] | None) -> tuple[dict, list[dic
     variable that variable's, and any other constant its own form's (rules.py)."""
     types = {v["name"]: v["type"] for v in variable_types(prog, rule)}
 
-    def atom(a):
-        return [rule_term(t, c.type) for t, c in zip(a.terms, prog.relations[a.relation].key)]
+    def atom(a, *, is_head=False):
+        rel = prog.relations[a.relation]
+        cols = rel.head_columns if is_head else rel.row_columns
+        return [rule_term(t, c.type) for t, c in zip(a.terms, cols)]
 
     def typed(t, beside=None):
         source = t if ir.is_var(t) else beside if beside is not None and ir.is_var(beside) else None
@@ -602,7 +605,7 @@ def rule_body(prog, rule, order: tuple[str, ...] | None) -> tuple[dict, list[dic
             if getattr(x, "compare_as", None):
                 lit["compare_as"] = x.compare_as
         body.append(lit)
-    return {"relation": rule.head.relation, "terms": atom(rule.head)}, body
+    return {"relation": rule.head.relation, "terms": atom(rule.head, is_head=True)}, body
 
 
 def bundle_checks(checks) -> list[dict]:

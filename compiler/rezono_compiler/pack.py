@@ -842,8 +842,9 @@ def read(pack_dir: str | Path) -> Pack:
                     raise CompileError(f"rules: a calculation input needs a numeric selection: {', '.join(sorted(invalid))}")
                 program = rule_ir.load(pack.rules)
                 _, after = program.partition_at_calc(used, calc_sql.derived_reads(calculation))
-                if "may_read" in after:
-                    raise CompileError("rules: may_read cannot depend on a calculation selection")
+                for access_rel in ("may_read", "may_read_full"):
+                    if access_rel in after:
+                        raise CompileError(f"rules: {access_rel} cannot depend on a calculation selection")
         except (CompileError, rule_ir.IRError) as e:
             errors.append(str(e))
             if isinstance(e, CompileError):

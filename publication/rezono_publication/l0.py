@@ -59,6 +59,9 @@ CORE_REASONS = {  # §2.3: always in scope, with the states each may label
     "no_row_applies": ("unknown",),
     "ambiguous_date": ("invalid",),
     "empty": ("not_applicable",),
+    "no_value": ("not_applicable", "unknown"),
+    "no_match": ("not_applicable", "unknown"),
+    "multiple_values": ("invalid",),
     "added_later": ("not_applicable", "unknown", "invalid"),
 }
 CORE_TYPES = {"Text", "Bool", "Integer", "Ratio", "Date", "DateTime", "Quantity", "Money", "Period", "Enum"}
