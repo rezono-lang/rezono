@@ -563,7 +563,7 @@ export function reader(checked: Pick<Checked, 'typed' | 'heads'>, schema: Schema
 		});
 	}
 
-	function aggregate(e: { agg: [string, Expr] | [string, Expr, Expr] }): V {
+	function aggregate(e: { agg: [string, Expr] | [string, Expr, Expr] | [string, Expr, Expr, string] }): V {
 		const [name, of, arg] = e.agg;
 		const base = ex(of);
 		const set = members(base);
@@ -941,12 +941,16 @@ export function tabulate(declared: Declared, data: Data, budget: { steps?: numbe
 		const read = reader(declared, schema, out, budget.steps, { note: (fact) => facts.push(fact), steps });
 		const ty: Ty = { t: 'ref', kind: table.kind };
 		const relation = relationOf(table.kind, table.slot);
-		const outputs = table.rows.map((row) => read.ex(row.value) as V & { s: 'known' });
+		const outputs: V[] = table.rows.map((row) => read.ex(row.value));
 		const outTy = slotType(schema, schema.kinds[table.kind].slots[table.slot]);
 		const outDt = isDateTime(schema, outTy);
-		const same = (i: number, j: number): boolean => order(outputs[i].v, outputs[j].v, outDt) === 0;
-		// `priority`: the place of a row's output in the order of the output enum.
-		const rank = (i: number): number => table.order!.indexOf(outputs[i].v as string);
+		const same = (i: number, j: number): boolean => sameValue(outputs[i], outputs[j], outDt);
+		// `priority`: the place of a known row's output in the order of the output enum.
+		const knownRank = (i: number): number => {
+			if (!table.order) return i;
+			const pos = table.order.indexOf((outputs[i] as { s: 'known'; v: unknown }).v as string);
+			return pos < 0 ? Number.POSITIVE_INFINITY : pos;
+		};
 		const cells = new Map<string, Cell>();
 		const rows = new Map<string, RowWitness[]>();
 		for (const id of idsOf(out, table.kind)) {
@@ -974,11 +978,21 @@ export function tabulate(declared: Declared, data: Data, budget: { steps?: numbe
 				value = worst(undecided.map((d) => d.v)) ?? { s: 'unknown', reason: NO_ROW_APPLIES, cause };
 				from = undecided;
 			} else if (table.policy === 'unique') value = applying.length > 1 ? { s: 'invalid', reason: EXCEPTION_CONFLICT, cause } : outputs[applying[0].i];
-			else {
-				// `first`: the first row that applies; `priority`: the one whose output comes first in the enum's
-				// order. An undecided row that would win if it applied, with another output, leaves the value undecided.
-				const r = table.policy === 'first' ? applying[0] : applying.reduce((best, d) => (rank(d.i) < rank(best.i) ? d : best));
-				const wins = undecided.filter((d) => (table.policy === 'first' ? d.i < r.i && !same(d.i, r.i) : rank(d.i) < rank(r.i)));
+			else if (table.policy === 'priority') {
+				// `priority`: among applying rows, non-known outputs propagate strictly (A.3) and known outputs win by
+				// enum order. An undecided row with a non-known output or a higher-priority known output leaves the value undecided.
+				const applyingNonKnown = applying.filter((d) => outputs[d.i].s !== 'known');
+				const applyingKnown = applying.filter((d) => outputs[d.i].s === 'known');
+				const r = applyingKnown.length ? applyingKnown.reduce((best, d) => (knownRank(d.i) < knownRank(best.i) ? d : best)) : undefined;
+				const pickedRank = r ? knownRank(r.i) : Number.POSITIVE_INFINITY;
+				const wins = undecided.filter((d) => outputs[d.i].s !== 'known' || knownRank(d.i) < pickedRank);
+				const issues: V[] = [...applyingNonKnown.map((d) => outputs[d.i]), ...wins.map((d) => d.v)];
+				value = issues.length ? worst(issues)! : outputs[r!.i];
+				from = issues.length ? [...applyingNonKnown, ...wins].sort((a, b) => a.i - b.i) : [r!];
+			} else {
+				// `first`: the first row that applies. An undecided row above it with another output leaves the value undecided.
+				const r = applying[0];
+				const wins = undecided.filter((d) => d.i < r.i && !same(d.i, r.i));
 				value = wins.length ? worst(wins.map((d) => d.v))! : outputs[r.i];
 				from = wins.length ? wins : [r];
 			}

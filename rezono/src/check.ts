@@ -101,10 +101,12 @@ interface Level {
 	ty: Ty;
 	/** Where its values are read from, as the first part of their path. */
 	at: string;
-	/** The name of the question's row; absent for an element. */
+	/** The name of the question's row, a derivation parameter, or an explicit method binder; absent for implicit `it`. */
 	binder?: string;
 	/** When true, only the binder name itself is in scope (not its slots as bare names). */
 	paramOnly?: boolean;
+	/** When true, this scope was opened by an explicit method binder (`S.any(x: ...)`): bare slots yield to outer variables. */
+	methodBinder?: true;
 	/** Named columns when ranging over a relation tuple set. */
 	fields?: Record<string, SlotDef>;
 }
@@ -223,7 +225,10 @@ export function typing(text: string, schema: Schema, spans: WeakMap<object, Span
 	const slotsOfLevel = (l: Level) => (l.paramOnly ? {} : (l.fields ?? slotsOf(l.ty)));
 	/** Formats a collection receiver expression in rezono 1 `.where(...)` spelling for R028 hints. */
 	function formatCollectionBase(e: Expr): string {
-		if ('filter' in e) return `${formatCollectionBase(e.filter[0])}.where(${printExpr(e.filter[1])})`;
+		if ('filter' in e) {
+			const [set, cond, binder] = e.filter;
+			return `${formatCollectionBase(set)}.where(${binder ? `${binder}: ` : ''}${printExpr(cond)})`;
+		}
 		return printExpr(e);
 	}
 	/** Prefixes bare paths inside an aggregate argument when rewriting `S.p.agg(q)` to `S.agg(p.q)`. */
@@ -454,7 +459,7 @@ export function typing(text: string, schema: Schema, spans: WeakMap<object, Span
 				if (inner.fields) tupleFields.set(row, inner.fields);
 				return [row, inner.at];
 			}
-			const row = levels[0]?.binder;
+			const row = inner?.binder ?? levels[0]?.binder;
 			return [report('R001', within(node, name, 'start'), [name], row ? { hint: { id: 'hint.row', args: [row] } } : {}), ''];
 		}
 		const hits: (() => [Typed, string])[] = [];
@@ -469,12 +474,17 @@ export function typing(text: string, schema: Schema, spans: WeakMap<object, Span
 				});
 			}
 			if (slotsOfLevel(l)[name]) {
-				hits.push(() => {
-					heads.set(node, { as: 'slot', level });
-					const row = value(l.ty);
-					if (l.fields) tupleFields.set(row, l.fields);
-					return step(row, l.at, name, node);
-				});
+				const shadowedByOuterVar =
+					l.methodBinder &&
+					(levels.slice(0, level).some((outer) => outer.binder === name) || schema.params?.[name] !== undefined);
+				if (!shadowedByOuterVar) {
+					hits.push(() => {
+						heads.set(node, { as: 'slot', level });
+						const row = value(l.ty);
+						if (l.fields) tupleFields.set(row, l.fields);
+						return step(row, l.at, name, node);
+					});
+				}
 			}
 		}
 		const param = schema.params?.[name];
@@ -519,9 +529,13 @@ export function typing(text: string, schema: Schema, spans: WeakMap<object, Span
 		const [first, ...rest] = e.path;
 		let at = head(first, e, rest.length === 0);
 		if (!at) {
+			const isName = grammar.match(first, 'name').succeeded();
+			const suggest = isName ? suggestions(first) : [];
+			// In rezono 1, an unbound bare name appearing as the receiver of a path (e.g. `za.outside`)
+			// is always R001 and never inferred as an element ID from slot names.
+			if (options?.rezono1 && isName) return report('R001', within(e, first, 'start'), [first], suggest.length ? { suggest } : {});
 			// `host-b.owner`: an id and its slots. Its kind is the one kind that has them.
 			const kinds = kindsWith(rest);
-			const suggest = grammar.match(first, 'name').succeeded() ? suggestions(first) : [];
 			if (suggest.length || !kinds.length) return report('R001', within(e, first, 'start'), [first], suggest.length ? { suggest } : {});
 			if (kinds.length > 1) return report('R002', within(e, first, 'start'), [first]);
 			resolve[first] = kinds[0];
@@ -557,10 +571,31 @@ export function typing(text: string, schema: Schema, spans: WeakMap<object, Span
 			for (let i = 0; i < bindings.length; i++) levels.pop();
 		}
 	}
+	/** The span of an explicit method binder `<name>:` inside `S.method(name: expr)`. */
+	function binderSpan(node: object, base: Expr, binder: string): Span {
+		const span = spanOf(node);
+		const baseEnd = spanOf(base).end;
+		const afterBase = Math.max(0, baseEnd - span.start);
+		const tail = [...span.text].slice(afterBase).join('');
+		const m = /\(\s*([a-z][a-z0-9_]*)\s*:/.exec(tail);
+		if (!m || m[1] !== binder) return within(node, binder, 'start');
+		const offsetInTail = m.index + m[0].indexOf(binder);
+		const start = span.start + afterBase + [...tail.slice(0, offsetInTail)].length;
+		return { text: binder, start, end: start + [...binder].length };
+	}
 	/** The scope of an element: inside an aggregate, a quantifier or a filter (§5 rule 2). */
-	function inside<T>(element: Typed, body: () => T): T {
+	function inside<T>(element: Typed, body: () => T, binder?: string, bSpan?: Span): T {
+		if (binder !== undefined) {
+			const duplicate = levels.some((l) => l.binder === binder || (binder === 'it' && !l.binder));
+			if (duplicate) report('R011', bSpan ?? { text: binder, start: 0, end: binder.length }, [binder]);
+		}
 		const fields = tupleFields.get(element);
-		levels.push({ ty: element.ty, at: `~${levels.length}`, ...(fields ? { fields } : {}) });
+		levels.push({
+			ty: element.ty,
+			at: `~${levels.length}`,
+			...(binder !== undefined ? { binder, methodBinder: true as const } : {}),
+			...(fields ? { fields } : {}),
+		});
 		try {
 			return body();
 		} finally {
@@ -609,7 +644,7 @@ export function typing(text: string, schema: Schema, spans: WeakMap<object, Span
 		}
 		if ('timesel' in e) return ex(e.timesel[0]);
 		if ('agg' in e) {
-			const [name, of, arg] = e.agg;
+			const [name, of, arg, binder] = e.agg;
 			projectionContext = options?.rezono1 ? { kind: 'agg', name, arg } : undefined;
 			let base: Typed;
 			try {
@@ -622,8 +657,9 @@ export function typing(text: string, schema: Schema, spans: WeakMap<object, Span
 			const baseFields = tupleFields.get(base);
 			const element = { ...base, set: false };
 			if (baseFields) tupleFields.set(element, baseFields);
+			const bSpan = binder !== undefined ? binderSpan(e, of, binder) : undefined;
 			if (name === 'one') {
-				const over = arg === undefined ? element : inside(element, () => settled(arg));
+				const over = arg === undefined ? element : inside(element, () => settled(arg), binder, bSpan);
 				if (over.set) return report('R005', spanOf(arg ?? e), []);
 				const v = value(over.ty, arg === undefined ? [base] : [base, over]);
 				v.states.add('unknown');
@@ -634,7 +670,7 @@ export function typing(text: string, schema: Schema, spans: WeakMap<object, Span
 				return v;
 			}
 			if (AGGREGATES.has(name)) {
-				const over = arg === undefined ? element : inside(element, () => (name === 'count' ? truth(arg) : settled(arg)));
+				const over = arg === undefined ? element : inside(element, () => (name === 'count' ? truth(arg) : settled(arg)), binder, bSpan);
 				if (over.set) return report('R005', spanOf(arg ?? e), []);
 				const v = value(name === 'count' ? { t: 'num', dim: {} } : over.ty, [base, over]);
 				if (name === 'sum' && over.ty.t !== 'num' && over.ty.t !== 'err' && over.ty.t !== 'state') return report('R003', spanOf(arg ?? e), [name, describe(over.ty)]);
@@ -648,20 +684,22 @@ export function typing(text: string, schema: Schema, spans: WeakMap<object, Span
 				v.sure = new Set();
 				return v;
 			}
-			const over = arg === undefined ? undefined : inside(element, () => truth(arg));
+			const over = arg === undefined ? undefined : inside(element, () => truth(arg), binder, bSpan);
 			const v = value({ t: 'bool' }, over ? [base, over] : [base]);
 			if (name !== 'any') closed(v, e, true);
 			v.sure = new Set();
 			return v;
 		}
 		if ('filter' in e) {
-			const base = settled(e.filter[0]);
+			const [of, pred, binder] = e.filter;
+			const base = settled(of);
 			if (base.ty.t === 'err') return value({ t: 'err' });
 			if (!base.set && base.ty.t !== 'state') return report('R003', spanOf(e), ['where', describe(base.ty)]);
 			const baseFields = tupleFields.get(base);
 			const element = { ...base, set: false };
 			if (baseFields) tupleFields.set(element, baseFields);
-			const cond = inside(element, () => truth(e.filter[1]));
+			const bSpan = binder !== undefined ? binderSpan(e, of, binder) : undefined;
+			const cond = inside(element, () => truth(pred), binder, bSpan);
 			const v = value(base.ty, [base, cond], true);
 			if (baseFields) tupleFields.set(v, baseFields);
 			v.sure = new Set();

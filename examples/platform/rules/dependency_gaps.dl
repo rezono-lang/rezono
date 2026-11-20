@@ -3,11 +3,11 @@
 .decl withdrawn_cluster(cluster: symbol)
 withdrawn_cluster(c) :- cluster_withdrawal__cluster(_, c).
 
-.decl cluster_domain(cluster: symbol, domain: symbol)
-cluster_domain(c, d) :- failure_domain_membership__cluster(m, c), failure_domain_membership__domain(m, d).
+.decl failure_domain(cluster: symbol, domain: symbol)
+failure_domain(c, d) :- failure_domain_membership__cluster(m, c), failure_domain_membership__domain(m, d).
 
 .decl has_domain(cluster: symbol)
-has_domain(c) :- cluster_domain(c, _).
+has_domain(c) :- failure_domain(c, _).
 
 .decl function_covered(function: symbol)
 function_covered(f) :- function_inventory_receipt__function(_, f).
@@ -26,8 +26,8 @@ surviving_placement(p, c) :- cluster_service_placement(p, c), !withdrawn_cluster
 
 .decl shares_withdrawn_domain(provider: symbol, cluster: symbol)
 shares_withdrawn_domain(p, alt) :-
-    surviving_placement(p, alt), cluster_domain(alt, d),
-    provider_withdrawn_placement(p, w), cluster_domain(w, d).
+    surviving_placement(p, alt), failure_domain(alt, d),
+    provider_withdrawn_placement(p, w), failure_domain(w, d).
 
 .decl missing_pair_domain(provider: symbol, cluster: symbol)
 missing_pair_domain(p, alt) :- surviving_placement(p, alt), !has_domain(alt).

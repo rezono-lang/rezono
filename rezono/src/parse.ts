@@ -192,12 +192,18 @@ semantics.addOperation<unknown>('tree', {
 	TimeAt: (_at, atom) => atom.tree(),
 	TimeKnown: (_as, _known, atom) => atom.tree(),
 	Filter: (_where, e) => e.tree(),
-	Dotted_where(base, _dot, _where, _open, cond, _close) {
-		return placed(this, { filter: [base.tree(), cond.tree()] } as Expr);
+	Dotted_where(base, _dot, _where, _open, arg, _close) {
+		const [cond, binder] = arg.tree() as [Expr, string | undefined];
+		return placed(this, { filter: binder === undefined ? [base.tree(), cond] : [base.tree(), cond, binder] } as Expr);
 	},
 	Dotted_agg(base, _dot, agg) {
-		const [name, ...arg] = agg.tree() as [string, ...Expr[]];
-		return placed(this, { agg: [name, base.tree(), ...arg] } as Expr);
+		const [name, expr, binder] = agg.tree() as [string, Expr | undefined, string | undefined];
+		return placed(
+			this,
+			{
+				agg: expr === undefined ? [name, base.tree()] : binder === undefined ? [name, base.tree(), expr] : [name, base.tree(), expr, binder]
+			} as Expr
+		);
 	},
 	Dotted_name(base, _dot, name) {
 		const b = base.tree() as Expr;
@@ -206,7 +212,12 @@ semantics.addOperation<unknown>('tree', {
 		return placed(this, { dot: [b, readRuleName(name)] } as Expr);
 	},
 	Agg(name, _open, arg, _close) {
-		return [name.sourceString, ...arg.children.map((a) => a.tree())];
+		if (!arg.numChildren) return [name.sourceString];
+		const [expr, binder] = arg.child(0).tree() as [Expr, string | undefined];
+		return binder === undefined ? [name.sourceString, expr] : [name.sourceString, expr, binder];
+	},
+	AggArg(binder, _colon, expr) {
+		return [expr.tree(), binder.numChildren ? binder.child(0).sourceString : undefined];
 	},
 	Atom(e) {
 		const text = e.sourceString;

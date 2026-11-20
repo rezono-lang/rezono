@@ -36,12 +36,6 @@ def tokens(state, relation, run, token):
     return {row for row in of_run(state, relation, run) if row[1] == token}
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError, reason=(
-    "M2: decisions/standard-packs-everywhere.md, section 2. Express the platform's safe steps through std-loop: "
-    "the kinds of schema/safe_step.yaml map onto LoopSweepReceipt, LoopStep with LoopRequirement, "
-    "LoopObservation with LoopExpectation, and the scoped completeness receipt, and the verdicts are std-loop's "
-    "known, current, waiting, unblocked and done. Remove rules/safe_step.dl and schema/safe_step.yaml. "
-    "Keep restore_offline.dl until a planner retires restore_offline_result after this test is green."))
 def test_startup_transition_cases():
     assert not (ROOT / "rules" / "safe_step.dl").exists(), "rules/safe_step.dl rebuilds std-loop's step safety"
     assert not (ROOT / "schema" / "safe_step.yaml").exists(), "schema/safe_step.yaml rebuilds std-loop's inputs"

@@ -4,9 +4,13 @@ a kind without a `world` member is a kind whose text has no world line, because 
 The expected worlds are read from the lowered LinkML schema, as test_lower_open_world.py reads them."""
 
 import json
+from pathlib import Path
+import shutil
 
 import pytest
-from rezono_compiler import rezono_module
+import yaml
+from rezono_compiler import pack, rezono_module
+from support import FIXTURE
 
 
 def kind(name, *slots, **properties):
@@ -98,3 +102,84 @@ def test_rezono_1_observed_kind_needs_open_world(tmp_path):
         problems.append({"facts layer": classes.get("Reading"), "errors": errors})
     if problems:
         raise MissingObservationGuard(json.dumps(problems, indent=2, default=str))
+
+
+def _write_v1_module(directory: Path, stem: str, decls: list[dict], *, layer: str) -> dict:
+    folder = directory / "rezono"
+    folder.mkdir(exist_ok=True)
+    module = {"rezono": "1", "pack": "minimal", "use": [], "decls": decls}
+    spans = [{"at": at, "line": "1", "start": "0", "end": "1"} for at in rezono_module.place_pointers(module)]
+    form = {"format": rezono_module.REZONO_1_FORMAT, "module": module, "spans": spans}
+    mod_path = folder / f"{stem}.rezono"
+    form_path = folder / f"{stem}.json"
+    mod_path.write_text("rezono 1\npack minimal\n", encoding="utf-8", newline="\n")
+    form_path.write_text(json.dumps(form, sort_keys=True, separators=(",", ":")), encoding="utf-8")
+    return {"module": f"rezono/{mod_path.name}", "form": f"rezono/{form_path.name}", "layer": layer}
+
+
+def _make_v1_pack(target: Path, modules: list[tuple[str, list[dict], str]]) -> Path:
+    pack_dir = Path(shutil.copytree(FIXTURE, target))
+    entries = [_write_v1_module(pack_dir, stem, decls, layer=layer) for stem, decls, layer in modules]
+    meta_path = pack_dir / "pack.yaml"
+    meta = yaml.safe_load(meta_path.read_text(encoding="utf-8"))
+    meta["rezono"] = entries
+    meta_path.write_text(yaml.safe_dump(meta, sort_keys=False), encoding="utf-8", newline="\n")
+    return pack_dir
+
+
+def test_rezono_1_observed_subkind_with_closed_parent_refused_with_r051(tmp_path):
+    # A rezono 1 subkind in layer: observation inheriting from a closed kind in layer: facts must be refused with R051.
+    closed_parent_pack = _make_v1_pack(
+        tmp_path / "closed_parent_obs_subkind",
+        [
+            ("facts_mod", [kind("Record", slot("label", "Text"))], "facts"),
+            ("obs_mod", [kind("ObservedRecord", slot("reading", "Text"), parent="Record")], "observation"),
+        ],
+    )
+    with pytest.raises(pack.CompileError) as exc_info:
+        pack.read(closed_parent_pack)
+    message = str(exc_info.value)
+    assert "R051" in message and "ObservedRecord" in message, message
+
+    # Counter-case: a rezono 1 subkind in layer: observation whose root kind is world open inherits world open and compiles.
+    open_parent_pack = _make_v1_pack(
+        tmp_path / "open_parent_obs_subkind",
+        [
+            ("facts_mod", [kind("OpenRecord", slot("label", "Text"), world="open")], "facts"),
+            ("obs_mod", [kind("ObservedOpenRecord", slot("reading", "Text"), parent="OpenRecord")], "observation"),
+        ],
+    )
+    compiled = pack.read(open_parent_pack)
+    assert compiled.kinds["observed_open_record"].world == "open"
+
+
+def test_rezono_1_subkind_explicit_world_refused(tmp_path):
+    # Explicit `world closed` on a rezono 1 subkind under an open parent must be refused, not silently ignored.
+    decls_closed_under_open = [
+        kind("OpenParent", slot("name", "Text"), world="open"),
+        kind("ClosedChild", slot("extra", "Text"), parent="OpenParent", world="closed"),
+    ]
+    classes, errors = lowered(tmp_path / "closed_under_open", decls_closed_under_open, version="1")
+    assert "ClosedChild" not in classes and any("parent" in error and "world" in error for error in errors), (
+        classes, errors,
+    )
+
+    # Explicit `world closed` on a rezono 1 subkind under a closed parent is also refused.
+    decls_closed_under_closed = [
+        kind("ClosedParent", slot("name", "Text")),
+        kind("RedundantChild", slot("extra", "Text"), parent="ClosedParent", world="closed"),
+    ]
+    classes, errors = lowered(tmp_path / "closed_under_closed", decls_closed_under_closed, version="1")
+    assert "RedundantChild" not in classes and any("parent" in error and "world" in error for error in errors), (
+        classes, errors,
+    )
+
+    # Counter-case: a rezono 1 subkind without an explicit world clause lowers cleanly.
+    decls_valid = [
+        kind("OpenParent", slot("name", "Text"), world="open"),
+        kind("ValidChild", slot("extra", "Text"), parent="OpenParent"),
+    ]
+    classes, errors = lowered(tmp_path / "valid_subkind", decls_valid, version="1")
+    assert not errors and "ValidChild" in classes and classes["ValidChild"].get("is_a") == "OpenParent", (
+        classes, errors,
+    )

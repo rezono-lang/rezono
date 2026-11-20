@@ -17,8 +17,8 @@ export type Expr =
 	| Path
 	| { dot: [Expr, string] }
 	| { kind: string }
-	| { agg: [string, Expr] | [string, Expr, Expr] }
-	| { filter: [Expr, Expr] }
+	| { agg: [string, Expr] | [string, Expr, Expr] | [string, Expr, Expr, string] }
+	| { filter: [Expr, Expr] | [Expr, Expr, string] }
 	| { cmp: [string, Expr, Expr] }
 	| { in: [Expr, Expr] }
 	| { is: [Expr, State] }

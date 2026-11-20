@@ -116,10 +116,10 @@ def resolve_effect_operation(
     visible: Iterable[str],
     operation: str,
     where: str,
-) -> tuple[str, str]:
-    """Resolve an authored effect operation name to a unique visible effect port's `apply` operation."""
+) -> tuple[str, str, str]:
+    """Resolve an authored effect operation name to a unique visible effect port's owner, name, and `apply` operation."""
     matches = [
-        port for p in visible for port in ports_by_pack.get(p, {}).values()
+        (p, port) for p in visible for port in ports_by_pack.get(p, {}).values()
         if port["kind"] == "effect" and port["effect"]["apply"] == operation
     ]
     if not matches:
@@ -129,13 +129,14 @@ def resolve_effect_operation(
             "R046",
         )
     if len(matches) > 1:
-        names = ", ".join(sorted(m["name"] for m in matches))
+        names = ", ".join(sorted(m["name"] for _, m in matches))
         raise _compile_error(
             f"{where}: ambiguous effect operation {operation!r} across ports: {names}",
             where,
             "R046",
         )
-    return matches[0]["name"], operation
+    port_owner, port = matches[0]
+    return port_owner, port["name"], operation
 
 
 def _all_model_slots(pack_kinds: Mapping[str, pack.Kind], kind_name: str) -> list[pack.Slot]:
@@ -150,8 +151,20 @@ def _all_model_slots(pack_kinds: Mapping[str, pack.Kind], kind_name: str) -> lis
     return sorted(out, key=lambda s: s.name)
 
 
+def _model_slot(pack_kinds: Mapping[str, pack.Kind], kind_name: str, slot_name: str) -> pack.Slot | None:
+    cur: str | None = kind_name
+    while cur:
+        k = pack_kinds.get(cur)
+        if k is None:
+            break
+        if slot_name in k.slots:
+            return k.slots[slot_name]
+        cur = k.parent
+    return None
+
+
 def _kind_has_slot(pack_kinds: Mapping[str, pack.Kind], kind_name: str, slot_name: str) -> bool:
-    return any(s.name == slot_name for s in _all_model_slots(pack_kinds, kind_name))
+    return _model_slot(pack_kinds, kind_name, slot_name) is not None
 
 
 def _nonempty_str(value: object) -> bool:
@@ -260,7 +273,7 @@ def parse_safe_steps(
                 raise _compile_error(f"{at}.operation: must be a nonempty operation name", at)
             if operation in atomic_effects:
                 raise _compile_error(f"{at}: duplicate atomic_effects binding for {operation!r}", at)
-            port_name, _ = resolve_effect_operation(ports_by_pack, visible, operation, at)
+            _, port_name, _ = resolve_effect_operation(ports_by_pack, visible, operation, at)
             if not _nonempty_str(boundary):
                 raise _compile_error(f"{at}.boundary: must be a nonempty boundary name", at)
             if (not isinstance(evidence, dict) or set(evidence) != {"relation", "key"}
@@ -565,6 +578,9 @@ def _lower_change(
         return change, postconditions
 
     # retract_slot
+    model_slot = _model_slot(pack_kinds, resolved_kind, slot_name)
+    if model_slot is not None and model_slot.required:
+        raise Refusal("R049", f"Cannot retract required slot {resolved_kind}.{slot_name}", body_at)
     change = pack.StepChange(op="unset", kind=resolved_kind, key=key_op, slot=slot_name)
     postconditions = [
         pack.StepPostcondition(
@@ -654,7 +670,7 @@ def lower_steps(
                 raise Refusal("R048", "Step effect requires an operation name and one or more changes", effect_at)
             op_name = effect_node["operation"]
             try:
-                port_name, apply_name = resolve_effect_operation(
+                port_owner, port_name, apply_name = resolve_effect_operation(
                     ports_by_pack, visible, op_name, f"{source.file}#{effect_at}",
                 )
             except pack.CompileError as error:
@@ -662,6 +678,8 @@ def lower_steps(
 
             raw_changes = decl["effect"]["changes"]
             atomic_binding = owner_bindings.atomic_effects.get(apply_name)
+            if atomic_binding is None and port_owner in bindings_by_pack:
+                atomic_binding = bindings_by_pack[port_owner].atomic_effects.get(apply_name)
             if len(raw_changes) > 1 and atomic_binding is None:
                 raise Refusal(
                     "R049",

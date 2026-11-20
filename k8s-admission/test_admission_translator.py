@@ -1,5 +1,7 @@
 """Regression tests for soundness guards in admission_translator."""
 
+import re
+
 import pytest
 
 from admission_translator import _request_root_expression, translate
@@ -336,3 +338,43 @@ def test_reference_policies_translate_cleanly():
         assert policy["metadata"]["name"].startswith(f"{rule_name}.")
         assert len(policy["spec"]["variables"]) == 1
         assert len(policy["spec"]["validations"]) == 3
+
+
+def test_reference_policies_use_struct_field_access_for_openapi_typechecking():
+    """Translated policies must satisfy Kubernetes OpenAPI CEL static type-checking."""
+    struct_subscript = re.compile(r'(?<=[A-Za-z0-9_)\]])\["[A-Za-z_][A-Za-z0-9_]*"\]')
+    struct_in = re.compile(r'"[A-Za-z_][A-Za-z0-9_]*" in ')
+    unwrapped_struct_map_check = re.compile(r"\btype\(v\d+\)\s*!=\s*map\b")
+    unwrapped_struct_all = re.compile(r"!v\d+\.all\(")
+
+    for rule_name in ("verified-supply", "in-zone-flow"):
+        prog = load_program(f"{rule_name}.rules.yaml")
+        binding = fixture(f"{rule_name}.binding.yaml")
+        policy = translate(prog, binding, DIGEST)
+        expressions = [
+            *(var["expression"] for var in policy["spec"]["variables"]),
+            *(val["expression"] for val in policy["spec"]["validations"]),
+        ]
+        for expr in expressions:
+            assert struct_subscript.search(expr) is None, (rule_name, expr)
+            assert struct_in.search(expr) is None, (rule_name, expr)
+            assert "type(dyn(object)) == map" not in expr, (rule_name, expr)
+            assert "type(dyn(object.spec)) == map" not in expr, (rule_name, expr)
+            assert unwrapped_struct_map_check.search(expr) is None, (rule_name, expr)
+            assert unwrapped_struct_all.search(expr) is None, (rule_name, expr)
+
+        missing_expr = policy["spec"]["variables"][0]["expression"]
+        violation_expr = policy["spec"]["validations"][2]["expression"]
+        assert "has(request.namespace)" in missing_expr
+        if rule_name == "verified-supply":
+            assert "has(object.spec) && has(object.spec.containers)" in missing_expr
+            assert "object.spec.containers.all(" in violation_expr
+            assert '"app.kubernetes.io/name" in object.metadata.labels' in missing_expr
+            assert 'object.metadata.labels["app.kubernetes.io/name"]' in violation_expr
+        else:
+            assert "has(object.spec) && has(object.spec.ingress)" in missing_expr
+            assert "!dyn(v0).all(" in missing_expr
+            assert '"rezono.org/service" in object.spec.podSelector.matchLabels' in missing_expr
+            # HomogeneousAggregateLiterals requires uniform value types across mixed string/int map entries.
+            assert '"source": dyn(x.source)' in violation_expr
+            assert '"port": dyn(x.port)' in violation_expr

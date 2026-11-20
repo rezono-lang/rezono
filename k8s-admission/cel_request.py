@@ -4,8 +4,16 @@ See decisions/k8s-admission-translator.md, "The binding" and "Request sources".
 """
 
 import itertools
+import re
 
 from cel_literal import literal
+
+_CEL_IDENT = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
+_CEL_KEYWORDS = frozenset({"true", "false", "null", "in"})
+
+
+def _is_cel_field(key):
+    return isinstance(key, str) and _CEL_IDENT.fullmatch(key) is not None and key not in _CEL_KEYWORDS
 
 
 def _is_default_valid(value, ctype):
@@ -26,14 +34,17 @@ def _path_parts(env, path):
     root, *keys = path
     if root not in env:
         raise ValueError(f"unknown path root: {root!r}")
-    curr, known_map = env[root]
+    curr = env[root]
     checks = []
-    for index, key in enumerate(keys):
-        key_lit = literal(key, "string")
-        if index > 0 or not known_map:
+    for key in keys:
+        if _is_cel_field(key):
+            checks.append(f"has({curr}.{key})")
+            curr = f"{curr}.{key}"
+        else:
+            key_lit = literal(key, "string")
             checks.append(f"type(dyn({curr})) == map")
-        checks.append(f"{key_lit} in {curr}")
-        curr = f"{curr}[{key_lit}]"
+            checks.append(f"{key_lit} in {curr}")
+            curr = f"{curr}[{key_lit}]"
     return " && ".join(checks), curr
 
 
@@ -49,11 +60,11 @@ def _scalar_parts(spec, ctype, env):
     if "default" in spec and _is_default_valid(spec["default"], ctype):
         default_raw = str(spec["default"]) if ctype == "integer" else spec["default"]
         default_lit = literal(default_raw, ctype)
-        ok = f"(!({present}) || type({val}) == {cel_type})"
+        ok = f"(!({present}) || type(dyn({val})) == {cel_type})"
         expr = f"(({present}) ? {cel_type}({val}) : {default_lit})"
         return ok, expr
 
-    ok = f"({present}) && type({val}) == {cel_type}"
+    ok = f"({present}) && type(dyn({val})) == {cel_type}"
     expr = f"{cel_type}({val})"
     return ok, expr
 
@@ -64,7 +75,7 @@ def _port_range_parts(spec, ctype, env):
     start_ok, start_cel = _scalar_parts(spec, "integer", env)
     if "end" in spec:
         end_present, end_val = _path_parts(env, spec["end"])
-        end_ok = f"(!({end_present}) || type({end_val}) == int)"
+        end_ok = f"(!({end_present}) || type(dyn({end_val})) == int)"
         end_cel = f"(({end_present}) ? int({end_val}) : {start_cel})"
         ok = f"{start_ok} && {end_ok} && 1 <= {start_cel} && {start_cel} <= {end_cel} && {end_cel} <= 65535"
     else:
@@ -97,17 +108,17 @@ def _source_missing(source, program, env, iterators, counter):
 
     it, rest = iterators[0], iterators[1:]
     present, val = _path_parts(env, it["path"])
-    list_checks = [f"type({val}) != list"]
+    list_checks = [f"type(dyn({val})) != list"]
     if it.get("nonempty"):
         list_checks.append(f"size({val}) == 0")
 
     var = f"v{next(counter)}"
-    elem_checks = [f"type({var}) != map"]
+    elem_checks = [f"type(dyn({var})) != map"]
     if "closed" in it:
         closed_list = "[" + ", ".join(literal(key, "string") for key in it["closed"]) + "]"
         key_var = f"k{next(counter)}"
-        elem_checks.append(f"!{var}.all({key_var}, {key_var} in {closed_list})")
-    rest_missing = _source_missing(source, program, {**env, it["name"]: (var, True)}, rest, counter)
+        elem_checks.append(f"!dyn({var}).all({key_var}, {key_var} in {closed_list})")
+    rest_missing = _source_missing(source, program, {**env, it["name"]: var}, rest, counter)
     elem_checks.append(f"({rest_missing})")
 
     list_checks.append(f"{val}.exists({var}, {' || '.join(elem_checks)})")
@@ -129,7 +140,7 @@ def _source_quantify(source, program, env, iterators, body, counter):
     it, rest = iterators[0], iterators[1:]
     present, val = _path_parts(env, it["path"])
     var = f"v{next(counter)}"
-    rest_cel = _source_quantify(source, program, {**env, it["name"]: (var, True)}, rest, body, counter)
+    rest_cel = _source_quantify(source, program, {**env, it["name"]: var}, rest, body, counter)
     all_expr = f"{val}.all({var}, {rest_cel})"
     if it.get("optional"):
         return f"(!({present}) || {all_expr})"
@@ -138,7 +149,7 @@ def _source_quantify(source, program, env, iterators, body, counter):
 
 def missing(binding, program, roots):
     """Return CEL that holds when the incoming object has missing or unsupported input."""
-    env = {name: (expr, False) for name, expr in roots.items()}
+    env = dict(roots)
     counter = itertools.count()
     parts = [_source_missing(source, program, env, source["each"], counter) for source in binding["request"]]
     if not parts:
@@ -148,7 +159,7 @@ def missing(binding, program, roots):
 
 def quantify(binding, program, roots, body):
     """Return CEL that holds when `body(relation, columns)` holds for every row of every source."""
-    env = {name: (expr, False) for name, expr in roots.items()}
+    env = dict(roots)
     counter = itertools.count()
     parts = [_source_quantify(source, program, env, source["each"], body, counter) for source in binding["request"]]
     if not parts:
