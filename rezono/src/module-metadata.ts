@@ -74,9 +74,14 @@ export function printMetadata(target: Metadata): string[] {
 export function readSchema(target: SchemaMetadata, line: Logical, build: Build): void {
 	target.schema = line.read!.name as string;
 	build.spans.set(target, build.spans.get(line.read!)!);
-	const warnDefault = (entry: Logical) => {
+	const reportDefault = (entry: Logical) => {
 		const span = build.spans.get(entry.read!);
-		if (span) build.later.push({ code: 'W107', span, args: [span.text], hint: { id: 'hint.leave_out', args: [] } });
+		if (!span) return;
+		if (build.version === '1') {
+			build.removed(entry, span.text, span, { id: 'hint.leave_out', args: [] });
+		} else {
+			build.later.push({ code: 'W107', span, args: [span.text], hint: { id: 'hint.leave_out', args: [] } });
+		}
 	};
 	let soleImport: Logical | undefined;
 	let importCount = 0;
@@ -85,7 +90,7 @@ export function readSchema(target: SchemaMetadata, line: Logical, build: Build):
 		if (readMetadataLine(target, child, build)) {
 			const { line: field, name } = child.read!;
 			if (!hadLayer && field === 'annotation' && name === 'layer' && typeof target.annotations?.layer === 'string') {
-				warnDefault(child);
+				reportDefault(child);
 			}
 			continue;
 		}
@@ -99,7 +104,11 @@ export function readSchema(target: SchemaMetadata, line: Logical, build: Build):
 		else if (field === 'import') {
 			(target.imports ??= []).push(value);
 			importCount++;
-			soleImport = importCount === 1 && value === 'linkml:types' ? child : undefined;
+			if (build.version === '1') {
+				if (value === 'linkml:types') reportDefault(child);
+			} else {
+				soleImport = importCount === 1 && value === 'linkml:types' ? child : undefined;
+			}
 		} else if (field === 'prefix') {
 			const prefixes = target.prefixes ??= {};
 			if (Object.hasOwn(prefixes, name as string)) build.refuse(child, 'one prefix per name');
@@ -107,10 +116,10 @@ export function readSchema(target: SchemaMetadata, line: Logical, build: Build):
 		} else if (target[field] !== undefined) build.refuse(child, 'one value for this schema field');
 		else {
 			target[field] = value;
-			if (field === 'defaultRange' && value === 'Text') warnDefault(child);
+			if (field === 'defaultRange' && value === 'Text') reportDefault(child);
 		}
 	}
-	if (soleImport) warnDefault(soleImport);
+	if (soleImport) reportDefault(soleImport);
 }
 
 export function printSchema(target: SchemaMetadata): string[] {
