@@ -88,7 +88,7 @@ def header(body: dict, schema: dict, layer: str, default_range: str | None, refu
     metadata = lower(body)
     if body.get("annotations", {}).get("layer", layer) != layer:
         refuse("", f"the schema layer must agree with the pack's declared layer, {layer}", "§3")
-    metadata["annotations"] = metadata.get("annotations", {}) | {"layer": {"value": layer}}
+    metadata["annotations"] = metadata.get("annotations", {}) | {"layer": layer}
     for field, target in (("schema", "name"), ("iri", "id"), ("language", "in_language")):
         if field in body:
             metadata[target] = body[field]
