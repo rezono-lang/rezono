@@ -1,0 +1,56 @@
+// The authority check (decisions/review-and-rights.md, sections 3, 5, 7 and 8).
+// Reviewing uses the rights held on the day of the review: the reviewer must hold the named role on that day
+// through a grant that counts on that day and was not introduced by the change under review, and that role must
+// have may_review over every element the change touches. A dismissed review is not active, so it triggers no check.
+
+// A grant introduced by a change counts only from the day a valid current acceptance on founding grants alone
+// accepted that change, and while it stays accepted (not stale and not rejected). Founding grants have no change.
+.decl grant_introduced(grant: symbol)
+grant_introduced(g) :- role_grant__change(g, _).
+
+.decl grant_founding(grant: symbol)
+grant_founding(g) :- role_grant(g), !grant_introduced(g).
+
+// A grant covers a review's day when first day <= review day < exclusive last day (if any).
+.decl grant_ended_on(grant: symbol, review: symbol)
+grant_ended_on(g, r) :- role_grant__until_day(g, u), review__day(r, d), u <= d.
+
+.decl grant_held_on(grant: symbol, review: symbol)
+grant_held_on(g, r) :- role_grant(g), role_grant__subject(g, w), role_grant__role(g, role),
+    role_grant__from_day(g, f), review__reviewer(r, w), review__role(r, role), review__day(r, d),
+    f <= d, !grant_ended_on(g, r).
+
+.decl review_lacks_may_review(review: symbol)
+review_lacks_may_review(r) :- review_active(r), review__change(r, c), review__role(r, role),
+    change_member__change(m, c), change_member__kind(m, k), change_member__element(m, e),
+    !may_review(role, k, e).
+
+// Acceptance on founding grants alone, kept separate from review_valid so the rules stay stratified.
+.decl review_founded_authority(review: symbol)
+review_founded_authority(r) :- review_active(r), grant_founding(g), grant_held_on(g, r),
+    !review_lacks_may_review(r).
+
+.decl founded_valid_current(review: symbol)
+founded_valid_current(r) :- review_current(r), review_founded_authority(r), !review_self(r), !review_blind(r).
+
+.decl founded_current_verdict(change: symbol, verdict: symbol)
+founded_current_verdict(c, v) :- founded_valid_current(r), review__change(r, c), review__verdict(r, v).
+
+.decl founded_accepted_on(change: symbol, day: number)
+founded_accepted_on(c, d) :- founded_valid_current(r), review__change(r, c), review__verdict(r, "accepted"),
+    review__day(r, d), !founded_current_verdict(c, "rejected").
+
+// A grant that counts for review r: either a founding grant, or an introduced grant of another change
+// accepted on founding grants by r's day and still accepted.
+.decl grant_counts_for(grant: symbol, review: symbol)
+grant_counts_for(g, r) :- review_active(r), grant_founding(g), grant_held_on(g, r).
+grant_counts_for(g, r) :- review_active(r), grant_held_on(g, r), role_grant__change(g, gc),
+    review__change(r, rc), gc != rc, founded_accepted_on(gc, ad), review__day(r, rd), ad <= rd.
+
+.decl review_has_grant(review: symbol)
+review_has_grant(r) :- grant_counts_for(_, r).
+
+// @invariant
+.decl review_unauthorized(review: symbol)
+review_unauthorized(r) :- review_active(r), !review_has_grant(r).
+review_unauthorized(r) :- review_lacks_may_review(r).

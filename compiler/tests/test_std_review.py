@@ -289,17 +289,6 @@ class MissingReviewAuthorityCheck(AssertionError):
     """std-review lacks review_unauthorized, or does not evaluate review rights at the moment of review."""
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=MissingReviewAuthorityCheck,
-    reason="extra: decisions/review-and-rights.md: Write packs/std-review/rules/authority.dl: the invariant "
-           "review_unauthorized(review) from the role_grant held on the review day (first day inclusive, last day "
-           "exclusive), not introduced by the reviewed change, and may_review of that role over every "
-           "change_member; a grant that a change introduces counts only from the day a review on founding "
-           "grants alone accepted that change, and while it stays accepted. Add !review_unauthorized(r) to "
-           "review_valid in rules/state.dl. Read sections 3, 5, 7 and 8. Waits for test_review_blind, which edits "
-           "the same rule, and for compiler/tests/test_std_access.py::test_standard_access_declares_the_four_rights (may_review).",
-)
 def test_review_unauthorized(tmp_path):
     p = Probe(tmp_path, MissingReviewAuthorityCheck)
     p.invariant("review_unauthorized")
@@ -437,3 +426,47 @@ def test_review_phase_ambiguous(tmp_path):
         p.expect(f"one {phase} fact", p.run(world([NOTE_CHANGE], grants=[SCRIBE_YEAR], phase=(phase, "una"))),
                  {"review_phase_ambiguous": set()})
     p.expect("no phase fact", p.run(world([NOTE_CHANGE], grants=[SCRIBE_YEAR])), {"review_phase_ambiguous": set()})
+
+
+def test_review_phase_ambiguous_owners(tmp_path):
+    p = Probe(tmp_path, MissingPhaseAmbiguity)
+    p.invariant("review_phase_ambiguous", "review_self")
+    grants = [SCRIBE_YEAR, IVO_SCRIBE]
+    una_change = ("ch-2", "una", C2, S2, [("note", "n2")], [])
+    two_lab = world([NOTE_CHANGE, una_change], [accept(who="ivo"), accept("rv-2", change="ch-2", who="una", content=C2, support=S2)],
+                    grants, phase=("lab", "ivo"))
+    two_lab.setdefault("review_phase", set()).add(("phase-other",))
+    two_lab.setdefault("review_phase__phase", set()).add(("phase-other", "lab"))
+    two_lab.setdefault("review_phase__owner", set()).add(("phase-other", "una"))
+    p.expect("two lab facts with different owners block and grant no self-review exception", p.run(two_lab),
+             {"review_phase_ambiguous": {("phase",), ("phase-other",)},
+              "review_lab_owner": set(),
+              "review_self": {("rv-1",), ("rv-2",)},
+              **states(proposed=["ch-1", "ch-2"], due=["ch-1", "ch-2"])})
+    two_strict = world([NOTE_CHANGE], grants=grants, phase=("strict", "ivo"))
+    two_strict.setdefault("review_phase", set()).add(("phase-other",))
+    two_strict.setdefault("review_phase__phase", set()).add(("phase-other", "strict"))
+    two_strict.setdefault("review_phase__owner", set()).add(("phase-other", "una"))
+    p.expect("two strict facts with different owners are ambiguous", p.run(two_strict),
+             {"review_phase_ambiguous": {("phase",), ("phase-other",)}})
+
+
+def test_review_self_blocked_when_strict_and_lab_coexist(tmp_path):
+    p = Probe(tmp_path, MissingSelfReviewCheck)
+    p.invariant("review_self", "review_phase_ambiguous")
+    grants = [SCRIBE_YEAR, IVO_SCRIBE]
+    own = [accept(who="ivo")]
+    for label, strict_owner in (("strict beside lab with same owner", "ivo"),
+                                ("strict beside lab with different owner", "una")):
+        mixed = world([NOTE_CHANGE], own, grants, phase=("strict", strict_owner))
+        mixed.setdefault("review_phase", set()).add(("phase-lab",))
+        mixed.setdefault("review_phase__phase", set()).add(("phase-lab", "lab"))
+        mixed.setdefault("review_phase__owner", set()).add(("phase-lab", "ivo"))
+        p.expect(label, p.run(mixed),
+                 {"review_phase_ambiguous": {("phase",), ("phase-lab",)},
+                  "review_lab_owner": set(),
+                  "review_self": {("rv-1",)},
+                  **states(proposed=["ch-1"], due=["ch-1"])})
+    p.expect("unambiguous lab owner still self-reviews", p.run(world([NOTE_CHANGE], own, grants, phase=("lab", "ivo"))),
+             {"review_phase_ambiguous": set(), "review_lab_owner": {("ivo",)}, "review_self": set(),
+              **states(accepted=["ch-1"])})

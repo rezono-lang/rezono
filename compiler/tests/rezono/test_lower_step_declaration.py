@@ -206,3 +206,182 @@ def test_lower_step_declaration(tmp_path):
     unknown_op_dir = make_pack(tmp_path, "unknown_op", decls, operation="nonexistent_apply")
     with pytest.raises(pack.CompileError):
         pack.read(unknown_op_dir)
+
+
+def _retract_step(kind: str, slot: str) -> dict:
+    return {
+        "step": "clear_slot",
+        "columns": [{"name": "target", "type": kind}, {"name": "item", "type": "Alpha"}],
+        "when": {
+            "and": [
+                {"in": [{"path": ["target"]}, {"kind": kind}]},
+                {"call": ["approved_item", [{"path": ["item"]}]]},
+            ],
+        },
+        "effect": {
+            "operation": "item_install",
+            "changes": [{
+                "retract_slot": {
+                    "kind": kind,
+                    "slot": slot,
+                    "key": {"path": ["target"]},
+                },
+            }],
+        },
+        "confirm": {
+            "reader": {"call": ["beta_readback", [{"path": ["item"]}]]},
+            "token": {"path": ["item", "title"]},
+        },
+    }
+
+
+def test_retract_slot_refuses_required_slot(tmp_path):
+    # Direct required slot Beta.alpha must be refused with R049.
+    required_dir = make_pack(
+        tmp_path,
+        "retract_required",
+        [APPROVED_RULE, READBACK_RULE, _retract_step("Beta", "alpha")],
+        targets=[{"kind": "beta", "slot": "alpha"}],
+    )
+    with pytest.raises(pack.CompileError) as exc_info:
+        pack.read(required_dir)
+    assert any(d.code == "R049" and "beta.alpha" in d.message for d in exc_info.value.diagnostics)
+
+    # Inherited required slot SubBeta.alpha must also be refused with R049.
+    inherited_dir = make_pack(
+        tmp_path,
+        "retract_inherited_required",
+        [APPROVED_RULE, READBACK_RULE, _retract_step("SubBeta", "alpha")],
+        targets=[{"kind": "sub_beta", "slot": "alpha"}],
+    )
+    schema = yaml.safe_load((inherited_dir / "schema/minimal.yaml").read_bytes())
+    schema["classes"]["SubBeta"] = {"is_a": "Beta"}
+    (inherited_dir / "schema/minimal.yaml").write_text(yaml.safe_dump(schema, sort_keys=False), encoding="utf-8")
+    labels = (inherited_dir / "labels/nl.yaml").read_text(encoding="utf-8")
+    (inherited_dir / "labels/nl.yaml").write_text(labels + "\nsub_beta: sub-bèta\n", encoding="utf-8")
+    with pytest.raises(pack.CompileError) as exc_info:
+        pack.read(inherited_dir)
+    assert any(d.code == "R049" and "sub_beta.alpha" in d.message for d in exc_info.value.diagnostics)
+
+    # Counter-case: optional slot Beta.state can still be retracted.
+    optional_dir = make_pack(
+        tmp_path,
+        "retract_optional",
+        [APPROVED_RULE, READBACK_RULE, _retract_step("Beta", "state")],
+        targets=[{"kind": "beta", "slot": "state"}],
+    )
+    model = pack.read(optional_dir)
+    [step] = model.steps
+    assert len(step.changes) == 1
+    assert step.changes[0].op == "unset"
+    assert step.changes[0].kind == "beta"
+    assert step.changes[0].slot == "state"
+    assert len(step.confirmation.postconditions) == 1
+    post = step.confirmation.postconditions[0]
+    assert (post.attribute.kind, post.attribute.slot, post.state) == ("beta", "state", "absent")
+
+
+def _make_imported_atomic_pack(
+    tmp_path: Path,
+    name: str,
+    decls: list[dict],
+    *,
+    targets: list[dict],
+    boundary: str = "tx-batch",
+    evidence: dict[str, str] | None = None,
+) -> Path:
+    shared = FIXTURE.parent / "shared"
+    provider = Path(shutil.copytree(shared, tmp_path / name / "provider"))
+    (provider / "ports").mkdir()
+    (provider / "ports/item-apply.yaml").write_text(yaml.safe_dump(EFFECT_PORT, sort_keys=False), encoding="utf-8")
+    provider_meta = yaml.safe_load((provider / "pack.yaml").read_bytes())
+    provider_meta["name"] = "provider"
+    provider_meta["safe_steps"] = {
+        "atomic_effects": [{
+            "operation": "item_install",
+            "boundary": boundary,
+            "evidence": evidence or {"relation": "atomic_proof", "key": "item-install-failure"},
+        }],
+    }
+    (provider / "pack.yaml").write_text(yaml.safe_dump(provider_meta, sort_keys=False), encoding="utf-8")
+
+    consumer = make_pack(tmp_path, name, decls, targets=targets, include_ports=False)
+    (consumer / "ports").mkdir()
+    (consumer / "ports/item-readback.yaml").write_text(yaml.safe_dump(READER_PORT, sort_keys=False), encoding="utf-8")
+    meta = yaml.safe_load((consumer / "pack.yaml").read_bytes())
+    meta["imports"] = [{"name": "provider", "path": "../provider", "sha256": modules.pack_hash(provider)}]
+    meta["safe_steps"] = {
+        "readers": [{
+            "relation": "beta_readback",
+            "port": "item-readback",
+            "scope": ["scope"],
+            "targets": targets,
+        }],
+    }
+    (consumer / "pack.yaml").write_text(yaml.safe_dump(meta, sort_keys=False), encoding="utf-8")
+    return consumer
+
+
+def test_imported_atomic_effects_apply_to_steps(tmp_path):
+    expected_evidence = {"relation": "atomic_proof", "key": "item-install-failure"}
+
+    # Multi-write step using an imported effect port and its pack's atomic_effects binding.
+    multi_step = {
+        "step": "update_pair",
+        "columns": [{"name": "target", "type": "Beta"}, {"name": "item", "type": "Alpha"}],
+        "when": {"call": ["active_beta", [{"path": ["target"]}, {"path": ["item"]}]]},
+        "effect": {
+            "operation": "item_install",
+            "changes": [
+                {
+                    "set_slot": {
+                        "kind": "Alpha",
+                        "slot": "size",
+                        "key": {"path": ["item"]},
+                        "value": {"lit": "1"},
+                    },
+                },
+                {
+                    "retract_slot": {
+                        "kind": "Beta",
+                        "slot": "state",
+                        "key": {"path": ["target"]},
+                    },
+                },
+            ],
+        },
+        "confirm": {
+            "reader": {"call": ["beta_readback", [{"path": ["item"]}]]},
+            "token": {"path": ["item", "title"]},
+        },
+    }
+    multi_dir = _make_imported_atomic_pack(
+        tmp_path,
+        "imported_multi",
+        [ACTIVE_RULE, READBACK_RULE, multi_step],
+        targets=[{"kind": "alpha", "slot": "size"}, {"kind": "beta", "slot": "state"}],
+        evidence=expected_evidence,
+    )
+    multi_model = pack.read(multi_dir)
+    [step] = multi_model.steps
+    assert len(step.changes) == 2
+    assert step.operation.port == "item-apply"
+    assert step.operation.apply == "item_install"
+    assert step.operation.boundary == "tx-batch"
+    assert step.operation.evidence == expected_evidence
+
+    # Single-write step using an imported effect port retains its atomic_effects boundary and evidence.
+    single_dir = _make_imported_atomic_pack(
+        tmp_path,
+        "imported_single",
+        [APPROVED_RULE, ACTIVE_RULE, INVENTORY_RULE, READBACK_RULE, STEP_DECL],
+        targets=[{"kind": "beta"}, {"kind": "beta", "slot": "alpha"}],
+        evidence=expected_evidence,
+    )
+    single_model = pack.read(single_dir)
+    [single_step] = single_model.steps
+    assert len(single_step.changes) == 1
+    assert single_step.operation.port == "item-apply"
+    assert single_step.operation.apply == "item_install"
+    assert single_step.operation.boundary == "tx-batch"
+    assert single_step.operation.evidence == expected_evidence

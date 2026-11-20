@@ -65,18 +65,22 @@ def review(obj):
 def test_translated_policy(tmp_path):
     from admission_release import render_release
     from admission_translator import translate
+    from policy_renderer import render_policy
 
     publication = load("publication.yaml")
     store = publish_evidence(tmp_path / "checked")
-    manual = render_release(["admission-blue", "admission-green"], [publication], store=store,
-                            manifest_key=MANIFEST_KEY)
-    digest, = {item["spec"]["digest"] for item in manual if item["kind"] == "NamespacePublication"}
-    generated = []
-    for item in manual:
+    release = render_release(["admission-blue", "admission-green"], [publication], store=store,
+                             manifest_key=MANIFEST_KEY)
+    digest, = {item["spec"]["digest"] for item in release if item["kind"] == "NamespacePublication"}
+    manual, generated = [], []
+    for item in release:
         if item["kind"] == "ValidatingAdmissionPolicy":
             rule = item["metadata"]["name"].split(".")[0]
-            item = translate(load_program(f"{rule}.rules.yaml"), fixture(f"{rule}.binding.yaml"), digest)
-        generated.append(item)
+            manual.append(render_policy(rule=rule, digest=digest))
+            generated.append(translate(load_program(f"{rule}.rules.yaml"), fixture(f"{rule}.binding.yaml"), digest))
+        else:
+            manual.append(item)
+            generated.append(item)
     assert [item["metadata"]["name"] for item in generated] == [item["metadata"]["name"] for item in manual]
 
     releases = {}
@@ -100,20 +104,6 @@ def test_translated_policy(tmp_path):
             assert outcomes == [expected, expected], (driver, label)
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason=(
-        "M2: decisions/code-does-not-decide.md, section 4, and decisions/k8s-admission-translator.md, 'Order'. "
-        "render_release in k8s-admission/admission_release.py renders each ValidatingAdmissionPolicy with "
-        "admission_translator.translate from the checked rule program and binding of its rule "
-        "(fixtures/translator/<rule>.rules.yaml and <rule>.binding.yaml), no longer with "
-        "policy_renderer.render_policy, which then stays only as the expectation of test_translated_policy. The "
-        "outcomes are the hand-calculated cases of decisions/k8s-admission-rules.md. admission_release.py is not a "
-        "test: if k8s-admission/ is on the review-before-landing list by then, the switch is read before it "
-        "lands. Today the release ships the hand-written policy (AssertionError)."
-    ),
-)
 def test_release_renders_the_translated_policy(tmp_path):
     from admission_release import render_release
     from admission_translator import translate

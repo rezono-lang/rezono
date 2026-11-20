@@ -74,7 +74,7 @@ def scenario(path, values, initial):
 
 
 @pytest.mark.xfail(strict=True, raises=MissingThresholdPublication,
-                   reason="M2: Depends on ordinary admission outputs. Add the written capacity exploration and checked threshold publication under examples/platform. Read decisions/platform-admission-threshold.md.")
+                   reason="M2: Depends on ordinary admission outputs from examples/platform/test_admission_assumption.py (currently marked extra), whose schemas and derived relations (request_outcome, landed_request, free_cores) do not yet exist in examples/platform. Deriving those relations without portal/assumption_scene.py causes test_admission_assumption.py to fail with FileNotFoundError instead of MissingAssumptionProjection, so the admission-assumption task must land or be split first. Add the written capacity exploration and checked threshold publication under examples/platform. Read decisions/platform-admission-threshold.md.")
 def test_first_threshold_is_between_two_real_assumptions(tmp_path):
     runner = ROOT / "portal" / "capacity_exploration.py"
     if not runner.exists():

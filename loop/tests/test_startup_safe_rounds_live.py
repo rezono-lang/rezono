@@ -9,17 +9,6 @@ import pytest
 
 
 @pytest.mark.cluster
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason=(
-        "M2: Read decisions/safe-step-rounds.md. Run the startup through the shared disposable cluster's "
-        "normal recorded path and compare live scoped readback after every visible transition. Waits for "
-        "test_startup_transition_cases and the platform startup bindings, test_certified_round_replay, "
-        "scoped policy/readback and the live recorder. "
-        "Use the existing admission handoff and recorder, including the assigned worker workflow path."
-    ),
-)
 def test_startup_safe_rounds_live():
     assert find_spec("loop.startup_rounds") is not None, "The live certified startup entry point is not wired"
     from loop.startup_rounds import run_startup

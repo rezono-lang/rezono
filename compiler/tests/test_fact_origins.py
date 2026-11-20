@@ -111,16 +111,6 @@ def naming(found: list[str], place: str, kind: str, identifier: str) -> list[str
     return [line for line in found if place in line and kind in line and identifier in line]
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=MissingOriginWarning,
-    reason="M3: decisions/fact-origin-required.md: In a rezono 0 pack, warn W113 once per record and place whose "
-           "rows have only the implicit {kind: pack, name: facts/<file>, position: <line>} source, on one stderr line "
-           "with the code, `<file>:<line>`, the kind, the identifier and the sentence of section 4 (naming `@`, "
-           "`decide`, `Decision` and `.sources.yaml`); keep compiling and keep the locator in generated/sources.json. "
-           "Judge origins in one function beside the reader in compiler/rezono_compiler/sources.py; add W113 to "
-           "rezono/messages/en.json and nl.json. Read sections 1, 2 and 4.",
-)
 def test_rezono_0_warns_on_a_fact_row_without_origin(tmp_path, capsys):
     directory = make_pack(tmp_path, "warn", {"a.yaml": ALPHA, "b.yaml": BETA}, {"b.sources.yaml": {"default": TOOL}})
     status, err, entries = compiled(directory, tmp_path, capsys)
@@ -145,15 +135,6 @@ def test_rezono_0_warns_on_a_fact_row_without_origin(tmp_path, capsys):
         raise MissingOriginWarning("\n".join(problems))
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=MissingOriginRefusal,
-    reason="M3: decisions/fact-origin-required.md: In a rezono 1 pack, refuse with R053 every record and place whose "
-           "rows have only the implicit file-and-line source, on one stderr line with the code, `<file>:<line>`, the "
-           "kind and the identifier, and give no W113 there; compile the same pack once every row has an origin. Add "
-           "R053 to rezono/messages/en.json and nl.json. Read sections 2 and 4. Waits for "
-           "compiler/tests/rezono/test_rezono_1_compiler_version.py--test_compiler_admits_rezono_module_5_and_enforces_pack_version.",
-)
 def test_rezono_1_refuses_a_fact_row_without_origin(tmp_path, capsys):
     problems = []
     refused = make_pack(tmp_path, "refused", {"a.yaml": ALPHA, "b.yaml": BETA}, {"b.sources.yaml": {"default": TOOL}})
@@ -183,13 +164,6 @@ def test_rezono_1_refuses_a_fact_row_without_origin(tmp_path, capsys):
         raise MissingOriginRefusal("\n".join(problems))
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=MissingCitedOrigin,
-    reason="M3: decisions/fact-origin-required.md: Read a source of any kind but `pack` as an origin, from a sidecar "
-           "(tool, git) or an `@` citation of a fact table, and give W113 for the implicit source and for a sidecar "
-           "source of kind `pack` written out. Read sections 1 and 2.",
-)
 def test_a_citation_or_a_sidecar_entry_is_an_origin(tmp_path, capsys):
     directory = make_pack(
         tmp_path, "cited",
@@ -217,14 +191,6 @@ def test_a_citation_or_a_sidecar_entry_is_an_origin(tmp_path, capsys):
         raise MissingCitedOrigin("\n".join(problems))
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=MissingSyntheticOrigin,
-    reason="M3: decisions/fact-origin-required.md: Add `synthetic` to SourceKind in contracts/source.yaml (name the "
-           "generator, position the seed and part) and to KINDS in checker/rezono_checker/sources.py, and read a "
-           "synthetic source as an origin. Read section 3. Depends on "
-           "compiler/tests/test_fact_origins.py--test_rezono_0_warns_on_a_fact_row_without_origin.",
-)
 def test_a_synthetic_source_is_an_origin(tmp_path, capsys):
     problems = []
     contract = yaml.safe_load((REPO / "contracts" / "source.yaml").read_text(encoding="utf-8"))

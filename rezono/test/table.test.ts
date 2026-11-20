@@ -683,3 +683,43 @@ test('a question over the declared schema reads the derived value as any other s
 	const bare = (await answer(check('ask Host where size = medium', schema), schema, appendixB))!;
 	assert.deepEqual([bare.rows.length, bare.undecided.map((u) => `${u.$id} ${u.state} ${u.reason}`)], [0, ['host-a unknown ', 'host-b unknown ', 'host-c unknown ', 'host-d unknown ']]);
 });
+
+test('priority table evaluation propagates non-known outputs and ranks out-of-enum known outputs last', () => {
+	const d = valid(tableOf('Thing', 'derived v: Level', 'priority', '| a | b | -> v |', '| true | - | high |', '| - | true | low |'));
+	const [baseTable] = d.tables;
+	const stateLit = (lit: string) => {
+		const node = { lit };
+		const state = lit === 'n/a' ? 'not_applicable' : lit.startsWith('invalid') ? 'invalid' : 'unknown';
+		d.typed.set(node, { ty: { t: 'state' }, states: new Set([state]), set: false, opens: [] });
+		return node;
+	};
+	const enumLit = (lit: string) => {
+		const node = { lit };
+		d.typed.set(node, { ty: { t: 'val', name: 'Level' }, states: new Set(['known']), set: false, opens: [] });
+		return node;
+	};
+	const rows = load(lab, [
+		{ $kind: 'Thing', $id: 'both', a: true, b: true },
+		{ $kind: 'Thing', $id: 'undec', a: { $unknown: 'pending' }, b: true }
+	]);
+	const run = (out0: { lit: string }, out1: { lit: string }) => {
+		const modified: Declared = {
+			...d,
+			tables: [{ ...baseTable, rows: [{ ...baseTable.rows[0], value: out0 }, { ...baseTable.rows[1], value: out1 }] }]
+		};
+		return Object.fromEntries([...tabulate(modified, rows).data.kinds.get('Thing')!].map(([id, r]) => [id, show(r.get('v')!)]));
+	};
+
+	assert.deepEqual(run(stateLit('unknown missing'), enumLit('low')), {
+		both: 'unknown missing',
+		undec: 'unknown pending @ thing__a ["undec"]'
+	});
+	assert.deepEqual(run(stateLit('unknown missing'), stateLit('invalid bad')), {
+		both: 'invalid bad',
+		undec: 'invalid bad'
+	});
+	assert.deepEqual(run(enumLit('high'), enumLit('"other"')), {
+		both: 'high',
+		undec: 'unknown pending @ thing__a ["undec"]'
+	});
+});

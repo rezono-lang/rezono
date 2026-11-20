@@ -31,7 +31,8 @@ function level(e: Expr): number {
 	if ('range' in e) return RANGE;
 	if ('arith' in e) return e.arith[0] === '+' || e.arith[0] === '-' ? ADD : MUL;
 	if ('neg' in e) return UNARY;
-	if ('timesel' in e || 'filter' in e) return POST;
+	if ('timesel' in e) return POST;
+	if ('filter' in e) return e.filter[2] !== undefined ? DOTTED : POST;
 	return DOTTED;
 }
 
@@ -41,7 +42,7 @@ function level(e: Expr): number {
  */
 function expr(e: Expr, min: number, last: boolean): string {
 	const text = bare(e, last);
-	return level(e) < min || ('filter' in e && !last) ? `(${text})` : text;
+	return level(e) < min || ('filter' in e && e.filter[2] === undefined && !last) ? `(${text})` : text;
 }
 /**
  * What a slot or an aggregate is read from. A literal that is not one word stands in parentheses: `3.count()`
@@ -58,8 +59,8 @@ function bare(e: Expr, last: boolean): string {
 	if ('kind' in e) return spellQualifiedName(e.kind);
 	if ('dot' in e) return `${base(e.dot[0])}.${e.dot[1]}`;
 	if ('agg' in e) {
-		const [name, of, arg] = e.agg;
-		return `${base(of)}.${name}(${arg ? whole(arg) : ''})`;
+		const [name, of, arg, binder] = e.agg;
+		return `${base(of)}.${name}(${arg ? `${binder ? `${binder}: ` : ''}${whole(arg)}` : ''})`;
 	}
 	if ('call' in e) return `${spellQualifiedName(e.call[0], true)}(${e.call[1].map(whole).join(', ')})`;
 	if ('timesel' in e) {
@@ -67,7 +68,8 @@ function bare(e: Expr, last: boolean): string {
 		return [expr(base, DOTTED, false), ...(sel.at ? [`at ${atom(sel.at)}`] : []), ...(sel.as_known ? [`as known ${atom(sel.as_known)}`] : [])].join(' ');
 	}
 	if ('filter' in e) {
-		const [set, cond] = e.filter;
+		const [set, cond, binder] = e.filter;
+		if (binder !== undefined) return `${base(set)}.where(${binder}: ${whole(cond)})`;
 		// The set is a path with or without a time selection; a filter of a filter needs its parentheses.
 		return `${'timesel' in set ? expr(set, POST, false) : expr(set, DOTTED, false)} where ${whole(cond)}`;
 	}

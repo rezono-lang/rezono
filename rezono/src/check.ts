@@ -21,7 +21,7 @@
 import { grammar } from './grammar.ts';
 import { parse, type Diagnostic, type Span } from './parse.ts';
 import { printExpr } from './print.ts';
-import { baseTypeOf, dimText, inPart, isOrdered, mulDim, sameDim, slotType, snake, typeOf, unitOf, type Schema, type StateName, type Ty } from './schema.ts';
+import { baseTypeOf, dimText, inPart, isOrdered, mulDim, sameDim, slotType, snake, typeOf, unitOf, type Schema, type SlotDef, type StateName, type Ty, type World } from './schema.ts';
 import { isAsk, isCheck, type Ask, type CheckDecl, type Expr, type Question } from './tree.ts';
 
 /** What is known of an expression once its names and types are. */
@@ -80,14 +80,38 @@ export interface Checked {
 /** A warning leaves a question valid; every other code is an error. */
 export const isError = (d: Diagnostic): boolean => !d.code.startsWith('W');
 
+/** A module-level derivation visible in a rezono 1 module as both a callable relation/function and a tuple set. */
+export interface RelationDef {
+	params: { name: string; slot: SlotDef }[];
+	result: Ty;
+	set?: boolean;
+	world: World;
+	states: StateName[];
+}
+
+export interface TypingOptions {
+	/** Enforce rezono 1 type rules (e.g. R028 on collection path projections). */
+	rezono1?: boolean;
+	/** Module-level derivations callable by name and usable as tuple sets in rezono 1. */
+	relations?: Record<string, RelationDef>;
+}
+
 /** One scope: the question's row (the outermost) or the element of an aggregate, a quantifier or a filter. */
 interface Level {
 	ty: Ty;
 	/** Where its values are read from, as the first part of their path. */
 	at: string;
-	/** The name of the question's row; absent for an element. */
+	/** The name of the question's row, a derivation parameter, or an explicit method binder; absent for implicit `it`. */
 	binder?: string;
+	/** When true, only the binder name itself is in scope (not its slots as bare names). */
+	paramOnly?: boolean;
+	/** When true, this scope was opened by an explicit method binder (`S.any(x: ...)`): bare slots yield to outer variables. */
+	methodBinder?: true;
+	/** Named columns when ranging over a relation tuple set. */
+	fields?: Record<string, SlotDef>;
 }
+
+type ProjectionContext = { kind: 'agg'; name: string; arg?: Expr } | { kind: 'in'; lhs: Expr };
 
 const AGGREGATES = new Set(['sum', 'count', 'min', 'max']);
 /** The roundings `round(x, mode)` can name (v0 §5f). */
@@ -122,11 +146,11 @@ const union = <T>(...sets: Iterable<T>[]): Set<T> => new Set(sets.flatMap((s) =>
 const common = <T>(a: Set<T>, b: Set<T>): Set<T> => new Set([...a].filter((x) => b.has(x)));
 
 /** Checks one question (an `ask` or a suppose line) or one check statement against a schema. */
-export function check(text: string, schema: Schema): Checked {
+export function check(text: string, schema: Schema, options?: TypingOptions): Checked {
 	const parsed = parse(text);
 	const { tree } = parsed;
 	if (!tree) return { typed: new Map(), heads: new Map(), diagnostics: parsed.diagnostics, resolve: {} };
-	const { typed, heads, resolve, found, ask, statement, suppose } = typing(text, schema, parsed.spans);
+	const { typed, heads, resolve, found, ask, statement, suppose } = typing(text, schema, parsed.spans, options);
 	const answer = isAsk(tree) ? ask(tree) : undefined;
 	const publication = isCheck(tree) ? statement(tree) : undefined;
 	if (!isAsk(tree) && !isCheck(tree)) suppose(tree);
@@ -140,12 +164,14 @@ export function check(text: string, schema: Schema): Checked {
  * The names and types of one text against a schema: what the check of a question and the check of a decision
  * table (table.ts) share. `spans` places the nodes of the text; what is found is collected in `found`.
  */
-export function typing(text: string, schema: Schema, spans: WeakMap<object, Span>) {
+export function typing(text: string, schema: Schema, spans: WeakMap<object, Span>, options?: TypingOptions) {
 	const resolve: Record<string, string> = {};
 	const typed = new Map<object, Typed>();
 	const heads = new Map<object, Head>();
 	const found: Diagnostic[] = [];
 	const levels: Level[] = [];
+	const tupleFields = new WeakMap<Typed, Record<string, SlotDef>>();
+	let projectionContext: ProjectionContext | undefined;
 
 	const spanOf = (node: object): Span => spans.get(node) ?? { text, start: 0, end: [...text].length };
 	/** The span of one word inside a node's span, when it can be found there. */
@@ -195,6 +221,44 @@ export function typing(text: string, schema: Schema, spans: WeakMap<object, Span
 	}
 	const describe = (ty: Ty): string => (ty.t === 'bool' ? 'Bool' : ty.t === 'num' ? (ty.name ?? dimText(ty.dim)) : ty.t === 'ref' ? ty.kind : ty.t === 'val' ? ty.name : ty.t === 'id' || ty.t === 'tok' ? ty.text : '');
 	const slotsOf = (ty: Ty) => (ty.t === 'ref' ? (schema.kinds[ty.kind]?.slots ?? {}) : {});
+	const slotsOfTyped = (v: Typed) => tupleFields.get(v) ?? slotsOf(v.ty);
+	const slotsOfLevel = (l: Level) => (l.paramOnly ? {} : (l.fields ?? slotsOf(l.ty)));
+	/** Formats a collection receiver expression in rezono 1 `.where(...)` spelling for R028 hints. */
+	function formatCollectionBase(e: Expr): string {
+		if ('filter' in e) {
+			const [set, cond, binder] = e.filter;
+			return `${formatCollectionBase(set)}.where(${binder ? `${binder}: ` : ''}${printExpr(cond)})`;
+		}
+		return printExpr(e);
+	}
+	/** Prefixes bare paths inside an aggregate argument when rewriting `S.p.agg(q)` to `S.agg(p.q)`. */
+	function prefixProjectionArg(projPath: string, arg: Expr): string {
+		if ('path' in arg) {
+			if (arg.path[0] === 'it') return arg.path.length > 1 ? `${projPath}.${arg.path.slice(1).join('.')}` : projPath;
+			return `${projPath}.${arg.path.join('.')}`;
+		}
+		return printExpr(arg);
+	}
+	/** Builds the `hint.use_instead` replacement for a refused collection path projection in rezono 1. */
+	function buildProjectionHint(baseText: string, projPath: string, ctx?: ProjectionContext): string {
+		if (ctx?.kind === 'agg') {
+			if (ctx.name === 'count') {
+				return ctx.arg === undefined ? `${baseText}.count()` : `${baseText}.count(${prefixProjectionArg(projPath, ctx.arg)})`;
+			}
+			if (ctx.name === 'sum' || ctx.name === 'min' || ctx.name === 'max' || ctx.name === 'one') {
+				return ctx.arg === undefined ? `${baseText}.${ctx.name}(${projPath})` : `${baseText}.${ctx.name}(${prefixProjectionArg(projPath, ctx.arg)})`;
+			}
+			return ctx.arg === undefined ? `${baseText}.${ctx.name}()` : `${baseText}.${ctx.name}(${prefixProjectionArg(projPath, ctx.arg)})`;
+		}
+		if (ctx?.kind === 'in') return `${baseText}.any(${projPath} = ${printExpr(ctx.lhs)})`;
+		return `${baseText}.one(${projPath})`;
+	}
+	function refuseCollectionProjection(node: object, baseText: string, projPath: string, ctx?: ProjectionContext): Typed {
+		const span = spanOf(node);
+		return report('R028', span, [span.text, '1'], {
+			hint: { id: 'hint.use_instead', args: [buildProjectionHint(baseText, projPath, ctx)] },
+		});
+	}
 	/** The values of an enum type, by the type's name; undefined for a type that is no enum. */
 	function enumValues(name: string): string[] | undefined {
 		const def = schema.types?.[name];
@@ -213,9 +277,9 @@ export function typing(text: string, schema: Schema, spans: WeakMap<object, Span
 	}
 	/** What an unknown bare name may have meant, from what is in scope here. */
 	function suggestions(name: string): string[] {
-		const inScope: string[] = Object.keys(schema.params ?? {});
-		for (const l of levels) inScope.push(...Object.keys(slotsOf(l.ty)), ...(l.binder ? [l.binder] : []));
-		return [...new Set([...near(name, inScope), ...[...levels].reverse().flatMap((l) => reach(name, l.ty))])];
+		const inScope: string[] = [...Object.keys(schema.params ?? {}), ...Object.keys(options?.relations ?? {})];
+		for (const l of levels) inScope.push(...Object.keys(slotsOfLevel(l)), ...(l.binder ? [l.binder] : []));
+		return [...new Set([...near(name, inScope), ...[...levels].reverse().flatMap((l) => (l.paramOnly ? [] : reach(name, l.ty)))])];
 	}
 
 	/** An id or a literal token that met no type: R001 for a word that reads as a name, R002 or R013 otherwise. */
@@ -355,42 +419,47 @@ export function typing(text: string, schema: Schema, spans: WeakMap<object, Span
 	/** One slot further along a path. */
 	function step(from: Typed, at: string, name: string, node: object): [Typed, string] {
 		if (from.ty.t === 'err') return [from, at];
-		const slot = slotsOf(from.ty)[name];
-		if (!slot) return [report('R001', within(node, name, 'end'), [name], { suggest: [...near(name, Object.keys(slotsOf(from.ty))), ...reach(name, from.ty)] }), at];
+		const slots = slotsOfTyped(from);
+		const slot = slots[name];
+		if (!slot) return [report('R001', within(node, name, 'end'), [name], { suggest: [...near(name, Object.keys(slots)), ...reach(name, from.ty)] }), at];
 		const here = `${at}.${name}`;
 		const many = slot.card === '*' || slot.card === '+';
 		const v = value(slotType(schema, slot), [from], from.set || many);
 		for (const s of slot.states) v.states.add(s);
-		const kind = (from.ty as { kind: string }).kind;
-		// An element of an open kind may have no row, and then every slot of it is unknown (§7, "Sets").
-		const unlisted = schema.kinds[kind].world === 'open';
-		// A single value of a relation the role reads in part may be one it does not read: unknown, whatever the
-		// slot's cardinality (§7a rule 1).
-		const part = inPart(schema, kind, name);
-		const maybe = unlisted || (part && !many);
-		if (maybe) v.states.add('unknown');
-		v.reads.set(here, maybe || slot.states.includes('unknown'));
-		// An inverse slot is the relation of its forward slot read the other way (publication §3.4). It is open
-		// when it says so itself, when its forward slot is open, or when the kind that carries the forward slot is
-		// open: an element nobody listed may point here. A `closed` written on either slot does not close that.
-		// A relation the role reads in part is open for the role, from either end.
-		const forward = slot.inverse !== undefined && slot.ref !== undefined ? schema.kinds[slot.ref]?.slots[slot.inverse] : undefined;
-		const open = forward
-			? slot.world === 'open' || forward.world === 'open' || schema.kinds[slot.ref!].world === 'open' || inPart(schema, slot.ref!, slot.inverse!)
-			: part || (slot.world ?? schema.kinds[kind].world) === 'open';
-		if (many && open) v.opens.push(`${kind}.${name}`);
+		if (from.ty.t === 'ref') {
+			const kind = from.ty.kind;
+			// An element of an open kind may have no row, and then every slot of it is unknown (§7, "Sets").
+			const unlisted = schema.kinds[kind].world === 'open';
+			// A single value of a relation the role reads in part may be one it does not read: unknown, whatever the
+			// slot's cardinality (§7a rule 1).
+			const part = inPart(schema, kind, name);
+			const maybe = unlisted || (part && !many);
+			if (maybe) v.states.add('unknown');
+			v.reads.set(here, maybe || slot.states.includes('unknown'));
+			// An inverse slot is the relation of its forward slot read the other way (publication §3.4). It is open
+			// when it says so itself, when its forward slot is open, or when the kind that carries the forward slot is
+			// open: an element nobody listed may point here. A `closed` written on either slot does not close that.
+			// A relation the role reads in part is open for the role, from either end.
+			const forward = slot.inverse !== undefined && slot.ref !== undefined ? schema.kinds[slot.ref]?.slots[slot.inverse] : undefined;
+			const open = forward
+				? slot.world === 'open' || forward.world === 'open' || schema.kinds[slot.ref!].world === 'open' || inPart(schema, slot.ref!, slot.inverse!)
+				: part || (slot.world ?? schema.kinds[kind].world) === 'open';
+			if (many && open) v.opens.push(`${kind}.${name}`);
+		}
 		if (!v.set && !here.startsWith('~')) v.sure.add(here);
 		return [v, here];
 	}
-	/** The first name of a path: `it`, a slot of an element, the question's row, one of its slots, a parameter. */
+	/** The first name of a path: `it`, a slot of an element, the question's row, one of its slots, a parameter, or a rezono 1 relation tuple set. */
 	function head(name: string, node: object, alone: boolean): [Typed, string] | undefined {
 		const inner = levels[levels.length - 1];
 		if (name === 'it') {
 			if (inner && !inner.binder) {
 				heads.set(node, { as: 'row', level: levels.length - 1 });
-				return [value(inner.ty), inner.at];
+				const row = value(inner.ty);
+				if (inner.fields) tupleFields.set(row, inner.fields);
+				return [row, inner.at];
 			}
-			const row = levels[0]?.binder;
+			const row = inner?.binder ?? levels[0]?.binder;
 			return [report('R001', within(node, name, 'start'), [name], row ? { hint: { id: 'hint.row', args: [row] } } : {}), ''];
 		}
 		const hits: (() => [Typed, string])[] = [];
@@ -399,14 +468,23 @@ export function typing(text: string, schema: Schema, spans: WeakMap<object, Span
 				hits.push(() => {
 					resolve[name] = 'binder';
 					heads.set(node, { as: 'row', level });
-					return [value(l.ty), l.at];
+					const row = value(l.ty);
+					if (l.fields) tupleFields.set(row, l.fields);
+					return [row, l.at];
 				});
 			}
-			if (slotsOf(l.ty)[name]) {
-				hits.push(() => {
-					heads.set(node, { as: 'slot', level });
-					return step(value(l.ty), l.at, name, node);
-				});
+			if (slotsOfLevel(l)[name]) {
+				const shadowedByOuterVar =
+					l.methodBinder &&
+					(levels.slice(0, level).some((outer) => outer.binder === name) || schema.params?.[name] !== undefined);
+				if (!shadowedByOuterVar) {
+					hits.push(() => {
+						heads.set(node, { as: 'slot', level });
+						const row = value(l.ty);
+						if (l.fields) tupleFields.set(row, l.fields);
+						return step(row, l.at, name, node);
+					});
+				}
 			}
 		}
 		const param = schema.params?.[name];
@@ -418,6 +496,15 @@ export function typing(text: string, schema: Schema, spans: WeakMap<object, Span
 				v.reads.set(`param ${name}`, param.states.includes('unknown'));
 				v.sure.add(`param ${name}`);
 				return [v, ''];
+			});
+		}
+		const rel = options?.relations?.[name];
+		if (rel) {
+			hits.push(() => {
+				const v = value({ t: 'val', name }, [], true);
+				tupleFields.set(v, Object.fromEntries(rel.params.map((p) => [p.name, p.slot])));
+				if (rel.world === 'open') v.opens.push(name);
+				return [v, name];
 			});
 		}
 		if (hits.length > 1) return [report('R011', within(node, name, 'start'), [name]), ''];
@@ -438,35 +525,77 @@ export function typing(text: string, schema: Schema, spans: WeakMap<object, Span
 				});
 			});
 	}
-	function path(e: { path: string[] }): Typed {
+	function path(e: { path: string[] }, ctx?: ProjectionContext): Typed {
 		const [first, ...rest] = e.path;
 		let at = head(first, e, rest.length === 0);
 		if (!at) {
+			const isName = grammar.match(first, 'name').succeeded();
+			const suggest = isName ? suggestions(first) : [];
+			// In rezono 1, an unbound bare name appearing as the receiver of a path (e.g. `za.outside`)
+			// is always R001 and never inferred as an element ID from slot names.
+			if (options?.rezono1 && isName) return report('R001', within(e, first, 'start'), [first], suggest.length ? { suggest } : {});
 			// `host-b.owner`: an id and its slots. Its kind is the one kind that has them.
 			const kinds = kindsWith(rest);
-			const suggest = grammar.match(first, 'name').succeeded() ? suggestions(first) : [];
 			if (suggest.length || !kinds.length) return report('R001', within(e, first, 'start'), [first], suggest.length ? { suggest } : {});
 			if (kinds.length > 1) return report('R002', within(e, first, 'start'), [first]);
 			resolve[first] = kinds[0];
 			heads.set(e, { as: 'id', kind: kinds[0] });
 			at = [value({ t: 'ref', kind: kinds[0] }), `id ${first}`];
 		}
-		for (const name of rest) at = step(at[0], at[1], name, e);
+		for (let i = 0; i < rest.length; i++) {
+			if (options?.rezono1 && at[0].set) {
+				const baseText = [first, ...rest.slice(0, i)].join('.');
+				const projPath = rest.slice(i).join('.');
+				return refuseCollectionProjection(e, baseText, projPath, ctx);
+			}
+			at = step(at[0], at[1], rest[i], e);
+		}
 		return at[0];
 	}
 
 	/** The scope of an element of a kind, where a derived value is written (v0 §5): its slots by their bare name. */
-	function element<T>(kind: string, body: () => T): T {
-		levels.push({ ty: { t: 'ref', kind }, at: snake(kind) });
+	function element<T>(kind: string, body: () => T, binder?: string): T {
+		levels.push({ ty: { t: 'ref', kind }, at: binder ?? snake(kind), ...(binder !== undefined ? { binder } : {}) });
 		try {
 			return body();
 		} finally {
 			levels.pop();
 		}
 	}
+	/** The scope of named parameters of a multi-key derivation (only the parameter names are in scope, not their slots). */
+	function params<T>(bindings: { name: string; ty: Ty }[], body: () => T): T {
+		for (const b of bindings) levels.push({ ty: b.ty, at: b.name, binder: b.name, paramOnly: true });
+		try {
+			return body();
+		} finally {
+			for (let i = 0; i < bindings.length; i++) levels.pop();
+		}
+	}
+	/** The span of an explicit method binder `<name>:` inside `S.method(name: expr)`. */
+	function binderSpan(node: object, base: Expr, binder: string): Span {
+		const span = spanOf(node);
+		const baseEnd = spanOf(base).end;
+		const afterBase = Math.max(0, baseEnd - span.start);
+		const tail = [...span.text].slice(afterBase).join('');
+		const m = /\(\s*([a-z][a-z0-9_]*)\s*:/.exec(tail);
+		if (!m || m[1] !== binder) return within(node, binder, 'start');
+		const offsetInTail = m.index + m[0].indexOf(binder);
+		const start = span.start + afterBase + [...tail.slice(0, offsetInTail)].length;
+		return { text: binder, start, end: start + [...binder].length };
+	}
 	/** The scope of an element: inside an aggregate, a quantifier or a filter (§5 rule 2). */
-	function inside<T>(element: Typed, body: () => T): T {
-		levels.push({ ty: element.ty, at: `~${levels.length}` });
+	function inside<T>(element: Typed, body: () => T, binder?: string, bSpan?: Span): T {
+		if (binder !== undefined) {
+			const duplicate = levels.some((l) => l.binder === binder || (binder === 'it' && !l.binder));
+			if (duplicate) report('R011', bSpan ?? { text: binder, start: 0, end: binder.length }, [binder]);
+		}
+		const fields = tupleFields.get(element);
+		levels.push({
+			ty: element.ty,
+			at: `~${levels.length}`,
+			...(binder !== undefined ? { binder, methodBinder: true as const } : {}),
+			...(fields ? { fields } : {}),
+		});
 		try {
 			return body();
 		} finally {
@@ -480,8 +609,11 @@ export function typing(text: string, schema: Schema, spans: WeakMap<object, Span
 		return v;
 	}
 	function form(e: Expr): Typed {
+		const ctx = projectionContext;
+		projectionContext = undefined;
 		if ('lit' in e) return literal(e);
-		if ('path' in e) return path(e);
+		if ('wildcard' in e) return value({ t: 'state' });
+		if ('path' in e) return path(e, ctx);
 		if ('kind' in e) {
 			const kind = schema.kinds[e.kind];
 			if (!kind) return report('R001', spanOf(e), [e.kind], { suggest: near(e.kind, Object.keys(schema.kinds)) });
@@ -489,16 +621,47 @@ export function typing(text: string, schema: Schema, spans: WeakMap<object, Span
 			if (kind.world === 'open') v.opens.push(e.kind);
 			return v;
 		}
-		if ('dot' in e) return step(settled(e.dot[0]), '~', e.dot[1], e)[0];
+		if ('dot' in e) {
+			if (!options?.rezono1) return step(settled(e.dot[0]), '~', e.dot[1], e)[0];
+			const chain: { dot: [Expr, string] }[] = [];
+			let cur: Expr = e;
+			while ('dot' in cur) {
+				chain.unshift(cur);
+				cur = cur.dot[0];
+			}
+			let at: [Typed, string] = [settled(cur), '~'];
+			for (let i = 0; i < chain.length; i++) {
+				if (at[0].set) {
+					const prefix = formatCollectionBase(cur);
+					const baseText = i === 0 ? prefix : `${prefix}.${chain.slice(0, i).map((d) => d.dot[1]).join('.')}`;
+					const projPath = chain.slice(i).map((d) => d.dot[1]).join('.');
+					return refuseCollectionProjection(e, baseText, projPath, ctx);
+				}
+				at = step(at[0], at[1], chain[i].dot[1], chain[i]);
+				typed.set(chain[i], at[0]);
+			}
+			return at[0];
+		}
 		if ('timesel' in e) return ex(e.timesel[0]);
 		if ('agg' in e) {
-			const [name, of, arg] = e.agg;
-			const base = settled(of);
+			const [name, of, arg, binder] = e.agg;
+			projectionContext = options?.rezono1 ? { kind: 'agg', name, arg } : undefined;
+			let base: Typed;
+			try {
+				base = settled(of);
+			} finally {
+				projectionContext = undefined;
+			}
 			if (base.ty.t === 'err') return value({ t: 'err' });
 			if (!base.set && base.ty.t !== 'state') return report('R003', spanOf(e), [name, describe(base.ty)]);
+			const baseFields = tupleFields.get(base);
 			const element = { ...base, set: false };
+			if (baseFields) tupleFields.set(element, baseFields);
+			const bSpan = binder !== undefined ? binderSpan(e, of, binder) : undefined;
 			if (name === 'one') {
-				const v = value(element.ty, [base]);
+				const over = arg === undefined ? element : inside(element, () => settled(arg), binder, bSpan);
+				if (over.set) return report('R005', spanOf(arg ?? e), []);
+				const v = value(over.ty, arg === undefined ? [base] : [base, over]);
 				v.states.add('unknown');
 				v.states.add('not_applicable');
 				v.states.add('invalid');
@@ -507,7 +670,7 @@ export function typing(text: string, schema: Schema, spans: WeakMap<object, Span
 				return v;
 			}
 			if (AGGREGATES.has(name)) {
-				const over = arg === undefined ? element : inside(element, () => (name === 'count' ? truth(arg) : settled(arg)));
+				const over = arg === undefined ? element : inside(element, () => (name === 'count' ? truth(arg) : settled(arg)), binder, bSpan);
 				if (over.set) return report('R005', spanOf(arg ?? e), []);
 				const v = value(name === 'count' ? { t: 'num', dim: {} } : over.ty, [base, over]);
 				if (name === 'sum' && over.ty.t !== 'num' && over.ty.t !== 'err' && over.ty.t !== 'state') return report('R003', spanOf(arg ?? e), [name, describe(over.ty)]);
@@ -521,25 +684,37 @@ export function typing(text: string, schema: Schema, spans: WeakMap<object, Span
 				v.sure = new Set();
 				return v;
 			}
-			const over = arg === undefined ? undefined : inside(element, () => truth(arg));
+			const over = arg === undefined ? undefined : inside(element, () => truth(arg), binder, bSpan);
 			const v = value({ t: 'bool' }, over ? [base, over] : [base]);
 			if (name !== 'any') closed(v, e, true);
 			v.sure = new Set();
 			return v;
 		}
 		if ('filter' in e) {
-			const base = settled(e.filter[0]);
+			const [of, pred, binder] = e.filter;
+			const base = settled(of);
 			if (base.ty.t === 'err') return value({ t: 'err' });
 			if (!base.set && base.ty.t !== 'state') return report('R003', spanOf(e), ['where', describe(base.ty)]);
-			const cond = inside({ ...base, set: false }, () => truth(e.filter[1]));
+			const baseFields = tupleFields.get(base);
+			const element = { ...base, set: false };
+			if (baseFields) tupleFields.set(element, baseFields);
+			const bSpan = binder !== undefined ? binderSpan(e, of, binder) : undefined;
+			const cond = inside(element, () => truth(pred), binder, bSpan);
 			const v = value(base.ty, [base, cond], true);
+			if (baseFields) tupleFields.set(v, baseFields);
 			v.sure = new Set();
 			return v;
 		}
 		if ('cmp' in e || 'in' in e || 'range' in e) {
 			const [an, bn] = 'cmp' in e ? [e.cmp[1], e.cmp[2]] : 'in' in e ? e.in : [e.range[0], e.range[2]];
 			const a = ex(an);
-			const b = ex(bn);
+			projectionContext = 'in' in e && options?.rezono1 ? { kind: 'in', lhs: an } : undefined;
+			let b: Typed;
+			try {
+				b = ex(bn);
+			} finally {
+				projectionContext = undefined;
+			}
 			if (a.set || (b.set && !('in' in e))) return report('R005', spanOf(e), []);
 			if (!meet(a, an, b, bn)) return report('R003', spanOf(e), [describe(a.ty), describe(b.ty)]);
 			// `in` asks whether a value is a member: its right side is a set or a range, never one value.
@@ -621,10 +796,25 @@ export function typing(text: string, schema: Schema, spans: WeakMap<object, Span
 			rounded.inexact = false;
 			return rounded;
 		}
+		const rel = options?.relations?.[name];
+		if (rel) {
+			const given = args.map(ex);
+			if (given.length !== rel.params.length) return report('R003', spanOf(e), [name, String(rel.params.length)]);
+			for (const [i, v] of given.entries()) {
+				if ('wildcard' in args[i]) continue;
+				if (v.set) return report('R005', spanOf(args[i]), []);
+				const want = value(slotType(schema, rel.params[i].slot));
+				if (!meet(v, args[i], want, args[i])) return report('R003', spanOf(args[i]), [describe(v.ty), describe(want.ty)]);
+			}
+			const v = value(rel.result, given, rel.set ?? false);
+			for (const s of rel.states) v.states.add(s);
+			if (rel.world === 'open') v.opens.push(name);
+			return v;
+		}
 		const rule = schema.rules?.[name];
 		const called = within(e, name, 'start');
-		const slot = levels.find((l) => slotsOf(l.ty)[name]);
-		if (!rule) return report('R001', called, [name], { suggest: near(name, Object.keys(schema.rules ?? {})) });
+		const slot = levels.find((l) => slotsOfLevel(l)[name]);
+		if (!rule) return report('R001', called, [name], { suggest: near(name, [...Object.keys(schema.rules ?? {}), ...Object.keys(options?.relations ?? {})]) });
 		if (slot) return report('R001', called, [name], { suggest: [`${name}(…)`, `${slot.binder ?? 'it'}.${name}`] });
 		const given = args.map(ex);
 		if (given.length !== rule.binders.length) return report('R003', spanOf(e), [name, String(rule.binders.length)]);
@@ -807,5 +997,5 @@ export function typing(text: string, schema: Schema, spans: WeakMap<object, Span
 		return { verb: q.check, ...(q.name !== undefined ? { name: q.name } : {}), ...(binder !== undefined ? { binder, kind: kindOf(binder)! } : {}) };
 	}
 
-	return { typed, heads, resolve, found, ask, statement, suppose, element, settled, ex, meet, report, value, describe, spanOf, enumValues };
+	return { typed, heads, resolve, found, ask, statement, suppose, element, params, settled, truth, ex, meet, report, value, describe, spanOf, enumValues };
 }
