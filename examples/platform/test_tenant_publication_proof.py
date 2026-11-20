@@ -7,6 +7,8 @@ from pathlib import Path
 import pytest
 import yaml
 
+from rezono_canon import canonical_bytes, canonical_sha256, sha256_hex
+from rezono_checker.evidence import Evidence
 from rezono_compiler import pack, rules
 from rezono_publisher import batch, publish, store
 
@@ -16,6 +18,8 @@ TENANT = "sprig"
 PEER = "private-neighbor"
 SUMMARY = "tenant_capacity_summary"
 BASIS = "platform_capacity_basis"
+RECEIPT_SOURCE = "capacity-readings"
+RECEIPT_TAG = "capacity-reading"
 # Period, pool limit, tenant usage, peer usage. Distinct limits and free space.
 PERIODS = (("early", 11, 3, 5), ("late", 17, 4, 6))
 
@@ -119,6 +123,55 @@ def prepare(directory):
     return target
 
 
+def capacity_evidence():
+    """Pinned trusted context and candidate completeness receipt covering every reading in PERIODS
+    (decisions/scoped-completeness.md, decisions/admission-transport.md section 6)."""
+    archive = {}
+
+    def pin(name, value):
+        data = canonical_bytes(value)
+        uri = f"archive/{name}"
+        archive[uri] = data
+        return {"file": name, "uri": uri, "sha256": sha256_hex(data)}
+
+    source = {"kind": "query", "name": RECEIPT_SOURCE, "revision": "snapshot-1", "position": "/enumeration"}
+    authorization = pin("observations/retained/authorization.json", {"issuer": "capacity-observer"})
+    definition = pin("observations/retained/definition.json", {"query": RECEIPT_SOURCE})
+    content = []
+    for period, _, own, peer in PERIODS:
+        for team, used in ((TENANT, own), (PEER, peer)):
+            key = [RECEIPT_TAG, period, team]
+            content.append({
+                "key": key,
+                "terminal": {**source, "position": f"/readings/{period}/{team}/end"},
+                "rows": [{
+                    "key": key,
+                    "values": {"tenant": team, "period": period, "cores": used},
+                    "source": {**source, "position": f"/readings/{period}/{team}/0"},
+                }],
+            })
+    content.sort(key=lambda member: canonical_bytes(member["key"]))
+    inventory = [member["key"] for member in content]
+
+    def body(prefix):
+        return {
+            "source": source,
+            "issuer": {"id": "capacity-observer", "authorization": authorization},
+            "scope": {"definition": definition, "query": RECEIPT_SOURCE, "bindings": []},
+            "cut": {"frontier": {"source_id": RECEIPT_SOURCE, "position": "snapshot-1"}},
+            "inventory": pin(f"{prefix}/inventory.json", inventory),
+            "content": pin(f"{prefix}/content.json", content),
+        }
+
+    trusted = body("observations/retained")
+    submitted = body("observations/submitted")
+    identity = canonical_sha256(["rezono.completeness-receipt/1", submitted])
+    candidate = pin("observations/submitted/receipt.json", submitted | {"id": identity})
+    context = pin("observations/retained/context.json", {"completeness": [trusted], "rounds": []})
+    index = pin("observations/submitted/index.json", {"completeness_receipts": [candidate], "rounds": []})
+    return Evidence(context, index, archive.__getitem__)
+
+
 def state(target, private):
     notes = [{"id": f"note-{p}", "issuer": "platform", "origin": "decision", "period": p,
               "free_cores": cap - own - peer, "total_cores": own + peer}
@@ -133,7 +186,7 @@ def state(target, private):
             'capacity_reading__period(x, "late"), capacity_reading__cores(x, n), platform_capacity_basis("late", f, u).\n',
             encoding="utf-8")
     return batch.epoch(target, epoch=2 if private else 1, knowledge_time="2026-03-01T00:00:00Z",
-                       sources=[("rules", "platform-proof-example")])
+                       sources=[("rules", "platform-proof-example")], evidence=capacity_evidence())
 
 
 def declaration(period, free, used):
@@ -225,7 +278,7 @@ def test_complete_publication_reports_a_notice_that_differs_from_the_basis(tmp_p
     late["free_cores"] = free + 1
     path.write_text(yaml.safe_dump(notes), encoding="utf-8")
     changed = batch.epoch(target, epoch=3, knowledge_time="2026-03-01T00:00:00Z",
-                          sources=[("rules", "platform-proof-example")])
+                          sources=[("rules", "platform-proof-example")], evidence=capacity_evidence())
     platform, details, _ = snapshots(changed, store.FileStore(tmp_path / "differing"), "platform", "complete")
     finding = (MISMATCH, ("note-late", "late", str(free + 1), str(used), str(free), str(used)))
     assert {r for r in platform if r[0] == MISMATCH} == {finding}
