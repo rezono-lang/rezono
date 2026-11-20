@@ -16,7 +16,7 @@ A site gives a code with the keyword `code="<code>"` on its error class, or by a
 
 **What it does not count.** `IRError`, `native_rule_dl.Refusal` and `ViewTypingError` carry a code already. `BoundReached`, `NoProof` and `TooBig` are signals inside the engine path, not a judgement of what an author wrote. `UnitError` builds its diagnostics from its problems.
 
-**The budget.** `compiler/error-code-budget.json` holds the number of such sites per file and per class. `compiler/tests/test_error_codes.py` counts them from the source and requires exactly the budget, and the total at most the number it had when the budget was set (869). A new error site without a code is therefore red at once; a pull request that gives sites a code lowers the budget in the same change. The budget only goes down.
+**The budget.** `compiler/error-code-budget.json` holds the number of such sites per file and per class. `compiler/tests/test_error_codes.py` counts them from the source and requires each file and class at most its budget, and the budget total at most the number it had when the budget was set (869). A new error site without a code is therefore red at once; a pull request that gives sites a code may lower the budget in the same change, but need not, so that changes merged together in one queue group cannot break on an exact count. The budget only goes down.
 
 **The order.** The four largest groups first, in the order an author meets them: `CompileError` (reading a pack), `LoadError` (reading facts), `WriteError` (writing facts), `OperationError` (schema operations). Then `RuleError`, `ViewRuleError`, `ViewError`, `PatternError`, `IdentityError` and `Unmatched`. The collected sentences come last, file by file, because they are the most and each needs its own code.
 

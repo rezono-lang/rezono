@@ -370,12 +370,15 @@ class Conversion:
                             raise Refusal("R044", over, "The aggregate measure needs a ranged integer column")
                         arguments.append({"path": ["it", over]})
                     nodes.append({"cmp": ["=", {"path": [var]}, {"agg": arguments}]})
-                case ("cmp", op, left, right):
+                case ("cmp", op, left, right, *typed) if len(typed) <= 1:
                     key = ("comparison", number, item)
                     if self.types.ambiguous(key):
                         raise Refusal("R049", clause.head[0], "The comparison needs compatible nominal types")
                     kind = self.types.type_of(key)
-                    nodes.append({"cmp": [COMPARE[op], self.term(left, kind), self.term(right, kind)]})
+                    operands = [self.term(left, kind), self.term(right, kind)]
+                    if typed:
+                        operands = [{"call": [typed[0], [operand]]} for operand in operands]
+                    nodes.append({"cmp": [COMPARE[op], *operands]})
                 case ("arith", var, op, left, right):
                     terms = [self.term(left, "Int"), self.term(right, "Int")]
                     if op == "div" and (right[0] != "const" or right[1] == "0"):

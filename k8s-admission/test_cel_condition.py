@@ -11,11 +11,6 @@ OPS = {"eq": operator.eq, "ne": operator.ne, "lt": operator.lt,
 VALUES = (-3, 0, 7)
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="M4: Write cel_condition.condition as decisions/k8s-admission-translator.md specifies under Condition. "
-           "Write in k8s-admission/cel_condition.py. Without Go the test checks the exact text; the CI also runs cel-go.",
-)
 def test_cel_condition():
     from cel_condition import condition
 

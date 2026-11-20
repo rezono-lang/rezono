@@ -41,6 +41,11 @@ def release_records(records):
         "task/foreign": ("sent", t + 10, [("other", t + 60, "absent", None, "other-after-delete")]),
         "task/unreceipted": ("sent", t + 10, [("current", t + 30, "absent", None, None)]),
         "task/still": ("sent", t + 10, [("current", t + 60, "present", "task/still", "after-delete")]),
+        # A present read that names no generation still shows the branch at that tick.
+        "task/unnamed": ("sent", t + 10, [
+            ("current", t + 60, "absent", None, "after-delete"),
+            ("current", t + 60, "present", None, "after-delete"),
+        ]),
         "task/contradicted": ("sent", t + 10, [
             ("current", t + 60, "absent", None, "after-delete"),
             ("current", t + 60, "present", "task/contradicted", "after-delete"),
@@ -84,5 +89,6 @@ def test_build_claim_release_confirmation(tmp_path):
         ("current", "task/foreign", "readback-missing"),
         ("current", "task/unreceipted", "readback-missing"),
         ("current", "task/still", "still-present"),
+        ("current", "task/unnamed", "still-present"),
         ("current", "task/contradicted", "still-present"),
     }

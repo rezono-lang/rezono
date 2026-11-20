@@ -1,0 +1,23 @@
+id: https://rezono.org/build/decision_rules
+name: build_decision_rules
+description: Citation scans of tracked files and red tests against decision heads.
+imports: [linkml:types, selection, "std-decision:decision"]
+default_range: string
+annotations:
+  layer: facts
+
+classes:
+  BuildCitationScan:
+    description: A complete citation scan of tracked files and red tests at an observation cut.
+    attributes:
+      id: {identifier: true}
+      run: {range: BuildRun, required: true}
+      observed_at: {range: integer, required: true}
+      source: {required: true}
+  BuildRedCitation:
+    description: A red test whose reason names a decision with a head in a citation scan.
+    attributes:
+      id: {identifier: true}
+      scan: {range: BuildCitationScan, required: true}
+      test: {required: true}
+      decision: {range: Decision, required: true}

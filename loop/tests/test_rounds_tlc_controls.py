@@ -22,16 +22,6 @@ def _invariants(config):
     return set(block.group(1).split()) if block else set()
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason=(
-        "M2: Read decisions/safe-step-rounds.md section 6 and formal/README.md. Link the Claim row of the Rounds "
-        "table in formal/README.md to loop/tests/test_round_claim.py and the SubmitOne, Crash and LoseReply row "
-        "to loop/tests/test_round_submit.py. Write in formal/. Waits for test_round_claim_is_durable_and_exclusive "
-        "and test_round_submit_follows_the_certified_claim."
-    ),
-)
 def test_rounds_tlc_controls():
     model = (FORMAL / "Rounds.tla").read_text(encoding="utf-8")
     following = model.split("\nNext ==", 1)[1].split("\n\n", 1)[0]

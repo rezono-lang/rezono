@@ -113,14 +113,6 @@ def read_form(path, tmp_path):
     return json.loads(form.read_bytes())
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=MissingSliceModule,
-    reason="extra: decisions/language-healthcare-allowance-slice.md: Write examples/zorgtoeslag-slice/rezono/"
-           "allowance.rezono, the module of the slice: the kind Household with partner, insured and joint_income, "
-           "the unit Cents, the parameters with a version per year, and the derived allowance with its two "
-           "exceptions, using only the constructs of the first slice",
-)
 def test_slice_module_uses_only_the_first_slice(tmp_path):
     if not MODULE.is_file():
         raise MissingSliceModule(f"{MODULE.relative_to(ROOT).as_posix()} does not exist")
