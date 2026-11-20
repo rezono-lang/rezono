@@ -107,3 +107,18 @@ cluster_worker_node: cluster worker node
 cluster_worker_node.owner: owner cluster
 cluster_worker_node.endpoint: worker endpoint
 cluster_worker_node.same_cluster: the worker endpoint belongs to the owner cluster
+restore_dataset_binding: restore dataset binding
+restore_dataset_binding.trial: trial
+restore_dataset_binding.dataset: dataset
+restore_dataset_binding.backup: backup
+restore_dataset_binding.capture: capture
+restore_offline_interval: restore offline interval
+restore_offline_interval.run: run
+restore_offline_interval.trial: trial
+restore_offline_interval.start_evidence: start evidence
+restore_offline_interval.end_evidence: end evidence
+restore_offline_interval.readback_evidence: readback evidence
+platform_safe_frontier: platform safe frontier
+platform_safe_blocker: platform safe blocker
+platform_startup_goal: platform startup goal
+platform_restore_goal: platform restore goal

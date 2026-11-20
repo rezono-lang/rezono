@@ -402,12 +402,6 @@ def _protected_evidence(archive_dir, startup):
     return evidence
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError, reason=(
-    "M2: Depends on test_startup_transition_cases, test_restore_offline_dependencies and test_certified_round_replay. "
-    "Bind platform steps to std-loop certified rounds and scoped completeness receipts, add the restore dataset "
-    "binding and offline interval schema/rules, and publish startup and isolated management dataset restore reader "
-    "questions and their actual goal witnesses per decisions/safe-step-rounds.md, sections 3, 4 and 7, "
-    "decisions/standard-packs-everywhere.md, section 2.2, and decisions/loop-certificate-admission.md."))
 def test_platform_safe_rounds_recorded(tmp_path):
     root = copy_pack(tmp_path / "inputs")
     bucket = store.FileStore(tmp_path / "published")
