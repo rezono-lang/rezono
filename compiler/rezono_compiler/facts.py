@@ -30,6 +30,7 @@ PYTHON_TYPES = {"VARCHAR": str, "BIGINT": int, "BOOLEAN": bool, "DATE": datetime
 SQL_TYPES = {"text": "VARCHAR", "enum": "VARCHAR", "integer": "BIGINT", "boolean": "BOOLEAN", "date": "DATE"}
 FORMAT = "rezono.schema-bundle/1"
 DATASET_FORMAT = rezono_module.DATASET_FORMAT
+DATASET_FORMATS = rezono_module.DATASET_FORMATS
 FACT_ROW_KEYS = frozenset({"fact", "id", "valid", "during", "in", "known", "set"})
 _OMITTED = object()
 # A schema without kinds: what admission refuses of a document against it, beside its unknown kinds, is the
@@ -114,6 +115,14 @@ class DatasetForm:
     source: str | None
 
 
+def _dataset_body(form: object) -> dict | None:
+    for fmt in DATASET_FORMATS:
+        body = rezono_module.module_body(form, fmt)
+        if body is not None:
+            return body
+    return None
+
+
 def _declared_dataset(pack_dir: Path, meta: dict, declared: rezono_module.Declared) -> DatasetForm | None:
     path = pack_dir / declared.form
     source_dir = pack_dir.resolve() / rezono_module.DIR
@@ -124,15 +133,15 @@ def _declared_dataset(pack_dir: Path, meta: dict, declared: rezono_module.Declar
         submitted = json.loads(path.read_bytes())
     except (OSError, ValueError) as error:
         raise LoadError(f"{declared.form}: cannot read module form ({error})") from error
-    plain = rezono_module.module_body(submitted, rezono_module.FORMAT)
+    plain = (rezono_module.module_body(submitted, rezono_module.FORMAT)
+             or rezono_module.module_body(submitted, rezono_module.REZONO_1_FORMAT))
     if (plain is not None and rezono_module.fact_tables_only(plain)
             and not rezono_module.form_only_source(pack_dir / declared.module, submitted)):
         return _fact_tables(pack_dir, meta, declared, submitted)
     if any(rezono_module.module_body(submitted, version) is not None
            for version in (rezono_module.FORMAT, *rezono_module.NATIVE_FORMATS)):
         return None
-    module = (rezono_module.module_body(submitted, DATASET_FORMAT)
-              or rezono_module.module_body(submitted, rezono_module.REZONO_1_FORMAT))
+    module = _dataset_body(submitted)
     if module is None:
         raise LoadError(f"{declared.form}: expected a Rezono module form")
     if not any(isinstance(decl, dict) and "dataset" in decl for decl in module["decls"]):
@@ -156,13 +165,17 @@ def _declared_dataset(pack_dir: Path, meta: dict, declared: rezono_module.Declar
     if effective is submitted:
         return DatasetForm(submitted, None)
     effective = rezono_module.dataset_only(effective)
-    authored = rezono_module.module_body(effective, DATASET_FORMAT)
+    authored = _dataset_body(effective)
     dataset = rezono_module.named_dataset(authored) if authored is not None else None
     if authored is None or dataset is None:
         raise LoadError(f"{declared.module}: expected one named dataset")
     if dataset["dataset"] != basename:
         raise LoadError(f"{declared.module}: module '{basename}' declares dataset '{dataset['dataset']}'")
-    errors = [message for _, message, _ in rezono_module.header_errors(authored, pack_name)]
+    errors = [
+        message for _, message, _ in rezono_module.header_errors(
+            authored, pack_name, form_format=effective["format"],
+        )
+    ]
     if errors:
         raise LoadError(f"{declared.module}: " + "; ".join(errors))
     return DatasetForm(effective, declared.module)
@@ -174,15 +187,21 @@ def _fact_tables(pack_dir: Path, meta: dict, declared: rezono_module.Declared, s
     effective = rezono_module.source_form(pack_dir, declared, submitted, errors, lambda source: False)
     if effective is None:
         raise LoadError("\n".join(errors))
-    authored = rezono_module.module_body(effective, rezono_module.FORMAT)
+    authored = (rezono_module.module_body(effective, rezono_module.FORMAT)
+                or rezono_module.module_body(effective, rezono_module.REZONO_1_FORMAT))
     if authored is None or not rezono_module.fact_tables_only(authored):
         raise LoadError(f"{declared.module}: a module of fact tables declares nothing else")
-    problems = [message for _, message, _ in rezono_module.header_errors(authored, str(meta.get("name", "")))]
+    problems = [
+        message for _, message, _ in rezono_module.header_errors(
+            authored, str(meta.get("name", "")), form_format=effective["format"],
+        )
+    ]
     if problems:
         raise LoadError(f"{declared.module}: " + "; ".join(problems))
     spans = [span | {"at": re.sub(r"^/decls/", "/decls/0/decls/", span["at"])} for span in effective["spans"]]
     module = authored | {"decls": [{"dataset": Path(declared.module).stem, "decls": authored["decls"]}]}
-    return DatasetForm({"format": DATASET_FORMAT, "module": module, "spans": spans}, declared.module)
+    out_format = rezono_module.REZONO_1_FORMAT if effective["format"] == rezono_module.REZONO_1_FORMAT else DATASET_FORMAT
+    return DatasetForm({"format": out_format, "module": module, "spans": spans}, declared.module)
 
 
 def dataset_at(path: Path) -> DatasetForm | None:
@@ -231,7 +250,7 @@ def _document_with_dated_tables(
     dataset = dataset_at(path)
     data = dataset.form if dataset is not None else strict_yaml.read(path)
     dated_tables: set[str] = set()
-    if isinstance(data, dict) and data.get("format") == DATASET_FORMAT:
+    if isinstance(data, dict) and data.get("format") in DATASET_FORMATS:
         if pack is not None:
             data, _, dated_tables = _located_scalar_dataset(schema(pack), data, as_of=as_of_date, known=known_date)
         else:
@@ -306,9 +325,9 @@ def _named_dataset(module: dict) -> dict:
 
 def named_dataset_decls(form: dict) -> list:
     """The fact tables and source declarations of the named dataset of a module form, in source order."""
-    module = rezono_module.module_body(form, DATASET_FORMAT)
+    module = _dataset_body(form)
     if module is None:
-        raise LoadError(f"expected {DATASET_FORMAT} with a module header and spans")
+        raise LoadError(f"expected {DATASET_FORMAT} or {rezono_module.REZONO_1_FORMAT} with a module header and spans")
     return _named_dataset(module)["decls"]
 
 
@@ -334,10 +353,14 @@ def _located_scalar_dataset(
     as_of: datetime.date | None = None,
     known: datetime.date | None = None,
 ) -> tuple[dict[str, list], dict[str, list[str]], set[str]]:
-    module = rezono_module.module_body(form, DATASET_FORMAT)
+    module = _dataset_body(form)
     if module is None:
-        raise LoadError(f"expected {DATASET_FORMAT} with a module header and spans")
-    problems = [message for _, message, _ in rezono_module.header_errors(module, judged.pack)]
+        raise LoadError(f"expected {DATASET_FORMAT} or {rezono_module.REZONO_1_FORMAT} with a module header and spans")
+    problems = [
+        message for _, message, _ in rezono_module.header_errors(
+            module, judged.pack, form_format=form["format"],
+        )
+    ]
     if problems:
         raise LoadError("\n".join(problems))
     tables = _named_dataset(module)["decls"]
@@ -378,10 +401,14 @@ def untyped_dataset(form: dict, *,
                     as_of: datetime.date | None = None,
                     known: datetime.date | None = None) -> dict[str, list]:
     """Read the authored shapes when no pack is available to supply column types."""
-    module = rezono_module.module_body(form, DATASET_FORMAT)
+    module = _dataset_body(form)
     if module is None:
-        raise LoadError(f"expected {DATASET_FORMAT} with a module header and spans")
-    problems = [message for _, message, _ in rezono_module.header_errors(module, module["pack"])]
+        raise LoadError(f"expected {DATASET_FORMAT} or {rezono_module.REZONO_1_FORMAT} with a module header and spans")
+    problems = [
+        message for _, message, _ in rezono_module.header_errors(
+            module, module["pack"], form_format=form["format"],
+        )
+    ]
     if problems:
         raise LoadError("\n".join(problems))
 
