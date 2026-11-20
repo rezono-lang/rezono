@@ -27,15 +27,6 @@ class MissingDeprecatedLowering(AssertionError):
     """The compiler refused a deprecated kind or enum, or lowered it otherwise than the decision gives."""
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=MissingDeprecatedLowering,
-    reason="extra: decisions/language-deprecation.md: Lower the member deprecated: {note, until} of a kind and of "
-           "an enum to LinkML deprecated and the annotation deprecated_until on the class or enum, in "
-           "compiler/rezono_compiler/rezono_module.py, and admit the member in rezono.module/2 in "
-           "contracts/rezono-module.yaml. Read the section Lowering. test_deprecated_declaration also admits the "
-           "member in the contract: whoever lands second resolves the conflict.",
-)
 def test_lower_deprecated(tmp_path):
     # Counter-case: without the member the kind and the enum lower as before.
     plain, errors = lowered(tmp_path / "plain", [ZONE, MODE], "rezono.module/1")

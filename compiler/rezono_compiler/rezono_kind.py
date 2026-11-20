@@ -126,13 +126,16 @@ def lower(decl: dict, at: str, own: dict[str, str], owners: dict[str, list[str]]
           own_module: str = "") -> dict | None:
     """`kinds` holds the slots of each kind of the module, which an inverse slot reads."""
     ok = True
-    allowed = (MEMBERS | {"checks", "embedded", "equations", "parent", "relationship"} | rezono_metadata.FIELDS
+    allowed = (MEMBERS | {"checks", "deprecated", "embedded", "equations", "parent", "relationship"} | rezono_metadata.FIELDS
                if extended_format else MEMBERS)
     if extra := set(decl) - allowed:
         refuse(at, f"a kind with {', '.join(sorted(extra))} is not lowered", "§5.1")
         ok = False
     if not rezono_metadata.valid(decl):
         refuse(at, "invalid kind metadata", "§5.1")
+        ok = False
+    deprecated = rezono_metadata.deprecated(decl, at, refuse, "§5.1") if extended_format else ()
+    if deprecated is None:
         ok = False
     embedded = decl.get("embedded") is True
     if extended_format and "embedded" in decl and not embedded:
@@ -212,7 +215,7 @@ def lower(decl: dict, at: str, own: dict[str, str], owners: dict[str, list[str]]
             result.setdefault("annotations", {})["path_equations"] = equations
         if rules:
             result["rules"] = rules
-        return result
+        return rezono_metadata.with_deprecated(result, deprecated or ())
     return None
 
 
