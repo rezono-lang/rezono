@@ -1,5 +1,5 @@
 ---
-decider: [owner, loop, core]
+decider: [owner, loop, core, run]
 decided_on: 2026-11-20
 valid_from: 2026-11-20
 state: in_force
@@ -22,6 +22,8 @@ At `0d1a379d`:
 - **`std-loop`** defines steps, requirements, completions, goals, expectations, observations, sweeps, sweep receipts, deadlines, recorded refusals and pending operations. A refusal can only be recorded (`LoopRefusal`), not derived. A pending operation is an input record with a run and a token and nothing else.
 
 ## 2. One run vocabulary
+
+The vocabulary has two layers. The loop layer, sections 2.1 to 2.3, is how any run proceeds: steps, requirements, claims, effects, receipts and refusals. Its home is `std-loop`. The provider layer, section 2.4, is what each of the three runs is: a run that buys work from a provider, through order, claim, delivery, acceptance, payment and cleanup. This decision names that layer and its mapping as the target. It does not build or move it.
 
 ### 2.1 Inventory
 
@@ -65,6 +67,31 @@ The moves land after this decision, each in its own pull request, never in this 
 4. **Pending operations.** `possible_progress` also holds while an `effect_pending` row names a plan of an unfinished step. `LoopPendingOperation` stays readable until no recorded fixture writes it.
 
 A move that changes `std-loop` changes its hash. The same pull request re-pins every importer, the build pack among them, and keeps every build test green. The build pack's published relation names and rows do not change. Its consumers in CI read relations, not kinds, so selection, claims, the red list and the per-milestone progress keep working through the move. A build test whose records name a moved kind is restated by a planner on the `std-loop` kinds, with the same expectation, before the worker moves the rules. If a move cannot keep a published build row, it does not land. The build pack has no Python fallback: when its publication is missing or the checker refuses it, CI runs every suite, claims stay and nothing new starts, with a finding. No move may weaken that safe state; unknown never means less checking.
+
+### 2.4 A run that buys work from a provider
+
+The build run is a paid run whose provider is an LLM provider. The engine epoch run buys compute: CI runners and the disposable cluster. The paid run buys servers from a hosting provider. All three order work, claim it so that it is done once, take delivery, accept it against independent evidence, pay for it within a decided bound, and clean up what is left. `run/packs/` already holds most of that layer in a provider-neutral form; only `provider-terms` names a provider.
+
+| Stage | Paid run (servers) | Build run (LLM work) | Engine epoch run (compute) |
+| --- | --- | --- | --- |
+| Order | one order of the approved plan; `dispatch` binds the approval and its cap to the exact plan hash ([price enforcement](run-price-enforcement.md)) | start a worker session on one red test | dispatch the compile, evaluation and check jobs, and the Feldera shards |
+| Claim | `refs/rezono/run-claims/<plan hash>`, created once with an empty lease ([shared claim](run-shared-claim.md)) | `refs/heads/task/<test>`, created once with an empty lease ([worker card](../WORKER.md), step 2) | `effect:<plan>` and `run:<run>` (section 5) |
+| Delivery | the machines that come back, with addresses and disks (`cluster-shape`) | the pull request with the lifted mark | the evaluated rows and witnesses, then the written forms |
+| Acceptance | the delivered machines match the order and the plan (`cluster-shape` `valid_machine`, order status, price enforcement) | the red test turns green and the checker agrees: the required checks pass, then the merge queue | `publish_allowed` (section 3.3) |
+| Payment | rated and billed charges against an approved ceiling (`invoice-drift`, [run reconciliation](run-reconciliation.md)) | tokens and run minutes, usage-billed, today without a cap | CI and cluster minutes, today without a cap |
+| Cleanup | a complete tagged-resource inventory confirms cleanup (`cleanup`), before a deadline (`cleanup-deadline`, [server deadline](run-server-deadline.md)) | release an expired claim, confirmed by a complete ref read (`build_claim_release_*`, `scripts/release_claims.py`) | tear down the cluster and pipelines, confirmed by a complete read |
+
+Four concepts are defined twice today, once for servers and once for LLM work.
+
+- **Claims.** [Shared claim](run-shared-claim.md) creates `refs/rezono/run-claims/<plan hash>` with `--force-with-lease=<ref>:`, which succeeds once. The worker card claims `refs/heads/task/<test>` with the same empty lease. `scripts/release_claims.py` releases it with `--force-with-lease=<ref>:<head>`, and the build pack models that release (`build/rules/claim_release.dl`). They are one mechanism, a write-once ref. They differ only in what is claimed (a plan hash or a red test) and whether a lease ends the claim: a server claim is never released, a task claim is. `scripts/release_claims.py` also writes the lease as a literal four hours, while the build pack reads it from `BuildClaimLease` and its decision. That literal is a decision in code, fate (c) of [code does not decide](code-does-not-decide.md).
+- **Brake and lease.** Two kinds of decided bound appear in both runs.
+  - *How much work at once.* For servers, `cluster-shape`'s `Line.quantity` bounds the order. For LLM work, `BuildQueueLimit` bounds the planner slots.
+  - *How long a phase may take.* For servers, `probe-profiles`' `ProbePhaseBudget` (seconds, under a `std-decision` `Decision`) bounds a phase. For LLM work, `BuildClaimLease` (seconds, under a `Decision`) bounds a claim.
+  - Both are a decided bound on work bought from a provider. The time bound is a `LoopDeadline` whose budget a decision states (section 2.2, `lease_budget`).
+- **Ports.** [Provider ports](run-provider-ports.md) names a price and availability read, a single order, order status, a tagged-resource inventory and cleanup. It also requires a complete, independent inventory before cleanup counts. The build run has the same ports: a quota or price read of the LLM provider, starting a worker, the status of a session and its pull request, an inventory of `task/` branches and sessions, and release. It has the same rule too: a complete ref read with its receipt confirms a release (`BuildClaimRefRead`).
+- **Billing.** `provider-terms` derives that an order with a usage-billed detail (`UsageDetailType`) has no quote guarantee. An LLM session is billed by usage, so the same rule applies: its price is never guaranteed. Like a paid order, it needs an approved cap, a `std-decision` ceiling as in [run reconciliation](run-reconciliation.md), against which its rated usage is compared. The build run has no such cap today, and neither has the engine epoch run's compute.
+
+**The target.** The provider layer gets one home: a standard pack for runs that buy work. It is built from the provider-neutral parts of `run/packs/` (`dispatch`, `cleanup`, `cleanup-deadline` and the reconciliation of `invoice-drift`) and sits on `std-loop` and `std-decision`. Each run then supplies only its provider: the paid run through `provider-terms` and its ports; the build run through an LLM provider's terms, its claims as provider claims and its sessions as orders; the engine epoch run through its compute. The build run's mapping is the row of the table above. Its migration is not part of this decision. The owner may make it a steering point of its own; until then the build pack and `run/packs/` stay as they are. The pack's name is registered as [standard pack names](standard-pack-names.md) requires when the decision that creates it lands.
 
 ## 3. The engine epoch run
 
@@ -240,5 +267,6 @@ All are `extra:`. Release 1 does not include this run.
 - **Evaluate the loop with the engine of the judged commit.** A broken engine would then judge itself. A pinned release keeps the judge outside the change.
 - **Let the loop check the witnesses.** That would make the loop a second checker with the engine's code paths. The checker stays the independent oracle (root AGENTS.md, rule 6).
 - **Name `pack_sha256` in the role's witness.** It hashes facts the role may not read, so the statement would differ between worlds the role cannot tell apart. The complete witness carries it instead.
-- **A new standard pack for claims and effects.** Claims, receipts, refusals and the fixed point are one model; a second pack would make `std-loop` import it for every run.
+- **A new standard pack for claims and effects.** Claims, receipts, refusals and the fixed point are one model; a second pack would make `std-loop` import it for every run. The provider layer of section 2.4 is a different cut: order, delivery, acceptance, payment and cleanup are what a run buys, not how a loop proceeds, so it sits on `std-loop` and not in it.
+- **Keep the build run as a kind of its own.** Its claims, lease, queue bound, ports and missing cap are the paid run's under other names (section 2.4). Two definitions would drift, as the literal four hours in `scripts/release_claims.py` already has from `BuildClaimLease`.
 - **Add `allowed` to version 2.** Version 2 is specified and its test exists; changing its fields before it is built would move a target under a worker. Version 3 extends it without touching its rules.
