@@ -643,6 +643,7 @@ def lower(pack_dir: Path, d: Declared, form: dict, pack: str, owners: dict[str, 
                 decl, at, own, owners, declared_names, uses, refuse,
                 extended_format=extended_format, aliases=prefixes, kinds=kinds,
                 integer_types=integer_types, own_module=d.id, rezono_1=rezono_1,
+                layer=d.layer,
             )
             if lowered_kind is not None:
                 if keys:
