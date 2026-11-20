@@ -118,6 +118,9 @@ def _declared_dataset(pack_dir: Path, meta: dict, declared: rezono_module.Declar
         raise LoadError(f"{declared.form}: expected a Rezono module form")
     if not any(isinstance(decl, dict) and "dataset" in decl for decl in module["decls"]):
         return None
+    # Declarations before the dataset are lowered as a schema module; only the dataset's tables load here.
+    submitted = rezono_module.dataset_only(submitted)
+    module = submitted["module"]
 
     basename = Path(declared.module).stem
     name = _named_dataset(module)["dataset"]
@@ -133,6 +136,7 @@ def _declared_dataset(pack_dir: Path, meta: dict, declared: rezono_module.Declar
         raise LoadError("\n".join(errors))
     if effective is submitted:
         return DatasetForm(submitted, None)
+    effective = rezono_module.dataset_only(effective)
     authored = rezono_module.module_body(effective, DATASET_FORMAT)
     dataset = rezono_module.named_dataset(authored) if authored is not None else None
     if authored is None or dataset is None:

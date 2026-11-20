@@ -12,6 +12,7 @@ import pytest
 from calcsupport import run_both
 from golden import differences, golden
 from rezono_compiler import calc, calc_sql, pack, scenarios
+from rezono_compiler import facts as fact_files
 from support import FIXTURE, REPO, compile_dir, expected, load, violations
 
 ROOT = Path(__file__).parent
@@ -82,20 +83,23 @@ def test_two_compiles_give_identical_bytes(example, tmp_path):
 
 
 @pytest.mark.parametrize("example, facts", FACT_FILES, ids=[f"{name(e)}:{f}" for e, f in FACT_FILES])
-def test_violations(example, facts, tmp_path):
+def test_violations(example, facts, committed_packs):
+    """The pack as compiled once for this process (its compile is checked above); its own copy for each file."""
     want = example / "expected" / "violations" / f"{facts}.json"
     assert want.exists(), f"{name(example)}: facts/{facts}.yaml has no expected/violations/{facts}.json"
-    files = compile_dir(example, tmp_path)
-    assert violations(files, load(example, example / "facts" / f"{facts}.yaml")) == expected(want)
+    files = committed_packs.compiled(example)
+    rows = fact_files.load(committed_packs.model(example), example / "facts" / f"{facts}.yaml")
+    assert violations(files, rows) == expected(want)
 
 
 @pytest.mark.parametrize("example, fixture", DIAGNOSTICS, ids=[f"{name(e)}:{f}" for e, f in DIAGNOSTICS])
-def test_diagnostics(example, fixture, tmp_path):
+def test_diagnostics(example, fixture, committed_packs):
     want = example / "expected" / "diagnostics" / f"{fixture}.json"
     assert want.exists(), f"{name(example)}: diagnostics/{fixture}.yaml has no expected/diagnostics/{fixture}.json"
     assert expected(want), f"{name(example)}: a diagnostic fixture shows at least one violation"
-    files = compile_dir(example, tmp_path)
-    assert violations(files, load(example, example / "diagnostics" / f"{fixture}.yaml")) == expected(want)
+    files = committed_packs.compiled(example)
+    rows = fact_files.load(committed_packs.model(example), example / "diagnostics" / f"{fixture}.yaml")
+    assert violations(files, rows) == expected(want)
 
 
 # --- Calculation rules (M3): every pack with calc/, per fact state --------------------------------
@@ -166,9 +170,7 @@ class MissingCalculationFiles(FileNotFoundError):
 
 @pytest.mark.parametrize("example", [
     *(pytest.param(e, id=name(e)) for e in CALC if e != SUBSIDY),
-    pytest.param(SUBSIDY, id="subsidy", marks=pytest.mark.xfail(
-        strict=True, raises=MissingCalculationFiles, reason="Needs independent expected/calc JSON for every "
-        "subsidy fact state. The worked amounts are in examples/subsidy/README.md and reference.py.")),
+    pytest.param(SUBSIDY, id="subsidy"),
 ])
 def test_calculation_reference_files(example):
     """Compare the complete serialized output and write candidates for missing or changed files under compiled/."""

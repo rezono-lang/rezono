@@ -1,0 +1,57 @@
+rezono 0
+pack zorgtoeslag-slice
+
+--- The first slice of the healthcare allowance (decisions/language-healthcare-allowance-slice.md): ordered
+--- exceptions, dated facts and parameter versions per year, and nothing else the reader does not lower yet.
+--- Amounts, rates and article numbers are those of examples/zorgtoeslag. They are illustrative, not the
+--- published figures. An amount is a whole number of cents: 218000 is EUR 2,180.00.
+
+unit Cents = money minor EUR
+
+kind Household  world closed
+  partner: Bool                        -- a fact of the household: the claimant has a toeslagpartner
+  insured: Bool                        -- dated: a version per period of health insurance cover
+  joint_income: Cents                  -- dated: the toetsingsinkomen, a version per calendar year
+
+param standard_premium: Cents
+  version 1, valid 2025-01-01..<2026-01-01, known 2024-09-17  = 211200  @ regeling-zt#art-1
+  version 2, valid 2026-01-01.., known 2025-09-16             = 218000  @ regeling-zt#art-1
+  version 3, valid 2026-01-01.., known 2026-03-02             = 219000  @ wijziging-zt#art-I
+
+param threshold_income: Cents
+  version 1, valid 2025-01-01..<2026-01-01, known 2024-09-17  = 2840600  @ awir#art-2.1
+  version 2, valid 2026-01-01.., known 2025-09-16             = 2960000  @ awir#art-2.1
+
+param income_limit_single: Cents
+  version 1, valid 2025-01-01..<2026-01-01, known 2024-09-17  = 3852000  @ wzt#art-2.2
+  version 2, valid 2026-01-01.., known 2025-09-16             = 3971900  @ wzt#art-2.2
+
+param income_limit_partner: Cents
+  version 1, valid 2025-01-01..<2026-01-01, known 2024-09-17  = 4822400  @ wzt#art-2.2
+  version 2, valid 2026-01-01.., known 2025-09-16             = 5020600  @ wzt#art-2.2
+
+param rate_above: Ratio = 13.7 %
+
+extend Household
+  derived income_limit: Cents =
+      when partner then income_limit_partner else income_limit_single
+
+  derived threshold_rate: Ratio =
+      when partner then 4.256 % else 1.879 %
+
+  derived household_premium: Cents =
+      when partner then 2 * standard_premium else standard_premium
+
+  derived norm_premium: Cents =
+      threshold_rate * threshold_income
+      + rate_above * (when joint_income > threshold_income then joint_income - threshold_income else 0)
+
+  derived yearly_amount: Cents =
+      when household_premium > norm_premium then household_premium - norm_premium else 0
+
+  -- The monthly allowance, rounded down to whole euros. The lower block is read first (v0 section 5b).
+  derived allowance: Cents = floor(yearly_amount / 1200) * 100
+    unless
+      when not insured then 0                            @ wzt#art-2.1
+    unless
+      when joint_income > income_limit then 0            @ wzt#art-2.2

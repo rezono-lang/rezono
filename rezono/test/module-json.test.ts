@@ -184,7 +184,7 @@ test('the four states of a value are four different literals, and none of them i
 	assert.equal(new Set(table.rows[0].map((cell) => canonicalJson(cell))).size, 5);
 	assert.deepEqual(moduleFromJson(JSON.parse(moduleToJson(form))), form);
 	// The same in a fact row, with a reason given as its label.
-	const [row] = formOf(['pack lab', 'fact host host-a', '  a = n/a', '  b = unknown "not measured yet"', '  c = invalid out_of_range']).module.decls as { set: unknown[] }[];
+	const [, row] = formOf(['pack lab', 'reason not_measured = "not measured yet"', 'fact host host-a', '  a = n/a', '  b = unknown "not measured yet"', '  c = invalid out_of_range']).module.decls as [unknown, { set: unknown[] }];
 	assert.deepEqual(row.set, [
 		{ slot: 'a', value: { lit: 'n/a' } },
 		{ slot: 'b', value: { lit: 'unknown "not measured yet"' } },

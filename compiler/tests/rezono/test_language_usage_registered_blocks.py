@@ -35,15 +35,6 @@ EXPECTED = [
 ]
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=MissingRegisteredBlock,
-    reason="extra: decisions/language-pending-building-blocks.md: In scripts/language_usage.py, add the features "
-           "deprecated-declaration (a deprecated line), intermediate-invariant (invariant intermediate on a rule "
-           "head) and step-declaration (a step line) to MODULE_SYNTAX and their evidence to EVIDENCE: "
-           "test_deprecated_declaration and test_lower_deprecated, test_invariant_intermediate, and "
-           "test_step_declaration. Read the rows for safe steps and deprecation in that decision.",
-)
 def test_language_usage_registered_blocks(tmp_path):
     (tmp_path / "packs/sample/rezono").mkdir(parents=True)
     (tmp_path / "packs/sample/pack.yaml").write_text("name: sample\n", encoding="utf-8")

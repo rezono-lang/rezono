@@ -112,18 +112,20 @@ COUNTER_CASES = {
            "queue from the admitted verified_member keys of the receipt that the build_queue_listing row names: "
            "the member [\"queue-listing\", base] (parts 0 and 1) for the read itself, also when it lists nothing, "
            "and one member [\"queue-pull\", base, number] (parts 0 to 2) per open pull request against the base "
-           "that is not a draft. Derive build_queue_at_cut(run, count, listing) only for a listing at the run's "
-           "cut whose named receipt is admitted with its queue-listing member; count is the number of its "
-           "queue-pull members for that base. Leave the count unknown when a second admitted receipt carries the "
-           "same queue-listing member, or when a recorded open pull request against the base that is not a draft "
-           "has no member. A build_queue_reading row no longer establishes a count; keep its class. Keep "
-           "build_queue_known, build_planner_slot and build_planner_waiting as they are. Write in build/ "
-           "(tasks.dl and its schema). Waits for "
-           "loop/tests/test_mapped_path_requires_reader_inventory.py--test_mapped_path_requires_reader_inventory, "
-           "which declares verified_receipt and verified_member in build/rules/selection.dl; reuse those "
-           "declarations. The same rule turns loop/tests/test_build_queue_count.py--test_build_queue_count[empty] "
-           "green: remove its mark in the same PR. Today the rules count the submitted pull records, so an omitted, "
-           "emptied or unadmitted listing and a bare reading still give a planner slot (MissingVerifiedQueue).",
+           "that is not a draft. verified_member exposes part 2 as canonical decimal text (symbol), so change "
+           "BuildQueuePull.number in build/schema/tasks.yaml from integer to string (default_range: string, "
+           "required: true) so build_queue_pull__number joins directly with verified_member(receipt, m, 2, number); "
+           "queue_listing in loop/tests/test_build_task_order.py adapts to string automatically. Derive "
+           "build_queue_at_cut(run, count, listing) only for a listing at the run's cut whose named receipt is "
+           "admitted with its queue-listing member; count is the number of its queue-pull members for that base. "
+           "Leave the count unknown when a second admitted receipt carries the same queue-listing member, or when "
+           "a recorded open pull request against the base that is not a draft has no member. A build_queue_reading "
+           "row no longer establishes a count; keep its class. Keep build_queue_known, build_planner_slot and "
+           "build_planner_waiting as they are. Reuse the verified_receipt and verified_member declarations in "
+           "build/rules/selection.dl. Write in build/ (schema/tasks.yaml and rules/tasks.dl). The same rule turns "
+           "loop/tests/test_build_queue_count.py--test_build_queue_count[empty] green: remove its mark in the same "
+           "PR. Today the rules count the submitted pull records, so an omitted, emptied or unadmitted listing and "
+           "a bare reading still give a planner slot (MissingVerifiedQueue).",
 )
 def test_planner_slot_needs_verified_pull_inventory(tmp_path):
     records = submitted(tmp_path / "admitted")
