@@ -7,7 +7,8 @@
 	"engines": { "node": ">=24" },
 	"scripts": {
 		"test": "node --test test/*.test.ts",
-		"form": "node src/write-form.ts"
+		"form": "node src/write-form.ts",
+		"fmt": "node src/fmt.ts"
 	},
 	"dependencies": {
 		"ohm-js": "17.5.0"
