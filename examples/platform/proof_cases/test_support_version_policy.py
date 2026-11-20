@@ -76,15 +76,6 @@ def leaf(leaves, relation, key):
     return any(rel == relation and row[0] == key for rel, row in leaves)
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError, reason=(
-    "extra: decisions/platform-support-version-policy.md: Derive latest_supported_cycle(reference, product, cycle), support_severity(reference, service, cycle, "
-    "severity), support_severity_unknown(reference, service, reason) with reasons pin-unmapped, cycle-conflict "
-    "and policy-missing, and support_severity_drift(reference, service, cycle, derived, registered, entry) in "
-    "rules/support_version_policy.dl, using std-time for holds and ended and std-decision in_force_on for the "
-    "policy. Declare VendorCycleSupport (is_a Interval; product: Product, series, source_url, source_sha256), "
-    "SupportReference (point: ReferencePoint, standing_on: ReferenceDate), SupportPolicy (decision: Decision, "
-    "product: Product, warning_days) and SupportAssessmentEntry (revision, service: Service, series, severity) in "
-    "schema/support_version_policy.yaml; no fact rows. Read decisions/platform-support-version-policy.md."))
 def test_support_version_policy():
     data = records()
     model, state, (latest, severity, unknown, drift) = outcome(data)
