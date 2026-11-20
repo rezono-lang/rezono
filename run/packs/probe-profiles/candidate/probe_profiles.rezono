@@ -1,0 +1,81 @@
+rezono 0
+pack probe-profiles
+use std-part
+use std-decision
+use std-access
+
+schema probe_profiles
+  iri "https://rezono.org/run/probe-profiles/design"
+  language en
+  prefix linkml = "https://w3id.org/linkml/"
+  import "linkml:types"
+  default range Text
+  description "The approved probe design and its approved terms: a profile, its cells, the planned clusters and members of each cell, the phases and the storage variants. Identities only; no machine inventory or provider request is described here."
+  annotation layer = "facts"
+
+enum MembershipCoverage world closed = complete | partial
+  description "Whether the snapshot certifies that the profile membership is complete."
+  value complete
+    description "Every planned cell, cluster and member of the profile is recorded."
+  value partial
+    description "Some planned members may be missing from the records."
+
+enum PhysicalRequirement world closed = required | optional
+  description "What a decision says about physical machines for a cell."
+  value required
+    description "The cell runs on physical machines."
+  value optional
+    description "Physical machines are explicitly permitted but not required."
+
+kind ProbeProfile is Constituent world closed
+  description "A probe profile, the whole that its cells are part of."
+
+kind ProbeCell is Constituent world closed
+  description "A cell of a profile. Its part_of is the profile."
+
+kind ProbeCluster is Constituent world closed
+  description "A planned cluster of a cell. Its part_of is the cell."
+
+kind ProbeMember is Constituent world closed
+  description "A planned member of a cluster. Its part_of is the cluster."
+
+kind ProbePhase world closed
+  description "A phase of a probe. A phase keeps its identity when a variant sets another budget for it."
+  precedes: ProbePhase*
+    description "The phase that directly follows."
+
+kind ProbeStorageVariant world closed
+  description "A storage variant with its own installation method."
+  storage: Text
+  installation: Text
+
+kind ProbeSnapshot world closed
+  description "A recorded planning snapshot, with its reference day and the completeness of the membership."
+  profile: ProbeProfile
+  reference_date: ReferenceDate
+  membership_complete: MembershipCoverage
+
+kind ProbePhaseBudget world closed
+  description "The approved duration of one phase for one storage variant of one profile."
+  profile: ProbeProfile
+  variant: ProbeStorageVariant
+  phase: ProbePhase
+  decision: Decision
+  seconds: Int
+    minimum 0
+
+kind ProbePhysicalRequirement world closed
+  description "A dated requirement about physical machines for one cell of a profile."
+  profile: ProbeProfile
+  cell: ProbeCell
+  decision: Decision
+  requirement: PhysicalRequirement
+
+kind ProbeTermCoverage world closed
+  description "A certification that the decision terms are complete for the scope of a snapshot."
+  snapshot: ProbeSnapshot
+
+kind ProbeBudgetReadGrant world closed
+  description "A role may read one phase budget, and the evidence it rests on."
+  role: Role
+  budget: ProbePhaseBudget
