@@ -12,3 +12,6 @@ structural_stuck(run, step, reason) :-
 structural_stuck(run, step, reason) :-
     declared(run, step, _),
     refusal(run, step, reason).
+
+// An expired deadline blocks its step: the step is stuck and cannot be ready.
+structural_stuck(run, step, deadline) :- deadline_expired(run, step, _, deadline, _).

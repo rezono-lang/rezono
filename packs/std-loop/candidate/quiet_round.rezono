@@ -52,11 +52,33 @@ rules quiet_round
   | complete_current_sweep(run, sweep) :-
   |     current_sweep(run, sweep, _), sweep_flag(sweep, complete), complete = TRUE.
   | 
-  | // At the inclusive boundary of its budget an unfinished step has expired.
-  | .decl deadline_expired(run: symbol, step: symbol, sweep: symbol, deadline: symbol, start: symbol)
-  | deadline_expired(run, step, sweep, deadline, start) :-
+  | // The boundary of a deadline whose start observation belongs to the same run.
+  | .decl deadline_until(run: symbol, step: symbol, deadline: symbol, start: symbol, until: number)
+  | deadline_until(run, step, deadline, start, until) :-
   |     loop_deadline__run(deadline, run), loop_deadline__step(deadline, step),
   |     loop_deadline__start(deadline, start), loop_deadline__budget(deadline, budget),
   |     loop_observation__run(start, run), loop_observation__event_time(start, started),
-  |     current_sweep(run, sweep, time), until = started + budget, until <= time,
-  |     declared(run, step, _), !waiting_done(run, step).
+  |     until = started + budget.
+  | 
+  | // A deadline must count from a start observation of its own run; another run's start cannot date it.
+  | // @invariant
+  | .decl deadline_foreign_start(deadline: symbol)
+  | deadline_foreign_start(deadline) :-
+  |     loop_deadline__run(deadline, run), loop_deadline__start(deadline, start),
+  |     loop_observation__run(start, other), other != run.
+  | 
+  | // A step met its deadline when it is done and its completion value was observed at or before the boundary.
+  | .decl done_in_time(run: symbol, step: symbol, deadline: symbol)
+  | done_in_time(run, step, deadline) :-
+  |     deadline_until(run, step, deadline, _, until), done(run, step, _),
+  |     completion(run, step, token, _), expectation(token, value),
+  |     observed(run, token, time, _, "known", value, _), time <= until.
+  | 
+  | // At the inclusive boundary of its budget a step that did not finish in time has expired.
+  | // The current sweep only dates the round, so an incomplete sweep expires a deadline too.
+  | // Expiry is terminal: a completion observed after the boundary does not clear it.
+  | .decl deadline_expired(run: symbol, step: symbol, sweep: symbol, deadline: symbol, start: symbol)
+  | deadline_expired(run, step, sweep, deadline, start) :-
+  |     deadline_until(run, step, deadline, start, until),
+  |     current_sweep(run, sweep, time), until <= time,
+  |     declared(run, step, _), !done_in_time(run, step, deadline).
