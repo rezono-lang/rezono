@@ -191,10 +191,16 @@ class TypedRecording:
 
                 # Refine only this snapshot's representation, scaling stored and arriving ticks together.
                 factor = lcm(*(ticks.denominator for _, ticks in arrived))
-                records = {**self.records, "loop_observation": list(stored.values())}
-                if sweeps:
-                    records["loop_sweep"] = list(sweeps.values())
-                if sweep.receipt is not None:
+                records = {
+                    **self.records,
+                    "loop_observation": [row for row in stored.values() if row["run"] == self.run],
+                }
+                active_sweeps = [row for row in sweeps.values() if row["run"] == self.run]
+                if active_sweeps:
+                    records["loop_sweep"] = active_sweeps
+                else:
+                    records.pop("loop_sweep", None)
+                if sweep.receipt is not None and sweep.receipt["run"] == self.run:
                     records["loop_sweep_receipt"] = [sweep.receipt]
                 records = scale_timed_records(records, self.run, factor)
                 observed = {(row["run"], row["id"]): row for row in records["loop_observation"]}

@@ -65,3 +65,34 @@ def test_typed_recording_scopes_record_ids_by_run(tmp_path):
     )
     with pytest.raises(ValueError, match="conflicting records for sweep"):
         list(typed_recording(tmp_path, data).snapshots())
+
+
+def test_typed_recording_does_not_leak_other_run_values_with_shared_ids(tmp_path):
+    data = setup_recording(tmp_path)
+    data["records"]["loop_observation"] = [
+        {
+            "id": "recorded-status/shared",
+            "run": "prior",
+            "token": "seeded",
+            "event_time": 1,
+            "state": "known",
+            "value": "yes",
+            "reason": "prior-seed",
+        },
+    ]
+    data["records"]["loop_sweep"] = [
+        {"id": "sw-1", "run": "prior", "event_time": 1, "complete": True},
+    ]
+    data["sweeps"] = [
+        boundary(
+            "sw-1",
+            run="active",
+            at=10,
+            complete=False,
+            observations=[observation("active", "sw-1", "seed", "shared", 10, "no")],
+        ),
+    ]
+
+    snapshots = list(typed_recording(tmp_path, data).snapshots())
+    assert snapshots[-1].drift == {("active", "seeded", "seeded", "sweep/sw-1/shared")}
+    assert not snapshots[-1].fixed_point
