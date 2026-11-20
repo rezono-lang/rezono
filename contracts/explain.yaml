@@ -311,7 +311,7 @@ classes:
       manifest: {description: "The target manifest (a proposal or variant); absent for a sweep and for a supposition, which has none."}
   Difference:
     description: >-
-      What a delta changed in what the role reads (rezono.explain-index/1, docs/gui.md "suppose in profile edge"),
+      What a delta changed in what the role reads (rezono.explain-index/1; decisions/local-suppose.md, "The answer"),
       in its own order: by relation, then by key element by element. A page holds at most the limit of entries;
       the cursor (next) is 0,<relation>,<key>.
     attributes:
