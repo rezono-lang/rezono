@@ -150,7 +150,7 @@ request_outcome(r, "capacity") :-
 landed_request(r) :-
     request_outcome(r, "landed").
 
-.decl free_cores(pool: symbol, count: number)
+.decl free_cores(pool: symbol, cores: number)
 free_cores(pool, free) :-
     admission_after(pool, step, free),
     total = count : { request_ordinal(_, _) },
