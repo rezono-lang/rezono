@@ -6,9 +6,18 @@ decisions/build-reconciliation.md (task and queue observations) and decisions/ad
 member ["queue-pull", base, number] of the admitted receipt that the listing names, beside the member
 ["queue-listing", base] of the read itself. With a limit of three, each excluded pull request would on its own lift
 the count of two to the limit.
+
+Most cases read the rows of the rules from the same epoch that a publication makes, without its witness instances
+(`derived`): computing every witness instance takes most of a publication's time. The proofs of the count, a slot
+and a waiting reason are published and checked once, in test_build_queue_count_is_published.
 """
+import shutil
+from unittest import mock
+
 import pytest
 import yaml
+from rezono_compiler import batch as engine
+from rezono_publisher import batch, publish, store
 from test_build_claim_release_plan import ROOT
 from test_build_selection import OBSERVED_AT, capture, published, repository
 from test_build_task_order import queue_evidence, queue_listing, queue_members, task_observations
@@ -22,6 +31,10 @@ SLOT = [["current", "listing", "placement-policy"]]
 
 class MissingVerifiedQueue(AssertionError):
     """The planner queue is counted from submitted records instead of the admitted pull inventory."""
+
+
+class MissingQueueListingMember(AssertionError):
+    """The planner queue is counted from a receipt without its single tagged listing member for the base."""
 
 
 def declared_kinds():
@@ -47,10 +60,35 @@ def listing(records, pulls, receipt, inventories=()):
     return evidence
 
 
-def outcome(tmp_path, records, evidence):
-    rows = published(tmp_path, records, evidence)
-    return tuple([row["key"] for row in rows.get(relation, [])]
-                 for relation in ("build_queue_known", "build_planner_slot", "build_planner_waiting"))
+RELATIONS = ("build_queue_known", "build_planner_slot", "build_planner_waiting")
+
+
+def derived(tmp, records, evidence=None):
+    """The rows of `records` through the build pack in the epoch `published` makes, before it is published.
+
+    The epoch is the same, with the same facts, admitted evidence and checks, except that it computes no witness
+    instances; a publication blocks on a red check, so every check must be green here too. Rows come back as the
+    reader's snapshot gives them: {"key": [text, ...]}, sorted by key."""
+    build = tmp / "build"
+    shutil.copytree(ROOT / "build", build)
+    for pack in ("std-loop", "std-order", "std-decision"):
+        shutil.copytree(ROOT / "packs" / pack, tmp / "packs" / pack)
+    (build / "facts").mkdir()
+    (build / "facts" / "input.yaml").write_text(yaml.safe_dump(records), encoding="utf-8")
+    handoff = {} if evidence is None else {"evidence": evidence(store.FileStore(tmp / "archive"))}
+    with mock.patch.object(engine, "witnesses", lambda con, prog, rule_ids=None: {}):
+        epoch = batch.epoch(build, epoch=1, knowledge_time="2027-01-15T08:00:00Z", sources=[("facts", "input")],
+                            **handoff)
+    assert not epoch.witnesses
+    red = [check for check in epoch.checks if check["status"] != "green"]
+    assert not red, f"red checks would block the publication: {red}"
+    return {relation: [{"key": list(row)} for row in sorted(set(rows), key=publish.key_text)]
+            for relation, rows in epoch.rows.items()}
+
+
+def outcome(tmp_path, records, evidence, publication=derived):
+    rows = publication(tmp_path, records, evidence)
+    return tuple([row["key"] for row in rows.get(relation, [])] for relation in RELATIONS)
 
 
 def expected(known, waiting):
@@ -71,13 +109,7 @@ def submitted(tmp_path):
     pytest.param(COUNTED + EXCLUDED, "admitted", [1, 2], "2", None, id="two-of-five"),
     pytest.param(COUNTED + EXCLUDED + [SIXTH], "admitted", [1, 2, 6], "3", "queue-limit", id="at-limit"),
     # The submitted listing is empty while the admitted read lists three pull requests: the queue is at its limit.
-    pytest.param([], "admitted", [1, 2, 6], "3", "queue-limit", id="empty", marks=pytest.mark.xfail(
-        strict=True, raises=MissingVerifiedQueue,
-        reason="M2: decisions/admission-transport.md: section 6, queue pulls. An empty submitted listing whose "
-               "admitted read lists three open pull requests reaches the limit of three. The same rule turns "
-               "loop/tests/test_build_queue_count.py--test_planner_slot_needs_verified_pull_inventory green; "
-               "remove this mark in that PR. Today the rules count the empty records (known 0 and a planner slot, "
-               "MissingVerifiedQueue).")),
+    pytest.param([], "admitted", [1, 2, 6], "3", "queue-limit", id="empty"),
     pytest.param([], "admitted", [], "0", None, id="verified-empty"),
     pytest.param(COUNTED + EXCLUDED, None, None, None, "queue-evidence-unknown", id="no-receipt"),
     pytest.param(COUNTED + EXCLUDED, "stale-round", None, None, "queue-evidence-unknown", id="stale-receipt"),
@@ -89,6 +121,18 @@ def test_build_queue_count(tmp_path, pulls, receipt, inventory, known, waiting):
     actual = outcome(tmp_path, records, evidence)
     if actual != expected(known, waiting):
         raise MissingVerifiedQueue(f"known, slot and waiting: {actual}")
+
+
+# One count with a planner slot, and one at the limit with a waiting reason: the checker checks the proof of each
+# published row of the queue count against the reader's snapshots.
+@pytest.mark.parametrize(("pulls", "inventory", "known", "waiting"), [
+    pytest.param(COUNTED + EXCLUDED, [1, 2], "2", None, id="slot"),
+    pytest.param(COUNTED + EXCLUDED + [SIXTH], [1, 2, 6], "3", "queue-limit", id="waiting"),
+])
+def test_build_queue_count_is_published(tmp_path, pulls, inventory, known, waiting):
+    records = submitted(tmp_path)
+    evidence = listing(records, pulls, "admitted", (queue_members(inventory),))
+    assert outcome(tmp_path, records, evidence, published) == expected(known, waiting)
 
 
 # Each case drops one ground of the count: the admitted receipt, the full population, the tag, the base, the read
@@ -103,42 +147,33 @@ COUNTER_CASES = {
     "second-receipt": (COUNTED, "admitted", (queue_members([1, 2]), queue_members([1, 2, 6])),
                        (None, "queue-evidence-unknown")),
 }
+# Each case is one epoch; the cases are split over two tests so that each stays well inside the worker's check.
+# The population: no admitted receipt, or one that omits a pull request or lacks a recorded one.
+POPULATION_CASES = ("records-only", "omitted-pull", "unlisted-record")
+# The read itself: its tag, its base, its listing member and that one admitted receipt carries it.
+LISTING_CASES = ("untagged", "other-base", "no-listing-member", "second-receipt")
 
 
-@pytest.mark.xfail(
-    strict=True, raises=MissingVerifiedQueue,
-    reason="M2: decisions/admission-transport.md: section 6, queue pulls, and decisions/build-reconciliation.md "
-           "(task and queue observations). A planner slot rests on the submitted pull records alone. Count the "
-           "queue from the admitted verified_member keys of the receipt that the build_queue_listing row names: "
-           "the member [\"queue-listing\", base] (parts 0 and 1) for the read itself, also when it lists nothing, "
-           "and one member [\"queue-pull\", base, number] (parts 0 to 2) per open pull request against the base "
-           "that is not a draft. verified_member exposes part 2 as canonical decimal text (symbol), so change "
-           "BuildQueuePull.number in build/schema/tasks.yaml from integer to string (default_range: string, "
-           "required: true) so build_queue_pull__number joins directly with verified_member(receipt, m, 2, number); "
-           "queue_listing in loop/tests/test_build_task_order.py adapts to string automatically. Derive "
-           "build_queue_at_cut(run, count, listing) only for a listing at the run's cut whose named receipt is "
-           "admitted with its queue-listing member; count is the number of its queue-pull members for that base. "
-           "Leave the count unknown when a second admitted receipt carries the same queue-listing member, or when "
-           "a recorded open pull request against the base that is not a draft has no member. A build_queue_reading "
-           "row no longer establishes a count; keep its class. Keep build_queue_known, build_planner_slot and "
-           "build_planner_waiting as they are. Reuse the verified_receipt and verified_member declarations in "
-           "build/rules/selection.dl. Write in build/ (schema/tasks.yaml and rules/tasks.dl). The same rule turns "
-           "loop/tests/test_build_queue_count.py--test_build_queue_count[empty] green: remove its mark in the same "
-           "PR. Today the rules count the submitted pull records, so an omitted, emptied or unadmitted listing and "
-           "a bare reading still give a planner slot (MissingVerifiedQueue).",
-)
-def test_planner_slot_needs_verified_pull_inventory(tmp_path):
-    records = submitted(tmp_path / "admitted")
-    evidence = listing(records, COUNTED + EXCLUDED, "admitted", (queue_members([1, 2]),))
-    assert outcome(tmp_path / "admitted", records, evidence) == expected("2", None)
-
+def counter_outcomes(tmp_path, cases):
+    """The outcome of each of `cases` in COUNTER_CASES that is not its expectation, by case."""
     wrong = {}
-    for case, (pulls, receipt, inventories, want) in COUNTER_CASES.items():
+    for case in cases:
+        pulls, receipt, inventories, want = COUNTER_CASES[case]
         records = submitted(tmp_path / case)
         evidence = listing(records, pulls, receipt, inventories)
         actual = outcome(tmp_path / case, records, evidence)
         if actual != expected(*want):
             wrong[case] = actual
+    return wrong
+
+
+def test_planner_slot_needs_verified_pull_inventory(tmp_path):
+    records = submitted(tmp_path / "admitted")
+    evidence = listing(records, COUNTED + EXCLUDED, "admitted", (queue_members([1, 2]),))
+    assert outcome(tmp_path / "admitted", records, evidence) == expected("2", None)
+
+    assert set(POPULATION_CASES) | set(LISTING_CASES) == set(COUNTER_CASES)
+    wrong = counter_outcomes(tmp_path, POPULATION_CASES)
 
     # A reported count of the old reading path, with a receipt of the run's cut but no admitted listing.
     records = submitted(tmp_path / "reading")
@@ -150,3 +185,9 @@ def test_planner_slot_needs_verified_pull_inventory(tmp_path):
         wrong["reading-only"] = actual
     if wrong:
         raise MissingVerifiedQueue(f"a planner slot or count without the admitted pull inventory: {wrong}")
+
+
+def test_planner_count_needs_the_listing_member(tmp_path):
+    wrong = counter_outcomes(tmp_path, LISTING_CASES)
+    if wrong:
+        raise MissingQueueListingMember(f"a planner slot or count without the listing member: {wrong}")

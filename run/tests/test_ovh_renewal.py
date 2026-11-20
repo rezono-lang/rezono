@@ -19,10 +19,6 @@ def service(**changes):
     return body
 
 
-@pytest.mark.xfail(strict=True, reason=(
-    "M4: decisions/run-price-enforcement.md: Read the section The bound covers the whole run. Implement blocks(service, deadline) "
-    "in run/ovh_renewal.py, returning the sorted codes that block the order; empty means bounded."
-))
 def test_ovh_renewal():
     blocks = implementation("ovh_renewal.py", "blocks")
 

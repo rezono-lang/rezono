@@ -125,13 +125,6 @@ def test_language_compares_slot_read_cases():
     check({case_id: cases[case_id] for case_id in SLOT_READS})
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=MissingLanguageOutcome,
-    reason="extra: rezono/test/shared-conformance.test.ts now compares the five QUESTIONS_AND_CHECKS cases as todo "
-           "while this mark stands; verify they pass (fixing rezono/src/ if any fails) and lift this mark. Read "
-           "tests/conformance/README.md.",
-)
 def test_language_compares_question_and_check_cases():
     cases = corpus()
     check({case_id: cases[case_id] for case_id in QUESTIONS_AND_CHECKS})

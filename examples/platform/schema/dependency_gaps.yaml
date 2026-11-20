@@ -1,0 +1,26 @@
+id: https://rezono.org/examples/platform-core/dependency-gaps
+name: platform_dependency_gaps
+description: Failure-domain membership, function inventory receipts, and what-if cluster withdrawals for dependency gap checks.
+in_language: en
+imports: [linkml:types, core, placement]
+default_range: string
+annotations:
+  layer: facts
+
+classes:
+  FailureDomainMembership:
+    description: A topology assertion or observation placing a cluster in a failure domain.
+    attributes:
+      id: {identifier: true}
+      cluster: {range: Cluster, required: true}
+      domain: {required: true}
+  FunctionInventoryReceipt:
+    description: An observation receipt confirming the providers and placements of a function were completely inventoried.
+    attributes:
+      id: {identifier: true}
+      function: {range: Function, required: true}
+  ClusterWithdrawal:
+    description: A what-if withdrawal of a cluster's availability.
+    attributes:
+      id: {identifier: true}
+      cluster: {range: Cluster, required: true}

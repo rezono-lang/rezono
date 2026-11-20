@@ -1,0 +1,36 @@
+// Publish tabular placement comparisons against each CMDB export with source-key witnesses.
+.decl platform_placed(service: symbol)
+platform_placed(s) :- cluster_service_placement(s, _).
+
+.decl placement_differs(export: symbol, service: symbol)
+placement_differs(e, s) :- cmdb_missing_placement(e, s, _).
+placement_differs(e, s) :- cmdb_unexpected_placement(e, s, _).
+
+.decl placement_comparison(export: symbol, service: symbol, outcome: symbol, reason: symbol)
+placement_comparison(e, s, "equal", "same-clusters") :-
+    cmdb_covered(e, s),
+    platform_placed(s),
+    cmdb_has_report(e, s),
+    !placement_differs(e, s).
+placement_comparison(e, s, "different", "different-clusters") :-
+    cmdb_covered(e, s),
+    cmdb_has_report(e, s),
+    placement_differs(e, s).
+placement_comparison(e, s, "not-comparable", "reference-missing") :-
+    cmdb_covered(e, s),
+    platform_placed(s),
+    !cmdb_has_report(e, s).
+placement_comparison(e, s, "not-comparable", "platform-missing") :-
+    cmdb_covered(e, s),
+    !platform_placed(s),
+    cmdb_has_report(e, s).
+placement_comparison(e, s, "not-comparable", "scope-incomplete") :-
+    cmdb_export(e),
+    platform_placed(s),
+    !cmdb_covered(e, s).
+placement_comparison(e, s, "not-comparable", "scope-incomplete") :-
+    cmdb_export(e),
+    cmdb_has_report(e, s),
+    !cmdb_covered(e, s).
+
+.output placement_comparison

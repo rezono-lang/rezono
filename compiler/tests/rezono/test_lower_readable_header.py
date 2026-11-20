@@ -25,14 +25,6 @@ class MissingHeaderDefaults(AssertionError):
     """Two headers that differ only in written defaults lowered to different schemas."""
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=MissingHeaderDefaults,
-    reason="extra: decisions/language-readable-rules.md: In compiler/rezono_compiler/rezono_metadata.py (header), "
-           "lower the layer annotation as layer: <layer>, as a module without a schema line lowers it, so that "
-           "a module without a header, with only `schema <module>`, and with every default written out lower "
-           "to the same schema. Read section 1, One lowering.",
-)
 def test_lower_readable_header(tmp_path):
     full = {"schema": "zone", "iri": DEFAULTS["id"], "imports": ["linkml:types"], "defaultRange": "Text",
             "annotations": {"layer": "facts"}}

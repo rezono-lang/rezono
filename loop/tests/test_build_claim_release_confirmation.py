@@ -106,3 +106,93 @@ def test_build_claim_release_confirmation(tmp_path):
         ("current", "task/unnamed", "still-present"),
         ("current", "task/contradicted", "still-present"),
     }
+
+
+def test_build_claim_release_conflicting_settlement(tmp_path):
+    """Conflicting same-tick reads never settle as replaced, and a branch is never both released and discarded."""
+    source = tmp_path / "source"
+    base, head, paths = repository(source, "decisions/claims.md")
+    records = capture(source, base, head, paths)
+    t = OBSERVED_AT
+    records["loop_sweep_receipt"].extend([
+        {"id": "after-delete", "run": "current", "event_time": t + 60},
+        {"id": "later", "run": "current", "event_time": t + 90},
+    ])
+    records["build_claim_delete"] = [
+        {"id": "task/absent-and-other@d0", "run": "current", "branch": "task/absent-and-other",
+         "generation": generation("task/absent-and-other"), "sent_at": t + 10,
+         "outcome": "sent", "source": "claim-delete"},
+        {"id": "task/same-and-other@d0", "run": "current", "branch": "task/same-and-other",
+         "generation": generation("task/same-and-other"), "sent_at": t + 10,
+         "outcome": "sent", "source": "claim-delete"},
+        {"id": "task/unnamed-and-other@d0", "run": "current", "branch": "task/unnamed-and-other",
+         "generation": generation("task/unnamed-and-other"), "sent_at": t + 10,
+         "outcome": "sent", "source": "claim-delete"},
+        {"id": "task/refused-and-released@d0", "run": "current", "branch": "task/refused-and-released",
+         "generation": generation("task/refused-and-released-old"), "sent_at": t + 5,
+         "outcome": "refused", "source": "claim-delete"},
+        {"id": "task/refused-and-released@d1", "run": "current", "branch": "task/refused-and-released",
+         "generation": generation("task/refused-and-released"), "sent_at": t + 10,
+         "outcome": "sent", "source": "claim-delete"},
+        {"id": "task/refused-and-pending@d0", "run": "current", "branch": "task/refused-and-pending",
+         "generation": generation("task/refused-and-pending-old"), "sent_at": t + 5,
+         "outcome": "refused", "source": "claim-delete"},
+        {"id": "task/refused-and-pending@d1", "run": "current", "branch": "task/refused-and-pending",
+         "generation": generation("task/refused-and-pending"), "sent_at": t + 10,
+         "outcome": "unknown", "source": "claim-delete"},
+        {"id": "task/mixed-effective@d0", "run": "current", "branch": "task/mixed-effective",
+         "generation": generation("task/mixed-effective-old"), "sent_at": t + 10,
+         "outcome": "sent", "source": "claim-delete"},
+        {"id": "task/mixed-effective@d1", "run": "current", "branch": "task/mixed-effective",
+         "generation": generation("task/mixed-effective-new"), "sent_at": t + 20,
+         "outcome": "sent", "source": "claim-delete"},
+    ]
+    records["build_claim_ref_read"] = [
+        {"id": "task/absent-and-other@r0", "run": "current", "branch": "task/absent-and-other",
+         "observed_at": t + 60, "state": "absent", "receipt": "after-delete", "source": "ref-listing"},
+        {"id": "task/absent-and-other@r1", "run": "current", "branch": "task/absent-and-other",
+         "observed_at": t + 60, "state": "present", "generation": generation("task/absent-and-other-new"),
+         "receipt": "after-delete", "source": "ref-listing"},
+        {"id": "task/same-and-other@r0", "run": "current", "branch": "task/same-and-other",
+         "observed_at": t + 60, "state": "present", "generation": generation("task/same-and-other"),
+         "receipt": "after-delete", "source": "ref-listing"},
+        {"id": "task/same-and-other@r1", "run": "current", "branch": "task/same-and-other",
+         "observed_at": t + 60, "state": "present", "generation": generation("task/same-and-other-new"),
+         "receipt": "after-delete", "source": "ref-listing"},
+        {"id": "task/unnamed-and-other@r0", "run": "current", "branch": "task/unnamed-and-other",
+         "observed_at": t + 60, "state": "present", "receipt": "after-delete", "source": "ref-listing"},
+        {"id": "task/unnamed-and-other@r1", "run": "current", "branch": "task/unnamed-and-other",
+         "observed_at": t + 60, "state": "present", "generation": generation("task/unnamed-and-other-new"),
+         "receipt": "after-delete", "source": "ref-listing"},
+        {"id": "task/refused-and-released@r0", "run": "current", "branch": "task/refused-and-released",
+         "observed_at": t + 60, "state": "absent", "receipt": "after-delete", "source": "ref-listing"},
+        {"id": "task/mixed-effective@r0", "run": "current", "branch": "task/mixed-effective",
+         "observed_at": t + 60, "state": "present", "generation": generation("task/mixed-effective-new"),
+         "receipt": "after-delete", "source": "ref-listing"},
+        {"id": "task/mixed-effective@r1", "run": "current", "branch": "task/mixed-effective",
+         "observed_at": t + 90, "state": "absent", "receipt": "later", "source": "ref-listing"},
+    ]
+    rows = published(tmp_path, records)
+
+    def keys(relation, width):
+        return {tuple(row["key"][:width]) for row in rows.get(relation, [])}
+
+    assert keys("build_claim_released", 3) == {
+        ("current", "task/refused-and-released", generation("task/refused-and-released")),
+    }
+    assert keys("build_claim_release_discarded", 3) == {
+        ("current", "task/mixed-effective", "replaced"),
+    }
+    assert keys("build_claim_release_pending", 3) == {
+        ("current", "task/absent-and-other", "readback-missing"),
+        ("current", "task/same-and-other", "still-present"),
+        ("current", "task/unnamed-and-other", "still-present"),
+        ("current", "task/refused-and-pending", "readback-missing"),
+    }
+    both = keys("build_claim_released", 2) & keys("build_claim_release_discarded", 2)
+    assert not both, f"A branch cannot be both released and discarded in one run: {both}"
+    settled_and_pending = (
+        (keys("build_claim_released", 2) | keys("build_claim_release_discarded", 2))
+        & keys("build_claim_release_pending", 2)
+    )
+    assert not settled_and_pending, f"A branch cannot be both settled and pending: {settled_and_pending}"

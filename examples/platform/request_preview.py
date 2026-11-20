@@ -215,7 +215,6 @@ def request_rows(teams_path, catalog):
             "id": profile, "zone": name(entry["zone"], "profile zone"), "unlisted": entry["unlisted"],
             "size": [name(size, "profile size") for size in sequence(entry["sizes"], "profile sizes")],
         })
-    available = {(row["item"], row["size"]) for row in records["tenant_catalog_offer"]}
     for path in sorted(teams_path.rglob("request.json")):
         parts = path.relative_to(teams_path).parts
         if len(parts) != 3:
@@ -239,11 +238,9 @@ def request_rows(teams_path, catalog):
             {"id": request_id, **scope, "profile": profile, "submitted_at": timestamp}
         )
         for item, value in mapping(request["items"], "request items").items():
-            size = name(value, "requested size")
-            if (item, size) not in available:
-                raise ValueError(f"unknown catalog offer {item}/{size}")
             records["tenant_request_item"].append(
-                {"id": f"{request_id}/{item}", **scope, "item": item, "size": size}
+                {"id": f"{request_id}/{item}", **scope, "item": name(item, "requested item"),
+                 "size": name(value, "requested size")}
             )
         if not isinstance(request["connections"], list):
             raise ValueError("request connections must be a list")
@@ -323,12 +320,7 @@ def relation_rows(model, rows, name):
     connection, _, _ = batch.run(model, program, rows, calculation)
     with closing(connection):
         result = connection.execute(f"SELECT * FROM {q(name)}").fetchall()
-    if name == "tenant_delivery_scope":
-        result = [
-            (tenant, artifact, tenant if number == 0 else f"{tenant}-{number}")
-            for tenant, artifact, number in result
-        ]
-    elif name == "tenant_connection_review":
+    if name == "tenant_connection_review":
         result = [(team, f"{team}-{number}", *rest) for team, number, *rest in result]
     return sorted(result)
 

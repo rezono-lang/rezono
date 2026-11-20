@@ -1,0 +1,25 @@
+// The publication policy per kind and the lab phase (decisions/review-and-rights.md, sections 9 and 10).
+// A change falls under a policy through a kind it touches; a kind without a policy fact has none.
+.decl change_policy(change: symbol, policy: symbol)
+change_policy(c, p) :- change_member__change(m, c), change_member__kind(m, k), review_policy__kind(q, k),
+    review_policy__policy(q, p).
+
+// A change under require that is not accepted holds the epoch.
+// @invariant
+.decl unreviewed_required(change: symbol)
+unreviewed_required(c) :- change_policy(c, "require"), !change_accepted(c).
+
+// A change under mark that is not accepted is published with its status shown; it blocks nothing.
+.decl unreviewed_marked(change: symbol)
+unreviewed_marked(c) :- change_policy(c, "mark"), !change_accepted(c).
+
+// In the lab phase a pack uses none or mark, never require. Without a phase fact the phase is strict.
+// @invariant
+.decl require_in_lab(policy: symbol)
+require_in_lab(q) :- review_policy__policy(q, "require"), review_phase__phase(_, "lab").
+
+// Exactly one phase holds. Two phase facts with different phases make the phase ambiguous; that blocks, so no check
+// can read a lab exception beside a strict fact. Each such fact is named.
+// @invariant
+.decl review_phase_ambiguous(phase_fact: symbol)
+review_phase_ambiguous(f) :- review_phase__phase(f, p), review_phase__phase(_, q), p != q.

@@ -26,7 +26,7 @@
 import { canonicalJson } from '../../viewer/src/lib/canon.ts';
 import { outputSchema, schemaId, type AnswerSchema } from './answer-schema.ts';
 import { isError, type Checked } from './check.ts';
-import { inPart, NOT_READ_IN_FULL, sameDim, slotType, snake, typeOf, type Schema, type SlotDef, type Ty, type TypeDef } from './schema.ts';
+import { baseTypeOf, inPart, NOT_READ_IN_FULL, sameDim, slotType, snake, typeOf, type Schema, type SlotDef, type Ty, type TypeDef } from './schema.ts';
 import type { Declared } from './table.ts';
 import { isAsk, isCheck, type Expr } from './tree.ts';
 
@@ -702,6 +702,13 @@ function cellValue(v: V, relation: string, key: string): Cell {
 	return v.s === 'known' && Array.isArray(v.v) ? v.v.map(placed) : placed(v);
 }
 
+/** Canonicalizes an integer record key so equivalent spellings address the same row. */
+function canonicalKey(schema: Schema, kind: string, key: string): string {
+	const typeName = schema.kinds[kind]?.id?.type ?? 'Text';
+	if (baseTypeOf(schema, typeName) === 'Integer' && /^-?[0-9]+$/.test(key)) return BigInt(key).toString();
+	return key;
+}
+
 /**
  * The rows with one suppose line applied (§8): `+ path = value` sets a value, and makes the element when it is
  * not there; `+ Kind id {slot = value, ...}` inserts a fresh whole record; `- path` takes a value away, so that
@@ -714,15 +721,17 @@ export function suppose(data: Data, line: Checked, schema: Schema): Data {
 	const kinds = new Map([...data.kinds].map(([kind, rows]) => [kind, new Map(rows)]));
 	const out: Data = { ...data, kinds };
 	if ('retract_row' in tree) {
-		kinds.get(tree.retract_row[0])?.delete(tree.retract_row[1]);
+		const [kind, rawKey] = tree.retract_row;
+		kinds.get(kind)?.delete(canonicalKey(schema, kind, rawKey));
 		return out;
 	}
 	const read = reader(line, schema, data);
 	if ('insert_row' in tree) {
-		const { kind, key, slots } = tree.insert_row;
+		const { kind, key: rawKey, slots } = tree.insert_row;
 		const def = schema.kinds[kind];
 		if (!def) throw new TypeError(`unknown kind ${kind}`);
 		if (data.only && !data.only.has(kind)) throw new NotLoaded(`${kind} is inserted and was not loaded`);
+		const key = canonicalKey(schema, kind, rawKey);
 		if (kinds.get(kind)?.has(key)) throw new TypeError(`${kind} ${key} already exists`);
 		const cells = new Map<string, Cell>();
 		for (const entry of slots) {

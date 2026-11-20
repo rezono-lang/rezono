@@ -1,0 +1,167 @@
+format: rezono.platform.scenes/1
+scenes:
+  1:
+    slug: build-from-empty
+    title: Build from empty
+    summary: From decisions to a running cluster, in derived order.
+  2:
+    slug: tenant-request
+    title: A tenant submits a request
+    summary: Does it fit, who approves, and what is delivered.
+  3:
+    slug: change
+    title: A change
+    summary: First the difference, then the safe steps.
+  4:
+    slug: failure-or-drift
+    title: A failure or drift
+    summary: A finding with evidence from both sides.
+  5:
+    slug: auditor-visits
+    title: The auditor visits
+    summary: Who may do what, who decided it, and what is proven.
+questions:
+  admission-outcomes-and-free-capacity:
+    scene: 3
+  alternative-providers:
+    scene: 3
+  backup-age-and-inventory:
+    scene: 4
+  backup-capture-and-readback:
+    scene: 4
+  backup-storage-routes:
+    scene: 4
+  capacity-admission-threshold:
+    scene: 3
+  catalog-entry-rendering:
+    scene: 2
+  checked-network-policy-rendering:
+    scene: 1
+  cluster-fleet-membership:
+    scene: 1
+  cluster-network-implementation:
+    scene: 1
+  cluster-projection-completeness:
+    scene: 1
+  cluster-required-flows:
+    scene: 1
+  cluster-service-placement:
+    scene: 1
+  cluster-worker-machine-stack:
+    scene: 1
+  cluster-worker-network:
+    scene: 1
+  cmdb-placement-authority:
+    scene: 4
+  cmdb-placement-drift:
+    scene: 4
+  comparison-report:
+    scene: 4
+  conflicting-placement-decisions:
+    scene: 5
+  cross-zone-firewall-rules:
+    scene: 1
+  current-service-health:
+    scene: 4
+  decision-review-after-replacement:
+    scene: 5
+  default-transport-publication-grounds:
+    scene: 5
+  delivery-status-rendering:
+    scene: 2
+  dependency-gaps:
+    scene: 4
+  dependency-order:
+    scene: 1
+  effective-decision-standing:
+    scene: 5
+  entry-tls-firewall-change:
+    scene: 3
+  entry-tls-flow-change:
+    scene: 3
+  granted-listener-ports:
+    scene: 1
+  keycloak-release-evidence:
+    scene: 5
+  kubernetes-series-support-evidence:
+    scene: 3
+  management-certificate-findings:
+    scene: 5
+  management-certificate-renewal:
+    scene: 5
+  management-cluster-rights:
+    scene: 5
+  management-membership-withdrawal:
+    scene: 5
+  management-recorder-availability:
+    scene: 4
+  management-router-drift:
+    scene: 4
+  management-telemetry-routes:
+    scene: 4
+  management-tenant-access-isolation:
+    scene: 5
+  network-policy-origins:
+    scene: 5
+  norm-standing:
+    scene: 5
+  observation-event-time-validity:
+    scene: 4
+  offline-management-dataset-restore:
+    scene: 4
+  postgresql-default-transport:
+    scene: 1
+  product-part-closure:
+    scene: 2
+  product-release-publication-grounds:
+    scene: 5
+  provider-selection-evidence:
+    scene: 1
+  readable-publication-witnesses:
+    scene: 2
+  recovery-isolation-firewall-change:
+    scene: 3
+  recovery-isolation-flow-change:
+    scene: 3
+  reference-identity-conflicts:
+    scene: 4
+  registry-release-licence:
+    scene: 5
+  role-and-zone-attribute-findings:
+    scene: outside_scenes
+    reason: >-
+      Pack-level regression check verifying that isolation, boundary and software-origin
+      findings depend on role and zone attributes rather than identifiers; it guards
+      rule generality across every scene rather than answering one operational scene.
+  runtime-and-management-outage:
+    scene: 4
+  safe-platform-startup:
+    scene: 1
+  same-zone-network-policy:
+    scene: 1
+  service-release-licences:
+    scene: 5
+  standard-pack-imports:
+    scene: outside_scenes
+    reason: >-
+      Pack-level dependency pinning check verifying the imported standard packs and
+      their SHA-256 digests across the whole example rather than answering one
+      operational scene.
+  successor-runtime-impacts:
+    scene: 3
+  successor-support-window:
+    scene: 3
+  support-ending-within-window:
+    scene: 3
+  support-without-vendor-evidence:
+    scene: 5
+  tenant-publication-access:
+    scene: 2
+  tenant-request-file:
+    scene: 2
+  unknown-time-boundaries:
+    scene: 5
+  version-support:
+    scene: 3
+  workload-address-ownership:
+    scene: 1
