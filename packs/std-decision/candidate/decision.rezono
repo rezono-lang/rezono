@@ -47,7 +47,7 @@ kind Decision world closed
     iri "schema:validThrough"
     description "The day the decision stops applying; from that day on it does not apply. Absent when the record names no end."
   valid_from_day: Int?
-    description "valid_from as the whole number YYYYMMDD, which orders as the calendar does. A stopgap: rules cannot read a date yet (docs/roadmap.md, open questions), so the rules read this slot. It goes when they can."
+    description "valid_from as the whole number YYYYMMDD, which orders as the calendar does. A stopgap: rules cannot read a date yet, so the rules read this slot. It goes when they can."
     minimum 19000101
     maximum 99991231
   valid_until_day: Int?
