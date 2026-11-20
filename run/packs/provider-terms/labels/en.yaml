@@ -1,9 +1,12 @@
 usage_detail_type: Usage-billed detail type
 quote_policy: Provider quote policy
 quote_policy.mode: Quote mode
+order_status: Provider order status
+order_status.outcome: Run outcome
 order: Provider order
 order.expiration_us: Order expiration in microseconds
 order.day_end_us: Approved day end in microseconds
+order.status: Order status
 order_detail: Order detail
 order_detail.order: Order
 order_detail.detail_type: Detail type
@@ -13,3 +16,8 @@ order_has_usage_detail: Order has usage-billed detail
 invalid_order: Invalid order
 conflicted_quote_policy: Conflicted quote policy
 order_guarantee: Order quote guarantee
+order_has_status: Order has status
+conflicted_order_status: Conflicted order status
+ambiguous_order_status: Ambiguous order status
+known_order_status: Known order status
+order_outcome: Order outcome

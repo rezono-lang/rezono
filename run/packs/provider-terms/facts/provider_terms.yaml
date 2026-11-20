@@ -4,3 +4,11 @@ usage_detail_type:
 
 quote_policy:
   - {id: ovhcloud, mode: binding_quote}
+
+order_status:
+  - {id: notPaid, outcome: not_committed}
+  - {id: checking, outcome: pending}
+  - {id: documentsRequested, outcome: pending}
+  - {id: delivering, outcome: pending}
+  - {id: delivered, outcome: delivered}
+  - {id: cancelled, outcome: refused}
