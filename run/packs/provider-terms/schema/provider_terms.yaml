@@ -1,0 +1,31 @@
+id: https://rezono.org/run/provider-terms
+name: provider_terms
+description: Provider order terms, usage-billed detail types, and quote guarantee rules.
+in_language: en
+imports: [linkml:types]
+default_range: string
+annotations:
+  layer: facts
+
+classes:
+  UsageDetailType:
+    description: A provider order detail type billed by usage, which gives no quote guarantee.
+    attributes:
+      id: {identifier: true}
+  QuotePolicy:
+    description: The quote mode assigned by the provider terms to a valid non-usage order.
+    attributes:
+      id: {identifier: true}
+      mode: {required: true}
+  Order:
+    description: An unpaid provider order with its expiry and approved day end in UTC microseconds.
+    attributes:
+      id: {identifier: true}
+      expiration_us: {range: integer}
+      day_end_us: {range: integer}
+  OrderDetail:
+    description: One detail line of a provider order and its provider detail type.
+    attributes:
+      id: {identifier: true}
+      order: {range: Order, required: true}
+      detail_type: {required: true}
