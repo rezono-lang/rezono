@@ -1,3 +1,11 @@
+---
+decider: [core, loop]
+decided_on: 2026-11-19
+valid_from: 2026-11-19
+state: in_force
+subject: admission-transport
+---
+
 # Admit verified evidence at the batch boundary
 
 Rules may rely on a completeness receipt or a certified round only after the independent checker has verified it. One admission step fills a small set of protected input relations before the rules run, and the publisher repeats the same step when it checks the epoch. This decision fixes the transport: the interface, the archive layout, where authority comes from, the outcomes and the protected relations. The receipt itself is fixed in [scoped completeness](scoped-completeness.md) and the round certificate in [safe transition rounds](safe-step-rounds.md).
@@ -116,7 +124,7 @@ The protected relations are published on the complete side only. They carry no e
 
 ## 7. Round verification
 
-The round verifier builds its context only from the retained round context. It enumerates the candidate batches over the pinned domain up to the width, checks a certificate for every visible subset of the claimed batch with `check_transition_certificate`, and recomputes the deterministic selection of safe transition rounds. Every alternative that would precede the claimed batch needs a certificate for one of its visible subsets that the checker finds violating. Missing evidence for an alternative leaves the round unverified, so readiness waits instead of trusting a supplied verdict.
+The round verifier builds its context only from the retained round context. It enumerates the candidate batches over the pinned domain up to the width, checks a certificate for every visible subset of the claimed batch with `check_transition_certificate`, and recomputes the deterministic selection of safe transition rounds. Every alternative that would precede the claimed batch needs a certificate for one of its visible subsets that the checker finds violating. Missing evidence for an alternative leaves the round unverified, so readiness waits instead of trusting a supplied verdict. The verifier checks each claim on its own, and a claim names its batch freely, so two claims of one run and cut can both be admitted under different batch names. `std-loop` then selects neither batch.
 
 Each step in the retained domain lists the plan hashes of its effects in their fixed order. A certificate binds `effect` to the canonical SHA-256 of the ordered list of plan hashes it applies, never to a step name. The verifier recomputes that digest from the domain and refuses a mismatch. A step with several effects has a visible boundary after each prefix of its effects, and each prefix needs its own certificate from the same base.
 

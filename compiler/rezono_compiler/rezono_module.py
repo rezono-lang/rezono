@@ -17,13 +17,13 @@ import json
 import os
 import re
 import subprocess
-from collections.abc import Callable, Iterator, Mapping, Set
+from collections.abc import Callable, Iterable, Iterator, Mapping, Set
 from dataclasses import dataclass, field
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import cast
 
-from . import rezono_alias, rezono_enum, rezono_extend, rezono_key, rezono_kind, rezono_metadata, rezono_slot, rezono_unit, strict_yaml
+from . import rezono_alias, rezono_calc, rezono_enum, rezono_extend, rezono_key, rezono_kind, rezono_metadata, rezono_reason, rezono_slot, rezono_unit, strict_yaml
 from .native_literals import NATIVE_FORMAT, native_literal_errors
 from .schemaview import SchemaView
 from linkml_runtime.linkml_model import SchemaDefinition
@@ -31,6 +31,8 @@ from linkml_runtime.loaders.yaml_loader import YAMLLoader
 
 FORMAT = "rezono.module/1"
 IDENTIFIER_FORMAT = "rezono.module/2"
+SAFE_STEP_FORMAT = "rezono.module/4"
+NATIVE_FORMATS = (NATIVE_FORMAT, SAFE_STEP_FORMAT)
 DIR = "rezono"
 PACKAGED_READER = Path(__file__).with_name("module_reader") / "src" / "write-form.js"
 CHECKOUT_READER = Path(__file__).resolve().parents[2] / DIR / "src" / "write-form.ts"
@@ -42,7 +44,6 @@ PATH = re.compile(r"^rezono/[a-z][a-z0-9_]*(/[a-z][a-z0-9_]*)*\.(rezono|json)$")
 REFUSED = {
     "rounding": ("a rounding is not lowered yet", "§6"),
     "param": ("a parameter is not lowered yet", "§6"),
-    "reason": ("a reason declaration is not lowered (no ticket yet)", "§6"),
     "check": ("a check statement is not lowered yet", "§6"),
 }
 
@@ -68,6 +69,7 @@ class Lowered:
     form: dict
     uses: list[str] = field(default_factory=list)  # module ids within the pack, sorted
     foreign: list[str] = field(default_factory=list)  # `<pack>:<module>` of the schema modules of the used packs
+    reasons: list[tuple[str, str]] = field(default_factory=list)  # (code, label) in declaration order
 
 
 def declared(meta: dict, pack_dir: Path, errors: list[str], *, reject_undeclared: bool = True,
@@ -130,10 +132,15 @@ def read_form(pack_dir: Path, d: Declared, errors: list[str],
     except (OSError, ValueError) as e:
         errors.append(f"{where}: not a JSON file ({e})")
         return None
-    module = module_body(doc, FORMAT) or module_body(doc, IDENTIFIER_FORMAT) or module_body(doc, NATIVE_FORMAT)
+    module = (
+        module_body(doc, FORMAT)
+        or module_body(doc, IDENTIFIER_FORMAT)
+        or module_body(doc, NATIVE_FORMAT)
+        or module_body(doc, SAFE_STEP_FORMAT)
+    )
     if module is None:
         errors.append(
-            f"{where}: not the form of a module ({FORMAT}, {IDENTIFIER_FORMAT}, or {NATIVE_FORMAT},"
+            f"{where}: not the form of a module ({FORMAT}, {IDENTIFIER_FORMAT}, {NATIVE_FORMAT}, or {SAFE_STEP_FORMAT},"
             " contracts/rezono-module.yaml)"
         )
         return None
@@ -295,6 +302,31 @@ def named_dataset(module: dict) -> dict | None:
     return None
 
 
+def trailing_dataset(module: dict) -> bool:
+    """A module whose last declaration is its named dataset, after declarations that are none
+    (decisions/language-library-datasets.md): the declarations before it lower like any other module's."""
+    declarations = module["decls"]
+    return (len(declarations) > 1 and named_dataset(module | {"decls": declarations[-1:]}) is not None
+            and not any(isinstance(decl, dict) and "dataset" in decl for decl in declarations[:-1]))
+
+
+def dataset_only(form: dict) -> dict:
+    """The form of a module with its trailing dataset as the form of that dataset alone; the places of the dataset
+    keep their lines, and the places of the declarations before it are dropped. Any other form is returned as is."""
+    module = form["module"]
+    if not trailing_dataset(module):
+        return form
+    last = f"/decls/{len(module['decls']) - 1}"
+    spans = []
+    for span in form["spans"]:
+        at = span["at"]
+        if at == last or at.startswith(last + "/"):
+            spans.append(span | {"at": "/decls/0" + at[len(last):]})
+        elif not at.startswith("/decls/"):
+            spans.append(span)
+    return form | {"module": module | {"decls": module["decls"][-1:]}, "spans": spans}
+
+
 def fact_tables_only(module: dict) -> bool:
     """A module whose declarations are all fact tables (§5.3): the form of a base fact file."""
     declarations = module["decls"]
@@ -405,30 +437,84 @@ def names(form: dict) -> dict[str, str]:
     return out
 
 
+def type_bases(form: dict) -> dict[str, str]:
+    """Declared unit and scalar-alias bases of one module form, mapping units and `Int` to `integer`."""
+    out: dict[str, str] = {}
+    for decl in form["module"]["decls"]:
+        if not isinstance(decl, dict):
+            continue
+        if isinstance(decl.get("unit"), str):
+            out[decl["unit"]] = "integer"
+        elif isinstance(decl.get("type"), str) and isinstance(decl.get("base"), str):
+            out[decl["type"]] = rezono_alias.BASES.get(decl["base"], decl["base"])
+    return out
+
+
+def integer_type_names(tnames: Iterable[str], bases: Mapping[str, str],
+                       known_ints: Set[str] = frozenset()) -> set[str]:
+    """Return the type names whose base chain in `bases` reaches `integer` or `known_ints`."""
+    ints: set[str] = set()
+    for tname in tnames:
+        cur: str | None = bases.get(tname)
+        seen: set[str] = {tname}
+        while cur:
+            if cur == "integer" or cur in known_ints:
+                ints.add(tname)
+                break
+            if cur in seen:
+                break
+            seen.add(cur)
+            cur = bases.get(cur)
+    return ints
+
+
 def lower_pack(pack_dir: Path, meta: dict, pack: str, declared_by: Mapping[str, Set[str]],
                errors: list[str], imported: bool = False,
-               pinned: Mapping[str, Mapping[str, Set[str]]] | None = None) -> list[Lowered]:
+               pinned: Mapping[str, Mapping[str, Set[str]]] | None = None,
+               integer_types: Mapping[str, Set[str]] | None = None) -> list[Lowered]:
     """Lower every module of one pack. `pinned` holds, by pack name, the names each schema module declares of every
     pack that pack.yaml pins (the packs a `use` line may name). `pack` is the pack's name, `declared_by` the LinkML names each schema
     module of the pack declares, by module id within the pack, `imported` whether another pack imports it. Every
     refusal names the module's file and line."""
     forms = {d: effective_form(pack_dir, d, errors) for d in declared(meta, pack_dir, errors)}
     owners: dict[str, list[str]] = {}
+    ints: dict[str, set[str]] = {mid: set(ns) for mid, ns in (integer_types or {}).items()}
     for mid, ns in sorted(declared_by.items()):
         for n in ns:
             owners.setdefault(n, []).append(mid)
+    local_type_bases: dict[str, str] = {}
+    by_module: dict[str, dict[str, str]] = {}
+    reason_owners: dict[str, list[str]] = {}
     for d, form in forms.items():
         if d.id in declared_by:
             errors.append(f"{pack_dir.name}/{d.module}: module '{d.id}' is also a schema module (schema/{d.id}.yaml)")
         for n in names(form) if form else {}:
             owners.setdefault(n, []).append(d.id)
-    return [lower(pack_dir, d, form, pack, owners, errors, imported, pinned or {})
+        for code in rezono_reason.codes(form) if form else ():
+            reason_owners.setdefault(code, []).append(d.id)
+        if form:
+            mod_bases = type_bases(form)
+            if mod_bases:
+                by_module[d.id] = mod_bases
+                local_type_bases.update(mod_bases)
+    known_ints = {tname for ns in ints.values() for tname in ns}
+    for mid, mod_bases in by_module.items():
+        if local_ints := integer_type_names(mod_bases, local_type_bases, known_ints):
+            ints.setdefault(mid, set()).update(local_ints)
+    default_lang = str(meta.get("default_language", ""))
+    defined_reasons = rezono_reason.defined_in_catalog(pack_dir, default_lang)
+    return [lower(pack_dir, d, form, pack, owners, errors, imported, pinned or {}, ints,
+                  reason_owners=reason_owners, defined_reasons=defined_reasons, default_language=default_lang)
             for d, form in forms.items() if form is not None]
 
 
 def lower(pack_dir: Path, d: Declared, form: dict, pack: str, owners: dict[str, list[str]],
           errors: list[str], imported: bool = False,
-          pinned: Mapping[str, Mapping[str, Set[str]]] | None = None) -> Lowered:
+          pinned: Mapping[str, Mapping[str, Set[str]]] | None = None,
+          integer_types: Mapping[str, Set[str]] | None = None, *,
+          reason_owners: Mapping[str, list[str]] | None = None,
+          defined_reasons: Set[str] = frozenset(),
+          default_language: str = "") -> Lowered:
     """One module's form as the LinkML schema that says the same (§5.1, §5.2), or a refusal at a line. An `extend`
     adds nothing to the schema: its tables are rules, which rezono_table writes once the pack's model is read
     (§9.1)."""
@@ -439,33 +525,59 @@ def lower(pack_dir: Path, d: Declared, form: dict, pack: str, owners: dict[str, 
         n = at if isinstance(at, int) else line.get(at) or line.get("/".join(at.split("/")[:3])) or 1
         errors.append(f"{where}:{n}: {what} ({PAGE} {section})")
 
-    native_rules = form["format"] == NATIVE_FORMAT
-    extended_format = form["format"] in (IDENTIFIER_FORMAT, NATIVE_FORMAT)
+    native_rules = form["format"] in NATIVE_FORMATS
+    extended_format = form["format"] in (IDENTIFIER_FORMAT, *NATIVE_FORMATS)
     for key, message, section in header_errors(module, pack, native_rules=native_rules, schema=True):
         place = key if key.startswith("/") else header_line(pack_dir, d, key)
         refuse(place, message, section)
     pinned = pinned or {}
-    used: list[str] = []  # the pinned packs an unaliased `use` line makes visible, in the order of the lines
+    used: list[str] = []  # the pinned packs this module imports via `use`, in the order of the lines
+    unaliased: set[str] = set()
+    prefixes: dict[str, dict[str, list[str]]] = {}  # prefix -> {declared name -> [<pack>:<module>, ...]}
     if not native_rules:
         owners = {name: list(found) for name, found in owners.items()}
         for i, line_ in enumerate(module["use"]):
             at = f"/use/{i}"
             target = line_.get("use") if isinstance(line_, dict) else None
-            if not isinstance(target, str) or set(line_) - {"use"} or "." in target:
-                refuse(at, "a `use` line with a prefix or a dotted pack name is not lowered yet")
+            alias = line_.get("as") if isinstance(line_, dict) else None
+            if not isinstance(target, str) or set(line_) - {"use", "as"} or (
+                "as" in line_ and not isinstance(alias, str)
+            ):
+                refuse(at, "not a `use` line of the form")
+            elif "." in target:
+                refuse(at, "a `use` line with a dotted pack name is not lowered yet")
             elif target not in pinned:
                 refuse(at, f"{target} is not a pack that pack.yaml pins (R046)")
-            elif target not in used:
-                used.append(target)
-                for mid, ns in sorted(pinned[target].items()):
-                    for n in ns:
-                        owners.setdefault(n, []).append(f"{target}:{mid}")
+            elif alias is not None and alias in prefixes:
+                refuse(at, f"prefix {alias} is declared twice (R046)")
+            else:
+                if target not in used:
+                    used.append(target)
+                if alias is not None:
+                    prefixed: dict[str, list[str]] = {}
+                    for mid, ns in sorted(pinned[target].items()):
+                        for n in ns:
+                            prefixed.setdefault(n, []).append(f"{target}:{mid}")
+                    prefixes[alias] = prefixed
+                elif target not in unaliased:
+                    unaliased.add(target)
+                    for mid, ns in sorted(pinned[target].items()):
+                        for n in ns:
+                            owners.setdefault(n, []).append(f"{target}:{mid}")
     own = names(form)
+    reasons: list[tuple[str, str]] = []
+    seen_reasons: set[str] = set()
+    reason_owners = reason_owners or {}
     declared_names = own.keys() | owners.keys()
     uses: set[str] = set()
     enums: dict[str, dict] = {}
     classes: dict[str, dict] = {}
     aliases: dict[str, dict] = {}
+    # The slots of each kind of this module, which an inverse slot reads (decisions/language-inverse-references.md).
+    kinds: dict[str, list] = {}
+    for decl in module["decls"]:
+        if isinstance(decl, dict) and isinstance(decl.get("kind"), str):
+            kinds.setdefault(decl["kind"], decl.get("slots") or [])
     for i, decl in enumerate(module["decls"]):
         at = f"/decls/{i}"
         if not isinstance(decl, dict):
@@ -495,20 +607,25 @@ def lower(pack_dir: Path, d: Declared, form: dict, pack: str, owners: dict[str, 
                     continue
             lowered_kind = rezono_kind.lower(
                 decl, at, own, owners, declared_names, uses, refuse,
-                extended_format=extended_format,
+                extended_format=extended_format, aliases=prefixes, kinds=kinds,
+                integer_types=integer_types, own_module=d.id,
             )
             if lowered_kind is not None:
                 if keys:
                     lowered_kind["unique_keys"] = keys
                 classes[decl["kind"]] = lowered_kind | kind_fields
         elif "enum" in decl:
-            lowered_enum = rezono_enum.lower(decl, at, refuse, extended=metadata_format)
+            lowered_enum = rezono_enum.lower(decl, at, refuse, extended=extended_format)
             if lowered_enum is not None:
                 enums[decl["enum"]] = lowered_enum
         elif "rule" in decl and native_rules:
             continue  # The rule assembler needs the checked schema and pinned imports.
         elif "extend" in decl:
-            rezono_extend.validate(decl, at, imported, refuse)
+            rezono_extend.validate(decl, at, imported, refuse, extended_format=extended_format)
+        elif "asOf" in decl and extended_format:
+            rezono_calc.validate_as_of(decl, at, refuse)
+        elif "param" in decl and extended_format:
+            rezono_calc.validate_param(decl, at, refuse)
         elif "rules" in decl and form["format"] == IDENTIFIER_FORMAT:
             from .rezono_relational import valid_block
 
@@ -527,8 +644,26 @@ def lower(pack_dir: Path, d: Declared, form: dict, pack: str, owners: dict[str, 
                 refuse(at, "a scalar alias requires rezono.module/2", "§5.1")
             elif alias := rezono_alias.lower(decl, at, refuse):
                 aliases[decl["type"]] = alias
+        elif "reason" in decl:
+            code = decl.get("reason")
+            elsewhere = [o for o in reason_owners.get(code, []) if o != d.id] if isinstance(code, str) else ()
+            lowered_reason = rezono_reason.lower(
+                decl, at, refuse,
+                seen=seen_reasons,
+                elsewhere=elsewhere,
+                defined=defined_reasons,
+                default_language=default_language,
+            )
+            if isinstance(code, str) and rezono_reason.CODE.fullmatch(code):
+                seen_reasons.add(code)
+            if lowered_reason is not None:
+                reasons.append(lowered_reason)
+        elif "dataset" in decl and form["format"] == DATASET_FORMAT and trailing_dataset(module):
+            continue  # The fact loader reads the dataset's tables (decisions/language-library-datasets.md).
         else:
             refuse(at, *next((REFUSED[k] for k in REFUSED if k in decl), ("not a declaration this compiler reads",)))
+    if extended_format:
+        rezono_calc.validate_module(module["decls"], refuse)
     schema = {"id": f"https://rezono.org/rezono/{pack}/{d.id}", "name": d.id.replace("/", "_"),
               "imports": ["linkml:types"], "default_range": "string", "annotations": {"layer": d.layer},
               "enums": enums, "classes": classes}
@@ -542,7 +677,7 @@ def lower(pack_dir: Path, d: Declared, form: dict, pack: str, owners: dict[str, 
         )
     foreign = [f"{u}:{mid}" for u in used for mid in sorted(pinned[u])]
     schema["imports"] += foreign
-    return Lowered(d, schema, form, sorted(u for u in uses if u.partition(":")[2] == ""), foreign)
+    return Lowered(d, schema, form, sorted(u for u in uses if u.partition(":")[2] == ""), foreign, reasons)
 
 
 def view(schema: dict, importmap: dict) -> SchemaView:

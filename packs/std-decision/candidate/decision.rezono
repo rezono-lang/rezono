@@ -1,0 +1,242 @@
+rezono 0
+pack std-decision
+
+schema std_decision
+  iri "https://rezono.example/std-decision/decision"
+  language en
+  prefix linkml = "https://w3id.org/linkml/"
+  prefix rdfs = "http://www.w3.org/2000/01/rdf-schema#"
+  prefix schema = "http://schema.org/"
+  prefix prov = "http://www.w3.org/ns/prov#"
+  prefix dcterms = "http://purl.org/dc/terms/"
+  prefix skos = "http://www.w3.org/2004/02/skos/core#"
+  import "linkml:types"
+  default range Text
+  description "The decision record. A decision is an origin of facts (S32, class decision): somebody decided it, on a day, and it applies from a day until it ends or a later decision supersedes it. A fact of a domain that is a decision points to a Decision with an arrow of its own; rules read whether that decision is in force on a reference date (rules/decision.dl). The fields follow MADR: title, status, deciders, date, supersedes. A decision may rest on other decisions (Ground) and may look at an earlier one again (reassesses)."
+  annotation layer = "facts"
+
+enum DecisionState world closed = proposed | in_force | superseded | withdrawn
+  description "What the decision record says about its standing."
+  value proposed
+    description "put forward, not taken"
+  value in_force
+    description "taken and standing"
+  value superseded
+    description "replaced by a later decision"
+  value withdrawn
+    description "taken back without a replacement"
+
+kind Decision world closed
+  description "One decision, as its record states it: what was decided, about which subject, by whom, when, from when and until when it applies, how it stands, and which earlier decisions it replaces."
+  title: Text
+    iri "rdfs:label"
+    description "What was decided, in the words of the record."
+  subject: Subject?
+    description "The matter the decision is about. Decisions that succeed each other share it."
+    close mapping "dcterms:subject"
+  decider: Text* world open
+    description "Who took the decision: a person or a body, by the identifier the domain uses for its parties. Open world: a record that names nobody leaves unknown who decided."
+    close mapping "prov:wasAttributedTo"
+  decided_on: Date?
+    iri "prov:generatedAtTime"
+    description "The day the decision was taken (knowledge time). Absent while it is proposed."
+  valid_from: Date?
+    iri "schema:validFrom"
+    description "The first day the decision applies (validity). Often the day it was taken."
+  valid_until: Date?
+    iri "schema:validThrough"
+    description "The day the decision stops applying; from that day on it does not apply. Absent when the record names no end."
+  valid_from_day: Int?
+    description "valid_from as the whole number YYYYMMDD, which orders as the calendar does. A stopgap: rules cannot read a date yet, so the rules read this slot. It goes when they can."
+    minimum 19000101
+    maximum 99991231
+  valid_until_day: Int?
+    description "valid_until as the whole number YYYYMMDD; the same stopgap as valid_from_day."
+    minimum 19000101
+    maximum 99991231
+  state: DecisionState
+    iri "schema:creativeWorkStatus"
+    description "The standing the record gives the decision today. Rules take time from the validity days and from supersedes, and check the state against them."
+  supersedes: Decision*
+    description "An earlier decision this one replaces, from the day this one takes effect."
+    exact mapping "dcterms:replaces"
+  reassesses: Decision* world open
+    description "An earlier decision this one looked at again. A reassessment replaces nothing: the earlier decision stands as its own record says. A domain's rule reads it to say that a decision was looked at again after one of its grounds stopped standing. Open world: that no record reassesses a decision leaves unknown whether anybody looked at it again."
+  rationale: Text?
+    description "Why it was decided, in the words of the record. Text, and no rule reads it."
+    close mapping "skos:scopeNote"
+  warrant: Principle* world open
+    description "A principle the decision rests on: what makes it right (the warrant of an explanation). Open world: a record that names no principle leaves unknown what the decision rests on. No rule reads it."
+  owner: Text* world open
+    description "Who answers for the decision today, by the identifier the domain uses for its parties. Not the decider: the one who keeps it and is asked about it. Open world, and no rule reads it."
+    close mapping "schema:maintainer"
+  review_on: Date?
+    description "The day the decision is looked at again. Absent when the record names none."
+  require rule_1 when valid_from is known then valid_from_day is known
+    description "A validity date and its day number come together (four rules, one per direction)."
+  require rule_2 when valid_from_day is known then valid_from is known
+  require rule_3 when valid_until is known then valid_until_day is known
+  require rule_4 when valid_until_day is known then valid_until is known
+  require rule_5 when state = withdrawn and valid_from is known then valid_until is known
+    description "A decision that applied and was withdrawn names the day it stopped applying."
+
+relationship kind Ground world closed
+  description "One decision rests on another: its record names the other decision as a ground. A link, named by its two ends (S27), and its source is the record that names the ground. It says nothing about time: whether the ground stands on a reference date is read from the other decision (in_force_on)."
+  decision: Decision
+    description "The decision whose record names the ground."
+  rests_on: Decision
+    description "The decision it rests on."
+    close mapping "prov:wasInfluencedBy"
+  unique ground_pair = decision, rests_on
+
+kind Purpose world closed
+  description "Something a decision serves, and for whom: the purpose of an explanation. One row per thing served."
+  decision: Decision
+    description "The decision that serves it."
+  title: Text
+    iri "rdfs:label"
+    description "What is served, in the words of the record."
+  served: Text* world open
+    description "Who is served, by the identifier the domain uses for its parties. Open world: a record that names nobody leaves unknown for whom."
+
+kind Principle world closed
+  description "A statement that makes decisions right: the warrant of an explanation. A decision names the principles it rests on (Decision.warrant). A principle has no state of its own: it stands as the decision that adopted it stands."
+  title: Text
+    iri "rdfs:label"
+    description "The principle, in the words of its record."
+  decision: Decision? world open
+    description "The decision that adopted the principle. Its state, decider and validity are the principle's. Open world: a principle whose record names no decision is of unknown standing, never of no standing. A pack whose rules read a principle's standing makes this slot required for its own principles."
+
+kind Alternative world closed
+  description "An option that was weighed for a decision and rejected."
+  decision: Decision
+    description "The decision that rejected it."
+  title: Text
+    iri "rdfs:label"
+    description "The alternative, in the words of the record."
+  reason: Text?
+    description "Why it was rejected, in the words of the record. Text, and no rule reads it."
+    close mapping "skos:scopeNote"
+
+kind Exception world closed
+  description "Something a decision leaves out, in the words of its record: where what was decided does not hold. An exception that is itself decided separately is a Decision of its own."
+  decision: Decision
+    description "The decision that makes the exception."
+  title: Text
+    iri "rdfs:label"
+    description "What is excepted, in the words of the record."
+
+kind Subject world closed
+  description "A matter that is decided on, named by the domain. A Flow groups decisions by it."
+  title: Text
+    iri "rdfs:label"
+
+kind ReferenceDate world closed
+  description "A day for which the registration is read: \"in force\" is always in force on such a day. A fact, never the clock (rule 3), and itself a choice of the domain. The decision records are read as they stand on it."
+  title: Text
+    iri "rdfs:label"
+    description "The day as people write it."
+  day: Int
+    description "The day as the whole number YYYYMMDD (the stopgap of Decision.valid_from_day)."
+    minimum 19000101
+    maximum 99991231
+
+rules decision
+  | // Rules of std-decision, in the Datalog subset, so Soufflé is the oracle.
+  | // The base relations are the pack's tables: decision(d), decision__state(d, s), decision__supersedes(new, old),
+  | // decision__decider(d, who), decision__valid_from_day(d, n), decision__valid_until_day(d, n),
+  | // reference_date__day(r, n), and the two ends of a ground g: ground__decision(g, d) and ground__rests_on(g, d).
+  | // A day is a whole number YYYYMMDD until rules read dates (schema/decision.yaml).
+  | //
+  | // Time comes from the validity days and from supersedes, never from the state: the state is what the record
+  | // says today, and a reference date may lie before or after today. So a decision whose record says superseded
+  | // is in force on a reference date before its successor took effect.
+  | 
+  | // replaces: the transitive closure of supersedes. a replaces b directly or through decisions in between.
+  | .decl replaces(a: symbol, b: symbol)
+  | replaces(a, b) :- decision__supersedes(a, b).
+  | replaces(a, c) :- replaces(a, b), decision__supersedes(b, c).
+  | 
+  | // Axiom: supersedes has no cycle. No decision replaces itself.
+  | // @invariant
+  | .decl supersession_cycle(decision: symbol)
+  | supersession_cycle(a) :- replaces(a, a).
+  | 
+  | // Axiom: a decision does not end on or before the day it starts.
+  | // @invariant
+  | .decl window_inverted(decision: symbol)
+  | window_inverted(d) :- decision__valid_from_day(d, f), decision__valid_until_day(d, u), u <= f.
+  | 
+  | // took_effect: on reference date r, decision d has been taken and its first day f has come. The rule reads the
+  | // decision itself, decision(d), so a proof that rests on a decision ends in its record.
+  | .decl took_effect(decision: symbol, on: symbol)
+  | took_effect(d, r) :- decision(d), reference_date__day(r, n), decision__valid_from_day(d, f), f <= n,
+  |     !decision__state(d, "proposed").
+  | 
+  | // ended: on reference date r, the last day of decision d has passed (valid_until u is the first day without it).
+  | .decl ended(decision: symbol, on: symbol)
+  | ended(d, r) :- reference_date__day(r, n), decision__valid_until_day(d, u), u <= n.
+  | 
+  | // replaced: on reference date r, decision s, which supersedes d, has taken effect. It stays so when s itself
+  | // ends or is replaced later: a decision does not come back by itself.
+  | .decl replaced(decision: symbol, by: symbol, on: symbol)
+  | replaced(d, s, r) :- decision__supersedes(s, d), took_effect(s, r).
+  | 
+  | .decl was_replaced(decision: symbol, on: symbol)
+  | was_replaced(d, r) :- replaced(d, _, r).
+  | 
+  | // in_force_on: decision d is in force on reference date r. It has taken effect, its last day has not passed,
+  | // and no decision that supersedes it has taken effect.
+  | .decl in_force_on(decision: symbol, on: symbol)
+  | in_force_on(d, r) :- took_effect(d, r), !ended(d, r), !was_replaced(d, r).
+  | 
+  | .decl has_start(decision: symbol)
+  | has_start(d) :- decision__valid_from_day(d, _).
+  | 
+  | // has_successor: a decision that has been taken and names its first day supersedes d.
+  | .decl has_successor(decision: symbol)
+  | has_successor(d) :- decision__supersedes(s, d), has_start(s), !decision__state(s, "proposed").
+  | 
+  | // Axiom: a superseded decision is not in force. From the day a successor takes effect that holds by the rule
+  | // above. What is left is a record that says superseded while no decision that has been taken supersedes it:
+  | // by the rules it is then in force on r, against its own record.
+  | // @invariant
+  | .decl superseded_in_force(decision: symbol, on: symbol)
+  | superseded_in_force(d, r) :- decision__state(d, "superseded"), in_force_on(d, r), !has_successor(d).
+  | 
+  | .decl has_decider(decision: symbol)
+  | has_decider(d) :- decision__decider(d, _).
+  | 
+  | // Finding: decision d is in force on r, and its record names nobody who took it. About the registration, not
+  | // the world (decider is open): somebody decided, the record does not say who.
+  | // @absence
+  | .decl in_force_without_decider(decision: symbol, on: symbol)
+  | in_force_without_decider(d, r) :- in_force_on(d, r), !has_decider(d).
+  | 
+  | // Finding: the record of d says in force and names no first day, so d is in force on no reference date.
+  | .decl in_force_without_start(decision: symbol)
+  | in_force_without_start(d) :- decision__state(d, "in_force"), !has_start(d).
+  | 
+  | // Finding: the record of d says withdrawn and names no first day. By its days d is in force on no reference
+  | // date, and no day says when it stopped. A decision may still rest on d, and a rule that asks whether a ground
+  | // still stands reads this relation, not the state.
+  | .decl withdrawn_without_start(decision: symbol)
+  | withdrawn_without_start(d) :- decision__state(d, "withdrawn"), !has_start(d).
+  | 
+  | // proposal: the record of d says proposed, so d has not been taken. A proposal names grounds as a decision
+  | // does; a rule that reads grounds uses this relation to say which of the two it speaks of.
+  | .decl proposal(decision: symbol)
+  | proposal(d) :- decision__state(d, "proposed").
+  | 
+  | // ground_chain: the transitive closure of the grounds. a rests on b because the record of a names b as a ground,
+  | // or through decisions in between. It is what the records name; whether any of them is in force is not in it.
+  | .decl ground_chain(decision: symbol, rests_on: symbol)
+  | ground_chain(a, b) :- ground__decision(g, a), ground__rests_on(g, b).
+  | ground_chain(a, c) :- ground__decision(g, a), ground__rests_on(g, b), ground_chain(b, c).
+  | 
+  | // Axiom: the grounds have no cycle. No decision rests on itself.
+  | // @invariant
+  | .decl ground_cycle(decision: symbol)
+  | ground_cycle(a) :- ground_chain(a, a).
+  | 
+  | .output replaces, supersession_cycle, window_inverted, took_effect, ended, replaced, in_force_on, superseded_in_force, in_force_without_decider, in_force_without_start, withdrawn_without_start, ground_cycle

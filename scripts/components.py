@@ -262,7 +262,7 @@ PR_FILE_CONSUMERS = {
 # changes is read by them, or the selection falls back to everything. As dependents
 # of another component they run in the merge queue (decisions/pr-deferred-dependents.md).
 # The empty set restores them as pull request dependents.
-PR_DEFERRED_DEPENDENTS = frozenset({"loop", "run"})
+PR_DEFERRED_DEPENDENTS = frozenset({"examples", "loop", "run"})
 # These are test entry points and a private subprocess helper, rather than inputs to
 # the installed packages. Their shared corpus is still routed by SHARED_READERS.
 PR_TEST_LEAVES = frozenset({
@@ -330,6 +330,9 @@ SHARED_READERS = {
     # The build pack: the loop tests read its schema and rules, and the converter
     # regression parses every tracked Datalog file.
     "build/": ("compiler", "loop"),
+    # The build pack reads the head of every decision, and loop/tests/test_decision_heads.py holds
+    # the budget of decisions without one (decisions/decision-heads.md).
+    "decisions/": ("loop",),
     # examples/test_front_door.py runs the readme's blocks through the quickstart check.
     "README.md": ("examples",),
     "CONTRIBUTING.md": ("examples",),
@@ -342,11 +345,12 @@ FULL_SELECTION_PATHS = (
     ".github/workflows/ci.yml", ".github/workflows/disposable-cluster.yml",
     ".github/workflows/python-environment/", "blocked/",
     "scripts/check-pinned.py", "scripts/components.py", "scripts/fast_check.py",
-    "scripts/install-souffle.sh", "scripts/red_list.py",
+    "scripts/install-souffle.sh", "scripts/pytest-plugins.txt", "scripts/red_list.py",
 )
 # What scripts/components.py itself reads while it runs one component's shards.
 JOB_INPUTS = {
     ".github/workflows/compiler-duration-profile.json": ("compiler",),
+    ".github/workflows/examples-duration-profile.json": ("examples",),
     ".github/workflows/publication_fixture.py": ("examples",),
 }
 # Scripts, other workflows and actions select the components that name them, directly
@@ -409,8 +413,15 @@ def git_output(root: Path, *args: str) -> bytes:
     return subprocess.check_output(["git", *args], cwd=root, stderr=subprocess.PIPE)
 
 
+def design_record(path: str) -> bool:
+    """A decision or documentation page that no test reads: citing a test name there runs nothing."""
+    return (path.startswith(("decisions/", "docs/")) and path.endswith(".md") and path != LANGUAGE_COVERAGE_REPORT
+            and not shared_readers(path))
+
+
 def independent_test_leaves(root: Path, revision: str, leaves: dict[str, list[str]], folders: set[str],
-                            *, manual_references: dict[str, str] | None = None) -> bool:
+                            *, manual_references: dict[str, str] | None = None,
+                            cited_in_records: bool = False) -> bool:
     """Refuse a narrowed test selection if either tree names an outside reader."""
     leaf_paths = {path for paths in leaves.values() for path in paths}
     tracked = sorted(leaf_paths | (manual_references or {}).keys())
@@ -454,7 +465,7 @@ def independent_test_leaves(root: Path, revision: str, leaves: dict[str, list[st
                 if not entry.startswith(prefix):
                     return False
                 name = entry[len(prefix):]
-                if component_owner(name, folders) == owner:
+                if component_owner(name, folders) == owner or (cited_in_records and design_record(name)):
                     continue
                 if name not in (manual_references or {}):
                     return False
@@ -523,13 +534,17 @@ def reference_patterns(path: str, owner: str | None) -> list[re.Pattern[str]]:
     if source.stem in GENERIC_STEMS:
         return []
     stem = re.escape(source.stem)
-    patterns = [rf"(?<![\w.-]){re.escape(source.name)}\b", rf"/{stem}(?:\.\w+)?['\x22`]"]
+    patterns = [rf"(?<![\w.-]){re.escape(source.name)}\b", rf"/{stem}(?:\.\w+)?['\x22`]",
+                # The last segment of a joined path, as in ROOT / "loop" / "replay".
+                rf"/\s*['\x22]{stem}['\x22]"]
     if source.suffix == ".py" and owner:
         module = ".".join(Path(path[len(owner) + 1:]).with_suffix("").parts)
         package, _, name = module.rpartition(".")
         if package:
+            # A dotted module, or an import from its package on one line or in parentheses over several.
             patterns += [rf"(?<!\w){re.escape(module)}\b",
-                         rf"\bfrom\s+{re.escape(package)}\s+import\s[^\n]*\b{re.escape(name)}\b"]
+                         rf"\bfrom\s+{re.escape(package)}\s+import\s[^\n(]*\b{re.escape(name)}\b",
+                         rf"\bfrom\s+{re.escape(package)}\s+import\s*\([^)]*\b{re.escape(name)}\b"]
         else:
             patterns.append(rf"^\s*(?:from\s+{stem}\s+import\b|import\s+{stem}\b)")
     return [re.compile(pattern, re.MULTILINE) for pattern in patterns]
@@ -560,8 +575,14 @@ def own_readers(path: str) -> set[str]:
 
 
 def independent_test_file(root: Path, revisions: tuple[str, ...], path: str, owner: str, folders: set[str]) -> bool:
-    """A test file that nothing outside its component names in either tree."""
-    return all(independent_test_leaves(root, revision, {owner: [path]}, folders) for revision in revisions)
+    """A test file that nothing outside its component names in either tree.
+
+    A decision or documentation page that cites a changed or added test file does not read it.
+    A deleted test file keeps every citation, since a page may link to it."""
+    kept = subprocess.run(["git", "cat-file", "-e", f"{revisions[-1]}:{path}"], cwd=root,
+                          capture_output=True, check=False).returncode == 0
+    return all(independent_test_leaves(root, revision, {owner: [path]}, folders, cited_in_records=kept)
+               for revision in revisions)
 
 
 def language_coverage_only(root: Path, base: str, head: str, changed: list[str], folders: set[str]) -> bool | None:
@@ -830,9 +851,11 @@ def pull_request_selection(components: list[Component], root: Path,
 # runner's cores, so one large parametrized file can use more than one core.
 FORMS_MODULE = "examples/subsidy/test_subsidy_forms.py"
 INDEPENDENT_PUBLICATIONS = "examples/subsidy/test_subsidy.py"
-RULE_EXAMPLES = "examples/test_rules.py"
+FORMS_READER = ("test_a_ledger_payment_does_not_change_the_policy_adviser_s_form",
+                "test_each_role_s_standards_exports_pass_their_readers")
 SHARDS = {"compiler": 3, "edge/publisher": 2}
 PARALLEL = {"compiler", "examples", "edge/publisher"}
+EXAMPLE_PROFILE = ROOT / ".github/workflows/examples-duration-profile.json"
 
 
 def test_files(folder: str) -> list[str]:
@@ -847,15 +870,72 @@ def test_files(folder: str) -> list[str]:
 
 def shard_count(folder: str) -> int:
     files = test_files(folder)
-    if folder != "examples":
-        return min(SHARDS.get(folder, 1), max(1, len(files)))
-    # Run 44301601328 placed the two CPU-heavy modules on the same runner.
-    # Choose the fewest round-robin partitions that separate the three long
-    # example modules, even as new test files change their sorted positions.
-    heavy = {RULE_EXAMPLES, INDEPENDENT_PUBLICATIONS, FORMS_MODULE}
-    positions = [i for i, file in enumerate(files) if file in heavy]
-    candidates = range(max(1, len(positions)), min(8, max(1, len(files))) + 1)
-    return min(candidates, key=lambda n: (len(positions) - len({i % n for i in positions}), n))
+    return min(SHARDS.get(folder, 1), max(1, len(files)))
+
+
+def example_profile() -> dict:
+    """Seconds per example unit, as `run-shard` prints them for each shard of a hosted run. Without the
+    profile (a repository under test), one shard and one second per test ID."""
+    if not EXAMPLE_PROFILE.is_file():
+        return {"shards": 1, "default_s": 1, "seconds": {}}
+    return json.loads(EXAMPLE_PROFILE.read_text(encoding="utf-8"))
+
+
+def example_unit(node: str) -> str:
+    """Keep cached pack states and module-scoped fixtures in one process: a file is a unit. The independent
+    subsidy publications are each a unit of their own."""
+    path = node.partition("::")[0]
+    return node if path == INDEPENDENT_PUBLICATIONS else path
+
+
+def forms_pair(items: list[str]) -> tuple[list[str], list[str]]:
+    """The publication form tests in two processes. The producer's first test publishes the shared world. The
+    reader's test with the second publication makes that one meanwhile and reads the shared world after it,
+    and the standards readers, the longest of the other tests, follow it there. Without those tests, the
+    longer half by the profile produces. Empty unless both processes have a test."""
+    readers = sorted(i for i in items if i.split("::", 1)[0] == FORMS_MODULE)
+    reader = [i for i in readers if i.partition("::")[2] in FORMS_READER]
+    if not reader:
+        profile = example_profile()
+        costs = {i: profile["seconds"].get(i, profile["default_s"]) for i in readers}
+        reader = weighted_workers(readers, 2, costs, profile["default_s"])[1] if len(readers) > 1 else []
+    producer = [i for i in readers if i not in reader]
+    return (producer, reader) if producer and reader else ([], [])
+
+
+def example_slots(items: list[str], slots: int, width: int = 0) -> list[list[str]]:
+    """Longest first onto `slots` processes by the profile's seconds per unit, `width` processes to a runner
+    (all by default); pytest order within each. A unit goes to the least loaded process where it does not
+    lengthen its runner, else to the least loaded one: a runner costs its longest process. With at least
+    three processes, the producer of the form tests has process 0, where only units that pytest runs after
+    them may follow, so the shared world is published first; their reader starts process 1."""
+    width = width or slots
+    profile = example_profile()
+    seconds, default = profile["seconds"], profile["default_s"]
+    loads, assigned = [0.0] * slots, {}
+    producer, reader = forms_pair(items) if slots > 2 else ([], [])
+    for slot, group in enumerate((producer, reader)):
+        for node in group:
+            assigned[node] = slot
+            loads[slot] += seconds.get(node, default)
+    last = max((items.index(node) for node in producer), default=-1)
+    first: dict[str, int] = {}
+    for index, node in enumerate(items):
+        if node not in assigned:
+            first.setdefault(example_unit(node), index)
+    units = Counter(example_unit(i) for i in items if i not in assigned)
+    for unit in sorted(units, key=lambda u: (-seconds.get(u, default * units[u]), u)):
+        cost = seconds.get(unit, default * units[unit])
+        free = [s for s in range(slots) if s or first[unit] > last]
+        runner = [max(loads[s - s % width:s - s % width + width]) for s in range(slots)]
+        within = [s for s in free if loads[s] + cost <= runner[s]]
+        slot = min(within or free, key=loads.__getitem__)
+        assigned[unit] = slot
+        loads[slot] += cost
+    groups = [[] for _ in range(slots)]
+    for node in items:
+        groups[assigned.get(node, assigned.get(example_unit(node)))].append(node)
+    return groups
 
 
 def runner_cores() -> int:
@@ -896,6 +976,64 @@ def inventory_path(directory: Path, folder: str) -> Path:
     return directory / folder / "items.json"
 
 
+# The pytest plugins CI may load, as `name = value` of the pytest11 entry points. In CI the
+# list comes from the base revision, so a candidate cannot extend it; locally this checkout's
+# list applies. scripts/red_before.py reads it the same way.
+PLUGIN_LIST = ROOT / "scripts/pytest-plugins.txt"
+
+
+def allowed_plugins() -> set[str]:
+    # One reading of the list for this script and red_before.py, beside this file.
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from red_guard import listed_plugins
+
+    return listed_plugins(PLUGIN_LIST, ROOT)
+
+
+def plugin_arguments() -> tuple[list[str], object]:
+    """Turn pytest's plugin autoload off and name each allowed plugin that is installed.
+
+    A plugin loads in every run and its hooks could drop or pass a red test, so no other plugin
+    loads: not one that a package registers, nor a *.dist-info that a candidate adds to a
+    directory on sys.path. Return the `-p` arguments and a plugin that checks the result.
+    """
+    from importlib.metadata import entry_points
+    import pytest
+
+    allowed = allowed_plugins()
+    os.environ["PYTEST_DISABLE_PLUGIN_AUTOLOAD"] = "1"
+    found = sorted(entry_points(group="pytest11"), key=lambda e: e.name)
+    if unlisted := [f"{e.name} = {e.value}" for e in found if f"{e.name} = {e.value}" not in allowed]:
+        raise SystemExit(f"pytest plugins that {PLUGIN_LIST.name} does not list: {', '.join(unlisted)}")
+    names = sorted({e.name for e in found})
+    modules = {e.value.split(":", 1)[0] for e in found}
+
+    class PluginGuard:
+        @pytest.hookimpl(tryfirst=True)
+        def pytest_configure(self, config):
+            # `-p name` loads a plugin by its entry point, as autoload would; one whose name is
+            # already a plugin of pytest's own, such as pytest-logging's `logging`, is skipped.
+            for plugin, dist in config.pluginmanager.list_plugin_distinfo():
+                listed = {f"{e.name} = {e.value}" for e in dist.entry_points if e.group == "pytest11"
+                          and e.value.split(":", 1)[0] == getattr(plugin, "__name__", None)}
+                if not listed & allowed:
+                    raise pytest.UsageError(f"pytest loaded the plugin {plugin!r} from {dist.project_name}, "
+                                            f"which {PLUGIN_LIST.name} does not list")
+            for module in sorted(modules & set(sys.modules)):
+                # A module of the same name earlier on sys.path, such as one the candidate adds
+                # at the repository root, would run in the allowed plugin's place.
+                origin = subprocess.run(
+                    [sys.executable, "-P", "-c", "import importlib.util, sys; "
+                     "s = importlib.util.find_spec(sys.argv[1]); print(s.origin if s else '')", module],
+                    capture_output=True, text=True, check=True).stdout.strip()
+                loaded_file = getattr(sys.modules.get(module), "__file__", None)
+                if not origin or not loaded_file or Path(origin).resolve() != Path(loaded_file).resolve():
+                    raise pytest.UsageError(f"pytest plugin {module} loaded from {loaded_file}, "
+                                            f"not from its installed {origin or 'location'}")
+
+    return [arg for name in names for arg in ("-p", name)], PluginGuard()
+
+
 def collect_component(folder: str, directory: Path) -> int:
     import pytest
 
@@ -924,10 +1062,11 @@ def collect_component(folder: str, directory: Path) -> int:
             cluster.extend(item.nodeid for item in session.items if item.get_closest_marker("cluster"))
             config_path = str(session.config.inipath.relative_to(ROOT)) if session.config.inipath else None
 
+    plugin_args, guard = plugin_arguments()
     result = pytest.main(
-        [folder, "--collect-only", "--rezono-cluster", "-qq", "--rootdir", str(ROOT),
+        [*plugin_args, folder, "--collect-only", "--rezono-cluster", "-qq", "--rootdir", str(ROOT),
          f"--junitxml={collection_report}"],
-        plugins=[Inventory()],
+        plugins=[Inventory(), guard],
     )
     if deselected:
         print(f"{folder}: tests deselected during full inventory: {deselected}", file=sys.stderr)
@@ -1004,47 +1143,7 @@ def worker_items(folder: str, items: list[str], workers: int) -> list[list[str]]
     if folder != "examples" or workers == 1:
         return [items[n::workers] for n in range(workers)]
     # Keep the examples' file-scoped accumulation and the two independent immutable readers.
-    forms = FORMS_MODULE
-    readers = sorted(i for i in items if i.split("::", 1)[0] == forms)
-    groups = [[] for _ in range(workers)]
-    offset = 2 if readers and workers > 2 else 0
-    if offset:
-        # Keep pytest collection order within each execution process.
-        # The second publication and the independent standards readers dominate
-        # this module. Give the table checks to the shorter reader as well.
-        costs = {
-            forms + "::test_a_ledger_payment_does_not_change_the_policy_adviser_s_form": 79_000,
-            forms + "::test_each_role_s_standards_exports_pass_their_readers": 55_000,
-            forms + "::test_each_role_s_tables_give_its_dataset_hash_alone": 7_700,
-        }
-        first = set(weighted_workers(readers, 2, costs, 200)[0])
-        for node in items:
-            if node in first:
-                groups[0].append(node)
-            elif node in readers:
-                groups[1].append(node)
-    others = [i for i in items if not offset or i.split("::", 1)[0] != forms]
-    # The independent subsidy tests each publish into their own tmp_path.
-    # Keep cached pack states and all other module-scoped fixtures together.
-    def unit(node: str) -> str:
-        path = node.partition("::")[0]
-        return node if path == INDEPENDENT_PUBLICATIONS else path
-
-    by_unit = Counter(map(unit, others))
-    # Rounded worker durations from run 44300384730. Unknown files cost one
-    # second per collected item, and new independent publications cost 17s.
-    weights = {
-        key: (17 if key.startswith(INDEPENDENT_PUBLICATIONS + "::") else count)
-        for key, count in by_unit.items()
-    }
-    weights.update({RULE_EXAMPLES: 125, "examples/test_examples.py": 75,
-                    "examples/subsidy/test_proposal_path.py": 45,
-                    "examples/subsidy/test_assessment_transition.py": 30,
-                    "examples/subsidy/test_tutorial.py": 30})
-    for index, units in enumerate(weighted_workers(sorted(by_unit), workers - offset, weights, 1), offset):
-        assigned = set(units)
-        groups[index].extend(node for node in others if unit(node) in assigned)
-    return groups
+    return example_slots(items, workers)
 
 
 def execute_worker(assignment: Path, journal: Path, report: Path) -> int:
@@ -1057,7 +1156,13 @@ def execute_worker(assignment: Path, journal: Path, report: Path) -> int:
         if not expected:
             return 0
 
+        seconds: dict[str, float] = {}
+
         class Evidence:
+            def pytest_runtest_logreport(self, report):
+                # Setup, call and teardown: what the ID costs its process, for the duration profile.
+                seconds[report.nodeid] = seconds.get(report.nodeid, 0.0) + report.duration
+
             def pytest_collection_finish(self, session):
                 found = [i.nodeid for i in session.items]
                 if Counter(found) != Counter(expected):
@@ -1081,11 +1186,13 @@ def execute_worker(assignment: Path, journal: Path, report: Path) -> int:
             def pytest_runtest_logfinish(self, nodeid, location):
                 print(json.dumps(["finish", nodeid]), file=evidence)
 
-        args = ["-q", "--rezono-report-cluster", "--durations=5", "--rootdir", str(ROOT), f"--junitxml={report}"]
+        plugin_args, guard = plugin_arguments()
+        args = [*plugin_args, "-q", "--rezono-report-cluster", "--durations=5", "--rootdir", str(ROOT),
+                f"--junitxml={report}"]
         if data["config"]:
             args.extend(["-c", data["config"]])
         # Pytest resolves only assigned IDs, without walking the component again.
-        plugins = [Evidence()]
+        plugins = [Evidence(), guard]
         if "publication" in data:
             # These short-lived RDF graphs caused 63 full-heap collections
             # (20.6 s) in run 44302050936. Collect larger batches in these
@@ -1100,7 +1207,9 @@ def execute_worker(assignment: Path, journal: Path, report: Path) -> int:
             share = data["publication"]
             plugin = PublicationProducer if share["producer"] else PublicationReader
             plugins.append(plugin(Path(share["directory"]), ROOT / FORMS_MODULE))
-        return int(pytest.main([*args, "--", *expected], plugins=plugins))
+        status = int(pytest.main([*args, "--", *expected], plugins=plugins))
+        report.with_suffix(".seconds.json").write_text(json.dumps(seconds), encoding="utf-8")
+        return status
 
 
 def run_shard(folder: str, shard: int, total: int, plans: Path, reports: Path, receipts: Path) -> int:
@@ -1113,9 +1222,10 @@ def run_shard(folder: str, shard: int, total: int, plans: Path, reports: Path, r
     if Counter(i for group in groups for i in group) != Counter(selected):
         raise ValueError("Worker assignments differ from the shard inventory")
     print(f"{folder} shard {shard+1}/{total}: {len(selected)} test IDs", flush=True)
-    paired_readers = (folder == "examples" and len(groups) > 2 and
-                      all(group and all(node.partition("::")[0] == FORMS_MODULE for node in group)
-                          for group in groups[:2]))
+    producer, reader = forms_pair(selected) if folder == "examples" and len(groups) > 2 else ([], [])
+    paired_readers = bool(producer) and set(producer) <= set(groups[0]) and set(reader) <= set(groups[1])
+    if producer and not paired_readers:
+        print("The form tests are not paired: each of their processes publishes the world itself", flush=True)
 
     def execute(pair):
         index, nodes = pair
@@ -1124,16 +1234,19 @@ def run_shard(folder: str, shard: int, total: int, plans: Path, reports: Path, r
         share = paired_readers and index < 2
         if share:
             data["publication"] = {"directory": directory, "producer": index == 0}
+        # The shard's processes share the builds of examples/shared_builds.py for this run only.
+        env = dict(os.environ, REZONO_SHARED_BUILDS=str(Path(directory) / "builds")) if folder == "examples" else None
         try:
             assignment.write_text(json.dumps(data), encoding="utf-8")
             return subprocess.call([
                 sys.executable, __file__, "execute-worker", str(assignment),
                 str(evidence / f"{shard}-{index}.jsonl"), str(reports / f"pytest-{index}.xml"),
-            ])
+            ], env=env)
         finally:
             if share and index == 0:
                 (Path(directory) / "producer-finished").touch()
     with tempfile.TemporaryDirectory(prefix="pytest-fixture-") as directory:
+        (Path(directory) / "builds").mkdir()
         with ThreadPoolExecutor(max_workers=len(groups)) as pool:
             statuses = list(pool.map(execute, enumerate(groups)))
         status = next((code for code in statuses if code), 0)
@@ -1141,6 +1254,17 @@ def run_shard(folder: str, shard: int, total: int, plans: Path, reports: Path, r
             for role in ("producer", "reader"):
                 timing = (Path(directory) / f"{role}.json").read_text(encoding="utf-8")
                 print(f"Current publication fixture {role}: {timing}", flush=True)
+    if folder == "examples":
+        # The seconds per unit of this shard, for examples-duration-profile.json.
+        seconds = Counter()
+        for index in range(len(groups)):
+            measured = reports / f"pytest-{index}.seconds.json"
+            if measured.is_file():
+                for node, spent in json.loads(measured.read_text(encoding="utf-8")).items():
+                    paired = paired_readers and node.partition("::")[0] == FORMS_MODULE
+                    seconds[node if paired else example_unit(node)] += spent
+        print("Example seconds per unit: " + json.dumps({u: round(t, 1) for u, t in sorted(seconds.items())}),
+              flush=True)
     # Write the expected number of journals even on failure, for diagnosis.
     (evidence / f"{shard}.json").write_text(json.dumps(len(groups)), encoding="utf-8")
     return status

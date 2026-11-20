@@ -1,5 +1,7 @@
 import { canonicalJson } from '../../viewer/src/lib/canon.ts';
 import { block, named, typeOf, type Build, type Logical, type ModuleComponent } from './module-support.ts';
+import { placed } from './parse-support.ts';
+import { readRuleName, spellName } from './rule-names.ts';
 
 type AnnotationValue = string | boolean | AnnotationValue[] | { [name: string]: AnnotationValue };
 
@@ -72,8 +74,21 @@ export function printMetadata(target: Metadata): string[] {
 export function readSchema(target: SchemaMetadata, line: Logical, build: Build): void {
 	target.schema = line.read!.name as string;
 	build.spans.set(target, build.spans.get(line.read!)!);
+	const warnDefault = (entry: Logical) => {
+		const span = build.spans.get(entry.read!);
+		if (span) build.later.push({ code: 'W107', span, args: [span.text], hint: { id: 'hint.leave_out', args: [] } });
+	};
+	let soleImport: Logical | undefined;
+	let importCount = 0;
 	for (const child of line.block) {
-		if (readMetadataLine(target, child, build)) continue;
+		const hadLayer = target.annotations !== undefined && Object.hasOwn(target.annotations, 'layer');
+		if (readMetadataLine(target, child, build)) {
+			const { line: field, name } = child.read!;
+			if (!hadLayer && field === 'annotation' && name === 'layer' && typeof target.annotations?.layer === 'string') {
+				warnDefault(child);
+			}
+			continue;
+		}
 		const { line: field, value, name } = child.read!;
 		if (field !== 'iri' && field !== 'language' && field !== 'prefix' && field !== 'import' && field !== 'defaultRange') {
 			build.refuse(child, 'a schema header field');
@@ -81,19 +96,26 @@ export function readSchema(target: SchemaMetadata, line: Logical, build: Build):
 		}
 		build.leaf(child);
 		if (typeof value !== 'string') build.refuse(child, 'a JSON string');
-		else if (field === 'import') (target.imports ??= []).push(value);
-		else if (field === 'prefix') {
+		else if (field === 'import') {
+			(target.imports ??= []).push(value);
+			importCount++;
+			soleImport = importCount === 1 && value === 'linkml:types' ? child : undefined;
+		} else if (field === 'prefix') {
 			const prefixes = target.prefixes ??= {};
 			if (Object.hasOwn(prefixes, name as string)) build.refuse(child, 'one prefix per name');
 			else prefixes[name as string] = value;
 		} else if (target[field] !== undefined) build.refuse(child, 'one value for this schema field');
-		else target[field] = value;
+		else {
+			target[field] = value;
+			if (field === 'defaultRange' && value === 'Text') warnDefault(child);
+		}
 	}
+	if (soleImport) warnDefault(soleImport);
 }
 
 export function printSchema(target: SchemaMetadata): string[] {
 	if (target.schema === undefined) return [];
-	return block(`schema ${target.schema}`, [
+	return block(`schema ${spellName(target.schema)}`, [
 		...(target.iri === undefined ? [] : [`iri ${JSON.stringify(target.iri)}`]),
 		...(target.language === undefined ? [] : [`language ${target.language}`]),
 		...Object.keys(target.prefixes ?? {}).sort().map(name => `prefix ${name} = ${JSON.stringify(target.prefixes![name])}`),
@@ -106,7 +128,7 @@ export function printSchema(target: SchemaMetadata): string[] {
 export const metadata = {
 	lineRules: ['SchemaLine', 'IriLine', 'LanguageLine', 'PrefixLine', 'ImportLine', 'DefaultRangeLine', 'DescriptionLine', 'ExactMappingLine', 'CloseMappingLine', 'BroadMappingLine', 'AnnotationLine'],
 	grammar: String.raw`
-  SchemaLine = kw<"schema"> name
+  SchemaLine = kw<"schema"> rName
   IriLine = kw<"iri"> MetaString
   LanguageLine = kw<"language"> metaLanguage
   PrefixLine = kw<"prefix"> name "=" MetaString
@@ -127,17 +149,17 @@ export const metadata = {
   metaNonzero = "1".."9" d*
   `,
 	actions: {
-		SchemaLine: (_kw, name) => named(name, { line: 'schema', name: name.sourceString }),
+		SchemaLine: (_kw, name) => named(name, { line: 'schema', name: readRuleName(name) }),
 		IriLine: (_kw, value) => ({ line: 'iri', value: value.decl() }),
 		LanguageLine: (_kw, value) => ({ line: 'language', value: value.sourceString }),
 		PrefixLine: (_kw, name, _eq, value) => ({ line: 'prefix', name: name.sourceString, value: value.decl() }),
-		ImportLine: (_kw, value) => ({ line: 'import', value: value.decl() }),
-		DefaultRangeLine: (_default, _range, value) => ({ line: 'defaultRange', value: typeOf(value) }),
+		ImportLine(_kw, value) { return placed(this, { line: 'import', value: value.decl() }); },
+		DefaultRangeLine(_default, _range, value) { return placed(this, { line: 'defaultRange', value: typeOf(value) }); },
 		DescriptionLine: (_kw, value) => ({ line: 'description', value: value.decl() }),
 		ExactMappingLine: (_exact, _mapping, value) => ({ line: 'exactMapping', value: value.decl() }),
 		CloseMappingLine: (_close, _mapping, value) => ({ line: 'closeMapping', value: value.decl() }),
 		BroadMappingLine: (_broad, _mapping, value) => ({ line: 'broadMapping', value: value.decl() }),
-		AnnotationLine: (_kw, name, _eq, value) => ({ line: 'annotation', name: name.sourceString, value: value.decl() }),
+		AnnotationLine(_kw, name, _eq, value) { return placed(this, { line: 'annotation', name: name.sourceString, value: value.decl() }); },
 		MetaValue: value => value.ctorName === 'metaDecimal' ? value.sourceString : value.ctorName === 'boolLit' ? value.sourceString === 'true' : value.decl(),
 		MetaArray(_open, values, _close) {
 			const items = values.asIteration().children.map(item => item.decl());

@@ -10,23 +10,33 @@ Removed and changed evidence is reported either way.
 One exception lets a planner complete evidence: with the label, a pull request may lift one
 red mark beside new evidence data that test reads (added files under expected/, snapshots/
 or vectors/), if it changes nothing else. red_before.py
-then shows that the test is red on the base and green with the new evidence.
+then shows that the test is red on the base and green with the new evidence. A second one
+lets a planner re-pin the imports of a fixture pack beside a lifted mark, to the hash the
+guard computes for the imported pack at the head (decisions/fixture-pin-update.md).
 
 A pull request that changes the checker or read access in a file that is not a test is
-read before it lands: it needs the label `p1-read-` plus the first seven characters of its
-head commit, whatever other labels it carries. A new push therefore needs a new label.
+read before it lands: it needs the label `p1-read-` plus the full id of its head commit
+(40 hex characters), whatever other labels it carries. A new push therefore needs a new label.
 In the merge queue no labels are read and this rule does not apply.
 """
 import argparse
 import ast
 from collections import Counter, namedtuple
+import configparser
 import copy
+from fnmatch import fnmatchcase
+import hashlib
 import io
 import json
-from pathlib import PurePosixPath
+import os
+from pathlib import Path, PurePosixPath
+import posixpath
+import re
 import subprocess
 import sys
+import time
 import tokenize
+import tomllib
 
 
 # The merge queue runs a candidate's own workflow files, so the workflows that define the
@@ -38,13 +48,17 @@ import tokenize
 SOURCE_POLICY = {
     ".github/workflows/python-environment/action.yml", "loop/rezono_cluster.py",
     "scripts/cluster_worker_tasks.py", "scripts/role_publication_ci.py", "scripts/components.py",
+    # The cluster task split imports fast_check.py, and the cluster workflow runs it for a
+    # task; for a suite, select_tests.py chooses the cluster tests and nothing counts them.
+    # ci.yml runs red_list.py to decide whether the milestones and skips hold.
+    "scripts/fast_check.py", "loop/cluster/select_tests.py", "scripts/red_list.py",
 }
 POLICY = SOURCE_POLICY | {
     ".github/workflows/red-policy.yml",
     ".github/workflows/ci.yml", ".github/workflows/disposable-cluster.yml",
     ".github/workflows/resume-feldera-review.yml", "scripts/feldera_admission.py",
     "scripts/red_guard.py", "scripts/test_red_guard.py",
-    "scripts/red_before.py", "scripts/test_red_before.py",
+    "scripts/red_before.py", "scripts/test_red_before.py", "scripts/pytest-plugins.txt",
 }
 EVIDENCE_DIRS = {
     "test", "tests", "__tests__", "__snapshots__", "fixture", "fixtures",
@@ -53,6 +67,9 @@ EVIDENCE_DIRS = {
 # Expectations recorded by hand outside an evidence directory, such as the slip an example
 # must render.
 EXPECTATIONS = {"slip.yaml"}
+# Files that pytest reads as its whole configuration (pytest 9 reads pytest.toml and the
+# hidden forms before pyproject.toml): a change there can drop a test from the run.
+PYTEST_FILES = {"pytest.toml", ".pytest.toml", ".pytest.ini"}
 # Evidence data that completes a red test: a new recorded outcome, snapshot or vector, not
 # code and not configuration. Only these directories hold it; a fixture, a conformance case,
 # a schema, a pack, a contract or a list of what is blocked or not yet supported does not.
@@ -74,15 +91,56 @@ def protected(path):
             or p.name == "conftest.py" or p.name.startswith("test_")
             or p.name.endswith(("_test.py", "_support.py", ".test.ts", ".spec.ts",
                                 ".test.js", ".spec.js", ".snap", ".golden"))
-            or p.name in {"frozen_baseline.py", "reference.py", "pytest.ini"} | EXPECTATIONS
+            or p.name in {"frozen_baseline.py", "reference.py", "pytest.ini"} | PYTEST_FILES | STARTUP | EXPECTATIONS
+            or p.suffix == ".pth" or p.name == "entry_points.txt"
+            or any(part.endswith((".dist-info", ".egg-info")) for part in p.parts[:-1])
             or "fixture" in p.stem or p.stem.endswith(("-cases", "_cases", "-vectors", "_vectors"))
             or p.parts[0] == "blocked")
 
 
+# Files that may hold pytest's configuration beside other settings. Their pytest section can
+# drop a test file from the run (`addopts = --ignore=...`), so a change to that section is
+# protected like pytest.ini; the rest of the file is not.
+PYTEST_CONFIG = {"pyproject.toml": None, "setup.cfg": "tool:pytest", "tox.ini": "pytest"}
+UNREADABLE_CONFIG = b"\xff"
+
+
+def pytest_config(path):
+    return PurePosixPath(path.lower()).name in PYTEST_CONFIG
+
+
+def pytest_section(path, blob):
+    """The pytest configuration in a pyproject.toml, setup.cfg or tox.ini blob.
+
+    An absent file or section gives None. A blob that does not parse gives its bytes, so that
+    any change to it counts.
+    """
+    if blob is None:
+        return None
+    try:
+        text = blob.decode("utf-8")
+        name = PurePosixPath(path.lower()).name
+        if name == "pyproject.toml":
+            return tomllib.loads(text).get("tool", {}).get("pytest")
+        parser = configparser.ConfigParser(interpolation=None, strict=False)
+        parser.read_string(text)
+        section = PYTEST_CONFIG[name]
+        return dict(parser.items(section)) if parser.has_section(section) else None
+    except (UnicodeError, tomllib.TOMLDecodeError, configparser.Error, AttributeError):
+        return blob
+
+
 # Changes here decide whether a proof is accepted or what a role may see. Nothing downstream
-# catches a mistake in them, so a reviewer reads them before they land.
-READ_FIRST_DIRS = ("checker/rezono_checker/", "packs/std-access/", "edge/gate/src/")
-READ_FIRST_FILES = {"edge/publisher/rezono_publisher/access.py", "contracts/proof.yaml"}
+# catches a mistake in them, so a reviewer reads them before they land. The checker hashes
+# and encodes through rezono_canon, so that package decides as much as the checker itself.
+READ_FIRST_DIRS = ("checker/rezono_checker/", "packs/std-access/", "edge/gate/src/",
+                   "canon/rezono_canon/")
+# In the publisher, these decide what a role reads or what the checker is handed to check
+# it by; decisions/checker-and-access-review.md says what each decides.
+PUBLISHER = "edge/publisher/rezono_publisher/"
+READ_FIRST_FILES = {"contracts/proof.yaml", *(PUBLISHER + name for name in (
+    "access.py", "calc_scope.py", "sources.py", "sweep.py", "difference.py", "batch.py",
+    "publish.py", "proof.py", "views.py", "retained_calculation.py"))}
 TEST_DIRS = {"test", "tests", "__tests__"}
 READ_LABEL = "p1-read-"
 
@@ -112,7 +170,8 @@ def read_label(head):
     if not (isinstance(head, str) and len(head) == 40
             and all(ch in "0123456789abcdef" for ch in head)):
         return None
-    return READ_LABEL + head[:7]
+    # The full id: a prefix is cheap to match with another commit, which would inherit the label.
+    return READ_LABEL + head
 
 
 def is_red(node):
@@ -230,10 +289,52 @@ LIMIT = 2_000_000
 UNREADABLE = (SyntaxError, ValueError, UnicodeError, RecursionError)
 
 
+# Python runs these at start-up, before pytest collects anything; a .pth file may run a line of
+# code as well. setup.py is protected as well as source: it can register a pytest plugin.
+STARTUP = {"sitecustomize.py", "usercustomize.py", "setup.py"}
+# A package's metadata can register a pytest plugin (the `pytest11` entry point). CI installs
+# the candidate, so the plugin loads and its hooks can drop a red test from the collection.
+PLUGIN_CONFIG = {"pyproject.toml", "setup.cfg"}
+
+
+def plugin_config(path):
+    return PurePosixPath(path.lower()).name in PLUGIN_CONFIG
+
+
+def pytest_plugins(path, blob):
+    """What in a pyproject.toml or setup.cfg blob can register a pytest plugin.
+
+    That is the pytest11 entry points, and every way to give entry points from elsewhere:
+    `dynamic` entry points and their source in pyproject.toml, `entry_points` under
+    `[options]` in setup.cfg (`file: ...`). A blob that does not parse gives its bytes, so that
+    any change to it counts. CI also compares the installed plugins with a list from the base
+    (scripts/pytest-plugins.txt), which covers any other way.
+    """
+    if blob is None:
+        return None
+    try:
+        text = blob.decode("utf-8")
+        if PurePosixPath(path.lower()).name == "pyproject.toml":
+            data = tomllib.loads(text)
+            project, tool = data.get("project", {}), data.get("tool", {})
+            dynamic = project.get("dynamic", [])
+            return json.dumps([project.get("entry-points", {}).get("pytest11"),
+                               tool.get("poetry", {}).get("plugins", {}).get("pytest11"),
+                               "entry-points" in dynamic,
+                               tool.get("setuptools", {}).get("dynamic", {}).get("entry-points")], sort_keys=True)
+        parser = configparser.ConfigParser(interpolation=None, strict=False)
+        parser.read_string(text)
+        return json.dumps([parser.get(section, option, fallback=None) for section, option in (
+            ("options.entry_points", "pytest11"), ("options", "entry_points"))])
+    except (UnicodeError, tomllib.TOMLDecodeError, configparser.Error, AttributeError, TypeError, ValueError):
+        return blob
+
+
 def source(path):
     """A path the guard does not protect, or policy that is also source; not documentation."""
-    return path in SOURCE_POLICY or not (protected(path) or path.endswith(".md")
-                                         or PurePosixPath(path).parts[0] in {"docs", "decisions"})
+    if path in SOURCE_POLICY or PurePosixPath(path).name == "setup.py":
+        return True
+    return not (protected(path) or path.endswith(".md") or PurePosixPath(path).parts[0] in {"docs", "decisions"})
 
 
 def is_param(node):
@@ -456,12 +557,495 @@ def pack_roots(rev):
                      for n in names if n.endswith(b"/pack.yaml"))
 
 
-def review(changes, planner=False, head=None, labels=(), packs=frozenset()):
+# A pin update: a pack that changes gets a new hash, and every pack.yaml that imports it pins
+# the new one. In a fixture or test pack that is a protected change, yet it holds no
+# expectation of its own. With the planner label it may come beside a lifted mark when the
+# guard computes the new hash itself (decisions/fixture-pin-update.md).
+# The files that make up a pack's hash, as compiler/rezono_compiler/modules.py defines them
+# (DEFINITION and pack_hash); scripts/test_red_guard.py keeps the two the same.
+DEFINITION = ("pack.yaml", "channels.yaml", "schema/**/*.yaml", "rezono/**/*.rezono", "rezono/**/*.json",
+              "labels/*.yaml", "messages/*.mf2", "rules/*.dl", "calc/*.yaml", "sweeps.yaml", "questions.yaml",
+              "views.yaml", "icons/*.svg", "icons/sources.yaml")
+PIN_DIRS = {"fixture", "fixtures", "test", "tests"}
+PIN = re.compile(r"sha256:[ \t]*([0-9a-f]{64})\b")
+REGULAR = {"100644", "100755"}
+
+
+class Tree:
+    """The files of one revision: `modes` maps each path to its Git mode, `read` gives its bytes."""
+
+    def __init__(self, modes, read):
+        self.modes, self.read = modes, read
+
+    @classmethod
+    def of(cls, files):
+        """A tree of regular files from {path: bytes}, for tests."""
+        return cls({path: "100644" for path in files}, files.__getitem__)
+
+    @classmethod
+    def at(cls, rev):
+        """The tree of a revision, read from Git objects only."""
+        modes, oids = {}, {}
+        for entry in filter(None, git("ls-tree", "-r", "-z", "--full-tree", rev).split(b"\0")):
+            meta, raw = entry.split(b"\t", 1)
+            mode, _, oid = meta.decode().split()
+            path = raw.decode("utf-8", "surrogateescape")
+            modes[path], oids[path] = mode, oid
+        return cls(modes, lambda path: git("cat-file", "blob", oids[path]))
+
+
+def definition_file(rel):
+    """Whether a path relative to a pack root matches DEFINITION, as pathlib's glob does."""
+    parts = rel.split("/")
+    for pattern in DEFINITION:
+        pp = pattern.split("/")
+        if "**" not in pp:
+            if len(parts) == len(pp) and all(map(fnmatchcase, parts, pp)):
+                return True
+            continue
+        at = pp.index("**")
+        head, tail = pp[:at], pp[at + 1:]
+        if (len(parts) >= len(head) + len(tail) and all(map(fnmatchcase, parts[:len(head)], head))
+                and all(map(fnmatchcase, parts[len(parts) - len(tail):], tail))):
+            return True
+    return False
+
+
+def canonical_hash(files):
+    """rezono_canon.canonical_sha256 of a {str: str} mapping: RFC 8785 keys in UTF-16 order."""
+    text = "{" + ",".join(json.dumps(k, ensure_ascii=False) + ":" + json.dumps(files[k], ensure_ascii=False)
+                          for k in sorted(files, key=lambda k: k.encode("utf-16-be"))) + "}"
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def pack_hash(tree, pack_dir):
+    """The pack's hash at `tree`, or None when a file in the pack is not a regular file."""
+    prefix, files = pack_dir + "/", {}
+    for path, mode in tree.modes.items():
+        if not path.startswith(prefix):
+            continue
+        if mode not in REGULAR:
+            return None  # A link or a submodule: what pathlib reads there is not in the tree.
+        rel = path[len(prefix):]
+        if definition_file(rel):
+            files[rel] = hashlib.sha256(tree.read(path)).hexdigest()
+    return canonical_hash(files)
+
+
+def import_pins(text):
+    """{line number: (name, path, sha256)} for each pin in the imports of a pack.yaml text.
+
+    An import is a sequence item under the top-level `imports:` key, written as a block or a
+    flow mapping. Its sha256 sits on one line; an item with no or several pins is left out.
+    """
+    lines, pins, item, inside = text.splitlines(), {}, [], False
+
+    def close():
+        found = [i for i in item if PIN.search(lines[i])]
+        body = "\n".join(lines[i] for i in item)
+        name = re.search(r"\bname:[ \t]*['\"]?([a-z0-9-]+)", body)
+        path = re.search(r"\bpath:[ \t]*['\"]?([^\s,}'\"]+)", body)
+        if len(found) == 1 and len(PIN.findall(body)) == 1 and name and path:
+            pins[found[0]] = (name.group(1), path.group(1), PIN.search(lines[found[0]]).group(1))
+
+    for i, line in enumerate(lines):
+        if not line.strip() or line.lstrip().startswith("#"):
+            continue
+        if not line[0].isspace() and not line.startswith("-"):
+            if item:
+                close()
+            item, inside = [], bool(re.match(r"imports:[ \t]*(#.*)?$", line))
+            continue
+        if inside:
+            if line.lstrip().startswith("-"):
+                if item:
+                    close()
+                item = []
+            item.append(i)
+    if inside and item:
+        close()
+    return pins
+
+
+# YAML whose lines do not stand on their own: an anchor or alias, or a second document.
+NOT_PLAIN = re.compile(r"(^|[\s,\[{:-])[&*][^\s,\]}]+|^(---|\.\.\.)([ \t]|$)", re.M)
+
+
+def pin_update(change, tree, base):
+    """Whether a change only re-pins imports of a fixture or test pack, from `base` to `tree`.
+
+    The pack.yaml exists already (status M) under a fixture or test directory, and holds no
+    anchor, alias or second document. Only lines with `sha256: <64 hex>` in its imports differ,
+    each only in that value. Each old value is the hash of the imported pack at `base`, and each
+    new value its hash at `tree`: so the pack's definition, or that of a pack it imports,
+    changes in this pull request, and the pin follows it.
+    """
+    p = PurePosixPath(change.path)
+    if not (change.status == "M" and p.name == "pack.yaml" and change.before is not None
+            and change.after is not None and PIN_DIRS.intersection(part.lower() for part in p.parts[:-1])):
+        return False
+    try:
+        before, after = change.before.decode("utf-8"), change.after.decode("utf-8")
+    except UnicodeError:
+        return False
+    if NOT_PLAIN.search(before) or NOT_PLAIN.search(after):
+        return False
+    old_lines, new_lines = before.splitlines(keepends=True), after.splitlines(keepends=True)
+    if len(old_lines) != len(new_lines):
+        return False
+    differ = [i for i, (a, b) in enumerate(zip(old_lines, new_lines)) if a != b]
+    old_pins, new_pins = import_pins(before), import_pins(after)
+    if not differ:
+        return False
+    for i in differ:
+        if (i not in old_pins or i not in new_pins or old_pins[i][:2] != new_pins[i][:2]
+                or PIN.sub("", old_lines[i]) != PIN.sub("", new_lines[i])):
+            return False
+        _, path, digest = new_pins[i]
+        target = posixpath.normpath(posixpath.join(str(p.parent), path))
+        if (target.startswith("../") or target + "/pack.yaml" not in tree.modes
+                or target + "/pack.yaml" not in base.modes):
+            return False
+        if pack_hash(tree, target) != digest or pack_hash(base, target) != old_pins[i][2]:
+            return False
+    return True
+
+
+def pin_updates(changes, base, rev):
+    """The paths of the changes that are pin updates from `base` to `rev`."""
+    candidates = [c for c in changes if c.status == "M" and PurePosixPath(c.path).name == "pack.yaml"
+                  and protected(c.path)]
+    if not candidates:
+        return frozenset()
+    tree, before = Tree.at(rev), Tree.at(base)
+    return frozenset(c.path for c in candidates if pin_update(c, tree, before))
+
+
+def bare(node):
+    """A copy of the node without red marks: lifting a mark changes no table."""
+    return _Unmark().visit(copy.deepcopy(node))
+
+
+COMPOUND = (ast.If, ast.For, ast.AsyncFor, ast.While, ast.With, ast.AsyncWith, ast.Try, ast.TryStar, ast.Match)
+
+
+def base_name(target):
+    """The name a target writes through (`NAME`, `NAME[k]`, `NAME.attr`), or None."""
+    while isinstance(target, (ast.Subscript, ast.Attribute, ast.Starred)):
+        target = target.value
+    return target.id if isinstance(target, ast.Name) else None
+
+
+def definitions(tree):
+    """Each module-level name with the statements that give it its value, in order, and the rest.
+
+    A statement counts toward a name when it assigns, augments or deletes it or an item of it,
+    calls any method on it (`NAME.remove(...)`, `NAME.pop()`), defines it as a function or
+    class (a helper that returns a table is part of what a test reads), or is a compound
+    statement (if, for, while, with, try, match) that mentions it. A statement that counts
+    toward no name, such as `globals()[...] = ...`, `exec(...)` or `setattr(...)`, is
+    returned apart: the guard cannot tell which test it reaches.
+    """
+    found, rest = {}, []
+    for node in tree.body:
+        names = []
+        if isinstance(node, (ast.Assign, ast.AnnAssign, ast.AugAssign, ast.Delete)):
+            targets = (node.targets if isinstance(node, (ast.Assign, ast.Delete)) else [node.target])
+            flat = [e for target in targets for e in (target.elts if isinstance(target, (ast.Tuple, ast.List))
+                                                      else [target])]
+            names = [base_name(target) for target in flat]
+            if None in names:
+                rest.append(node)
+            names = [name for name in names if name]
+        elif isinstance(node, ast.Expr) and isinstance(node.value, ast.Call):
+            name = base_name(node.value.func.value) if isinstance(node.value.func, ast.Attribute) else None
+            if name:
+                names.append(name)
+            else:
+                rest.append(node)
+        elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            if not node.name.startswith(("test", "Test")):
+                names.append(node.name)
+        elif isinstance(node, COMPOUND):
+            names = sorted({n.id for n in ast.walk(node) if isinstance(n, ast.Name)})
+            if not names:
+                rest.append(node)
+        elif isinstance(node, (ast.Import, ast.ImportFrom)):
+            names = [(alias.asname or alias.name).split(".")[0] for alias in node.names]
+        elif not (isinstance(node, ast.Expr) and isinstance(node.value, ast.Constant)):
+            rest.append(node)  # Anything else at module level, but a docstring.
+        for name in names:
+            found.setdefault(name, []).append(node)
+    return found, rest
+
+
+def changed_names(old_defs, new_defs):
+    """The names whose value changes, directly or through a name that it reads."""
+    shape = lambda nodes: [ast.dump(bare(n)) for n in nodes]
+    changed = {name for name in old_defs.keys() | new_defs.keys()
+               if shape(old_defs.get(name, [])) != shape(new_defs.get(name, []))}
+    reads = {name: {n.id for node in nodes for n in ast.walk(node) if isinstance(n, ast.Name)} - {name}
+             for name, nodes in new_defs.items()}
+    while grown := {name for name, read in reads.items() if name not in changed and read & changed}:
+        changed |= grown
+    return changed
+
+
+def table(expr, defs, seen=frozenset()):
+    """The cases of a table expression, {case: syntax}, as far as literals and names resolve.
+
+    A literal dict gives its keys, a literal list, tuple or set its items. A name resolves to
+    its module-level value and every later `+=` or mutating call; `+`, `*rest` items, a call of
+    a module-level helper that returns a table, and `list(...)`, `tuple(...)`, `dict(...)`
+    resolve through what they combine. What does not resolve contributes nothing.
+    """
+    expr = bare(expr)
+    found = {}
+    if isinstance(expr, ast.Dict):
+        for k, v in zip(expr.keys, expr.values):
+            if k is None:
+                found.update(table(v, defs, seen))
+            else:
+                found[ast.unparse(k)] = ast.dump(v)
+    elif isinstance(expr, (ast.List, ast.Tuple, ast.Set)):
+        for e in expr.elts:
+            if isinstance(e, ast.Starred):
+                found.update(table(e.value, defs, seen))
+            else:
+                found[ast.unparse(e)] = ast.dump(e)
+    elif isinstance(expr, ast.BinOp) and isinstance(expr.op, (ast.Add, ast.BitOr)):
+        found.update(table(expr.left, defs, seen))
+        found.update(table(expr.right, defs, seen))
+    elif isinstance(expr, ast.Name) and expr.id in defs and expr.id not in seen:
+        seen = seen | {expr.id}
+        for node in defs[expr.id]:
+            if isinstance(node, ast.AnnAssign) and node.value is not None:
+                found = table(node.value, defs, seen)
+            elif isinstance(node, ast.Assign):
+                for target in node.targets:
+                    if isinstance(target, ast.Name) and target.id == expr.id:
+                        found = table(node.value, defs, seen)  # A new value replaces the table.
+                    elif (isinstance(target, ast.Subscript) and isinstance(target.value, ast.Name)
+                          and target.value.id == expr.id):
+                        found[ast.unparse(bare(target.slice))] = ast.dump(bare(node.value))
+            elif isinstance(node, ast.AugAssign):
+                found.update(table(node.value, defs, seen))
+            elif isinstance(node, ast.Delete):
+                for target in node.targets:
+                    if isinstance(target, ast.Subscript):
+                        found.pop(ast.unparse(bare(target.slice)), None)
+            elif isinstance(node, ast.Expr):
+                call = node.value
+                if not isinstance(call.func, ast.Attribute):
+                    continue
+                if call.func.attr in {"remove", "discard"} and call.args:
+                    found.pop(ast.unparse(bare(call.args[0])), None)
+                elif call.func.attr in {"append", "add"} and call.args:
+                    found[ast.unparse(bare(call.args[0]))] = ast.dump(bare(call.args[0]))
+                elif call.func.attr == "insert" and len(call.args) > 1:
+                    found[ast.unparse(bare(call.args[1]))] = ast.dump(bare(call.args[1]))
+                elif call.func.attr in {"extend", "update"} and call.args:
+                    found.update(table(call.args[0], defs, seen))
+            elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                returns = [n.value for n in ast.walk(node) if isinstance(n, ast.Return) and n.value is not None]
+                for value in returns:
+                    found.update(table(value, defs, seen))
+    elif (isinstance(expr, ast.Call) and isinstance(expr.func, ast.Attribute)
+          and expr.func.attr in {"values", "keys", "items"}):
+        found.update(table(expr.func.value, defs, seen))  # A case of a dict is its key.
+    elif isinstance(expr, (ast.ListComp, ast.SetComp, ast.GeneratorExp, ast.DictComp)):
+        found.update(table(expr.generators[0].iter, defs, seen))
+    elif isinstance(expr, ast.Call) and isinstance(expr.func, ast.Name):
+        if expr.func.id in {"list", "tuple", "dict", "set", "sorted"} and expr.args:
+            found.update(table(expr.args[0], defs, seen))
+        elif expr.func.id in defs:
+            found.update(table(expr.func, defs, seen))
+    return found
+
+
+def argument_names(function):
+    a = function.args
+    return [arg.arg for arg in (*a.posonlyargs, *a.args, *a.kwonlyargs)]
+
+
+def fixture_calls(node):
+    """The `pytest.fixture` decorators of a function, as (call or None, keywords)."""
+    found = []
+    for decorator in getattr(node, "decorator_list", []):
+        call = decorator if isinstance(decorator, ast.Call) else None
+        if ast.unparse(call.func if call else decorator).endswith("fixture"):
+            found.append({k.arg: k.value for k in call.keywords} if call else {})
+    return found
+
+
+def fixtures_in(body):
+    """The fixtures a module or class body defines, by the name tests use, and those used always.
+
+    A fixture's name is its `name=`, else its function's. An `autouse=True` fixture applies
+    to every test in its scope.
+    """
+    found, autouse = {}, []
+    for node in body:
+        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        for keywords in fixture_calls(node):
+            alias = keywords.get("name")
+            name = alias.value if isinstance(alias, ast.Constant) and isinstance(alias.value, str) else node.name
+            found[name] = node
+            used = keywords.get("autouse")
+            if isinstance(used, ast.Constant) and used.value is True:
+                autouse.append(name)
+    return found, autouse
+
+
+def used_fixtures(marks):
+    """The fixture names that `usefixtures` marks name, among decorators or `pytestmark` values."""
+    found = []
+    for mark in marks:
+        for call in mark.elts if isinstance(mark, (ast.List, ast.Tuple)) else [mark]:
+            if isinstance(call, ast.Call) and ast.unparse(call.func).endswith("usefixtures"):
+                found.extend(a.value for a in call.args if isinstance(a, ast.Constant) and isinstance(a.value, str))
+    return found
+
+
+def test_fixtures(tree, scope):
+    """The fixtures of this module that a test uses, by name, with the function of each.
+
+    That is each fixture it takes as an argument, names in `usefixtures` or gets by autouse,
+    from its classes or its module (a class's fixture hides the module's of the same name),
+    and each fixture those take in turn.
+    """
+    available, autouse = fixtures_in(tree.body)
+    marks = []
+    for node in scope:
+        if isinstance(node, ast.ClassDef):
+            inner, always = fixtures_in(node.body)
+            available = {**available, **inner}
+            autouse = autouse + always
+        marks.extend(getattr(node, "decorator_list", None) or ([] if hasattr(node, "body") else [node]))
+    wanted = [*argument_names(scope[-1]), *used_fixtures(marks), *autouse]
+    found = {}
+    while wanted:
+        name = wanted.pop()
+        if name in found or name not in available:
+            continue
+        found[name] = available[name]
+        wanted.extend(argument_names(available[name]))
+    return found
+
+
+def generated_cases(tree, defs):
+    """The cases a module-level `pytest_generate_tests` gives through `metafunc.parametrize`."""
+    found = {}
+    for node in tree.body:
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name == "pytest_generate_tests":
+            found.update(parametrized([n for n in ast.walk(node) if isinstance(n, ast.Call)], defs))
+    return found
+
+
+def parametrized(marks, defs):
+    """The cases of every `parametrize` among marks: decorators, or a `pytestmark` value."""
+    found = {}
+    for mark in marks:
+        for call in mark.elts if isinstance(mark, (ast.List, ast.Tuple)) else [mark]:
+            if not (isinstance(call, ast.Call) and ast.unparse(call.func).endswith("parametrize")):
+                continue
+            values = call.args[1] if len(call.args) > 1 else next(
+                (k.value for k in call.keywords if k.arg == "argvalues"), None)
+            if values is not None:
+                found.update(table(values, defs, frozenset()))
+    return found
+
+
+def test_scopes(tree):
+    """Each test function by qualified name, with the nodes whose parametrize applies to it.
+
+    Those are the function, each class around it, and the `pytestmark` of the module and of
+    each such class.
+    """
+    found = {}
+
+    def marks_of(body):
+        return [n.value for n in body if isinstance(n, ast.Assign)
+                and any(isinstance(t, ast.Name) and t.id == "pytestmark" for t in n.targets)]
+
+    def visit(body, scope, outer):
+        for node in body:
+            if isinstance(node, ast.ClassDef):
+                visit(node.body, f"{scope}::{node.name}" if scope else node.name,
+                      outer + [node] + marks_of(node.body))
+            elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name.startswith("test"):
+                found[f"{scope}::{node.name}" if scope else node.name] = outer + [node]
+
+    visit(tree.body, "", marks_of(tree.body))
+    return found
+
+
+def table_changes(path, before, after):
+    """Notes for a test that reads a changed module-level name, and for each case it loses.
+
+    A test reads a name in its own syntax, in a class around it or in a `pytestmark`. A name
+    changes when its value does, or a name it reads does (a derived table, a helper that
+    returns one). Such a test is CHANGED; each case that goes from its parametrize tables,
+    wherever they are given and however they are built from names, is REMOVED as
+    `path::test[case]`. Red marks are left out, so a lift reports nothing.
+    """
+    try:
+        old_tree, new_tree = ast.parse(before.decode("utf-8")), ast.parse(after.decode("utf-8"))
+    except UNREADABLE:
+        return []
+    (old_defs, old_rest), (new_defs, new_rest) = definitions(old_tree), definitions(new_tree)
+    changed = changed_names(old_defs, new_defs)
+    # A changed statement that counts toward no name could reach any test of the module.
+    unknown = [ast.dump(bare(n)) for n in old_rest] != [ast.dump(bare(n)) for n in new_rest]
+    old_scopes, notes = test_scopes(old_tree), []
+    for test, nodes in test_scopes(new_tree).items():
+        if test not in old_scopes:
+            continue
+        read = set()
+        for node in nodes:
+            parts = (node.decorator_list + [n for n in node.body if isinstance(n, ast.Assign)]
+                     if isinstance(node, ast.ClassDef) else [node])
+            read |= {n.id for part in parts for n in ast.walk(part) if isinstance(n, ast.Name)}
+        # A fixture it uses is a name it reads, and so is pytest_generate_tests, which pytest
+        # calls for every test of the module.
+        old_fixtures, new_fixtures = test_fixtures(old_tree, old_scopes[test]), test_fixtures(new_tree, nodes)
+        read |= set(argument_names(nodes[-1])) | set(new_fixtures) | {"pytest_generate_tests"}
+        for node in new_fixtures.values():
+            read |= {n.id for n in ast.walk(node) if isinstance(n, ast.Name)}
+        notes.extend(f"CHANGED {path}::{test} reads the changed {name}" for name in sorted(changed & read))
+        notes.extend(f"CHANGED {path}::{test} uses the changed fixture {name}"
+                     for name in sorted(old_fixtures.keys() | new_fixtures.keys())
+                     if name not in changed and (name not in old_fixtures or name not in new_fixtures
+                                                 or ast.dump(bare(old_fixtures[name]))
+                                                 != ast.dump(bare(new_fixtures[name]))))
+        if unknown:
+            notes.append(f"CHANGED {path}::{test} under a changed module-level statement")
+
+        def cases_of(tree, scope, defs, fixtures):
+            marks = []
+            for node in scope:
+                marks.extend(getattr(node, "decorator_list", None) or ([] if hasattr(node, "body") else [node]))
+            found = {**parametrized(marks, defs), **generated_cases(tree, defs)}
+            for node in fixtures.values():
+                for keywords in fixture_calls(node):
+                    if "params" in keywords:
+                        found.update(table(keywords["params"], defs, frozenset()))
+            return found
+
+        lost = (cases_of(old_tree, old_scopes[test], old_defs, old_fixtures).keys()
+                - cases_of(new_tree, nodes, new_defs, new_fixtures).keys())
+        notes.extend(f"REMOVED {path}::{test}[{case}]" for case in sorted(lost))
+    return notes
+
+
+def review(changes, planner=False, head=None, labels=(), packs=frozenset(), pins=frozenset()):
     """Return (errors, notes) for a sequence of Change records.
 
     `head` and `labels` describe a pull request. Without `head`, as in the merge queue,
     labels are not read and changes to the checker or read access are not refused.
-    `packs` holds the pack roots of the reviewed revision, for an evidence completion.
+    `packs` holds the pack roots of the reviewed revision, for an evidence completion, and
+    `pins` the paths whose change is a pin update (`pin_update`).
     """
     changes = list(changes)
     errors, notes, lifted, other, unread = [], [], [], [], []
@@ -470,9 +1054,22 @@ def review(changes, planner=False, head=None, labels=(), packs=frozenset()):
             unread.append(ascii(c.path))
         if c.path == CI_WORKFLOW:
             notes.append(f"CHANGED {CI_WORKFLOW}")
+        section = pytest_config(c.path) and pytest_section(c.path, c.before) != pytest_section(c.path, c.after)
+        plugins = plugin_config(c.path) and pytest_plugins(c.path, c.before) != pytest_plugins(c.path, c.after)
+        if not protected(c.path) and (section or plugins):
+            other.append(ascii(c.path))
+            for changed, what in ((section, "pytest configuration"), (plugins, "pytest plugins")):
+                if changed:
+                    notes.append(f"CHANGED {c.path} {what}")
+                    if not planner:
+                        errors.append(f"ERROR planner label required for the {what} in {ascii(c.path)}")
+            continue
         if not protected(c.path):
             continue
         quoted = ascii(c.path)
+        if planner and c.path in pins:
+            notes.append(f"PINNED {c.path}")
+            continue
         if not (c.path.endswith(".py") and allowed(c.path, c.before, c.after)):
             other.append(quoted)
             if not planner:
@@ -521,14 +1118,27 @@ def review(changes, planner=False, head=None, labels=(), packs=frozenset()):
                 errors.append(f"ERROR new or changed red mark on {ascii(c.path + '::' + owner)} "
                               "needs strict=True and must not set run=False")
         notes.extend(f"REMOVED {c.path}::{name}" for name in old.tests if name not in new.tests)
+        if c.before is not None:
+            notes.extend(table_changes(c.path, c.before, c.after))
         # Report every changed green test, whether or not the pull request also changes source:
         # weakening an expectation on its own is the change a reviewer most needs to see.
         notes.extend(f"CHANGED {c.path}::{name}" for name, (shape, red) in new.tests.items()
                      if name in old.tests and not red and old.tests[name][0] != shape)
+        # A green test that a new mark turns red stops guarding what it guarded. Only a planner
+        # does that, and names the decision in the pull request.
+        reddened = [name for name, (_, red) in new.tests.items()
+                    if red and name in old.tests and not old.tests[name][1]]
+        notes.extend(f"CHANGED {c.path}::{name} from green to red" for name in reddened)
+        if reddened and not planner:
+            errors.append(f"ERROR green tests turn red in {quoted}: {', '.join(reddened)}. Only a pull request "
+                          "with the planner label marks a green test red, and it names the decision.")
     completed = completion(changes, packs) if planner and lifted and other else None
     if completed:
         path, names = completed
         notes.extend(f"COMPLETED {path}::{name}" for name in names)
+        # Nothing checks where the new evidence came from. A reviewer reads its source before
+        # it lands, so that no output of the engine becomes the test's own expectation.
+        unread.append(f"the evidence that completes {ascii(path)}")
     elif lifted and other:
         errors.append(f"ERROR red marks are lifted in {', '.join(lifted)} while protected paths "
                       f"also change: {', '.join(other)}. Lift marks in a pull request of their own, or, with the "
@@ -540,10 +1150,51 @@ def review(changes, planner=False, head=None, labels=(), packs=frozenset()):
             errors.append(f"ERROR the head commit {ascii(head)} is not a full commit id, "
                           f"so no {READ_LABEL} label can apply to it")
         elif label not in labels:
-            errors.append(f"ERROR the checker or read access changes in {', '.join(unread)}: a reviewer "
+            errors.append(f"ERROR the checker, read access or completed evidence changes in {', '.join(unread)}: "
+                          "a reviewer "
                           f"reads it before it lands and then sets the label {label} for the head "
                           "commit. The planner label does not replace it, and a new push needs a new label.")
     return errors, notes
+
+
+def listed_plugins(local, root):
+    """The allowed pytest plugins (`name = value`): from the base revision in CI, else `local`.
+
+    In GitHub Actions the base is the first parent of GITHUB_SHA for a pull request (whose
+    GITHUB_SHA merges it into its base) and for a merge group (whose commit sits on its
+    base), and GITHUB_SHA itself otherwise, as for pull_request_target, whose GITHUB_SHA is
+    the base branch's own commit. A step can set no GITHUB_* variable, so nothing
+    a candidate runs earlier in the job can redirect it. The event file is not read for the
+    base: the job could rewrite it, and a pull request's `base.sha` is the base when the event
+    fired, older than the base GitHub merged onto. Replace refs and .git/info/grafts are
+    ignored, so no file in the checkout's .git can give a commit another parent. In GitHub Actions
+    without an event file this fails rather than trusting the checkout.
+    """
+    if os.environ.get("GITHUB_ACTIONS") != "true":
+        text = Path(local).read_text(encoding="utf-8")
+    else:
+        event, sha = os.environ.get("GITHUB_EVENT_PATH"), os.environ.get("GITHUB_SHA")
+        if not (event and sha):
+            raise SystemExit("ERROR GitHub Actions without GITHUB_EVENT_PATH and GITHUB_SHA: "
+                             "no base revision for the list of allowed pytest plugins")
+        env = dict(os.environ, GIT_NO_REPLACE_OBJECTS="1", GIT_GRAFT_FILE=os.devnull)
+
+        def run(*args, check=True):
+            return subprocess.run(["git", *args], cwd=root, env=env, capture_output=True, text=True, check=check)
+
+        merged = os.environ.get("GITHUB_EVENT_NAME") in {"pull_request", "merge_group"}
+        target = f"{sha}^1" if merged else sha
+        for attempt in range(3):
+            if not run("cat-file", "-e", f"{target}^{{commit}}", check=False).returncode:
+                break
+            if attempt:
+                time.sleep(10)
+            run("fetch", "--no-tags", "--depth=2", "origin", sha, check=False)
+        else:
+            raise SystemExit(f"ERROR the base {target} could not be fetched for the list of allowed pytest plugins")
+        base = run("rev-parse", "--verify", "--end-of-options", f"{target}^{{commit}}").stdout.strip()
+        text = run("show", f"{base}:scripts/pytest-plugins.txt").stdout
+    return {line.strip() for line in text.splitlines() if line.strip() and not line.lstrip().startswith("#")}
 
 
 def git(*args):
@@ -556,11 +1207,15 @@ def changes(base, head):
         path = raw_path.decode("utf-8", "surrogateescape")
         old_mode, new_mode, old_id, new_id, status = header.decode().lstrip(":").split()
         sides = [None, None]
-        if protected(path):
+        if protected(path) or pytest_config(path) or plugin_config(path):
             # Git objects are data. Never open a path in the proposed revision.
             for i, (mode, oid) in enumerate(((old_mode, old_id), (new_mode, new_id))):
                 if mode == "100644" and int(git("cat-file", "-s", oid)) <= LIMIT:
                     sides[i] = git("cat-file", "blob", oid)
+                elif mode != "000000" and (pytest_config(path) or plugin_config(path)):
+                    # A link or an oversized file: not readable as configuration, so it counts
+                    # as a change of its pytest section and plugins (bytes that are not UTF-8).
+                    sides[i] = UNREADABLE_CONFIG
         yield Change(path, status[0], *sides)
 
 
@@ -569,7 +1224,9 @@ def check(base, head, planner=False, labels=None):
     pr_head = None
     if labels is not None:
         pr_head = git("rev-parse", "--verify", "--end-of-options", head + "^{commit}").decode().strip()
-    return review(list(changes(base, head)), planner, pr_head, labels or (), pack_roots(head))
+    records = list(changes(base, head))
+    pins = pin_updates(records, base, head) if planner else frozenset()
+    return review(records, planner, pr_head, labels or (), pack_roots(head), pins)
 
 
 def label_list(text):

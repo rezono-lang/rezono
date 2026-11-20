@@ -59,11 +59,6 @@ CASES = [
 ]
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="extra: Write request_check.check_request as decisions/k8s-admission-binding-checks.md specifies under "
-           "Request check. Write in k8s-admission/request_check.py.",
-)
 def test_request_check():
     from request_check import check_request
     from translator_support import fixture, load_program

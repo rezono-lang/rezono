@@ -80,7 +80,8 @@ def _catalogue(program) -> dict[str, Relation]:
         types = tuple(column["type"] for column in key)
         if not all(_text(name) for name in names) or len(set(names)) != len(names):
             raise Refused("malformed_definition")
-        if any(column not in ("string", "integer", "rational") for column in types):
+        # decisions/boolean-rule-inputs.md: a boolean rule column holds the canonical text true or false.
+        if any(column not in ("string", "integer", "rational", "boolean") for column in types):
             raise Refused("malformed_definition")
         catalogue[name] = Relation(role, types)
     return catalogue
@@ -113,6 +114,8 @@ def _key(value, relation: Relation) -> Key:
         if column == "integer" and (not INTEGER.fullmatch(part) or not BIGINT[0] <= int(part) <= BIGINT[1]):
             raise Refused("malformed_row_key")
         if column == "rational" and not calc_value(part, "rational"):
+            raise Refused("malformed_row_key")
+        if column == "boolean" and part not in ("true", "false"):
             raise Refused("malformed_row_key")
     return tuple(value)
 

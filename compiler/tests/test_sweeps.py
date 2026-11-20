@@ -157,16 +157,6 @@ class MissingSeveralSweeps(AssertionError):
 MAX_SWEEPS = 4  # decisions/viewer-slip.md, "Several sweeps"
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=(MissingSeveralSweeps, AssertionError),
-    reason=(
-        "extra: decisions/viewer-slip.md: Raise MAX_SWEEPS in compiler/rezono_compiler/pack.py to 4, and let contracts/pack.yaml (SweepFile.sweeps) "
-        "and contracts/explain.yaml (BoundSweepList.sweeps) follow it with maximum_cardinality 4, as "
-        "decisions/viewer-slip.md, section Several sweeps, says. Expectation: the minimal fixture with two sweeps, "
-        "grids written by hand; five sweeps are refused."
-    ),
-)
 def test_a_pack_has_up_to_four_sweeps(fixture, tmp_path):
     second = {**SWEEP, "name": "second", "key": "a2"}
     sweeps(fixture, SWEEP, second)

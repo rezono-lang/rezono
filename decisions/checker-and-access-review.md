@@ -2,17 +2,29 @@
 
 A change to the independent checker or to read access is read by a reviewer before it lands. A change to the workflows or to the meaning of the compiler is still read after it lands. Every other change lands when the check is green, as before.
 
-## The five paths
+## The paths read first
 
 A pull request needs a review before it lands when it changes a file that is not a test under one of these paths:
 
 | Path | What it decides |
 | --- | --- |
 | `checker/rezono_checker/` | whether a witness, a completeness receipt or a round certificate is accepted |
+| `canon/rezono_canon/` | the canonical encoding and hashes the checker compares a witness by |
 | `packs/std-access/` | which relations and rows a role may read |
 | `edge/gate/src/` | what the read kernel and the gate hand to a role |
 | `edge/publisher/rezono_publisher/access.py` | how the server applies read access per role |
+| `edge/publisher/rezono_publisher/calc_scope.py` | which calculated rows and witnesses a role gets, by the publisher's own reading of the calculation program |
+| `edge/publisher/rezono_publisher/sources.py` | which source entries a role receives with the base rows it reads |
+| `edge/publisher/rezono_publisher/sweep.py` | which roles get a sweep variant and which see its status (`roles_of`) |
+| `edge/publisher/rezono_publisher/difference.py` | whether an assumption can change a read right (`withheld`), and the bounds it hands to the checker |
+| `edge/publisher/rezono_publisher/batch.py` | the table of which column holds an element of which kind (`columns`) |
+| `edge/publisher/rezono_publisher/publish.py` | what the checker's `check_role` is handed: that column table, the kinds and their parents |
+| `edge/publisher/rezono_publisher/proof.py` | the piece size and fan-out of a role's proof graph (`PIECE`, `FANOUT`), bounds the checker is handed |
+| `edge/publisher/rezono_publisher/views.py` | which views a role gets, and the proof bounds it hands to the checker |
+| `edge/publisher/rezono_publisher/retained_calculation.py` | whether a selection from a retained publication is accepted: what it hands to the checker's `check_epoch` and `check_calc_bindings` |
 | `contracts/proof.yaml` | the witnesses and proofs the engine produces and the checker verifies |
+
+An evidence completion (`decisions/evidence-completion.md`) is read before it lands as well, because nothing else checks where its evidence came from.
 
 A test is a file that `scripts/red_guard.py` treats as test evidence: a `test_*` file, a fixture, a `conftest.py` and the like. A pull request that changes only tests under these paths needs no review label.
 
@@ -24,7 +36,7 @@ The workflows and the compiler's semantics stay with review after landing. A wro
 
 ## How it is enforced
 
-- `scripts/red_guard.py` and `.github/workflows/red-policy.yml` keep such a pull request red until it carries the label `p1-read-` followed by the first seven characters of its last commit. A new push changes the commit, so the pull request is red again until the new commit has been read.
+- `scripts/red_guard.py` and `.github/workflows/red-policy.yml` keep such a pull request red until it carries the label `p1-read-` followed by the full id of its last commit (40 hex characters; a label may hold 50). A shorter prefix would let another commit that shares it inherit the label. A new push changes the commit, so the pull request is red again until the new commit has been read.
 - The label `planner` does not replace it.
 - The check is required to enter the merge queue. In the queue the guard reads no labels.
 - Only the maintainer sets the label, after a reviewer has read the difference of that commit and reported no correctness finding. A finding is repaired on the same branch, and the new commit is read again.

@@ -2,14 +2,14 @@
 
 The file is Soufflé syntax, so Soufflé can serve as the oracle. What it may contain:
 
-    .decl relies_on(a: symbol, b: symbol)        derived relation: columns and types (symbol, number)
+    .decl relies_on(a: symbol, b: symbol)        derived relation: columns and types (symbol, number, boolean)
     .input k, k__a  /  .output relies_on         accepted; .input names a table, .output a derived relation
     head(x, y) :- p(x, z), !q(z), n = count : { r(x, _) }, s = sum v : { t(x, _, v) }, n > 1, m = n + 1.
 
 Base predicates are the tables of the schema (M1): `k(id)` per kind and `k__a(id, v)` per arrow or
 attribute, plus the parameter tables (enum values, bounds). A rule reads them by name; a `.decl` for a
-table is optional and must agree with the schema. Columns are text or whole numbers; a rule cannot
-read a boolean or date table yet.
+table is optional and must agree with the schema. Columns can hold text, whole numbers or booleans.
+A rule cannot read a date table yet.
 
 A variable inside an aggregate that no positive literal binds is local to the aggregate: it ranges over
 the group, like '_'. The variable after `sum`, `min` or `max` names the column that is aggregated.
@@ -34,6 +34,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from . import rules as ir
+from .diagnostics import Diagnosed, Diagnostic
 
 TOKEN = re.compile(r"""
     (?P<ws>[ \t\r]+) | (?P<nl>\n) | (?P<line>//[^\n]*) | (?P<block>/\*.*?\*/) |
@@ -41,9 +42,10 @@ TOKEN = re.compile(r"""
     (?P<ident>[A-Za-z_][A-Za-z0-9_]*) |
     (?P<op>:-|!=|<=|>=|[(),.:{}!=<>+\-*;|&^%/\[\]$@#])
 """, re.X | re.S)
-TYPES = {"symbol": "string", "number": "integer"}
+TYPES = {"symbol": "string", "number": "integer", "boolean": "boolean"}
 SYMBOLS = {t: s for s, t in TYPES.items()}
-SQL = {"VARCHAR": "string", "BIGINT": "integer"}
+SQL = {"VARCHAR": "string", "BIGINT": "integer", "BOOLEAN": "boolean"}
+BOOLEAN_LITERALS = {"TRUE": "true", "FALSE": "false"}
 COMPARE = {"=": "eq", "!=": "ne", "<": "lt", "<=": "le", ">": "gt", ">=": "ge"}
 COMPARE_AS = ir.COMPARE_AS  # `binary_text(x) < binary_text(y)`: a comparison type, written on both operands
 ARITH = {"+": "add", "-": "sub", "*": "mul", "/": "div"}
@@ -74,6 +76,15 @@ CLOSES = re.compile(r"^//\s*@closes\s+(\S+)\s*$")
 
 class RuleError(ValueError):
     pass
+
+
+class ProtectedTable(RuleError, Diagnosed):
+    """A schema table (kind, slot or enum) under the name of a protected admission input (PROTECTED). Only
+    admission fills such a relation (decisions/admission-transport.md, section 6), so the name is reserved."""
+    CODE = "schema_table_protected"
+
+    def __init__(self, messages: list[str]):
+        Diagnosed.__init__(self, "\n".join(messages), tuple(Diagnostic(self.CODE, message) for message in messages))
 
 
 @dataclass(frozen=True)
@@ -165,6 +176,8 @@ def term(p: Parser):
             p.fail(f"the constant {t.text} cannot be written in the rule IR (it starts with '?' or is '_')", t)
         return ("const", text, "string")
     if t.kind == "ident":
+        if t.text in BOOLEAN_LITERALS:
+            return ("const", BOOLEAN_LITERALS[t.text], "boolean")
         if t.text == "_":
             return ("wild",)
         if not VARIABLE.match(t.text):
@@ -280,7 +293,7 @@ def parse_file(text: str, where: str, columns: list | None = None):
                     p.take(":")
                     ty = p.take(kind="ident").text
                     if ty not in TYPES:
-                        p.fail(f"{name}.{c}: type '{ty}' is not supported (symbol or number)")
+                        p.fail(f"{name}.{c}: type '{ty}' is not supported (symbol, number or boolean)")
                     cols.append((c, TYPES[ty]))
                     if not p.at(")"):
                         p.take(",")
@@ -368,6 +381,14 @@ def base_tables(pack) -> dict[str, list[tuple[str, str | None]]]:
         for part in seal.parts:  # a part counts when the element it is part of does
             out[part.accepted] = [("id", SQL.get(pack.kinds[part.kind].id_type))]
     return out
+
+
+def reserved(pack) -> list[str]:
+    """The tables of the schema whose name is a protected admission input. Such a name is reserved: a kind,
+    slot or enum table under it would be read as the admitted relation, whose rows only admission gives
+    (decisions/admission-transport.md, section 6), so the pack's own facts would silently be replaced."""
+    return [f"schema: the table {name} (a kind, slot or enum) has the name of a protected admission input; "
+            "that name is reserved, rename it" for name in sorted(PROTECTED.keys() & base_tables(pack).keys())]
 
 
 def seal_docs(pack) -> list[dict]:
@@ -487,6 +508,8 @@ def read(pack, pack_dir: Path, imports=None, renames=None, *, calc_inputs=None, 
     imports, renames = imports or {}, renames or {}
     calc_inputs = calc_inputs or {}
     root = pack.meta["name"]
+    if clash := reserved(pack):  # before any rule is read: also a pack without rules may not take the name
+        raise ProtectedTable(clash)
     givers = {}  # selection -> the packs whose calc files give its rule; any other is the root's own
     for name, doc in (calc_parts or {}).items():
         for version in doc.get("rules") or []:
@@ -706,7 +729,8 @@ def read(pack, pack_dir: Path, imports=None, renames=None, *, calc_inputs=None, 
             continue
         bad = [c for c, t in tables[name] if t is None]
         if bad:
-            errors.append(f"rules: {name} has a column that is not text or a whole number; rules cannot read it yet")
+            errors.append(f"rules: {name} has a column that is not text, a whole number or a boolean; "
+                          "rules cannot read it yet")
             continue
         relations[name] = {"name": name, "role": "base", "key": [{"name": c, "type": t} for c, t in tables[name]],
                            "world": worlds.get(name, "closed")}
@@ -843,6 +867,8 @@ def to_rule(rid, module, where, head, body, line, columns=lambda name: None) -> 
     def show(t):
         if t[0] == "wild":
             return "_"
+        if t[0] == "const" and t[2] == "boolean":
+            return t[1].upper()
         return '"' + t[1] + '"' if t[0] == "const" and t[2] == "string" else t[1]
 
     # Types: a constant has its own; a variable the column of its positive literal, or integer as a result.
@@ -882,7 +908,7 @@ def to_rule(rid, module, where, head, body, line, columns=lambda name: None) -> 
         elif b[0] == "arith":
             for t in (b[3], b[4]):
                 if typ(t) not in (None, "integer"):
-                    fail(f"{b[1]} = …: arithmetic needs whole numbers, and {show(t)} is text")
+                    fail(f"{b[1]} = …: arithmetic needs whole numbers, and {show(t)} is {typ(t)}")
 
     positive = {t[1] for kind, *rest in body if kind == "lit" and rest[0] == "positive"
                 for t in rest[1][1] if t[0] == "var"}

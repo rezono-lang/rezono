@@ -84,6 +84,35 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 27
     steps:
+      # GitHub does not cancel the runs of a merge group that the queue replaced.
+      # Such a job stops here, before it spends a runner on a commit that can no
+      # longer land: the group's ref is gone or points elsewhere. A failed lookup
+      # lets the job run. Stopping fails the job, which is safe: the group no
+      # longer exists, and a misread can never turn an untested group green.
+      - name: Stop when the merge group was replaced
+        if: github.event_name == 'merge_group'
+        shell: bash
+        env:
+          HEAD_REF: ${{ github.event.merge_group.head_ref }}
+          HEAD_SHA: ${{ github.event.merge_group.head_sha }}
+        run: |
+          set -euo pipefail
+          if [[ -z "$HEAD_REF" || -z "$HEAD_SHA" ]]; then
+            echo "::warning::The event names no merge-group ref or commit; running the job"
+            exit 0
+          fi
+          [[ "$HEAD_REF" == refs/* ]] || HEAD_REF="refs/heads/$HEAD_REF"
+          # No checkout yet, so the repository is named by its address.
+          if ! found=$(GIT_TERMINAL_PROMPT=0 timeout 60 git ls-remote "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git" "$HEAD_REF"); then
+            echo "::warning::Could not read $HEAD_REF from the remote; running the job"
+            exit 0
+          fi
+          current=$(awk -v ref="$HEAD_REF" '$2 == ref { print $1 }' <<< "$found")
+          echo "Merge group $HEAD_REF: tested commit $HEAD_SHA, remote has ${current:-no such ref}"
+          if [[ "$current" != "$HEAD_SHA" ]]; then
+            echo "::error title=group replaced::The merge queue replaced this group ($HEAD_REF is ${current:-gone}, not $HEAD_SHA); stopping without running the job"
+            exit 1
+          fi
       - id: full_checkout
         name: Check out the candidate with history
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -91,11 +120,19 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
           path: release-source
-      - name: Check tracked files and the exception budget
+      - name: Check tracked files, the exception budget and the branch name
         working-directory: release-source
+        shell: bash
         env:
+          POLICY: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.sha }}
           BASE: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.event.before }}
-        run: python3 -I scripts/leak_check.py --base "$BASE"
+          LEAK_CHECK_BRANCH: ${{ github.head_ref }}
+        run: |
+          set -euo pipefail
+          # Run the check as the base has it, so a change to scripts/leak_check.py cannot
+          # weaken the check that judges that same change. The next step tests the candidate's copy.
+          echo "Leak check from $POLICY, scripts/leak_check.py blob $(git rev-parse "$POLICY:scripts/leak_check.py")"
+          git show "$POLICY:scripts/leak_check.py" | python3 -I - --base "$BASE"
       - name: Test the leak check on a throwaway repository
         working-directory: release-source
         run: python3 -I scripts/test_leak_check.py -v
@@ -107,6 +144,11 @@ jobs:
       - name: Test the docs reference check on a throwaway repository
         working-directory: release-source
         run: python3 -I scripts/test_docs_links.py -v
+      - name: Check the compiler's error-code budget against the base, cell by cell
+        working-directory: release-source
+        env:
+          ERROR_CODE_BUDGET_BASE: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.event.before }}
+        run: python3 -I scripts/test_error_code_budget.py -v
       - name: Check Dependabot manifest coverage
         working-directory: release-source
         shell: bash
@@ -175,8 +217,25 @@ jobs:
         with:
           persist-credentials: false
           path: readme-source
-      - name: Run the README example
+      # The compiler reads authored .rezono pack sources through Node from the
+      # editable checkout, so the README example needs the runtime and the
+      # reader's locked packages in readme-source/rezono.
+      - id: readme_node
+        name: Set up Node for the README example
         if: ${{ !cancelled() && steps.readme_checkout.outcome == 'success' }}
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1  # v7.1.0
+        with:
+          node-version-file: readme-source/.node-version
+          cache: npm
+          cache-dependency-path: readme-source/rezono/package-lock.json
+      - id: readme_reader
+        name: Install the Rezono reader for the README example
+        if: ${{ !cancelled() && steps.readme_node.outcome == 'success' }}
+        working-directory: readme-source/rezono
+        shell: bash
+        run: npm ci
+      - name: Run the README example
+        if: ${{ !cancelled() && steps.readme_reader.outcome == 'success' }}
         working-directory: readme-source
         shell: bash
         run: bash scripts/check-quickstart.sh
@@ -205,6 +264,35 @@ jobs:
       role_publication: ${{ steps.role_publication.outputs.required }}
       red_before: ${{ steps.red_before.outputs.required }}
     steps:
+      # GitHub does not cancel the runs of a merge group that the queue replaced.
+      # Such a job stops here, before it spends a runner on a commit that can no
+      # longer land: the group's ref is gone or points elsewhere. A failed lookup
+      # lets the job run. Stopping fails the job, which is safe: the group no
+      # longer exists, and a misread can never turn an untested group green.
+      - name: Stop when the merge group was replaced
+        if: github.event_name == 'merge_group'
+        shell: bash
+        env:
+          HEAD_REF: ${{ github.event.merge_group.head_ref }}
+          HEAD_SHA: ${{ github.event.merge_group.head_sha }}
+        run: |
+          set -euo pipefail
+          if [[ -z "$HEAD_REF" || -z "$HEAD_SHA" ]]; then
+            echo "::warning::The event names no merge-group ref or commit; running the job"
+            exit 0
+          fi
+          [[ "$HEAD_REF" == refs/* ]] || HEAD_REF="refs/heads/$HEAD_REF"
+          # No checkout yet, so the repository is named by its address.
+          if ! found=$(GIT_TERMINAL_PROMPT=0 timeout 60 git ls-remote "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git" "$HEAD_REF"); then
+            echo "::warning::Could not read $HEAD_REF from the remote; running the job"
+            exit 0
+          fi
+          current=$(awk -v ref="$HEAD_REF" '$2 == ref { print $1 }' <<< "$found")
+          echo "Merge group $HEAD_REF: tested commit $HEAD_SHA, remote has ${current:-no such ref}"
+          if [[ "$current" != "$HEAD_SHA" ]]; then
+            echo "::error title=group replaced::The merge queue replaced this group ($HEAD_REF is ${current:-gone}, not $HEAD_SHA); stopping without running the job"
+            exit 1
+          fi
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           fetch-depth: 0
@@ -308,7 +396,7 @@ jobs:
           done < <(find "$RUNNER_TEMP/inventory" -name collection.xml -print0)
       - name: Save the independent pytest inventory
         if: always() && steps.matrix.outputs.has_pytest == 'true'
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: pytest-inventory
           path: ${{ runner.temp }}/inventory
@@ -461,11 +549,45 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     strategy:
-      fail-fast: false
+      # In the merge queue one failed shard fails the group, so the other shards
+      # stop; a pull request keeps every shard to report all its failures.
+      fail-fast: ${{ github.event_name == 'merge_group' }}
       matrix:
         component: ${{ fromJson(needs.discover.outputs.python) }}
     steps:
+      # GitHub does not cancel the runs of a merge group that the queue replaced.
+      # Such a job stops here, before it spends a runner on a commit that can no
+      # longer land: the group's ref is gone or points elsewhere. A failed lookup
+      # lets the job run. Stopping fails the job, which is safe: the group no
+      # longer exists, and a misread can never turn an untested group green.
+      - name: Stop when the merge group was replaced
+        if: github.event_name == 'merge_group'
+        shell: bash
+        env:
+          HEAD_REF: ${{ github.event.merge_group.head_ref }}
+          HEAD_SHA: ${{ github.event.merge_group.head_sha }}
+        run: |
+          set -euo pipefail
+          if [[ -z "$HEAD_REF" || -z "$HEAD_SHA" ]]; then
+            echo "::warning::The event names no merge-group ref or commit; running the job"
+            exit 0
+          fi
+          [[ "$HEAD_REF" == refs/* ]] || HEAD_REF="refs/heads/$HEAD_REF"
+          # No checkout yet, so the repository is named by its address.
+          if ! found=$(GIT_TERMINAL_PROMPT=0 timeout 60 git ls-remote "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git" "$HEAD_REF"); then
+            echo "::warning::Could not read $HEAD_REF from the remote; running the job"
+            exit 0
+          fi
+          current=$(awk -v ref="$HEAD_REF" '$2 == ref { print $1 }' <<< "$found")
+          echo "Merge group $HEAD_REF: tested commit $HEAD_SHA, remote has ${current:-no such ref}"
+          if [[ "$current" != "$HEAD_SHA" ]]; then
+            echo "::error title=group replaced::The merge queue replaced this group ($HEAD_REF is ${current:-gone}, not $HEAD_SHA); stopping without running the job"
+            exit 1
+          fi
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          # The loop compares the decisions with the base (DECISION_HEADS_BASE below), so it needs the history.
+          fetch-depth: ${{ matrix.component.folder == 'loop' && '0' || '1' }}
       - uses: ./.github/workflows/python-environment
         with:
           editable: ${{ needs.discover.outputs.python_editable }}
@@ -498,7 +620,7 @@ jobs:
           bash run/probes/worker-join/prepare-renderer.sh "$renderer"
           test -x "$renderer"
           printf 'REZONO_WORKER_RENDERER=%s\n' "$renderer" >> "$GITHUB_ENV"
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
         with:
           name: pytest-inventory
           path: ${{ runner.temp }}/inventory
@@ -507,6 +629,8 @@ jobs:
         env:
           REZONO_HYPOTHESIS_PROFILE: ci
           PYTHONHASHSEED: '0'
+          # The base of loop/tests/test_decision_heads.py: the pull request's base, or the merge group's base.
+          DECISION_HEADS_BASE: ${{ matrix.component.folder == 'loop' && (github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.event.before) || '' }}
           COMPONENT: ${{ matrix.component.folder }}
           KIND: ${{ matrix.component.kind }}
           SHARD: ${{ matrix.component.shard }}
@@ -523,7 +647,7 @@ jobs:
               "$RUNNER_TEMP/inventory" "$RUNNER_TEMP/reports" "$RUNNER_TEMP/receipts"
       - name: Save execution evidence
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: pytest-execution-${{ strategy.job-index }}
           path: ${{ runner.temp }}/receipts
@@ -564,10 +688,41 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     strategy:
-      fail-fast: false
+      # In the merge queue one failed shard fails the group, so the other shards
+      # stop; a pull request keeps every shard to report all its failures.
+      fail-fast: ${{ github.event_name == 'merge_group' }}
       matrix:
         component: ${{ fromJson(needs.discover.outputs.node) }}
     steps:
+      # GitHub does not cancel the runs of a merge group that the queue replaced.
+      # Such a job stops here, before it spends a runner on a commit that can no
+      # longer land: the group's ref is gone or points elsewhere. A failed lookup
+      # lets the job run. Stopping fails the job, which is safe: the group no
+      # longer exists, and a misread can never turn an untested group green.
+      - name: Stop when the merge group was replaced
+        if: github.event_name == 'merge_group'
+        shell: bash
+        env:
+          HEAD_REF: ${{ github.event.merge_group.head_ref }}
+          HEAD_SHA: ${{ github.event.merge_group.head_sha }}
+        run: |
+          set -euo pipefail
+          if [[ -z "$HEAD_REF" || -z "$HEAD_SHA" ]]; then
+            echo "::warning::The event names no merge-group ref or commit; running the job"
+            exit 0
+          fi
+          [[ "$HEAD_REF" == refs/* ]] || HEAD_REF="refs/heads/$HEAD_REF"
+          # No checkout yet, so the repository is named by its address.
+          if ! found=$(GIT_TERMINAL_PROMPT=0 timeout 60 git ls-remote "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git" "$HEAD_REF"); then
+            echo "::warning::Could not read $HEAD_REF from the remote; running the job"
+            exit 0
+          fi
+          current=$(awk -v ref="$HEAD_REF" '$2 == ref { print $1 }' <<< "$found")
+          echo "Merge group $HEAD_REF: tested commit $HEAD_SHA, remote has ${current:-no such ref}"
+          if [[ "$current" != "$HEAD_SHA" ]]; then
+            echo "::error title=group replaced::The merge queue replaced this group ($HEAD_REF is ${current:-gone}, not $HEAD_SHA); stopping without running the job"
+            exit 1
+          fi
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1  # v7.1.0
         with:
@@ -587,7 +742,7 @@ jobs:
         if: matrix.component.pytest && needs.queue_evidence.outputs.tested != 'true'
         with:
           editable: ${{ needs.discover.outputs.python_editable }}
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
         if: matrix.component.pytest && needs.queue_evidence.outputs.tested != 'true'
         with:
           name: pytest-inventory
@@ -604,7 +759,7 @@ jobs:
           python scripts/components.py run-shard "$COMPONENT" 0 1             "$RUNNER_TEMP/inventory" "$RUNNER_TEMP/reports" "$RUNNER_TEMP/receipts"
       - name: Save execution evidence
         if: always() && matrix.component.pytest && needs.queue_evidence.outputs.tested != 'true'
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: pytest-execution-node-${{ strategy.job-index }}
           path: ${{ runner.temp }}/receipts
@@ -639,12 +794,12 @@ jobs:
           ref: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.sha }}
           sparse-checkout: scripts
           persist-credentials: false
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
         if: always() && needs.discover.outputs.has_pytest == 'true' && needs.queue_evidence.outputs.tested != 'true'
         with:
           name: pytest-inventory
           path: ${{ runner.temp }}/inventory
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
         if: always() && needs.discover.outputs.has_pytest == 'true' && needs.queue_evidence.outputs.tested != 'true'
         with:
           pattern: pytest-execution-*

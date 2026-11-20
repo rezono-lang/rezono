@@ -1,0 +1,64 @@
+rezono 0
+pack offer-selection
+
+rules charges
+  | // Bill quantity × (periods × rate + setup) with exact integer limbs.
+  | .decl charge_input(demand: symbol, offer: symbol, quantity: number, periods: number, rate: number, setup: number)
+  | charge_input(d, o, q, p, r, s) :- charge_terms(d, o, r, s), r >= 0, s >= 0,
+  |     demand__quantity(d, q), q > 0, demand__billed_periods(d, p), p > 0.
+  | 
+  | .decl charge_operand(operand: number)
+  | charge_operand(q) :- charge_input(_, _, q, _, _, _).
+  | charge_operand(p) :- charge_input(_, _, _, p, _, _).
+  | charge_operand(r) :- charge_input(_, _, _, _, r, _).
+  | charge_operand(s) :- charge_input(_, _, _, _, _, s).
+  | 
+  | // Four base-65536 limbs cover every nonnegative signed BIGINT.
+  | .decl charge_digit(operand: number, position: number, digit: number)
+  | charge_digit(v, 0, x) :- charge_operand(v), high = v / 65536, used = high * 65536, x = v - used.
+  | charge_digit(v, 1, x) :- charge_operand(v), low = v / 65536, high = v / 4294967296,
+  |     used = high * 65536, x = low - used.
+  | charge_digit(v, 2, x) :- charge_operand(v), low = v / 4294967296, high = v / 281474976710656,
+  |     used = high * 65536, x = low - used.
+  | charge_digit(v, 3, x) :- charge_operand(v), x = v / 281474976710656.
+  | 
+  | // Each term is below 2^48, and each column has fewer than 2^7 terms.
+  | // Keep positions and fee types so equal contributions still count.
+  | .decl charge_term(demand: symbol, offer: symbol, quantity: number, periods: number, rate: number, setup: number,
+  |     position: number, fee: symbol, quantity_position: number, period_position: number, rate_position: number, amount: number)
+  | charge_term(d, o, q, p, r, s, pos, "usage", i, j, k, amount) :- charge_input(d, o, q, p, r, s),
+  |     charge_digit(q, i, a), charge_digit(p, j, b), charge_digit(r, k, c), a > 0, b > 0, c > 0,
+  |     pair = i + j, pos = pair + k, usage = b * c, amount = a * usage.
+  | charge_term(d, o, q, p, r, s, pos, "setup", i, j, 0, amount) :- charge_input(d, o, q, p, r, s),
+  |     charge_digit(q, i, a), charge_digit(s, j, b), a > 0, b > 0, pos = i + j, amount = a * b.
+  | 
+  | .decl charge_column(demand: symbol, offer: symbol, quantity: number, periods: number, rate: number, setup: number,
+  |     position: number, coefficient: number)
+  | charge_column(d, o, q, p, r, s, pos, n) :- charge_input(d, o, q, p, r, s), charge_digit(q, pos, _),
+  |     n = sum amount : { charge_term(d, o, q, p, r, s, pos, _, _, _, _, amount) }.
+  | 
+  | .decl charge_carry(demand: symbol, offer: symbol, quantity: number, periods: number, rate: number, setup: number,
+  |     position: number, carry: number)
+  | charge_carry(d, o, q, p, r, s, 0, 0) :- charge_input(d, o, q, p, r, s).
+  | charge_carry(d, o, q, p, r, s, next, carry) :- charge_carry(d, o, q, p, r, s, pos, previous),
+  |     charge_column(d, o, q, p, r, s, pos, n), pos < 4,
+  |     next = pos + 1, coefficient = n + previous, carry = coefficient / 65536.
+  | 
+  | .decl charge_limb(demand: symbol, offer: symbol, quantity: number, periods: number, rate: number, setup: number,
+  |     position: number, digit: number)
+  | charge_limb(d, o, q, p, r, s, pos, x) :- charge_carry(d, o, q, p, r, s, pos, previous),
+  |     charge_column(d, o, q, p, r, s, pos, n),
+  |     coefficient = n + previous, carry = coefficient / 65536, used = carry * 65536, x = coefficient - used.
+  | 
+  | // A whole-order guarantee's total uses this same integer representation. A
+  | // result beyond it cannot match a recorded total. Retain the exclusion evidence.
+  | .decl charge_out_of_range(demand: symbol, offer: symbol)
+  | charge_out_of_range(d, o) :- charge_term(d, o, _, _, _, _, pos, _, _, _, _, _), pos > 3.
+  | charge_out_of_range(d, o) :- charge_carry(d, o, _, _, _, _, 4, carry), carry > 0.
+  | charge_out_of_range(d, o) :- charge_limb(d, o, _, _, _, _, 3, high), high >= 32768.
+  | 
+  | .decl payable_charge(demand: symbol, offer: symbol, total: number)
+  | payable_charge(d, o, total) :- charge_limb(d, o, q, p, r, s, 0, a), charge_limb(d, o, q, p, r, s, 1, b),
+  |     charge_limb(d, o, q, p, r, s, 2, c), charge_limb(d, o, q, p, r, s, 3, high),
+  |     high < 32768, !charge_out_of_range(d, o), middle = b * 65536, upper = c * 4294967296,
+  |     highest = high * 281474976710656, low = a + middle, top = upper + highest, total = low + top.

@@ -1,0 +1,20 @@
+// Derive service releases whose published series support ends within the caller's inclusive window.
+.decl support_window_result(query: symbol, service: symbol, version: symbol, end: symbol, url: symbol, sha256: symbol)
+support_window_result(q, s, v, end, url, sha256) :-
+    support_query(q),
+    support_query__as_of_day(q, as_of),
+    support_query__horizon_days(q, horizon),
+    horizon >= 0,
+    supported_service_release(rel),
+    supported_service_release__service(rel, s),
+    supported_service_release__product(rel, p),
+    supported_service_release__series(rel, series),
+    supported_service_release__version(rel, v),
+    service(s),
+    published_series_support(p, series, _, end, url, sha256),
+    end_day = @days(end, "1970-01-01"),
+    window_end = as_of + horizon,
+    end_day >= as_of,
+    end_day <= window_end.
+
+.output support_window_result

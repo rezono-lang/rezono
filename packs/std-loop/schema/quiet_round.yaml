@@ -1,0 +1,30 @@
+id: https://rezono.org/std-loop/quiet-round
+name: std_loop_quiet_round
+description: Dated observation sweeps, step deadlines and declared expected differences of a run (decisions/quiet-observation-rounds.md).
+imports: [linkml:types, loop_inputs]
+default_range: string
+annotations:
+  layer: facts
+classes:
+  LoopSweep:
+    description: A consumed observation sweep of one run, kept even when it returned no new values.
+    attributes:
+      id: {identifier: true}
+      run: {required: true}
+      event_time: {range: integer, required: true}
+      complete: {range: boolean, required: true, description: Whether the sweep read every source of the run.}
+  LoopDeadline:
+    description: The budget of a step in event-time units, counted from a start observation of the same run.
+    attributes:
+      id: {identifier: true}
+      run: {required: true}
+      step: {range: LoopStep, required: true}
+      start: {range: LoopObservation, required: true}
+      budget: {range: integer, required: true}
+  LoopExpectedDifference:
+    description: A deliberate discrepancy declared before execution in the pinned inputs.
+    attributes:
+      id: {identifier: true}
+      run: {required: true}
+      token: {required: true}
+      observed: {required: true, description: The exact observed value that the declaration excuses.}

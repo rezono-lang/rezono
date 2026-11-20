@@ -347,7 +347,7 @@ classes:
       the gate never substitutes a newer main. The route without m keeps its legacy array.
     attributes:
       manifest_id: {required: true, description: "The exact selected main manifest, checked before grid or variant metadata is read."}
-      sweeps: {range: BoundSweep, required: true, multivalued: true, inlined_as_list: true, minimum_cardinality: 1, maximum_cardinality: 1, description: "The current pack contract allows one sweep; only a sweep whose cell the role reads appears."}
+      sweeps: {range: BoundSweep, required: true, multivalued: true, inlined_as_list: true, minimum_cardinality: 1, maximum_cardinality: 4, description: "A pack has at most four sweeps; only a sweep whose cell the role reads appears."}
   BoundSweep:
     description: A published grid and its actual swept fact-cell identity, not a fabricated proof row.
     attributes:

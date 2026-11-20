@@ -18,11 +18,6 @@ def finding(obj, reason, **detail):
     return {"rule": "verified-supply", "digest": DIGEST, "object": obj, "reason": reason, **detail}
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="extra: Write observed_findings.observed_findings as decisions/k8s-admission-translator.md specifies under "
-           "What CEL cannot do. Write in k8s-admission/observed_findings.py.",
-)
 def test_observed_findings():
     from observed_findings import observed_findings
 
@@ -64,3 +59,49 @@ def test_observed_findings():
         "rule": "paired-port", "digest": DIGEST, "object": {"kind": "Pod", "namespace": "blue", "name": "p2"},
         "reason": "not_admitted", "relation": "pod_port", "row": ["blue", 8443],
     }]
+
+
+@pytest.mark.parametrize("bad_observation", [
+    {"object": {"kind": "Pod", "namespace": "blue", "name": "a"}, "missing": []},
+    {"object": {"kind": "Pod", "namespace": "blue", "name": "a"}, "rows": {}},
+    {"object": {"kind": "Pod", "namespace": "blue", "name": "a"}},
+    {"rows": {}, "missing": []},
+    {"object": {}, "rows": {}, "missing": []},
+    {"object": None, "rows": {}, "missing": []},
+    {"object": {"kind": "Pod", "namespace": "blue", "name": "a"}, "rows": None, "missing": []},
+    {"object": {"kind": "Pod", "namespace": "blue", "name": "a"}, "rows": {}, "missing": None},
+    {"object": {"kind": "Pod", "namespace": "blue", "name": "a"}, "rows": {}, "missing": "object.spec"},
+    {"object": {"kind": "Pod", "namespace": "blue", "name": "a"}, "rows": {"pod_image": "not-a-row-list"},
+     "missing": []},
+    "not-a-mapping",
+])
+def test_observed_findings_rejects_incomplete_or_malformed_observation(bad_observation):
+    from observed_findings import observed_findings
+
+    supply = load_program("verified-supply.rules.yaml")
+    with pytest.raises(ValueError):
+        observed_findings(supply, "allow_image", {}, [bad_observation], rule="verified-supply", digest=DIGEST)
+
+
+def test_observed_findings_requires_object_namespace():
+    from observed_findings import observed_findings
+
+    supply = load_program("verified-supply.rules.yaml")
+    for bad_object in (
+        {"kind": "Pod", "name": "a"},
+        {"kind": "Pod", "namespace": None, "name": "a"},
+        {"kind": "Pod", "namespace": 123, "name": "a"},
+    ):
+        observation = {"object": bad_object, "rows": {"pod_image": [("blue", "web", IMAGE_A)]}, "missing": []}
+        with pytest.raises(ValueError, match="namespace"):
+            observed_findings(supply, "allow_image", {}, [observation], rule="verified-supply", digest=DIGEST)
+
+    cluster_scoped = {
+        "object": {"kind": "ClusterRole", "namespace": "", "name": "admin"},
+        "rows": {"pod_image": [("", "web", IMAGE_A)]},
+        "missing": [],
+    }
+    assert observed_findings(supply, "allow_image", {}, [cluster_scoped], rule="verified-supply", digest=DIGEST) == [
+        finding({"kind": "ClusterRole", "namespace": "", "name": "admin"}, "not_admitted",
+                relation="pod_image", row=["", "web", IMAGE_A]),
+    ]

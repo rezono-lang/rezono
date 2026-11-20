@@ -2,7 +2,7 @@ id: https://rezono.org/contracts/change
 name: rezono_change
 title: Change and its life cycle
 description: >-
-  One change in Rezono, from delta to effect (docs/lifecycle.md): an edit in the viewer, a commit by
+  One change in Rezono, from delta to effect (decisions/review-and-rights.md): an edit in the viewer, a commit by
   hand, a batch from a journal, or the plan of a plugin with an effect. Every change follows the same
   state machine. The state is derived from facts (the proposal on the host, reviews, the outcome of
   the epoch, the result of a plugin), never set by hand. A review is a fact about exactly one content
@@ -63,7 +63,7 @@ enums:
 classes:
   Change:
     tree_root: true
-    description: One change and where it stands in its life cycle (docs/lifecycle.md).
+    description: One change and where it stands in its life cycle (decisions/review-and-rights.md).
     attributes:
       id: {identifier: true, required: true}
       author: {range: Actor, required: true, inlined: true, description: "Who submitted it, from a verified identity."}

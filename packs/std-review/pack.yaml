@@ -1,0 +1,10 @@
+# Standard pack std-review: the assessment of reviews that were already admitted (decisions/review-and-rights.md).
+# A review is a fixed row about one content hash and one support hash; the rules derive the state of a change from
+# the valid current reviews. It authenticates nobody; a consumer imports it beside std-access and writes its grants.
+name: std-review
+version: 0.1.0
+default_language: en
+imports:
+  - name: std-access
+    path: ../std-access
+    sha256: 54c8a70d5c7108422fa02ac46d924c11d429b5fda79f20c33d4bc6505e53243d

@@ -1,0 +1,22 @@
+id: https://rezono.org/examples/platform-support-window
+name: platform_support_window
+imports: [linkml:types, core]
+default_range: string
+annotations:
+  layer: facts
+
+classes:
+  SupportQuery:
+    description: A support-window query supplied by the caller.
+    attributes:
+      id: {identifier: true}
+      as_of_day: {range: integer, required: true}
+      horizon_days: {range: integer, minimum_value: 0, required: true}
+  SupportedServiceRelease:
+    description: A running service release bound to a product and release series.
+    attributes:
+      id: {identifier: true}
+      service: {range: Service, required: true}
+      product: {range: Product, required: true}
+      series: {required: true}
+      version: {required: true}

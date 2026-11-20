@@ -30,6 +30,8 @@ PYTHON_TYPES = {"VARCHAR": str, "BIGINT": int, "BOOLEAN": bool, "DATE": datetime
 SQL_TYPES = {"text": "VARCHAR", "enum": "VARCHAR", "integer": "BIGINT", "boolean": "BOOLEAN", "date": "DATE"}
 FORMAT = "rezono.schema-bundle/1"
 DATASET_FORMAT = rezono_module.DATASET_FORMAT
+FACT_ROW_KEYS = frozenset({"fact", "id", "valid", "during", "in", "known", "set"})
+_OMITTED = object()
 # A schema without kinds: what admission refuses of a document against it, beside its unknown kinds, is the
 # document's own shape (sections).
 SHAPE = Schema({"format": FORMAT, "pack": {"id": ""}, "kinds": []})
@@ -111,13 +113,16 @@ def _declared_dataset(pack_dir: Path, meta: dict, declared: rezono_module.Declar
             and not rezono_module.form_only_source(pack_dir / declared.module, submitted)):
         return _fact_tables(pack_dir, meta, declared, submitted)
     if any(rezono_module.module_body(submitted, version) is not None
-           for version in (rezono_module.FORMAT, rezono_module.NATIVE_FORMAT)):
+           for version in (rezono_module.FORMAT, *rezono_module.NATIVE_FORMATS)):
         return None
     module = rezono_module.module_body(submitted, DATASET_FORMAT)
     if module is None:
         raise LoadError(f"{declared.form}: expected a Rezono module form")
     if not any(isinstance(decl, dict) and "dataset" in decl for decl in module["decls"]):
         return None
+    # Declarations before the dataset are lowered as a schema module; only the dataset's tables load here.
+    submitted = rezono_module.dataset_only(submitted)
+    module = submitted["module"]
 
     basename = Path(declared.module).stem
     name = _named_dataset(module)["dataset"]
@@ -133,6 +138,7 @@ def _declared_dataset(pack_dir: Path, meta: dict, declared: rezono_module.Declar
         raise LoadError("\n".join(errors))
     if effective is submitted:
         return DatasetForm(submitted, None)
+    effective = rezono_module.dataset_only(effective)
     authored = rezono_module.module_body(effective, DATASET_FORMAT)
     dataset = rezono_module.named_dataset(authored) if authored is not None else None
     if authored is None or dataset is None:
@@ -178,16 +184,42 @@ def dataset_at(path: Path) -> DatasetForm | None:
     return None
 
 
-def document(path: Path, pack: Pack | None = None) -> dict[str, list]:
+def _load_error(code: str, message: str, where: str = "") -> LoadError:
+    return LoadError(message, [Diagnostic(code, message, where)])
+
+
+def _parse_iso_date(value: object, where: str) -> datetime.date:
+    if not isinstance(value, str) or not ISO_DATE.fullmatch(value):
+        raise _load_error("invalid_date", f"{where}: expected an ISO date YYYY-MM-DD", where)
+    try:
+        return datetime.date.fromisoformat(value)
+    except ValueError as error:
+        raise _load_error("invalid_date", f"{where}: invalid calendar date {value!r}", where) from error
+
+
+def document(path: Path, pack: Pack | None = None, *, as_of: str | None = None, known: str | None = None) -> dict[str, list]:
     """Read records per kind from a fact file or a named dataset.
 
     A null document or section is refused. Use {} for an empty document or [] for an empty relation.
     """
+    data, _ = _document_with_dated_tables(path, pack, as_of=as_of, known=known)
+    return data
+
+
+def _document_with_dated_tables(
+    path: Path, pack: Pack | None = None, *, as_of: str | None = None, known: str | None = None
+) -> tuple[dict[str, list], set[str]]:
+    as_of_date = _parse_iso_date(as_of, "as_of") if as_of is not None else None
+    known_date = _parse_iso_date(known, "known") if known is not None else None
     dataset = dataset_at(path)
     data = dataset.form if dataset is not None else strict_yaml.read(path)
+    dated_tables: set[str] = set()
     if isinstance(data, dict) and data.get("format") == DATASET_FORMAT:
-        data = scalar_dataset(schema(pack), data) if pack is not None else untyped_dataset(data)
-    return sections(data)
+        if pack is not None:
+            data, _, dated_tables = _located_scalar_dataset(schema(pack), data, as_of=as_of_date, known=known_date)
+        else:
+            data = untyped_dataset(data, as_of=as_of_date, known=known_date)
+    return sections(data), dated_tables
 
 
 def sections(data) -> dict[str, list]:
@@ -231,11 +263,15 @@ def schema(pack: Pack) -> FactSchema:
                        "attributes": attributes, "arrows": arrows}, optional_slots)
 
 
-def load(pack: Pack, path: str | Path) -> dict[str, list[tuple]]:
+def load(pack: Pack, path: str | Path, *, as_of: str | None = None, known: str | None = None) -> dict[str, list[tuple]]:
     path = Path(path)
     try:
-        data = document(path, pack)
+        data, dated_tables = _document_with_dated_tables(path, pack, as_of=as_of, known=known)
         rows = rows_of(pack, data)
+        if dated_tables:
+            for table in dated_tables:
+                rows.setdefault(table, [])
+            rows = {t: rows[t] for t in sorted(rows)}
     except LoadError as error:
         raise placed(error, path) from None
     if path.parent.name == "facts" and path.with_suffix(".sources.yaml").exists():
@@ -259,14 +295,28 @@ def named_dataset_decls(form: dict) -> list:
     return _named_dataset(module)["decls"]
 
 
-def scalar_dataset(judged: FactSchema, form: dict) -> dict[str, list]:
+def scalar_dataset(judged: FactSchema, form: dict, *,
+                   as_of: datetime.date | None = None, known: datetime.date | None = None) -> dict[str, list]:
     """Decode a named module dataset into the records used by ordinary admission."""
-    records, _ = located_scalar_dataset(judged, form)
+    records, _, _ = _located_scalar_dataset(judged, form, as_of=as_of, known=known)
     return records
 
 
-def located_scalar_dataset(judged: FactSchema, form: dict) -> tuple[dict[str, list], dict[str, list[str]]]:
+def located_scalar_dataset(judged: FactSchema, form: dict, *,
+                           as_of: datetime.date | None = None,
+                           known: datetime.date | None = None) -> tuple[dict[str, list], dict[str, list[str]]]:
     """Decode each record with its JSON pointer for publication provenance."""
+    records, pointers, _ = _located_scalar_dataset(judged, form, as_of=as_of, known=known)
+    return records, pointers
+
+
+def _located_scalar_dataset(
+    judged: FactSchema,
+    form: dict,
+    *,
+    as_of: datetime.date | None = None,
+    known: datetime.date | None = None,
+) -> tuple[dict[str, list], dict[str, list[str]], set[str]]:
     module = rezono_module.module_body(form, DATASET_FORMAT)
     if module is None:
         raise LoadError(f"expected {DATASET_FORMAT} with a module header and spans")
@@ -277,8 +327,12 @@ def located_scalar_dataset(judged: FactSchema, form: dict) -> tuple[dict[str, li
 
     records: dict[str, list] = {}
     pointers: dict[str, list[str]] = {}
+    fact_rows: list[_ParsedFactRow] = []
     for table_index, table in enumerate(tables):
         if source_decl(table):
+            continue
+        if fact_row_decl(table):
+            fact_rows.append(_decode_fact_row(table, table_index, judged))
             continue
         kind, columns, rows, cited = dataset_table(table)
         if kind not in judged.kinds:
@@ -299,10 +353,13 @@ def located_scalar_dataset(judged: FactSchema, form: dict) -> tuple[dict[str, li
                 raise LoadError(f"{where}: row width does not match the fact table header")
             output.append(dataset_record(zip(columns, row[:len(columns)], strict=True), where, judged, kind))
             places.append(f"/module/decls/0/decls/{table_index}/rows/{row_index}")
-    return records, pointers
+    dated_tables = _resolve_fact_rows(fact_rows, records, pointers, judged, as_of, known)
+    return records, pointers, dated_tables
 
 
-def untyped_dataset(form: dict) -> dict[str, list]:
+def untyped_dataset(form: dict, *,
+                    as_of: datetime.date | None = None,
+                    known: datetime.date | None = None) -> dict[str, list]:
     """Read the authored shapes when no pack is available to supply column types."""
     module = rezono_module.module_body(form, DATASET_FORMAT)
     if module is None:
@@ -312,17 +369,292 @@ def untyped_dataset(form: dict) -> dict[str, list]:
         raise LoadError("\n".join(problems))
 
     records: dict[str, list] = {}
-    for table in _named_dataset(module)["decls"]:
+    pointers: dict[str, list[str]] = {}
+    fact_rows: list[_ParsedFactRow] = []
+    for index, table in enumerate(_named_dataset(module)["decls"]):
         if source_decl(table):
+            continue
+        if fact_row_decl(table):
+            fact_rows.append(_decode_fact_row(table, index, None))
             continue
         kind, columns, rows, cited = dataset_table(table)
         output = records.setdefault(kind, [])
-        for row in rows:
+        places = pointers.setdefault(kind, [])
+        for row_index, row in enumerate(rows):
             where = f"{kind}[{len(output) + 1}]"
             if not isinstance(row, list) or len(row) != len(columns) + len(cited):
                 raise LoadError(f"{where}: row width does not match the fact table header")
             output.append(dataset_record(zip(columns, row[:len(columns)], strict=True), where))
+            places.append(f"/module/decls/0/decls/{index}/rows/{row_index}")
+    _resolve_fact_rows(fact_rows, records, pointers, None, as_of, known)
     return records
+
+
+def fact_row_decl(decl) -> bool:
+    """A FactRow declaration in a dataset (decisions/language-dated-facts.md)."""
+    return isinstance(decl, dict) and "fact" in decl and "columns" not in decl and "rows" not in decl
+
+
+@dataclass(frozen=True)
+class _ParsedFactRow:
+    index: int
+    kind: str
+    root: str
+    id_key: str
+    eid: object
+    valid: tuple[datetime.date, datetime.date | None] | None
+    known: datetime.date | None
+    assignments: list[tuple[str, str, object]]
+
+    @property
+    def dated(self) -> bool:
+        return self.valid is not None or self.known is not None
+
+
+def _normalize_fact_expr(cell):
+    """Normalize expression nodes written by the module reader into scalar/collection fact cells."""
+    if not isinstance(cell, dict):
+        return cell
+    if cell.keys() == {"list"} and isinstance(cell["list"], list):
+        return {"list": [_normalize_fact_expr(item) for item in cell["list"]]}
+    if cell.keys() == {"record"} and isinstance(cell["record"], dict):
+        return {"record": {k: _normalize_fact_expr(v) for k, v in cell["record"].items()}}
+    if cell.keys() == {"path"} and isinstance(cell["path"], list) and len(cell["path"]) == 1 and isinstance(cell["path"][0], str):
+        return {"lit": cell["path"][0]}
+    if cell.keys() == {"kind"} and isinstance(cell["kind"], str):
+        return {"lit": cell["kind"]}
+    if (cell.keys() == {"neg"} and isinstance(cell["neg"], dict)
+            and cell["neg"].keys() == {"lit"} and isinstance(cell["neg"]["lit"], str)
+            and re.fullmatch(r"[0-9]+", cell["neg"]["lit"])):
+        return {"lit": "-" + cell["neg"]["lit"]}
+    return cell
+
+
+def _check_slot_value(slot, value, where: str) -> None:
+    if isinstance(value, list):
+        for i, item in enumerate(value, 1):
+            _check_slot_value(slot, item, f"{where}[{i}]")
+        return
+    if slot.input_format == "sha256" and (not isinstance(value, str) or not re.fullmatch(r"[0-9a-f]{64}", value)):
+        raise _load_error("invalid_sha256", f"{where}: invalid SHA-256 digest", where)
+
+
+def _decode_fact_row(decl: dict, index: int, judged: FactSchema | None) -> _ParsedFactRow:
+    extra = decl.keys() - FACT_ROW_KEYS
+    if extra:
+        raise _load_error("invalid_fact_row", f"decls[{index}]: unexpected fields in fact row: {sorted(extra)}")
+    if not {"fact", "id", "set"} <= decl.keys():
+        raise _load_error("invalid_fact_row", f"decls[{index}]: a fact row needs fact, id and set")
+    if not isinstance(decl["fact"], str):
+        raise _load_error("invalid_fact_row", f"decls[{index}]: invalid dataset fact kind")
+    kind = snake(decl["fact"])
+
+    id_key = "id"
+    root = kind
+    if judged is not None:
+        if kind not in judged.kinds:
+            raise _load_error("unknown_kind", f"unknown kind '{kind}'", kind)
+        if judged.kinds[kind].abstract:
+            raise _load_error("kind_abstract", f"{kind}: the kind is abstract", kind)
+        root = judged.root(kind)
+        identity = judged.kinds[root]
+        if identity.identifier is None:
+            raise _load_error("kind_without_identifier", f"{kind}: has no identifier", kind)
+        id_key = identity.identifier
+        raw_id = decl["id"]
+        sql_type = SQL_TYPES[identity.id_type]
+        id_where = f"{kind}.{id_key}"
+        if isinstance(raw_id, str):
+            if sql_type == "VARCHAR":
+                if not raw_id:
+                    raise _load_error("wrong_type", f"{id_where}: identifier cannot be empty", id_where)
+                eid: object = raw_id
+            else:
+                eid = scalar_cell({"lit": raw_id}, sql_type, id_where)
+        else:
+            eid = typed(sql_type, raw_id, id_where)
+    else:
+        eid = decl["id"]
+
+    where = f"{kind}[{eid}]"
+    if "during" in decl or "in" in decl:
+        raise _load_error("unsupported_context", f"{where}: stage and setup contexts (during/in) are not lowered yet", kind)
+
+    valid_range: tuple[datetime.date, datetime.date | None] | None = None
+    if "valid" in decl:
+        raw_valid = decl["valid"]
+        if not isinstance(raw_valid, list) or not (1 <= len(raw_valid) <= 2):
+            raise _load_error("invalid_date_range", f"{where}: valid must be one or two ISO dates", kind)
+        start = _parse_iso_date(raw_valid[0], f"{where}.valid[0]")
+        end = _parse_iso_date(raw_valid[1], f"{where}.valid[1]") if len(raw_valid) == 2 else None
+        if end is not None and end <= start:
+            raise _load_error(
+                "invalid_date_range",
+                f"{where}: valid end date {raw_valid[1]!r} must be after start date {raw_valid[0]!r}",
+                f"{where}.valid",
+            )
+        valid_range = (start, end)
+
+    row_known: datetime.date | None = None
+    if "known" in decl:
+        row_known = _parse_iso_date(decl["known"], f"{where}.known")
+
+    raw_set = decl["set"]
+    if not isinstance(raw_set, list):
+        raise _load_error("invalid_fact_row", f"{where}: set must be a list of assignments", kind)
+
+    assignments: list[tuple[str, str, object]] = []
+    seen: set[str] = set()
+    for pos, item in enumerate(raw_set):
+        if not isinstance(item, dict) or not {"slot", "value"} <= item.keys() or item.keys() - {"slot", "value", "source"}:
+            raise _load_error("invalid_fact_row", f"{where}.set[{pos}]: expected slot and value", kind)
+        if not isinstance(item["slot"], str):
+            raise _load_error("invalid_fact_row", f"{where}.set[{pos}]: expected slot name", kind)
+        slot_name = snake(item["slot"])
+        if slot_name in seen:
+            raise _load_error("duplicate_slot", f"{where}: duplicate field '{slot_name}'", f"{where}.{slot_name}")
+        seen.add(slot_name)
+        field_where = f"{where}.{slot_name}"
+        cell = item["value"]
+        if judged is not None:
+            if slot_name == id_key:
+                raise _load_error("unknown_slot", f"{where}: unknown slot '{slot_name}'", field_where)
+            slot = judged.slot(kind, slot_name)
+            if slot is None:
+                raise _load_error("unknown_slot", f"{where}: unknown slot '{slot_name}'", field_where)
+            if cell == {"lit": "n/a"}:
+                if slot.table not in judged.optional_slots:
+                    raise _load_error("wrong_type", f"{field_where}: n/a requires an optional slot", field_where)
+                decoded: object = _OMITTED
+            else:
+                decoded = dataset_cell(
+                    _normalize_fact_expr(cell),
+                    field_where,
+                    SQL_TYPES[slot.type],
+                    judged,
+                    slot.target if slot.inlined else None,
+                )
+                _check_slot_value(slot, decoded, field_where)
+            table_name = slot.table
+        else:
+            decoded = _OMITTED if cell == {"lit": "n/a"} else dataset_cell(_normalize_fact_expr(cell), field_where)
+            table_name = f"{kind}__{slot_name}"
+        assignments.append((slot_name, table_name, decoded))
+
+    return _ParsedFactRow(index, kind, root, id_key, eid, valid_range, row_known, assignments)
+
+
+def _resolve_fact_rows(
+    fact_rows: list[_ParsedFactRow],
+    records: dict[str, list],
+    pointers: dict[str, list[str]],
+    judged: FactSchema | None,
+    as_of: datetime.date | None,
+    known: datetime.date | None,
+) -> set[str]:
+    if not fact_rows:
+        return set()
+
+    def ancestors(rec_kind: str) -> list[str]:
+        return judged.ancestors(rec_kind) if judged is not None else [rec_kind]
+
+    by_root: dict[tuple[str, object], list[tuple[str, dict]]] = {}
+    for rec_kind, rec_list in records.items():
+        root = judged.root(rec_kind) if judged is not None else rec_kind
+        id_key = judged.kinds[root].identifier if judged is not None else "id"
+        if id_key is None:
+            continue
+        for rec in rec_list:
+            if id_key in rec:
+                by_root.setdefault((root, rec[id_key]), []).append((rec_kind, rec))
+
+    def matching_records(row: _ParsedFactRow) -> list[tuple[str, dict]]:
+        return [(rk, rec) for rk, rec in by_root.get((row.root, row.eid), []) if row.kind in ancestors(rk)]
+
+    for row in fact_rows:
+        if row.dated:
+            continue
+        matches = matching_records(row)
+        if matches:
+            for _, rec in matches:
+                for slot_name, _, val in row.assignments:
+                    if slot_name in rec:
+                        raise _load_error(
+                            "duplicate_slot",
+                            f"{row.kind}[{row.eid}]: duplicate field '{slot_name}'",
+                            f"{row.kind}.{slot_name}",
+                        )
+                    if val is not _OMITTED:
+                        rec[slot_name] = val
+        else:
+            new_rec: dict[str, object] = {row.id_key: row.eid}
+            for slot_name, _, val in row.assignments:
+                if val is not _OMITTED:
+                    new_rec[slot_name] = val
+            records.setdefault(row.kind, []).append(new_rec)
+            pointers.setdefault(row.kind, []).append(f"/module/decls/0/decls/{row.index}")
+            by_root.setdefault((row.root, row.eid), []).append((row.kind, new_rec))
+
+    dated_tables: set[str] = set()
+    applying: dict[tuple[str, object, str], list[tuple[tuple[int, datetime.date], str, object, list[tuple[str, dict]]]]] = {}
+    for row in fact_rows:
+        if not row.dated:
+            continue
+        matches = matching_records(row)
+        if not matches:
+            raise _load_error(
+                "unknown_record",
+                f"{row.kind}: dated fact row references unknown record {row.eid!r}",
+                row.kind,
+            )
+        if row.valid is not None and as_of is None:
+            raise _load_error(
+                "missing_as_of",
+                f"{row.kind}[{row.eid}]: dated fact row with valid range requires as_of",
+                row.kind,
+            )
+        if row.known is not None and known is None:
+            raise _load_error(
+                "missing_known",
+                f"{row.kind}[{row.eid}]: dated fact row with known date requires known",
+                row.kind,
+            )
+        for slot_name, table_name, _ in row.assignments:
+            dated_tables.add(table_name)
+            if any(slot_name in rec for _, rec in matches):
+                raise _load_error(
+                    "versions_overlap",
+                    f"{table_name}: versions_overlap between undated and dated assignments for record {row.eid!r}",
+                    table_name,
+                )
+        valid_ok = row.valid is None or (
+            row.valid[0] <= as_of and (row.valid[1] is None or as_of < row.valid[1])  # type: ignore[operator]
+        )
+        known_ok = row.known is None or row.known <= known  # type: ignore[operator]
+        if not (valid_ok and known_ok):
+            continue
+        rank = (1, row.known) if row.known is not None else (0, datetime.date.min)
+        for slot_name, table_name, val in row.assignments:
+            key = (row.root, row.eid, table_name)
+            applying.setdefault(key, []).append((rank, slot_name, val, matches))
+
+    for (root, eid, table_name), candidates in applying.items():
+        best_rank = max(item[0] for item in candidates)
+        winners = [item for item in candidates if item[0] == best_rank]
+        if len(winners) > 1:
+            raise _load_error(
+                "versions_overlap",
+                f"{table_name}: versions_overlap for record {eid!r}",
+                table_name,
+            )
+        _, slot_name, val, matches = winners[0]
+        for _, rec in matches:
+            if val is _OMITTED:
+                rec.pop(slot_name, None)
+            else:
+                rec[slot_name] = val
+
+    return dated_tables
 
 
 def source_decl(decl) -> bool:

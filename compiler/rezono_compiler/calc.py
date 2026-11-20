@@ -190,16 +190,13 @@ def rule_input_columns(pack: Pack, doc: dict) -> dict:
             if isinstance(version, dict) and isinstance(version.get("rule"), str)}
 
 
-def read_doc(pack_dir: str | Path, source: str | None = None) -> dict | None:
-    """Every calc/*.yaml as one program document, as written. None without calc/. `source` names the
-    imported pack the files belong to: such a file states no evaluation date."""
-    files = sorted(Path(pack_dir, "calc").glob("*.yaml"))
-    if not files:
+def merge_docs(entries: list[tuple[str, dict]], source: str | None = None) -> dict | None:
+    """Merge calc/*.yaml files and lowered Rezono calculation modules of one pack into one program document."""
+    if not entries:
         return None
-    docs = [load_yaml(f) or {} for f in files]
     merged: dict = {"rules": [], "templates": []}
-    for f, doc in zip(files, docs):
-        where = f"calc/{f.name}" if source is None else f"{source}:calc/{f.name}"
+    for rel, doc in entries:
+        where = rel if source is None else f"{source}:{rel}"
         if source is not None and "as_of" in doc:
             raise CompileError(f"calc.import: {where}: an imported calculation carries no as_of: its rules are "
                                "definition, and the date they are evaluated on is the importing pack's")
@@ -213,23 +210,111 @@ def read_doc(pack_dir: str | Path, source: str | None = None) -> dict | None:
     return merged
 
 
-def read_closure(pack: Pack, pack_dir: str | Path, imports: dict, renames: dict) -> tuple[dict | None, dict[str, dict]]:
+def read_doc(pack_dir: str | Path, source: str | None = None) -> dict | None:
+    """Every calc/*.yaml as one program document, as written. None without calc/. `source` names the
+    imported pack the files belong to: such a file states no evaluation date."""
+    files = sorted(Path(pack_dir, "calc").glob("*.yaml"))
+    return merge_docs([(f"calc/{f.name}", load_yaml(f) or {}) for f in files], source)
+
+
+def _doc_rules_by_subject(docs: list[dict], out: dict[str, set[str]]) -> None:
+    for doc in docs:
+        subject = doc.get("subject")
+        if not isinstance(subject, str):
+            continue
+        names = out.setdefault(subject, set())
+        for version in doc.get("rules") or []:
+            if isinstance(version, dict) and isinstance(version.get("rule"), str):
+                names.add(version["rule"])
+
+
+def read_closure(
+    pack: Pack,
+    pack_dir: str | Path,
+    imports: dict,
+    renames: dict,
+    *,
+    mods: list | None = None,
+    bare_leaves: list[tuple[str, str, str, str]] | None = None,
+) -> tuple[dict | None, dict[str, dict]]:
     """The program of the pinned import closure, and each imported pack's part of it: the
-    calc files of the imported packs (`imports`, in dependency order, each pack once), then the pack's own,
-    as one document under this pack's names. An imported file states no evaluation date; this pack
-    states it, for the whole program. A pack that imports no calculation gets its own
-    document, as written."""
-    own, parts = read_doc(pack_dir), {}
+    calc files and Rezono calculation modules of the imported packs (`imports`, in dependency order,
+    each pack once), then the pack's own, as one document under this pack's names. An imported file
+    states no evaluation date; this pack states it, for the whole program. A pack that imports no
+    calculation gets its own document, as written."""
+    from . import rezono_calc
+
+    parts: dict[str, dict] = {}
+    visible: dict[str, set[str]] = {}
+    visible_params: dict[str, set[str]] = {}
     for name, imported in imports.items():
-        doc = read_doc(imported.dir, name)
+        visible[name] = {name}.union(*(visible[dep] for dep in imported.imports))
+        yaml_entries = [(f"calc/{f.name}", load_yaml(f) or {}) for f in sorted(Path(imported.dir, "calc").glob("*.yaml"))]
+        calc_mods = rezono_calc.calc_modules(mods or (), name)
+        own_params: set[str] = set()
+        for m in calc_mods:
+            own_params.update(rezono_calc.module_parameters(m.form))
+        visible_params[name] = own_params.union(*(visible_params[dep] for dep in imported.imports))
+        mod_entries: list[tuple[str, dict]] = []
+        if calc_mods:
+            rules_by_subject: dict[str, set[str]] = {}
+            inv_rename: dict[str, list[str]] = {}
+            for own_id, root_id in renames[name].items():
+                inv_rename.setdefault(root_id, []).append(own_id)
+            for dep in visible[name] - {name}:
+                if dep in parts and isinstance(parts[dep].get("subject"), str):
+                    for own_id in inv_rename.get(parts[dep]["subject"], []):
+                        names = rules_by_subject.setdefault(own_id, set())
+                        for version in parts[dep].get("rules") or []:
+                            if isinstance(version, dict) and isinstance(version.get("rule"), str):
+                                names.add(version["rule"])
+            _doc_rules_by_subject([doc for _, doc in yaml_entries], rules_by_subject)
+            for m in calc_mods:
+                cls_name, rnames = rezono_calc.module_rules(m.form)
+                if cls_name is not None:
+                    own_id, _ = rezono_calc.resolve_subject(pack, name, cls_name, renames)
+                    rules_by_subject.setdefault(own_id, set()).update(rnames)
+            mod_entries = [
+                (m.rel, rezono_calc.lower_module(
+                    pack, m, rules_by_subject, visible_params[name],
+                    renames=renames, bare_leaves=bare_leaves,
+                ))
+                for m in calc_mods
+            ]
+            rezono_calc.check_parameter_sources(yaml_entries, mod_entries)
+        doc = merge_docs(yaml_entries + mod_entries, name)
         if doc is not None:
             parts[name] = under(pack, doc, renames[name])
+
+    root_name = pack.meta["name"]
+    yaml_entries = [(f"calc/{f.name}", load_yaml(f) or {}) for f in sorted(Path(pack_dir, "calc").glob("*.yaml"))]
+    calc_mods = rezono_calc.calc_modules(mods or (), root_name)
+    root_params = set().union(*(visible_params[dep] for dep in visible_params))
+    for m in calc_mods:
+        root_params.update(rezono_calc.module_parameters(m.form))
+    mod_entries = []
+    if calc_mods:
+        rules_by_subject = {}
+        _doc_rules_by_subject(list(parts.values()) + [doc for _, doc in yaml_entries], rules_by_subject)
+        for m in calc_mods:
+            cls_name, rnames = rezono_calc.module_rules(m.form)
+            if cls_name is not None:
+                own_id, _ = rezono_calc.resolve_subject(pack, root_name, cls_name)
+                rules_by_subject.setdefault(own_id, set()).update(rnames)
+        mod_entries = [
+            (m.rel, rezono_calc.lower_module(
+                pack, m, rules_by_subject, root_params, bare_leaves=bare_leaves,
+            ))
+            for m in calc_mods
+        ]
+        rezono_calc.check_parameter_sources(yaml_entries, mod_entries)
+    own = merge_docs(yaml_entries + mod_entries)
     if not parts:
         return own, parts
     if own is None or own.get("as_of") is None:
-        raise CompileError(f"calc.import: {pack.meta['name']} imports the calculation of {', '.join(parts)} and states "
+        raise CompileError(f"calc.import: {root_name} imports the calculation of {', '.join(parts)} and states "
                            "no evaluation date: give as_of in a calc file of its own")
-    return union([*parts.items(), (pack.meta["name"], own)]), parts
+    return union([*parts.items(), (root_name, own)]), parts
 
 
 def union(docs: list[tuple[str, dict]]) -> dict:
@@ -428,6 +513,12 @@ def build(pack: Pack, doc: dict, derived: dict | None = None, files: list[tuple[
         raise CompileError("\n".join(errors))
     return Program(doc["pack"], subject, root.id_type, subject, parameters, choice, inputs, as_of, versions, rules,
                    rule_types, facts, order, engine)
+
+
+def read(pack: Pack, doc: dict, _where: str | None = None, derived: dict | None = None,
+         files: list[tuple[str, Path]] | None = None) -> Program:
+    """Build a checked calculation program from a `rezono.calc/1` document."""
+    return build(pack, doc, derived=derived, files=files)
 
 
 def date_text(v, where: str) -> str:

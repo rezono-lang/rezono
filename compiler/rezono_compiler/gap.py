@@ -29,7 +29,8 @@ from .rules_sql import UTC_PATTERN, UTC_WHOLE
 FORMAT = "rezono.gap/1"
 KINDS = ("positive", "negative", "condition", "assignment", "aggregate")
 OPS = {"eq": "=", "ne": "!=", "lt": "<", "le": "<=", "gt": ">", "ge": ">=", "add": "+", "sub": "-", "mul": "*", "div": "/"}
-TYPE = {"string": "symbol", "integer": "number"}
+# Soufflé has no boolean column. The reference uses the two canonical symbols.
+TYPE = {"string": "symbol", "integer": "number", "boolean": "symbol"}
 _UTC = re.compile(r"([0-9]{4})-([0-9]{2})-([0-9]{2})T([0-9]{2}):([0-9]{2}):([0-9]{2})(?:[.]([0-9]+))?Z", re.ASCII)
 
 
@@ -332,6 +333,8 @@ def prefix_program(prog, relation, bound) -> str:
 # --- the reference: the same answer in plain Python ---
 
 def _value(v, typ):
+    if typ == "boolean" and type(v) is bool:
+        return "true" if v else "false"
     return int(v) if typ == "integer" else str(v)
 
 

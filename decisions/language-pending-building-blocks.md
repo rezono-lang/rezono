@@ -1,3 +1,11 @@
+---
+decider: [language]
+decided_on: 2026-11-19
+valid_from: 2026-11-19
+state: in_force
+subject: language-pending-building-blocks
+---
+
 # Tests for every pending building block
 
 `compiler/tests/rezono/language_usage.py` names a building block Pending until its reading and lowering tests pass. Every pending building block has a red test for reading and one for lowering, or this decision says why it has none yet.
@@ -6,12 +14,12 @@
 | --- | --- | --- |
 | calculation | `rezono/test/test_calculation.py`; version blocks with definitions, `unit` and `overrides` in `rezono/test/test_calculation_versions.py` | `compiler/tests/rezono/test_lower_calculation.py` |
 | parameters | `rezono/test/test_parameters.py`, `rezono/test/test_version_replaces.py` | a row-backed parameter in `compiler/tests/rezono/test_lower_parameters.py` |
-| dated-fact | `rezono/test/test_dated_fact.py`, `rezono/test/test_fact_context_axes.py` | none yet, see below |
-| exceptions | `rezono/test/test_exceptions.py` | none yet, see below |
+| dated-fact | `rezono/test/test_dated_fact.py`, `rezono/test/test_fact_context_axes.py` | `compiler/tests/rezono/test_lower_dated_fact.py` |
+| exceptions | `rezono/test/test_exceptions.py` | `compiler/tests/rezono/test_lower_exceptions.py` |
 | schema-metadata, fact-provenance, structured-fact, open-world, inverse-reference, table-policy | their existing reading tests | their existing lowering tests |
 | deprecated-declaration | `rezono/test/test_deprecated_declaration.py` | `compiler/tests/rezono/test_lower_deprecated.py` |
-| step-declaration | `rezono/test/test_step_declaration.py` | none yet, see below |
-| intermediate-invariant | `rezono/test/test_invariant_intermediate.py` | none yet, see below |
+| step-declaration | `rezono/test/test_step_declaration.py` | `compiler/tests/rezono/test_lower_step_declaration.py` |
+| intermediate-invariant | `rezono/test/test_invariant_intermediate.py` | `compiler/tests/rezono/test_lower_intermediate_invariant.py` |
 
 The lowering tests of calculations and parameters compare with the existing `calc/*.yaml` files of `examples/subsidy-scheme` and `examples/subsidy`, as [Calculated values](language-calculations.md) says.
 

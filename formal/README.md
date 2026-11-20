@@ -80,8 +80,8 @@ action has no direct replay there.
 | Claims | `OpenPR`, `ClosePR`, `Observe` | None. |
 | Claims | `Delete`, `Confirm`, `DiscardConfirmation` | None. |
 | Rounds | `Evaluate` | None for certification of a batch. |
-| Rounds | `Claim` | None for the durable write. |
-| Rounds | `SubmitOne`, `Crash`, `LoseReply` | None for physical dispatch, interruption or reply loss. |
+| Rounds | `Claim` | [Durable attempt claim](../loop/tests/test_round_claim.py) replays exclusive conditional claim creation, same-pin holder coalescing and persistence across cuts and runs. |
+| Rounds | `SubmitOne`, `Crash`, `LoseReply` | [Round submit guard](../loop/tests/test_round_submit.py) replays the certified claim, crash, lost-reply and unknown-state guards without marking completion. None for physical dispatch. |
 | Rounds | `Correct` | None for changing the physical resource. |
 | Rounds | `Observe`, `Reconcile` | [Recorded correction](../loop/tests/test_recorded_correction.py) replays a late observation, rejects a foreign run and revokes completion on newer contrary evidence. |
 | Rounds | `CloseSweep` | [Fixed-point replay](../loop/tests/test_replay_fixed_point.py) exercises complete and partial coverage. |

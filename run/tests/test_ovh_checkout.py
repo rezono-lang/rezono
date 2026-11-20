@@ -30,10 +30,6 @@ class Recorded:
         return self.answers[len(self.calls) - 1]
 
 
-@pytest.mark.xfail(strict=True, reason=(
-    "M4: decisions/run-price-enforcement.md: Read the section The order is the quote. Implement checkout(call, request) in "
-    "run/ovh_checkout.py; call(method, path, body) is the provider port."
-))
 def test_ovh_checkout():
     checkout = implementation("ovh_checkout.py", "checkout")
 

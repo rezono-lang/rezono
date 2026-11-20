@@ -129,13 +129,6 @@ def test_std_access_publishes_through_its_consumer(tmp_path):
     assert any(not relations.get("application") for relations in readers.values())
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError, reason=(
-    "M3: decisions/language-first-packs.md: Replace schema/access.yaml and rules/access.dl of packs/std-access "
-    "with rezono/access.rezono and rezono/access.json, declared in its pack.yaml, starting from what "
-    "scripts/convert_pack.py proposes, so that examples/subsidy publishes the same files, bundle (places "
-    "and the pin of std-access aside) and relations per role over it as over the oracle in "
-    "compiler/tests/rezono/fixtures/std-access-legacy. Update the sha256 of std-access in every pack.yaml "
-    "that imports it, and onwards for their importers; this task may change those lines."))
 def test_whole_std_access_has_the_same_meaning(tmp_path):
     expected = meaning(published(tmp_path, "legacy"))
     actual = meaning(published(tmp_path, "rezono"))

@@ -283,3 +283,61 @@ def test_resealed_receipt_cannot_drop_mapped_reader(tmp_path):
     assert {component for _, component, _ in rows["build_selected_job"]} == set(SUITES)
     assert rows["build_full_selection"]
     assert not rows.get("build_readerless_path")
+
+
+def test_mapped_reader_requires_both_reader_inventories():
+    """An admitted path-reader edge narrows selection only when both direct and transitive inventories exist."""
+    from rezono_compiler import batch as compiler_batch, facts, pack, rules
+
+    model = pack.read(ROOT / "build")
+    program = rules.load(model.rules)
+    receipt = "r1"
+
+    def run_selection(reader_kind, inventories):
+        rows = facts.rows_of(model, {
+            "build_run": [{
+                "id": "current", "event": "pull_request", "base_sha": "a" * 40, "head_sha": "b" * 40,
+                "engine_sha": "e" * 40, "observed_at": OBSERVED_AT, "receipt": receipt,
+            }],
+            "loop_sweep_receipt": [{"id": receipt, "run": "current", "event_time": OBSERVED_AT}],
+            "build_component": [
+                {"id": "alpha", "run": "current", "kind": "python", "folder": "alpha"},
+                {"id": "beta", "run": "current", "kind": "python", "folder": "beta"},
+            ],
+            "build_path": [{"id": "p1", "run": "current", "path": SOURCE, "coverage": "mapped"}],
+            "build_path_reader": [
+                {"id": "pr1", "path": "p1", "component": "alpha", "kind": reader_kind, "source": "alpha"},
+            ],
+        })
+        members = [
+            (receipt, "m-changed", 0, "changed-path"), (receipt, "m-changed", 1, SOURCE),
+            (receipt, "m-edge", 0, "path-reader"), (receipt, "m-edge", 1, SOURCE),
+            (receipt, "m-edge", 2, reader_kind), (receipt, "m-edge", 3, "alpha"),
+            (receipt, "m-suite-alpha", 0, "suite"), (receipt, "m-suite-alpha", 1, "alpha"),
+            (receipt, "m-suite-beta", 0, "suite"), (receipt, "m-suite-beta", 1, "beta"),
+        ]
+        for kind in inventories:
+            member_id = f"m-readers-{kind}"
+            members.extend([
+                (receipt, member_id, 0, "path-readers"),
+                (receipt, member_id, 1, SOURCE),
+                (receipt, member_id, 2, kind),
+            ])
+        rows["verified_receipt"] = [(receipt, "git", "build-selection", "cut1", "inv1", "cnt1")]
+        rows["verified_member"] = members
+        con, _, _ = compiler_batch.run(model, program, rows)
+        try:
+            return compiler_batch.read(con, program, ["build_selected_job", "build_full_selection", "build_readerless_path"])
+        finally:
+            con.close()
+
+    for reader_kind, present in (("direct", ("direct",)), ("transitive", ("transitive",))):
+        incomplete = run_selection(reader_kind, present)
+        assert incomplete["build_full_selection"] == {("current", SOURCE)}, reader_kind
+        assert {component for _, component, _ in incomplete["build_selected_job"]} == {"alpha", "beta"}, reader_kind
+        assert not incomplete["build_readerless_path"], reader_kind
+
+    complete = run_selection("direct", ("direct", "transitive"))
+    assert complete["build_selected_job"] == {("current", "alpha", "p1")}
+    assert not complete["build_full_selection"]
+    assert not complete["build_readerless_path"]

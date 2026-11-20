@@ -1,0 +1,36 @@
+rezono 0
+pack std-loop
+
+schema std_loop_flow_comparison
+  iri "https://rezono.org/std-loop/flow-comparison"
+  import "linkml:types"
+  default range Text
+  description "Closed policy snapshots bound to the scope of independently recorded flow events."
+  annotation layer = "facts"
+
+kind FlowPolicyBinding world closed
+  description "The closed policy snapshot selected for a run, collector and window."
+  run: Text
+  collector: Text
+  window: Text
+  snapshot: Text
+
+kind FlowAllowance world closed
+  description "An identified tuple permitted by the selected policy snapshot."
+  snapshot: Text
+  source: Text
+  destination: Text
+  protocol: Text
+  port: Int
+
+kind FlowObservedEvent world closed
+  description "An independently recorded observation of a service flow."
+  run: Text
+  collector: Text
+  window: Text
+  tick: Int
+  source: Text
+  destination: Text
+  protocol: Text
+  port: Int
+  verdict: Text

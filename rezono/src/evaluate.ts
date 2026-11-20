@@ -694,10 +694,19 @@ function roundTo(f: Frac, mode: string): bigint {
 
 // ---- suppose lines ----
 
+/** Places an evaluated value into a cell, attributing any state to the row that holds it. */
+function cellValue(v: V, relation: string, key: string): Cell {
+	const cause: RowRef = { relation, key: [key] };
+	// A state written in the line stands in the row it is set on, like a state the data gives.
+	const placed = (x: V): V => (x.s === 'known' ? x : { ...x, cause });
+	return v.s === 'known' && Array.isArray(v.v) ? v.v.map(placed) : placed(v);
+}
+
 /**
  * The rows with one suppose line applied (§8): `+ path = value` sets a value, and makes the element when it is
- * not there; `- path` takes a value away, so that it is read as absent; `- Kind id` takes a row away. The rows
- * handed in are not changed: a delta lasts for the question only.
+ * not there; `+ Kind id {slot = value, ...}` inserts a fresh whole record; `- path` takes a value away, so that
+ * it is read as absent; `- Kind id` takes a row away. The rows handed in are not changed: a delta lasts for the
+ * question only.
  */
 export function suppose(data: Data, line: Checked, schema: Schema): Data {
 	const { tree } = line;
@@ -708,8 +717,25 @@ export function suppose(data: Data, line: Checked, schema: Schema): Data {
 		kinds.get(tree.retract_row[0])?.delete(tree.retract_row[1]);
 		return out;
 	}
-	if ('insert_row' in tree) throw new TypeError('a whole-record insertion is not applied yet');
 	const read = reader(line, schema, data);
+	if ('insert_row' in tree) {
+		const { kind, key, slots } = tree.insert_row;
+		const def = schema.kinds[kind];
+		if (!def) throw new TypeError(`unknown kind ${kind}`);
+		if (data.only && !data.only.has(kind)) throw new NotLoaded(`${kind} is inserted and was not loaded`);
+		if (kinds.get(kind)?.has(key)) throw new TypeError(`${kind} ${key} already exists`);
+		const cells = new Map<string, Cell>();
+		for (const entry of slots) {
+			const slotDef = def.slots[entry.name];
+			if (!slotDef || slotDef.inverse !== undefined || slotDef.derived) {
+				throw new TypeError(`${kind}.${entry.name} cannot be written by a whole-record insertion`);
+			}
+			cells.set(entry.name, cellValue(read.ex(entry.value), relationOf(kind, entry.name), key));
+		}
+		if (!kinds.has(kind)) kinds.set(kind, new Map());
+		kinds.get(kind)!.set(key, cells);
+		return out;
+	}
 	const at = read.target('set' in tree ? tree.set[0] : tree.retract);
 	// A path through a value that is not there names no row: nothing to change.
 	if (!at) return out;
@@ -717,13 +743,8 @@ export function suppose(data: Data, line: Checked, schema: Schema): Data {
 	if (schema.kinds[at.kind]?.slots[at.slot]?.inverse !== undefined) throw new TypeError(`${at.kind}.${at.slot} is an inverse slot: a suppose line writes its forward slot`);
 	if (!kinds.has(at.kind)) kinds.set(at.kind, new Map());
 	const cells = new Map(kinds.get(at.kind)!.get(at.id));
-	if ('set' in tree) {
-		const v = read.ex(tree.set[1]);
-		const cause = { relation: relationOf(at.kind, at.slot), key: [at.id] };
-		// A state written in the line stands in the row it is set on, like a state the data gives.
-		const placed = (x: V): V => (x.s === 'known' ? x : { ...x, cause });
-		cells.set(at.slot, v.s === 'known' && Array.isArray(v.v) ? v.v.map(placed) : placed(v));
-	} else cells.delete(at.slot);
+	if ('set' in tree) cells.set(at.slot, cellValue(read.ex(tree.set[1]), relationOf(at.kind, at.slot), at.id));
+	else cells.delete(at.slot);
 	kinds.get(at.kind)!.set(at.id, cells);
 	return out;
 }

@@ -1,0 +1,40 @@
+rezono 0
+pack std-access
+
+schema std_access
+  iri "https://rezono.example/std-access/access"
+  language en
+  prefix linkml = "https://w3id.org/linkml/"
+  prefix rdfs = "http://www.w3.org/2000/01/rdf-schema#"
+  import "linkml:types"
+  default range Text
+  description "Roles in two layers. A role is an element like any other: the pack names its roles as facts, and its rules derive which typed elements a role may read, as may_read(role, kind, element). Rezono knows only the generic capabilities below; a pack maps each of its roles to capabilities as facts (role__capability), and its read rules may grant a kind to every role that holds a capability."
+  annotation layer = "facts"
+
+enum Capability world closed = read | propose | review | administer | read_restricted | agent
+  description "The generic capabilities, the one vocabulary of the core. A pack says what a capability reads through its own read rules; holding one grants nothing by itself."
+  value read
+    description "reads what the pack's read rules give this capability"
+  value propose
+    description "may also propose a change"
+  value review
+    description "may review a proposal"
+  value administer
+    description "may administer the pack's deployment"
+  value read_restricted
+    description "reads the restricted sources the pack's read rules give this capability"
+  value agent
+    description "an automated reader or proposer, not a person"
+
+kind Role world closed
+  description "A role at the gate, as the deploy profile names it (access.roles)."
+  title: Text
+    iri "rdfs:label"
+  capability: Capability*
+    description "The capabilities the pack maps this role to: pack data, never code. A read rule of the form may_read(r, \"K\", x) :- role__capability(r, \"c\"), K(x). gives kind K in full to every role with a row (r, c) here, and that row is the evidence the checker recomputes (docs/architecture.md, access and privacy)."
+
+rules access
+  | // The shared typed read right (S28, O8). Each consumer supplies its own grant clauses.
+  | // This declaration alone denotes the empty set and confers no read rights.
+  | // @extend
+  | .decl may_read(role: symbol, kind: symbol, element: symbol)

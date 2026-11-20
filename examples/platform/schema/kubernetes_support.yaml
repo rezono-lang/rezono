@@ -5,30 +5,27 @@ default_range: string
 annotations:
   layer: facts
 
+types:
+  SupportEndDate:
+    description: Calendar date in YYYY-MM-DD form for a series support end date.
+    typeof: string
+    pattern: '^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$'
+
 classes:
-  SeriesSupportEvidence:
-    description: Upstream support information for a published product series.
+  SeriesSupportReference:
+    description: The support end recorded for a product series in the platform register, used to compare with the maker's support statement.
     attributes:
       id: {identifier: true}
-      product:
-        range: Product
-        description: Product identifier used in the publisher's release evidence.
-        required: true
+      product: {range: Product, required: true}
       series: {required: true}
-      latest_patch: {required: true}
-      support_end:
-        description: Published UTC calendar date in YYYY-MM-DD form for the rule projection.
-        required: true
-        pattern: '^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$'
-      source_url: {required: true, pattern: '^https://[^ ]+$'}
-      source_sha256: {required: true, pattern: '^[0-9a-f]{64}$'}
+      support_end: {range: SupportEndDate, required: true}
   SeriesSupportSource:
-    description: The separately pinned publisher statement for support of one product series.
+    description: The maker's pinned statement for support of one product series.
     attributes:
       id: {identifier: true}
       product: {range: Product, required: true}
       series: {required: true}
       latest_patch: {required: true}
-      support_end: {required: true, pattern: '^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$'}
+      support_end: {range: SupportEndDate, required: true}
       source_url: {required: true, pattern: '^https://[^ ]+$'}
       source_sha256: {required: true, pattern: '^[0-9a-f]{64}$'}

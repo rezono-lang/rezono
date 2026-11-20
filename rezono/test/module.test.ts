@@ -250,3 +250,52 @@ test('a text ends on its line in the whole language: the module reader refuses t
 	assert.deepEqual(parseModule(input).diagnostics, expected);
 	assert.equal(parseModule(input).module, undefined);
 });
+
+test('R029: an undeclared reason label leaves parseModule without a module, consistent with R021', () => {
+	const input = [
+		'pack p',
+		'reason no_rate = "no monthly rate published yet"',
+		'param rate: Int',
+		'  version 1, valid 2026-01-01.. = 1',
+		'fact host host-a',
+		'  rate = unknown "no rate yet"',
+		''
+	].join('\n');
+	const parsed = parseModule(input);
+	assert.equal(parsed.module, undefined);
+	assert.deepEqual(
+		parsed.diagnostics.map((d) => [d.code, d.span.text, ...d.args]),
+		[['R029', '"no rate yet"', '"no rate yet"']]
+	);
+});
+
+test('R021: duplicate version numbers forming a self-replacement or cycle are still detected', () => {
+	const selfDup = [
+		'pack p',
+		'param quota: Int',
+		'  version 1, valid 2025-01-01.. = 1',
+		'  version 1 replaces 1, valid 2026-01-01.. = 2',
+		''
+	].join('\n');
+	const selfParsed = parseModule(selfDup);
+	assert.equal(selfParsed.module, undefined);
+	assert.deepEqual(
+		selfParsed.diagnostics.map((d) => [d.code, d.span.text, ...d.args]),
+		[['R021', '1', '1', '1', 'quota']]
+	);
+
+	const cycleDup = [
+		'pack p',
+		'param quota: Int',
+		'  version 1 = 1',
+		'  version 2 replaces 1 = 2',
+		'  version 1 replaces 2 = 3',
+		''
+	].join('\n');
+	const cycleParsed = parseModule(cycleDup);
+	assert.equal(cycleParsed.module, undefined);
+	assert.deepEqual(
+		cycleParsed.diagnostics.map((d) => [d.code, d.span.text, ...d.args]),
+		[['R021', '1', '2', '1', 'quota']]
+	);
+});
