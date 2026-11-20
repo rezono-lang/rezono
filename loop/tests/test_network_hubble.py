@@ -9,10 +9,12 @@ import subprocess
 import pytest
 
 
-CLUSTER_DIR = Path(__file__).resolve().parents[1] / "cluster"
+LOOP_DIR = Path(__file__).resolve().parents[1]
+CLUSTER_DIR = LOOP_DIR / "cluster"
 
 
 def _load(monkeypatch, name):
+    monkeypatch.syspath_prepend(str(LOOP_DIR))
     monkeypatch.syspath_prepend(str(CLUSTER_DIR))
     return importlib.import_module(name)
 
