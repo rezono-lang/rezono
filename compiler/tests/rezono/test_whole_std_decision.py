@@ -53,15 +53,6 @@ def test_std_decision_legacy_evaluates_scenarios(tmp_path):
     assert ("d4",) in evaluated["proposal"]
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=MissingCandidatePack,
-    reason="M3: decisions/language-standard-pack-candidates.md: Author packs/std-decision/candidate/decision.rezono "
-           "and generate packs/std-decision/candidate/decision.json with node rezono/src/write-form.ts so that the "
-           "isolated candidate matches packs/std-decision on semantic bundle, compiled SQL/IR and batch evaluation. "
-           "Keep schema/decision.yaml and rules/decision.dl untouched as the oracle. Read "
-           "decisions/language-standard-pack-candidates.md and decisions/language-first-packs.md.",
-)
 def test_whole_std_decision_candidate_has_the_same_meaning(tmp_path):
     actual = check_pack(tmp_path, "candidate")
     expected = check_pack(tmp_path, "legacy")

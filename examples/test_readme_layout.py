@@ -149,12 +149,6 @@ def _has_a001_and_a003(text: str) -> bool:
     )
 
 
-@pytest.mark.xfail(strict=True, raises=MissingCalculationExample, reason=(
-    "extra: decisions/front-door.md: Rewrite ## Example in README.md to show the subsidy calculation for A001 "
-    "(EUR 2,694 with its calculation steps and the article and council decision of a read parameter) and A003 "
-    "(assessment unknown with reason income_statement_not_received and an unknown calculated award), in plain "
-    "words and euro amounts without hashes or paths, with one sentence noting that the independent checker "
-    "verified the witness and examples/subsidy/reference.py gives the same amount."))
 def test_the_example_shows_a001_award_and_a003_unknown():
     text = readme()
     example = dict(sections(text)).get("Example", "")
@@ -173,11 +167,6 @@ def test_the_example_shows_a001_award_and_a003_unknown():
     assert not re.search(r"\b[0-9a-f]{64}\b|/tmp/|\$work|/store/|/manifests/", answer), answer
 
 
-@pytest.mark.xfail(strict=True, raises=MissingCalculationQuickstartOutput, reason=(
-    "extra: decisions/front-door.md: Update step 2 of ## Try it in README.md so its bash block prints the same "
-    "A001 (euro award, calculation steps, and parameter article/decision) and A003 (assessment unknown with "
-    "reason income_statement_not_received) answers shown in ## Example, and keep its text block matching the "
-    "stdout byte for byte while keeping the final jq -e line mentioning witness."))
 def test_the_second_step_prints_a001_and_a003_answers():
     text = readme()
     example = dict(sections(text)).get("Example", "")

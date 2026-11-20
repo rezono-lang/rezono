@@ -30,9 +30,8 @@ class MissingReasonLabelCheck(AssertionError):
     raises=MissingReasonLabelCheck,
     reason="extra: decisions/language-reasons.md: Refuse a state literal whose quoted label is the label of no "
            "reason declaration of the module with R029 at the label, in rezono/src/module-check.ts, and give R029 "
-           "its sentence in each language of rezono/messages/. Read the section Reading a label. Waits for a "
-           "planner to declare reason not_measured in the fact-row case of the test 'the four states of a value' in "
-           "rezono/test/module-json.test.ts, which reads unknown \"not measured yet\" undeclared and expects a form.",
+           "its sentence in each language of rezono/messages/. Read the section Reading a label. The fact row of "
+           "'the four states of a value' in rezono/test/module-json.test.ts declares the label it names.",
 )
 def test_reason_label():
     stray = source('unknown "no rate yet"')

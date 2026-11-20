@@ -92,18 +92,6 @@ def test_souffle_oracle_orders_typed_values():
     assert oracle.evaluate(rules.load(program()), inputs(), "comparison") == expected()
 
 
-@pytest.mark.xfail(strict=True, raises=rules.IRError, reason=(
-    "M2: decisions/ordered-rule-scalars.md: Lower compare_as in Feldera SQL in "
-    "compiler/rezono_compiler/rules_sql.py (feldera()), by a byte comparison or a pure typed sign function; "
-    "check yourself that the pinned Feldera v0.383.0 compares strings in byte order. Select this test in "
-    "compiler/ci/run_feldera_oracle.sh, add it to the compiler-rules shard in compiler/ci/feldera_shards.py "
-    "and leave it out of ORIGINAL there (ORIGINAL = EXPECTED - {INTERFACE, ..., <this test>}; recorded main "
-    "runs before it stay complete evidence; scripts/feldera_admission.py stays unchanged). Lift this mark. If "
-    "compiler/tests/test_recorded_dates.py::test_independent_date_equality is already routed on main, also lift "
-    "the strict marks on examples/test_live_feldera_shards.py::test_merge_preserves_all_live_cases_and_outcomes "
-    "and examples/test_feldera_incident.py::test_classifier_uses_complete_reports_from_the_parallel_comparison; "
-    "otherwise leave them. Provide the hosted dispatch for the implementation commit, as the decision requires "
-    "before the platform rule uses it."))
 def test_feldera_orders_typed_values():
     import feldera
     sql = rules_sql.feldera(rules.load(program()), witnesses=True)

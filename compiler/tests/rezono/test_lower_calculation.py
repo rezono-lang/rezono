@@ -19,13 +19,6 @@ def drift_and_date() -> list:
             {"extend": "Application", "derived": [payment_difference]}]
 
 
-@pytest.mark.xfail(strict=True, raises=MissingCalculationLowering, reason=(
-    "M3: decisions/language-calculations.md: Lower the derived values of an extend block and `as of` to a "
-    "rezono.calc/1 program that joins the pack closure where a calc/*.yaml document would, in a new "
-    "compiler/rezono_compiler/rezono_calc.py called from rezono_module.py instead of refuse_derived for a "
-    "value without a table, following the sections Versions with definitions, What each member becomes, "
-    "Leaves and Operators; refuse a second subject as R050 two subjects. Waits for test_calculation_versions, "
-    "which admits unit and the definitions of a version in contracts/rezono-module.yaml."))
 def test_lower_calculation(tmp_path):
     expected = calc_ir(examples(tmp_path / "legacy") / SUBSIDY)
     assert expected["ir/calc.json"]["rules"]
@@ -77,12 +70,6 @@ def award() -> list:
     return [*map(row_parameter, parameters), {"extend": "Application", "derived": values}]
 
 
-@pytest.mark.xfail(strict=True, raises=MissingCalculationLowering, reason=(
-    "M3: decisions/language-calculations.md: Lower the whole award (calc/award.yaml of the scheme that examples/subsidy imports) from its module "
-    "form: row-backed parameters, a parameter and a derived value of the same name (the subject-qualified "
-    "Application.advice_allowance is the derived value; a bare name that matches both is R050 ambiguous leaf), "
-    "round, min, when-then-else and the chained comparisons, in compiler/rezono_compiler/rezono_calc.py. "
-    "Waits for test_lower_calculation and test_lower_parameters, which add that module and the parameters."))
 def test_lower_calculation_award(tmp_path):
     expected = calc_ir(examples(tmp_path / "legacy") / SCHEME)
     assert len(expected["ir/calc.json"]["rules"]) == 6

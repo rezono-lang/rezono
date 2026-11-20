@@ -1,12 +1,51 @@
 """Evaluate an observation-only admission rule on observed objects: decisions/k8s-admission-translator.md."""
 
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable, Mapping, Sequence
 
 from rezono_compiler import batch, rules
 
 
 def _canonical_row(row) -> tuple[str, ...]:
     return tuple(str(value) for value in row)
+
+
+def _is_sequence(value: object) -> bool:
+    return isinstance(value, Sequence) and not isinstance(value, (str, bytes, bytearray))
+
+
+def _normalize_observation(obs: object) -> tuple[dict, dict[str, list[tuple]], list]:
+    if not isinstance(obs, Mapping):
+        raise ValueError("each observation must be a mapping")
+    missing_keys = [key for key in ("object", "rows", "missing") if key not in obs]
+    if missing_keys:
+        joined = ", ".join(repr(key) for key in missing_keys)
+        raise ValueError(f"observation is missing required key(s): {joined}")
+
+    raw_object = obs["object"]
+    if not isinstance(raw_object, Mapping) or "kind" not in raw_object or "name" not in raw_object:
+        raise ValueError("observation 'object' must be a mapping with 'kind' and 'name'")
+
+    raw_rows = obs["rows"]
+    if not isinstance(raw_rows, Mapping):
+        raise ValueError("observation 'rows' must be a mapping")
+    rows_by_relation: dict[str, list[tuple]] = {}
+    for relation, relation_rows in raw_rows.items():
+        if not isinstance(relation, str):
+            raise ValueError("observation 'rows' keys must be relation names")
+        if not _is_sequence(relation_rows):
+            raise ValueError(f"observation rows for {relation!r} must be a sequence")
+        normalized_rows: list[tuple] = []
+        for row in relation_rows:
+            if not _is_sequence(row):
+                raise ValueError(f"observation row for {relation!r} must be a sequence")
+            normalized_rows.append(tuple(row))
+        rows_by_relation[relation] = normalized_rows
+
+    raw_missing = obs["missing"]
+    if not _is_sequence(raw_missing):
+        raise ValueError("observation 'missing' must be a sequence")
+
+    return dict(raw_object), rows_by_relation, list(raw_missing)
 
 
 def _sort_key(finding: dict) -> tuple:
@@ -33,7 +72,7 @@ def observed_findings(
     if output not in program.relations or program.relations[output].role != "derived":
         raise ValueError(f"{output}: an admission output must be a derived relation")
 
-    observation_list = list(observations)
+    normalized = [_normalize_observation(obs) for obs in observations]
     combined: dict[str, list[tuple]] = {}
     seen: dict[str, set[tuple[str, ...]]] = {}
 
@@ -48,8 +87,8 @@ def observed_findings(
 
     for relation, rows in model_rows.items():
         add_rows(relation, rows)
-    for obs in observation_list:
-        for relation, rows in obs.get("rows", {}).items():
+    for _, rows_by_relation, _ in normalized:
+        for relation, rows in rows_by_relation.items():
             add_rows(relation, rows)
 
     with batch.connect(program, combined, threads=1) as connection:
@@ -57,18 +96,16 @@ def observed_findings(
         admitted = batch.read(connection, program, [output])[output]
 
     findings: list[dict] = []
-    for obs in observation_list:
-        obj = dict(obs["object"])
-        missing = list(obs.get("missing", ()))
+    for obj, rows_by_relation, missing in normalized:
         if missing:
             findings.append({
                 "rule": rule,
                 "digest": digest,
                 "object": dict(obj),
                 "reason": "missing_input",
-                "places": missing,
+                "places": list(missing),
             })
-        for relation, rows in obs.get("rows", {}).items():
+        for relation, rows in rows_by_relation.items():
             for row in rows:
                 if _canonical_row(row) not in admitted:
                     findings.append({

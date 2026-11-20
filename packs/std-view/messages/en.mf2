@@ -314,7 +314,7 @@ nav.views = Views
 nav.schema = Schema and elements
 packs.knowledge = {{knowledge of {$date}}}
 
-# Proposals (docs/lifecycle.md): a new value becomes a pull request, through the access gate and CI.
+# Proposals (decisions/review-and-rights.md): a new value becomes a pull request, through the access gate and CI.
 enum.true = yes
 enum.false = no
 propose.submit = Propose

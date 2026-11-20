@@ -1,4 +1,4 @@
-import { answer, check, isError, load, suppose, type Schema } from '../src/index.ts';
+import { answer, check, dataSchema, isError, load, schemaId, suppose, type Schema } from '../src/index.ts';
 
 // Neutral schema exercising required, optional, reference, inverse and empty-brace whole-record insertions
 // (decisions/language-safe-steps.md §1).
@@ -53,7 +53,8 @@ const issues: unknown[] = [];
 			const before = await answer(q, schema, base);
 			const afterIds = after?.rows.map((r) => [r.$id, r.c1]) ?? null;
 			const beforeIds = before?.rows.map((r) => r.$id) ?? null;
-			if (JSON.stringify(afterIds) !== JSON.stringify([['policy-b', { $ref: 'zone-a' }]])) {
+			const pack = `${schema.pack}@${await schemaId(dataSchema(schema))}`;
+			if (JSON.stringify(afterIds) !== JSON.stringify([['policy-b', { $ref: `${pack}:Zone/zone-a` }]])) {
 				issues.push({ case: 'valid-insert-answer', actual: afterIds });
 			}
 			if (JSON.stringify(beforeIds) !== JSON.stringify([])) {
