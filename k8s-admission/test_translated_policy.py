@@ -111,7 +111,12 @@ def test_translated_policy(tmp_path):
         "policy_renderer.render_policy, which then stays only as the expectation of test_translated_policy. The "
         "outcomes are the hand-calculated cases of decisions/k8s-admission-rules.md. admission_release.py is not a "
         "test: if k8s-admission/ is on the review-before-landing list by then, the switch is read before it "
-        "lands. Today the release ships the hand-written policy (AssertionError)."
+        "lands. Today the release ships the hand-written policy (AssertionError). "
+        "Blocked on planner updates to protected tests that still expect policy_renderer.render_policy from "
+        "render_release: test_desired_release.py, test_server_release.py (live validations comparison), and "
+        "test_rendered_transport_cel.py::test_transport_coverage_in_both_released_directions (which invokes "
+        "oracles/flow-expression without a request CEL variable, whereas translated in-zone-flow reads "
+        "request.namespace)."
     ),
 )
 def test_release_renders_the_translated_policy(tmp_path):
