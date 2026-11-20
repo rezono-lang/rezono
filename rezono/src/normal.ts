@@ -64,20 +64,28 @@ type Levels = { kind: string | undefined; binder?: string }[];
  * Rebuilds a tree bottom up, with `path` deciding each path from the scopes it is written in, as the check opens
  * them: the question's row, then the element of each aggregate, quantifier and filter (check.ts, `inside`).
  */
-function rebuild(e: Expr, levels: Levels, kindOf: (e: Expr) => string | undefined, path: (e: { path: string[] }, levels: Levels) => string[]): Expr {
-	const at = (x: Expr, inner = levels) => rebuild(x, inner, kindOf, path);
+function rebuild(
+	e: Expr,
+	levels: Levels,
+	kindOf: (e: Expr) => string | undefined,
+	path: (e: { path: string[] }, levels: Levels) => string[],
+	onBinder?: (binder: string) => void
+): Expr {
+	const at = (x: Expr, inner = levels) => rebuild(x, inner, kindOf, path, onBinder);
 	if ('path' in e) return { path: path(e, levels) };
 	if ('lit' in e) return { lit: e.lit };
 	if ('kind' in e) return { kind: e.kind };
 	if ('dot' in e) return { dot: [at(e.dot[0]), e.dot[1]] };
 	if ('agg' in e) {
 		const [name, of, arg, binder] = e.agg;
+		if (binder !== undefined) onBinder?.(binder);
 		if (arg === undefined) return { agg: [name, at(of)] };
 		const inner = at(arg, [...levels, { kind: kindOf(of), binder }]);
 		return { agg: binder === undefined ? [name, at(of), inner] : [name, at(of), inner, binder] };
 	}
 	if ('filter' in e) {
 		const [set, cond, binder] = e.filter;
+		if (binder !== undefined) onBinder?.(binder);
 		const inner = at(cond, [...levels, { kind: kindOf(set), binder }]);
 		return { filter: binder === undefined ? [at(set), inner] : [at(set), inner, binder] };
 	}
@@ -149,12 +157,18 @@ export function normalQuestion(checked: Checked, pack: Schema): Question {
 	if (isAsk(tree) && row !== undefined) {
 		const avoid = new Set(['it']);
 		for (const e of exprs)
-			rebuild(e, top, kindOf, (p, levels) => {
-				const how = form(p, levels);
-				if (how === 'binder' || how === 'row slot') for (const name of taken(levels)) avoid.add(name);
-				else if (how === 'as written') avoid.add(p.path[0]);
-				return p.path;
-			});
+			rebuild(
+				e,
+				top,
+				kindOf,
+				(p, levels) => {
+					const how = form(p, levels);
+					if (how === 'binder' || how === 'row slot') for (const name of taken(levels)) avoid.add(name);
+					else if (how === 'as written') avoid.add(p.path[0]);
+					return p.path;
+				},
+				(name) => avoid.add(name)
+			);
 		for (const name of Object.keys(pack.params ?? {})) avoid.add(name);
 		const first = snake(row);
 		for (let n = 1; binder === undefined; n++) {

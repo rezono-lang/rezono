@@ -220,6 +220,18 @@ test('R011: nothing shadows silently (§5 rules 2 and 7)', () => {
 	clean('ask Host where Host.any(it.memory_need > host.memory_need)');
 });
 
+test('explicit method binders shadow slots cleanly, while forbidding `it` and schema parameter collisions', () => {
+	// Explicit method binder colliding with a slot on its own element kind (`HostCluster.host`) or an outer kind (`Host.owner`).
+	clean('ask h: Host where clusters.any(host: host.count > 1)');
+	clean('ask h: Host where clusters.any(owner: owner.count > 1)');
+	// `it` is forbidden as an explicit method binder (no bogus `R001` with `hint.row: ['it']`).
+	assert.deepEqual(found('ask h: Host where clusters.any(it: it.count > 1)'), ['R011 at it']);
+	assert.deepEqual(found('ask h: Host where clusters.any(it: true)'), ['R011 at it']);
+	assert.deepEqual(found('ask h: Host where clusters.where(it: it.count > 1).count() > 0'), ['R011 at it']);
+	// Collisions with `schema.params` (`host_reserve`) are refused at the binder.
+	assert.deepEqual(found('ask h: Host where clusters.any(host_reserve: count > 1)'), ['R011 at host_reserve']);
+});
+
 test('R012 and R013: a literal token is read by the type its context expects', () => {
 	const typed = schemaWith((s) => {
 		s.types!.IPv4 = { of: 'Text', pattern: '[0-9]{1,3}(\\.[0-9]{1,3}){3}' };
