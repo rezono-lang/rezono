@@ -98,8 +98,9 @@ def replay_certified_report(
     trace: list[list[str]] = []
     submissions: list[dict[str, str]] = []
     round_reports: list[dict[str, Any]] = []
-    claimed: set[str] = set()
+    claimed: dict[str, str] = {}
     reserved: dict[str, str] = {}
+    reserved_state: dict[str, str] = {}
     round_iter = iter(certified_rounds)
 
     def record_round(current_round: Any, current: Snapshot) -> None:
@@ -115,8 +116,24 @@ def replay_certified_report(
     while True:
         for attempt in current_round.attempts:
             if attempt.plan_hash in reserved:
-                if (attempt.state == "applied" and attempt.step in current.done) or attempt.state in RELEASED_STATES:
-                    reserved.pop(attempt.plan_hash, None)
+                reserved_step = reserved[attempt.plan_hash]
+                if attempt.step != reserved_step:
+                    raise ValueError(
+                        f"attempt plan_hash {attempt.plan_hash!r} is reserved for step "
+                        f"{reserved_step!r}, not {attempt.step!r}"
+                    )
+                reserved_state[attempt.plan_hash] = attempt.state
+            elif attempt.plan_hash in claimed and claimed[attempt.plan_hash] != attempt.step:
+                raise ValueError(
+                    f"attempt plan_hash {attempt.plan_hash!r} is claimed for step "
+                    f"{claimed[attempt.plan_hash]!r}, not {attempt.step!r}"
+                )
+
+        for plan_hash, step in list(reserved.items()):
+            attempt_state = reserved_state[plan_hash]
+            if (attempt_state == "applied" and step in current.done) or attempt_state in RELEASED_STATES:
+                reserved.pop(plan_hash)
+                reserved_state.pop(plan_hash)
 
         state = _require_round_outcome(current)
         if current.fixed_point:
@@ -141,12 +158,20 @@ def replay_certified_report(
 
         for step in plans:
             for attempt in current_round.attempts:
-                if attempt.step != step or attempt.plan_hash in claimed:
+                if attempt.step != step:
                     continue
-                claimed.add(attempt.plan_hash)
+                if attempt.plan_hash in claimed:
+                    if claimed[attempt.plan_hash] != step:
+                        raise ValueError(
+                            f"attempt plan_hash {attempt.plan_hash!r} is claimed for step "
+                            f"{claimed[attempt.plan_hash]!r}, not {step!r}"
+                        )
+                    continue
+                claimed[attempt.plan_hash] = step
                 submissions.append({"step": step, "plan_hash": attempt.plan_hash})
-                if attempt.state in RESERVED_STATES:
+                if attempt.state in RESERVED_STATES or (attempt.state == "applied" and step not in current.done):
                     reserved[attempt.plan_hash] = step
+                    reserved_state[attempt.plan_hash] = attempt.state
 
         record_round(current_round, current)
         trace.append(plans)

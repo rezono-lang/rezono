@@ -30,7 +30,7 @@ export const schemaId = async (document: object): Promise<string> => `s-${await 
 
 /** The the publication document of a schema: without what a question needs beyond it. */
 export function dataSchema(schema: Schema): object {
-	const { rules: _rules, params: _params, symbols: _symbols, rounding: _rounding, default_units: _defaultUnits, in_part: _inPart, ...document } = schema;
+	const { rules: _rules, params: _params, symbols: _symbols, rounding: _rounding, in_part: _inPart, default_units: _defaultUnits, ...document } = schema;
 	return document;
 }
 

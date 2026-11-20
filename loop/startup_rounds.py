@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from functools import lru_cache
 from ipaddress import IPv4Address, ip_address
 import json
 import os
@@ -16,19 +17,22 @@ from time import monotonic, sleep, time_ns
 from typing import Any
 from urllib.parse import urlsplit
 
-import yaml
-
 from loop.batch_selection import select_batch
 from loop.cluster.network_hubble import Hubble
 from loop.round_claim import claim_attempt
 from rezono_canon import canonical_bytes, canonical_json, canonical_sha256, sha256_hex
 from rezono_checker.evidence import Evidence, admit
 from rezono_checker.transition import check_transition_certificate
+from rezono_compiler import batch as compiler_batch
+from rezono_compiler import facts as compiler_facts
+from rezono_compiler import pack as compiler_pack
+from rezono_compiler import rules as compiler_rules
+from rezono_compiler import scenarios as compiler_scenarios
 from rezono_publisher import store
 
 ROOT = Path(__file__).resolve().parents[1]
-PLATFORM_FACTS = ROOT / "examples" / "platform" / "facts" / "core.yaml"
-ADMISSION_POD_FIXTURE = ROOT / "k8s-admission" / "fixtures" / "server" / "pod.yaml"
+PLATFORM_PACK = ROOT / "examples" / "platform"
+PLATFORM_FACTS = PLATFORM_PACK / "facts" / "core.yaml"
 PROBE_SOURCE = ROOT / "loop" / "cluster" / "network_probe.go"
 CONTEXT = "kind-rezono-fixture"
 CLUSTER_NAME = "rezono-fixture"
@@ -52,6 +56,8 @@ def _relation(name: str, role: str, columns: tuple[str, ...], *, invariant: bool
         "role": role,
         "key": [{"name": column, "type": "string"} for column in columns],
     }
+    if role == "derived":
+        entry["module"] = "startup"
     if invariant:
         entry["invariant"] = True
     return entry
@@ -66,16 +72,31 @@ def _literal(relation: str, *terms: str, negative: bool = False, stratum: str = 
     }
 
 
-def _rule(name: str, head: tuple[str, ...], body: list[dict[str, Any]], *, stratum: str = "0") -> dict[str, Any]:
-    return {"id": name, "stratum": stratum, "head": {"relation": name, "terms": list(head)}, "body": body}
+def _rule(
+    name: str,
+    head: tuple[str, ...],
+    body: list[dict[str, Any]],
+    *,
+    line: int,
+    stratum: str = "0",
+) -> dict[str, Any]:
+    return {
+        "id": name,
+        "module": "startup",
+        "stratum": stratum,
+        "head": {"relation": name, "terms": list(head)},
+        "body": body,
+        "origin": {"file": "startup.dl", "line": str(line)},
+    }
 
 
 def _row_ref(relation: str, cells: Iterable[str]) -> dict[str, str]:
     return {"relation": relation, "key": canonical_json(list(cells))}
 
 
-STARTUP_PROGRAM: dict[str, Any] = {
+STARTUP_PROGRAM: dict[str, Any] = compiler_rules.with_strata({
     "format": "rezono.rules/1",
+    "pack": MANIFEST_ID,
     "relations": [
         _relation("managed_namespace", "base", ("namespace",)),
         _relation("endpoint_protected", "base", ("endpoint",)),
@@ -86,7 +107,7 @@ STARTUP_PROGRAM: dict[str, Any] = {
         _relation("exposed_without_namespace", "derived", ("endpoint",), invariant=True),
     ],
     "rules": [
-        _rule("namespace_active", ("?ns",), [_literal("managed_namespace", "?ns")]),
+        _rule("namespace_active", ("?ns",), [_literal("managed_namespace", "?ns")], line=1),
         _rule(
             "unprotected_exposure",
             ("?ep",),
@@ -94,6 +115,7 @@ STARTUP_PROGRAM: dict[str, Any] = {
                 _literal("endpoint_exposed", "?ep"),
                 _literal("endpoint_protected", "?ep", negative=True),
             ],
+            line=2,
             stratum="1",
         ),
         _rule(
@@ -104,10 +126,26 @@ STARTUP_PROGRAM: dict[str, Any] = {
                 _literal("endpoint_namespace", "?ep", "?ns"),
                 _literal("managed_namespace", "?ns", negative=True),
             ],
+            line=3,
             stratum="1",
         ),
     ],
-}
+})
+
+TOPOLOGY_DERIVED_RELATIONS = (
+    "flow",
+    "provides",
+    "recovery_reaches_out",
+    "unverified_supply",
+    "verified",
+    "zone_of",
+)
+TOPOLOGY_BASE_RELATIONS = (
+    "artifact__for_service",
+    "artifact__signed",
+    "zone__entry_boundary",
+    "zone__workload",
+)
 
 
 @dataclass(frozen=True)
@@ -133,6 +171,16 @@ class StartupTopology:
 
 
 @dataclass(frozen=True)
+class EndpointProtectionSpec:
+    endpoint: str
+    zone: str
+    service: str
+    namespace: str
+    pod_selector: dict[str, Any]
+    ingress: tuple[dict[str, Any], ...]
+
+
+@dataclass(frozen=True)
 class RoundStep:
     step_id: str
     priority: int
@@ -141,124 +189,97 @@ class RoundStep:
     delta: tuple[tuple[str, tuple[str, ...], int], ...]
 
 
-def load_startup_topology(facts_path: Path = PLATFORM_FACTS) -> StartupTopology:
-    """Derive startup zones, endpoints, live network cases and deliberate findings from pack facts."""
-    data = yaml.safe_load(facts_path.read_text(encoding="utf-8"))
-    zones_by_id = {row["id"]: row for row in data["zone"]}
-    roles_by_id = {row["id"]: row for row in data["platform_role"]}
-    functions_by_id = {row["id"]: row for row in data["function"]}
-    services_by_id = {row["id"]: row for row in data["service"]}
+@lru_cache(maxsize=1)
+def _startup_program() -> compiler_rules.Program:
+    return compiler_rules.load(STARTUP_PROGRAM, require_witness=False)
 
-    offers_by_product: dict[str, list[dict[str, Any]]] = {}
-    for offer in data["offer"]:
-        offers_by_product.setdefault(offer["product"], []).append(offer)
-    demands_by_product: dict[str, list[dict[str, Any]]] = {}
-    for demand in data["demand"]:
-        demands_by_product.setdefault(demand["product"], []).append(demand)
-    choices = {(row["service"], row["function"]): row["provider"] for row in data.get("choice", ())}
 
-    providers_by_func: dict[str, list[tuple[str, int]]] = {}
-    for svc in data["service"]:
-        for offer in offers_by_product.get(svc["product"], ()):
-            providers_by_func.setdefault(offer["function"], []).append((svc["id"], int(offer["port"])))
+@lru_cache(maxsize=4)
+def _load_platform_pack(pack_dir: Path) -> tuple[compiler_pack.Pack, compiler_rules.Program, frozenset[str]]:
+    model = compiler_pack.read(pack_dir)
+    if not model.rules:
+        raise RuntimeError(f"pack {pack_dir} defines no rule program")
+    program = compiler_rules.load(model.rules)
+    derived_set = set(program.derived())
+    needed: set[str] = set()
+    stack = [name for name in TOPOLOGY_DERIVED_RELATIONS if name in derived_set]
+    while stack:
+        relation = stack.pop()
+        if relation in needed:
+            continue
+        needed.add(relation)
+        stack.extend(dep for dep in program.deps(relation) if dep in derived_set and dep not in needed)
+    return model, program, frozenset(needed)
 
-    def zone_of(service_id: str) -> str:
-        return roles_by_id[services_by_id[service_id]["role"]]["zone"]
 
-    flows: list[tuple[str, str, str, int]] = []
-    for svc in data["service"]:
-        sid = svc["id"]
-        for demand in demands_by_product.get(svc["product"], ()):
-            fn = demand["function"]
-            chosen = choices.get((sid, fn))
-            candidates = providers_by_func.get(fn, ())
-            if chosen is not None:
-                for prov, port in candidates:
-                    if prov == chosen:
-                        flows.append((sid, prov, fn, port))
-            elif len({prov for prov, _ in candidates}) == 1:
-                for prov, port in candidates:
-                    flows.append((sid, prov, fn, port))
-
-    # Derive the deliberate prohibited recovery flow from pack facts.
-    prohibited: list[tuple[str, str, str, int]] = [
+def _select_topology_from_relations(relations: Mapping[str, set[tuple[str, ...]]]) -> StartupTopology:
+    """Build the startup topology from compiler-derived pack relations without re-implementing rules."""
+    zone_by_service = {svc: zone for svc, zone in relations["zone_of"]}
+    flows = sorted((src, dst, fn, int(port)) for src, dst, fn, port in relations["flow"])
+    recovery_prohibited = set(relations["recovery_reaches_out"])
+    prohibited = sorted(
         (src, dst, fn, port)
         for src, dst, fn, port in flows
-        if zones_by_id[zone_of(src)]["isolated_recovery"] == "yes"
-        and zones_by_id[zone_of(dst)]["isolated_recovery"] == "no"
-        and functions_by_id[fn]["recovery_allowed"] == "no"
-    ]
+        if (src, dst, fn) in recovery_prohibited
+    )
     if not prohibited:
-        raise RuntimeError("No prohibited recovery flow derived from platform facts")
-    bad_src, bad_dst, bad_fn, bad_port = sorted(prohibited)[0]
+        raise RuntimeError("No prohibited recovery flow derived by platform pack rules")
+    bad_src, bad_dst, bad_fn, bad_port = prohibited[0]
 
-    # Derive the deliberate unsigned component from pack facts (runs_images=yes with signed=no artifact).
-    build_authorities = {
-        svc["id"]
-        for svc in data["service"]
-        if roles_by_id[svc["role"]]["build_authority"] == "yes"
-    }
-    unsigned_artifacts = [
-        art
-        for art in data.get("artifact", ())
-        if art.get("signed") != "yes"
-        and art.get("built_by") in build_authorities
-        and roles_by_id[services_by_id[art["for_service"]]["role"]]["runs_images"] == "yes"
-    ]
+    # Select an explicitly unsigned ("no") artifact for a service derived as unverified_supply.
+    # Missing/unknown artifact__signed rows are never treated as "no".
+    unverified_services = {svc for (svc,) in relations["unverified_supply"]}
+    explicitly_unsigned = {art_id for art_id, signed in relations["artifact__signed"] if signed == "no"}
+    unsigned_artifacts = sorted(
+        (svc, art_id)
+        for art_id, svc in relations["artifact__for_service"]
+        if svc in unverified_services and art_id in explicitly_unsigned
+    )
     if not unsigned_artifacts:
-        raise RuntimeError("No unsigned artifact derived from platform facts")
-    unsigned = sorted(unsigned_artifacts, key=lambda row: (row["for_service"], row["id"]))[0]
+        raise RuntimeError("No explicitly unsigned artifact derived for unverified_supply services")
+    unsigned_service, unsigned_artifact_id = unsigned_artifacts[0]
 
-    # Identify an entry-boundary service and an authorized workload service targeting bad_dst.
-    entry_services = sorted(
-        svc["id"]
-        for svc in data["service"]
-        if zones_by_id[zone_of(svc["id"])]["entry_boundary"] == "yes"
-    )
+    entry_zones = {zone for zone, flag in relations["zone__entry_boundary"] if flag == "yes"}
+    entry_services = sorted(svc for svc, zone in zone_by_service.items() if zone in entry_zones)
     if not entry_services:
-        raise RuntimeError("No entry-boundary service derived from platform facts")
+        raise RuntimeError("No entry-boundary service derived from platform pack")
     entry_svc = entry_services[0]
-    entry_port = next(
-        (int(offer["port"]) for offer in offers_by_product.get(services_by_id[entry_svc]["product"], ())),
-        bad_port,
-    )
+    entry_ports = sorted(int(port) for svc, _, port in relations["provides"] if svc == entry_svc)
+    entry_port = entry_ports[0] if entry_ports else bad_port
     # Use an unprivileged container port (>= 1024) for the non-root scratch listener.
     entry_listen_port = entry_port if entry_port >= 1024 else 8443
     dst_listen_port = bad_port if bad_port >= 1024 else 8443
 
+    verified_services = {svc for (svc,) in relations["verified"]}
+    workload_zones = {zone for zone, flag in relations["zone__workload"] if flag == "yes"}
     authorized_workload = sorted(
         (src, fn, port)
         for src, dst, fn, port in flows
-        if dst == bad_dst
-        and zones_by_id[zone_of(src)]["workload"] == "yes"
-        and any(
-            art["for_service"] == src and art.get("signed") == "yes" and art.get("built_by") in build_authorities
-            for art in data.get("artifact", ())
-        )
+        if dst == bad_dst and src in verified_services and zone_by_service.get(src) in workload_zones
     )
     if not authorized_workload:
-        raise RuntimeError("No verified workload flow derived from platform facts")
+        raise RuntimeError("No verified workload flow derived from platform pack")
     workload_svc, workload_fn, _ = authorized_workload[0]
 
     selected_services = (
-        (entry_svc, zone_of(entry_svc), entry_listen_port),
-        (bad_dst, zone_of(bad_dst), dst_listen_port),
-        (workload_svc, zone_of(workload_svc), 8080),
-        (bad_src, zone_of(bad_src), 8080),
+        (entry_svc, zone_by_service[entry_svc], entry_listen_port),
+        (bad_dst, zone_by_service[bad_dst], dst_listen_port),
+        (workload_svc, zone_by_service[workload_svc], 8080),
+        (bad_src, zone_by_service[bad_src], 8080),
     )
-    managed_zones = tuple(sorted({z for _, z, _ in selected_services}))
+    managed_zones = tuple(sorted({zone for _, zone, _ in selected_services}))
     endpoint_zones = {
-        f"{zone_of(entry_svc)}/{entry_svc}": zone_of(entry_svc),
-        f"{zone_of(bad_dst)}/{bad_dst}": zone_of(bad_dst),
+        f"{zone_by_service[entry_svc]}/{entry_svc}": zone_by_service[entry_svc],
+        f"{zone_by_service[bad_dst]}/{bad_dst}": zone_by_service[bad_dst],
     }
 
     cases = (
         NetworkCaseSpec(
             case_id=f"{entry_svc}-to-{bad_dst}",
             source_service=entry_svc,
-            source_zone=zone_of(entry_svc),
+            source_zone=zone_by_service[entry_svc],
             destination_service=bad_dst,
-            destination_zone=zone_of(bad_dst),
+            destination_zone=zone_by_service[bad_dst],
             port=dst_listen_port,
             expected="allow",
             function=bad_fn,
@@ -266,9 +287,9 @@ def load_startup_topology(facts_path: Path = PLATFORM_FACTS) -> StartupTopology:
         NetworkCaseSpec(
             case_id=f"{workload_svc}-to-{bad_dst}",
             source_service=workload_svc,
-            source_zone=zone_of(workload_svc),
+            source_zone=zone_by_service[workload_svc],
             destination_service=bad_dst,
-            destination_zone=zone_of(bad_dst),
+            destination_zone=zone_by_service[bad_dst],
             port=dst_listen_port,
             expected="allow",
             function=workload_fn,
@@ -276,9 +297,9 @@ def load_startup_topology(facts_path: Path = PLATFORM_FACTS) -> StartupTopology:
         NetworkCaseSpec(
             case_id=f"{bad_src}-to-{bad_dst}",
             source_service=bad_src,
-            source_zone=zone_of(bad_src),
+            source_zone=zone_by_service[bad_src],
             destination_service=bad_dst,
-            destination_zone=zone_of(bad_dst),
+            destination_zone=zone_by_service[bad_dst],
             port=dst_listen_port,
             expected="deny",
             function=bad_fn,
@@ -291,8 +312,24 @@ def load_startup_topology(facts_path: Path = PLATFORM_FACTS) -> StartupTopology:
         endpoint_zones=endpoint_zones,
         cases=cases,
         prohibited_recovery_flow={"source": bad_src, "destination": bad_dst, "function": bad_fn},
-        unsigned_artifact={"service": unsigned["for_service"], "artifact": unsigned["id"]},
+        unsigned_artifact={"service": unsigned_service, "artifact": unsigned_artifact_id},
     )
+
+
+def load_startup_topology(
+    facts_path: Path = PLATFORM_FACTS,
+    *,
+    pack_dir: Path = PLATFORM_PACK,
+) -> StartupTopology:
+    """Evaluate the platform pack via rezono_compiler and derive the startup topology."""
+    model, program, needed_derived = _load_platform_pack(Path(pack_dir).resolve())
+    fact_rows = compiler_facts.load(model, Path(facts_path))
+    inputs = compiler_scenarios.rule_rows(model, program, fact_rows)
+    requested = (*TOPOLOGY_DERIVED_RELATIONS, *TOPOLOGY_BASE_RELATIONS)
+    with compiler_batch.connect(program, inputs) as con:
+        compiler_batch.compute(con, program, relations=needed_derived)
+        relations = compiler_batch.read(con, program, requested)
+    return _select_topology_from_relations(relations)
 
 
 def build_snapshot(
@@ -303,61 +340,45 @@ def build_snapshot(
     exposed_endpoints: Iterable[str],
     endpoint_namespaces: Mapping[str, str],
 ) -> dict[str, Any]:
-    """Build a witnessed snapshot for STARTUP_PROGRAM."""
-    ns_set = sorted(set(managed_namespaces))
-    prot_set = sorted(set(protected_endpoints))
-    exp_set = sorted(set(exposed_endpoints))
-    ep_ns_rows = sorted((ep, ns) for ep, ns in endpoint_namespaces.items())
-
-    prot_lookup = set(prot_set)
-    ns_lookup = set(ns_set)
-    unprotected = sorted(ep for ep in exp_set if ep not in prot_lookup)
-    without_ns = sorted(ep for ep in exp_set if ep in endpoint_namespaces and endpoint_namespaces[ep] not in ns_lookup)
+    """Build a witnessed snapshot for STARTUP_PROGRAM via rezono_compiler.batch."""
+    base_rows: dict[str, list[tuple[str, ...]]] = {
+        "managed_namespace": [(ns,) for ns in sorted(set(managed_namespaces))],
+        "endpoint_protected": [(ep,) for ep in sorted(set(protected_endpoints))],
+        "endpoint_exposed": [(ep,) for ep in sorted(set(exposed_endpoints))],
+        "endpoint_namespace": sorted((ep, ns) for ep, ns in endpoint_namespaces.items()),
+    }
+    program = _startup_program()
+    with compiler_batch.connect(program, base_rows) as con:
+        compiler_batch.compute(con, program)
+        derived_rows = compiler_batch.read(con, program)
+        raw_witnesses = compiler_batch.witnesses(con, program)
 
     witnesses: list[dict[str, Any]] = []
-    for ns in ns_set:
-        witnesses.append({
-            "rule_id": "namespace_active",
-            "conclusion": _row_ref("namespace_active", (ns,)),
-            "bindings": [{"variable": "?ns", "value": ns}],
-            "premises": [{"row": _row_ref("managed_namespace", (ns,)), "polarity": "positive", "stratum": 0}],
-        })
-    for ep in unprotected:
-        witnesses.append({
-            "rule_id": "unprotected_exposure",
-            "conclusion": _row_ref("unprotected_exposure", (ep,)),
-            "bindings": [{"variable": "?ep", "value": ep}],
-            "premises": [
-                {"row": _row_ref("endpoint_exposed", (ep,)), "polarity": "positive", "stratum": 0},
-                {"row": _row_ref("endpoint_protected", (ep,)), "polarity": "negative", "stratum": 0},
-            ],
-        })
-    for ep in without_ns:
-        ns = endpoint_namespaces[ep]
-        witnesses.append({
-            "rule_id": "exposed_without_namespace",
-            "conclusion": _row_ref("exposed_without_namespace", (ep,)),
-            "bindings": [{"variable": "?ep", "value": ep}, {"variable": "?ns", "value": ns}],
-            "premises": [
-                {"row": _row_ref("endpoint_exposed", (ep,)), "polarity": "positive", "stratum": 0},
-                {"row": _row_ref("endpoint_namespace", (ep, ns)), "polarity": "positive", "stratum": 0},
-                {"row": _row_ref("managed_namespace", (ns,)), "polarity": "negative", "stratum": 0},
-            ],
-        })
+    for rule_id, substitutions in sorted(raw_witnesses.items()):
+        rule = program.rules[rule_id]
+        for values in substitutions:
+            env = dict(zip(rule.variables, values, strict=True))
+            conclusion_cells = [env[t] if compiler_rules.is_var(t) else t for t in rule.head.terms]
+            premises = [
+                {
+                    "row": _row_ref(
+                        lit.atom.relation,
+                        [env[t] if compiler_rules.is_var(t) else t for t in lit.atom.terms],
+                    ),
+                    "polarity": lit.polarity,
+                    "stratum": lit.stratum,
+                }
+                for lit in rule.body
+            ]
+            witnesses.append({
+                "rule_id": rule_id,
+                "conclusion": _row_ref(rule.head.relation, conclusion_cells),
+                "bindings": [{"variable": var, "value": val} for var, val in zip(rule.variables, values, strict=True)],
+                "premises": premises,
+            })
 
-    return {
-        "id": label,
-        "rows": {
-            "managed_namespace": [(ns,) for ns in ns_set],
-            "endpoint_protected": [(ep,) for ep in prot_set],
-            "endpoint_exposed": [(ep,) for ep in exp_set],
-            "endpoint_namespace": ep_ns_rows,
-            "namespace_active": [(ns,) for ns in ns_set],
-            "unprotected_exposure": [(ep,) for ep in unprotected],
-            "exposed_without_namespace": [(ep,) for ep in without_ns],
-        },
-        "witnesses": witnesses,
-    }
+    rows = {**base_rows, **{name: sorted(entries) for name, entries in derived_rows.items()}}
+    return {"id": label, "rows": rows, "witnesses": witnesses}
 
 
 def _apply_delta_to_state(
@@ -726,6 +747,17 @@ class StartupCluster:
         app = self.get("applications.argoproj.io", app_name, namespace=app_ns)
         if app.get("status", {}).get("sync", {}).get("status") != "Synced":
             raise RuntimeError("shared admission application is not Synced")
+        publications = sorted(
+            (row.get("namespace", ""), row["name"])
+            for row in app.get("status", {}).get("resources", ())
+            if row.get("kind") == "NamespacePublication"
+            and row.get("status") == "Synced"
+            and row.get("namespace")
+            and row.get("name")
+        )
+        if not publications:
+            raise RuntimeError("shared admission application has no Synced NamespacePublication")
+        self.admission_namespace, self.admission_publication = publications[0]
 
     def ensure_probe_image(self) -> None:
         """Reuse the preloaded probe image on the Kind node, or build and load it."""
@@ -797,19 +829,78 @@ class StartupCluster:
             raise RuntimeError(f"probe from {namespace}/{pod} failed: {res.stderr.strip()}")
         return status == "0", int(status)
 
-    def verify_unsigned_admission_denial(self) -> dict[str, Any]:
-        """Verify live server-side admission rejects an unsigned image digest."""
-        pod = yaml.safe_load(ADMISSION_POD_FIXTURE.read_text(encoding="utf-8"))
-        pod["spec"]["containers"][0]["image"] = "registry.example.org/sample/app@sha256:" + "b" * 64
+    def verify_unsigned_admission_denial(self, unsigned_artifact: Mapping[str, str]) -> dict[str, Any]:
+        """Verify live server-side admission rejects the derived unsigned artifact's image digest."""
+        service = unsigned_artifact["service"]
+        artifact = unsigned_artifact["artifact"]
+        image = _unsigned_artifact_image(unsigned_artifact)
+        publication = self.get(
+            "namespacepublications.admission.rezono.org",
+            self.admission_publication,
+            namespace=self.admission_namespace,
+        )
+        spec = publication.get("spec", {})
+        pub_digest = spec.get("digest", "")
+        if not isinstance(pub_digest, str) or not re.fullmatch(r"[0-9a-f]{64}", pub_digest):
+            raise RuntimeError(f"invalid reconciled NamespacePublication digest: {pub_digest!r}")
+        admitted_images = {
+            (row.get("service"), row.get("image"))
+            for row in spec.get("images", ())
+            if isinstance(row, dict)
+        }
+        if (service, image) in admitted_images:
+            raise RuntimeError(f"unsigned artifact {artifact} for service {service} is unexpectedly published")
+        pod = {
+            "apiVersion": "v1",
+            "kind": "Pod",
+            "metadata": {
+                "name": f"unsigned-{service}-{artifact}"[:63].rstrip("-"),
+                "namespace": self.admission_namespace,
+                "labels": {
+                    "app.kubernetes.io/name": service,
+                    RUN_LABEL: self.run,
+                    SERVICE_LABEL: service,
+                },
+                "annotations": {"rezono.org/artifact": artifact},
+            },
+            "spec": {
+                "automountServiceAccountToken": False,
+                "securityContext": {
+                    "runAsNonRoot": True,
+                    "seccompProfile": {"type": "RuntimeDefault"},
+                },
+                "containers": [{
+                    "name": "app",
+                    "image": image,
+                    "securityContext": {
+                        "allowPrivilegeEscalation": False,
+                        "capabilities": {"drop": ["ALL"]},
+                    },
+                }],
+            },
+        }
         result = self.runner(
             [*self.command, "create", "--dry-run=server", "-f", "-"],
             data=json.dumps(pod),
             timeout=25,
             check=False,
         )
-        if result.returncode == 0 or "verified-supply" not in result.stderr:
-            raise RuntimeError(f"expected verified-supply admission denial, got rc={result.returncode}: {result.stderr}")
-        return {"denied": True, "policy": "verified-supply"}
+        compact_stderr = result.stderr.replace(".", "").replace("-", "")
+        if result.returncode == 0 or "verified-supply" not in result.stderr or pub_digest not in compact_stderr:
+            raise RuntimeError(
+                f"expected verified-supply admission denial for {service}/{artifact} "
+                f"(publication {pub_digest}), got rc={result.returncode}: {result.stderr}"
+            )
+        return {
+            "denied": True,
+            "policy": "verified-supply",
+            "namespace": self.admission_namespace,
+            "publication": self.admission_publication,
+            "publication_digest": pub_digest,
+            "service": service,
+            "artifact": artifact,
+            "image": image,
+        }
 
     def hubble(self) -> Any:
         cmd = [
@@ -901,40 +992,154 @@ class StartupCluster:
         }
 
 
+def _unsigned_artifact_image(unsigned_artifact: Mapping[str, str]) -> str:
+    service = unsigned_artifact.get("service", "")
+    artifact = unsigned_artifact.get("artifact", "")
+    if not isinstance(service, str) or not service or not isinstance(artifact, str) or not artifact:
+        raise ValueError("unsigned artifact requires non-empty service and artifact identifiers")
+    digest = canonical_sha256({"artifact": artifact, "service": service, "signed": "no"})
+    return f"registry.example.org/platform/{service}@sha256:{digest}"
+
+
 def _namespace_name(run: str, zone: str) -> str:
     return f"{run}-{zone}"
 
 
-def _read_protected_endpoints(policies: list[dict[str, Any]], expected_endpoints: set[str]) -> list[str]:
+def _expected_protections(run: str, topology: StartupTopology) -> dict[str, EndpointProtectionSpec]:
+    """Compute the exact namespace, podSelector and ingress rules expected for each protected endpoint."""
+    allowed_by_dst: dict[tuple[str, str], list[dict[str, Any]]] = {}
+    for case in topology.cases:
+        if case.expected != "allow":
+            continue
+        dst_key = (case.destination_zone, case.destination_service)
+        allowed_by_dst.setdefault(dst_key, []).append({
+            "from": [{
+                "namespaceSelector": {"matchLabels": {RUN_LABEL: run, ZONE_LABEL: case.source_zone}},
+                "podSelector": {"matchLabels": {SERVICE_LABEL: case.source_service}},
+            }],
+            "ports": [{"protocol": "TCP", "port": case.port}],
+        })
+
+    # Also allow the Hubble coverage heartbeat on MARKER_PORT from the first allowed case's source to destination.
+    heartbeat_case = next(case for case in topology.cases if case.expected == "allow")
+    hb_key = (heartbeat_case.destination_zone, heartbeat_case.destination_service)
+    allowed_by_dst.setdefault(hb_key, []).append({
+        "from": [{
+            "namespaceSelector": {"matchLabels": {RUN_LABEL: run, ZONE_LABEL: heartbeat_case.source_zone}},
+            "podSelector": {"matchLabels": {SERVICE_LABEL: heartbeat_case.source_service}},
+        }],
+        "ports": [{"protocol": "TCP", "port": MARKER_PORT}],
+    })
+
+    protections: dict[str, EndpointProtectionSpec] = {}
+    for ep_id, zone in sorted(topology.endpoint_zones.items()):
+        ep_zone, svc = ep_id.split("/", 1)
+        if ep_zone != zone:
+            raise ValueError(f"endpoint {ep_id!r} zone prefix does not match zone {zone!r}")
+        protections[ep_id] = EndpointProtectionSpec(
+            endpoint=ep_id,
+            zone=zone,
+            service=svc,
+            namespace=_namespace_name(run, zone),
+            pod_selector={"matchLabels": {SERVICE_LABEL: svc}},
+            ingress=tuple(allowed_by_dst.get((zone, svc), ())),
+        )
+    return protections
+
+
+def _read_protected_endpoints(
+    policies: list[dict[str, Any]],
+    run: str,
+    expected_protections: Mapping[str, EndpointProtectionSpec],
+) -> list[str]:
     """Derive protected endpoints from live readback of applied NetworkPolicies."""
     default_deny_ns: set[str] = set()
-    scoped_allow_ep: set[str] = set()
+    unsafe_ns: set[str] = set()
+    matched_endpoints: set[str] = set()
+    compromised_endpoints: set[str] = set()
+
+    expected_by_ns_selector: dict[tuple[str, str], str] = {
+        (_namespace_name(run, spec.zone), canonical_json({"matchLabels": {SERVICE_LABEL: spec.service}})): ep
+        for ep, spec in expected_protections.items()
+    }
+
     for policy in policies:
         meta = policy.get("metadata", {})
         if type(meta.get("generation")) is not int or meta["generation"] <= 0 or not meta.get("uid"):
             continue
-        ns = meta["namespace"]
-        name = meta["name"]
+        ns = meta.get("namespace")
+        name = meta.get("name")
+        if not isinstance(ns, str) or not isinstance(name, str):
+            continue
         spec = policy.get("spec", {})
-        if name == "rezono-default-deny" and spec.get("podSelector") == {} and "Ingress" in spec.get("policyTypes", ()):
-            default_deny_ns.add(ns)
+        policy_types = spec.get("policyTypes", ())
+        if not isinstance(policy_types, list) or "Ingress" not in policy_types:
+            continue
+        raw_ingress = spec.get("ingress")
+        if raw_ingress is None:
+            actual_ingress: list[Any] = []
+        elif isinstance(raw_ingress, list):
+            actual_ingress = raw_ingress
+        else:
+            continue
+        pod_selector = spec.get("podSelector")
+
+        if name == "rezono-default-deny" and pod_selector == {}:
+            if not actual_ingress:
+                default_deny_ns.add(ns)
+            else:
+                unsafe_ns.add(ns)
+            continue
+
+        if pod_selector == {} and actual_ingress:
+            unsafe_ns.add(ns)
+            continue
+
         ep = meta.get("annotations", {}).get("rezono.org/protected-endpoint")
-        if ep in expected_endpoints and "Ingress" in spec.get("policyTypes", ()):
-            scoped_allow_ep.add(ep)
-    return sorted(ep for ep in scoped_allow_ep if any(ns.endswith("-" + ep.split("/", 1)[0]) for ns in default_deny_ns))
+        if ep in expected_protections:
+            expected = expected_protections[ep]
+            expected_ns = _namespace_name(run, expected.zone)
+            expected_selector = {"matchLabels": {SERVICE_LABEL: expected.service}}
+            if ns != expected_ns:
+                continue
+            actual_rules = sorted(canonical_json(rule) for rule in actual_ingress)
+            expected_rules = sorted(canonical_json(rule) for rule in expected.ingress)
+            if pod_selector == expected_selector and actual_rules == expected_rules:
+                matched_endpoints.add(ep)
+            else:
+                compromised_endpoints.add(ep)
+            continue
+
+        if isinstance(pod_selector, dict):
+            selected_ep = expected_by_ns_selector.get((ns, canonical_json(pod_selector)))
+            if selected_ep is not None and actual_ingress:
+                compromised_endpoints.add(selected_ep)
+
+    return sorted(
+        ep
+        for ep in matched_endpoints
+        if ep not in compromised_endpoints
+        and _namespace_name(run, expected_protections[ep].zone) in default_deny_ns
+        and _namespace_name(run, expected_protections[ep].zone) not in unsafe_ns
+    )
 
 
-def _read_exposed_endpoints(pods: list[dict[str, Any]], expected_endpoints: set[str]) -> list[str]:
+def _read_exposed_endpoints(
+    pods: list[dict[str, Any]],
+    run: str,
+    expected_endpoints: Mapping[str, str],
+) -> list[str]:
     """Derive currently exposed endpoints from live Ready Pod readback."""
     exposed: set[str] = set()
     for pod in pods:
-        labels = pod.get("metadata", {}).get("labels", {})
+        meta = pod.get("metadata", {})
+        labels = meta.get("labels", {})
         zone = labels.get(ZONE_LABEL)
         svc = labels.get(SERVICE_LABEL)
         if not zone or not svc:
             continue
         ep = f"{zone}/{svc}"
-        if ep not in expected_endpoints:
+        if ep not in expected_endpoints or meta.get("namespace") != _namespace_name(run, expected_endpoints[ep]):
             continue
         ready = any(
             cond.get("type") == "Ready" and cond.get("status") == "True"
@@ -965,49 +1170,28 @@ def _apply_namespaces_and_default_deny(cluster: StartupCluster, run: str, topolo
         })
 
 
-def _apply_scoped_protections(cluster: StartupCluster, run: str, topology: StartupTopology) -> None:
-    allowed_by_dst: dict[tuple[str, str], list[dict[str, Any]]] = {}
-    for case in topology.cases:
-        if case.expected != "allow":
-            continue
-        dst_key = (case.destination_zone, case.destination_service)
-        allowed_by_dst.setdefault(dst_key, []).append({
-            "from": [{
-                "namespaceSelector": {"matchLabels": {RUN_LABEL: run, ZONE_LABEL: case.source_zone}},
-                "podSelector": {"matchLabels": {SERVICE_LABEL: case.source_service}},
-            }],
-            "ports": [{"protocol": "TCP", "port": case.port}],
-        })
-
-    # Also allow the Hubble coverage heartbeat on MARKER_PORT from the first allowed case's source to destination.
-    heartbeat_case = next(case for case in topology.cases if case.expected == "allow")
-    hb_key = (heartbeat_case.destination_zone, heartbeat_case.destination_service)
-    allowed_by_dst.setdefault(hb_key, []).append({
-        "from": [{
-            "namespaceSelector": {"matchLabels": {RUN_LABEL: run, ZONE_LABEL: heartbeat_case.source_zone}},
-            "podSelector": {"matchLabels": {SERVICE_LABEL: heartbeat_case.source_service}},
-        }],
-        "ports": [{"protocol": "TCP", "port": MARKER_PORT}],
-    })
-
-    for ep_id, zone in sorted(topology.endpoint_zones.items()):
-        svc = ep_id.split("/", 1)[1]
-        ns = _namespace_name(run, zone)
-        ingress_rules = allowed_by_dst.get((zone, svc), [])
+def _apply_scoped_protections(
+    cluster: StartupCluster,
+    run: str,
+    expected_protections: Mapping[str, EndpointProtectionSpec],
+) -> None:
+    for ep_id, expected in sorted(expected_protections.items()):
+        spec: dict[str, Any] = {
+            "podSelector": expected.pod_selector,
+            "policyTypes": ["Ingress"],
+        }
+        if expected.ingress:
+            spec["ingress"] = list(expected.ingress)
         cluster.apply({
             "apiVersion": "networking.k8s.io/v1",
             "kind": "NetworkPolicy",
             "metadata": {
-                "name": f"rezono-protect-{svc}",
-                "namespace": ns,
-                "labels": {RUN_LABEL: run, ZONE_LABEL: zone, SERVICE_LABEL: svc},
+                "name": f"rezono-protect-{expected.service}",
+                "namespace": expected.namespace,
+                "labels": {RUN_LABEL: run, ZONE_LABEL: expected.zone, SERVICE_LABEL: expected.service},
                 "annotations": {"rezono.org/protected-endpoint": ep_id},
             },
-            "spec": {
-                "podSelector": {"matchLabels": {SERVICE_LABEL: svc}},
-                "policyTypes": ["Ingress"],
-                "ingress": ingress_rules,
-            },
+            "spec": spec,
         })
 
 
@@ -1275,9 +1459,14 @@ def run_startup(
         if [s.step_id for s in chosen_r2] != ["protect-endpoints"]:
             raise RuntimeError(f"Round 2 selected unexpected steps: {[s.step_id for s in chosen_r2]}")
 
-        _apply_scoped_protections(live, run, topo)
-        admission_check = live.verify_unsigned_admission_denial()
-        observed_protected = _read_protected_endpoints(live.managed_network_policies(), expected_endpoints)
+        expected_protections = _expected_protections(run, topo)
+        _apply_scoped_protections(live, run, expected_protections)
+        admission_check = live.verify_unsigned_admission_denial(topo.unsigned_artifact)
+        observed_protected = _read_protected_endpoints(
+            live.managed_network_policies(),
+            run,
+            expected_protections,
+        )
         if set(observed_protected) != expected_endpoints:
             raise RuntimeError(f"Round 2 policy readback mismatch: {observed_protected}")
         boundaries.append(
@@ -1310,7 +1499,7 @@ def run_startup(
 
         pod_ips = _apply_protected_pods(live, run, topo)
         network_cases = _run_network_verification(live, topo, pod_ips)
-        observed_exposed = _read_exposed_endpoints(live.managed_pods(), expected_endpoints)
+        observed_exposed = _read_exposed_endpoints(live.managed_pods(), run, topo.endpoint_zones)
         if set(observed_exposed) != expected_endpoints:
             raise RuntimeError(f"Round 3 exposed endpoint readback mismatch: {observed_exposed}")
         boundaries.append(

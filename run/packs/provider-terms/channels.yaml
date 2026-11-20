@@ -1,0 +1,5 @@
+kinds:
+  - {kind: usage_detail_type, shape: rect}
+  - {kind: quote_policy, shape: rect}
+  - {kind: order, shape: rect}
+  - {kind: order_detail, shape: rect}

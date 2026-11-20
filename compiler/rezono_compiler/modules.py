@@ -60,6 +60,8 @@ class Module:
     interface: dict[str, str | None] | None = None
     form: dict | None = None  # the effective JSON form when `file` is written in Rezono
     reasons: list[tuple[str, str]] = field(default_factory=list)  # lowered (code, label) pairs
+    slot_targets: dict[tuple[str, str], str] = field(default_factory=dict)  # (class, slot) -> owner module id
+    parent_targets: dict[str, str] = field(default_factory=dict)  # class -> owner module id
 
     @property
     def rel(self) -> str:
@@ -320,7 +322,12 @@ def load(pack_dir: Path, meta: dict, errors: list[str]) -> tuple[list[Module], d
                     classes = m.sv.all_classes()
                     for kind in m.sv.schema.classes.values():
                         for slot in kind.attributes.values():
-                            if slot.inlined and slot.range not in classes:
+                            target_id = m.slot_targets.get((kind.name, slot.name))
+                            target_classes = (
+                                modules[target_id].sv.all_classes(imports=False)
+                                if target_id in modules else classes
+                            )
+                            if slot.inlined and slot.range not in target_classes:
                                 errors.append(f"{m.pack_dir.name}/{m.rel}: {kind.name}.{slot.name}: "
                                               f"an embedded reference must name a kind, not {slot.range}")
                 except (TypeError, ValueError, OSError) as e:
@@ -428,9 +435,19 @@ def rezono_modules(d: Path, meta: dict, name: str | None, pack: str, schemas: di
         except (TypeError, ValueError, OSError) as e:
             errors.append(f"{d.name}/{low.declared.module}: LinkML cannot read its lowered schema ({e})")
             continue
-        out[Path(f"{mid}.yaml")] = Module(module_id(name, mid), pack, d, d / low.declared.module, sv,
-                                          sorted([module_id(name, x) for x in low.uses] + low.foreign), form=low.form,
-                                          reasons=low.reasons)
+        out[Path(f"{mid}.yaml")] = Module(
+            module_id(name, mid), pack, d, d / low.declared.module, sv,
+            sorted([module_id(name, x) for x in low.uses] + low.foreign), form=low.form,
+            reasons=low.reasons,
+            slot_targets={
+                pair: target if ":" in target else module_id(name, target)
+                for pair, target in low.slot_targets.items()
+            },
+            parent_targets={
+                cls_name: target if ":" in target else module_id(name, target)
+                for cls_name, target in low.parent_targets.items()
+            },
+        )
         authored[key[mid]] = low.schema
         authored[f"{pack}:{mid}"] = low.schema
     return out, authored
@@ -528,6 +545,9 @@ class Names:
         self.shared = {n for n, ms in owners.items() if len(ms) > 1}
         self.closures = {mid: self.closure(mid) for mid in self.modules}
         for mid, closure in sorted(self.closures.items()):
+            if self.modules[mid].form is not None:
+                # Rezono modules resolve names per `use` line (unaliased vs prefixed) during lowering.
+                continue
             seen: dict[str, str] = {}
             for other in closure:
                 for n in self.declared[other]:
@@ -557,9 +577,12 @@ class Names:
             return mid
         return next((o for o in self.closures[mid] if linkml_name in self.declared[o]), None)
 
-    def resolve(self, mid: str, linkml_name: str) -> str | None:
+    def resolve(self, mid: str, linkml_name: str, *, owner: str | None = None) -> str | None:
         """The engine name of `linkml_name` as module `mid` uses it, held to the owner's interface."""
-        o = self.owner(mid, linkml_name)
+        if owner is not None:
+            o = owner if (owner in self.declared and linkml_name in self.declared[owner]) else None
+        else:
+            o = self.owner(mid, linkml_name)
         if o is None:
             return None
         if o != mid and (mid, o, linkml_name) not in self.used:

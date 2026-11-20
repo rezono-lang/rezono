@@ -26,6 +26,7 @@ from tempfile import TemporaryDirectory
 from typing import cast
 
 from . import rezono_alias, rezono_calc, rezono_enum, rezono_extend, rezono_key, rezono_kind, rezono_metadata, rezono_reason, rezono_slot, rezono_unit, strict_yaml
+from .diagnostics import Diagnostic
 from .native_literals import NATIVE_FORMAT, native_literal_errors
 from .schemaview import SchemaView
 from linkml_runtime.linkml_model import SchemaDefinition
@@ -74,6 +75,8 @@ class Lowered:
     uses: list[str] = field(default_factory=list)  # module ids within the pack, sorted
     foreign: list[str] = field(default_factory=list)  # `<pack>:<module>` of the schema modules of the used packs
     reasons: list[tuple[str, str]] = field(default_factory=list)  # (code, label) in declaration order
+    slot_targets: dict[tuple[str, str], str] = field(default_factory=dict)  # (kind, slot) -> owning module id
+    parent_targets: dict[str, str] = field(default_factory=dict)  # kind -> owning module id
 
 
 def declared(meta: dict, pack_dir: Path, errors: list[str], *, reject_undeclared: bool = True,
@@ -545,6 +548,23 @@ def pack_language_version(forms: Iterable[dict]) -> str:
     return "0"
 
 
+def dataset_forms(pack_dir: Path, meta: dict) -> dict[Declared, dict]:
+    """Submitted JSON forms of declared dataset / fact-tables-only modules skipped by schema lowering."""
+    schema_decls = set(declared(meta, pack_dir, [], reject_undeclared=False, include_datasets=False))
+    all_decls = declared(meta, pack_dir, [], reject_undeclared=False, include_datasets=True)
+    out: dict[Declared, dict] = {}
+    for d in all_decls:
+        if d in schema_decls:
+            continue
+        try:
+            doc = json.loads((pack_dir / d.form).read_bytes())
+        except (OSError, ValueError):
+            continue
+        if isinstance(doc, dict) and isinstance(doc.get("module"), dict) and isinstance(doc.get("format"), str):
+            out[d] = doc
+    return out
+
+
 def header_errors(module: dict, pack: str, *, native_rules: bool = False,
                   schema: bool = False, form_format: str = FORMAT,
                   pack_version: str | None = None) -> Iterator[tuple[str, str, str]]:
@@ -713,7 +733,23 @@ def lower_pack(pack_dir: Path, meta: dict, pack: str, declared_by: Mapping[str, 
             ints.setdefault(mid, set()).update(local_ints)
     default_lang = str(meta.get("default_language", ""))
     defined_reasons = rezono_reason.defined_in_catalog(pack_dir, default_lang)
-    pack_version = pack_language_version(form for form in forms.values() if form is not None)
+    ds_forms = dataset_forms(pack_dir, meta)
+    pack_version = pack_language_version(
+        [*(form for form in forms.values() if form is not None), *ds_forms.values()]
+    )
+    if pack_version == "1":
+        for d, form in ds_forms.items():
+            module = form["module"]
+            where = f"{pack_dir.name}/{d.module}"
+            for key, message, section in header_errors(
+                module, pack, form_format=form["format"], pack_version=pack_version,
+            ):
+                if key == "rezono":
+                    n = header_line(pack_dir, d, key)
+                    code = "R028" if "(R028)" in message else "R027"
+                    errors.append(
+                        Diagnostic(code, f"{where}:{n}: {message} ({PAGE} {section})", where=where, span=(d.module, n, 1))
+                    )
     return [lower(pack_dir, d, form, pack, owners, errors, imported, pinned or {}, ints,
                   reason_owners=reason_owners, defined_reasons=defined_reasons, default_language=default_lang,
                   pack_version=pack_version)
@@ -790,6 +826,8 @@ def lower(pack_dir: Path, d: Declared, form: dict, pack: str, owners: dict[str, 
     reason_owners = reason_owners or {}
     declared_names = own.keys() | owners.keys()
     uses: set[str] = set()
+    slot_targets: dict[tuple[str, str], str] = {}
+    parent_targets: dict[str, str] = {}
     enums: dict[str, dict] = {}
     classes: dict[str, dict] = {}
     aliases: dict[str, dict] = {}
@@ -829,7 +867,7 @@ def lower(pack_dir: Path, d: Declared, form: dict, pack: str, owners: dict[str, 
                 decl, at, own, owners, declared_names, uses, refuse,
                 extended_format=extended_format, aliases=prefixes, kinds=kinds,
                 integer_types=integer_types, own_module=d.id, rezono_1=rezono_1,
-                layer=d.layer,
+                layer=d.layer, slot_targets=slot_targets, parent_targets=parent_targets,
             )
             if lowered_kind is not None:
                 if keys:
@@ -906,7 +944,10 @@ def lower(pack_dir: Path, d: Declared, form: dict, pack: str, owners: dict[str, 
         )
     foreign = [f"{u}:{mid}" for u in used for mid in sorted(pinned[u])]
     schema["imports"] += foreign
-    return Lowered(d, schema, form, sorted(u for u in uses if u.partition(":")[2] == ""), foreign, reasons)
+    return Lowered(
+        d, schema, form, sorted(u for u in uses if u.partition(":")[2] == ""), foreign, reasons,
+        slot_targets, parent_targets,
+    )
 
 
 def view(schema: dict, importmap: dict) -> SchemaView:

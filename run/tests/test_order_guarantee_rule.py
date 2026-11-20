@@ -105,22 +105,6 @@ def record():
     }
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason=(
-        "M4: decisions/code-does-not-decide.md, row run/ovh_order.py, and section 3. Put the provider's "
-        "usage-billed detail types (CONSUMPTION, OUTPLAN) and quote mode (binding_quote) into "
-        "run/packs/provider-terms as facts, and derive order_guarantee(order, mode, expires_us) there: "
-        "an order without a usage-billed detail type yields mode binding_quote and expires_us = "
-        "min(expiration_us, day_end_us) in UTC microseconds; an order with a usage-billed detail type "
-        "yields no order_guarantee row. run/ovh_order.py keeps guarantee(order, record, plan_hash, day) "
-        "as the adapter for input-integrity checks (JSON shape, order id, currencies, microcent "
-        "arithmetic, timestamp parsing) and reads order_guarantee through rezono_compiler.batch.read, "
-        "with no CONSUMPTION, OUTPLAN, or binding_quote literal and no min(...) expiry clamp in Python. "
-        "Keep run/tests/test_ovh_order_guarantee.py green. Today the pack does not exist (AssertionError)."
-    ),
-)
 def test_order_guarantee_comes_from_provider_terms(monkeypatch):
     assert (RUN / "packs" / "provider-terms" / "pack.yaml").is_file(), "run/packs/provider-terms is missing"
     assert not literals("ovh_order.py") & POLICY_LITERALS, (
