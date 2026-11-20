@@ -8,3 +8,5 @@ default_language: en
 theory: true
 imports:
   - {name: std-decision, path: ../../packs/std-decision, sha256: 2fd4cc60cc4f1c7dca42da2f5368a08a992de39df7cd7db205b9118dd1b8fe5a}
+rezono:
+  - {module: rezono/award.rezono, form: rezono/award.json, layer: conclusions}
