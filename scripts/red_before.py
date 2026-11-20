@@ -37,7 +37,8 @@ import xml.etree.ElementTree as ET
 
 # Read the guard beside this file, which in CI is the base copy of both.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from red_guard import (EMPTY, UNREADABLE, changes, collectable, completion, git, inventory, pack_roots,
+from red_guard import (EMPTY, UNREADABLE, changes, collectable, completion, git, inventory, listed_plugins,
+                       pack_roots,
                        protected, source)
 
 
@@ -183,16 +184,13 @@ def plugin_arguments():
 
     As in scripts/components.py, pytest loads no plugin of its own accord
     (PYTEST_DISABLE_PLUGIN_AUTOLOAD): a plugin's hooks could drop or pass a test. In CI the
-    environment action points REZONO_PYTEST_PLUGINS at the base's list; otherwise the list
-    beside this script applies.
+    list comes from the base revision (`listed_plugins`); otherwise the list beside this
+    script applies.
     """
     from importlib.metadata import entry_points
 
-    listed = Path(os.environ.get("REZONO_PYTEST_PLUGINS") or Path(__file__).with_name("pytest-plugins.txt"))
-    if not listed.is_file():
-        raise SystemExit(f"ERROR no list of allowed pytest plugins at {listed}")
-    allowed = {line.strip() for line in listed.read_text(encoding="utf-8").splitlines()
-               if line.strip() and not line.lstrip().startswith("#")}
+    listed = Path(__file__).with_name("pytest-plugins.txt")
+    allowed = listed_plugins(listed, git("rev-parse", "--show-toplevel").decode().strip())
     found = sorted(entry_points(group="pytest11"), key=lambda e: e.name)
     if unlisted := [f"{e.name} = {e.value}" for e in found if f"{e.name} = {e.value}" not in allowed]:
         raise SystemExit(f"ERROR pytest plugins that {listed.name} does not list: {', '.join(unlisted)}")

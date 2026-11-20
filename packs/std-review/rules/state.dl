@@ -1,0 +1,32 @@
+// The state of a change from its reviews (decisions/review-and-rights.md, sections 2 and 6, and the section
+// The standard pack std-review). A review counts only while it is active (not dismissed); it is current while both
+// hashes it saw are the change's current hashes. Merging is no input anywhere.
+.decl review_dismissed(review: symbol)
+review_dismissed(r) :- review_dismissal__review(d, r).
+.decl review_active(review: symbol)
+review_active(r) :- review(r), !review_dismissed(r).
+.decl review_current(review: symbol)
+review_current(r) :- review_active(r), review__change(r, c), review__content_sha256(r, h), change__content_sha256(c, h),
+    review__support_sha256(r, s), change__support_sha256(c, s).
+// For now a review is valid while it is active; the checks of section 8 each add their negation to this one rule.
+.decl review_valid(review: symbol)
+review_valid(r) :- review_active(r).
+.decl valid_current_verdict(change: symbol, verdict: symbol)
+valid_current_verdict(c, v) :- review_valid(r), review_current(r), review__change(r, c), review__verdict(r, v).
+.decl change_accepted(change: symbol)
+change_accepted(c) :- valid_current_verdict(c, "accepted"), !valid_current_verdict(c, "rejected").
+.decl change_rejected(change: symbol)
+change_rejected(c) :- valid_current_verdict(c, "rejected"), !valid_current_verdict(c, "accepted").
+// A valid acceptance of this change about another pair of hashes: the change has been accepted before.
+.decl accepted_before(change: symbol)
+accepted_before(c) :- review_valid(r), review__change(r, c), review__verdict(r, "accepted"), !review_current(r).
+.decl change_settled(change: symbol)
+change_settled(c) :- change_accepted(c).
+change_settled(c) :- change_rejected(c).
+.decl change_stale(change: symbol)
+change_stale(c) :- change(c), accepted_before(c), !change_settled(c).
+.decl change_proposed(change: symbol)
+change_proposed(c) :- change(c), !change_settled(c), !accepted_before(c).
+.decl review_due(change: symbol)
+review_due(c) :- change_proposed(c).
+review_due(c) :- change_stale(c).

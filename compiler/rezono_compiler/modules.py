@@ -36,7 +36,7 @@ from linkml_runtime.linkml_model import SchemaDefinition
 from .schemaview import SchemaView
 from rezono_canon import canonical_sha256, sha256_hex
 
-from . import rezono_module, strict_yaml
+from . import rezono_module, standard_packs, strict_yaml
 
 # The files that define a pack: everything the compiler reads but facts, scenarios and diagnostics (data)
 # and expected output. Its hash covers exactly these: the import pin and the publication's
@@ -59,6 +59,7 @@ class Module:
     # The public kinds and enums, LinkML name -> deprecation date or None; None: no interface, all public.
     interface: dict[str, str | None] | None = None
     form: dict | None = None  # the effective JSON form when `file` is written in Rezono
+    reasons: list[tuple[str, str]] = field(default_factory=list)  # lowered (code, label) pairs
 
     @property
     def rel(self) -> str:
@@ -216,8 +217,10 @@ def imported_packs(pack_dir: Path, meta: dict, errors: list[str]) -> dict[str, I
                 errors.append(f"{where}: the pack in {imp['path']} is named {sub.get('name')!r}")
                 continue
             digest = pack_hash(d)
-            if digest != imp["sha256"]:
-                errors.append(f"{where}: the files hash to {digest}, not the pinned {imp['sha256']}")
+            why = (f"the files hash to {digest}, not the pinned {imp['sha256']}" if digest != imp["sha256"]
+                   else standard_packs.refusal(name, digest))
+            if why:
+                errors.append(f"{where}: {why}")
                 continue
             if name in found and found[name].sha256 != digest:
                 errors.append(f"{where}: pack {name} is imported twice with different contents")
@@ -323,7 +326,7 @@ def load(pack_dir: Path, meta: dict, errors: list[str]) -> tuple[list[Module], d
 
 
 def schema_names(pack_dir: Path) -> dict[str, set[str]]:
-    """The kinds, enums and types each schema file of a pack declares, by module id within the pack."""
+    """The kinds, enums and types each schema or Rezono module of a pack declares, by module id within the pack."""
     out: dict[str, set[str]] = {}
     for f in sorted((pack_dir / "schema").rglob("*.yaml")):
         try:
@@ -333,6 +336,16 @@ def schema_names(pack_dir: Path) -> dict[str, set[str]]:
         if isinstance(doc, dict):
             out[f.relative_to(pack_dir / "schema").with_suffix("").as_posix()] = {
                 str(n) for key in ("classes", "enums", "types") if isinstance(doc.get(key), dict) for n in doc[key]}
+    pack_file = pack_dir / "pack.yaml"
+    try:
+        meta = strict_yaml.read(pack_file) or {} if pack_file.is_file() else {}
+    except (OSError, ValueError, yaml.YAMLError):
+        meta = {}
+    if isinstance(meta, dict):
+        for d in rezono_module.declared(meta, pack_dir, [], reject_undeclared=False):
+            form = rezono_module.effective_form(pack_dir, d, [])
+            if form is not None:
+                out.setdefault(d.id, set()).update(rezono_module.names(form))
     return out
 
 
@@ -410,7 +423,8 @@ def rezono_modules(d: Path, meta: dict, name: str | None, pack: str, schemas: di
             errors.append(f"{d.name}/{low.declared.module}: LinkML cannot read its lowered schema ({e})")
             continue
         out[Path(f"{mid}.yaml")] = Module(module_id(name, mid), pack, d, d / low.declared.module, sv,
-                                          sorted([module_id(name, x) for x in low.uses] + low.foreign), form=low.form)
+                                          sorted([module_id(name, x) for x in low.uses] + low.foreign), form=low.form,
+                                          reasons=low.reasons)
         authored[key[mid]] = low.schema
         authored[f"{pack}:{mid}"] = low.schema
     return out, authored

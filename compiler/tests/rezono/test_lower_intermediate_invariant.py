@@ -30,8 +30,14 @@ def spans_for(body: dict) -> list[dict]:
 
 def make_pack(tmp_path: Path, name: str, decls: list[dict], *, form_format: str = "rezono.module/4") -> Path:
     directory = Path(shutil.copytree(FIXTURE, tmp_path / name / "minimal"))
-    with (directory / "labels/nl.yaml").open("a", encoding="utf-8") as labels:
-        labels.write("\nmissing_guard: missing guard\nalpha_coverage: alpha coverage\nwrong_coverage: wrong coverage\n")
+    label_lines = [
+        f"{decl['rule']}: {decl['rule'].replace('_', ' ')}"
+        for decl in decls
+        if "rule" in decl
+    ]
+    if label_lines:
+        with (directory / "labels/nl.yaml").open("a", encoding="utf-8") as labels:
+            labels.write("\n" + "\n".join(label_lines) + "\n")
     with (directory / "messages/nl.mf2").open("a", encoding="utf-8") as messages:
         messages.write("\nrule.missing_guard = {{Guard is missing.}}\n")
     (directory / "rezono").mkdir()
@@ -63,12 +69,12 @@ COVERAGE_RULE = {
     "rule": "alpha_coverage",
     "columns": [{"name": "item", "type": "Alpha"}, {"name": "scope", "type": "Text"}],
     "when": {"and": [
-        {"call": ["alpha", [{"path": ["item"]}]]},
-        {"call": ["alpha__title", [{"path": ["item"]}, {"path": ["scope"]}]]},
+        {"in": [{"path": ["item"]}, {"kind": "Alpha"}]},
+        {"call": ["Alpha.title", [{"path": ["item"]}, {"path": ["scope"]}]]},
     ]},
 }
 
-VIOLATION_BODY = {"call": ["alpha", [{"path": ["item"]}]]}
+VIOLATION_BODY = {"in": [{"path": ["item"]}, {"kind": "Alpha"}]}
 
 
 def violation_rule(options: list[dict]) -> dict:
@@ -80,17 +86,6 @@ def violation_rule(options: list[dict]) -> dict:
     }
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=MissingIntermediateInvariantLowering,
-    reason="extra: decisions/language-safe-steps.md: Admit rezono.module/4 in compiler/rezono_compiler/rezono_module.py "
-           "and lower rule heads with {invariant: intermediate, within: {relation: NAME}} into one publication "
-           "violation rule with invariant: true in ir/rules.json and an IntermediateInvariant(relation, "
-           "coverage_relation, key_binding) entry in Pack.intermediate_invariants (empty tuple when unused). "
-           "Require every violation column to match a coverage key column in name and resolved schema type, "
-           "allowing extra coverage columns for scopes/readings; refuse missing or incompatible coverage with "
-           "CompileError.",
-)
 def test_lower_intermediate_invariant(tmp_path):
     # Counter-case 1: a bare publication invariant lowers as before and leaves intermediate_invariants empty.
     bare_dir = make_plain_invariant_pack(tmp_path)
@@ -131,7 +126,7 @@ def test_lower_intermediate_invariant(tmp_path):
     bad_cov = {
         "rule": "wrong_coverage",
         "columns": [{"name": "item", "type": "Beta"}],
-        "when": {"call": ["beta", [{"path": ["item"]}]]},
+        "when": {"in": [{"path": ["item"]}, {"kind": "Beta"}]},
     }
     bad_dir = make_pack(tmp_path, "wrong_cov", [
         bad_cov,

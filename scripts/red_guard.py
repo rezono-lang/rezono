@@ -28,11 +28,13 @@ from fnmatch import fnmatchcase
 import hashlib
 import io
 import json
-from pathlib import PurePosixPath
+import os
+from pathlib import Path, PurePosixPath
 import posixpath
 import re
 import subprocess
 import sys
+import time
 import tokenize
 import tomllib
 
@@ -719,6 +721,324 @@ def pin_updates(changes, base, rev):
     return frozenset(c.path for c in candidates if pin_update(c, tree, before))
 
 
+def bare(node):
+    """A copy of the node without red marks: lifting a mark changes no table."""
+    return _Unmark().visit(copy.deepcopy(node))
+
+
+COMPOUND = (ast.If, ast.For, ast.AsyncFor, ast.While, ast.With, ast.AsyncWith, ast.Try, ast.TryStar, ast.Match)
+
+
+def base_name(target):
+    """The name a target writes through (`NAME`, `NAME[k]`, `NAME.attr`), or None."""
+    while isinstance(target, (ast.Subscript, ast.Attribute, ast.Starred)):
+        target = target.value
+    return target.id if isinstance(target, ast.Name) else None
+
+
+def definitions(tree):
+    """Each module-level name with the statements that give it its value, in order, and the rest.
+
+    A statement counts toward a name when it assigns, augments or deletes it or an item of it,
+    calls any method on it (`NAME.remove(...)`, `NAME.pop()`), defines it as a function or
+    class (a helper that returns a table is part of what a test reads), or is a compound
+    statement (if, for, while, with, try, match) that mentions it. A statement that counts
+    toward no name, such as `globals()[...] = ...`, `exec(...)` or `setattr(...)`, is
+    returned apart: the guard cannot tell which test it reaches.
+    """
+    found, rest = {}, []
+    for node in tree.body:
+        names = []
+        if isinstance(node, (ast.Assign, ast.AnnAssign, ast.AugAssign, ast.Delete)):
+            targets = (node.targets if isinstance(node, (ast.Assign, ast.Delete)) else [node.target])
+            flat = [e for target in targets for e in (target.elts if isinstance(target, (ast.Tuple, ast.List))
+                                                      else [target])]
+            names = [base_name(target) for target in flat]
+            if None in names:
+                rest.append(node)
+            names = [name for name in names if name]
+        elif isinstance(node, ast.Expr) and isinstance(node.value, ast.Call):
+            name = base_name(node.value.func.value) if isinstance(node.value.func, ast.Attribute) else None
+            if name:
+                names.append(name)
+            else:
+                rest.append(node)
+        elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            if not node.name.startswith(("test", "Test")):
+                names.append(node.name)
+        elif isinstance(node, COMPOUND):
+            names = sorted({n.id for n in ast.walk(node) if isinstance(n, ast.Name)})
+            if not names:
+                rest.append(node)
+        elif isinstance(node, (ast.Import, ast.ImportFrom)):
+            names = [(alias.asname or alias.name).split(".")[0] for alias in node.names]
+        elif not (isinstance(node, ast.Expr) and isinstance(node.value, ast.Constant)):
+            rest.append(node)  # Anything else at module level, but a docstring.
+        for name in names:
+            found.setdefault(name, []).append(node)
+    return found, rest
+
+
+def changed_names(old_defs, new_defs):
+    """The names whose value changes, directly or through a name that it reads."""
+    shape = lambda nodes: [ast.dump(bare(n)) for n in nodes]
+    changed = {name for name in old_defs.keys() | new_defs.keys()
+               if shape(old_defs.get(name, [])) != shape(new_defs.get(name, []))}
+    reads = {name: {n.id for node in nodes for n in ast.walk(node) if isinstance(n, ast.Name)} - {name}
+             for name, nodes in new_defs.items()}
+    while grown := {name for name, read in reads.items() if name not in changed and read & changed}:
+        changed |= grown
+    return changed
+
+
+def table(expr, defs, seen=frozenset()):
+    """The cases of a table expression, {case: syntax}, as far as literals and names resolve.
+
+    A literal dict gives its keys, a literal list, tuple or set its items. A name resolves to
+    its module-level value and every later `+=` or mutating call; `+`, `*rest` items, a call of
+    a module-level helper that returns a table, and `list(...)`, `tuple(...)`, `dict(...)`
+    resolve through what they combine. What does not resolve contributes nothing.
+    """
+    expr = bare(expr)
+    found = {}
+    if isinstance(expr, ast.Dict):
+        for k, v in zip(expr.keys, expr.values):
+            if k is None:
+                found.update(table(v, defs, seen))
+            else:
+                found[ast.unparse(k)] = ast.dump(v)
+    elif isinstance(expr, (ast.List, ast.Tuple, ast.Set)):
+        for e in expr.elts:
+            if isinstance(e, ast.Starred):
+                found.update(table(e.value, defs, seen))
+            else:
+                found[ast.unparse(e)] = ast.dump(e)
+    elif isinstance(expr, ast.BinOp) and isinstance(expr.op, (ast.Add, ast.BitOr)):
+        found.update(table(expr.left, defs, seen))
+        found.update(table(expr.right, defs, seen))
+    elif isinstance(expr, ast.Name) and expr.id in defs and expr.id not in seen:
+        seen = seen | {expr.id}
+        for node in defs[expr.id]:
+            if isinstance(node, ast.AnnAssign) and node.value is not None:
+                found = table(node.value, defs, seen)
+            elif isinstance(node, ast.Assign):
+                for target in node.targets:
+                    if isinstance(target, ast.Name) and target.id == expr.id:
+                        found = table(node.value, defs, seen)  # A new value replaces the table.
+                    elif (isinstance(target, ast.Subscript) and isinstance(target.value, ast.Name)
+                          and target.value.id == expr.id):
+                        found[ast.unparse(bare(target.slice))] = ast.dump(bare(node.value))
+            elif isinstance(node, ast.AugAssign):
+                found.update(table(node.value, defs, seen))
+            elif isinstance(node, ast.Delete):
+                for target in node.targets:
+                    if isinstance(target, ast.Subscript):
+                        found.pop(ast.unparse(bare(target.slice)), None)
+            elif isinstance(node, ast.Expr):
+                call = node.value
+                if not isinstance(call.func, ast.Attribute):
+                    continue
+                if call.func.attr in {"remove", "discard"} and call.args:
+                    found.pop(ast.unparse(bare(call.args[0])), None)
+                elif call.func.attr in {"append", "add"} and call.args:
+                    found[ast.unparse(bare(call.args[0]))] = ast.dump(bare(call.args[0]))
+                elif call.func.attr == "insert" and len(call.args) > 1:
+                    found[ast.unparse(bare(call.args[1]))] = ast.dump(bare(call.args[1]))
+                elif call.func.attr in {"extend", "update"} and call.args:
+                    found.update(table(call.args[0], defs, seen))
+            elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                returns = [n.value for n in ast.walk(node) if isinstance(n, ast.Return) and n.value is not None]
+                for value in returns:
+                    found.update(table(value, defs, seen))
+    elif (isinstance(expr, ast.Call) and isinstance(expr.func, ast.Attribute)
+          and expr.func.attr in {"values", "keys", "items"}):
+        found.update(table(expr.func.value, defs, seen))  # A case of a dict is its key.
+    elif isinstance(expr, (ast.ListComp, ast.SetComp, ast.GeneratorExp, ast.DictComp)):
+        found.update(table(expr.generators[0].iter, defs, seen))
+    elif isinstance(expr, ast.Call) and isinstance(expr.func, ast.Name):
+        if expr.func.id in {"list", "tuple", "dict", "set", "sorted"} and expr.args:
+            found.update(table(expr.args[0], defs, seen))
+        elif expr.func.id in defs:
+            found.update(table(expr.func, defs, seen))
+    return found
+
+
+def argument_names(function):
+    a = function.args
+    return [arg.arg for arg in (*a.posonlyargs, *a.args, *a.kwonlyargs)]
+
+
+def fixture_calls(node):
+    """The `pytest.fixture` decorators of a function, as (call or None, keywords)."""
+    found = []
+    for decorator in getattr(node, "decorator_list", []):
+        call = decorator if isinstance(decorator, ast.Call) else None
+        if ast.unparse(call.func if call else decorator).endswith("fixture"):
+            found.append({k.arg: k.value for k in call.keywords} if call else {})
+    return found
+
+
+def fixtures_in(body):
+    """The fixtures a module or class body defines, by the name tests use, and those used always.
+
+    A fixture's name is its `name=`, else its function's. An `autouse=True` fixture applies
+    to every test in its scope.
+    """
+    found, autouse = {}, []
+    for node in body:
+        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        for keywords in fixture_calls(node):
+            alias = keywords.get("name")
+            name = alias.value if isinstance(alias, ast.Constant) and isinstance(alias.value, str) else node.name
+            found[name] = node
+            used = keywords.get("autouse")
+            if isinstance(used, ast.Constant) and used.value is True:
+                autouse.append(name)
+    return found, autouse
+
+
+def used_fixtures(marks):
+    """The fixture names that `usefixtures` marks name, among decorators or `pytestmark` values."""
+    found = []
+    for mark in marks:
+        for call in mark.elts if isinstance(mark, (ast.List, ast.Tuple)) else [mark]:
+            if isinstance(call, ast.Call) and ast.unparse(call.func).endswith("usefixtures"):
+                found.extend(a.value for a in call.args if isinstance(a, ast.Constant) and isinstance(a.value, str))
+    return found
+
+
+def test_fixtures(tree, scope):
+    """The fixtures of this module that a test uses, by name, with the function of each.
+
+    That is each fixture it takes as an argument, names in `usefixtures` or gets by autouse,
+    from its classes or its module (a class's fixture hides the module's of the same name),
+    and each fixture those take in turn.
+    """
+    available, autouse = fixtures_in(tree.body)
+    marks = []
+    for node in scope:
+        if isinstance(node, ast.ClassDef):
+            inner, always = fixtures_in(node.body)
+            available = {**available, **inner}
+            autouse = autouse + always
+        marks.extend(getattr(node, "decorator_list", None) or ([] if hasattr(node, "body") else [node]))
+    wanted = [*argument_names(scope[-1]), *used_fixtures(marks), *autouse]
+    found = {}
+    while wanted:
+        name = wanted.pop()
+        if name in found or name not in available:
+            continue
+        found[name] = available[name]
+        wanted.extend(argument_names(available[name]))
+    return found
+
+
+def generated_cases(tree, defs):
+    """The cases a module-level `pytest_generate_tests` gives through `metafunc.parametrize`."""
+    found = {}
+    for node in tree.body:
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name == "pytest_generate_tests":
+            found.update(parametrized([n for n in ast.walk(node) if isinstance(n, ast.Call)], defs))
+    return found
+
+
+def parametrized(marks, defs):
+    """The cases of every `parametrize` among marks: decorators, or a `pytestmark` value."""
+    found = {}
+    for mark in marks:
+        for call in mark.elts if isinstance(mark, (ast.List, ast.Tuple)) else [mark]:
+            if not (isinstance(call, ast.Call) and ast.unparse(call.func).endswith("parametrize")):
+                continue
+            values = call.args[1] if len(call.args) > 1 else next(
+                (k.value for k in call.keywords if k.arg == "argvalues"), None)
+            if values is not None:
+                found.update(table(values, defs, frozenset()))
+    return found
+
+
+def test_scopes(tree):
+    """Each test function by qualified name, with the nodes whose parametrize applies to it.
+
+    Those are the function, each class around it, and the `pytestmark` of the module and of
+    each such class.
+    """
+    found = {}
+
+    def marks_of(body):
+        return [n.value for n in body if isinstance(n, ast.Assign)
+                and any(isinstance(t, ast.Name) and t.id == "pytestmark" for t in n.targets)]
+
+    def visit(body, scope, outer):
+        for node in body:
+            if isinstance(node, ast.ClassDef):
+                visit(node.body, f"{scope}::{node.name}" if scope else node.name,
+                      outer + [node] + marks_of(node.body))
+            elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name.startswith("test"):
+                found[f"{scope}::{node.name}" if scope else node.name] = outer + [node]
+
+    visit(tree.body, "", marks_of(tree.body))
+    return found
+
+
+def table_changes(path, before, after):
+    """Notes for a test that reads a changed module-level name, and for each case it loses.
+
+    A test reads a name in its own syntax, in a class around it or in a `pytestmark`. A name
+    changes when its value does, or a name it reads does (a derived table, a helper that
+    returns one). Such a test is CHANGED; each case that goes from its parametrize tables,
+    wherever they are given and however they are built from names, is REMOVED as
+    `path::test[case]`. Red marks are left out, so a lift reports nothing.
+    """
+    try:
+        old_tree, new_tree = ast.parse(before.decode("utf-8")), ast.parse(after.decode("utf-8"))
+    except UNREADABLE:
+        return []
+    (old_defs, old_rest), (new_defs, new_rest) = definitions(old_tree), definitions(new_tree)
+    changed = changed_names(old_defs, new_defs)
+    # A changed statement that counts toward no name could reach any test of the module.
+    unknown = [ast.dump(bare(n)) for n in old_rest] != [ast.dump(bare(n)) for n in new_rest]
+    old_scopes, notes = test_scopes(old_tree), []
+    for test, nodes in test_scopes(new_tree).items():
+        if test not in old_scopes:
+            continue
+        read = set()
+        for node in nodes:
+            parts = (node.decorator_list + [n for n in node.body if isinstance(n, ast.Assign)]
+                     if isinstance(node, ast.ClassDef) else [node])
+            read |= {n.id for part in parts for n in ast.walk(part) if isinstance(n, ast.Name)}
+        # A fixture it uses is a name it reads, and so is pytest_generate_tests, which pytest
+        # calls for every test of the module.
+        old_fixtures, new_fixtures = test_fixtures(old_tree, old_scopes[test]), test_fixtures(new_tree, nodes)
+        read |= set(argument_names(nodes[-1])) | set(new_fixtures) | {"pytest_generate_tests"}
+        for node in new_fixtures.values():
+            read |= {n.id for n in ast.walk(node) if isinstance(n, ast.Name)}
+        notes.extend(f"CHANGED {path}::{test} reads the changed {name}" for name in sorted(changed & read))
+        notes.extend(f"CHANGED {path}::{test} uses the changed fixture {name}"
+                     for name in sorted(old_fixtures.keys() | new_fixtures.keys())
+                     if name not in changed and (name not in old_fixtures or name not in new_fixtures
+                                                 or ast.dump(bare(old_fixtures[name]))
+                                                 != ast.dump(bare(new_fixtures[name]))))
+        if unknown:
+            notes.append(f"CHANGED {path}::{test} under a changed module-level statement")
+
+        def cases_of(tree, scope, defs, fixtures):
+            marks = []
+            for node in scope:
+                marks.extend(getattr(node, "decorator_list", None) or ([] if hasattr(node, "body") else [node]))
+            found = {**parametrized(marks, defs), **generated_cases(tree, defs)}
+            for node in fixtures.values():
+                for keywords in fixture_calls(node):
+                    if "params" in keywords:
+                        found.update(table(keywords["params"], defs, frozenset()))
+            return found
+
+        lost = (cases_of(old_tree, old_scopes[test], old_defs, old_fixtures).keys()
+                - cases_of(new_tree, nodes, new_defs, new_fixtures).keys())
+        notes.extend(f"REMOVED {path}::{test}[{case}]" for case in sorted(lost))
+    return notes
+
+
 def review(changes, planner=False, head=None, labels=(), packs=frozenset(), pins=frozenset()):
     """Return (errors, notes) for a sequence of Change records.
 
@@ -798,6 +1118,8 @@ def review(changes, planner=False, head=None, labels=(), packs=frozenset(), pins
                 errors.append(f"ERROR new or changed red mark on {ascii(c.path + '::' + owner)} "
                               "needs strict=True and must not set run=False")
         notes.extend(f"REMOVED {c.path}::{name}" for name in old.tests if name not in new.tests)
+        if c.before is not None:
+            notes.extend(table_changes(c.path, c.before, c.after))
         # Report every changed green test, whether or not the pull request also changes source:
         # weakening an expectation on its own is the change a reviewer most needs to see.
         notes.extend(f"CHANGED {c.path}::{name}" for name, (shape, red) in new.tests.items()
@@ -833,6 +1155,46 @@ def review(changes, planner=False, head=None, labels=(), packs=frozenset(), pins
                           f"reads it before it lands and then sets the label {label} for the head "
                           "commit. The planner label does not replace it, and a new push needs a new label.")
     return errors, notes
+
+
+def listed_plugins(local, root):
+    """The allowed pytest plugins (`name = value`): from the base revision in CI, else `local`.
+
+    In GitHub Actions the base is the first parent of GITHUB_SHA for a pull request (whose
+    GITHUB_SHA merges it into its base) and for a merge group (whose commit sits on its
+    base), and GITHUB_SHA itself otherwise, as for pull_request_target, whose GITHUB_SHA is
+    the base branch's own commit. A step can set no GITHUB_* variable, so nothing
+    a candidate runs earlier in the job can redirect it. The event file is not read for the
+    base: the job could rewrite it, and a pull request's `base.sha` is the base when the event
+    fired, older than the base GitHub merged onto. Replace refs and .git/info/grafts are
+    ignored, so no file in the checkout's .git can give a commit another parent. In GitHub Actions
+    without an event file this fails rather than trusting the checkout.
+    """
+    if os.environ.get("GITHUB_ACTIONS") != "true":
+        text = Path(local).read_text(encoding="utf-8")
+    else:
+        event, sha = os.environ.get("GITHUB_EVENT_PATH"), os.environ.get("GITHUB_SHA")
+        if not (event and sha):
+            raise SystemExit("ERROR GitHub Actions without GITHUB_EVENT_PATH and GITHUB_SHA: "
+                             "no base revision for the list of allowed pytest plugins")
+        env = dict(os.environ, GIT_NO_REPLACE_OBJECTS="1", GIT_GRAFT_FILE=os.devnull)
+
+        def run(*args, check=True):
+            return subprocess.run(["git", *args], cwd=root, env=env, capture_output=True, text=True, check=check)
+
+        merged = os.environ.get("GITHUB_EVENT_NAME") in {"pull_request", "merge_group"}
+        target = f"{sha}^1" if merged else sha
+        for attempt in range(3):
+            if not run("cat-file", "-e", f"{target}^{{commit}}", check=False).returncode:
+                break
+            if attempt:
+                time.sleep(10)
+            run("fetch", "--no-tags", "--depth=2", "origin", sha, check=False)
+        else:
+            raise SystemExit(f"ERROR the base {target} could not be fetched for the list of allowed pytest plugins")
+        base = run("rev-parse", "--verify", "--end-of-options", f"{target}^{{commit}}").stdout.strip()
+        text = run("show", f"{base}:scripts/pytest-plugins.txt").stdout
+    return {line.strip() for line in text.splitlines() if line.strip() and not line.lstrip().startswith("#")}
 
 
 def git(*args):

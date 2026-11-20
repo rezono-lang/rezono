@@ -39,14 +39,6 @@ def receipt(members, source=SOURCE):
             "verified_member": member_rows}
 
 
-@pytest.mark.xfail(strict=True, raises=FreeCapacityWithoutCoverage, reason=(
-    "M2: decisions/scoped-completeness.md: Declare verified_receipt and verified_member in "
-    "examples/platform/rules/tenant_capacity.dl, derive platform_capacity_basis only for a period that a verified "
-    "receipt from the source 'capacity-readings' covers with a reading for every member, and derive "
-    "platform_capacity_unknown(period, reason, subject) with 'coverage-missing' or 'reading-missing' otherwise. "
-    "A member is the key [\"capacity-reading\", period, tenant] (decisions/admission-transport.md section 6, "
-    "member keys): read only members whose part 0 is 'capacity-reading', with the period in part 1 and the "
-    "tenant in part 2."))
 def test_free_capacity_needs_verified_coverage_of_the_readings():
     model = pack.read(ROOT)
     rows = readings(model)

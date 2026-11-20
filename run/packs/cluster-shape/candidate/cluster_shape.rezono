@@ -1,0 +1,127 @@
+rezono 0
+pack cluster-shape
+
+schema cluster_shape
+  iri "https://rezono.org/run/cluster-shape"
+  language en
+  import "linkml:types"
+  default range Text
+  description "Demand and observed machines from which the shape of a run cluster is derived."
+  annotation layer = "facts"
+
+enum ClusterRole world closed = controller | worker
+
+kind Cluster world closed
+  plan_hash: Text?
+
+kind Line world closed
+  description "The cluster's demand for one SKU in one role."
+  cluster: Cluster
+  sku: Text?
+  role: ClusterRole?
+  quantity: Int?
+    minimum 0
+
+kind Machine world closed
+  description "A machine observed after the order, with the disks it reports."
+  plan_hash: Text?
+  sku: Text?
+  address: Text?
+  boot_disk: Text?
+  data_disk: Text?
+
+rules cluster_shape
+  | // A machine belongs to a cluster through the plan hash it was ordered under.
+  | .decl plan_machine(cluster: symbol, machine: symbol)
+  | plan_machine(c, m) :- cluster__plan_hash(c, p), machine__plan_hash(m, p).
+  | 
+  | .decl machine_disk(machine: symbol, disk: symbol)
+  | machine_disk(m, d) :- machine__boot_disk(m, d).
+  | machine_disk(m, d) :- machine__data_disk(m, d).
+  | 
+  | .decl has_sku(machine: symbol)
+  | has_sku(m) :- machine__sku(m, _).
+  | .decl has_address(machine: symbol)
+  | has_address(m) :- machine__address(m, _).
+  | .decl has_boot_disk(machine: symbol)
+  | has_boot_disk(m) :- machine__boot_disk(m, _).
+  | .decl has_data_disk(machine: symbol)
+  | has_data_disk(m) :- machine__data_disk(m, _).
+  | 
+  | // A machine is invalid unless each slot has exactly one value, its disks differ,
+  | // and neither disk appears on another machine of the plan.
+  | .decl invalid_machine(cluster: symbol, machine: symbol)
+  | invalid_machine(c, m) :- plan_machine(c, m), !has_sku(m).
+  | invalid_machine(c, m) :- plan_machine(c, m), !has_address(m).
+  | invalid_machine(c, m) :- plan_machine(c, m), !has_boot_disk(m).
+  | invalid_machine(c, m) :- plan_machine(c, m), !has_data_disk(m).
+  | invalid_machine(c, m) :- plan_machine(c, m), machine__plan_hash(m, a), machine__plan_hash(m, b), a != b.
+  | invalid_machine(c, m) :- plan_machine(c, m), machine__sku(m, a), machine__sku(m, b), a != b.
+  | invalid_machine(c, m) :- plan_machine(c, m), machine__address(m, a), machine__address(m, b), a != b.
+  | invalid_machine(c, m) :- plan_machine(c, m), machine__boot_disk(m, a), machine__boot_disk(m, b), a != b.
+  | invalid_machine(c, m) :- plan_machine(c, m), machine__data_disk(m, a), machine__data_disk(m, b), a != b.
+  | invalid_machine(c, m) :- plan_machine(c, m), machine__boot_disk(m, d), machine__data_disk(m, d).
+  | invalid_machine(c, m) :- plan_machine(c, m), plan_machine(c, n), m != n,
+  |     machine_disk(m, d), machine_disk(n, d).
+  | 
+  | .decl valid_machine(cluster: symbol, machine: symbol)
+  | valid_machine(c, m) :- plan_machine(c, m), !invalid_machine(c, m).
+  | 
+  | .decl line_has_sku(line: symbol)
+  | line_has_sku(l) :- line__sku(l, _).
+  | .decl line_has_role(line: symbol)
+  | line_has_role(l) :- line__role(l, _).
+  | .decl line_has_quantity(line: symbol)
+  | line_has_quantity(l) :- line__quantity(l, _).
+  | 
+  | // A line is invalid unless each slot has exactly one value: an unknown slot never passes.
+  | .decl invalid_line(cluster: symbol, line: symbol)
+  | invalid_line(c, l) :- line__cluster(l, c), !line_has_sku(l).
+  | invalid_line(c, l) :- line__cluster(l, c), !line_has_role(l).
+  | invalid_line(c, l) :- line__cluster(l, c), !line_has_quantity(l).
+  | invalid_line(c, l) :- line__cluster(l, c), line__sku(l, a), line__sku(l, b), a != b.
+  | invalid_line(c, l) :- line__cluster(l, c), line__role(l, a), line__role(l, b), a != b.
+  | invalid_line(c, l) :- line__cluster(l, c), line__quantity(l, a), line__quantity(l, b), a != b.
+  | 
+  | .decl named_sku(cluster: symbol, sku: symbol)
+  | named_sku(c, s) :- line__cluster(l, c), line__sku(l, s).
+  | 
+  | .decl valid_sku(cluster: symbol, sku: symbol, machine: symbol)
+  | valid_sku(c, s, m) :- valid_machine(c, m), machine__sku(m, s).
+  | 
+  | .decl has_valid_sku(cluster: symbol, sku: symbol)
+  | has_valid_sku(c, s) :- valid_sku(c, s, _).
+  | 
+  | .decl has_controller(cluster: symbol)
+  | has_controller(c) :- line__cluster(l, c), line__role(l, "controller").
+  | 
+  | .decl shape_problem(cluster: symbol, reason: symbol)
+  | shape_problem(c, "invalid_machine") :- invalid_machine(c, _).
+  | shape_problem(c, "invalid_line") :- invalid_line(c, _).
+  | shape_problem(c, "count") :- line__cluster(l, c), line__sku(l, s), line__quantity(l, q),
+  |     n = count : { valid_sku(c, s, _) }, n != q.
+  | shape_problem(c, "count") :- line__cluster(l, c), line__sku(l, s), line__quantity(l, q),
+  |     !has_valid_sku(c, s), q != 0.
+  | shape_problem(c, "unassigned") :- valid_machine(c, m), machine__sku(m, s), !named_sku(c, s).
+  | shape_problem(c, "ambiguous_line") :- line__cluster(a, c), line__cluster(b, c), a != b,
+  |     line__sku(a, s), line__sku(b, s).
+  | shape_problem(c, "no_controller") :- cluster(c), !has_controller(c).
+  | 
+  | .decl has_problem(cluster: symbol)
+  | has_problem(c) :- shape_problem(c, _).
+  | 
+  | // Only a cluster without any problem has a shape.
+  | .decl member(cluster: symbol, machine: symbol, role: symbol)
+  | member(c, m, r) :- cluster(c), !has_problem(c), valid_machine(c, m), machine__sku(m, s),
+  |     line__cluster(l, c), line__sku(l, s), line__role(l, r).
+  | 
+  | .decl ceph_device(cluster: symbol, machine: symbol, disk: symbol)
+  | ceph_device(c, m, d) :- member(c, m, _), machine__data_disk(m, d).
+  | 
+  | .decl api_address(cluster: symbol, address: symbol)
+  | api_address(c, a) :- member(c, m, "controller"), machine__address(m, a).
+  | 
+  | .output member
+  | .output ceph_device
+  | .output api_address
+  | .output shape_problem

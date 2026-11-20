@@ -169,12 +169,14 @@ def apply(con, prog, rel, row, op):
 
 
 def read(con, prog, names=None):
-    """Relations as sets of tuples of canonical text (an integer as decimal text). A calculation selection
-    is read as the rules read it: its known whole numbers."""
+    """Relations as sets of tuples of canonical text (seal.text: an integer as decimal text, a boolean as
+    true/false). A calculation selection is read as the rules read it: its known whole numbers."""
+    from .seal import text
+
     out = {}
     for name in names or prog.derived():
         table = q(sql.relation_source(prog.relations[name]) if name in prog.relations else name)
-        out[name] = {tuple(str(v) for v in r) for r in con.execute(f"SELECT * FROM {table}").fetchall()}
+        out[name] = {tuple(text(v) for v in r) for r in con.execute(f"SELECT * FROM {table}").fetchall()}
     return out
 
 
@@ -184,11 +186,13 @@ def witnesses(con, prog, rule_ids=None):
     Runs the witness query of each rule (the explain query of on_demand relations) on the final
     relations; the empty substitution is the empty tuple.
     """
+    from .seal import text
+
     out = {}
     for rid in sorted(rule_ids or prog.rules):
         rule = prog.rules[rid]
         rows = con.execute(sql.witness_select(prog, rule, "duckdb")).fetchall()
-        out[rid] = sorted({() if not rule.variables else tuple(str(v) for v in r) for r in rows})
+        out[rid] = sorted({() if not rule.variables else tuple(text(v) for v in r) for r in rows})
     return out
 
 

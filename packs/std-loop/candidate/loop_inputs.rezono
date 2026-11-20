@@ -1,0 +1,72 @@
+rezono 0
+pack std-loop
+use std-order
+
+schema std_loop_inputs
+  iri "https://rezono.org/std-loop/inputs"
+  import "linkml:types"
+  default range Text
+  description "Run-scoped declarations and observations for an immutable reconciliation plan."
+  annotation layer = "facts"
+
+kind LoopStep is Ordered world closed
+  description "A step in the plan, with precedence inherited from std-order."
+
+kind LoopActiveRun world closed
+  description "The run selected for evaluation. Historical events keep their own run identifiers."
+
+kind LoopCompletion world closed
+  description "A source declaration naming the token that confirms completion of a step."
+  run: Text
+  step: LoopStep
+  token: Text
+  reason: Text
+
+kind LoopExpectation world closed
+  description "The expected comparison value identified by its token."
+  value: Text
+
+kind LoopObservation world closed
+  description "A recorded event with its normalized value state and separate evidence reference."
+  run: Text
+  token: Text
+  event_time: Int
+  state: Text
+  value: Text
+  reason: Text
+  scope: Text?
+    description "The collector scope in which the lookup was made."
+  sweep: Text?
+    description "The observation window in that scope."
+
+kind LoopRequirement world closed
+  description "A prerequisite token explicitly required by a step in a run."
+  run: Text
+  step: LoopStep
+  token: Text
+  reason: Text
+
+kind LoopRefusal world closed
+  description "A recorded terminal refusal to perform a step in a run."
+  run: Text
+  step: LoopStep
+  reason: Text
+
+rules loop_inputs
+  | // Join the admitted slots of a single record before projecting the fragment input.
+  | .decl active(run: symbol)
+  | active(run) :- loop_active_run(run).
+  | 
+  | .decl completion(run: symbol, step: symbol, token: symbol, reason: symbol)
+  | completion(run, step, token, reason) :-
+  |     loop_completion__run(record, run), loop_completion__step(record, step),
+  |     loop_completion__token(record, token), loop_completion__reason(record, reason).
+  | 
+  | .decl expectation(token: symbol, value: symbol)
+  | expectation(token, value) :- loop_expectation__value(token, value).
+  | 
+  | .decl observed(run: symbol, token: symbol, event_time: number, event: symbol, state: symbol, value: symbol, reason: symbol)
+  | observed(run, token, time, event, state, value, reason) :-
+  |     loop_observation__run(event, run), loop_observation__token(event, token),
+  |     loop_observation__event_time(event, time), loop_observation__state(event, state),
+  |     loop_observation__value(event, value), loop_observation__reason(event, reason).

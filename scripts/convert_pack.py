@@ -20,7 +20,7 @@ from typing import TYPE_CHECKING, TypedDict
 
 import yaml
 
-from rezono_compiler import modules, pack, rules_dl
+from rezono_compiler import modules, pack, rules_dl, standard_packs
 
 if TYPE_CHECKING:
     from rezono_publisher.publish import Epoch
@@ -30,6 +30,12 @@ READER = Path(__file__).resolve().parents[1] / "rezono/src/write-form.ts"
 WORD = re.compile(r"[a-z][a-z0-9_]*")
 TYPE = re.compile(r"[A-Z][A-Za-z0-9]*")
 TYPES = {"string": "Text", "integer": "Int", "boolean": "Bool", "date": "Date"}
+MAPPING_FIELDS = (
+    ("exact_mappings", "exact mapping"),
+    ("close_mappings", "close mapping"),
+    ("broad_mappings", "broad mapping"),
+)
+MAPPING_KEYS = frozenset(field for field, _ in MAPPING_FIELDS)
 
 
 class ModuleEntry(TypedDict):
@@ -89,24 +95,47 @@ def quoted(value: object, where: str) -> str:
     return json.dumps(value, ensure_ascii=False)
 
 
-def metadata_lines(doc: dict, where: str, indent: str) -> list[str]:
+def valid_annotation_value(value: object, where: str) -> None:
+    if isinstance(value, (str, bool, int)):
+        return
+    if isinstance(value, list):
+        for item in value:
+            valid_annotation_value(item, where)
+        return
+    if isinstance(value, dict) and all(isinstance(key, str) for key in value):
+        for item in value.values():
+            valid_annotation_value(item, where)
+        return
+    raise ConversionError(f"{where}: unsupported annotation value {value!r}")
+
+
+def annotation_json(value: object, where: str) -> str:
+    valid_annotation_value(value, where)
+    return json.dumps(value, ensure_ascii=False, sort_keys=True)
+
+
+def metadata_lines(doc: dict, where: str, indent: str, *, annotations: dict | None = None) -> list[str]:
     lines = []
     if "description" in doc:
         lines.append(f"{indent}description {quoted(doc['description'], where)}")
-    if "exact_mappings" in doc:
-        values = doc["exact_mappings"]
-        if not isinstance(values, list):
-            raise ConversionError(f"{where}: expected a list of exact mappings")
-        lines.extend(f"{indent}exact mapping {quoted(value, where)}" for value in values)
+    for field, keyword in MAPPING_FIELDS:
+        if field in doc:
+            values = doc[field]
+            if not isinstance(values, list):
+                raise ConversionError(f"{where}: expected a list of {keyword}s")
+            lines.extend(f"{indent}{keyword} {quoted(value, where)}" for value in values)
+    for tag in sorted(annotations or ()):
+        lines.append(f"{indent}annotation {name(tag, WORD, where)} = {annotation_json(annotations[tag], where)}")
     return lines
 
 
 def header_lines(doc: dict, identity: str, module: str, where: str) -> list[str]:
     imports = doc.get("imports", ["linkml:types"])
     default = doc.get("default_range", "string")
+    metadata_keys = {"in_language", "prefixes", "description"} | MAPPING_KEYS
     if (doc.get("id") == f"https://rezono.org/rezono/{identity}/{module}"
             and doc.get("name") == module.replace("/", "_") and imports == ["linkml:types"]
-            and default == "string" and not {"in_language", "prefixes", "description", "exact_mappings"} & doc.keys()):
+            and default == "string" and not metadata_keys & doc.keys()):
         return []
     if not isinstance(imports, list):
         raise ConversionError(f"{where}: expected a list of imports")
@@ -130,8 +159,8 @@ def flag(doc: dict, key: str, where: str) -> bool:
     return value
 
 
-def world(node: object, where: str, default: str) -> str:
-    annotations = supported(node, {"world"}, where)
+def world(node: object, where: str, default: str, *, allow_extra: bool = False) -> str:
+    annotations = mapping(node, where) if allow_extra else supported(node, {"world"}, where)
     if "world" not in annotations:
         return default
     value = annotations["world"]
@@ -142,7 +171,7 @@ def world(node: object, where: str, default: str) -> str:
 
 def slot_lines(slot: str, body: object, where: str) -> list[str]:
     doc = supported(body, {"range", "required", "multivalued", "identifier", "minimum_value", "maximum_value",
-                           "pattern", "annotations", "description", "exact_mappings", "slot_uri"}, where)
+                           "pattern", "annotations", "description", "slot_uri"} | MAPPING_KEYS, where)
     if slot == "id" and doc == {"identifier": True}:
         return []  # The implicit id has this exact definition.
     if slot == "id":
@@ -172,19 +201,106 @@ def slot_lines(slot: str, body: object, where: str) -> list[str]:
     return lines
 
 
+def path_equation_lines(equations: object, where: str) -> list[str]:
+    if not isinstance(equations, list):
+        raise ConversionError(f"{where}: expected a list of path equations")
+    lines = []
+    for index, entry in enumerate(equations):
+        place = f"{where}.path_equations[{index}]"
+        doc = supported(entry, {"name", "left", "right"}, place)
+        eq_name = name(doc.get("name"), WORD, place)
+        paths = []
+        for side in ("left", "right"):
+            raw = doc.get(side)
+            if not isinstance(raw, str) or not raw:
+                raise ConversionError(f"{place}: {side} must be a non-empty slot path")
+            paths.append(".".join(name(step, WORD, place) for step in raw.split(".")))
+        lines.append(f"  equal {eq_name} = {paths[0]}, {paths[1]}")
+    return lines
+
+
+def unique_key_lines(keys: object, where: str) -> list[str]:
+    lines = []
+    for key_name, definition in mapping(keys, where).items():
+        place = f"{where}.unique_keys.{key_name}"
+        doc = supported(definition, {"unique_key_slots"}, place)
+        slots = doc.get("unique_key_slots")
+        if not isinstance(slots, list) or not slots:
+            raise ConversionError(f"{place}: expected a non-empty list of unique_key_slots")
+        lines.append(f"  unique {name(key_name, WORD, place)} = {', '.join(name(s, WORD, place) for s in slots)}")
+    return lines
+
+
+def condition_expr(slot: str, body: object, where: str, *, allow_equals: bool) -> str:
+    slot_name = name(slot, WORD, where)
+    allowed = {"value_presence", "required"} | ({"equals_string"} if allow_equals else set())
+    doc = supported(body, allowed, where)
+    parts = []
+    if "equals_string" in doc:
+        parts.append(f"{slot_name} = {name(doc['equals_string'], WORD, where)}")
+    if "value_presence" in doc:
+        if doc["value_presence"] != "PRESENT":
+            raise ConversionError(f"{where}: only value_presence PRESENT is supported")
+        parts.append(f"{slot_name} is known")
+    elif "required" in doc:
+        if doc["required"] is not True:
+            raise ConversionError(f"{where}: required must be true")
+        parts.append(f"{slot_name} is known")
+    if not parts:
+        raise ConversionError(f"{where}: expected a slot condition")
+    return " and ".join(parts)
+
+
+def class_rule_lines(rules: object, where: str) -> list[str]:
+    if not isinstance(rules, list):
+        raise ConversionError(f"{where}: expected a list of class rules")
+    lines = []
+    for index, entry in enumerate(rules, 1):
+        place = f"{where}.rules[{index}]"
+        doc = supported(entry, {"description", "preconditions", "postconditions"}, place)
+        pre = supported(doc.get("preconditions"), {"slot_conditions"}, f"{place}.preconditions")
+        post = supported(doc.get("postconditions"), {"slot_conditions"}, f"{place}.postconditions")
+        pre_slots = mapping(pre.get("slot_conditions"), f"{place}.preconditions")
+        post_slots = mapping(post.get("slot_conditions"), f"{place}.postconditions")
+        if not pre_slots:
+            raise ConversionError(f"{place}: expected at least one precondition")
+        if len(post_slots) != 1:
+            raise ConversionError(f"{place}: expected exactly one postcondition slot")
+        when_clause = " and ".join(
+            condition_expr(slot, cond, f"{place}.preconditions.{slot}", allow_equals=True)
+            for slot, cond in pre_slots.items()
+        )
+        then_slot, then_cond = next(iter(post_slots.items()))
+        then_clause = condition_expr(then_slot, then_cond, f"{place}.postconditions.{then_slot}", allow_equals=False)
+        lines.append(f"  require rule_{index} when {when_clause} then {then_clause}")
+        if "description" in doc:
+            lines.append(f"    description {quoted(doc['description'], place)}")
+    return lines
+
+
 def schema_source(path: Path, identity: str, module: str) -> Source:
     where = f"schema/{module}.yaml"
     doc = supported(yaml.safe_load(path.read_text(encoding="utf-8")),
-                    {"id", "name", "imports", "default_range", "annotations", "enums", "classes",
-                     "in_language", "prefixes", "description", "exact_mappings"}, where)
+                    {"id", "name", "imports", "default_range", "annotations", "types", "enums", "classes",
+                     "in_language", "prefixes", "description"} | MAPPING_KEYS, where)
     layer = supported(doc.get("annotations", {}), {"layer"}, where).get("layer", "facts")
     if layer not in pack.LAYERS:
         raise ConversionError(f"{where}: unknown layer {layer!r}")
 
     lines: list[str] = []
+    for scalar, definition in mapping(doc.get("types", {}), where).items():
+        place = f"{where}: {scalar}"
+        body = supported(definition, {"typeof", "description"}, place)
+        typeof = body.get("typeof")
+        if typeof not in TYPES:
+            raise ConversionError(f"{place}: unsupported scalar base {typeof!r}")
+        if "description" in body:
+            quoted(body["description"], place)
+        lines.extend([f"type {name(scalar, TYPE, place)} = {TYPES[typeof]}", ""])
+
     for enum, definition in mapping(doc.get("enums", {}), where).items():
         place = f"{where}: {enum}"
-        body = supported(definition, {"permissible_values", "annotations", "description", "exact_mappings"}, place)
+        body = supported(definition, {"permissible_values", "annotations", "description"} | MAPPING_KEYS, place)
         members = mapping(body.get("permissible_values"), place)
         if not members:
             raise ConversionError(f"{place}: expected at least one enum member")
@@ -194,7 +310,7 @@ def schema_source(path: Path, identity: str, module: str) -> Source:
         lines.extend(metadata_lines(body, place, "  "))
         for member, definition in members.items():
             member_where = f"{place}.{member}"
-            metadata = supported({} if definition is None else definition, {"description", "exact_mappings"},
+            metadata = supported({} if definition is None else definition, {"description"} | MAPPING_KEYS,
                                  member_where)
             if annotations := metadata_lines(metadata, member_where, "    "):
                 lines.extend([f"  value {member}", *annotations])
@@ -202,19 +318,28 @@ def schema_source(path: Path, identity: str, module: str) -> Source:
 
     for kind, definition in mapping(doc.get("classes", {}), where).items():
         place = f"{where}: {kind}"
-        body = supported(definition, {"abstract", "is_a", "annotations", "attributes", "description",
-                                      "exact_mappings"}, place)
+        body = supported(definition, {"abstract", "is_a", "represents_relationship", "annotations", "attributes",
+                                      "unique_keys", "rules", "description"} | MAPPING_KEYS, place)
         abstract = "abstract " if flag(body, "abstract", place) else ""
-        own_world = world(body.get("annotations", {}), place, "closed")
+        relationship = "relationship " if flag(body, "represents_relationship", place) else ""
+        annotations = mapping(body.get("annotations", {}), place)
+        own_world = world(annotations, place, "closed", allow_extra=True)
+        extra_annotations = {key: value for key, value in annotations.items() if key not in {"world", "path_equations"}}
         parent = f" is {name(body['is_a'], TYPE, place)}" if "is_a" in body else ""
-        lines.append(f"{abstract}kind {name(kind, TYPE, place)}{parent} world {own_world}")
-        lines.extend(metadata_lines(body, place, "  "))
+        lines.append(f"{abstract}{relationship}kind {name(kind, TYPE, place)}{parent} world {own_world}")
+        lines.extend(metadata_lines(body, place, "  ", annotations=extra_annotations))
         attributes = mapping(body.get("attributes", {}), place)
         if not parent and not any(isinstance(value, dict) and value.get("identifier") is True
                                   for value in attributes.values()):
             raise ConversionError(f"{place}: cannot introduce an implicit identifier")
         for slot, value in attributes.items():
             lines.extend(slot_lines(slot, value, f"{place}.{slot}"))
+        if "path_equations" in annotations:
+            lines.extend(path_equation_lines(annotations["path_equations"], place))
+        if "unique_keys" in body:
+            lines.extend(unique_key_lines(body["unique_keys"], place))
+        if "rules" in body:
+            lines.extend(class_rule_lines(body["rules"], place))
         lines.append("")
     if not lines:
         raise ConversionError(f"{where}: no kind or enum declarations")
@@ -247,9 +372,26 @@ def sources(directory: Path, identity: str) -> dict[str, Source]:
     return result
 
 
+def condition_meaning(cond: pack.Condition) -> pack.Condition:
+    facets = dict(cond.facets)
+    if facets.get("value_presence") == "PRESENT":
+        facets.pop("value_presence")
+        facets["required"] = True
+    return replace(cond, facets=facets)
+
+
 def kind_meaning(kind: pack.Kind) -> pack.Kind:
     slots = {name: replace(slot, span=None) for name, slot in kind.slots.items()}
-    return replace(kind, slots=slots, span=None, spans={})
+    rules = [
+        replace(
+            rule,
+            pre=[condition_meaning(c) for c in rule.pre],
+            post=[condition_meaning(c) for c in rule.post],
+            otherwise=[condition_meaning(c) for c in rule.otherwise],
+        )
+        for rule in kind.rules
+    ]
+    return replace(kind, slots=slots, rules=rules, span=None, spans={})
 
 
 def compare_imported(consumer: Path, original: Path, candidate: Path, identity: str) -> None:
@@ -266,7 +408,9 @@ def compare_imported(consumer: Path, original: Path, candidate: Path, identity: 
         matches[0]["path"] = Path(os.path.relpath(candidate, copy)).as_posix()
         matches[0]["sha256"] = modules.pack_hash(candidate)
         (copy / "pack.yaml").write_bytes(yaml.safe_dump(meta, sort_keys=False).encode("utf-8"))
-        compare(baseline, pack.read(copy))
+        with standard_packs.trial(identity, matches[0]["sha256"]):
+            trial = pack.read(copy)
+        compare(baseline, trial)
 
 
 def compare(baseline: pack.Pack, trial: pack.Pack) -> None:
@@ -438,7 +582,9 @@ def candidate(original: Path, destination: Path, node: str, consumer: Path | Non
         meta["rezono"] = entries
         (stage / "pack.yaml").write_bytes(yaml.safe_dump(meta, sort_keys=False).encode("utf-8"))
         if consumer is None:
-            compare(pack.read(original), pack.read(stage))
+            with standard_packs.trial(identity, modules.pack_hash(stage)):
+                trial = pack.read(stage)
+            compare(pack.read(original), trial)
         else:
             compare_imported(consumer, original, stage, identity)
         stage.rename(destination)

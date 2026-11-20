@@ -80,15 +80,6 @@ def test_subsidy_scheme_legacy_compiles_with_calc_and_rules(tmp_path):
     assert len(got["ir"]["rules"]) > 0
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=MissingCandidatePack,
-    reason="M3: decisions/language-standard-pack-candidates.md: Author examples/subsidy-scheme/candidate/ holding "
-           "subsidy.rezono (from schema/subsidy.yaml) and assessment.rezono, costs.rezono, findings.rezono and "
-           "scheme.rezono (from rules/*.dl), and generate their .json forms with node rezono/src/write-form.ts, "
-           "so that the isolated candidate (keeping calc/award.yaml) matches examples/subsidy-scheme on semantic "
-           "bundle, rule IR, calc IR and compiled SQL. Keep schema/ and rules/ untouched as the oracle.",
-)
 def test_whole_subsidy_scheme_schema_and_rules_candidate(tmp_path):
     actual = compiled(tmp_path, "candidate")
     expected = compiled(tmp_path, "legacy")

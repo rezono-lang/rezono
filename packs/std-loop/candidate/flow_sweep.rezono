@@ -1,0 +1,35 @@
+rezono 0
+pack std-loop
+
+schema std_loop_flow_sweep
+  iri "https://rezono.org/std-loop/flow-sweep"
+  import "linkml:types"
+  default range Text
+  description "Observation intervals, expected nodes and final coverage reports for flow sweeps."
+  annotation layer = "facts"
+
+kind FlowSweepWindow world closed
+  description "The identified sweep over an interval of source-event ticks."
+  run: Text
+  collector: Text
+  window: Text
+  start: Int
+  stop: Int
+
+kind FlowExpectedNode world closed
+  description "A node in the inventory pinned to a sweep window."
+  run: Text
+  collector: Text
+  window: Text
+  node: Text
+
+kind FlowNodeReport world closed
+  description "A node's final coverage bounds and counts of gaps and lost events."
+  run: Text
+  collector: Text
+  window: Text
+  node: Text
+  first: Int
+  last: Int
+  gaps: Int
+  lost: Int

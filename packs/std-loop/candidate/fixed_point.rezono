@@ -1,0 +1,50 @@
+rezono 0
+pack std-loop
+
+rules fixed_point
+  | .decl goal_produced(run: symbol, token: symbol)
+  | goal_produced(run, token) :- completion(run, _, token, _).
+  | 
+  | // A required outcome stays unfinished until its token is known, even when no step can produce it.
+  | .decl unproduced_goal(run: symbol, goal: symbol, token: symbol)
+  | unproduced_goal(run, goal, token) :-
+  |     loop_goal__run(goal, run), loop_goal__token(goal, token),
+  |     !waiting_known(run, token), !goal_produced(run, token).
+  | 
+  | .decl possible_progress(run: symbol)
+  | possible_progress(run) :- ready(run, _, _).
+  | possible_progress(run) :-
+  |     waiting(run, _, token, _),
+  |     loop_pending_operation__run(operation, run), loop_pending_operation__token(operation, token).
+  | 
+  | // An outstanding operation can confirm an unfinished step despite a missing prerequisite.
+  | possible_progress(run) :-
+  |     eligible(run, step, _), !waiting_done(run, step), completion(run, step, token, _),
+  |     loop_pending_operation__run(operation, run), loop_pending_operation__token(operation, token).
+  | 
+  | // An undecided safety check can still be resolved by additional evidence.
+  | possible_progress(run) :-
+  |     current_step_safety_check(run, step, _, _, "unknown", _), !waiting_done(run, step).
+  | 
+  | // An outstanding operation can still supply a goal that no step produces.
+  | possible_progress(run) :-
+  |     unproduced_goal(run, _, token),
+  |     loop_pending_operation__run(operation, run), loop_pending_operation__token(operation, token).
+  | 
+  | // A supplied deferral of an unblocked step at the current cut withholds the fixed point.
+  | possible_progress(run) :-
+  |     loop_batch_deferral__run(deferral, run), loop_batch_deferral__step(deferral, step),
+  |     loop_batch_deferral__cut(deferral, cut), step_safety_current_cut(run, cut), !waiting_done(run, step),
+  |     current_step_safety_check(run, step, cut, _, "proved", _), !step_safety_blocked(run, step, cut).
+  | 
+  | .decl fixed_point(run: symbol, sweep: symbol, step: symbol, token: symbol, requirement: symbol)
+  | fixed_point(run, sweep, step, token, requirement) :-
+  |     loop_sweep_receipt__run(sweep, run), loop_sweep_receipt__event_time(sweep, _),
+  |     waiting(run, step, token, requirement), !possible_progress(run).
+  | 
+  | // Account for an unfinished goal without a producer. The goal record is its own requirement.
+  | fixed_point(run, sweep, goal, token, goal) :-
+  |     loop_sweep_receipt__run(sweep, run), loop_sweep_receipt__event_time(sweep, _),
+  |     unproduced_goal(run, goal, token), !possible_progress(run).
+  | 
+  | .output fixed_point

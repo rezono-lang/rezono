@@ -13,12 +13,12 @@ import tempfile
 from itertools import accumulate, count
 from pathlib import Path
 
-from rezono_compiler.gap import days_text
-from rezono_compiler.rules import COMPARE_AS, const_type, is_var
+from rezono_compiler.rules import COMPARE_AS, DAYS, const_type, is_var
 
 TYPE = {"string": "symbol", "integer": "number"}
 INPUT = ("base", "calc")  # what the rules read: a table, and a calculation selection with the rows given
 OPS = {"eq": "=", "ne": "!=", "lt": "<", "le": "<=", "gt": ">", "ge": ">=", "add": "+", "sub": "-", "mul": "*", "div": "/"}
+_DAY_SHAPE = r"[0-9]{4}-[0-9]{2}-[0-9]{2}"
 _UTC_SHAPE = r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}([.][0-9]+)?Z"
 _UTC_WHOLE = 20  # characters of YYYY-MM-DDTHH:mm:ssZ
 _MONTH_DAYS = (31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31)
@@ -56,8 +56,8 @@ def _decl(rel):
     return f".decl {rel.name}({', '.join(f'{c.name}:{TYPE[c.type]}' for c in rel.key + rel.values)})"
 
 
-def _utc_candidates(prog, extra_literals=()):
-    """Stratum-0 rules feeding every string value that can reach a UTC comparison into UtcIn."""
+def _string_candidates(prog, target, extra_literals=()):
+    """Stratum-0 rules feeding every string value that can reach `target` from inputs and rule literals."""
     rules = []
     for rel in sorted(prog.relations.values(), key=lambda r: r.name):
         if rel.role not in INPUT:
@@ -67,7 +67,7 @@ def _utc_candidates(prog, extra_literals=()):
             if col.type != "string":
                 continue
             terms = ["x" if j == i else "_" for j in range(len(cols))]
-            rules.append(f"UtcIn(x) :- {rel.name}({', '.join(terms)}).")
+            rules.append(f"{target}(x) :- {rel.name}({', '.join(terms)}).")
     literals = set(extra_literals)
     for r in prog.rules.values():
         for atom in (r.head, *(b.atom for b in r.body), *(a.atom for a in r.aggregates)):
@@ -75,14 +75,42 @@ def _utc_candidates(prog, extra_literals=()):
             for t, col in zip(atom.terms, rel.key):
                 if col.type == "string" and t != "_" and not is_var(t):
                     literals.add(_term(t, "string"))
+        for s in r.assignments:
+            if s.op == DAYS:
+                for t in (s.left, s.right):
+                    if not is_var(t):
+                        literals.add(_term(t, "string"))
         for c in r.conditions:
             if c.compare_as in COMPARE_AS:
                 for t in (c.left, c.right):
                     if not is_var(t):
                         literals.add(_term(t, "string"))
     for lit in sorted(literals):
-        rules.append(f"UtcIn({lit}).")
+        rules.append(f"{target}({lit}).")
     return rules
+
+
+def _day_rules(prog, extra_literals=()):
+    """`DayNum(x, n)`: x is a valid Gregorian YYYY-MM-DD date (years 0001..9999) and n its proleptic day ordinal.
+    Invalid spellings, non-existent calendar days and year 0000 derive nothing (decisions/rule-day-numbers.md)."""
+    return [
+        ".decl DayIn(x: symbol)",
+        ".decl DayShape(x: symbol)",
+        ".decl DayMonth(m: number, last: number)",
+        ".decl DayFields(x: symbol, y: number, m: number, d: number)",
+        ".decl DayOk(x: symbol, y: number, m: number, d: number)",
+        ".decl DayNum(x: symbol, n: number)",
+        *_string_candidates(prog, "DayIn", extra_literals),
+        *(f"DayMonth({month}, {last})." for month, last in enumerate(_MONTH_DAYS, 1)),
+        f'DayShape(x) :- DayIn(x), match("{_DAY_SHAPE}", x).',
+        ("DayFields(x, Y, M, D) :- DayShape(x), "
+         "Y = to_number(substr(x, 0, 4)), M = to_number(substr(x, 5, 2)), D = to_number(substr(x, 8, 2))."),
+        "DayOk(x, Y, M, D) :- DayFields(x, Y, M, D), Y >= 1, DayMonth(M, L), D >= 1, D <= L.",
+        "DayOk(x, Y, 2, 29) :- DayFields(x, Y, 2, 29), Y >= 1, Y % 4 = 0, Y % 100 != 0.",
+        "DayOk(x, Y, 2, 29) :- DayFields(x, Y, 2, 29), Y >= 1, Y % 400 = 0.",
+        ("DayNum(x, V) :- DayOk(x, Y, M, D), S = Y - (14 - M) / 12, N = (M + 9) % 12, "
+         "V = 365 * S + S / 4 - S / 100 + S / 400 + (153 * N + 2) / 5 + D."),
+    ]
 
 
 def _utc_rules(prog, extra_literals=()):
@@ -95,7 +123,7 @@ def _utc_rules(prog, extra_literals=()):
         ".decl UtcOk(x: symbol)",
         ".decl UtcCut(x: symbol, t: symbol)",
         ".decl UtcKey(x: symbol, k: symbol)",
-        *_utc_candidates(prog, extra_literals),
+        *_string_candidates(prog, "UtcIn", extra_literals),
         *(f"UtcMonth({month}, {last})." for month, last in enumerate(_MONTH_DAYS, 1)),
         f'UtcShape(x) :- UtcIn(x), match("{_UTC_SHAPE}", x).',
         ("UtcFields(x, Y, M, D, H, I, S) :- UtcShape(x), "
@@ -135,9 +163,14 @@ def _rule(prog, r):
         inner = _atom(prog, a.atom, over=a.over)
         fn = "count" if a.function == "count" else f"{a.function} W_"
         parts.append(f"{_term(a.var, 'integer')} = {fn} : {{ {inner} }}")
-    for s in r.assignments:
-        if s.op == "days":  # the oracle's own count, from the digits of the text: no date library on this side
-            parts.append(f"{_term(s.var, 'integer')} = {days_text(_term(s.left, 'string'))} - {days_text(_term(s.right, 'string'))}")
+    for idx, s in enumerate(r.assignments):
+        if s.op == DAYS:
+            left_d, right_d = f"DayLeft_{idx}_", f"DayRight_{idx}_"
+            parts.append(
+                f"DayNum({_term(s.left, 'string')}, {left_d}), "
+                f"DayNum({_term(s.right, 'string')}, {right_d}), "
+                f"{_term(s.var, 'integer')} = {left_d} - {right_d}"
+            )
             continue
         parts.append(f"{_term(s.var, 'integer')} = {_term(s.left, 'integer')} {OPS[s.op]} {_term(s.right, 'integer')}")
     for idx, c in enumerate(r.conditions):
@@ -167,6 +200,8 @@ def program(prog):
         lines.append(_decl(rel))
         lines.append(f".input {rel.name}" if rel.role in INPUT else f".output {rel.name}")
     lines += [_rule(prog, r) for r in sorted(prog.rules.values(), key=lambda r: r.id)]
+    if any(s.op == DAYS for r in prog.rules.values() for s in r.assignments):
+        lines += _day_rules(prog)
     modes = {c.compare_as for r in prog.rules.values() for c in r.conditions if c.compare_as}
     if "utc_instant" in modes:
         lines += _utc_rules(prog)
@@ -263,7 +298,8 @@ def bound(text, names):
         rule(s)
     # The relations: a name right before an opening bracket (a declaration, a head, a premise, an aggregate).
     for k, i in enumerate(code[:-1]):
-        if _NAME.match(toks[i]) and toks[code[k + 1]] == "(" and toks[i] not in COMPARE_AS:
+        if (_NAME.match(toks[i]) and toks[code[k + 1]] == "("
+                and toks[i] not in COMPARE_AS and not (k > 0 and toks[code[k - 1]] == "@")):
             head, sep, tail = toks[i].partition("__")
             toks[i] = names.get(head, head) + sep + tail
     return "".join(toks)
@@ -287,7 +323,8 @@ def view_bound(text, where, prog):
     toks, code = _code(text)
     line = list(accumulate((t.count("\n") for t in toks), initial=1))  # of each token, as the compiler counts
     for s in _rules(toks, code):
-        named = [i for p, i in enumerate(s[:-1]) if _NAME.match(toks[i]) and toks[s[p + 1]] == "("]
+        named = [i for p, i in enumerate(s[:-1])
+                 if _NAME.match(toks[i]) and toks[s[p + 1]] == "(" and not (p > 0 and toks[s[p - 1]] == "@")]
         have = reads.get((where, line[named[0]]), set()) if named else set()  # the first name is the head
         for i in named:
             if toks[i] in prog.relations and toks[i] not in have:  # exactly one, or this harness cannot tell
@@ -350,31 +387,36 @@ def closure(pack_dir, prog=None):
     return [view_bound(text, where, prog) for where, text in texts] + tables + lowered(prog)
 
 
+def _var(tok):
+    return tok != "_" and bool(_NAME.match(tok))
+
+
 def _operand(tok):
-    return (tok != "_" and bool(_NAME.match(tok))) or (len(tok) >= 2 and tok[0] == '"' and tok[-1] == '"')
+    return _var(tok) or (len(tok) >= 2 and tok[0] == '"' and tok[-1] == '"')
 
 
-def _rewrite_typed(text, counter):
-    """Rewrite `utc_instant(a) <op> utc_instant(b)` and `binary_text(a) <op> binary_text(b)` in rule text
-    into Soufflé comparisons, preserving comments and surrounding layout."""
+def _rewrite_source(text, counter):
+    """Rewrite typed scalar comparisons (`utc_instant`/`binary_text`) and `@days(text, origin)`
+    assignments in rule text into Soufflé constructs, preserving comments and surrounding layout."""
     toks, code = _code(text)
     modes = set()
+    has_days = False
     literals = {toks[i] for i in code if len(toks[i]) >= 2 and toks[i][0] == '"' and toks[i][-1] == '"'}
     p = 0
     while p + 8 < len(code):
-        mode = toks[code[p]]
-        if (mode in COMPARE_AS
+        tok0 = toks[code[p]]
+        if (tok0 in COMPARE_AS
                 and toks[code[p + 1]] == "("
                 and _operand(toks[code[p + 2]])
                 and toks[code[p + 3]] == ")"
                 and toks[code[p + 4]] in COMPARE
-                and toks[code[p + 5]] == mode
+                and toks[code[p + 5]] == tok0
                 and toks[code[p + 6]] == "("
                 and _operand(toks[code[p + 7]])
                 and toks[code[p + 8]] == ")"):
             left, op, right = toks[code[p + 2]], toks[code[p + 4]], toks[code[p + 7]]
-            modes.add(mode)
-            if mode == "utc_instant":
+            modes.add(tok0)
+            if tok0 == "utc_instant":
                 n = next(counter)
                 left_k, right_k = f"UtcL_{n}_", f"UtcR_{n}_"
                 replacement = f"UtcKey({left}, {left_k}), UtcKey({right}, {right_k}), {left_k} {op} {right_k}"
@@ -385,8 +427,26 @@ def _rewrite_typed(text, counter):
                 toks[j] = ""
             p += 9
             continue
+        if (_var(tok0)
+                and toks[code[p + 1]] == "="
+                and toks[code[p + 2]] == "@"
+                and toks[code[p + 3]] == DAYS
+                and toks[code[p + 4]] == "("
+                and _operand(toks[code[p + 5]])
+                and toks[code[p + 6]] == ","
+                and _operand(toks[code[p + 7]])
+                and toks[code[p + 8]] == ")"):
+            left, right = toks[code[p + 5]], toks[code[p + 7]]
+            has_days = True
+            n = next(counter)
+            left_d, right_d = f"DayL_{n}_", f"DayR_{n}_"
+            toks[code[p]] = f"DayNum({left}, {left_d}), DayNum({right}, {right_d}), {tok0} = {left_d} - {right_d}"
+            for j in range(code[p] + 1, code[p + 8] + 1):
+                toks[j] = ""
+            p += 9
+            continue
         p += 1
-    return "".join(toks), modes, literals
+    return "".join(toks), modes, has_days, literals
 
 
 def source(prog, texts):
@@ -396,7 +456,7 @@ def source(prog, texts):
     files of its import closure (`closure`, `pack_source`). A relation that an importing pack declares
     again (`// @extend`, with the same columns) is declared once; any other second declaration stays, and
     Soufflé refuses it."""
-    lines, columns, kept, modes, literals, counter = [], {}, [], set(), set(), count()
+    lines, columns, kept, modes, has_days, literals, counter = [], {}, [], set(), False, set(), count()
     for text in texts:
         earlier = dict(columns)  # what the files before this one declare
 
@@ -404,13 +464,16 @@ def source(prog, texts):
             name, cols = m.group(1), re.sub(r"\s+", "", m.group(2))
             columns.setdefault(name, cols)
             return "" if earlier.get(name) == cols else m.group(0)
-        rewritten, found, lits = _rewrite_typed(_DECL.sub(once, text), counter)
+        rewritten, found, found_days, lits = _rewrite_source(_DECL.sub(once, text), counter)
         kept.append(rewritten)
         modes |= found
+        has_days = has_days or found_days
         literals |= lits
     if any("UtcKey(" in text for text in kept):
         modes.add("utc_instant")
     modes |= {c.compare_as for r in prog.rules.values() if r.origin[0] == VIEW for c in r.conditions if c.compare_as}
+    uses_days = (has_days or any("DayNum(" in text for text in kept)
+                 or any(s.op == DAYS for r in prog.rules.values() if r.origin[0] == VIEW for s in r.assignments))
     declared = set(columns)
     for rel in sorted(prog.relations.values(), key=lambda r: r.name):
         if rel.role in INPUT and rel.name not in declared:
@@ -419,6 +482,8 @@ def source(prog, texts):
         lines.append(re.sub(r"^\s*\.(input|output)\b[^\n]*$", "", text, flags=re.M))
     lines += [f".input {n}" for n in sorted(declared) if prog.relations.get(n) and prog.relations[n].role == "base"]
     lines += [f".output {r.name}" for r in sorted(prog.relations.values(), key=lambda r: r.name) if r.role == "derived"]
+    if uses_days:
+        lines += _day_rules(prog, literals)
     if "utc_instant" in modes:
         lines += _utc_rules(prog, literals)
     if modes:

@@ -31,6 +31,8 @@ A review is a row that is never edited: who reviewed, in which role, the verdict
 
 Reading uses today's rights. Reviewing uses the rights held on the day of the review. Holding a role is a dated fact, `role_grant` (subject, role, first day, optional exclusive last day). A review is authorised when its reviewer held the role it names on its day, and that role has `may_review` over every element the change touches. A grant that ends after the review leaves the review valid; a grant that starts after it does not make it valid. A grant introduced by the change under review never authorises a review of that same change.
 
+A grant that no change introduced is a founding grant, such as the owner's from the start of an installation. A grant that a change introduces counts only once that change is accepted: from the day of the review that accepted it, and only while the change stays accepted, so not once it is stale or rejected. That acceptance rests on founding grants alone: the review that accepts a change to rights must be authorised by a founding grant, not by a grant that another change introduced. So two changes cannot accept each other into being, each granting the role that the reviewer of the other one needs, and a still proposed change grants nothing. It also keeps the rules stratified: whether a grant counts never depends on a review that the grant itself authorises.
+
 ## 4. Read to judge
 
 Whoever accepts or rejects must be able to read everything the judgement rests on: every element the change touches and every element of its support, through `may_read` of the role the review names. A review that cannot read one of them is blind.
@@ -45,7 +47,7 @@ A valid acceptance is about one pair (content, support). When the change's curre
 
 ## 7. Changing rights is itself a proposal
 
-A change to role grants or to grant rules is proposed and reviewed like any other change. Every beneficiary of a grant that a change introduces counts as an author of that change, so the beneficiary cannot accept it. This holds in the lab phase too (section 10).
+A change to role grants or to grant rules is proposed and reviewed like any other change, and is accepted on the authority of founding grants (section 3). Every beneficiary of a grant that a change introduces counts as an author of that change, so the beneficiary cannot accept it. This holds in the lab phase too (section 10).
 
 ## 8. Four checks that block
 
@@ -54,7 +56,7 @@ A change to role grants or to grant rules is proposed and reviewed like any othe
 | Check | Fires for an active review when |
 |---|---|
 | `review_self(review)` | the reviewer is an author of the change (its author, or a beneficiary of a grant it introduces), except the owner's own work in the lab phase |
-| `review_unauthorized(review)` | the reviewer did not hold the named role on the review day through a grant not introduced by this change, or that role lacks `may_review` over one element the change touches |
+| `review_unauthorized(review)` | the reviewer did not hold the named role on the review day through a grant that counts on that day (a founding grant, or one whose change was accepted on founding grants by that day and is still accepted) and that this change did not introduce, or that role lacks `may_review` over one element the change touches |
 | `review_blind(review)` | the named role lacks `may_read` over one element the change touches or rests on |
 | `review_conflict(change)` | two valid reviews about the current content and support have opposite verdicts |
 
@@ -111,7 +113,7 @@ During a conflict there is no extra state: the change is neither accepted nor re
 The cases about assessment and rights are red tests now, with the mark `extra:` and this decision in their reason:
 
 - `compiler/tests/test_std_access.py::test_standard_access_declares_the_four_rights`: the declarations of section 1.
-- `compiler/tests/test_std_review.py`, one test per task: the review states (no review, accepted, rejected with a reason, a new content, a new support, an unrelated change, a review of another change, a re-review); `review_self` (four eyes, the owner in the lab phase, a non-owner in the lab phase, two people with one role, a beneficiary); `review_unauthorized` (a grant revoked later, a grant that starts later, an exclusive last day, a grant in the change itself, a typed right, a role that is claimed but not held, a role without the review capability); `review_blind`; `review_conflict` with dismissal; and the publication policy with the lab phase.
+- `compiler/tests/test_std_review.py`, one test per task: the review states (no review, accepted, rejected with a reason, a new content, a new support, an unrelated change, a review of another change, a re-review); `review_self` (four eyes, the owner in the lab phase, a non-owner in the lab phase, two people with one role, a beneficiary); `review_unauthorized` (a grant revoked later, a grant that starts later, an exclusive last day, a grant in the change itself, a grant from a change that is proposed, accepted on founding grants, reviewed before that acceptance or stale, two changes that grant each other's reviewer, a typed right, a role that is claimed but not held, a role without the review capability); `review_blind`; `review_conflict` with dismissal; and the publication policy with the lab phase.
 
 The other cases are not red tests now:
 
@@ -130,6 +132,7 @@ The tests use a small consumer pack of their own, not an extension of `tests/fix
 - **Rights as fields of a role in the deploy profile.** Then a grant has no proof and no history, and a review could not be checked against the rights of its day.
 - **Evaluate review rights with today's grants.** Revoking a role would erase every earlier acceptance, and a role granted today would approve old reviews retroactively.
 - **Accept on merge.** The host's merge says the change is integrated, not that someone allowed to judge it did. It would make every merged change accepted, including the author's own.
+- **Let a grant count once its change is accepted on any grant that counts.** That would allow delegation in chains, but whether a grant counts would then depend on reviews that such grants authorise: a recursion through the negations of the checks, which the rule program cannot stratify, and a door for changes that approve each other. A chain of delegation can come later as an explicit, bounded rule.
 - **A `conflict` state.** It would add a state the change contract does not have, and the queue already says what to do: review again.
 - **The last review wins.** It makes the outcome depend on the order in which a journal is read, and hides a real disagreement.
 - **Put the assessment in `std-access`.** `std-access` stays the small vocabulary of rights; what a review means is a pack of its own that a consumer imports when it reviews.
