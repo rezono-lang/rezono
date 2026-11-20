@@ -121,7 +121,15 @@ class Schema:
         candidates = [engine for owner in owners for engine in self.by_owner.get((owner, authored), ())]
         aliases = [definition for owner in owners for definition in self.aliases.get((owner, authored), ())]
         if len(candidates) + len(aliases) > 1:
-            raise Refusal("R046", f"{spelling!r} is ambiguous; qualify it with an import alias", at)
+            found = sorted({
+                *((self.classes if engine in self.classes else self.enums)[engine][0].id for engine in candidates),
+                *(definition.id for definition in aliases),
+            })
+            raise Refusal(
+                "R046",
+                f"{spelling!r} is ambiguous (declared in {' and '.join(found)}); qualify it with an import alias",
+                at,
+            )
         if candidates:
             name = candidates[0]
             definition, _ = (self.classes if name in self.classes else self.enums)[name]
@@ -194,35 +202,50 @@ class Schema:
             raise Refusal("R049", f"{authored} has no supported identifier: {'; '.join(errors)}", at)
         return storage
 
+    def _ancestors(self, subject: str) -> Iterator[tuple[str, modules.Module, str]]:
+        """Yield `(engine_name, module, authored_name)` for `subject` and each ancestor in order."""
+        current = subject
+        seen: set[str] = set()
+        while current in self.classes and current not in seen:
+            seen.add(current)
+            definition, authored = self.classes[current]
+            yield current, definition, authored
+            cls = definition.sv.get_class(authored)
+            if cls is None or not cls.is_a:
+                break
+            parent_owner = definition.parent_targets.get(authored)
+            parent = self.names.resolve(definition.id, cls.is_a, owner=parent_owner)
+            if parent is None:
+                break
+            current = parent
+
     def assignable(self, actual: str, expected: str) -> bool:
         if actual == expected:
             return True
         if actual not in self.classes or expected not in self.classes:
             return False
-        definition, authored = self.classes[actual]
-        return any(self.names.resolve(definition.id, ancestor) == expected
-                   for ancestor in definition.sv.class_ancestors(authored, mixins=False))
+        return any(engine == expected for engine, _, _ in self._ancestors(actual))
 
     def slot(self, subject: str, name: str, at: str) -> tuple[ResolvedPath, bool]:
         if subject not in self.classes:
             raise Refusal("R003", f"{subject} is a value and has no slot {name!r}", at)
-        definition, authored = self.classes[subject]
-        view = definition.sv
-        for ancestor in view.class_ancestors(authored, mixins=False):
-            kind = view.get_class(ancestor)
+        _, authored = self.classes[subject]
+        for owner, owner_mod, ancestor in self._ancestors(subject):
+            kind = owner_mod.sv.get_class(ancestor)
             if name in (kind.attributes or {}) or name in (kind.slots or []):
                 break
         else:
             raise Refusal("R001", f"{authored} has no slot {name!r}", at)
-        owner = self.names.resolve(definition.id, ancestor)
-        slot = view.induced_slot(name, ancestor)
+        slot = owner_mod.sv.induced_slot(name, ancestor)
         if slot.identifier:
             scalar = "Int" if self.storage(subject, at) == "integer" else "Text"
             return (None, scalar), False
-        rng = slot.range or view.schema.default_range
-        target = self.names.resolve(definition.id, rng)
+        rng = slot.range or owner_mod.sv.schema.default_range
+        slot_owner = owner_mod.slot_targets.get((ancestor, name))
+        target = self.names.resolve(owner_mod.id, rng, owner=slot_owner)
         if target is None:
-            target, _ = self.scalar_type(definition, rng, at)
+            target_mod = self.names.modules[slot_owner] if slot_owner in self.names.modules else owner_mod
+            target, _ = self.scalar_type(target_mod, rng, at)
         return (f"{owner}__{name}", target), bool(slot.multivalued)
 
     def slot_states(self, subject: str, name: str) -> tuple[tuple[str, ...], Place | None]:
@@ -230,16 +253,17 @@ class Schema:
 
         A missing required scalar is unknown and a missing optional one is not applicable. An identifier is
         always known, and a multivalued hop gives a collection whose fold decides its own state."""
-        definition, authored = self.classes[subject]
-        view = definition.sv
-        ancestor = next(ancestor for ancestor in view.class_ancestors(authored, mixins=False)
-                        if name in (view.get_class(ancestor).attributes or {})
-                        or name in (view.get_class(ancestor).slots or []))
-        slot = view.induced_slot(name, ancestor)
-        if slot.identifier or slot.multivalued:
-            return ("known",), None
-        owner, written = self.classes.get(self.names.resolve(definition.id, ancestor) or "", (definition, ancestor))
-        return ("known", "unknown" if slot.required else "not_applicable"), self.slot_place(owner, written, name)
+        for _, owner_mod, ancestor in self._ancestors(subject):
+            kind = owner_mod.sv.get_class(ancestor)
+            if name in (kind.attributes or {}) or name in (kind.slots or []):
+                slot = owner_mod.sv.induced_slot(name, ancestor)
+                if slot.identifier or slot.multivalued:
+                    return ("known",), None
+                return (
+                    ("known", "unknown" if slot.required else "not_applicable"),
+                    self.slot_place(owner_mod, ancestor, name),
+                )
+        return ("known",), None
 
     def slot_place(self, module: modules.Module, kind: str, name: str) -> Place | None:
         key = module.pack, module.rel
