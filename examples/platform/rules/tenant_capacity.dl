@@ -1,11 +1,76 @@
+.decl verified_receipt(receipt: symbol, source: symbol, scope: symbol, cut: symbol, inventory: symbol, content: symbol)
+.decl verified_member(receipt: symbol, member: symbol, part: number, value: symbol)
+
+.decl capacity_expected_member(receipt: symbol, period: symbol, tenant: symbol)
+capacity_expected_member(receipt, p, t) :-
+    verified_receipt(receipt, "capacity-readings", _, _, _, _),
+    verified_member(receipt, member, 0, "capacity-reading"),
+    verified_member(receipt, member, 1, p),
+    verified_member(receipt, member, 2, t).
+
+.decl capacity_tenant_reading(period: symbol, tenant: symbol)
+capacity_tenant_reading(p, t) :-
+    capacity_reading__period(r, p),
+    capacity_reading__tenant(r, t),
+    capacity_reading__cores(r, _).
+
+.decl capacity_period_receipt(receipt: symbol, period: symbol)
+capacity_period_receipt(receipt, p) :- capacity_expected_member(receipt, p, _).
+
+.decl capacity_period_has_receipt(period: symbol)
+capacity_period_has_receipt(p) :- capacity_period_receipt(_, p).
+
+.decl capacity_period_second_receipt(period: symbol)
+capacity_period_second_receipt(p) :-
+    capacity_period_receipt(r1, p),
+    capacity_period_receipt(r2, p),
+    r1 != r2.
+
+.decl capacity_period_missing_reading(period: symbol, tenant: symbol)
+capacity_period_missing_reading(p, t) :-
+    capacity_pool(p),
+    capacity_expected_member(_, p, t),
+    !capacity_tenant_reading(p, t).
+
+.decl capacity_period_has_missing_reading(period: symbol)
+capacity_period_has_missing_reading(p) :- capacity_period_missing_reading(p, _).
+
+.decl capacity_period_unlisted_reading(period: symbol)
+capacity_period_unlisted_reading(p) :-
+    capacity_period_receipt(receipt, p),
+    capacity_tenant_reading(p, t),
+    !capacity_expected_member(receipt, p, t).
+
+.decl capacity_period_covered(period: symbol)
+capacity_period_covered(p) :-
+    capacity_pool(p),
+    capacity_period_has_receipt(p),
+    !capacity_period_second_receipt(p),
+    !capacity_period_has_missing_reading(p),
+    !capacity_period_unlisted_reading(p).
+
 .decl capacity_period_reading(period: symbol, reading: symbol, cores: number)
 capacity_period_reading(p, r, n) :- capacity_reading__period(r, p), capacity_reading__cores(r, n).
 
 // The complete platform publication can trace this aggregate back to every reading.
 .decl platform_capacity_basis(period: symbol, free: number, used: number)
 platform_capacity_basis(p, free, used) :-
-    capacity_pool__cores(p, limit), capacity_period_reading(p, _, _),
+    capacity_pool__cores(p, limit), capacity_period_covered(p), capacity_period_reading(p, _, _),
     used = sum n : { capacity_period_reading(p, _, n) }, free = limit - used.
+
+.decl platform_capacity_unknown(period: symbol, reason: symbol, subject: symbol)
+platform_capacity_unknown(p, "coverage-missing", p) :-
+    capacity_pool(p),
+    !capacity_period_has_receipt(p).
+platform_capacity_unknown(p, "coverage-missing", p) :-
+    capacity_pool(p),
+    capacity_period_second_receipt(p).
+platform_capacity_unknown(p, "coverage-missing", p) :-
+    capacity_pool(p),
+    capacity_period_unlisted_reading(p),
+    !capacity_period_has_missing_reading(p).
+platform_capacity_unknown(p, "reading-missing", t) :-
+    capacity_period_missing_reading(p, t).
 
 tenant_capacity_summary(t, p, free, used, own) :-
     capacity_reading__tenant(r, t), capacity_reading__period(r, p), capacity_reading__cores(r, own),
@@ -21,5 +86,6 @@ may_read(t, "capacity_notice", d) :-
 publication_required(t, "tenant_capacity_summary", t, p) :- capacity_reading__tenant(_, t), capacity_pool(p).
 
 .output platform_capacity_basis
+.output platform_capacity_unknown
 .output tenant_capacity_summary
 .output publication_required

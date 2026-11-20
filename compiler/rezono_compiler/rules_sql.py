@@ -27,11 +27,11 @@ and WHERE as the rule. It reads the final relations, so it is never part of a re
 from dataclasses import replace
 
 from . import feldera_names
-from .rules import Condition, calc_input_table, const_type, is_var, upper
+from .rules import BOOLEAN, Condition, calc_input_table, const_type, is_var, upper
 from .sqltext import literal, q
 
 OPS = {"eq": "=", "ne": "<>", "lt": "<", "le": "<=", "gt": ">", "ge": ">=", "add": "+", "sub": "-", "mul": "*", "div": "/"}
-SQL_TYPE = {"string": "VARCHAR", "integer": "BIGINT"}
+SQL_TYPE = {"string": "VARCHAR", "integer": "BIGINT", "boolean": "BOOLEAN"}
 # Integer division truncated toward zero, on the absolute values, so it does not depend on how `//` rounds a
 # negative operand; HUGEINT, so that abs(-2^63) fits. Only the quotient -2^63 / -1 does not fit a BIGINT.
 DUCKDB_MACROS = ("CREATE OR REPLACE MACRO rezono_quotient(a, b) AS CAST(CASE WHEN (a < 0) = (b < 0) "
@@ -84,6 +84,8 @@ def typed_condition(c, left, right, dialect="duckdb"):
 def lit_sql(term, typ):
     if typ == "integer":
         return f"CAST({int(term)} AS BIGINT)"
+    if typ == "boolean":
+        return "TRUE" if BOOLEAN[term] else "FALSE"
     return literal(term)
 
 
@@ -298,7 +300,8 @@ def wants_witness(prog, rule, witnesses):
 
 def empty_relation(rel, dialect):
     """A declaration-only extension is empty, with typed columns and no implicit grants or NULLs."""
-    cols = [f"{lit_sql('0' if c.type == 'integer' else '', c.type)} AS {q(c.name)}" for c in rel.key]
+    empty = {"string": "", "integer": "0", "boolean": "false"}
+    cols = [f"{lit_sql(empty[c.type], c.type)} AS {q(c.name)}" for c in rel.key]
     # Calcite requires a FROM clause before WHERE. The constant source contributes no facts.
     source = " FROM (VALUES (1)) AS seed(n)" if dialect == "feldera" else ""
     return f"SELECT {', '.join(cols)}{source} WHERE FALSE"

@@ -23,7 +23,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import cast
 
-from . import rezono_alias, rezono_calc, rezono_enum, rezono_extend, rezono_key, rezono_kind, rezono_metadata, rezono_slot, rezono_unit, strict_yaml
+from . import rezono_alias, rezono_calc, rezono_enum, rezono_extend, rezono_key, rezono_kind, rezono_metadata, rezono_reason, rezono_slot, rezono_unit, strict_yaml
 from .native_literals import NATIVE_FORMAT, native_literal_errors
 from .schemaview import SchemaView
 from linkml_runtime.linkml_model import SchemaDefinition
@@ -42,7 +42,6 @@ PATH = re.compile(r"^rezono/[a-z][a-z0-9_]*(/[a-z][a-z0-9_]*)*\.(rezono|json)$")
 REFUSED = {
     "rounding": ("a rounding is not lowered yet", "§6"),
     "param": ("a parameter is not lowered yet", "§6"),
-    "reason": ("a reason declaration is not lowered (no ticket yet)", "§6"),
     "check": ("a check statement is not lowered yet", "§6"),
 }
 
@@ -68,6 +67,7 @@ class Lowered:
     form: dict
     uses: list[str] = field(default_factory=list)  # module ids within the pack, sorted
     foreign: list[str] = field(default_factory=list)  # `<pack>:<module>` of the schema modules of the used packs
+    reasons: list[tuple[str, str]] = field(default_factory=list)  # (code, label) in declaration order
 
 
 def declared(meta: dict, pack_dir: Path, errors: list[str], *, reject_undeclared: bool = True,
@@ -444,11 +444,14 @@ def lower_pack(pack_dir: Path, meta: dict, pack: str, declared_by: Mapping[str, 
     for mid, ns in sorted(declared_by.items()):
         for n in ns:
             owners.setdefault(n, []).append(mid)
+    reason_owners: dict[str, list[str]] = {}
     for d, form in forms.items():
         if d.id in declared_by:
             errors.append(f"{pack_dir.name}/{d.module}: module '{d.id}' is also a schema module (schema/{d.id}.yaml)")
         for n in names(form) if form else {}:
             owners.setdefault(n, []).append(d.id)
+        for code in rezono_reason.codes(form) if form else ():
+            reason_owners.setdefault(code, []).append(d.id)
         if form:
             local_ints = {
                 str(decl.get("unit") or decl.get("type"))
@@ -457,14 +460,20 @@ def lower_pack(pack_dir: Path, meta: dict, pack: str, declared_by: Mapping[str, 
             }
             if local_ints:
                 ints.setdefault(d.id, set()).update(local_ints)
-    return [lower(pack_dir, d, form, pack, owners, errors, imported, pinned or {}, ints)
+    default_lang = str(meta.get("default_language", ""))
+    defined_reasons = rezono_reason.defined_in_catalog(pack_dir, default_lang)
+    return [lower(pack_dir, d, form, pack, owners, errors, imported, pinned or {}, ints,
+                  reason_owners=reason_owners, defined_reasons=defined_reasons, default_language=default_lang)
             for d, form in forms.items() if form is not None]
 
 
 def lower(pack_dir: Path, d: Declared, form: dict, pack: str, owners: dict[str, list[str]],
           errors: list[str], imported: bool = False,
           pinned: Mapping[str, Mapping[str, Set[str]]] | None = None,
-          integer_types: Mapping[str, Set[str]] | None = None) -> Lowered:
+          integer_types: Mapping[str, Set[str]] | None = None, *,
+          reason_owners: Mapping[str, list[str]] | None = None,
+          defined_reasons: Set[str] = frozenset(),
+          default_language: str = "") -> Lowered:
     """One module's form as the LinkML schema that says the same (§5.1, §5.2), or a refusal at a line. An `extend`
     adds nothing to the schema: its tables are rules, which rezono_table writes once the pack's model is read
     (§9.1)."""
@@ -515,6 +524,9 @@ def lower(pack_dir: Path, d: Declared, form: dict, pack: str, owners: dict[str, 
                         for n in ns:
                             owners.setdefault(n, []).append(f"{target}:{mid}")
     own = names(form)
+    reasons: list[tuple[str, str]] = []
+    seen_reasons: set[str] = set()
+    reason_owners = reason_owners or {}
     declared_names = own.keys() | owners.keys()
     uses: set[str] = set()
     enums: dict[str, dict] = {}
@@ -591,6 +603,20 @@ def lower(pack_dir: Path, d: Declared, form: dict, pack: str, owners: dict[str, 
                 refuse(at, "a scalar alias requires rezono.module/2", "§5.1")
             elif alias := rezono_alias.lower(decl, at, refuse):
                 aliases[decl["type"]] = alias
+        elif "reason" in decl:
+            code = decl.get("reason")
+            elsewhere = [o for o in reason_owners.get(code, []) if o != d.id] if isinstance(code, str) else ()
+            lowered_reason = rezono_reason.lower(
+                decl, at, refuse,
+                seen=seen_reasons,
+                elsewhere=elsewhere,
+                defined=defined_reasons,
+                default_language=default_language,
+            )
+            if isinstance(code, str) and rezono_reason.CODE.fullmatch(code):
+                seen_reasons.add(code)
+            if lowered_reason is not None:
+                reasons.append(lowered_reason)
         elif "dataset" in decl and form["format"] == DATASET_FORMAT and trailing_dataset(module):
             continue  # The fact loader reads the dataset's tables (decisions/language-library-datasets.md).
         else:
@@ -610,7 +636,7 @@ def lower(pack_dir: Path, d: Declared, form: dict, pack: str, owners: dict[str, 
         )
     foreign = [f"{u}:{mid}" for u in used for mid in sorted(pinned[u])]
     schema["imports"] += foreign
-    return Lowered(d, schema, form, sorted(u for u in uses if u.partition(":")[2] == ""), foreign)
+    return Lowered(d, schema, form, sorted(u for u in uses if u.partition(":")[2] == ""), foreign, reasons)
 
 
 def view(schema: dict, importmap: dict) -> SchemaView:

@@ -69,16 +69,6 @@ DATED_ROWS = [
 ]
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=MissingDatedFactLowering,
-    reason="M3: decisions/language-dated-facts.md: Support dated FactRow declarations in named datasets inside "
-           "compiler/rezono_compiler/facts.py via facts.load(pack, path, *, as_of=None, known=None): verify that "
-           "each dated row targets an existing record created by a fact table or undated row, type-check its slot "
-           "assignments, select the applying version on (as_of, known) by latest known date (half-open valid range "
-           "or open end), omit the slot row when no version applies, and raise LoadError with versions_overlap on "
-           "a same-known overlap.",
-)
 def test_lower_dated_fact(tmp_path):
     model, form_path = make_pack(tmp_path, "valid", DATED_ROWS)
     try:

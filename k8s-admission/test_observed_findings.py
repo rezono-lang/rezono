@@ -81,3 +81,27 @@ def test_observed_findings_rejects_incomplete_or_malformed_observation(bad_obser
     supply = load_program("verified-supply.rules.yaml")
     with pytest.raises(ValueError):
         observed_findings(supply, "allow_image", {}, [bad_observation], rule="verified-supply", digest=DIGEST)
+
+
+def test_observed_findings_requires_object_namespace():
+    from observed_findings import observed_findings
+
+    supply = load_program("verified-supply.rules.yaml")
+    for bad_object in (
+        {"kind": "Pod", "name": "a"},
+        {"kind": "Pod", "namespace": None, "name": "a"},
+        {"kind": "Pod", "namespace": 123, "name": "a"},
+    ):
+        observation = {"object": bad_object, "rows": {"pod_image": [("blue", "web", IMAGE_A)]}, "missing": []}
+        with pytest.raises(ValueError, match="namespace"):
+            observed_findings(supply, "allow_image", {}, [observation], rule="verified-supply", digest=DIGEST)
+
+    cluster_scoped = {
+        "object": {"kind": "ClusterRole", "namespace": "", "name": "admin"},
+        "rows": {"pod_image": [("", "web", IMAGE_A)]},
+        "missing": [],
+    }
+    assert observed_findings(supply, "allow_image", {}, [cluster_scoped], rule="verified-supply", digest=DIGEST) == [
+        finding({"kind": "ClusterRole", "namespace": "", "name": "admin"}, "not_admitted",
+                relation="pod_image", row=["", "web", IMAGE_A]),
+    ]

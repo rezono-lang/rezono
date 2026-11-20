@@ -3,7 +3,7 @@ decider: [language]
 decided_on: 2026-11-19
 valid_from: 2026-11-19
 state: in_force
-subject: standard-pack-candidates
+subject: language-standard-pack-candidates
 ---
 
 # Staging candidates for ready standard packs and examples

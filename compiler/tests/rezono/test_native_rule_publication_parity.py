@@ -283,16 +283,6 @@ class NativePublicationError(Exception):
     """The native source reached the parity gate but could not publish the required result."""
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=NativePublicationError,
-    reason="M3: Publish native rules through the normal pack compiler in compiler/rezono_compiler/. "
-           "Read decisions/language-native-rules.md sections 3, 5, 7 and 11, and the migration comparison in "
-           "decisions/language-expression-semantics.md §4. Waits for test_expression_python_branch_bindings and "
-           "test_order_check_ordinary_filtered_count, which lower the slot-call conjunction and the count on "
-           "the ordinary path. The two source fixtures are authored, so state projection and the corpus "
-           "converter are not needed here.",
-)
 def test_native_rule_publication_parity(tmp_path):
     expected = published_meaning(tmp_path / "legacy", "legacy")
     try:

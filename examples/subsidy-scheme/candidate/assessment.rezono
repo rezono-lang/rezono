@@ -1,0 +1,52 @@
+rezono 0
+pack subsidy-scheme
+
+rules assessment
+  | // Can an application be assessed, and if not, why not? One named outcome per application,
+  | // and the facts the calculation reads once the outcome is known.
+  | 
+  | // Income statements are open (schema: world open): a statement that is there is true, a missing one says
+  | // nothing about the income. So a rule may not read "no statement" as "no income".
+  | .decl has_income_statement(household: symbol)
+  | has_income_statement(h) :- income_statement__household(_, h).
+  | 
+  | // What is not registered. An @absence relation speaks about the registration, never about the world:
+  | // "no income statement has been received for this household" is simply true or not on a snapshot.
+  | // @absence
+  | .decl income_not_received(application: symbol, household: symbol)
+  | income_not_received(a, h) :- application__household(a, h), !has_income_statement(h).
+  | 
+  | // @absence
+  | .decl income_missing(application: symbol)
+  | income_missing(a) :- income_not_received(a, _).
+  | 
+  | // Quote lines are closed: what is registered is all there is, so an application without a line has no quote.
+  | .decl quote_missing(application: symbol)
+  | quote_missing(a) :- application(a), !has_quote(a).
+  | 
+  | // The outcome: every application has exactly one state. `unknown` names its reason (a message
+  | // reason.<reason>); an application can have more than one. `known` has no reason.
+  | // @outcome application
+  | .decl assessment(application: symbol, state: symbol, reason: symbol)
+  | assessment(a, "unknown", "income_statement_not_received") :- income_missing(a).
+  | assessment(a, "unknown", "quote_not_received") :- quote_missing(a).
+  | assessment(a, "known", "") :- application(a), !income_missing(a), !quote_missing(a).
+  | 
+  | // What a known assessment rests on. These read the `known` row, so for an application that cannot be
+  | // assessed they have no row at all, and the calculation gives `unknown`, never an amount.
+  | .decl assessed_income(application: symbol, cents: number)
+  | assessed_income(a, c) :- assessment(a, "known", ""), application__household(a, h), income_statement__household(s, h), income_statement__income(s, c).
+  | 
+  | .decl assessed_costs(application: symbol, cents: number)
+  | assessed_costs(a, c) :- assessment(a, "known", ""), eligible_costs(a, c).
+  | 
+  | // The size of the household behind an application, for the income threshold (article 4).
+  | .decl household_size(application: symbol, persons: number)
+  | household_size(a, n) :- application__household(a, h), household__persons(h, n).
+  | 
+  | // An application of a household with a registered advice report (article 6). The advice register is
+  | // closed, so no report means no advice.
+  | .decl advised(application: symbol)
+  | advised(a) :- application__household(a, h), advice_report__household(_, h).
+  | 
+  | .output assessment, assessed_income, assessed_costs, household_size, advised

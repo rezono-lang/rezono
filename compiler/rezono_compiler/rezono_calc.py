@@ -37,7 +37,7 @@ DIRECT_CMP = {"=": "eq", "<": "lt", "<=": "lte", ">=": "gte"}
 DERIVED_MEMBERS = frozenset({
     "derived", "type", "card", "value", "unless", "versions", "output", "unit", "definitions", "totality",
 })
-VERSION_MEMBERS = frozenset({"version", "replaces", "valid", "known", "value", "source", "definitions"})
+VERSION_MEMBERS = frozenset({"version", "valid", "known", "value", "definitions"})
 DEFINITION_MEMBERS = frozenset({"name", "when", "value", "overrides"})
 OVERRIDE_MEMBERS = frozenset({"definition", "reason"})
 PARAM_MEMBERS = frozenset({"param", "type", "per", "value", "source", "versions"})
@@ -331,19 +331,25 @@ def validate_module(decls: list, refuse: Refuse) -> None:
 
 def resolve_subject(pack: Pack, pack_name: str, cls_name: str,
                     renames: Mapping[str, Mapping[str, str]] | None = None) -> tuple[str, str]:
-    """Return `(own_id, root_id)` for a subject class name in `pack_name`."""
-    from .pack import snake
+    """Return `(own_id, root_id)` for a subject class name in `pack_name`, or raise R050 if unresolved."""
+    from .pack import CompileError
 
     if pack_name == pack.meta["name"]:
-        found = next((k for k, kind in pack.kinds.items() if kind.cls == cls_name), None)
-        own = found if found is not None else snake(cls_name)
-        return own, own
-    mapping = (renames or {}).get(pack_name, {})
-    for own_id, root_id in mapping.items():
-        if root_id in pack.kinds and pack.kinds[root_id].cls == cls_name:
-            return own_id, root_id
-    own = snake(cls_name)
-    return own, mapping.get(own, own)
+        matches = [(k, k) for k, kind in pack.kinds.items() if kind.cls == cls_name]
+    else:
+        mapping = (renames or {}).get(pack_name, {})
+        matches = [
+            (own_id, root_id)
+            for own_id, root_id in mapping.items()
+            if root_id in pack.kinds and pack.kinds[root_id].cls == cls_name
+        ]
+    if len(matches) == 1:
+        return matches[0]
+    if len(matches) > 1:
+        msg = f"subject kind {cls_name!r} is ambiguous in pack {pack_name} (R050)"
+    else:
+        msg = f"subject kind {cls_name!r} is not declared in pack {pack_name} (R050)"
+    raise CompileError(msg, [Diagnostic("R050", msg)])
 
 
 def _place(line_map: Mapping[str, int], at: str) -> int:
@@ -638,10 +644,17 @@ def lower_module(
         kind_name, derived_list = found
         if subject_cls is None:
             subject_cls = kind_name
-            own_subject, root_subject = resolve_subject(pack, module.pack, kind_name, renames)
+            try:
+                own_subject, root_subject = resolve_subject(pack, module.pack, kind_name, renames)
+            except CompileError as err:
+                detail = err.diagnostics[0].message.removesuffix(" (R050)") if err.diagnostics else str(err)
+                refuse(decl_at, detail)
+                continue
             doc["subject"] = own_subject
         elif kind_name != subject_cls:
             refuse(decl_at, f"two subjects: {subject_cls} and {kind_name}")
+            continue
+        elif own_subject is None or root_subject is None:
             continue
 
         assert own_subject is not None and root_subject is not None
@@ -663,18 +676,21 @@ def lower_module(
                 continue
 
             if "versions" in dv:
-                version_specs = [
-                    (
-                        f"{dv_at}/versions/{vi}",
+                version_specs = []
+                for vi, ver in enumerate(dv["versions"]):
+                    ver_at = f"{dv_at}/versions/{vi}"
+                    if extra := set(ver) - VERSION_MEMBERS:
+                        refuse(ver_at, f"a version with {', '.join(sorted(extra))} is not lowered")
+                        continue
+                    version_specs.append((
+                        ver_at,
                         str(ver["version"]),
                         ver["valid"][0] if ver.get("valid") else DEFAULT_VALID_FROM,
                         ver["valid"][1] if ver.get("valid") and len(ver["valid"]) > 1 else DEFAULT_VALID_UNTIL,
                         ver.get("known") or DEFAULT_KNOWN_FROM,
                         ver.get("definitions"),
                         ver.get("value"),
-                    )
-                    for vi, ver in enumerate(dv["versions"])
-                ]
+                    ))
             else:
                 version_specs = [
                     (

@@ -1,0 +1,107 @@
+rezono 0
+pack subsidy-scheme
+use std-decision
+
+schema subsidy
+  iri "https://rezono.example/subsidy"
+  language en
+  prefix linkml = "https://w3id.org/linkml/"
+  prefix rdfs = "http://www.w3.org/2000/01/rdf-schema#"
+  prefix schema = "http://schema.org/"
+  import "linkml:types"
+  default range Text
+  description "A municipal energy-saving subsidy scheme, entirely synthetic: the regulation and the decisions that set its amounts, households and their applications with quoted costs, and the registers a case officer consults. The award follows from these by rules (rules/, calc/); nothing here stores it."
+  annotation layer = "facts"
+
+unit Cents = money minor EUR
+
+enum Eligibility world closed = eligible | not_eligible
+  description "Whether the regulation counts a cost towards the subsidy (article 3)."
+
+enum ParameterUnit world closed = cents | ppm
+  description "What the whole number of a parameter counts."
+
+kind Article world closed
+  description "An article of the Energy-Saving Subsidy Regulation 2026. Origin: the regulation as published."
+  id: Text identifier
+  title: Text
+    iri "rdfs:label"
+  text: Text
+    iri "schema:description"
+    description "What the article says."
+
+kind SchemeParameter world closed
+  description "An amount or rate of the scheme, valid from a date until (exclusive) another. Origin: the decision that set it, under the article that uses it. A new value is a new row, never an edit. The decision is a Decision of the standard pack std-decision: who took it, when, from when it applies and how it stands are its slots, and its rules say whether it is in force on a reference date. A decided value (plane: control): a new row comes only from a reviewed proposal, which the policy adviser reviews."
+  annotation owner = "policy_adviser"
+  annotation plane = "control"
+  id: Text identifier
+  name: Text
+    description "The name a calculation rule reads. Of the rows with one name, the row valid on the evaluation date is chosen."
+    pattern "^[a-z][a-z0-9_]*$"
+  value: Int
+    minimum 0
+  `unit`: ParameterUnit
+  valid_from: Date
+    iri "schema:validFrom"
+  valid_until: Date
+    iri "schema:validThrough"
+    description "Exclusive."
+  calendar: Calendar
+    description "The calendar its two dates are days of."
+  article: Article
+  decision: Decision
+
+kind Calendar world closed
+  description "A calendar whose days the scheme counts: the axis on which a validity and a reference day are compared (std-time reads it as its Axis, views.yaml). Origin: a design choice of this example. The regulation dates everything by the civil calendar, so the pack has one."
+  id: Text identifier
+  title: Text
+    iri "rdfs:label"
+
+kind EvaluationDay is ReferenceDate
+  description "The reference date of the scheme, with what std-time needs to read validity at it (views.yaml reads it as a ReferencePoint): the calendar its day is a day of, and how far ahead an end counts as near. The same element as the ReferenceDate of std-decision, never a second day. Origin: a design choice of this example, as the reference date is."
+  calendar: Calendar
+  horizon: Int
+    description "The number of days ahead of the day within which the end of a validity counts as near. Origin: a design choice of this example: the council sets the amounts of the next year in the last quarter, so an amount that ends within ninety days is one to decide about now."
+    minimum 0
+
+kind CostItem world closed
+  description "A kind of cost a quote can name. Origin: the regulation, which lists the measures that count and the costs that do not (article 3)."
+  id: Text identifier
+  title: Text
+    iri "rdfs:label"
+  eligibility: Eligibility
+  article: Article
+
+kind Household world closed
+  description "A household that applies. Origin: an observation, the population register as consulted for the application."
+  id: Text identifier
+  persons: Int
+    minimum 1
+
+kind Application world closed
+  description "An application for the subsidy. Origin: an observation, the application form as received."
+  id: Text identifier
+  household: Household
+  claimed_costs: Cents
+    description "The total cost the applicant states on the form."
+    minimum 0
+
+kind CostLine world closed
+  description "One line of a quote submitted with an application. Origin: an observation, the quote as received. An application without any line has no quote yet: its costs are unknown, not zero."
+  id: Text identifier
+  application: Application
+  item: CostItem
+  amount: Cents
+    minimum 0
+
+kind IncomeStatement world open
+  description "The verified yearly income of a household. Origin: an observation, the statement of the income register. Open world: a household without a statement has an unknown income, never an income of zero."
+  id: Text identifier
+  household: Household
+  income: Cents
+    minimum 0
+
+kind AdviceReport world closed
+  description "A registered energy-advice report for a household. Origin: an observation, the advice register. Closed world: the register is complete, so a household without a report took no advice."
+  id: Text identifier
+  household: Household

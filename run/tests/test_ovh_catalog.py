@@ -39,10 +39,6 @@ def raw(value):
     return json.dumps(value).encode()
 
 
-@pytest.mark.xfail(strict=True, reason=(
-    "M4: decisions/run-price-enforcement.md: Read the section The price list. Implement terms(catalog, plan_code, mode) in "
-    "run/ovh_catalog.py; catalog is the captured response body."
-))
 def test_ovh_catalog():
     terms = implementation("ovh_catalog.py", "terms")
 
