@@ -104,6 +104,7 @@ function readModule(text: string, bare: boolean): ParsedModule {
 		const keyword = code.split(/\s/, 1)[0];
 		return verbatimBlocks.some(block => block.keyword === keyword && grammar.match(code, block.header).succeeded());
 	});
+	let declaredVersion: LanguageVersion = '0';
 	const read = (line: Logical, rule = 'Line', invalidFirst?: BlockSyntax['invalidFirst']) => {
 		const cut = torn(text.slice(line.start, line.end));
 		if (cut) {
@@ -112,7 +113,8 @@ function readModule(text: string, bare: boolean): ParsedModule {
 		} else {
 			const statement = only(text, line);
 			const syntax = rule === 'Line' && /^rule(?![A-Za-z0-9_-])/.test(text.slice(line.start, line.end)) ? 'NativeRuleLine' : rule;
-			const r = readRule(statement, syntax, (m) => m.decl() as Line, spans, map);
+			const useNative = declaredVersion === '1' && rule === 'Line' ? true : undefined;
+			const r = readRule(statement, syntax, (m) => m.decl() as Line, spans, map, useNative);
 			// The rest of the source is blank here. An incomplete statement fails where its line ends.
 			for (const e of r.errors) if (e.span.start > cp(line.end)) e.span = { text: '', start: cp(line.end), end: cp(line.end) };
 			const alternative = r.errors.length && invalidFirst?.(text, line, cp, (rule) =>
@@ -128,7 +130,6 @@ function readModule(text: string, bare: boolean): ParsedModule {
 		const block = tag === undefined ? undefined : blockSyntax.get(tag);
 		line.block.forEach((child, i) => read(child, i === 0 ? block?.first : block?.rest, i === 0 ? block?.invalidFirst : undefined));
 	};
-	let declaredVersion: LanguageVersion = '0';
 	if (!bare && lines.length) {
 		read(lines[0]);
 		if (lines[0].read?.line === 'rezono') {
