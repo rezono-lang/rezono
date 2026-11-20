@@ -552,6 +552,17 @@ export function reader(checked: Pick<Checked, 'typed' | 'heads'>, schema: Schema
 		return v;
 	};
 
+	function filterSet(set: Member[], ty: Ty, pred: Expr): Member[] {
+		// A filter decides as an `ask` does (A.5): true is in, false and `n/a` are out; with an unknown or
+		// invalid condition the member stays, with that state on its membership.
+		return set.flatMap((m): Member[] => {
+			const c = within(plain(m), ty, () => ex(pred));
+			const decided = m.maybe ? and([m.maybe, c]) : c;
+			if (decided.s === 'known') return decided.v === true ? [plain(m)] : [];
+			return decided.s === 'not_applicable' ? [] : [{ ...plain(m), maybe: decided }];
+		});
+	}
+
 	function aggregate(e: { agg: [string, Expr] | [string, Expr, Expr] }): V {
 		const [name, of, arg] = e.agg;
 		const base = ex(of);
@@ -575,11 +586,19 @@ export function reader(checked: Pick<Checked, 'typed' | 'heads'>, schema: Schema
 			if (name === 'any') return some.s === 'known' && some.v === false && opens(of) ? { s: 'unknown', reason: OPEN_WORLD } : some;
 			return not(some);
 		}
-		// `count`, `sum`, `min` and `max` are strict in the members (A.3), and in whether each one is a member: a
-		// count does not reason about bounds, so it stays undecided where a membership or a member is.
+		if (name === 'count') {
+			// `S.count(pred)` is identically `S.where(pred).count()`: `n/a` predicate results are excluded while
+			// `unknown` and `invalid` leave the count undecided. Zero-argument `S.count()` remains strict in member states.
+			const counted = arg === undefined ? set : filterSet(set, ty, arg);
+			return strict(
+				[...counted.flatMap((m) => (m.maybe ? [m.maybe as V] : [])), ...counted.map(plain)],
+				() => known(frac(BigInt(counted.length)))
+			);
+		}
+		// `sum`, `min`, `max` and `one` are strict in the members (A.3), and in whether each one is a member:
+		// they stay undecided where a membership or a member is.
 		const undecided = set.flatMap((m) => (m.maybe ? [m.maybe as V] : []));
 		const values = arg === undefined ? set.map(plain) : set.map(each);
-		if (name === 'count') return strict([...undecided, ...values], () => known(frac(BigInt(arg === undefined ? set.length : values.filter((v) => (v as { v: Known }).v === true).length))));
 		return strict([...undecided, ...values], () => {
 			const all = values.map((v) => (v as { v: Known }).v);
 			if (name === 'sum') return known(all.reduce<Frac>((sum, x) => plus(sum, number(x)), frac(0n)));
@@ -603,13 +622,16 @@ export function reader(checked: Pick<Checked, 'typed' | 'heads'>, schema: Schema
 			const { lo, hi, open } = of.v;
 			return strict([x, lo, hi], (a, b, c) => bool(order(a, b, dt) >= 0 && (open ? order(a, c, dt) < 0 : order(a, c, dt) <= 0)));
 		}
-		if (x.s !== 'known') return x;
 		const set: Member[] = members(of) ?? [of];
 		tick(set.length);
+		if (x.s !== 'known') {
+			// A.3: when `x` is not known, include the set's member states and undecided memberships in `worst`.
+			return worst([x, ...set.flatMap((m) => (m.maybe ? [plain(m), m.maybe] : [plain(m)]))])!;
+		}
 		const same = set.filter((m) => m.s === 'known' && order(m.v, x.v, dt) === 0);
 		if (same.some((m) => !m.maybe)) return T;
 		// Not found for sure: a member in a state, or one whose membership is undecided, may be the one.
-		return worst([...same.map((m) => m.maybe as V), ...set.filter((m) => m.s !== 'known').map(plain)]) ?? (opens(e.in[1]) ? { s: 'unknown', reason: OPEN_WORLD } : F);
+		return worst([...same.map((m) => m.maybe as V), ...set.filter((m) => m.s !== 'known').flatMap((m) => (m.maybe ? [plain(m), m.maybe] : [plain(m)]))]) ?? (opens(e.in[1]) ? { s: 'unknown', reason: OPEN_WORLD } : F);
 	}
 
 	function round(e: { call: [string, Expr[]] }): V {
@@ -650,17 +672,7 @@ export function reader(checked: Pick<Checked, 'typed' | 'heads'>, schema: Schema
 			const base = ex(e.filter[0]);
 			const set = members(base);
 			if (!set) return base;
-			const ty = tyOf(e.filter[0]);
-			// A filter decides as an `ask` does (A.5): true is in, false and `n/a` are out; with an unknown or
-			// invalid condition the member stays, with that state on its membership.
-			return known(
-				set.flatMap((m): Member[] => {
-					const c = within(plain(m), ty, () => ex(e.filter[1]));
-					const decided = m.maybe ? and([m.maybe, c]) : c;
-					if (decided.s === 'known') return decided.v === true ? [plain(m)] : [];
-					return decided.s === 'not_applicable' ? [] : [{ ...plain(m), maybe: decided }];
-				})
-			);
+			return known(filterSet(set, tyOf(e.filter[0]), e.filter[1]));
 		}
 		if ('cmp' in e) {
 			const [op, a, b] = e.cmp;
