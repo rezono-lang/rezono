@@ -8,14 +8,19 @@ export type { Logical } from './module-layout.ts';
 
 export type World = 'open' | 'closed';
 export type Card = '?' | '*' | '+';
+export type LanguageVersion = '0' | '1';
+export const isLanguageVersion = (version: string): version is LanguageVersion => version === '0' || version === '1';
 
 /** One logical line as the grammar reads it, before any block is interpreted. */
 export type Line = { line: string; [member: string]: unknown };
 
 export interface Build {
+	version: LanguageVersion;
 	spans: WeakMap<object, Span>;
 	later: Diagnostic[];
 	refuse(line: Logical, expected: string, to?: number): void;
+	error(diagnostic: Diagnostic): void;
+	removed(line: Logical, what: string, span?: Span, hint?: Diagnostic['hint']): void;
 	leaf(line: Logical): void;
 	leaves(line: Logical, tag: string, expected: string): Line[];
 	strip<T>(line: Line): T;

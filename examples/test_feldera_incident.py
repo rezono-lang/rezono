@@ -87,11 +87,10 @@ def test_a_confirmed_disagreement_requires_complete_comparison_evidence(tmp_path
 
 @pytest.mark.xfail(strict=True, raises=ValueError, reason=(
     "extra: compiler/ci/feldera_shards.py does not yet expect "
-    "compiler/tests/test_boolean_rule_inputs.py::test_native_boolean_rule_inputs, "
     "compiler/tests/test_recorded_dates.py::test_independent_date_equality and "
-    "compiler/tests/test_ordered_rule_scalars_engines.py::test_feldera_orders_typed_values in the live "
+    "examples/test_calculation_engine_parity.py::test_feldera_calculations_match_duckdb_and_checker[subsidy] in the live "
     "collection. Each joins its shard there and stays out of ORIGINAL, as INTERFACE does. Lift this mark "
-    "in the pull request that routes the last of the three; the others leave it."))
+    "in the pull request that routes the last of the two; the other leaves it."))
 @pytest.mark.parametrize("missing_subsidy_report", [False, True])
 def test_classifier_uses_complete_reports_from_the_parallel_comparison(tmp_path, missing_subsidy_report):
     ci = Path(incident.__file__).resolve().parent
@@ -100,6 +99,7 @@ def test_classifier_uses_complete_reports_from_the_parallel_comparison(tmp_path,
         "compiler/tests/test_boolean_rule_inputs.py::test_native_boolean_rule_inputs",
         "compiler/tests/test_recorded_dates.py::test_independent_date_equality",
         "compiler/tests/test_ordered_rule_scalars_engines.py::test_feldera_orders_typed_values",
+        "examples/test_calculation_engine_parity.py::test_feldera_calculations_match_duckdb_and_checker[subsidy]",
     ]
     collected, report = records({CASES[7]: sql_error(36), CASES[8]: sql_error(96)}, cases, cases)
     original = ET.fromstring(report)

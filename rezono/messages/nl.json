@@ -15,6 +15,8 @@
 	"R018": "de contextas `{0}` staat er twee keer",
 	"R021": "versie {0} van `{2}` vervangt {1}; er is geen versie {1}, of `replaces`-regels vormen een cyclus",
 	"R024": "`{0}` is `total`, en het heeft geen bekende waarde als `{1}`",
+	"R027": "taalversie `rezono {0}` wordt niet ondersteund",
+	"R028": "`{0}` is verwijderd in `rezono {1}`",
 	"R029": "geen reden heeft het label {0}",
 	"R030": "`{0}` is geen afronding; gebruik `half_even`, `half_up`, `down` of `up`",
 	"R031": "`table unique` in `{0}`: rij {1} en rij {2} gelden allebei als `{3}`",
@@ -40,5 +42,6 @@
 	"hint.question_as_known": "schrijf `{0}` om te kiezen wat de vraag weet",
 	"hint.question_at": "schrijf `{0}` om de datum van de vraag te kiezen",
 	"hint.row": "de rij van de vraag is `{0}`",
+	"hint.use_instead": "gebruik `{0}` in plaats daarvan",
 	"suggest": "bedoel je {0}?"
 }

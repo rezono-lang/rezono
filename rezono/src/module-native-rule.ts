@@ -36,6 +36,10 @@ export type NativeRuleDecl = RuleFields & ({ columns: RuleColumn[] } | { args: E
 
 function readNativeRule(line: Logical, build: Build): NativeRuleDecl {
 	const decl = build.strip<NativeRuleDecl>(line.read!);
+	if (build.version === '1') {
+		build.removed(line, 'rule', undefined, { id: 'hint.use_instead', args: ['derived'] });
+		return decl;
+	}
 	for (const child of line.block) {
 		build.leaf(child);
 		const read = child.read!;
