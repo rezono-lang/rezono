@@ -587,6 +587,56 @@ def resolve_intermediate_invariants(
     return tuple(resolved), found
 
 
+def _register_steps(
+    root: str,
+    schema: Schema,
+    step_decls_raw: list[tuple[Source, str, dict]],
+    signatures: dict[str, Signature],
+    owners: dict[str, tuple[Source, str]],
+    rules_list: list[tuple[Source, str, dict]],
+) -> tuple[list[tuple[Source, str, dict, str, tuple[Column, ...]]], dict[ClauseKey, str], list[Diagnostic]]:
+    """Register positive-match signatures for step declarations and report any header diagnostics."""
+    step_specs: list[tuple[Source, str, dict, str, tuple[Column, ...]]] = []
+    step_clauses: dict[ClauseKey, str] = {}
+    seen_steps: dict[tuple[str, str, str], tuple[Source, str]] = {}
+    found: list[Diagnostic] = []
+    for source, at, decl in step_decls_raw:
+        try:
+            if source.format not in (rezono_module.SAFE_STEP_FORMAT, rezono_module.REZONO_1_FORMAT):
+                raise Refusal("R048", "Step declaration requires rezono.module/4 or rezono.module/5", at)
+            if (set(decl) - {"step", "columns", "when", "forbid", "effect", "confirm"}
+                    or not {"step", "columns", "when", "effect", "confirm"} <= set(decl)):
+                raise Refusal("R048", "Invalid step declaration shape", at)
+            step_name = decl["step"]
+            if not rules.NAME.match(step_name) or "__" in step_name:
+                raise Refusal("R040", f"Step name {step_name!r} must be lower snake case without '__'", at)
+            step_key = (source.owner, source.path, step_name)
+            if step_key in seen_steps:
+                other, pointer = seen_steps[step_key]
+                found.append(other.diagnose(Refusal("R040", f"Duplicate step {step_name!r} in module", pointer)))
+                raise Refusal("R040", f"Duplicate step {step_name!r} in module", at)
+            seen_steps[step_key] = (source, at)
+            key = columns(schema, source, decl["columns"], f"{at}/columns")
+            semantics = tuple(schema.column_semantic(logical, physical, f"{at}/columns/{index}")
+                              for index, (_, logical, physical) in enumerate(key))
+            try:
+                match_relation = rezono_step.match_relation_name(
+                    source.owner, root, source.path, step_name, signatures,
+                )
+            except ValueError as error:
+                raise Refusal("R040", str(error), at) from None
+            owners[match_relation] = source, at
+            signatures[match_relation] = Signature(
+                key, source.module, source.owner, source.path, semantics=semantics,
+            )
+            step_specs.append((source, at, decl, match_relation, key))
+            step_clauses[source.owner, source.path, at] = match_relation
+            rules_list.append((source, at, {"rule": match_relation, "columns": decl["columns"], "when": decl["when"]}))
+        except Refusal as error:
+            found.append(source.diagnose(error))
+    return step_specs, step_clauses, found
+
+
 def link_modules(meta: dict, definitions: list[modules.Module], imported: dict[str, modules.Imported],
                  names: modules.Names, forms: Mapping[tuple[str, str], dict],
                  *, pack_dir: Path | None = None,
@@ -640,43 +690,10 @@ def link_modules(meta: dict, definitions: list[modules.Module], imported: dict[s
         except Refusal as error:
             errors.append(source.diagnose(error))
 
-    step_specs: list[tuple[Source, str, dict, str, tuple[Column, ...]]] = []
-    step_clauses: dict[ClauseKey, str] = {}
-    seen_steps: dict[tuple[str, str, str], tuple[Source, str]] = {}
-    for source, at, decl in step_decls_raw:
-        try:
-            if source.format not in (rezono_module.SAFE_STEP_FORMAT, rezono_module.REZONO_1_FORMAT):
-                raise Refusal("R048", "Step declaration requires rezono.module/4 or rezono.module/5", at)
-            if (set(decl) - {"step", "columns", "when", "forbid", "effect", "confirm"}
-                    or not {"step", "columns", "when", "effect", "confirm"} <= set(decl)):
-                raise Refusal("R048", "Invalid step declaration shape", at)
-            step_name = decl["step"]
-            if not rules.NAME.match(step_name) or "__" in step_name:
-                raise Refusal("R040", f"Step name {step_name!r} must be lower snake case without '__'", at)
-            step_key = (source.owner, source.path, step_name)
-            if step_key in seen_steps:
-                other, pointer = seen_steps[step_key]
-                errors.append(other.diagnose(Refusal("R040", f"Duplicate step {step_name!r} in module", pointer)))
-                raise Refusal("R040", f"Duplicate step {step_name!r} in module", at)
-            seen_steps[step_key] = (source, at)
-            key = columns(schema, source, decl["columns"], f"{at}/columns")
-            semantics = tuple(schema.column_semantic(logical, physical, f"{at}/columns/{index}")
-                              for index, (_, logical, physical) in enumerate(key))
-            try:
-                match_relation = rezono_step.match_relation_name(
-                    source.owner, root, source.path, step_name, signatures,
-                )
-            except ValueError as error:
-                raise Refusal("R040", str(error), at) from None
-            owners[match_relation] = source, at
-            signatures[match_relation] = Signature(
-                key, source.module, source.owner, source.path, semantics=semantics,
-            )
-            step_specs.append((source, at, decl, match_relation, key))
-            step_clauses[source.owner, source.path, at] = match_relation
-            rules_list.append((source, at, {"rule": match_relation, "columns": decl["columns"], "when": decl["when"]}))
-        except Refusal as error:
-            errors.append(source.diagnose(error))
+    step_specs, step_clauses, step_errors = _register_steps(
+        root, schema, step_decls_raw, signatures, owners, rules_list,
+    )
+    errors.extend(step_errors)
 
     intermediate, intermediate_errors = resolve_intermediate_invariants(intermediate_specs, signatures)
     errors.extend(intermediate_errors)

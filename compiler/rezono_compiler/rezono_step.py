@@ -615,6 +615,7 @@ def lower_steps(
         return ()
 
     compiled: list[pack.CompiledStep] = []
+    found: list[Diagnostic] = []
     for source, at, decl, match_relation, step_cols in step_decls:
         try:
             col_types = {name: logical for name, logical, _ in step_cols}
@@ -746,5 +747,6 @@ def lower_steps(
                 confirmation=confirmation,
             ))
         except Refusal as error:
-            errors.append(source.diagnose(error))
+            found.append(source.diagnose(error))
+    errors.extend(found)
     return tuple(compiled)
