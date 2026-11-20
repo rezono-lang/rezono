@@ -1,0 +1,51 @@
+rezono 0
+pack projects
+
+schema projects
+  iri "https://rezono.example/projects"
+  language nl
+  import "linkml:types"
+  default range Text
+  description "Een neutraal voorbeeld dat iedereen kent: projecten met taken, mijlpalen, afhankelijkheden en een begroting."
+  annotation layer = "facts"
+
+type Cents = Int
+
+enum TaskStatus world closed = open | done
+
+kind Project world closed
+  id: Text identifier
+  name: Text
+  budget: Cents
+    minimum 0
+  unique project_name = name
+
+kind BudgetLine world closed
+  id: Text identifier
+  project: Project
+  description: Text
+  amount: Cents
+    minimum 0
+
+kind Milestone world closed
+  id: Text identifier
+  name: Text
+  project: Project
+  due: Date?
+
+kind Task world closed
+  id: Text identifier
+  name: Text
+  project: Project
+  milestone: Milestone?
+  status: TaskStatus
+  estimate: Int?
+    minimum 1
+    maximum 200
+  equal same_project = milestone.project, project
+
+kind Dependency world closed
+  id: Text identifier
+  task: Task
+  prerequisite: Task
+  unique dependency_pair = task, prerequisite
