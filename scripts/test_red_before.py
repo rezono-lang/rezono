@@ -245,6 +245,20 @@ def base_list_cases():
             if listed("push", {}, sha=base) != {"listed = listed"}:
                 raise AssertionError("push: the list does not come from GITHUB_SHA")
             print("BASE: the plugin list of a push comes from GITHUB_SHA")
+            # pull_request_target runs on the base branch's own commit, so GITHUB_SHA is the base.
+            if listed("pull_request_target", {}, sha=base) != {"listed = listed"}:
+                raise AssertionError("pull_request_target: the list does not come from GITHUB_SHA")
+            print("BASE: the plugin list of pull_request_target comes from GITHUB_SHA")
+            # A graft that gives the merge commit the head as its first parent moves nothing.
+            grafts = repo / ".git/info/grafts"
+            grafts.parent.mkdir(parents=True, exist_ok=True)
+            grafts.write_text(f"{merge} {head}\n", encoding="utf-8")
+            try:
+                if listed("pull_request", {}) != {"listed = listed"}:
+                    raise AssertionError("a graft moved the base of the plugin list")
+            finally:
+                grafts.unlink()
+            print("BASE: a graft in .git/info/grafts does not move the base")
             # The event file does not decide the base: one that names another commit changes nothing.
             if listed("pull_request", {"pull_request": {"base": {"sha": head}}}) != {"listed = listed"}:
                 raise AssertionError("an event that names another base moved the list")
