@@ -171,12 +171,21 @@ def _schema_from_bundle(bundle, doc: dict) -> tuple[frozenset[str], dict[str, st
         if not isinstance(seal, dict):
             raise ValueError("seal entry must be a mapping")
         kind = _non_empty_str(seal.get("kind"), "seal kind")
+        if kind not in kinds:
+            raise ValueError(f"seal references unknown kind {kind!r}")
+        if "period_close" not in kinds:
+            raise ValueError("seal requires kind 'period_close'")
         refused = _non_empty_str(seal.get("refused"), "seal refused")
         accepted = _non_empty_str(seal.get("accepted"), "seal accepted")
         row_sha = _non_empty_str(seal.get("row_sha256"), "seal row_sha256")
-        columns[refused] = (kind, "period_close")
-        columns[accepted] = (kind,)
-        columns[row_sha] = (kind, None)
+        for table, cols in (
+            (refused, (kind, "period_close")),
+            (accepted, (kind,)),
+            (row_sha, (kind, None)),
+        ):
+            if table in columns:
+                raise ValueError(f"duplicate table {table!r}")
+            columns[table] = cols
         parts = seal.get("parts")
         if parts is None:
             parts = ()
@@ -186,7 +195,11 @@ def _schema_from_bundle(bundle, doc: dict) -> tuple[frozenset[str], dict[str, st
             if not isinstance(part, dict):
                 raise ValueError("seal part must be a mapping")
             p_kind = _non_empty_str(part.get("kind"), "seal part kind")
+            if p_kind not in kinds:
+                raise ValueError(f"seal part references unknown kind {p_kind!r}")
             p_accepted = _non_empty_str(part.get("accepted"), "seal part accepted")
+            if p_accepted in columns:
+                raise ValueError(f"duplicate table {p_accepted!r}")
             columns[p_accepted] = (p_kind,)
 
     return frozenset(kinds), parents, columns
