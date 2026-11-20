@@ -37,9 +37,14 @@ that its test reads. This is an evidence completion. It applies when all of thes
   `conftest.py`, no workflow, no changed or removed file.
 - The evidence comes from a source independent of the engine: worked by hand, computed
   by an oracle or another implementation, or taken from a published reference, never
-  written from the engine's own output. The pull request says how it was made, and the
-  planner who reviews it checks that. The guard cannot see this; it is a condition for the
-  reviewer, not for the script.
+  written from the engine's own output. The pull request says how it was made.
+- A reviewer has read that source before it lands: the pull request carries the read label
+  `p1-read-<full head commit id>` of `decisions/checker-and-access-review.md`, as a change to
+  the checker does. The guard cannot see where evidence came from, and a pull request lands
+  once its checks are green, so without the label a planner could record the engine's
+  output as the expectation and lift the mark: the test would then compare the engine with
+  itself. The guard requires the label for every `COMPLETED` pull request, and a new push
+  needs a new label.
 
 The guard reports such a pull request as `COMPLETED <path>::<test>`. Without the label, or
 with anything else in the pull request, the refusal stands.
@@ -67,8 +72,11 @@ the one that introduces it lands.
   that the evidence turns the test green, and the second needs no planner at all.
 - **Let the label allow any lift beside protected changes.** That is the gap the rule
   closes: a planner could weaken an expectation and lift the mark in one step.
-- **Ask a reviewer to read each such pull request.** It adds a person to the path while
-  the base already holds what decides the question: the test, red, without the new data.
+- **Rely on the base alone.** The base shows that the test is red without the new data
+  and green with it, but not that the data is right: data written from the engine's own
+  output passes as well. So a reviewer reads the source too.
+- **A provenance line in the pull request that the guard reads.** Anyone can write the
+  line; only a reader can tell whether it is true.
 
 ## Not covered
 

@@ -46,7 +46,10 @@ def receipt(members, source=SOURCE):
     "'coverage-missing' or 'reading-missing' otherwise. A member is the key [\"capacity-reading\", period, tenant] "
     "(decisions/admission-transport.md section 6, member keys): read only members whose part 0 is "
     "'capacity-reading', with the period in part 1 and the tenant in part 2. test_tenant_publication_proof.py then "
-    "needs that receipt in its epochs (decisions/platform-tenant-proof-boundary.md)."))
+    "needs that receipt in its epochs (decisions/platform-tenant-proof-boundary.md). "
+    "Blocker: test_tenant_capacity_reading_key.py::test_readings_of_other_tenants_or_periods_are_accepted and "
+    "test_tenant_publication_proof.py::test_complete_tenant_publication_or_no_manifest both expect "
+    "platform_capacity_basis without a verified receipt, so a planner PR must update those tests first."))
 def test_free_capacity_needs_verified_coverage_of_the_readings():
     model = pack.read(ROOT)
     rows = readings(model)
