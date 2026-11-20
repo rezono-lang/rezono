@@ -81,7 +81,7 @@ NOT_EVIDENCE_NAMES = {"not-yet.json", "pack.yaml"}
 # The compiler reads these directories of a pack as its definition (DEFINITION in
 # compiler/rezono_compiler/modules.py), at any depth for schema/ and rezono/. An evidence
 # directory inside one of them would change the pack, not record what it should produce.
-DEFINITION_DIRS = {"schema", "rezono", "facts", "labels", "messages", "rules", "calc", "icons"}
+DEFINITION_DIRS = {"schema", "rezono", "facts", "labels", "messages", "rules", "calc", "icons", "ports"}
 EVIDENCE_HOME_DIRS = {"test", "tests"}
 
 
@@ -567,7 +567,7 @@ def pack_roots(rev):
 # (DEFINITION and pack_hash); scripts/test_red_guard.py keeps the two the same.
 DEFINITION = ("pack.yaml", "channels.yaml", "schema/**/*.yaml", "rezono/**/*.rezono", "rezono/**/*.json",
               "labels/*.yaml", "messages/*.mf2", "rules/*.dl", "calc/*.yaml", "sweeps.yaml", "questions.yaml",
-              "views.yaml", "icons/*.svg", "icons/sources.yaml")
+              "views.yaml", "icons/*.svg", "icons/sources.yaml", "ports/*.yaml")
 PIN_DIRS = {"fixture", "fixtures", "test", "tests"}
 PIN = re.compile(r"sha256:[ \t]*([0-9a-f]{64})\b")
 REGULAR = {"100644", "100755"}

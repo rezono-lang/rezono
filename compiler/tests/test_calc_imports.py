@@ -327,7 +327,7 @@ def test_an_imported_calculation_is_bound_to_the_names_of_the_importing_pack(tmp
 
 HASHED = ("pack.yaml", "channels.yaml", "schema/**/*.yaml", "rezono/**/*.rezono", "rezono/**/*.json",
           "labels/*.yaml", "messages/*.mf2", "rules/*.dl", "calc/*.yaml", "sweeps.yaml", "questions.yaml",
-          "views.yaml", "icons/*.svg", "icons/sources.yaml")
+          "views.yaml", "icons/*.svg", "icons/sources.yaml", "ports/*.yaml")
 
 
 def test_definition_hash_covers_each_file_family(tmp_path):
@@ -335,7 +335,7 @@ def test_definition_hash_covers_each_file_family(tmp_path):
     paths = ("pack.yaml", "channels.yaml", "schema/nested/item.yaml", "rezono/nested/item.rezono",
              "rezono/nested/item.json", "labels/en.yaml", "messages/en.mf2", "rules/query.dl",
              "calc/total.yaml", "sweeps.yaml", "questions.yaml", "views.yaml", "icons/item.svg",
-             "icons/sources.yaml")
+             "icons/sources.yaml", "ports/item.yaml")
     expected = {}
     for path in paths:
         target = tmp_path / path
