@@ -1,3 +1,11 @@
+---
+decider: [loop]
+decided_on: 2026-11-18
+valid_from: 2026-11-18
+state: in_force
+subject: quiet-observation-rounds
+---
+
 # Quiet observation rounds
 
 Preserve the sweep identifier, run, recorded event time and completeness even
@@ -16,8 +24,16 @@ A proved fixed point includes the run, sweep, blocked step, missing token
 and prerequisite reference in the command's `fixed_point` array.
 
 LoopSweep records carry this evidence. LoopDeadline attaches a step's budget
-in event-time units to a start observation of the same run. At the inclusive
-boundary an unfinished step is stuck and cannot be ready. LoopRequirement
+in event-time units to a start observation of the same run. A deadline whose
+start observation belongs to another run violates the invariant
+`deadline_foreign_start`; it never dates the deadline. At the inclusive
+boundary an unfinished step is stuck and cannot be ready. The current sweep
+only dates the round, so an incomplete sweep at or past the boundary expires
+the deadline as well; completeness matters only for a fixed point. Expiry is
+terminal: a step is in time only when its completion value was observed at or
+before the boundary, so a completion observed later leaves the step stuck and
+the run failed. An expired deadline is structural stuck evidence, not a
+refusal: `refusal` holds only recorded LoopRefusal input. LoopRequirement
 names a token required by a step. LoopPendingOperation records an external
 operation that can still supply a token. A current complete sweep can
 establish an unresolved fixed point only when no step can advance and no

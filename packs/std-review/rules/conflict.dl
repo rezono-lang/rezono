@@ -1,0 +1,6 @@
+// Two valid current reviews of one change with opposite verdicts (decisions/review-and-rights.md, section 8 and the
+// open case on two opposite reviews). There is no conflict state: state.dl already settles such a change neither way,
+// so it stays proposed or stale and due for review. A dismissed review is not active, so it counts on neither side.
+// @invariant
+.decl review_conflict(change: symbol)
+review_conflict(c) :- valid_current_verdict(c, "accepted"), valid_current_verdict(c, "rejected").

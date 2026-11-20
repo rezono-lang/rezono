@@ -3,11 +3,13 @@ import json
 
 import pytest
 
-from rezono_canon import canonical_bytes, canonical_sha256
+from rezono_canon import canonical_bytes, canonical_json, canonical_sha256
+from rezono_checker.rounds import Unverified, verify_round
 from rezono_checker.transition import check_transition_certificate
 from round_visibility_cases import (
     ACTIVATE_A, A_RESTORED, A_WITHDRAWN, ALL_STATES, EFFECTS, Effect, FINISHED_ONLY, INITIAL,
-    LANES, OPENING, ROUNDS, RUN, SOLO_A, SOLO_B, VIOLATION, WITHDRAW_A, WITHDRAW_B, serving, visible_boundaries,
+    LANE_PHASE, LANES, OPENING, ROUNDS, RUN, SOLO_A, SOLO_B, VIOLATION, WITHDRAW_A, WITHDRAW_B,
+    serving, visible_boundaries,
 )
 from round_visibility_pair import INVARIANTS, MANIFEST, PROGRAM, pair_evidence
 from round_visibility_publication import (
@@ -17,17 +19,17 @@ from round_visibility_publication import (
 
 @pytest.mark.xfail(
     strict=True,
-    raises=(AssertionError, ImportError, TypeError),
+    raises=AssertionError,
     reason=(
         "M2: decisions/loop-certificate-admission.md: Read it and decisions/admission-transport.md sections 3 and 7. "
-        "The round verifier rebuilds the eight visible boundaries of the two ordered steps from the plan hashes "
-        "in the retained domain and refuses the claim, because the violating boundary has no certificate even "
-        "though every submitted pair checks. So no verified_round row is admitted and nothing is ready. "
-        "Preserve observed old rows and residual effects. Waits for test_ready_requires_checked_batch_member "
-        "and for a core red test in checker/tests that has the round verifier rebuild the visible boundaries "
-        "of a step with ordered effects (not yet written; the checker is core's). Write in packs/std-loop only "
-        "if the ready rules still need it. Today admission already refuses the claim (round_boundary_missing "
-        "for withdraw-a with withdraw-b), but the supplied availability verdicts still make both steps ready "
+        "The round verifier in checker/rezono_checker/rounds.py already rebuilds the eight visible boundaries of "
+        "the two ordered steps from the plan hashes in the retained domain: it refuses the two-step claim with "
+        "round_boundary_missing when the violating overlap boundary is omitted, refuses an unrefuted solo claim "
+        "with round_preceded, and admits the solo replace-a claim once the overlap boundary is refuted. "
+        "Switching packs/std-loop/rules/ready.dl to require current_verified_round and verified_round_member "
+        "turns both loop/tests/test_ready_requires_checked_batch_member.py::"
+        "test_ready_requires_checked_batch_member and this test green: remove both marks in that PR. Today "
+        "ready.dl still derives ready from eligible, so both steps enter ready even when the claim is refused "
         "(AssertionError)."
     ),
 )
@@ -98,11 +100,67 @@ def test_overlapping_withdrawals_break_availability(tmp_path):
     submitted["claim"] = canonical_bytes(round_claim(
         submitted, run=RUN, cut=OPENING.cut, batch="replace-both", members=members, subsets=pairs,
     ))
+    solo_pairs = [subset for subset in pairs if subset[0] == ["replace-a"]]
+    assert len(solo_pairs) == 2
+    submitted["claim-solo-unrefuted"] = canonical_bytes(round_claim(
+        submitted, run=RUN, cut=OPENING.cut, batch="replace-a-only", members=("replace-a",), subsets=solo_pairs,
+    ))
+    refuted_variant = overlap.variant | {
+        "rows": overlap.variant["rows"] | {"outage": [list(LANES)]},
+        "witnesses": [*overlap.variant["witnesses"], {
+            "rule_id": "outage",
+            "conclusion": {"relation": "outage", "key": canonical_json(list(LANES))},
+            "bindings": [],
+            "premises": [
+                {"row": {"relation": LANE_PHASE, "key": canonical_json([lane, "offline"])},
+                 "polarity": "positive", "stratum": 0}
+                for lane in LANES
+            ],
+        }],
+    }
+    refuted_certificate = overlap.certificate | {
+        "variant": canonical_sha256(refuted_variant),
+    }
+    refuted_findings = check_transition_certificate(
+        refuted_certificate, overlap.context, overlap.base, refuted_variant,
+    )["findings"]
+    assert any(f.get("snapshot") == "variant" and f["reason"] == "invariant_violated" for f in refuted_findings)
+    submitted["variant-overlap-refuted"] = canonical_bytes(refuted_variant)
+    submitted["certificate-overlap-refuted"] = canonical_bytes(refuted_certificate)
+    submitted["claim-solo-refuted"] = canonical_bytes(round_claim(
+        submitted, run=RUN, cut=OPENING.cut, batch="replace-a-only", members=("replace-a",),
+        subsets=[*solo_pairs, (list(members), [WITHDRAW_A.plan_hash, WITHDRAW_B.plan_hash],
+                               "variant-overlap-refuted", "certificate-overlap-refuted")],
+    ))
     context = {"rounds": [round_context(
         retained, run=RUN, cut=overlap.context["cut"], manifest=MANIFEST, invariants=INVARIANTS,
         program="definition", observations={f"read-{OPENING.cut}": "observed-lanes"}, base="base",
         domain="round-domain",
     )]}
+    by_uri = {
+        observation_reference(group, name, body)["uri"]: body
+        for group, objects in (("retained", retained), ("submitted", submitted))
+        for name, body in objects.items()
+    }
+    with pytest.raises(Unverified) as missing:
+        verify_round(
+            observation_reference("submitted", "claim", submitted["claim"]),
+            context["rounds"], set(), by_uri.get,
+        )
+    assert missing.value.code == "round_boundary_missing"
+    assert WITHDRAW_A.plan_hash in missing.value.detail and WITHDRAW_B.plan_hash in missing.value.detail
+    with pytest.raises(Unverified) as preceded:
+        verify_round(
+            observation_reference("submitted", "claim-solo-unrefuted", submitted["claim-solo-unrefuted"]),
+            context["rounds"], set(), by_uri.get,
+        )
+    assert preceded.value.code == "round_preceded"
+
+    solo_ref = observation_reference("submitted", "claim-solo-refuted", submitted["claim-solo-refuted"])
+    assert verify_round(solo_ref, context["rounds"], set(), by_uri.get) == (
+        solo_ref["sha256"], RUN, OPENING.cut, "replace-a-only", ("replace-a",),
+    )
+
     records = {
         "loop_active_run": [{"id": RUN}],
         "loop_sweep_receipt": [{"id": OPENING.cut, "run": RUN, "event_time": OPENING.event_time}],
@@ -114,7 +172,16 @@ def test_overlapping_withdrawals_break_availability(tmp_path):
         ],
     }
     _, rows, _ = checked_loop_publication(
-        tmp_path, records, retained=retained, submitted=submitted, context=context,
+        tmp_path / "omitted-boundary", records, retained=retained, submitted=submitted, context=context,
         index={"rounds": [observation_reference("submitted", "claim", submitted["claim"])]},
     )
+    assert rows("verified_round") == set()
     assert not rows("ready"), f"A batch with an omitted unsafe intermediate boundary was published ready: {rows('ready')}"
+
+    # Positive control: refuting the violating two-step boundary admits the solo replace-a batch and makes only it ready.
+    _, rows, _ = checked_loop_publication(
+        tmp_path / "refuted-overlap-solo", records, retained=retained, submitted=submitted, context=context,
+        index={"rounds": [solo_ref]},
+    )
+    assert rows("verified_round") == {(solo_ref["sha256"], RUN, OPENING.cut, "replace-a-only")}
+    assert {row[:2] for row in rows("ready")} == {(RUN, "replace-a")}

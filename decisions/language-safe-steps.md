@@ -1,4 +1,14 @@
+---
+decider: [language]
+decided_on: 2026-11-18
+valid_from: 2026-11-18
+state: in_force
+subject: language-safe-steps
+---
+
 # Write safe steps in Rezono
+
+> **Scope across language versions:** These three building blocks continue to be built in `rezono 0` (`rezono.module/4`). Platform steps convert once with platform rules to `rezono 1` (`rezono.module/5`), where [`decisions/language-rezono-1.md`](language-rezono-1.md#3-effect-on-prior-decisions) specifies how `step` clauses and `invariant intermediate within` read functional derivations.
 
 A pack can write a whole-record assumption, declare a step with its typed effect and confirmation, and mark a publication invariant for intermediate states. These three language additions use the modeled operational rows, observation cut and safety rules of [safe transition rounds](safe-step-rounds.md). The declaration supplies inputs to those rules. The round checker still decides whether an effect is safe, whether it is selected, and whether a later readback confirms it.
 

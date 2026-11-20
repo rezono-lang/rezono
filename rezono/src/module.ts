@@ -28,18 +28,23 @@
 //   R018  `valid` or `known` twice on one version or fact row
 //   R021  a `replaces` number that names no version of the same declaration, or `replaces` lines that form a cycle
 //   R015  a reserved construct
+//   R027  an unsupported language version on the `rezono` line
+//   R028  a construct removed in the declared language version (such as `table priority`, `rule ... when ...`,
+//         `rules` pipe blocks, or redundant schema header defaults in `rezono 1`)
 //   R029  a state literal whose quoted label is the label of no `reason` declaration of the module
+//   W107  in `rezono 0`, a schema header line that writes its default (`import "linkml:types"` alone,
+//         `default range Text`, or `annotation layer = ...`)
 //   W108  a declaration with versions has none before the earliest `valid` date: there its value is
 //         `unknown no_version_applies` (§5a rule 4). Only that first gap is reported here; a gap between two
 //         versions needs the order of their contexts, which the checker gives later.
-// As in a question, an R000, R014, R016, R018, R021 or R029 leaves no module and no other diagnostic.
+// As in a question, an R000, R014, R016, R018, R021, R027, R028 or R029 leaves no module and no other diagnostic.
 import { grammar } from './grammar.ts';
 import { blockSyntax, declarationActions, declarations, verbatimBlocks, type Decl } from './module-components.ts';
 import type { Deprecation } from './module-deprecation.ts';
 import { layout, only, type Logical } from './module-layout.ts';
 import { readSchema, type SchemaMetadata } from './module-metadata.ts';
 import { undeclaredReasonLabels } from './module-reason.ts';
-import type { BlockSyntax, Build, Line } from './module-support.ts';
+import { isLanguageVersion, type BlockSyntax, type Build, type LanguageVersion, type Line } from './module-support.ts';
 import { versionGaps, versionReplacements } from './module-version.ts';
 import { inOrder, points, readRule, semantics, torn, tornAt, type Diagnostic, type Span } from './parse.ts';
 
@@ -51,7 +56,7 @@ export type { ExtendDecl, KindDecl } from './module-kind.ts';
 export type { ParamDecl } from './module-parameter.ts';
 export type { SlotDecl } from './module-slot.ts';
 export type { StepChange, StepConfirm, StepDecl, StepEffect, StepForbid, StepSlot } from './module-step.ts';
-export type { Card, World } from './module-support.ts';
+export type { Card, LanguageVersion, World } from './module-support.ts';
 export type { Table, TableRow, TableTest, TableValue } from './module-table.ts';
 export type { Clause } from './module-unless.ts';
 export type { Valid, VersionDecl } from './module-version.ts';
@@ -123,14 +128,34 @@ function readModule(text: string, bare: boolean): ParsedModule {
 		const block = tag === undefined ? undefined : blockSyntax.get(tag);
 		line.block.forEach((child, i) => read(child, i === 0 ? block?.first : block?.rest, i === 0 ? block?.invalidFirst : undefined));
 	};
-	for (const line of lines) read(line);
+	let declaredVersion: LanguageVersion = '0';
+	if (!bare && lines.length) {
+		read(lines[0]);
+		if (lines[0].read?.line === 'rezono') {
+			const v = lines[0].read.rezono as string;
+			if (isLanguageVersion(v)) declaredVersion = v;
+		}
+	}
+	for (let i = !bare && lines.length ? 1 : 0; i < lines.length; i++) read(lines[i]);
 	if (errors.length) return { diagnostics: errors.sort(inOrder), spans };
 
+	const firstWordSpan = (line: Logical, to = line.start + /^\S+/.exec(text.slice(line.start, line.end))![0].length): Span => ({
+		text: text.slice(line.start, to),
+		start: cp(line.start),
+		end: cp(to),
+	});
 	const build: Build = {
+		version: declaredVersion,
 		spans,
 		later,
-		refuse(line, expected, to = line.start + /^\S+/.exec(text.slice(line.start, line.end))![0].length) {
-			errors.push({ code: 'R000', span: { text: text.slice(line.start, to), start: cp(line.start), end: cp(to) }, args: [expected] });
+		refuse(line, expected, to) {
+			errors.push({ code: 'R000', span: firstWordSpan(line, to), args: [expected] });
+		},
+		error(diagnostic) {
+			errors.push(diagnostic);
+		},
+		removed(line, what, span = firstWordSpan(line), hint) {
+			errors.push({ code: 'R028', span, args: [what, build.version], ...(hint ? { hint } : {}) });
 		},
 		leaf(line) {
 			for (const child of line.block) build.refuse(child, 'no line under this one');
@@ -165,7 +190,14 @@ function readModule(text: string, bare: boolean): ParsedModule {
 		const r = line.read!;
 		if (r.line === 'rezono' && stage === 0 && module.rezono === undefined && !module.decls.length) {
 			build.leaf(line);
-			module.rezono = r.rezono as string;
+			const version = r.rezono as string;
+			if (!isLanguageVersion(version)) {
+				const span = spans.get(r) ?? { text: text.slice(line.start, line.end), start: cp(line.start), end: cp(line.end) };
+				build.error({ code: 'R027', span, args: [version] });
+			} else {
+				module.rezono = version;
+				build.version = version;
+			}
 			continue;
 		}
 		if (r.line === 'pack' && stage === 0) {

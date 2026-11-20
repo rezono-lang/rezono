@@ -15,6 +15,8 @@
 	"R018": "the context axis `{0}` is given twice",
 	"R021": "version {0} of `{2}` replaces {1}; there is no version {1}, or `replaces` lines form a cycle",
 	"R024": "`{0}` is `total`, and it has no known value when `{1}`",
+	"R027": "language version `rezono {0}` is not supported",
+	"R028": "`{0}` is removed in `rezono {1}`",
 	"R029": "no reason has the label {0}",
 	"R030": "`{0}` is not a rounding; use `half_even`, `half_up`, `down` or `up`",
 	"R031": "`table unique` in `{0}`: rows {1} and {2} both apply when `{3}`",
@@ -33,10 +35,13 @@
 	"R049": "`{0}` has no supported rule representation",
 	"R050": "`{0}` cannot be lowered to a calculation",
 	"W105": "`{0}` may be unknown; unknown values print with their reason",
+	"W107": "`{0}` is deprecated",
 	"W108": "`{0}` has no version before {1}; there it is unknown (`no_version_applies`)",
 	"W112": "`table {0}` in `{1}`: no row applies when `{2}`; there it is unknown (`no_row_applies`)",
+	"hint.leave_out": "leave it out",
 	"hint.question_as_known": "to set what the question knows, write `{0}`",
 	"hint.question_at": "to set the date of the question, write `{0}`",
 	"hint.row": "the question's row is `{0}`",
+	"hint.use_instead": "use `{0}` instead",
 	"suggest": "did you mean {0}?"
 }

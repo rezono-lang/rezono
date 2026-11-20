@@ -148,20 +148,6 @@ RED = [
 ]
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=MissingDecisionCitationCapture,
-    reason=(
-        "extra: decisions/decision-heads.md: section 4. Waits for loop/tests/test_build_decision_capture.py--"
-        "test_decision_head_gives_one_decision_row (the same module). Add citation_rows(root, paths, red_tests, *, "
-        "run, observed_at, source) to loop/build_decision_capture.py. It returns one build_citation_scan row "
-        "{id, run, observed_at, source}, one build_decision_citation row {id, scan, path, decision} per tracked "
-        "path whose text names a decision with a head (decisions/<id>.md anywhere, or ](<id>.md in a file under "
-        "decisions/), never the decision's own file, and one build_red_citation row {id, scan, test, decision} "
-        "per decision with a head that a red test's reason names. Only the given paths are read; a file that is "
-        "not UTF-8 text names nothing. Ids are unique."
-    ),
-)
 def test_decision_citations_name_each_file(tmp_path):
     capture = capture_module(MissingDecisionCitationCapture)
     if not hasattr(capture, "citation_rows"):

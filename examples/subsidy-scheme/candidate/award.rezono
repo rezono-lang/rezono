@@ -1,0 +1,66 @@
+-- The award per application, as calculation rules (decisions/language-calculations.md).
+-- Each derived value is one step of the regulation and gives one value per application,
+-- with a state: known, unknown, not_applicable or invalid. The inputs come from
+-- rules/assessment.dl; the amounts and rates are the scheme parameters supplied by the
+-- importing pack, chosen by the evaluation date it states (as_of).
+-- Numbers are exact fractions; the only rounding is round, half away from zero.
+rezono 0
+pack subsidy-scheme
+
+param income_threshold_base: Int from SchemeParameter.value by name
+param income_threshold_per_person: Int from SchemeParameter.value by name
+param income_margin: Int from SchemeParameter.value by name
+param full_rate: Int from SchemeParameter.value by name
+param partial_rate: Int from SchemeParameter.value by name
+param advice_allowance: Int from SchemeParameter.value by name
+param maximum_award: Int from SchemeParameter.value by name
+
+extend Application
+  -- Article 4: a base amount plus an amount per person in the household.
+  derived income_threshold: Int
+    output income_threshold.cents
+    unit cents
+    version 2026, valid 2026-01-01..<2027-01-01, known 2025-12-09
+      definition base_plus_persons when true
+        then income_threshold_base + household_size.persons * income_threshold_per_person
+
+  -- Article 4: the limit above which there is no cost share.
+  derived income_limit: Int
+    output income_limit.cents
+    unit cents
+    version 2026, valid 2026-01-01..<2027-01-01, known 2025-12-09
+      definition threshold_plus_margin when true then income_threshold + income_margin
+
+  -- Article 5: three bands of income, each a definition. Exactly one applies; the proof names it.
+  derived cost_share: Int
+    output cost_share.cents
+    unit cents
+    version 2026, valid 2026-01-01..<2027-01-01, known 2025-12-09
+      definition full_rate when assessed_income.cents <= income_threshold
+        then round(assessed_costs.cents * full_rate / 1000000)
+      definition partial_rate when income_threshold < assessed_income.cents
+        and assessed_income.cents <= income_limit
+        then round(assessed_costs.cents * partial_rate / 1000000)
+      definition above_the_limit when income_limit < assessed_income.cents then 0
+
+  -- Article 6: a fixed allowance for an advised household, on top of a cost share above zero.
+  derived advice_allowance: Int
+    output advice_allowance.cents
+    unit cents
+    version 2026, valid 2026-01-01..<2027-01-01, known 2025-12-09
+      definition allowance_or_nothing when true
+        then when advised and 0 < cost_share then advice_allowance else 0
+
+  -- What the household would receive without a maximum.
+  derived entitlement: Int
+    output entitlement.cents
+    unit cents
+    version 2026, valid 2026-01-01..<2027-01-01, known 2025-12-09
+      definition share_plus_allowance when true then cost_share + Application.advice_allowance
+
+  -- Article 7: the award is the entitlement, at most the maximum.
+  derived award: Int
+    output award.cents
+    unit cents
+    version 2026, valid 2026-01-01..<2027-01-01, known 2025-12-09
+      definition at_most_the_maximum when true then min(entitlement, maximum_award)

@@ -23,7 +23,9 @@ INSTANT = re.compile(r"(\d{4}-\d\d-\d\d[Tt]\d\d:\d\d:\d\d)(?:\.(\d+))?([Zz]|[+-]
 EPOCH = datetime(1970, 1, 1, tzinfo=timezone.utc)
 TICK_COLUMNS = {
     "loop_observation": ("event_time",),
+    "loop_sweep": ("event_time",),
     "loop_sweep_receipt": ("event_time",),
+    "loop_deadline": ("budget",),
     "flow_sweep_window": ("start", "stop"),
     "flow_node_report": ("first", "last"),
 }
@@ -122,6 +124,7 @@ def event(envelope: dict, readers: set[str], expectations: set[str]) -> Event:
 class Sweep:
     events: list[Event]
     receipt: dict | None = None
+    dated: dict | None = None
 
 
 def read_sweep(raw: list | dict, readers: set[str], expectations: set[str]) -> Sweep:
@@ -137,8 +140,9 @@ def read_sweep(raw: list | dict, readers: set[str], expectations: set[str]) -> S
     events = [event(item, readers, expectations) for item in raw["observations"]]
     if any(e.envelope["sweep"] != raw["id"] or e.envelope["run"] != raw["run"] for e in events):
         raise ValueError("observation belongs to another sweep or run")
+    dated = {k: raw[k] for k in ("id", "run", "event_time", "complete")}
     receipt = {k: raw[k] for k in ("id", "run", "event_time")} if raw["complete"] else None
-    return Sweep(events, receipt)
+    return Sweep(events, receipt, dated)
 
 
 @dataclass
@@ -157,15 +161,23 @@ class TypedRecording:
 
         stored = {}
         for row in self.records.get("loop_observation", ()):
-            if row["run"] == self.run and stored.setdefault(row["id"], row) != row:
+            if stored.setdefault(row["id"], row) != row:
                 raise ValueError(f"conflicting records for observation {row['id']!r}")
+        sweeps = {}
+        for row in self.records.get("loop_sweep", ()):
+            if sweeps.setdefault(row["id"], row) != row:
+                raise ValueError(f"conflicting records for sweep {row['id']!r}")
         clock = self.clock
         arrived: list[tuple[Event, Fraction]] = []
         relations = list(RELATIONS)
-        if "fixed_point" in self.program.derived():
-            relations.append("fixed_point")
+        for optional in ("fixed_point", "round_outcome"):
+            if optional in self.program.derived():
+                relations.append(optional)
         try:
             for sweep in self.rounds:
+                if sweep.dated is not None:
+                    if sweeps.setdefault(sweep.dated["id"], sweep.dated) != sweep.dated:
+                        raise ValueError(f"conflicting records for sweep {sweep.dated['id']!r}")
                 events = [e for e in sweep.events if e.envelope["run"] == self.run]
                 if events:
                     if clock is None:
@@ -177,6 +189,8 @@ class TypedRecording:
                 # Refine only this snapshot's representation, scaling stored and arriving ticks together.
                 factor = lcm(*(ticks.denominator for _, ticks in arrived))
                 records = {**self.records, "loop_observation": list(stored.values())}
+                if sweeps:
+                    records["loop_sweep"] = list(sweeps.values())
                 if sweep.receipt is not None:
                     records["loop_sweep_receipt"] = [sweep.receipt]
                 records = scale_timed_records(records, self.run, factor)
@@ -192,9 +206,15 @@ class TypedRecording:
                     rows = batch.read(connection, self.program, relations)
                 selected = {name: {row for row in relation if row[0] == self.run}
                             for name, relation in rows.items()}
+                round_outcome = None
+                if "round_outcome" in selected:
+                    outcomes = {row[1] for row in selected["round_outcome"]}
+                    if len(outcomes) != 1 or not outcomes <= {"pending", "success", "failure"}:
+                        raise ValueError(f"expected one round outcome for {self.run!r}, got {sorted(outcomes)}")
+                    round_outcome = next(iter(outcomes))
                 yield Snapshot({row[1] for row in selected["declared"]}, selected["ready"],
                                {row[1] for row in selected["done"]}, {row[1] for row in selected["stuck"]},
-                               selected["drift"], selected.get("fixed_point", ()))
+                               selected["drift"], selected.get("fixed_point", ()), round_outcome)
         except Diagnosed as error:
             raise ValueError(str(error)) from error
 

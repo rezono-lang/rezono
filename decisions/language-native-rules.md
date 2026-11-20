@@ -1,4 +1,14 @@
+---
+decider: [language]
+decided_on: 2026-11-18
+valid_from: 2026-11-18
+state: in_force
+subject: language-native-rules
+---
+
 # Native relational rules in Rezono
+
+> **Scope across language versions:** This decision remains in force for `rezono 0` (`rezono.module/3`). For `rezono 1` (`rezono.module/5`), `rule ... when ...` is superseded by unified `derived` declarations; see [`decisions/language-rezono-1.md`](language-rezono-1.md#3-effect-on-prior-decisions).
 
 ## 1. Principles and choices
 

@@ -14,6 +14,7 @@ busy: busy
 linked: linked
 too_large: too large
 may_read: may read
+may_read_full: may read in full
 role: role
 role.title: title
 recorded_amount: recorded amount

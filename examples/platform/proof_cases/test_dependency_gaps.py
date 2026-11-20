@@ -73,13 +73,6 @@ def leaf(leaves, relation, key):
     return any(rel == relation and row[0] == key for rel, row in leaves)
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError, reason=(
-    "extra: decisions/platform-dependency-gaps.md: Derive dependency_gap(consumer, function, reason) with reasons no-solution, no-placement and "
-    "no-independent-placement, and dependency_gap_unknown(consumer, function, reason) with reasons "
-    "coverage-missing and domain-not-recorded, in rules/dependency_gaps.dl from needs, unmet_need and "
-    "cluster_service_placement. Declare FailureDomainMembership (cluster: Cluster, domain), "
-    "FunctionInventoryReceipt (function: Function) and the what-if ClusterWithdrawal (cluster: Cluster) in "
-    "schema/dependency_gaps.yaml; no fact rows. Read decisions/platform-dependency-gaps.md."))
 def test_dependency_gaps():
     data = records()
     base_gaps = {("shop", "queue", "no-placement"), ("shop", "search", "no-solution")}

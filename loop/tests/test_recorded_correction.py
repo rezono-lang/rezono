@@ -28,7 +28,7 @@ def test_recorded_correction(monkeypatch, tmp_path, capsys):
     from rezono_compiler import batch, modules, pack
 
     snapshots = []
-    relations = {"needed", "known", "waiting", "ready", "done", "stuck"}
+    relations = {"needed", "known", "waiting", "unblocked", "done", "stuck"}
     compute = batch.compute
 
     def observe_compute(connection, program, *args, **kwargs):
@@ -80,7 +80,7 @@ def test_recorded_correction(monkeypatch, tmp_path, capsys):
         assert (status, report["plans"], report["outcome"], report["rounds"]) == (
             expected_status, [["seed"], ["ship"]], expected_outcome, 2)
 
-        frontiers = [{row[1] for row in state["ready"] if row[0] == "active"} for state in snapshots]
+        frontiers = [{row[1] for row in state["unblocked"] if row[0] == "active"} for state in snapshots]
         assert {"seed"} in frontiers and {"ship"} in frontiers[frontiers.index({"seed"}) + 1:]
         final = snapshots[-1]
         completed = {row[1] for row in final["done"] if row[0] == "active"}

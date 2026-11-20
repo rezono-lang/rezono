@@ -15,15 +15,6 @@ class EarlierManifestNotRefused(AssertionError):
     """The local gate served an earlier manifest that is no longer readable under current authority."""
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=EarlierManifestNotRefused,
-    reason=(
-        "extra: decisions/central-read-access.md: Tighten stillReadable in edge/gate/src/local.ts (section 5): "
-        "refuse an earlier complete manifest when the current manifest is not complete (even when present.full "
-        "is true), and require matching definition_sha256 before present.full bypasses row-by-row checks."
-    ),
-)
 def test_still_readable_refuses_downgraded_and_redefined_earlier_manifests():
     result = subprocess.run(
         ["node", str(PROBE)],

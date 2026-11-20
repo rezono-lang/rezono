@@ -30,12 +30,21 @@ export const MODULE_FORMAT = 'rezono.module/1';
 const EXTENDED_MODULE_FORMAT = 'rezono.module/2';
 const NATIVE_RULE_MODULE_FORMAT = 'rezono.module/3';
 const SAFE_STEP_MODULE_FORMAT = 'rezono.module/4';
+export const REZONO_1_MODULE_FORMAT = 'rezono.module/5';
+const SUPPORTED_MODULE_FORMATS = new Set<string>([
+	MODULE_FORMAT,
+	EXTENDED_MODULE_FORMAT,
+	NATIVE_RULE_MODULE_FORMAT,
+	SAFE_STEP_MODULE_FORMAT,
+	REZONO_1_MODULE_FORMAT,
+]);
 
 function hasIntermediateInvariant(decl: Module['decls'][number]): boolean {
 	return 'rule' in decl && (decl.options?.some(option => 'invariant' in option && option.invariant === 'intermediate') ?? false);
 }
 
 function formatOf(module: Module): ModuleForm['format'] {
+	if (module.rezono === '1') return REZONO_1_MODULE_FORMAT;
 	if (module.decls.some(decl => 'step' in decl || hasIntermediateInvariant(decl))) return SAFE_STEP_MODULE_FORMAT;
 	if (module.decls.some(decl => 'rule' in decl)) return NATIVE_RULE_MODULE_FORMAT;
 	const extended = module.schema !== undefined || module.decls.some(decl => {
@@ -64,7 +73,12 @@ export interface Place {
 	end: string;
 }
 export interface ModuleForm {
-	format: typeof MODULE_FORMAT | typeof EXTENDED_MODULE_FORMAT | typeof NATIVE_RULE_MODULE_FORMAT | typeof SAFE_STEP_MODULE_FORMAT;
+	format:
+		| typeof MODULE_FORMAT
+		| typeof EXTENDED_MODULE_FORMAT
+		| typeof NATIVE_RULE_MODULE_FORMAT
+		| typeof SAFE_STEP_MODULE_FORMAT
+		| typeof REZONO_1_MODULE_FORMAT;
 	module: Module;
 	spans: Place[];
 }
@@ -133,7 +147,7 @@ export function moduleFromJson(value: unknown): ModuleForm {
 	const not = (why: string) => new JsonFormError(`not the JSON form of a module: ${why}`);
 	if (typeof value !== 'object' || value === null || Array.isArray(value)) throw not('it is not an object');
 	const { format, module, spans, ...rest } = value as Record<string, unknown>;
-	if ((format !== MODULE_FORMAT && format !== EXTENDED_MODULE_FORMAT && format !== NATIVE_RULE_MODULE_FORMAT && format !== SAFE_STEP_MODULE_FORMAT) || Object.keys(rest).length)
+	if (typeof format !== 'string' || !SUPPORTED_MODULE_FORMATS.has(format) || Object.keys(rest).length)
 		throw not('its members are a supported `format`, `module` and `spans`');
 	let canonical: string;
 	let text: string;
@@ -147,7 +161,8 @@ export function moduleFromJson(value: unknown): ModuleForm {
 	const errors = own.diagnostics.filter(isError);
 	if (errors.length) throw not(`its text is refused: ${errors.map((d) => `${d.code} at \`${d.span.text}\``).join(', ')}`);
 	if (!own.module || canonicalJson(own.module) !== canonical) throw not('`module` is not the tree of its own text');
-	if (format !== formatOf(own.module)) throw not('`format` does not match the module tree');
+	const expectedFormat = formatOf(own.module);
+	if (format !== expectedFormat) throw not('`format` does not match the module tree');
 	const expected = places(own.module, own.spans, text);
 	const placed = (s: unknown, i: number): s is Place => {
 		if (typeof s !== 'object' || s === null || Object.keys(s).sort().join() !== 'at,end,line,start') return false;
@@ -155,5 +170,5 @@ export function moduleFromJson(value: unknown): ModuleForm {
 		return p.at === expected[i].at && [p.line, p.start, p.end].every((n) => typeof n === 'string' && WHOLE.test(n)) && p.line !== '0' && BigInt(p.start) <= BigInt(p.end);
 	};
 	if (!Array.isArray(spans) || spans.length !== expected.length || !spans.every(placed)) throw not('`spans` does not place the nodes of `module`, each once and in their order');
-	return { format, module: own.module, spans: spans.map(({ at, line, start, end }) => ({ at, line, start, end })) };
+	return { format: expectedFormat, module: own.module, spans: spans.map(({ at, line, start, end }) => ({ at, line, start, end })) };
 }

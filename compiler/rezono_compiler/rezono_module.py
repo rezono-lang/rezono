@@ -17,7 +17,7 @@ import json
 import os
 import re
 import subprocess
-from collections.abc import Callable, Iterator, Mapping, Set
+from collections.abc import Callable, Iterable, Iterator, Mapping, Set
 from dataclasses import dataclass, field
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -437,6 +437,42 @@ def names(form: dict) -> dict[str, str]:
     return out
 
 
+def type_bases(form: dict) -> dict[str, str]:
+    """Declared unit and scalar-alias bases of one module form, mapping units and `Int` to `integer`."""
+    out: dict[str, str] = {}
+    for decl in form["module"]["decls"]:
+        if not isinstance(decl, dict):
+            continue
+        if isinstance(decl.get("unit"), str):
+            out[decl["unit"]] = "integer"
+        elif isinstance(decl.get("type"), str) and isinstance(decl.get("base"), str):
+            out[decl["type"]] = rezono_alias.BASES.get(decl["base"], decl["base"])
+    return out
+
+
+def integer_type_names(tnames: Iterable[str], bases: Mapping[str, str],
+                       known_ints: Set[str] = frozenset()) -> set[str]:
+    """Return the type names whose base chain in `bases` reaches `integer` or an external `known_ints`."""
+    ints: set[str] = set()
+    for tname in tnames:
+        cur: str | None = bases.get(tname)
+        seen: set[str] = {tname}
+        while cur:
+            if cur == "integer":
+                ints.add(tname)
+                break
+            if cur in seen:
+                break
+            seen.add(cur)
+            if cur in bases:
+                cur = bases[cur]
+                continue
+            if cur in known_ints:
+                ints.add(tname)
+            break
+    return ints
+
+
 def lower_pack(pack_dir: Path, meta: dict, pack: str, declared_by: Mapping[str, Set[str]],
                errors: list[str], imported: bool = False,
                pinned: Mapping[str, Mapping[str, Set[str]]] | None = None,
@@ -451,6 +487,8 @@ def lower_pack(pack_dir: Path, meta: dict, pack: str, declared_by: Mapping[str, 
     for mid, ns in sorted(declared_by.items()):
         for n in ns:
             owners.setdefault(n, []).append(mid)
+    local_type_bases: dict[str, str] = {}
+    by_module: dict[str, dict[str, str]] = {}
     reason_owners: dict[str, list[str]] = {}
     for d, form in forms.items():
         if d.id in declared_by:
@@ -460,13 +498,14 @@ def lower_pack(pack_dir: Path, meta: dict, pack: str, declared_by: Mapping[str, 
         for code in rezono_reason.codes(form) if form else ():
             reason_owners.setdefault(code, []).append(d.id)
         if form:
-            local_ints = {
-                str(decl.get("unit") or decl.get("type"))
-                for decl in form["module"]["decls"]
-                if isinstance(decl, dict) and ("unit" in decl or (decl.get("base") == "Int" and "type" in decl))
-            }
-            if local_ints:
-                ints.setdefault(d.id, set()).update(local_ints)
+            mod_bases = type_bases(form)
+            if mod_bases:
+                by_module[d.id] = mod_bases
+                local_type_bases.update(mod_bases)
+    known_ints = {tname for ns in ints.values() for tname in ns}
+    for mid, mod_bases in by_module.items():
+        if local_ints := integer_type_names(mod_bases, local_type_bases, known_ints):
+            ints.setdefault(mid, set()).update(local_ints)
     default_lang = str(meta.get("default_language", ""))
     defined_reasons = rezono_reason.defined_in_catalog(pack_dir, default_lang)
     return [lower(pack_dir, d, form, pack, owners, errors, imported, pinned or {}, ints,

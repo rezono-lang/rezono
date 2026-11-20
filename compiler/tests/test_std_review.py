@@ -256,15 +256,6 @@ class MissingSelfReviewCheck(AssertionError):
     """std-review lacks the four-eyes check review_self, or applies it otherwise than the decision gives."""
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=MissingSelfReviewCheck,
-    reason="extra: decisions/review-and-rights.md: Write packs/std-review/rules/self.dl: the invariant "
-           "review_self(review) for an author of the change (its author, or the subject of a role_grant the change "
-           "introduces), with the lab exception for the owner's own work only, and add !review_self(r) to "
-           "review_valid in rules/state.dl. Read sections 7, 8 and 10 and the open case on a beneficiary. Waits "
-           "for test_review_states.",
-)
 def test_review_self(tmp_path):
     p = Probe(tmp_path, MissingSelfReviewCheck)
     p.invariant("review_self")
@@ -390,14 +381,6 @@ class MissingReviewConflictCheck(AssertionError):
     """std-review lacks review_conflict, or resolves opposite reviews or dismissals otherwise than the decision."""
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=MissingReviewConflictCheck,
-    reason="extra: decisions/review-and-rights.md: Write packs/std-review/rules/conflict.dl: the invariant "
-           "review_conflict(change) for two valid current reviews with opposite verdicts, without a new state, "
-           "and make sure a review_dismissal takes a review out of every count. Read section 8 and the open cases "
-           "on two opposite reviews and on a dismissed approval. Waits for test_review_states.",
-)
 def test_review_conflict_and_dismissal(tmp_path):
     p = Probe(tmp_path, MissingReviewConflictCheck)
     p.invariant("review_conflict")
@@ -443,3 +426,22 @@ def test_review_policy(tmp_path):
              {"require_in_lab": {("pol",)}})
     p.expect("mark in the lab phase", p.run(world(phase=("lab", "una"), policies=[("pol", "note", "mark")])),
              {"require_in_lab": set()})
+
+
+class MissingPhaseAmbiguity(AssertionError):
+    """std-review lets two phase facts with different phases stand side by side without blocking."""
+
+
+def test_review_phase_ambiguous(tmp_path):
+    p = Probe(tmp_path, MissingPhaseAmbiguity)
+    p.invariant("review_phase_ambiguous")
+    both = world([NOTE_CHANGE], grants=[SCRIBE_YEAR], phase=("strict", "una"))
+    both.setdefault("review_phase", set()).add(("phase-lab",))
+    both.setdefault("review_phase__phase", set()).add(("phase-lab", "lab"))
+    both.setdefault("review_phase__owner", set()).add(("phase-lab", "una"))
+    p.expect("a lab fact beside a strict fact", p.run(both),
+             {"review_phase_ambiguous": {("phase",), ("phase-lab",)}})
+    for phase in ("lab", "strict"):
+        p.expect(f"one {phase} fact", p.run(world([NOTE_CHANGE], grants=[SCRIBE_YEAR], phase=(phase, "una"))),
+                 {"review_phase_ambiguous": set()})
+    p.expect("no phase fact", p.run(world([NOTE_CHANGE], grants=[SCRIBE_YEAR])), {"review_phase_ambiguous": set()})
