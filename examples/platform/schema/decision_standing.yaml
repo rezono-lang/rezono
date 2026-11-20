@@ -20,6 +20,8 @@ enums:
       product_stance: {description: A stance on a product.}
       capacity: {description: A capacity statement.}
       shared_cost: {description: A shared monthly cost statement.}
+      backup_policy: {description: A backup retention and recovery routing policy.}
+      access_policy: {description: An access and isolation policy for cluster or tenant operations.}
 
 classes:
   PlatformDecisionBinding:
