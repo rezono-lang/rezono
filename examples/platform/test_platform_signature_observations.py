@@ -35,13 +35,10 @@ def _derive(model, prog, label, rows):
 @pytest.mark.xfail(strict=True, raises=AssertionError, reason=(
     "M2: decisions/platform-facts-not-conclusions.md, section 7. Add schema/artifact_signature.yaml in the layer "
     "observation (ArtifactSignature, world open, with artifact and scan; SignatureScan with covers), the scenario's "
-    "observations in facts/artifact_signature.yaml with a synthetic sidecar, and rules in which verified reads the "
-    "observed signature, supply_unknown names a service whose artifact no scan covers, and unverified_supply leaves "
-    "those out. Keep Artifact.signed: a planner retires it. "
-    "Waits for the planner to add examples/platform/expected/violations/artifact_signature.json (required by "
-    "examples/test_examples.py::test_violations for facts/artifact_signature.yaml, and protected by red_guard). "
-    "Note: contracts/source.yaml does not include `synthetic` yet, so the sidecar must use a valid SourceKind "
-    "(such as `git` citing the decision) until `synthetic` lands."))
+    "observations in facts/artifact_signature.yaml (scan `scan-1` covering `a-shop` and `a-lab`, signature `sig-1` "
+    "on `a-shop` in `scan-1`) with a `synthetic` sidecar, `arrow.many.total` in messages/en.mf2, and rules in which "
+    "verified reads the observed signature, supply_unknown names a service whose artifact no scan covers, and "
+    "unverified_supply leaves those out. Keep Artifact.signed: a planner retires it."))
 def test_supply_is_verified_from_observed_signatures():
     reference = {tuple(row) for row in
                  json.loads((PLATFORM / "oracle-rows.json").read_text(encoding="utf-8"))["unverified_supply"]}

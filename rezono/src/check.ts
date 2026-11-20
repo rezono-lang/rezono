@@ -770,6 +770,23 @@ export function typing(text: string, schema: Schema, spans: WeakMap<object, Span
 			if (op === '/' || !(whole(a, nodes[0]) || whole(b, nodes[1]))) v.inexact = true;
 			return v;
 		}
+		if ('otherwise' in e) {
+			const [an, bn] = e.otherwise;
+			const a = ex(an);
+			const b = ex(bn);
+			if (!meet(a, an, b, bn)) return report('R003', spanOf(e), [describe(a.ty), describe(b.ty)]);
+			if (a.set !== b.set && a.ty.t !== 'state' && b.ty.t !== 'state' && a.ty.t !== 'err' && b.ty.t !== 'err') return report('R005', spanOf(e), []);
+			const ty = a.ty.t === 'state' ? b.ty : a.ty.t === 'num' && b.ty.t === 'num' ? { ...a.ty, name: a.ty.name ?? b.ty.name } : a.ty;
+			const v = value(ty, [a, b], a.set || b.set);
+			const states = new Set<StateName>(a.states);
+			if (states.has('not_applicable')) {
+				states.delete('not_applicable');
+				for (const s of b.states) states.add(s);
+			}
+			v.states = states;
+			v.sure = union(a.sure, [`expr ${printExpr(e)}`]);
+			return v;
+		}
 		if ('when' in e) {
 			const [c, an, bn] = e.when;
 			const cond = truth(c);
@@ -844,7 +861,21 @@ export function typing(text: string, schema: Schema, spans: WeakMap<object, Span
 		if ('when' in e) return union(common(knownWhen(e.when[0], true), knownWhen(e.when[0], false)), common(knownWhen(e.when[1], holds), knownWhen(e.when[2], holds)));
 		if ('is' in e) return holds && e.is[1] === 'known' ? sure(e.is[0]) : new Set();
 		if ('call' in e) return holds ? sure(e) : new Set();
-		return 'cmp' in e || 'in' in e || 'path' in e || 'dot' in e ? sure(e) : new Set();
+		return 'cmp' in e || 'in' in e || 'path' in e || 'dot' in e || 'otherwise' in e ? sure(e) : new Set();
+	}
+	/** Whether `e` can evaluate to `unknown` on a row where `known` holds (for W105). */
+	function mayBeUnknown(e: Expr, known: Set<string>): boolean {
+		const v = typed.get(e);
+		if (!v || v.ty.t === 'err') return false;
+		if (known.has(`expr ${printExpr(e)}`)) return false;
+		if ('otherwise' in e) {
+			const [a, b] = e.otherwise;
+			const va = typed.get(a);
+			return mayBeUnknown(a, known) || (Boolean(va?.states.has('not_applicable')) && mayBeUnknown(b, known));
+		}
+		if ('arith' in e) return mayBeUnknown(e.arith[1], known) || mayBeUnknown(e.arith[2], known);
+		if ('neg' in e) return mayBeUnknown(e.neg, known);
+		return [...v.reads].some(([path, open]) => open && !known.has(path));
 	}
 	/** The default `show` (§8): every single value the condition reads, in source order; an aggregate as itself. */
 	function read(e: Expr, out: Expr[]): Expr[] {
@@ -874,7 +905,7 @@ export function typing(text: string, schema: Schema, spans: WeakMap<object, Span
 			// anything but a whole number, warns.
 			if (stored(v.ty) && !('path' in expr || 'dot' in expr || ('call' in expr && expr.call[0] === 'round'))) v.states.add('unknown');
 			if (v.set) report('R005', spanOf(expr), []);
-			else if (([...v.reads].some(([path, open]) => open && !known.has(path)) || (stored(v.ty) && v.inexact)) && q.show) found.push({ code: 'W105', span: spanOf(expr), args: [printExpr(expr)] });
+			else if ((mayBeUnknown(expr, known) || (stored(v.ty) && v.inexact)) && q.show) found.push({ code: 'W105', span: spanOf(expr), args: [printExpr(expr)] });
 			return { expr, text: printExpr(expr), typed: v };
 		});
 		return { binder, kind: q.ask, shown };

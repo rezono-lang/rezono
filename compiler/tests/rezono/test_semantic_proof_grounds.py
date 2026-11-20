@@ -63,6 +63,9 @@ def scenario(path, selection):
     shutil.copyfile(FIXTURE / "channels.yaml", directory / "channels.yaml")
     write(directory, "pack.yaml", 'name: minimal\nversion: "0"\ndefault_language: en\nimports: []\n')
     write(directory, "facts/base.yaml", FACTS)
+    write(directory, "facts/base.sources.yaml",
+          'default: {kind: git, name: rezono-lang/rezono, revision: "0000000", '
+          'position: compiler/tests/rezono/test_semantic_proof_grounds.py#FACTS}\n')
     write(directory, "messages/en.mf2", MESSAGES)
     write(directory, "rules/access.dl", """.decl may_read(role: symbol, kind: symbol, element: symbol)
 may_read("viewer", "alpha", item) :- alpha(item).

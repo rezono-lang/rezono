@@ -1,0 +1,6 @@
+usage_detail_type:
+  - {id: CONSUMPTION}
+  - {id: OUTPLAN}
+
+quote_policy:
+  - {id: ovhcloud, mode: binding_quote}

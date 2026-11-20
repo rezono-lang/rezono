@@ -50,8 +50,8 @@ export function depthOf(code: string): number {
 	}
 	return depth;
 }
-const OPEN_END = /(?:=>|=|(?:^|\s)[+\-*/]|[(,]|\b(?:when|then|else|and|or|not))$/;
-const GOES_ON = /^(?:(?:then|else|and|or)\b|=>|[+*/).]|-(?!-))/;
+const OPEN_END = /(?:=>|=|(?:^|\s)[+\-*/]|[(,]|\b(?:when|then|else|otherwise|and|or|not))$/;
+const GOES_ON = /^(?:(?:then|else|otherwise|and|or)\b|=>|[+*/).]|-(?!-))/;
 const EFFECT_HEADER = /^effect\s+(?:[a-z][a-z0-9_]*|`[a-z][a-z0-9_]*`)$/;
 
 /** Splits a file into logical lines and their blocks (§11); a tab in an indent is an R000. */
