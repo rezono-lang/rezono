@@ -25,8 +25,27 @@ def imported_example(example: str) -> str:
     return path.relative_to(ROOT.resolve()).as_posix()
 
 
-# The scheme the subsidy example imports: its definition, with calc/award.yaml.
+# The scheme the subsidy example imports: its definition, with the award calculation.
 SCHEME = imported_example(SUBSIDY)
+
+
+def strip_award(scheme_dir: Path) -> None:
+    """Remove the scheme's award calculation whether it lives in YAML or in a rezono/ module."""
+    legacy = scheme_dir / "calc" / "award.yaml"
+    if legacy.exists():
+        legacy.unlink()
+    for suffix in (".rezono", ".json"):
+        candidate = scheme_dir / "rezono" / f"award{suffix}"
+        if candidate.exists():
+            candidate.unlink()
+    meta_path = scheme_dir / "pack.yaml"
+    meta = yaml.safe_load(meta_path.read_bytes())
+    entries = [e for e in meta.get("rezono") or [] if e.get("module") != "rezono/award.rezono"]
+    if entries:
+        meta["rezono"] = entries
+    else:
+        meta.pop("rezono", None)
+    meta_path.write_text(yaml.safe_dump(meta, sort_keys=False), encoding="utf-8")
 
 
 def examples(root: Path) -> Path:

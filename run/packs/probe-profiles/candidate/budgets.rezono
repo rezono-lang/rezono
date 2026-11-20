@@ -120,4 +120,15 @@ rules budgets
   | may_read(r, "probe_budget_read_grant", g) :- probe_budget_read(r, g, _).
   | may_read(r, "decision", d) :- role__capability(r, "read"), decision(d).
   | 
+  | may_read_full(r, "probe_profile") :- role__capability(r, "read").
+  | may_read_full(r, "probe_cell") :- role__capability(r, "read").
+  | may_read_full(r, "probe_cluster") :- role__capability(r, "read").
+  | may_read_full(r, "probe_member") :- role__capability(r, "read").
+  | may_read_full(r, "probe_phase") :- role__capability(r, "read").
+  | may_read_full(r, "probe_storage_variant") :- role__capability(r, "read").
+  | may_read_full(r, "probe_snapshot") :- role__capability(r, "read").
+  | may_read_full(r, "probe_term_coverage") :- role__capability(r, "read").
+  | may_read_full(r, "reference_date") :- role__capability(r, "read").
+  | may_read_full(r, "decision") :- role__capability(r, "read").
+  | 
   | .output probe_cluster_size, probe_profile_total, probe_physical, probe_physical_status, probe_budget, probe_budget_status

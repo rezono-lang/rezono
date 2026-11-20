@@ -6,8 +6,8 @@ hands the checker; each case breaks one thing, as a filter bug would, and names 
 `check_role` can give has a case.
 """
 
+import ast
 import json
-import re
 from pathlib import Path
 
 import pytest
@@ -16,8 +16,12 @@ from rezono_checker import access
 from rezono_checker.canon import encode_key
 
 KINDS = {"doc", "person"}
-COLUMNS = {"doc": ("doc",), "person": ("person",), "doc__author": ("doc", "person"), "role": (None,),
-           "grant": (None, "doc"), "role__capability": (None, None)}
+BUNDLE = {
+    "kinds": [{"id": "doc"}, {"id": "person"}],
+    "arrows": [{"table": "doc__author", "kind": "doc", "target": "person"}],
+    "attributes": [{"table": "grant", "kind": "doc"}],
+    "enums": [{"id": "role"}, {"id": "role__capability"}],
+}
 
 
 def atom(relation, *terms, polarity="positive", stratum="0"):
@@ -38,7 +42,7 @@ DOC = {"format": "rezono.rules/1", "pack": "example",
                      derived("busy", "person"), derived("idle", "person")],
        "rules": [
            rule("everyone", "1", ("may_read", "?r", "person", "?x"), atom("role", "?r"), atom("person", "?x")),
-           rule("granted", "1", ("may_read", "?r", "doc", "?x"), atom("grant", "?r", "?x")),
+           rule("granted", "1", ("may_read", "?r", "doc", "?x"), atom("grant", "?x", "?r")),
            rule("authored", "1", ("authored", "?p", "?d"), atom("doc__author", "?d", "?p")),
            rule("busy", "1", ("busy", "?p"), atom("doc__author", "?d", "?p")),
            rule("idle", "2", ("idle", "?p"), atom("person", "?p"), atom("busy", "?p", polarity="negative", stratum="1")),
@@ -64,7 +68,7 @@ def instance(rule_id, head, bindings, *premises):
 
 EVERYONE = [instance("everyone", ("may_read", "guest", "person", p), {"?r": "guest", "?x": p}, ("role", "guest"), ("person", p))
             for p in ("p1", "p2")]
-GRANTED = instance("granted", ("may_read", "guest", "doc", "d1"), {"?r": "guest", "?x": "d1"}, ("grant", "guest", "d1"))
+GRANTED = instance("granted", ("may_read", "guest", "doc", "d1"), {"?r": "guest", "?x": "d1"}, ("grant", "d1", "guest"))
 AUTHORED = {d: instance("authored", ("authored", "p1", d), {"?d": d, "?p": "p1"}, ("doc__author", d, "p1")) for d in ("d1", "d2")}
 BUSY = {d: instance("busy", ("busy", "p1"), {"?d": d, "?p": "p1"}, ("doc__author", d, "p1")) for d in ("d1", "d2")}
 IDLE = instance("idle", ("idle", "p2"), {"?p": "p2"}, ("person", "p2"), ("not", "busy", "p2"))
@@ -76,11 +80,11 @@ def world(calc=False) -> dict:
     """The complete epoch and what a correct filter gives the guest."""
     w = {
         "complete": {"role": [("guest",)], "person": [("p1",), ("p2",)], "doc": [("d1",), ("d2",)],
-                     "doc__author": [("d1", "p1"), ("d2", "p1")], "grant": [("guest", "d1")],
+                     "doc__author": [("d1", "p1"), ("d2", "p1")], "grant": [("d1", "guest")],
                      "may_read": [("guest", "person", "p1"), ("guest", "person", "p2"), ("guest", "doc", "d1")],
                      "authored": [("p1", "d1"), ("p1", "d2")], "busy": [("p1",)], "idle": [("p2",)]},
         "mine": {"role": [("guest",)], "person": [("p1",), ("p2",)], "doc": [("d1",)], "doc__author": [("d1", "p1")],
-                 "grant": [("guest", "d1")],
+                 "grant": [("d1", "guest")],
                  "may_read": [("guest", "person", "p1"), ("guest", "person", "p2"), ("guest", "doc", "d1")],
                  # busy(p1) by the document it reads; idle(p2) negates busy, which it does not read in full
                  "authored": [("p1", "d1")], "busy": [("p1",)], "idle": []},
@@ -108,8 +112,8 @@ def checked(w) -> tuple[frozenset, set]:
     """(the relations the checker finds full, its findings as (reason, relation))."""
     full, findings = access.check_role(
         "guest", {r: snapshot(rs) for r, rs in w["complete"].items()}, {r: snapshot(rs) for r, rs in w["mine"].items()},
-        w["full"], COLUMNS, KINDS, {}, w.get("doc", DOC), w["calc_ir"], w["instances"], w["calc_all"], w["calc_mine"],
-        w["witnesses"], claimed_evidence=w.get("evidence"))
+        w["full"], w.get("bundle", BUNDLE), w.get("doc", DOC), w["calc_ir"], w["instances"], w["calc_all"],
+        w["calc_mine"], w["witnesses"], claimed_evidence=w.get("evidence"))
     assert all(f["severity"] == "error" for f in findings)
     return full, {(f["reason"], f.get("relation")) for f in findings}
 
@@ -192,6 +196,10 @@ def broken_snapshot(w):
     w["mine"]["person"] = b"[{"
 
 
+def missing_bundle(w):
+    w["bundle"] = {}
+
+
 def hidden_subject(w):  # the calculation of a document the role does not read
     w["mine"]["calc__size"].append(("d2", "1", "known", ""))
     w["calc_mine"].append(SIZE["d2"])
@@ -228,6 +236,7 @@ CASES = [
     (other_proof, False, {("choice_mismatch", None)}, True),
     (missing_proof, False, {("choice_mismatch", None)}, True),
     (broken_snapshot, False, {("malformed_snapshot", "person")}, False),
+    (missing_bundle, False, {("malformed_bundle", None)}, True),
     (hidden_subject, True, {("calc_not_visible", "calc__size"), ("calc_not_visible", None)}, False),
     (partial_read, True, {("calc_not_visible", "calc__size"), ("calc_not_visible", None)}, True),
     (dropped_calculation, True, {("calc_visible_missing", "calc__size"), ("calc_visible_missing", None)}, True),
@@ -291,11 +300,36 @@ def test_the_scope_is_the_checkers_own():
     assert checked(w)[0] == frozenset({"person", "role"})
 
 
+def _reasons_of_check_role(source: str) -> set[str]:
+    """Every finding reason literal reachable from `check_role` through functions in `access.py`."""
+    tree = ast.parse(source)
+    funcs = {node.name: node for node in tree.body if isinstance(node, ast.FunctionDef)}
+    seen, todo, reasons = set(), ["check_role"], set()
+    while todo:
+        name = todo.pop()
+        if name in seen or name not in funcs:
+            continue
+        seen.add(name)
+        for child in ast.walk(funcs[name]):
+            if isinstance(child, ast.Name) and child.id in funcs and child.id not in seen:
+                todo.append(child.id)
+            elif isinstance(child, ast.Dict):
+                for key, value in zip(child.keys, child.values):
+                    if (isinstance(key, ast.Constant) and key.value == "reason"
+                            and isinstance(value, ast.Constant) and isinstance(value.value, str)):
+                        reasons.add(value.value)
+            elif isinstance(child, ast.keyword) and child.arg == "reason":
+                if isinstance(child.value, ast.Constant) and isinstance(child.value.value, str):
+                    reasons.add(child.value.value)
+    return reasons
+
+
 def test_every_reason_of_the_role_check_is_reached():
     """A reason check_role can give and no case here plants would be an untested check."""
     source = Path(access.__file__).read_text(encoding="utf-8")
     reached = {reason for _, _, findings, _ in CASES for reason, _ in findings}
-    assert set(re.findall(r'"reason": "([a-z_]+)"', source)) <= reached
+    expected = _reasons_of_check_role(source)
+    assert expected and expected <= reached
 
 
 # Roles in two layers (B19): the read rules grant documents to every role the pack maps to the capability `read`,

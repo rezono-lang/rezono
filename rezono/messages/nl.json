@@ -37,6 +37,7 @@
 	"W105": "`{0}` kan onbekend zijn; onbekende waarden worden met hun reden getoond",
 	"W107": "`{0}` is verouderd",
 	"W108": "`{0}` heeft geen versie vóór {1}; daar is het onbekend (`no_version_applies`)",
+	"W109": "`{0}` in `{1}` wordt door geen enkel voorbeeld gebruikt",
 	"W112": "`table {0}` in `{1}`: geen rij geldt als `{2}`; daar is het onbekend (`no_row_applies`)",
 	"hint.leave_out": "laat dit weg",
 	"hint.question_as_known": "schrijf `{0}` om te kiezen wat de vraag weet",

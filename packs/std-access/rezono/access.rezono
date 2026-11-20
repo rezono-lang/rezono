@@ -38,3 +38,8 @@ rules access
   | // This declaration alone denotes the empty set and confers no read rights.
   | // @extend
   | .decl may_read(role: symbol, kind: symbol, element: symbol)
+  | 
+  | // Explicit full-kind read coverage (decisions/central-read-access.md). Each consumer supplies
+  | // its own coverage clauses; this declaration alone denotes the empty set and grants no coverage.
+  | // @extend
+  | .decl may_read_full(role: symbol, kind: symbol)

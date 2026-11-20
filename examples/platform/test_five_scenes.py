@@ -314,7 +314,12 @@ def test_platform_readme_names_five_scenes_and_matches_publication_counts(tmp_pa
     reason=(
         "M2: decisions/platform-five-scenes.md: Add one offline-replayable std-loop recording and manifest per "
         "scene under examples/platform/recordings/scene-<n>-<slug>/; scenes 1 and 4 require real recordings "
-        "from the loop apply/readback executor, while scenes 2, 3 and 5 may start hand-written."
+        "from the loop apply/readback executor, while scenes 2, 3 and 5 may start hand-written. "
+        "Waits for loop/tests/test_startup_safe_rounds_live.py--test_startup_safe_rounds_live, "
+        "examples/platform/proof_cases/test_management_dataset_restored_offline.py--test_management_dataset_restored_offline "
+        "and examples/platform/proof_cases/test_platform_safe_rounds_recorded.py--test_platform_safe_rounds_recorded. "
+        "Today neither the loop apply/readback executor nor real cluster capture evidence for scenes 1 and 4 "
+        "exists on main, so honest origin='real' recordings cannot be produced without those runs."
     ),
 )
 def test_each_scene_has_an_offline_replayable_recorded_run():

@@ -256,15 +256,6 @@ class MissingSelfReviewCheck(AssertionError):
     """std-review lacks the four-eyes check review_self, or applies it otherwise than the decision gives."""
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=MissingSelfReviewCheck,
-    reason="extra: decisions/review-and-rights.md: Write packs/std-review/rules/self.dl: the invariant "
-           "review_self(review) for an author of the change (its author, or the subject of a role_grant the change "
-           "introduces), with the lab exception for the owner's own work only, and add !review_self(r) to "
-           "review_valid in rules/state.dl. Read sections 7, 8 and 10 and the open case on a beneficiary. Waits "
-           "for test_review_states.",
-)
 def test_review_self(tmp_path):
     p = Probe(tmp_path, MissingSelfReviewCheck)
     p.invariant("review_self")

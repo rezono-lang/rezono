@@ -11,16 +11,6 @@ class MissingStatusReaderCheck(AssertionError):
     """The checker does not yet expose or enforce check_variant_status_readers."""
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=MissingStatusReaderCheck,
-    reason=(
-        "extra: decisions/central-read-access.md: Add check_variant_status_readers(variant, role_full, "
-        "all_relations, complete_roles=frozenset()) to checker/rezono_checker/access.py and call it from "
-        "edge/publisher/rezono_publisher/sweep.py with checker-derived full sets before writing a variant "
-        "manifest or diagnosis. Refuse any status_reader not in readers or missing any relation of all_relations."
-    ),
-)
 def test_checker_refuses_incomplete_variant_status_reader():
     check = getattr(access, "check_variant_status_readers", None)
     if check is None:

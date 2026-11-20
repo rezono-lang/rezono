@@ -291,7 +291,11 @@ def verify(e: Epoch, snapshots=None, witnesses=None, full=None, calc_witnesses=N
             raise ValueError("a role's proofs need the role and the complete snapshots: the checker derives its scope")
         if instances is None:
             instances = frozen(e)[1]
-        full, scope = checker_access.check_role(role, complete, snapshots, full, e.columns, e.kinds, e.parents,
+        try:
+            bundle_doc = json.loads(e.bundle) if e.bundle else None
+        except (TypeError, ValueError):
+            bundle_doc = None
+        full, scope = checker_access.check_role(role, complete, snapshots, full, bundle_doc,
                                                 doc, calculation, instances, e.calc_witnesses, calc_witnesses or (),
                                                 witnesses, claimed_evidence=getattr(full, "evidence", None))
     if snapshots is None:

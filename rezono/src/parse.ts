@@ -29,11 +29,14 @@ export interface Parsed {
 
 const semantics = grammar.createSemantics();
 
-/** The text of a literal as it prints: its parts one space apart, its digits as they were written (§9). */
+/** The text of a literal as it prints: its parts one space apart, digits normalized without grouping underscores (§9). */
 semantics.addOperation<string>('lit', {
-	quantity: (n, _sp, unit) => `${n.sourceString} ${unit.sourceString}`,
-	percent: (n, _sp, _pct) => `${n.sourceString} %`,
-	money: (symbol, _sp, n, _slash, unit) => `${symbol.sourceString} ${n.sourceString}${unit.children.map((u) => `/${u.sourceString}`).join("")}`,
+	num(_whole, _dot, _part, _slash, _under) {
+		return this.sourceString.replaceAll('_', '');
+	},
+	quantity: (n, _sp, unit) => `${n.lit()} ${unit.sourceString}`,
+	percent: (n, _sp, _pct) => `${n.lit()} %`,
+	money: (symbol, _sp, n, _slash, unit) => `${symbol.sourceString} ${n.lit()}${unit.children.map((u) => `/${u.sourceString}`).join("")}`,
 	stateLit_unknown: (_w, _sp, reason) => `unknown ${reason.sourceString}`,
 	stateLit_invalid: (_w, _sp, reason) => `invalid ${reason.sourceString}`,
 	_nonterminal(...children) {

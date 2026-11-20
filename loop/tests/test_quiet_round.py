@@ -140,9 +140,9 @@ def test_quiet_round_rules():
     model = pack.read(LOOP)
     for settings, *_ in CASES:
         records = scenario(**settings)
-        ready, proof, outcome, drift = reference(records)
+        unblocked, proof, outcome, drift = reference(records)
         program, rows, explainer = evaluate(model, records)
-        assert any(row[:2] == (RUN, "publish") for row in rows["ready"]) is ready
+        assert any(row[:2] == (RUN, "publish") for row in rows["unblocked"]) is unblocked
         blocked = [row for row in rows["stuck"] if row[:2] == (RUN, "publish")]
         assert bool(blocked) is bool(proof)
         if blocked:
