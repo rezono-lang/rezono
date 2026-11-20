@@ -128,8 +128,6 @@ def scoped(role: str, checks: list) -> dict:
     return {"id": "m-1", "snapshots": [s for s in TRUTH["snapshots"] if s["role"] == role], "checks": checks}
 
 
-@pytest.mark.xfail(strict=True, raises=AttributeError,
-                   reason="extra: Waits for deploy/profiles/edge/test_pilot.py--test_private_variants_and_the_masked_gate_view (same file). Add pilot.check_statuses(role, manifest, truth) to deploy/profiles/edge/pilot.py: a role sees check statuses only if the unscoped manifest in the store (truth) shows it reads every relation in full, and otherwise every check as unavailable; without a store, all or nothing by the role's own snapshots. The comment above these tests and pilot_sample.TRUTH give the cases. The same change makes the other check_statuses tests in this file pass: remove their marks in the same pull request.")
 def test_a_role_that_reads_in_part_sees_exactly_unavailable():
     pilot.check_statuses("propose", scoped("propose", UNAVAILABLE), TRUTH)
     # The leak AUD-E1 closed: a status of rows the role does not read; and a check left out.
@@ -138,8 +136,6 @@ def test_a_role_that_reads_in_part_sees_exactly_unavailable():
             pilot.check_statuses("propose", scoped("propose", checks), TRUTH)
 
 
-@pytest.mark.xfail(strict=True, raises=AttributeError,
-                   reason='extra: Covered by the task deploy/profiles/edge/test_pilot.py--test_a_role_that_reads_in_part_sees_exactly_unavailable: a full reader sees the true statuses. The change for that task makes this pass; remove this mark with it.')
 def test_a_full_reader_sees_the_true_statuses_and_never_unavailable():
     pilot.check_statuses("auditor", scoped("auditor", SHOWN), TRUTH)
     # A gate that masks every status would pass an all-or-nothing check; against the store it does not.
@@ -155,15 +151,11 @@ def test_a_full_reader_sees_the_true_statuses_and_never_unavailable():
             pilot.check_statuses("auditor", scoped("auditor", checks), TRUTH)
 
 
-@pytest.mark.xfail(strict=True, raises=AttributeError,
-                   reason='extra: Covered by the task deploy/profiles/edge/test_pilot.py--test_a_role_that_reads_in_part_sees_exactly_unavailable: the truth must be the same manifest. The change for that task makes this pass; remove this mark with it.')
 def test_the_truth_must_be_the_same_manifest():
     with pytest.raises(SystemExit, match="checked against"):
         pilot.check_statuses("auditor", scoped("auditor", SHOWN), dict(TRUTH, id="m-0"))
 
 
-@pytest.mark.xfail(strict=True, raises=AttributeError,
-                   reason='extra: Covered by the task deploy/profiles/edge/test_pilot.py--test_a_role_that_reads_in_part_sees_exactly_unavailable: without a store, all or nothing. The change for that task makes this pass; remove this mark with it.')
 def test_without_a_store_only_all_or_nothing():
     # `live` has no store: a role whose own snapshots are all full may see statuses, every role may see
     # every check unavailable, none sees a mix, a count or a status beside a part read.
