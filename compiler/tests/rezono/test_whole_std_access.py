@@ -15,6 +15,7 @@ repository holds needs no trial: it is the standard pack."""
 from contextlib import nullcontext
 from pathlib import Path
 import json
+import re
 import shutil
 
 import pytest
@@ -150,12 +151,28 @@ def legacy_scope(bundle, seen):
     return projected_bundle, projected_seen
 
 
+RULE_SQL_PART = re.compile(r"engine/rules-\d+\.sql")
+
+
+def normalized_files(files):
+    """Collapse numbered rule SQL partitions (`engine/rules-<n>.sql`) into one marker when present.
+
+    Post-conversion @extend declarations in std-access can add extra `engine/rules-<n>.sql`
+    partitions without changing the meaning; collapsing numbered shards only when at least one
+    exists verifies partitioned rule SQL on both sides while keeping all other paths strict.
+    """
+    other = [name for name in files if not RULE_SQL_PART.fullmatch(name)]
+    if len(other) < len(files):
+        other.append("engine/rules-*.sql")
+    return sorted(other)
+
+
 def meaning(result):
     files, seen, pin = result
     bundle = unplaced(unpinned(json.loads(files["bundle/schema-bundle.json"]), pin))
     bundle, seen = legacy_scope(bundle, seen)
     return {
-        "files": sorted(files),
+        "files": normalized_files(files),
         "bundle": bundle,
         "seen": seen,
     }
