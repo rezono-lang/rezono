@@ -797,7 +797,7 @@ class InventoryTests(unittest.TestCase):
             base, candidate = root / ".build-base", root / "scripts"
             for scripts in (base, candidate, check / "scripts"):
                 scripts.mkdir(parents=True)
-                for name in ("components.py", "pytest-plugins.txt", "red_list.py"):
+                for name in ("components.py", "pytest-plugins.txt", "red_guard.py", "red_list.py"):
                     shutil.copyfile(ROOT / "scripts" / name, scripts / name)
             names = [f"loop/test_{letter}.py" for letter in "abcde"]
             # The base weighs test_e heavily; the candidate has no profile and would split round-robin.
