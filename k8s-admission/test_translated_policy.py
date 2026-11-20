@@ -65,18 +65,22 @@ def review(obj):
 def test_translated_policy(tmp_path):
     from admission_release import render_release
     from admission_translator import translate
+    from policy_renderer import render_policy
 
     publication = load("publication.yaml")
     store = publish_evidence(tmp_path / "checked")
-    manual = render_release(["admission-blue", "admission-green"], [publication], store=store,
-                            manifest_key=MANIFEST_KEY)
-    digest, = {item["spec"]["digest"] for item in manual if item["kind"] == "NamespacePublication"}
-    generated = []
-    for item in manual:
+    release = render_release(["admission-blue", "admission-green"], [publication], store=store,
+                             manifest_key=MANIFEST_KEY)
+    digest, = {item["spec"]["digest"] for item in release if item["kind"] == "NamespacePublication"}
+    manual, generated = [], []
+    for item in release:
         if item["kind"] == "ValidatingAdmissionPolicy":
             rule = item["metadata"]["name"].split(".")[0]
-            item = translate(load_program(f"{rule}.rules.yaml"), fixture(f"{rule}.binding.yaml"), digest)
-        generated.append(item)
+            manual.append(render_policy(rule=rule, digest=digest))
+            generated.append(translate(load_program(f"{rule}.rules.yaml"), fixture(f"{rule}.binding.yaml"), digest))
+        else:
+            manual.append(item)
+            generated.append(item)
     assert [item["metadata"]["name"] for item in generated] == [item["metadata"]["name"] for item in manual]
 
     releases = {}

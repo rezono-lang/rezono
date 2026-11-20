@@ -331,11 +331,6 @@ def sentences(body: str) -> list[str]:
     return found
 
 
-@pytest.mark.xfail(strict=True, raises=MissingLanguageExcerpt, reason=(
-    "extra: decisions/front-door.md: Waits for examples/subsidy-scheme to replace calc/award.yaml with a "
-    "declared rezono/ calculation module in pack.yaml. Then add ### The rules in Rezono inside ## Example "
-    "in README.md with a <=20-line haskell fence quoting two A001 calculation rules byte for byte and a "
-    "sentence linking to that source file for the other rules. README.md only."))
 def test_the_readme_shows_a_literal_rezono_excerpt_of_a001_rules():
     text = readme()
     assert "rezono 1" not in text.lower(), "README.md must not mention rezono 1 while the quoted pack is in rezono 0"
@@ -369,11 +364,6 @@ def test_the_readme_shows_a_literal_rezono_excerpt_of_a001_rules():
         f"README.md ## Example must link to {repo_rel} for the remaining calculation rules")
 
 
-@pytest.mark.xfail(strict=True, raises=MissingLanguageRefusal, reason=(
-    "extra: decisions/front-door.md: Waits for examples/subsidy-scheme to replace calc/award.yaml with a "
-    "declared rezono/ calculation module in pack.yaml. Then show the excerpt with one changed line "
-    "(Application.advice_allowance -> advice_allowance) in a second haskell block in ## Example beside its "
-    "R050 ambiguous leaf compiler refusal. README.md only."))
 def test_the_readme_changed_excerpt_is_refused_by_the_compiler(tmp_path):
     text = readme()
     example = dict(sections(text)).get("Example", "")
@@ -428,10 +418,6 @@ def test_the_readme_changed_excerpt_is_refused_by_the_compiler(tmp_path):
     assert REFUSAL_DETAIL in str(error), str(error)
 
 
-@pytest.mark.xfail(strict=True, raises=MissingLanguageFourStates, reason=(
-    "extra: decisions/front-door.md: Waits for examples/subsidy-scheme to replace calc/award.yaml with a "
-    "declared rezono/ calculation module in pack.yaml. Then add one sentence in ## Example of README.md "
-    "naming the four value states (known, unknown, not_applicable, invalid). README.md only."))
 def test_the_readme_names_the_four_value_states_in_one_sentence():
     example = dict(sections(readme())).get("Example", "")
     found = [
