@@ -20,7 +20,7 @@ def test_live_oracle_workflow_runs_the_compiler_entrypoint():
             if any(entry in step.get("run", "").splitlines() for step in job["steps"])]
     job, = jobs
     assert job["runs-on"].startswith("ubuntu-")
-    assert int(job["timeout-minutes"]) == 60
+    assert int(job["timeout-minutes"]) == 120
     assert job.get("permissions", job_file.get("permissions")) == {"contents": "read"}
     assert (ROOT / "compiler/ci/run_feldera_oracle.sh").is_file()
     assert job["strategy"]["matrix"]["shard"] == [

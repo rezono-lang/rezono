@@ -20,9 +20,10 @@ jobs:
       matrix:
         shard: [library, projects, platform-incremental, platform-e2e, tenant-capacity-interface, subsidy, compiler-calc, compiler-bound, compiler-rules]
     runs-on: ubuntu-24.04
-    # Platform-incremental builds about 2,300 generated operator crates on four cores; its integrity
-    # program alone takes about 19 minutes. The other shards finish within 30 minutes.
-    timeout-minutes: 60
+    # Platform-incremental builds about 3,200 generated operator crates on four cores; its integrity
+    # pipeline alone takes about 35 minutes, with the remaining parts pushing the shard past 60 minutes.
+    # The other shards finish within 30 minutes.
+    timeout-minutes: 120
     defaults:
       run:
         shell: bash
