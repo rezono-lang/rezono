@@ -36,13 +36,18 @@ Non-interference: what a role gets depends only on what it may read, never on a 
 from __future__ import annotations
 
 import json
+import re
 from collections import defaultdict
+from decimal import Decimal
+from math import gcd
 
 from rezono_canon import canonical_json
 from rezono_compiler import rank
 from rezono_compiler.rules import INT
 
 from . import calc_scope
+
+_POSITIVE = re.compile(r"^[1-9][0-9]*$")
 
 ACCESS = "may_read"
 READ_FULL = "may_read_full"
@@ -112,6 +117,40 @@ def choose(instances, derived) -> dict[tuple[str, str], dict]:
     return {head: instances[i] for head, (_, i) in rank.choose(inst).items()}
 
 
+def _calc_value_valid(text: str, column_type: str) -> bool:
+    """Whether a calculation selection value has canonical syntax for its declared column type."""
+    if not isinstance(text, str):
+        return False
+    if column_type == "integer":
+        return INT.fullmatch(text) is not None
+    if column_type != "rational":
+        return False
+    num, slash, den = text.partition("/")
+    if not INT.fullmatch(num):
+        return False
+    if not slash:
+        return True
+    # Decimal decodes decimal digits without a string-to-int digit limit.
+    return bool(den != "1" and _POSITIVE.fullmatch(den) and gcd(int(Decimal(num)), int(Decimal(den))) == 1)
+
+
+def _calc_input_types(rules: dict) -> dict[str, str]:
+    """Per declared calc-input relation, its numeric value column type (`rational` or `integer`)."""
+    grouped: dict[str, list[dict]] = defaultdict(list)
+    for rel in rules.get("relations", ()):
+        if isinstance(rel, dict) and rel.get("role") == "calc" and isinstance(rel.get("name"), str):
+            grouped[rel["name"]].append(rel)
+    out: dict[str, str] = {}
+    for name, decls in grouped.items():
+        key = decls[0].get("key", ()) if len(decls) == 1 else ()
+        if (isinstance(key, (list, tuple)) and len(key) == 4
+                and isinstance(key[1], dict) and key[1].get("type") == "rational"):
+            out[name] = "rational"
+        else:
+            out[name] = "integer"
+    return out
+
+
 class Scope:
     """What one filtered role may read in an epoch, decided before any derived row is looked at."""
 
@@ -123,14 +162,19 @@ class Scope:
         self.chains = ancestors(kinds, parents)
         self.columns = columns
         self.derived = {r["name"] for r in rules.get("relations", ()) if r.get("role") == "derived"}
-        self.calc_inputs = {r["name"] for r in rules.get("relations", ()) if r.get("role") == "calc"}
+        self.calc_input_types = _calc_input_types(rules)
+        self.calc_inputs = set(self.calc_input_types)
         for r in rules.get("relations", ()):
             if "release" in r:
                 raise ValueError(f"relation {r['name']}: release is not supported yet (negation and aggregates "
                                  "only over relations the role reads in full)")
         for rel in sorted(set(rows) - self.derived - set(columns)):
             raise ValueError(f"relation {rel}: no kind per column, so no right can be read from it")
-        self.named = any(r[0] == role for r in rows.get(ROLE, ()))  # the pack's facts name this role
+        for rel in sorted(set(rows) - self.derived):
+            expected = len(self.columns[rel])
+            if any(len(r) != expected for r in rows[rel]):
+                raise ValueError(f"relation {rel}: row arity must match schema ({expected} columns)")
+        self.named = any(r == (role,) for r in rows.get(ROLE, ()))  # the pack's facts name this role
         # The capabilities the pack's facts map this role to (roles in two layers).
         self.capabilities = {r[1] for r in rows.get(CAPABILITY, ()) if len(r) == 2 and r[0] == role}
         if any(r["name"] == READ_FULL for r in rules.get("relations", ())):
@@ -140,7 +184,7 @@ class Scope:
         self.full_kinds = {k for k, chain in self.chains.items() if {g["kind"] for g in self.grants}.intersection(chain)}
         for k in sorted(self.full_kinds):
             for r in rows.get(k, ()):
-                if not self.reads(k, r[0]):
+                if len(r) != 1 or not self.reads(k, r[0]):
                     raise Uncovered(f"role {role}: the read rules give kind {k} in full, but not every element")
         self.withheld = self._withheld_seals(rules) | self._withheld_admission(rules)
         # What each calculation view rests on, as `with_calc` gave it; without a program there is none.
@@ -153,7 +197,10 @@ class Scope:
 
     def readable(self, rel: str, row) -> bool:
         """A base row: every element in it is one the role may read, in a relation not withheld."""
-        return rel not in self.withheld and all(k is None or self.reads(k, v) for k, v in zip(self.columns[rel], row))
+        cols = self.columns[rel]
+        if len(row) != len(cols):
+            raise ValueError(f"relation {rel}: row has {len(row)} columns, expected {len(cols)}")
+        return rel not in self.withheld and all(k is None or self.reads(k, v) for k, v in zip(cols, row, strict=True))
 
     def _withheld_seals(self, rules: dict) -> frozenset[str]:
         """The relations of a seal with parts (docs/compiler.md#parts) for a role that does not read every part
@@ -293,7 +340,7 @@ class Scope:
 def without_rights(rows: dict, roles: dict[str, str]) -> list[str]:
     """The filtered roles of the configuration that no `may_read` row names: each reads no element. So a
     publication can say it (the command line does), where a profile and a pack disagree about the roles."""
-    named = {r[0] for r in rows.get(ACCESS, ())}
+    named = {r[0] for r in rows.get(ACCESS, ()) if len(r) == 3}
     return sorted(role for role, mode in roles.items() if mode == FILTERED and role not in named)
 
 
@@ -338,8 +385,10 @@ def for_role(rows: dict, kinds, parents: dict, columns: dict, rules: dict, witne
         if scope.calc_inputs:
             # A readable subject does not make its calculated value usable as a proof premise.
             for rel in sorted(scope.calc_inputs):
+                column_type = scope.calc_input_types[rel]
                 keys[rel] = {key_text(row) for row in readable.get(rel, ()) if len(row) == 4
-                             and row[2] == "known" and row[3] == "" and INT.fullmatch(row[1])}
+                             and row[2] == "known" and row[3] == ""
+                             and _calc_value_valid(row[1], column_type)}
             chosen = choose([w for w in witnesses if scope.usable(w, keys)], scope.derived)
     for rel, rs in rows.items():
         if rel in scope.derived:
