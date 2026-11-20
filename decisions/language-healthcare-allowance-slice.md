@@ -1,3 +1,11 @@
+---
+decider: [language]
+decided_on: 2026-11-19
+valid_from: 2026-11-19
+state: in_force
+subject: language-healthcare-allowance-slice
+---
+
 # The first slice of the healthcare allowance (zorgtoeslag)
 
 Regulation is the first domain after the reference platform, and `examples/zorgtoeslag` is its example. That example is written in the language and is not published. It has no `pack.yaml`, and its module uses nearly every construct the language designs, some of which the compiler refuses or the reader reserves. This decision cuts a first slice that can publish once three building blocks lower, and says where every other construct goes.
@@ -25,7 +33,7 @@ The first slice uses three building blocks that no other pack uses:
 
 Beside them it uses only what the language already reads and the compiler lowers or is about to lower: a kind with Boolean and amount slots, a fact table, a unit, and a derived value with arithmetic, comparisons, `when … then … else` and `floor`.
 
-The slice keeps one kind, `Household`. Its slots are `partner` (a Boolean in the fact table), `insured` (a dated Boolean, a version per period of cover) and `joint_income` (a dated amount, a version per calendar year). The four parameters of the full example, `standard_premium`, `threshold_income`, `income_limit_single` and `income_limit_partner`, keep their versions per year, including version 3 of the standard premium, known later on the same dates. The derived value `allowance` has two `unless` blocks: `not insured` gives zero, and below it `joint_income > income_limit` gives zero, so the income block is read first (v0 section 5b). The amounts, rates and versions are those of the full example. They are illustrative.
+The slice keeps one kind, `Household`. Its slots are `partner` (a Boolean in the fact table), `insured` (a dated Boolean, a version per period of cover) and `joint_income` (a dated amount, a version per calendar year). The four parameters of the full example, `standard_premium`, `threshold_income`, `income_limit_single` and `income_limit_partner`, keep their versions per year, including version 3 of the standard premium, known later on the same dates. The derived value `allowance` has two `unless` blocks: `not insured` gives zero, and below it `joint_income > income_limit` gives zero, so the income block is read first (v0 section 5b). The amounts, rates, versions and article numbers are copied from the full example (`examples/zorgtoeslag/zorgtoeslag.rezono`) and are illustrative synthetic test figures rather than published statutory figures; likewise, the households and amounts in `facts.rezono` are invented case data.
 
 A publication of the slice is evaluated on one day, with one `as of DAY known DAY` line, as in the subsidy example. Each case of the slice evaluates one household on the first day of one month.
 

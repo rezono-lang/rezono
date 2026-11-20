@@ -1,3 +1,11 @@
+---
+decider: [language]
+decided_on: 2026-11-19
+valid_from: 2026-11-19
+state: in_force
+subject: language-pending-building-blocks
+---
+
 # Tests for every pending building block
 
 `compiler/tests/rezono/language_usage.py` names a building block Pending until its reading and lowering tests pass. Every pending building block has a red test for reading and one for lowering, or this decision says why it has none yet.
