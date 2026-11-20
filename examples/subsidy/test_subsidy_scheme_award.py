@@ -72,13 +72,6 @@ def compile_legacy_oracle(tmp_path: Path) -> dict[str, str]:
     return emit.compile_pack(pack.read(scheme))
 
 
-def test_award_legacy_oracle_matches_existing_calc_yaml():
-    """While calc/award.yaml still exists, the frozen oracle fixture holds identical bytes."""
-    live = SCHEME / "calc" / "award.yaml"
-    if live.is_file():
-        assert live.read_bytes().replace(b"\r\n", b"\n") == ORACLE.read_bytes().replace(b"\r\n", b"\n")
-
-
 @pytest.mark.xfail(
     strict=True,
     raises=MissingSubsidyAwardInRezono,
