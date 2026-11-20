@@ -600,7 +600,7 @@ class PullRequestSelectorTests(unittest.TestCase):
         uses |= {job["uses"].removeprefix("./") for job in jobs.values() if job.get("uses", "").startswith("./")}
         for used in uses:
             self.assertTrue((used + "/").startswith(ci.FULL_SELECTION_PATHS), used)
-        for reads in ("compiler-duration-profile.json", "publication_fixture.py"):
+        for reads in ("compiler-duration-profile.json", "loop-duration-profile.json", "publication_fixture.py"):
             self.assertIn(reads, (ROOT / "scripts/components.py").read_text(encoding="utf-8"))
             self.assertIn(".github/workflows/" + reads, ci.JOB_INPUTS)
 
@@ -761,6 +761,36 @@ class InventoryTests(unittest.TestCase):
         self.assertEqual(groups, [["c"], ["a", "b", "f"], ["d", "e", "g"]])
         self.assertCountEqual((node for group in groups for node in group), items)
         self.assertEqual(ci.weighted_workers(items, 1, {}, 1), [items])
+
+    def test_profiled_shards_place_every_file_once_longest_first(self):
+        files = ["t/a.py", "t/b.py", "t/c.py", "t/d.py", "t/e.py"]
+        with tempfile.TemporaryDirectory() as tmp:
+            profile = Path(tmp) / "profile.json"
+            with patch.dict(ci.FILE_PROFILES, {"t": profile}):
+                # Without the profile file, round-robin in the given order.
+                self.assertEqual(ci.shard_files("t", files, 2), [files[0::2], files[1::2]])
+                profile.write_text(json.dumps({"default_s": 1, "seconds": {"t/c.py": 9, "t/e.py": 5}}),
+                                   encoding="utf-8")
+                groups = ci.shard_files("t", files, 2)
+                self.assertEqual(groups, [["t/c.py"], ["t/a.py", "t/b.py", "t/d.py", "t/e.py"]])
+                # The split depends on the file set, not on the order the inventory lists it in.
+                self.assertEqual(ci.shard_files("t", files[::-1], 2), groups)
+                plan = {"files": files, "items": [f"{f}::test_{n}" for f in files for n in range(2)]}
+                shards = [ci.shard_items(plan, "t", shard, 2) for shard in range(2)]
+                self.assertCountEqual([node for shard in shards for node in shard], plan["items"])
+
+    def test_loop_shards_hold_every_test_file_exactly_once_within_budget(self):
+        files = ci.test_files("loop")
+        total = ci.shard_count("loop")
+        self.assertEqual(total, 3)
+        groups = ci.shard_files("loop", files, total)
+        placed = [name for group in groups for name in group]
+        self.assertEqual(sorted(placed), files)
+        self.assertEqual(len(placed), len(set(placed)))
+        profile = json.loads(ci.FILE_PROFILES["loop"].read_text(encoding="utf-8"))
+        loads = [sum(profile["seconds"].get(name, profile["default_s"]) for name in group) for group in groups]
+        # Each shard stays well inside the python job's 20-minute timeout on the measured profile.
+        self.assertLess(max(loads), 600, loads)
 
     def test_publication_fixture_is_built_once_and_read_from_isolated_stores(self):
         with tempfile.TemporaryDirectory() as tmp:
