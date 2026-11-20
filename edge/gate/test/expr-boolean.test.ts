@@ -291,116 +291,245 @@ test('multi-hop Bool type aliases parse and evaluate as booleans', async () => {
 	);
 });
 
-test('cyclic, unknown, and multi-hop integer type aliases resolve safely and fail closed', async () => {
-	type BoundedType = TypeDef & { min?: string; max?: string };
+test('cyclic, prototype, and unknown type chains fail closed without coercing', async () => {
+	const readView = async (
+		types: Record<string, unknown> | undefined,
+		slots: Record<string, string>,
+		cell = 'true'
+	) => {
+		const slotNames = Object.keys(slots);
+		const view: View = {
+			schema: {
+				rezono: '1.0',
+				pack: 'sample',
+				base: 'https://example.org/sample/',
+				...(types ? { types: types as Record<string, TypeDef> } : {}),
+				kinds: {
+					Item: {
+						world: 'closed',
+						id: { type: 'Text' },
+						slots: Object.fromEntries(slotNames.map((name) => [
+							name,
+							{ type: slots[name], card: '?' as const, states: ['known' as const, 'not_applicable' as const] }
+						]))
+					}
+				}
+			},
+			kinds: new Map([['Item', { relation: 'item' }]]),
+			slots: new Map([['Item', new Map(slotNames.map((name) => [name, { relation: `item__${name}`, partial: false }]))]]),
+			reads: new Set(['item', ...slotNames.map((name) => `item__${name}`)]),
+			trees: new Set()
+		};
+		const read = async (relation: string) => ({
+			rows: (relation === 'item' ? [['a']] : [['a', cell]]).map((key) => ({ key }))
+		});
+		const rows = await rowsOf(view, new Map([['Item', new Set(slotNames)]]), read, { left: 100 });
+		assert.equal(rows.length, 1);
+		return rows[0];
+	};
+
+	// Bool cycles starting at Bool itself, entering Bool, or looping between aliases all fail closed as text.
+	assert.deepEqual(
+		await readView({ Bool: { of: 'Bool' } }, { self_bool: 'Bool' }),
+		{ $kind: 'Item', $id: 'a', self_bool: 'true' }
+	);
+	assert.deepEqual(
+		await readView(
+			{
+				SelfLoop: { of: 'SelfLoop' },
+				LoopA: { of: 'LoopB' },
+				LoopB: { of: 'LoopA' },
+				CycleBool: { of: 'Bool' },
+				Bool: { of: 'CycleBool' },
+				AliasToCycleBool: { of: 'Bool' },
+				UnknownAlias: { of: 'MissingBase' },
+				EmptyOf: { of: '' },
+				MissingOf: {}
+			},
+			{
+				self_loop: 'SelfLoop',
+				two_loop: 'LoopA',
+				direct_bool_cycle: 'Bool',
+				cycle_bool: 'CycleBool',
+				alias_to_bool_cycle: 'AliasToCycleBool',
+				unknown_direct: 'MissingBase',
+				unknown_alias: 'UnknownAlias',
+				empty_of: 'EmptyOf',
+				missing_of: 'MissingOf'
+			}
+		),
+		{
+			$kind: 'Item',
+			$id: 'a',
+			self_loop: 'true',
+			two_loop: 'true',
+			direct_bool_cycle: 'true',
+			cycle_bool: 'true',
+			alias_to_bool_cycle: 'true',
+			unknown_direct: 'true',
+			unknown_alias: 'true',
+			empty_of: 'true',
+			missing_of: 'true'
+		}
+	);
+
+	// Prototype keys as slot.type or type.of fail closed even if present as own JSON properties on schema.types.
+	const protoTypes = JSON.parse(
+		'{"__proto__":{"of":"Bool"},"constructor":{"of":"Bool"},"toString":{"of":"Bool"},"prototype":{"of":"Bool"},'
+		+ '"ProtoAlias":{"of":"__proto__"},"CtorAlias":{"of":"constructor"},"ToStringAlias":{"of":"toString"}}'
+	) as Record<string, unknown>;
+	assert.deepEqual(
+		await readView(protoTypes, {
+			proto_slot: '__proto__',
+			ctor_slot: 'constructor',
+			tostring_slot: 'toString',
+			prototype_slot: 'prototype',
+			proto_alias: 'ProtoAlias',
+			ctor_alias: 'CtorAlias',
+			tostring_alias: 'ToStringAlias'
+		}),
+		{
+			$kind: 'Item',
+			$id: 'a',
+			proto_slot: 'true',
+			ctor_slot: 'true',
+			tostring_slot: 'true',
+			prototype_slot: 'true',
+			proto_alias: 'true',
+			ctor_alias: 'true',
+			tostring_alias: 'true'
+		}
+	);
+
+	// Cycles through Integer itself also fail closed as text.
+	assert.deepEqual(
+		await readView(
+			{ Integer: { of: 'IntLoop', min: '0', max: '100' }, IntLoop: { of: 'Integer' } },
+			{ count: 'Integer' },
+			'42'
+		),
+		{ $kind: 'Item', $id: 'a', count: '42' }
+	);
+});
+
+test('multi-hop integer bounds validate every hop and fail closed on inverted, malformed, or widened bounds', async () => {
+	type BoundedType = TypeDef & { min?: unknown; max?: unknown };
 	const types: Record<string, BoundedType> = {
-		SelfLoop: { of: 'SelfLoop' },
-		LoopA: { of: 'LoopB' },
-		LoopB: { of: 'LoopA' },
-		CycleBool: { of: 'Bool' },
-		Bool: { of: 'CycleBool' },
-		UnknownAlias: { of: 'MissingBase' },
 		SmallInt: { of: 'Integer', min: '0', max: '100' },
 		AliasSmallInt: { of: 'SmallInt' },
+		TighterInt: { of: 'SmallInt', min: '10', max: '50' },
 		BaseInt: { of: 'Integer' },
 		NarrowInt: { of: 'BaseInt', min: '-10', max: '10' },
 		WideInt: { of: 'Integer', min: '-9223372036854775808', max: '9223372036854775807' },
 		AliasWideInt: { of: 'WideInt' },
-		EmptyBounds: { of: 'Integer', min: '', max: '' }
+		NarrowFromWide: { of: 'WideInt', min: '0', max: '100' },
+		ExactSafe: { of: 'Integer', min: '-9007199254740991', max: '9007199254740991' },
+		OnlyMin: { of: 'Integer', min: '0' },
+		SplitBounds: { of: 'OnlyMin', max: '100' },
+		// Invalid / fail-closed cases:
+		Inverted: { of: 'Integer', min: '100', max: '0' },
+		OutOfRangeInverted: { of: 'Integer', min: '99999999999999999999', max: '10' },
+		NegOutOfRangeInverted: { of: 'Integer', min: '-10', max: '-99999999999999999999' },
+		LoOutOfSafe: { of: 'Integer', min: '-9007199254740992', max: '0' },
+		HiOutOfSafe: { of: 'Integer', min: '0', max: '9007199254740992' },
+		EmptyBounds: { of: 'Integer', min: '', max: '' },
+		FloatBounds: { of: 'Integer', min: '1.5', max: '10' },
+		PaddedBounds: { of: 'Integer', min: ' 0 ', max: '10' },
+		NumericBounds: { of: 'Integer', min: 0, max: 10 },
+		NullMin: { of: 'Integer', min: null, max: '10' },
+		BadParent: { of: 'Integer', min: '1.5', max: '100' },
+		ChildOfBadParent: { of: 'BadParent', min: '0', max: '10' },
+		NullParent: { of: 'Integer', min: null, max: '100' },
+		ChildOfNullParent: { of: 'NullParent', min: '0', max: '10' },
+		InvertedParent: { of: 'Integer', min: '100', max: '0' },
+		ChildOfInvertedParent: { of: 'InvertedParent', min: '1', max: '5' },
+		WidenedLo: { of: 'SmallInt', min: '-1' },
+		WidenedHi: { of: 'SmallInt', max: '101' },
+		WidenedBoth: { of: 'SmallInt', min: '-5', max: '200' },
+		ContradictoryChild: { of: 'OnlyMin', max: '-1' }
 	};
-	const schema: Schema = {
-		rezono: '1.0',
-		pack: 'sample',
-		base: 'https://example.org/sample/',
-		types,
-		kinds: {
-			Item: {
-				world: 'closed',
-				id: { type: 'Text' },
-				slots: {
-					self_loop: { type: 'SelfLoop', card: '?', states: ['known', 'not_applicable'] },
-					two_loop: { type: 'LoopA', card: '?', states: ['known', 'not_applicable'] },
-					cycle_bool: { type: 'CycleBool', card: '?', states: ['known', 'not_applicable'] },
-					unknown_direct: { type: 'MissingBase', card: '?', states: ['known', 'not_applicable'] },
-					unknown_alias: { type: 'UnknownAlias', card: '?', states: ['known', 'not_applicable'] },
-					inherited_num: { type: 'AliasSmallInt', card: '?', states: ['known', 'not_applicable'] },
-					narrow_num: { type: 'NarrowInt', card: '?', states: ['known', 'not_applicable'] },
-					wide_num: { type: 'AliasWideInt', card: '?', states: ['known', 'not_applicable'] },
-					empty_bounds: { type: 'EmptyBounds', card: '?', states: ['known', 'not_applicable'] }
+	const slotMap: Record<string, string> = {
+		inherited_num: 'AliasSmallInt',
+		tighter_num: 'TighterInt',
+		narrow_num: 'NarrowInt',
+		narrow_from_wide: 'NarrowFromWide',
+		exact_safe: 'ExactSafe',
+		split_bounds: 'SplitBounds',
+		wide_num: 'AliasWideInt',
+		inverted: 'Inverted',
+		out_of_range_inverted: 'OutOfRangeInverted',
+		neg_out_of_range_inverted: 'NegOutOfRangeInverted',
+		lo_out_of_safe: 'LoOutOfSafe',
+		hi_out_of_safe: 'HiOutOfSafe',
+		empty_bounds: 'EmptyBounds',
+		float_bounds: 'FloatBounds',
+		padded_bounds: 'PaddedBounds',
+		numeric_bounds: 'NumericBounds',
+		null_min: 'NullMin',
+		child_of_bad_parent: 'ChildOfBadParent',
+		child_of_null_parent: 'ChildOfNullParent',
+		child_of_inverted_parent: 'ChildOfInvertedParent',
+		widened_lo: 'WidenedLo',
+		widened_hi: 'WidenedHi',
+		widened_both: 'WidenedBoth',
+		contradictory_child: 'ContradictoryChild'
+	};
+	const slotNames = Object.keys(slotMap);
+	const view: View = {
+		schema: {
+			rezono: '1.0',
+			pack: 'sample',
+			base: 'https://example.org/sample/',
+			types: types as Record<string, TypeDef>,
+			kinds: {
+				Item: {
+					world: 'closed',
+					id: { type: 'Text' },
+					slots: Object.fromEntries(slotNames.map((name) => [
+						name,
+						{ type: slotMap[name], card: '?' as const, states: ['known' as const, 'not_applicable' as const] }
+					]))
 				}
 			}
-		}
-	};
-	const slotNames = Object.keys(schema.kinds.Item.slots);
-	const view: View = {
-		schema,
+		},
 		kinds: new Map([['Item', { relation: 'item' }]]),
 		slots: new Map([['Item', new Map(slotNames.map((name) => [name, { relation: `item__${name}`, partial: false }]))]]),
 		reads: new Set(['item', ...slotNames.map((name) => `item__${name}`)]),
 		trees: new Set()
 	};
-	const tables: Record<string, string[][]> = {
-		item: [['a']],
-		item__self_loop: [['a', 'true']],
-		item__two_loop: [['a', 'true']],
-		item__cycle_bool: [['a', 'true']],
-		item__unknown_direct: [['a', 'true']],
-		item__unknown_alias: [['a', 'true']],
-		item__inherited_num: [['a', '42']],
-		item__narrow_num: [['a', '-7']],
-		item__wide_num: [['a', '42']],
-		item__empty_bounds: [['a', '42']]
-	};
 	const read = async (relation: string) => ({
-		rows: (tables[relation] ?? []).map((key) => ({ key }))
+		rows: (relation === 'item' ? [['a']] : [['a', relation === 'item__narrow_num' ? '-7' : '42']]).map((key) => ({ key }))
 	});
 
 	const rows = await rowsOf(view, new Map([['Item', new Set(slotNames)]]), read, { left: 100 });
 	assert.deepEqual(rows, [{
 		$kind: 'Item',
 		$id: 'a',
-		// Cyclic and unknown types fail closed: values remain raw text, never coerced to boolean.
-		self_loop: 'true',
-		two_loop: 'true',
-		cycle_bool: 'true',
-		unknown_direct: 'true',
-		unknown_alias: 'true',
-		// Multi-hop bounded safe integers become JSON numbers; wide or malformed bounds fail closed as text.
+		// Valid safe bounded integer chains emit JSON numbers:
 		inherited_num: 42,
+		tighter_num: 42,
 		narrow_num: -7,
+		narrow_from_wide: 42,
+		exact_safe: 42,
+		split_bounds: 42,
+		// Wide, inverted, malformed, non-integer, bad-parent, and widened bounds fail closed as text:
 		wide_num: '42',
-		empty_bounds: '42'
+		inverted: '42',
+		out_of_range_inverted: '42',
+		neg_out_of_range_inverted: '42',
+		lo_out_of_safe: '42',
+		hi_out_of_safe: '42',
+		empty_bounds: '42',
+		float_bounds: '42',
+		padded_bounds: '42',
+		numeric_bounds: '42',
+		null_min: '42',
+		child_of_bad_parent: '42',
+		child_of_null_parent: '42',
+		child_of_inverted_parent: '42',
+		widened_lo: '42',
+		widened_hi: '42',
+		widened_both: '42',
+		contradictory_child: '42'
 	}]);
-
-	// A cycle through Integer itself also fails closed as text instead of looping or coercing.
-	const intCycleTypes: Record<string, BoundedType> = {
-		Integer: { of: 'IntLoop', min: '0', max: '100' },
-		IntLoop: { of: 'Integer' }
-	};
-	const intCycleView: View = {
-		schema: {
-			rezono: '1.0',
-			pack: 'sample',
-			base: 'https://example.org/sample/',
-			types: intCycleTypes,
-			kinds: {
-				Item: {
-					world: 'closed',
-					id: { type: 'Text' },
-					slots: { count: { type: 'Integer', card: '?', states: ['known', 'not_applicable'] } }
-				}
-			}
-		},
-		kinds: new Map([['Item', { relation: 'item' }]]),
-		slots: new Map([['Item', new Map([['count', { relation: 'item__count', partial: false }]])]]),
-		reads: new Set(['item', 'item__count']),
-		trees: new Set()
-	};
-	const cycleRows = await rowsOf(
-		intCycleView,
-		new Map([['Item', new Set(['count'])]]),
-		async (relation) => ({ rows: (relation === 'item' ? [['a']] : [['a', '42']]).map((key) => ({ key })) }),
-		{ left: 100 }
-	);
-	assert.deepEqual(cycleRows, [{ $kind: 'Item', $id: 'a', count: '42' }]);
 });
