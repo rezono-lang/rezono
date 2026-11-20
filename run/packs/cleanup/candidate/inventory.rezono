@@ -1,0 +1,61 @@
+rezono 0
+pack cleanup
+
+schema cleanup_inventory
+  iri "https://rezono.org/examples/run/cleanup"
+  language en
+  import "linkml:types"
+  default range Text
+  annotation layer = "facts"
+
+type PlanDigest = Text
+
+enum ObservedTagState world closed = untagged
+
+enum InventoryCoverage world closed = complete | incomplete | unknown
+
+kind Sweep world closed
+  id: Text identifier
+  plan_hash: PlanDigest?
+    pattern "^[0-9a-f]{64}$"
+  coverage: InventoryCoverage?
+    description "Optional legacy coverage report."
+  run: Text?
+    description "Run in which inventory was requested."
+  scope: Text?
+    description "Provider inventory scope."
+  attempt: Attempt?
+  started_us: Int?
+    description "Event time when the first page was requested."
+  root_token: Text?
+    description "Token requested for the first page."
+
+kind Attempt world closed
+  description "A journal record of a dispatched operation."
+  id: Text identifier
+  operation: Text
+  run: Text
+  scope: Text
+  plan_hash: PlanDigest
+    pattern "^[0-9a-f]{64}$"
+  dispatched_us: Int
+
+kind Page world closed
+  description "An individual observed page response, independent of its pagination token."
+  id: Text identifier
+  sweep: Sweep
+  token: Text
+  next_token: Text
+    description "An empty string records an explicit null successor."
+  item_count: Int
+    minimum 0
+
+kind Resource world closed
+  id: Text identifier
+  sweep: Sweep
+  plan_hash: PlanDigest?
+    pattern "^[0-9a-f]{64}$"
+  page: Page?
+  tag_state: ObservedTagState?
+  provider_id: Text?
+    description "The resource identifier in the original page."

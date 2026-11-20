@@ -1,0 +1,24 @@
+rezono 0
+pack cleanup-deadline
+
+schema cleanup_deadline
+  iri "https://rezono.org/run/cleanup-deadline"
+  language en
+  import "linkml:types"
+  default range Text
+  description "Recorded cleanup deadline and observation watermark for an effect attempt."
+  annotation layer = "facts"
+
+enum CleanupAttemptState world closed = planned | applying | unknown | applied | failed | cleaned
+
+kind Attempt world closed
+  state: CleanupAttemptState
+  deadline_us: Int
+  watermark_us: Int?
+
+rules cleanup_deadline
+  | // A known watermark establishes that an applied attempt reached its cleanup deadline.
+  | .decl overdue(attempt: symbol)
+  | overdue(a) :- attempt__state(a, "applied"), attempt__deadline_us(a, d),
+  |     attempt__watermark_us(a, w), w >= d.
+  | .output overdue
