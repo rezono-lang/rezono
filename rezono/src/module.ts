@@ -39,6 +39,7 @@
 //         versions needs the order of their contexts, which the checker gives later.
 // As in a question, an R000, R014, R016, R018, R021, R027, R028 or R029 leaves no module and no other diagnostic.
 import { grammar } from './grammar.ts';
+import { positionalAggregates } from './module-aggregates.ts';
 import { blockSyntax, declarationActions, declarations, verbatimBlocks, type Decl } from './module-components.ts';
 import type { Deprecation } from './module-deprecation.ts';
 import { layout, sliceOf, type Logical } from './module-layout.ts';
@@ -286,6 +287,7 @@ function readModule(text: string, bare: boolean, packVersion?: LanguageVersion):
 	if (!bare && !module.pack && !errors.length) errors.push({ code: 'R000', span: { text: '', start: 0, end: 0 }, args: ['`pack`'] });
 	errors.push(...versionReplacements(module));
 	errors.push(...undeclaredReasonLabels(module, spans));
+	errors.push(...positionalAggregates(module, spans));
 	if (errors.length) return { diagnostics: errors.sort(inOrder), spans };
 	return {
 		module,

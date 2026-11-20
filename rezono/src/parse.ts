@@ -206,7 +206,6 @@ semantics.addOperation<unknown>('tree', {
 		return placed(this, { dot: [b, readRuleName(name)] } as Expr);
 	},
 	Agg(name, _open, arg, _close) {
-		if (name.sourceString === 'one' && arg.numChildren) refused(arg.child(0), 'R000', ['`)`']);
 		return [name.sourceString, ...arg.children.map((a) => a.tree())];
 	},
 	Atom(e) {

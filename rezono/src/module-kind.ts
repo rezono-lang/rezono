@@ -34,6 +34,7 @@ export interface KindDecl extends Metadata {
 export interface ExtendDecl {
 	extend: string;
 	binder?: string;
+	slots?: SlotDecl[];
 	derived: DerivedDecl[];
 }
 
@@ -87,7 +88,8 @@ function readExtension(line: Logical, build: Build): ExtendDecl {
 	}
 	for (const child of line.block) {
 		if (child.read!.line === 'derived') decl.derived.push(readDerived(child, build, 'member'));
-		else build.refuse(child, '`derived`');
+		else if (child.read!.line === 'slot' && build.version === '1') (decl.slots ??= []).push(readSlot(child, build));
+		else build.refuse(child, build.version === '1' ? 'a slot or `derived`' : '`derived`');
 	}
 	return decl;
 }
@@ -159,7 +161,10 @@ export const kind = {
 		extend: declaration<ExtendDecl>(
 			'extend',
 			readExtension,
-			d => block(`extend ${d.binder ? `${d.binder}: ` : ''}${d.extend}`, d.derived.flatMap(printDerived))
+			d => block(`extend ${d.binder ? `${d.binder}: ` : ''}${d.extend}`, [
+				...(d.slots ?? []).flatMap(printSlot),
+				...d.derived.flatMap(printDerived),
+			])
 		)
 	}
 } satisfies ModuleComponent;
