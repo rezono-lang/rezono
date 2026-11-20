@@ -116,6 +116,7 @@ export function roleSchema(bundle: Bundle, snapshots: Listed[]): View {
 			slot.min = a.minimum ?? BIGINT[0];
 			slot.max = a.maximum ?? BIGINT[1];
 		} else if (a.type === 'date') slot.type = 'Date';
+		else if (a.type === 'boolean') slot.type = 'Bool';
 		else if (a.type === 'text') {
 			if (a.patterns?.length) {
 				if (a.patterns.length !== 1) throw notYet(`${a.id} has more than one pattern`);
@@ -208,6 +209,15 @@ function asNumber(schema: Schema, slot: SlotDef): boolean {
 	const type = schema.types?.[slot.type ?? ''] as (TypeDef & { min?: string; max?: string }) | undefined;
 	return type?.of === 'Integer' && type.min !== undefined && type.max !== undefined && -SAFE <= BigInt(type.min) && BigInt(type.max) <= SAFE;
 }
+function asBoolean(schema: Schema, slot: SlotDef): boolean {
+	return slot.ref === undefined && (slot.type === 'Bool' || (slot.type !== undefined && schema.types?.[slot.type]?.of === 'Bool'));
+}
+function parseBoolean(relation: string, parts: string[]): boolean {
+	if (parts.length !== 2) throw new AskError(500, `${relation} holds a malformed boolean row`);
+	if (parts[1] === 'true') return true;
+	if (parts[1] === 'false') return false;
+	throw new AskError(500, `${relation} holds an invalid boolean value`);
+}
 
 /**
  * The rows of the wanted kinds and slots as Row JSON (Rezono Data §3), read through `read` and counted against
@@ -246,10 +256,12 @@ export async function rowsOf(view: View, want: Map<string, Set<string>>, read: R
 			const slot = view.schema.kinds[kind].slots[name];
 			const many = slot.card === '*' || slot.card === '+';
 			const number = asNumber(view.schema, slot);
-			for (const [id, v] of await all(at.relation)) {
+			const bool = asBoolean(view.schema, slot);
+			for (const parts of await all(at.relation)) {
+				const [id, v] = parts;
 				const row = elements.get(id);
 				if (!row) continue;
-				const value = slot.ref !== undefined ? { $ref: v } : number ? Number(v) : v;
+				const value = slot.ref !== undefined ? { $ref: v } : bool ? parseBoolean(at.relation, parts) : number ? Number(v) : v;
 				if (many) ((row[name] ??= []) as unknown[]).push(value);
 				else if (name in row) throw new AskError(500, `${at.relation} holds two values for one element`);
 				else row[name] = value;
