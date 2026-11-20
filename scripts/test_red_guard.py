@@ -45,6 +45,7 @@ def main():
     read_cases(function)
     pin_cases(function)
     table_cases()
+    table_form_cases()
     pytest_config_cases(function)
     green_to_red_cases()
 
@@ -176,6 +177,55 @@ def table_cases():
     if errors or notes:
         raise AssertionError(f"a lifted mark in a table: errors {errors}, notes {notes}")
     print("ALLOW without planner, nothing reported: a lifted mark in a module-level table")
+
+
+def table_form_cases():
+    """Each way to give or build a parametrize table reports the case it loses."""
+    path = "x/tests/test_t.py"
+    top = b"import pytest\n\n"
+    forms = [
+        ("argvalues as a keyword",
+         top + b"@pytest.mark.parametrize(argnames='x', argvalues=[1, 2])\ndef test_a(x):\n    assert x\n",
+         b"[1, 2]", b"[1]", "test_a", "2", False),
+        ("parametrize on a test class",
+         top + b"@pytest.mark.parametrize('x', [1, 2])\nclass TestA:\n    def test_a(self, x):\n        assert x\n",
+         b"[1, 2]", b"[1]", "TestA::test_a", "2", False),
+        ("a module pytestmark",
+         top + b"pytestmark = pytest.mark.parametrize('x', [1, 2])\n\n\ndef test_a(x):\n    assert x\n",
+         b"[1, 2]", b"[1]", "test_a", "2", False),
+        ("a table derived from another",
+         top + b"BASE = [1, 2]\nCASES = BASE + [3]\n\n\n@pytest.mark.parametrize('x', CASES)\ndef test_a(x):\n"
+         b"    assert x\n", b"BASE = [1, 2]", b"BASE = [1]", "test_a", "2", "CASES"),
+        ("a module-level += that goes",
+         top + b"CASES = [1]\nCASES += [2]\n\n\n@pytest.mark.parametrize('x', CASES)\ndef test_a(x):\n    assert x\n",
+         b"CASES += [2]\n", b"", "test_a", "2", "CASES"),
+        ("a module-level append that goes",
+         top + b"CASES = [1]\nCASES.append(2)\n\n\n@pytest.mark.parametrize('x', CASES)\ndef test_a(x):\n"
+         b"    assert x\n", b"CASES.append(2)\n", b"", "test_a", "2", "CASES"),
+        ("a table read through .values()",
+         top + b"T = {'a': 1, 'b': 2}\n\n\n@pytest.mark.parametrize('x', T.values(), ids=T)\ndef test_a(x):\n"
+         b"    assert x\n", b"'b': 2", b"'c': 3", "test_a", "'b'", "T"),
+    ]
+    for label, before, old, new, test, case, name in forms:
+        after = before.replace(old, new, 1)
+        errors, notes = review([Change(path, "M", before, after)], planner=True)
+        if errors or f"REMOVED {path}::{test}[{case}]" not in notes or (
+                name and f"CHANGED {path}::{test} reads the changed {name}" not in notes):
+            raise AssertionError(f"{label}: errors {errors}, notes {notes}")
+        print(f"REPORTED: a case lost through {label}")
+    # A helper that returns the table: the test reads it, so it reads the change.
+    helper = (top + b"T = {'a': 1, 'b': 2}\n\n\ndef rows():\n    return T\n\n\ndef test_a():\n"
+              b"    assert rows()\n")
+    errors, notes = review([Change(path, "M", helper, helper.replace(b", 'b': 2", b""))], planner=True)
+    if errors or f"CHANGED {path}::test_a reads the changed rows" not in notes:
+        raise AssertionError(f"a helper that returns a table: errors {errors}, notes {notes}")
+    print("REPORTED: a test that calls a helper whose table changes")
+    deleted = top + b"T = {'a': 1, 'b': 2}\n\n\n@pytest.mark.parametrize('x', T)\ndef test_a(x):\n    assert x\n"
+    errors, notes = review([Change(path, "M", deleted, deleted.replace(b"\n\n\n@", b"\ndel T['b']\n\n\n@"))],
+                           planner=True)
+    if f"REMOVED {path}::test_a['b']" not in notes:
+        raise AssertionError(f"a module-level del: errors {errors}, notes {notes}")
+    print("REPORTED: a case lost through a module-level del")
 
 
 def pin_cases(function):

@@ -675,25 +675,7 @@ def pin_updates(changes, base, rev):
     return frozenset(c.path for c in candidates if pin_update(c, tree, before))
 
 
-def module_constants(tree):
-    """Each name that a module-level assignment binds, with the value it binds."""
-    found = {}
-    for node in tree.body:
-        if isinstance(node, ast.Assign):
-            found.update((t.id, node.value) for t in node.targets if isinstance(t, ast.Name))
-        elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name) and node.value is not None:
-            found[node.target.id] = node.value
-    return found
-
-
-def cases(value):
-    """The cases of a literal table: its keys for a dict, its items otherwise; None if not literal."""
-    value = bare(value)
-    if isinstance(value, ast.Dict) and None not in value.keys:
-        return {ast.unparse(k): ast.dump(v) for k, v in zip(value.keys, value.values)}
-    if isinstance(value, (ast.List, ast.Tuple, ast.Set)):
-        return {ast.unparse(e): ast.dump(e) for e in value.elts}
-    return None
+MUTATORS = {"append", "extend", "insert", "update", "add", "__setitem__"}
 
 
 def bare(node):
@@ -701,57 +683,190 @@ def bare(node):
     return _Unmark().visit(copy.deepcopy(node))
 
 
-def test_nodes(tree):
-    """Each test function by qualified name, as `inventory` names them."""
+def definitions(tree):
+    """Each module-level name with the statements that give it its value, in order.
+
+    That is an assignment, an augmented assignment, a call that mutates it
+    (`NAME.append(...)` and the like), a subscript assignment or `del`, and a function or class
+    definition: a helper that returns a table is part of what a test reads.
+    """
+    found = {}
+    for node in tree.body:
+        names = []
+        if isinstance(node, (ast.Assign, ast.AnnAssign, ast.AugAssign)):
+            for target in node.targets if isinstance(node, ast.Assign) else [node.target]:
+                for t in ast.walk(target):
+                    if isinstance(t, ast.Name):
+                        names.append(t.id)
+                    elif isinstance(t, ast.Subscript) and isinstance(t.value, ast.Name):
+                        names.append(t.value.id)
+        elif isinstance(node, ast.Delete):
+            names.extend(t.value.id if isinstance(t, ast.Subscript) else t.id for t in node.targets
+                         if isinstance(getattr(t, "value", t), ast.Name))
+        elif (isinstance(node, ast.Expr) and isinstance(node.value, ast.Call)
+              and isinstance(node.value.func, ast.Attribute) and node.value.func.attr in MUTATORS
+              and isinstance(node.value.func.value, ast.Name)):
+            names.append(node.value.func.value.id)
+        elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            if not node.name.startswith(("test", "Test")):
+                names.append(node.name)
+        for name in names:
+            found.setdefault(name, []).append(node)
+    return found
+
+
+def changed_names(old_defs, new_defs):
+    """The names whose value changes, directly or through a name that it reads."""
+    shape = lambda nodes: [ast.dump(bare(n)) for n in nodes]
+    changed = {name for name in old_defs.keys() | new_defs.keys()
+               if shape(old_defs.get(name, [])) != shape(new_defs.get(name, []))}
+    reads = {name: {n.id for node in nodes for n in ast.walk(node) if isinstance(n, ast.Name)} - {name}
+             for name, nodes in new_defs.items()}
+    while grown := {name for name, read in reads.items() if name not in changed and read & changed}:
+        changed |= grown
+    return changed
+
+
+def table(expr, defs, seen=frozenset()):
+    """The cases of a table expression, {case: syntax}, as far as literals and names resolve.
+
+    A literal dict gives its keys, a literal list, tuple or set its items. A name resolves to
+    its module-level value and every later `+=` or mutating call; `+`, `*rest` items, a call of
+    a module-level helper that returns a table, and `list(...)`, `tuple(...)`, `dict(...)`
+    resolve through what they combine. What does not resolve contributes nothing.
+    """
+    expr = bare(expr)
+    found = {}
+    if isinstance(expr, ast.Dict):
+        for k, v in zip(expr.keys, expr.values):
+            if k is None:
+                found.update(table(v, defs, seen))
+            else:
+                found[ast.unparse(k)] = ast.dump(v)
+    elif isinstance(expr, (ast.List, ast.Tuple, ast.Set)):
+        for e in expr.elts:
+            if isinstance(e, ast.Starred):
+                found.update(table(e.value, defs, seen))
+            else:
+                found[ast.unparse(e)] = ast.dump(e)
+    elif isinstance(expr, ast.BinOp) and isinstance(expr.op, (ast.Add, ast.BitOr)):
+        found.update(table(expr.left, defs, seen))
+        found.update(table(expr.right, defs, seen))
+    elif isinstance(expr, ast.Name) and expr.id in defs and expr.id not in seen:
+        seen = seen | {expr.id}
+        for node in defs[expr.id]:
+            if isinstance(node, ast.AnnAssign) and node.value is not None:
+                found = table(node.value, defs, seen)
+            elif isinstance(node, ast.Assign):
+                for target in node.targets:
+                    if isinstance(target, ast.Name) and target.id == expr.id:
+                        found = table(node.value, defs, seen)  # A new value replaces the table.
+                    elif (isinstance(target, ast.Subscript) and isinstance(target.value, ast.Name)
+                          and target.value.id == expr.id):
+                        found[ast.unparse(bare(target.slice))] = ast.dump(bare(node.value))
+            elif isinstance(node, ast.AugAssign):
+                found.update(table(node.value, defs, seen))
+            elif isinstance(node, ast.Delete):
+                for target in node.targets:
+                    if isinstance(target, ast.Subscript):
+                        found.pop(ast.unparse(bare(target.slice)), None)
+            elif isinstance(node, ast.Expr):
+                call = node.value
+                if call.func.attr in {"append", "add"} and call.args:
+                    found[ast.unparse(bare(call.args[0]))] = ast.dump(bare(call.args[0]))
+                elif call.func.attr == "insert" and len(call.args) > 1:
+                    found[ast.unparse(bare(call.args[1]))] = ast.dump(bare(call.args[1]))
+                elif call.func.attr in {"extend", "update"} and call.args:
+                    found.update(table(call.args[0], defs, seen))
+            elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                returns = [n.value for n in ast.walk(node) if isinstance(n, ast.Return) and n.value is not None]
+                for value in returns:
+                    found.update(table(value, defs, seen))
+    elif (isinstance(expr, ast.Call) and isinstance(expr.func, ast.Attribute)
+          and expr.func.attr in {"values", "keys", "items"}):
+        found.update(table(expr.func.value, defs, seen))  # A case of a dict is its key.
+    elif isinstance(expr, (ast.ListComp, ast.SetComp, ast.GeneratorExp, ast.DictComp)):
+        found.update(table(expr.generators[0].iter, defs, seen))
+    elif isinstance(expr, ast.Call) and isinstance(expr.func, ast.Name):
+        if expr.func.id in {"list", "tuple", "dict", "set", "sorted"} and expr.args:
+            found.update(table(expr.args[0], defs, seen))
+        elif expr.func.id in defs:
+            found.update(table(expr.func, defs, seen))
+    return found
+
+
+def parametrized(marks, defs):
+    """The cases of every `parametrize` among marks: decorators, or a `pytestmark` value."""
+    found = {}
+    for mark in marks:
+        for call in mark.elts if isinstance(mark, (ast.List, ast.Tuple)) else [mark]:
+            if not (isinstance(call, ast.Call) and ast.unparse(call.func).endswith("parametrize")):
+                continue
+            values = call.args[1] if len(call.args) > 1 else next(
+                (k.value for k in call.keywords if k.arg == "argvalues"), None)
+            if values is not None:
+                found.update(table(values, defs, frozenset()))
+    return found
+
+
+def test_scopes(tree):
+    """Each test function by qualified name, with the nodes whose parametrize applies to it.
+
+    Those are the function, each class around it, and the `pytestmark` of the module and of
+    each such class.
+    """
     found = {}
 
-    def visit(body, scope):
-        for node in body:
-            name = f"{scope}::{node.name}" if scope and hasattr(node, "name") else getattr(node, "name", None)
-            if isinstance(node, ast.ClassDef):
-                visit(node.body, name)
-            elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name.startswith("test"):
-                found[name] = node
+    def marks_of(body):
+        return [n.value for n in body if isinstance(n, ast.Assign)
+                and any(isinstance(t, ast.Name) and t.id == "pytestmark" for t in n.targets)]
 
-    visit(tree.body, "")
+    def visit(body, scope, outer):
+        for node in body:
+            if isinstance(node, ast.ClassDef):
+                visit(node.body, f"{scope}::{node.name}" if scope else node.name,
+                      outer + [node] + marks_of(node.body))
+            elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name.startswith("test"):
+                found[f"{scope}::{node.name}" if scope else node.name] = outer + [node]
+
+    visit(tree.body, "", marks_of(tree.body))
     return found
 
 
 def table_changes(path, before, after):
-    """Notes for the cases a test loses when a table it reads changes, at module level or inline.
+    """Notes for a test that reads a changed module-level name, and for each case it loses.
 
-    A test that reads a module-level name whose value changes is CHANGED; each case that goes
-    from a literal table it reads, or from a literal list in its own parametrize decorator, is
-    REMOVED as `path::test[case]`.
+    A test reads a name in its own syntax, in a class around it or in a `pytestmark`. A name
+    changes when its value does, or a name it reads does (a derived table, a helper that
+    returns one). Such a test is CHANGED; each case that goes from its parametrize tables,
+    wherever they are given and however they are built from names, is REMOVED as
+    `path::test[case]`. Red marks are left out, so a lift reports nothing.
     """
     try:
         old_tree, new_tree = ast.parse(before.decode("utf-8")), ast.parse(after.decode("utf-8"))
     except UNREADABLE:
         return []
-    old_constants, new_constants = module_constants(old_tree), module_constants(new_tree)
-    changed = {name for name, value in old_constants.items()
-               if name not in new_constants or ast.dump(bare(new_constants[name])) != ast.dump(bare(value))}
-    old_tests, notes = test_nodes(old_tree), []
-    for test, node in test_nodes(new_tree).items():
-        if test not in old_tests:
+    old_defs, new_defs = definitions(old_tree), definitions(new_tree)
+    changed = changed_names(old_defs, new_defs)
+    old_scopes, notes = test_scopes(old_tree), []
+    for test, nodes in test_scopes(new_tree).items():
+        if test not in old_scopes:
             continue
-        read = {n.id for n in ast.walk(node) if isinstance(n, ast.Name)}
-        for name in sorted(changed & read):
-            notes.append(f"CHANGED {path}::{test} reads the changed {name}")
-            old_cases = cases(old_constants[name]) or {}
-            new_cases = cases(new_constants[name]) if name in new_constants else {}
-            notes.extend(f"REMOVED {path}::{test}[{case}]" for case in old_cases if case not in (new_cases or {}))
+        read = set()
+        for node in nodes:
+            parts = (node.decorator_list + [n for n in node.body if isinstance(n, ast.Assign)]
+                     if isinstance(node, ast.ClassDef) else [node])
+            read |= {n.id for part in parts for n in ast.walk(part) if isinstance(n, ast.Name)}
+        notes.extend(f"CHANGED {path}::{test} reads the changed {name}" for name in sorted(changed & read))
 
-        def inline(fn):
-            found = {}
-            for d in fn.decorator_list:
-                if (isinstance(d, ast.Call) and ast.unparse(d.func).endswith("parametrize") and len(d.args) > 1
-                        and (table := cases(d.args[1])) is not None):
-                    found.update(table)
-            return found
+        def cases_of(scope, defs):
+            marks = []
+            for node in scope:
+                marks.extend(getattr(node, "decorator_list", None) or ([] if hasattr(node, "body") else [node]))
+            return parametrized(marks, defs)
 
-        before_cases, after_cases = inline(old_tests[test]), inline(node)
-        notes.extend(f"REMOVED {path}::{test}[{case}]" for case in before_cases if case not in after_cases)
+        lost = cases_of(old_scopes[test], old_defs).keys() - cases_of(nodes, new_defs).keys()
+        notes.extend(f"REMOVED {path}::{test}[{case}]" for case in sorted(lost))
     return notes
 
 
