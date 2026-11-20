@@ -5,6 +5,7 @@ import json
 import os
 from pathlib import Path
 import subprocess
+from tempfile import TemporaryDirectory
 
 import pytest
 import yaml
@@ -33,12 +34,22 @@ def fetch(config, *args):
 def test_reconciled_admission_release_on_the_api_server():
     config = os.environ["REZONO_ADMISSION_TEST_KUBECONFIG"]
     assert Path(config).is_file()
+    from admission_release import render_release
+    from admission_translator import translate
     from bindings import render_binding
+    from checked_release_fixture import MANIFEST_KEY, publish_evidence
     from policy_renderer import render_policy
+    from translator_support import fixture as translator_fixture, load_program
 
     desired = fixture("publication.yaml")
     digest = desired["spec"]["digest"]
     name = desired["metadata"]["name"]
+    with TemporaryDirectory(prefix="rezono-server-release-") as directory:
+        store = publish_evidence(Path(directory))
+        release = render_release(["admission-blue", "admission-green"], [desired], store=store,
+                                 manifest_key=MANIFEST_KEY)
+    released_policies = {obj["metadata"]["name"].split(".")[0]: obj for obj in release
+                         if obj["kind"] == "ValidatingAdmissionPolicy"}
     app = fetch(config, "applications.argoproj.io", os.environ["REZONO_ADMISSION_TEST_APPLICATION"],
                 "-n", os.environ["REZONO_ADMISSION_TEST_APPLICATION_NAMESPACE"])
     revision = subprocess.check_output(["git", "-C", str(FIXTURES), "rev-parse", "HEAD"], text=True).strip()
@@ -56,7 +67,10 @@ def test_reconciled_admission_release_on_the_api_server():
 
     for rule, filename in [("verified-supply", "pod.yaml"), ("in-zone-flow", "flow.yaml")]:
         binding = render_binding(rule=rule, digest=digest, parameter_name=name)
-        policy = render_policy(rule=rule, digest=digest)
+        policy = released_policies[rule]
+        legacy = render_policy(rule=rule, digest=digest)
+        translated = translate(load_program(f"{rule}.rules.yaml"), translator_fixture(f"{rule}.binding.yaml"), digest)
+        assert policy in (legacy, translated)
         assert ("ValidatingAdmissionPolicy", "", policy["metadata"]["name"]) in tracked
         assert ("ValidatingAdmissionPolicyBinding", "", binding["metadata"]["name"]) in tracked
         bound = fetch(config, "validatingadmissionpolicybinding", binding["metadata"]["name"])

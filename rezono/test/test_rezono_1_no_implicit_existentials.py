@@ -84,7 +84,7 @@ const out = sources.map((source) => {
     format: checked.form?.format ?? null,
     module: checked.form?.module ?? null,
     printed,
-    roundtrip_ok: Boolean(reparsed && !reparsed.diagnostics.length && JSON.stringify(reparsed.module) === JSON.stringify(checked.form?.module)),
+    roundtrip_ok: Boolean(reparsed && !reparsed.diagnostics.length && JSON.stringify(reparsed.form?.module) === JSON.stringify(checked.form?.module)),
     diagnostics: checked.diagnostics.map((d) => ({
       code: d.code,
       args: d.args ?? [],
