@@ -1,4 +1,14 @@
+---
+decider: [language]
+decided_on: 2026-11-17
+valid_from: 2026-11-17
+state: in_force
+subject: language-tables
+---
+
 # Decision tables
+
+> **Scope across language versions:** This decision remains in force for `rezono 0` (including `table priority`, which stays silent with no `W107` warning in `rezono 0`). For `rezono 1`, `table unique`, `table first`, and `table collect` lower through `rezono.rules/2` and `table priority` is refused with `R028` (hint: `table first`); see [`decisions/language-rezono-1.md`](language-rezono-1.md#3-effect-on-prior-decisions).
 
 Retain the existing table tree under the derived member. Preserve row order, policy, wildcard cells, open endpoints and ordered enum priorities. This fragment is the value of its table member. Lower via the table publication path. Sorting rows could change a first-match result.
 
