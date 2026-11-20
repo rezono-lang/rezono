@@ -135,18 +135,6 @@ def refusal(epoch, archive) -> str | None:
     return None
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=(MissingSurfaceCheck, AssertionError),
-    reason=(
-        "M3: decisions/language-surface-compatibility.md: Write edge/publisher/rezono_publisher/surface.py with "
-        "compare(before, after): two parsed schema bundles in, {\"class\", \"changes\"} out, each change "
-        "{\"element\", \"change\", \"class\"} and the list sorted by element, then change, with the elements, change "
-        "names and classes of sections 1 and 3 of the decision (docs/rezono/v0.md section 4c). Elements are matched "
-        "by id and a rename by stable_id; spans, sentences, labels, messages and channels are no surface, and two "
-        "bundles without a surface change give {\"class\": \"patch\", \"changes\": []}."
-    ),
-)
 def test_compare_classifies_each_change_as_section_4c_does(tmp_path):
     compare = surface_compare()
     before = bundle_of(edited(FIXTURE, tmp_path / "before", []))
