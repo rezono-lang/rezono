@@ -1,0 +1,14 @@
+.decl build_citation_scan_at_cut(run: symbol, scan: symbol)
+.decl build_red_cites_replaced(run: symbol, test: symbol, decision: symbol, successor: symbol)
+
+// Only a scan of a verified run at its cut tick counts.
+build_citation_scan_at_cut(run, scan) :- build_verified_cut(run), build_run__observed_at(run, tick),
+    build_citation_scan__run(scan, run), build_citation_scan__observed_at(scan, tick),
+    build_citation_scan__source(scan, source), source != "".
+
+build_red_cites_replaced(run, test, decision, successor) :- build_citation_scan_at_cut(run, scan),
+    build_red_citation__scan(citation, scan), build_red_citation__test(citation, test),
+    build_red_citation__decision(citation, decision),
+    build_policy_date_at_cut(run, day), replaced(decision, successor, day).
+
+.output build_red_cites_replaced

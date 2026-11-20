@@ -469,7 +469,6 @@ REFUSALS = {
     "a rounding": ([{"rounding": "money", "mode": "half_even"}], 10, "a rounding is not lowered yet"),
     "a parameter": ([{"param": "p", "type": "Date"}], 10, "a parameter is not lowered yet"),
     "a check": ([{"check": "warn", "cond": {"lit": "true"}}], 10, "a check statement is not lowered yet"),
-    "a reason": ([{"reason": "r", "text": '"r"'}], 10, "a reason declaration is not lowered"),
     "a slot named id": ([slot(slot="id", type="Text")], 11, "a slot named `id` is refused"),
     "an unknown slot suffix": ([slot(slot="many", type="Text", card="**")], 11, "a slot `Text**` is not lowered"),
     # decisions/language-inverse-references.md: the forward slot must exist on the kind the type names; Zeta has

@@ -20,7 +20,11 @@ from round_visibility_rounds import singleton_rounds
         "result is not a certificate. Write in packs/std-loop (ready.dl, fixed_point.dl) and switch the readers "
         "of the old ready to unblocked (loop/typed_recording.py, build/rules/tasks.dl). Waits for "
         "test_unblocked_evidence and test_verified_round_authorizes_steps (same std-loop files). Today "
-        "rezono_checker.evidence is missing (ImportError)."
+        "rezono_checker.evidence is missing (ImportError). "
+        "Waits for a planner to switch loop/tests/test_recorded_correction.py from reading state['ready'] "
+        "to state['unblocked'] (like test_eligibility_oracle.py), because requiring current_verified_round in "
+        "packs/std-loop/rules/ready.dl makes this test pass but breaks test_recorded_correction and turns "
+        "test_overlapping_withdrawals_break_availability XPASS(strict)."
     ),
 )
 def test_ready_requires_checked_batch_member(tmp_path):
