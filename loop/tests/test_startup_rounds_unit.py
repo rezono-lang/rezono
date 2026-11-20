@@ -377,7 +377,8 @@ def test_verify_unsigned_admission_denial_binds_to_derived_unsigned_artifact() -
         env: Any = None,
         check: bool = True,
     ) -> subprocess.CompletedProcess[str]:
-        if "get" in args and "applications.argoproj.io" in args:
+        subcommand = args[3:]
+        if subcommand == ["-n", "argocd", "get", "applications.argoproj.io", "rezono-admission", "-o", "json"]:
             payload = {
                 "status": {
                     "sync": {"status": "Synced"},
@@ -390,7 +391,15 @@ def test_verify_unsigned_admission_denial_binds_to_derived_unsigned_artifact() -
                 },
             }
             return subprocess.CompletedProcess(args, 0, stdout=json.dumps(payload), stderr="")
-        if "get" in args and "namespacepublications.admission.rezono.org" in args:
+        if subcommand == [
+            "-n",
+            "admission-blue",
+            "get",
+            "namespacepublications.admission.rezono.org",
+            "admission-sample",
+            "-o",
+            "json",
+        ]:
             payload = {
                 "spec": {
                     "digest": pub_digest,
@@ -398,7 +407,7 @@ def test_verify_unsigned_admission_denial_binds_to_derived_unsigned_artifact() -
                 },
             }
             return subprocess.CompletedProcess(args, 0, stdout=json.dumps(payload), stderr="")
-        if "create" in args and "--dry-run=server" in args:
+        if subcommand == ["create", "--dry-run=server", "-f", "-"]:
             assert data is not None
             pod = json.loads(data)
             captured.append(pod)
@@ -438,7 +447,7 @@ def test_verify_unsigned_admission_denial_binds_to_derived_unsigned_artifact() -
 
     # Counterexample: denial stderr missing the reconciled publication digest is rejected.
     def wrong_digest_runner(args: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
-        if "create" in args and "--dry-run=server" in args:
+        if args[3:] == ["create", "--dry-run=server", "-f", "-"]:
             return subprocess.CompletedProcess(args, 1, stdout="", stderr="verified-supply: wrong digest")
         return fake_runner(args, **kwargs)
 
