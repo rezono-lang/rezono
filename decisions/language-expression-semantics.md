@@ -1,3 +1,11 @@
+---
+decider: [language, core]
+decided_on: 2026-11-18
+valid_from: 2026-11-18
+state: in_force
+subject: language-expression-semantics
+---
+
 # Shared expression semantics for questions and rules
 
 Questions and rules use the same expressions, types, states and grounds. A question starts with a readable subject and classifies the expression's result. A rule can bind variables by matching rows and emits one tuple for each binding that satisfies its guard.
