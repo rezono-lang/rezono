@@ -83,7 +83,10 @@ def imported_modules(path):
     reason="extra: decisions/language-healthcare-allowance-slice.md: Write examples/zorgtoeslag-slice/reference.py, "
            "the independent oracle of the slice, with the standard library only: allowance(facts, household, "
            "as_of, known) reads the fact rows of facts.rezono itself and states the parameter versions of the "
-           "decision itself, and returns the monthly allowance in whole cents, or the pair (state, reason)",
+           "decision itself, and returns the monthly allowance in whole cents, or the pair (state, reason). "
+           "Blocked for a worker PR: scripts/red_guard.py protects reference.py (requires the planner label) "
+           "and rejects lifting a red mark alongside a protected .py file even with planner; a planner must "
+           "land reference.py or exempt new slice oracles in red_guard.py first.",
 )
 def test_slice_oracle_gives_the_cases(tmp_path):
     oracle = load_oracle()
