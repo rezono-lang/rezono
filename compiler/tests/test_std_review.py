@@ -289,17 +289,6 @@ class MissingReviewAuthorityCheck(AssertionError):
     """std-review lacks review_unauthorized, or does not evaluate review rights at the moment of review."""
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=MissingReviewAuthorityCheck,
-    reason="extra: decisions/review-and-rights.md: Write packs/std-review/rules/authority.dl: the invariant "
-           "review_unauthorized(review) from the role_grant held on the review day (first day inclusive, last day "
-           "exclusive), not introduced by the reviewed change, and may_review of that role over every "
-           "change_member; a grant that a change introduces counts only from the day a review on founding "
-           "grants alone accepted that change, and while it stays accepted. Add !review_unauthorized(r) to "
-           "review_valid in rules/state.dl. Read sections 3, 5, 7 and 8. Waits for test_review_blind, which edits "
-           "the same rule, and for compiler/tests/test_std_access.py::test_standard_access_declares_the_four_rights (may_review).",
-)
 def test_review_unauthorized(tmp_path):
     p = Probe(tmp_path, MissingReviewAuthorityCheck)
     p.invariant("review_unauthorized")
