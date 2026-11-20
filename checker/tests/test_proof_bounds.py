@@ -24,16 +24,6 @@ def _leaf(tree: str, relation: str, rows: list) -> tuple[bytes, dict]:
     return data, {"file": f"{tree}/{relation}/0/0.json", "sha256": digest, "levels": 1}
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=MissingProofBounds,
-    reason=(
-        "extra: decisions/central-read-access.md: Define MAX_PIECE = 65536, MAX_FANOUT = 128 and "
-        "MAX_LEVELS = 8 in checker/rezono_checker/proof.py and enforce them in _Walk (check_proof, "
-        "check_rows, check_indexes, check_sources, check_difference) so any caller-supplied limit above "
-        "MAX_PIECE, fanout above MAX_FANOUT, or tree root with levels above MAX_LEVELS is refused."
-    ),
-)
 def test_checker_refuses_proof_index_above_its_own_limits():
     max_piece = getattr(proof, "MAX_PIECE", None)
     max_fanout = getattr(proof, "MAX_FANOUT", None)
