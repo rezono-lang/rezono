@@ -38,10 +38,6 @@ def record():
             "expirationDate": "2032-05-05T01:30:00+02:00", "priceWithTax": price(16797600000)}
 
 
-@pytest.mark.xfail(strict=True, reason=(
-    "M4: decisions/run-price-enforcement.md: Read the section Conditions for the OVHcloud guarantee. "
-    "Implement guarantee(order, record, plan_hash, day) in run/ovh_order.py."
-))
 def test_ovh_order_guarantee():
     guarantee = implementation("ovh_order.py", "guarantee")
 
