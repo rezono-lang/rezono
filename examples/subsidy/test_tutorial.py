@@ -40,11 +40,12 @@ def blocks(page: str, language: str) -> list[str]:
 
 
 def check_quoted_lines(page: str):
-    """A yaml or rule block quotes the pack or the scheme it imports, except the scenario the reader writes."""
+    """A yaml, rezono or rule block quotes the pack or the scheme it imports, except the scenario the reader writes."""
     pack = "\n".join(p.read_text(encoding="utf-8") for at in (HERE, SCHEME)
-                     for d in ("schema", "facts", "rules", "calc", "messages") for p in sorted((at / d).glob("*")))
+                     for d in ("schema", "facts", "rules", "calc", "messages", "rezono")
+                     for p in sorted((at / d).glob("*")) if p.is_file())
     lines = {line.strip() for line in pack.splitlines()}
-    quoted = [b for b in blocks(page, "yaml") + blocks(page, "") if '"par-07"' not in b]
+    quoted = [b for b in blocks(page, "yaml") + blocks(page, "rezono") + blocks(page, "") if '"par-07"' not in b]
     assert len(quoted) >= 8
     missing = [line for b in quoted for line in b.splitlines() if line.strip() and line.strip() not in lines]
     assert missing == []
