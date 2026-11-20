@@ -10,5 +10,6 @@ link.head: head
 outgoing_link: outgoing link
 recorded_weight: recorded weight
 may_read: may read
+may_read_full: may read in full
 role: role
 role.title: title
