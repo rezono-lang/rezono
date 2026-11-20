@@ -31,11 +31,12 @@ import re
 import sys
 from collections import Counter
 
+from rezono_checker import access as checker_access
 from rezono_checker.difference import check_difference
 from rezono_checker.rules import load_seals
 
 from . import proof, timing, views
-from .access import ACCESS
+from .access import ACCESS, READ_FULL
 from . import store as stores
 
 INDEX = "rezono.explain-index/1"
@@ -153,7 +154,16 @@ def plan(st, pack: str, manifest: str, delta: dict | None = None) -> list[tuple[
     base = json.loads(views._get(st, f"{pack}/manifests/{m['base_manifest']}.json"))
     if not views.MAIN.match(base.get("id", "")) or base.get("proposal") or base.get("variant"):
         raise ValueError(f"{manifest}: its base {m['base_manifest']} is not a main manifest")
-    if withheld(_compiled(st, base, "ir/rules.json"), _compiled(st, base, "bundle/schema-bundle.json"), delta):
+    rules_doc = _compiled(st, base, "ir/rules.json")
+    bundle = _compiled(st, base, "bundle/schema-bundle.json")
+    pub_withheld = withheld(rules_doc, bundle, delta)
+    with timing.phase("checker"):
+        chk_withheld = checker_access.may_change_access(rules_doc, bundle, delta)
+    if type(pub_withheld) is not bool or type(chk_withheld) is not bool or pub_withheld != chk_withheld:
+        raise views.Blocked(
+            f"access-change check disagreement: publisher={pub_withheld}, checker={chk_withheld}"
+        )
+    if pub_withheld:
         return []
     served = {s["role"] for s in m["snapshots"] if s.get("complete") is False}
     served &= {s["role"] for s in base["snapshots"] if s.get("complete") is False}
@@ -173,39 +183,114 @@ def withheld(rules_doc: dict | None, bundle: dict | None, delta: dict | None) ->
     profile edge").
 
     Decided from the rules and the delta alone, never from data, so it is the same whether or not an element
-    exists that a role does not see (no existence leak). A delta changes facts, never rules, but `may_read` is
-    derived from facts. A change writes the relations of its kind and the kinds above it (an element of a
-    subkind is one of its parent), and their slots (`<kind>__<slot>`). It may change a right if one of them is
-    in the dependency closure of `may_read` (its body relations, through derived ones, to base ones), except an
-    insert into a kind that only grants itself: every rule over it in that closure is `may_read(?r, "K", ?x)`
-    with `K(?x)` positive in its body, so inserting K(x0) grants x0 alone, the delta's own content. Without
-    the delta, or without its rules or bundle, it is withheld (fail closed).
+    exists that a role does not see (no existence leak). A delta changes facts, never rules, but `may_read`
+    and `may_read_full` are derived from facts. A change writes the relations of its kind and the kinds above
+    it (an element of a subkind is one of its parent), and their slots (`<kind>__<slot>`). It may change a
+    right if one of them is in the dependency closure of `may_read` or `may_read_full` (their body and
+    aggregate relations, through derived ones, to base ones), except an insert into a kind that only grants
+    itself: every rule over it in that closure is `may_read(?r, "K", ?x)` with `K(?x)` positive in its body
+    (and `may_read` itself does not feed further access rules), so inserting K(x0) grants x0 alone, the
+    delta's own content, and never changes `may_read_full`. Without the delta or bundle, or on malformed
+    inputs, it is withheld (fail closed).
 
     A base relation of the rules is a schema table, except two kinds the compiler makes from other tables:
     - A seal's relations (`k__refused`, `k__accepted`, `k__row_sha256`, each `p__accepted`) follow
       from the sealed kind, every part and the closes. With one of them in the closure, a change to any table
       the seal reads is withheld, whatever its op: an edited part refuses its element, which can grant a right.
     - A calculation selection (`calc__…`, role `calc`) follows from whatever the calculation reads. The
-      compiler and the checker refuse a `may_read` that depends on one; if one arrives, it is withheld."""
-    if delta is None or bundle is None:
+      compiler and the checker refuse access rules that depend on one; if one arrives, it is withheld."""
+    if not isinstance(delta, dict) or not isinstance(bundle, dict):
+        return True
+    if rules_doc is not None and not isinstance(rules_doc, dict):
+        return True
+    doc = {} if rules_doc is None else rules_doc
+    fmt = doc.get("format")
+    if fmt is not None and fmt != "rezono.rules/1":
+        return True
+    if "seals" in doc and not isinstance(doc["seals"], list):
         return True
     try:
-        seals = load_seals(rules_doc or {})
-    except (ValueError, AttributeError, TypeError):
+        seals = load_seals(doc)
+    except (ValueError, AttributeError, TypeError, KeyError):
         return True
-    rules = (rules_doc or {}).get("rules", [])
+    if not isinstance(bundle.get("kinds"), list) or not isinstance(delta.get("changes"), list):
+        return True
+    if ("rules" in doc and not isinstance(doc["rules"], list)) or ("relations" in doc and not isinstance(doc["relations"], list)):
+        return True
+    parent: dict[str, str | None] = {}
+    for entry in bundle["kinds"]:
+        if not isinstance(entry, dict) or not isinstance(entry.get("id"), str) or not entry["id"] or entry["id"] in parent:
+            return True
+        par = entry.get("parent")
+        if par is not None and (not isinstance(par, str) or not par):
+            return True
+        parent[entry["id"]] = par
+    chains: dict[str, list[str]] = {}
+    for kid in parent:
+        chain, cur = [], kid
+        while cur is not None:
+            if cur not in parent or cur in chain:
+                return True
+            chain.append(cur)
+            cur = parent[cur]
+        chains[kid] = chain
+    inlined_arrows: dict[str, list[str]] = {}
+    if "arrows" in bundle:
+        if not isinstance(bundle["arrows"], list):
+            return True
+        for arrow in bundle["arrows"]:
+            if not isinstance(arrow, dict):
+                return True
+            src, dst = arrow.get("kind"), arrow.get("target")
+            if (not isinstance(src, str) or not src or src not in parent
+                    or not isinstance(dst, str) or not dst or dst not in parent):
+                return True
+            if "inlined" in arrow:
+                if not isinstance(arrow["inlined"], bool):
+                    return True
+                if arrow["inlined"]:
+                    inlined_arrows.setdefault(src, []).append(dst)
+    rules = doc.get("rules", [])
+    for r in rules:
+        if not isinstance(r, dict) or not isinstance(r.get("head"), dict):
+            return True
+        head = r["head"]
+        if (not isinstance(head.get("relation"), str) or not head["relation"]
+                or not isinstance(head.get("terms"), list) or not all(isinstance(t, str) for t in head["terms"])):
+            return True
+        if ("body" in r and not isinstance(r["body"], list)) or ("aggregates" in r and not isinstance(r["aggregates"], list)):
+            return True
+        for x in r.get("body", []):
+            pol = x.get("polarity") if isinstance(x, dict) else None
+            if (not isinstance(x, dict) or not isinstance(x.get("relation"), str) or not x["relation"]
+                    or not isinstance(x.get("terms"), list) or not all(isinstance(t, str) for t in x["terms"])
+                    or (pol is not None and (not isinstance(pol, str) or pol not in ("positive", "negative")))):
+                return True
+        for x in r.get("aggregates", []):
+            if not isinstance(x, dict) or not isinstance(x.get("relation"), str) or not x["relation"]:
+                return True
+    relations = doc.get("relations", [])
+    for r in relations:
+        if not isinstance(r, dict):
+            return True
+        if r.get("role") == "calc" and (not isinstance(r.get("name"), str) or not r["name"]):
+            return True
+
+    roots = {ACCESS, READ_FULL}
     heads = {r["head"]["relation"] for r in rules}
-    closure, todo = set(), [ACCESS]
+    closure, seen, todo = set(), set(roots), list(roots)
     while todo:
         head = todo.pop()
         for r in rules:
             if r["head"]["relation"] == head:
                 for x in (*r.get("body", []), *r.get("aggregates", [])):
-                    if x["relation"] not in closure:
-                        closure.add(x["relation"])
-                        todo.append(x["relation"])
-    over = [r for r in rules if r["head"]["relation"] in (closure & heads) | {ACCESS}]
-    if any(r.get("role") == "calc" and r.get("name") in closure for r in (rules_doc or {}).get("relations", [])):
+                    rel = x["relation"]
+                    closure.add(rel)
+                    if rel not in seen:
+                        seen.add(rel)
+                        todo.append(rel)
+    over = [r for r in rules if r["head"]["relation"] in (closure & heads) | roots]
+    if any(r.get("role") == "calc" and r.get("name") in (closure | roots) for r in relations):
         return True
     sealed = set()  # every table a seal relation in the closure is computed from
     for s in seals:
@@ -215,23 +300,36 @@ def withheld(rules_doc: dict | None, bundle: dict | None, delta: dict | None) ->
             sealed |= {t for p in parts for t in (p["kind"], p["arrow"], *p["tables"])}
 
     def grants_itself(kind):
-        uses = [(r, x) for r in over for x in (*r.get("body", []), *r.get("aggregates", [])) if x["relation"] == kind]
-        return all(r["head"]["relation"] == ACCESS and x in r.get("body", []) and x.get("polarity") == "positive"
+        if ACCESS in closure:
+            return False
+        body_uses = [(r, x) for r in over for x in r.get("body", []) if x["relation"] == kind]
+        agg_uses = [x for r in over for x in r.get("aggregates", []) if x["relation"] == kind]
+        if agg_uses or not body_uses:
+            return False
+        return all(r["head"]["relation"] == ACCESS and x.get("polarity") == "positive"
                    and len(x["terms"]) == 1 and x["terms"][0].startswith("?")
-                   and r["head"]["terms"][1:] == [kind, x["terms"][0]] for r, x in uses)
+                   and len(r["head"]["terms"]) == 3 and r["head"]["terms"][1:] == [kind, x["terms"][0]]
+                   for r, x in body_uses)
 
-    parent = {k["id"]: k.get("parent") for k in bundle.get("kinds", [])}
-    for ch in delta.get("changes", []):
-        if not isinstance(ch, dict) or not isinstance(ch.get("kind"), str) or ch.get("op") not in OPS:
+    for ch in delta["changes"]:
+        if (not isinstance(ch, dict) or not isinstance(ch.get("op"), str) or ch["op"] not in OPS
+                or not isinstance(ch.get("kind"), str) or not ch["kind"] or ch["kind"] not in chains):
             return True
-        op, chain, k = ch["op"], [], ch["kind"]
-        while k and k not in chain:
-            chain.append(k)
-            k = parent.get(k)
-        if any(t == k or t.startswith(f"{k}__") for t in sealed for k in chain):
+        op, chain = ch["op"], chains[ch["kind"]]
+        inlined_reached, expanded, work = set(), set(chain), list(chain)
+        while work:
+            owner = work.pop()
+            for target in inlined_arrows.get(owner, ()):
+                for anc in chains[target]:
+                    inlined_reached.add(anc)
+                    if anc not in expanded:
+                        expanded.add(anc)
+                        work.append(anc)
+        touched = set(chain) | inlined_reached
+        if any(t == k or t.startswith(f"{k}__") for t in sealed for k in touched):
             return True
         for rel in closure:
-            if any(rel.startswith(f"{k}__") for k in chain):
+            if rel in inlined_reached or any(rel.startswith(f"{k}__") for k in touched):
                 return True
             # Only an insert or a delete writes a kind's own table: a set or an unset needs the record as it
             # is and never changes its identifier or kind (the canonical writer), so membership stays.
