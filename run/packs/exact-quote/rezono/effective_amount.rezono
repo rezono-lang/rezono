@@ -1,0 +1,170 @@
+rezono 0
+pack exact-quote
+
+type CurrencyCode = Text
+
+enum RateOperand world closed = numerator | denominator
+
+enum AmountPart world closed = numerator | denominator
+
+kind QuoteCurrency world closed
+  currency: CurrencyCode
+
+kind RatePair world closed
+  base: CurrencyCode
+  target: CurrencyCode
+
+kind RateCapture world closed
+  quote: RecordedQuote
+  base: CurrencyCode
+  target: CurrencyCode
+
+kind RateDigit world closed
+  rate: RateCapture
+  operand: RateOperand
+  position: Int
+    minimum 0
+  value: Int
+    minimum 0
+    maximum 9
+
+kind EffectiveCarry world closed
+  quote: RecordedQuote
+  currency: CurrencyCode
+  part: AmountPart
+  position: Int
+    minimum 0
+  value: Int
+    minimum 0
+
+rules effective_amount
+  | // Accepted rate captures match the pack's quote-currency and rate-pair facts.
+  | .decl valid_rate_digit(rate: symbol, operand: symbol, position: number, value: number)
+  | valid_rate_digit(r, op, p, v) :- rate_capture(r), rate_digit(s), rate_digit__rate(s, r),
+  |     rate_digit__operand(s, op), rate_digit__position(s, p), rate_digit__value(s, v),
+  |     p >= 0, v >= 0, v <= 9.
+  | 
+  | .decl conflicted_rate_digit(rate: symbol)
+  | conflicted_rate_digit(r) :- valid_rate_digit(r, op, p, v), valid_rate_digit(r, op, p, other), v != other.
+  | 
+  | .decl rate_positive_part(rate: symbol, operand: symbol)
+  | rate_positive_part(r, op) :- valid_rate_digit(r, op, _, v), v > 0.
+  | 
+  | .decl valid_rate_capture(rate: symbol, quote: symbol, base: symbol, target: symbol)
+  | valid_rate_capture(r, q, base, target) :- rate_capture(r), rate_capture__quote(r, q),
+  |     rate_capture__base(r, base), rate_capture__target(r, target),
+  |     recorded_quote(q), quote_currency(qc), quote_currency__currency(qc, base),
+  |     rate_pair(rp), rate_pair__base(rp, base), rate_pair__target(rp, target),
+  |     base != target,
+  |     valid_rate_digit(r, "numerator", 0, _), valid_rate_digit(r, "denominator", 0, _),
+  |     rate_positive_part(r, "numerator"), rate_positive_part(r, "denominator"),
+  |     !conflicted_rate_digit(r).
+  | 
+  | // Multiply the quote total digits (in millionths) by the rate numerator digits in decimal columns.
+  | .decl converted_term(quote: symbol, currency: symbol, position: number, offset: number, value: number)
+  | converted_term(q, target, p, i, v) :- valid_rate_capture(r, q, _, target),
+  |     amount_digit(q, i, a), valid_rate_digit(r, "numerator", j, b),
+  |     a > 0, b > 0, p = i + j, v = a * b.
+  | 
+  | .decl converted_position(quote: symbol, currency: symbol, position: number)
+  | converted_position(q, target, 0) :- valid_rate_capture(_, q, _, target), amount_digit(q, 0, _).
+  | converted_position(q, target, p) :- converted_term(q, target, p, _, _).
+  | 
+  | .decl effective_column(quote: symbol, currency: symbol, part: symbol, position: number, coefficient: number)
+  | effective_column(q, target, "numerator", p, n) :- converted_position(q, target, p),
+  |     n = sum term : { converted_term(q, target, p, _, term) }.
+  | 
+  | // Verify the supplied decimal carries for converted numerator columns.
+  | .decl eff_carry(quote: symbol, currency: symbol, part: symbol, position: number, value: number)
+  | eff_carry(q, c, part, p, n) :- effective_carry(s), effective_carry__quote(s, q),
+  |     effective_carry__currency(s, c), effective_carry__part(s, part),
+  |     effective_carry__position(s, p), effective_carry__value(s, n), p >= 0, n >= 0.
+  | 
+  | .decl conflicted_eff_carry(quote: symbol, currency: symbol, part: symbol)
+  | conflicted_eff_carry(q, c, part) :- eff_carry(q, c, part, p, n), eff_carry(q, c, part, p, other), n != other.
+  | 
+  | .decl eff_column_position(quote: symbol, currency: symbol, part: symbol, position: number)
+  | eff_column_position(q, c, part, p) :- effective_column(q, c, part, p, _).
+  | 
+  | .decl eff_next_position(quote: symbol, currency: symbol, part: symbol, position: number, next: number)
+  | eff_next_position(q, c, part, p, next) :- eff_carry(q, c, part, p, _), next = p + 1.
+  | 
+  | .decl eff_normalized_column(quote: symbol, currency: symbol, part: symbol, position: number, next: number, digit: number)
+  | eff_normalized_column(q, c, part, p, next, d) :- effective_column(q, c, part, p, n),
+  |     eff_carry(q, c, part, p, carry), eff_next_position(q, c, part, p, next), eff_carry(q, c, part, next, b),
+  |     available = n + carry, shifted = b * 10, d = available - shifted, d >= 0, d <= 9.
+  | eff_normalized_column(q, c, part, p, next, d) :- eff_carry(q, c, part, p, carry),
+  |     eff_next_position(q, c, part, p, next), eff_carry(q, c, part, next, b),
+  |     !eff_column_position(q, c, part, p), shifted = b * 10, d = carry - shifted, d >= 0, d <= 9.
+  | 
+  | .decl eff_normalized_prefix(quote: symbol, currency: symbol, part: symbol, position: number)
+  | eff_normalized_prefix(q, c, part, 0) :- eff_carry(q, c, part, 0, 0).
+  | eff_normalized_prefix(q, c, part, next) :- eff_normalized_prefix(q, c, part, p),
+  |     eff_normalized_column(q, c, part, p, next, _).
+  | 
+  | .decl complete_eff_amount(quote: symbol, currency: symbol, part: symbol)
+  | complete_eff_amount(q, c, part) :- eff_normalized_prefix(q, c, part, p), eff_carry(q, c, part, p, 0),
+  |     !conflicted_eff_carry(q, c, part),
+  |     last = max column : { eff_column_position(q, c, part, column) }, p > last.
+  | 
+  | .decl micros_pad(position: number)
+  | micros_pad(0) :- recorded_quote(_).
+  | micros_pad(1) :- recorded_quote(_).
+  | micros_pad(2) :- recorded_quote(_).
+  | micros_pad(3) :- recorded_quote(_).
+  | micros_pad(4) :- recorded_quote(_).
+  | micros_pad(5) :- recorded_quote(_).
+  | 
+  | // Base-10 digits of both quote-currency and converted-currency numerators and denominators.
+  | .decl effective_digit(quote: symbol, currency: symbol, part: symbol, position: number, digit: number)
+  | effective_digit(q, base, "numerator", p, d) :- valid_rate_capture(_, q, base, _), amount_digit(q, p, d).
+  | effective_digit(q, base, "denominator", p, 0) :- valid_rate_capture(_, q, base, _), micros_pad(p).
+  | effective_digit(q, base, "denominator", 6, 1) :- valid_rate_capture(_, q, base, _).
+  | effective_digit(q, target, "numerator", p, d) :- complete_eff_amount(q, target, "numerator"),
+  |     eff_normalized_prefix(q, target, "numerator", p),
+  |     eff_normalized_column(q, target, "numerator", p, _, d).
+  | effective_digit(q, target, "denominator", p, 0) :- valid_rate_capture(_, q, _, target), micros_pad(p).
+  | effective_digit(q, target, "denominator", p, b) :- valid_rate_capture(r, q, _, target),
+  |     valid_rate_digit(r, "denominator", j, b), p = j + 6.
+  | 
+  | .decl ten_power(position: number, value: number)
+  | ten_power(0, 1) :- recorded_quote(_).
+  | ten_power(1, 10) :- recorded_quote(_).
+  | ten_power(2, 100) :- recorded_quote(_).
+  | ten_power(3, 1000) :- recorded_quote(_).
+  | ten_power(4, 10000) :- recorded_quote(_).
+  | ten_power(5, 100000) :- recorded_quote(_).
+  | ten_power(6, 1000000) :- recorded_quote(_).
+  | ten_power(7, 10000000) :- recorded_quote(_).
+  | ten_power(8, 100000000) :- recorded_quote(_).
+  | ten_power(9, 1000000000) :- recorded_quote(_).
+  | ten_power(10, 10000000000) :- recorded_quote(_).
+  | ten_power(11, 100000000000) :- recorded_quote(_).
+  | ten_power(12, 1000000000000) :- recorded_quote(_).
+  | ten_power(13, 10000000000000) :- recorded_quote(_).
+  | ten_power(14, 100000000000000) :- recorded_quote(_).
+  | ten_power(15, 1000000000000000) :- recorded_quote(_).
+  | ten_power(16, 10000000000000000) :- recorded_quote(_).
+  | ten_power(17, 100000000000000000) :- recorded_quote(_).
+  | ten_power(18, 1000000000000000000) :- recorded_quote(_).
+  | 
+  | .decl part_overflow(quote: symbol, currency: symbol, part: symbol)
+  | part_overflow(q, c, part) :- effective_digit(q, c, part, p, d), p > 18, d > 0.
+  | part_overflow(q, c, part) :- effective_digit(q, c, part, 18, d), d > 8.
+  | 
+  | .decl part_term(quote: symbol, currency: symbol, part: symbol, position: number, value: number)
+  | part_term(q, c, part, p, v) :- effective_digit(q, c, part, p, d), !part_overflow(q, c, part),
+  |     ten_power(p, w), d > 0, v = d * w.
+  | 
+  | .decl effective_part_present(quote: symbol, currency: symbol, part: symbol)
+  | effective_part_present(q, c, part) :- effective_digit(q, c, part, 0, _), !part_overflow(q, c, part).
+  | 
+  | .decl effective_part_value(quote: symbol, currency: symbol, part: symbol, value: number)
+  | effective_part_value(q, c, part, v) :- effective_part_present(q, c, part),
+  |     v = sum term : { part_term(q, c, part, _, term) }.
+  | 
+  | .decl effective_amount(quote: symbol, currency: symbol, numerator: number, denominator: number)
+  | effective_amount(q, c, num, den) :- effective_part_value(q, c, "numerator", num),
+  |     effective_part_value(q, c, "denominator", den), den > 0.
+  | 
+  | .output effective_digit, effective_amount

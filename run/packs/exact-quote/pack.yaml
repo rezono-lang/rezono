@@ -7,3 +7,6 @@ rezono:
 - module: rezono/quote.rezono
   form: rezono/quote.json
   layer: facts
+- module: rezono/effective_amount.rezono
+  form: rezono/effective_amount.json
+  layer: facts
