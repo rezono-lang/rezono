@@ -134,8 +134,8 @@ def slot_row(clause: native_rule_signatures.LinkedClause, pointer: str, guard: d
         if table is not None and len(domain.get("path", ())) == 2 and (value := operand(subject)) is not None:
             return table, [("var", domain["path"][0]), value]
     elif set(guard) == {"call"} and (table := clause.calls.get(pointer)) is not None:
-        values = [operand(argument) for argument in guard["call"][1]]
-        if all(value is not None and value[0] == "var" for value in values):
+        values = [("wild",) if argument == {"wildcard": True} else operand(argument) for argument in guard["call"][1]]
+        if all(value is not None for value in values):
             return table, values
     return None, []
 
