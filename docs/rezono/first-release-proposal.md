@@ -1,7 +1,7 @@
 # First-release language proposal: unified derivations (`rezono 1`)
 
-> **Status: Proposal only — not a specification or a design decision.**
-> Nothing in this document is built or scheduled; no pack is converted, no existing rule file is edited, and no red test is attached. Work on `rezono 0` continues unchanged. This trial examines how `rezono 1` would look as the first released version of Rezono with a single derivation form, so the owner can choose between the paths in [Section 13](#13-two-paths-and-recommendation).
+> **Status: Adopted and finalized by [`decisions/language-rezono-1.md`](../../decisions/language-rezono-1.md).**
+> This document is the original design trial kept for historical context; it is not itself a specification. Where the decision updates or corrects details of this trial (including pipeline-level view budgets, view weights and runner measurements, closed-domain rules, the `no_match` reason code, `<k>_<d>` bundle naming, hyphenated pack names `std-money`/`std-units`, the exact `.dl` file census, and per-derivation differences for `core.dl`), [`decisions/language-rezono-1.md`](../../decisions/language-rezono-1.md) is authoritative.
 
 ---
 
