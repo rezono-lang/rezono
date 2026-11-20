@@ -17,7 +17,7 @@ GIT_SRC = {
     "kind": "git",
     "name": "example/notes",
     "revision": "0123456789abcdef0123456789abcdef01234567",
-    "position": "docs/notes.md#L1",
+    "position": "records/notes.md#L1",
 }
 
 
@@ -120,8 +120,8 @@ def test_decide_unknown_or_malformed_source_citation_raises_load_error(tmp_path)
 
     # Counter-case: valid declared source and valid source#fragment attach both person and cited sources.
     for case_name, ref, expected_pos in (
-        ("valid_plain", "notes", "docs/notes.md#L1"),
-        ("valid_fragment", "notes#L42", "docs/notes.md#L42"),
+        ("valid_plain", "notes", "records/notes.md#L1"),
+        ("valid_fragment", "notes#L42", "records/notes.md#L42"),
     ):
         decls = [
             {"source": "notes", "fields": GIT_SRC},
