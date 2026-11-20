@@ -255,11 +255,10 @@ def _scopes_at(tokenized: dict, word: str, after: str = "") -> list[str]:
     strict=True,
     raises=MissingContextualKeywords,
     reason=(
-        "M3: decisions/language-contextual-keywords.md: Allow any identifier word after '.' "
-        "(`Dotted \".\" identWord` and `SupposePath`), print member segments bare without backticks, "
-        "and ensure `require active: shelf.open is known` and dotted paths (`item.version`, "
-        "`entry.known`, `claim.valid`, `record.value`, `record.type`, `record.range`, `record.where`, "
-        "`record.at`) parse, round-trip, and typecheck cleanly."
+        "M3: decisions/language-contextual-keywords.md: Implementation landed; test fixture bug blocks green "
+        "because SCHEMA defines slot `open` on both `Shelf` and `Record`, so `+ shelf-1.open = true` and "
+        "`- shelf-1.open` legitimately report R002 (ambiguous id head). Planner fix needed to make `open` "
+        "unique to `Shelf` in SCHEMA."
     ),
 )
 def test_dotted_member_names_parse_and_typecheck_without_backticks():
@@ -328,16 +327,6 @@ def test_dotted_member_names_parse_and_typecheck_without_backticks():
         raise MissingContextualKeywords(json.dumps(problems, indent=2))
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=MissingContextualKeywords,
-    reason=(
-        "M3: decisions/language-contextual-keywords.md: Restrict hard keywords in rezono/src/rule-names.ts "
-        "to the 15 expression keywords, make declaration and clause keywords (`kind`, `enum`, `unit`, `param`, "
-        "`version`, `valid`, `known`, `world`, `open`, `closed`, `view`, `sources`, `example`, etc.) contextual "
-        "outside declaration headers, and keep expression keywords reserved."
-    ),
-)
 def test_contextual_declaration_keywords_work_as_identifiers_while_expression_keywords_stay_reserved():
     contextual_module = """\
 rezono 1
@@ -445,10 +434,9 @@ require active: shelf.open is known
     strict=True,
     raises=MissingContextualKeywords,
     reason=(
-        "M3: decisions/language-contextual-keywords.md: Update rezono/src/syntax-grammar.ts so slot names "
-        "after '.' (`shelf.open`, `item.version`, `entry.known`, `claim.valid`, `x.value`, `x.type`, `x.range`, "
-        "`x.where`, `x.and`) and contextual declaration words outside declaration headers are never scoped as "
-        "`keyword.control*` (or operator/state scopes after '.')."
+        "M3: decisions/language-contextual-keywords.md: Implementation landed; test helper bug blocks green "
+        "because `_scopes_at(tokenized[line], 'and', 'x.')` matches the first `'x.'` (in `x.where`) and then "
+        "finds the logical operator `and` instead of the member `x.and`. Planner fix needed to anchor on `'and x.'`."
     ),
 )
 def test_syntax_grammar_does_not_color_dotted_slots_or_contextual_words_as_control_keywords():
