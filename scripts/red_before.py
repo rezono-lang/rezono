@@ -178,6 +178,27 @@ def cluster_only(tests, collected):
     return all(kinds.get(test) == {"cluster"} for test in tests)
 
 
+def plugin_arguments():
+    """`-p` for each installed pytest plugin that scripts/pytest-plugins.txt lists, and no other.
+
+    As in scripts/components.py, pytest loads no plugin of its own accord
+    (PYTEST_DISABLE_PLUGIN_AUTOLOAD): a plugin's hooks could drop or pass a test. In CI the
+    environment action points REZONO_PYTEST_PLUGINS at the base's list; otherwise the list
+    beside this script applies.
+    """
+    from importlib.metadata import entry_points
+
+    listed = Path(os.environ.get("REZONO_PYTEST_PLUGINS") or Path(__file__).with_name("pytest-plugins.txt"))
+    if not listed.is_file():
+        raise SystemExit(f"ERROR no list of allowed pytest plugins at {listed}")
+    allowed = {line.strip() for line in listed.read_text(encoding="utf-8").splitlines()
+               if line.strip() and not line.lstrip().startswith("#")}
+    found = sorted(entry_points(group="pytest11"), key=lambda e: e.name)
+    if unlisted := [f"{e.name} = {e.value}" for e in found if f"{e.name} = {e.value}" not in allowed]:
+        raise SystemExit(f"ERROR pytest plugins that {listed.name} does not list: {', '.join(unlisted)}")
+    return [arg for name in sorted({e.name for e in found}) for arg in ("-p", name)]
+
+
 def execute(tests, where):
     """Run the tests by file; return (files with a failure, passed, skipped, collected lines)."""
     if importlib.util.find_spec("pytest") is None:
@@ -192,12 +213,13 @@ def execute(tests, where):
         (Path(reports) / "red_before_cluster.py").write_text(CLUSTER_PLUGIN, encoding="utf-8")
         collected = Path(reports) / "collected.txt"
         collected.touch()
-        env = dict(os.environ, RED_BEFORE_COLLECTED=str(collected),
+        env = dict(os.environ, RED_BEFORE_COLLECTED=str(collected), PYTEST_DISABLE_PLUGIN_AUTOLOAD="1",
                    PYTHONPATH=os.pathsep.join(filter(None, [reports, os.environ.get("PYTHONPATH")])))
+        plugins = plugin_arguments()
         for number, (path, ids) in enumerate(files.items()):
             report = Path(reports) / f"{number}.xml"
             print(f"::group::pytest {path} on {where}", flush=True)
-            code = subprocess.run([sys.executable, "-m", "pytest", "-p", "no:cacheprovider",
+            code = subprocess.run([sys.executable, "-m", "pytest", "-p", "no:cacheprovider", *plugins,
                                    "-p", "red_before_cluster", "-q", "-rA", "--tb=short", "--rootdir", root,
                                    f"--junitxml={report}", "--", *ids],
                                   cwd=root, env=env).returncode
