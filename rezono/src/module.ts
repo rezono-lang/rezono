@@ -29,6 +29,8 @@
 //   R021  a `replaces` number that names no version of the same declaration, or `replaces` lines that form a cycle
 //   R015  a reserved construct
 //   R029  a state literal whose quoted label is the label of no `reason` declaration of the module
+//   W107  a schema header line that writes its default (`import "linkml:types"` alone, `default range Text`,
+//         or `annotation layer = ...`)
 //   W108  a declaration with versions has none before the earliest `valid` date: there its value is
 //         `unknown no_version_applies` (§5a rule 4). Only that first gap is reported here; a gap between two
 //         versions needs the order of their contexts, which the checker gives later.

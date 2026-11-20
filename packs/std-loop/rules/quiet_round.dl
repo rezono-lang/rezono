@@ -1,0 +1,30 @@
+// A consumed sweep of an active run, also when it returned no new values.
+.decl dated_sweep(run: symbol, sweep: symbol, event_time: number)
+dated_sweep(run, sweep, time) :-
+    active(run), loop_sweep__run(sweep, run), loop_sweep__event_time(sweep, time).
+
+// The current sweep of a run is its latest dated sweep. A sweep of another run never counts.
+.decl latest_sweep(run: symbol, event_time: number)
+latest_sweep(run, latest) :-
+    active(run), dated_sweep(run, _, _),
+    latest = max time : { dated_sweep(run, _, time) }.
+
+.decl current_sweep(run: symbol, sweep: symbol, event_time: number)
+current_sweep(run, sweep, time) :- latest_sweep(run, time), dated_sweep(run, sweep, time).
+
+.decl sweep_flag(sweep: symbol, complete: boolean)
+sweep_flag(sweep, complete) :- loop_sweep(sweep), loop_sweep__complete(sweep, complete).
+
+// Only an explicitly complete current sweep can close the round; false and a missing flag cannot.
+.decl complete_current_sweep(run: symbol, sweep: symbol)
+complete_current_sweep(run, sweep) :-
+    current_sweep(run, sweep, _), sweep_flag(sweep, complete), complete = TRUE.
+
+// At the inclusive boundary of its budget an unfinished step has expired.
+.decl deadline_expired(run: symbol, step: symbol, sweep: symbol, deadline: symbol, start: symbol)
+deadline_expired(run, step, sweep, deadline, start) :-
+    loop_deadline__run(deadline, run), loop_deadline__step(deadline, step),
+    loop_deadline__start(deadline, start), loop_deadline__budget(deadline, budget),
+    loop_observation__run(start, run), loop_observation__event_time(start, started),
+    current_sweep(run, sweep, time), until = started + budget, until <= time,
+    declared(run, step, _), !waiting_done(run, step).

@@ -1,0 +1,33 @@
+rezono 0
+pack std-loop
+
+schema std_loop_round_progress
+  iri "https://rezono.org/std-loop/round-progress"
+  import "linkml:types"
+  default range Text
+  description "Observation coverage and outstanding work at the current reconciliation boundary."
+  annotation layer = "facts"
+
+kind LoopSweepReceipt world closed
+  description "A named reader receipt closing the observation round of one run."
+  run: Text
+  event_time: Int
+
+kind LoopPendingOperation world closed
+  description "An outstanding operation that can still supply its token in this run."
+  run: Text
+  token: Text
+
+kind LoopGoal world closed
+  description "A required outcome of a run, confirmed by its token whether or not a step produces it."
+  run: Text
+  token: Text
+
+kind LoopBatchDeferral world closed
+  description "A step deferred by batch selection at an observation cut."
+  run: Text
+  step: LoopStep
+  cut: Text
+    description "The identity of the sweep receipt used for the selection."
+  batch: Text
+    description "The selected batch that deferred the step."

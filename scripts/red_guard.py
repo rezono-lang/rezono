@@ -28,11 +28,13 @@ from fnmatch import fnmatchcase
 import hashlib
 import io
 import json
-from pathlib import PurePosixPath
+import os
+from pathlib import Path, PurePosixPath
 import posixpath
 import re
 import subprocess
 import sys
+import time
 import tokenize
 import tomllib
 
@@ -861,6 +863,86 @@ def table(expr, defs, seen=frozenset()):
     return found
 
 
+def argument_names(function):
+    a = function.args
+    return [arg.arg for arg in (*a.posonlyargs, *a.args, *a.kwonlyargs)]
+
+
+def fixture_calls(node):
+    """The `pytest.fixture` decorators of a function, as (call or None, keywords)."""
+    found = []
+    for decorator in getattr(node, "decorator_list", []):
+        call = decorator if isinstance(decorator, ast.Call) else None
+        if ast.unparse(call.func if call else decorator).endswith("fixture"):
+            found.append({k.arg: k.value for k in call.keywords} if call else {})
+    return found
+
+
+def fixtures_in(body):
+    """The fixtures a module or class body defines, by the name tests use, and those used always.
+
+    A fixture's name is its `name=`, else its function's. An `autouse=True` fixture applies
+    to every test in its scope.
+    """
+    found, autouse = {}, []
+    for node in body:
+        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        for keywords in fixture_calls(node):
+            alias = keywords.get("name")
+            name = alias.value if isinstance(alias, ast.Constant) and isinstance(alias.value, str) else node.name
+            found[name] = node
+            used = keywords.get("autouse")
+            if isinstance(used, ast.Constant) and used.value is True:
+                autouse.append(name)
+    return found, autouse
+
+
+def used_fixtures(marks):
+    """The fixture names that `usefixtures` marks name, among decorators or `pytestmark` values."""
+    found = []
+    for mark in marks:
+        for call in mark.elts if isinstance(mark, (ast.List, ast.Tuple)) else [mark]:
+            if isinstance(call, ast.Call) and ast.unparse(call.func).endswith("usefixtures"):
+                found.extend(a.value for a in call.args if isinstance(a, ast.Constant) and isinstance(a.value, str))
+    return found
+
+
+def test_fixtures(tree, scope):
+    """The fixtures of this module that a test uses, by name, with the function of each.
+
+    That is each fixture it takes as an argument, names in `usefixtures` or gets by autouse,
+    from its classes or its module (a class's fixture hides the module's of the same name),
+    and each fixture those take in turn.
+    """
+    available, autouse = fixtures_in(tree.body)
+    marks = []
+    for node in scope:
+        if isinstance(node, ast.ClassDef):
+            inner, always = fixtures_in(node.body)
+            available = {**available, **inner}
+            autouse = autouse + always
+        marks.extend(getattr(node, "decorator_list", None) or ([] if hasattr(node, "body") else [node]))
+    wanted = [*argument_names(scope[-1]), *used_fixtures(marks), *autouse]
+    found = {}
+    while wanted:
+        name = wanted.pop()
+        if name in found or name not in available:
+            continue
+        found[name] = available[name]
+        wanted.extend(argument_names(available[name]))
+    return found
+
+
+def generated_cases(tree, defs):
+    """The cases a module-level `pytest_generate_tests` gives through `metafunc.parametrize`."""
+    found = {}
+    for node in tree.body:
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name == "pytest_generate_tests":
+            found.update(parametrized([n for n in ast.walk(node) if isinstance(n, ast.Call)], defs))
+    return found
+
+
 def parametrized(marks, defs):
     """The cases of every `parametrize` among marks: decorators, or a `pytestmark` value."""
     found = {}
@@ -925,17 +1007,34 @@ def table_changes(path, before, after):
             parts = (node.decorator_list + [n for n in node.body if isinstance(n, ast.Assign)]
                      if isinstance(node, ast.ClassDef) else [node])
             read |= {n.id for part in parts for n in ast.walk(part) if isinstance(n, ast.Name)}
+        # A fixture it uses is a name it reads, and so is pytest_generate_tests, which pytest
+        # calls for every test of the module.
+        old_fixtures, new_fixtures = test_fixtures(old_tree, old_scopes[test]), test_fixtures(new_tree, nodes)
+        read |= set(argument_names(nodes[-1])) | set(new_fixtures) | {"pytest_generate_tests"}
+        for node in new_fixtures.values():
+            read |= {n.id for n in ast.walk(node) if isinstance(n, ast.Name)}
         notes.extend(f"CHANGED {path}::{test} reads the changed {name}" for name in sorted(changed & read))
+        notes.extend(f"CHANGED {path}::{test} uses the changed fixture {name}"
+                     for name in sorted(old_fixtures.keys() | new_fixtures.keys())
+                     if name not in changed and (name not in old_fixtures or name not in new_fixtures
+                                                 or ast.dump(bare(old_fixtures[name]))
+                                                 != ast.dump(bare(new_fixtures[name]))))
         if unknown:
             notes.append(f"CHANGED {path}::{test} under a changed module-level statement")
 
-        def cases_of(scope, defs):
+        def cases_of(tree, scope, defs, fixtures):
             marks = []
             for node in scope:
                 marks.extend(getattr(node, "decorator_list", None) or ([] if hasattr(node, "body") else [node]))
-            return parametrized(marks, defs)
+            found = {**parametrized(marks, defs), **generated_cases(tree, defs)}
+            for node in fixtures.values():
+                for keywords in fixture_calls(node):
+                    if "params" in keywords:
+                        found.update(table(keywords["params"], defs, frozenset()))
+            return found
 
-        lost = cases_of(old_scopes[test], old_defs).keys() - cases_of(nodes, new_defs).keys()
+        lost = (cases_of(old_tree, old_scopes[test], old_defs, old_fixtures).keys()
+                - cases_of(new_tree, nodes, new_defs, new_fixtures).keys())
         notes.extend(f"REMOVED {path}::{test}[{case}]" for case in sorted(lost))
     return notes
 
@@ -1056,6 +1155,46 @@ def review(changes, planner=False, head=None, labels=(), packs=frozenset(), pins
                           f"reads it before it lands and then sets the label {label} for the head "
                           "commit. The planner label does not replace it, and a new push needs a new label.")
     return errors, notes
+
+
+def listed_plugins(local, root):
+    """The allowed pytest plugins (`name = value`): from the base revision in CI, else `local`.
+
+    In GitHub Actions the base is the first parent of GITHUB_SHA for a pull request (whose
+    GITHUB_SHA merges it into its base) and for a merge group (whose commit sits on its
+    base), and GITHUB_SHA itself otherwise, as for pull_request_target, whose GITHUB_SHA is
+    the base branch's own commit. A step can set no GITHUB_* variable, so nothing
+    a candidate runs earlier in the job can redirect it. The event file is not read for the
+    base: the job could rewrite it, and a pull request's `base.sha` is the base when the event
+    fired, older than the base GitHub merged onto. Replace refs and .git/info/grafts are
+    ignored, so no file in the checkout's .git can give a commit another parent. In GitHub Actions
+    without an event file this fails rather than trusting the checkout.
+    """
+    if os.environ.get("GITHUB_ACTIONS") != "true":
+        text = Path(local).read_text(encoding="utf-8")
+    else:
+        event, sha = os.environ.get("GITHUB_EVENT_PATH"), os.environ.get("GITHUB_SHA")
+        if not (event and sha):
+            raise SystemExit("ERROR GitHub Actions without GITHUB_EVENT_PATH and GITHUB_SHA: "
+                             "no base revision for the list of allowed pytest plugins")
+        env = dict(os.environ, GIT_NO_REPLACE_OBJECTS="1", GIT_GRAFT_FILE=os.devnull)
+
+        def run(*args, check=True):
+            return subprocess.run(["git", *args], cwd=root, env=env, capture_output=True, text=True, check=check)
+
+        merged = os.environ.get("GITHUB_EVENT_NAME") in {"pull_request", "merge_group"}
+        target = f"{sha}^1" if merged else sha
+        for attempt in range(3):
+            if not run("cat-file", "-e", f"{target}^{{commit}}", check=False).returncode:
+                break
+            if attempt:
+                time.sleep(10)
+            run("fetch", "--no-tags", "--depth=2", "origin", sha, check=False)
+        else:
+            raise SystemExit(f"ERROR the base {target} could not be fetched for the list of allowed pytest plugins")
+        base = run("rev-parse", "--verify", "--end-of-options", f"{target}^{{commit}}").stdout.strip()
+        text = run("show", f"{base}:scripts/pytest-plugins.txt").stdout
+    return {line.strip() for line in text.splitlines() if line.strip() and not line.lstrip().startswith("#")}
 
 
 def git(*args):

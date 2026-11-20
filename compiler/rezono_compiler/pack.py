@@ -29,9 +29,10 @@ CLASS = re.compile(r"[a-z][a-z0-9]*(-[a-z0-9]+)*")  # a pack's class (pack.yaml,
 # What a missing row means: closed, not true; open, unknown.
 WORLDS = ("closed", "open")
 BIGINT = (-(2**63), 2**63 - 1)
-# A sweep computes one epoch per grid value (docs/interaction.md, 1); v1 allows this many, and one sweep per pack.
+# A sweep computes one epoch per grid value (docs/interaction.md, 1); v1 allows this many, and at most four sweeps
+# per pack, so a publication run needs at most 256 evaluations (decisions/viewer-slip.md, "Several sweeps").
 MAX_GRID = 64
-MAX_SWEEPS = 1
+MAX_SWEEPS = 4
 # Explanation questions (docs/gui.md, "Questions as data"): what a question starts from, the shape of its answer,
 # what a trace step may say, and the messages std-explain gives every question.
 QUESTION_STARTS = ("present", "absent", "delta", "sweep")

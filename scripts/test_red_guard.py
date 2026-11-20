@@ -222,6 +222,38 @@ def table_form_cases():
     if errors or f"CHANGED {path}::test_a reads the changed rows" not in notes:
         raise AssertionError(f"a helper that returns a table: errors {errors}, notes {notes}")
     print("REPORTED: a test that calls a helper whose table changes")
+    # A fixture's params parametrize every test that takes it, directly or through another fixture.
+    fixture = (top + b"\x40pytest.fixture(params=['a', 'b'])\ndef letter(request):\n    return request.param\n\n\n"
+               b"\x40pytest.fixture\ndef word(letter):\n    return letter * 2\n\n\n"
+               b"def test_letter(letter):\n    assert letter\n\n\ndef test_word(word):\n    assert word\n")
+    errors, notes = review([Change(path, "M", fixture, fixture.replace(b"['a', 'b']", b"['a']"))], planner=True)
+    for test, name in (("test_letter", "letter"), ("test_word", "word")):
+        if (errors or f"REMOVED {path}::{test}['b']" not in notes
+                or f"CHANGED {path}::{test} reads the changed {name}" not in notes):
+            raise AssertionError(f"a case lost from fixture params: errors {errors}, notes {notes}")
+    print("REPORTED: a case lost from the params of a fixture a test takes, directly or not")
+    at = b"\x40pytest."
+    params = at + b"fixture(params=['a', 'b']"
+    forms = [
+        ("a fixture named with name=", top + params + b", name='letter')\ndef make_letter(request):\n"
+         b"    return request.param\n\n\ndef test_a(letter):\n    assert letter\n", "test_a"),
+        ("a fixture named in usefixtures", top + params + b")\ndef letter(request):\n    return request.param\n\n\n"
+         + at + b"mark.usefixtures('letter')\ndef test_a():\n    assert True\n", "test_a"),
+        ("an autouse fixture", top + params + b", autouse=True)\ndef letter(request):\n    return request.param\n\n\n"
+         b"def test_a():\n    assert True\n", "test_a"),
+        ("a fixture defined in the test class", top + b"class TestA:\n    " + params
+         + b")\n    def letter(self, request):\n        return request.param\n\n"
+         b"    def test_a(self, letter):\n        assert letter\n", "TestA::test_a"),
+        ("pytest_generate_tests", top + b"def pytest_generate_tests(metafunc):\n"
+         b"    metafunc.parametrize('letter', ['a', 'b'])\n\n\ndef test_a(letter):\n    assert letter\n", "test_a"),
+    ]
+    for label, before, test in forms:
+        after = before.replace(b"['a', 'b']", b"['a']")
+        errors, notes = review([Change(path, "M", before, after)], planner=True)
+        if errors or f"REMOVED {path}::{test}['b']" not in notes or not any(
+                n.startswith(f"CHANGED {path}::{test} ") for n in notes):
+            raise AssertionError(f"{label}: errors {errors}, notes {notes}")
+        print(f"REPORTED: a case lost through {label}")
     deleted = top + b"T = {'a': 1, 'b': 2}\n\n\n\x40pytest.mark.parametrize('x', T)\ndef test_a(x):\n    assert x\n"
     errors, notes = review([Change(path, "M", deleted, deleted.replace(b"\n\n\n@", b"\ndel T['b']\n\n\n@"))],
                            planner=True)
