@@ -1,5 +1,5 @@
 """A module without a header, with only `schema <module>`, and with every default written out lowers to the same
-LinkML schema (decisions/language-readable-rules.md, section 3, One lowering). The module forms are written by hand
+LinkML schema (decisions/language-readable-rules.md, section 1, One lowering). The module forms are written by hand
 from that decision; the expected header members are its table of defaults."""
 
 import json
@@ -31,7 +31,7 @@ class MissingHeaderDefaults(AssertionError):
     reason="extra: decisions/language-readable-rules.md: In compiler/rezono_compiler/rezono_metadata.py (header), "
            "lower the layer annotation as layer: <layer>, as a module without a schema line lowers it, so that "
            "a module without a header, with only `schema <module>`, and with every default written out lower "
-           "to the same schema. Read section 3, One lowering.",
+           "to the same schema. Read section 1, One lowering.",
 )
 def test_lower_readable_header(tmp_path):
     full = {"schema": "zone", "iri": DEFAULTS["id"], "imports": ["linkml:types"], "defaultRange": "Text",

@@ -1,5 +1,5 @@
 """A header line that writes its default gives W107, and the form keeps every member as written
-(decisions/language-readable-rules.md, section 3). The sources, spans and members are written from that decision."""
+(decisions/language-readable-rules.md, section 1). The sources, spans and members are written from that decision."""
 
 import json
 
@@ -25,7 +25,7 @@ class MissingHeaderHint(AssertionError):
     reason="extra: decisions/language-readable-rules.md: In rezono/src/module-header.ts or module-metadata.ts, give "
            "W107 with the hint \"leave it out\" at `import \"linkml:types\"` when it is the only import, at "
            "`default range Text` and at `annotation layer = ...`, without changing the form. Add W107 to "
-           "rezono/messages/en.json and nl.json if another test of that decision has not. Read section 3.",
+           "rezono/messages/en.json and nl.json if another test of that decision has not. Read section 1.",
 )
 def test_readable_header():
     short, full, two = read_modules(SHORT, FULL, TWO_IMPORTS)

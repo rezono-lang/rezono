@@ -1,5 +1,5 @@
 """A rule clause carries its sentence with `means` and its source with `@` (decisions/language-readable-rules.md,
-section 4). The members are written from that decision; the sources are in the printer's form, with one space
+section 2). The members are written from that decision; the sources are in the printer's form, with one space
 before `@` as for an exception line."""
 
 import json
@@ -25,7 +25,7 @@ class MissingRuleSentence(AssertionError):
            "`means \"TEXT\"` with an optional `@ source` after a rule clause, and `@ source` at the end of a "
            "clause's last line, into the members means and source of the rule declaration; print them back; "
            "refuse a means without a text, two means lines and two sources with R000. Admit the members in "
-           "rezono.module/3 in contracts/rezono-module.yaml. Read section 4, Reading.",
+           "rezono.module/3 in contracts/rezono-module.yaml. Read section 2, Reading.",
 )
 def test_rule_sentence():
     plain, both, source_only, sentence_only, *refused = read_modules(

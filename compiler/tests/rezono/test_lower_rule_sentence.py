@@ -1,5 +1,5 @@
 """A rule clause's sentence lowers to its message in the default language, and its source to the bundle's rule entry
-(decisions/language-readable-rules.md, section 4). The module text and the expected message line are written from
+(decisions/language-readable-rules.md, section 2). The module text and the expected message line are written from
 that decision; the counter-cases are the same rule without a sentence and a sentence that the message file repeats."""
 
 import json
@@ -63,7 +63,7 @@ class MissingRuleSentenceLowering(AssertionError):
     reason="extra: decisions/language-readable-rules.md: Lower the member means of a rule clause to the line "
            "`<message> = {{TEXT}}` in the messages of the default language and its member source to source in the "
            "bundle's rule entry, in compiler/rezono_compiler/rezono_module.py and the bundle writer; refuse a "
-           "means whose message key messages/<default_language>.mf2 also gives. Read section 4. Waits for "
+           "means whose message key messages/<default_language>.mf2 also gives. Read section 2. Waits for "
            "test_rule_sentence, which reads the members.",
 )
 def test_lower_rule_sentence(tmp_path):
