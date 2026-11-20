@@ -982,31 +982,11 @@ def inventory_path(directory: Path, folder: str) -> Path:
 PLUGIN_LIST = ROOT / "scripts/pytest-plugins.txt"
 
 
-def listed_plugins(local, root):
-    """The allowed pytest plugins (`name = value`): from the base revision in CI, else `local`.
-
-    In GitHub Actions the base is read from the event file: the pull request's base, the merge
-    group's base, else the commit itself. A step can set no GITHUB_* variable, so a candidate
-    script that runs earlier in the job cannot point the list elsewhere.
-    """
-    event = os.environ.get("GITHUB_EVENT_PATH")
-    if event:
-        with open(event, encoding="utf-8") as handle:
-            data = json.load(handle)
-        base = ((data.get("pull_request") or {}).get("base", {}).get("sha")
-                or (data.get("merge_group") or {}).get("base_sha") or os.environ.get("GITHUB_SHA"))
-        if not base:
-            raise SystemExit("ERROR no base revision for the list of allowed pytest plugins")
-        if subprocess.run(["git", "cat-file", "-e", f"{base}^{{commit}}"], cwd=root, capture_output=True).returncode:
-            subprocess.run(["git", "fetch", "--no-tags", "--depth=1", "origin", base], cwd=root, check=True)
-        text = subprocess.run(["git", "show", f"{base}:scripts/pytest-plugins.txt"], cwd=root,
-                              capture_output=True, text=True, check=True).stdout
-    else:
-        text = Path(local).read_text(encoding="utf-8")
-    return {line.strip() for line in text.splitlines() if line.strip() and not line.lstrip().startswith("#")}
-
-
 def allowed_plugins() -> set[str]:
+    # One reading of the list for this script and red_before.py, beside this file.
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from red_guard import listed_plugins
+
     return listed_plugins(PLUGIN_LIST, ROOT)
 
 

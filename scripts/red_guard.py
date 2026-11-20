@@ -28,11 +28,13 @@ from fnmatch import fnmatchcase
 import hashlib
 import io
 import json
-from pathlib import PurePosixPath
+import os
+from pathlib import Path, PurePosixPath
 import posixpath
 import re
 import subprocess
 import sys
+import time
 import tokenize
 import tomllib
 
@@ -1056,6 +1058,44 @@ def review(changes, planner=False, head=None, labels=(), packs=frozenset(), pins
                           f"reads it before it lands and then sets the label {label} for the head "
                           "commit. The planner label does not replace it, and a new push needs a new label.")
     return errors, notes
+
+
+def listed_plugins(local, root):
+    """The allowed pytest plugins (`name = value`): from the base revision in CI, else `local`.
+
+    In GitHub Actions the base is the first parent of GITHUB_SHA for a pull request (whose
+    GITHUB_SHA merges it into its base) and for a merge group (whose commit sits on its
+    base), and GITHUB_SHA itself otherwise. A step can set no GITHUB_* variable, so nothing
+    a candidate runs earlier in the job can redirect it. The event file is not read for the
+    base: the job could rewrite it, and a pull request's `base.sha` is the base when the event
+    fired, older than the base GitHub merged onto. Replace refs are ignored. In GitHub Actions
+    without an event file this fails rather than trusting the checkout.
+    """
+    if os.environ.get("GITHUB_ACTIONS") != "true":
+        text = Path(local).read_text(encoding="utf-8")
+    else:
+        event, sha = os.environ.get("GITHUB_EVENT_PATH"), os.environ.get("GITHUB_SHA")
+        if not (event and sha):
+            raise SystemExit("ERROR GitHub Actions without GITHUB_EVENT_PATH and GITHUB_SHA: "
+                             "no base revision for the list of allowed pytest plugins")
+        env = dict(os.environ, GIT_NO_REPLACE_OBJECTS="1")
+
+        def run(*args, check=True):
+            return subprocess.run(["git", *args], cwd=root, env=env, capture_output=True, text=True, check=check)
+
+        merged = os.environ.get("GITHUB_EVENT_NAME") in {"pull_request", "pull_request_target", "merge_group"}
+        target = f"{sha}^1" if merged else sha
+        for attempt in range(3):
+            if not run("cat-file", "-e", f"{target}^{{commit}}", check=False).returncode:
+                break
+            if attempt:
+                time.sleep(10)
+            run("fetch", "--no-tags", "--depth=2", "origin", sha, check=False)
+        else:
+            raise SystemExit(f"ERROR the base {target} could not be fetched for the list of allowed pytest plugins")
+        base = run("rev-parse", "--verify", "--end-of-options", f"{target}^{{commit}}").stdout.strip()
+        text = run("show", f"{base}:scripts/pytest-plugins.txt").stdout
+    return {line.strip() for line in text.splitlines() if line.strip() and not line.lstrip().startswith("#")}
 
 
 def git(*args):
