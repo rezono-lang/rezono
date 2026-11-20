@@ -23,13 +23,18 @@ export interface Table {
 }
 
 export function readTable(line: Logical, of: string, build: Build): Table | undefined {
+	const policy = line.read!.table as Table['table'];
+	if (build.version === '1' && policy === 'priority') {
+		build.removed(line, 'table priority', build.spans.get(line.read!), { id: 'hint.use_instead', args: ['table first'] });
+		return undefined;
+	}
 	const [head, ...rows] = line.block;
 	for (const child of line.block) build.leaf(child);
 	if (!head) return void build.refuse(line, 'a header under it: `| input | -> name |`');
 	const { inputs, output } = head.read as unknown as { inputs: Expr[]; output: { name: string } };
 	for (const child of rows) if ((child.read!.tests as unknown[]).length !== inputs.length) build.refuse(child, `${inputs.length} cells and a value`, child.end);
 	if (output.name !== of) build.later.push({ code: 'R001', span: build.spans.get(output)!, args: [output.name], suggest: [of] });
-	const decl: Table = { table: line.read!.table as Table['table'], inputs, output: output.name, rows: rows.map((child) => build.strip<TableRow>(child.read!)) };
+	const decl: Table = { table: policy, inputs, output: output.name, rows: rows.map((child) => build.strip<TableRow>(child.read!)) };
 	build.spans.set(decl, build.spans.get(line.read!)!);
 	return decl;
 }

@@ -292,7 +292,7 @@ PACK_READERS = ("admission", "checker", "compiler", "edge/plugins/connectors", "
 SHARED_READERS = {
     "examples/platform/proof_cases/role-publication-cases.ts": ("tools/repl", "tools/mcp"),
     "docs/compiler/pack.md": ("compiler",),
-    "docs/publication/l0.md": ("edge/plugins/connectors",),
+    "docs/publication/l0.md": ("compiler", "edge/plugins/connectors"),
     "docs/publication/cases/": ("compiler", "edge/plugins/connectors", "publication"),
     "docs/rezono/cases/": ("compiler", "rezono"),
     "docs/semantics/value-cases.yaml": ("compiler", "rezono"),
@@ -346,7 +346,7 @@ FULL_SELECTION_PATHS = (
     ".github/workflows/python-environment/", "blocked/",
     "scripts/check-pinned.py", "scripts/components.py", "scripts/fast_check.py",
     "scripts/install-souffle.sh", "scripts/loop-duration-profile.json", "scripts/pytest-plugins.txt",
-    "scripts/red_list.py",
+    "scripts/red_before.py", "scripts/red_guard.py", "scripts/red_list.py",
 )
 # What scripts/components.py itself reads while it runs one component's shards.
 JOB_INPUTS = {

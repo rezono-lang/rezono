@@ -54,6 +54,7 @@ from .evidence import PROTECTED
 from .check import _check_witness, _rows, shaped
 from .rules import load_rules
 from .snapshots import read_rows
+from .variant_access import check_variant_status_readers as check_variant_status_readers
 
 ACCESS = "may_read"
 READ_FULL = "may_read_full"

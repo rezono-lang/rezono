@@ -149,6 +149,34 @@ jobs:
             python scripts/fast_check.py "$task" --base "$TASK_BASE" | tee "$RUNNER_TEMP/fast.txt"
             echo "Fast check took $((SECONDS-start)) seconds and printed $(wc -l < "$RUNNER_TEMP/fast.txt") lines" | tee -a "$GITHUB_STEP_SUMMARY"
           done <<< "$assigned"
+      - name: Run added cluster tests on the base source
+        if: github.event_name == 'pull_request'
+        shell: bash
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          export REZONO_CLUSTER_KUBECONFIG="$KUBECONFIG"
+          policy="$RUNNER_TEMP/cluster-base-check"
+          mkdir -p "$policy"
+          if git cat-file -e "$BASE:loop/cluster/base_check.py" 2>/dev/null; then
+            git show "$BASE:loop/cluster/base_check.py" > "$policy/base_check.py"
+          elif [[ -f loop/cluster/base_check.py ]]; then
+            cp loop/cluster/base_check.py "$policy/base_check.py"
+          else
+            echo "loop/cluster/base_check.py is not yet present."
+            exit 0
+          fi
+          if ! git cat-file -e "$BASE:scripts/red_before.py" 2>/dev/null; then
+            echo "scripts/red_before.py is not on the base $BASE."
+            exit 0
+          fi
+          for name in red_before.py red_guard.py; do
+            git show "$BASE:scripts/$name" > "$policy/$name"
+          done
+          python3 -I "$policy/red_before.py" prepare "$BASE" "$HEAD" "$policy/selection.txt"
+          python "$policy/base_check.py" --root "$PWD" "$policy/selection.txt"
       - name: Remove the named cluster and verify cleanup
         if: always()
         shell: bash

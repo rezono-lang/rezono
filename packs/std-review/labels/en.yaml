@@ -38,6 +38,8 @@ review_dismissed: dismissed
 review_active: active
 review_current: current
 review_valid: valid
+review_lab_owner: owner in the lab phase
+review_self: review by an author
 valid_current_verdict: valid current verdict
 change_accepted: accepted
 change_rejected: rejected

@@ -33,7 +33,10 @@ EXPECTED = {
         "examples/test_feldera_rules.py::test_incremental_on_feldera_equals_batch[platform]",
         "examples/test_platform_incremental_proof.py::test_platform_incremental_delta_and_witnesses_match_batch",
     ],
-    "subsidy": ["examples/test_feldera_rules.py::test_incremental_on_feldera_equals_batch[subsidy]"],
+    "subsidy": [
+        "examples/test_feldera_rules.py::test_incremental_on_feldera_equals_batch[subsidy]",
+        "examples/test_calculation_engine_parity.py::test_feldera_calculations_match_duckdb_and_checker[subsidy]",
+    ],
 }
 
 
@@ -61,11 +64,10 @@ def evidence(tmp_path):
 
 @pytest.mark.xfail(strict=True, raises=AssertionError, reason=(
     "extra: compiler/ci/feldera_shards.py does not yet route "
-    "compiler/tests/test_boolean_rule_inputs.py::test_native_boolean_rule_inputs and "
     "compiler/tests/test_recorded_dates.py::test_independent_date_equality (compiler-bound shard) and "
-    "compiler/tests/test_ordered_rule_scalars_engines.py::test_feldera_orders_typed_values (compiler-rules shard). "
-    "Lift this mark in the pull request that routes the last of the three, with its selector in "
-    "compiler/ci/run_feldera_oracle.sh; the others leave it."))
+    "examples/test_calculation_engine_parity.py::test_feldera_calculations_match_duckdb_and_checker[subsidy] (subsidy shard). "
+    "Lift this mark in the pull request that routes the last of the two, with its selector in "
+    "compiler/ci/run_feldera_oracle.sh; the other leaves it."))
 @pytest.mark.parametrize("outcome", [None, "failure", "skipped", "error"])
 def test_merge_preserves_all_live_cases_and_outcomes(evidence, outcome):
     inputs, output = evidence
