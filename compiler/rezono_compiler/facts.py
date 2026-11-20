@@ -60,18 +60,34 @@ class LoadError(Diagnosed):
 
 def files(pack_dir: str | Path) -> list[Path]:
     """Legacy fact files followed by declared datasets, in path order within each group."""
+    return [path for path, _ in files_with_datasets(pack_dir)]
+
+
+def files_with_datasets(pack_dir: str | Path) -> list[tuple[Path, DatasetForm | None]]:
+    """Legacy fact files paired with None, followed by declared datasets paired with their decoded form."""
     pack_dir = Path(pack_dir)
     paths = sorted((pack_dir / "facts").glob("*.yaml"))
     for path in paths:
         if path.name.endswith(".sources.yaml") and not path.with_name(path.name.removesuffix(".sources.yaml") + ".yaml").is_file():
             raise LoadError(f"{path.name}: a source sidecar has no companion fact file")
-    return [p for p in paths if not p.name.endswith(".sources.yaml")] + _named_datasets(pack_dir)
+    legacy: list[tuple[Path, DatasetForm | None]] = [(p, None) for p in paths if not p.name.endswith(".sources.yaml")]
+    return legacy + [(p, dataset) for p, dataset in _named_dataset_forms(pack_dir)]
+
+
+def _named_dataset_forms(pack_dir: Path) -> list[tuple[Path, DatasetForm]]:
+    meta, modules = _module_entries(pack_dir)
+    rezono_module.warm_pack_modules(pack_dir, meta, modules, datasets_only=True)
+    found: list[tuple[Path, DatasetForm]] = []
+    for declared in modules:
+        dataset = _declared_dataset(pack_dir, meta, declared)
+        if dataset is not None:
+            found.append((pack_dir / declared.form, dataset))
+    found.sort(key=lambda item: item[0])
+    return found
 
 
 def _named_datasets(pack_dir: Path) -> list[Path]:
-    meta, modules = _module_entries(pack_dir)
-    return sorted(pack_dir / declared.form for declared in modules
-                  if _declared_dataset(pack_dir, meta, declared) is not None)
+    return [path for path, _ in _named_dataset_forms(pack_dir)]
 
 
 def _module_entries(pack_dir: Path) -> tuple[dict, list[rezono_module.Declared]]:
