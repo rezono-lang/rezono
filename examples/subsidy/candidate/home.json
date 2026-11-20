@@ -1,0 +1,1 @@
+{"format":"rezono.module/2","module":{"decls":[{"lines":["// The day on which the scheme is evaluated.",".decl scheme_evaluation_day(day: symbol)","scheme_evaluation_day(d) :- evaluation_day(d).","",".output scheme_evaluation_day"],"rules":"home"}],"pack":"subsidy","rezono":"0","use":[]},"spans":[{"at":"/decls/0","end":"33","line":"4","start":"29"}]}

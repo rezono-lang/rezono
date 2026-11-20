@@ -10,7 +10,7 @@ import re
 
 import yaml
 
-from . import modules, pack, rezono_module, rules_dl, spans, types
+from . import modules, pack, rezono_module, rules, rules_dl, spans, types
 from .diagnostics import Diagnostic
 
 Column = tuple[str, str, str]
@@ -95,6 +95,7 @@ class Schema:
         self.enums: dict[str, tuple[modules.Module, str]] = {}
         self.by_owner: dict[tuple[str, str], list[str]] = {}
         self.aliases: dict[tuple[str, str], list[modules.Module]] = {}
+        self.scalar_storages: dict[str, str] = {}
         for definition in definitions:
             for authored, category in names.declared[definition.id].items():
                 engine = names.name(definition.id, authored)
@@ -135,7 +136,12 @@ class Schema:
         owner = next((module for module in self.names.closures[definition.id]
                       if name in self.names.modules[module].sv.all_types(imports=False)), definition.id)
         module = self.names.modules[owner]
-        return f"{module.pack}.{name}", storage
+        resolved = f"{module.pack}.{name}"
+        self.scalar_storages[resolved] = storage
+        return resolved, storage
+
+    def is_text(self, value: str) -> bool:
+        return value == "Text" or self.scalar_storages.get(value) == "string"
 
     def storage(self, name: str, at: str) -> str:
         if name in self.enums:
@@ -336,6 +342,7 @@ def read_clause(schema: Schema, source: Source, at: str, decl: dict, signatures:
     calls: dict[str, str] = {}
     memberships: dict[str, str] = {}
     arguments: list[tuple[dict, str, str, bool]] = []
+    typed_calls: list[tuple[dict, str]] = []
     for index, (arg, (_, expected, _)) in enumerate(zip(head, signature.key, strict=True)):
         if "wildcard" in arg:
             raise Refusal("R042", "A rule head needs a value in each column", f"{at}/args/{index}")
@@ -346,6 +353,11 @@ def read_clause(schema: Schema, source: Source, at: str, decl: dict, signatures:
         if "call" in node:
             name, terms = node["call"]
             if name == "quotient":  # Its arithmetic and safety checks belong to the body checker.
+                continue
+            if name in rules.COMPARE_AS:
+                if len(terms) != 1:
+                    raise Refusal("R041", f"{name!r} takes 1 column, got {len(terms)}", pointer)
+                typed_calls.append((terms[0], f"{pointer}/call/1/0"))
                 continue
             target, expected = call_of(schema, source, name, signatures, pointer)
             if len(terms) != len(expected):
@@ -374,6 +386,8 @@ def read_clause(schema: Schema, source: Source, at: str, decl: dict, signatures:
     def value_type(node: dict, pointer: str) -> str | None:
         if "neg" in node:
             return value_type(node["neg"], f"{pointer}/neg")
+        if "call" in node and node["call"][0] in rules.COMPARE_AS and len(node["call"][1]) == 1:
+            return value_type(node["call"][1][0], f"{pointer}/call/1/0")
         if "path" not in node:
             return literal_type(schema, source, node["lit"], pointer) if "lit" in node else None
         name, *steps = node["path"]
@@ -400,6 +414,10 @@ def read_clause(schema: Schema, source: Source, at: str, decl: dict, signatures:
             actual = known.get(name)
             if actual is None or (name not in explicit and schema.assignable(expected, actual)):
                 known[name] = expected
+    for node, _ in typed_calls:
+        path = node.get("path", ())
+        if len(path) == 1 and path[0] not in known:
+            known[path[0]] = "Text"
 
     # Equality carries type information, without making either operand a positive fact binding.
     equalities = [(pointer, *node["cmp"][1:]) for pointer, node in body if node.get("cmp", [None])[0] == "="]
@@ -420,6 +438,10 @@ def read_clause(schema: Schema, source: Source, at: str, decl: dict, signatures:
             raise Refusal("R003", f"Expected {expected}, found {actual}", pointer)
         if is_head and "lit" in node and actual is None:
             raise Refusal("R049", "The rule head literal has no checked column representation", pointer)
+    for node, pointer in typed_calls:
+        actual = value_type(node, pointer)
+        if actual is not None and not schema.is_text(actual):
+            raise Refusal("R003", f"Expected Text, found {actual}", pointer)
 
     for pointer, node in body:
         if "cmp" in node:

@@ -21,6 +21,7 @@
 - [Publication](rezono/publication.md) specifies the checked artifacts and how to read them.
 - [Language coverage](rezono/language-coverage.md) tracks which specifications have an implemented path and executable checks.
 - [Native rule pack linking](rezono/native-rule-pack-link.md) defines how native rules link to typed declarations in an import closure.
+- [First-release language proposal (`rezono 1`)](rezono/first-release-proposal.md) is a proposal (not a specification or decision) exploring unified derivations and first-release scope.
 
 ## Conformance and maintenance
 

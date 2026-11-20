@@ -246,10 +246,15 @@ def read_closure(
 
     parts: dict[str, dict] = {}
     visible: dict[str, set[str]] = {}
+    visible_params: dict[str, set[str]] = {}
     for name, imported in imports.items():
         visible[name] = {name}.union(*(visible[dep] for dep in imported.imports))
         yaml_entries = [(f"calc/{f.name}", load_yaml(f) or {}) for f in sorted(Path(imported.dir, "calc").glob("*.yaml"))]
         calc_mods = rezono_calc.calc_modules(mods or (), name)
+        own_params: set[str] = set()
+        for m in calc_mods:
+            own_params.update(rezono_calc.module_parameters(m.form))
+        visible_params[name] = own_params.union(*(visible_params[dep] for dep in imported.imports))
         mod_entries: list[tuple[str, dict]] = []
         if calc_mods:
             rules_by_subject: dict[str, set[str]] = {}
@@ -270,9 +275,13 @@ def read_closure(
                     own_id, _ = rezono_calc.resolve_subject(pack, name, cls_name, renames)
                     rules_by_subject.setdefault(own_id, set()).update(rnames)
             mod_entries = [
-                (m.rel, rezono_calc.lower_module(pack, m, rules_by_subject, renames=renames, bare_leaves=bare_leaves))
+                (m.rel, rezono_calc.lower_module(
+                    pack, m, rules_by_subject, visible_params[name],
+                    renames=renames, bare_leaves=bare_leaves,
+                ))
                 for m in calc_mods
             ]
+            rezono_calc.check_parameter_sources(yaml_entries, mod_entries)
         doc = merge_docs(yaml_entries + mod_entries, name)
         if doc is not None:
             parts[name] = under(pack, doc, renames[name])
@@ -280,6 +289,9 @@ def read_closure(
     root_name = pack.meta["name"]
     yaml_entries = [(f"calc/{f.name}", load_yaml(f) or {}) for f in sorted(Path(pack_dir, "calc").glob("*.yaml"))]
     calc_mods = rezono_calc.calc_modules(mods or (), root_name)
+    root_params = set().union(*(visible_params[dep] for dep in visible_params))
+    for m in calc_mods:
+        root_params.update(rezono_calc.module_parameters(m.form))
     mod_entries = []
     if calc_mods:
         rules_by_subject = {}
@@ -290,9 +302,12 @@ def read_closure(
                 own_id, _ = rezono_calc.resolve_subject(pack, root_name, cls_name)
                 rules_by_subject.setdefault(own_id, set()).update(rnames)
         mod_entries = [
-            (m.rel, rezono_calc.lower_module(pack, m, rules_by_subject, bare_leaves=bare_leaves))
+            (m.rel, rezono_calc.lower_module(
+                pack, m, rules_by_subject, root_params, bare_leaves=bare_leaves,
+            ))
             for m in calc_mods
         ]
+        rezono_calc.check_parameter_sources(yaml_entries, mod_entries)
     own = merge_docs(yaml_entries + mod_entries)
     if not parts:
         return own, parts
