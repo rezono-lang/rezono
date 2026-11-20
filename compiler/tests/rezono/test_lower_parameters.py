@@ -32,13 +32,6 @@ def split(root):
     return scheme, parameters, values
 
 
-@pytest.mark.xfail(strict=True, raises=MissingCalculationLowering, reason=(
-    "M3: decisions/language-calculations.md: Lower param NAME: T from Kind.slot by nameSlot to the program "
-    "members parameters (kind.slot) and parameter_choice ({name: nameSlot}), and each leaf that names it to "
-    "{parameter: NAME}, in compiler/rezono_compiler/rezono_calc.py instead of the parameter refusal of "
-    "rezono_module.py; a module program merges with the calc/*.yaml files of the pack as another calc file "
-    "does. Refuse a second source as R050 two parameter sources. Waits for test_lower_calculation, which adds "
-    "rezono_calc.py."))
 def test_lower_parameters(tmp_path):
     expected = calc_ir(examples(tmp_path / "legacy") / SCHEME)
     assert expected["ir/calc.json"]["parameter_choice"]["name"] == "scheme_parameter__name"

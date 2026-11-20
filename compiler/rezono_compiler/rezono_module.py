@@ -559,6 +559,8 @@ def lower(pack_dir: Path, d: Declared, form: dict, pack: str, owners: dict[str, 
             rezono_extend.validate(decl, at, imported, refuse, extended_format=extended_format)
         elif "asOf" in decl and extended_format:
             rezono_calc.validate_as_of(decl, at, refuse)
+        elif "param" in decl and extended_format:
+            rezono_calc.validate_param(decl, at, refuse)
         elif "rules" in decl and form["format"] == IDENTIFIER_FORMAT:
             from .rezono_relational import valid_block
 
