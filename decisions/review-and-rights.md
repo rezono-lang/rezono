@@ -76,7 +76,7 @@ A kind without a policy fact has `none`. The status of a calculation, the freshn
 
 ## 10. The lab phase
 
-The phase is a fact, `review_phase`, with the value `lab` or `strict` and the owner's subject. Without a phase fact the phase is `strict`. In the lab phase there is one reviewer: the owner may accept their own work, so `review_self` does not fire when the author and the reviewer are both the owner. Authority and read-to-judge still hold for the owner. In the lab phase a pack uses `none` or `mark`, never `require`: `require_in_lab(policy)` is an invariant. Otherwise the self-review check would block every review there is. Moving to `strict` is a decision of the owner, recorded as a change to the phase fact; nothing switches it by implication.
+The phase is a fact, `review_phase`, with the value `lab` or `strict` and the owner's subject. Without a phase fact the phase is `strict`. In the lab phase there is one reviewer: the owner may accept their own work, so `review_self` does not fire when the author and the reviewer are both the owner. Authority and read-to-judge still hold for the owner. In the lab phase a pack uses `none` or `mark`, never `require`: `require_in_lab(policy)` is an invariant. Otherwise the self-review check would block every review there is. Moving to `strict` is a decision of the owner, recorded as a change to the phase fact; nothing switches it by implication. Exactly one phase holds: two phase facts with different phases are a blocking invariant, `review_phase_ambiguous(phase_fact)`, so no check can read the lab exception beside a `strict` fact.
 
 ## The standard pack `std-review`
 
@@ -98,7 +98,7 @@ The derived relations:
 - `review_active(review)`: not dismissed. `review_current(review)`: active, and both hashes equal those of its change.
 - `review_valid(review)`: active, and none of `review_self`, `review_unauthorized` and `review_blind` holds for it.
 - `change_accepted(change)`: a valid current acceptance and no valid current rejection. `change_rejected(change)`: the reverse. `change_stale(change)`: neither, and a valid acceptance of the change about another pair exists. `change_proposed(change)`: none of the three. `review_due(change)`: proposed or stale.
-- The invariants `review_self`, `review_unauthorized`, `review_blind`, `review_conflict`, `unreviewed_required` and `require_in_lab`, and the derived `unreviewed_marked`.
+- The invariants `review_self`, `review_unauthorized`, `review_blind`, `review_conflict`, `unreviewed_required`, `require_in_lab` and `review_phase_ambiguous`, and the derived `unreviewed_marked`.
 
 During a conflict there is no extra state: the change is neither accepted nor rejected, so it is `proposed` or `stale` and stays due for review.
 
@@ -113,7 +113,7 @@ During a conflict there is no extra state: the change is neither accepted nor re
 The cases about assessment and rights are red tests now, with the mark `extra:` and this decision in their reason:
 
 - `compiler/tests/test_std_access.py::test_standard_access_declares_the_four_rights`: the declarations of section 1.
-- `compiler/tests/test_std_review.py`, one test per task: the review states (no review, accepted, rejected with a reason, a new content, a new support, an unrelated change, a review of another change, a re-review); `review_self` (four eyes, the owner in the lab phase, a non-owner in the lab phase, two people with one role, a beneficiary); `review_unauthorized` (a grant revoked later, a grant that starts later, an exclusive last day, a grant in the change itself, a grant from a change that is proposed, accepted on founding grants, reviewed before that acceptance or stale, two changes that grant each other's reviewer, a typed right, a role that is claimed but not held, a role without the review capability); `review_blind`; `review_conflict` with dismissal; and the publication policy with the lab phase.
+- `compiler/tests/test_std_review.py`, one test per task: the review states (no review, accepted, rejected with a reason, a new content, a new support, an unrelated change, a review of another change, a re-review); `review_self` (four eyes, the owner in the lab phase, a non-owner in the lab phase, two people with one role, a beneficiary); `review_unauthorized` (a grant revoked later, a grant that starts later, an exclusive last day, a grant in the change itself, a grant from a change that is proposed, accepted on founding grants, reviewed before that acceptance or stale, two changes that grant each other's reviewer, a typed right, a role that is claimed but not held, a role without the review capability); `review_blind`; `review_conflict` with dismissal; the publication policy with the lab phase; and an ambiguous phase.
 
 The other cases are not red tests now:
 

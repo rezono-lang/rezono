@@ -363,6 +363,90 @@ test('a suppose line changes the rows for the question only', async () => {
 	assert.throws(() => suppose(world, check('- host-b.clusters', fixture), fixture), /inverse slot/);
 });
 
+test('suppose lines: states on many-valued slots and canonical Integer keys', async () => {
+	const keyed = schemaWith((s) => {
+		s.kinds.Host.slots.host_tags = { type: 'Text', card: '*', states: ['known', 'unknown'] };
+		s.kinds.Ticket = {
+			world: 'closed',
+			id: { type: 'Integer' },
+			slots: {
+				title: { type: 'Text', card: '1', states: ['known'] },
+				labels: { type: 'Text', card: '*', states: ['known', 'unknown'] },
+			},
+		};
+	});
+	const base = load(keyed, [
+		{ $kind: 'Host', $id: 'host-a', host_tags: ['ops'] },
+		{ $kind: 'Ticket', $id: '7', title: 'open', labels: ['ops'] },
+	]);
+	// Setting a state on a many-valued slot makes that slot undecided on the row, in both `set` and `insert_row`.
+	const viaSet = suppose(base, check('+ host-a.host_tags = unknown not_collected', keyed), keyed);
+	const setAnswer = await ask('ask Host where host_tags.any(it = "ops")', viaSet, keyed);
+	assert.deepEqual(
+		setAnswer.undecided.map((u) => [u.$id, u.state, u.reason, u.cause_relation, u.cause_key]),
+		[['host-a', 'unknown', 'not_collected', 'host__host_tags', '["host-a"]']],
+	);
+	const viaInsert = suppose(base, check('+ Ticket 8 {title = "next", labels = unknown not_collected}', keyed), keyed);
+	const insertAnswer = await ask('ask Ticket where labels.any(it = "ops")', viaInsert, keyed);
+	assert.deepEqual(insertAnswer.rows.map((r) => r.$id), ['7']);
+	assert.deepEqual(
+		insertAnswer.undecided.map((u) => [u.$id, u.state, u.reason, u.cause_relation, u.cause_key]),
+		[['8', 'unknown', 'not_collected', 'ticket__labels', '["8"]']],
+	);
+	// Integer keys are canonicalized in suppose: retracting `007` removes `7`, and an already-present `7` blocks `007`.
+	const retracted = suppose(base, check('- Ticket 007', keyed), keyed);
+	assert.deepEqual((await ask('ask Ticket where true', retracted, keyed)).rows, []);
+	const crafted = check('+ Ticket 8 {title = "dup"}', keyed);
+	if (crafted.tree && 'insert_row' in crafted.tree) crafted.tree.insert_row.key = '007';
+	assert.throws(() => suppose(base, crafted, keyed), /Ticket 7 already exists/);
+});
+
+test('suppose lines: multi-hop Integer alias keys validate and canonicalize cleanly', async () => {
+	const keyed = schemaWith((s) => {
+		s.types = {
+			...(s.types ?? {}),
+			TicketNo: { of: 'Integer' },
+			SubTicketNo: { of: 'TicketNo' },
+			LoopA: { of: 'LoopB' },
+			LoopB: { of: 'LoopA' },
+		};
+		s.kinds.Ticket = {
+			world: 'closed',
+			id: { type: 'SubTicketNo' },
+			slots: {
+				title: { type: 'Text', card: '1', states: ['known'] },
+			},
+		};
+		s.kinds.LoopKind = {
+			world: 'closed',
+			id: { type: 'LoopA' },
+			slots: {},
+		};
+	});
+	assert.deepEqual(
+		check('+ Ticket 007 {title = "bad"}', keyed).diagnostics.filter(isError).map((d) => d.code),
+		['R012'],
+	);
+	assert.deepEqual(
+		check('+ Ticket abc {title = "bad"}', keyed).diagnostics.filter(isError).map((d) => d.code),
+		['R012'],
+	);
+	assert.deepEqual(check('+ Ticket 8 {title = "ok"}', keyed).diagnostics.filter(isError), []);
+	assert.deepEqual(check('+ LoopKind k1 {}', keyed).diagnostics.filter(isError), []);
+
+	const base = load(keyed, [
+		{ $kind: 'Ticket', $id: '7', title: 'open' },
+		{ $kind: 'LoopKind', $id: 'k1' },
+	]);
+	const retracted = suppose(base, check('- Ticket 007', keyed), keyed);
+	assert.deepEqual((await ask('ask Ticket where true', retracted, keyed)).rows, []);
+	const crafted = check('+ Ticket 8 {title = "dup"}', keyed);
+	if (crafted.tree && 'insert_row' in crafted.tree) crafted.tree.insert_row.key = '007';
+	assert.throws(() => suppose(base, crafted, keyed), /Ticket 7 already exists/);
+	const loopRetracted = suppose(base, check('- LoopKind k1', keyed), keyed);
+	assert.deepEqual((await ask('ask LoopKind where true', loopRetracted, keyed)).rows, []);
+});
+
 // ---- the answer as a dataset ----
 
 test('an answer is Row JSON of its output schema: values in their normal form, states with their reason', async () => {

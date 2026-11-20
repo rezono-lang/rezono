@@ -9,10 +9,6 @@ DIGEST = "0123456789abcdef" * 4
 IGNITION = '{"ignition": {"version": "3.4.0"},\n "passwd": {}}\n'
 
 
-@pytest.mark.xfail(strict=True, reason=(
-    "M4: decisions/run-price-enforcement.md: Read the section Installation. Implement body(operating_system, image_url, "
-    "image_sha256, ignition, hostname) in run/ovh_reinstall.py."
-))
 def test_ovh_reinstall():
     body = implementation("ovh_reinstall.py", "body")
 
@@ -40,3 +36,24 @@ def test_ovh_reinstall():
     ]:
         with pytest.raises(ValueError):
             body(*args)
+
+
+def test_ovh_reinstall_rejects_duplicate_keys_and_malformed_image_url():
+    body = implementation("ovh_reinstall.py", "body")
+
+    for bad_ignition in [
+        '{"ignition": {"version": "3.4.0"}, "ignition": {"version": "3.3.0"}}',
+        '{"ignition": {"version": "3.4.0", "version": "3.3.0"}}',
+    ]:
+        with pytest.raises(ValueError):
+            body("observed-template", IMAGE, DIGEST, bad_ignition, "m-a")
+
+    for bad_url in [
+        "https://:443/flatcar.img",
+        "https://user:pass@images.example.org/flatcar.img",
+        "https://user@images.example.org/flatcar.img",
+        "https://:pass@images.example.org/flatcar.img",
+        "https://@images.example.org/flatcar.img",
+    ]:
+        with pytest.raises(ValueError):
+            body("observed-template", bad_url, DIGEST, IGNITION, "m-a")

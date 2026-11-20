@@ -1,0 +1,86 @@
+// Function dependency gaps: missing solutions, missing placements, and cluster-loss continuity checks.
+
+.decl withdrawn_cluster(cluster: symbol)
+withdrawn_cluster(c) :- cluster_withdrawal__cluster(_, c).
+
+.decl cluster_domain(cluster: symbol, domain: symbol)
+cluster_domain(c, d) :- failure_domain_membership__cluster(m, c), failure_domain_membership__domain(m, d).
+
+.decl has_domain(cluster: symbol)
+has_domain(c) :- cluster_domain(c, _).
+
+.decl function_covered(function: symbol)
+function_covered(f) :- function_inventory_receipt__function(_, f).
+
+.decl provider_placed(provider: symbol)
+provider_placed(p) :- cluster_service_placement(p, _).
+
+.decl provider_withdrawn_placement(provider: symbol, cluster: symbol)
+provider_withdrawn_placement(p, c) :- cluster_service_placement(p, c), withdrawn_cluster(c).
+
+.decl provider_affected(provider: symbol)
+provider_affected(p) :- provider_withdrawn_placement(p, _).
+
+.decl surviving_placement(provider: symbol, cluster: symbol)
+surviving_placement(p, c) :- cluster_service_placement(p, c), !withdrawn_cluster(c).
+
+.decl shares_withdrawn_domain(provider: symbol, cluster: symbol)
+shares_withdrawn_domain(p, alt) :-
+    surviving_placement(p, alt), cluster_domain(alt, d),
+    provider_withdrawn_placement(p, w), cluster_domain(w, d).
+
+.decl missing_pair_domain(provider: symbol, cluster: symbol)
+missing_pair_domain(p, alt) :- surviving_placement(p, alt), !has_domain(alt).
+missing_pair_domain(p, alt) :- surviving_placement(p, alt), provider_withdrawn_placement(p, w), !has_domain(w).
+
+.decl independent_placement(provider: symbol, cluster: symbol)
+independent_placement(p, alt) :-
+    surviving_placement(p, alt),
+    has_domain(alt),
+    provider_affected(p),
+    !shares_withdrawn_domain(p, alt),
+    !missing_pair_domain(p, alt).
+
+.decl has_independent_placement(provider: symbol)
+has_independent_placement(p) :- independent_placement(p, _).
+
+.decl provider_domain_unknown(provider: symbol)
+provider_domain_unknown(p) :- missing_pair_domain(p, _).
+
+.decl dependency_gap(consumer: symbol, function: symbol, reason: symbol)
+dependency_gap(consumer, function, "no-solution") :-
+    unmet_need(consumer, function),
+    function_covered(function).
+dependency_gap(consumer, function, "no-placement") :-
+    needs(consumer, provider, function),
+    !provider_placed(provider),
+    function_covered(function).
+dependency_gap(consumer, function, "no-independent-placement") :-
+    needs(consumer, provider, function),
+    provider_affected(provider),
+    !has_independent_placement(provider),
+    !provider_domain_unknown(provider),
+    function_covered(function).
+
+.decl dependency_gap_unknown(consumer: symbol, function: symbol, reason: symbol)
+dependency_gap_unknown(consumer, function, "coverage-missing") :-
+    unmet_need(consumer, function),
+    !function_covered(function).
+dependency_gap_unknown(consumer, function, "coverage-missing") :-
+    needs(consumer, provider, function),
+    !provider_placed(provider),
+    !function_covered(function).
+dependency_gap_unknown(consumer, function, "coverage-missing") :-
+    needs(consumer, provider, function),
+    provider_affected(provider),
+    !has_independent_placement(provider),
+    !function_covered(function).
+dependency_gap_unknown(consumer, function, "domain-not-recorded") :-
+    needs(consumer, provider, function),
+    provider_affected(provider),
+    !has_independent_placement(provider),
+    provider_domain_unknown(provider),
+    function_covered(function).
+
+.output dependency_gap
+.output dependency_gap_unknown

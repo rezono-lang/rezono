@@ -33,12 +33,6 @@ ADAPTER_KEYS = {
 }
 
 
-@pytest.mark.xfail(strict=True, raises=AdapterKeyDecidesDeliveryNumber, reason=(
-    "M2: decisions/ordered-rule-scalars.md: Waits for examples/platform/test_global_request_order.py"
-    "--test_adapter_rank_keys_do_not_decide_the_global_request_order. Then number deliveries in "
-    "examples/platform/rules/tenant_delivery_number.dl on the source submission instant and the service within the "
-    "tenant (decisions/platform-delivery-inventory.md), not on the adapter keys "
-    "tenant_service_request__submitted_at_key and tenant_service_request__service_key."))
 def test_delivery_numbers_ignore_adapter_rank_keys(tmp_path):
     from rezono_compiler import pack
     from request_preview import preview_inputs, relation_rows
@@ -72,3 +66,26 @@ def test_delivery_numbers_ignore_adapter_rank_keys(tmp_path):
             changed[case] = numbers
     if changed:
         raise AdapterKeyDecidesDeliveryNumber(f"adapter keys changed the delivery numbers: {changed}")
+
+
+def test_duplicate_service_requests_do_not_self_precede(tmp_path):
+    from rezono_compiler import pack
+    from request_preview import preview_inputs, relation_rows
+    from request_preview_case import ROOT
+
+    teams, catalog = copy_requests(tmp_path)
+    model = pack.read(ROOT)
+    inputs = preview_inputs(model, ROOT, teams, catalog)
+    dup_id = "elm/ledger#resubmitted"
+    mutated = {
+        **inputs,
+        "tenant_service_request": [*inputs["tenant_service_request"], (dup_id,)],
+        "tenant_service_request__tenant": [*inputs["tenant_service_request__tenant"], (dup_id, "elm")],
+        "tenant_service_request__service": [*inputs["tenant_service_request__service"], (dup_id, "ledger")],
+        "tenant_service_request__submitted_at": [
+            *inputs["tenant_service_request__submitted_at"],
+            (dup_id, "2026-01-02T00:00:00Z"),
+        ],
+    }
+    numbers = relation_rows(model, mutated, "tenant_delivery_number")
+    assert numbers == [("elm", "ledger", 1), ("reed", "studio", 1)]

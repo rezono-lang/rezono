@@ -254,12 +254,6 @@ class MissingNoticeMismatch(AssertionError):
 MISMATCH = "capacity_notice_mismatch"
 
 
-@pytest.mark.xfail(strict=True, raises=MissingNoticeMismatch, reason=(
-    "extra: decisions/platform-tenant-proof-boundary.md: Derive "
-    "capacity_notice_mismatch(notice, period, issued_free, issued_used, free, used) in "
-    "examples/platform/rules/tenant_capacity.dl when an issued capacity notice states other amounts than "
-    "platform_capacity_basis for its period. It belongs to the complete platform publication only; the tenant "
-    "keeps reading the issued notice."))
 def test_complete_publication_reports_a_notice_that_differs_from_the_basis(tmp_path):
     model = pack.read(ROOT)
     if MISMATCH not in rules.load(model.rules).derived():
