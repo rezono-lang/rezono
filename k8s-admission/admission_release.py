@@ -9,11 +9,23 @@ from pathlib import Path
 
 import yaml
 from rezono_checker.snapshots import read_rows
+from rezono_compiler import rules
 from rezono_publisher.views import key_of
 
+from admission_translator import translate
 from bindings import MANAGED_NAMESPACE_LABEL, RULES, render_binding
 from parameter_reader import read_parameters
-from policy_renderer import render_policy
+
+_TRANSLATOR_DIR = Path(__file__).with_name("fixtures") / "translator"
+
+
+def _render_translated_policy(*, rule: str, digest: str) -> dict:
+    if rule not in RULES:
+        raise ValueError(f"Unsupported admission rule: {rule}")
+    program_doc = yaml.safe_load((_TRANSLATOR_DIR / f"{rule}.rules.yaml").read_text(encoding="utf-8"))
+    binding = yaml.safe_load((_TRANSLATOR_DIR / f"{rule}.binding.yaml").read_text(encoding="utf-8"))
+    program = rules.load(rules.with_strata(program_doc), require_witness=False)
+    return translate(program, binding, digest)
 
 
 def _checked_rows(store, manifest_key: str):
@@ -99,6 +111,6 @@ def render_release(namespaces: Iterable[str], publications: Iterable[dict], *, s
     } for namespace in sorted(managed))
     resources.extend(by_namespace[namespace] for namespace in sorted(by_namespace))
     for rule in sorted(RULES):
-        resources.append(render_policy(rule=rule, digest=digest))
+        resources.append(_render_translated_policy(rule=rule, digest=digest))
         resources.append(render_binding(rule=rule, digest=digest, parameter_name=name))
     return resources
