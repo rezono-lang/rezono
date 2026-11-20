@@ -48,7 +48,7 @@ function formatOf(module: Module): ModuleForm['format'] {
 	if (module.decls.some(decl => 'step' in decl || hasIntermediateInvariant(decl))) return SAFE_STEP_MODULE_FORMAT;
 	if (module.decls.some(decl => 'rule' in decl)) return NATIVE_RULE_MODULE_FORMAT;
 	const extended = module.schema !== undefined || module.decls.some(decl => {
-		if ('dataset' in decl || 'rules' in decl || ('source' in decl && 'fields' in decl)) return true;
+		if ('dataset' in decl || 'rules' in decl || 'decide' in decl || ('source' in decl && 'fields' in decl)) return true;
 		if ('kind' in decl) {
 			if (decl.parent !== undefined) return true;
 			return decl.abstract || decl.embedded || decl.relationship || decl.keys?.length || decl.deprecated !== undefined || hasMetadata(decl)

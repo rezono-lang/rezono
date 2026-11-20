@@ -331,7 +331,9 @@ def _pending_authored(pack_dir: Path, meta: dict, decls: Iterable[Declared],
         if module_body(submitted, fmt) is None:
             continue
         if datasets_only:
-            plain = module_body(submitted, FORMAT) or module_body(submitted, REZONO_1_FORMAT)
+            plain = (module_body(submitted, FORMAT)
+                     or module_body(submitted, DATASET_FORMAT)
+                     or module_body(submitted, REZONO_1_FORMAT))
             if plain is not None and fact_tables_only(plain):
                 if form_only_source(mod_path, submitted):
                     continue
@@ -438,7 +440,7 @@ def place_pointers(value: object, at: str = "", member: str = "", *, legacy_meta
             elif member == "memberMetadata":
                 if isinstance(child, dict):
                     yield pointer
-            elif key not in ("annotations", "prefixes"):
+            elif key not in ("annotations", "prefixes", "fields"):
                 yield from place_pointers(child, pointer, key)
     elif isinstance(value, list):
         for i, item in enumerate(value):
@@ -513,17 +515,32 @@ def dataset_only(form: dict) -> dict:
     return form | {"module": module | {"decls": module["decls"][-1:]}, "spans": spans}
 
 
+def _is_fact_table(decl: object) -> bool:
+    return isinstance(decl, dict) and isinstance(decl.get("fact"), str) and "columns" in decl and "rows" in decl
+
+
+def _is_decide_decl(decl: object) -> bool:
+    return (isinstance(decl, dict) and isinstance(decl.get("decide"), str)
+            and isinstance(decl.get("by"), str) and isinstance(decl.get("on"), str)
+            and isinstance(decl.get("set"), list))
+
+
+def _is_source_decl(decl: object) -> bool:
+    return isinstance(decl, dict) and decl.keys() == {"source", "fields"}
+
+
 def fact_tables_only(module: dict) -> bool:
-    """A module whose declarations are all fact tables (§5.3): the form of a base fact file."""
+    """A module whose declarations are only fact tables, decide blocks, and their sources (§5.3)."""
     declarations = module["decls"]
-    return bool(declarations) and all(
-        isinstance(decl, dict) and isinstance(decl.get("fact"), str) and "columns" in decl and "rows" in decl
-        for decl in declarations)
+    return (bool(declarations)
+            and any(_is_fact_table(decl) or _is_decide_decl(decl) for decl in declarations)
+            and all(_is_fact_table(decl) or _is_decide_decl(decl) or _is_source_decl(decl)
+                    for decl in declarations))
 
 
 def is_dataset_form(path: Path, source: Path | None = None) -> bool:
     """Dispatch only recognized dataset forms; leave other documents to ordinary schema validation. With its
-    source, an authored module of fact tables is one too; a form-only module is left to the refusal."""
+    source, an authored module of fact tables or decide blocks is one too; a form-only module is left to the refusal."""
     try:
         doc = json.loads(path.read_bytes())
     except (OSError, ValueError):
@@ -532,7 +549,7 @@ def is_dataset_form(path: Path, source: Path | None = None) -> bool:
         module = module_body(doc, fmt)
         if module is not None and named_dataset(module) is not None:
             return True
-    for fmt in (FORMAT, REZONO_1_FORMAT):
+    for fmt in (FORMAT, DATASET_FORMAT, REZONO_1_FORMAT):
         module = module_body(doc, fmt)
         if (source is not None and module is not None and fact_tables_only(module)
                 and not form_only_source(source, doc)):
@@ -903,6 +920,8 @@ def lower(pack_dir: Path, d: Declared, form: dict, pack: str, owners: dict[str, 
                 refuse(at, "a fact table is not lowered yet", "§5.3")
             else:
                 refuse(at, "a fact row is not lowered (no ticket yet)")
+        elif "decide" in decl:
+            refuse(at, "a decide block is not lowered in a schema module", "§5.3")
         elif "unit" in decl:
             if unit := rezono_unit.lower(decl, at, refuse):
                 aliases[decl["unit"]] = unit

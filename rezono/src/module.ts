@@ -50,6 +50,7 @@ import { versionGaps, versionReplacements } from './module-version.ts';
 import { inOrder, points, readRule, semantics, torn, tornAt, type Diagnostic, type Span } from './parse.ts';
 
 export type { Decl } from './module-components.ts';
+export type { DecideAssign, DecideDecl } from './module-decide.ts';
 export type { Deprecation } from './module-deprecation.ts';
 export type { DerivedDecl } from './module-derived.ts';
 export type { FactRow, FactTable } from './module-facts.ts';

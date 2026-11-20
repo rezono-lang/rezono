@@ -213,15 +213,6 @@ def test_a_synthetic_source_is_an_origin(tmp_path, capsys):
         raise MissingSyntheticOrigin("\n".join(problems))
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=MissingDecideOrigin,
-    reason="M3: decisions/fact-origin-required.md: Read and lower `decide \"<title>\" by <decider> on <date>` blocks "
-           "(docs/rezono/v0.md section 5 and the grammar's `decide`) in a rezono 0 module, and read the values a block "
-           "sets as having an origin: no W113 at the block's lines, while an uncited fact table row of the same "
-           "record still warns at its own line. Read sections 1 and 4. Depends on "
-           "compiler/tests/test_fact_origins.py--test_rezono_0_warns_on_a_fact_row_without_origin.",
-)
 def test_a_decide_block_is_an_origin(tmp_path, capsys):
     directory = make_pack(tmp_path, "decide", {})
     add_module(directory, "sample", DECIDE, None)
