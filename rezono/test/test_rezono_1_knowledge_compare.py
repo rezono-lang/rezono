@@ -51,14 +51,6 @@ class MissingKnowledgeDateComparison(AssertionError):
     """Two-knowledge-date comparison did not produce a rezono.turns/1 diff naming the turned rows and cause."""
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=MissingKnowledgeDateComparison,
-    reason="M3: decisions/language-rezono-1.md: Waits for rezono/test/test_rezono_1_version_switch.py. "
-           "Implement two-knowledge-date comparison (`compareAsKnown` in rezono/src/compare-knowledge.ts) reusing the "
-           "rezono.turns/1 shape so comparing an `ask` at two `as known` dates returns changed rows (before/after "
-           "values and states) and the amended rule or parameter version causing each turn. Read section 1.",
-)
 def test_rezono_1_two_knowledge_date_comparison():
     result = subprocess.run(
         ["node", "--input-type=module", "-e", PROBE, VERSIONED_MODULE],
