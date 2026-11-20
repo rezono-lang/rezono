@@ -29,8 +29,8 @@ decision:
     title: Place platform services on clusters matching their role and zone
     subject: placement-core
     decider: [platform-board]
-    decided_on: "2026-11-01"
-    valid_from: "2026-11-01"
+    decided_on: '2026-11-01'
+    valid_from: '2026-11-01'
     valid_from_day: 20261101
     state: in_force
     rationale: Each cluster role maps to one zone and hosts only the services assigned to that role.
@@ -38,8 +38,8 @@ decision:
     title: Enforce default-deny cross-zone boundaries and allow only declared service flows
     subject: zone-policy-matrix
     decider: [platform-board, security-review]
-    decided_on: "2026-11-01"
-    valid_from: "2026-11-01"
+    decided_on: '2026-11-01'
+    valid_from: '2026-11-01'
     valid_from_day: 20261101
     state: in_force
     rationale: Cross-zone traffic requires a derived service flow and an explicit boundary allowance.
@@ -47,8 +47,8 @@ decision:
     title: Admit tenant requests only within verified pool capacity and tenant quota
     subject: tenant-capacity-admission
     decider: [platform-board]
-    decided_on: "2026-11-05"
-    valid_from: "2026-11-05"
+    decided_on: '2026-11-05'
+    valid_from: '2026-11-05'
     valid_from_day: 20261105
     state: in_force
     rationale: Admission checks request sizes against available pool headroom and tenant limits.
@@ -56,8 +56,8 @@ decision:
     title: Allocate shared monthly platform cost proportionally by observed core-days
     subject: tenant-shared-cost
     decider: [platform-board]
-    decided_on: "2026-11-05"
-    valid_from: "2026-11-05"
+    decided_on: '2026-11-05'
+    valid_from: '2026-11-05'
     valid_from_day: 20261105
     state: in_force
     rationale: Tenant cost shares follow measured core-day usage over fully covered periods.
@@ -65,8 +65,8 @@ decision:
     title: Require operator review for production tenant requests crossing shared boundaries
     subject: tenant-delivery-review
     decider: [security-review]
-    decided_on: "2026-11-05"
-    valid_from: "2026-11-05"
+    decided_on: '2026-11-05'
+    valid_from: '2026-11-05'
     valid_from_day: 20261105
     state: in_force
     rationale: Shared isolation boundaries require explicit operator judgement before delivery.
@@ -74,8 +74,8 @@ decision:
     title: Keep pinned releases within vendor support windows or backed by a supported successor
     subject: product-lifecycle-stance
     decider: [platform-board]
-    decided_on: "2026-11-10"
-    valid_from: "2026-11-10"
+    decided_on: '2026-11-10'
+    valid_from: '2026-11-10'
     valid_from_day: 20261110
     state: in_force
     rationale: Supported release series and verified handoffs prevent unmaintained runtime dependencies.
@@ -83,8 +83,8 @@ decision:
     title: Require verified fresh backups and allow isolated recovery readback while management is offline
     subject: backup-and-recovery-policy
     decider: [platform-board, operations-lead]
-    decided_on: "2026-11-12"
-    valid_from: "2026-11-12"
+    decided_on: '2026-11-12'
+    valid_from: '2026-11-12'
     valid_from_day: 20261112
     state: in_force
     rationale: Recovery clusters must restore and verify datasets from the shared store without management access.
@@ -92,8 +92,8 @@ decision:
     title: Exclude general tenant workloads from the isolated recovery zone
     subject: recovery-workload-exclusion
     decider: [security-review]
-    decided_on: "2026-11-15"
-    valid_from: "2026-11-15"
+    decided_on: '2026-11-15'
+    valid_from: '2026-11-15'
     valid_from_day: 20261115
     state: in_force
     rationale: Only recovery services may run in the recovery zone so restore paths remain isolated.
@@ -101,8 +101,8 @@ decision:
     title: Restrict cluster actions and tenant publication reads to active memberships and explicit grants
     subject: cluster-and-tenant-access
     decider: [security-review]
-    decided_on: "2026-11-15"
-    valid_from: "2026-11-15"
+    decided_on: '2026-11-15'
+    valid_from: '2026-11-15'
     valid_from_day: 20261115
     state: in_force
     rationale: Withdrawn memberships and missing read grants must remove derived access rights.
