@@ -100,6 +100,85 @@ def _facts_root(pack_dir: Path) -> Path:
     return facts_dir if facts_dir.is_dir() else pack_dir / "facts.rezono"
 
 
+def _as_date(value) -> datetime.date:
+    return value if isinstance(value, datetime.date) else datetime.date.fromisoformat(str(value))
+
+
+def _load_pack_rows(model, pack_dir: Path, as_of: datetime.date, known: datetime.date) -> dict[str, list[tuple]]:
+    """Load every fact file/dataset of `pack_dir` for one `(as_of, known)` case.
+
+    - Declared Rezono datasets with dated fact rows are selected via `facts.load(..., as_of=..., known=...)`.
+    - YAML fact files (`facts/*.yaml`, such as `facts/cases.yaml` paired with `expected/violations/cases.json`)
+      are loaded directly; if the pack declares an `evaluation_day` / `evaluation_date` kind so Datalog rules
+      can filter dated source rows on `(as_of, known)`, its row is bound to this case's `(as_of, known)`.
+    """
+    from rezono_compiler import facts
+
+    as_of_iso, known_iso = as_of.isoformat(), known.isoformat()
+    rows: dict[str, list[tuple]] = {}
+    for path in facts.files(pack_dir):
+        for table, table_rows in facts.load(model, path, as_of=as_of_iso, known=known_iso).items():
+            rows.setdefault(table, []).extend(table_rows)
+
+    as_of_day = int(as_of.strftime("%Y%m%d"))
+    known_day = int(known.strftime("%Y%m%d"))
+    for kind_name in ("evaluation_day", "evaluation_date"):
+        if kind_name in model.kinds:
+            kind = model.kinds[kind_name]
+            rows[kind_name] = [("as_of",)]
+            for slot_name, slot in kind.slots.items():
+                if slot_name in ("as_of", "valid_at", "valid_date"):
+                    rows[slot.table] = [("as_of", as_of)]
+                elif slot_name in ("known", "known_at", "known_date"):
+                    rows[slot.table] = [("as_of", known)]
+                elif slot_name in ("as_of_day", "valid_at_day", "valid_day", "day"):
+                    rows[slot.table] = [("as_of", as_of_day)]
+                elif slot_name in ("known_day", "known_at_day"):
+                    rows[slot.table] = [("as_of", known_day)]
+    return rows
+
+
+def _derived_joint_income_map(derived: dict[str, list[tuple]], calc_results: dict[str, dict]) -> dict[str, int]:
+    """Read derived `joint_income` per person from M2 derived relations or M3 calculation rules."""
+    if "joint_income" in derived:
+        return {str(row[0]): int(row[1]) for row in derived["joint_income"]}
+    if "joint_income" in calc_results:
+        return {
+            str(subject): int(val)
+            for subject, (state, val, *_rest) in calc_results["joint_income"].items()
+            if state == "known"
+        }
+    raise AssertionError("pack must derive `joint_income` as a derived relation or calculation rule")
+
+
+def _strip_tax_partner_sections(root: Path) -> None:
+    """Drop tax.Partner fact files and any tax-partner YAML sections inside copied fact files."""
+    for candidate in list(root.rglob("*tax*partner*")):
+        if candidate.is_file():
+            candidate.write_text("", encoding="utf-8")
+    for path in sorted(root.rglob("*.yaml")) + sorted(root.rglob("*.yml")):
+        if not path.is_file() or path.name.endswith(".sources.yaml"):
+            continue
+        raw = path.read_text(encoding="utf-8")
+        if not raw.strip():
+            continue
+        doc = yaml.safe_load(raw)
+        if not isinstance(doc, dict):
+            continue
+        kept = {
+            sec: rows
+            for sec, rows in doc.items()
+            if not ("partner" in str(sec).lower() and ("tax" in str(sec).lower() or "fiscal" in str(sec).lower()))
+        }
+        if len(kept) != len(doc):
+            lines = []
+            for sec, rows in kept.items():
+                lines.append(f"{sec}:")
+                for row in rows or ():
+                    lines.append(f"  - {json.dumps(row, default=str)}")
+            path.write_text("\n".join(lines) + "\n", encoding="utf-8", newline="\n")
+
+
 def _assert_no_bsn_like_identifiers(pack_dir: Path) -> None:
     fact_files = [
         p
@@ -238,21 +317,52 @@ def test_three_source_allowance_matches_extended_oracle_for_all_17_cases():
     assert oracle.toeslagpartner(facts_source, "p-bob", "p-bea", feb, cut) is True
     assert oracle.toeslagpartner(facts_source, "p-kim", "p-kai", feb, cut) is True
 
-    # Compiled and evaluated pack must agree with the independent oracle on all 17 cases.
-    from calcsupport import run_both
-    from rezono_compiler import calc, calc_sql, pack, scenarios
+    # Compiled and evaluated pack must derive toeslagpartner, insured, joint_income, and agree with the
+    # independent oracle on all 17 cases using the compiler's M2 rules + M3 calc execution path.
+    from calcsupport import connect, derived_rows, run_both
+    from rezono_compiler import calc, calc_sql, pack
 
     model = pack.read(SLICE)
+    assert model.calc is not None, "examples/zorgtoeslag-slice must declare a calculation program"
     program = calc.build(model, model.calc)
-    (_, rows), *_ = scenarios.states(model, SLICE)
+
+    # Directly verify the compiled engine's derived relations on (2026-02-01, 2026-02-10).
+    feb_rows = _load_pack_rows(model, SLICE, feb, cut)
+    feb_day = {calc_sql.AS_OF: [("as_of", feb.isoformat(), cut.isoformat())]}
+    feb_db = connect(model, program, feb_rows | feb_day)
+    feb_derived = derived_rows(feb_db, model)
+    feb_got, feb_ref = run_both(model, program, model.calc, feb_rows | feb_day)
+    assert feb_got == feb_ref
+
+    assert "toeslagpartner" in feb_derived, f"missing derived relation `toeslagpartner`: {sorted(feb_derived)}"
+    tp_pairs = {(str(a), str(b)) for a, b in feb_derived["toeslagpartner"]}
+    assert ("p-leo", "p-mia") not in tp_pairs and ("p-mia", "p-leo") not in tp_pairs, tp_pairs
+    for left, right in (("p-noa", "p-sam"), ("p-bob", "p-bea"), ("p-kim", "p-kai")):
+        assert (left, right) in tp_pairs and (right, left) in tp_pairs, (left, right, tp_pairs)
+
+    assert any("insured" in name for name in set(feb_derived) | set(feb_got)), (
+        f"pack must derive `insured`, found relations {sorted(feb_derived)} and rules {sorted(feb_got)}"
+    )
+    ji_map = _derived_joint_income_map(feb_derived, feb_got)
+    assert ji_map.get("p-leo") == 2600000, ji_map
+    assert ji_map.get("p-noa") == 4200000, ji_map
+    assert ji_map.get("p-bob") == 4300000, ji_map
+    assert ji_map.get("p-kim") == 5100000, ji_map
+    assert "p-hal" not in ji_map, f"p-hal has no 2026 income and must stay unknown: {ji_map}"
+
+    # Evaluate every case S01–S17 on its own (as_of, known) date through DuckDB + calcoracle + checker.
     for cid, want in EXPECTED_CASES.items():
         case = by_id[cid]
-        day = {calc_sql.AS_OF: [("as_of", str(case["as_of"]), str(case["known"]))]}
+        as_of, known = _as_date(case["as_of"]), _as_date(case["known"])
+        rows = _load_pack_rows(model, SLICE, as_of, known)
+        day = {calc_sql.AS_OF: [("as_of", as_of.isoformat(), known.isoformat())]}
         got, reference = run_both(model, program, model.calc, rows | day)
         assert got == reference, cid
         state, value, reason, *_ = got["allowance"][_claimant_id(case)]
-        actual = int(value) if state == "known" else (state, reason)
-        assert actual == want, (cid, actual, want)
+        if isinstance(want, int):
+            assert state == "known" and int(value) == want, (cid, state, value, reason, want)
+        else:
+            assert state == want[0] and reason, (cid, state, value, reason, want)
 
 
 @pytest.mark.xfail(
@@ -291,9 +401,7 @@ def test_silently_merging_civil_and_tax_partner_gives_wrong_toeslagpartner_outco
         without_tax_partner.mkdir()
         shutil.copy2(facts_source, without_tax_partner / facts_source.name)
     # Drop any tax partner fact file/rows and re-evaluate Case A.
-    for candidate in list(without_tax_partner.rglob("*tax*partner*")):
-        if candidate.is_file():
-            candidate.write_text("", encoding="utf-8")
+    _strip_tax_partner_sections(without_tax_partner)
     assert oracle.toeslagpartner(without_tax_partner, "p-leo", "p-mia", feb, cut) is False
     assert oracle.allowance(without_tax_partner, "p-leo", feb, cut) == 13500
 
