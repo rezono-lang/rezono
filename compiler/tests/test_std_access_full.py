@@ -41,19 +41,6 @@ def _std_access_statements() -> list:
     return [stmt for i, text in enumerate(texts) for stmt in parse_file(text, f"std-access:{i}")]
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=MissingExplicitMayReadFull,
-    reason=(
-        "extra: decisions/central-read-access.md: Waits for "
-        "compiler/tests/rezono/test_whole_std_access.py--test_whole_std_access_has_the_same_meaning. "
-        "Declare may_read_full(role: symbol, kind: symbol) as @extend with no clauses in packs/std-access, "
-        "include may_read_full in ACCESS in compiler/rezono_compiler/pack.py and compiler/tests/souffle.py, "
-        "and state explicit may_read_full(role, kind) grants in the importing packs (examples/subsidy, "
-        "examples/platform, run/packs/probe-profiles, tests/fixtures/neutral, and tests/fixtures/slip), "
-        "updating their pinned std-access hashes."
-    ),
-)
 def test_std_access_and_consumers_declare_may_read_full():
     statements = _std_access_statements()
     assert all(stmt[0] == "decl" for stmt in statements), "std-access itself must declare no grant clauses"
