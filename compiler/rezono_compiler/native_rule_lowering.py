@@ -7,7 +7,7 @@ import json
 import re
 from typing import NoReturn
 
-from . import modules, native_rule_signatures, rezono_module, rules_dl, spans
+from . import modules, native_rule_signatures, rezono_module, rules, rules_dl, spans
 from .diagnostics import Diagnostic
 from .pack import CompileError
 
@@ -197,6 +197,8 @@ def premise(site: Site, linked: native_rule_signatures.Linked, clause: native_ru
         return [("lit", "positive", (table, terms, line))]
     if (compared := scalar_comparison(site, clause, pointer, node, bound, used, line)) is not None:
         return compared
+    if (annotation := typed_annotation(site, pointer, node)) is not None:
+        refuse(site.file, pointer, *site.span(pointer)[1:], f"{annotation[0]}(…) only as an operand of a comparison")
     refuse(site.file, pointer, *site.span(pointer)[1:],
            "A native rule premise needs a kind membership, a slot row, a relation call, a negated relation call, "
            "a scalar comparison or a computed assignment")
@@ -204,6 +206,17 @@ def premise(site: Site, linked: native_rule_signatures.Linked, clause: native_ru
 
 # Negation of a strict scalar comparison swaps T and F on known values while preserving undecided states.
 NEGATED_COMPARE = {"=": "!=", "!=": "=", "<": ">=", "<=": ">", ">": "<=", ">=": "<"}
+
+
+def typed_annotation(site: Site, at: str, node: dict) -> tuple[str, dict] | None:
+    """`utc_instant(x)` or `binary_text(x)` on a comparison operand: (mode, operand)."""
+    if set(node) == {"call"}:
+        name, args = node["call"]
+        if name in rules.COMPARE_AS:
+            if len(args) != 1:
+                refuse(site.file, at, *site.span(at)[1:], f"{name!r} takes 1 column, got {len(args)}", "R041")
+            return name, args[0]
+    return None
 
 
 def scalar_comparison(site: Site, clause: native_rule_signatures.LinkedClause, pointer: str, node: dict,
@@ -226,13 +239,33 @@ def scalar_comparison(site: Site, clause: native_rule_signatures.LinkedClause, p
     if symbol not in rules_dl.COMPARE:
         refuse(site.file, at, *site.span(at)[1:], f"Comparison {symbol!r} is not lowered in a native rule")
     operator = NEGATED_COMPARE[symbol] if flipped else symbol
+    left_typed = typed_annotation(site, f"{at}/cmp/1", left)
+    right_typed = typed_annotation(site, f"{at}/cmp/2", right)
+    if (left_typed is None) != (right_typed is None):
+        mode = (left_typed or right_typed)[0]
+        refuse(site.file, at, *site.span(at)[1:],
+               f"{mode}(…) on one side of a comparison only; write it on both operands")
+    mode = None
+    if left_typed is not None and right_typed is not None:
+        if left_typed[0] != right_typed[0]:
+            refuse(site.file, at, *site.span(at)[1:],
+                   f"Cannot compare {left_typed[0]} with {right_typed[0]}", "R003")
+        mode = left_typed[0]
     items: list[tuple] = []
     terms = []
-    for side, child in ((1, left), (2, right)):
-        term, reads = scalar_operand(site, clause, f"{at}/cmp/{side}", child, bound, used, line)
+    for side, child, annotation in ((1, left, left_typed), (2, right, right_typed)):
+        child_at = f"{at}/cmp/{side}/call/1/0" if annotation is not None else f"{at}/cmp/{side}"
+        operand_node = annotation[1] if annotation is not None else child
+        term, reads = scalar_operand(site, clause, child_at, operand_node, bound, used, line)
+        if mode is not None and term[0] != "var":
+            refuse(site.file, child_at, *site.span(child_at)[1:],
+                   f"{mode}(…) takes a bound text variable or scalar slot path")
         items.extend(reads)
         terms.append(term)
-    items.append(("cmp", rules_dl.COMPARE[operator], terms[0], terms[1]))
+    cmp_item: tuple = ("cmp", rules_dl.COMPARE[operator], terms[0], terms[1])
+    if mode is not None:
+        cmp_item = (*cmp_item, mode)
+    items.append(cmp_item)
     return items
 
 
