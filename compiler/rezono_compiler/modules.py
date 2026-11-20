@@ -323,7 +323,7 @@ def load(pack_dir: Path, meta: dict, errors: list[str]) -> tuple[list[Module], d
 
 
 def schema_names(pack_dir: Path) -> dict[str, set[str]]:
-    """The kinds, enums and types each schema file of a pack declares, by module id within the pack."""
+    """The kinds, enums and types each schema or Rezono module of a pack declares, by module id within the pack."""
     out: dict[str, set[str]] = {}
     for f in sorted((pack_dir / "schema").rglob("*.yaml")):
         try:
@@ -333,6 +333,16 @@ def schema_names(pack_dir: Path) -> dict[str, set[str]]:
         if isinstance(doc, dict):
             out[f.relative_to(pack_dir / "schema").with_suffix("").as_posix()] = {
                 str(n) for key in ("classes", "enums", "types") if isinstance(doc.get(key), dict) for n in doc[key]}
+    pack_file = pack_dir / "pack.yaml"
+    try:
+        meta = strict_yaml.read(pack_file) or {} if pack_file.is_file() else {}
+    except (OSError, ValueError, yaml.YAMLError):
+        meta = {}
+    if isinstance(meta, dict):
+        for d in rezono_module.declared(meta, pack_dir, [], reject_undeclared=False):
+            form = rezono_module.effective_form(pack_dir, d, [])
+            if form is not None:
+                out.setdefault(d.id, set()).update(rezono_module.names(form))
     return out
 
 
