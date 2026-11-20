@@ -659,12 +659,12 @@ classes:
       world: {range: World}
       values: {required: true, range: Name, multivalued: true, minimum_cardinality: 1}
       memberMetadata: {all_of: [{range: EnumMemberMetadataMap, inlined: true}]}
-      deprecated: {all_of: [{range: Deprecated, inlined: true}]}
+      deprecated: {range: Deprecated, inlined: true}
 
   Deprecated:
-    description: A deprecation notice and removal date on a kind or enum (decisions/language-deprecation.md).
+    description: A deprecation notice on a declaration (decisions/language-deprecation.md).
     attributes:
-      note: {required: true, range: string, pattern: "^[^\\n\\r]*$"}
+      note: {required: true, range: string}
       until: {required: true, range: Date}
 
   ReasonDecl:
@@ -703,7 +703,7 @@ classes:
       applies: {range: Applies, inlined: true}
       sealed: {range: Name, description: "The slot of `sealed at`. It has no place of its own: its kind's stands for it."}
       relationship: {range: boolean, description: "`true` for a relationship kind; absent otherwise (decisions/language-relationship-kinds.md)."}
-      deprecated: {all_of: [{range: Deprecated, inlined: true}]}
+      deprecated: {range: Deprecated, inlined: true}
       slots:
         required: true
         multivalued: true

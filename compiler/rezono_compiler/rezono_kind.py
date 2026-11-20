@@ -96,6 +96,8 @@ def lower(decl: dict, at: str, own: dict[str, str], owners: dict[str, list[str]]
         refuse(at, "invalid kind metadata", "§5.1")
         ok = False
     deprecated = rezono_metadata.deprecated(decl, at, refuse, "§5.1") if extended_format else ()
+    if deprecated is None:
+        ok = False
     embedded = decl.get("embedded") is True
     if extended_format and "embedded" in decl and not embedded:
         refuse(at, "an embedded kind must be marked true", "§5.1")
@@ -148,7 +150,7 @@ def lower(decl: dict, at: str, own: dict[str, str], owners: dict[str, list[str]]
     if rezono_slot.validate(
         slots, decl["kind"], at, own, owners, uses, refuse,
         extended=extended_format, open_kind=world == "open", aliases=aliases,
-    ) and ok and equations is not None and rules is not None and deprecated is not None:
+    ) and ok and equations is not None and rules is not None:
         attributes = rezono_slot.lower(slots, declared, implicit_identifier=not embedded and parent is None)
         result = {"attributes": attributes} | rezono_metadata.lower(decl)
         if world == "open":
@@ -163,7 +165,7 @@ def lower(decl: dict, at: str, own: dict[str, str], owners: dict[str, list[str]]
             result.setdefault("annotations", {})["path_equations"] = equations
         if rules:
             result["rules"] = rules
-        return rezono_metadata.with_deprecated(result, deprecated)
+        return rezono_metadata.with_deprecated(result, deprecated or ())
     return None
 
 
