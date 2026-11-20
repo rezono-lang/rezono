@@ -342,13 +342,13 @@ FULL_SELECTION_PATHS = (
     ".github/workflows/ci.yml", ".github/workflows/disposable-cluster.yml",
     ".github/workflows/python-environment/", "blocked/",
     "scripts/check-pinned.py", "scripts/components.py", "scripts/fast_check.py",
-    "scripts/install-souffle.sh", "scripts/pytest-plugins.txt", "scripts/red_list.py",
+    "scripts/install-souffle.sh", "scripts/loop-duration-profile.json", "scripts/pytest-plugins.txt",
+    "scripts/red_list.py",
 )
 # What scripts/components.py itself reads while it runs one component's shards.
 JOB_INPUTS = {
     ".github/workflows/compiler-duration-profile.json": ("compiler",),
     ".github/workflows/examples-duration-profile.json": ("examples",),
-    ".github/workflows/loop-duration-profile.json": ("loop",),
     ".github/workflows/publication_fixture.py": ("examples",),
 }
 # Scripts, other workflows and actions select the components that name them, directly
@@ -855,8 +855,10 @@ SHARDS = {"compiler": 3, "edge/publisher": 2, "loop": 3}
 PARALLEL = {"compiler", "examples", "edge/publisher"}
 EXAMPLE_PROFILE = ROOT / ".github/workflows/examples-duration-profile.json"
 # Seconds per test file, as `run-shard` prints them for each shard of a hosted run. A component with
-# such a profile places its files longest first on the least loaded shard instead of round-robin.
-FILE_PROFILES = {"loop": ROOT / ".github/workflows/loop-duration-profile.json"}
+# such a profile places its files longest first on the least loaded shard instead of round-robin. The
+# profile sits beside this script, so the base's copy (which builds the matrix and the inventory, and
+# verifies the execution) reads the base's profile, never the candidate's.
+FILE_PROFILES = {"loop": Path(__file__).resolve().parent / "loop-duration-profile.json"}
 
 
 def test_files(folder: str) -> list[str]:
@@ -1116,8 +1118,10 @@ def collect_component(folder: str, directory: Path) -> int:
                   file=sys.stderr)
             return 1
     files = sorted(set(test_files(folder)) | collected)
-    dest.write_text(json.dumps({"items": items, "cluster": cluster, "files": files, "config": config_path}),
-                    encoding="utf-8")
+    # The split into the matrix's shards, made here by the same script and profile as the matrix.
+    shards = shard_files(folder, files, shard_count(folder))
+    dest.write_text(json.dumps({"items": items, "cluster": cluster, "files": files, "shards": shards,
+                                "config": config_path}), encoding="utf-8")
     print(f"{folder}: inventoried {len(items)} node IDs from {len(files)} test files", flush=True)
     return 0
 
@@ -1146,8 +1150,16 @@ def shard_files(folder: str, files: list[str], total: int) -> list[list[str]]:
     return weighted_workers(sorted(files), total, data["seconds"], data["default_s"])
 
 
-def shard_items(plan: dict, folder: str, shard: int, total: int) -> list[str]:
-    files = set(shard_files(folder, plan["files"], total)[shard])
+def shard_items(plan: dict, shard: int, total: int) -> list[str]:
+    """The IDs of one shard. The inventory records the split of the script that also built the matrix,
+    so the candidate's shards and the base's verification share it. An inventory without a recorded split
+    comes from a base before it: that base verifies round-robin, so the shards run round-robin too."""
+    split = plan.get("shards")
+    if split is None:
+        split = [plan["files"][n::total] for n in range(total)]
+    elif len(split) != total:
+        raise ValueError(f"The inventory splits into {len(split)} shards, the matrix into {total}")
+    files = set(split[shard])
     return [node for node in plan["items"] if node.split("::", 1)[0] in files]
 
 
@@ -1249,7 +1261,7 @@ def run_shard(folder: str, shard: int, total: int, plans: Path, reports: Path, r
     reports.mkdir(parents=True, exist_ok=True)
     evidence = receipts / folder
     evidence.mkdir(parents=True, exist_ok=True)
-    selected = shard_items(plan, folder, shard, total)
+    selected = shard_items(plan, shard, total)
     groups = worker_items(folder, selected, runner_cores() if folder in PARALLEL else 1)
     if Counter(i for group in groups for i in group) != Counter(selected):
         raise ValueError("Worker assignments differ from the shard inventory")
@@ -1324,7 +1336,7 @@ def verify_execution(matrix: list[dict], plans: Path, receipts: Path) -> int:
         for row in rows:
             shard, total = row["shard"], row["total"]
             directory = receipts / folder
-            expected = Counter(shard_items(plan, folder, shard, total))
+            expected = Counter(shard_items(plan, shard, total))
             shard_counts = {event: Counter() for event in expected_events}
             try:
                 workers = json.loads((directory / f"{shard}.json").read_text(encoding="utf-8"))
