@@ -614,7 +614,7 @@ def iris(pack: Pack, meta: dict, packs: dict, owner: dict, errors: list[str]) ->
 
 def read(pack_dir: str | Path) -> Pack:
     pack_dir = Path(pack_dir)
-    errors: list[str] = []
+    errors: list[str | diagnostics.Diagnostic] = []
     typed: dict[str, tuple[diagnostics.Diagnostic, ...]] = {}  # D15: the diagnostics of an error that has its own
     warnings: list[str] = []
     meta = read_meta(pack_dir)
@@ -730,6 +730,20 @@ def read(pack_dir: str | Path) -> Pack:
         if kind.parent and kind.parent not in kinds:
             errors.append(f"class {cname}: parent {kind.parent} is not a kind of this pack")
             continue
+        if (
+            kind.layer == "observation"
+            and kind.world != "open"
+            and m.form is not None
+            and m.form.get("format") == rezono_module.REZONO_1_FORMAT
+        ):
+            errors.append(
+                diagnostics.Diagnostic(
+                    "R051",
+                    f"class {cname}: `{cname}` is observed: declare `world open`, and `complete by` the scope in which it is complete (R051)",
+                    where=f"class {cname}",
+                    span=kind.span,
+                )
+            )
         c = sv.get_class(cname)
         inherited = {s.name for s in sv.class_induced_slots(c.is_a)} if kind.parent else set()
         for s in sv.class_induced_slots(cname):
@@ -977,7 +991,14 @@ def read(pack_dir: str | Path) -> Pack:
     if not errors:
         fold.check(pack, errors)
     if errors:
-        raise CompileError("\n".join(errors), [d for e in errors for d in typed.get(e) or diagnostics.of_text(e)])
+        raise CompileError(
+            "\n".join(map(str, errors)),
+            [
+                d
+                for e in errors
+                for d in ((e,) if isinstance(e, diagnostics.Diagnostic) else typed.get(e) or diagnostics.of_text(e))
+            ],
+        )
     for w in pack.warnings:
         print(f"warning: {w}", file=sys.stderr)
     return pack
