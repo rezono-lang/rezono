@@ -36,7 +36,7 @@ rules flow_witness
   | .decl flow_case_expected(run: symbol, case: symbol, expected: symbol)
   | .decl flow_case_witness(run: symbol, case: symbol, kind: symbol, ref: symbol, outcome: symbol)
   | .decl flow_case_valid_witness(run: symbol, case: symbol, kind: symbol, ref: symbol, outcome: symbol)
-  | .decl flow_case_witness_count(run: symbol, case: symbol, kind: symbol, count: number)
+  | .decl flow_case_witness_count(run: symbol, case: symbol, kind: symbol, n: number)
   | .decl flow_case_pair(run: symbol, case: symbol, expected: symbol, probe: symbol, probe_outcome: symbol, hubble: symbol, hubble_outcome: symbol)
   | .decl flow_case_verdict(run: symbol, case: symbol, state: symbol, probe: symbol, hubble: symbol)
   | .decl flow_case_decided(run: symbol, case: symbol)
