@@ -34,6 +34,7 @@
 	"R048": "`{0}` past niet bij zijn eigen signatuur; zet opties op de getypeerde kop en geef het een definiërende clausule",
 	"R049": "`{0}` heeft geen ondersteunde regelrepresentatie",
 	"R050": "`{0}` kan niet worden omgezet naar een berekening",
+	"R051": "`{0}` wordt waargenomen: declareer `world open`, en `complete by` het bereik waarin het volledig is",
 	"W105": "`{0}` kan onbekend zijn; onbekende waarden worden met hun reden getoond",
 	"W106": "geen `rezono`-regel; gelezen als `rezono 0`",
 	"W107": "`{0}` is verouderd",
