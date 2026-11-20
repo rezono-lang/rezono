@@ -27,15 +27,6 @@ class MissingPrefixedImport(AssertionError):
     """The compiler refused a `use` line with a prefix, which decisions/language-imports.md lowers."""
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=MissingPrefixedImport,
-    reason="extra: decisions/language-imports.md: Lower a use line with a prefix (use lib as terms) and a slot type "
-           "terms.Party as the same use line without the prefix and the type Party, in "
-           "compiler/rezono_compiler/rezono_module.py instead of the refusal of a prefix; refuse at the slot a "
-           "prefix that no use line declares and a prefixed name the pack does not declare, and keep refusing a "
-           "dotted pack name. Read the section Lowering a prefix.",
-)
 def test_lower_prefixed_import(tmp_path):
     legacy = pinned(tmp_path, "legacy")
     (legacy / "schema" / "holder.yaml").write_bytes(yaml.safe_dump({

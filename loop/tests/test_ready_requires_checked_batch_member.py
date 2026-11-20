@@ -19,7 +19,7 @@ from round_visibility_rounds import singleton_rounds
         "round_visibility_rounds only withdraw-a's is admitted. A supplied positive "
         "result is not a certificate. Write in packs/std-loop (ready.dl, fixed_point.dl) and switch the readers "
         "of the old ready to unblocked (loop/typed_recording.py, build/rules/tasks.dl, and refresh the std-loop "
-        "pin in build/pack.yaml). The same change turns "
+        "pin in build/pack.yaml and the table in compiler/rezono_compiler/standard_packs.py). The same change turns "
         "loop/tests/test_overlapping_withdrawals_break_availability.py::"
         "test_overlapping_withdrawals_break_availability green: remove both marks in the same PR. Today ready.dl "
         "still derives ready from eligible without a verified round (AssertionError)."

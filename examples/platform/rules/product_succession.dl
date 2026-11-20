@@ -47,23 +47,14 @@ successor_finding(product, "missing_successor") :- successor_handoff(product, _)
 successor_finding(product, "support_gap") :-
     successor_coverage(product, _, at, "gap"), successor_uncovered_at(product, at).
 
-.decl successor_affected_use(product: symbol, service: symbol)
-successor_affected_use(product, service) :-
+.decl successor_impact(product: symbol, service: symbol)
+successor_impact(product, service) :-
     successor_finding(product, _), service_product_use__product(use, product),
     service_product_use__service(use, service).
-
-.decl successor_run_need(consumer: symbol, provider: symbol)
-successor_run_need(consumer, provider) :-
+successor_impact(product, consumer) :-
+    successor_impact(product, provider),
     service_need__consumer(need, consumer), service_need__provider(need, provider),
     service_need__mode(need, "run").
-
-.decl successor_impact(product: symbol, service: symbol)
-successor_impact(product, service) :- successor_affected_use(product, service).
-successor_impact(product, consumer) :-
-    successor_affected_use(product, service), successor_run_need(consumer, service).
-successor_impact(product, consumer) :-
-    successor_affected_use(product, service), successor_run_need(intermediate, service),
-    successor_run_need(consumer, intermediate).
 
 .output successor_finding
 .output successor_impact
