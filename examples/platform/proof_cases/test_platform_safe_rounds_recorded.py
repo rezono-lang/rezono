@@ -22,7 +22,9 @@ def observe(run, cut, subject, attribute, value, evidence):
 @pytest.mark.xfail(strict=True, raises=AssertionError, reason=(
     "M2: Depends on test_startup_transition_cases, test_restore_offline_dependencies and test_certified_round_replay. "
     "Bind platform steps to certified rounds and publish startup and isolated management dataset restore reader "
-    "questions and their actual goal witnesses per decisions/safe-step-rounds.md, sections 3, 4 and 7."))
+    "questions and their actual goal witnesses per decisions/safe-step-rounds.md, sections 3, 4 and 7. "
+    "A planner first re-encodes its safe_* records as std-loop rows per "
+    "decisions/standard-packs-everywhere.md, section 2.2."))
 def test_platform_safe_rounds_recorded(tmp_path):
     root = copy_pack(tmp_path / "inputs")
     bucket = store.FileStore(tmp_path / "published")
