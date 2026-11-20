@@ -393,8 +393,14 @@ def _witnessed_grants(doc: dict, role: str, chains: dict, every: dict, instances
     """Check coverage witnesses and their positive rule premises against the complete snapshots."""
     coverage = {}
     for key, (parts, _) in every.get(READ_FULL, {}).items():
-        if parts[:1] == (role,):
-            if len(parts) != 2 or parts[1] not in chains:
+        if len(parts) != 2:
+            findings.append({"reason": "malformed_snapshot", "relation": READ_FULL, "key": key,
+                             "detail": f"complete: row has {len(parts)} columns, expected 2"})
+            if parts[:1] == (role,):
+                findings.append({"reason": "evidence_mismatch", "relation": READ_FULL, "key": key})
+            continue
+        if parts[0] == role:
+            if parts[1] not in chains:
                 findings.append({"reason": "evidence_mismatch", "relation": READ_FULL, "key": key})
             else:
                 coverage[(READ_FULL, key)] = parts[1]

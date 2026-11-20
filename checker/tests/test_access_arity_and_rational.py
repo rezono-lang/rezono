@@ -149,6 +149,29 @@ def test_check_role_refuses_empty_kind_row_without_crashing():
     assert any(f["reason"] == "malformed_snapshot" and f["relation"] == "person" for f in findings), findings
 
 
+@pytest.mark.parametrize("bad_row", [(), ("other",), ("other", "person", "extra"), ("guest",)])
+def test_check_role_refuses_malformed_arity_rows_in_may_read_full(bad_row: tuple[str, ...]):
+    """Empty or mismatched-arity rows in complete['may_read_full'] fail closed for any role."""
+    w = _base_world()
+    doc = _base_doc()
+    doc["relations"].append({
+        "name": "may_read_full",
+        "role": "derived",
+        "key": [{"name": "role", "type": "string"}, {"name": "kind", "type": "string"}],
+    })
+    w["doc"] = doc
+    w["complete"]["may_read_full"] = [bad_row]
+    w["mine"]["may_read_full"] = []
+    w["full"] = {"role"}
+    w["evidence"] = []
+    _, findings = _run_check(w)
+    assert findings
+    assert all(f["severity"] == "error" for f in findings)
+    assert any(f["reason"] == "malformed_snapshot" and f["relation"] == "may_read_full" for f in findings), findings
+    if bad_row[:1] == ("guest",):
+        assert any(f["reason"] == "evidence_mismatch" and f["relation"] == "may_read_full" for f in findings), findings
+
+
 def _calc_world(value: str, value_type: str = "rational") -> dict:
     w = _base_world()
     selection = "calc__share"

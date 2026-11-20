@@ -92,6 +92,21 @@ def test_publisher_access_refuses_mismatched_arity_rows(bad_row: tuple[str, ...]
         scope.readable("doc__author", bad_row)
 
 
+def test_publisher_scope_accepts_list_role_rows():
+    """List-typed rows in rows['role'] still match Scope.named while bad-arity list rows fail closed."""
+    rows = _base_rows()
+    rows["role"] = [["guest"]]
+    scope = access.Scope(rows, KINDS, {}, COLUMNS, _base_rules(), "guest")
+    assert scope.named is True
+    assert "person" in scope.full
+    assert scope.full.evidence == ({"kind": "person", "rule": "everyone", "ground": ["role", "guest"]},)
+
+    rows_bad = _base_rows()
+    rows_bad["role"] = [["guest", "extra"]]
+    with pytest.raises(ValueError, match="role"):
+        access.Scope(rows_bad, KINDS, {}, COLUMNS, _base_rules(), "guest")
+
+
 def _calc_setup(value: str, value_type: str = "rational") -> tuple[dict, dict, dict, list[dict], list[dict]]:
     selection = "calc__share"
     doc = _base_rules()

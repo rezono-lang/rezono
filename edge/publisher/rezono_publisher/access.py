@@ -174,7 +174,7 @@ class Scope:
             expected = len(self.columns[rel])
             if any(len(r) != expected for r in rows[rel]):
                 raise ValueError(f"relation {rel}: row arity must match schema ({expected} columns)")
-        self.named = any(r == (role,) for r in rows.get(ROLE, ()))  # the pack's facts name this role
+        self.named = any(len(r) == 1 and r[0] == role for r in rows.get(ROLE, ()))  # the pack's facts name this role
         # The capabilities the pack's facts map this role to (roles in two layers).
         self.capabilities = {r[1] for r in rows.get(CAPABILITY, ()) if len(r) == 2 and r[0] == role}
         if any(r["name"] == READ_FULL for r in rules.get("relations", ())):
