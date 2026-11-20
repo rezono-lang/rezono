@@ -345,7 +345,7 @@ FULL_SELECTION_PATHS = (
     ".github/workflows/ci.yml", ".github/workflows/disposable-cluster.yml",
     ".github/workflows/python-environment/", "blocked/",
     "scripts/check-pinned.py", "scripts/components.py", "scripts/fast_check.py",
-    "scripts/install-souffle.sh", "scripts/red_list.py",
+    "scripts/install-souffle.sh", "scripts/pytest-plugins.txt", "scripts/red_list.py",
 )
 # What scripts/components.py itself reads while it runs one component's shards.
 JOB_INPUTS = {
@@ -976,6 +976,62 @@ def inventory_path(directory: Path, folder: str) -> Path:
     return directory / folder / "items.json"
 
 
+# The pytest plugins CI may load, as `name = value` of the pytest11 entry points. In CI the
+# environment action points REZONO_PYTEST_PLUGINS at the base's copy, so a candidate cannot
+# extend it; locally this checkout's list applies.
+PLUGIN_LIST = ROOT / "scripts/pytest-plugins.txt"
+
+
+def allowed_plugins() -> set[str]:
+    path = Path(os.environ.get("REZONO_PYTEST_PLUGINS") or PLUGIN_LIST)
+    return {line.strip() for line in path.read_text(encoding="utf-8").splitlines()
+            if line.strip() and not line.lstrip().startswith("#")}
+
+
+def plugin_arguments() -> tuple[list[str], object]:
+    """Turn pytest's plugin autoload off and name each allowed plugin that is installed.
+
+    A plugin loads in every run and its hooks could drop or pass a red test, so no other plugin
+    loads: not one that a package registers, nor a *.dist-info that a candidate adds to a
+    directory on sys.path. Return the `-p` arguments and a plugin that checks the result.
+    """
+    from importlib.metadata import entry_points
+    import pytest
+
+    allowed = allowed_plugins()
+    os.environ["PYTEST_DISABLE_PLUGIN_AUTOLOAD"] = "1"
+    found = sorted(entry_points(group="pytest11"), key=lambda e: e.name)
+    if unlisted := [f"{e.name} = {e.value}" for e in found if f"{e.name} = {e.value}" not in allowed]:
+        raise SystemExit(f"pytest plugins that {PLUGIN_LIST.name} does not list: {', '.join(unlisted)}")
+    names = sorted({e.name for e in found})
+    modules = {e.value.split(":", 1)[0] for e in found}
+
+    class PluginGuard:
+        @pytest.hookimpl(tryfirst=True)
+        def pytest_configure(self, config):
+            # `-p name` loads a plugin by its entry point, as autoload would; one whose name is
+            # already a plugin of pytest's own, such as pytest-logging's `logging`, is skipped.
+            for plugin, dist in config.pluginmanager.list_plugin_distinfo():
+                listed = {f"{e.name} = {e.value}" for e in dist.entry_points if e.group == "pytest11"
+                          and e.value.split(":", 1)[0] == getattr(plugin, "__name__", None)}
+                if not listed & allowed:
+                    raise pytest.UsageError(f"pytest loaded the plugin {plugin!r} from {dist.project_name}, "
+                                            f"which {PLUGIN_LIST.name} does not list")
+            for module in sorted(modules & set(sys.modules)):
+                # A module of the same name earlier on sys.path, such as one the candidate adds
+                # at the repository root, would run in the allowed plugin's place.
+                origin = subprocess.run(
+                    [sys.executable, "-P", "-c", "import importlib.util, sys; "
+                     "s = importlib.util.find_spec(sys.argv[1]); print(s.origin if s else '')", module],
+                    capture_output=True, text=True, check=True).stdout.strip()
+                loaded_file = getattr(sys.modules.get(module), "__file__", None)
+                if not origin or not loaded_file or Path(origin).resolve() != Path(loaded_file).resolve():
+                    raise pytest.UsageError(f"pytest plugin {module} loaded from {loaded_file}, "
+                                            f"not from its installed {origin or 'location'}")
+
+    return [arg for name in names for arg in ("-p", name)], PluginGuard()
+
+
 def collect_component(folder: str, directory: Path) -> int:
     import pytest
 
@@ -1004,10 +1060,11 @@ def collect_component(folder: str, directory: Path) -> int:
             cluster.extend(item.nodeid for item in session.items if item.get_closest_marker("cluster"))
             config_path = str(session.config.inipath.relative_to(ROOT)) if session.config.inipath else None
 
+    plugin_args, guard = plugin_arguments()
     result = pytest.main(
-        [folder, "--collect-only", "--rezono-cluster", "-qq", "--rootdir", str(ROOT),
+        [*plugin_args, folder, "--collect-only", "--rezono-cluster", "-qq", "--rootdir", str(ROOT),
          f"--junitxml={collection_report}"],
-        plugins=[Inventory()],
+        plugins=[Inventory(), guard],
     )
     if deselected:
         print(f"{folder}: tests deselected during full inventory: {deselected}", file=sys.stderr)
@@ -1127,11 +1184,13 @@ def execute_worker(assignment: Path, journal: Path, report: Path) -> int:
             def pytest_runtest_logfinish(self, nodeid, location):
                 print(json.dumps(["finish", nodeid]), file=evidence)
 
-        args = ["-q", "--rezono-report-cluster", "--durations=5", "--rootdir", str(ROOT), f"--junitxml={report}"]
+        plugin_args, guard = plugin_arguments()
+        args = [*plugin_args, "-q", "--rezono-report-cluster", "--durations=5", "--rootdir", str(ROOT),
+                f"--junitxml={report}"]
         if data["config"]:
             args.extend(["-c", data["config"]])
         # Pytest resolves only assigned IDs, without walking the component again.
-        plugins = [Evidence()]
+        plugins = [Evidence(), guard]
         if "publication" in data:
             # These short-lived RDF graphs caused 63 full-heap collections
             # (20.6 s) in run 44302050936. Collect larger batches in these

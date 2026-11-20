@@ -20,7 +20,9 @@ class MissingSupposeInsertRowEvaluation(AssertionError):
            "throwing in suppose(): validate the kind, required slots, slot names, duplicate slots, read-only "
            "inverse/identifier slots and slot types/cardinalities, allow empty braces when no non-id slot is "
            "required, enforce freshness against existing keys in data, and return a new Data without mutating the "
-           "input. Read section 1, Insert a complete record with suppose.",
+           "input. Read section 1, Insert a complete record with suppose. Note: rezono/test/suppose-insert-row-evaluate.mts "
+           "line 56 expects {$ref: 'zone-a'}, whereas answer() formats reference columns as "
+           "{$ref: '<pack>@<schemaId>:Zone/zone-a'} per rezono/src/evaluate.ts toJson and docs/rezono/expressions.md §8a.",
 )
 def test_suppose_insert_row_evaluate():
     probe = Path(__file__).with_name("suppose-insert-row-evaluate.mts")

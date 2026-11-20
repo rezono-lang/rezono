@@ -766,8 +766,9 @@ class InventoryTests(unittest.TestCase):
     def test_publication_fixture_is_built_once_and_read_from_isolated_stores(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            for rel in ("scripts/components.py", ".github/workflows/publication_fixture.py"):
-                (root / rel).parent.mkdir(parents=True)
+            for rel in ("scripts/components.py", "scripts/pytest-plugins.txt",
+                        ".github/workflows/publication_fixture.py"):
+                (root / rel).parent.mkdir(parents=True, exist_ok=True)
                 shutil.copyfile(ROOT / rel, root / rel)
             module = root / ci.FORMS_MODULE
             module.parent.mkdir(parents=True)
@@ -835,6 +836,7 @@ class InventoryTests(unittest.TestCase):
             (root / "scripts").mkdir()
             script = root / "scripts/components.py"
             shutil.copyfile(ROOT / "scripts/components.py", script)
+            shutil.copyfile(ROOT / "scripts/pytest-plugins.txt", root / "scripts/pytest-plugins.txt")
             profile = Path(".github/workflows/compiler-duration-profile.json")
             (root / profile.parent).mkdir(parents=True)
             shutil.copyfile(ROOT / profile, root / profile)
@@ -928,7 +930,7 @@ class InventoryTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             (root / "scripts").mkdir()
-            for name in ("components.py", "red_list.py"):
+            for name in ("components.py", "red_list.py", "pytest-plugins.txt"):
                 shutil.copyfile(ROOT / "scripts" / name, root / "scripts" / name)
             component = root / "probe"
             component.mkdir()

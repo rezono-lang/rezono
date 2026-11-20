@@ -1,7 +1,9 @@
 """Read module/2 metadata and translate its written names to LinkML fields."""
 
+import datetime
 import re
 
+from .names import ISO_DATE
 from .rezono_lowering import Refuse
 
 MAPPINGS = (("exactMappings", "exact_mappings"), ("closeMappings", "close_mappings"), ("broadMappings", "broad_mappings"))
@@ -100,3 +102,35 @@ def header(body: dict, schema: dict, layer: str, default_range: str | None, refu
         else:
             metadata["default_range"] = default_range
     return schema | metadata
+
+
+def deprecated(decl: dict, at: str, refuse: Refuse, section: str) -> tuple[str, str] | tuple[()] | None:
+    """Validate a kind or enum `deprecated` member; return `()` when absent or `None` on refusal."""
+    if "deprecated" not in decl:
+        return ()
+    entry = decl["deprecated"]
+    if not isinstance(entry, dict) or entry.keys() != {"note", "until"}:
+        refuse(f"{at}/deprecated", "`deprecated` needs `note` and `until`", section)
+        return None
+    note, until = entry["note"], entry["until"]
+    if not isinstance(note, str) or "\n" in note or "\r" in note:
+        refuse(f"{at}/deprecated", "a `deprecated` note must be a single-line string", section)
+        return None
+    if not isinstance(until, str) or not ISO_DATE.fullmatch(until):
+        refuse(f"{at}/deprecated", f"`deprecated` date must be YYYY-MM-DD, not {until!r}", section)
+        return None
+    try:
+        datetime.date.fromisoformat(until)
+    except ValueError:
+        refuse(f"{at}/deprecated", f"`deprecated` date is not a calendar date: {until!r}", section)
+        return None
+    return note, until
+
+
+def with_deprecated(target: dict, entry: tuple[str, str] | tuple[()]) -> dict:
+    """Attach lowered LinkML `deprecated` and `annotations.deprecated_until` when present."""
+    if entry:
+        note, until = entry
+        target["deprecated"] = note
+        target.setdefault("annotations", {})["deprecated_until"] = until
+    return target
