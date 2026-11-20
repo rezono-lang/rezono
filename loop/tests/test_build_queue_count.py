@@ -71,9 +71,9 @@ def derived(tmp, records, evidence=None):
     reader's snapshot gives them: {"key": [text, ...]}, sorted by key."""
     build = tmp / "build"
     shutil.copytree(ROOT / "build", build)
-    for pack in ("std-loop", "std-order", "std-decision"):
+    for pack in ("std-loop", "std-order", "std-decision", "std-access"):
         shutil.copytree(ROOT / "packs" / pack, tmp / "packs" / pack)
-    (build / "facts").mkdir()
+    (build / "facts").mkdir(exist_ok=True)
     (build / "facts" / "input.yaml").write_text(yaml.safe_dump(records), encoding="utf-8")
     handoff = {} if evidence is None else {"evidence": evidence(store.FileStore(tmp / "archive"))}
     with mock.patch.object(engine, "witnesses", lambda con, prog, rule_ids=None: {}):
