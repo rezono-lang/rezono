@@ -5,3 +5,7 @@ name: std-access
 version: 0.2.0
 default_language: nl
 imports: []
+rezono:
+  - module: rezono/access.rezono
+    form: rezono/access.json
+    layer: facts
