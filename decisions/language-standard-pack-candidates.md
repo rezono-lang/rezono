@@ -1,3 +1,11 @@
+---
+decider: [language]
+decided_on: 2026-11-19
+valid_from: 2026-11-19
+state: in_force
+subject: standard-pack-candidates
+---
+
 # Staging candidates for ready standard packs and examples
 
 The usage inventory marks five remaining standard packs (`packs/std-decision`, `packs/std-identity`, `packs/std-order`, `packs/std-part`, `packs/std-time`) and the standalone example `examples/projects` Ready for first conversion into `.rezono` modules. Converting all six in parallel without disturbing existing pack hashes or legacy oracle tests follows the staging pattern already used for `examples/library` ([Acceptance of the library migration](language-library-acceptance.md)).
