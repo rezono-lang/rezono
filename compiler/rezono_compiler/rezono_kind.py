@@ -160,7 +160,7 @@ def lower(decl: dict, at: str, own: dict[str, str], owners: dict[str, list[str]]
     annotations = decl.get("annotations")
     kind_layer = annotations.get("layer", layer) if isinstance(annotations, dict) else layer
     world = decl.get("world")
-    if has_parent and world == "open":
+    if has_parent and (world == "open" or (rezono_1 and "world" in decl)):
         refuse(at, "a kind with a parent has the world of its root kind", "§5.1")
         ok = False
     elif rezono_1:
