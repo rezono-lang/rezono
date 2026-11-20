@@ -1,0 +1,10 @@
+# Signs of std-review (contracts/view.yaml): a shape per kind.
+kinds:
+  - {kind: change, shape: rect}
+  - {kind: change_member, shape: bar}
+  - {kind: change_support, shape: bar}
+  - {kind: review, shape: rect}
+  - {kind: review_dismissal, shape: bar}
+  - {kind: role_grant, shape: pill}
+  - {kind: review_phase, shape: pill}
+  - {kind: review_policy, shape: pill}

@@ -1,0 +1,74 @@
+id: https://rezono.example/std-review/review
+name: std_review
+in_language: en
+imports:
+  - linkml:types
+default_range: string
+annotations:
+  layer: facts
+enums:
+  Verdict:
+    permissible_values:
+      accepted: {}
+      rejected: {}
+  Phase:
+    permissible_values:
+      lab: {}
+      strict: {}
+  Policy:
+    permissible_values:
+      require: {}
+      mark: {}
+      none: {}
+classes:
+  Change:
+    attributes:
+      id: {identifier: true}
+      author: {required: true}
+      content_sha256: {required: true}
+      support_sha256: {required: true}
+  ChangeMember:
+    attributes:
+      id: {identifier: true}
+      change: {range: Change, required: true}
+      kind: {required: true}
+      element: {required: true}
+  ChangeSupport:
+    attributes:
+      id: {identifier: true}
+      change: {range: Change, required: true}
+      kind: {required: true}
+      element: {required: true}
+  Review:
+    attributes:
+      id: {identifier: true}
+      change: {range: Change, required: true}
+      reviewer: {required: true}
+      role: {required: true}
+      verdict: {range: Verdict, required: true}
+      reason: {}
+      day: {range: integer, required: true}
+      content_sha256: {required: true}
+      support_sha256: {required: true}
+  ReviewDismissal:
+    attributes:
+      id: {identifier: true}
+      review: {range: Review, required: true}
+  RoleGrant:
+    attributes:
+      id: {identifier: true}
+      subject: {required: true}
+      role: {required: true}
+      from_day: {range: integer, required: true}
+      until_day: {range: integer}
+      change: {range: Change}
+  ReviewPhase:
+    attributes:
+      id: {identifier: true}
+      phase: {range: Phase, required: true}
+      owner: {required: true}
+  ReviewPolicy:
+    attributes:
+      id: {identifier: true}
+      kind: {required: true}
+      policy: {range: Policy, required: true}

@@ -168,9 +168,10 @@ class RepositoryPullRequestSelectionTests(unittest.TestCase):
         with patch.object(ci, "pull_request_range", return_value=(head, head, list(changed))):
             return {c.folder for c in ci.pull_request_components(components, ROOT, "main")}, components, head
 
-    def test_decision_only_change_selects_no_component_job(self):
+    def test_decision_only_change_selects_the_decision_head_reader(self):
+        # The loop component reads every decision head (decisions/decision-heads.md); a docs page has no reader.
         selected, _, _ = self.selected("decisions/a-new-decision.md", "docs/a-new-page.md")
-        self.assertEqual(selected, set())
+        self.assertEqual(selected, {"loop"})
 
     def test_compiler_change_selects_the_compiler_and_its_dependents_only(self):
         selected, components, head = self.selected("compiler/rezono_compiler/__init__.py")
@@ -765,7 +766,7 @@ class InventoryTests(unittest.TestCase):
     def test_publication_fixture_is_built_once_and_read_from_isolated_stores(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            for rel in ("scripts/components.py", "scripts/pytest-plugins.txt",
+            for rel in ("scripts/components.py", "scripts/pytest-plugins.txt", "scripts/red_guard.py",
                         ".github/workflows/publication_fixture.py"):
                 (root / rel).parent.mkdir(parents=True, exist_ok=True)
                 shutil.copyfile(ROOT / rel, root / rel)
@@ -836,6 +837,7 @@ class InventoryTests(unittest.TestCase):
             script = root / "scripts/components.py"
             shutil.copyfile(ROOT / "scripts/components.py", script)
             shutil.copyfile(ROOT / "scripts/pytest-plugins.txt", root / "scripts/pytest-plugins.txt")
+            shutil.copyfile(ROOT / "scripts/red_guard.py", root / "scripts/red_guard.py")
             profile = Path(".github/workflows/compiler-duration-profile.json")
             (root / profile.parent).mkdir(parents=True)
             shutil.copyfile(ROOT / profile, root / profile)
@@ -929,7 +931,7 @@ class InventoryTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             (root / "scripts").mkdir()
-            for name in ("components.py", "red_list.py", "pytest-plugins.txt"):
+            for name in ("components.py", "red_list.py", "pytest-plugins.txt", "red_guard.py"):
                 shutil.copyfile(ROOT / "scripts" / name, root / "scripts" / name)
             component = root / "probe"
             component.mkdir()
@@ -964,5 +966,5 @@ class InventoryTests(unittest.TestCase):
 if __name__ == "__main__":
     # The inventory cases run in repositories of their own, without the job's base revision, so
     # the plugin list comes from their checkout (scripts/components.py, listed_plugins).
-    os.environ.pop("GITHUB_EVENT_PATH", None)
+    os.environ.pop("GITHUB_ACTIONS", None)
     unittest.main()
