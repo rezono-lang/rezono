@@ -132,9 +132,9 @@ function selectVersion<T extends { version: string; replaces?: string; known?: s
 
 function parseUnitDef(unitName: string, body: string, existing: Record<string, TypeDef>): TypeDef | undefined {
 	if (body === 'integer') return { of: 'Integer' };
-	const money = /^money(?: minor)? ([A-Z][A-Za-z0-9]*)(?: per ([a-z][a-z0-9_]*))?$/.exec(body);
+	const money = /^money(?: (minor))? ([A-Z][A-Za-z0-9]*)(?: per ([a-z][a-z0-9_]*))?$/.exec(body);
 	if (money) {
-		return { of: 'Money', currency: money[1], scale: '2', ...(money[2] ? { per: money[2] } : {}) };
+		return { of: 'Money', currency: money[2], scale: money[1] ? '0' : '2', ...(money[3] ? { per: money[3] } : {}) };
 	}
 	const qty = /^([0-9]+(?:\.[0-9]+)?(?:\/[0-9]+)?) ([A-Za-z]\w*)$/.exec(body);
 	if (qty) {
@@ -409,7 +409,25 @@ function evalExpr(
 	scopeKind?: string,
 	scopeId?: string
 ): { value: V; diagnostics: ReturnType<typeof typing>['found'] } {
-	const t = typing('', schema, new WeakMap());
+	const spans = new WeakMap<object, { text: string; start: number; end: number }>();
+	const nodeBySpan = new Map<number, object>();
+	let nextSpanId = 1;
+	const assignSpans = (node: unknown): void => {
+		if (Array.isArray(node)) {
+			node.forEach(assignSpans);
+			return;
+		}
+		if (typeof node !== 'object' || node === null) return;
+		if (!spans.has(node)) {
+			const id = nextSpanId++;
+			spans.set(node, { text: '', start: id, end: id });
+			nodeBySpan.set(id, node);
+		}
+		for (const v of Object.values(node as Record<string, unknown>)) assignSpans(v);
+	};
+	assignSpans(expr);
+
+	const t = typing('', schema, spans);
 	const run = () => t.ex(expr);
 	if (scopeKind !== undefined) t.element(scopeKind, run);
 	else run();
@@ -428,13 +446,15 @@ function evalExpr(
 			if (kind) {
 				t.heads.set(node, { as: 'id', kind });
 				let cur: Ty = { t: 'ref', kind };
+				let set = false;
 				for (const s of (rec.path as string[]).slice(1)) {
 					if (cur.t !== 'ref') break;
 					const sd = schema.kinds[cur.kind]?.slots[s];
 					if (!sd) break;
+					if (sd.card === '*' || sd.card === '+') set = true;
 					cur = slotType(schema, sd);
 				}
-				t.typed.set(node, t.value(cur));
+				t.typed.set(node, t.value(cur, [], set));
 				patchedNodes.add(node);
 			}
 		}
@@ -442,9 +462,40 @@ function evalExpr(
 	};
 	patchHeads(expr);
 
+	if (patchedNodes.size) {
+		const recheckPatchedPeers = (node: unknown): void => {
+			if (Array.isArray(node)) {
+				node.forEach(recheckPatchedPeers);
+				return;
+			}
+			if (typeof node !== 'object' || node === null) return;
+			const rec = node as Record<string, unknown>;
+			if (Array.isArray(rec.cmp) && rec.cmp.length === 3) {
+				const [, an, bn] = rec.cmp as [string, object, object];
+				if (patchedNodes.has(an) || patchedNodes.has(bn)) {
+					const ta = t.typed.get(an);
+					const tb = t.typed.get(bn);
+					if (ta && tb && !t.meet(ta, an, tb, bn)) {
+						t.report('R003', spans.get(node) ?? { text: '', start: 0, end: 0 }, [t.describe(ta.ty), t.describe(tb.ty)]);
+					}
+				}
+			}
+			for (const v of Object.values(rec)) recheckPatchedPeers(v);
+		};
+		recheckPatchedPeers(expr);
+	}
+
 	const diagnostics = patchedNodes.size
-		? t.found.filter((d) => d.code !== 'R002' && d.code !== 'R003')
+		? t.found.filter((d) => {
+			if (d.code !== 'R002' && d.code !== 'R003') return true;
+			const diagNode = nodeBySpan.get(d.span.start);
+			return !diagNode || !patchedNodes.has(diagNode);
+		})
 		: t.found;
+
+	if (diagnostics.some(isError)) {
+		return { value: { s: 'invalid', reason: '' }, diagnostics };
+	}
 
 	const r = reader({ typed: t.typed, heads: t.heads }, schema, data);
 	const value = scopeKind !== undefined && scopeId !== undefined
@@ -624,6 +675,7 @@ export function runExamples(module: Module): ExamplesResult {
 		resolveParams(paramEntries, schema, data, exCtx, idKinds);
 
 		// Apply `given` slot assignments.
+		const givenSingle = new Set<string>();
 		for (const g of exDecl.given) {
 			const [id, ...rest] = g.path;
 			const kind = idKinds.get(id);
@@ -635,13 +687,18 @@ export function runExamples(module: Module): ExamplesResult {
 			// Follow intermediate ref slots if g.path has > 2 segments.
 			let curKind = kind;
 			let curId = id;
+			let broken = false;
 			for (let i = 0; i < rest.length - 1; i++) {
-				const cell = kindRows.get(curId)?.get(rest[i]);
+				const cell = data.kinds.get(curKind)?.get(curId)?.get(rest[i]);
 				const sd = schema.kinds[curKind]?.slots[rest[i]];
-				if (!sd?.ref || !cell || Array.isArray(cell) || cell.s !== 'known' || typeof cell.v !== 'object' || !('id' in cell.v)) break;
+				if (!sd?.ref || !cell || Array.isArray(cell) || cell.s !== 'known' || typeof cell.v !== 'object' || cell.v === null || !('id' in cell.v)) {
+					broken = true;
+					break;
+				}
 				curKind = sd.ref;
 				curId = cell.v.id;
 			}
+			if (broken) continue;
 			const slot = rest[rest.length - 1];
 			const slotDef = schema.kinds[curKind]?.slots[slot];
 			if (!slotDef) continue;
@@ -663,8 +720,14 @@ export function runExamples(module: Module): ExamplesResult {
 				const prev = cellMap.get(slot);
 				cellMap.set(slot, prev === undefined ? [attributed] : mergeCell(prev, attributed));
 			} else {
-				const prev = cellMap.get(slot);
-				cellMap.set(slot, prev === undefined ? attributed : mergeCell(prev, attributed));
+				const gk = `${curKind}\0${curId}\0${slot}`;
+				if (!givenSingle.has(gk)) {
+					givenSingle.add(gk);
+					cellMap.set(slot, attributed);
+				} else {
+					const prev = cellMap.get(slot);
+					cellMap.set(slot, prev === undefined ? attributed : mergeCell(prev, attributed));
+				}
 			}
 		}
 
@@ -773,17 +836,42 @@ export function runExamples(module: Module): ExamplesResult {
 
 				const evalDefs = (defs: DefinitionDecl[], flags: boolean[]): V => {
 					const trueIndices: number[] = [];
-					const undecided: V[] = [];
+					const undecided: { idx: number; v: V }[] = [];
 					defs.forEach((def, di) => {
 						const v = evalBody(def.when);
 						if (v.s === 'known' && v.v === true) trueIndices.push(di);
-						else if (v.s === 'unknown' || v.s === 'invalid') undecided.push(v);
+						else if (v.s === 'unknown' || v.s === 'invalid') undecided.push({ idx: di, v });
 					});
-					const overridden = new Set<string>();
-					for (const di of trueIndices) {
-						for (const o of defs[di].overrides ?? []) overridden.add(o.definition);
+					const overrides = new Map<string, Set<string>>();
+					for (const def of defs) {
+						overrides.set(def.name, new Set((def.overrides ?? []).map((o) => o.definition)));
 					}
-					const winners = trueIndices.filter((di) => !overridden.has(defs[di].name));
+					// Transitive closure of overrides.
+					let changed = true;
+					while (changed) {
+						changed = false;
+						for (const targets of overrides.values()) {
+							for (const target of [...targets]) {
+								for (const trans of overrides.get(target) ?? []) {
+									if (!targets.has(trans)) {
+										targets.add(trans);
+										changed = true;
+									}
+								}
+							}
+						}
+					}
+					const winners = trueIndices.filter(
+						(di) => !trueIndices.some((other) => other !== di && overrides.get(defs[other].name)!.has(defs[di].name))
+					);
+					if (undecided.length) {
+						const blockingUndecided = undecided.filter(
+							(u) => !trueIndices.some((ai) => overrides.get(defs[ai].name)!.has(defs[u.idx].name))
+						);
+						if (blockingUndecided.length && winners.length <= 1) {
+							return worstV(blockingUndecided.map((u) => u.v))!;
+						}
+					}
 					if (winners.length > 1) {
 						for (const di of winners) flags[di] = true;
 						addCoreViolation('exception_conflict', id);
@@ -794,7 +882,7 @@ export function runExamples(module: Module): ExamplesResult {
 						flags[winIdx] = true;
 						return evalBody(defs[winIdx].value);
 					}
-					return worstV(undecided) ?? { s: 'unknown', reason: 'no_row_applies', cause: { relation, key: [id] } };
+					return { s: 'unknown', reason: 'no_row_applies', cause: { relation, key: [id] } };
 				};
 
 				const evalUnless = (blocks: Clause[][]): V | undefined => {
@@ -899,7 +987,9 @@ export function runExamples(module: Module): ExamplesResult {
 							for (const m of setEval.value.v) {
 								if (m.s !== 'known' || typeof m.v !== 'object' || !('id' in m.v)) continue;
 								const pVal = evalExpr(pred, schema, data, idKinds, setTyped.ty.kind, m.v.id).value;
-								const fails = aggName === 'all' ? !(pVal.s === 'known' && pVal.v === true) : (pVal.s === 'known' && pVal.v === true);
+								const fails = aggName === 'all'
+									? (pVal.s === 'known' && pVal.v === false) || pVal.s === 'invalid'
+									: (pVal.s === 'known' && pVal.v === true) || pVal.s === 'invalid';
 								if (fails) badIds.add(m.v.id);
 							}
 						}
