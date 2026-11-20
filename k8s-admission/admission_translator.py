@@ -29,6 +29,7 @@ _BINDING_FORMAT = "rezono.admission-binding/1"
 _REQUIRED_KEYS = ("format", "rule", "output", "match", "request", "parameters")
 _CEL_IDENT = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
 _NAMESPACE_EXPR = "request.namespace"
+_MAX_REQUEST_BRANCH_KEYS = 8
 
 
 def _validate_binding(binding: Any, program: rules.Program) -> None:
@@ -77,12 +78,10 @@ def _request_root_expression(binding: Mapping[str, Any]) -> str:
         if not node:
             return f"dyn({prefix})"
         keys = sorted(node)
-        if len(keys) > 4:
-            entries = ", ".join(
-                f"{literal(key, 'string')}: {render_tree(f'{prefix}.{key}', node[key])}"
-                for key in keys
+        if len(keys) > _MAX_REQUEST_BRANCH_KEYS:
+            raise ValueError(
+                f"cannot project more than {_MAX_REQUEST_BRANCH_KEYS} guarded request fields at {prefix}"
             )
-            return f"{{{entries}}}"
 
         def branch(index: int, chosen: list[str]) -> str:
             if index == len(keys):
@@ -328,6 +327,68 @@ def _compile_range_atom(
     return range_var, covers(table, var, atom_conds, range_col, start, end)
 
 
+def _value_key(value: Any) -> tuple[str, ...]:
+    if isinstance(value, dict):
+        return ("range", value["start"], value["end"])
+    return ("scalar", value)
+
+
+def _same_req_matches_current_row(
+    head_terms: tuple[str, ...],
+    head_columns: tuple[rules.Column, ...],
+    target_values: tuple[Any, ...],
+    req_terms: tuple[str, ...],
+    req_columns: tuple[rules.Column, ...],
+    current_values: tuple[Any, ...],
+    conds: list[Condition],
+    types: Mapping[str, str],
+) -> bool:
+    """Return True only when head unification and rule equalities force `req_terms` to equal `current_values`.
+
+    Single-row CEL translation only knows that `current_values` belongs to `current_rel`; it cannot
+    quantify over other rows of `current_rel`. Unifying a `same_req` literal with `current_values`
+    is sound only when every valuation satisfying the head and rule conditions must already assign
+    each column of `req_terms` to the corresponding column of `current_values`.
+    """
+    parent: dict[tuple[Any, ...], tuple[Any, ...]] = {}
+
+    def find(node: tuple[Any, ...]) -> tuple[Any, ...]:
+        root = parent.setdefault(node, node)
+        while parent[root] != root:
+            root = parent[root]
+        while node != root:
+            nxt = parent[node]
+            parent[node] = root
+            node = nxt
+        return root
+
+    def union(left: tuple[Any, ...], right: tuple[Any, ...]) -> None:
+        lroot, rroot = find(left), find(right)
+        if lroot != rroot:
+            parent[lroot] = rroot
+
+    for term, col, value in zip(head_terms, head_columns, target_values):
+        term_node: tuple[Any, ...] = ("var", term) if is_var(term) else ("lit", literal(term, col.type))
+        union(term_node, ("val", _value_key(value)))
+
+    for cond in conds:
+        if cond.op != "eq" or getattr(cond, "compare_as", None) is not None:
+            continue
+        if is_var(cond.left) and is_var(cond.right):
+            union(("var", cond.left), ("var", cond.right))
+        elif is_var(cond.left) and cond.left in types:
+            union(("var", cond.left), ("lit", literal(cond.right, types[cond.left])))
+        elif is_var(cond.right) and cond.right in types:
+            union(("var", cond.right), ("lit", literal(cond.left, types[cond.right])))
+
+    for term, col, value in zip(req_terms, req_columns, current_values):
+        term_node = ("var", term) if is_var(term) else ("lit", literal(term, col.type))
+        val_node = ("val", _value_key(value))
+        if find(term_node) != find(val_node):
+            return False
+    return True
+
+
 def _compile_derived(
     request_program: rules.Program,
     rel_name: str,
@@ -463,13 +524,35 @@ def _compile_derived(
                     f"cannot join distinct request relations in one rule: "
                     f"{current_rel} and {other_req[0].atom.relation}"
                 )
-            # Rule derives from a different request relation than the row currently being checked.
-            continue
+            raise ValueError(
+                f"cannot compile rule for {rel_name} referencing request relation "
+                f"{other_req[0].atom.relation} while checking {current_rel}"
+            )
+        if len(same_req) > 1:
+            raise ValueError(
+                f"cannot self-join request relation {current_rel} in rule for {rel_name}"
+            )
 
-        for lit in same_req:
+        if same_req:
+            req_lit = same_req[0]
+            req_rel = request_program.relations[current_rel]
+            if not _same_req_matches_current_row(
+                head_terms,
+                rel_obj.key,
+                target_values,
+                req_lit.atom.terms,
+                req_rel.key,
+                current_values,
+                conds,
+                types,
+            ):
+                raise ValueError(
+                    f"cannot quantify over other rows of request relation {current_rel} "
+                    f"in rule for {rel_name}"
+                )
             _unify_terms(
-                lit.atom.terms,
-                request_program.relations[current_rel].key,
+                req_lit.atom.terms,
+                req_rel.key,
                 current_values,
                 env,
                 ranges,
