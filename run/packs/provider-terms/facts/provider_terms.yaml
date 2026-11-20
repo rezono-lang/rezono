@@ -12,3 +12,8 @@ order_status:
   - {id: delivering, outcome: pending}
   - {id: delivered, outcome: delivered}
   - {id: cancelled, outcome: refused}
+
+renew_field_block:
+  - {id: automatic, blocked_when: true, code: renews_automatically}
+  - {id: forced, blocked_when: true, code: renewal_forced}
+  - {id: deleteAtExpiration, blocked_when: false, code: not_deleted_at_expiration}

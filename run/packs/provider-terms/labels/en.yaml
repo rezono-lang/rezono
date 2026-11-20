@@ -21,3 +21,25 @@ conflicted_order_status: Conflicted order status
 ambiguous_order_status: Ambiguous order status
 known_order_status: Known order status
 order_outcome: Order outcome
+renew_field_block: Renew field block rule
+renew_field_block.blocked_when: Blocking boolean value
+renew_field_block.code: Blocking code
+service: Provider service
+service.deadline_us: Cleanup deadline in microseconds
+service.expiration_us: Paid expiration in microseconds
+service.engaged_known: Engagement status known
+service.engaged_up_to_us: Engagement end in microseconds
+service_renew_flag: Service renew flag
+service_renew_flag.service: Service
+service_renew_flag.field: Renew field name
+service_renew_flag.value: Observed boolean value
+conflicted_renew_field_block: Conflicted renew field block
+service_has_renew_flag: Service has renew flag
+ambiguous_renew_flag: Ambiguous service renew flag
+service_has_expiration: Service has expiration
+ambiguous_service_expiration: Ambiguous service expiration
+service_engaged_known: Service engagement known
+service_engaged_unknown: Service engagement unknown
+service_has_known_engagement: Service has known engagement
+ambiguous_service_engagement: Ambiguous service engagement
+renewal_block: Renewal block

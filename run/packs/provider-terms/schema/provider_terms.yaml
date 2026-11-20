@@ -35,3 +35,24 @@ classes:
       id: {identifier: true}
       order: {range: Order, required: true}
       detail_type: {required: true}
+  RenewFieldBlock:
+    description: A provider renew boolean field and the value at which it blocks a run.
+    attributes:
+      id: {identifier: true}
+      blocked_when: {range: boolean, required: true}
+      code: {required: true}
+  Service:
+    description: A provider service record with deadline, expiration, and engagement bounds in UTC microseconds.
+    attributes:
+      id: {identifier: true}
+      deadline_us: {range: integer, required: true}
+      expiration_us: {range: integer}
+      engaged_known: {range: boolean}
+      engaged_up_to_us: {range: integer}
+  ServiceRenewFlag:
+    description: One boolean field observed in a service's renew object.
+    attributes:
+      id: {identifier: true}
+      service: {range: Service, required: true}
+      field: {required: true}
+      value: {range: boolean, required: true}

@@ -4,3 +4,6 @@ kinds:
   - {kind: order_status, shape: rect}
   - {kind: order, shape: rect}
   - {kind: order_detail, shape: rect}
+  - {kind: renew_field_block, shape: rect}
+  - {kind: service, shape: rect}
+  - {kind: service_renew_flag, shape: rect}
