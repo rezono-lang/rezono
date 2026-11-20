@@ -21,6 +21,7 @@ type sample struct {
 	Validations []expression
 	Object      map[string]any
 	Params      map[string]any
+	Request     map[string]any
 }
 
 // Preserve Kubernetes integer ports; the generic JSON decoder otherwise uses doubles.
@@ -71,6 +72,7 @@ func evaluate(env *cel.Env, source string, bindings map[string]any) (bool, error
 func run() error {
 	obj := cel.MapType(cel.StringType, cel.DynType)
 	env, err := cel.NewEnv(cel.Variable("object", obj), cel.Variable("params", obj),
+		cel.Variable("request", obj),
 		cel.Variable("variables", cel.MapType(cel.StringType, cel.BoolType)))
 	if err != nil {
 		return err
@@ -84,7 +86,12 @@ func run() error {
 	var results []bool
 	for _, test := range samples {
 		variables := map[string]bool{}
-		bindings := map[string]any{"object": test.Object, "params": test.Params, "variables": variables}
+		request := test.Request
+		if request == nil {
+			request = map[string]any{}
+		}
+		bindings := map[string]any{"object": test.Object, "params": test.Params,
+			"request": request, "variables": variables}
 		if _, err := integers(bindings); err != nil {
 			return err
 		}
