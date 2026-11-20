@@ -11,12 +11,15 @@ The stdio process reads the publisher's on-disk store. The operator launching it
 | Tool | Shared operation |
 | --- | --- |
 | `ask` | Evaluate an `ask … where …` expression and show value states and undecided reasons. |
-| `grounds`, `reach` | Ask the named question about the supplied row. |
+| `grounds`, `reach`, `gap` | Ask the named question about the supplied row (`gap` accepts `null` or `"_"` for wildcard key parts). |
+| `suppose` | Evaluate a `proposal` or `variant` with `:suppose` (`scenario`, or `impact` when `impact: true`). |
 | `kinds`, `schema` | Ask about kinds or a named kind's fields in the role's typed catalogue, as `:kinds` and `:schema` do in the REPL. |
 | `row` | Read the typed cells and outcomes for a kind and a single `id` or ordered `key` parts, as `:row` does. |
 | `search` | Complete an identifier prefix the role can read. |
 | `sweep` | Read the role's published sweep with `:sweep`. The gate requires the pinned base to be current. |
 | `more` | Continue the previous page, or pass a row's `cursor` to continue that cell source under its original pin. |
+
+Every tool result returns both the human-readable `text` content and a machine-readable `structuredContent` JSON object (`tool`, `ok`, `role`, pinned `pack`/`manifest`, `lines`, and the typed `rezono.answer/1` `answer`, `matches`, proposal `delta`/`response`, or `error`).
 
 The `--gate` option selects an explicitly configured external gate. In an unlocked session, `propose` requires a `REZONO_GATE_TOKEN` and an affirmative `propose` right for the selected role from the authenticated gate's `/whoami` response. The client checks the right again before sending a proposed delta. The gate controls authorization and handling.
 
@@ -33,4 +36,4 @@ The recording stores the exact manifest, role, tool arguments, text and refusal 
 
 ## Dependencies
 
-The lockfile pins the MCP SDK 1.32.2 and Zod 3.25.76 directly, and Jose 6.2.17 through the SDK. Their licenses are MIT. The remaining locked licenses are MIT, ISC and BSD.
+The lockfile pins the MCP SDK 1.32.2 and Zod 4.6.7 directly, and Jose 6.2.17 through the SDK. Their licenses are MIT. The remaining locked licenses are MIT, ISC and BSD.
