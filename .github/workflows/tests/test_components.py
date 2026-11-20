@@ -1006,6 +1006,9 @@ class InventoryTests(unittest.TestCase):
             journal.write_text(original, encoding="utf-8")
             # Omit a whole originally inventoried file from the assignment metadata.
             inventory["files"].remove("compiler/test_states.py")
+            for files in inventory["shards"]:
+                if "compiler/test_states.py" in files:
+                    files.remove("compiler/test_states.py")
             (plans / "compiler/items.json").write_text(json.dumps(inventory), encoding="utf-8")
             for shard in range(2):
                 good("run-shard", "compiler", shard, 2, plans, reports / str(shard), receipts)

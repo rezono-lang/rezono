@@ -1057,7 +1057,7 @@ def plugin_arguments() -> tuple[list[str], object]:
     return [arg for name in names for arg in ("-p", name)], PluginGuard()
 
 
-def collect_component(folder: str, directory: Path) -> int:
+def collect_component(folder: str, directory: Path, total: int = 1) -> int:
     import pytest
 
     sys.path.insert(0, str(ROOT))
@@ -1119,7 +1119,7 @@ def collect_component(folder: str, directory: Path) -> int:
             return 1
     files = sorted(set(test_files(folder)) | collected)
     # The split into the matrix's shards, made here by the same script and profile as the matrix.
-    shards = shard_files(folder, files, shard_count(folder))
+    shards = shard_files(folder, files, total)
     dest.write_text(json.dumps({"items": items, "cluster": cluster, "files": files, "shards": shards,
                                 "config": config_path}), encoding="utf-8")
     print(f"{folder}: inventoried {len(items)} node IDs from {len(files)} test files", flush=True)
@@ -1131,11 +1131,12 @@ def pytest_folder(component: dict) -> str:
 
 
 def collect_matrix(matrix: list[dict], directory: Path) -> int:
-    folders = sorted({pytest_folder(c) for c in matrix})
+    totals = {pytest_folder(c): c.get("total", 1) for c in matrix}
     def collect(folder: str) -> int:
-        return subprocess.call([sys.executable, __file__, "collect-component", folder, str(directory)])
+        return subprocess.call([sys.executable, __file__, "collect-component", folder, str(directory),
+                                str(totals[folder])])
     with ThreadPoolExecutor(max_workers=runner_cores()) as pool:
-        statuses = list(pool.map(collect, folders))
+        statuses = list(pool.map(collect, sorted(totals)))
         return next((code for code in statuses if code), 0)
 
 
@@ -1380,6 +1381,7 @@ def main() -> int:
     collect = sub.add_parser("collect-component")
     collect.add_argument("folder")
     collect.add_argument("plans", type=Path)
+    collect.add_argument("total", type=int, nargs="?", default=1)
     for name in ("inventory", "verify-execution"):
         command = sub.add_parser(name)
         command.add_argument("plans", type=Path)
@@ -1400,7 +1402,7 @@ def main() -> int:
     if args.cmd == "inventory":
         return collect_matrix(json.loads(os.environ["PYTHON_MATRIX"]), args.plans)
     if args.cmd == "collect-component":
-        return collect_component(args.folder, args.plans)
+        return collect_component(args.folder, args.plans, args.total)
     if args.cmd == "execute-worker":
         return execute_worker(args.assignment, args.journal, args.report)
     if args.cmd == "verify-execution":
