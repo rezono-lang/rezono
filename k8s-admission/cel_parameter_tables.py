@@ -47,6 +47,8 @@ def _relation_table(name, spec, relation, namespace):
     columns = {col.name: (namespace if col.name == scope else f"{{e}}.{col.name}") for col in rel_columns}
     non_scope = [col for col in rel_columns if col.name != scope]
     expr = " + ".join(_list_expression(entry, non_scope) for entry in lists)
+    if len(lists) > 1:
+        expr = f"({expr})"
     return {"list": expr, "columns": columns, "types": types}
 
 
