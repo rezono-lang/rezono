@@ -200,20 +200,6 @@ def _recording(root, *, include_trusted_context=True):
     return plan_hash, data
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason=(
-        "M2: decisions/safe-step-rounds.md, decisions/loop-certificate-admission.md, decisions/admission-transport.md "
-        "and decisions/code-does-not-decide.md. Extend the ordinary typed recording and replay path for certified "
-        "rounds: allow a dated opening sweep in initial so step_safety_current_cut derives opening, admit the "
-        "recording's archived Evidence (archive, context, index) through rezono_checker.evidence.admit and feed "
-        "only the admitted verified_round and verified_round_member rows into std-loop, read ready (not unblocked) "
-        "for certified rounds, preserve durable attempt reservation across lost replies and reconciliation on "
-        "readback, refuse stale round cuts, and keep std-loop round_outcome (drift from later contrary readback "
-        "yields failure)."
-    ),
-)
 def test_certified_round_replay(tmp_path, capsys):
     certified_dir = tmp_path / "certified"
     plan_hash, data = _recording(certified_dir)
