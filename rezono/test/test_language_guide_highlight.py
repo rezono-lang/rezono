@@ -82,7 +82,7 @@ def _svg_lines_and_fills(svg_bytes: bytes) -> tuple[list[str], set[str]]:
     strict=True,
     raises=MissingLanguageGuideHighlight,
     reason=(
-        "extra: decisions/language-guide-highlight.md: Waits for "
+        "M3: decisions/language-guide-highlight.md: Waits for "
         "rezono/test/test_rezono_syntax_grammar.py--test_generated_syntax_highlighting_grammar and "
         "rezono/test/test_language_guide_excerpt.py--test_language_guide_starts_with_subsidy_award_excerpt. "
         "Add rezono/src/render-excerpt-svg.ts (with `--out-dir`) and generate deterministic "
@@ -131,7 +131,7 @@ def test_regenerating_excerpt_svgs_produces_identical_bytes(tmp_path):
     strict=True,
     raises=MissingLanguageGuideHighlight,
     reason=(
-        "extra: decisions/language-guide-highlight.md: Waits for "
+        "M3: decisions/language-guide-highlight.md: Waits for "
         "rezono/test/test_rezono_syntax_grammar.py--test_generated_syntax_highlighting_grammar and "
         "rezono/test/test_language_guide_excerpt.py--test_language_guide_starts_with_subsidy_award_excerpt. "
         "Ensure the text content inside rezono/assets/excerpt-light.svg and excerpt-dark.svg matches the "
@@ -224,7 +224,7 @@ def test_highlight_theme_covers_every_token_kind_in_light_and_dark():
     strict=True,
     raises=MissingLanguageGuideHighlight,
     reason=(
-        "extra: decisions/language-guide-highlight.md: Waits for "
+        "M3: decisions/language-guide-highlight.md: Waits for "
         "rezono/test/test_rezono_syntax_grammar.py--test_generated_syntax_highlighting_grammar and "
         "rezono/test/test_language_guide_excerpt.py--test_language_guide_starts_with_subsidy_award_excerpt. "
         "Display the light and dark SVGs in rezono/README.md with <picture>, descriptive alt text, "

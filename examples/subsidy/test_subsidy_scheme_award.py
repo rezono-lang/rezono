@@ -76,7 +76,7 @@ def compile_legacy_oracle(tmp_path: Path) -> dict[str, str]:
     strict=True,
     raises=MissingSubsidyAwardInRezono,
     reason=(
-        "extra: decisions/language-calculations.md: Convert examples/subsidy-scheme/calc/award.yaml "
+        "M3: decisions/language-calculations.md: Convert examples/subsidy-scheme/calc/award.yaml "
         "to examples/subsidy-scheme/rezono/award.rezono (starting from candidate/award.rezono) with "
         "its generated rezono/award.json and rezono: entry in pack.yaml, remove calc/award.yaml, "
         "verify identical ir/calc.json and examples/subsidy expected/calc/ outcomes, re-pin "

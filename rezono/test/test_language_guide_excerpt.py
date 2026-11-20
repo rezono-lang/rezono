@@ -40,7 +40,7 @@ def _is_line_bounded_slice(excerpt: str, source: str) -> bool:
     strict=True,
     raises=MissingLanguageGuideExcerpt,
     reason=(
-        "extra: decisions/language-guide-highlight.md: Waits for "
+        "M3: decisions/language-guide-highlight.md: Waits for "
         "examples/subsidy/test_subsidy_scheme_award.py--test_subsidy_scheme_award_in_rezono. "
         "Start rezono/README.md before its source-file table with a `haskell`-fenced excerpt copied "
         "byte-for-byte from examples/subsidy-scheme/rezono/award.rezono and links to where the syntax "
