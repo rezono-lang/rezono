@@ -39,6 +39,7 @@ examples/platform/messages/*.mf2 pack-definition
 examples/projects/messages/*.mf2 pack-definition
 examples/subsidy/messages/*.mf2 pack-definition
 examples/subsidy-scheme/messages/*.mf2 pack-definition
+examples/zorgtoeslag-slice/messages/*.mf2 pack-definition
 examples/*/rules/*.dl pack-definition
 examples/*/calc/*.yaml pack-definition
 examples/*/sweeps.yaml pack-definition
@@ -56,6 +57,15 @@ examples/platform/tenant-capacity/interface/labels/*.yaml pack-definition
 examples/platform/tenant-capacity/interface/messages/*.mf2 pack-definition
 examples/platform/tenant-capacity/interface/rules/*.dl pack-definition
 examples/platform/tenant-capacity/interface/ports/*.yaml pack-definition
+
+# The three-source healthcare allowance slice pins its four source packs.
+examples/zorgtoeslag-slice/sources/*/pack.yaml pack-definition
+examples/zorgtoeslag-slice/sources/*/channels.yaml pack-definition
+examples/zorgtoeslag-slice/sources/*/schema/**/*.yaml pack-definition
+examples/zorgtoeslag-slice/sources/*/rezono/**/*.rezono pack-definition
+examples/zorgtoeslag-slice/sources/*/rezono/**/*.json pack-definition
+examples/zorgtoeslag-slice/sources/*/labels/*.yaml pack-definition
+examples/zorgtoeslag-slice/sources/*/messages/*.mf2 pack-definition
 
 compiler/tests/fixtures/*/pack.yaml pack-definition
 compiler/tests/fixtures/*/channels.yaml pack-definition
