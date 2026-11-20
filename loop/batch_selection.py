@@ -6,10 +6,60 @@ from itertools import combinations
 from pathlib import Path
 from typing import TypedDict
 
-from rezono_compiler import batch, facts, pack, rules, scenarios
+from rezono_compiler import batch, facts, pack, rules, rules_dl, scenarios
 
 
 Members = frozenset[str]
+
+# Speculative selection lives only in this certifier evaluation under internal names; ordinary
+# publication authorizes batches only through admitted verified rounds.
+_SPECULATIVE_RULES = """\
+.decl speculative_batch_unproved(batch: symbol)
+speculative_batch_unproved(b) :-
+    loop_batch_visible__batch(row, b), loop_batch_visible__subset(row, v),
+    !loop_batch_candidate__verdict(v, "proved").
+
+.decl speculative_batch_write_conflict(batch: symbol)
+speculative_batch_write_conflict(b) :-
+    loop_batch_member__batch(x, b), loop_batch_member__batch(y, b),
+    loop_batch_member__position(x, i), loop_batch_member__position(y, j), i < j,
+    loop_batch_member__step(x, s), loop_batch_member__step(y, t),
+    loop_batch_write__step(a, s), loop_batch_write__step(z, t),
+    loop_batch_write__target(a, slot), loop_batch_write__target(z, slot).
+
+.decl speculative_certified_batch(batch: symbol, domain: symbol, size: number)
+speculative_certified_batch(b, d, n) :-
+    loop_batch_candidate__domain(b, d), loop_batch_candidate__size(b, n),
+    loop_batch_domain__width(d, w), n > 0, n <= w,
+    loop_batch_visible__batch(full, b), loop_batch_visible__subset(full, b),
+    loop_batch_visible__batch(base, b), loop_batch_visible__subset(base, e),
+    loop_batch_candidate__domain(e, d), loop_batch_candidate__size(e, 0),
+    !speculative_batch_unproved(b), !speculative_batch_write_conflict(b).
+
+.decl speculative_batch_priority(batch: symbol, position: number, priority: number)
+speculative_batch_priority(b, i, p) :-
+    loop_batch_member__batch(m, b), loop_batch_member__position(m, i),
+    loop_batch_member__step(m, s), loop_batch_step__priority(s, p).
+
+.decl speculative_batch_difference(first: symbol, second: symbol, position: number)
+speculative_batch_difference(a, b, i) :-
+    speculative_certified_batch(a, d, n), speculative_certified_batch(b, d, n),
+    speculative_batch_priority(a, i, p), speculative_batch_priority(b, i, q), p != q.
+
+.decl speculative_batch_earlier_difference(first: symbol, second: symbol, position: number)
+speculative_batch_earlier_difference(a, b, i) :-
+    speculative_batch_difference(a, b, i), speculative_batch_difference(a, b, j), j < i.
+
+.decl speculative_batch_preceded(batch: symbol)
+speculative_batch_preceded(b) :-
+    speculative_certified_batch(a, d, m), speculative_certified_batch(b, d, n), m > n.
+speculative_batch_preceded(b) :-
+    speculative_batch_difference(a, b, i), !speculative_batch_earlier_difference(a, b, i),
+    speculative_batch_priority(a, i, p), speculative_batch_priority(b, i, q), p < q.
+
+.decl speculative_selected_batch(batch: symbol)
+speculative_selected_batch(b) :- speculative_certified_batch(b, _, _), !speculative_batch_preceded(b).
+"""
 
 
 class BatchSelection(TypedDict):
@@ -21,7 +71,15 @@ class BatchSelection(TypedDict):
 def _theory() -> tuple[pack.Pack, rules.Program]:
     path = Path(__file__).resolve().parents[1] / "packs" / "std-loop"
     model = pack.read(path)
-    return model, rules.load(model.rules)
+    inputs = {
+        name: cols
+        for name, cols in rules_dl.base_tables(model).items()
+        if name.startswith("loop_batch_") and all(t for _, t in cols)
+    }
+    program = rules_dl.read_program(
+        _SPECULATIVE_RULES, "loop/batch_selection.py", inputs, "speculative_batch_selection",
+    )
+    return model, rules.load(program)
 
 
 def _subsets(steps: tuple[str, ...], width: int) -> Iterator[tuple[str, ...]]:
@@ -85,12 +143,12 @@ def select_batch(
         "loop_batch_write": write_rows,
     }
     inputs = scenarios.rule_rows(model, program, facts.rows_of(model, records))
-    outputs = ("loop_certified_batch", "loop_selected_batch")
+    outputs = ("speculative_certified_batch", "speculative_selected_batch")
     with batch.connect(program, inputs, threads=1) as connection:
         batch.compute(connection, program)
         rows = batch.read(connection, program, outputs)
-    certified = {name for name, _, _ in rows["loop_certified_batch"]}
-    winners = rows["loop_selected_batch"]
+    certified = {name for name, _, _ in rows["speculative_certified_batch"]}
+    winners = rows["speculative_selected_batch"]
     selected = frozenset()
     if winners:
         (winner,), = winners

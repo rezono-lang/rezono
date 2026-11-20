@@ -40,10 +40,6 @@ step_safety_blocker(run, step, cut, obligation, reason) :-
 
 step_safety_blocked(run, step, cut) :- step_safety_blocker(run, step, cut, _, _).
 
-// This is individual safety from supplied checks. Batch selection remains separate.
-safe_alone(run, step, cut) :-
-    current_step_safety_check(run, step, cut, _, "proved", _), !step_safety_blocked(run, step, cut).
-
 // A verified round of the current run and cut. A round for an earlier cut authorizes nothing.
 current_verified_round(round, run, cut, batch) :-
     step_safety_current_cut(run, cut), verified_round(round, run, cut, batch).
