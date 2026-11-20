@@ -6,7 +6,7 @@ import type { CalcWitness, RowRef, Witness } from '../../../contracts/typescript
 import { canonicalJson } from '../../../viewer/src/lib/canon.ts';
 import { ask as trace, AskError, calcSteps, memoryGraph, parseAfter, questionOf, stepsOf, type RuleDoc, type Sources, type SourcesOf } from './ask.ts';
 import { catalogueQueryScope } from './catalogue-query.ts';
-import { roleCatalogue } from './catalogue.ts';
+import { roleBundle } from './catalogue.ts';
 import { ask as evaluate, roleSchema, type Asking } from './expr.ts';
 import { compareKey, pageByKey, type KeyRange } from './pieces.ts';
 import { rowQueryScope, type RowSelection } from './row-query.ts';
@@ -217,6 +217,16 @@ async function stillReadable(then: Current, now: Current): Promise<boolean> {
 	return true;
 }
 
+async function readableSnapshots(view: Current): Promise<Snapshot[]> {
+	const readable: Snapshot[] = [];
+	for (const snapshot of view.snaps.values()) {
+		if (snapshot.complete || snapshot.full === true || (await view.rows(snapshot.relation)).length > 0) {
+			readable.push(snapshot);
+		}
+	}
+	return readable;
+}
+
 function listed(view: Current) {
 	const { manifest, schema, snaps } = view;
 	return {
@@ -344,7 +354,8 @@ export async function openLocalGate(root: string, role: string): Promise<Handle>
 				if (parts.length === 2 && id === 'head') return json(listed(view));
 				if (parts.length === 2 && id === 'bundle') {
 					const selected = url.searchParams.get('m');
-					return selected === null || selected === view.manifest.id ? json(roleCatalogue(view.bundle, [...view.snaps.values()])) : missing();
+					return selected === null || selected === view.manifest.id
+						? json(roleBundle(view.bundle, await readableSnapshots(view))) : missing();
 				}
 				if (parts.length === 3 && id === 'manifests' && route === view.manifest.id) return json(listed(view));
 				if (id !== view.manifest.id) return missing();
