@@ -145,8 +145,9 @@ def test_calculation_refuses_unresolved_subject_kind(tmp_path):
         rezono_calc.resolve_subject(model, model.meta["name"], "NoSuchKind")
     assert [d.code for d in root_err.value.diagnostics] == ["R050"]
 
+    imported = model.imports[0]["name"]
     with pytest.raises(pack.CompileError, match="R050") as imported_err:
         rezono_calc.resolve_subject(
-            model, "subsidy-scheme", "NoSuchKind", {"subsidy-scheme": {"application": "application"}},
+            model, imported, "NoSuchKind", {imported: {"application": "application"}},
         )
     assert [d.code for d in imported_err.value.diagnostics] == ["R050"]
