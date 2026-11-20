@@ -551,6 +551,14 @@ def test_src_a_cited_manifest_with_its_hash_pin_is_read():
     l0.read_row(FIXTURE, dict(R01[0], **{"$src": {"memory_need": [pinned]}}))
 
 
+def test_src_synthetic_source_is_read_and_matches_source_contract():
+    doc = yaml.safe_load((ROOT / "contracts" / "source.yaml").read_text("utf-8"))
+    assert l0._SOURCE_KINDS == set(doc["enums"]["SourceKind"]["permissible_values"])
+    assert l0._SOURCE_FIELDS == set(doc["classes"]["Source"]["attributes"])
+    synthetic = {"kind": "synthetic", "name": "examples/sample/generate.py", "position": "seed 20261110#alpha"}
+    l0.read_row(FIXTURE, dict(R01[0], **{"$src": {"memory_need": [synthetic]}}))
+
+
 @pytest.mark.parametrize("why, fragment", [
     ({"tags": "rezono:w/1"}, "maps member payloads to proof URIs"),
     ({"tags": {"gpu": "not a uri"}}, "maps member payloads to proof URIs"),

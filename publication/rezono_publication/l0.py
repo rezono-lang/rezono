@@ -110,7 +110,7 @@ _CURRENCY_SIGN = {"EUR": "€", "GBP": "£", "INR": "₹", "KRW": "₩", "ILS": 
                   "RUB": "₽", "TRY": "₺", "UAH": "₴", "VND": "₫", "KZT": "₸", "GEL": "₾", "AZN": "₼"}
 # contracts/source.yaml `Source`, restated (as checker/rezono_checker/sources.py does) so the reader imports no
 # contract code (§1).
-_SOURCE_KINDS = {"git", "pack", "scenario", "proposal", "query", "tool", "person", "document"}
+_SOURCE_KINDS = {"git", "pack", "scenario", "proposal", "query", "tool", "person", "document", "synthetic"}
 _SOURCE_FIELDS = {"kind", "name", "revision", "position", "url", "retrieved_at", "fragment_sha256", "ownership",
                   "licence", "attribution"}
 _URL = re.compile(r"https?://[^\s/?#]+([/?#][^\s]*)?")
