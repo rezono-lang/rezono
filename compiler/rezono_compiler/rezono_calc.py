@@ -507,10 +507,10 @@ def lower_module(
     assert form is not None
     where = f"{module.pack_dir.name}/{module.rel}"
     line_map = rezono_module.lines(form)
-    errors: list[str] = []
+    errors: list[Diagnostic] = []
 
     def refuse(at: str, what: str) -> None:
-        errors.append(f"{where}:{_place(line_map, at)}: {what} (R050)")
+        errors.append(Diagnostic("R050", f"{where}:{_place(line_map, at)}: {what} (R050)"))
 
     doc: dict = {"format": FORMAT, "pack": module.pack, "rules": [], "templates": []}
     subject_cls: str | None = None
@@ -628,25 +628,31 @@ def lower_module(
                 })
 
     if errors:
-        raise CompileError("\n".join(errors), [Diagnostic("R050", msg) for msg in errors])
+        raise CompileError("\n".join(d.message for d in errors), errors)
     return doc
 
 
 def check_relation_ambiguity(
     pack: Pack,
     bare_leaves: Sequence[tuple[str, str, str, str]],
-    errors: list[str],
 ) -> None:
-    """Report R050 if a bare leaf resolved to a parameter, rule or slot also names a subject presence relation."""
+    """Raise R050 if a bare leaf resolved to a parameter, rule or slot also names a subject presence relation."""
     from . import calc, types
+    from .pack import CompileError
 
     derived = calc.derived_relations(pack)
     if not derived:
         return
+    found: list[Diagnostic] = []
     for where, subject, name, kind_tag in bare_leaves:
         if name not in derived or subject not in pack.kinds:
             continue
         key = derived[name]["key"]
         id_type = types.rule_type(pack.kinds[pack.root(subject)].id_type)
         if len(key) == 1 and key[0]["type"] == id_type:
-            errors.append(f"{where}: ambiguous leaf {name!r} (both {kind_tag} and relation {name}) (R050)")
+            found.append(Diagnostic(
+                "R050",
+                f"{where}: ambiguous leaf {name!r} (both {kind_tag} and relation {name}) (R050)",
+            ))
+    if found:
+        raise CompileError("\n".join(d.message for d in found), found)
