@@ -10,7 +10,7 @@ export const keywords = [
 	'norm', 'exception', 'applies', 'replaces', 'deprecated', 'true', 'false'
 ] as const;
 
-export const aggregates = ['sum', 'count', 'min', 'max', 'any', 'all', 'none'] as const;
+export const aggregates = ['sum', 'count', 'min', 'max', 'any', 'all', 'none', 'one'] as const;
 const reservedNames = new Set<string>(keywords);
 const aggregateNames = new Set<string>(aggregates);
 

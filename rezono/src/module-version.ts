@@ -73,7 +73,10 @@ export const printVersion = (v: VersionDecl) =>
 function eachVersionedDecl(module: Module, visit: (decl: ParamDecl | DerivedDecl, name: string) => void): void {
 	for (const decl of module.decls) {
 		if ('param' in decl) visit(decl, decl.param);
-		if ('derived' in decl && Array.isArray(decl.derived)) for (const d of decl.derived) visit(d, d.derived);
+		else if ('derived' in decl) {
+			if (Array.isArray(decl.derived)) for (const d of decl.derived) visit(d, d.derived);
+			else visit(decl, decl.derived);
+		}
 	}
 }
 

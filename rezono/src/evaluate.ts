@@ -551,6 +551,12 @@ export function reader(checked: Pick<Checked, 'typed' | 'heads'>, schema: Schema
 		return strict([...undecided, ...values], () => {
 			const all = values.map((v) => (v as { v: Known }).v);
 			if (name === 'sum') return known(all.reduce<Frac>((sum, x) => plus(sum, number(x)), frac(0n)));
+			if (name === 'one') {
+				if (!all.length) return { s: 'unknown', reason: 'no_match' };
+				const first = all[0];
+				if (all.some((x) => order(x, first) !== 0)) return { s: 'invalid', reason: 'multiple_values' };
+				return known(first);
+			}
 			if (!all.length) return { s: 'not_applicable', reason: 'empty' };
 			return known(all.reduce((best, x) => ((name === 'min' ? order(x, best) < 0 : order(x, best) > 0) ? x : best)));
 		});
