@@ -31,7 +31,10 @@ const semantics = grammar.createSemantics();
 
 /** The text of a literal as it prints: its parts one space apart, digits normalized without grouping underscores (§9). */
 semantics.addOperation<string>('lit', {
-	num(_whole, _dot, _part, _slash, _under) {
+	num(_whole, _sep, _rest) {
+		if (run.version === '0' && this.sourceString.includes('_')) {
+			refused(this, 'R000', ['a number without digit grouping']);
+		}
 		return this.sourceString.replaceAll('_', '');
 	},
 	quantity: (n, _sp, unit) => `${n.lit()} ${unit.sourceString}`,
@@ -99,7 +102,7 @@ semantics.addOperation<unknown>('tree', {
 	Show: (_show, list) => all(list),
 	Tail_order: (_order, _by, list) => ({ order: all(list) }),
 	Tail_group: (_group, _by, list) => ({ group: all(list) }),
-	Tail_limit: (_limit, n) => ({ limit: n.sourceString }),
+	Tail_limit: (_limit, n) => ({ limit: n.lit() }),
 
 	Check(verb, name, _colon, cond) {
 		const decl: CheckDecl = { check: verb.sourceString as CheckDecl['check'], cond: undefined as unknown as Expr };
@@ -189,6 +192,9 @@ semantics.addOperation<unknown>('tree', {
 	TimeAt: (_at, atom) => atom.tree(),
 	TimeKnown: (_as, _known, atom) => atom.tree(),
 	Filter: (_where, e) => e.tree(),
+	Dotted_where(base, _dot, _where, _open, cond, _close) {
+		return placed(this, { filter: [base.tree(), cond.tree()] } as Expr);
+	},
 	Dotted_agg(base, _dot, agg) {
 		const [name, ...arg] = agg.tree() as [string, ...Expr[]];
 		return placed(this, { agg: [name, base.tree(), ...arg] } as Expr);
@@ -199,7 +205,10 @@ semantics.addOperation<unknown>('tree', {
 		if ('lit' in b && run.ids.has(b)) return placed(this, { path: [b.lit, readRuleName(name)] });
 		return placed(this, { dot: [b, readRuleName(name)] } as Expr);
 	},
-	Agg: (name, _open, arg, _close) => [name.sourceString, ...arg.children.map((a) => a.tree())],
+	Agg(name, _open, arg, _close) {
+		if (name.sourceString === 'one' && arg.numChildren) refused(arg.child(0), 'R000', ['`)`']);
+		return [name.sourceString, ...arg.children.map((a) => a.tree())];
+	},
 	Atom(e) {
 		const text = e.sourceString;
 		switch (e.ctorName) {
@@ -277,9 +286,16 @@ export { semantics, placed, refused, reserved };
  */
 const nativeRules = new Set(['NativeRuleLine', 'StepClauseLine', 'StepChangeLine']);
 
-export function readRule<T>(text: string, rule: string, read: (node: Node) => T, spans = new WeakMap<object, Span>(), at = points(text)): Read<T> {
-	startRun(text, spans, at);
-	const native = nativeRules.has(rule);
+export function readRule<T>(
+	text: string,
+	rule: string,
+	read: (node: Node) => T,
+	spans = new WeakMap<object, Span>(),
+	at = points(text),
+	native = nativeRules.has(rule),
+	version?: '0' | '1'
+): Read<T> {
+	startRun(text, spans, at, version);
 	const match = (native ? nativeRuleGrammar : grammar).match(text, rule);
 	if (match.failed()) {
 		const at = Math.min(match.getRightmostFailurePosition(), text.length);

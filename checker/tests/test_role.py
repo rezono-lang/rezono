@@ -20,7 +20,7 @@ BUNDLE = {
     "kinds": [{"id": "doc"}, {"id": "person"}],
     "arrows": [{"table": "doc__author", "kind": "doc", "target": "person"}],
     "attributes": [{"table": "grant", "kind": "doc"}],
-    "enums": [{"id": "role"}, {"id": "role__capability"}],
+    "enums": [{"id": "role"}],
 }
 
 
@@ -337,23 +337,34 @@ def test_every_reason_of_the_role_check_is_reached():
 # mapped as deploy/profiles/edge.yaml declares its readers (`may_read`, which reads). The rule over the capability
 # gives documents in full, with the mapping row as its ground.
 READERS = rule("readers", "1", ("may_read", "?r", "doc", "?x"), atom("role__capability", "?r", "read"), atom("doc", "?x"))
-TWO_LAYERS = DOC | {"rules": [READERS if r["id"] == "granted" else r for r in DOC["rules"]]}
+ROLES = rule("roles", "1", ("may_read", "?r", "role", "?x"), atom("role", "?r"), atom("role", "?x"))
+TWO_LAYERS = DOC | {"rules": [READERS if r["id"] == "granted" else r for r in DOC["rules"]] + [ROLES]}
 BY_CAPABILITY = {d: instance("readers", ("may_read", "guest", "doc", d), {"?r": "guest", "?x": d},
                              ("role__capability", "guest", "read"), ("doc", d)) for d in ("d1", "d2")}
+ROLE_READS = [instance("roles", ("may_read", "guest", "role", r), {"?r": "guest", "?x": r},
+                       ("role", "guest"), ("role", r)) for r in ("guest", "other")]
+TWO_LAYERS_BUNDLE = {
+    "kinds": [*BUNDLE["kinds"], {"id": "role"}],
+    "arrows": BUNDLE["arrows"],
+    "attributes": [*BUNDLE["attributes"], {"table": "role__capability", "kind": "role"}],
+}
 
 
 def two_layers() -> dict:
     """The world with documents read through the capability: every row is the guest's, every relation full."""
     w = world()
-    complete = w["complete"] | {"role__capability": [("guest", "read")], "grant": [],
-                                "may_read": [*w["complete"]["may_read"], ("guest", "doc", "d2")]}
+    complete = w["complete"] | {"role": [("guest",), ("other",)], "role__capability": [("guest", "read")], "grant": [],
+                                "may_read": [*w["complete"]["may_read"], ("guest", "doc", "d2"),
+                                             ("guest", "role", "guest"), ("guest", "role", "other")]}
     w["complete"], w["mine"] = complete, dict(complete)
-    w["instances"] = [*EVERYONE, *BY_CAPABILITY.values(), *AUTHORED.values(), *BUSY.values(), IDLE]
-    w["witnesses"] = [*EVERYONE, *BY_CAPABILITY.values(), *AUTHORED.values(), BUSY["d1"], IDLE]
+    w["bundle"] = TWO_LAYERS_BUNDLE
+    w["instances"] = [*EVERYONE, *ROLE_READS, *BY_CAPABILITY.values(), *AUTHORED.values(), *BUSY.values(), IDLE]
+    w["witnesses"] = [*EVERYONE, *ROLE_READS, *BY_CAPABILITY.values(), *AUTHORED.values(), BUSY["d1"], IDLE]
     w["full"] = set(complete)
     w["doc"] = TWO_LAYERS
     w["evidence"] = [{"kind": "doc", "rule": "readers", "ground": ["role__capability", "guest", "read"]},
-                     {"kind": "person", "rule": "everyone", "ground": ["role", "guest"]}]
+                     {"kind": "person", "rule": "everyone", "ground": ["role", "guest"]},
+                     {"kind": "role", "rule": "roles", "ground": ["role", "guest"]}]
     return w
 
 
@@ -362,10 +373,10 @@ def test_a_capability_gives_a_kind_in_full_with_its_mapping_row_as_evidence():
     authorship) only because the guest reads every document in full, on the mapping row the checker found."""
     w = two_layers()
     assert checked(w) == (frozenset(w["full"]), set())
-    chains = {k: (k,) for k in KINDS}
+    chains = {k: (k,) for k in KINDS | {"role"}}
     assert access.grants(TWO_LAYERS, "guest", chains, True, {"read"}) == w["evidence"]
-    assert access.full_kinds(TWO_LAYERS, "guest", chains, True, {"read"}) == KINDS
-    assert access.full_kinds(TWO_LAYERS, "guest", chains, True) == {"person"}
+    assert access.full_kinds(TWO_LAYERS, "guest", chains, True, {"read"}) == KINDS | {"role"}
+    assert access.full_kinds(TWO_LAYERS, "guest", chains, True) == {"person", "role"}
 
 
 def test_without_the_mapping_row_the_capability_gives_nothing_in_full():

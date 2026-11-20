@@ -25,13 +25,6 @@ def records():
     }
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError, reason=(
-    "M2: Implement the platform backup-plan, scoped inventory and age rules in schema/management_backup.yaml "
-    "and rules/management_backup.dl using std-time and std-decision. Read decisions/platform-management-backup.md. "
-    "Waits for boolean support in compiler/tests/souffle.py (TYPE lacks boolean and TRUE/FALSE are not rewritten, "
-    "crashing examples/test_rules.py Souffle oracle tests on backup_inventory__complete with KeyError: 'boolean') "
-    "and for view_typing.resolve and view_rules.bind to support attributes on multi-source kind unions in views.yaml "
-    "(#716 only updated view_rules.lower, and views.yaml already maps std-time reference_point to cluster_right_clock)."))
 def test_management_backup_age_and_absence():
     from management_probes import compiled
 

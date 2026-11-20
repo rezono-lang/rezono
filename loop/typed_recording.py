@@ -161,11 +161,13 @@ class TypedRecording:
 
         stored = {}
         for row in self.records.get("loop_observation", ()):
-            if stored.setdefault(row["id"], row) != row:
+            key = (row["run"], row["id"])
+            if stored.setdefault(key, row) != row:
                 raise ValueError(f"conflicting records for observation {row['id']!r}")
         sweeps = {}
         for row in self.records.get("loop_sweep", ()):
-            if sweeps.setdefault(row["id"], row) != row:
+            key = (row["run"], row["id"])
+            if sweeps.setdefault(key, row) != row:
                 raise ValueError(f"conflicting records for sweep {row['id']!r}")
         clock = self.clock
         arrived: list[tuple[Event, Fraction]] = []
@@ -176,7 +178,8 @@ class TypedRecording:
         try:
             for sweep in self.rounds:
                 if sweep.dated is not None:
-                    if sweeps.setdefault(sweep.dated["id"], sweep.dated) != sweep.dated:
+                    key = (sweep.dated["run"], sweep.dated["id"])
+                    if sweeps.setdefault(key, sweep.dated) != sweep.dated:
                         raise ValueError(f"conflicting records for sweep {sweep.dated['id']!r}")
                 events = [e for e in sweep.events if e.envelope["run"] == self.run]
                 if events:
@@ -188,16 +191,23 @@ class TypedRecording:
 
                 # Refine only this snapshot's representation, scaling stored and arriving ticks together.
                 factor = lcm(*(ticks.denominator for _, ticks in arrived))
-                records = {**self.records, "loop_observation": list(stored.values())}
-                if sweeps:
-                    records["loop_sweep"] = list(sweeps.values())
-                if sweep.receipt is not None:
+                records = {
+                    **self.records,
+                    "loop_observation": [row for row in stored.values() if row["run"] == self.run],
+                }
+                active_sweeps = [row for row in sweeps.values() if row["run"] == self.run]
+                if active_sweeps:
+                    records["loop_sweep"] = active_sweeps
+                else:
+                    records.pop("loop_sweep", None)
+                if sweep.receipt is not None and sweep.receipt["run"] == self.run:
                     records["loop_sweep_receipt"] = [sweep.receipt]
                 records = scale_timed_records(records, self.run, factor)
-                observed = {row["id"]: row for row in records["loop_observation"]}
+                observed = {(row["run"], row["id"]): row for row in records["loop_observation"]}
                 for e, ticks in arrived:
                     row = e.record(integer_tick(ticks * factor))
-                    if observed.setdefault(row["id"], row) != row:
+                    key = (row["run"], row["id"])
+                    if observed.setdefault(key, row) != row:
                         raise ValueError(f"conflicting records for observation {row['id']!r}")
                 records["loop_observation"] = list(observed.values())
                 inputs = scenarios.rule_rows(self.model, self.program, facts.rows_of(self.model, records))

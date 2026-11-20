@@ -6,7 +6,7 @@ input:
     - {$kind: Group, $id: group-a}
     - {$kind: Item, $id: item-a, group: {$ref: group-a}, labels: ["unknown"]}
   select: {kind: Item, id: item-a}
-  language: "ask Item where true show labels.min()"
+  language: "ask Item where true show labels.one()"
 expect:
   value: "unknown"
   state: known

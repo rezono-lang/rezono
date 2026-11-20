@@ -1,41 +1,131 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "Literal flags in a native Rezono module form",
-  "if": {
-    "type": "object",
-    "required": ["format"],
-    "properties": {
-      "format": {"const": "rezono.module/3"}
-    }
-  },
-  "then": {
-    "properties": {
-      "module": {
+  "allOf": [
+    {
+      "if": {
+        "type": "object",
+        "required": ["format"],
         "properties": {
-          "decls": {"items": {"$ref": "#/$defs/declaration"}}
+          "format": {"enum": ["rezono.module/3", "rezono.module/4", "rezono.module/5"]}
         }
-      }
-    }
-  },
-  "$defs": {
-    "asserted": {"const": true},
-    "declaration": {
-      "if": {"type": "object", "required": ["rule"]},
+      },
       "then": {
         "properties": {
-          "args": {"items": {"$ref": "#/$defs/expression"}},
-          "when": {"$ref": "#/$defs/expression"},
-          "options": {
-            "items": {
+          "module": {
+            "properties": {
+              "decls": {"items": {"$ref": "#/$defs/declaration"}}
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "type": "object",
+        "required": ["format"],
+        "properties": {
+          "format": {"const": "rezono.module/3"}
+        }
+      },
+      "then": {
+        "properties": {
+          "module": {
+            "properties": {
+              "decls": {"items": {"$ref": "#/$defs/v3_rule_declaration"}}
+            }
+          }
+        }
+      },
+      "else": {
+        "if": {
+          "type": "object",
+          "required": ["format"],
+          "properties": {
+            "format": {"enum": ["rezono.module/4", "rezono.module/5"]}
+          }
+        },
+        "then": {
+          "properties": {
+            "module": {
               "properties": {
-                "extend": {"$ref": "#/$defs/asserted"},
-                "invariant": {"$ref": "#/$defs/asserted"},
-                "absence": {"$ref": "#/$defs/asserted"}
+                "decls": {"items": {"$ref": "#/$defs/safe_step_rule_declaration"}}
               }
             }
           }
         }
       }
+    }
+  ],
+  "$defs": {
+    "asserted": {"const": true},
+    "v3_rule_declaration": {
+      "if": {"type": "object", "required": ["rule"]},
+      "then": {
+        "properties": {
+          "options": {
+            "items": {
+              "properties": {
+                "invariant": {"$ref": "#/$defs/asserted"}
+              }
+            }
+          }
+        }
+      }
+    },
+    "safe_step_rule_declaration": {
+      "if": {"type": "object", "required": ["rule"]},
+      "then": {
+        "properties": {
+          "options": {
+            "items": {
+              "if": {"type": "object", "required": ["within"]},
+              "then": {
+                "properties": {
+                  "invariant": {"const": "intermediate"}
+                }
+              },
+              "else": {
+                "properties": {
+                  "invariant": {"$ref": "#/$defs/asserted"}
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "declaration": {
+      "allOf": [
+        {
+          "if": {"type": "object", "required": ["rule"]},
+          "then": {
+            "properties": {
+              "args": {"items": {"$ref": "#/$defs/expression"}},
+              "when": {"$ref": "#/$defs/expression"},
+              "options": {
+                "items": {
+                  "properties": {
+                    "extend": {"$ref": "#/$defs/asserted"},
+                    "absence": {"$ref": "#/$defs/asserted"}
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {"type": "object", "required": ["step"]},
+          "then": {
+            "properties": {
+              "when": {"$ref": "#/$defs/expression"},
+              "forbid": {"items": {"$ref": "#/$defs/expression"}},
+              "effect": {"$ref": "#/$defs/expression"},
+              "confirm": {"$ref": "#/$defs/expression"}
+            }
+          }
+        }
+      ]
     },
     "expression": {
       "properties": {

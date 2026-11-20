@@ -1,4 +1,15 @@
-"""Platform startup and retirement use observations from the bound cut."""
+"""Platform startup, retirement and restore steps are std-loop rows (decisions/standard-packs-everywhere.md,
+section 2).
+
+The cases are the ones this file held for rules/safe_step.dl, and those of test_restore_offline_dependencies.py,
+in the terms of std-loop (decisions/loop-certificate-admission.md, decisions/safe-step-rounds.md section 1). A step
+waits while a token it needs is not known in its own run. A token is known from the latest reading of the run
+with the expected value; equal-time readings that disagree give none. A refuted or unknown step check at the
+current cut blocks. A done step cites the reading that confirmed its completion token.
+"""
+
+from copy import deepcopy
+from hashlib import sha256
 
 import pytest
 
@@ -6,85 +17,177 @@ from case_support import ROOT, verified
 from management_probes import compiled
 from rezono_compiler import pack, rules
 
+SAFE_STEP_KINDS = {"safe_round_cut", "safe_step_request", "safe_step_observation", "safe_step_scope"}
+LOOP_INPUTS = {"loop_active_run", "loop_sweep_receipt", "loop_step", "loop_requirement", "loop_expectation",
+               "loop_observation", "loop_completion", "loop_step_safety_check"}
+LOOP_RELATIONS = {"known", "current", "waiting", "unblocked", "done", "step_safety_blocker"}
 
+
+def observe(run, cut, evidence, reader, token, value, time=9):
+    return {"id": evidence, "run": run, "token": token, "event_time": time, "state": "known", "value": value,
+            "reason": evidence, "scope": reader, "sweep": cut}
+
+
+def of_run(state, relation, run):
+    return {row for row in state.derived.get(relation, ()) if row[0] == run}
+
+
+def tokens(state, relation, run, token):
+    return {row for row in of_run(state, relation, run) if row[1] == token}
+
+
+@pytest.mark.xfail(strict=True, raises=AssertionError, reason=(
+    "M2: decisions/standard-packs-everywhere.md, section 2. Express the platform's safe steps through std-loop: "
+    "the kinds of schema/safe_step.yaml map onto LoopSweepReceipt, LoopStep with LoopRequirement, "
+    "LoopObservation with LoopExpectation, and the scoped completeness receipt, and the verdicts are std-loop's "
+    "known, current, waiting, unblocked and done. Remove rules/safe_step.dl and schema/safe_step.yaml. "
+    "Keep restore_offline.dl until a planner retires restore_offline_result after this test is green."))
 def test_startup_transition_cases():
-    relation = "startup_transition_result"
-    assert relation in rules.load(pack.read(ROOT).rules).derived(), "Missing platform startup transition results"
+    assert not (ROOT / "rules" / "safe_step.dl").exists(), "rules/safe_step.dl rebuilds std-loop's step safety"
+    assert not (ROOT / "schema" / "safe_step.yaml").exists(), "schema/safe_step.yaml rebuilds std-loop's inputs"
+    model = pack.read(ROOT)
+    assert not SAFE_STEP_KINDS & set(model.kinds), f"Platform kinds beside std-loop: {sorted(SAFE_STEP_KINDS & set(model.kinds))}"
+    assert LOOP_INPUTS <= set(model.kinds), f"Missing std-loop input kinds: {sorted(LOOP_INPUTS - set(model.kinds))}"
+    derived = set(rules.load(model.rules).derived())
+    assert "startup_transition_result" not in derived, "The platform still derives its own step verdicts"
+    assert LOOP_RELATIONS <= derived, f"Missing std-loop relations: {sorted(LOOP_RELATIONS - derived)}"
 
+    # Startup: expose the entry listener, and retire the identity database while identity may still run on it.
     run, cut = "startup-case", "current-cut"
-    context = {"run": run, "cut": cut}
+    expose, retire = "expose-entry", "retire-database"
+    policy, router, consumer = "lb/network-policy", "lb/router-policy", "idp/runtime"
     records = {
-        "safe_round_cut": [{"id": cut, "run": run}],
-        "safe_step_request": [
-            {"run": run, "id": "expose-entry", "effect": "expose", "subject": "lb"},
-            {"run": run, "id": "retire-database", "effect": "retire", "subject": "db-idp"},
+        "loop_active_run": [{"id": run}],
+        "loop_sweep_receipt": [{"id": cut, "run": run, "event_time": 10},
+                               {"id": "older-cut", "run": run, "event_time": 5}],
+        "loop_step": [{"id": expose}, {"id": retire}],
+        "loop_requirement": [
+            {"id": "expose-policy", "run": run, "step": expose, "token": policy, "reason": "effective-protection"},
+            {"id": "expose-router", "run": run, "step": expose, "token": router, "reason": "effective-protection"},
+            {"id": "retire-consumer", "run": run, "step": retire, "token": consumer, "reason": "identity-database"},
         ],
-        "service_need": [{"id": "identity-database", "consumer": "idp", "provider": "db-idp", "mode": "run"}],
-        "safe_step_observation": [
-            {**context, "id": "network-policy", "subject": "lb", "attribute": "network-policy", "value": "effective"},
-            {**context, "id": "identity-state", "subject": "idp", "attribute": "runtime", "value": "running"},
-            {**context, "id": "database-state", "subject": "db-idp", "attribute": "runtime", "value": "running"},
-            {**context, "id": "other-router-allowance", "subject": "another-listener", "attribute": "router-policy",
-             "value": "effective"},
-        ],
-        "safe_step_scope": [
-            {**context, "id": "router-inventory", "reader": "router", "scope": "lb"},
-            {**context, "id": "consumer-inventory", "reader": "runtime", "scope": "db-idp"},
+        "loop_expectation": [{"id": policy, "value": "effective"}, {"id": router, "value": "effective"},
+                             {"id": consumer, "value": "stopped"}],
+        "loop_observation": [
+            observe(run, cut, "network-policy", "policy", policy, "effective"),
+            observe(run, cut, "identity-state", "runtime", consumer, "running"),
+            observe(run, cut, "other-router-allowance", "router", "another-listener/router-policy", "effective"),
+            observe("previous-run", "previous-cut", "earlier-stop", "runtime", consumer, "stopped", time=12),
         ],
     }
-    expose = (run, cut, "expose-entry", "blocked", "unprotected-listener", "lb")
-    retire = (run, cut, "retire-database", "blocked", "provider-in-use", "idp")
     model, state = compiled(records)
-    assert state.derived.get(relation) == {expose, retire}
-    assert ("safe_step_scope__scope", ("router-inventory", "lb")) in verified(relation, expose, state=(model, state))
-    assert {
-        ("service_need__provider", ("identity-database", "db-idp")),
-        ("safe_step_observation__value", ("identity-state", "running")),
-    } <= verified(relation, retire, state=(model, state))
+    # No router allowance for the entry is read: the exposure waits, unknown rather than refuted. Identity runs on
+    # the database in this run: the retirement waits, and the contrary value is current. A stop recorded by
+    # another run, even a later one, counts for nothing here.
+    assert of_run(state, "waiting", run) == {(run, expose, router, "effective-protection"),
+                                              (run, retire, consumer, "identity-database")}
+    assert not tokens(state, "current", run, router)
+    assert (run, consumer, "known", "running", "identity-state") in state.derived.get("current", ())
+    assert not {row[1] for row in of_run(state, "unblocked", run)} & {expose, retire}
+    assert ("loop_requirement__token", ("retire-consumer", consumer)) in verified(
+        "waiting", (run, retire, consumer, "identity-database"), state=(model, state))
+    assert ("loop_observation__value", ("identity-state", "running")) in verified(
+        "current", (run, consumer, "known", "running", "identity-state"), state=(model, state))
 
-    unknown = (run, cut, "expose-entry", "unknown", "missing-router-coverage", "lb")
-    receipt = records["safe_step_scope"].pop(0)
-    _, state = compiled(records)
-    assert state.derived.get(relation) == {unknown, retire}
-    # A complete receipt from a different cut does not repair the missing coverage.
-    records["safe_step_scope"].append({**receipt, "cut": "older-cut"})
-    _, state = compiled(records)
-    assert state.derived.get(relation) == {unknown, retire}
+    # The certifier's results enter as step checks. Only those of the current cut count: a refutation at an older
+    # cut blocks nothing, missing router coverage at the current one leaves the exposure unknown.
+    checked = deepcopy(records)
+    checked["loop_step_safety_check"] = [
+        {"id": "old-refutation", "run": run, "step": expose, "cut": "older-cut", "obligation": "router-coverage",
+         "verdict": "refuted", "reason": "violated-invariant"},
+        {"id": "router-coverage", "run": run, "step": expose, "cut": cut, "obligation": "router-coverage",
+         "verdict": "unknown", "reason": "missing-coverage"},
+    ]
+    _, state = compiled(checked)
+    assert (run, expose, "router-coverage", "missing-coverage") in of_run(state, "waiting", run)
+    assert (run, expose, "router-coverage", "violated-invariant") not in of_run(state, "waiting", run)
 
-    records["safe_step_scope"][-1] = receipt
-    records["safe_step_observation"].append(
-        {**context, "id": "router-allowance", "subject": "lb", "attribute": "router-policy", "value": "effective"})
-    records["safe_step_observation"][1]["value"] = "stopped"
-    model, state = compiled(records)
-    safe_expose = (run, cut, "expose-entry", "safe", "effective-protection", "lb")
-    safe_retire = (run, cut, "retire-database", "safe", "consumer-stopped", "idp")
-    assert state.derived.get(relation) == {safe_expose, safe_retire}
-    assert {
-        ("safe_step_observation__value", ("network-policy", "effective")),
-        ("safe_step_observation__value", ("router-allowance", "effective")),
-    } <= verified(relation, safe_expose, state=(model, state))
-    assert ("safe_step_observation__value", ("identity-state", "stopped")) in verified(
-        relation, safe_retire, state=(model, state))
+    # With the router allowance read and identity stopped, both steps are free of waiting rows.
+    safe = deepcopy(records)
+    safe["loop_observation"].append(observe(run, cut, "router-allowance", "router", router, "effective"))
+    safe["loop_observation"][1]["value"] = "stopped"
+    model, state = compiled(safe)
+    assert not of_run(state, "waiting", run)
+    assert {(run, expose, expose), (run, retire, retire)} <= of_run(state, "unblocked", run)
+    assert {(run, policy, "network-policy"), (run, router, "router-allowance"),
+            (run, consumer, "identity-state")} <= of_run(state, "known", run)
+    assert {("loop_observation__value", ("router-allowance", "effective")),
+            ("loop_expectation__value", (router, "effective"))} <= verified(
+        "known", (run, router, "router-allowance"), state=(model, state))
 
-    # A stopped consumer without a complete runtime receipt for the provider does not prove absence.
-    runtime_receipt = records["safe_step_scope"].pop(0)
-    assert runtime_receipt["reader"] == "runtime"
-    _, state = compiled(records)
-    no_runtime = (run, cut, "retire-database", "unknown", "missing-runtime-coverage", "idp")
-    assert state.derived.get(relation) == {safe_expose, no_runtime}
-    records["safe_step_scope"].append(runtime_receipt)
+    # A contradictory reading at the same time leaves the protection unknown: no token and no current value.
+    contradicted = deepcopy(safe)
+    contradicted["loop_observation"].append(observe(run, cut, "router-denial", "router", router, "denied"))
+    _, state = compiled(contradicted)
+    assert of_run(state, "waiting", run) == {(run, expose, router, "effective-protection")}
+    assert not tokens(state, "known", run, router) and not tokens(state, "current", run, router)
 
-    # A contradictory observation in the same cut leaves the protection unknown.
-    records["safe_step_observation"].append(
-        {**context, "id": "router-denial", "subject": "lb", "attribute": "router-policy", "value": "denied"})
-    _, state = compiled(records)
-    contradicted = (run, cut, "expose-entry", "unknown", "contradictory-observation", "lb")
-    assert state.derived.get(relation) == {contradicted, safe_retire}
-    records["safe_step_observation"].pop()
+    # Router allowance without any network-policy read leaves the protection unknown.
+    unread = deepcopy(safe)
+    unread["loop_observation"].pop(0)
+    _, state = compiled(unread)
+    assert of_run(state, "waiting", run) == {(run, expose, policy, "effective-protection")}
+    assert not tokens(state, "current", run, policy)
 
-    # Router coverage and allowance without any network-policy read leave the protection unknown.
-    policy_read = records["safe_step_observation"].pop(0)
-    assert policy_read["attribute"] == "network-policy"
-    _, state = compiled(records)
-    no_policy = (run, cut, "expose-entry", "unknown", "missing-network-policy-read", "lb")
-    assert state.derived.get(relation) == {no_policy, safe_retire}
+    # Restore: the trial's dependencies are readings of the restore run, and the matching readback confirms the
+    # restore step's completion token.
+    run, cut, step = "restore-run", "offline-cut", "restore-copy"
+    digest = sha256(b"authored recovery payload\n").hexdigest()
+    payload = "chosen-copy/payload"
+    bindings = (("control", "recovery-api"), ("credentials", "recovery-key"), ("storage", "backup-store"))
+    restore = {
+        "loop_active_run": [{"id": run}],
+        "loop_sweep_receipt": [{"id": cut, "run": run, "event_time": 20}],
+        "loop_step": [{"id": step}],
+        "loop_requirement": [{"id": f"needs-{function}", "run": run, "step": step,
+                              "token": f"{provider}/availability", "reason": function}
+                             for function, provider in bindings],
+        "loop_completion": [{"id": "restored-copy", "run": run, "step": step, "token": payload,
+                             "reason": "matching-copy"}],
+        "loop_expectation": [{"id": f"{provider}/availability", "value": "available"} for _, provider in bindings]
+        + [{"id": payload, "value": digest}],
+        "loop_observation": [observe(run, cut, f"observed-{function}", function, f"{provider}/availability",
+                                     "available", time=18) for function, provider in bindings],
+    }
+    _, state = compiled(restore)
+    assert not of_run(state, "waiting", run)
+    assert (run, step, step) in of_run(state, "unblocked", run)
+    assert not of_run(state, "done", run)
+
+    readback = observe(run, cut, "readback", "recovery", payload, digest, time=19)
+    finished = deepcopy(restore)
+    finished["loop_observation"].append(readback)
+    model, state = compiled(finished)
+    assert of_run(state, "done", run) == {(run, step, "readback")}
+    assert ("loop_observation__value", ("readback", digest)) in verified(
+        "done", (run, step, "readback"), state=(model, state))
+
+    # Wrong bytes do not complete the restore.
+    wrong = deepcopy(finished)
+    wrong["loop_observation"][-1]["value"] = sha256(b"different recovery payload\n").hexdigest()
+    _, state = compiled(wrong)
+    assert not of_run(state, "done", run)
+
+    # A reading from another run is no reading of this one.
+    missing = deepcopy(restore)
+    missing["loop_observation"][1]["run"] = "previous-run"
+    _, state = compiled(missing)
+    assert of_run(state, "waiting", run) == {(run, step, "recovery-key/availability", "credentials")}
+
+    # A later reading that contradicts an earlier one is the current value: the control plane is unavailable.
+    later = deepcopy(restore)
+    later["loop_observation"].append(observe(run, cut, "observed-control-later", "control", "recovery-api/availability",
+                                             "unavailable", time=19))
+    _, state = compiled(later)
+    assert of_run(state, "waiting", run) == {(run, step, "recovery-api/availability", "control")}
+    assert (run, "recovery-api/availability", "known", "unavailable", "observed-control-later") in state.derived.get(
+        "current", ())
+
+    # A dependency on the unavailable management cluster violates the platform's offline invariant; the certifier
+    # reports it at the current cut and the step waits on it.
+    dependent = deepcopy(restore)
+    dependent["loop_step_safety_check"] = [{"id": "management-dependent", "run": run, "step": step, "cut": cut,
+                                            "obligation": "recovery-api/offline", "verdict": "refuted",
+                                            "reason": "violated-invariant"}]
+    _, state = compiled(dependent)
+    assert of_run(state, "waiting", run) == {(run, step, "recovery-api/offline", "violated-invariant")}

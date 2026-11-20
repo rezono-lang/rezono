@@ -1,0 +1,49 @@
+id: https://rezono.org/examples/platform-core/management-firewall
+name: platform_management_firewall
+description: Managed router table scope, sweep completeness, and desired versus observed allowances.
+in_language: en
+imports: [linkml:types]
+default_range: string
+annotations:
+  layer: facts
+
+classes:
+  RouterManagement:
+    description: An active managed router table scope for a run.
+    attributes:
+      id: {identifier: true}
+      run: {required: true}
+      router: {required: true}
+      table: {required: true}
+  RouterSweep:
+    description: A read sweep over one router table in a run, with explicit completeness.
+    attributes:
+      id: {identifier: true}
+      run: {required: true}
+      router: {required: true}
+      table: {required: true}
+      complete: {range: boolean}
+  RouterDesired:
+    description: An intended router allowance within a scoped run, router, and table.
+    attributes:
+      id: {identifier: true}
+      run: {required: true}
+      router: {required: true}
+      table: {required: true}
+      source: {required: true}
+      destination: {required: true}
+      protocol: {required: true}
+      first_port: {range: integer, minimum_value: 1, maximum_value: 65535, required: true}
+      last_port: {range: integer, minimum_value: 1, maximum_value: 65535, required: true}
+  RouterSeen:
+    description: An observed router allowance read from a router table in a run.
+    attributes:
+      id: {identifier: true}
+      run: {required: true}
+      router: {required: true}
+      table: {required: true}
+      source: {required: true}
+      destination: {required: true}
+      protocol: {required: true}
+      first_port: {range: integer, minimum_value: 1, maximum_value: 65535, required: true}
+      last_port: {range: integer, minimum_value: 1, maximum_value: 65535, required: true}

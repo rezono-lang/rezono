@@ -204,13 +204,63 @@ export class Cut extends Error {}
 
 /** The largest integer a JSON number holds exactly (Rezono Data §3.2, LD2). */
 const SAFE = 9007199254740991n;
+const INT = /^-?[0-9]+$/;
+type BoundedType = TypeDef & { min?: unknown; max?: unknown };
+
+/**
+ * Follows own `schema.types[cur].of` links to the base type name and visited definitions.
+ * Returns `undefined` on any cycle, missing/non-string `of`, or prototype key (fail-closed).
+ */
+function resolveTypeChain(schema: Schema, name: string): { base: string; chain: BoundedType[] } | undefined {
+	if (typeof name !== 'string' || !name) return undefined;
+	const types = schema.types;
+	if (types !== undefined && (types === null || typeof types !== 'object' || Array.isArray(types))) return undefined;
+	const seen = new Set<string>();
+	const chain: BoundedType[] = [];
+	let cur = name;
+	while (true) {
+		if (cur === 'prototype' || cur in Object.prototype || seen.has(cur)) return undefined;
+		seen.add(cur);
+		if (!types || !Object.hasOwn(types, cur)) return { base: cur, chain };
+		const def = types[cur] as BoundedType | undefined;
+		if (!def || typeof def !== 'object' || Array.isArray(def)) return undefined;
+		const of = Object.hasOwn(def, 'of') ? (def as { of?: unknown }).of : undefined;
+		if (typeof of !== 'string' || !of) return undefined;
+		chain.push(def);
+		cur = of;
+	}
+}
 /** LD2: a value of an integer type that declares both bounds within ±(2⁵³ − 1) is a JSON number; every other integer is a string. */
 function asNumber(schema: Schema, slot: SlotDef): boolean {
-	const type = schema.types?.[slot.type ?? ''] as (TypeDef & { min?: string; max?: string }) | undefined;
-	return type?.of === 'Integer' && type.min !== undefined && type.max !== undefined && -SAFE <= BigInt(type.min) && BigInt(type.max) <= SAFE;
+	if (slot.ref !== undefined || slot.type === undefined) return false;
+	const resolved = resolveTypeChain(schema, slot.type);
+	if (!resolved || resolved.base !== 'Integer') return false;
+	let lo: bigint | undefined;
+	let hi: bigint | undefined;
+	// Walk from the outermost parent down to the slot's type so every hop's bounds are validated and children cannot widen parents.
+	for (let i = resolved.chain.length - 1; i >= 0; i--) {
+		const def = resolved.chain[i];
+		const rawMin = Object.hasOwn(def, 'min') ? def.min : undefined;
+		const rawMax = Object.hasOwn(def, 'max') ? def.max : undefined;
+		if (rawMin !== undefined) {
+			if (typeof rawMin !== 'string' || !INT.test(rawMin)) return false;
+			const nextLo = BigInt(rawMin);
+			if (lo !== undefined && nextLo < lo) return false;
+			lo = nextLo;
+		}
+		if (rawMax !== undefined) {
+			if (typeof rawMax !== 'string' || !INT.test(rawMax)) return false;
+			const nextHi = BigInt(rawMax);
+			if (hi !== undefined && nextHi > hi) return false;
+			hi = nextHi;
+		}
+		if (lo !== undefined && hi !== undefined && lo > hi) return false;
+	}
+	return lo !== undefined && hi !== undefined && -SAFE <= lo && lo <= hi && hi <= SAFE;
 }
 function asBoolean(schema: Schema, slot: SlotDef): boolean {
-	return slot.ref === undefined && (slot.type === 'Bool' || (slot.type !== undefined && schema.types?.[slot.type]?.of === 'Bool'));
+	if (slot.ref !== undefined || slot.type === undefined) return false;
+	return resolveTypeChain(schema, slot.type)?.base === 'Bool';
 }
 function parseBoolean(relation: string, parts: string[]): boolean {
 	if (parts.length !== 2) throw new AskError(500, `${relation} holds a malformed boolean row`);

@@ -25,6 +25,7 @@ packs/*/questions.yaml pack-definition
 packs/*/views.yaml pack-definition
 packs/*/icons/*.svg pack-definition
 packs/*/icons/sources.yaml pack-definition
+packs/*/ports/*.yaml pack-definition
 
 examples/*/pack.yaml pack-definition
 examples/*/channels.yaml pack-definition
@@ -45,6 +46,7 @@ examples/*/questions.yaml pack-definition
 examples/*/views.yaml pack-definition
 examples/*/icons/*.svg pack-definition
 examples/*/icons/sources.yaml pack-definition
+examples/*/ports/*.yaml pack-definition
 
 # The nested capacity interface is also a digest-pinned pack.
 examples/platform/tenant-capacity/interface/pack.yaml pack-definition
@@ -53,6 +55,7 @@ examples/platform/tenant-capacity/interface/schema/**/*.yaml pack-definition
 examples/platform/tenant-capacity/interface/labels/*.yaml pack-definition
 examples/platform/tenant-capacity/interface/messages/*.mf2 pack-definition
 examples/platform/tenant-capacity/interface/rules/*.dl pack-definition
+examples/platform/tenant-capacity/interface/ports/*.yaml pack-definition
 
 compiler/tests/fixtures/*/pack.yaml pack-definition
 compiler/tests/fixtures/*/channels.yaml pack-definition
@@ -68,6 +71,7 @@ compiler/tests/fixtures/*/questions.yaml pack-definition
 compiler/tests/fixtures/*/views.yaml pack-definition
 compiler/tests/fixtures/*/icons/*.svg pack-definition
 compiler/tests/fixtures/*/icons/sources.yaml pack-definition
+compiler/tests/fixtures/*/ports/*.yaml pack-definition
 
 tests/fixtures/neutral/pack.yaml pack-definition
 tests/fixtures/neutral/channels.yaml pack-definition
@@ -76,6 +80,7 @@ tests/fixtures/neutral/labels/*.yaml pack-definition
 tests/fixtures/neutral/messages/*.mf2 pack-definition
 tests/fixtures/neutral/rules/*.dl pack-definition
 tests/fixtures/neutral/calc/*.yaml pack-definition
+tests/fixtures/neutral/ports/*.yaml pack-definition
 
 run/packs/*/pack.yaml pack-definition
 run/packs/*/channels.yaml pack-definition
@@ -91,6 +96,7 @@ run/packs/*/questions.yaml pack-definition
 run/packs/*/views.yaml pack-definition
 run/packs/*/icons/*.svg pack-definition
 run/packs/*/icons/sources.yaml pack-definition
+run/packs/*/ports/*.yaml pack-definition
 
 edge/plugins/connectors/fixtures/*/pack.yaml pack-definition
 edge/plugins/connectors/fixtures/*/channels.yaml pack-definition
@@ -106,6 +112,7 @@ edge/plugins/connectors/fixtures/*/questions.yaml pack-definition
 edge/plugins/connectors/fixtures/*/views.yaml pack-definition
 edge/plugins/connectors/fixtures/*/icons/*.svg pack-definition
 edge/plugins/connectors/fixtures/*/icons/sources.yaml pack-definition
+edge/plugins/connectors/fixtures/*/ports/*.yaml pack-definition
 
 edge/plugins/connectors/fixtures/linkml-standard/pack/pack.yaml pack-definition
 edge/plugins/connectors/fixtures/linkml-standard/pack/channels.yaml pack-definition
@@ -121,3 +128,4 @@ edge/plugins/connectors/fixtures/linkml-standard/pack/questions.yaml pack-defini
 edge/plugins/connectors/fixtures/linkml-standard/pack/views.yaml pack-definition
 edge/plugins/connectors/fixtures/linkml-standard/pack/icons/*.svg pack-definition
 edge/plugins/connectors/fixtures/linkml-standard/pack/icons/sources.yaml pack-definition
+edge/plugins/connectors/fixtures/linkml-standard/pack/ports/*.yaml pack-definition

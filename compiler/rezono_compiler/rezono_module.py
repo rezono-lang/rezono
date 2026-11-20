@@ -32,6 +32,7 @@ from linkml_runtime.loaders.yaml_loader import YAMLLoader
 FORMAT = "rezono.module/1"
 IDENTIFIER_FORMAT = "rezono.module/2"
 SAFE_STEP_FORMAT = "rezono.module/4"
+REZONO_1_FORMAT = "rezono.module/5"
 NATIVE_FORMATS = (NATIVE_FORMAT, SAFE_STEP_FORMAT)
 DIR = "rezono"
 PACKAGED_READER = Path(__file__).with_name("module_reader") / "src" / "write-form.js"
@@ -137,10 +138,11 @@ def read_form(pack_dir: Path, d: Declared, errors: list[str],
         or module_body(doc, IDENTIFIER_FORMAT)
         or module_body(doc, NATIVE_FORMAT)
         or module_body(doc, SAFE_STEP_FORMAT)
+        or module_body(doc, REZONO_1_FORMAT)
     )
     if module is None:
         errors.append(
-            f"{where}: not the form of a module ({FORMAT}, {IDENTIFIER_FORMAT}, {NATIVE_FORMAT}, or {SAFE_STEP_FORMAT},"
+            f"{where}: not the form of a module ({FORMAT}, {IDENTIFIER_FORMAT}, {NATIVE_FORMAT}, {SAFE_STEP_FORMAT}, or {REZONO_1_FORMAT},"
             " contracts/rezono-module.yaml)"
         )
         return None
@@ -280,7 +282,7 @@ def module_body(form: object, expected_format: str) -> dict | None:
         return None
     module = form["module"]
     header = {"rezono", "pack", "use", "decls"}
-    if expected_format == IDENTIFIER_FORMAT:
+    if expected_format in (IDENTIFIER_FORMAT, REZONO_1_FORMAT):
         header |= rezono_metadata.HEADER
     if (form["format"] != expected_format or not isinstance(form["spans"], list)
             or not isinstance(module, dict) or not isinstance(module.get("pack"), str)
@@ -342,18 +344,35 @@ def is_dataset_form(path: Path, source: Path | None = None) -> bool:
         doc = json.loads(path.read_bytes())
     except (OSError, ValueError):
         return False
-    module = module_body(doc, DATASET_FORMAT)
-    if module is not None and named_dataset(module) is not None:
-        return True
+    for fmt in (DATASET_FORMAT, REZONO_1_FORMAT):
+        module = module_body(doc, fmt)
+        if module is not None and named_dataset(module) is not None:
+            return True
     module = module_body(doc, FORMAT)
     return (source is not None and module is not None and fact_tables_only(module)
             and not form_only_source(source, doc))
 
 
+def pack_language_version(forms: Iterable[dict]) -> str:
+    """Declared Rezono language version of a pack from its module forms ('1' if any uses rezono.module/5, else '0')."""
+    for form in forms:
+        if isinstance(form, dict) and form.get("format") == REZONO_1_FORMAT:
+            return "1"
+    return "0"
+
+
 def header_errors(module: dict, pack: str, *, native_rules: bool = False,
-                  schema: bool = False) -> Iterator[tuple[str, str, str]]:
+                  schema: bool = False, form_format: str = FORMAT,
+                  pack_version: str | None = None) -> Iterator[tuple[str, str, str]]:
     """Header refusals shared by schema lowering and dataset admission."""
-    if module.get("rezono") != "0":
+    if pack_version == "1" or form_format == REZONO_1_FORMAT:
+        if "rezono" not in module:
+            yield "rezono", "missing `rezono 1` line in a `rezono 1` pack (R028)", "§3"
+        elif module.get("rezono") != "1":
+            yield "rezono", f"pack {pack} uses `rezono 1`, not `{module.get('rezono')}` (R027)", "§3"
+        elif form_format != REZONO_1_FORMAT:
+            yield "rezono", f"a `rezono 1` module requires {REZONO_1_FORMAT}, not {form_format} (R027)", "§3"
+    elif module.get("rezono") != "0":
         yield "rezono", f"the `rezono` line says 0, not {module.get('rezono', 'nothing')}", "§3"
     if module["pack"] != pack:
         yield "pack", f"the `pack` line names {module['pack']}, not this pack, {pack}", "§3"
@@ -508,8 +527,10 @@ def lower_pack(pack_dir: Path, meta: dict, pack: str, declared_by: Mapping[str, 
             ints.setdefault(mid, set()).update(local_ints)
     default_lang = str(meta.get("default_language", ""))
     defined_reasons = rezono_reason.defined_in_catalog(pack_dir, default_lang)
+    pack_version = pack_language_version(form for form in forms.values() if form is not None)
     return [lower(pack_dir, d, form, pack, owners, errors, imported, pinned or {}, ints,
-                  reason_owners=reason_owners, defined_reasons=defined_reasons, default_language=default_lang)
+                  reason_owners=reason_owners, defined_reasons=defined_reasons, default_language=default_lang,
+                  pack_version=pack_version)
             for d, form in forms.items() if form is not None]
 
 
@@ -519,20 +540,25 @@ def lower(pack_dir: Path, d: Declared, form: dict, pack: str, owners: dict[str, 
           integer_types: Mapping[str, Set[str]] | None = None, *,
           reason_owners: Mapping[str, list[str]] | None = None,
           defined_reasons: Set[str] = frozenset(),
-          default_language: str = "") -> Lowered:
+          default_language: str = "",
+          pack_version: str = "0") -> Lowered:
     """One module's form as the LinkML schema that says the same (§5.1, §5.2), or a refusal at a line. An `extend`
     adds nothing to the schema: its tables are rules, which rezono_table writes once the pack's model is read
     (§9.1)."""
     where, line, module = f"{pack_dir.name}/{d.module}", lines(form), form["module"]
-    metadata_format = form["format"] == IDENTIFIER_FORMAT
+    rezono_1 = form["format"] == REZONO_1_FORMAT
+    metadata_format = form["format"] in (IDENTIFIER_FORMAT, REZONO_1_FORMAT)
 
     def refuse(at: str | int, what: str, section: str = "§6") -> None:
         n = at if isinstance(at, int) else line.get(at) or line.get("/".join(at.split("/")[:3])) or 1
         errors.append(f"{where}:{n}: {what} ({PAGE} {section})")
 
     native_rules = form["format"] in NATIVE_FORMATS
-    extended_format = form["format"] in (IDENTIFIER_FORMAT, *NATIVE_FORMATS)
-    for key, message, section in header_errors(module, pack, native_rules=native_rules, schema=True):
+    extended_format = form["format"] in (IDENTIFIER_FORMAT, *NATIVE_FORMATS, REZONO_1_FORMAT)
+    for key, message, section in header_errors(
+        module, pack, native_rules=native_rules, schema=True,
+        form_format=form["format"], pack_version=pack_version,
+    ):
         place = key if key.startswith("/") else header_line(pack_dir, d, key)
         refuse(place, message, section)
     pinned = pinned or {}
@@ -550,7 +576,10 @@ def lower(pack_dir: Path, d: Declared, form: dict, pack: str, owners: dict[str, 
             ):
                 refuse(at, "not a `use` line of the form")
             elif "." in target:
-                refuse(at, "a `use` line with a dotted pack name is not lowered yet")
+                if rezono_1:
+                    refuse(at, "a `use` line with a dotted pack name is removed in `rezono 1` (R028)")
+                else:
+                    refuse(at, "a `use` line with a dotted pack name is not lowered yet")
             elif target not in pinned:
                 refuse(at, f"{target} is not a pack that pack.yaml pins (R046)")
             elif alias is not None and alias in prefixes:
@@ -613,7 +642,7 @@ def lower(pack_dir: Path, d: Declared, form: dict, pack: str, owners: dict[str, 
             lowered_kind = rezono_kind.lower(
                 decl, at, own, owners, declared_names, uses, refuse,
                 extended_format=extended_format, aliases=prefixes, kinds=kinds,
-                integer_types=integer_types, own_module=d.id,
+                integer_types=integer_types, own_module=d.id, rezono_1=rezono_1,
             )
             if lowered_kind is not None:
                 if keys:
@@ -623,14 +652,18 @@ def lower(pack_dir: Path, d: Declared, form: dict, pack: str, owners: dict[str, 
             lowered_enum = rezono_enum.lower(decl, at, refuse, extended=extended_format)
             if lowered_enum is not None:
                 enums[decl["enum"]] = lowered_enum
+        elif "rule" in decl and rezono_1:
+            refuse(at, "a `rule` declaration is removed in `rezono 1` (R028)")
         elif "rule" in decl and native_rules:
             continue  # The rule assembler needs the checked schema and pinned imports.
         elif "extend" in decl:
-            rezono_extend.validate(decl, at, imported, refuse, extended_format=extended_format)
+            rezono_extend.validate(decl, at, imported, refuse, extended_format=extended_format, rezono_1=rezono_1)
         elif "asOf" in decl and extended_format:
             rezono_calc.validate_as_of(decl, at, refuse)
         elif "param" in decl and extended_format:
             rezono_calc.validate_param(decl, at, refuse)
+        elif "rules" in decl and rezono_1:
+            refuse(at, "a `rules` block is removed in `rezono 1` (R028)")
         elif "rules" in decl and form["format"] == IDENTIFIER_FORMAT:
             from .rezono_relational import valid_block
 
@@ -663,7 +696,7 @@ def lower(pack_dir: Path, d: Declared, form: dict, pack: str, owners: dict[str, 
                 seen_reasons.add(code)
             if lowered_reason is not None:
                 reasons.append(lowered_reason)
-        elif "dataset" in decl and form["format"] == DATASET_FORMAT and trailing_dataset(module):
+        elif "dataset" in decl and form["format"] in (DATASET_FORMAT, REZONO_1_FORMAT) and trailing_dataset(module):
             continue  # The fact loader reads the dataset's tables (decisions/language-library-datasets.md).
         else:
             refuse(at, *next((REFUSED[k] for k in REFUSED if k in decl), ("not a declaration this compiler reads",)))

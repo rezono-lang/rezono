@@ -1,6 +1,6 @@
 {
   "docs/a-new-page.md": 1,
-  "docs/architecture.md": 12,
+  "docs/architecture.md": 10,
   "docs/archive/m1-engine-proof.md": 1,
   "docs/archive/m2-pipelines-and-rule-ir.md": 3,
   "docs/calc.md": 1,
@@ -12,7 +12,7 @@
   "docs/explain/contract.md": 5,
   "docs/feldera.md": 1,
   "docs/glossary.md": 1,
-  "docs/gui.md": 81,
+  "docs/gui.md": 78,
   "docs/interaction.md": 10,
   "docs/live-service.md": 2,
   "docs/m2-pipelines-and-rule-ir.md": 1,

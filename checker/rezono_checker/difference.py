@@ -12,9 +12,9 @@ columns whose prefix holds exactly one row in each snapshot, and those differ (`
 
 from __future__ import annotations
 
-import json
 from collections import defaultdict
 
+from .canon import strict_json_loads
 from .proof import _Walk
 from .snapshots import read_rows
 
@@ -28,7 +28,7 @@ def changes(before: bytes, after: bytes) -> list[dict]:
     sides = []
     for data in (before, after):
         by_prefix = defaultdict(set)
-        for r in json.loads(data):
+        for r in strict_json_loads(data):
             k = tuple(r["key"])
             by_prefix[(True, k[:-1]) if len(k) > 1 else (False, k)].add(k)  # a cell, or a row of one column
         sides.append(by_prefix)

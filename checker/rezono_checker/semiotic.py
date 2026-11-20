@@ -5,9 +5,9 @@ The caller supplies the existing authorised role snapshots and publication hash 
 """
 
 from dataclasses import dataclass
-import json
 import math
 
+from .canon import strict_json_loads
 from .views import Role, _placeholder, chain, check_view, group_of, lane_key
 
 
@@ -50,7 +50,7 @@ def containment(sheet: str, role: Role, layout: bytes, tiles: dict[str, bytes], 
         raise ValueError("containment requires a valid role view") from None
     if problems:
         raise ValueError("containment requires a valid role view")
-    pieces = {path: json.loads(data) for path, data in tiles.items()}
+    pieces = {path: strict_json_loads(data) for path, data in tiles.items()}
     leaves = {path: piece for path, piece in pieces.items() if piece.get("level") == levels - 1}
     scope = tuple(sorted(leaves if selected is None else selected))
     if not scope or not set(scope) <= leaves.keys():

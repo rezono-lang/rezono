@@ -489,8 +489,9 @@ test('an answer is Row JSON of its output schema: values in their normal form, s
 	assert.equal((await ask('ask Team where true show 1 s * 5', one)).rows[0].c1, '5 s');
 	assert.equal((await ask('ask Team where true show 1 h / 3600 * 7', one)).rows[0].c1, '7/3600 h');
 	for (const name of ['c1', 'c2', 'c3', 'c4', 'c5']) assert.ok(x.schema.kinds.Answer.slots[name].states.includes('unknown'), name);
-	// A percent that has no number has no value, as the number alone has none; a type whose factor is no number above zero is a defect.
-	await assert.rejects(ask('ask Team where 1/0 % = 0', one), NotEvaluated);
+	// A percent that has no number is rejected at check time (R012) and has no amount; a type whose factor is no number above zero is a defect.
+	assert.deepEqual(check('ask Team where 1/0 % = 0', fixture).diagnostics.filter(isError).map((d) => d.code), ['R012']);
+	assert.equal(amount(fixture, '1/0 %'), undefined);
 	await assert.rejects(ask('ask Team where round(1 GiB, half_even) = 1 GiB', one, schemaWith((s) => (s.types!.GiB.factor = '0'))), TypeError);
 	// The default `show` is what the condition reads.
 	const d = await ask('ask Host where memory_need > 300 GiB or owner is known');

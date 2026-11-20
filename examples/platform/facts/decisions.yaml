@@ -1,0 +1,155 @@
+# Governing std-decision records across the five operational scenes.
+reference_date:
+  - id: platform-2026-11-20
+    title: 20 November 2026
+    day: 20261120
+
+subject:
+  - id: placement-core
+    title: Core service and cluster placement
+  - id: zone-policy-matrix
+    title: Cross-zone and in-zone network policy matrix
+  - id: tenant-capacity-admission
+    title: Tenant capacity admission and quota bounds
+  - id: tenant-shared-cost
+    title: Shared platform monthly cost allocation
+  - id: tenant-delivery-review
+    title: Tenant delivery review and approval
+  - id: product-lifecycle-stance
+    title: Product release and support lifecycle stance
+  - id: backup-and-recovery-policy
+    title: Backup freshness and isolated recovery policy
+  - id: recovery-workload-exclusion
+    title: Workload exclusion from isolated recovery zone
+  - id: cluster-and-tenant-access
+    title: Cluster rights and tenant publication access
+
+decision:
+  - id: d-placement-core
+    title: Place platform services on clusters matching their role and zone
+    subject: placement-core
+    decider: [platform-board]
+    decided_on: '2026-11-01'
+    valid_from: '2026-11-01'
+    valid_from_day: 20261101
+    state: in_force
+    rationale: Each cluster role maps to one zone and hosts only the services assigned to that role.
+  - id: d-zone-matrix-default
+    title: Enforce default-deny cross-zone boundaries and allow only declared service flows
+    subject: zone-policy-matrix
+    decider: [platform-board, security-review]
+    decided_on: '2026-11-01'
+    valid_from: '2026-11-01'
+    valid_from_day: 20261101
+    state: in_force
+    rationale: Cross-zone traffic requires a derived service flow and an explicit boundary allowance.
+  - id: d-tenant-capacity-policy
+    title: Admit tenant requests only within verified pool capacity and tenant quota
+    subject: tenant-capacity-admission
+    decider: [platform-board]
+    decided_on: '2026-11-05'
+    valid_from: '2026-11-05'
+    valid_from_day: 20261105
+    state: in_force
+    rationale: Admission checks request sizes against available pool headroom and tenant limits.
+  - id: d-shared-cost-allocation
+    title: Allocate shared monthly platform cost proportionally by observed core-days
+    subject: tenant-shared-cost
+    decider: [platform-board]
+    decided_on: '2026-11-05'
+    valid_from: '2026-11-05'
+    valid_from_day: 20261105
+    state: in_force
+    rationale: Tenant cost shares follow measured core-day usage over fully covered periods.
+  - id: d-tenant-delivery-review
+    title: Require operator review for production tenant requests crossing shared boundaries
+    subject: tenant-delivery-review
+    decider: [security-review]
+    decided_on: '2026-11-05'
+    valid_from: '2026-11-05'
+    valid_from_day: 20261105
+    state: in_force
+    rationale: Shared isolation boundaries require explicit operator judgement before delivery.
+  - id: d-product-stance-supported
+    title: Keep pinned releases within vendor support windows or backed by a supported successor
+    subject: product-lifecycle-stance
+    decider: [platform-board]
+    decided_on: '2026-11-10'
+    valid_from: '2026-11-10'
+    valid_from_day: 20261110
+    state: in_force
+    rationale: Supported release series and verified handoffs prevent unmaintained runtime dependencies.
+  - id: d-backup-recovery-isolation
+    title: Require verified fresh backups and allow isolated recovery readback while management is offline
+    subject: backup-and-recovery-policy
+    decider: [platform-board, operations-lead]
+    decided_on: '2026-11-12'
+    valid_from: '2026-11-12'
+    valid_from_day: 20261112
+    state: in_force
+    rationale: Recovery clusters must restore and verify datasets from the shared store without management access.
+  - id: d-exclusion-recovery-workload
+    title: Exclude general tenant workloads from the isolated recovery zone
+    subject: recovery-workload-exclusion
+    decider: [security-review]
+    decided_on: '2026-11-15'
+    valid_from: '2026-11-15'
+    valid_from_day: 20261115
+    state: in_force
+    rationale: Only recovery services may run in the recovery zone so restore paths remain isolated.
+  - id: d-access-least-privilege
+    title: Restrict cluster actions and tenant publication reads to active memberships and explicit grants
+    subject: cluster-and-tenant-access
+    decider: [security-review]
+    decided_on: '2026-11-15'
+    valid_from: '2026-11-15'
+    valid_from_day: 20261115
+    state: in_force
+    rationale: Withdrawn memberships and missing read grants must remove derived access rights.
+
+platform_decision_binding:
+  - id: b-placement-core
+    decision: d-placement-core
+    area: placement
+    subject: platform-clusters
+    value: role-zoned-placement
+  - id: b-zone-matrix-default
+    decision: d-zone-matrix-default
+    area: zone_matrix
+    subject: zone-boundary-matrix
+    value: default-deny-explicit-flows
+  - id: b-tenant-capacity-policy
+    decision: d-tenant-capacity-policy
+    area: capacity
+    subject: tenant-pool-admission
+    value: fit-within-verified-quota
+  - id: b-shared-cost-allocation
+    decision: d-shared-cost-allocation
+    area: shared_cost
+    subject: monthly-core-day-ledger
+    value: proportional-observed-core-days
+  - id: b-tenant-delivery-review
+    decision: d-tenant-delivery-review
+    area: review
+    subject: tenant-request-approval
+    value: operator-review-required
+  - id: b-product-stance-supported
+    decision: d-product-stance-supported
+    area: product_stance
+    subject: pinned-product-releases
+    value: vendor-supported-or-succeeded
+  - id: b-backup-recovery-isolation
+    decision: d-backup-recovery-isolation
+    area: backup_policy
+    subject: management-backup-store
+    value: verified-fresh-offline-restore
+  - id: b-exclusion-recovery-workload
+    decision: d-exclusion-recovery-workload
+    area: exclusion
+    subject: recovery-zone-app-workload
+    value: excluded
+  - id: b-access-least-privilege
+    decision: d-access-least-privilege
+    area: access_policy
+    subject: cluster-and-tenant-reads
+    value: scoped-non-withdrawn-grants

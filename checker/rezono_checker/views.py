@@ -83,7 +83,7 @@ import json
 import re
 from typing import NamedTuple
 
-from .canon import INTEGER
+from .canon import INTEGER, strict_json_loads
 from .snapshots import read_rows
 
 
@@ -198,7 +198,13 @@ def check_page(snapshots: dict[str, bytes], bundle: dict, page: bytes, role: Rol
     for kind, i in role.once:
         by_kind.setdefault(kind, set()).add(i)
     problems = []
-    for entry in json.loads(page).get("kinds", []):
+    try:
+        doc = strict_json_loads(page)
+    except ValueError as err:
+        return [f"page: invalid JSON ({err})"]
+    if not isinstance(doc, dict):
+        return ["page: not a JSON object"]
+    for entry in doc.get("kinds", []):
         kind, ids = entry["kind"], by_kind.get(entry["kind"], set())
         if entry["count"] != len(ids):
             problems.append(f"page: kind {kind} counts {entry['count']}, the role reads {len(ids)}")
@@ -720,7 +726,12 @@ def check_view(sheet: str, snapshots: dict[str, bytes], layout: bytes, tiles: di
     problems: list[str] = []
     role = role or Role(snapshots, bundle)
     read, readable, once = role.read, role.readable, role.once
-    whole = json.loads(layout)
+    try:
+        whole = strict_json_loads(layout)
+    except ValueError as err:
+        return [f"{sheet}: layout is not valid JSON ({err})"]
+    if not isinstance(whole, dict):
+        return [f"{sheet}: layout is not a JSON object"]
     nodes = whole.get("nodes", {})
     lines = whole.get("edges", {})
     # A node that is not its element (an element that stands on the sheet more than once) says which it shows.
@@ -857,7 +868,14 @@ def check_view(sheet: str, snapshots: dict[str, bytes], layout: bytes, tiles: di
         if sha is not None and hashlib.sha256(data).hexdigest() != sha:
             problems.append(f"{sheet}: tile {path} does not have the sha256 its parent names")
         reached.add(path)
-        t = json.loads(data)
+        try:
+            t = strict_json_loads(data)
+        except ValueError as err:
+            problems.append(f"{sheet}: tile {path} is not valid JSON ({err})")
+            continue
+        if not isinstance(t, dict):
+            problems.append(f"{sheet}: tile {path} is not a JSON object")
+            continue
         if t.get("sheet") != sheet or f"{sheet}/{t.get('level')}/{t.get('x')}_{t.get('y')}.json" != path:
             problems.append(f"{sheet}: tile {path} says it is another tile")
         for c in t.get("clusters", []):
@@ -1129,15 +1147,28 @@ def check_islands(snapshots: dict[str, bytes], bundle: dict, levels: dict[str, b
             problems.append(f"islands: level {key} is missing")
         elif key not in want:
             problems.append(f"islands: level {key} is no level the role's rows give")
-        elif json.loads(levels[key]) != want[key]:
-            problems.append(f"islands: level {key} is not what the role's rows give")
+        else:
+            try:
+                got = strict_json_loads(levels[key])
+            except ValueError as err:
+                problems.append(f"islands: level {key} is not valid JSON ({err})")
+            else:
+                if got != want[key]:
+                    problems.append(f"islands: level {key} is not what the role's rows give")
     for sheet in sorted(set(maps) | set(layouts)):
         if sheet not in layouts:
             problems.append(f"islands: the Map {sheet} is missing")
         elif sheet not in maps:
             problems.append(f"islands: {sheet} is the Map of no island")
         else:
-            whole = json.loads(layouts[sheet])
+            try:
+                whole = strict_json_loads(layouts[sheet])
+            except ValueError as err:
+                problems.append(f"islands: {sheet} is not valid JSON ({err})")
+                continue
+            if not isinstance(whole, dict):
+                problems.append(f"islands: {sheet} is not a JSON object")
+                continue
             drawn = {i for i in whole.get("nodes", {}) if not _placeholder(i)}
             if drawn != maps[sheet]:
                 problems.append(f"islands: {sheet} draws {len(drawn)} elements, the island holds {len(maps[sheet])}")

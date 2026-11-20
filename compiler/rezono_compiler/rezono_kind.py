@@ -123,7 +123,8 @@ def lower(decl: dict, at: str, own: dict[str, str], owners: dict[str, list[str]]
           aliases: Mapping[str, Mapping[str, list[str]]] | None = None,
           kinds: Mapping[str, list] | None = None,
           integer_types: Mapping[str, Set[str]] | None = None,
-          own_module: str = "") -> dict | None:
+          own_module: str = "",
+          rezono_1: bool = False) -> dict | None:
     """`kinds` holds the slots of each kind of the module, which an inverse slot reads."""
     ok = True
     allowed = (MEMBERS | {"checks", "deprecated", "embedded", "equations", "parent", "relationship"} | rezono_metadata.FIELDS
@@ -178,7 +179,10 @@ def lower(decl: dict, at: str, own: dict[str, str], owners: dict[str, list[str]]
             refuse_derived(here, refuse)
             ok = False
         elif isinstance(derived, dict) and isinstance(derived.get("table"), dict):
-            refuse(here, "a decision table under a kind is not lowered (R050)", "§5.4")
+            if rezono_1 and derived["table"].get("table") == "priority":
+                refuse(here, "`table priority` is removed in `rezono 1` (R028); use `table first` instead", "§5.4")
+            else:
+                refuse(here, "a decision table under a kind is not lowered (R050)", "§5.4")
             ok = False
         else:
             from . import rezono_calc

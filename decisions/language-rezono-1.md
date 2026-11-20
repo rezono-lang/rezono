@@ -12,6 +12,8 @@ subject: language-rezono-1
 
 This decision adopts and finalizes the design explored in [the first-release proposal](../docs/rezono/first-release-proposal.md), resolves every technical correction and open gap against the codebase, settles the effect on prior language decisions, and specifies every intended semantic difference for migrating `examples/platform/rules/core.dl`.
 
+> **Follow-up refinements ([`decisions/language-rezono-1-refinements.md`](language-rezono-1-refinements.md)):** prohibits implicit existential variables in relation calls (adding optional explicit binders `Kind.any(x: ...)` / `rel.any(row: ...)`), introduces `a otherwise b` for conflict-safe fallback on `n/a` plus `W115` on `unless x is known`, enforces set-only collections (`R028` on collection path projection, plus `.one(expr)`), aligns `.count(pred)` and `x in S`, replaces alphabetical `round` type selection with `round(x as Type, mode)` / `default_units`, and unifies the symmetric 64-bit exact-number bound (`BOUND = 2^63 - 1`) and all four rounding modes across engines.
+
 ## 1. Fixed invariants and scope
 
 Four constraints hold for every part of `rezono 1`:
@@ -72,7 +74,7 @@ Every derivation in `rezono 1` uses `derived`:
 - **Publication conflict policy:**
   - **Rule-structure contradictions always block publication (`conflict_policy = block`, automatic invariant):** unresolved `versions_overlap`, sibling `unless` clashes (`exception_conflict`), and overlapping `table unique` rows.
   - **Data-multiplicity conflicts from `.one()` (`invalid multiple_values`) publish as findings by default (`conflict_policy = publish`)** on `partial` derivations (the default per `v0.md` §5d): the functional derivation emits `(key..., "invalid", "multiple_values", "")` (with `value` omitted in structured `Value` JSON per `contracts/value.yaml`, `""` in snapshot row keys, and a non-NULL typed sentinel in SQL) carrying every candidate as witness; downstream `Bool` derivations reading its value (`d(k) = v`) require `state = "known"` and emit no false positive tuple; and checks or diagnostic views can test `d(k) is invalid` directly. A pack that wants data multiplicity conflicts to block publication writes `check` / `require` (e.g. `check unique_provider: not (needs(a, f) is invalid)`) or declares the derivation `total`.
-- **Guarding `unless` without masking `invalid`:** because `is` always evaluates to `true` or `false` (`v0.md` §7b), an `unless` guard that should forward both `known` and `invalid` writes `unless not (chosen(a, f) is n/a) then chosen(a, f)` rather than `unless chosen(a, f) is known`, which would silently mask a conflict in `chosen`.
+- **Guarding `unless` without masking `invalid`:** because `is` always evaluates to `true` or `false` (`v0.md` §7b), an optional-override fallback in `rezono 1` uses the conflict-safe `otherwise` operator (`chosen(a, f) otherwise ...`, [refinements](language-rezono-1-refinements.md#2-conflict-safe-fallback-on-na-with-otherwise-and-warning-w115)); an `unless` guard that writes `unless not (chosen(a, f) is n/a) then chosen(a, f)` also forwards `invalid`, whereas `unless chosen(a, f) is known` would silently mask a conflict in `chosen` and triggers warning `W115`.
 
 ## 3. Effect on prior decisions
 
@@ -283,6 +285,8 @@ All 104 pack-owned `.dl` files (98 in `examples/`/`packs/`/`run/packs/` plus 6 u
 ## 7. Per-derivation intended semantic differences for `examples/platform/rules/core.dl`
 
 Whole-pack conversion equivalence tests ([migration equivalence](language-expression-semantics.md#4-migration-equivalence)) compare every derived result against the legacy `.dl` pack. For `examples/platform/rules/core.dl`, **every intended semantic difference (including every downstream propagation from `needs`, `flow`, `crossing`, and `runs`) and every bundle relation name change is listed below**; the equivalence test asserts each listed difference explicitly by name and compares every other relation and known tuple for exact equality. **Any difference not listed here is a test error.**
+
+> **Forward note ([platform facts are not conclusions](platform-facts-not-conclusions.md)):** four rows below change when that decision's steps land; the table keeps its text until then. `newest_day` and `runs` order releases by `released_on`, the date derived from the maker's pinned release statement, in native date order instead of `Release.released_on_day`, and `newest_day` retires (its section 4). `needs_service` and `flow_from_step` retire with `Service.step`: the start order is `std-order`'s `before` over services, from `stated_precedes(b, a)` for each `needs(a, b, _)` (its section 5). `provides` keeps its tuple set with ports from port decisions and vendor statements (its section 3), and `verified` and `unverified_supply` keep theirs on observed signatures, beside a new `supply_unknown` (its section 7).
 
 | Legacy `core.dl` relation | `rezono 1` replacement (bundle id) | Intended semantic differences & where readers find retired content |
 | --- | --- | --- |
