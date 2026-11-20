@@ -10,13 +10,12 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-import shutil
 
 import pytest
 import yaml
 
 from rezono_compiler import modules, native_rule_signatures, pack, rezono_module
-from support import FIXTURE, compile_dir
+from support import compile_dir
 
 
 def _spans(body: dict) -> list[dict]:
@@ -46,7 +45,13 @@ def _write_pack(
     labels: str = "",
 ) -> Path:
     directory.mkdir(parents=True, exist_ok=True)
-    shutil.copytree(FIXTURE / "messages", directory / "messages")
+    (directory / "channels.yaml").write_text("{}\n", encoding="utf-8", newline="\n")
+    (directory / "messages").mkdir()
+    (directory / "messages" / "en.mf2").write_text(
+        "@locale en\n---\n" + "".join(f"{key} = {{{{{key}}}}}\n" for key in pack.MESSAGES),
+        encoding="utf-8",
+        newline="\n",
+    )
     (directory / "labels").mkdir()
     (directory / "labels" / "en.yaml").write_text(labels, encoding="utf-8", newline="\n")
     (directory / "rezono").mkdir()
@@ -165,15 +170,7 @@ def _native_form(pack_name: str, decls: list[dict], uses: list[dict]) -> dict:
     return {"format": "rezono.module/3", "module": body, "spans": places}
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason="extra: decisions/healthcare-allowance-three-sources.md: Compiler-side qualified same-name kind "
-           "separation is implemented, but the test helper `_write_pack` omits `channels.yaml` and copies "
-           "`FIXTURE / 'messages'` (`nl.mf2`) while setting `default_language: en` and `labels/en.yaml`, "
-           "causing `pack.channels()` and `pack.language()` to refuse the fixture pack; needs planner fixture fix.",
-)
-def test_same_name_kinds_across_two_sources_stay_disjoint_with_qualified_imports(tmp_path: Path):
+def test_qualified_cross_pack_same_name_kinds_stay_disjoint(tmp_path: Path):
     base = tmp_path / "qualified"
     person, civil, tax = _build_sources(base)
     allowance = _write_pack(
