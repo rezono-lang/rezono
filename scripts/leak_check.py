@@ -1,5 +1,8 @@
 """Compare tracked file contents and names with the per-file disclosure budget.
 
+In a pull request or merge-group run it also refuses commit messages, and the pull request
+title and body, that contain a Co-authored-by trailer or an address other than the author's.
+
 The budget is a ceiling per file and kind that may only fall: more findings than listed, or a listed number
 above the base budget, is red. With a base, it is also a ratchet: more findings in a listed file than that
 file holds on the base is red, even while the listed number leaves room, so slack left behind by a removed
@@ -20,6 +23,9 @@ EMAIL = re.compile(rb"(?:(?:\d+\+)?[\w-]+\[bot\]|[\w.!#$%&'*+/=?^_\x60{|}~-]+)@(
 AUTHOR = b"222310762+vdo89" + b"@users.noreply.github.com"
 BOT = re.compile(rb"(?:\d+\+)?[\w-]+\[bot\]@users\.noreply\.github\.com")
 EXAMPLE = re.compile(rb"(?:[\w-]+\.)*(?:example\.(?:com|org|net)|example|invalid|test|localhost)")
+CO_AUTHOR = re.compile(rb"^[ \t]*co-authored-by[ \t]*:", re.I | re.M)
+# The sign-off GitHub's dependency bot writes; assembled so this file holds no address itself.
+BOT_SIGN_OFF = b"Signed-off-by: dependabot[bot] <support" + b"@github.com>"
 PATTERNS = {
     "machine_path": re.compile(rb"(?:[A-Z]:[/\\]+(?:Users|Documents and Settings)[/\\]+|/(?:Users|home)/|/mnt/[a-z]/Users/)[\w.-]+", re.I),
     "ticket": re.compile(rb"RV-[A-Z]*[0-9]+"),
@@ -35,14 +41,60 @@ NUMBERED_STREAM = re.compile(r"(?<![a-z0-9])(?:golf|kern|taal|kring|platform|run
 PATH_BRANCHES = ("task/", "fix/", "note/")
 
 
+def foreign(address):
+    return address != AUTHOR and not BOT.fullmatch(address) and not EXAMPLE.fullmatch(address.split(b"@")[-1].lower())
+
+
 def counts(data):
     found = {name: sum(1 for _ in pattern.finditer(data)) for name, pattern in PATTERNS.items()}
-    emails = (m.group() for m in EMAIL.finditer(data))
-    found["email"] = sum(
-        address != AUTHOR and not BOT.fullmatch(address) and not EXAMPLE.fullmatch(address.split(b"@")[-1].lower())
-        for address in emails
-    )
+    found["email"] = sum(foreign(m.group()) for m in EMAIL.finditer(data))
     return {kind: number for kind, number in sorted(found.items()) if number}
+
+
+def addressed(match):
+    """A local part without a letter or digit, such as a backtick before a Python decorator, names no one."""
+    return any(c.isalnum() for c in match.rpartition(b"@")[0].decode("utf-8", "replace"))
+
+
+def message_counts(data):
+    """Count Co-authored-by trailers and foreign addresses in a commit message or PR text."""
+    lines = (line for line in data.splitlines() if line.strip() != BOT_SIGN_OFF)
+    found = {
+        "co_author": len(CO_AUTHOR.findall(data)),
+        "email": sum(foreign(m.group()) for line in lines for m in EMAIL.finditer(line) if addressed(m.group())),
+    }
+    return {kind: number for kind, number in found.items() if number}
+
+
+def event_texts():
+    """Yield (label, text) for each commit message and PR text of this pull request or merge group."""
+    name, path = os.environ.get("GITHUB_EVENT_NAME"), os.environ.get("GITHUB_EVENT_PATH")
+    if name not in ("pull_request", "merge_group") or not path:
+        return
+    event = json.loads(Path(path).read_bytes())
+    if name == "pull_request":
+        pull = event["pull_request"]
+        base, head = pull["base"]["sha"], pull["head"]["sha"]
+        yield "pull request title", (pull.get("title") or "").encode()
+        yield "pull request body", (pull.get("body") or "").encode()
+    else:
+        group = event["merge_group"]
+        base, head = group["base_sha"], group["head_sha"]
+        yield "merge group message", ((group.get("head_commit") or {}).get("message") or "").encode()
+    log = subprocess.check_output(["git", "log", "-z", "--format=%h%n%B", f"{base}..{head}"])
+    for entry in filter(None, log.split(b"\0")):
+        commit, _, message = entry.partition(b"\n")
+        yield f"commit {commit.decode()} message", message
+
+
+def check_messages():
+    failed = False
+    for label, text in event_texts():
+        for kind, number in sorted(message_counts(text).items()):
+            # Print counts only, never the trailer or the address itself.
+            print(f"{label} {kind}: observed={number} allowed=0")
+            failed = True
+    return failed
 
 
 def branch_finding(name):
@@ -137,6 +189,7 @@ def main():
             elif number < limit:
                 print(f"{label} {kind}: observed={number} listed={limit}; lower the budget in {BUDGET}")
     print(" ".join(f"{kind}={totals[kind]}" for kind in sorted({"email", *PATTERNS})))
+    failed = check_messages() or failed
     return int(failed)
 
 

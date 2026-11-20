@@ -73,6 +73,10 @@ def observed_receipt(source, base, head, engine):
             for reader in readers:
                 record(["path-reader", path, kind, reader], {"revision": engine, "path": AUTHORITY}, [reader])
     record(["file-dependencies"], {"revision": engine, "path": AUTHORITY}, registry["file_dependencies"])
+    # Like a reader edge, each dependency edge is its own member, named by the folders of its components.
+    for edge in registry["file_dependencies"]:
+        record(["file-dependency", edge["dependency"], edge["consumer"]], {"revision": engine, "path": AUTHORITY},
+               [edge])
     for revision in (base, head):
         for path, entry in tree(revision).items():
             if path.endswith("/pyproject.toml"):
@@ -80,6 +84,8 @@ def observed_receipt(source, base, head, engine):
                 project = tomllib.loads(git(source, "show", f"{revision}:{path}"))["project"]
                 record(["manifest", revision, path], origin, [project])
                 record(["manifest-dependencies", revision, path], origin, project.get("dependencies", []))
+                for dependency in project.get("dependencies", []):
+                    record(["manifest-dependency", revision, path, dependency], origin, [dependency])
             if revision == head and path.endswith("/test_unit.py"):
                 record(["test-file", path], {"revision": head, "path": path, **entry}, [path])
     # The CI universe comes from ordinary discovery on the exact candidate checkout,
@@ -183,9 +189,22 @@ def test_mapped_path_requires_reader_inventory(tmp_path):
     assert {component for _, component, _ in intact["build_selected_job"]} == native == {"alpha", "beta", "gamma"}
     assert not intact["build_full_selection"]
 
-    for removed in ("reader", "path", "manifest", "test-file", "suite"):
+    # Each admitted member needs its record, and each recorded path, reader edge and dependency edge its member.
+    for removed in ("reader", "path", "manifest", "dependency", "extra-path", "extra-reader", "extra-dependency",
+                    "test-file", "suite"):
         submitted = deepcopy(records)
-        if removed == "reader":
+        if removed == "dependency":
+            submitted["build_dependency"] = [row for row in submitted["build_dependency"] if row["consumer"] != "gamma"]
+        elif removed == "extra-path":
+            submitted["build_path"].append({"id": "unlisted", "run": "current", "path": "beta/unlisted.py",
+                                            "coverage": "mapped"})
+        elif removed == "extra-reader":
+            submitted["build_path_reader"].append({"id": "unlisted-reader", "path": "change", "component": "spare",
+                                                   "kind": "direct", "source": "alpha"})
+        elif removed == "extra-dependency":
+            submitted["build_dependency"].append({"id": "unlisted-dependency", "dependency": "alpha",
+                                                  "consumer": "spare", "kind": "file_reader", "source": "alpha"})
+        elif removed == "reader":
             submitted["build_path_reader"].clear()
         elif removed == "path":
             submitted["build_path"].clear()
