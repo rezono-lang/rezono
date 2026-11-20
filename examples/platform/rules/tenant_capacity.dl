@@ -1,6 +1,3 @@
-.decl verified_receipt(receipt: symbol, source: symbol, scope: symbol, cut: symbol, inventory: symbol, content: symbol)
-.decl verified_member(receipt: symbol, member: symbol, part: number, value: symbol)
-
 .decl capacity_expected_member(receipt: symbol, period: symbol, tenant: symbol)
 capacity_expected_member(receipt, p, t) :-
     verified_receipt(receipt, "capacity-readings", _, _, _, _),

@@ -181,15 +181,6 @@ def test_every_question_belongs_to_one_scene_or_outside_with_reason():
     assert covered_scenes == VALID_SCENES, f"Every scene 1..5 must contain at least one question; got {sorted(covered_scenes)}"
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason=(
-        "M2: decisions/platform-five-scenes.md: Import and pin packs/std-loop in examples/platform/pack.yaml, "
-        "ensure examples/platform/rules/ does not redeclare std-loop core relations, and compile the platform "
-        "pack with std-loop loaded."
-    ),
-)
 def test_platform_imports_std_loop():
     pack_doc = yaml.safe_load(PACK_FILE.read_text(encoding="utf-8"))
     imports = pack_doc.get("imports", [])
