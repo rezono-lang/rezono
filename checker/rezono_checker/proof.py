@@ -32,7 +32,7 @@ import hashlib
 import json
 import re
 
-from .canon import encode_key, value_text
+from .canon import encode_key, strict_json_loads, value_text
 from .evaluate import cells
 from .rules import load_rules
 from .snapshots import read_rows, rows_of
@@ -159,7 +159,11 @@ class _Walk:
         if len(data) > self.limit:
             problems.append(f"{path}: {len(data)} bytes, more than {self.limit}")
             return None
-        piece = json.loads(data)
+        try:
+            piece = strict_json_loads(data)
+        except ValueError as err:
+            problems.append(f"{path}: invalid JSON ({err})")
+            return None
         if not isinstance(piece, dict) or set(piece) != (LEAF if level == 0 else PAGE):
             problems.append(f"{path}: fields {sorted(piece) if isinstance(piece, dict) else type(piece).__name__}, "
                             f"not exactly {sorted(LEAF if level == 0 else PAGE)}")
@@ -253,7 +257,7 @@ def check_rows(snapshots: dict, pieces: dict, roots: dict, limit: int, fanout: i
 
     def table(rel):  # each snapshot is parsed once
         if rel not in parsed:
-            parsed[rel] = json.loads(snapshots[rel])
+            parsed[rel] = strict_json_loads(snapshots[rel])
         return parsed[rel]
 
     for rel in sorted(set(roots) | set(snapshots)):
@@ -317,7 +321,7 @@ def check_indexes(plan: dict, snapshots: dict, pieces: dict, entries: list, limi
             problems.append(f"gap: {k[0]} {list(k[1])} listed twice")
         given[k] = e
     for rel, bound in want:
-        rs = json.loads(snapshots[rel]) if rel in snapshots else []
+        rs = strict_json_loads(snapshots[rel]) if rel in snapshots else []
         k = (rel, tuple(bound))
         if not rs:
             if k in given:
@@ -354,7 +358,10 @@ def check_sources(entries: list, pieces: dict, roots: dict, limit: int, fanout: 
     want: dict[str, list] = {}
     for e in entries:
         row = e.get("row") if isinstance(e, dict) else None
-        key = json.loads(row["key"]) if isinstance(row, dict) and isinstance(row.get("key"), str) else None
+        try:
+            key = strict_json_loads(row["key"]) if isinstance(row, dict) and isinstance(row.get("key"), str) else None
+        except ValueError:
+            key = None
         if not isinstance(key, list) or not all(isinstance(p, str) for p in key) or not isinstance(row.get("relation"), str):
             return ["sources: an entry has no row reference with a key of text parts"]
         want.setdefault(row["relation"], []).append({"key": key} | {k: v for k, v in e.items() if k != "row"})
