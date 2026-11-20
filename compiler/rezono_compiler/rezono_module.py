@@ -505,6 +505,16 @@ def lower(pack_dir: Path, d: Declared, form: dict, pack: str, owners: dict[str, 
                             owners.setdefault(n, []).append(f"{target}:{mid}")
     own = names(form)
     declared_names = own.keys() | owners.keys()
+    scalar_bases: dict[str, str] = {}
+    for decl in module["decls"]:
+        if not isinstance(decl, dict):
+            continue
+        if "unit" in decl and isinstance(decl.get("unit"), str):
+            scalar_bases.setdefault(decl["unit"], "integer")
+        elif "type" in decl and "base" in decl and isinstance(decl.get("type"), str):
+            base = rezono_alias.BASES.get(decl["base"]) if isinstance(decl.get("base"), str) else None
+            if base is not None:
+                scalar_bases.setdefault(decl["type"], base)
     uses: set[str] = set()
     enums: dict[str, dict] = {}
     classes: dict[str, dict] = {}
@@ -538,7 +548,7 @@ def lower(pack_dir: Path, d: Declared, form: dict, pack: str, owners: dict[str, 
                     continue
             lowered_kind = rezono_kind.lower(
                 decl, at, own, owners, declared_names, uses, refuse,
-                extended_format=extended_format, aliases=prefixes,
+                extended_format=extended_format, aliases=prefixes, scalar_bases=scalar_bases,
             )
             if lowered_kind is not None:
                 if keys:

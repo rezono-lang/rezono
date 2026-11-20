@@ -85,7 +85,8 @@ def parent_of(value: object, kind: str, at: str, own: dict[str, str],
 
 def lower(decl: dict, at: str, own: dict[str, str], owners: dict[str, list[str]],
           declared: Set[str], uses: set[str], refuse: Refuse, *, extended_format: bool = False,
-          aliases: Mapping[str, Mapping[str, list[str]]] | None = None) -> dict | None:
+          aliases: Mapping[str, Mapping[str, list[str]]] | None = None,
+          scalar_bases: Mapping[str, str] | None = None) -> dict | None:
     ok = True
     allowed = (MEMBERS | {"checks", "embedded", "equations", "parent", "relationship"} | rezono_metadata.FIELDS
                if extended_format else MEMBERS)
@@ -146,9 +147,11 @@ def lower(decl: dict, at: str, own: dict[str, str], owners: dict[str, list[str]]
         ok = False
     if rezono_slot.validate(
         slots, decl["kind"], at, own, owners, uses, refuse,
-        extended=extended_format, open_kind=world == "open", aliases=aliases,
+        extended=extended_format, open_kind=world == "open", aliases=aliases, scalar_bases=scalar_bases,
     ) and ok and equations is not None and rules is not None:
-        attributes = rezono_slot.lower(slots, declared, implicit_identifier=not embedded and parent is None)
+        attributes = rezono_slot.lower(
+            slots, declared, implicit_identifier=not embedded and parent is None, scalar_bases=scalar_bases,
+        )
         result = {"attributes": attributes} | rezono_metadata.lower(decl)
         if world == "open":
             result.setdefault("annotations", {})["world"] = "open"

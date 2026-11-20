@@ -86,7 +86,8 @@ def resolve_prefixed(
     return None
 
 
-def lower(slots: list[dict], declared: Set[str], *, implicit_identifier: bool = True) -> dict[str, dict]:
+def lower(slots: list[dict], declared: Set[str], *, implicit_identifier: bool = True,
+          scalar_bases: Mapping[str, str] | None = None) -> dict[str, dict]:
     """Lower slots in written order, using an implicit identifier only when needed."""
     out: dict[str, dict] = {}
     if implicit_identifier and not any(slot.get("identifier") is True for slot in slots):
@@ -103,7 +104,8 @@ def lower(slots: list[dict], declared: Set[str], *, implicit_identifier: bool = 
         if "slotUri" in slot:
             attribute["slot_uri"] = slot["slotUri"]
         if "constraints" in slot:
-            attribute.update(constraint_facets(slot, range_name))
+            facet_range = scalar_bases.get(range_name, range_name) if scalar_bases else range_name
+            attribute.update(constraint_facets(slot, facet_range))
         if slot.get("identifier") is True:
             attribute["identifier"] = True
         elif "card" not in slot or slot["card"] == "+":
@@ -120,7 +122,8 @@ def lower(slots: list[dict], declared: Set[str], *, implicit_identifier: bool = 
 
 def validate(slots: list, kind: str, at: str, own: Mapping[str, str], owners: Mapping[str, list[str]],
              uses: set[str], refuse: Refuse, *, extended: bool = False, open_kind: bool = False,
-             aliases: Mapping[str, Mapping[str, list[str]]] | None = None) -> bool:
+             aliases: Mapping[str, Mapping[str, list[str]]] | None = None,
+             scalar_bases: Mapping[str, str] | None = None) -> bool:
     """Check slot forms and resolve references against all the modules of the pack."""
     ok = True
     seen: set[str] = set()
@@ -194,9 +197,10 @@ def validate(slots: list, kind: str, at: str, own: Mapping[str, str], owners: Ma
             continue
         found = owners.get(name, [])
         range_name = builtin_range(name, name in own or bool(found))
+        facet_range = scalar_bases.get(name, range_name) if range_name is None and scalar_bases else range_name
         if has_constraints:
             try:
-                constraint_facets(slot, range_name)
+                constraint_facets(slot, facet_range)
             except ValueError as error:
                 refuse(here, str(error), "§5.1")
                 ok = False
