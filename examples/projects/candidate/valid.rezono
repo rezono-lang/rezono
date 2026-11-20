@@ -1,0 +1,29 @@
+rezono 0
+pack projects
+
+-- Een kleine, geldige toestand: alle violation views zijn leeg.
+
+dataset `valid`
+  fact Project
+    | id | name         | budget  |
+    | p1 | "Website"    | 1200000 |
+    | p2 | "Verhuizing" | 500000  |
+  fact BudgetLine
+    | id | project | description | amount |
+    | b1 | p1      | "Ontwerp"   | 700000 |
+    | b2 | p1      | "Bouw"      | 500000 |
+    | b3 | p2      | "Vervoer"   | 500000 |
+  fact Milestone
+    | id | project | name            | due        |
+    | m1 | p1      | "Ontwerp klaar" | 2026-12-01 |
+    | m2 | p2      | "Sleutel over"  | -          |
+  fact Task
+    | id | project | milestone | name             | status | estimate |
+    | t1 | p1      | m1        | "Schetsen"       | done   | 16       |
+    | t2 | p1      | m1        | "Huisstijl"      | "open" | 24       |
+    | t3 | p1      | -         | "Bouwen"         | "open" | 80       |
+    | t4 | p2      | m2        | "Dozen inpakken" | "open" | -        |
+  fact Dependency
+    | id | task | prerequisite |
+    | d1 | t2   | t1           |
+    | d2 | t3   | t2           |

@@ -1,2 +1,8 @@
 product:
   - id: kubernetes
+
+series_support_reference:
+  - id: kubernetes-1.32-register
+    product: kubernetes
+    series: '1.32'
+    support_end: '2026-02-28'

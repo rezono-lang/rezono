@@ -644,11 +644,79 @@ export function typing(text: string, schema: Schema, spans: WeakMap<object, Span
 		});
 		return { binder, kind: q.ask, shown };
 	}
+	/** Checks a slot assignment expression against its expected typed slot. */
+	function assign(expr: Expr, expected: Typed, target: object): void {
+		const to = ex(expr);
+		if (to.set !== expected.set && to.ty.t !== 'err' && expected.ty.t !== 'err' && to.ty.t !== 'state') report('R005', spanOf(expr), []);
+		else if (!meet(to, expr, expected, target)) report('R003', spanOf(expr), [describe(to.ty), describe(expected.ty)]);
+	}
+	/** The span of the record key following the kind name in a whole-record insertion. */
+	function keySpan(node: object, kind: string, key: string): Span {
+		const span = spanOf(node);
+		const afterKind = span.text.indexOf(kind);
+		const at = afterKind < 0 ? -1 : span.text.indexOf(key, afterKind + kind.length);
+		if (at < 0) return span;
+		const start = span.start + [...span.text.slice(0, at)].length;
+		return { text: key, start, end: start + [...key].length };
+	}
+	/** Whether an authored record key matches the schema's identifier type. */
+	function validKey(key: string, typeName: string): boolean {
+		const ty = typeOf(schema, typeName);
+		const of = schema.types?.[typeName]?.of ?? typeName;
+		if (ty.t === 'bool') return key === 'true' || key === 'false';
+		if (ty.t === 'num') return of === 'Integer' ? /^-?[0-9]+$/.test(key) : grammar.match(key, 'number').succeeded();
+		if (ty.t === 'val') {
+			if (of === 'Date') return grammar.match(key, 'date').succeeded();
+			if (of === 'DateTime') return grammar.match(key, 'datetime').succeeded();
+			const enums = enumValues(typeName);
+			if (enums) return enums.includes(key);
+			const pattern = schema.types?.[typeName]?.pattern;
+			if (pattern !== undefined) return new RegExp(`^(?:${pattern})$`, 'u').test(key);
+		}
+		return true;
+	}
 	function suppose(q: Exclude<Question, Ask | CheckDecl>): void {
-		// A whole-record insertion reads and prints (decisions/language-safe-steps.md §1); checking it against the
-		// schema is not done yet, so it is refused at its span rather than read as a change it does not make.
 		if ('insert_row' in q) {
-			report('R015', spanOf(q), ['a whole-record insertion']);
+			const { kind, key, slots } = q.insert_row;
+			const def = schema.kinds[kind];
+			if (!def) {
+				report('R001', within(q, kind, 'start'), [kind], { suggest: near(kind, Object.keys(schema.kinds)) });
+				return;
+			}
+			const idType = def.id?.type ?? 'Text';
+			if (!validKey(key, idType)) report('R012', keySpan(q, kind, key), [key, idType]);
+			else resolve[key] = kind;
+			const writable = Object.keys(def.slots).filter((s) => !def.slots[s].derived && def.slots[s].inverse === undefined);
+			const seen = new Set<string>();
+			for (const entry of slots) {
+				const slotSpan = within(entry, entry.name, 'start');
+				if (seen.has(entry.name)) {
+					report('R036', slotSpan, [entry.name]);
+					continue;
+				}
+				seen.add(entry.name);
+				if (entry.name === 'id') {
+					report('R037', slotSpan, [entry.name, kind]);
+					continue;
+				}
+				const slotDef = def.slots[entry.name];
+				if (!slotDef) {
+					report('R001', slotSpan, [entry.name], { suggest: near(entry.name, writable) });
+					continue;
+				}
+				if (slotDef.inverse !== undefined || slotDef.derived) {
+					report('R037', slotSpan, [entry.name, kind]);
+					continue;
+				}
+				const many = slotDef.card === '*' || slotDef.card === '+';
+				assign(entry.value, value(slotType(schema, slotDef), [], many), entry.value);
+			}
+			for (const name of writable) {
+				const slotDef = def.slots[name];
+				if ((slotDef.card === '1' || slotDef.card === '+') && !seen.has(name)) {
+					report('R035', within(q, kind, 'start'), [kind, name]);
+				}
+			}
 			return;
 		}
 		if ('retract_row' in q) {
@@ -660,9 +728,7 @@ export function typing(text: string, schema: Schema, spans: WeakMap<object, Span
 		const target = 'set' in q ? q.set[0] : q.retract;
 		const slot = path(target);
 		if (!('set' in q)) return;
-		const to = ex(q.set[1]);
-		if (to.set !== slot.set && to.ty.t !== 'err' && slot.ty.t !== 'err') report('R005', spanOf(q.set[1]), []);
-		else if (!meet(to, q.set[1], slot, target)) report('R003', spanOf(q.set[1]), [describe(to.ty), describe(slot.ty)]);
+		assign(q.set[1], slot, target);
 	}
 
 	/**

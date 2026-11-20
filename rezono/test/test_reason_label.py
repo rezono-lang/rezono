@@ -25,15 +25,6 @@ class MissingReasonLabelCheck(AssertionError):
     """The reader did not refuse a label that no reason declares with R029 at that label."""
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=MissingReasonLabelCheck,
-    reason="extra: decisions/language-reasons.md: Refuse a state literal whose quoted label is the label of no "
-           "reason declaration of the module with R029 at the label, in rezono/src/module-check.ts, and give R029 "
-           "its sentence in each language of rezono/messages/. Read the section Reading a label. Waits for a "
-           "planner to declare reason not_measured in the fact-row case of the test 'the four states of a value' in "
-           "rezono/test/module-json.test.ts, which reads unknown \"not measured yet\" undeclared and expects a form.",
-)
 def test_reason_label():
     stray = source('unknown "no rate yet"')
     declared, coded, refused = read_modules(source('unknown "no monthly rate published yet"'),

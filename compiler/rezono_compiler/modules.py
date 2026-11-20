@@ -36,7 +36,7 @@ from linkml_runtime.linkml_model import SchemaDefinition
 from .schemaview import SchemaView
 from rezono_canon import canonical_sha256, sha256_hex
 
-from . import rezono_module, strict_yaml
+from . import rezono_module, standard_packs, strict_yaml
 
 # The files that define a pack: everything the compiler reads but facts, scenarios and diagnostics (data)
 # and expected output. Its hash covers exactly these: the import pin and the publication's
@@ -59,6 +59,7 @@ class Module:
     # The public kinds and enums, LinkML name -> deprecation date or None; None: no interface, all public.
     interface: dict[str, str | None] | None = None
     form: dict | None = None  # the effective JSON form when `file` is written in Rezono
+    reasons: list[tuple[str, str]] = field(default_factory=list)  # lowered (code, label) pairs
 
     @property
     def rel(self) -> str:
@@ -216,8 +217,10 @@ def imported_packs(pack_dir: Path, meta: dict, errors: list[str]) -> dict[str, I
                 errors.append(f"{where}: the pack in {imp['path']} is named {sub.get('name')!r}")
                 continue
             digest = pack_hash(d)
-            if digest != imp["sha256"]:
-                errors.append(f"{where}: the files hash to {digest}, not the pinned {imp['sha256']}")
+            why = (f"the files hash to {digest}, not the pinned {imp['sha256']}" if digest != imp["sha256"]
+                   else standard_packs.refusal(name, digest))
+            if why:
+                errors.append(f"{where}: {why}")
                 continue
             if name in found and found[name].sha256 != digest:
                 errors.append(f"{where}: pack {name} is imported twice with different contents")
@@ -323,7 +326,7 @@ def load(pack_dir: Path, meta: dict, errors: list[str]) -> tuple[list[Module], d
 
 
 def schema_names(pack_dir: Path) -> dict[str, set[str]]:
-    """The kinds and enums each schema file of a pack declares, by module id within the pack."""
+    """The kinds, enums and types each schema or Rezono module of a pack declares, by module id within the pack."""
     out: dict[str, set[str]] = {}
     for f in sorted((pack_dir / "schema").rglob("*.yaml")):
         try:
@@ -332,7 +335,64 @@ def schema_names(pack_dir: Path) -> dict[str, set[str]]:
             continue  # load() reports a file LinkML cannot read
         if isinstance(doc, dict):
             out[f.relative_to(pack_dir / "schema").with_suffix("").as_posix()] = {
-                str(n) for key in ("classes", "enums") if isinstance(doc.get(key), dict) for n in doc[key]}
+                str(n) for key in ("classes", "enums", "types") if isinstance(doc.get(key), dict) for n in doc[key]}
+    pack_file = pack_dir / "pack.yaml"
+    try:
+        meta = strict_yaml.read(pack_file) or {} if pack_file.is_file() else {}
+    except (OSError, ValueError, yaml.YAMLError):
+        meta = {}
+    if isinstance(meta, dict):
+        for d in rezono_module.declared(meta, pack_dir, [], reject_undeclared=False):
+            form = rezono_module.effective_form(pack_dir, d, [])
+            if form is not None:
+                out.setdefault(d.id, set()).update(rezono_module.names(form))
+    return out
+
+
+def _integer_type_names(tnames: list[str] | set[str], bases: dict[str, str]) -> set[str]:
+    """Return the type names whose typeof chain in `bases` reaches `integer`."""
+    ints: set[str] = set()
+    for tname in tnames:
+        cur, seen = bases.get(tname), set()
+        while cur and cur not in seen:
+            if cur == "integer":
+                ints.add(tname)
+                break
+            seen.add(cur)
+            cur = bases.get(cur)
+    return ints
+
+
+def _integer_types(local: dict[str, Module], packs: dict[str, Imported] | None,
+                   pinned: dict[str, dict[str, set[str]]]) -> dict[str, set[str]]:
+    """Scalar types in local or pinned LinkML schemas whose typeof chain reaches integer."""
+    out: dict[str, set[str]] = {}
+    local_bases = {
+        str(tname): body.typeof
+        for m in local.values()
+        for tname, body in (m.sv.schema.types or {}).items()
+        if body.typeof
+    }
+    for mid, m in local.items():
+        if ints := _integer_type_names({str(tname) for tname in (m.sv.schema.types or {})}, local_bases):
+            out[mid] = ints
+    for n in pinned:
+        bases: dict[str, str] = {}
+        by_module: dict[str, list[str]] = {}
+        for f in sorted((packs[n].dir / "schema").rglob("*.yaml")):
+            try:
+                doc = strict_yaml.read(f) or {}
+            except (OSError, ValueError, yaml.YAMLError):
+                continue
+            if isinstance(doc, dict) and isinstance(doc.get("types"), dict):
+                mid = f.relative_to(packs[n].dir / "schema").with_suffix("").as_posix()
+                for tname, body in doc["types"].items():
+                    if isinstance(body, dict) and isinstance(body.get("typeof"), str):
+                        bases[str(tname)] = body["typeof"]
+                        by_module.setdefault(mid, []).append(str(tname))
+        for mid, tnames in by_module.items():
+            if ints := _integer_type_names(tnames, bases):
+                out[f"{n}:{mid}"] = ints
     return out
 
 
@@ -344,9 +404,12 @@ def rezono_modules(d: Path, meta: dict, name: str | None, pack: str, schemas: di
     module by its schema, which LinkML reads from the import map."""
     local = {m.id.partition(":")[2] if name else m.id: m for m in schemas.values()}
     declared_by = {mid: set(m.sv.all_classes(imports=False)) | set(m.sv.all_enums(imports=False))
+                   | set(m.sv.all_types(imports=False))
                    for mid, m in local.items()}
     pinned = {n: schema_names(packs[n].dir) for n in direct(meta) if packs and n in packs}
-    lowered = rezono_module.lower_pack(d, meta, pack, declared_by, errors, imported=name is not None, pinned=pinned)
+    integer_types = _integer_types(local, packs or {}, pinned)
+    lowered = rezono_module.lower_pack(d, meta, pack, declared_by, errors, imported=name is not None,
+                                       pinned=pinned, integer_types=integer_types)
     key = {x: f"{pack}:{x}" for x in local} | {low.declared.id: f"{pack}:{rezono_module.DIR}/{low.declared.id}.rezono"
                                                  for low in lowered}
     for low in lowered:
@@ -360,7 +423,8 @@ def rezono_modules(d: Path, meta: dict, name: str | None, pack: str, schemas: di
             errors.append(f"{d.name}/{low.declared.module}: LinkML cannot read its lowered schema ({e})")
             continue
         out[Path(f"{mid}.yaml")] = Module(module_id(name, mid), pack, d, d / low.declared.module, sv,
-                                          sorted([module_id(name, x) for x in low.uses] + low.foreign), form=low.form)
+                                          sorted([module_id(name, x) for x in low.uses] + low.foreign), form=low.form,
+                                          reasons=low.reasons)
         authored[key[mid]] = low.schema
         authored[f"{pack}:{mid}"] = low.schema
     return out, authored

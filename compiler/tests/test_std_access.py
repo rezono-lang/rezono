@@ -3,6 +3,7 @@
 import shutil
 from pathlib import Path
 
+import pytest
 import yaml
 
 from support import FIXTURE, REPO
@@ -26,6 +27,38 @@ def test_standard_access_declares_no_grants():
     assert all(stmt[8] is True and stmt[9] is None and stmt[10] is False for stmt in statements)
     assert by_name["may_read"][2] == [
         ("role", "string"), ("kind", "string"), ("element", "string")]
+
+
+class MissingRightDeclarations(AssertionError):
+    """std-access does not declare the rights to propose, review, publish and execute as the decision gives."""
+
+
+@pytest.mark.xfail(
+    strict=True,
+    raises=MissingRightDeclarations,
+    reason="extra: decisions/review-and-rights.md: Declare in packs/std-access, beside may_read and "
+           "each as // @extend without a clause, may_propose(role: symbol, kind: symbol, element: symbol), "
+           "may_review(role: symbol, kind: symbol, element: symbol), may_publish(role: symbol, kind: symbol) and "
+           "may_execute(role: symbol, plugin: symbol); then regenerate the std-access row of "
+           "compiler/rezono_compiler/standard_packs.py and the std-access pins of the packs that import it. Read "
+           "section 1. Waits for compiler/tests/test_std_access_full.py, which changes the same file and pins.",
+)
+def test_standard_access_declares_the_four_rights():
+    import souffle
+    from rezono_compiler.rules_dl import parse_file
+
+    texts = souffle.closure(STD)
+    statements = [stmt for i, text in enumerate(texts) for stmt in parse_file(text, f"std-access:{i}")]
+    got = {s[1]: s[2] for s in statements if s[0] == "decl"}
+    want = {
+        "may_propose": [("role", "string"), ("kind", "string"), ("element", "string")],
+        "may_review": [("role", "string"), ("kind", "string"), ("element", "string")],
+        "may_publish": [("role", "string"), ("kind", "string")],
+        "may_execute": [("role", "string"), ("plugin", "string")],
+    }
+    wrong = {name: got.get(name) for name, columns in want.items() if got.get(name) != columns}
+    if wrong:
+        raise MissingRightDeclarations(f"declared otherwise or not at all: {wrong}")
 
 
 def test_importing_the_standard_pack_grants_nothing(tmp_path):

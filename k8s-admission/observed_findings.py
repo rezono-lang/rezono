@@ -22,8 +22,15 @@ def _normalize_observation(obs: object) -> tuple[dict, dict[str, list[tuple]], l
         raise ValueError(f"observation is missing required key(s): {joined}")
 
     raw_object = obs["object"]
-    if not isinstance(raw_object, Mapping) or "kind" not in raw_object or "name" not in raw_object:
-        raise ValueError("observation 'object' must be a mapping with 'kind' and 'name'")
+    if not isinstance(raw_object, Mapping):
+        raise ValueError("observation 'object' must be a mapping")
+    missing_object_keys = [key for key in ("kind", "namespace", "name") if key not in raw_object]
+    if missing_object_keys:
+        joined = ", ".join(repr(key) for key in missing_object_keys)
+        raise ValueError(f"observation 'object' is missing required key(s): {joined}")
+    for key in ("kind", "namespace", "name"):
+        if not isinstance(raw_object[key], str):
+            raise ValueError(f"observation 'object' {key!r} must be a string")
 
     raw_rows = obs["rows"]
     if not isinstance(raw_rows, Mapping):
@@ -52,7 +59,7 @@ def _sort_key(finding: dict) -> tuple:
     obj = finding["object"]
     return (
         obj["kind"],
-        obj.get("namespace") or "",
+        obj["namespace"],
         obj["name"],
         finding["reason"],
         finding.get("relation", ""),

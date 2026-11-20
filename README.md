@@ -43,14 +43,15 @@ The independent checker verified the witness of every answer before the publicat
 
 ## Try it
 
-Start in a clean checkout on Ubuntu 24.04 x86-64 with Python 3.13.18, Bash and jq. Run the steps in order in one shell.
+Start in a clean checkout on Ubuntu 24.04 x86-64 with Python 3.13.18, Node 24 (the version in `.node-version`), npm, Bash and jq. Run the steps in order in one shell.
 
 ### 1. Publish the library example
 
-Install the locked dependencies into a temporary virtual environment, copy the valid part of the library example, publish it to a local store and show the independent checker's result.
+Install the locked packages of the Rezono reader in `rezono/`: the compiler reads authored `.rezono` pack sources through Node. Then install the locked dependencies into a temporary virtual environment, copy the valid part of the library example, publish it to a local store and show the independent checker's result.
 
 ```bash
 work=$(mktemp -d)
+npm ci --prefix rezono --cache "$work/npm-cache" --no-audit --no-fund --silent
 python3 -m venv "$work/venv"
 "$work/venv/bin/python" -m pip install -q --no-deps --require-hashes -r requirements/run.txt
 "$work/venv/bin/python" -m pip install -q --no-deps --no-build-isolation -e admission -e canon -e compiler -e checker -e edge/publisher
@@ -99,7 +100,7 @@ A003: assessment unknown, reason income_statement_not_received
 
 ### On any other machine
 
-With Docker, build an image from the checkout with the same Ubuntu, Python and jq, start a shell in it, and run the steps above there. The image stays on your machine.
+With Docker, build an image from the checkout with the same Ubuntu, Python, Node and jq, start a shell in it, and run the steps above there. The image stays on your machine.
 
 ```sh
 docker build --tag rezono-quickstart .

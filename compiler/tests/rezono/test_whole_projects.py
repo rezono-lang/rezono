@@ -82,16 +82,6 @@ def test_authored_projects_has_expected_states(tmp_path):
     assert "budget_line__amount__value_range" in results["errors"][1]
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=MissingCandidatePack,
-    reason="M3: decisions/language-standard-pack-candidates.md: Author examples/projects/candidate/projects.rezono, "
-           "valid.rezono and errors.rezono and generate their .json forms with node rezono/src/write-form.ts "
-           "(following examples/library/candidate/ and decisions/language-library-acceptance.md, using backticks "
-           "around keyword dataset `valid`), so that the isolated candidate matches examples/projects on semantic "
-           "bundle, loaded rows and violation findings for both valid and errors datasets. Keep schema/projects.yaml "
-           "and facts/*.yaml untouched as the oracle.",
-)
 def test_whole_projects_candidate_has_the_same_meaning(tmp_path):
     actual = check_example(isolated(tmp_path, "candidate"))
     expected = check_example(isolated(tmp_path, "legacy"))
