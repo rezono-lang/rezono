@@ -34,6 +34,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from . import rules as ir
+from .diagnostics import Diagnosed, Diagnostic
 
 TOKEN = re.compile(r"""
     (?P<ws>[ \t\r]+) | (?P<nl>\n) | (?P<line>//[^\n]*) | (?P<block>/\*.*?\*/) |
@@ -75,6 +76,15 @@ CLOSES = re.compile(r"^//\s*@closes\s+(\S+)\s*$")
 
 class RuleError(ValueError):
     pass
+
+
+class ProtectedTable(RuleError, Diagnosed):
+    """A schema table (kind, slot or enum) under the name of a protected admission input (PROTECTED). Only
+    admission fills such a relation (decisions/admission-transport.md, section 6), so the name is reserved."""
+    CODE = "schema_table_protected"
+
+    def __init__(self, messages: list[str]):
+        Diagnosed.__init__(self, "\n".join(messages), tuple(Diagnostic(self.CODE, message) for message in messages))
 
 
 @dataclass(frozen=True)
@@ -373,6 +383,14 @@ def base_tables(pack) -> dict[str, list[tuple[str, str | None]]]:
     return out
 
 
+def reserved(pack) -> list[str]:
+    """The tables of the schema whose name is a protected admission input. Such a name is reserved: a kind,
+    slot or enum table under it would be read as the admitted relation, whose rows only admission gives
+    (decisions/admission-transport.md, section 6), so the pack's own facts would silently be replaced."""
+    return [f"schema: the table {name} (a kind, slot or enum) has the name of a protected admission input; "
+            "that name is reserved, rename it" for name in sorted(PROTECTED.keys() & base_tables(pack).keys())]
+
+
 def seal_docs(pack) -> list[dict]:
     """The seals of the rule IR: the tables the checker recomputes refused and accepted input from.
     Written also for a pack without rules (emit), so the check never falls away. `parts` only when the seal
@@ -490,6 +508,8 @@ def read(pack, pack_dir: Path, imports=None, renames=None, *, calc_inputs=None, 
     imports, renames = imports or {}, renames or {}
     calc_inputs = calc_inputs or {}
     root = pack.meta["name"]
+    if clash := reserved(pack):  # before any rule is read: also a pack without rules may not take the name
+        raise ProtectedTable(clash)
     givers = {}  # selection -> the packs whose calc files give its rule; any other is the root's own
     for name, doc in (calc_parts or {}).items():
         for version in doc.get("rules") or []:

@@ -12,6 +12,7 @@ INCREMENTAL = "examples/test_feldera_rules.py::test_incremental_on_feldera_equal
 EXAMPLE = "examples/test_feldera.py::test_feldera_accepts_the_sql_and_finds_the_errors"
 CALC = "compiler/tests/test_calc.py::test_feldera_gives_what_duckdb_gives"
 GENERATED = "compiler/tests/test_rules_properties.py::test_feldera_runs_generated_programs_as_duckdb_does"
+ORDERED_SCALARS = "compiler/tests/test_ordered_rule_scalars_engines.py::test_feldera_orders_typed_values"
 INTERFACE = f"{INCREMENTAL}[platform/tenant-capacity/interface]"
 BOOLEAN = "compiler/tests/test_boolean_rule_inputs.py::test_native_boolean_rule_inputs"
 SHARDS = {
@@ -23,10 +24,10 @@ SHARDS = {
     "compiler-calc": (f"{CALC}[full]", f"{CALC}[choice]"),
     "compiler-bound": ("compiler/tests/test_bound.py::test_the_check_view_on_feldera_holds_the_rows_past_the_bound",
                        BOOLEAN),
-    "compiler-rules": (f"{GENERATED}[0]", f"{GENERATED}[1]"),
+    "compiler-rules": (f"{GENERATED}[0]", f"{GENERATED}[1]", ORDERED_SCALARS),
 }
 EXPECTED = {node for group in SHARDS.values() for node in group}
-ORIGINAL = EXPECTED - {INTERFACE, BOOLEAN}
+ORIGINAL = EXPECTED - {INTERFACE, BOOLEAN, ORDERED_SCALARS}
 
 
 def collection(path: Path) -> list[str]:
