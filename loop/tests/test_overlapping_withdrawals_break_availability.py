@@ -17,22 +17,6 @@ from round_visibility_publication import (
 )
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason=(
-        "M2: decisions/loop-certificate-admission.md: Read it and decisions/admission-transport.md sections 3 and 7. "
-        "The round verifier in checker/rezono_checker/rounds.py already rebuilds the eight visible boundaries of "
-        "the two ordered steps from the plan hashes in the retained domain: it refuses the two-step claim with "
-        "round_boundary_missing when the violating overlap boundary is omitted, refuses an unrefuted solo claim "
-        "with round_preceded, and admits the solo replace-a claim once the overlap boundary is refuted. "
-        "Switching packs/std-loop/rules/ready.dl to require current_verified_round and verified_round_member "
-        "turns both loop/tests/test_ready_requires_checked_batch_member.py::"
-        "test_ready_requires_checked_batch_member and this test green: remove both marks in that PR. Today "
-        "ready.dl still derives ready from eligible, so both steps enter ready even when the claim is refused "
-        "(AssertionError)."
-    ),
-)
 def test_overlapping_withdrawals_break_availability(tmp_path):
     states = visible_boundaries(INITIAL, EFFECTS)
     assert set(states) == ALL_STATES and sum(map(len, states.values())) == 12

@@ -18,7 +18,7 @@ if TYPE_CHECKING:
     from rezono_compiler.rules import Program
 
 
-RELATIONS = ("declared", "needed", "known", "waiting", "ready", "done", "stuck", "drift")
+RELATIONS = ("declared", "needed", "known", "waiting", "unblocked", "done", "stuck", "drift")
 INSTANT = re.compile(r"(\d{4}-\d\d-\d\d[Tt]\d\d:\d\d:\d\d)(?:\.(\d+))?([Zz]|[+-]\d\d:\d\d)")
 EPOCH = datetime(1970, 1, 1, tzinfo=timezone.utc)
 TICK_COLUMNS = {
@@ -212,7 +212,7 @@ class TypedRecording:
                     if len(outcomes) != 1 or not outcomes <= {"pending", "success", "failure"}:
                         raise ValueError(f"expected one round outcome for {self.run!r}, got {sorted(outcomes)}")
                     round_outcome = next(iter(outcomes))
-                yield Snapshot({row[1] for row in selected["declared"]}, selected["ready"],
+                yield Snapshot({row[1] for row in selected["declared"]}, selected["unblocked"],
                                {row[1] for row in selected["done"]}, {row[1] for row in selected["stuck"]},
                                selected["drift"], selected.get("fixed_point", ()), round_outcome)
         except Diagnosed as error:
