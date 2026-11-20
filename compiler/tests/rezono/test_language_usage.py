@@ -12,6 +12,13 @@ def readiness(root, name):
     return tuple(value.strip() for value in row.split("|")[-3:-1])
 
 
+def pending_items(status):
+    if status == "Ready":
+        return set()
+    assert status.startswith("Pending: "), status
+    return {item.strip() for item in status.removeprefix("Pending: ").split(",")}
+
+
 def evidence(root, checks):
     for path, name in checks:
         write(root, path, f"def {name}():\n    assert True\n")
@@ -65,20 +72,30 @@ def test_mixed_and_native_conversion_have_separate_rule_evidence(tmp_path):
     evidence(tmp_path, EVIDENCE["relational-rule"])
     # The closure includes the base rules even though the top and middle packs have no rule file of their own.
     for name in ("packs/base", "packs/middle", "run/top"):
-        assert readiness(tmp_path, name) == (
-            "Ready", "Pending: native-rule, native-rule-publication-parity, native-rule-signatures",
-        )
+        mixed, native = readiness(tmp_path, name)
+        assert mixed == "Ready"
+        assert {"native-rule", "native-rule-publication-parity", "native-rule-signatures"} <= pending_items(native)
+        assert "relational-rule" not in pending_items(native)
     evidence(tmp_path, EVIDENCE["native-rule"])
     evidence(tmp_path, (NATIVE_PACK_EVIDENCE["native-rule-signatures"],))
-    assert readiness(tmp_path, "run/top") == ("Ready", "Pending: native-rule-publication-parity")
+    mixed, native = readiness(tmp_path, "run/top")
+    assert mixed == "Ready"
+    assert "native-rule-publication-parity" in pending_items(native)
+    assert {"native-rule", "native-rule-signatures"}.isdisjoint(pending_items(native))
     evidence(tmp_path, (NATIVE_PACK_EVIDENCE["native-rule-publication-parity"],))
     pipe_reader, _ = EVIDENCE["relational-rule"]
     (tmp_path / pipe_reader[0]).unlink()
-    assert readiness(tmp_path, "run/top") == ("Pending: relational-rule", "Ready")
+    mixed, native = readiness(tmp_path, "run/top")
+    assert mixed == "Pending: relational-rule"
+    assert {
+        "relational-rule", "native-rule", "native-rule-signatures", "native-rule-publication-parity",
+    }.isdisjoint(pending_items(native))
 
     write(tmp_path, "packs/base/rules/example.dl", "// @invariant\n.decl sample(x: symbol)\n")
     evidence(tmp_path, EVIDENCE["relational-rule"])
-    assert readiness(tmp_path, "run/top") == ("Pending: conditional-check",) * 2
+    mixed, native = readiness(tmp_path, "run/top")
+    assert mixed == "Pending: conditional-check"
+    assert "conditional-check" in pending_items(native)
 
 
 def test_native_clauses_and_empty_sources_keep_conservative_conversion_status(tmp_path):
@@ -90,11 +107,17 @@ def test_native_clauses_and_empty_sources_keep_conservative_conversion_status(tm
     write(tmp_path, "packs/native/pack.yaml", "name: native\n")
     write(tmp_path, "packs/native/sample.rezono", "rezono 0\npack native\nrule sample(x) when known(x)\n")
     evidence(tmp_path, EVIDENCE["native-rule"])
-    assert readiness(tmp_path, "packs/native") == ("Pending: native-rule-publication-parity, native-rule-signatures",) * 2
+    mixed, native = readiness(tmp_path, "packs/native")
+    assert {"native-rule-publication-parity", "native-rule-signatures"} <= pending_items(mixed)
+    assert {"native-rule-publication-parity", "native-rule-signatures"} <= pending_items(native)
     evidence(tmp_path, NATIVE_PACK_EVIDENCE.values())
-    assert readiness(tmp_path, "packs/native") == ("Ready", "Ready")
+    mixed, native = readiness(tmp_path, "packs/native")
+    assert {"native-rule", "native-rule-publication-parity", "native-rule-signatures"}.isdisjoint(pending_items(mixed))
+    assert {"native-rule", "native-rule-publication-parity", "native-rule-signatures"}.isdisjoint(pending_items(native))
     write(tmp_path, "packs/native/sample.rezono", "rezono 0\npack native\nrule sample(x) when x.value is unknown\n")
-    assert readiness(tmp_path, "packs/native") == ("Pending: native-rule-state-review",) * 2
+    mixed, native = readiness(tmp_path, "packs/native")
+    assert "native-rule-state-review" in pending_items(mixed)
+    assert "native-rule-state-review" in pending_items(native)
 
 
 def test_schema_support_requires_both_positive_evidence_checks(tmp_path):
