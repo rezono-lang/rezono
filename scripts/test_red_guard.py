@@ -222,6 +222,16 @@ def table_form_cases():
     if errors or f"CHANGED {path}::test_a reads the changed rows" not in notes:
         raise AssertionError(f"a helper that returns a table: errors {errors}, notes {notes}")
     print("REPORTED: a test that calls a helper whose table changes")
+    # A fixture's params parametrize every test that takes it, directly or through another fixture.
+    fixture = (top + b"\x40pytest.fixture(params=['a', 'b'])\ndef letter(request):\n    return request.param\n\n\n"
+               b"\x40pytest.fixture\ndef word(letter):\n    return letter * 2\n\n\n"
+               b"def test_letter(letter):\n    assert letter\n\n\ndef test_word(word):\n    assert word\n")
+    errors, notes = review([Change(path, "M", fixture, fixture.replace(b"['a', 'b']", b"['a']"))], planner=True)
+    for test, name in (("test_letter", "letter"), ("test_word", "word")):
+        if (errors or f"REMOVED {path}::{test}['b']" not in notes
+                or f"CHANGED {path}::{test} reads the changed {name}" not in notes):
+            raise AssertionError(f"a case lost from fixture params: errors {errors}, notes {notes}")
+    print("REPORTED: a case lost from the params of a fixture a test takes, directly or not")
     deleted = top + b"T = {'a': 1, 'b': 2}\n\n\n\x40pytest.mark.parametrize('x', T)\ndef test_a(x):\n    assert x\n"
     errors, notes = review([Change(path, "M", deleted, deleted.replace(b"\n\n\n@", b"\ndel T['b']\n\n\n@"))],
                            planner=True)

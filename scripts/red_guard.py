@@ -861,6 +861,29 @@ def table(expr, defs, seen=frozenset()):
     return found
 
 
+def argument_names(function):
+    a = function.args
+    return [arg.arg for arg in (*a.posonlyargs, *a.args, *a.kwonlyargs)]
+
+
+def fixture_cases(function, defs, seen=frozenset()):
+    """The cases of the `params=` of each module-level fixture a test or fixture takes, at any depth."""
+    found = {}
+    for name in argument_names(function):
+        if name in seen:
+            continue
+        for node in defs.get(name, []):
+            if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                continue
+            for decorator in node.decorator_list:
+                if isinstance(decorator, ast.Call) and ast.unparse(decorator.func).endswith("fixture"):
+                    params = next((k.value for k in decorator.keywords if k.arg == "params"), None)
+                    if params is not None:
+                        found.update(table(params, defs, frozenset()))
+            found.update(fixture_cases(node, defs, seen | {name}))
+    return found
+
+
 def parametrized(marks, defs):
     """The cases of every `parametrize` among marks: decorators, or a `pytestmark` value."""
     found = {}
@@ -925,6 +948,7 @@ def table_changes(path, before, after):
             parts = (node.decorator_list + [n for n in node.body if isinstance(n, ast.Assign)]
                      if isinstance(node, ast.ClassDef) else [node])
             read |= {n.id for part in parts for n in ast.walk(part) if isinstance(n, ast.Name)}
+        read |= set(argument_names(nodes[-1]))  # A fixture it takes is a name it reads.
         notes.extend(f"CHANGED {path}::{test} reads the changed {name}" for name in sorted(changed & read))
         if unknown:
             notes.append(f"CHANGED {path}::{test} under a changed module-level statement")
@@ -933,7 +957,7 @@ def table_changes(path, before, after):
             marks = []
             for node in scope:
                 marks.extend(getattr(node, "decorator_list", None) or ([] if hasattr(node, "body") else [node]))
-            return parametrized(marks, defs)
+            return {**parametrized(marks, defs), **fixture_cases(scope[-1], defs)}
 
         lost = cases_of(old_scopes[test], old_defs).keys() - cases_of(nodes, new_defs).keys()
         notes.extend(f"REMOVED {path}::{test}[{case}]" for case in sorted(lost))
