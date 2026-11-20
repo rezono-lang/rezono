@@ -16,6 +16,8 @@ from rezono_compiler import emit, pack
 from rezono_compiler import rules as ir
 
 THEORY = Path(__file__).resolve().parents[2] / "packs" / "std-order"
+CORE = {"before", "comparable", "order_cycle", "rank_conflict"}
+OPTIONAL_DERIVED = {"stated_precedes", "direct_before"}
 pytest.importorskip("duckdb")
 
 
@@ -59,12 +61,14 @@ def evaluate(precedes, rank, tmp_path):
     """Every engine at hand, each compared with the reference."""
     prog = program()
     want = as_text(reference(set(precedes), set(rank)))
-    assert as_text(batch_eval(prog, precedes, rank)) == want
+    got = as_text(batch_eval(prog, precedes, rank))
+    assert {name: got[name] for name in CORE} == want
     if shutil.which("souffle"):
         import souffle
         text = souffle.pack_source(prog, THEORY)
         data = {"ordered__precedes": sorted(precedes), "ordered__rank": sorted(rank)}
-        assert souffle.run(prog, data, tmp_path, program_text=text) == want
+        oracle = souffle.run(prog, data, tmp_path, program_text=text)
+        assert {name: oracle[name] for name in CORE} == want
     return want
 
 
@@ -75,8 +79,10 @@ def test_the_theory_is_fact_free_and_compiles_on_its_own():
     files = emit.compile_pack(theory)
     assert '"ordered__precedes"' in files["engine/tables.sql"] and '"ordered__rank"' in files["engine/tables.sql"]
     prog = program()
-    assert sorted(r.name for r in prog.relations.values() if r.role == "derived") == [
-        "before", "comparable", "order_cycle", "rank_conflict"]
+    derived = {r.name for r in prog.relations.values() if r.role == "derived"}
+    assert CORE <= derived <= (CORE | OPTIONAL_DERIVED)
+    if "stated_precedes" in derived:
+        assert prog.relations["stated_precedes"].extend
     assert sorted(r.name for r in prog.relations.values() if getattr(r, "invariant", False)) == ["order_cycle", "rank_conflict"]
     assert [q["term"] for q in theory.questions] == ["order_grounds", "order_reach"]
 
