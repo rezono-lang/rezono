@@ -59,5 +59,6 @@
 	"params": {
 		"host_reserve": { "type": "GiB", "states": ["known", "unknown"] }
 	},
-	"symbols": { "€": "EUR" }
+	"symbols": { "€": "EUR" },
+	"default_units": { "money EUR": "Eur" }
 }
