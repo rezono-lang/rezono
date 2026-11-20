@@ -174,7 +174,7 @@ Case A (`S16`) is simultaneously the domain counterexample for [formal foundatio
 All new expectations are recorded as strict `extra:` red tests:
 
 - [compiler/tests/rezono/test_same_name_kind_collision.py](../compiler/tests/rezono/test_same_name_kind_collision.py):
-  - `test_same_name_kinds_across_two_sources_stay_disjoint_with_qualified_imports`: two pinned source packs (`civil`, `tax`) sharing `person` (`Persoon`) and each declaring `Partner` compile cleanly under `use ... as ...` and remain two distinct kinds with distinct arrows and attributes in `bundle/schema-bundle.json`.
+  - `test_qualified_cross_pack_same_name_kinds_stay_disjoint`: two pinned source packs (`civil`, `tax`) sharing `person` (`Persoon`) and each declaring `Partner` compile cleanly under `use ... as ...` and remain two distinct kinds with distinct arrows and attributes in `bundle/schema-bundle.json`.
   - `test_unqualified_same_name_kind_reports_both_candidates`: an unqualified reference to `Partner` (in schema slots and in native rule signatures) is refused with a diagnostic naming both candidate sources, while qualified references (`civil.Partner`, `tax.Partner`) resolve to distinct engine kinds.
 - [examples/test_zorgtoeslag_three_sources.py](../examples/test_zorgtoeslag_three_sources.py):
   - `test_three_source_packs_and_schema_drop_stored_partner_and_insured`: verifies the four-pack structure, distinct `civil`/`tax` `Partner` kinds, removal of stored `partner: Bool` and `insured: Bool`, synthetic keys, and `@ awr#art-5a` / `@ awir#art-3` citations.
