@@ -221,3 +221,86 @@ def test_a_pack_version_that_moves_less_than_the_class_is_refused(tmp_path):
         assert archive.list("minimal/") == written, name
         moved = edited(folder, tmp_path / f"{name}-moved", edits + bumped("1.0.0", version))
         assert publish.publish(epoch_of(moved, 2), archive, ROLES)["id"] == "m-2", name
+
+
+def test_adding_explicit_enum_openness_when_before_lacks_it_is_not_major(tmp_path):
+    compare = surface_compare()
+    base = bundle_of(edited(FIXTURE, tmp_path / "base", []))
+    open_before = opened(base)
+    enum_id = base["enums"][0]["id"]
+
+    # Earlier bundle carries openness only on the slot (no explicit `world`/`open` on the enum).
+    # A newer compiler starting to write explicit `world: "open"` or `open: true` must not report a major `opened`.
+    for field, value in (("world", "open"), ("open", True)):
+        after_same = copy.deepcopy(open_before)
+        after_same["enums"][0][field] = value
+        assert compare(open_before, after_same) == {"class": "patch", "changes": []}, (field, value)
+
+        new_val = f"{enum_id}.middle"
+        after_added = with_value(after_same, new_val)
+        result = compare(open_before, after_added)
+        assert result["class"] == "minor", (field, result)
+        assert (new_val, "added", "minor") in triples(result)
+        assert (enum_id, "opened", "major") not in triples(result)
+
+    # Even without any slot referencing the enum, an explicit `world`/`open` absent from `before` is not compared.
+    unreferenced = copy.deepcopy(base)
+    unreferenced["attributes"] = [a for a in unreferenced["attributes"] if a["id"] != "beta.state"]
+    for field, value in (("world", "open"), ("open", True)):
+        after_unreferenced = copy.deepcopy(unreferenced)
+        after_unreferenced["enums"][0][field] = value
+        assert compare(unreferenced, after_unreferenced) == {"class": "patch", "changes": []}, (field, value)
+
+    # When `before` DOES carry explicit openness, real changes and dropped open flags stay major.
+    explicit_closed = copy.deepcopy(unreferenced)
+    explicit_closed["enums"][0]["world"] = "closed"
+    explicit_open = copy.deepcopy(unreferenced)
+    explicit_open["enums"][0]["world"] = "open"
+
+    opened_res = compare(explicit_closed, explicit_open)
+    assert opened_res["class"] == "major"
+    assert (enum_id, "opened", "major") in triples(opened_res)
+
+    closed_res = compare(explicit_open, explicit_closed)
+    assert closed_res["class"] == "major"
+    assert (enum_id, "closed", "major") in triples(closed_res)
+
+    dropped_res = compare(explicit_open, unreferenced)
+    assert dropped_res["class"] == "major"
+    assert (enum_id, "closed", "major") in triples(dropped_res)
+
+
+def test_private_slots_do_not_affect_public_enum_openness(tmp_path):
+    compare = surface_compare()
+    base = bundle_of(edited(FIXTURE, tmp_path / "base", []))
+    enum_id = base["enums"][0]["id"]
+    new_val = f"{enum_id}.middle"
+    [state_slot] = [a for a in base["attributes"] if a["id"] == "beta.state"]
+
+    # 1. A private closed slot referencing a public open enum must not make the enum appear closed.
+    open_with_private_closed = opened(base)
+    private_closed = copy.deepcopy(state_slot)
+    private_closed["id"] = "beta.internal_state"
+    private_closed["stable_id"] = state_slot["stable_id"] + "_private"
+    private_closed["name"] = "internal_state"
+    private_closed["table"] = "beta__internal_state"
+    private_closed["private"] = True
+    private_closed["semantic"].pop("open", None)
+    open_with_private_closed["attributes"].append(private_closed)
+
+    result_open = compare(open_with_private_closed, with_value(open_with_private_closed, new_val))
+    assert result_open["class"] == "minor", result_open
+    assert (new_val, "added", "minor") in triples(result_open)
+
+    # 2. A private open slot must not make an enum without public open slots appear open.
+    closed_with_private_open = copy.deepcopy(base)
+    closed_with_private_open["attributes"] = [
+        a for a in closed_with_private_open["attributes"] if a["id"] != "beta.state"
+    ]
+    private_open = copy.deepcopy(private_closed)
+    private_open["semantic"]["open"] = True
+    closed_with_private_open["attributes"].append(private_open)
+
+    result_closed = compare(closed_with_private_open, with_value(closed_with_private_open, new_val))
+    assert result_closed["class"] == "major", result_closed
+    assert (new_val, "added", "major") in triples(result_closed)

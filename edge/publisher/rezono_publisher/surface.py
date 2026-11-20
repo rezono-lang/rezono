@@ -246,7 +246,7 @@ def _parse_bundle(raw: Any, label: str) -> dict[str, Any]:
             ref_enum = enum_name or (semantic.get("enum") if isinstance(semantic.get("enum"), str) else None)
             is_enum_slot = semantic["case"] == "enum" or ref_enum is not None
             enum_open = bool(semantic.get("open", False)) if is_enum_slot else False
-            if ref_enum is not None:
+            if not private and ref_enum is not None:
                 enum_slot_openness.setdefault(ref_enum, []).append(enum_open)
             parsed_slot = {
                 "id": sid,
@@ -678,8 +678,8 @@ def compare(before: dict[str, Any], after: dict[str, Any]) -> dict[str, Any]:
             continue
         elem = b_enum["element"]
         module = b_enum["module"]
-        if b_enum["explicit_open"] is not None or a_enum["explicit_open"] is not None:
-            b_open = bool(b_enum["explicit_open"])
+        if b_enum["explicit_open"] is not None:
+            b_open = b_enum["explicit_open"]
             a_open = bool(a_enum["explicit_open"])
             if b_open != a_open:
                 record(elem, "closed" if b_open else "opened", "major")
