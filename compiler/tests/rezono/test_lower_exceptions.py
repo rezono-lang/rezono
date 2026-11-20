@@ -88,14 +88,6 @@ UNLESS_BLOCKS = [
 ]
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=MissingExceptionsLowering,
-    reason="M3: decisions/language-exceptions.md: Implement compiler/rezono_compiler/rezono_exceptions.py with "
-           "lower_unless(rule_id, base_value, unless_blocks, lower_expr) returning rezono.calc/1 definitions "
-           "where each block's lines override base and every earlier block (keeping line.get('source') or "
-           "'unless' as the override reason) without overriding siblings in the same block.",
-)
 def test_lower_exceptions():
     try:
         from rezono_compiler import rezono_exceptions
