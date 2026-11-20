@@ -44,15 +44,6 @@ def test_std_order_legacy_evaluates_scenarios(tmp_path):
     assert ("a", "b") not in evaluated["rank_conflict"]
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=MissingCandidatePack,
-    reason="M3: decisions/language-standard-pack-candidates.md: Author packs/std-order/candidate/order.rezono "
-           "and generate packs/std-order/candidate/order.json with node rezono/src/write-form.ts so that the "
-           "isolated candidate matches packs/std-order on semantic bundle, compiled SQL/IR and batch evaluation. "
-           "Keep schema/order.yaml and rules/order.dl untouched as the oracle. Read "
-           "decisions/language-standard-pack-candidates.md and decisions/language-first-packs.md.",
-)
 def test_whole_std_order_candidate_has_the_same_meaning(tmp_path):
     actual = check_pack(tmp_path, "candidate")
     expected = check_pack(tmp_path, "legacy")

@@ -53,15 +53,6 @@ def test_std_time_legacy_evaluates_scenarios(tmp_path):
     assert ("i4",) in evaluated["interval_inverted"]
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=MissingCandidatePack,
-    reason="M3: decisions/language-standard-pack-candidates.md: Author packs/std-time/candidate/time.rezono "
-           "and generate packs/std-time/candidate/time.json with node rezono/src/write-form.ts so that the "
-           "isolated candidate matches packs/std-time on semantic bundle, compiled SQL/IR and batch evaluation. "
-           "Keep schema/time.yaml and rules/time.dl untouched as the oracle. Read "
-           "decisions/language-standard-pack-candidates.md and decisions/language-first-packs.md.",
-)
 def test_whole_std_time_candidate_has_the_same_meaning(tmp_path):
     actual = check_pack(tmp_path, "candidate")
     expected = check_pack(tmp_path, "legacy")
