@@ -82,8 +82,8 @@ runs:
           exit 0
         fi
         git show "$POLICY:scripts/pytest-plugins.txt" > "$RUNNER_TEMP/pytest-plugins.txt"
-        # scripts/components.py loads only these plugins in every pytest run, from this copy.
-        echo "REZONO_PYTEST_PLUGINS=$RUNNER_TEMP/pytest-plugins.txt" >> "$GITHUB_ENV"
+        # scripts/components.py and red_before.py read the same list from the base
+        # themselves, so a later step cannot point them elsewhere.
         python -I -c '
         import sys
         from importlib.metadata import entry_points

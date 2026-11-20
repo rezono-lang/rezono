@@ -28,6 +28,7 @@ From the repository root:
 """
 import argparse
 import importlib.util
+import json
 import os
 from pathlib import Path, PurePosixPath
 import subprocess
@@ -178,21 +179,42 @@ def cluster_only(tests, collected):
     return all(kinds.get(test) == {"cluster"} for test in tests)
 
 
+def listed_plugins(local, root):
+    """The allowed pytest plugins (`name = value`): from the base revision in CI, else `local`.
+
+    In GitHub Actions the base is read from the event file: the pull request's base, the merge
+    group's base, else the commit itself. A step can set no GITHUB_* variable, so a candidate
+    script that runs earlier in the job cannot point the list elsewhere.
+    """
+    event = os.environ.get("GITHUB_EVENT_PATH")
+    if event:
+        with open(event, encoding="utf-8") as handle:
+            data = json.load(handle)
+        base = ((data.get("pull_request") or {}).get("base", {}).get("sha")
+                or (data.get("merge_group") or {}).get("base_sha") or os.environ.get("GITHUB_SHA"))
+        if not base:
+            raise SystemExit("ERROR no base revision for the list of allowed pytest plugins")
+        if subprocess.run(["git", "cat-file", "-e", f"{base}^{{commit}}"], cwd=root, capture_output=True).returncode:
+            subprocess.run(["git", "fetch", "--no-tags", "--depth=1", "origin", base], cwd=root, check=True)
+        text = subprocess.run(["git", "show", f"{base}:scripts/pytest-plugins.txt"], cwd=root,
+                              capture_output=True, text=True, check=True).stdout
+    else:
+        text = Path(local).read_text(encoding="utf-8")
+    return {line.strip() for line in text.splitlines() if line.strip() and not line.lstrip().startswith("#")}
+
+
 def plugin_arguments():
     """`-p` for each installed pytest plugin that scripts/pytest-plugins.txt lists, and no other.
 
     As in scripts/components.py, pytest loads no plugin of its own accord
     (PYTEST_DISABLE_PLUGIN_AUTOLOAD): a plugin's hooks could drop or pass a test. In CI the
-    environment action points REZONO_PYTEST_PLUGINS at the base's list; otherwise the list
-    beside this script applies.
+    list comes from the base revision (`listed_plugins`); otherwise the list beside this
+    script applies.
     """
     from importlib.metadata import entry_points
 
-    listed = Path(os.environ.get("REZONO_PYTEST_PLUGINS") or Path(__file__).with_name("pytest-plugins.txt"))
-    if not listed.is_file():
-        raise SystemExit(f"ERROR no list of allowed pytest plugins at {listed}")
-    allowed = {line.strip() for line in listed.read_text(encoding="utf-8").splitlines()
-               if line.strip() and not line.lstrip().startswith("#")}
+    listed = Path(__file__).with_name("pytest-plugins.txt")
+    allowed = listed_plugins(listed, git("rev-parse", "--show-toplevel").decode().strip())
     found = sorted(entry_points(group="pytest11"), key=lambda e: e.name)
     if unlisted := [f"{e.name} = {e.value}" for e in found if f"{e.name} = {e.value}" not in allowed]:
         raise SystemExit(f"ERROR pytest plugins that {listed.name} does not list: {', '.join(unlisted)}")

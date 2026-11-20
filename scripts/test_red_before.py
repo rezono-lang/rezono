@@ -3,6 +3,8 @@
 Needs pytest, because the two end-to-end cases run the added tests on the base.
 """
 from pathlib import Path
+import json
+import os
 import subprocess
 import sys
 import tempfile
@@ -10,7 +12,7 @@ import tempfile
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 from red_guard import Change
-from red_before import added_tests
+from red_before import added_tests, listed_plugins
 
 SCRIPT = HERE / "red_before.py"
 BUGGY = b"def double(x):\n    return x + 2\n"
@@ -199,7 +201,35 @@ def completion(label, test, case, run_code, green_code, verdict, lifted=None):
         print(f"{'RED' if run_code or green_code else 'GREEN'}: {label}")
 
 
+def base_list_cases():
+    """In CI the plugin list comes from the base revision that the event names, not the checkout."""
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as directory:
+        repo = Path(directory)
+        git(repo, "init", "-q")
+        git(repo, "config", "core.autocrlf", "false")
+        base = commit(repo, {"scripts/pytest-plugins.txt": b"# allowed\nlisted = listed\n"})
+        (repo / "scripts/pytest-plugins.txt").write_text("listed = listed\nadded = added\n", encoding="utf-8")
+        event = repo / "event.json"
+        local = repo / "scripts/pytest-plugins.txt"
+        try:
+            for name, data in (("pull request", {"pull_request": {"base": {"sha": base}}}),
+                               ("merge group", {"merge_group": {"base_sha": base}})):
+                event.write_text(json.dumps(data), encoding="utf-8")
+                os.environ["GITHUB_EVENT_PATH"] = str(event)
+                if listed_plugins(local, repo) != {"listed = listed"}:
+                    raise AssertionError(f"{name}: the list does not come from the base")
+                print(f"BASE: the plugin list of a {name} comes from its base")
+        finally:
+            os.environ.pop("GITHUB_EVENT_PATH", None)
+        if listed_plugins(local, repo) != {"listed = listed", "added = added"}:
+            raise AssertionError("outside CI the checkout's list applies")
+        print("LOCAL: outside CI the checkout's plugin list applies")
+
+
 def main():
+    # The cases below run in repositories of their own, without the job's base revision.
+    os.environ.pop("GITHUB_EVENT_PATH", None)
+    base_list_cases()
     selection_cases()
     not_mixed()
     completion("evidence completion: red on the base, green with the new evidence", READS_CASE, b"[4]\n",
