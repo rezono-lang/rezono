@@ -35,12 +35,32 @@ deadline_foreign_start(deadline) :-
     loop_deadline__run(deadline, run), loop_deadline__start(deadline, start),
     loop_observation__run(start, other), other != run.
 
-// A step met its deadline when it is done and its completion value was observed at or before the boundary.
+// A completion observation at time is invalidated if a simultaneous or later observation in the same
+// active run disagrees with the expected known state or value.
+.decl completion_invalidated_at(run: symbol, token: symbol, time: number)
+completion_invalidated_at(run, token, time) :-
+    active(run), expectation(token, value),
+    observed(run, token, time, _, "known", value, _),
+    observed(run, token, other_time, _, state, _, _),
+    other_time >= time, state != "known".
+completion_invalidated_at(run, token, time) :-
+    active(run), expectation(token, value),
+    observed(run, token, time, _, "known", value, _),
+    observed(run, token, other_time, _, "known", other, _),
+    other_time >= time, other != value.
+
+// A step met its deadline when it is done and an uncontradicted completion observation was recorded
+// at or after the deadline start and at or before the boundary, with no conflicting or regressed
+// observation at or after that time.
 .decl done_in_time(run: symbol, step: symbol, deadline: symbol)
 done_in_time(run, step, deadline) :-
-    deadline_until(run, step, deadline, _, until), done(run, step, _),
+    deadline_until(run, step, deadline, start, until),
+    loop_observation__event_time(start, started),
+    done(run, step, _),
     completion(run, step, token, _), expectation(token, value),
-    observed(run, token, time, _, "known", value, _), time <= until.
+    observed(run, token, time, _, "known", value, _),
+    started <= time, time <= until,
+    !completion_invalidated_at(run, token, time).
 
 // At the inclusive boundary of its budget a step that did not finish in time has expired.
 // The current sweep only dates the round, so an incomplete sweep expires a deadline too.

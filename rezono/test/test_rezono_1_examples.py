@@ -12,7 +12,7 @@ ROOT = Path(__file__).resolve().parents[2]
 PARTIAL_COVERAGE_MODULE = """\
 rezono 1
 pack sample
-kind Item world closed
+kind Item
   amount: Int
   flagged: Bool
   derived fee: Int = amount * 2

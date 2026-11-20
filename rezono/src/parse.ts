@@ -206,7 +206,6 @@ semantics.addOperation<unknown>('tree', {
 		return placed(this, { dot: [b, readRuleName(name)] } as Expr);
 	},
 	Agg(name, _open, arg, _close) {
-		if (name.sourceString === 'one' && arg.numChildren) refused(arg.child(0), 'R000', ['`)`']);
 		return [name.sourceString, ...arg.children.map((a) => a.tree())];
 	},
 	Atom(e) {
@@ -280,9 +279,9 @@ export interface Read<T> {
 export { semantics, placed, refused, reserved };
 
 /**
- * Reads `text` with one rule of the grammar, its result made by `read` from the match. module.ts reads one line
- * of a file this way: it passes the file with every other line blanked, so that offsets are those of the file,
- * and the code points of the file itself (`at`), since a blank has none of its astral characters.
+ * Reads `text` with one rule of the grammar, its result made by `read` from the match. module.ts reads one
+ * logical line of a file as a slice with `offset` set to the slice's UTF-16 start in the file, and passes
+ * the file's code-point map (`at`), so reported spans keep exact file code-point offsets in O(|line|) time.
  */
 const nativeRules = new Set(['NativeRuleLine', 'StepClauseLine', 'StepChangeLine']);
 
@@ -293,13 +292,14 @@ export function readRule<T>(
 	spans = new WeakMap<object, Span>(),
 	at = points(text),
 	native = nativeRules.has(rule),
-	version?: '0' | '1'
+	version?: '0' | '1',
+	offset = 0
 ): Read<T> {
-	startRun(text, spans, at, version);
+	startRun(text, spans, at, version, offset);
 	const match = (native ? nativeRuleGrammar : grammar).match(text, rule);
 	if (match.failed()) {
-		const at = Math.min(match.getRightmostFailurePosition(), text.length);
-		return { errors: [{ code: 'R000', span: spanAt(...tokenAt(text, at)), args: [match.getExpectedText()] }], reserved: [], spans };
+		const failAt = Math.min(match.getRightmostFailurePosition(), text.length);
+		return { errors: [{ code: 'R000', span: spanAt(...tokenAt(text, failAt)), args: [match.getExpectedText()] }], reserved: [], spans };
 	}
 	const value = read((native ? nativeRuleSemantics : semantics)(match) as unknown as Node);
 	return { value, errors: run.errors, reserved: run.reserved, spans };

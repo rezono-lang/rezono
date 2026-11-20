@@ -194,14 +194,14 @@ def collected(entries) -> list[dict]:
 
 
 def file_entries(pack: Pack, path: Path, data: dict | None = None, *, metadata=UNSET,
-                 relative: Path | None = None) -> list[dict]:
+                 relative: Path | None = None, dataset=UNSET) -> list[dict]:
     companion = path.with_suffix(".sources.yaml")
     if metadata is UNSET and companion.exists():
         metadata = strict_yaml.read(companion)
-    dataset = facts.dataset_at(path)
+    resolved_dataset = facts.dataset_at(path) if dataset is UNSET else dataset
     return text_entries(pack, relative.as_posix() if relative is not None else path.name,
-                        "" if dataset is not None else path.read_text("utf-8"), data,
-                        metadata=metadata, dataset=dataset)
+                        "" if resolved_dataset is not None else path.read_text("utf-8"), data,
+                        metadata=metadata, dataset=resolved_dataset)
 
 
 def text_entries(pack: Pack, name: str, text: str, data: dict | None = None, *, metadata=UNSET,
@@ -217,7 +217,7 @@ def text_entries(pack: Pack, name: str, text: str, data: dict | None = None, *, 
     pointers = None
     authored_lines = {span["at"]: span["line"] for span in dataset.form["spans"]} if dataset and dataset.source else {}
     own_sources = {}
-    if isinstance(raw, dict) and raw.get("format") == facts.DATASET_FORMAT:
+    if isinstance(raw, dict) and raw.get("format") in facts.DATASET_FORMATS:
         data, pointers = facts.located_scalar_dataset(judged, raw)
         own_sources = cited(raw, path.name)
     elif data is None:
@@ -309,8 +309,8 @@ def text_entries(pack: Pack, name: str, text: str, data: dict | None = None, *, 
 
 def read(pack: Pack, pack_dir: str | Path) -> list[dict]:
     pack_dir = Path(pack_dir)
-    return collected(e for path in facts.files(pack_dir)
-                     for e in file_entries(pack, path, relative=path.relative_to(pack_dir)))
+    return collected(e for path, dataset in facts.files_with_datasets(pack_dir)
+                     for e in file_entries(pack, path, relative=path.relative_to(pack_dir), dataset=dataset))
 
 
 def compile_sources(pack: Pack, pack_dir: str | Path) -> str:

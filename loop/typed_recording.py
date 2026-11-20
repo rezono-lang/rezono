@@ -271,6 +271,11 @@ class TypedRecording:
         from rezono_compiler import batch, facts, scenarios
         from rezono_compiler.diagnostics import Diagnosed
 
+        schema = facts.schema(self.model)
+
+        def is_run_scoped(kind: str) -> bool:
+            return kind in schema.kinds and schema.slot(kind, "run") is not None
+
         stored = {}
         for row in self.records.get("loop_observation", ()):
             key = (row["run"], row["id"])
@@ -305,10 +310,22 @@ class TypedRecording:
 
                 # Refine only this snapshot's representation, scaling stored and arriving ticks together.
                 factor = lcm(*(ticks.denominator for _, ticks in arrived))
-                records = {
-                    **self.records,
-                    "loop_observation": [row for row in stored.values() if row["run"] == self.run],
-                }
+                records = {}
+                for kind, rows in self.records.items():
+                    if kind in {"loop_observation", "loop_sweep", "loop_sweep_receipt"}:
+                        continue
+                    if isinstance(rows, list):
+                        scoped = is_run_scoped(kind)
+                        kept = [
+                            row for row in rows
+                            if not (isinstance(row, dict) and (scoped or "run" in row))
+                            or row.get("run") == self.run
+                        ]
+                        if kept:
+                            records[kind] = kept
+                    else:
+                        records[kind] = rows
+                records["loop_observation"] = [row for row in stored.values() if row["run"] == self.run]
                 active_sweeps = [row for row in sweeps.values() if row["run"] == self.run]
                 if active_sweeps:
                     records["loop_sweep"] = active_sweeps
@@ -316,6 +333,8 @@ class TypedRecording:
                     records.pop("loop_sweep", None)
                 if sweep.receipt is not None and sweep.receipt["run"] == self.run:
                     records["loop_sweep_receipt"] = [sweep.receipt]
+                else:
+                    records.pop("loop_sweep_receipt", None)
                 records = scale_timed_records(records, self.run, factor)
                 observed = {(row["run"], row["id"]): row for row in records["loop_observation"]}
                 for e, ticks in arrived:

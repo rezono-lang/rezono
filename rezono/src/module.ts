@@ -11,7 +11,7 @@
 // before it, not as a block, when either line shows that the statement is not finished:
 // - the line before ends in `=`, `=>`, `+`, `-`, `*`, `/`, `(`, `,` or the word `when`, `then`, `else`, `and`,
 //   `or` or `not`, or leaves a parenthesis open;
-// - the line itself begins with `then`, `else`, `and`, `or`, `=>`, `+`, `-`, `*`, `/` or `)`.
+// - the line itself begins with `then`, `else`, `and`, `or`, `=>`, `+`, `-`, `*`, `/`, `.` or `)`.
 // A comment ends at the end of its line (§3) and is not part of either test.
 //
 // The diagnostics a module's text alone shows:
@@ -39,9 +39,10 @@
 //         versions needs the order of their contexts, which the checker gives later.
 // As in a question, an R000, R014, R016, R018, R021, R027, R028 or R029 leaves no module and no other diagnostic.
 import { grammar } from './grammar.ts';
+import { positionalAggregates } from './module-aggregates.ts';
 import { blockSyntax, declarationActions, declarations, verbatimBlocks, type Decl } from './module-components.ts';
 import type { Deprecation } from './module-deprecation.ts';
-import { layout, only, type Logical } from './module-layout.ts';
+import { layout, sliceOf, type Logical } from './module-layout.ts';
 import { readSchema, type SchemaMetadata } from './module-metadata.ts';
 import { undeclaredReasonLabels } from './module-reason.ts';
 import { isLanguageVersion, type BlockSyntax, type Build, type LanguageVersion, type Line } from './module-support.ts';
@@ -111,19 +112,17 @@ function readModule(text: string, bare: boolean, packVersion?: LanguageVersion):
 	});
 	let declaredVersion: LanguageVersion = '0';
 	const read = (line: Logical, rule = 'Line', invalidFirst?: BlockSyntax['invalidFirst']) => {
-		const cut = torn(text.slice(line.start, line.end));
+		const slice = sliceOf(text, line);
+		const cut = torn(slice.text);
 		if (cut) {
 			// A newline inside a literal would become part of that value.
 			errors.push(tornAt(text, line.start + cut[0], line.start + cut[1], cp));
 		} else {
-			const statement = only(text, line);
-			const syntax = rule === 'Line' && /^rule(?![A-Za-z0-9_-])/.test(text.slice(line.start, line.end)) ? 'NativeRuleLine' : rule;
+			const syntax = rule === 'Line' && /^rule(?![A-Za-z0-9_-])/.test(slice.text) ? 'NativeRuleLine' : rule;
 			const useNative = declaredVersion === '1' && rule === 'Line' ? true : undefined;
-			const r = readRule(statement, syntax, (m) => m.decl() as Line, spans, map, useNative, declaredVersion);
-			// The rest of the source is blank here. An incomplete statement fails where its line ends.
-			for (const e of r.errors) if (e.span.start > cp(line.end)) e.span = { text: '', start: cp(line.end), end: cp(line.end) };
+			const r = readRule(slice.text, syntax, (m) => m.decl() as Line, spans, map, useNative, declaredVersion, slice.offset);
 			const alternative = r.errors.length && invalidFirst?.(text, line, cp, (rule) =>
-				!readRule(statement, rule, () => undefined, new WeakMap(), map, undefined, declaredVersion).errors.length
+				!readRule(slice.text, rule, () => undefined, new WeakMap(), map, undefined, declaredVersion, slice.offset).errors.length
 			);
 			if (alternative) errors.push(alternative);
 			else errors.push(...r.errors);
@@ -288,6 +287,7 @@ function readModule(text: string, bare: boolean, packVersion?: LanguageVersion):
 	if (!bare && !module.pack && !errors.length) errors.push({ code: 'R000', span: { text: '', start: 0, end: 0 }, args: ['`pack`'] });
 	errors.push(...versionReplacements(module));
 	errors.push(...undeclaredReasonLabels(module, spans));
+	errors.push(...positionalAggregates(module, spans));
 	if (errors.length) return { diagnostics: errors.sort(inOrder), spans };
 	return {
 		module,
