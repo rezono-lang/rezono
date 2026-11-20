@@ -18,6 +18,7 @@ class Snapshot:
     stuck: set[str]
     drift: Collection[object]
     fixed_point: Collection[tuple[str, str, str, str, str]] = ()
+    round_outcome: Literal["success", "pending", "failure"] | None = None
 
 
 def replay_report(run: str, limit: int, snapshots: Iterator[Snapshot], *, report_limit: bool):
@@ -26,7 +27,11 @@ def replay_report(run: str, limit: int, snapshots: Iterator[Snapshot], *, report
     trace: list[list[str]] = []
     current = next(snapshots)
     while True:
-        state = outcome(declared=current.declared, done=current.done, stuck=current.stuck, drift=current.drift)
+        state = (
+            current.round_outcome
+            if current.round_outcome is not None
+            else outcome(declared=current.declared, done=current.done, stuck=current.stuck, drift=current.drift)
+        )
         if current.fixed_point:
             return trace, "failure", sorted(current.fixed_point)
         if state != "pending":

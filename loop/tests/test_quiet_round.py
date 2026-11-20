@@ -155,7 +155,6 @@ def test_quiet_round_rules():
             assert any({"probe", "probe-reading"} <= ground_ids(program, explainer, "drift", row) for row in findings)
 
 
-@pytest.mark.xfail(strict=True, reason="M2: Read decisions/quiet-observation-rounds.md. Waits for test_quiet_round_rules and test_recorded_correction. Extend loop/recording_input.py and the shared executor to preserve empty dated sweeps and use the admitted theory for each round.")
 def test_quiet_round_recording(monkeypatch, tmp_path, capsys):
     from rezono_compiler import batch, modules
 
