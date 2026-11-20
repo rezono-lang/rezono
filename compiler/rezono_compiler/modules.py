@@ -59,6 +59,7 @@ class Module:
     # The public kinds and enums, LinkML name -> deprecation date or None; None: no interface, all public.
     interface: dict[str, str | None] | None = None
     form: dict | None = None  # the effective JSON form when `file` is written in Rezono
+    reasons: list[tuple[str, str]] = field(default_factory=list)  # lowered (code, label) pairs
 
     @property
     def rel(self) -> str:
@@ -420,7 +421,8 @@ def rezono_modules(d: Path, meta: dict, name: str | None, pack: str, schemas: di
             errors.append(f"{d.name}/{low.declared.module}: LinkML cannot read its lowered schema ({e})")
             continue
         out[Path(f"{mid}.yaml")] = Module(module_id(name, mid), pack, d, d / low.declared.module, sv,
-                                          sorted([module_id(name, x) for x in low.uses] + low.foreign), form=low.form)
+                                          sorted([module_id(name, x) for x in low.uses] + low.foreign), form=low.form,
+                                          reasons=low.reasons)
         authored[key[mid]] = low.schema
         authored[f"{pack}:{mid}"] = low.schema
     return out, authored
