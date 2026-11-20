@@ -1,0 +1,33 @@
+rezono 0
+pack subsidy
+use subsidy-scheme
+
+schema subsidy_reference
+  iri "https://rezono.example/subsidy/reference"
+  language en
+  prefix linkml = "https://w3id.org/linkml/"
+  import "linkml:types"
+  default range Text
+  description "The payment ledger of the finance department, as a reference source: what another system recorded, kept apart from the scheme. No award reads it. A calculation rule compares it with the awards the rules derive, and the difference is drift, shown to readers with its proof."
+  annotation layer = "observation"
+
+kind LedgerPayment world closed
+  description "A payment as the ledger records it. Origin: an observation, the ledger export of the finance department. Sealed on its booking date: once a month is closed, a late or changed row is refused by name and does not count."
+  sealed at: booked_on
+  id: Text identifier
+  application: Application
+  booked_on: Date
+  amount: Cents
+    minimum 0
+
+kind PeriodClose world closed
+  description "The close of the ledger up to a date. Origin: a decision of the finance department. It names every payment it closes with the hash of its row, as `rezono_compiler close` writes it."
+  id: Text identifier
+  closed_until: Date
+    description "Every payment booked before this date is closed."
+  covers: ClosedPayment* embedded
+
+embedded kind ClosedPayment world closed
+  description "A closed payment, with the hash of its row when it was closed."
+  element: LedgerPayment
+  sha256: Text
