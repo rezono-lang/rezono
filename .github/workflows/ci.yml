@@ -120,11 +120,19 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
           path: release-source
-      - name: Check tracked files and the exception budget
+      - name: Check tracked files, the exception budget and the branch name
         working-directory: release-source
+        shell: bash
         env:
+          POLICY: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.sha }}
           BASE: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.event.before }}
-        run: python3 -I scripts/leak_check.py --base "$BASE"
+          LEAK_CHECK_BRANCH: ${{ github.head_ref }}
+        run: |
+          set -euo pipefail
+          # Run the check as the base has it, so a change to scripts/leak_check.py cannot
+          # weaken the check that judges that same change. The next step tests the candidate's copy.
+          echo "Leak check from $POLICY, scripts/leak_check.py blob $(git rev-parse "$POLICY:scripts/leak_check.py")"
+          git show "$POLICY:scripts/leak_check.py" | python3 -I - --base "$BASE"
       - name: Test the leak check on a throwaway repository
         working-directory: release-source
         run: python3 -I scripts/test_leak_check.py -v

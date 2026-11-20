@@ -1,0 +1,34 @@
+// Derive verified endpoint address bounds from cluster_endpoint_network and declared address facts.
+.decl duplicate_endpoint_address(address: number)
+duplicate_endpoint_address(address) :-
+    endpoint_address__address(r1, address),
+    endpoint_address__address(r2, address),
+    r1 != r2.
+
+.decl conflicting_endpoint_address(endpoint: symbol)
+conflicting_endpoint_address(endpoint) :-
+    endpoint_address__endpoint(r1, endpoint),
+    endpoint_address__endpoint(r2, endpoint),
+    r1 != r2.
+
+.decl conflicting_node_address_range(network: symbol)
+conflicting_node_address_range(network) :-
+    node_address_range__network(r1, network),
+    node_address_range__network(r2, network),
+    r1 != r2.
+
+.decl endpoint_address_bounds(endpoint: symbol, network: symbol, address: number, first: number, last: number)
+endpoint_address_bounds(endpoint, network, address, first, last) :-
+    cluster_endpoint_network(endpoint, network),
+    endpoint_address__endpoint(addr_row, endpoint),
+    endpoint_address__address(addr_row, address),
+    node_address_range__network(range_row, network),
+    node_address_range__first(range_row, first),
+    node_address_range__last(range_row, last),
+    first <= address,
+    address <= last,
+    !duplicate_endpoint_address(address),
+    !conflicting_endpoint_address(endpoint),
+    !conflicting_node_address_range(network).
+
+.output endpoint_address_bounds

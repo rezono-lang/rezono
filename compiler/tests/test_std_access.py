@@ -14,21 +14,18 @@ from rezono_compiler import rules as ir
 STD = REPO / "packs" / "std-access"
 
 
-def declarations():
-    from rezono_compiler.rules_dl import parse_file
-    statements = []
-    for f in sorted((STD / "rules").glob("*.dl")):
-        statements += parse_file(f.read_text(encoding="utf-8"), f"rules/{f.name}")
-    return statements
-
-
 def test_standard_access_declares_no_grants():
-    statements = declarations()
-    assert statements and all(s[0] == "decl" for s in statements)    # declarations only, not a single clause
-    for s in statements:
-        assert s[8] is True and s[9] is None and s[10] is False     # extend, no closes, no fold mark
-    read = [s for s in statements if s[1] == "may_read"]
-    assert len(read) == 1 and read[0][2] == [
+    import souffle
+    from rezono_compiler.rules_dl import parse_file
+
+    texts = souffle.closure(STD)
+    assert texts
+    statements = [stmt for i, text in enumerate(texts) for stmt in parse_file(text, f"std-access:{i}")]
+    assert all(stmt[0] == "decl" for stmt in statements)
+    by_name = {stmt[1]: stmt for stmt in statements}
+    assert "may_read" in by_name
+    assert all(stmt[8] is True and stmt[9] is None and stmt[10] is False for stmt in statements)
+    assert by_name["may_read"][2] == [
         ("role", "string"), ("kind", "string"), ("element", "string")]
 
 
@@ -39,7 +36,7 @@ class MissingRightDeclarations(AssertionError):
 @pytest.mark.xfail(
     strict=True,
     raises=MissingRightDeclarations,
-    reason="extra: decisions/review-and-rights.md: Declare in packs/std-access/rules/access.dl, beside may_read and "
+    reason="extra: decisions/review-and-rights.md: Declare in packs/std-access, beside may_read and "
            "each as // @extend without a clause, may_propose(role: symbol, kind: symbol, element: symbol), "
            "may_review(role: symbol, kind: symbol, element: symbol), may_publish(role: symbol, kind: symbol) and "
            "may_execute(role: symbol, plugin: symbol); then regenerate the std-access row of "
@@ -47,7 +44,12 @@ class MissingRightDeclarations(AssertionError):
            "section 1. Waits for compiler/tests/test_std_access_full.py, which changes the same file and pins.",
 )
 def test_standard_access_declares_the_four_rights():
-    got = {s[1]: s[2] for s in declarations() if s[0] == "decl"}
+    import souffle
+    from rezono_compiler.rules_dl import parse_file
+
+    texts = souffle.closure(STD)
+    statements = [stmt for i, text in enumerate(texts) for stmt in parse_file(text, f"std-access:{i}")]
+    got = {s[1]: s[2] for s in statements if s[0] == "decl"}
     want = {
         "may_propose": [("role", "string"), ("kind", "string"), ("element", "string")],
         "may_review": [("role", "string"), ("kind", "string"), ("element", "string")],
