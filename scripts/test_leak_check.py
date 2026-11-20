@@ -171,8 +171,10 @@ class BranchName(unittest.TestCase):
             (root / "scripts").mkdir()
             (root / "scripts" / "leak-budget.json").write_text("{}\n")
             subprocess.check_call(["git", "add", "-A"], cwd=root)
+            env = {key: value for key, value in os.environ.items() if not key.startswith("GITHUB_")}
             return subprocess.run(
-                [sys.executable, "-I", str(SCRIPT), "--branch", branch], cwd=root, capture_output=True, text=True
+                [sys.executable, "-I", str(SCRIPT), "--branch", branch],
+                cwd=root, capture_output=True, text=True, env=env,
             )
 
     def test_names_after_a_subject_pass(self):
