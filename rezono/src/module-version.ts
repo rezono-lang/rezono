@@ -83,35 +83,45 @@ export function versionReplacements(module: Module): Diagnostic[] {
 	const check = (decl: ParamDecl | DerivedDecl, name: string) => {
 		const versions = decl.versions;
 		if (!versions?.length) return;
-		const byNumber = new Map<string, number>();
+		const byNumber = new Map<string, number[]>();
 		versions.forEach((v, i) => {
-			if (!byNumber.has(v.version)) byNumber.set(v.version, i);
+			const group = byNumber.get(v.version);
+			if (group) group.push(i);
+			else byNumber.set(v.version, [i]);
 		});
 		const state = new Uint8Array(versions.length); // 0: unvisited, 1: active, 2: done
-		for (let i = 0; i < versions.length; i++) {
-			const v = versions[i];
+		const reported = new Set<number>();
+		const stack: number[] = [];
+		const visit = (node: number): void => {
+			const v = versions[node];
 			if (v.replaces !== undefined && !byNumber.has(v.replaces)) {
 				const span = replacedSpans.get(v);
 				if (span) out.push({ code: 'R021', span, args: [v.version, v.replaces, name] });
-				state[i] = 2;
-				continue;
+				state[node] = 2;
+				return;
 			}
-			if (state[i] !== 0) continue;
-			const path: number[] = [];
-			let cur: number | undefined = i;
-			while (cur !== undefined && state[cur] === 0) {
-				state[cur] = 1;
-				path.push(cur);
-				const nextNumber = versions[cur].replaces;
-				cur = nextNumber !== undefined ? byNumber.get(nextNumber) : undefined;
+			state[node] = 1;
+			stack.push(node);
+			const targets = v.replaces !== undefined ? (byNumber.get(v.replaces) ?? []) : [];
+			for (const next of targets) {
+				if (state[next] === 0) {
+					visit(next);
+				} else if (state[next] === 1) {
+					const cycle = stack.slice(stack.indexOf(next));
+					const firstIndex = Math.min(...cycle);
+					if (!reported.has(firstIndex)) {
+						reported.add(firstIndex);
+						const first = versions[firstIndex];
+						const span = replacedSpans.get(first);
+						if (span) out.push({ code: 'R021', span, args: [first.version, first.replaces!, name] });
+					}
+				}
 			}
-			if (cur !== undefined && state[cur] === 1) {
-				const cycle = path.slice(path.indexOf(cur));
-				const first = versions[Math.min(...cycle)];
-				const span = replacedSpans.get(first);
-				if (span) out.push({ code: 'R021', span, args: [first.version, first.replaces!, name] });
-			}
-			for (const node of path) state[node] = 2;
+			stack.pop();
+			state[node] = 2;
+		};
+		for (let i = 0; i < versions.length; i++) {
+			if (state[i] === 0) visit(i);
 		}
 	};
 	eachVersionedDecl(module, check);

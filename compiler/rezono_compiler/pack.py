@@ -14,10 +14,11 @@ from rezono_admission.schema import INPUT_FORMATS
 
 from .schemaview import SchemaView
 
-from . import amounts, diagnostics, fold, icons as icon_files, modules, rezono_module, rules_dl, spans, strict_yaml, types, views
+from . import amounts, diagnostics, fold, icons as icon_files, modules, rezono_module, rules_dl, spans, standard_packs, strict_yaml, types, views
 from .diagnostics import Diagnosed
 from .names import NAME
 from .regex import PatternError, portable
+from . import rezono_reason
 
 LAYERS = ("source", "facts", "conclusions", "plan", "output", "observation")
 # Annotations the compiler reads now, or in a later milestone (then ignored without warning).
@@ -64,7 +65,7 @@ UNSUPPORTED = ("equals_expression", "equals_string_in", "any_of", "exactly_one_o
                "ifabsent")
 # LinkML's open value: a slot with a class of this class_uri as range takes any value, which Rezono cannot type.
 ANY_URI = "https://w3id.org/linkml/Any"
-ENTRY = re.compile(r"^([a-z][a-z0-9_.]*)\s*=\s*", re.M)
+ENTRY = rezono_reason.ENTRY
 VARIABLE = re.compile(r"\$([A-Za-z_][A-Za-z0-9_]*)")
 
 
@@ -224,6 +225,14 @@ class AcceptanceQuestion(TypedDict):
     tests: list[str]
 
 
+@dataclass(frozen=True)
+class IntermediateInvariant:
+    """An intermediate-state invariant bound to its coverage relation and key columns."""
+    relation: str
+    coverage_relation: str
+    key_binding: tuple[tuple[str, str], ...]
+
+
 @dataclass
 class Pack:
     meta: dict
@@ -254,6 +263,7 @@ class Pack:
     # P10.3: the units the pack and the packs it imports declare, by the name of their LinkML type (`units`).
     units: dict[str, types.Unit] = field(default_factory=dict)
     acceptance_questions: list[AcceptanceQuestion] = field(default_factory=list)  # own source inventory
+    intermediate_invariants: tuple[IntermediateInvariant, ...] = ()
 
     def ancestors(self, kind: str) -> list[str]:
         """The kind itself, then its parent, up to the root."""
@@ -522,6 +532,10 @@ def read(pack_dir: str | Path) -> Pack:
     meta = read_meta(pack_dir)
     if not list((pack_dir / "schema").rglob("*.yaml")) and not meta.get("rezono"):
         raise CompileError(f"{pack_dir}/schema: no schema files, and pack.yaml names no module written in Rezono")
+    if standard_packs.is_standard_name(str(meta["name"])) and (
+            why := standard_packs.refusal(str(meta["name"]), modules.pack_hash(pack_dir))):
+        refused = f"{pack_dir}/pack.yaml: {why}"
+        raise CompileError(refused, diagnostics.of_text(refused, "reserved_standard_name"))
     is_theory = theory_meta(meta, pack_dir, errors)
     if errors:
         raise CompileError("\n".join(errors))
@@ -769,7 +783,11 @@ def read(pack_dir: str | Path) -> Pack:
         from . import native_rule_lowering
 
         try:
-            native = native_rule_lowering.lower_modules(meta, mods, packs, names)
+            intermediate_invariants: list[IntermediateInvariant] = []
+            native = native_rule_lowering.lower_modules(
+                meta, mods, packs, names, intermediate_invariants=intermediate_invariants,
+            )
+            pack.intermediate_invariants = tuple(intermediate_invariants)
             pack.rules, rule_warnings = rules_dl.read(pack, pack_dir, ordered, renames, calc_inputs=calc_inputs,
                                                       calc_parts=calc_parts, folds=pack.folds,
                                                       bodies=pack.rule_bodies, spans=pack.rule_spans,
@@ -849,7 +867,11 @@ def read(pack_dir: str | Path) -> Pack:
     if not errors:
         pack.channels = channels(pack, pack_dir, ordered, renames, errors)
         pack.questions = questions(pack, pack_dir, ordered, errors)
-        language(pack, pack_dir, ordered, renames, errors)
+        pack_reasons: dict[str, list[tuple[str, str]]] = {}
+        for m in mods:
+            if m.reasons:
+                pack_reasons.setdefault(m.pack, []).extend(m.reasons)
+        language(pack, pack_dir, ordered, renames, errors, reasons=pack_reasons)
         pack.iri = iris(pack, meta, packs, owner, errors)
     if not errors:
         fold.check(pack, errors)
@@ -2599,7 +2621,8 @@ def named(values, known: set, where: str, errors: list[str]) -> None:
     errors += [f"{where}: '{v}' does not exist in this pack" for v in values if v not in known]
 
 
-def language(pack: Pack, pack_dir: Path, packs: dict, renames: dict, errors: list[str]) -> None:
+def language(pack: Pack, pack_dir: Path, packs: dict, renames: dict, errors: list[str], *,
+             reasons: dict[str, list[tuple[str, str]]] | None = None) -> None:
     """Labels (facts per language) and message resources (MessageFormat 2, carried as text).
     Imported packs' labels come first, a dependency before the pack that imports it, under this pack's names;
     the pack's own labels win."""
@@ -2643,18 +2666,27 @@ def language(pack: Pack, pack_dir: Path, packs: dict, renames: dict, errors: lis
         head, sep, body = text.partition("\n---\n")
         if text and (not sep or f"@locale {lang}" not in head.splitlines()):
             errors.append(f"messages/{lang}.mf2: a resource starts with '@locale {lang}' and a '---' line")
+        extra = reasons.get(pack.meta["name"], []) if reasons and lang == default else []
+        if extra and (not text or sep):
+            if not sep:
+                head, sep = f"@locale {lang}", "\n---\n"
+            body = rezono_reason.append_entries(body, extra)
+            text = f"{head}{sep}{body}"
         # An imported pack's messages come first, a dependency before the pack that imports it; an entry of
         # the pack itself wins (S14). The pack's own resource stays as written, after them.
         own, imported = set(ENTRY.findall(body)), {}
         for name, p in packs.items():
             source = p.dir / "messages" / f"{lang}.mf2"
-            if not source.exists():
-                continue
-            ihead, isep, ibody = source.read_text("utf-8").replace("\r\n", "\n").partition("\n---\n")
-            if not isep or f"@locale {lang}" not in ihead.splitlines():
-                errors.append(f"{name}/messages/{lang}.mf2: a resource starts with '@locale {lang}' and a '---' line")
-                continue
-            imported.update({mid: block for mid, block in entries(ibody) if mid not in own})
+            ibody = ""
+            if source.exists():
+                ihead, isep, ibody = source.read_text("utf-8").replace("\r\n", "\n").partition("\n---\n")
+                if not isep or f"@locale {lang}" not in ihead.splitlines():
+                    errors.append(f"{name}/messages/{lang}.mf2: a resource starts with '@locale {lang}' and a '---' line")
+                    continue
+            if reasons and lang == p.meta.get("default_language") and name in reasons:
+                ibody = rezono_reason.append_entries(ibody, reasons[name])
+            if ibody:
+                imported.update({mid: block for mid, block in entries(ibody) if mid not in own})
         ids = own | set(imported)
         for mid in needed:
             if mid not in ids:

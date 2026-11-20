@@ -585,6 +585,9 @@ jobs:
             exit 1
           fi
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          # The loop compares the decisions with the base (DECISION_HEADS_BASE below), so it needs the history.
+          fetch-depth: ${{ matrix.component.folder == 'loop' && '0' || '1' }}
       - uses: ./.github/workflows/python-environment
         with:
           editable: ${{ needs.discover.outputs.python_editable }}
@@ -626,6 +629,8 @@ jobs:
         env:
           REZONO_HYPOTHESIS_PROFILE: ci
           PYTHONHASHSEED: '0'
+          # The base of loop/tests/test_decision_heads.py: the pull request's base, or the merge group's base.
+          DECISION_HEADS_BASE: ${{ matrix.component.folder == 'loop' && (github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.event.before) || '' }}
           COMPONENT: ${{ matrix.component.folder }}
           KIND: ${{ matrix.component.kind }}
           SHARD: ${{ matrix.component.shard }}

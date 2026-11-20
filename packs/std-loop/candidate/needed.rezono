@@ -1,0 +1,13 @@
+rezono 0
+pack std-loop
+
+rules needed
+  | .decl needed(run: symbol, step: symbol, token: symbol, reason: symbol)
+  | 
+  | needed(run, step, token, reason) :-
+  |     requirement(run, step, token, reason).
+  | 
+  | // The successor requires the predecessor's completion token in the same run.
+  | needed(run, step, token, reason) :-
+  |     before(predecessor, step),
+  |     completion(run, predecessor, token, reason).

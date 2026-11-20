@@ -65,25 +65,25 @@ READER_PORT = {
 APPROVED_RULE = {
     "rule": "approved_item",
     "columns": [{"name": "item", "type": "Alpha"}],
-    "when": {"call": ["alpha", [{"path": ["item"]}]]},
+    "when": {"in": [{"path": ["item"]}, {"kind": "Alpha"}]},
 }
 
 ACTIVE_RULE = {
     "rule": "active_beta",
-    "columns": [{"name": "target", "type": "Beta"}],
-    "when": {"call": ["beta", [{"path": ["target"]}]]},
+    "columns": [{"name": "target", "type": "Beta"}, {"name": "owner", "type": "Alpha"}],
+    "when": {"call": ["Beta.alpha", [{"path": ["target"]}, {"path": ["owner"]}]]},
 }
 
 INVENTORY_RULE = {
     "rule": "beta_inventory",
     "columns": [{"name": "scope", "type": "Alpha"}],
-    "when": {"call": ["alpha", [{"path": ["scope"]}]]},
+    "when": {"in": [{"path": ["scope"]}, {"kind": "Alpha"}]},
 }
 
 READBACK_RULE = {
     "rule": "beta_readback",
     "columns": [{"name": "scope", "type": "Alpha"}],
-    "when": {"call": ["alpha", [{"path": ["scope"]}]]},
+    "when": {"in": [{"path": ["scope"]}, {"kind": "Alpha"}]},
 }
 
 STEP_DECL = {
@@ -91,7 +91,7 @@ STEP_DECL = {
     "columns": [{"name": "item", "type": "Alpha"}],
     "when": {"call": ["approved_item", [{"path": ["item"]}]]},
     "forbid": [{
-        "pattern": {"call": ["active_beta", [{"path": ["item"]}]]},
+        "pattern": {"call": ["active_beta", [{"wildcard": True}, {"path": ["item"]}]]},
         "within": {"call": ["beta_inventory", [{"path": ["item"]}]]},
     }],
     "effect": {
@@ -99,7 +99,7 @@ STEP_DECL = {
         "changes": [{
             "insert_row": {
                 "kind": "Beta",
-                "key": {"path": ["item"]},
+                "key": {"path": ["item", "id"]},
                 "slots": [{"name": "alpha", "value": {"path": ["item"]}}],
             },
         }],
@@ -158,11 +158,16 @@ def make_pack(
     strict=True,
     raises=MissingStepDeclarationLowering,
     reason="extra: decisions/language-safe-steps.md: Include ports/<name>.yaml in compiler/rezono_compiler/modules.py "
-           "DEFINITION, load ports via rezono_ports.load and safe_steps bindings in pack.yaml, admit step "
-           "declarations in rezono.module/4, and expose Pack.steps (empty tuple when unused) with CompiledStep "
-           "(id, match_relation emitted in Pack.rules/ir/rules.json, typed columns, blockers, operation, changes, "
-           "confirmation with derived identity and slot postconditions). Refuse unresolved operations and "
-           "incomplete reader targets with CompileError.",
+           "DEFINITION (note: adding ports/ to DEFINITION changes pack import pins and the standard pack hash table "
+           "in compiler/rezono_compiler/standard_packs.py for packs carrying ports/), load ports via rezono_ports.load "
+           "and safe_steps bindings in pack.yaml, admit step declarations in rezono.module/4, and expose Pack.steps "
+           "(empty tuple when unused) with CompiledStep (id, match_relation emitted in Pack.rules/ir/rules.json, "
+           "typed columns, blockers, operation, changes, confirmation with derived identity and slot postconditions). "
+           "Refuse unresolved operations and incomplete reader targets with CompileError. "
+           "Blocked for a worker PR: scripts/test_red_guard.py requires scripts/red_guard.py DEFINITION to match "
+           "compiler/rezono_compiler/modules.py DEFINITION, while scripts/red_guard.py is a POLICY file that cannot "
+           "be changed without planner or alongside a lifted xfail mark; a planner must add ports/*.yaml to DEFINITION "
+           "in both files first (and PR #1089 is open for rezono.module/4 admission).",
 )
 def test_lower_step_declaration(tmp_path):
     # Counter-case 1: an ordinary pack without steps exposes an empty Pack.steps tuple.

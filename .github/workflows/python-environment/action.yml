@@ -77,13 +77,18 @@ runs:
             sleep 10
           done
         fi
+        # Fail closed: without the base, or without its list, no plugin may be trusted.
+        if ! git cat-file -e "$POLICY^{commit}" 2>/dev/null; then
+          echo "::error::The base $POLICY could not be fetched, so the installed pytest plugins cannot be checked."
+          exit 1
+        fi
         if ! git cat-file -e "$POLICY:scripts/pytest-plugins.txt" 2>/dev/null; then
-          echo "The base $POLICY lists no pytest plugins yet, so they are not checked."
-          exit 0
+          echo "::error::The base $POLICY has no scripts/pytest-plugins.txt, so the installed pytest plugins cannot be checked."
+          exit 1
         fi
         git show "$POLICY:scripts/pytest-plugins.txt" > "$RUNNER_TEMP/pytest-plugins.txt"
-        # scripts/components.py loads only these plugins in every pytest run, from this copy.
-        echo "REZONO_PYTEST_PLUGINS=$RUNNER_TEMP/pytest-plugins.txt" >> "$GITHUB_ENV"
+        # scripts/components.py and red_before.py read the same list from the base
+        # themselves, so a later step cannot point them elsewhere.
         python -I -c '
         import sys
         from importlib.metadata import entry_points

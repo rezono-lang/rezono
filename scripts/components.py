@@ -330,6 +330,9 @@ SHARED_READERS = {
     # The build pack: the loop tests read its schema and rules, and the converter
     # regression parses every tracked Datalog file.
     "build/": ("compiler", "loop"),
+    # The build pack reads the head of every decision, and loop/tests/test_decision_heads.py holds
+    # the budget of decisions without one (decisions/decision-heads.md).
+    "decisions/": ("loop",),
     # examples/test_front_door.py runs the readme's blocks through the quickstart check.
     "README.md": ("examples",),
     "CONTRIBUTING.md": ("examples",),
@@ -974,15 +977,17 @@ def inventory_path(directory: Path, folder: str) -> Path:
 
 
 # The pytest plugins CI may load, as `name = value` of the pytest11 entry points. In CI the
-# environment action points REZONO_PYTEST_PLUGINS at the base's copy, so a candidate cannot
-# extend it; locally this checkout's list applies.
+# list comes from the base revision, so a candidate cannot extend it; locally this checkout's
+# list applies. scripts/red_before.py reads it the same way.
 PLUGIN_LIST = ROOT / "scripts/pytest-plugins.txt"
 
 
 def allowed_plugins() -> set[str]:
-    path = Path(os.environ.get("REZONO_PYTEST_PLUGINS") or PLUGIN_LIST)
-    return {line.strip() for line in path.read_text(encoding="utf-8").splitlines()
-            if line.strip() and not line.lstrip().startswith("#")}
+    # One reading of the list for this script and red_before.py, beside this file.
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from red_guard import listed_plugins
+
+    return listed_plugins(PLUGIN_LIST, ROOT)
 
 
 def plugin_arguments() -> tuple[list[str], object]:

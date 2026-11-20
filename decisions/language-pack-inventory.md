@@ -1,3 +1,11 @@
+---
+decider: [language]
+decided_on: 2026-11-17
+valid_from: 2026-11-17
+state: in_force
+subject: language-pack-inventory
+---
+
 # Writing a pack in Rezono
 
 A module starts with the existing rezono and pack headers. Each language decision gives a source fragment and the corresponding object at its location in the module tree. Preserve the current module/1 contract and bytes for existing constructs. A module requiring any new tree member uses rezono.module/2. Its envelope retains module and spans. The new contract must enumerate the new fields, reject unknown fields, and preserve source spans as JSON pointers. A compiler that cannot read the declared version must reject the whole form.

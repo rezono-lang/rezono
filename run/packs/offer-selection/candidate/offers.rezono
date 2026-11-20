@@ -1,0 +1,64 @@
+rezono 0
+pack offer-selection
+
+schema offer_selection
+  iri "https://rezono.org/examples/run/offer-selection"
+  language en
+  import "linkml:types"
+  default range Text
+  annotation layer = "facts"
+
+enum AmountUnit world closed = micros | minor
+
+enum GuaranteeMode world closed = estimate | binding_quote | reject_above
+
+kind Offer world closed
+  price_micros: Int?
+    minimum 0
+  setup_price_micros: Int?
+    minimum 0
+  period_price_minor: Int?
+    annotation explore = {"max": 501, "min": 499, "step": 1}
+    minimum 0
+  setup_price_minor: Int?
+    minimum 0
+  guarantee_mode: GuaranteeMode?
+  provider: Text?
+  tie_rank: Int
+  stock: Int
+    minimum 0
+  free_disks: Int
+    minimum 0
+  virtualization: Text
+  boot: Text
+  currency: Text
+
+kind Demand world closed
+  quantity: Int
+    minimum 1
+  billed_periods: Int?
+    minimum 1
+  amount_unit: AmountUnit?
+  boot: Text
+  currency: Text
+
+kind Guarantee world closed
+  description "A provider record covering a particular offer for a particular order."
+  demand: Demand
+  offer: Offer
+  provider: Text
+  currency: Text
+  scope: Text
+  mode: Text
+  total_micros: Int?
+    minimum 0
+  total_minor: Int?
+    minimum 0
+  period_price_minor: Int?
+    minimum 0
+  setup_price_minor: Int?
+    minimum 0
+  quantity: Int?
+    minimum 1
+  billed_periods: Int?
+    minimum 1

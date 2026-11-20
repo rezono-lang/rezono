@@ -347,6 +347,8 @@ classes:
       args: {all_of: [{range: NativeRuleExpr, multivalued: true, inlined_as_list: true, minimum_cardinality: 1}]}
       locals: {all_of: [{range: RuleColumn, multivalued: true, inlined_as_list: true, minimum_cardinality: 1}]}
       when: {all_of: [{range: NativeRuleExpr, inlined: true}]}
+      means: {all_of: [{range: string}], description: "The clause's sentence in the pack's default language."}
+      source: {all_of: [{range: string}], description: "The source reference after `@`."}
       options:
         multivalued: true
         inlined_as_list: true
@@ -366,6 +368,11 @@ classes:
     # The cardinality clauses use contains constraints because LinkML's JSON Schema
     # generator does not emit uniqueness for list_elements_unique.
     all_of:
+      - any_of:
+          - slot_conditions: {when: {required: true}}
+          - all_of:
+              - slot_conditions: {means: {value_presence: ABSENT}}
+              - slot_conditions: {source: {value_presence: ABSENT}}
       - any_of:
           - slot_conditions:
               options: {all_of: [{multivalued: true, maximum_cardinality: 1}]}

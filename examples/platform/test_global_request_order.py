@@ -86,13 +86,6 @@ def test_global_request_ordinals_use_exact_time_tenant_and_service(tmp_path):
                     {"elm/alpha": 1, "elm/zulu": 2, "reed/alpha": 3, "reed/zulu": 4})
 
 
-@pytest.mark.xfail(strict=True, raises=AdapterKeyDecidesOrder, reason=(
-    "M2: decisions/ordered-rule-scalars.md: Waits for compiler/tests/test_ordered_rule_scalars_engines.py--test_datalog_spells_typed_comparisons, "
-    "--test_the_bundle_keeps_typed_comparisons, --test_gap_follows_typed_comparisons, "
-    "--test_souffle_oracle_orders_typed_values and --test_feldera_orders_typed_values "
-    "(the decision requires Soufflé and Feldera evidence before the platform rule). "
-    "Then order request_ordinal in examples/platform/rules/request_ordinal.dl on the source submission instant, "
-    "tenant and service, not on adapter rank keys."))
 def test_adapter_rank_keys_do_not_decide_the_global_request_order(tmp_path):
     teams = tmp_path / "teams"
     write_requests(teams)

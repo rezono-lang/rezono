@@ -96,12 +96,6 @@ DRIFT = "series_support_end_drift"
 REFERENCE = "kubernetes-1.32-register"
 
 
-@pytest.mark.xfail(strict=True, raises=MissingSupportDrift, reason=(
-    "M2: decisions/platform-vendor-support-statement.md: Waits for test_support_requires_each_independent_ground. "
-    "Add the series_support_reference class (product, series, support_end) to schema/kubernetes_support.yaml, one "
-    "register row kubernetes-1.32-register in facts/kubernetes_support.yaml, and derive "
-    "series_support_end_drift(reference, source, product, series, expected, observed) in "
-    "examples/platform/rules/kubernetes_support.dl when the register and the statement differ."))
 def test_register_difference_is_support_drift():
     model, program, (state,) = states(ROOT)
     if DRIFT not in program.derived() or not state.base.get("series_support_reference"):

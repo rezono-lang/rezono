@@ -7,6 +7,7 @@ Every case that grants something has a counter-case in which the one ground it n
 """
 
 import json
+from contextlib import closing
 from pathlib import Path
 
 import pytest
@@ -115,9 +116,9 @@ class Probe:
         if unknown:
             raise self.missing(f"tables the decision names are not in the pack: {unknown}")
         try:
-            con = batch.connect(self.prog, {k: sorted(v) for k, v in rows.items()})
-            batch.compute(con, self.prog)
-            return batch.read(con, self.prog)
+            with closing(batch.connect(self.prog, {k: sorted(v) for k, v in rows.items()})) as con:
+                batch.compute(con, self.prog)
+                return batch.read(con, self.prog)
         except Exception as failed:
             raise self.missing(f"evaluation failed: {failed}") from failed
 
@@ -220,15 +221,6 @@ class MissingReviewStates(AssertionError):
     """std-review is missing, or derives the review state of a change otherwise than the decision gives."""
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=MissingReviewStates,
-    reason="extra: decisions/review-and-rights.md: Create the standard pack packs/std-review, importing "
-           "packs/std-access: its whole schema with the tables of the section The standard pack std-review, and "
-           "rules/state.dl with review_active, review_current, review_valid (for now: active), change_accepted, "
-           "change_rejected, change_stale, change_proposed and review_due. "
-           "Add its row to compiler/rezono_compiler/standard_packs.py. Read sections 2 and 6.",
-)
 def test_review_states(tmp_path):
     p = Probe(tmp_path, MissingReviewStates)
     grants = [SCRIBE_YEAR]
@@ -312,9 +304,10 @@ class MissingReviewAuthorityCheck(AssertionError):
     reason="extra: decisions/review-and-rights.md: Write packs/std-review/rules/authority.dl: the invariant "
            "review_unauthorized(review) from the role_grant held on the review day (first day inclusive, last day "
            "exclusive), not introduced by the reviewed change, and may_review of that role over every "
-           "change_member, and add !review_unauthorized(r) to review_valid in rules/state.dl. Read sections 3, 5 "
-           "and 8. Waits for test_review_blind, which edits the same rule, and for "
-           "compiler/tests/test_std_access.py::test_standard_access_declares_the_four_rights (may_review).",
+           "change_member; a grant that a change introduces counts only from the day a review on founding "
+           "grants alone accepted that change, and while it stays accepted. Add !review_unauthorized(r) to "
+           "review_valid in rules/state.dl. Read sections 3, 5, 7 and 8. Waits for test_review_blind, which edits "
+           "the same rule, and for compiler/tests/test_std_access.py::test_standard_access_declares_the_four_rights (may_review).",
 )
 def test_review_unauthorized(tmp_path):
     p = Probe(tmp_path, MissingReviewAuthorityCheck)
@@ -327,13 +320,36 @@ def test_review_unauthorized(tmp_path):
     p.expect("a grant that starts after the review", p.run(world([NOTE_CHANGE], [accept()], [starts_later])), bad)
     p.expect("the last day is exclusive", p.run(world([NOTE_CHANGE], [accept(day=20260601)], [revoked_later])), bad)
     p.expect("no grant at all", p.run(world([NOTE_CHANGE], [accept()])), bad)
-    # A grant introduced by the change under review authorises no review of that change, but does of another.
+    # A grant introduced by the change under review authorises no review of that change.
     self_grant = ("g-una", "una", "scribe", 20260101, None, "ch-1")
     p.expect("a grant in the reviewed change", p.run(world([NOTE_CHANGE], [accept()], [self_grant])), bad)
+    # A grant introduced by a change counts for another change only once its own change is accepted, on the
+    # authority of founding grants alone, from the day of that acceptance and while it stays accepted.
     other = ("ch-2", "ivo", C2, S2, [("note", "n2")], [])
-    p.expect("that grant for another change",
-             p.run(world([NOTE_CHANGE, other], [accept("rv-2", change="ch-2", content=C2, support=S2)], [self_grant])),
-             {"review_unauthorized": set(), **states(accepted=["ch-2"], proposed=["ch-1"], due=["ch-1"])})
+    by_una = accept("rv-2", change="ch-2", content=C2, support=S2)
+    founder = ("g-ada", "ada", "scribe", 20260101, None, None)
+    p.expect("a grant whose change is still proposed",
+             p.run(world([NOTE_CHANGE, other], [by_una], [self_grant])),
+             {"review_unauthorized": {("rv-2",)}, **states(proposed=["ch-1", "ch-2"], due=["ch-1", "ch-2"])})
+    by_ada = accept(who="ada", day=20260305)
+    p.expect("a grant whose change a founder accepted",
+             p.run(world([NOTE_CHANGE, other], [by_ada, by_una], [self_grant, founder])),
+             {"review_unauthorized": set(), **states(accepted=["ch-1", "ch-2"])})
+    p.expect("a review before that acceptance",
+             p.run(world([NOTE_CHANGE, other], [by_ada, by_una[:5] + (20260301,) + by_una[6:]], [self_grant, founder])),
+             {"review_unauthorized": {("rv-2",)}, **states(accepted=["ch-1"], proposed=["ch-2"], due=["ch-2"])})
+    moved = ("ch-1", "ivo", C2, S1, [("note", "n1")], [("note", "n2")])
+    p.expect("a grant whose accepted change went stale",
+             p.run(world([moved, other], [by_ada, by_una], [self_grant, founder])),
+             {"review_unauthorized": {("rv-2",)}, **states(stale=["ch-1"], proposed=["ch-2"], due=["ch-1", "ch-2"])})
+    # Two changes that grant each other's reviewer a role cannot accept each other into being.
+    first = ("ch-1", "ivo", C1, S1, [("note", "n1")], [])
+    second = ("ch-2", "ivo", C2, S2, [("note", "n2")], [])
+    crosswise = [("g-una", "una", "scribe", 20260101, None, "ch-1"), ("g-ada", "ada", "scribe", 20260101, None, "ch-2")]
+    p.expect("two changes that grant each other's reviewer",
+             p.run(world([first, second], [accept(who="ada"), by_una], crosswise)),
+             {"review_unauthorized": {("rv-1",), ("rv-2",)},
+              **states(proposed=["ch-1", "ch-2"], due=["ch-1", "ch-2"])})
     # Rights are typed: a review right over the note x1 is none over the shelf x1.
     shelf = ("ch-1", "ivo", C1, S1, [("shelf", "x1")], [])
     note = ("ch-1", "ivo", C1, S1, [("note", "x1")], [])
@@ -374,14 +390,6 @@ class MissingReviewConflictCheck(AssertionError):
     """std-review lacks review_conflict, or resolves opposite reviews or dismissals otherwise than the decision."""
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=MissingReviewConflictCheck,
-    reason="extra: decisions/review-and-rights.md: Write packs/std-review/rules/conflict.dl: the invariant "
-           "review_conflict(change) for two valid current reviews with opposite verdicts, without a new state, "
-           "and make sure a review_dismissal takes a review out of every count. Read section 8 and the open cases "
-           "on two opposite reviews and on a dismissed approval. Waits for test_review_states.",
-)
 def test_review_conflict_and_dismissal(tmp_path):
     p = Probe(tmp_path, MissingReviewConflictCheck)
     p.invariant("review_conflict")
@@ -405,14 +413,6 @@ class MissingReviewPolicy(AssertionError):
     """std-review lacks the publication policy per kind, or allows require in the lab phase."""
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=MissingReviewPolicy,
-    reason="extra: decisions/review-and-rights.md: Write packs/std-review/rules/policy.dl: the invariants "
-           "unreviewed_required(change) and require_in_lab(policy) and the derived unreviewed_marked(change), "
-           "from review_policy per kind of a change_member and review_phase. Read sections 9 and 10. Waits for "
-           "test_review_states.",
-)
 def test_review_policy(tmp_path):
     p = Probe(tmp_path, MissingReviewPolicy)
     p.invariant("unreviewed_required", "require_in_lab")

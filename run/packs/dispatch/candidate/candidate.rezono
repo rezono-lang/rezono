@@ -1,0 +1,48 @@
+rezono 0
+pack dispatch
+
+schema dispatch
+  iri "https://rezono.org/examples/run/dispatch"
+  language en
+  import "linkml:types"
+  default range Text
+  annotation layer = "facts"
+
+type PlanDigest = Text
+type CurrencyCode = Text
+
+enum ApprovalDecision world closed = approve | decline
+
+kind Candidate world closed
+  description "A proposed dispatch attempt."
+
+kind Plan world closed
+  candidate: Candidate
+  plan_hash: PlanDigest?
+    pattern "^[0-9a-f]{64}$"
+  currency: CurrencyCode?
+    pattern "^[A-Z]{3}$"
+
+kind Quote world closed
+  candidate: Candidate
+  plan_hash: PlanDigest?
+    pattern "^[0-9a-f]{64}$"
+  currency: CurrencyCode?
+    pattern "^[A-Z]{3}$"
+  cost_micros: Int?
+    minimum 0
+
+kind Approval world closed
+  candidate: Candidate
+  plan_hash: PlanDigest?
+    pattern "^[0-9a-f]{64}$"
+  currency: CurrencyCode?
+    pattern "^[A-Z]{3}$"
+  decision: ApprovalDecision?
+  cap_micros: Int?
+    minimum 0
+  expires_us: Int?
+
+kind Observation world closed
+  candidate: Candidate
+  event_us: Int?

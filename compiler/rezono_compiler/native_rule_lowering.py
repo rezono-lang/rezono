@@ -9,17 +9,25 @@ from typing import NoReturn
 
 from . import diagnostics, modules, native_rule_groups, native_rule_signatures, rezono_module, rules, rules_dl, spans
 from .diagnostics import Diagnostic
-from .pack import CompileError
+from .pack import CompileError, IntermediateInvariant
 
 
-def lower_modules(meta: dict, definitions: list[modules.Module], imports: dict[str, modules.Imported],
-                  names: modules.Names) -> tuple[rules_dl.NativeSource, ...]:
+def lower_modules(
+    meta: dict,
+    definitions: list[modules.Module],
+    imports: dict[str, modules.Imported],
+    names: modules.Names,
+    *,
+    intermediate_invariants: list[IntermediateInvariant] | None = None,
+) -> tuple[rules_dl.NativeSource, ...]:
     authored = [(m, form) for m in definitions
-                if (form := m.form) is not None and form["format"] == rezono_module.NATIVE_FORMAT]
+                if (form := m.form) is not None and form["format"] in rezono_module.NATIVE_FORMATS]
     if not authored:
         return ()
     forms = {(m.pack, m.rel): form for m, form in authored}
     linked = native_rule_signatures.link_modules(meta, definitions, imports, names, forms)
+    if intermediate_invariants is not None:
+        intermediate_invariants.extend(linked.intermediate_invariants)
     result = []
     for module, form in authored:
         if source := lower_source(module, form, meta["name"], linked):
@@ -64,16 +72,23 @@ def lower_declaration(site: Site, linked: native_rule_signatures.Linked, module:
     line = text.count("\n", 0, offset) + 1
     column = offset - text.rfind("\n", 0, offset)
     options = declaration.get("options")
-    if set(declaration) - {"rule", "columns", "args", "when", "options"} or (
-        options is not None and
-        (len(options) != 1 or options[0].keys() != {"extend"} or options[0]["extend"] is not True)
-    ):
+    if set(declaration) - {"rule", "columns", "args", "when", "options"}:
         refuse(where, at, line, column, "Rule options and locals are not lowered yet")
+    if options is not None:
+        for index, option in enumerate(options):
+            opt_at = f"{at}/options/{index}"
+            opt_span = site.span(opt_at)[1:] if opt_at in site.offsets else (line, column)
+            is_extend = isinstance(option, dict) and set(option) == {"extend"} and option["extend"] is True
+            is_bare_inv = isinstance(option, dict) and set(option) == {"invariant"} and option["invariant"] is True
+            is_inter_inv = (isinstance(option, dict) and set(option) == {"invariant", "within"}
+                            and option.get("invariant") == "intermediate")
+            if not (is_extend or is_bare_inv or is_inter_inv):
+                refuse(where, opt_at, *opt_span, "Rule options and locals are not lowered yet")
     if "columns" in declaration:
         name = declaration["rule"]
         signature = linked.signatures[name]
         key = [(col, storage) for col, _, storage in signature.key]
-        statements.append(("decl", name, key, line, None, False, False, None, signature.extend, None, False))
+        statements.append(("decl", name, key, line, None, signature.invariant, False, None, signature.extend, None, False))
         semantics[name] = signature.semantics
     if "when" in declaration:
         clause = linked.clauses[module.pack, module.rel, at]
