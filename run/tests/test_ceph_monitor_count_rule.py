@@ -89,24 +89,6 @@ def pack_reads(monkeypatch):
     return seen
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason=(
-        "M4: decisions/code-does-not-decide.md, row run/ceph_storage.py. Derive "
-        "ceph_monitor_count(cluster, count) in run/packs/cluster-shape: 3 when a valid cluster has "
-        "three or more ceph_device rows, 1 when it has one or two, and no row when the cluster has "
-        "a shape_problem (keep candidate/cluster_shape.{rezono,json} in sync so "
-        "compiler/tests/rezono/test_whole_run_cluster_shape.py stays green). Update "
-        "run/ceph_storage.py:render(cluster, namespace, image, devices, monitors=None) to consume "
-        "derived (cluster, count) monitor rows (where count is a positive integer or canonical "
-        "decimal text from rezono_compiler.batch.read) without deciding the quorum count in Python, "
-        "and when monitors is omitted to read ceph_monitor_count from run/packs/cluster-shape "
-        "through rezono_compiler.batch.read. Keep run/tests/test_ceph_storage.py and "
-        "run/tests/test_cluster_shape.py green. Today run/packs/cluster-shape does not derive "
-        "ceph_monitor_count and run/ceph_storage.py hardcodes 3 in Python (AssertionError)."
-    ),
-)
 def test_ceph_monitor_count_comes_from_cluster_shape(monkeypatch):
     from rezono_compiler import pack, rules
 
