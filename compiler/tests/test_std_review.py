@@ -390,14 +390,6 @@ class MissingReviewConflictCheck(AssertionError):
     """std-review lacks review_conflict, or resolves opposite reviews or dismissals otherwise than the decision."""
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=MissingReviewConflictCheck,
-    reason="extra: decisions/review-and-rights.md: Write packs/std-review/rules/conflict.dl: the invariant "
-           "review_conflict(change) for two valid current reviews with opposite verdicts, without a new state, "
-           "and make sure a review_dismissal takes a review out of every count. Read section 8 and the open cases "
-           "on two opposite reviews and on a dismissed approval. Waits for test_review_states.",
-)
 def test_review_conflict_and_dismissal(tmp_path):
     p = Probe(tmp_path, MissingReviewConflictCheck)
     p.invariant("review_conflict")
