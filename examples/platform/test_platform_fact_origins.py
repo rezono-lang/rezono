@@ -42,18 +42,6 @@ def cited(entry: dict) -> bool:
     return any(s.get("kind") not in NO_ORIGIN and not own_file(s) for s in entry["sources"])
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=MissingFactOrigin,
-    reason="M2: decisions/fact-origin-required.md: Give every row of examples/platform/facts/ an origin: a sidecar or "
-           "an @ citation that names the decision file, vendor publication or observation it comes from (kind git, "
-           "document, tool, query or person; never pack), an arrow to the std-decision Decision that sets it, or a "
-           "Decision record with decider and decided_on. Today 20 of the 40 fact files, among them core.yaml, have "
-           "only their file and line. Read sections 1, 2 and 6. Waits for the planner: "
-           "acceptance/test_keycloak_release.py (line 118) and acceptance/test_kubernetes_support.py (line 133) "
-           "currently assert kind == 'pack' on facts/keycloak_release.yaml and series_support_reference in "
-           "facts/kubernetes_support.yaml.",
-)
 def test_every_platform_fact_row_has_an_origin():
     model = pack.read(PLATFORM)
     entries = sources.read(model, PLATFORM)

@@ -1,0 +1,5 @@
+default:
+  kind: git
+  name: rezono-lang/rezono
+  revision: f676bf54fee01b9da206ac8b6713315e91bed864
+  position: decisions/platform-five-scenes.md#4-scene-decisions-as-std-decision-facts

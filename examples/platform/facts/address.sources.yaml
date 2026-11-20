@@ -1,0 +1,5 @@
+default:
+  kind: synthetic
+  name: decisions/platform-firewall-output.md
+  revision: f30c300f2707c78ce73173dba3a0ac31a5505e77
+  position: how-to-emit-firewall-rules

@@ -1,0 +1,4 @@
+default:
+  kind: synthetic
+  name: decisions/platform-derivation-acceptance.md
+  position: import-and-exercise-the-five-standard-packs#std-access
