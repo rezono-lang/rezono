@@ -8,13 +8,13 @@ subject: engine-epoch-run
 
 # Run one engine epoch as a std-loop run, with one run vocabulary for every run
 
-Rezono's own development is steered by Rezono's own relations. The build run already is a `std-loop` pack ([build reconciliation](build-reconciliation.md)), and the paid provider run is designed as a loop ([run-scoped reconciliation](loop-design.md), [run reconciliation](run-reconciliation.md)). The engine epoch run is the third: it takes one epoch of one pack from compile to distribution. Today a Python call sequence drives it, and the publisher decides by raising an exception. This decision makes that run a `std-loop` run that orchestrates the steps and evaluates nothing itself. It names the one home of every run concept that the three runs share, so that no run concept is defined twice. The owner accepted the approach: orchestration only, evaluated by a pinned earlier engine, the checker independent, effects exactly once, "why published" as a derived relation whose witness hash goes into the epoch statement, and sealing later. [Loop rules](../packs/std-loop/pack.yaml) · [Publisher](../edge/publisher/rezono_publisher/publish.py) · [Epoch statement](../contracts/statement.yaml) · [Effect contract](../contracts/effect.yaml) · [Formal models](../formal/README.md)
+Rezono's own development is steered by Rezono's own relations. The build run already is a `std-loop` pack ([build reconciliation](build-reconciliation.md)), and the paid provider run is designed as a loop ([run-scoped reconciliation](loop-design.md), [run reconciliation](run-reconciliation.md)). The engine epoch run is the third: it takes one epoch of one pack from compile to distribution. Today a Python call sequence drives it, and the publisher stops it by raising an exception. This decision makes that run a `std-loop` run that orchestrates the steps and evaluates nothing itself. Following [code does not decide](code-does-not-decide.md), it gives each publisher check one fate: an input-integrity check stays in code, and a gate that decides whether an epoch may be published becomes a derived refusal. It names the one home of every run concept that the three runs share, so that no run concept is defined twice. The owner accepted the approach: orchestration only, evaluated by a pinned earlier engine, the checker independent, effects exactly once, "why published" as a derived relation whose witness hash goes into the epoch statement, and sealing later. [Loop rules](../packs/std-loop/pack.yaml) · [Publisher](../edge/publisher/rezono_publisher/publish.py) · [Epoch statement](../contracts/statement.yaml) · [Effect contract](../contracts/effect.yaml) · [Formal models](../formal/README.md)
 
 ## 1. Existing behavior
 
-At `b80d716f`:
+At `0d1a379d`:
 
-- **The publisher decides.** [`publish.plan`](../edge/publisher/rezono_publisher/publish.py) computes every object of a publication and raises `Blocked` on the first red finding: a red engine check, a public-surface refusal, a theory flag that is not `false`, a missing or malformed rule IR or calculation IR, a malformed witness, a relation no definition accounts for, a checker error in the proofs (`rezono:proofs`), an uncovered role (`rezono:access`), a missing required conclusion (`publication_required`), images (`rezono:assets`), fact sources (`rezono:sources`) and admitted evidence (`rezono:evidence`). The command line turns `Blocked` into exit code 2. The reason is a message on stderr. No relation says why an epoch was published or refused.
+- **The publisher stops on the first red finding.** [`publish.plan`](../edge/publisher/rezono_publisher/publish.py) computes every object of a publication and raises `Blocked` on the first red finding: a red engine check, a public-surface refusal, a theory flag, a missing or malformed rule IR or calculation IR, a malformed witness, a relation no definition accounts for, a checker error in the proofs (`rezono:proofs`), an uncovered role (`rezono:access`), a missing required conclusion (`publication_required`), images (`rezono:assets`), fact sources (`rezono:sources`) and admitted evidence (`rezono:evidence`). The command line turns `Blocked` into exit code 2, with the reason as a message on stderr. No relation says why an epoch was published or refused. The audit of [code does not decide](code-does-not-decide.md), at `8d1fa9c`, found the publisher in line with "code does not decide"; section 3.4 keeps to that audit and names the one check that came after it.
 - **Signing and distribution are effects without a journal here.** The form builder writes `statement.json` beside each filtered role's form. The signature is cosign's bundle over those bytes, and [`statement.attach`](../publication/rezono_publication/statement.py) pushes the statement and signature as a referrer of the role's seal. The store's conditional put makes writing a form idempotent. Nothing in this repository records a signing or push attempt, so nothing derives whether one happened once.
 - **The statement says what, not why.** An epoch statement (`rezono.epoch-statement/1`) binds the role's objects, snapshots, dataset, annotation and row roots. It never names `pack_sha256`, and a role's statement depends on nothing that role may not read. [Role epoch diffs](publication-role-diffs.md) specifies version 2, which adds `previous` and `diff` both or neither. That version is not built yet.
 - **The build run** imports `std-loop` and `std-decision`. Its task relations are views over `unblocked`, `waiting` and `stuck`, and its readings cite `LoopSweepReceipt`. It also defines claims, a lease that the latest push starts, and the settling of a claim delete by a complete ref read: `BuildClaim`, `BuildClaimActivity`, `BuildClaimLease`, `BuildClaimDelete`, `BuildClaimRefRead` and the rules of `build/rules/claims.dl` and `build/rules/claim_release.dl`. Those rules are the derivation of the [Claims](../formal/Claims.tla) model, and nothing in them is specific to builds.
@@ -33,7 +33,7 @@ At `b80d716f`:
 | Claim and lease | none | `BuildClaim`, `BuildClaimActivity`, lease rules in `claims.dl` | `journal_claim.py`, `git_claim.py` (Python only) | yes: one runner per run, one attempt per effect | `std-loop`: `LoopClaim`, `LoopClaimRenewal`, `claim_lease_ended`, `claim_held` (section 2.2) |
 | Pending operation | `LoopPendingOperation {run, token}`, an input | `build_claim_release_pending` | `Attempt` records | yes | `std-loop`: `effect_pending`, derived from attempts and readbacks. `LoopPendingOperation` stays an input for recorded fixtures; no new adapter writes it. |
 | Effect and receipt | `LoopSweepReceipt` closes a read; the effect contract has `EffectPlan`, `EffectApply`, `EffectState` | `BuildClaimDelete` and `BuildClaimRefRead`, settled in `claim_release.dl` | `Attempt`; `CleanupAttemptState` copies `EffectState` | yes: write, sign, distribute | `std-loop`: `LoopEffectPlan`, `LoopEffectAttempt`, `LoopEffectReadback`, the enum `LoopEffectState` with the contract's values, and `effect_*` relations (section 5) |
-| Refusal | `LoopRefusal`, recorded only | none (`build_full_selection` is a selection outcome, not a refusal) | `dispatch` `conflicting_input`; Python raises | yes: every publisher check | `std-loop`: `refusal` from `LoopRefusal` and from the new extensible `derived_refusal` (section 2.2) |
+| Refusal | `LoopRefusal`, recorded only | none (`build_full_selection` is a selection outcome, not a refusal) | `dispatch` `conflicting_input`; Python raises | yes: every publication gate, and a step that refused its input | `std-loop`: `refusal` from `LoopRefusal` and from the new extensible `derived_refusal` (section 2.2) |
 | Deadline | `LoopDeadline` (budget from a start observation) | the claim lease, computed apart in `claims.dl` | `cleanup-deadline` absolute `deadline_us` | yes: a run that never ends is stuck | `std-loop` `LoopDeadline`, with the absolute boundary of [standard packs everywhere](standard-packs-everywhere.md) once that lands. The lease ends by the same `until <= tick` comparison. |
 | Observation sweep | `LoopSweep`, `LoopSweepReceipt`, `complete_sweep` | cites `LoopSweepReceipt` | `cleanup` `Sweep` with pages and coverage | yes: store and registry readbacks | `std-loop`. `cleanup`'s `Sweep` keeps its paging slots and names the `LoopSweepReceipt` that closes it. |
 
@@ -64,7 +64,7 @@ The moves land after this decision, each in its own pull request, never in this 
 3. **Provider effects.** `run/packs/cleanup-deadline` imports `std-loop`. Its `Attempt.state` ranges over `LoopEffectState`, and `CleanupAttemptState` goes. `run/packs/cleanup`'s `Attempt` becomes a `LoopEffectAttempt`, and its `Sweep` names the `LoopSweepReceipt` that closes it. `run/journal_claim.py` and `run/git_claim.py` stay as claim adapters; what they record is a `LoopClaim` without a lease.
 4. **Pending operations.** `possible_progress` also holds while an `effect_pending` row names a plan of an unfinished step. `LoopPendingOperation` stays readable until no recorded fixture writes it.
 
-A move that changes `std-loop` changes its hash. The same pull request re-pins every importer, the build pack among them, and keeps every build test green. The build pack's published relation names and rows do not change. Its consumers in CI read relations, not kinds, so selection, claims, the red list and the per-milestone progress keep working through the move. A build test whose records name a moved kind is restated by a planner on the `std-loop` kinds, with the same expectation, before the worker moves the rules. If a move cannot keep a published build row, it does not land, and the Python fallback stays as it is.
+A move that changes `std-loop` changes its hash. The same pull request re-pins every importer, the build pack among them, and keeps every build test green. The build pack's published relation names and rows do not change. Its consumers in CI read relations, not kinds, so selection, claims, the red list and the per-milestone progress keep working through the move. A build test whose records name a moved kind is restated by a planner on the `std-loop` kinds, with the same expectation, before the worker moves the rules. If a move cannot keep a published build row, it does not land. The build pack has no Python fallback: when its publication is missing or the checker refuses it, CI runs every suite, claims stay and nothing new starts, with a finding. No move may weaken that safe state; unknown never means less checking.
 
 ## 3. The engine epoch run
 
@@ -87,7 +87,7 @@ Each step is a `LoopStep`. Precedence comes from `std-order`, so every step requ
 
 ### 3.2 Kinds of the epoch pack
 
-The pack lives in `epoch/` with the name `engine-epoch`, beside `build/`, and imports `std-loop`. Its kinds hold what each step observed. A kind marked *complete only* is read by the complete role alone (section 3.4).
+The pack lives in `epoch/` with the name `engine-epoch`, beside `build/`, and imports `std-loop`. Its kinds hold what each step observed. A kind marked *complete only* is read by the complete role alone (section 3.5).
 
 | Kind | Slots | Independent origin and acceptance question |
 | --- | --- | --- |
@@ -96,10 +96,8 @@ The pack lives in `epoch/` with the name `engine-epoch`, beside `build/`, and im
 | `EpochRoleStep` | `id`, `run`, `step: LoopStep`, `role: EpochRole`, `stage` (`sign`, `distribute`) | The input adapter. Which per-role step serves which role? |
 | `EpochEnginePin` | `id`, `run`, `version`, `wheel_sha256`, `commit` | `epoch/engine-pin.yaml` at protected main, held to the registry's digest. Which released engine evaluates this run's loop? |
 | `EpochTool` | `id`, `run`, `step: LoopStep`, `tool`, `version`, `sha256` | The step's adapter, from the build record the step ran with. Which compiler, engine, checker, publisher or signer ran this step? |
-| `EpochDefinition` | `id`, `run`, `definition_sha256`, `compiler_sha256`, `theory: boolean` | The compile step. Which pack definition was compiled, by which compiler, and is it a theory? |
-| `EpochArtifact` | `id`, `run`, `file` (`bundle`, `rules`, `calc`, `sweeps`), `format`, `sha256` | The compile step. Which compiled artifact exists, with which format tag? |
-| `EpochAcceptedFormat` | `id`, `file`, `format` | A plan fact. Which format of each artifact does this pack version publish? |
-| `EpochRelation` | `id`, `run`, `relation`, `origin` (`rows`, `schema`, `rules`, `calc`) | The evaluate steps. Which relation has rows, and which definition accounts for it? |
+| `EpochDefinition` | `id`, `run`, `definition_sha256`, `compiler_sha256` | The compile step. Which pack definition was compiled, by which compiler? |
+| `EpochSurface` | `id`, `run`, `against`, `class` (`patch`, `minor`, `major`), `before_major`, `before_minor`, `before_patch`, `after_major`, `after_minor`, `after_patch` (integers) | The check step, from `surface.compatibility`. Against which earlier main manifest was the public surface compared, how far did it change, and which pack versions do the two bundles name? |
 | `EpochCheck` | `id`, `run`, `step: LoopStep`, `check`, `outcome` (`green`, `red`, `unknown`), `violations: integer`, `source` | The step's adapter, copying the verdict of the engine, the comparison or the checker. What did this check find for the whole run? |
 | `EpochRoleCheck` | `id`, `run`, `step: LoopStep`, `role: EpochRole`, `check`, `outcome`, `violations: integer`, `source` | The same, for one role. |
 | `EpochRequiredCheck` | `id`, `step: LoopStep`, `check`, `scope` (`run`, `role`) | A plan fact. Which checks must have a verdict once their step is done? |
@@ -108,40 +106,54 @@ The pack lives in `epoch/` with the name `engine-epoch`, beside `build/`, and im
 | `EpochSource` | `id`, `run`, `source`, `position` | *Complete only.* Where each source stood. |
 | `EpochCheckDetail` | `id`, `check`, `first`, `report_sha256` | *Complete only.* The first error and the digest of the full report of a check. |
 
-An adapter copies a verdict; it does not judge it. The checker stays the code that finds a proof error, and the publication plan stays the code that computes the objects. Neither raises any more when it runs under the loop: each returns its findings, the adapter records them, and the rules below decide.
+An adapter copies a verdict; it does not judge it. The checker stays the code that finds a proof error, and the publication plan stays the code that computes the objects. Two paths lead from a step to a refusal, one per fate of section 3.4:
+
+- **Input integrity, fate (d).** The code that reads the input keeps its check and raises as today. The step's adapter records the raise as a `LoopRefusal` of its step, with the check's name (such as `rezono:assets`) as the reason. That is an observation of the step, not a judgement, and the recorded refusal makes the step stuck.
+- **Publication gate, fate (c).** The code that computes the verdict returns it instead of raising. The adapter records it as an `EpochCheck` or `EpochRoleCheck`, and the rules below refuse.
+
+A step that neither completes nor records anything leaves its token unknown. Its successors wait, and the deadline makes the run stuck. Nothing is published, and there is no other path to publish by.
 
 ### 3.3 Relations of the epoch pack
 
 | Relation | Derivation |
 | --- | --- |
-| `derived_refusal(run, "write-forms", reason)` | One clause per refusal below. Every derived refusal lands on `write-forms`, so one red finding writes nothing, as today. A refusal that needs a step's result waits until that step is `done`; it never refuses ahead of its evidence. |
-| `publish_allowed(run, epoch, role, reason)` | For an `EpochRole` of an `EpochRun`, with `epoch` the run's epoch and `role` the role's `name`: `done` of `compile`, `evaluate-duckdb`, `evaluate-feldera`, `compare-engines` and `check`; the `EpochTool` of each of those steps; the `EpochEnginePin`; the `EpochDefinition` with `theory` false; the role's `EpochRoleForm`; the role's green `rezono:proofs` and `rezono:access` checks; and no `refusal` in the run. `reason` is the `EpochRoleForm` id. Every gate and every pin is a positive premise, so the witness cites each one. A check that a pack may lack, such as assets, is covered by the absence of a refusal, which the witness carries as a negative premise. |
+| `derived_refusal(run, "write-forms", reason)` | One clause per gate of fate (c) below. Every derived refusal lands on `write-forms`, so one red finding writes nothing, as today. A refusal that needs a step's result waits until that step is `done`; it never refuses ahead of its evidence. |
+| `publish_allowed(run, epoch, role, reason)` | For an `EpochRole` of an `EpochRun`, with `epoch` the run's epoch and `role` the role's `name`: `done` of `compile`, `evaluate-duckdb`, `evaluate-feldera`, `compare-engines` and `check`; the `EpochTool` of each of those steps; the `EpochEnginePin`; the `EpochDefinition`; the role's `EpochRoleForm`; the role's green `rezono:proofs` and `rezono:access` checks; and no `refusal` in the run, recorded or derived. `reason` is the `EpochRoleForm` id. Every gate and every pin is a positive premise, so the witness cites each one. A check that a pack may lack, such as assets, is covered by the absence of a refusal, which the witness carries as a negative premise. |
 | `epoch_allowed(run, epoch, reason)` | The complete counterpart, one row per `EpochSource` of the run with that source as `reason`: the source, the `EpochPackFacts`, and no role of the run without a `publish_allowed` row. It goes into the complete manifest only, never into a statement. |
 | `effect_permitted(run, step, plan, reason)` | `write-forms`: a `LoopEffectPlan` of the step and `publish_allowed` for every role of the run. `sign-<role>` and `distribute-<role>`: a plan of the step and `publish_allowed` for its role. |
 
-Today's `Blocked` reasons map to derived refusals as follows.
+### 3.4 One fate per publisher check
 
-| `publish.py` today | Observation | Refusal reason row |
-| --- | --- | --- |
-| `instance_pack`: theory flag | `EpochDefinition.theory` is `true` (admission refuses a value that is not a boolean) | the definition |
-| red engine checks (`e.checks`) | `EpochCheck` of an evaluate step with `red` or `unknown` | the check |
-| `_surface_refusal` | `EpochCheck` `rezono:surface` | the check |
-| `rule_ir`: no rule definitions | `compile` done and no `EpochArtifact` for `rules` | the definition |
-| `rule_ir`, `calc_ir`: not JSON or not the format | an `EpochArtifact` whose `format` no `EpochAcceptedFormat` of its file names | the artifact |
-| `calc_ir`: calculation witnesses without `ir/calc.json` | an `EpochRelation` with origin `calc` and no `calc` artifact | the relation |
-| relations no definition accounts for | an `EpochRelation` with origin `rows` and none with origin `schema`, `rules` or `calc` for that relation | the relation |
-| `rezono:proofs` (malformed witnesses, rule IR, calculation bindings, seals, check metadata, R7 complete and per role) | `EpochCheck` or `EpochRoleCheck` `rezono:proofs` | the check |
-| `rezono:access` (`access.Uncovered`) | `EpochRoleCheck` `rezono:access` | the check |
-| `publication_required` | `EpochRoleCheck` `publication_required` | the check |
-| `rezono:assets` | `EpochRoleCheck` `rezono:assets` | the check |
-| `rezono:sources` (stale entries, a role's entries, the source sets) | `EpochCheck` or `EpochRoleCheck` `rezono:sources` | the check |
-| `rezono:evidence` | `EpochCheck` `rezono:evidence` | the check |
-| engine disagreement (new) | `EpochCheck` `rezono:engines` of `compare-engines` | the check |
-| a required check that never reported (new) | its step done, and no row for an `EpochRequiredCheck` of that step and scope | the required check |
+The fates are those of [code does not decide](code-does-not-decide.md), section 1. An input-integrity check asks whether the input can be read as what it claims to be: a file is there and has its format, an asset or a source is listed, a witness has the shape of a witness. Reading input is what code may do, so these checks keep fate (d). A publication gate asks whether a well-formed epoch may be published: the engines agree, a proof exists and the checker accepted it, each role reads what its form says. These are fate (c): the code that computes the verdict stays the reader, and the decision moves into the epoch pack, where `publish_allowed` can cite it. No check gets fate (a) or (b): none is unused, and none duplicates a rule.
 
-A check refuses when its outcome is `red` or `unknown`, or when it is `green` with violations above zero. Unknown is explicit; it is never read as green.
+| Check in `publish.py` today | Kind | Fate | Afterwards |
+| --- | --- | --- | --- |
+| `instance_pack`: the theory flag is not a boolean | input integrity | (d) | stays; `LoopRefusal` of `check` |
+| `instance_pack`: a theory pack publishes no instance | input integrity: a theory epoch is not an instance to publish | (d) | stays; `LoopRefusal` of `check` |
+| `rule_ir`: no rule definitions, not JSON, not `rezono.rules/1`, or the checker cannot load it | input integrity | (d) | stays; `LoopRefusal` of `check` |
+| `calc_ir`: calculation witnesses without `ir/calc.json`, not JSON, or not `rezono.calc-ir/1` | input integrity | (d) | stays; `LoopRefusal` of `check` |
+| malformed witness instances (`shaped`) | input integrity | (d) | stays; `LoopRefusal` of `check` |
+| relations no definition accounts for | input integrity | (d) | stays; `LoopRefusal` of `check` |
+| `verify`: the checker refuses the calculation bindings or the seals, or a sealed kind has no seal | input integrity of the compiled program | (d) | stays; `LoopRefusal` of `check` |
+| `metadata_checked`: the loaded check metadata is not the bundle's | input integrity | (d) | stays; `LoopRefusal` of `check` |
+| `rezono:sources`: stale fact sources, a role's source entries, the source sets | input integrity | (d) | stays; `LoopRefusal` of `check` |
+| `rezono:assets`: an image cell names an unlisted file, or the asset check fails | input integrity | (d) | stays; `LoopRefusal` of `check` |
+| `rezono:evidence`: admission refuses the evidence | input integrity | (d) | stays; `LoopRefusal` of `check` |
+| `check_publication_requirements`: malformed requirements | input integrity | (d) | stays; `LoopRefusal` of `check` |
+| `_surface_refusal`: a broken head, a missing or mismatched bundle, a malformed version | input integrity | (d) | stays; `LoopRefusal` of `check` |
+| red engine checks (`e.checks`) | gate: the engine's own checks found violations | (c) | `EpochCheck` of the evaluate step; the pack refuses |
+| `checked`: the checker finds errors in the proofs, complete and per role (R7) | gate: a proof exists and the checker accepted it | (c) | `EpochCheck` and `EpochRoleCheck` `rezono:proofs`; the pack refuses |
+| `access.Uncovered` | gate: access per role | (c) | `EpochRoleCheck` `rezono:access`; the pack refuses |
+| `check_publication_requirements`: a required conclusion has no unique readable proof | gate: the role gets what it must | (c) | `EpochRoleCheck` `publication_required`; the pack refuses |
+| `_surface_refusal`: R033 and the version that does not move far enough | gate: the public surface may change this way | (c) | `EpochSurface`; the pack refuses, by [surface compatibility](language-surface-compatibility.md) section 4 |
+| engine disagreement (new) | gate: the engines agree | (c) | `EpochCheck` `rezono:engines` of `compare-engines`; the pack refuses |
+| a required verdict that never came (new) | gate: unknown is not green | (c) | `EpochRequiredCheck` with its step done and no row; the pack refuses |
 
-### 3.4 What a role's witness may cite
+A gate verdict refuses when its outcome is `red` or `unknown`, or when it is `green` with violations above zero. The surface gate refuses only when the earlier version's major is 1 or more. It refuses a `major` class with R033, since no accepted proposal is modelled yet. It also refuses a version that moves less than the class: a `major` change needs a higher major, a `minor` change a higher major or, at the same major, a higher minor, and a `patch` change any higher version. The refusal's reason row is the culprit record: the check, the required check or the surface row.
+
+**The audit.** The audit at `8d1fa9c` found the publisher in line, and every row above that existed then keeps that reading. Each such check reads input, or stops on the independent checker's verdict. What moves is only the step from verdict to "not published", because `publish_allowed` must now carry it as a witness. The one exception postdates the audit. `surface.py` came with pull request 1208 (`fa51710a`) and `_surface_refusal` with pull request 1244 (`4ac7e665`); neither is an ancestor of `8d1fa9c`, and no other check in `publish.py` changed since. `surface.refusal` decides by a policy: whether the earlier pack version is 1.0.0 or later, whether a change class is refused, and how far the version must move. That is a decision in code, so its policy goes to fate (c). Its comparison of two bundles (`surface.compatibility`) stays the reader, fate (d).
+
+### 3.5 What a role's witness may cite
 
 An epoch statement depends on nothing its role may not read, and two worlds a role cannot tell apart give it the same statement. The witness behind the statement holds to the same rule. A premise of `publish_allowed` for a role is a row whose bytes are equal in two such worlds:
 
@@ -197,10 +209,12 @@ Sealing a round as certified with Feldera is out of scope. The hook is a step `s
 
 ## 9. Transition
 
-1. **Vocabulary first.** `std-loop` gains the kinds and relations of section 2.2. Each move of section 2.3 follows with its re-pin and its restated tests. The build pack's publication stays the same throughout.
-2. **Epoch pack in comparison.** The epoch run runs beside the current publish path on every main epoch. The current path stays authoritative. A disagreement between `publish_allowed` and the current outcome is recorded and repaired against the semantics.
-3. **Hand over.** Once no disagreement is open and a released engine exists to pin, the epoch run drives publication. `publish.plan` keeps raising `Blocked` for a direct caller until no caller outside the loop remains, and is then retired to an adapter that only returns its findings.
-4. **Statement version 3** lands after version 2. Until the epoch run drives publication, a form has no `allowed.json`, and statements stay at version 1 or 2.
+There is no fallback and no period in which two paths decide. A missing or refused gate means the epoch is not published.
+
+1. **Vocabulary first.** `std-loop` gains the kinds and relations of section 2.2. Each move of section 2.3 follows with its re-pin and its restated tests, and the build pack's publication stays the same throughout.
+2. **The epoch pack.** The pack, its adapters and the red tests of section 10 land. Until the switch in step 3, publication runs as it does today. That is the state before the switch, not a fallback beside it.
+3. **One switch.** One pull request lets the epoch run drive publication. It lands once the red tests of section 10 are green and a released engine exists to pin. From then on there is one path. If the epoch pack's evaluation is missing, the checker refuses the epoch pack's publication, or a gate is missing, refused or unknown, nothing is published and the run reports the finding. The same pull request removes the gate raises of fate (c) from `publish.plan`, which then returns those verdicts. It deletes the Python sequence that the run replaces (fate (a)), or moves it under `tests/` as an oracle of the epoch pack (fate (b)). The input-integrity checks of fate (d) stay where they are.
+4. **Statement version 3** lands after version 2. Until the switch, a form has no `allowed.json`, and statements stay at version 1 or 2.
 
 No released engine exists at this decision: `rezono/package.json` names `0.1.0` and no `v` tag exists. The pin, and with it step 3, waits for the first release.
 
@@ -215,8 +229,8 @@ All are `extra:`. Release 1 does not include this run.
 | `loop/tests/test_shared_run_vocabulary.py::test_a_derived_refusal_makes_its_step_stuck` | `derived_refusal` |
 | `loop/tests/test_shared_run_vocabulary.py::test_an_effect_is_attempted_once_per_plan` | the `effect_*` relations of section 5 |
 | `loop/tests/test_engine_epoch.py::test_publish_allowed_cites_every_gate_and_pin` | section 3.3, `publish_allowed` and `effect_permitted` |
-| `loop/tests/test_engine_epoch.py::test_publisher_checks_are_derived_refusals` | the refusal table of section 3.3 |
-| `loop/tests/test_engine_epoch.py::test_a_role_witness_ignores_complete_only_rows` | section 3.4 |
+| `loop/tests/test_engine_epoch.py::test_publication_gates_are_derived_refusals` | the gates of fate (c) in section 3.4, and a recorded refusal of fate (d) |
+| `loop/tests/test_engine_epoch.py::test_a_role_witness_ignores_complete_only_rows` | section 3.5 |
 | `loop/tests/test_engine_epoch.py::test_the_loop_engine_is_an_earlier_release` | section 6 |
 | `publication/tests/test_statement_allowed.py::test_the_statement_names_why_it_exists` | section 4 |
 

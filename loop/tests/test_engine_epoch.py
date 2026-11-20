@@ -59,7 +59,7 @@ def scenario():
         "loop_completion": [{"id": f"def-{step}", "run": RUN, "step": step, "token": token, "reason": f"def-{step}"}
                             for step, token in TOKENS.items()],
         "loop_expectation": [{"id": token, "value": "yes"} for token in TOKENS.values()],
-        # A gate observation's reason names the run and the step, never a digest over rows (section 3.4).
+        # A gate observation's reason names the run and the step, never a digest over rows (section 3.5).
         "loop_observation": [{"id": f"obs-{step}", "run": RUN, "token": TOKENS[step], "event_time": index + 1,
                               "state": "known", "value": "yes", "reason": f"{RUN} {step}"}
                              for index, step in enumerate(GATES)],
@@ -74,23 +74,11 @@ def scenario():
         "epoch_tool": [{"id": f"tool-{step}", "run": RUN, "step": step, "tool": tool, "version": "0.2.0",
                         "sha256": hexes("e")} for step, tool in TOOLS.items()],
         "epoch_definition": [{"id": "definition", "run": RUN, "definition_sha256": hexes("f"),
-                              "compiler_sha256": hexes("0"), "theory": False}],
-        "epoch_artifact": [
-            {"id": "artifact-bundle", "run": RUN, "file": "bundle", "format": "rezono.schema-bundle/1",
-             "sha256": hexes("1")},
-            {"id": "artifact-rules", "run": RUN, "file": "rules", "format": "rezono.rules/1", "sha256": hexes("2")},
-        ],
-        "epoch_accepted_format": [
-            {"id": "format-bundle", "file": "bundle", "format": "rezono.schema-bundle/1"},
-            {"id": "format-rules", "file": "rules", "format": "rezono.rules/1"},
-            {"id": "format-calc", "file": "calc", "format": "rezono.calc-ir/1"},
-        ],
-        "epoch_relation": [
-            {"id": "rel-host-rows", "run": RUN, "relation": "host", "origin": "rows"},
-            {"id": "rel-host-schema", "run": RUN, "relation": "host", "origin": "schema"},
-            {"id": "rel-reach-rows", "run": RUN, "relation": "reach", "origin": "rows"},
-            {"id": "rel-reach-rules", "run": RUN, "relation": "reach", "origin": "rules"},
-        ],
+                              "compiler_sha256": hexes("0")}],
+        # A stable pack (1.2.0) with a minor change and a new minor version: the surface gate passes.
+        "epoch_surface": [{"id": "surface", "run": RUN, "against": "m-6", "class": "minor", "before_major": 1,
+                           "before_minor": 2, "before_patch": 0, "after_major": 1, "after_minor": 3,
+                           "after_patch": 0}],
         "epoch_check": [
             {"id": "check-engines", "run": RUN, "step": "compare-engines", "check": "rezono:engines",
              "outcome": "green", "violations": 0, "source": "comparison"},
@@ -108,7 +96,7 @@ def scenario():
         ],
         "epoch_role_form": [{"id": f"form-{role}", "run": RUN, "role": f"role-{role}", "snapshots_sha256": hexes("3"),
                              "sources_sha256": hexes("4"), "objects_sha256": hexes("6")} for role in ROLES],
-        # Complete only (section 3.4): never a premise of a role's publish_allowed.
+        # Complete only (section 3.5): never a premise of a role's publish_allowed.
         "epoch_pack_facts": [{"id": "pack-facts", "run": RUN, "pack_sha256": hexes("9")}],
         "epoch_source": [{"id": "source-facts", "run": RUN, "source": "facts", "position": hexes("7", 40)}],
         "epoch_check_detail": [{"id": "detail-proofs", "check": "check-proofs", "report_sha256": hexes("8")}],
@@ -153,8 +141,8 @@ def planned(rows, step):
         "loop/tests/test_shared_run_vocabulary.py--test_an_effect_is_attempted_once_per_plan. Build the pack epoch/ "
         "(name engine-epoch, importing std-loop) with the kinds of section 3.2 and derive "
         "publish_allowed(run, epoch, role, reason): done of every gate step, the EpochTool of each, the "
-        "EpochEnginePin, the EpochDefinition with theory false, the role's EpochRoleForm (the reason) and its green "
-        "rezono:proofs and rezono:access checks as positive premises, and no refusal in the run; and "
+        "EpochEnginePin, the EpochDefinition, the role's EpochRoleForm (the reason) and its green rezono:proofs and "
+        "rezono:access checks as positive premises, and no refusal in the run, recorded or derived; and "
         "effect_permitted for write-forms only when every role of the run is allowed."
     ),
 )
@@ -179,38 +167,22 @@ def test_publish_allowed_cites_every_gate_and_pin():
     assert planned(rows, "write-forms") == set()
 
 
-def theory(data):
-    data["epoch_definition"][0]["theory"] = True
-
-
-def rules_format(data):
-    data["epoch_artifact"][1]["format"] = "rezono.rules/0"
-
-
-def rules_missing(data):
-    data["epoch_artifact"] = [a for a in data["epoch_artifact"] if a["file"] != "rules"]
-
-
-def stray_relation(data):
-    data["epoch_relation"].append({"id": "rel-stray", "run": RUN, "relation": "stray", "origin": "rows"})
-
-
-def calc_without_ir(data):
-    data["epoch_relation"] += [{"id": "rel-total-rows", "run": RUN, "relation": "total", "origin": "rows"},
-                               {"id": "rel-total-calc", "run": RUN, "relation": "total", "origin": "calc"}]
-
-
 def red_run_check(data):
     data["epoch_check"][1].update(outcome="red", violations=2)
 
 
 def unknown_run_check(data):
-    data["epoch_check"].append({"id": "check-evidence", "run": RUN, "step": "check", "check": "rezono:evidence",
-                                "outcome": "unknown", "violations": 0, "source": "checker"})
+    data["epoch_check"].append({"id": "check-engine-own", "run": RUN, "step": "evaluate-duckdb",
+                                "check": "rezono:invariants", "outcome": "unknown", "violations": 0,
+                                "source": "duckdb"})
 
 
 def green_with_violations(data):
-    data["epoch_check"][0]["violations"] = 1
+    data["epoch_check"][1]["violations"] = 1
+
+
+def engines_disagree(data):
+    data["epoch_check"][0].update(outcome="red", violations=3)
 
 
 def red_role_check(data):
@@ -219,23 +191,40 @@ def red_role_check(data):
             check.update(outcome="red", violations=1)
 
 
+def required_conclusion_missing(data):
+    data["epoch_role_check"].append({"id": "check-required-guest", "run": RUN, "step": "check",
+                                     "role": "role-guest", "check": "publication_required", "outcome": "red",
+                                     "violations": 1, "source": "checker"})
+
+
 def missing_required(data):
     data["epoch_role_check"] = [c for c in data["epoch_role_check"] if c["id"] != "check-proofs-auditor"]
 
 
-# Worked by hand from the refusal table of decisions/loop-engine-epoch.md section 3.3: each change and the record
-# the refusal of write-forms must cite.
+def surface_major(data):
+    data["epoch_surface"][0].update({"class": "major", "after_major": 2, "after_minor": 0})
+
+
+def surface_too_small(data):
+    data["epoch_surface"][0].update(after_minor=2, after_patch=1)
+
+
+def surface_unstable(data):
+    data["epoch_surface"][0].update({"class": "major", "before_major": 0, "after_major": 0, "after_minor": 3})
+
+
+# Worked by hand from the fate table of decisions/loop-engine-epoch.md section 3.4: each change to a gate verdict
+# of fate (c) and the record the refusal of write-forms must cite.
 REFUSALS = [
-    (theory, "definition"),
-    (rules_format, "artifact-rules"),
-    (rules_missing, "definition"),
-    (stray_relation, "rel-stray"),
-    (calc_without_ir, "rel-total-calc"),
     (red_run_check, "check-proofs"),
-    (unknown_run_check, "check-evidence"),
-    (green_with_violations, "check-engines"),
+    (unknown_run_check, "check-engine-own"),
+    (green_with_violations, "check-proofs"),
+    (engines_disagree, "check-engines"),
     (red_role_check, "check-access-auditor"),
+    (required_conclusion_missing, "check-required-guest"),
     (missing_required, "required-role-proofs"),
+    (surface_major, "surface"),
+    (surface_too_small, "surface"),
 ]
 
 
@@ -243,17 +232,18 @@ REFUSALS = [
     strict=True,
     raises=MissingEpochPack,
     reason=(
-        "extra: decisions/loop-engine-epoch.md: section 3.3, the refusal table. Waits for "
+        "extra: decisions/loop-engine-epoch.md: section 3.4, the gates of fate (c). Waits for "
         "loop/tests/test_engine_epoch.py--test_publish_allowed_cites_every_gate_and_pin. In epoch/, derive "
-        "derived_refusal(run, write-forms, reason) for each row of the table, with the culprit record as the reason "
-        "and only after the step that produces the evidence is done: a true theory flag, a rules or calc artifact "
-        "whose format no EpochAcceptedFormat names, compile done without a rules artifact, a relation with rows and "
-        "no definition, a calc relation without a calc artifact, a run or role check that is red, unknown or green "
-        "with violations, and a required check without a row once its step is done. A refusal writes nothing: no "
-        "publish_allowed and no effect_planned for write-forms."
+        "derived_refusal(run, write-forms, reason) with the culprit record as the reason, only after the step that "
+        "produces the verdict is done: a run or role check that is red, unknown or green with violations; a required "
+        "check without a row once its step is done; and an EpochSurface of a stable pack (earlier major 1 or more) "
+        "whose class is major (R033) or whose version moves less than its class. A pack at 0.y.z is not refused. A "
+        "refusal writes nothing: no publish_allowed and no effect_planned for write-forms. An input-integrity check "
+        "of fate (d) reaches the run as a recorded LoopRefusal of its step, which leaves the step stuck and "
+        "publishes nothing either."
     ),
 )
-def test_publisher_checks_are_derived_refusals():
+def test_publication_gates_are_derived_refusals():
     epoch = model()
     _, rows, _ = evaluate(epoch, scenario())
     assert not any(row[:2] == (RUN, "write-forms") for row in rows.get("stuck", set()))
@@ -266,10 +256,25 @@ def test_publisher_checks_are_derived_refusals():
         assert any(culprit in ground_ids(program, explainer, "stuck", row) for row in refused), change.__name__
         assert allowed(rows) == set(), change.__name__
         assert planned(rows, "write-forms") == set(), change.__name__
+    # A major change of a pack still at 0.y.z refuses nothing (decisions/language-surface-compatibility.md).
+    data = copy.deepcopy(scenario())
+    surface_unstable(data)
+    _, rows, _ = evaluate(epoch, data)
+    assert not any(row[:2] == (RUN, "write-forms") for row in rows.get("stuck", set()))
+    assert allowed(rows) == {(RUN, "7", role) for role in ROLES}
+    # Fate (d): the check step's adapter recorded the raise of an input-integrity check instead of its completion.
+    data = copy.deepcopy(scenario())
+    data["loop_observation"] = [o for o in data["loop_observation"] if o["id"] != "obs-check"]
+    data["loop_refusal"] = [{"id": "refused-assets", "run": RUN, "step": "check", "reason": "rezono:assets"}]
+    program, rows, explainer = evaluate(epoch, data)
+    refused = [row for row in rows.get("stuck", set()) if row[:2] == (RUN, "check")]
+    assert any("refused-assets" in ground_ids(program, explainer, "stuck", row) for row in refused), refused
+    assert allowed(rows) == set()
+    assert planned(rows, "write-forms") == set()
 
 
 def hidden_world(data):
-    """The same run in a world that differs only in rows no filtered role reads (section 3.4)."""
+    """The same run in a world that differs only in rows no filtered role reads (section 3.5)."""
     data["epoch_pack_facts"][0]["pack_sha256"] = hexes("a")
     data["epoch_source"][0]["position"] = hexes("b", 40)
     data["epoch_check_detail"][0].update(first="row 3 has no witness", report_sha256=hexes("c"))
@@ -280,7 +285,7 @@ def hidden_world(data):
     strict=True,
     raises=MissingEpochPack,
     reason=(
-        "extra: decisions/loop-engine-epoch.md: section 3.4. Waits for "
+        "extra: decisions/loop-engine-epoch.md: section 3.5. Waits for "
         "loop/tests/test_engine_epoch.py--test_publish_allowed_cites_every_gate_and_pin. Two worlds that differ only "
         "in EpochPackFacts, EpochSource and EpochCheckDetail give every role the same publish_allowed proof, byte for "
         "byte, while epoch_allowed(run, epoch, reason) cites the pack facts and every source."
