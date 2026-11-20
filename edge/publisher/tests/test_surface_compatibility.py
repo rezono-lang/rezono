@@ -1,11 +1,12 @@
 """The public-surface compatibility check at publication (docs/rezono/v0.md, section 4c;
 decisions/language-surface-compatibility.md), on the minimal, domain-free fixture pack: the class of each change of
-a pack's public surface, read from its compiled schema bundle, against its newest main publication, and R033 for a
-major change once the earlier publication promised a stable surface (pack version 1.0.0 or later).
+a pack's public surface, read from its compiled schema bundle, against its newest main publication, and, once the
+earlier publication promised a stable surface (pack version 1.0.0 or later), R033 for an unaccepted major change and
+a refusal of a pack version that moves less far than the class.
 
-Every expectation is a row of the table in v0 section 4c: an added slot, an added value of an open enum and a
-widened refinement are minor; a removed, renamed or retyped slot, a changed cardinality and a closed enum are major;
-doc comments, messages and labels are patch."""
+Every class is a row of the table in v0 section 4c: an added slot, an added value of an open enum and a widened
+refinement are minor; a removed, renamed or retyped slot, a changed cardinality and a closed enum are major; doc
+comments, messages and labels are patch."""
 
 import copy
 import importlib
@@ -95,6 +96,11 @@ def with_facts(target: Path, version: str) -> Path:
     return folder
 
 
+def bumped(old: str, new: str) -> list:
+    """The edit that moves the pack version, so a publication at 1.0.0 or later moves as far as its class."""
+    return [(PACK, f'version: "{old}"', f'version: "{new}"')]
+
+
 def epoch_of(folder: Path, number: int):
     return batch.epoch(folder, epoch=number, knowledge_time=f"2026-{number:02d}-01T00:00:00Z",
                        sources=[("facts", "fixture")])
@@ -133,7 +139,7 @@ def refusal(epoch, archive) -> str | None:
     strict=True,
     raises=(MissingSurfaceCheck, AssertionError),
     reason=(
-        "extra: decisions/language-surface-compatibility.md: Write edge/publisher/rezono_publisher/surface.py with "
+        "M3: decisions/language-surface-compatibility.md: Write edge/publisher/rezono_publisher/surface.py with "
         "compare(before, after): two parsed schema bundles in, {\"class\", \"changes\"} out, each change "
         "{\"element\", \"change\", \"class\"} and the list sorted by element, then change, with the elements, change "
         "names and classes of sections 1 and 3 of the decision (docs/rezono/v0.md section 4c). Elements are matched "
@@ -174,7 +180,7 @@ def test_compare_classifies_each_change_as_section_4c_does(tmp_path):
     strict=True,
     raises=(MissingSurfaceCheck, AssertionError),
     reason=(
-        "extra: decisions/language-surface-compatibility.md: Builds on "
+        "M3: decisions/language-surface-compatibility.md: Builds on "
         "test_compare_classifies_each_change_as_section_4c_does. Add compatibility(epoch, store) to "
         "edge/publisher/rezono_publisher/publish.py (section 2): None for a proposal, a variant or a pack without a "
         "main manifest; otherwise {\"against\", \"class\", \"changes\"}, comparing the bundle of the newest main "
@@ -191,14 +197,14 @@ def test_compatibility_names_the_class_against_the_newest_main(tmp_path):
     assert check(first, archive) is None  # nothing is published yet, so nothing is compared
     assert publish.publish(first, archive, ROLES)["id"] == "m-1"
 
-    added = edited(folder, tmp_path / "2", ADD_COLOUR)
+    added = edited(folder, tmp_path / "2", ADD_COLOUR + bumped("1.0.0", "1.1.0"))
     minor = epoch_of(added, 2)
     report = check(minor, archive)
     assert (report["against"], report["class"]) == ("m-1", "minor")
     assert ("alpha.colour", "added", "minor") in triples(report)
     assert publish.publish(minor, archive, ROLES)["id"] == "m-2"
 
-    patch = epoch_of(edited(added, tmp_path / "3", TEXT_ONLY), 3)
+    patch = epoch_of(edited(added, tmp_path / "3", TEXT_ONLY + bumped("1.1.0", "1.1.1")), 3)
     assert check(patch, archive) == {"against": "m-2", "class": "patch", "changes": []}
     assert publish.publish(patch, archive, ROLES)["id"] == "m-3"
     assert publish.newest_main(archive, "minimal")["id"] == "m-3"
@@ -208,7 +214,7 @@ def test_compatibility_names_the_class_against_the_newest_main(tmp_path):
     strict=True,
     raises=AssertionError,
     reason=(
-        "extra: decisions/language-surface-compatibility.md: Builds on "
+        "M3: decisions/language-surface-compatibility.md: Builds on "
         "test_compatibility_names_the_class_against_the_newest_main. In publish.plan, before anything is written, "
         "refuse a main publication whose compatibility class is major with Blocked naming R033 and the first major "
         "change by its element id in the earlier bundle, when the newest main manifest's bundle has a pack.version "
@@ -237,3 +243,29 @@ def test_a_removed_or_renamed_public_slot_is_refused_with_r033(tmp_path):
     assert publish.publish(epoch_of(folder, 1), archive, ROLES)["id"] == "m-1"
     assert refusal(epoch_of(edited(folder, tmp_path / "development-remove", REMOVE_SIZE), 2), archive) is None
     assert publish.newest_main(archive, "minimal")["id"] == "m-2"
+
+
+@pytest.mark.xfail(
+    strict=True,
+    raises=AssertionError,
+    reason=(
+        "M3: decisions/language-surface-compatibility.md: Builds on "
+        "test_a_removed_or_renamed_public_slot_is_refused_with_r033. In publish.plan, before anything is written, "
+        "refuse a main publication that changes the definition of a pack whose newest main manifest's bundle has a "
+        "pack.version of 1.0.0 or later, when the new pack.version moves less far than the compatibility class "
+        "(section 4: a new major version for major, a new minor or major version for minor, any higher version for "
+        "patch), with Blocked naming the class and both versions."
+    ),
+)
+def test_a_pack_version_that_moves_less_than_the_class_is_refused(tmp_path):
+    folder = with_facts(tmp_path / "stable", "1.0.0")
+    assert publish.publish(epoch_of(folder, 1), store.FileStore(tmp_path / "archive"), ROLES)["id"] == "m-1"
+    for name, edits, version in (("minor", ADD_COLOUR, "1.1.0"), ("patch", TEXT_ONLY, "1.0.1")):
+        archive = store.FileStore(shutil.copytree(tmp_path / "archive", tmp_path / f"{name}-archive"))
+        written = archive.list("minimal/")
+        reason = refusal(epoch_of(edited(folder, tmp_path / f"{name}-kept", edits), 2), archive)
+        # Held here, before the same change is published with a moved version into this archive.
+        assert reason is not None and name in reason and "1.0.0" in reason, (name, reason)
+        assert archive.list("minimal/") == written, name
+        moved = edited(folder, tmp_path / f"{name}-moved", edits + bumped("1.0.0", version))
+        assert publish.publish(epoch_of(moved, 2), archive, ROLES)["id"] == "m-2", name
