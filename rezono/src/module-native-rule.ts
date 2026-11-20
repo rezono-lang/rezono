@@ -1,5 +1,5 @@
 import type { Node } from 'ohm-js';
-import { declaration, leafDeclaration, named, typeOf, type ModuleComponent } from './module-support.ts';
+import { block, declaration, named, printSource, typeOf, type Build, type Logical, type ModuleComponent } from './module-support.ts';
 import { refused } from './parse-support.ts';
 import { printExpr } from './print-expression.ts';
 import { readRuleName, spellName, spellQualifiedName } from './rule-names.ts';
@@ -28,9 +28,37 @@ interface RuleFields {
 	options?: RuleOption[];
 	locals?: RuleColumn[];
 	when?: Expr;
+	means?: string;
+	source?: string;
 }
 
 export type NativeRuleDecl = RuleFields & ({ columns: RuleColumn[] } | { args: Expr[] });
+
+function readNativeRule(line: Logical, build: Build): NativeRuleDecl {
+	const decl = build.strip<NativeRuleDecl>(line.read!);
+	for (const child of line.block) {
+		build.leaf(child);
+		const read = child.read!;
+		if (read.line !== 'ruleMeans') {
+			build.refuse(child, '`means`');
+			continue;
+		}
+		if (decl.when === undefined) {
+			build.refuse(child, 'a `when` clause before `means`');
+			continue;
+		}
+		if (decl.means !== undefined) {
+			build.refuse(child, 'one `means` line');
+			continue;
+		}
+		decl.means = read.means as string;
+		if (read.source !== undefined) {
+			if (decl.source !== undefined) build.refuse(child, 'one `@` source');
+			else decl.source = read.source as string;
+		}
+	}
+	return decl;
+}
 
 function readList<T>(node: Node): T[] {
 	return node.asIteration().children.map(child => child.decl() as T);
@@ -61,12 +89,15 @@ function printOption(option: RuleOption): string {
 
 function printRule(rule: NativeRuleDecl): string[] {
 	const head = 'columns' in rule ? rule.columns.map(printColumn) : rule.args.map(printExpr);
-	return [[
+	const line = [
 		`rule ${spellQualifiedName(rule.rule)}(${head.join(', ')})`,
 		...(rule.options ?? []).map(printOption),
 		...(rule.locals ? ['with ' + rule.locals.map(printColumn).join(', ')] : []),
 		...(rule.when ? ['when ' + printExpr(rule.when)] : []),
-	].join(' ')];
+	].join(' ');
+	return rule.means !== undefined
+		? block(line, [`means ${JSON.stringify(rule.means)}${printSource(rule.source)}`])
+		: [`${line}${printSource(rule.source)}`];
 }
 
 export const nativeRule = {
@@ -80,7 +111,8 @@ export const nativeRule = {
   RuleColumn = rName ":" RuleType
   RuleType = (rName ".")? Type
   RuleLocals = kw<"with"> NonemptyListOf<RuleColumn, ",">
-  RuleGuard = when Expr
+  RuleGuard = when Expr Src?
+  RuleMeansLine = kw<"means"> MetaString Src?
   RuleOption = kw<"extend">                                                 -- extend
              | kw<"invariant"> kw<"intermediate"> kw<"within"> RuleRef      -- invariant_intermediate
              | kw<"invariant">                                              -- invariant
@@ -107,13 +139,14 @@ export const nativeRule = {
 					seen.add(kind);
 				});
 			}
+			const parsedGuard = guard.numChildren ? guard.child(0).decl() as { when: Expr; source?: string } : undefined;
 			return named(name, {
 				line: 'rule',
 				rule: name.decl(),
 				...contents,
 				...(parsedOptions.length ? { options: parsedOptions } : {}),
 				...(locals.numChildren ? { locals: locals.child(0).decl() } : {}),
-				...(guard.numChildren ? { when: guard.child(0).decl() } : {}),
+				...parsedGuard,
 			});
 		},
 		RuleRef(first, _dot, second) {
@@ -128,7 +161,21 @@ export const nativeRule = {
 			return [...pack.children.map(readRuleName), typeOf(type)].join('.');
 		},
 		RuleLocals: (_with, columns) => readList<RuleColumn>(columns),
-		RuleGuard: (_when, guard) => guard.tree(),
+		RuleGuard(_when, guard, src) {
+			return {
+				when: guard.tree() as Expr,
+				...(src.numChildren ? { source: src.child(0).decl() as string } : {}),
+			};
+		},
+		RuleMeansLine(_means, sentence, src) {
+			const means = sentence.decl();
+			if (typeof means !== 'string') refused(sentence, 'R000', ['a JSON string']);
+			return {
+				line: 'ruleMeans',
+				means,
+				...(src.numChildren ? { source: src.child(0).decl() as string } : {}),
+			};
+		},
 		RuleOption_extend: name => named(name, { extend: true }),
 		RuleOption_invariant_intermediate(invariant, _intermediate, _within, relation) {
 			const within = named(relation, { relation: relation.decl() as string });
@@ -147,6 +194,7 @@ export const nativeRule = {
 		},
 	},
 	declarations: {
-		rule: declaration<NativeRuleDecl>('rule', leafDeclaration<NativeRuleDecl>, printRule),
+		rule: declaration<NativeRuleDecl>('rule', readNativeRule, printRule),
 	},
+	block: { parent: 'rule', first: 'RuleMeansLine', rest: 'RuleMeansLine', invalidFirst: () => undefined },
 } satisfies ModuleComponent;

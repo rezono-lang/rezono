@@ -18,15 +18,6 @@ class MissingRuleSentence(AssertionError):
     """The reader did not read, print or refuse a rule's sentence and source as the decision gives them."""
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=MissingRuleSentence,
-    reason="extra: decisions/language-readable-rules.md: In rezono/src/module-native-rule.ts, read a deeper line "
-           "`means \"TEXT\"` with an optional `@ source` after a rule clause, and `@ source` at the end of a "
-           "clause's last line, into the members means and source of the rule declaration; print them back; "
-           "refuse a means without a text, two means lines and two sources with R000. Admit the members in "
-           "rezono.module/3 in contracts/rezono-module.yaml. Read section 2, Reading.",
-)
 def test_rule_sentence():
     plain, both, source_only, sentence_only, *refused = read_modules(
         HEADER + RULE + "\n",
