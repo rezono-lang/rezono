@@ -49,7 +49,10 @@ def cited(entry: dict) -> bool:
            "an @ citation that names the decision file, vendor publication or observation it comes from (kind git, "
            "document, tool, query or person; never pack), an arrow to the std-decision Decision that sets it, or a "
            "Decision record with decider and decided_on. Today 20 of the 40 fact files, among them core.yaml, have "
-           "only their file and line. Read sections 1, 2 and 6.",
+           "only their file and line. Read sections 1, 2 and 6. Waits for the planner: "
+           "acceptance/test_keycloak_release.py (line 118) and acceptance/test_kubernetes_support.py (line 133) "
+           "currently assert kind == 'pack' on facts/keycloak_release.yaml and series_support_reference in "
+           "facts/kubernetes_support.yaml.",
 )
 def test_every_platform_fact_row_has_an_origin():
     model = pack.read(PLATFORM)
