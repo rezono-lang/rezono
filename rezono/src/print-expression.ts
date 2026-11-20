@@ -65,6 +65,7 @@ function bare(e: Expr, last: boolean): string {
 		return `${base(of)}.${name}(${arg ? `${binder ? `${binder}: ` : ''}${whole(arg)}` : ''})`;
 	}
 	if ('call' in e) return `${spellQualifiedName(e.call[0], true)}(${e.call[1].map(whole).join(', ')})`;
+	if ('as' in e) return `${whole(e.as[0])} as ${e.as[1]}`;
 	if ('timesel' in e) {
 		const [base, sel] = e.timesel;
 		return [expr(base, DOTTED, false), ...(sel.at ? [`at ${atom(sel.at)}`] : []), ...(sel.as_known ? [`as known ${atom(sel.as_known)}`] : [])].join(' ');
@@ -152,5 +153,6 @@ export function grouping(e: Expr): string {
 	if ('arith' in e) return `${g(e.arith[1])} ${e.arith[0]} ${g(e.arith[2])}`;
 	if ('neg' in e) return `-${g(e.neg)}`;
 	if ('when' in e) return `when ${g(e.when[0])} then ${g(e.when[1])} else ${g(e.when[2])}`;
+	if ('as' in e) return `${g(e.as[0])} as ${e.as[1]}`;
 	return whole(e);
 }

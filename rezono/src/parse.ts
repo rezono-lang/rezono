@@ -243,8 +243,14 @@ semantics.addOperation<unknown>('tree', {
 		}
 	},
 	Atom_paren: (_open, e, _close) => e.tree(),
-	Call(name, _open, args, _close) {
+	Call_plain(name, _open, args, _close) {
 		return placed(this, { call: [name.sourceString, all(args)] } as Expr);
+	},
+	RoundCall(fn, _end, _open, first, _commas, rest, _close) {
+		return placed(this, { call: [fn.sourceString, [first.tree() as Expr, ...rest.children.map((c) => c.tree() as Expr)]] } as Expr);
+	},
+	RoundArg_as(e, _as, target) {
+		return placed(this, { as: [e.tree() as Expr, target.sourceString] } as Expr);
 	}
 });
 
@@ -259,7 +265,7 @@ nativeRuleSemantics.extendOperation<unknown>('tree', {
 	wildcard(_mark) {
 		return placed(this, { wildcard: true });
 	},
-	Call(name, _open, args, _close) {
+	Call_native(name, _open, args, _close) {
 		return placed(this, { call: [name.tree(), all(args)] } as Expr);
 	},
 	NativeCallName_schema(kind, _dot, member) {

@@ -32,6 +32,7 @@ export type Expr =
 	| { neg: Expr }
 	| { when: [Expr, Expr, Expr] }
 	| { call: [string, Expr[]] }
+	| { as: [Expr, string] }
 	| { timesel: [Expr, TimeSel] };
 
 /** A value along the validity axis (`at`) and the knowledge axis (`as_known`); reserved (§1). */

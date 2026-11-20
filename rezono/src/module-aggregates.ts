@@ -28,6 +28,7 @@ function stripIt(e: Expr): Expr {
 	if ('neg' in e) return { neg: stripIt(e.neg) };
 	if ('when' in e) return { when: [stripIt(e.when[0]), stripIt(e.when[1]), stripIt(e.when[2])] };
 	if ('call' in e) return { call: [e.call[0], e.call[1].map(stripIt)] };
+	if ('as' in e) return { as: [stripIt(e.as[0]), e.as[1]] };
 	if ('timesel' in e) return { timesel: [stripIt(e.timesel[0]), e.timesel[1]] };
 	return e;
 }
