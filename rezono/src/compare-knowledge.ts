@@ -133,6 +133,7 @@ interface ModuleModel {
 	appliesAt: Map<string, string>;
 	baseKinds: Map<string, Map<string, Map<string, Cell>>>;
 	versionedFacts: Map<string, Map<string, Map<string, VersionedFactEntry[]>>>;
+	tableWhen: Map<object, Expr[][]>;
 	typed: Map<object, Typed>;
 	heads: Map<object, Head>;
 }
@@ -482,11 +483,48 @@ function formatShownValue(v: V, ty: Ty, schema: Schema): unknown {
 	return whole(value);
 }
 
-function conditionToExpr(input: Expr, test: TableTest): Expr {
-	if ('lit' in test) return { cmp: ['=', input, test] };
+function sameV(a: V, b: V): boolean {
+	if (a.s !== b.s) return false;
+	if (a.s !== 'known') return a.reason === (b as Exclude<V, { s: 'known' }>).reason;
+	const av = a.v;
+	const bv = (b as { s: 'known'; v: typeof av }).v;
+	if (typeof av === 'object' && av !== null && 'n' in av && typeof bv === 'object' && bv !== null && 'n' in bv) {
+		return av.n * bv.d === bv.n * av.d;
+	}
+	if (typeof av === 'object' && av !== null && 'id' in av && typeof bv === 'object' && bv !== null && 'id' in bv) {
+		return av.id === bv.id;
+	}
+	return av === bv;
+}
+
+function conditionToExpr(input: Expr, inputTy: Typed, test: TableTest, t: ReturnType<typeof typing>): Expr {
+	if ('lit' in test) {
+		const b = t.ex(test);
+		t.meet(inputTy, input, b, test);
+		const cmp: Expr = { cmp: ['=', input, test] };
+		t.typed.set(cmp, t.value({ t: 'bool' }));
+		return cmp;
+	}
 	const { from, op, to } = test.between;
-	if (from && to) return { in: [input, { range: [from, op, to] }] };
-	return from ? { cmp: ['>=', input, from] } : { cmp: [op === '..' ? '<=' : '<', input, to!] };
+	if (from && to) {
+		t.meet(inputTy, input, t.ex(from), from);
+		t.meet(inputTy, input, t.ex(to), to);
+		const range: Expr = { range: [from, op, to] };
+		t.typed.set(range, t.value(inputTy.ty, [], true));
+		const inExpr: Expr = { in: [input, range] };
+		t.typed.set(inExpr, t.value({ t: 'bool' }));
+		return inExpr;
+	}
+	if (from) {
+		t.meet(inputTy, input, t.ex(from), from);
+		const cmp: Expr = { cmp: ['>=', input, from] };
+		t.typed.set(cmp, t.value({ t: 'bool' }));
+		return cmp;
+	}
+	t.meet(inputTy, input, t.ex(to!), to!);
+	const cmp: Expr = { cmp: [op === '..' ? '<=' : '<', input, to!] };
+	t.typed.set(cmp, t.value({ t: 'bool' }));
+	return cmp;
 }
 
 function typeCheckModuleAndAsk(module: Module, questionText: string): {
@@ -535,6 +573,8 @@ function typeCheckModuleAndAsk(module: Module, questionText: string): {
 		checkVersions(p.versions);
 	}
 
+	const tableWhen = new Map<object, Expr[][]>();
+
 	for (const [kindName, dMap] of derived) {
 		t.element(kindName, () => {
 			for (const d of dMap.values()) {
@@ -548,20 +588,28 @@ function typeCheckModuleAndAsk(module: Module, questionText: string): {
 				checkDefinitions(d.definitions);
 				checkVersions(d.versions);
 				if (d.table) {
-					for (const input of d.table.inputs) checkExpr(input);
+					const inputTypes = d.table.inputs.map((input) => t.settled(input));
+					const slotDef = schema.kinds[kindName]?.slots[d.derived];
+					const outTy = slotDef ? t.value(slotType(schema, slotDef)) : undefined;
+					const rowsWhen: Expr[][] = [];
 					for (const row of d.table.rows) {
-						for (const cell of row.tests) {
-							if (cell === '-') continue;
-							for (const test of cell) {
-								if ('lit' in test) checkExpr(test);
-								else {
-									checkExpr(test.between.from);
-									checkExpr(test.between.to);
-								}
+						const whenExprs: Expr[] = [];
+						row.tests.forEach((cell, j) => {
+							if (cell === '-') return;
+							const conds = cell.map((test) => conditionToExpr(d.table!.inputs[j], inputTypes[j], test, t));
+							if (conds.length === 1) {
+								whenExprs.push(conds[0]);
+							} else if (conds.length > 1) {
+								const orExpr: Expr = { or: conds };
+								t.typed.set(orExpr, t.value({ t: 'bool' }));
+								whenExprs.push(orExpr);
 							}
-						}
-						checkExpr(row.value as TableValue);
+						});
+						const valTy = t.ex(row.value as TableValue);
+						if (outTy) t.meet(valTy, row.value, outTy, row.value);
+						rowsWhen.push(whenExprs);
 					}
+					tableWhen.set(d.table, rowsWhen);
 				}
 			}
 		});
@@ -659,6 +707,7 @@ function typeCheckModuleAndAsk(module: Module, questionText: string): {
 			appliesAt,
 			baseKinds,
 			versionedFacts,
+			tableWhen,
 			typed: t.typed,
 			heads: t.heads,
 		},
@@ -760,7 +809,6 @@ function evaluateSnapshot(
 			def,
 			cond: r.within({ s: 'known', v: { id } }, ty, () => r.ex(def.when)),
 		}));
-		const byName = new Map(results.map((x) => [x.def.name, x]));
 		const overrides = new Map<string, Set<string>>();
 		for (const def of defs) {
 			overrides.set(def.name, new Set((def.overrides ?? []).map((o) => o.definition)));
@@ -933,14 +981,10 @@ function evaluateSnapshot(
 			const r = makeReader(subjectValidAt, trace, memo);
 			const ty: Ty = { t: 'ref', kind: kindName };
 			const table = decl.table;
+			const rowsWhen = model.tableWhen.get(table) ?? [];
 			const outputs = table.rows.map((row) => r.ex(row.value as TableValue) as V & { s: 'known' });
-			const decided = table.rows.map((row, idx) => {
-				const whenExprs: Expr[] = [];
-				row.tests.forEach((cell, j) => {
-					if (cell === '-') return;
-					const conds = cell.map((test) => conditionToExpr(table.inputs[j], test));
-					if (conds.length) whenExprs.push(conds.length === 1 ? conds[0] : { or: conds });
-				});
+			const decided = table.rows.map((_row, idx) => {
+				const whenExprs = rowsWhen[idx] ?? [];
 				const condVal = r.within({ s: 'known', v: { id } }, ty, () => {
 					const vals = whenExprs.map((w) => r.ex(w));
 					if (vals.some((x) => x.s === 'known' && x.v === false)) return { s: 'known', v: false } as V;
@@ -950,15 +994,39 @@ function evaluateSnapshot(
 			});
 			const applying = decided.filter((d) => d.v.s === 'known' && d.v.v === true);
 			const undecided = decided.filter((d) => d.v.s === 'unknown' || d.v.s === 'invalid');
-			if (table.policy === 'collect') {
-				v = { s: 'known', v: applying.map((d) => outputs[d.idx]) };
+			const sameOut = (i: number, j: number): boolean => sameV(outputs[i], outputs[j]);
+			if (table.table === 'collect') {
+				const open = undecided.filter((d) => !applying.some((a) => sameOut(a.idx, d.idx)));
+				const from = [...applying, ...open].sort((a, b) => a.idx - b.idx);
+				const members = from
+					.filter((d, n) => !from.slice(0, n).some((o) => sameOut(o.idx, d.idx)))
+					.map((d) =>
+						applying.includes(d)
+							? outputs[d.idx]
+							: { ...outputs[d.idx], maybe: worstOf(open.filter((o) => sameOut(o.idx, d.idx)).map((o) => o.v))! }
+					);
+				v = { s: 'known', v: members };
+			} else if (table.table === 'unique') {
+				if (applying.length > 1) {
+					v = { s: 'invalid', reason: 'exception_conflict', cause };
+				} else if (applying.length === 1) {
+					v = undecided.length ? worstOf(undecided.map((d) => d.v))! : outputs[applying[0].idx];
+				} else {
+					v = worstOf(undecided.map((d) => d.v)) ?? { s: 'unknown', reason: 'no_row_applies', cause };
+				}
 			} else if (!applying.length) {
 				v = worstOf(undecided.map((d) => d.v)) ?? { s: 'unknown', reason: 'no_row_applies', cause };
-			} else if (table.policy === 'unique') {
-				v = applying.length > 1 ? { s: 'invalid', reason: 'exception_conflict', cause } : outputs[applying[0].idx];
+			} else if (table.table === 'priority') {
+				const slotTy = slotType(schema, schema.kinds[kindName].slots[propName]);
+				const ev = slotTy.t === 'val' ? schema.enums?.[schema.types?.[slotTy.name]?.enum ?? slotTy.name] : undefined;
+				const orderList = ev === undefined ? undefined : Array.isArray(ev) ? ev : ev.values;
+				const rank = (idx: number) => (orderList ? orderList.indexOf(outputs[idx].v as string) : idx);
+				const picked = applying.reduce((best, d) => (rank(d.idx) < rank(best.idx) ? d : best));
+				const wins = undecided.filter((d) => rank(d.idx) < rank(picked.idx));
+				v = wins.length ? worstOf(wins.map((d) => d.v))! : outputs[picked.idx];
 			} else {
 				const picked = applying[0];
-				const wins = undecided.filter((d) => d.idx < picked.idx);
+				const wins = undecided.filter((d) => d.idx < picked.idx && !sameOut(d.idx, picked.idx));
 				v = wins.length ? worstOf(wins.map((d) => d.v))! : outputs[picked.idx];
 			}
 		} else if (decl.unless?.length) {
@@ -1142,13 +1210,15 @@ function diffCauses(
 			const a = afterTrace.versions.get(key);
 			const choice = a ?? b;
 			if (!choice) continue;
-			if (b && a && b.version === a.version && b.state === a.state && b.known === a.known) continue;
+			if (b && a && b.version === a.version && b.state === a.state && b.reason === a.reason && b.known === a.known) continue;
 			causes.push({
 				cause: 'version',
 				target: choice.target,
 				name: choice.name,
 				...(choice.kind !== undefined ? { kind: choice.kind } : {}),
 				...(choice.property !== undefined ? { property: choice.property } : {}),
+				...(choice.key !== undefined ? { key: choice.key } : {}),
+				...(choice.slot !== undefined ? { slot: choice.slot } : {}),
 				...(b?.version !== undefined ? { before_version: b.version } : {}),
 				...(a?.version !== undefined ? { after_version: a.version } : {}),
 				...(a?.replaces !== undefined ? { replaces: a.replaces } : {}),
@@ -1195,11 +1265,10 @@ export function compareAsKnown(source: string | Module, options: CompareAsKnownO
 	}
 
 	const { model, askTree, askKind, shown, questionValidAt } = typeCheckModuleAndAsk(module, options.question);
-	const beforeValidAt = options.validAt ?? questionValidAt ?? options.beforeKnown;
-	const afterValidAt = options.validAt ?? questionValidAt ?? options.afterKnown;
+	const validAt = options.validAt ?? questionValidAt ?? options.afterKnown;
 
-	const beforeMap = evaluateSnapshot(model, askTree, askKind, shown, options.beforeKnown, beforeValidAt);
-	const afterMap = evaluateSnapshot(model, askTree, askKind, shown, options.afterKnown, afterValidAt);
+	const beforeMap = evaluateSnapshot(model, askTree, askKind, shown, options.beforeKnown, validAt);
+	const afterMap = evaluateSnapshot(model, askTree, askKind, shown, options.afterKnown, validAt);
 
 	const keys = [...new Set([...beforeMap.keys(), ...afterMap.keys()])].sort((a, b) =>
 		byteOrder(canonicalJson([a]), canonicalJson([b]))
