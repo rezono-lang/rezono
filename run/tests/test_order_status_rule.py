@@ -35,19 +35,6 @@ def pack_reads(monkeypatch):
     return seen
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason=(
-        "M4: decisions/code-does-not-decide.md, row run/ovh_order_status.py, and section 3. Put the order status "
-        "vocabulary of the provider into run/packs/provider-terms as facts with their origin, and derive "
-        "order_outcome(order, outcome) there, unresolved for any status without a meaning. run/ovh_order_status.py "
-        "keeps outcome(body) as the reader: a body that is not one JSON string is unresolved without a lookup, "
-        "any other status is read from order_outcome through rezono_compiler.batch.read. No status word is a "
-        "literal in the module. Keep run/tests/test_ovh_order_status.py green. Today the pack does not exist "
-        "(AssertionError)."
-    ),
-)
 def test_order_status_meaning_comes_from_provider_terms(monkeypatch):
     assert (RUN / "packs" / "provider-terms" / "pack.yaml").is_file(), "run/packs/provider-terms is missing"
     assert not literals("ovh_order_status.py") & set(MEANINGS), "the vendor's status words are code, not pack facts"
