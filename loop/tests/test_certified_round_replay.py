@@ -18,7 +18,15 @@ from test_replay_fixed_point import boundary, execute, setup_recording
         "as loop_certified_step and loop_certified_member (decisions/loop-certificate-admission.md). Preserve "
         "the selected frontier, durable attempt identity, stale-cut refusal and latest observation precedence. "
         "Waits for test_supplied_verdicts_authorize_nothing, test_round_claim_is_durable_and_exclusive and "
-        "test_round_submit_follows_the_certified_claim."
+        "test_round_submit_follows_the_certified_claim. "
+        "Needs a planner update: (1) transition_certificates holds 5-field inline stubs without snapshots, "
+        "deltas, invariants or a retained trusted context (decisions/admission-transport.md replaced "
+        "loop_certified_step/loop_certified_member with Evidence and verified_round/verified_round_member); "
+        "(2) boundary('confirmed') and boundary('corrected') embed observation(..., 'delivery', ...), which "
+        "loop/typed_recording.py:read_sweep rejects because envelope sweep != dated sweep id; "
+        "(3) changed-readback with value 'no' against expectation 'yes' derives drift and round_outcome "
+        "'failure' in packs/std-loop/rules/round_outcome.dl, contradicting the asserted outcome 'pending'; "
+        "(4) initial has no loop_sweep_receipt for cut 'opening', so step_safety_current_cut cannot match it."
     ),
 )
 def test_certified_round_replay(tmp_path, capsys):
