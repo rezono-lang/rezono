@@ -44,15 +44,6 @@ def test_std_part_legacy_evaluates_scenarios(tmp_path):
     assert ("a",) not in evaluated["part_cycle"]
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=MissingCandidatePack,
-    reason="M3: decisions/language-standard-pack-candidates.md: Author packs/std-part/candidate/part.rezono "
-           "and generate packs/std-part/candidate/part.json with node rezono/src/write-form.ts so that the "
-           "isolated candidate matches packs/std-part on semantic bundle, compiled SQL/IR and batch evaluation. "
-           "Keep schema/part.yaml and rules/part.dl untouched as the oracle. Read "
-           "decisions/language-standard-pack-candidates.md and decisions/language-first-packs.md.",
-)
 def test_whole_std_part_candidate_has_the_same_meaning(tmp_path):
     actual = check_pack(tmp_path, "candidate")
     expected = check_pack(tmp_path, "legacy")
