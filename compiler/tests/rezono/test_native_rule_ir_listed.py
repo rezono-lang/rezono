@@ -30,6 +30,9 @@ beta:
 def example(tmp_path, source):
     directory = copytree(FIXTURE, tmp_path / "minimal")
     write(directory, "facts/base.yaml", FACTS)
+    write(directory, "facts/base.sources.yaml",
+          'default: {kind: git, name: rezono-lang/rezono, revision: "0000000", '
+          'position: compiler/tests/rezono/test_native_rule_ir_listed.py#FACTS}\n')
     with (directory / "labels/nl.yaml").open("a", encoding="utf-8") as labels:
         labels.write("\nlisted: listed\n")
     with (directory / "messages/nl.mf2").open("a", encoding="utf-8") as messages:
