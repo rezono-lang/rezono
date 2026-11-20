@@ -204,6 +204,9 @@ def withheld(rules_doc: dict | None, bundle: dict | None, delta: dict | None) ->
     if rules_doc is not None and not isinstance(rules_doc, dict):
         return True
     doc = {} if rules_doc is None else rules_doc
+    fmt = doc.get("format")
+    if fmt is not None and fmt != "rezono.rules/1":
+        return True
     if "seals" in doc and not isinstance(doc["seals"], list):
         return True
     try:
@@ -222,6 +225,31 @@ def withheld(rules_doc: dict | None, bundle: dict | None, delta: dict | None) ->
         if par is not None and (not isinstance(par, str) or not par):
             return True
         parent[entry["id"]] = par
+    chains: dict[str, list[str]] = {}
+    for kid in parent:
+        chain, cur = [], kid
+        while cur is not None:
+            if cur not in parent or cur in chain:
+                return True
+            chain.append(cur)
+            cur = parent[cur]
+        chains[kid] = chain
+    inlined_arrows: dict[str, list[str]] = {}
+    if "arrows" in bundle:
+        if not isinstance(bundle["arrows"], list):
+            return True
+        for arrow in bundle["arrows"]:
+            if not isinstance(arrow, dict):
+                return True
+            src, dst = arrow.get("kind"), arrow.get("target")
+            if (not isinstance(src, str) or not src or src not in parent
+                    or not isinstance(dst, str) or not dst or dst not in parent):
+                return True
+            if "inlined" in arrow:
+                if not isinstance(arrow["inlined"], bool):
+                    return True
+                if arrow["inlined"]:
+                    inlined_arrows.setdefault(src, []).append(dst)
     rules = doc.get("rules", [])
     for r in rules:
         if not isinstance(r, dict) or not isinstance(r.get("head"), dict):
@@ -233,9 +261,10 @@ def withheld(rules_doc: dict | None, bundle: dict | None, delta: dict | None) ->
         if ("body" in r and not isinstance(r["body"], list)) or ("aggregates" in r and not isinstance(r["aggregates"], list)):
             return True
         for x in r.get("body", []):
+            pol = x.get("polarity") if isinstance(x, dict) else None
             if (not isinstance(x, dict) or not isinstance(x.get("relation"), str) or not x["relation"]
                     or not isinstance(x.get("terms"), list) or not all(isinstance(t, str) for t in x["terms"])
-                    or (x.get("polarity") is not None and not isinstance(x.get("polarity"), str))):
+                    or (pol is not None and (not isinstance(pol, str) or pol not in ("positive", "negative")))):
                 return True
         for x in r.get("aggregates", []):
             if not isinstance(x, dict) or not isinstance(x.get("relation"), str) or not x["relation"]:
@@ -261,7 +290,7 @@ def withheld(rules_doc: dict | None, bundle: dict | None, delta: dict | None) ->
                         seen.add(rel)
                         todo.append(rel)
     over = [r for r in rules if r["head"]["relation"] in (closure & heads) | roots]
-    if any(r.get("role") == "calc" and r.get("name") in closure for r in relations):
+    if any(r.get("role") == "calc" and r.get("name") in (closure | roots) for r in relations):
         return True
     sealed = set()  # every table a seal relation in the closure is computed from
     for s in seals:
@@ -283,19 +312,24 @@ def withheld(rules_doc: dict | None, bundle: dict | None, delta: dict | None) ->
                    for r, x in body_uses)
 
     for ch in delta["changes"]:
-        if (not isinstance(ch, dict) or not isinstance(ch.get("kind"), str) or not ch["kind"]
-                or ch.get("op") not in OPS):
+        if (not isinstance(ch, dict) or not isinstance(ch.get("op"), str) or ch["op"] not in OPS
+                or not isinstance(ch.get("kind"), str) or not ch["kind"] or ch["kind"] not in chains):
             return True
-        op, chain, k = ch["op"], [], ch["kind"]
-        while k is not None:
-            if k in chain:
-                return True
-            chain.append(k)
-            k = parent.get(k)
-        if any(t == k or t.startswith(f"{k}__") for t in sealed for k in chain):
+        op, chain = ch["op"], chains[ch["kind"]]
+        inlined_reached, expanded, work = set(), set(chain), list(chain)
+        while work:
+            owner = work.pop()
+            for target in inlined_arrows.get(owner, ()):
+                for anc in chains[target]:
+                    inlined_reached.add(anc)
+                    if anc not in expanded:
+                        expanded.add(anc)
+                        work.append(anc)
+        touched = set(chain) | inlined_reached
+        if any(t == k or t.startswith(f"{k}__") for t in sealed for k in touched):
             return True
         for rel in closure:
-            if any(rel.startswith(f"{k}__") for k in chain):
+            if rel in inlined_reached or any(rel.startswith(f"{k}__") for k in touched):
                 return True
             # Only an insert or a delete writes a kind's own table: a set or an unset needs the record as it
             # is and never changes its identifier or kind (the canonical writer), so membership stays.

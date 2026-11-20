@@ -1,10 +1,11 @@
 """Independent checker decision on whether a delta may change read access.
 
 A proposal, local supposition or sweep variant delta may change what a filtered
-role reads if any modified kind, ancestor kind, slot table or seal input lies in
-the dependency closure of `may_read` or `may_read_full` (decisions/central-read-access.md,
-section 3). Decided solely from the rule IR, schema bundle and delta, never from
-data (avoiding existence leaks), and sharing no code with `rezono_publisher.difference`.
+role reads if any modified kind, ancestor kind, transitively inlined target kind,
+slot table or seal input lies in the dependency closure of `may_read` or
+`may_read_full` (decisions/central-read-access.md, section 3). Decided solely from
+the rule IR, schema bundle and delta, never from data (avoiding existence leaks),
+and sharing no code with `rezono_publisher.difference`.
 """
 
 from __future__ import annotations
@@ -16,12 +17,14 @@ from .rules import load_seals
 ACCESS = "may_read"
 READ_FULL = "may_read_full"
 ACCESS_ROOTS = (ACCESS, READ_FULL)
+RULES_FORMAT = "rezono.rules/1"
 DELTA_OPS = frozenset({"insert", "delete", "set", "unset"})
 MEMBERSHIP_OPS = frozenset({"insert", "delete"})
+VALID_POLARITIES = frozenset({"positive", "negative"})
 
 
-def _parse_bundle_parents(bundle: object) -> dict[str, str | None] | None:
-    """Return {kind_id: parent_id | None} from a schema bundle, or None if malformed."""
+def _parse_bundle(bundle: object) -> tuple[dict[str, tuple[str, ...]], dict[str, set[str]]] | None:
+    """Validate bundle kinds/parents/arrows and return (ancestor_chains, inlined_targets), or None."""
     if not isinstance(bundle, dict):
         return None
     raw_kinds = bundle.get("kinds")
@@ -38,11 +41,44 @@ def _parse_bundle_parents(bundle: object) -> dict[str, str | None] | None:
         if parent is not None and (not isinstance(parent, str) or not parent):
             return None
         parents[kid] = parent
-    return parents
+
+    chains: dict[str, tuple[str, ...]] = {}
+    for kid in parents:
+        chain: list[str] = []
+        seen: set[str] = set()
+        current: str | None = kid
+        while current is not None:
+            if current not in parents or current in seen:
+                return None
+            seen.add(current)
+            chain.append(current)
+            current = parents[current]
+        chains[kid] = tuple(chain)
+
+    inlined_targets: dict[str, set[str]] = defaultdict(set)
+    if "arrows" in bundle:
+        raw_arrows = bundle["arrows"]
+        if not isinstance(raw_arrows, list):
+            return None
+        for arrow in raw_arrows:
+            if not isinstance(arrow, dict):
+                return None
+            src = arrow.get("kind")
+            dst = arrow.get("target")
+            if (not isinstance(src, str) or not src or src not in parents
+                    or not isinstance(dst, str) or not dst or dst not in parents):
+                return None
+            if "inlined" in arrow:
+                if not isinstance(arrow["inlined"], bool):
+                    return None
+                if arrow["inlined"]:
+                    inlined_targets[src].add(dst)
+
+    return chains, dict(inlined_targets)
 
 
-def _parse_delta_changes(delta: object) -> list[tuple[str, str]] | None:
-    """Return [(op, kind), ...] from a delta, or None if malformed."""
+def _parse_delta_changes(delta: object, known_kinds: set[str]) -> list[tuple[str, str]] | None:
+    """Return [(op, kind), ...] from a delta, or None if malformed or naming an unknown kind."""
     if not isinstance(delta, dict):
         return None
     raw_changes = delta.get("changes")
@@ -56,7 +92,7 @@ def _parse_delta_changes(delta: object) -> list[tuple[str, str]] | None:
         kind = change.get("kind")
         if not isinstance(op, str) or op not in DELTA_OPS:
             return None
-        if not isinstance(kind, str) or not kind:
+        if not isinstance(kind, str) or not kind or kind not in known_kinds:
             return None
         parsed.append((op, kind))
     return parsed
@@ -67,6 +103,9 @@ def _parse_rules(rules_doc: object) -> tuple[dict[str, list[dict]], set[str], li
     if rules_doc is None:
         return {}, set(), []
     if not isinstance(rules_doc, dict):
+        return None
+    fmt = rules_doc.get("format")
+    if fmt is not None and fmt != RULES_FORMAT:
         return None
     if "seals" in rules_doc and not isinstance(rules_doc["seals"], list):
         return None
@@ -113,7 +152,7 @@ def _parse_rules(rules_doc: object) -> tuple[dict[str, list[dict]], set[str], li
             polarity = atom.get("polarity")
             if (not isinstance(rel, str) or not rel
                     or not isinstance(terms, list) or not all(isinstance(t, str) for t in terms)
-                    or (polarity is not None and not isinstance(polarity, str))):
+                    or (polarity is not None and (not isinstance(polarity, str) or polarity not in VALID_POLARITIES))):
                 return None
         for agg in rule.get("aggregates", ()):
             if not isinstance(agg, dict):
@@ -183,44 +222,50 @@ def _only_grants_inserted_element(kind: str, active_rules: list[dict], closure: 
     return found_use
 
 
-def _ancestor_chain(kind: str, parents: dict[str, str | None]) -> list[str] | None:
-    """Return [kind, parent, ...] up the bundle inheritance chain, or None on a cycle."""
-    chain: list[str] = []
-    seen: set[str] = set()
-    current: str | None = kind
-    while current is not None:
-        if current in seen:
-            return None
-        seen.add(current)
-        chain.append(current)
-        current = parents.get(current)
-    return chain
+def _inlined_closure(chain: tuple[str, ...], chains: dict[str, tuple[str, ...]],
+                     inlined_targets: dict[str, set[str]]) -> set[str]:
+    """All target kinds (and their ancestors) transitively reachable via `inlined: true` arrows."""
+    reached: set[str] = set()
+    expanded: set[str] = set(chain)
+    frontier: list[str] = list(chain)
+    while frontier:
+        owner = frontier.pop()
+        for target in inlined_targets.get(owner, ()):
+            for anc in chains[target]:
+                reached.add(anc)
+                if anc not in expanded:
+                    expanded.add(anc)
+                    frontier.append(anc)
+    return reached
 
 
 def may_change_access(rules_doc: dict | None, bundle: dict | None, delta: dict | None) -> bool:
     """Return True if `delta` may change `may_read` or `may_read_full` for any role (fail closed)."""
-    parents = _parse_bundle_parents(bundle)
-    changes = _parse_delta_changes(delta)
+    parsed_bundle = _parse_bundle(bundle)
+    if parsed_bundle is None:
+        return True
+    chains, inlined_targets = parsed_bundle
+    changes = _parse_delta_changes(delta, set(chains))
     parsed_rules = _parse_rules(rules_doc)
-    if parents is None or changes is None or parsed_rules is None:
+    if changes is None or parsed_rules is None:
         return True
 
     rules_by_head, calc_relations, seals = parsed_rules
     closure, active_rules = _access_closure(rules_by_head)
-    if calc_relations & closure:
+    if calc_relations & (closure | set(ACCESS_ROOTS)):
         return True
 
     seal_inputs = _seal_inputs_for_closure(seals, closure)
     for op, kind in changes:
-        chain = _ancestor_chain(kind, parents)
-        if chain is None:
-            return True
-        prefixes = tuple(f"{ancestor}__" for ancestor in chain)
+        chain = chains[kind]
         chain_set = set(chain)
-        if any(table in chain_set or table.startswith(prefixes) for table in seal_inputs):
+        inlined = _inlined_closure(chain, chains, inlined_targets)
+        all_touched = chain_set | inlined
+        all_prefixes = tuple(f"{ancestor}__" for ancestor in all_touched)
+        if any(table in all_touched or table.startswith(all_prefixes) for table in seal_inputs):
             return True
         for rel in closure:
-            if rel.startswith(prefixes):
+            if rel.startswith(all_prefixes) or rel in inlined:
                 return True
             if rel in chain_set and op in MEMBERSHIP_OPS:
                 if not (op == "insert" and _only_grants_inserted_element(rel, active_rules, closure)):
