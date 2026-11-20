@@ -6,6 +6,9 @@
 .decl build_claim_ref_present_unnamed(run: symbol, branch: symbol, tick: number)
 .decl build_claim_ref_present(run: symbol, branch: symbol, tick: number, generation: symbol)
 .decl build_claim_ref_present_at(run: symbol, branch: symbol, tick: number)
+.decl build_claim_settling_read(run: symbol, branch: symbol, generation: symbol, sent: number, tick: number, outcome: symbol)
+.decl build_claim_settled_earlier(run: symbol, branch: symbol, generation: symbol, sent: number, tick: number)
+.decl build_claim_first_settling(run: symbol, branch: symbol, generation: symbol, sent: number, outcome: symbol)
 .decl build_claim_released(run: symbol, branch: symbol, generation: symbol, reason: symbol)
 .decl build_claim_release_discarded(run: symbol, branch: symbol, reason: symbol)
 .decl build_claim_release_settled(run: symbol, branch: symbol)
@@ -42,14 +45,29 @@ build_claim_ref_present_unnamed(run, branch, tick) :- build_claim_ref_present_re
     !build_claim_ref_named(read).
 build_claim_ref_present_at(run, branch, tick) :- build_claim_ref_present_read(read, run, branch, tick).
 
-// The model's Confirm: a later absent read of the same run, with no present read at that tick.
-build_claim_released(run, branch, generation, "absent-after-delete") :-
+// A settling read is a later receipted read of the same run that Confirm or DiscardConfirmation in the model
+// could act on: absent with no present read at its tick, or present at another generation.
+build_claim_settling_read(run, branch, generation, sent, tick, "released") :-
     build_claim_delete_effective(run, branch, generation, sent), build_claim_ref_absent(run, branch, tick), tick > sent,
     !build_claim_ref_present_at(run, branch, tick).
+build_claim_settling_read(run, branch, generation, sent, tick, "replaced") :-
+    build_claim_delete_effective(run, branch, generation, sent), build_claim_ref_present(run, branch, tick, other),
+    tick > sent, other != generation.
+build_claim_settled_earlier(run, branch, generation, sent, tick) :-
+    build_claim_settling_read(run, branch, generation, sent, tick, _),
+    build_claim_settling_read(run, branch, generation, sent, earlier, _), earlier < tick.
+// The model leaves pending on its first Confirm or DiscardConfirmation, so the first settling read decides.
+// At one tick a settling read is either absent or present, never both, so the two outcomes exclude each other.
+build_claim_first_settling(run, branch, generation, sent, outcome) :-
+    build_claim_settling_read(run, branch, generation, sent, tick, outcome),
+    !build_claim_settled_earlier(run, branch, generation, sent, tick).
 
-// The model's DiscardConfirmation: a later read shows the branch at another generation.
-build_claim_release_discarded(run, branch, "replaced") :- build_claim_delete_effective(run, branch, generation, sent),
-    build_claim_ref_present(run, branch, tick, other), tick > sent, other != generation.
+// The model's Confirm: the first settling read is absent.
+build_claim_released(run, branch, generation, "absent-after-delete") :-
+    build_claim_first_settling(run, branch, generation, _, "released").
+
+// The model's DiscardConfirmation: the first settling read shows the branch at another generation.
+build_claim_release_discarded(run, branch, "replaced") :- build_claim_first_settling(run, branch, _, _, "replaced").
 build_claim_release_discarded(run, branch, "delete-refused") :- build_claim_delete_attempt(run, branch, _, _, "refused").
 
 build_claim_release_settled(run, branch) :- build_claim_released(run, branch, _, _).

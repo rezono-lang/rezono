@@ -1,4 +1,9 @@
-"""Compare tracked file contents and names with the per-file disclosure budget."""
+"""Compare tracked file contents and names with the per-file disclosure budget.
+
+The budget is a ceiling per file and kind that may only fall: more findings than listed, or a listed number
+above the base budget, is red. Fewer findings than listed is green with a hint to lower the budget, so two
+changes that each remove a finding from the same file stay green when they are merged together.
+"""
 
 import argparse
 import json
@@ -98,11 +103,13 @@ def main():
         totals.update(observed)
         for kind in sorted(set(observed) | set(allowed)):
             number, limit = observed.get(kind, 0), allowed.get(kind, 0)
-            if number != limit or limit > previous.get(path, {}).get(kind, 0):
-                # Print counts only, including when a filename itself contains a finding.
-                label = "[redacted filename]" if counts(path.encode()) else path
+            # Print counts only, including when a filename itself contains a finding.
+            label = "[redacted filename]" if counts(path.encode()) else path
+            if number > limit or limit > previous.get(path, {}).get(kind, 0):
                 print(f"{label} {kind}: observed={number} listed={limit}")
                 failed = True
+            elif number < limit:
+                print(f"{label} {kind}: observed={number} listed={limit}; lower the budget in {BUDGET}")
     print(" ".join(f"{kind}={totals[kind]}" for kind in sorted({"email", *PATTERNS})))
     return int(failed)
 

@@ -18,35 +18,44 @@ def bare_name(expr: object) -> str | None:
     return None
 
 
-def when_conditions(expr: object, at: str, refuse: Refuse) -> dict[str, dict[str, object]] | None:
-    """Extract slot conditions from a single check clause or an `and` conjunction."""
-    terms = expr.get("and") if isinstance(expr, dict) and expr.keys() == {"and"} else [expr]
-    if not isinstance(terms, list) or not terms:
-        refuse(at, "expected one or more slot conditions joined by `and`", "§5.1")
+def _condition_terms(expr: object) -> list[dict] | None:
+    match expr:
+        case {"and": list(items), **other} if not other and items:
+            terms: list[dict] = []
+            for item in items:
+                part = _condition_terms(item)
+                if part is None:
+                    return None
+                terms.extend(part)
+            return terms
+        case dict():
+            return [expr]
+    return None
+
+
+def _lower_conditions(expr: object, *, presence: dict[str, object]) -> dict[str, dict] | None:
+    terms = _condition_terms(expr)
+    if terms is None:
         return None
-    conditions: dict[str, dict[str, object]] = {}
+    conditions: dict[str, dict] = {}
     for term in terms:
         match term:
             case {"cmp": ["=", left, right], **other} if not other:
                 slot, value = bare_name(left), bare_name(right)
                 if slot is None or value is None:
-                    refuse(at, "expected one slot equated to a bare value", "§5.1")
                     return None
-                facets: dict[str, object] = {"equals_string": value}
+                facet_name, facet_value = "equals_string", value
             case {"is": [target, "known"], **other} if not other:
                 slot = bare_name(target)
                 if slot is None:
-                    refuse(at, "expected one slot tested as known", "§5.1")
                     return None
-                facets = {"value_presence": "PRESENT"}
+                facet_name, facet_value = next(iter(presence.items()))
             case _:
-                refuse(at, "expected one slot equated to a bare value or tested as known", "§5.1")
                 return None
-        existing = conditions.setdefault(slot, {})
-        if existing.keys() & facets.keys():
-            refuse(at, f"slot {slot} has duplicate condition facets", "§5.1")
+        slot_facets = conditions.setdefault(slot, {})
+        if facet_name in slot_facets:
             return None
-        existing.update(facets)
+        slot_facets[facet_name] = facet_value
     return conditions
 
 
@@ -70,19 +79,17 @@ def lower_checks(checks: object, at: str, refuse: Refuse) -> list[dict] | None:
             continue
         names.add(name)
 
-        preconditions = when_conditions(check.get("when"), f"{here}/when", refuse)
-        if preconditions is None:
+        when_conditions = _lower_conditions(check.get("when"), presence={"value_presence": "PRESENT"})
+        if when_conditions is None:
+            refuse(f"{here}/when", "expected slot equality or presence conditions", "§5.1")
             continue
-        then_slot = None
-        match check.get("then"):
-            case {"is": [target, "known"], **other} if not other:
-                then_slot = bare_name(target)
-        if then_slot is None:
-            refuse(f"{here}/then", "expected one slot required to be known", "§5.1")
+        then_conditions = _lower_conditions(check.get("then"), presence={"required": True})
+        if then_conditions is None:
+            refuse(f"{here}/then", "expected slot equality or presence conditions", "§5.1")
             continue
         rules.append(rezono_metadata.lower(check) | {
-            "preconditions": {"slot_conditions": preconditions},
-            "postconditions": {"slot_conditions": {then_slot: {"required": True}}},
+            "preconditions": {"slot_conditions": when_conditions},
+            "postconditions": {"slot_conditions": then_conditions},
         })
     return rules if len(rules) == len(checks) else None
 
@@ -161,9 +168,19 @@ def lower(decl: dict, at: str, own: dict[str, str], owners: dict[str, list[str]]
     elif "sealed" in decl and not (isinstance(sealed, str) and NAME.fullmatch(sealed)):
         refuse(f"{at}/sealed", "`sealed at` names the period slot of the kind", "§5a")
         ok = False
-    for index, _ in enumerate(decl.get("derived") or []):
-        refuse_derived(f"{at}/derived/{index}", refuse)
-        ok = False
+    for index, derived in enumerate(decl.get("derived") or []):
+        here = f"{at}/derived/{index}"
+        if not extended_format:
+            refuse_derived(here, refuse)
+            ok = False
+        elif isinstance(derived, dict) and isinstance(derived.get("table"), dict):
+            refuse(here, "a decision table under a kind is not lowered (R050)", "§5.4")
+            ok = False
+        else:
+            from . import rezono_calc
+
+            if not rezono_calc.validate_derived(derived, here, refuse):
+                ok = False
     equations = rezono_equation.lower(decl.get("equations", []), f"{at}/equations", refuse) if extended_format else []
     rules = lower_checks(decl.get("checks", []), f"{at}/checks", refuse) if extended_format else []
     slots = decl.get("slots") or []

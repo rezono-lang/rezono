@@ -26,3 +26,18 @@ The corresponding JSON fragment is
   ]
 }
 ```
+
+## Lowering
+
+Ordered `unless` blocks under a derived value lower to `rezono.calc/1` definitions with `overrides`, preserving the semantics of [v0 section 5b](../docs/rezono/v0.md#5b-exceptions) without adding a new calculation operator:
+
+- `compiler/rezono_compiler/rezono_exceptions.py` exposes `lower_unless(rule_id, base_value, unless_blocks, lower_expr) -> list[dict]`.
+- The base value lowers to definition `base` with `when: {"boolean": True}` and `value: lower_expr(base_value)`.
+- Each line `j` (1-based) in block `i` (1-based) of `unless_blocks` lowers to definition `unless_{i}_{j}` with `when: lower_expr(line["when"])`, `value: lower_expr(line["then"])`, and `overrides` containing `{"definition": f"{rule_id}#{earlier}", "reason": line.get("source") or "unless"}` for `base` and every definition from earlier blocks `1 .. i-1`. Sibling lines within the same block `i` do not override one another.
+- Because `calc_sql.py` evaluates `overrides` with short-circuiting Kleene logic and rejects two simultaneously applying non-overriding definitions as `invalid`:
+  1. When every exception condition is false, `base` applies.
+  2. When a single exception line in the highest-precedence applying block is true, it overrides all earlier blocks and `base` (even if an earlier block's condition is unknown).
+  3. When two sibling lines in the same block both apply, the result state is `invalid` (never a silent pick).
+  4. When an active block's condition is unknown, the result state is `unknown` (never an unconditional fallback to `base` or an earlier block).
+
+The lowering test is `compiler/tests/rezono/test_lower_exceptions.py`.
