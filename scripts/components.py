@@ -292,7 +292,7 @@ PACK_READERS = ("admission", "checker", "compiler", "edge/plugins/connectors", "
 SHARED_READERS = {
     "examples/platform/proof_cases/role-publication-cases.ts": ("tools/repl", "tools/mcp"),
     "docs/compiler/pack.md": ("compiler",),
-    "docs/publication/l0.md": ("edge/plugins/connectors",),
+    "docs/publication/l0.md": ("compiler", "edge/plugins/connectors"),
     "docs/publication/cases/": ("compiler", "edge/plugins/connectors", "publication"),
     "docs/rezono/cases/": ("compiler", "rezono"),
     "docs/semantics/value-cases.yaml": ("compiler", "rezono"),
