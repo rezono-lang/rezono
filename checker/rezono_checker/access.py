@@ -50,7 +50,7 @@ from .access_change import may_change_access as may_change_access
 from .calc import published_views, subject_of, version_of
 from .calc import reads as calc_reads
 from .calc import sources as calc_sources
-from .canon import INTEGER, encode_key
+from .canon import CalcColumnType, calc_value, encode_key
 from .evidence import PROTECTED
 from .check import _check_witness, _rows, shaped
 from .rules import load_rules
@@ -119,6 +119,7 @@ def _schema_from_bundle(bundle, doc: dict) -> tuple[frozenset[str], dict[str, st
         return value
 
     slot_tables: list[str] = []
+    attr_tables: list[tuple[str, str]] = []
     for entry in section("arrows"):
         if not isinstance(entry, dict):
             raise ValueError("arrow entry must be a mapping")
@@ -143,6 +144,7 @@ def _schema_from_bundle(bundle, doc: dict) -> tuple[frozenset[str], dict[str, st
             raise ValueError(f"duplicate table {table!r}")
         columns[table] = (kind, None)
         slot_tables.append(table)
+        attr_tables.append((table, kind))
 
     for entry in section("enums"):
         if not isinstance(entry, dict):
@@ -154,7 +156,7 @@ def _schema_from_bundle(bundle, doc: dict) -> tuple[frozenset[str], dict[str, st
 
     relations = doc.get("relations", ()) if isinstance(doc, dict) else ()
     base_relations = {
-        r["name"] for r in relations
+        r["name"]: r for r in relations
         if isinstance(r, dict) and r.get("role") == "base" and isinstance(r.get("name"), str)
     }
     for slot_table in slot_tables:
@@ -162,6 +164,12 @@ def _schema_from_bundle(bundle, doc: dict) -> tuple[frozenset[str], dict[str, st
             param_table = f"{slot_table}__{suffix}"
             if param_table in base_relations and param_table not in columns:
                 columns[param_table] = (None,)
+    for attr_table, attr_kind in attr_tables:
+        state_table = f"{attr_table}_state"
+        rel = base_relations.get(state_table)
+        if (rel is not None and state_table not in columns
+                and isinstance(rel.get("key"), list) and len(rel["key"]) == 3):
+            columns[state_table] = (attr_kind, None, None)
 
     seals = doc.get("seals") if isinstance(doc, dict) else ()
     if seals is None:
@@ -385,8 +393,14 @@ def _witnessed_grants(doc: dict, role: str, chains: dict, every: dict, instances
     """Check coverage witnesses and their positive rule premises against the complete snapshots."""
     coverage = {}
     for key, (parts, _) in every.get(READ_FULL, {}).items():
-        if parts[:1] == (role,):
-            if len(parts) != 2 or parts[1] not in chains:
+        if len(parts) != 2:
+            findings.append({"reason": "malformed_snapshot", "relation": READ_FULL, "key": key,
+                             "detail": f"complete: row has {len(parts)} columns, expected 2"})
+            if parts[:1] == (role,):
+                findings.append({"reason": "evidence_mismatch", "relation": READ_FULL, "key": key})
+            continue
+        if parts[0] == role:
+            if parts[1] not in chains:
                 findings.append({"reason": "evidence_mismatch", "relation": READ_FULL, "key": key})
             else:
                 coverage[(READ_FULL, key)] = parts[1]
@@ -478,6 +492,23 @@ def _calc(ir: dict, views: set, every_witness, role_witnesses, derivable: set, f
     return visible, out
 
 
+def _calc_input_types(relations) -> dict[str, CalcColumnType]:
+    """Per declared calc-input relation, its numeric value column type (`rational` or `integer`)."""
+    grouped: dict[str, list[dict]] = defaultdict(list)
+    for rel in relations:
+        if isinstance(rel, dict) and rel.get("role") == "calc" and isinstance(rel.get("name"), str):
+            grouped[rel["name"]].append(rel)
+    out: dict[str, CalcColumnType] = {}
+    for name, decls in grouped.items():
+        key = decls[0].get("key", ()) if len(decls) == 1 else ()
+        if (isinstance(key, (list, tuple)) and len(key) == 4
+                and isinstance(key[1], dict) and key[1].get("type") == "rational"):
+            out[name] = "rational"
+        else:
+            out[name] = "integer"
+    return out
+
+
 def check_role(role: str, complete: dict, snapshots: dict, claimed_full, bundle: dict,
                doc: dict, calc_ir: dict | None = None, instances=(), calc_all=(),
                calc_witnesses=(), witnesses=(), claimed_evidence=None) -> tuple[frozenset, list[dict]]:
@@ -515,13 +546,22 @@ def check_role(role: str, complete: dict, snapshots: dict, claimed_full, bundle:
         columns |= {v: (calc_ir["subject"], None, None, None) for v in views}
         columns[calc_ir["as_of"]] = (None, None, None)
     chains = _chains(kinds, parents)
+    for key, (p, _) in every.get(ACCESS, {}).items():
+        if len(p) != 3:
+            findings.append({"reason": "malformed_snapshot", "relation": ACCESS, "key": key,
+                             "detail": f"complete: row has {len(p)} columns, expected 3"})
     allowed = {(p[1], p[2]) for p, _ in every.get(ACCESS, {}).values() if len(p) == 3 and p[0] == role}
 
     def reads(kind: str, id_: str) -> bool:
         return any((k, id_) in allowed for k in chains.get(kind, (kind,)))
 
     def readable(rel: str, parts) -> bool:
-        return rel not in withheld and all(k is None or reads(k, v) for k, v in zip(columns[rel], parts))
+        if rel in withheld:
+            return False
+        cols = columns[rel]
+        if len(parts) != len(cols):
+            return False
+        return all(k is None or reads(k, v) for k, v in zip(cols, parts, strict=True))
 
     relations = doc.get("relations", ())
     derived = {r["name"] for r in relations if r.get("role") == "derived"}
@@ -534,12 +574,12 @@ def check_role(role: str, complete: dict, snapshots: dict, claimed_full, bundle:
         evidence = _witnessed_grants(doc, role, chains, every, valid, derived, findings) if complete_valid else []
         instances = valid
     else:
-        named = any(p[:1] == (role,) for p, _ in every.get(ROLE, {}).values())
+        named = any(p == (role,) for p, _ in every.get(ROLE, {}).values())
         capabilities = frozenset(p[1] for p, _ in every.get(CAPABILITY, {}).values() if len(p) == 2 and p[0] == role)
         evidence = grants(doc, role, chains, named, capabilities)
     granted = {g["kind"] for g in evidence}
     kinds_full = {k for k, chain in chains.items() if granted.intersection(chain)}
-    unreadable = {k for k in kinds_full if any(not reads(k, p[0]) for p, _ in every.get(k, {}).values())}
+    unreadable = {k for k in kinds_full if any(len(p) != 1 or not reads(k, p[0]) for p, _ in every.get(k, {}).values())}
     findings += [{"reason": "full_not_readable", "relation": k} for k in sorted(unreadable)]
     if explicit and unreadable:
         rejected = {ancestor for k in unreadable for ancestor in chains[k]}
@@ -550,12 +590,24 @@ def check_role(role: str, complete: dict, snapshots: dict, claimed_full, bundle:
     withheld = withheld_seals(doc, kinds_full) | withheld_admission()
     for rel in sorted((set(every) | set(mine)) - derived):
         if rel in withheld:
+            if rel in columns:
+                expected = len(columns[rel])
+                for key, (p, _) in every.get(rel, {}).items():
+                    if len(p) != expected:
+                        findings.append({"reason": "malformed_snapshot", "relation": rel, "key": key,
+                                         "detail": f"complete: row has {len(p)} columns, expected {expected}"})
             got = set(mine.get(rel, {}))
             findings += [{"reason": "not_readable", "relation": rel, "key": key} for key in sorted(got)]
             continue
         if rel not in columns:
             findings.append({"reason": "no_columns", "relation": rel})
             continue
+        expected = len(columns[rel])
+        for whose, snap in (("complete", every.get(rel, {})), (role, mine.get(rel, {}))):
+            for key, (p, _) in snap.items():
+                if len(p) != expected:
+                    findings.append({"reason": "malformed_snapshot", "relation": rel, "key": key,
+                                     "detail": f"{whose}: row has {len(p)} columns, expected {expected}"})
         want = {key for key, (p, _) in every.get(rel, {}).items() if readable(rel, p)}
         got = set(mine.get(rel, {}))
         findings += [{"reason": "not_readable", "relation": rel, "key": key} for key in sorted(got - want)]
@@ -566,7 +618,8 @@ def check_role(role: str, complete: dict, snapshots: dict, claimed_full, bundle:
     if claimed_full is not None and set(claimed_full) != full:
         findings.append({"reason": "full_mismatch", "relation": ", ".join(sorted(set(claimed_full) ^ full))})
     width = {r["name"]: len(r["key"]) for r in doc.get("relations", ())}
-    calc_inputs = {r["name"] for r in doc.get("relations", ()) if r.get("role") == "calc"}
+    calc_input_types = _calc_input_types(relations)
+    calc_inputs = set(calc_input_types)
     reads_rows = {rel: {encode_key(p[:width.get(rel, len(p))]) for p, _ in rs.values() if readable(rel, p)}
                   for rel, rs in every.items() if rel not in derived and rel not in calc_inputs and rel in columns}
 
@@ -588,9 +641,10 @@ def check_role(role: str, complete: dict, snapshots: dict, claimed_full, bundle:
         if calc_inputs:
             # Only the checker's own visibility result can make a calculation a rule premise.
             for rel in calc_inputs:
+                column_type = calc_input_types[rel]
                 reads_rows[rel] = {key for key, (p, _) in every.get(rel, {}).items()
                                    if (rel, key) in visible and len(p) == 4 and p[2:] == ("known", "")
-                                   and INTEGER.fullmatch(p[1])}
+                                   and calc_value(p[1], column_type)}
             chosen = select(instances, derived, usable)
     findings += check_choice(witnesses, chosen)
     for rel in sorted(derived & (set(every) | set(mine))):
