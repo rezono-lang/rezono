@@ -1,4 +1,4 @@
-"""The engine epoch as a std-loop run: why an epoch is published, and why it is refused (decisions/loop-engine-epoch.md).
+"""The engine epoch as a std-loop run: why an epoch is published, and why not (decisions/loop-engine-epoch.md).
 
 The scenario is written by hand from sections 3 to 6 of the decision: one run of epoch 7 of a pack with the two
 filtered roles guest and auditor, every gate step observed done, every required check green, and one recorded
@@ -67,7 +67,8 @@ def scenario():
         "epoch_run": [{"id": RUN, "pack": "toy", "epoch": 7, "commit": hexes("a", 40), "profile": hexes("b")}],
         "epoch_role": [{"id": f"role-{role}", "run": RUN, "name": role} for role in ROLES],
         "epoch_role_step": [{"id": f"{stage}-step-{role}", "run": RUN, "step": f"{stage}-{role}",
-                             "role": f"role-{role}", "stage": stage} for role in ROLES for stage in ("sign", "distribute")],
+                             "role": f"role-{role}", "stage": stage}
+                            for role in ROLES for stage in ("sign", "distribute")],
         "epoch_engine_pin": [{"id": "engine-pin", "run": RUN, "version": "0.1.0", "wheel_sha256": hexes("c"),
                               "commit": hexes("d", 40)}],
         "epoch_tool": [{"id": f"tool-{step}", "run": RUN, "step": step, "tool": tool, "version": "0.2.0",
