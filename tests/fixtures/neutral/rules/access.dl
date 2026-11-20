@@ -3,3 +3,8 @@
 may_read(r, "item", i) :- role__capability(r, "read"), item(i).
 may_read(r, "group", g) :- role__capability(r, "read"), group(g).
 may_read(r, "link", l) :- role__capability(r, "read_restricted"), link(l).
+
+.decl may_read_full(role: symbol, kind: symbol)
+may_read_full(r, "item") :- role__capability(r, "read").
+may_read_full(r, "group") :- role__capability(r, "read").
+may_read_full(r, "link") :- role__capability(r, "read_restricted").

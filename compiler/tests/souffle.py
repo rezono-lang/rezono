@@ -229,7 +229,7 @@ def program(prog):
     return "\n".join(lines) + "\n"
 
 
-ACCESS = ("may_read", "may_propose", "may_review", "may_publish")  # their second column names a kind
+ACCESS = ("may_read", "may_read_full", "may_propose", "may_review", "may_publish")  # their second column names a kind
 _TOKEN = re.compile(r'//[^\n]*|/\*.*?\*/|"(?:[^"\\]|\\.)*"|[A-Za-z_][A-Za-z0-9_]*|:-|<=|>=|!=|\s+|.', re.S)
 _NAME = re.compile(r"[A-Za-z_][A-Za-z0-9_]*\Z")
 COMPARE = ("=", "!=", "<", "<=", ">", ">=")
