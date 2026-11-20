@@ -1,0 +1,85 @@
+rezono 0
+pack std-loop
+
+schema std_loop_step_safety
+  iri "https://rezono.org/std-loop/step-safety"
+  import "linkml:types"
+  default range Text
+  description "Supplied obligations and their results for a step at an observation cut."
+  annotation layer = "facts"
+
+enum LoopStepSafetyVerdict world closed = proved | refuted | unknown
+
+kind LoopStepSafetyCheck world closed
+  description "One recorded result with the identity of its obligation and evidence."
+  run: Text
+  step: LoopStep
+  cut: Text
+    description "The identity of the sweep receipt used for the check."
+  obligation: Text
+  verdict: LoopStepSafetyVerdict
+  reason: Text
+
+rules step_safety
+  | .decl step_safety_receipt(run: symbol, cut: symbol, event_time: number)
+  | .decl step_safety_latest_time(run: symbol, event_time: number)
+  | .decl step_safety_current_cut(run: symbol, cut: symbol)
+  | .decl current_step_safety_check(run: symbol, step: symbol, cut: symbol, obligation: symbol, verdict: symbol, reason: symbol)
+  | .decl step_safety_ambiguous_cut(run: symbol, cut: symbol, other: symbol)
+  | .decl step_safety_blocker(run: symbol, step: symbol, cut: symbol, obligation: symbol, reason: symbol)
+  | .decl step_safety_blocked(run: symbol, step: symbol, cut: symbol)
+  | .decl safe_alone(run: symbol, step: symbol, cut: symbol)
+  | // Protected admission inputs (decisions/admission-transport.md, section 6): only admission fills them.
+  | .decl verified_round(round: symbol, run: symbol, cut: symbol, batch: symbol)
+  | .decl verified_round_member(round: symbol, step: symbol)
+  | .decl current_verified_round(round: symbol, run: symbol, cut: symbol, batch: symbol)
+  | 
+  | step_safety_receipt(run, cut, time) :-
+  |     loop_sweep_receipt__run(cut, run), loop_sweep_receipt__event_time(cut, time).
+  | 
+  | step_safety_latest_time(run, latest) :-
+  |     active(run), step_safety_receipt(run, _, _),
+  |     latest = max time : { step_safety_receipt(run, _, time) }.
+  | 
+  | // Require one exact cut. Equally recent receipts with different identities leave it undecided.
+  | step_safety_current_cut(run, cut) :-
+  |     step_safety_latest_time(run, latest), step_safety_receipt(run, cut, latest),
+  |     cuts = count : { step_safety_receipt(run, _, latest) },
+  |     cuts = 1.
+  | 
+  | // Name both equally recent receipts so a reader can see why no current cut exists.
+  | step_safety_ambiguous_cut(run, cut, other) :-
+  |     step_safety_latest_time(run, latest), step_safety_receipt(run, cut, latest),
+  |     step_safety_receipt(run, other, latest), cut != other.
+  | 
+  | current_step_safety_check(run, step, cut, obligation, verdict, reason) :-
+  |     step_safety_current_cut(run, cut), loop_step(step),
+  |     loop_step_safety_check__run(check, run), loop_step_safety_check__step(check, step),
+  |     loop_step_safety_check__cut(check, cut), loop_step_safety_check__obligation(check, obligation),
+  |     loop_step_safety_check__verdict(check, verdict), loop_step_safety_check__reason(check, reason).
+  | 
+  | step_safety_blocker(run, step, cut, obligation, reason) :-
+  |     current_step_safety_check(run, step, cut, obligation, verdict, reason), verdict != "proved".
+  | 
+  | step_safety_blocked(run, step, cut) :- step_safety_blocker(run, step, cut, _, _).
+  | 
+  | // This is individual safety from supplied checks. Batch selection remains separate.
+  | safe_alone(run, step, cut) :-
+  |     current_step_safety_check(run, step, cut, _, "proved", _), !step_safety_blocked(run, step, cut).
+  | 
+  | // A verified round of the current run and cut. A round for an earlier cut authorizes nothing.
+  | current_verified_round(round, run, cut, batch) :-
+  |     step_safety_current_cut(run, cut), verified_round(round, run, cut, batch).
+  | 
+  | // A step is safe on its own when an admitted round of the current cut has exactly that one member.
+  | safe_alone(run, step, cut) :-
+  |     current_verified_round(round, run, cut, _), verified_round_member(round, step),
+  |     members = count : { verified_round_member(round, _) },
+  |     members = 1.
+  | 
+  | // A step checked at an ambiguous latest cut is blocked on that obligation. The ambiguous cut names both
+  | // receipts, so waiting cites them as grounds while no current cut exists.
+  | step_safety_blocker(run, step, cut, obligation, "ambiguous-cut") :-
+  |     step_safety_ambiguous_cut(run, cut, _), loop_step(step),
+  |     loop_step_safety_check__run(check, run), loop_step_safety_check__step(check, step),
+  |     loop_step_safety_check__cut(check, cut), loop_step_safety_check__obligation(check, obligation).

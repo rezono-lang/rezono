@@ -1,0 +1,18 @@
+rezono 0
+pack std-loop
+
+rules stuck
+  | .decl structural_stuck(run: symbol, step: symbol, reason: symbol)
+  | .decl stuck(run: symbol, step: symbol, reason: symbol)
+  | stuck(run, step, reason) :- structural_stuck(run, step, reason).
+  | stuck(run, step, sweep) :- fixed_point(run, sweep, step, _, _).
+  | 
+  | // A cycle blocks each declared step it contains.
+  | structural_stuck(run, step, reason) :-
+  |     declared(run, step, reason),
+  |     order_cycle(step).
+  | 
+  | // Cite terminal refusal evidence for the same declared step and run.
+  | structural_stuck(run, step, reason) :-
+  |     declared(run, step, _),
+  |     refusal(run, step, reason).
