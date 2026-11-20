@@ -43,8 +43,12 @@ import subprocess
 import sys
 import tempfile
 import time
+from collections.abc import Iterable
 from contextlib import contextmanager
 from pathlib import Path
+
+from rezono_checker import access as checker_access
+from rezono_checker.check import shaped
 
 from . import access, difference, pointers, publish, store, timing
 from .cache import SweepStore
@@ -83,6 +87,54 @@ def roles_of(e: publish.Epoch, roles: dict[str, str], kind: str, key: str) -> tu
         if scope.full >= set(e.rows):
             status_readers.append(role)
     return readers, status_readers
+
+
+def verify_status_readers(e: publish.Epoch, roles: dict[str, str], variant: dict) -> None:
+    """Verify variant `status_readers` through the independent checker before writing a manifest or diagnosis."""
+    complete_roles = frozenset(role for role, mode in roles.items() if mode == access.COMPLETE)
+    role_full: dict[str, frozenset[str]] = {}
+    raw_status = variant.get("status_readers", ()) if isinstance(variant, dict) else ()
+    filtered_status = (
+        sorted({r for r in raw_status if isinstance(r, str) and roles.get(r) == access.FILTERED})
+        if not isinstance(raw_status, (str, bytes)) and isinstance(raw_status, Iterable)
+        else []
+    )
+    all_relations = frozenset(e.rows)
+    if filtered_status:
+        doc, _, _ = publish.rule_ir(e)
+        rows, instances = publish.frozen(e)
+        bad = [i for i, w in enumerate(instances) if not shaped(w)]
+        if bad:
+            raise publish.Blocked(f"{publish.PROOFS}: {len(bad)} malformed witness instances (first: {bad[0]})")
+        calc_doc = publish.calc_ir(e)
+        calcs = json.loads(json.dumps(e.calc_witnesses))
+        complete = {rel: publish.snapshot(rs) for rel, rs in rows.items()}
+        all_relations = frozenset(rows)
+        for role in filtered_status:
+            try:
+                readable, sees, claimed_full = access.for_role(
+                    rows, e.kinds, e.parents, e.columns, doc, instances, role, calc_doc, calcs
+                )
+            except access.Uncovered as err:
+                raise publish.Blocked(f"{publish.ACCESS_CHECK}: {err}") from err
+            role_snaps = {rel: publish.snapshot(rs) for rel, rs in readable.items()}
+            derived_full, role_findings = checker_access.check_role(
+                role, complete, role_snaps, claimed_full, e.columns, e.kinds, e.parents,
+                doc, calc_doc, instances, calcs, sees.get("calc_witnesses") or (),
+                sees["witnesses"], claimed_evidence=getattr(claimed_full, "evidence", None),
+            )
+            role_errors = [f for f in role_findings if f.get("severity") == "error"]
+            if role_errors:
+                first = "; ".join(f"{f['reason']} {f.get('relation', '')}".strip() for f in role_errors[:3])
+                raise publish.Blocked(f"{publish.PROOFS}: role {role}: {len(role_errors)} (first: {first})")
+            role_full[role] = derived_full
+    findings = checker_access.check_variant_status_readers(
+        variant, role_full, all_relations, complete_roles=complete_roles
+    )
+    errors = [f for f in findings if f.get("severity") == "error"]
+    if errors:
+        first = "; ".join(f"{f['reason']} {f.get('role', '')}".strip() for f in errors[:3])
+        raise publish.Blocked(f"{publish.ACCESS_CHECK}: variant status_readers: {len(errors)} (first: {first})")
 
 
 def change_of(sw: dict) -> dict:
@@ -237,8 +289,10 @@ def run(repo: Path, pack: str, base_commit: str, st, roles: dict[str, str],
                         finally:
                             writer.write_files(pack_dir, originals)  # the next value starts from main's facts again
                         readers, status_readers = roles_of(e, roles, sw["kind"], sw["key"])
-                        e = dataclasses.replace(e, variant={"sweep": sw["name"], "index": i, "value": str(value),
-                                                            "readers": readers, "status_readers": status_readers})
+                        variant = {"sweep": sw["name"], "index": i, "value": str(value),
+                                   "readers": readers, "status_readers": status_readers}
+                        verify_status_readers(e, roles, variant)
+                        e = dataclasses.replace(e, variant=variant)
                         if any(c["status"] == "red" for c in e.checks):
                             publish.diagnose(e, st)
                             result = "diagnosis"
