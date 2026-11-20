@@ -114,11 +114,6 @@ def _monthly(teams, catalog, relation):
         raise
 
 
-@pytest.mark.xfail(strict=True, raises=MonthlyCostCountsMissingOffer, reason=(
-    "extra: decisions/platform-request-input.md: Derive tenant_monthly_cost_unknown(tenant, request_item, reason) "
-    "in examples/platform/rules/tenant_monthly_cost.dl with the reason 'offer-missing' for a requested item whose "
-    "item and size match no catalog offer, and derive no tenant_monthly_cost row for that tenant. "
-    "Then remove the offer check from request_rows in examples/platform/request_preview.py."))
 def test_missing_offer_makes_the_monthly_cost_unknown(tmp_path):
     teams, catalog = copy_requests(tmp_path)
     expected = json.loads((HERE / "tenant-rows.json").read_text())["requested"]["monthlyCost"]
