@@ -162,16 +162,6 @@ def test_excerpt_svg_text_matches_the_excerpt():
         raise MissingLanguageGuideHighlight("\n".join(problems))
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=MissingLanguageGuideHighlight,
-    reason=(
-        "extra: decisions/language-guide-highlight.md: Waits for "
-        "rezono/test/test_rezono_syntax_grammar.py--test_generated_syntax_highlighting_grammar. "
-        "Define light and dark hex colors for every declared token kind in rezono/highlight-theme.json "
-        "with no hex colors hardcoded in rezono/src/render-excerpt-svg.ts."
-    ),
-)
 def test_highlight_theme_covers_every_token_kind_in_light_and_dark():
     if not THEME.is_file():
         raise MissingLanguageGuideHighlight("missing rezono/highlight-theme.json")
