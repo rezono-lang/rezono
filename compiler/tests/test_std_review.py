@@ -413,14 +413,6 @@ class MissingReviewPolicy(AssertionError):
     """std-review lacks the publication policy per kind, or allows require in the lab phase."""
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=MissingReviewPolicy,
-    reason="extra: decisions/review-and-rights.md: Write packs/std-review/rules/policy.dl: the invariants "
-           "unreviewed_required(change) and require_in_lab(policy) and the derived unreviewed_marked(change), "
-           "from review_policy per kind of a change_member and review_phase. Read sections 9 and 10. Waits for "
-           "test_review_states.",
-)
 def test_review_policy(tmp_path):
     p = Probe(tmp_path, MissingReviewPolicy)
     p.invariant("unreviewed_required", "require_in_lab")
