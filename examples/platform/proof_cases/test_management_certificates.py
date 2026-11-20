@@ -30,7 +30,10 @@ def certificate_inputs():
 
 @pytest.mark.xfail(strict=True, raises=AssertionError, reason=(
     "M2: Implement caller-bound certificate findings over actual presentation, trust paths and dates in "
-    "schema/management_certificates.yaml and rules/management_certificates.dl. Read decisions/platform-management-certificates.md. Waits for compiler/tests/test_boolean_rule_inputs.py--test_native_boolean_rule_inputs (track kern): a missing certificate requires an explicitly complete read, and the rule compiler cannot yet consume the observed boolean."))
+    "schema/management_certificates.yaml and rules/management_certificates.dl. Read decisions/platform-management-certificates.md. "
+    "test_native_boolean_rule_inputs is now green, but compiler/tests/souffle.py still lacks boolean column "
+    "and TRUE/FALSE literal support (TYPE maps only string and integer), so reading tls_read__complete fails "
+    "examples/test_rules.py::test_the_pack_source_declares_every_relation_once[platform] and Soufflé oracle tests with KeyError: 'boolean'."))
 def test_management_certificate_findings():
     from management_probes import compiled
 
