@@ -155,16 +155,17 @@ def _column_type(columns: dict | None, rel: str, idx: int) -> str | None:
     return cols[idx]
 
 
-def _encoded_state(value: str) -> str | None:
-    if value.startswith("known:"):
-        return "known"
-    if value in NON_KNOWN_STATES:
-        return value
-    return None
+def _encoded_state(value: str) -> str:
+    if isinstance(value, str):
+        if value.startswith("known:"):
+            return "known"
+        if value in NON_KNOWN_STATES:
+            return value
+    return "known"
 
 
 def _agg_state(result: str) -> str:
-    return "known" if result.startswith("known:") else result
+    return _encoded_state(result)
 
 
 def _check_row_value(columns: dict | None, rel: str, kb: str, ka: str, causes: set[str]) -> None:
