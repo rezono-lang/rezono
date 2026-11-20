@@ -1,7 +1,20 @@
 """Read the unfiltered OVHcloud server list and find delivered services still listed, per decisions/run-price-enforcement.md, Cleanup."""
 
 from collections.abc import Iterable, Mapping
+from contextlib import closing
+from functools import cache
 import json
+from pathlib import Path
+
+from rezono_compiler import batch, facts, pack, rules, scenarios
+
+_PACK_DIR = Path(__file__).resolve().parent / "packs" / "cleanup"
+
+
+@cache
+def _cleanup() -> tuple[pack.Pack, rules.Program]:
+    model = pack.read(_PACK_DIR)
+    return model, rules.load(model.rules)
 
 
 def _reject_constant(token: str) -> object:
@@ -47,4 +60,21 @@ def remaining(listing: bytes, delivered: Iterable[str]) -> list[str]:
     """Return sorted delivered service names that still appear in the unfiltered server listing."""
     listed = _parse_listing(listing)
     expected = _delivered_names(delivered)
-    return sorted(listed & expected)
+    model, program = _cleanup()
+    listing_id = "unfiltered"
+    runtime_rows = facts.rows_of(model, {
+        "listing": [{"id": listing_id, "coverage": "complete", "unfiltered": True}],
+        "listed_service": [
+            {"id": f"listed/{index}", "listing": listing_id, "service": name}
+            for index, name in enumerate(sorted(listed))
+        ],
+        "delivered_service": [
+            {"id": f"delivered/{index}", "service": name}
+            for index, name in enumerate(sorted(expected))
+        ],
+    })
+    inputs = scenarios.rule_rows(model, program, runtime_rows)
+    with closing(batch.connect(program, inputs)) as connection:
+        batch.compute(connection, program)
+        rows = batch.read(connection, program, ["still_listed"])["still_listed"]
+    return sorted(service for row_listing, service in rows if row_listing == listing_id)

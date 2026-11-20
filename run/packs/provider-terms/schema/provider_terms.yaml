@@ -17,12 +17,18 @@ classes:
     attributes:
       id: {identifier: true}
       mode: {required: true}
+  OrderStatus:
+    description: A provider order status string and the run outcome it maps to.
+    attributes:
+      id: {identifier: true}
+      outcome: {required: true}
   Order:
-    description: An unpaid provider order with its expiry and approved day end in UTC microseconds.
+    description: A provider order with its expiry and approved day end in UTC microseconds, or its status.
     attributes:
       id: {identifier: true}
       expiration_us: {range: integer}
       day_end_us: {range: integer}
+      status: {range: string}
   OrderDetail:
     description: One detail line of a provider order and its provider detail type.
     attributes:

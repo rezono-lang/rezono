@@ -1,0 +1,40 @@
+// Map a recorded provider order status to one run outcome; unknown or conflicted statuses are unresolved.
+.decl order_has_status(order_ref: symbol)
+order_has_status(o) :- order__status(o, _).
+
+.decl conflicted_order_status(status: symbol)
+conflicted_order_status(s) :- order_status__outcome(s, a), order_status__outcome(s, b), a != b.
+
+.decl ambiguous_order_status(order_ref: symbol)
+ambiguous_order_status(o) :- order__status(o, a), order__status(o, b), a != b.
+
+.decl known_order_status(status: symbol)
+known_order_status(status) :-
+    order_status(status),
+    order_status__outcome(status, _),
+    !conflicted_order_status(status).
+
+.decl order_outcome(order: symbol, outcome: symbol)
+order_outcome(o, outcome) :-
+    order(o),
+    !ambiguous_order_status(o),
+    order__status(o, status),
+    order_status(status),
+    order_status__outcome(status, outcome),
+    !conflicted_order_status(status).
+
+order_outcome(o, "unresolved") :-
+    order(o),
+    !ambiguous_order_status(o),
+    order__status(o, status),
+    !known_order_status(status).
+
+order_outcome(o, "unresolved") :-
+    order(o),
+    !order_has_status(o).
+
+order_outcome(o, "unresolved") :-
+    order(o),
+    ambiguous_order_status(o).
+
+.output order_outcome

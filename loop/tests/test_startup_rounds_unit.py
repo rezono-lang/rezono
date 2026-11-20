@@ -230,6 +230,186 @@ def test_read_protected_endpoints_rejects_loose_selector_and_wide_open_ingress()
     assert _read_protected_endpoints([_default_deny(spec.namespace), valid_protect, rogue_svc_open], run, expected) == []
 
 
+def _multi_service_topology() -> StartupTopology:
+    return StartupTopology(
+        zones=("core", "caller"),
+        endpoints=(("lb", "core", 443), ("api", "core", 8443), ("client", "caller", 8080)),
+        endpoint_zones={"core/lb": "core", "core/api": "core"},
+        cases=(
+            NetworkCaseSpec(
+                case_id="client-to-lb",
+                source_service="client",
+                source_zone="caller",
+                destination_service="lb",
+                destination_zone="core",
+                port=443,
+                expected="allow",
+                function="ingress",
+            ),
+            NetworkCaseSpec(
+                case_id="lb-to-api",
+                source_service="lb",
+                source_zone="core",
+                destination_service="api",
+                destination_zone="core",
+                port=8443,
+                expected="allow",
+                function="identity",
+            ),
+        ),
+        prohibited_recovery_flow={"source": "rec", "destination": "api", "function": "identity"},
+        unsigned_artifact={"service": "lab", "artifact": "a-lab"},
+    )
+
+
+def _protect_policy(ep_id: str, spec: Any, *, uid: str | None = None) -> dict[str, Any]:
+    policy_spec: dict[str, Any] = {
+        "podSelector": spec.pod_selector,
+        "policyTypes": ["Ingress"],
+    }
+    if spec.ingress:
+        policy_spec["ingress"] = list(spec.ingress)
+    return _policy(
+        name=f"rezono-protect-{spec.service}",
+        namespace=spec.namespace,
+        annotations={"rezono.org/protected-endpoint": ep_id},
+        spec=policy_spec,
+        uid=uid or f"protect-{spec.service}",
+    )
+
+
+def test_read_protected_endpoints_rejects_omitted_policy_types_and_extra_selectors() -> None:
+    from loop.startup_rounds import _expected_protections
+
+    run = "run1"
+    topo = _multi_service_topology()
+    expected = _expected_protections(run, topo)
+    lb_spec = expected["core/lb"]
+    api_spec = expected["core/api"]
+    base = [
+        _default_deny(lb_spec.namespace),
+        _protect_policy("core/lb", lb_spec),
+        _protect_policy("core/api", api_spec),
+    ]
+    assert _read_protected_endpoints(base, run, expected) == ["core/api", "core/lb"]
+
+    # 1. Extra policy with omitted policyTypes (defaults to Ingress in Kubernetes).
+    omitted_policy_types = _policy(
+        name="rogue-omitted-policy-types",
+        namespace=lb_spec.namespace,
+        spec={"podSelector": {}, "ingress": [{}]},
+        uid="rogue-omitted-pt",
+    )
+    assert _read_protected_endpoints([*base, omitted_policy_types], run, expected) == []
+
+    # 2. Extra policy with empty policyTypes list (also defaults to Ingress in Kubernetes).
+    empty_policy_types = _policy(
+        name="rogue-empty-policy-types",
+        namespace=lb_spec.namespace,
+        spec={"podSelector": {}, "policyTypes": [], "ingress": [{}]},
+        uid="rogue-empty-pt",
+    )
+    assert _read_protected_endpoints([*base, empty_policy_types], run, expected) == []
+
+    # 3. Extra policy selecting pods via rezono.org/run label.
+    run_label_policy = _policy(
+        name="rogue-run-label",
+        namespace=lb_spec.namespace,
+        spec={
+            "podSelector": {"matchLabels": {RUN_LABEL: run}},
+            "policyTypes": ["Ingress"],
+            "ingress": [{}],
+        },
+        uid="rogue-run-label",
+    )
+    assert _read_protected_endpoints([*base, run_label_policy], run, expected) == []
+
+    # 4. Extra policy selecting pods via combined matchLabels (service + run).
+    combined_labels_policy = _policy(
+        name="rogue-combined-labels",
+        namespace=lb_spec.namespace,
+        spec={
+            "podSelector": {"matchLabels": {SERVICE_LABEL: "lb", RUN_LABEL: run}},
+            "policyTypes": ["Ingress"],
+            "ingress": [{}],
+        },
+        uid="rogue-combined",
+    )
+    assert _read_protected_endpoints([*base, combined_labels_policy], run, expected) == []
+
+    # 5. Extra policy selecting pods via matchExpressions.
+    match_expressions_policy = _policy(
+        name="rogue-match-expressions",
+        namespace=lb_spec.namespace,
+        spec={
+            "podSelector": {
+                "matchExpressions": [
+                    {"key": SERVICE_LABEL, "operator": "In", "values": ["lb"]},
+                ],
+            },
+            "policyTypes": ["Ingress"],
+            "ingress": [{}],
+        },
+        uid="rogue-expr",
+    )
+    assert _read_protected_endpoints([*base, match_expressions_policy], run, expected) == []
+
+    # 6. Extra policy with malformed policyTypes fails closed.
+    malformed_policy_types = _policy(
+        name="rogue-malformed-pt",
+        namespace=lb_spec.namespace,
+        spec={"podSelector": {}, "policyTypes": "Egress", "ingress": [{}]},
+        uid="rogue-malformed",
+    )
+    assert _read_protected_endpoints([*base, malformed_policy_types], run, expected) == []
+
+
+def test_read_protected_endpoints_allows_multi_service_and_egress_only_policies() -> None:
+    from loop.startup_rounds import _expected_protections
+
+    run = "run1"
+    topo = _multi_service_topology()
+    expected = _expected_protections(run, topo)
+    lb_spec = expected["core/lb"]
+    api_spec = expected["core/api"]
+    ns = lb_spec.namespace
+
+    egress_only = _policy(
+        name="allow-dns-egress",
+        namespace=ns,
+        spec={
+            "podSelector": {},
+            "policyTypes": ["Egress"],
+            "egress": [{"ports": [{"protocol": "UDP", "port": 53}]}],
+        },
+        uid="egress-only",
+    )
+
+    policies = [
+        _default_deny(ns),
+        _protect_policy("core/lb", lb_spec),
+        _protect_policy("core/api", api_spec),
+        egress_only,
+    ]
+    assert _read_protected_endpoints(policies, run, expected) == ["core/api", "core/lb"]
+
+    # An egress-only policy named rezono-default-deny cannot satisfy ingress default-deny.
+    egress_default_deny = _policy(
+        name="rezono-default-deny",
+        namespace=ns,
+        spec={"podSelector": {}, "policyTypes": ["Egress"]},
+        uid="egress-deny",
+    )
+    assert (
+        _read_protected_endpoints(
+            [egress_default_deny, _protect_policy("core/lb", lb_spec), _protect_policy("core/api", api_spec)],
+            run,
+            expected,
+        )
+        == []
+    )
+
+
 def test_read_protected_endpoints_accepts_exact_policies_for_platform_topology() -> None:
     from loop.startup_rounds import _expected_protections
 
