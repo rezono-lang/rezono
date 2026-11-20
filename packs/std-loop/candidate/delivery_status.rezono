@@ -103,11 +103,14 @@ rules delivery_status
   |     status_disagreement(tenant, delivery, step, run, reason).
   | 
   | // Delivery waiting time and completion time (decisions/delivery-commit-status.md).
-  | // The end of the waiting interval is the earliest dated done reading of the same run, else the latest sweep
-  | // of that run. The start is the latest dated waiting reading at or before that end. No waiting reading gives
-  | // no waiting-time row, never zero.
+  | // The end of the waiting interval is the earliest dated done reading of the same run (when no undated done
+  | // reading leaves the completion instant unknown), else the latest sweep of that run when no done reading exists.
+  | // The start is the latest dated waiting reading at or before that end (when no undated waiting reading leaves
+  | // the waiting start unknown). No waiting reading gives no waiting-time row, never zero.
   | .decl delivery_done_reading(tenant: symbol, delivery: symbol, step: symbol, run: symbol, time: number, at: symbol)
+  | .decl delivery_done_undated(tenant: symbol, delivery: symbol, step: symbol, run: symbol)
   | .decl delivery_waiting_reading(tenant: symbol, delivery: symbol, step: symbol, run: symbol, time: number)
+  | .decl delivery_waiting_undated(tenant: symbol, delivery: symbol, step: symbol, run: symbol)
   | .decl delivery_done_earliest(tenant: symbol, delivery: symbol, step: symbol, run: symbol, time: number)
   | .decl delivery_completed_at(tenant: symbol, delivery: symbol, step: symbol, run: symbol, at: symbol)
   | .decl delivery_has_done(tenant: symbol, delivery: symbol, step: symbol, run: symbol)
@@ -123,6 +126,12 @@ rules delivery_status
   |     loop_status_observation__event_time(event, time), loop_status_observation__at(event, at),
   |     at != "".
   | 
+  | delivery_done_undated(tenant, delivery, step, run) :-
+  |     loop_status_observation__tenant(event, tenant), loop_status_observation__delivery(event, delivery),
+  |     loop_status_observation__step(event, step), loop_status_observation__run(event, run),
+  |     loop_status_observation__relation(event, "done"),
+  |     !status_observation_dated(event).
+  | 
   | delivery_waiting_reading(tenant, delivery, step, run, time) :-
   |     loop_status_observation__tenant(event, tenant), loop_status_observation__delivery(event, delivery),
   |     loop_status_observation__step(event, step), loop_status_observation__run(event, run),
@@ -130,8 +139,15 @@ rules delivery_status
   |     loop_status_observation__event_time(event, time),
   |     status_observation_dated(event).
   | 
+  | delivery_waiting_undated(tenant, delivery, step, run) :-
+  |     loop_status_observation__tenant(event, tenant), loop_status_observation__delivery(event, delivery),
+  |     loop_status_observation__step(event, step), loop_status_observation__run(event, run),
+  |     loop_status_observation__relation(event, "waiting"),
+  |     !status_observation_dated(event).
+  | 
   | delivery_done_earliest(tenant, delivery, step, run, earliest) :-
   |     delivery_done_reading(tenant, delivery, step, run, _, _),
+  |     !delivery_done_undated(tenant, delivery, step, run),
   |     earliest = min time : { delivery_done_reading(tenant, delivery, step, run, time, _) }.
   | 
   | delivery_completed_at(tenant, delivery, step, run, at) :-
@@ -139,7 +155,10 @@ rules delivery_status
   |     delivery_done_reading(tenant, delivery, step, run, time, at).
   | 
   | delivery_has_done(tenant, delivery, step, run) :-
-  |     delivery_done_earliest(tenant, delivery, step, run, _).
+  |     delivery_done_reading(tenant, delivery, step, run, _, _).
+  | 
+  | delivery_has_done(tenant, delivery, step, run) :-
+  |     delivery_done_undated(tenant, delivery, step, run).
   | 
   | delivery_waiting_end(tenant, delivery, step, run, time) :-
   |     delivery_done_earliest(tenant, delivery, step, run, time).
@@ -156,6 +175,7 @@ rules delivery_status
   | 
   | delivery_waiting_start(tenant, delivery, step, run, start_time) :-
   |     delivery_waiting_before_end(tenant, delivery, step, run, _),
+  |     !delivery_waiting_undated(tenant, delivery, step, run),
   |     start_time = max time : { delivery_waiting_before_end(tenant, delivery, step, run, time) }.
   | 
   | delivery_waiting_time(tenant, delivery, step, run, elapsed) :-
