@@ -111,16 +111,6 @@ class MissingNoImplicitExistentials(AssertionError):
     """The rezono 1 reader/checker did not enforce no-implicit-existentials or explicit method binders."""
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=MissingNoImplicitExistentials,
-    reason="M3: decisions/language-rezono-1-refinements.md: Implement no implicit existential variables and optional "
-           "explicit method binders (`Kind.any(x: ...)`, `rel.any(row: ...)`, `.where(x: ...)`) in rezono/src/ "
-           "(grammar.ts, parse.ts, print-expression.ts, check.ts, and exported `checkModule` in index.ts): resolve "
-           "unbound bare names in Kind/Enum call positions as element IDs or enum values (e.g. `asks(s, identity)`), "
-           "never bind undeclared variables from relation calls, refuse undeclared names outside kind/enum positions "
-           "(such as `za.outside` or `port_var` in an Int slot) with R001, and round-trip explicit binders. Read section 1.",
-)
 def test_rezono_1_no_implicit_existentials_and_explicit_binder():
     payload = check_sources(VALID_MODULE, IMPLICIT_EXISTENTIAL_PATH, UNDECLARED_NON_KIND_ARG)
     if "missing_export" in payload:
