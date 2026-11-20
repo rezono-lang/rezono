@@ -74,6 +74,8 @@ class Lowered:
     uses: list[str] = field(default_factory=list)  # module ids within the pack, sorted
     foreign: list[str] = field(default_factory=list)  # `<pack>:<module>` of the schema modules of the used packs
     reasons: list[tuple[str, str]] = field(default_factory=list)  # (code, label) in declaration order
+    slot_targets: dict[tuple[str, str], str] = field(default_factory=dict)  # (kind, slot) -> owning module id
+    parent_targets: dict[str, str] = field(default_factory=dict)  # kind -> owning module id
 
 
 def declared(meta: dict, pack_dir: Path, errors: list[str], *, reject_undeclared: bool = True,
@@ -790,6 +792,8 @@ def lower(pack_dir: Path, d: Declared, form: dict, pack: str, owners: dict[str, 
     reason_owners = reason_owners or {}
     declared_names = own.keys() | owners.keys()
     uses: set[str] = set()
+    slot_targets: dict[tuple[str, str], str] = {}
+    parent_targets: dict[str, str] = {}
     enums: dict[str, dict] = {}
     classes: dict[str, dict] = {}
     aliases: dict[str, dict] = {}
@@ -829,7 +833,7 @@ def lower(pack_dir: Path, d: Declared, form: dict, pack: str, owners: dict[str, 
                 decl, at, own, owners, declared_names, uses, refuse,
                 extended_format=extended_format, aliases=prefixes, kinds=kinds,
                 integer_types=integer_types, own_module=d.id, rezono_1=rezono_1,
-                layer=d.layer,
+                layer=d.layer, slot_targets=slot_targets, parent_targets=parent_targets,
             )
             if lowered_kind is not None:
                 if keys:
@@ -906,7 +910,10 @@ def lower(pack_dir: Path, d: Declared, form: dict, pack: str, owners: dict[str, 
         )
     foreign = [f"{u}:{mid}" for u in used for mid in sorted(pinned[u])]
     schema["imports"] += foreign
-    return Lowered(d, schema, form, sorted(u for u in uses if u.partition(":")[2] == ""), foreign, reasons)
+    return Lowered(
+        d, schema, form, sorted(u for u in uses if u.partition(":")[2] == ""), foreign, reasons,
+        slot_targets, parent_targets,
+    )
 
 
 def view(schema: dict, importmap: dict) -> SchemaView:

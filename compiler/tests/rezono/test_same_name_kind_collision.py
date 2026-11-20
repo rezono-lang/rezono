@@ -168,10 +168,10 @@ def _native_form(pack_name: str, decls: list[dict], uses: list[dict]) -> dict:
 @pytest.mark.xfail(
     strict=True,
     raises=AssertionError,
-    reason="extra: decisions/healthcare-allowance-three-sources.md: Preserve import-alias qualification when "
-           "lowering Rezono slots and allow a module with distinct `use <pack> as <alias>` prefixes to import "
-           "two packs that each declare a kind with the same name (`Partner`) without merging or refusing "
-           "qualified references (`civil.Partner`, `tax.Partner`).",
+    reason="extra: decisions/healthcare-allowance-three-sources.md: Compiler-side qualified same-name kind "
+           "separation is implemented, but the test helper `_write_pack` omits `channels.yaml` and copies "
+           "`FIXTURE / 'messages'` (`nl.mf2`) while setting `default_language: en` and `labels/en.yaml`, "
+           "causing `pack.channels()` and `pack.language()` to refuse the fixture pack; needs planner fixture fix.",
 )
 def test_same_name_kinds_across_two_sources_stay_disjoint_with_qualified_imports(tmp_path: Path):
     base = tmp_path / "qualified"
@@ -243,14 +243,6 @@ def test_same_name_kinds_across_two_sources_stay_disjoint_with_qualified_imports
     assert arrows["review.fiscal_partner"] == tax_partner_id
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason="extra: decisions/healthcare-allowance-three-sources.md: An unqualified reference to `Partner` when "
-           "two imported sources each declare `Partner` must produce a diagnostic naming both candidate sources "
-           "(both in schema lowering and in native rule signatures), while qualified references (`civil.Partner`, "
-           "`tax.Partner`) resolve cleanly to distinct engine kinds.",
-)
 def test_unqualified_same_name_kind_reports_both_candidates(tmp_path: Path):
     # 1. Schema slot level: unaliased `use civil` and `use tax` with bare `Partner` must fail naming both.
     schema_base = tmp_path / "unqualified-schema"

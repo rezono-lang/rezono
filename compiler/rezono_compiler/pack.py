@@ -670,7 +670,8 @@ def read(pack_dir: str | Path) -> Pack:
             layer = ann(c, "layer", default_layer)
             if layer not in LAYERS:
                 errors.append(f"class {cname}: layer must be one of {LAYERS}, not {layer!r}")
-            parent = names.resolve(m.id, c.is_a) if c.is_a else None
+            parent_owner = m.parent_targets.get(cname)
+            parent = names.resolve(m.id, c.is_a, owner=parent_owner) if c.is_a else None
             if c.is_a and parent is None:  # LinkML cannot induce its slots either: nothing more to check
                 errors.append(f"class {cname}: parent {c.is_a} is not in the import closure of {m.id}")
                 continue
@@ -766,43 +767,53 @@ def read(pack_dir: str | Path) -> Pack:
             if not NAME.match(s.name) or "__" in s.name or s.name == "is_a":
                 errors.append(f"{where}: '{s.name}' is not a valid slot name")
             warnings += [f"{where}: unknown annotation '{t}'" for t in tags(s) if t not in ANNOTATIONS]
+            slot_owner = m.slot_targets.get((cname, s.name))
+            target_sv = names.modules[slot_owner].sv if slot_owner in names.modules else sv
             if s.identifier:
                 if not kind.parent:  # a subkind that declares one is refused above
-                    kind.id_type = identifier_type(sv, s, rng, where, errors)
+                    kind.id_type = identifier_type(target_sv, s, rng, where, errors)
                     if kind.id_type == "VARCHAR":
-                        kind.id_patterns = patterns(sv, s, rng, where, errors)
+                        kind.id_patterns = patterns(target_sv, s, rng, where, errors)
                 continue
             slot = Slot(s.name, k, bool(s.required), False, rng, "VARCHAR", multivalued=bool(s.multivalued))
             own = world(s, where, errors)
             if kind.world == "open" and "world" in tags(s) and own != "open":
                 errors.append(f"{where}: a slot of an open kind is open")
             slot.world = "open" if kind.world == "open" else own
-            if rng in sv.all_classes():
-                slot.arrow, slot.range, slot.inlined = True, names.resolve(m.id, rng), bool(s.inlined or s.inlined_as_list)
-                if open_value(sv, rng):
+            is_class = rng in (
+                target_sv.all_classes(imports=False) if slot_owner in names.modules else sv.all_classes()
+            )
+            is_enum = rng in (
+                target_sv.all_enums(imports=False) if slot_owner in names.modules else sv.all_enums()
+            )
+            if is_class:
+                slot.arrow, slot.range, slot.inlined = (
+                    True, names.resolve(m.id, rng, owner=slot_owner), bool(s.inlined or s.inlined_as_list)
+                )
+                if open_value(target_sv, rng):
                     errors.append(f"{where}: range {rng} is linkml:Any, an open value; Rezono types every value")
                 if s.pattern:
                     errors.append(f"{where}: a pattern applies to text and enums, not to an arrow")
                 if "explore" in tags(s):
                     errors.append(f"{where}: explore goes on a slot of whole numbers, not on an arrow")
-            elif rng in sv.all_enums():
-                slot.enum = slot.range = names.resolve(m.id, rng)
-                slot.patterns = patterns(sv, s, rng, where, errors)  # enum values are text
+            elif is_enum:
+                slot.enum = slot.range = names.resolve(m.id, rng, owner=slot_owner)
+                slot.patterns = patterns(target_sv, s, rng, where, errors)  # enum values are text
                 if "explore" in tags(s):
                     errors.append(f"{where}: explore goes on a slot of whole numbers, not on an enum")
             else:
-                slot.sql_type = sql_type(sv, rng, where, errors)
-                slot.minimum, slot.maximum = limits(sv, s, rng)
+                slot.sql_type = sql_type(target_sv, rng, where, errors)
+                slot.minimum, slot.maximum = limits(target_sv, s, rng)
                 bounds(slot, where, errors)
                 if "explore" in tags(s):
                     slot.explore = explore(slot, plain(ann(s, "explore")), where, errors)
-                slot.patterns = patterns(sv, s, rng, where, errors)
+                slot.patterns = patterns(target_sv, s, rng, where, errors)
                 if slot.patterns and slot.sql_type != "VARCHAR":
                     errors.append(f"{where}: a pattern applies to text only")
-                slot.currency = currency(sv, s, rng, where, errors)
+                slot.currency = currency(target_sv, s, rng, where, errors)
                 if slot.currency and slot.sql_type != "BIGINT":
                     errors.append(f"{where}: a currency goes on whole numbers (minor units), not on {rng}")
-                slot.unit = slot_unit(sv, rng, declared) if isinstance(rng, str) else None
+                slot.unit = slot_unit(target_sv, rng, declared) if isinstance(rng, str) else None
             if "input_format" in tags(s):
                 form = ann(s, "input_format")
                 if not isinstance(form, str) or form not in INPUT_FORMATS:
