@@ -18,18 +18,6 @@ def test_complete_flow_sweep():
         assert evaluate("complete_sweep", SWEEP_COLUMNS, coverage_rows(case)) == expected, case
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=MissingVerifiedSweepInventory,
-    reason=(
-        "M2: decisions/admission-transport.md: section 6, member keys. complete_sweep needs admitted members "
-        "[\"sweep-node\", run, collector, window, node] for that sweep, each covered by its single final report, "
-        "and no recorded expected_node outside them. Declare verified_receipt and verified_member in "
-        "packs/std-loop/rules/complete_sweep.dl; loop/tests/flow_drift_cases.py passes them to the fragment as "
-        "inputs. Today "
-        "complete_sweep follows from the recorded inventory without any receipt."
-    ),
-)
 def test_complete_flow_sweep_needs_verified_inventory():
     records = coverage_rows("complete", verified=False)
     cases = {

@@ -43,6 +43,7 @@ function depthOf(code: string): number {
 }
 const OPEN_END = /(?:=|(?:^|\s)[+\-*/]|[(,]|\b(?:when|then|else|and|or|not))$/;
 const GOES_ON = /^(?:(?:then|else|and|or)\b|=>|[+*/)]|-(?!-))/;
+const EFFECT_HEADER = /^effect\s+(?:[a-z][a-z0-9_]*|`[a-z][a-z0-9_]*`)$/;
 
 /** Splits a file into logical lines and their blocks (§11); a tab in an indent is an R000. */
 export function layout(
@@ -67,7 +68,8 @@ export function layout(
 			continue;
 		}
 		const body = code.slice(indent);
-		if (!verbatim && current && indent > current.indent && (current.depth > 0 || OPEN_END.test(current.last) || GOES_ON.test(body))) {
+		const inEffectHeader = open.length >= 2 && EFFECT_HEADER.test(current?.last ?? '');
+		if (!verbatim && current && indent > current.indent && !inEffectHeader && (current.depth > 0 || OPEN_END.test(current.last) || GOES_ON.test(body))) {
 			current.end = start + code.length;
 			current.last = body;
 			current.depth += depthOf(body);

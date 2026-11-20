@@ -152,16 +152,6 @@ def test_complete_windows_need_unambiguous_bounds(second_bounds, time, expected)
 
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=MissingVerifiedSweepInventory,
-    reason=(
-        "M2: decisions/admission-transport.md: section 6, member keys. A recorded sweep proves absence only with "
-        "admitted sweep-node members for the same run, collector and sweep, each covered by its final report. "
-        "Waits for loop/tests/test_flow_drift_sweep.py--test_complete_flow_sweep_needs_verified_inventory. Today "
-        "complete_sweep and drift follow from the recorded inventory without any receipt."
-    ),
-)
 def test_absence_needs_verified_sweep_inventory():
     from rezono_compiler import pack
 

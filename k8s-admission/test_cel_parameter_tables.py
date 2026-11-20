@@ -10,9 +10,9 @@ from translator_support import IMAGE_A, IMAGE_B, fixture, load_program, run_cel
 
 SUPPLY_LIST = 'params.spec.images.map(x, {"service": x.service, "image": x.image})'
 FLOW_LIST = (
-    'params.spec.flows.map(x, {"source": x.source, "destination": x.destination, "protocol": "TCP", "port": x.port})'
+    '(params.spec.flows.map(x, {"source": x.source, "destination": x.destination, "protocol": "TCP", "port": x.port})'
     ' + (has(params.spec.transportFlows) ? params.spec.transportFlows : [])'
-    '.map(x, {"source": x.source, "destination": x.destination, "protocol": x.protocol, "port": x.port})'
+    '.map(x, {"source": x.source, "destination": x.destination, "protocol": x.protocol, "port": x.port}))'
 )
 
 
