@@ -46,6 +46,7 @@ import json
 from collections import defaultdict
 from collections.abc import Set as AbstractSet
 
+from .access_change import may_change_access as may_change_access
 from .calc import published_views, subject_of, version_of
 from .calc import reads as calc_reads
 from .calc import sources as calc_sources
