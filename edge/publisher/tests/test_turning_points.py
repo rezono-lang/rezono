@@ -28,7 +28,7 @@ def between():
     strict=True,
     raises=(MissingTurningPoints, AssertionError),
     reason=(
-        "extra: decisions/viewer-slip.md: Write edge/publisher/rezono_publisher/turns.py with between(columns, program, before, after): the "
+        "M3: decisions/viewer-slip.md: Write edge/publisher/rezono_publisher/turns.py with between(columns, program, before, after): the "
         "conclusions the role reads that turn between two stops, with their causes, as decisions/viewer-slip.md, "
         "section Turning points, defines them (the same row by relation and key prefix, or by rule and subject "
         "for a calculation; the ten causes; the argument a min or max took derived from its steps and the "

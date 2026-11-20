@@ -29,7 +29,7 @@ def check():
     strict=True,
     raises=(MissingTurnCheck, AssertionError),
     reason=(
-        "extra: decisions/viewer-slip.md: Write checker/rezono_checker/turns.py with check(columns, program, before, after, listed) -> list of "
+        "M3: decisions/viewer-slip.md: Write checker/rezono_checker/turns.py with check(columns, program, before, after, listed) -> list of "
         "problems: it derives the turning points between two stops itself, as decisions/viewer-slip.md, section "
         "Turning points, defines them, and names every row listed too many or too few and every other cause. "
         "It shares no code with the publisher. Inputs as in tests/fixtures/turns/cases.py."
