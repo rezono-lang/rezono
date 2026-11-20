@@ -20,14 +20,6 @@ class MissingSyntaxGrammarGenerator(AssertionError):
     """The syntax-highlighting grammar generator is missing, non-deterministic, or out of sync with grammar.ts."""
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=MissingSyntaxGrammarGenerator,
-    reason="M3: decisions/language-rezono-1.md: Add rezono/src/syntax-grammar.ts (and wire a `syntax-grammar` script "
-           "in rezono/package.json) that deterministically generates a TextMate (.tmLanguage.json) syntax-highlighting "
-           "grammar directly from rezono/src/grammar.ts and rule-names.ts, covering all keywords, aggregates, `--` "
-           "comments, strings, ISO dates, numeric literals and `@` sources. Read sections 1 and 8.",
-)
 def test_generated_syntax_highlighting_grammar():
     if not GENERATOR.is_file():
         raise MissingSyntaxGrammarGenerator("missing rezono/src/syntax-grammar.ts")
