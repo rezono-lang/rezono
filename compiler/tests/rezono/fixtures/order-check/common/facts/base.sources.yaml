@@ -1,0 +1,5 @@
+default:
+  kind: git
+  name: rezono-lang/rezono
+  revision: "0000000"
+  position: decisions/language-expression-semantics.md#5-acceptance-with-order-check

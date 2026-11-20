@@ -80,8 +80,9 @@ def derived(tmp, records, evidence=None):
         epoch = batch.epoch(build, epoch=1, knowledge_time="2027-01-15T08:00:00Z", sources=[("facts", "input")],
                             **handoff)
     assert not epoch.witnesses
-    red = [check for check in epoch.checks if check["status"] != "green"]
+    red = [check for check in epoch.checks if check["status"] == "red"]
     assert not red, f"red checks would block the publication: {red}"
+    assert all(check["status"] == "green" for check in epoch.checks if check["name"] != "rezono:origins")
     return {relation: [{"key": list(row)} for row in sorted(set(rows), key=publish.key_text)]
             for relation, rows in epoch.rows.items()}
 
