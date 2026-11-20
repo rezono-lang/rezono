@@ -48,7 +48,10 @@ def pack_reads(monkeypatch):
         "already do for the total; which pair a capture converts is a pack fact (section 3), not a literal. "
         "run/effective_quote.py keeps quote_at as the reader: it selects the effective editions through std-time "
         "as today, reads effective_amount through rezono_compiler.batch.read and publishes reduced pairs. Keep "
-        "run/tests/test_effective_currency.py green. Today line 126 multiplies in Python (AssertionError)."
+        "run/tests/test_effective_currency.py green. Today line 126 multiplies in Python (AssertionError). "
+        "Blocked on planner review: run/tests/test_exact_quote_language.py asserts exact equality of "
+        "run/packs/exact-quote against run/fixtures/exact-quote-linkml (schema, program.derived(), and "
+        "publication columns), so adding effective_amount or new kinds/facts to exact-quote fails that green test."
     ),
 )
 def test_effective_amount_comes_from_the_quote_pack(monkeypatch):
