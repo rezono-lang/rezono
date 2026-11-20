@@ -31,7 +31,9 @@ class PrematureNativeReadiness(AssertionError):
     raises=PrematureNativeReadiness,
     reason="M3: decisions/language-rezono-1.md: In scripts/language_usage.py, include build/ beside examples/, packs/ "
            "and run/ in SCOPES, and gate the Native conversion column of ruled packs on rezono 1 derivation lowering "
-           "evidence so no ruled pack reports Ready while only rezono 0 native rules are supported. Read sections 5.10 and 6.",
+           "evidence so no ruled pack reports Ready while only rezono 0 native rules are supported. Read sections 5.10 and 6. "
+           "Blocked for a worker PR: in this test, evidence() writes Python syntax to module-json.test.ts so kind stays "
+           "Pending: kind, and compiler/tests/rezono/test_language_usage.py still asserts Ready without rezono 1 evidence.",
 )
 def test_native_conversion_waits_for_rezono_1_and_includes_build(tmp_path):
     write(tmp_path, "packs/base/pack.yaml", "name: base\n")
