@@ -424,6 +424,9 @@ def plan(e: Epoch, store, roles: dict[str, str], base: dict | None = None,
         raise ValueError("no roles: nothing would be readable")
     if not e.definition_sha256:
         raise ValueError("no definition_sha256: the bundle path would have to name the facts")
+    surface_error = _surface_refusal(e, store)
+    if surface_error is not None:
+        raise Blocked(surface_error)
     doc, _, derived = rule_ir(e)
     rows, instances = frozen(e)
     bad = [i for i, w in enumerate(instances) if not shaped(w)]
@@ -606,6 +609,25 @@ def newest_main(store, pack: str) -> dict | None:
         return json.loads(data)
     except (TypeError, KeyError, ValueError) as err:
         raise ValueError(f"{keys[0]} is not a head: {err}") from err
+
+
+def _surface_refusal(e: Epoch, store) -> str | None:
+    """Check public-surface compatibility for a main publication before anything is written
+    (decisions/language-surface-compatibility.md, sections 2 and 4).
+
+    Skipped for proposals, variants and epochs with a base manifest, and only for bundle-less
+    synthetic epochs on minimal test stores that do not expose `list()`. Any real store (or any
+    epoch with a bundle) fails closed on a broken head, missing or mismatched bundle, malformed
+    semver, unaccepted major change (R033), or insufficient pack version bump.
+    """
+    if e.proposal or e.variant or e.base_manifest:
+        return None
+    if not e.bundle and not hasattr(store, "list"):
+        return None
+    previous = newest_main(store, e.pack)
+    if previous is None:
+        return None
+    return surface.refusal(e, store, previous)
 
 
 def compatibility(e: Epoch, store) -> dict | None:

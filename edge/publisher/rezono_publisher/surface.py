@@ -20,11 +20,21 @@ from typing import Any
 from rezono_canon import sha256_hex
 from rezono_checker.canon import strict_json_loads
 
-__all__ = ["BUNDLE_FILE", "BUNDLE_FORMAT", "compare", "compatibility", "manifest_bundle_entry", "read_manifest_bundle"]
+__all__ = [
+    "BUNDLE_FILE",
+    "BUNDLE_FORMAT",
+    "compare",
+    "compatibility",
+    "manifest_bundle_entry",
+    "parse_semver",
+    "read_manifest_bundle",
+    "refusal",
+]
 
 BUNDLE_FILE = "bundle/schema-bundle.json"
 BUNDLE_FORMAT = "rezono.schema-bundle/1"
 _SHA256_HEX = re.compile(r"^[0-9a-f]{64}$")
+_SEMVER = re.compile(r"\A(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\Z")
 _CLASS_RANK = {"patch": 0, "minor": 1, "major": 2}
 _WORLDS = frozenset({"open", "closed"})
 _DECIMAL_INT = re.compile(r"^-?(0|[1-9][0-9]*)$")
@@ -844,12 +854,43 @@ def read_manifest_bundle(manifest: Any, store, *, pack: str | None = None) -> di
     return _parse_json_bundle(data, where)
 
 
-def compatibility(epoch, store, previous: Any) -> dict[str, Any] | None:
-    """Compare `epoch`'s compiled schema bundle against an earlier main `previous` manifest.
+def parse_semver(version: Any, where: str = "pack.version") -> tuple[int, int, int]:
+    """Parse a strict `MAJOR.MINOR.PATCH` semantic version (no leading zeroes), failing closed."""
+    if not isinstance(version, str) or not _SEMVER.fullmatch(version):
+        raise ValueError(f"{where}: expected a semantic version MAJOR.MINOR.PATCH, got {version!r}")
+    major, minor, patch = version.split(".")
+    return int(major), int(minor), int(patch)
+
+
+def _version_refusal(
+    change_class: str,
+    before_text: str,
+    before_ver: tuple[int, int, int],
+    after_text: str,
+    after_ver: tuple[int, int, int],
+) -> str | None:
+    if change_class == "major":
+        if after_ver[0] > before_ver[0]:
+            return None
+        return f"a major change needs a new major version: {before_text} to {after_text}"
+    if change_class == "minor":
+        if after_ver[:2] > before_ver[:2]:
+            return None
+        return f"a minor change needs a new minor version: {before_text} to {after_text}"
+    if change_class == "patch":
+        if after_ver > before_ver:
+            return None
+        return f"a patch change needs a higher version: {before_text} to {after_text}"
+    raise ValueError(f"unknown compatibility class {change_class!r}")
+
+
+def _compare_epoch(epoch, store, previous: Any) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]] | None:
+    """Load and compare `epoch`'s compiled schema bundle against an earlier main `previous` manifest.
 
     Returns None when `previous` is None or when `definition_sha256` and `compiler_sha256`
     are valid 64-character lowercase SHA-256 hex digests matching `previous` (same bundle,
-    nothing to compare). Otherwise returns `{"against": <manifest id>, "class": ..., "changes": [...]}`.
+    nothing to compare). Otherwise returns `(before, after, report)` where `report` is
+    `{"against": <manifest id>, "class": ..., "changes": [...]}`.
     Fails closed with `ValueError` on missing, mismatched, or malformed manifests or bundles.
     """
     if previous is None:
@@ -871,4 +912,53 @@ def compatibility(epoch, store, previous: Any) -> dict[str, Any] | None:
     before = read_manifest_bundle(prev_doc, store, pack=pack)
     after = _parse_json_bundle(getattr(epoch, "bundle", ""), "epoch.bundle")
     result = compare(before, after)
-    return {"against": against, "class": result["class"], "changes": result["changes"]}
+    return before, after, {"against": against, "class": result["class"], "changes": result["changes"]}
+
+
+def compatibility(epoch, store, previous: Any) -> dict[str, Any] | None:
+    """Compare `epoch`'s compiled schema bundle against an earlier main `previous` manifest.
+
+    Returns None when `previous` is None or when `definition_sha256` and `compiler_sha256`
+    are valid 64-character lowercase SHA-256 hex digests matching `previous` (same bundle,
+    nothing to compare). Otherwise returns `{"against": <manifest id>, "class": ..., "changes": [...]}`.
+    Fails closed with `ValueError` on missing, mismatched, or malformed manifests or bundles.
+    """
+    compared = _compare_epoch(epoch, store, previous)
+    return None if compared is None else compared[2]
+
+
+def refusal(epoch, store, previous: Any) -> str | None:
+    """Return the refusal reason for a main publication against `previous`, or None when allowed.
+
+    Enforces decisions/language-surface-compatibility.md section 4 once the earlier publication's
+    bundle has `pack.version` >= 1.0.0:
+    - R033 refuses any major change (naming R033 and the first major change first).
+    - The new bundle's `pack.version` must move at least as far as the compatibility class.
+    Packs at 0.y.z (initial development) are not refused. Fails closed with `ValueError` on
+    malformed manifests, bundles, or semantic versions.
+    """
+    compared = _compare_epoch(epoch, store, previous)
+    if compared is None:
+        return None
+    before, after, report = compared
+    before_text = before["pack"]["version"]
+    after_text = after["pack"]["version"]
+    before_ver = parse_semver(before_text, "before.pack.version")
+    after_ver = parse_semver(after_text, "after.pack.version")
+    if before_ver[0] < 1:
+        return None
+    reasons: list[str] = []
+    if report["class"] == "major":
+        major_changes = [c for c in report["changes"] if c["class"] == "major"]
+        if major_changes:
+            first = major_changes[0]
+            reasons.append(
+                f"R033 {first['element']} {first['change']}: "
+                "a breaking change needs a reviewed proposal (docs/rezono/v0.md §4c)"
+            )
+        else:
+            reasons.append("R033: a breaking change needs a reviewed proposal (docs/rezono/v0.md §4c)")
+    version_reason = _version_refusal(report["class"], before_text, before_ver, after_text, after_ver)
+    if version_reason is not None:
+        reasons.append(version_reason)
+    return "; ".join(reasons) if reasons else None
