@@ -166,3 +166,20 @@ def test_a_definition_without_a_subkind_has_no_parent_and_one_kind_per_family():
     assert not any("parent" in k for k in doc["kinds"].values())
     assert all(family == [name] for name, family in plan["family"].items())
     assert set(doc["kinds"]["Part"]["slots"]) == set()
+
+
+def test_boolean_attributes_write_bool_slots_and_exact_boolean_values():
+    bundle = copy.deepcopy(BUNDLE)
+    bundle["attributes"].append({"id": "holder.active", "kind": "holder", "name": "active", "table": "holder__active",
+                                 "type": "boolean", "required": False, "multivalued": False, "world": "closed"})
+    rows = {**WIDE["rows"], "holder__active": [("h1", "true")]}
+    doc, plan, out = form_of({**WIDE, "rows": rows}, bundle=bundle, full=None)
+    assert doc["kinds"]["Holder"]["slots"]["active"] == {"type": "Bool", "card": "?",
+                                                         "states": ["known", "not_applicable"]}
+    assert by_id(out)["h1"]["active"] is True
+    assert publication.differences(doc, plan, out, rows) == []
+
+    # Invalid boolean cell text fails closed instead of coercing.
+    bad_rows = {**WIDE["rows"], "holder__active": [("h1", "yes")]}
+    with pytest.raises(publication.FormError, match="holder__active.*not a boolean value"):
+        publication.row_json(doc, plan, {"rows": bad_rows, "witnesses": [], "sources": []})

@@ -121,6 +121,8 @@ def schema_document(bundle: dict, full=None) -> tuple[dict, dict]:
             slot["type"] = name
         elif a["type"] == "date":
             slot["type"] = "Date"
+        elif a["type"] == "boolean":
+            slot["type"] = "Bool"
         elif a["type"] == "text":
             if a.get("patterns"):
                 if len(a["patterns"]) != 1:
@@ -247,6 +249,14 @@ def _value(doc: dict, name: str, slot: str, a: dict, v):
     """The row JSON payload of one Rezono value of a slot (§3.2)."""
     if "target" in a:
         return {"$ref": v}
+    if a["type"] == "boolean":
+        if isinstance(v, bool):
+            return v
+        if v == "true":
+            return True
+        if v == "false":
+            return False
+        raise FormError(f"{a['table']}: {v!r} is not a boolean value")
     t = doc.get("types", {}).get(doc["kinds"][name]["slots"][slot].get("type"), {})
     return int(v) if t and _number_spelling(t) else v  # LD2: a bounded integer is a JSON number (hash-neutral)
 

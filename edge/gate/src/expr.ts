@@ -3,7 +3,6 @@ import { answer, check, isAsk, isError, load, NotEvaluated, page, print, questio
 import { NOT_READ_IN_FULL, snake } from '../../../rezono/src/schema.ts';
 import { canonicalJson } from '../../../viewer/src/lib/canon.ts';
 import type { Bundle } from '../../../contracts/typescript/generated/bundle.ts';
-import { roleCatalogue } from './catalogue.ts';
 import { ANSWER, AskError } from './ask.ts';
 import { NotLoaded, OverBudget } from '../../../rezono/src/evaluate.ts';
 import type { RowRef } from '../../../contracts/typescript/generated/proof.ts';
@@ -15,6 +14,51 @@ export { NOT_READ_IN_FULL };
 const PAGE = 1000;
 /** Rezono's integer storage (docs/compiler.md, Tables): the bounds of an integer type that declares none. */
 const BIGINT = ['-9223372036854775808', '9223372036854775807'];
+const RULE_COLUMN_TYPES: Record<string, string> = { string: 'Text', integer: 'Integer' };
+const ID_STORAGE: Record<string, string> = { text: 'string', integer: 'integer' };
+
+type BundleKind = {
+	id: string;
+	class: string;
+	parent?: string;
+	iri?: string;
+	world?: unknown;
+	id_type?: unknown;
+	plane?: unknown;
+	owner?: string;
+};
+type BundleSlot = {
+	id: string;
+	kind: string;
+	name: string;
+	table: string;
+	target?: string;
+	type?: string;
+	schema_type?: string;
+	enum?: string;
+	minimum?: string;
+	maximum?: string;
+	patterns?: string[];
+	multivalued?: boolean;
+	required?: boolean;
+	world?: unknown;
+};
+type BundleSemantic = {
+	case?: unknown;
+	base?: unknown;
+	target?: unknown;
+};
+type BundleColumn = {
+	name: string;
+	type?: unknown;
+	semantic?: BundleSemantic | null;
+};
+type BundleRelation = {
+	id: string;
+	world?: unknown;
+	columns: BundleColumn[];
+};
+const worldOf = (value: unknown): World | undefined => (value === 'open' || value === 'closed' ? value : undefined);
 
 /** Rows of one relation of the role, in key order: at most `limit` after `after`, and the last key while there are more. */
 export type Read = (relation: string, ask: { prefix: Key; after?: Key; limit: number }) => Promise<{ rows: unknown[]; next?: Key }>;
@@ -56,7 +100,6 @@ const notYet = (what: string): AskError => new AskError(501, `${what}: no Rezono
  * does not read in full is open, and a single-valued slot over one also takes `unknown`.
  */
 export function roleSchema(bundle: Bundle, snapshots: Listed[]): View {
-	const b = roleCatalogue(bundle, snapshots.filter((s): s is Required<Pick<Listed, 'relation' | 'complete'>> & Listed => typeof s.relation === 'string' && typeof s.complete === 'boolean'));
 	const reads = new Set<string>();
 	const full = new Set<string>();
 	for (const s of snapshots) {
@@ -66,31 +109,33 @@ export function roleSchema(bundle: Bundle, snapshots: Listed[]): View {
 	}
 	const partial = (relation: string): boolean => !full.has(relation);
 	// The pack's own base (§2.1), as the form takes it; a pack.yaml that declares no `iri:` gets the default.
-	const base = b.pack.base || `https://rezono.example/${b.pack.id}/`;
-	const view: View = { schema: { rezono: '1.0', pack: b.pack.id, base, kinds: {} }, kinds: new Map(), slots: new Map(), reads, trees: new Set() };
+	const base = bundle.pack.base || `https://rezono.example/${bundle.pack.id}/`;
+	const view: View = { schema: { rezono: '1.0', pack: bundle.pack.id, base, kinds: {} }, kinds: new Map(), slots: new Map(), reads, trees: new Set() };
 	const { kinds } = view.schema;
 	const types: Record<string, TypeDef> = {};
+	const usedEnums = new Set<string>();
 	const classOf = new Map<string, string>();
-	const byKind = new Map(b.kinds.map((k) => [k.id, k]));
+	const allKinds = (bundle.kinds ?? []) as unknown as BundleKind[];
+	const byAll = new Map(allKinds.map((k) => [k.id, k]));
 	/** The kind and the kinds above it, nearest first, by the bundle's `parent` (`_chain`). */
 	const chain = (id: string): string[] => {
 		const out: string[] = [];
-		for (let at: string | null | undefined = id; at; at = byKind.get(at)!.parent) {
-			if (!byKind.has(at) || out.includes(at)) throw notYet(`kind ${out[0] ?? at}: its parents do not end at a root kind`);
+		for (let at: string | null | undefined = id; at; at = byAll.get(at)!.parent) {
+			if (!byAll.has(at) || out.includes(at)) throw notYet(`kind ${out[0] ?? at}: its parents do not end at a root kind`);
 			out.push(at);
 		}
 		return out;
 	};
 	/** Per kind, by class: the kind and every kind below it, which restate each of its slots (§2.1 `parent`). */
 	const family = new Map<string, string[]>();
-	const visible = b.kinds.filter((k) => reads.has(k.id));
+	const visible = allKinds.filter((k) => reads.has(k.id));
 	for (const k of visible) {
 		// The world sits on the root kind: a subkind shares its parent's tables (docs/compiler.md, W6).
-		const world = chain(k.id).map((c) => byKind.get(c)!.world).find((w) => w !== undefined) ?? 'closed';
+		const world = chain(k.id).map((c) => worldOf(byAll.get(c)!.world)).find((w) => w !== undefined) ?? 'closed';
 		kinds[k.class] = { world: partial(k.id) ? 'open' : world, id: { type: 'Text' }, slots: {} };
 		// A kind's own IRI, when it is not the default under the base (§2.1: the default is never written).
-		if (k.iri !== undefined && k.iri !== `${base}${k.class}`) Object.assign(kinds[k.class], { iri: k.iri });
-		if (k.parent && reads.has(k.parent)) Object.assign(kinds[k.class], { parent: byKind.get(k.parent)!.class });
+		if (k.iri !== undefined && k.iri !== `${base}${k.class}`) kinds[k.class].iri = k.iri;
+		if (k.parent && reads.has(k.parent)) kinds[k.class].parent = byAll.get(k.parent)!.class;
 		classOf.set(k.id, k.class);
 		view.kinds.set(k.class, { relation: k.id });
 		view.slots.set(k.class, new Map());
@@ -98,10 +143,11 @@ export function roleSchema(bundle: Bundle, snapshots: Listed[]): View {
 	}
 	// Every kind of a tree that has a subkind: an element of a subkind is an element of each kind above it, which
 	// the evaluation does not read yet, so a question that reads any kind of such a tree is not answered (`ask`).
-	const roots = new Set(b.kinds.filter((k) => k.parent).map((k) => chain(k.id).at(-1)));
+	const roots = new Set(visible.filter((k) => k.parent && reads.has(k.parent)).map((k) => chain(k.id).at(-1)));
 	for (const k of visible) if (roots.has(chain(k.id).at(-1))) view.trees.add(k.class);
 	const byId = (x: { id: string }, y: { id: string }): number => (x.id < y.id ? -1 : x.id > y.id ? 1 : 0);
-	for (const a of [...(b.attributes ?? []), ...(b.arrows ?? [])].sort(byId)) {
+	const allSlots = [...((bundle.attributes ?? []) as unknown as BundleSlot[]), ...((bundle.arrows ?? []) as unknown as BundleSlot[])];
+	for (const a of [...allSlots].sort(byId)) {
 		const declared = classOf.get(a.kind);
 		if (!declared || !reads.has(a.table) || (a.target !== undefined && !classOf.has(a.target))) continue;
 		const slot: SlotDef = { card: a.multivalued ? (a.required ? '+' : '*') : a.required ? '1' : '?', states: ['known'] };
@@ -109,55 +155,102 @@ export function roleSchema(bundle: Bundle, snapshots: Listed[]): View {
 		else if (a.type === 'enum') {
 			slot.type = pascal(a.enum!);
 			types[slot.type] = { of: 'Enum', enum: a.enum };
+			if (a.enum) usedEnums.add(a.enum);
 		} else if (a.type === 'integer') {
 			slot.type = a.schema_type && a.schema_type !== 'integer' ? pascal(a.schema_type) : `${declared}${pascal(a.name)}`;
-			// Rezono Data's `min` and `max` of an integer type; `check` reads the slot's, a type's are data of the document.
-			types[slot.type] = { of: 'Integer' };
-			slot.min = a.minimum ?? BIGINT[0];
-			slot.max = a.maximum ?? BIGINT[1];
+			types[slot.type] = { of: 'Integer', min: a.minimum || BIGINT[0], max: a.maximum || BIGINT[1] };
 		} else if (a.type === 'date') slot.type = 'Date';
 		else if (a.type === 'boolean') slot.type = 'Bool';
 		else if (a.type === 'text') {
 			if (a.patterns?.length) {
 				if (a.patterns.length !== 1) throw notYet(`${a.id} has more than one pattern`);
-				slot.type = `${declared}${pascal(a.name)}`;
+				if (!a.schema_type) throw notYet(`${a.id} has no schema_type`);
+				slot.type = pascal(a.schema_type);
 				const type: TypeDef = { of: 'Text', pattern: a.patterns[0] };
-				if (slot.type in types && canonicalJson(types[slot.type]) !== canonicalJson(type)) throw notYet(`${a.id}: a second type named ${slot.type}`);
+				if (Object.hasOwn(types, slot.type) && canonicalJson(types[slot.type]) !== canonicalJson(type)) throw notYet(`${a.id}: a second type named ${slot.type}`);
 				types[slot.type] = type;
 			} else slot.type = 'Text';
 		} else throw notYet(`${a.id} has type ${a.type}`);
-		// A missing value is a state: unknown for a required slot, not applicable for an optional one.
-		if (!a.multivalued) slot.states = ['known', a.required ? 'unknown' : 'not_applicable'];
-		let world = a.world ?? 'closed';
-		if (partial(a.table)) {
-			// What the role cannot read in full is never closed over (O8). The evaluation is told too: it reads a
-			// value that is missing there as `rowsOf` writes it.
-			world = 'open';
-			if (!a.multivalued && !slot.states.includes('unknown')) slot.states = ['known', 'not_applicable', 'unknown'];
+		// What the role cannot read in full is never closed over (O8); only a closed, optional slot read in full
+		// can establish absence from a missing row (§3.3).
+		const world = partial(a.table) ? 'open' : (worldOf(a.world) ?? 'closed');
+		slot.states = ['known'];
+		if (!a.multivalued) {
+			if (!a.required) slot.states.push('not_applicable');
+			if (a.required || world === 'open') slot.states.push('unknown');
 		}
 		// The kind that declares the slot, and each kind below it, restates it (each its own copy, as the form writes it).
 		for (const kind of family.get(declared)!) {
-			if (a.name in kinds[kind].slots) throw notYet(`${a.id}: ${kind} has two slots ${a.name}`);
+			if (Object.hasOwn(kinds[kind].slots, a.name)) throw notYet(`${a.id}: ${kind} has two slots ${a.name}`);
 			if (partial(a.table)) ((view.schema.in_part ??= {})[kind] ??= []).push(a.name);
 			kinds[kind].slots[a.name] = { ...slot, states: [...slot.states], ...(world !== kinds[kind].world ? { world } : {}) };
 			view.slots.get(kind)!.set(a.name, { relation: a.table, partial: partial(a.table) });
 		}
 	}
-	for (const r of b.relations ?? []) {
+	// A kind of decided values (DV1, §3.7) carries its marker and owner; its decision is always known when read in full.
+	for (const kind of visible.filter((k) => k.plane === 'control').sort(byId)) {
+		const decision = kinds[kind.class].slots.decision;
+		const table = allSlots.find((a) => a.kind === kind.id && a.name === 'decision')?.table;
+		if (decision !== undefined && table !== undefined && !partial(kind.id) && !partial(table)) {
+			if (typeof kind.owner !== 'string' || !kind.owner) throw notYet(`kind ${kind.id}: control kind declares no owner`);
+			for (const name of family.get(kind.class)!) {
+				kinds[name].slots.decision.states = ['known'];
+				kinds[name].plane = 'control';
+				kinds[name].owner = kind.owner;
+			}
+		}
+	}
+	const columnSlot = (relation: string, column: BundleColumn): Pick<SlotDef, 'type' | 'ref' | 'min' | 'max'> => {
+		const where = `${relation}.${column.name}`;
+		const physical = column.type;
+		if (typeof physical !== 'string' || !Object.hasOwn(RULE_COLUMN_TYPES, physical)) {
+			throw notYet(`${where}: unsupported rule column type ${JSON.stringify(physical)}`);
+		}
+		const scalar: Pick<SlotDef, 'type' | 'min' | 'max'> = physical === 'integer'
+			? { type: RULE_COLUMN_TYPES[physical], min: BIGINT[0], max: BIGINT[1] }
+			: { type: RULE_COLUMN_TYPES[physical] };
+		const semantic = column.semantic;
+		if (semantic === undefined || semantic === null) return scalar;
+		if (typeof semantic !== 'object' || Array.isArray(semantic) || semantic.base !== physical) {
+			throw notYet(`${where}: its semantic type does not store a ${physical}`);
+		}
+		if (semantic.case === 'scalar') return scalar;
+		if (semantic.case === 'ref') {
+			const target = semantic.target;
+			if (typeof target !== 'string' || !classOf.has(target)) {
+				throw notYet(`${where}: refers to ${JSON.stringify(target)}, which is not a kind of the bundle`);
+			}
+			const idType = byAll.get(chain(target).at(-1)!)?.id_type;
+			if (typeof idType !== 'string' || !Object.hasOwn(ID_STORAGE, idType) || ID_STORAGE[idType] !== physical) {
+				throw notYet(`${where}: the identifier of ${target} is not stored as a ${physical}`);
+			}
+			return { ref: classOf.get(target)! };
+		}
+		throw notYet(`${where}: a ${JSON.stringify(semantic.case)} column is not written as a publication yet`);
+	};
+	for (const r of (bundle.relations ?? []) as unknown as BundleRelation[]) {
 		if (!reads.has(r.id)) continue;
 		const name = pascal(r.id);
-		if (kinds[name]) throw notYet(`derived relation ${r.id} has the name of a kind`);
-		const columns = r.columns.map((c) => c.name);
+		if (Object.hasOwn(kinds, name)) throw notYet(`derived relation ${r.id} has the name of a kind`);
+		const slots: Record<string, SlotDef> = {};
+		const columns: string[] = [];
+		for (const column of r.columns) {
+			if (Object.hasOwn(slots, column.name)) throw notYet(`${r.id}: two columns \`${column.name}\``);
+			slots[column.name] = { ...columnSlot(r.id, column), card: '1', states: ['known'], derived: true };
+			columns.push(column.name);
+		}
 		kinds[name] = {
-			world: partial(r.id) ? 'open' : (r.world ?? 'closed'),
+			world: partial(r.id) ? 'open' : (worldOf(r.world) ?? 'closed'),
 			id: { type: 'Text' },
-			slots: Object.fromEntries(columns.map((c) => [c, { type: 'Text', card: '1', states: ['known'], derived: true } satisfies SlotDef]))
+			slots,
+			tuple_key: columns
 		};
 		view.kinds.set(name, { relation: r.id, columns });
 		view.slots.set(name, new Map());
 	}
 	if (Object.keys(types).length) view.schema.types = types;
-	if (b.enums?.length) view.schema.enums = Object.fromEntries(b.enums.map((e) => [e.id, e.values.map((v) => v.slice(v.indexOf('.') + 1))]));
+	const enums = (bundle.enums ?? []).filter((e) => usedEnums.has(e.id) || reads.has(e.id));
+	if (enums.length) view.schema.enums = Object.fromEntries(enums.map((e) => [e.id, e.values.map((v) => v.slice(v.indexOf('.') + 1))]));
 	return view;
 }
 
@@ -268,6 +361,13 @@ function parseBoolean(relation: string, parts: string[]): boolean {
 	if (parts[1] === 'false') return false;
 	throw new AskError(500, `${relation} holds an invalid boolean value`);
 }
+function parseSafeInteger(relation: string, parts: string[]): number {
+	if (parts.length !== 2) throw new AskError(500, `${relation} holds a malformed integer row`);
+	if (!INT.test(parts[1])) throw new AskError(500, `${relation} holds an invalid integer value`);
+	const n = Number(parts[1]);
+	if (!Number.isSafeInteger(n)) throw new AskError(500, `${relation} holds an out-of-range integer value`);
+	return n;
+}
 
 /**
  * The rows of the wanted kinds and slots as Row JSON (Rezono Data §3), read through `read` and counted against
@@ -294,7 +394,14 @@ export async function rowsOf(view: View, want: Map<string, Set<string>>, read: R
 	for (const kind of [...want.keys()].sort()) {
 		const { relation, columns } = view.kinds.get(kind)!;
 		if (columns) {
-			for (const parts of await all(relation)) out.push({ $kind: kind, $id: canonicalJson(parts), ...Object.fromEntries(columns.map((c, i) => [c, parts[i]])) });
+			const slots = view.schema.kinds[kind].slots;
+			for (const parts of await all(relation)) {
+				out.push({
+					$kind: kind,
+					$id: canonicalJson(parts),
+					...Object.fromEntries(columns.map((c, i) => [c, slots[c].ref !== undefined ? { $ref: parts[i] } : parts[i]]))
+				});
+			}
 			continue;
 		}
 		const elements = new Map<string, Record<string, unknown>>();
@@ -311,7 +418,7 @@ export async function rowsOf(view: View, want: Map<string, Set<string>>, read: R
 				const [id, v] = parts;
 				const row = elements.get(id);
 				if (!row) continue;
-				const value = slot.ref !== undefined ? { $ref: v } : bool ? parseBoolean(at.relation, parts) : number ? Number(v) : v;
+				const value = slot.ref !== undefined ? { $ref: v } : bool ? parseBoolean(at.relation, parts) : number ? parseSafeInteger(at.relation, parts) : v;
 				if (many) ((row[name] ??= []) as unknown[]).push(value);
 				else if (name in row) throw new AskError(500, `${at.relation} holds two values for one element`);
 				else row[name] = value;
