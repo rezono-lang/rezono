@@ -321,14 +321,17 @@ def helper(p: packs.Pack, table: str, name: str, alts: list) -> str:
 
 def access_kind_columns(m: Model) -> dict[str, int | None]:
     """Per access relation the pack's rules declare: 1, the kind column of the fixed O7 signature
-    (role, kind, id), when the declaration has exactly that signature; None when it does not."""
+    (role, kind, id) — or (role, kind) for may_read_full — when the declaration has exactly that
+    signature; None when it does not."""
     out = {}
     for _, f in rule_files(m):
         toks = rule_tokens(read_text(f), f.name)
         for what, a, b in statements(toks):
             if what == "decl" and toks[a + 1].text in ACCESS:
+                rel = toks[a + 1].text
                 names = [toks[i].text for i in range(a + 3, b) if toks[i].kind == "ident" and toks[i + 1].text == ":"]
-                out[toks[a + 1].text] = 1 if len(names) == 3 and names[:2] == ["role", "kind"] else None
+                arity = 2 if rel == "may_read_full" else 3
+                out[rel] = 1 if len(names) == arity and names[:2] == ["role", "kind"] else None
     return out
 
 

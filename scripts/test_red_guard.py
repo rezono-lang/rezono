@@ -475,10 +475,13 @@ def read_cases(function):
     run("only tests changed under the read paths", [
         Change("edge/gate/src/ask.test.ts", "M", b"a", b"b"),
         Change("checker/rezono_checker/conftest.py", "M", b"a = 1\n", b"a = 2\n"),
+        Change("k8s-admission/test_policy_shell.py", "M", b"a = 1\n", b"a = 2\n"),
     ], ["planner"], False)
     for path in ("checker/rezono_checker/proof.py", "packs/std-access/rules/access.dl",
                  "edge/gate/src/ask.ts", "edge/publisher/rezono_publisher/access.py",
                  "contracts/proof.yaml", "checker/rezono_checker/fixtures.py",
+                 "k8s-admission/admission_translator.py", "k8s-admission/resources/publication-crd.yaml",
+                 "k8s-admission/fixtures/managed-blue.yaml", "examples/platform/network_policy.py",
                  *(f"edge/publisher/rezono_publisher/{name}.py" for name in (
                      "calc_scope", "sources", "sweep", "difference", "batch", "publish", "proof", "views",
                      "retained_calculation"))):

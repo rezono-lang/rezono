@@ -29,12 +29,12 @@ negations a certificate may cite; the current certificate check establishes abse
 relations only and refuses open reads itself (`missing_scope_coverage`).
 """
 
-import json
 import re
 from itertools import combinations, product
 
 from rezono_canon import canonical_bytes, canonical_sha256, sha256_hex
 
+from .canon import strict_json_loads
 from .transition import check_transition_certificate
 
 DECIMAL = re.compile(r"-?(0|[1-9][0-9]*)")
@@ -239,7 +239,7 @@ def _json(reference, read_bytes, what):
     """The canonical JSON value an archived-file reference pins."""
     data = _bytes(reference, read_bytes, what)
     try:
-        value = json.loads(data)
+        value = strict_json_loads(data)
         canonical = canonical_bytes(value) == data
     except (ValueError, RecursionError):  # bad UTF-8, bad JSON and CanonError are ValueErrors
         canonical = False

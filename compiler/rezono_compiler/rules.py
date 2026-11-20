@@ -449,7 +449,7 @@ def load(doc, require_witness=True):
         if absence not in (True, False) or (absence and role != "derived"):
             raise IRError("bad_absence", f"{name}: absence is true or false, on a derived relation")
         if "release" in r:
-            raise IRError("release_unsupported", f"{name}: release is not supported yet: a role reads a negation or an aggregate only over relations it reads in full (docs/architecture.md, delimited release)")
+            raise IRError("release_unsupported", f"{name}: release is not supported yet: a role reads a negation or an aggregate only over relations it reads in full (docs/formal.md, section 3; decisions/language-native-rules.md: delimited release stays reserved)")
         if r.get("world", "closed") not in WORLDS:
             raise IRError("bad_world", f"{name}: world is one of {WORLDS}")
         outcome = r.get("outcome")

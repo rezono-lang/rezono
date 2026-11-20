@@ -9,11 +9,10 @@ arguments `calc_step` (a wrong rounding, an unknown taken as zero), a step that 
 than the program `calc_node`, and a definition or result that differs `calc_result`.
 """
 
-import json
 from fractions import Fraction
 from graphlib import CycleError, TopologicalSorter
 
-from .canon import encode_key, number, number_text
+from .canon import encode_key, number, number_text, strict_json_loads
 
 BOUND = 2**63 - 1  # every numerator and denominator, in lowest terms
 
@@ -481,7 +480,7 @@ def total(ir: dict, rows) -> list[dict]:
 def subject_of(key) -> str | None:
     """The subject of a calculation row (subject, value, state, reason); None for any other key."""
     try:
-        parts = json.loads(key)
+        parts = strict_json_loads(key)
     except (TypeError, ValueError):
         return None
     return parts[0] if isinstance(parts, list) and len(parts) == 4 and all(isinstance(x, str) for x in parts) else None

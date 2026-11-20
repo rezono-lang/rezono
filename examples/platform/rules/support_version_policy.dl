@@ -92,6 +92,12 @@ effective_support_policy(ref, p, sp, w) :-
 .decl product_has_effective_policy(reference: symbol, product: symbol)
 product_has_effective_policy(ref, p) :- effective_support_policy(ref, p, _, _).
 
+.decl support_policy_conflict(reference: symbol, product: symbol)
+support_policy_conflict(ref, p) :-
+    effective_support_policy(ref, p, _, w1),
+    effective_support_policy(ref, p, _, w2),
+    w1 != w2.
+
 .decl support_severity(reference: symbol, service: symbol, cycle: symbol, severity: symbol)
 support_severity(ref, svc, c, "warning") :-
     support_reference__point(ref, pt),
@@ -99,6 +105,7 @@ support_severity(ref, svc, c, "warning") :-
     service_mapped_cycle(svc, p, series, c),
     cycle_consistent(p, series),
     effective_support_policy(ref, p, _, w),
+    !support_policy_conflict(ref, p),
     holds_at(c, pt),
     interval__end(c, end),
     cutoff = pos + w,
@@ -109,6 +116,7 @@ support_severity(ref, svc, c, "ok") :-
     service_mapped_cycle(svc, p, series, c),
     cycle_consistent(p, series),
     effective_support_policy(ref, p, _, w),
+    !support_policy_conflict(ref, p),
     holds_at(c, pt),
     interval__end(c, end),
     cutoff = pos + w,
@@ -118,6 +126,7 @@ support_severity(ref, svc, c, "ok") :-
     service_mapped_cycle(svc, p, series, c),
     cycle_consistent(p, series),
     effective_support_policy(ref, p, _, _),
+    !support_policy_conflict(ref, p),
     holds_at(c, pt),
     interval__unbounded(c, "end").
 support_severity(ref, svc, c, "critical") :-
@@ -125,6 +134,7 @@ support_severity(ref, svc, c, "critical") :-
     service_mapped_cycle(svc, p, series, c),
     cycle_consistent(p, series),
     effective_support_policy(ref, p, _, _),
+    !support_policy_conflict(ref, p),
     ended_at(c, pt).
 
 .decl support_severity_unknown(reference: symbol, service: symbol, reason: symbol)
@@ -142,6 +152,25 @@ support_severity_unknown(ref, svc, "policy-missing") :-
     service_mapped_cycle(svc, p, series, _),
     cycle_consistent(p, series),
     !product_has_effective_policy(ref, p).
+support_severity_unknown(ref, svc, "policy-conflict") :-
+    support_reference(ref),
+    service_mapped_cycle(svc, p, series, _),
+    cycle_consistent(p, series),
+    support_policy_conflict(ref, p).
+support_severity_unknown(ref, svc, "end-not-recorded") :-
+    support_reference__point(ref, pt),
+    service_mapped_cycle(svc, p, series, c),
+    cycle_consistent(p, series),
+    effective_support_policy(ref, p, _, _),
+    !support_policy_conflict(ref, p),
+    judgement(c, pt, "unknown", "end_not_recorded").
+support_severity_unknown(ref, svc, "start-not-recorded") :-
+    support_reference__point(ref, pt),
+    service_mapped_cycle(svc, p, series, c),
+    cycle_consistent(p, series),
+    effective_support_policy(ref, p, _, _),
+    !support_policy_conflict(ref, p),
+    judgement(c, pt, "unknown", "start_not_recorded").
 
 .decl support_severity_drift(reference: symbol, service: symbol, cycle: symbol, derived: symbol, registered: symbol, entry: symbol)
 support_severity_drift(ref, svc, c, derived, registered, entry) :-

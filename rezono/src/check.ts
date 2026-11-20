@@ -468,6 +468,15 @@ export function typing(text: string, schema: Schema, spans: WeakMap<object, Span
 			const base = settled(of);
 			if (base.ty.t === 'err') return value({ t: 'err' });
 			const element = { ...base, set: false };
+			if (name === 'one') {
+				const v = value(element.ty, [base]);
+				v.states.add('unknown');
+				v.states.add('not_applicable');
+				v.states.add('invalid');
+				closed(v, e, true);
+				v.sure = new Set();
+				return v;
+			}
 			if (AGGREGATES.has(name)) {
 				const over = arg === undefined ? element : inside(element, () => (name === 'count' ? truth(arg) : settled(arg)));
 				if (over.set) return report('R005', spanOf(arg ?? e), []);

@@ -33,6 +33,7 @@ export interface KindDecl extends Metadata {
 }
 export interface ExtendDecl {
 	extend: string;
+	binder?: string;
 	derived: DerivedDecl[];
 }
 
@@ -56,7 +57,7 @@ function readKind(line: Logical, build: Build): KindDecl {
 			(decl.equations ??= []).push(build.strip<PathEquationDecl>(member));
 			continue;
 		}
-		if (member.line === 'derived') decl.derived.push(readDerived(child, build));
+		if (member.line === 'derived') decl.derived.push(readDerived(child, build, 'member'));
 		else if (member.line === 'conditionalCheck') (decl.checks ??= []).push(readConditionalCheck(child, build));
 		else if (member.line === 'key') {
 			build.leaf(child);
@@ -81,8 +82,11 @@ function readKind(line: Logical, build: Build): KindDecl {
 function readExtension(line: Logical, build: Build): ExtendDecl {
 	const decl: ExtendDecl = { ...build.strip<ExtendDecl>(line.read!), derived: [] };
 	build.spans.set(decl, build.spans.get(line.read!)!);
+	if (decl.binder !== undefined && build.version !== '1') {
+		build.refuse(line, 'a kind name');
+	}
 	for (const child of line.block) {
-		if (child.read!.line === 'derived') decl.derived.push(readDerived(child, build));
+		if (child.read!.line === 'derived') decl.derived.push(readDerived(child, build, 'member'));
 		else build.refuse(child, '`derived`');
 	}
 	return decl;
@@ -116,7 +120,7 @@ export const kind = {
     | kw<"abstract"> -- abstract
     | kw<"relationship"> -- relationship
   KindLine = KindModifier? kw<"kind"> typeName (is typeName)? World?
-  ExtendLine = kw<"extend"> typeName
+  ExtendLine = kw<"extend"> (name ":")? typeName
   AppliesLine = kw<"applies"> (at | during | in) ":" name
   SealedLine = kw<"sealed"> at ":" name
   ConditionalCheckLine = kw<"require"> name kw<"when"> Expr kw<"then"> Expr
@@ -137,7 +141,11 @@ export const kind = {
 			if (world.numChildren) decl.world = world.child(0).decl();
 			return named(t, decl);
 		},
-		ExtendLine: (_k, t) => named(t, { line: 'extend', extend: t.sourceString }),
+		ExtendLine(_k, binder, _colon, t) {
+			const decl: Line = { line: 'extend', extend: t.sourceString };
+			if (binder.numChildren) decl.binder = opt(binder);
+			return named(t, decl);
+		},
 		AppliesLine: (_k, axis, _c, n) => named(n, { line: 'applies', axis: axis.sourceString, slot: n.sourceString }),
 		SealedLine: (_k, _at, _c, n) => ({ line: 'sealed', slot: n.sourceString }),
 		ConditionalCheckLine: (_require, name, _when, when, _then, then) => named(name, {
@@ -148,6 +156,10 @@ export const kind = {
 	},
 	declarations: {
 		kind: declaration<KindDecl>('kind', readKind, printKind),
-		extend: declaration<ExtendDecl>('extend', readExtension, d => block(`extend ${d.extend}`, d.derived.flatMap(printDerived)))
+		extend: declaration<ExtendDecl>(
+			'extend',
+			readExtension,
+			d => block(`extend ${d.binder ? `${d.binder}: ` : ''}${d.extend}`, d.derived.flatMap(printDerived))
+		)
 	}
 } satisfies ModuleComponent;

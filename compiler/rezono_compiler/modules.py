@@ -43,7 +43,7 @@ from . import rezono_module, standard_packs, strict_yaml
 # definition_sha256. A new kind of definition file is added here, and only here.
 DEFINITION = ("pack.yaml", "channels.yaml", "schema/**/*.yaml", "rezono/**/*.rezono", "rezono/**/*.json",
               "labels/*.yaml", "messages/*.mf2", "rules/*.dl", "calc/*.yaml", "sweeps.yaml", "questions.yaml",
-              "views.yaml", "icons/*.svg", "icons/sources.yaml")
+              "views.yaml", "icons/*.svg", "icons/sources.yaml", "ports/*.yaml")
 PACK_NAME = re.compile(r"^[a-z][a-z0-9]*(-[a-z0-9]+)*$")
 SHA256 = re.compile(r"^[0-9a-f]{64}$")
 

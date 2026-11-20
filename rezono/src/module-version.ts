@@ -73,7 +73,10 @@ export const printVersion = (v: VersionDecl) =>
 function eachVersionedDecl(module: Module, visit: (decl: ParamDecl | DerivedDecl, name: string) => void): void {
 	for (const decl of module.decls) {
 		if ('param' in decl) visit(decl, decl.param);
-		if ('derived' in decl && Array.isArray(decl.derived)) for (const d of decl.derived) visit(d, d.derived);
+		else if ('derived' in decl) {
+			if (Array.isArray(decl.derived)) for (const d of decl.derived) visit(d, d.derived);
+			else visit(decl, decl.derived);
+		}
 	}
 }
 
@@ -142,20 +145,40 @@ export function versionGaps(module: Module, spans: WeakMap<object, Span>): Diagn
 	return out;
 }
 
+/** Expand `YYYY` or `YYYY-MM` validity shorthand to `[start, exclusiveEnd]`. */
+function expandPeriod(text: string): [string, string] {
+	const parts = text.split('-');
+	const year = Number(parts[0]);
+	if (parts.length === 1) {
+		return [`${parts[0]}-01-01`, `${String(year + 1).padStart(4, '0')}-01-01`];
+	}
+	const month = Number(parts[1]);
+	const nextYear = month === 12 ? year + 1 : year;
+	const nextMonth = month === 12 ? 1 : month + 1;
+	return [
+		`${text}-01`,
+		`${String(nextYear).padStart(4, '0')}-${String(nextMonth).padStart(2, '0')}-01`
+	];
+}
+
 export const version = {
 	lineRules: ['VersionLine'],
 	grammar: String.raw`
   VersionLine = kw<"version"> number (kw<"replaces"> number)? ("," VContext)* ("=" Expr Src?)?
   VContext = kw<"valid"> date "..<" date    -- closed
            | kw<"valid"> date ".."           -- open
+           | kw<"valid"> yearMonth           -- month
+           | kw<"valid"> year                -- year
            | known date                      -- known
+  yearMonth = d d d d "-" ("0" "1".."9" | "1" "0".."2") ~tokCont
+  year = d d d d ~tokCont
   `,
 	actions: {
 		VersionLine(_k, n, _r, replaced, _commas, ctxs, _eq, value, src) {
-			const decl: Line = { line: 'version', version: n.sourceString };
+			const decl: Line = { line: 'version', version: n.lit() };
 			if (replaced.numChildren) {
 				const target = replaced.child(0);
-				decl.replaces = target.sourceString;
+				decl.replaces = target.lit();
 				replacedSpans.set(decl, spanOf(target));
 			}
 			Object.assign(decl, contexts(ctxs));
@@ -166,6 +189,8 @@ export const version = {
 		},
 		VContext_closed: (_k, from, _op, to) => ({ valid: [from.sourceString, to.sourceString] }),
 		VContext_open: (_k, from, _op) => ({ valid: [from.sourceString] }),
+		VContext_month: (_k, ym) => ({ valid: expandPeriod(ym.sourceString) }),
+		VContext_year: (_k, y) => ({ valid: expandPeriod(y.sourceString) }),
 		VContext_known: (_k, date) => ({ known: date.sourceString })
 	},
 } satisfies ModuleComponent;

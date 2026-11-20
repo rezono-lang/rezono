@@ -4,6 +4,7 @@ import { context } from './module-context.ts';
 import { deprecation } from './module-deprecation.ts';
 import { derived } from './module-derived.ts';
 import { enumeration } from './module-enum.ts';
+import { example, exampleExpect, exampleGiven } from './module-example.ts';
 import { facts } from './module-facts.ts';
 import { header } from './module-header.ts';
 import { kind } from './module-kind.ts';
@@ -27,10 +28,10 @@ import type { BlockSyntax, Declaration, ModuleComponent } from './module-support
 // Ohm tries these alternatives in order. Generic assignments stand after slots and specific statements.
 const components = [header, context, metadata, deprecation, rounding, reason, unit, enumeration, parameter, kind, derived, version, unless, table, source, facts, check, rules, slot, numericSlotBounds] as const;
 // Native signatures have columns, so their printer must precede the fact table printer.
-const registered: readonly ModuleComponent[] = [nativeRule, scalarAlias, step, stepEffect, ...components];
+const registered: readonly ModuleComponent[] = [nativeRule, scalarAlias, step, stepEffect, exampleGiven, exampleExpect, ...components, example];
 
 type DeclOf<T> = T extends { declarations: infer Entries } ? Entries[keyof Entries] extends Declaration<infer D> ? D : never : never;
-export type Decl = DeclOf<typeof components[number] | typeof nativeRule | typeof scalarAlias | typeof step>;
+export type Decl = DeclOf<typeof components[number] | typeof nativeRule | typeof scalarAlias | typeof step | typeof example>;
 
 const lines = [...registered.flatMap(c => c.lineRules), ...registered.flatMap(c => c.trailingRules ?? [])];
 export const moduleGrammar = `  Line = ${lines.join(' | ')}

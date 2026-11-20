@@ -70,8 +70,9 @@ Rezono {
   Unary = "-" Unary  -- neg
         | Post
   Post = Dotted TimeAt? TimeKnown? Filter?
-  Dotted = Dotted "." Agg   -- agg
-         | Dotted "." name  -- name
+  Dotted = Dotted "." where "(" Expr ")"  -- where
+         | Dotted "." Agg                 -- agg
+         | Dotted "." name                -- name
          | Atom
   Agg = aggName "(" Expr? ")"
   TimeAt = at Atom
@@ -154,7 +155,8 @@ ${moduleGrammar}
 
   literal (a value) = stateLit | boolLit | datetime | date | money | percent | quantity | number | text | typedText
           | typedId | numTok
-  num = d+ ("." d+)? ("/" d+)?
+  digits = d ("_"? d)*
+  num = digits ("." digits)? ("/" digits)?
   tokCont = wordChar | joint
   joint = ("-" | "." | "/" | ":") wordChar
   number (a number) = num ~tokCont
@@ -179,8 +181,8 @@ ${moduleGrammar}
            | "invalid" hsp+ reasonCode           -- invalid
   reasonCode = ~keyword az (az | d | "_")* ~wordChar
   boolLit = ("true" | "false") wordEnd
-  numTok = d (wordChar | inner)*
-  inner = ("-" | "." | "/" | ":") &wordChar
+  numTok = d (az | cap | d | inner)*
+  inner = ("-" | "." | "/" | ":") &(az | cap | d)
 }
 `;
 

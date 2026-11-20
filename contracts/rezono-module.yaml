@@ -48,6 +48,10 @@ types:
     typeof: string
     pattern: "^[a-z]([a-z0-9_]*|[a-z0-9]*(-[a-z0-9]+)+)$"
     description: A pack name from pack.yaml or a legacy Rezono name.
+  Rezono1PackName:
+    typeof: string
+    pattern: "^[a-z][a-z0-9]*(-[a-z0-9]+)*$"
+    description: A pack name in rezono 1 (decisions/language-rezono-1.md section 5.9), matching contracts/pack.yaml.
   DottedName:
     typeof: string
     pattern: "^[a-z]([a-z0-9_]*|[a-z0-9]*(-[a-z0-9]+)+)(\\.[a-z]([a-z0-9_]*|[a-z0-9]*(-[a-z0-9]+)+))*$"
@@ -128,6 +132,12 @@ enums:
       first: {description: "The first row that applies, in the order written."}
       priority: {description: The applying row whose output comes first in the order of the output enum.}
       collect: {description: "The set of the outputs of every row that applies."}
+  Rezono1HitPolicy:
+    description: Decision-table hit policies admitted in rezono 1 (`table priority` is removed; decisions/language-rezono-1.md section 1).
+    permissible_values:
+      unique: {description: "The rows do not overlap: at most one applies."}
+      first: {description: "The first row that applies, in the order written."}
+      collect: {description: "The set of the outputs of every row that applies."}
   RangeOp:
     permissible_values:
       "..": {description: Both ends are in.}
@@ -156,13 +166,14 @@ classes:
   ModuleForm:
     description: The form of one module.
     attributes:
-      format: {required: true, equals_string_in: [rezono.module/1, rezono.module/2, rezono.module/3, rezono.module/4]}
+      format: {required: true, equals_string_in: [rezono.module/1, rezono.module/2, rezono.module/3, rezono.module/4, rezono.module/5]}
       module:
         required: true
         any_of:
           - {range: ModuleWithRules, inlined: true}
           - {range: NativeRuleModule, inlined: true}
           - {range: SafeStepModule, inlined: true}
+          - {range: Rezono1Module, inlined: true}
       spans: {required: true, range: Place, multivalued: true, inlined_as_list: true, description: "The place of every node of `module` that has one, in the order of the canonical JSON of `module` (members by name, arrays by index); each node once."}
 
     rules:
@@ -206,6 +217,14 @@ classes:
               any_of:
                 - {range: SafeStepModule, inlined: true}
                 - {range: ModuleWithSafeSteps, inlined: true}
+      - preconditions:
+          slot_conditions:
+            format: {equals_string: rezono.module/5}
+        postconditions:
+          slot_conditions:
+            module:
+              all_of:
+                - {range: Rezono1Module, inlined: true}
 
   Place:
     description: >-
@@ -583,6 +602,89 @@ classes:
                   range_expression:
                     slot_conditions:
                       step: {required: true}
+
+  Rezono1Module:
+    is_a: ModuleHeader
+    description: The module shape for rezono 1 (`rezono.module/5`; decisions/language-rezono-1.md section 5.8).
+    slot_usage:
+      rezono:
+        required: true
+        equals_string: "1"
+      pack:
+        range: Rezono1PackName
+      use:
+        range: Rezono1Use
+        multivalued: true
+        inlined_as_list: true
+    attributes:
+      decls:
+        required: true
+        multivalued: true
+        inlined_as_list: true
+        any_of:
+          - *unit_decl
+          - *enum_decl
+          - *reason_decl
+          - *rounding_decl
+          - *param_decl
+          - range: Rezono1KindDeclWithKeys
+          - range: Rezono1KindDecl
+          - range: Rezono1ExtendDecl
+          - *check_decl
+          - *fact_table
+          - *fact_row
+          - *scalar_alias
+          - range: DatasetDecl
+          - *source_decl
+          - range: StepDecl
+
+  Rezono1Use:
+    description: "A `use` line in rezono 1: one hyphenated pack name, without dots."
+    attributes:
+      use: {required: true, range: Rezono1PackName}
+      as: {range: Name}
+
+  Rezono1Table:
+    is_a: Table
+    description: A decision table in rezono 1 (`table priority` is excluded).
+    slot_usage:
+      table:
+        range: Rezono1HitPolicy
+
+  Rezono1Derived:
+    is_a: Derived
+    description: A derived value in rezono 1 (excludes `table priority`).
+    slot_usage:
+      table:
+        range: Rezono1Table
+        inlined: true
+
+  Rezono1KindDecl:
+    is_a: KindDecl
+    description: A kind declaration in rezono 1 (excludes `table priority`).
+    slot_usage:
+      derived:
+        range: Rezono1Derived
+        multivalued: true
+        inlined_as_list: true
+
+  Rezono1KindDeclWithKeys:
+    is_a: KindDeclWithKeys
+    description: A kind declaration with named keys in rezono 1 (excludes `table priority`).
+    slot_usage:
+      derived:
+        range: Rezono1Derived
+        multivalued: true
+        inlined_as_list: true
+
+  Rezono1ExtendDecl:
+    is_a: ExtendDecl
+    description: An extend declaration in rezono 1 (excludes `table priority`).
+    slot_usage:
+      derived:
+        range: Rezono1Derived
+        multivalued: true
+        inlined_as_list: true
 
   StepDecl:
     description: A declared step with its match condition, scoped forbids, typed effect and confirmation.

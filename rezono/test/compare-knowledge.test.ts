@@ -1,0 +1,152 @@
+import assert from 'node:assert/strict';
+import { test } from 'node:test';
+import { compareAsKnown } from '../src/compare-knowledge.ts';
+
+test('compareAsKnown: table unique enforces unique policy, bare enum values, conflict, and undecided rows', () => {
+	// Bare enum tests and outputs + conflict when two rows apply + undecided row when one row applies.
+	const src = `rezono 1
+pack sample
+enum Tier = low | mid | high
+param cut: Int
+  version 1, valid 2026-01-01..<2027-01-01, known 2026-01-01 = 5
+  version 2 replaces 1, valid 2026-01-01..<2027-01-01, known 2026-02-01 = 10
+kind Item world closed
+  tier: Tier
+  score: Int
+  flag: Bool
+  derived label: Tier
+    table unique
+      | tier | -> label |
+      | low  | mid      |
+      | mid  | high     |
+      | high | high     |
+  derived unique_overlap: Tier
+    table unique
+      | score >= cut | flag | -> unique_overlap |
+      | true         | -    | high              |
+      | -            | true | low               |
+fact Item
+  | id | tier | score | flag |
+  | i1 | low  | 8     | true |
+  | i2 | mid  | 8     | unknown missing_flag |
+`;
+
+	// Before known 2026-02-01: cut = 5, so score (8) >= 5 is true.
+	// - i1: label = mid (bare enum test+output works without NotEvaluated).
+	//       unique_overlap: both row 1 (score>=5) and row 2 (flag=true) apply -> invalid exception_conflict!
+	// - i2: unique_overlap: row 1 applies (score>=5), row 2 is unknown -> MUST stay unknown (not ignore undecided row)!
+	// After known 2026-02-01: cut = 10, so score (8) >= 10 is false.
+	// - i1: unique_overlap: only row 2 applies -> known low!
+	// - i2: unique_overlap: row 1 is false, row 2 is unknown -> unknown missing_flag.
+	const res = compareAsKnown(src, {
+		question: 'ask Item at 2026-06-01 where label = mid or label = high show label, unique_overlap',
+		beforeKnown: '2026-01-15',
+		afterKnown: '2026-02-15',
+	});
+
+	assert.equal(res.format, 'rezono.turns/1');
+	const byKey = new Map(res.turns.map((t) => [t.key, t]));
+
+	// i1 turned from invalid exception_conflict -> known low
+	const t1 = byKey.get('i1');
+	assert.ok(t1, 'i1 should turn when conflict resolves to low');
+	assert.equal(t1.before.values?.label, 'mid');
+	assert.deepEqual(t1.before.states?.unique_overlap, { state: 'invalid', reason: 'exception_conflict' });
+	assert.equal(t1.after.values?.unique_overlap, 'low');
+	assert.deepEqual(t1.after.states?.unique_overlap, { state: 'known' });
+
+	// i2 stayed unknown missing_flag both before (when row 1 applied + row 2 undecided) and after (when row 1 false + row 2 undecided)
+	assert.equal(byKey.has('i2'), false, 'i2 must remain undecided on before snapshot when an undecided row could conflict');
+});
+
+test('compareAsKnown: table collect gathers all applying rows and undecided members', () => {
+	const src = `rezono 1
+pack sample
+enum Tag = a | b
+param cut: Int
+  version 1, valid 2026-01-01..<2027-01-01, known 2026-01-01 = 5
+  version 2 replaces 1, valid 2026-01-01..<2027-01-01, known 2026-02-01 = 15
+kind Item world closed
+  score: Int
+  derived tags: Tag*
+    table collect
+      | score >= 1 | score >= cut | -> tags |
+      | true       | -            | a       |
+      | -          | true         | b       |
+  derived tag_count: Int = tags.count()
+fact Item
+  | id | score |
+  | i1 | 10    |
+`;
+	const res = compareAsKnown(src, {
+		question: 'ask Item at 2026-06-01 where score > 0 show tag_count',
+		beforeKnown: '2026-01-15',
+		afterKnown: '2026-02-15',
+	});
+
+	assert.equal(res.turns.length, 1);
+	assert.equal(res.turns[0].key, 'i1');
+	assert.equal(res.turns[0].before.values?.tag_count, '2');
+	assert.equal(res.turns[0].after.values?.tag_count, '1');
+});
+
+test('compareAsKnown: omitting validAt and ask at does not conflate valid-time changes with knowledge-time changes', () => {
+	// Both versions were already known on 2026-01-01; only valid-time changes on 2026-03-01.
+	// Comparing known 2026-02-01 vs known 2026-04-01 without explicit validAt must use a single
+	// consistent validAt for both snapshots, so no turn is reported.
+	const src = `rezono 1
+pack sample
+param rate: Int
+  version 1, valid 2026-01-01..<2026-03-01, known 2026-01-01 = 10
+  version 2, valid 2026-03-01..<2027-01-01, known 2026-01-01 = 20
+kind Item world closed
+  units: Int
+  derived fee: Int = units * rate
+fact Item
+  | id | units |
+  | i1 | 3     |
+`;
+	const res = compareAsKnown(src, {
+		question: 'ask Item where fee >= 0 show fee',
+		beforeKnown: '2026-02-01',
+		afterKnown: '2026-04-01',
+	});
+
+	assert.equal(res.turns.length, 0, 'valid-time boundary with no knowledge change must produce 0 turns');
+});
+
+test('compareAsKnown: diffCauses fallback preserves fact key and slot when fact appears only on one side', () => {
+	const src = `rezono 1
+pack sample
+kind Item world closed
+  active: Bool
+  units: Int
+  derived fee: Int = units * 10
+    unless not active then 0
+fact Item
+  | id | active |
+  | i1 | false  |
+fact item i1, valid 2026-01-01.., known 2026-02-01
+  active = true
+  units = 5
+`;
+	// Before 2026-02-01: active=false (from base table), so `units` is never evaluated (short-circuited by unless).
+	// After 2026-02-01: active=true (versioned fact), units=5 (versioned fact only evaluated on after side).
+	const res = compareAsKnown(src, {
+		question: 'ask Item at 2026-06-01 where fee >= 0 show fee',
+		beforeKnown: '2026-01-15',
+		afterKnown: '2026-02-15',
+	});
+
+	assert.equal(res.turns.length, 1);
+	const turn = res.turns[0];
+	assert.equal(turn.key, 'i1');
+	assert.equal(turn.before.values?.fee, '0');
+	assert.equal(turn.after.values?.fee, '50');
+	const factCauses = turn.causes.filter((c) => c.target === 'fact');
+	assert.ok(factCauses.length >= 1, 'should include fact amendment cause');
+	for (const fc of factCauses) {
+		assert.equal(fc.key, 'i1');
+		assert.ok(fc.slot, 'fact cause must carry slot');
+	}
+});

@@ -21,6 +21,36 @@ def reads_all_in_full(manifest: dict, role: str) -> bool:
     return bool(relations) and full == relations
 
 
+def check_statuses(role: str, manifest: dict, truth: dict | None = None) -> None:
+    """Check that check statuses match the store's unscoped manifest or all-or-nothing without one."""
+    checks = manifest.get("checks")
+    if truth is not None:
+        if manifest.get("id") is None or manifest.get("id") != truth.get("id"):
+            raise SystemExit(f"{role} checks: manifest {manifest.get('id')!r} checked against {truth.get('id')!r}")
+        full = reads_all_in_full(truth, role)
+        expected = [
+            {"name": check["name"], "status": check["status"] if full else "unavailable"}
+            for check in truth.get("checks", [])
+        ]
+        if checks != expected:
+            raise SystemExit(f"{role} checks: expected {expected!r}, got {checks!r}")
+        return
+
+    if not isinstance(checks, list):
+        raise SystemExit(f"{role} checks: expected a list, got {checks!r}")
+    for check in checks:
+        if (not isinstance(check, dict) or set(check) != {"name", "status"}
+                or not isinstance(check["name"], str) or not check["name"]):
+            raise SystemExit(f"{role} checks: invalid check entry {check!r}")
+    statuses = {check["status"] for check in checks}
+    if not statuses <= {"green", "warning", "unavailable"}:
+        raise SystemExit(f"{role} checks: unexpected status in {checks!r}")
+    if "unavailable" in statuses and statuses != {"unavailable"}:
+        raise SystemExit(f"{role} checks: mixed unavailable and shown statuses in {checks!r}")
+    if statuses and statuses != {"unavailable"} and not reads_all_in_full(manifest, role):
+        raise SystemExit(f"{role} checks: status shown to a role that reads in part")
+
+
 def asked(gate, role: str, pack: str, manifest: str, question: str) -> list[dict]:
     """Read all pages of one typed question from a role-scoped gate."""
     path = f"/{pack}/{manifest}/ask"
@@ -76,6 +106,58 @@ def _object(local, key: str, what: str) -> bytes:
     if data is None:
         raise SystemExit(f"{what}: {key} is missing")
     return data
+
+
+def _holds_swept_value(rows, key: str, value: str) -> bool:
+    """Return whether snapshot rows contain the swept cell key and value."""
+    return isinstance(rows, list) and any(
+        isinstance(row, dict) and row.get("key") == [key, value] for row in rows
+    )
+
+
+def _check_sweep_cell(reader, role: str, pack: str, sweep_name: object,
+                      kind: object, slot: object, key: object, cell: object) -> None:
+    """Verify one generic sweep cell has a computed status backed by its variant snapshot."""
+    if not isinstance(cell, dict):
+        raise SystemExit(f"{role} sweeps: sweep {sweep_name!r} has invalid cell {cell!r}")
+    status = cell.get("status")
+    if status == "unavailable":
+        raise SystemExit(f"{role} sweeps: sweep {sweep_name!r} cell is unavailable")
+    if status not in ("green", "warning", "red"):
+        raise SystemExit(f"{role} sweeps: sweep {sweep_name!r} cell has non-computed status {status!r}")
+    if status == "red":
+        return
+    manifest, value = cell.get("manifest"), cell.get("value")
+    if not isinstance(manifest, str) or not manifest:
+        raise SystemExit(f"{role} sweeps: sweep {sweep_name!r} computed cell is missing manifest")
+    if not isinstance(value, str):
+        raise SystemExit(f"{role} sweeps: sweep {sweep_name!r} cell is missing value")
+    if not all(isinstance(part, str) and part for part in (kind, slot, key)):
+        raise SystemExit(f"{role} sweeps: sweep {sweep_name!r} is missing kind, slot or key")
+    if reader is None:
+        raise SystemExit(f"{role} sweeps: missing reader for sweep {sweep_name!r}")
+    rows = reader.get(f"/{pack}/{manifest}/snapshots/{kind}__{slot}")
+    if not _holds_swept_value(rows, key, value):
+        raise SystemExit(f"{role} sweeps: {manifest} snapshot does not hold {key} = {value}")
+
+
+def check_sweeps(reader, role: str, pack: str, sweeps: list[dict]) -> None:
+    """Check that every generic sweep cell has a computed status backed by its variant snapshot."""
+    if not isinstance(sweeps, list):
+        raise SystemExit(f"{role} sweeps: expected a list, got {sweeps!r}")
+    for sweep in sweeps:
+        if not isinstance(sweep, dict):
+            raise SystemExit(f"{role} sweeps: invalid sweep entry {sweep!r}")
+        name = sweep.get("name")
+        cells = sweep.get("cells")
+        if not isinstance(cells, list) or not cells:
+            raise SystemExit(f"{role} sweeps: sweep {name!r} has no cells")
+        cell_ref = sweep.get("cell") if isinstance(sweep.get("cell"), dict) else {}
+        kind = sweep.get("kind") or cell_ref.get("kind")
+        slot = sweep.get("slot") or cell_ref.get("slot")
+        key = sweep.get("key") or cell_ref.get("id")
+        for cell in cells:
+            _check_sweep_cell(reader, role, pack, name, kind, slot, key, cell)
 
 
 def checked_local_grid(local, pack: str, position: str, base_epoch: int, count: int) -> dict:
@@ -138,7 +220,7 @@ def checked_local_grid(local, pack: str, position: str, base_epoch: int, count: 
                 if snapshot.get("relation") != relation:
                     continue
                 rows = json.loads(_fetch(local, snapshot["uri"], snapshot["sha256"], f"{vid} snapshot"))
-                held = held or any(row.get("key") == [sweep["key"], value] for row in rows)
+                held = held or _holds_swept_value(rows, sweep["key"], value)
             if not held:
                 raise SystemExit(f"{vid}: snapshot does not hold {sweep['key']} = {value}")
             checks = [{"name": c["name"], "status": c["status"]} for c in variant.get("checks", [])]

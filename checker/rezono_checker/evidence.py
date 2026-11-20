@@ -15,14 +15,13 @@ and `verified_round_member`, the findings and the candidate references the compl
 admits again on the complete side of a publication and holds the protected snapshots against those rows.
 """
 
-import json
 from collections.abc import Callable
 from dataclasses import dataclass
 
 from rezono_canon import canonical_json
 
 from . import completeness
-from .canon import encode_key
+from .canon import encode_key, strict_json_loads
 
 RECEIPT = completeness.RELATION
 MEMBER = "verified_member"
@@ -131,5 +130,5 @@ def _members(parts, authorities, read_bytes):
     keys = completeness._inventory(completeness._read(inventory, read_bytes, "authority_inventory"),
                                    "authority_inventory")
     for member in sorted(keys):
-        for part, value in enumerate(json.loads(member)):
+        for part, value in enumerate(strict_json_loads(member)):
             yield parts[0], member, part, value if isinstance(value, str) else canonical_json(value)

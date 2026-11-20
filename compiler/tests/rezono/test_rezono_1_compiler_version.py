@@ -128,16 +128,6 @@ NOTE_KIND = {
 }
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=MissingRezono1CompilerVersion,
-    reason="M3: decisions/language-rezono-1.md: Admit rezono.module/5 (module.rezono == '1', excluding rezono 0-only "
-           "constructs) in contracts/rezono-module.yaml; accept rezono 0 and rezono 1 side by side in "
-           "compiler/rezono_compiler/rezono_module.py with pack-wide version consistency (R027), missing rezono line "
-           "refusal in rezono 1 (R028), and table priority refusal in rezono 1 (R028, hint: table first); and record "
-           "the pack language version ('0' or '1') on PackInfo in contracts/bundle.yaml and bundle/schema-bundle.json. "
-           "Read sections 1, 3.2, 5.8 and 8.",
-)
 def test_compiler_admits_rezono_module_5_and_enforces_pack_version(tmp_path):
     # Counter-case: a rezono 0 module with `table priority` still validates against rezono.module/1 and compiles.
     v0_form = _form("rezono.module/1", rezono="0", decls=[LEVEL_ENUM, ITEM_KIND, PRIORITY_EXTEND])

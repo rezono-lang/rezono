@@ -51,16 +51,6 @@ class LegacyCheckRoleSignature(AssertionError):
     """check_role still takes publisher-supplied columns, kinds or parents instead of the schema bundle."""
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=LegacyCheckRoleSignature,
-    reason=(
-        "extra: decisions/central-read-access.md: Remove the columns, kinds and parents parameters from "
-        "rezono_checker.access.check_role and accept the compiled schema bundle instead, deriving kinds, "
-        "parents and columns independently inside checker/rezono_checker/access.py; update "
-        "edge/publisher/rezono_publisher/publish.py and existing callers to pass the bundle."
-    ),
-)
 def test_check_role_derives_schema_from_bundle():
     params = list(inspect.signature(access.check_role).parameters)
     if any(legacy in params for legacy in ("columns", "kinds", "parents")) or "bundle" not in params:

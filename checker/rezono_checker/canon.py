@@ -1,5 +1,6 @@
 """Canonical text forms of keys and values. JSON and hashes follow the one rule in rezono_canon."""
 
+import json
 import re
 from decimal import Decimal
 from fractions import Fraction
@@ -11,6 +12,24 @@ from rezono_canon import canonical_json, canonical_sha256
 INTEGER = re.compile(r"0|-?[1-9][0-9]*")  # integers travel as decimal strings, never JSON numbers; no "-0" (K9)
 _POSITIVE = re.compile(r"[1-9][0-9]*")
 CalcColumnType = Literal["integer", "rational"]
+
+
+def _unique_object(pairs: list[tuple[str, object]]) -> dict[str, object]:
+    obj = dict(pairs)
+    if len(obj) != len(pairs):
+        raise ValueError("duplicate JSON object key")
+    return obj
+
+
+def _reject_constant(constant: str):
+    raise ValueError(f"non-standard JSON constant {constant!r}")
+
+
+def strict_json_loads(data: str | bytes | bytearray):
+    """Parse strict RFC 8259 JSON, rejecting duplicate object keys and NaN/Infinity constants."""
+    if isinstance(data, (bytes, bytearray)):
+        data = data.decode("utf-8")
+    return json.loads(data, object_pairs_hook=_unique_object, parse_constant=_reject_constant)
 
 
 def calc_value(text: str, column_type: CalcColumnType) -> bool:

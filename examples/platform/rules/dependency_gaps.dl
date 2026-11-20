@@ -45,7 +45,7 @@ independent_placement(p, alt) :-
 has_independent_placement(p) :- independent_placement(p, _).
 
 .decl provider_domain_unknown(provider: symbol)
-provider_domain_unknown(p) :- missing_pair_domain(p, _).
+provider_domain_unknown(p) :- missing_pair_domain(p, alt), !shares_withdrawn_domain(p, alt).
 
 .decl dependency_gap(consumer: symbol, function: symbol, reason: symbol)
 dependency_gap(consumer, function, "no-solution") :-

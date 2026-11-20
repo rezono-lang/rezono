@@ -115,7 +115,8 @@ def _declared_dataset(pack_dir: Path, meta: dict, declared: rezono_module.Declar
     if any(rezono_module.module_body(submitted, version) is not None
            for version in (rezono_module.FORMAT, *rezono_module.NATIVE_FORMATS)):
         return None
-    module = rezono_module.module_body(submitted, DATASET_FORMAT)
+    module = (rezono_module.module_body(submitted, DATASET_FORMAT)
+              or rezono_module.module_body(submitted, rezono_module.REZONO_1_FORMAT))
     if module is None:
         raise LoadError(f"{declared.form}: expected a Rezono module form")
     if not any(isinstance(decl, dict) and "dataset" in decl for decl in module["decls"]):

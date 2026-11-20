@@ -48,7 +48,7 @@ schema exact_quote
 - **One lowering.** A module without a `schema` line, a module with `schema <module>`, and a module that writes all four defaults explicitly lower to the same LinkML schema, byte for byte. The schema name defaults to the module's name. The `layer` annotation lowers as `layer: <layer>` in each case, as a module without a header lowers it today.
 - **Writing a default is deprecated.** `import "linkml:types"` as the only import, `default range Text` and `annotation layer = "<layer>"` give W107 at the line, with "leave it out" as the hint. A `layer` annotation that disagrees with the registration is refused, as today, so a written layer annotation is never needed. An `iri` gives no warning: the reader does not know the module's name, and an `iri` that deviates is the usual case.
 - **Imports.** In `rezono 0`, a written `import` list replaces the default, as it does today, so a header that imports anything else still writes `import "linkml:types"` and gets no warning for it. From `rezono 1`, `linkml:types` is always imported and written imports add to it; that changes the meaning of a header that leaves it out, so it waits for that version.
-- **Worlds.** The default world stays `open`, as v0 §5 and [the default world for a LinkML kind](conformance-value-world-default.md) give it. The header has no world line.
+- **Worlds.** The default world stays `open`, as v0 §5 and [the default world for a LinkML kind](conformance-value-world-default.md) give it. The header has no world line. In `rezono 1` a kind is closed by default: see [Rezono 1 defaults](language-rezono-1-defaults.md#1-kinds-are-closed-by-default-in-rezono-1).
 
 ## 2. The sentence and the source at the rule
 

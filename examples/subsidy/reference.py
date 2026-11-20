@@ -19,7 +19,7 @@ import sys
 from fractions import Fraction
 
 HERE = pathlib.Path(__file__).parent
-AS_OF = "2026-11-10"  # calc/award.yaml, as_of.valid_at
+AS_OF = "2026-11-10"  # calc/date.yaml, as_of.valid_at
 # Arrows per kind: the references a fact file must be able to follow.
 ARROWS = {"scheme_parameter": ("article", "decision", "calendar"), "evaluation_day": ("calendar",),
           "cost_item": ("article",), "application": ("household",),

@@ -18,7 +18,7 @@ if TYPE_CHECKING:
     from rezono_compiler.rules import Program
 
 
-RELATIONS = ("declared", "needed", "known", "waiting", "ready", "done", "stuck", "drift")
+RELATIONS = ("declared", "needed", "known", "waiting", "unblocked", "done", "stuck", "drift")
 INSTANT = re.compile(r"(\d{4}-\d\d-\d\d[Tt]\d\d:\d\d:\d\d)(?:\.(\d+))?([Zz]|[+-]\d\d:\d\d)")
 EPOCH = datetime(1970, 1, 1, tzinfo=timezone.utc)
 TICK_COLUMNS = {
@@ -161,11 +161,13 @@ class TypedRecording:
 
         stored = {}
         for row in self.records.get("loop_observation", ()):
-            if stored.setdefault(row["id"], row) != row:
+            key = (row["run"], row["id"])
+            if stored.setdefault(key, row) != row:
                 raise ValueError(f"conflicting records for observation {row['id']!r}")
         sweeps = {}
         for row in self.records.get("loop_sweep", ()):
-            if sweeps.setdefault(row["id"], row) != row:
+            key = (row["run"], row["id"])
+            if sweeps.setdefault(key, row) != row:
                 raise ValueError(f"conflicting records for sweep {row['id']!r}")
         clock = self.clock
         arrived: list[tuple[Event, Fraction]] = []
@@ -176,7 +178,8 @@ class TypedRecording:
         try:
             for sweep in self.rounds:
                 if sweep.dated is not None:
-                    if sweeps.setdefault(sweep.dated["id"], sweep.dated) != sweep.dated:
+                    key = (sweep.dated["run"], sweep.dated["id"])
+                    if sweeps.setdefault(key, sweep.dated) != sweep.dated:
                         raise ValueError(f"conflicting records for sweep {sweep.dated['id']!r}")
                 events = [e for e in sweep.events if e.envelope["run"] == self.run]
                 if events:
@@ -194,10 +197,11 @@ class TypedRecording:
                 if sweep.receipt is not None:
                     records["loop_sweep_receipt"] = [sweep.receipt]
                 records = scale_timed_records(records, self.run, factor)
-                observed = {row["id"]: row for row in records["loop_observation"]}
+                observed = {(row["run"], row["id"]): row for row in records["loop_observation"]}
                 for e, ticks in arrived:
                     row = e.record(integer_tick(ticks * factor))
-                    if observed.setdefault(row["id"], row) != row:
+                    key = (row["run"], row["id"])
+                    if observed.setdefault(key, row) != row:
                         raise ValueError(f"conflicting records for observation {row['id']!r}")
                 records["loop_observation"] = list(observed.values())
                 inputs = scenarios.rule_rows(self.model, self.program, facts.rows_of(self.model, records))
@@ -212,7 +216,7 @@ class TypedRecording:
                     if len(outcomes) != 1 or not outcomes <= {"pending", "success", "failure"}:
                         raise ValueError(f"expected one round outcome for {self.run!r}, got {sorted(outcomes)}")
                     round_outcome = next(iter(outcomes))
-                yield Snapshot({row[1] for row in selected["declared"]}, selected["ready"],
+                yield Snapshot({row[1] for row in selected["declared"]}, selected["unblocked"],
                                {row[1] for row in selected["done"]}, {row[1] for row in selected["stuck"]},
                                selected["drift"], selected.get("fixed_point", ()), round_outcome)
         except Diagnosed as error:
