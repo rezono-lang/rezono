@@ -1,0 +1,68 @@
+id: https://rezono.org/examples/platform-core/management-certificates
+name: platform_management_certificates
+description: Caller-bound TLS certificate requirements, trust anchors, reads and presented leaf certificates.
+in_language: en
+imports: [linkml:types]
+default_range: string
+annotations:
+  layer: facts
+
+types:
+  TlsCalendarDate:
+    description: Calendar date in YYYY-MM-DD form for certificate validity and evaluation days.
+    typeof: string
+    pattern: '^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$'
+
+enums:
+  TlsTransport:
+    description: Whether an offered service uses TLS or plaintext transport.
+    permissible_values:
+      tls:
+      plain:
+
+classes:
+  TlsRequirement:
+    description: A caller-specific TLS requirement for an offered service.
+    attributes:
+      id: {identifier: true}
+      caller: {required: true}
+      name: {required: true}
+      transport: {range: TlsTransport, required: true}
+
+  TlsClock:
+    description: The fixed calendar day and warning window in days for certificate evaluation.
+    attributes:
+      id: {identifier: true}
+      day: {range: TlsCalendarDate, required: true}
+      warning_days: {range: integer, minimum_value: 0, required: true}
+
+  TlsRoot:
+    description: A trust anchor authority accepted by a specific caller.
+    attributes:
+      id: {identifier: true}
+      caller: {required: true}
+      authority: {required: true}
+
+  TlsIssuer:
+    description: A subordinate issuer certificate signed by a parent authority.
+    attributes:
+      id: {identifier: true}
+      issuer: {required: true}
+
+  TlsRead:
+    description: An observation attempt reading the certificate presented by a service.
+    attributes:
+      id: {identifier: true}
+      service: {required: true}
+      complete: {range: boolean}
+
+  TlsLeaf:
+    description: A leaf certificate observed for a service during a read.
+    attributes:
+      id: {identifier: true}
+      service: {required: true}
+      read: {required: true}
+      dns_name: {required: true}
+      issuer: {required: true}
+      begins: {range: TlsCalendarDate, required: true}
+      ends: {range: TlsCalendarDate, required: true}
