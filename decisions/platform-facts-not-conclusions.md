@@ -6,11 +6,11 @@ state: in_force
 subject: platform-facts
 ---
 
-# Derive the platform's ports, release order, start order, running release and verified supply instead of writing them down
+# Derive the platform's ports, release order, start order, running release, verified supply and catalogue prices instead of writing them down
 
-The [vision](../docs/vision.md#facts-and-conclusions) says: "A conclusion is derived by a rule. If a rule can derive it from what the same publication holds, it is not written down", and "A row without an origin is not a fact." A review of `examples/platform` at commit `b77fd2a` found seven places where the pack writes down a row that repeats a pinned vendor statement, holds a number nobody published, or states what a rule could derive. The owner adopted, on 2026-11-20, the advice to put the seven points out together. This decision gives each point its current state, its target and its migration order, states the equivalence each step keeps, and names the red test of the step a worker takes. [Fact origins](fact-origin-required.md) · [Standard packs everywhere](standard-packs-everywhere.md) · [Rezono 1 defaults](language-rezono-1-defaults.md) · [Vendor transport evidence](platform-vendor-transport-evidence.md) · [Rezono 1, section 7](language-rezono-1.md#7-per-derivation-intended-semantic-differences-for-examplesplatformrulescoredl)
+The [vision](../docs/vision.md#facts-and-conclusions) says: "A conclusion is derived by a rule. If a rule can derive it from what the same publication holds, it is not written down", and "A row without an origin is not a fact." A review of `examples/platform` at commit `b77fd2a` found seven places where the pack writes down a row that repeats a pinned vendor statement, holds a number nobody published, or states what a rule could derive. The owner adopted, on 2026-11-20, the advice to put the seven points out together, and added an eighth the same day: catalogue prices follow a pricing policy. This decision gives each point its current state, its target and its migration order, states the equivalence each step keeps, and names the red test of the step a worker takes. [Fact origins](fact-origin-required.md) · [Standard packs everywhere](standard-packs-everywhere.md) · [Rezono 1 defaults](language-rezono-1-defaults.md) · [Vendor transport evidence](platform-vendor-transport-evidence.md) · [Rezono 1, section 7](language-rezono-1.md#7-per-derivation-intended-semantic-differences-for-examplesplatformrulescoredl)
 
-## 1. The seven points
+## 1. The eight points
 
 | # | Written today | What it is | Target | Red test |
 | --- | --- | --- | --- | --- |
@@ -21,6 +21,7 @@ The [vision](../docs/vision.md#facts-and-conclusions) says: "A conclusion is der
 | 5 | `Artifact.signed` (`yes`/`no`) | an observation written as a design fact | an observed signature, open, complete within a verifier's scan (section 7) | `test_platform_signature_observations.py`, `M2` |
 | 6 | zones, roles, function flags, catalogue prices, placement | design choices without origin | an origin for every row, as [fact origins](fact-origin-required.md) requires | that decision's `examples/platform/test_platform_fact_origins.py`, `M2` |
 | 7 | `Demand` | a maker's requirements mixed with the platform's own design, without origin | a maker's page for a maker's requirement, a decision for the platform's design (section 8) | `test_platform_demand_origins.py`, `M2` |
+| 8 | the fourth number of each size in `tenant-catalog.json` | prices set by hand, without origin or rule | a size states its contents; its price follows from pricing parameters that a decision sets; today's prices are a transitional decision until then (section 9) | `test_platform_catalogue_prices.py`, `M2` |
 
 The test files are in `examples/platform/`.
 
@@ -209,7 +210,7 @@ After point 2's sources step, because the new release has no day number:
 
 - The release `kube-control-1.32.13` with its pin, its dated `ProductReleaseSource` statement, and a licence binding `bind-kube-control-1.32.13` (basis `exact-scenario-release`, notice `kube-control-1.32.13`).
 - The rename of `kubernetes` to `kube-control` in the support register, its source, their expected standalone violations and `acceptance/test_kubernetes_support.py`; `facts/kubernetes_support.yaml` drops its own product row, because `facts/core.yaml` declares `kube-control`.
-- Intended differences, which the planner restates in the same pull request: `runs` gains `(cp, kube-control-1.32.13)` (`acceptance/test_support_unknown.py` asserts four rows); `support_unknown` gains `(cp, kube-control-1.32.13, unknown)`, because `VendorSupportStatement` has no row for it (section 9); and `component_product_licence` gives `cp` the basis `exact-scenario-release` instead of `reference-source-release`, with the same version 1.32.13. `provides(cp, control-plane, 6443)` stays, now through rule 2 of section 3.
+- Intended differences, which the planner restates in the same pull request: `runs` gains `(cp, kube-control-1.32.13)` (`acceptance/test_support_unknown.py` asserts four rows); `support_unknown` gains `(cp, kube-control-1.32.13, unknown)`, because `VendorSupportStatement` has no row for it (section 10); and `component_product_licence` gives `cp` the basis `exact-scenario-release` instead of `reference-source-release`, with the same version 1.32.13. `provides(cp, control-plane, 6443)` stays, now through rule 2 of section 3.
 
 ### Equivalence
 
@@ -270,15 +271,91 @@ With those observations: `verified` is `{shop}`, `unverified_supply` is `{lab, r
 
 A decision is a `git` source that names a file in `decisions/` (or a `proposal` source); a maker's page is a `document` or `tool` source with a URL outside this repository, or a `git` source at the maker's repository.
 
-## 9. Not decided here
+## 9. Catalogue prices (point 8)
+
+The owner added this point on 2026-11-20, after the seven above. They chose a pricing policy over hand-set prices (option B of the advice).
+
+### Now
+
+`tenant-catalog.json` gives each size of a catalogue item four numbers, `[cores, memory_gib, storage_gib, monthly_cents]`:
+
+- cluster small: `[2, 4, 20, 2495]`
+- cluster medium: `[4, 8, 40, 4995]`
+- database medium: `[2, 4, 30, 2510]`
+
+`request_preview.py` turns the fourth number into `TenantCatalogOffer.monthly_cents`. `rules/tenant_monthly_cost.dl` sums it per tenant: elm 7,505 and reed 2,495 ([tenants](platform-tenants.md), `tenant-rows.json`). The prices have no origin, and no rule derives them. [Core-day shares](platform-core-day-shares.md) says that direct catalogue prices "describe a different charge" from the shared monthly cost it allocates.
+
+### Target
+
+- **What a size contains.** A catalogue size states only its cores, GiB of memory and GiB of storage. That is a design decision, and it needs an origin ([fact origins](fact-origin-required.md)).
+- **The price.** The monthly price of a size is derived from pricing parameters. A std-decision `Decision` sets the parameters, one decision per version, and a later version `supersedes` the earlier one. `schema/pricing.yaml` declares two kinds:
+  - `PricingRate`, with slots `id`, `decision` (`Decision`), `item`, `dimension` and `cents_per_unit` (an integer, at least 0). The dimension is `cores`, `memory_gib` or `storage_gib`, the names of `TenantCatalogOffer`'s quantities. There is one row per item and dimension.
+  - `PricingRounding`, with slots `id`, `decision` (`Decision`), `item` and `rule`. The rule comes from a closed enum, `PriceRounding`, with two values:
+    - `none`: the sum itself.
+    - `up_to_95`: the smallest amount at or above the sum whose last two digits are 95, which is `n + (195 - n % 100) % 100` for a sum `n`.
+
+    A new rounding is a new enum value, defined in this section.
+- **The rule.** `tenant_catalog_price(offer, cents)` takes, over the three dimensions, the offer's quantity times the item's rate. It adds these up and applies the item's rounding. The parameters it reads are those whose decision is in force (std-decision `in_force_on`) on the evaluation's reference date. Two decisions in force at once for one item's rate or rounding give a finding, `pricing_conflict(item)`.
+- **The cost.** `tenant_monthly_cost_term` reads `tenant_catalog_price` instead of `tenant_catalog_offer__monthly_cents`, and `TenantCatalogOffer.monthly_cents` goes. A request item whose offer has no price gets `tenant_monthly_cost_unknown` with the reason `price-missing`, separate from `offer-missing`.
+- **The area.** The pricing decision is bound with a new `PlatformDecisionArea` value, `pricing` (`schema/decision_standing.yaml`), not with `shared_cost`. The two differ in what they set:
+  - A `shared_cost` statement is an amount the platform spends in a month. It is divided afterwards by observed core-days.
+  - A pricing decision sets in advance what a tenant pays for a requested size.
+
+  [Core-day shares](platform-core-day-shares.md) already calls these different charges. The recovery comparison below also needs them apart: under one area, the standing of one would read as the standing of the other.
+
+### Can a policy reproduce today's prices honestly?
+
+Only with rates fitted to the prices, not with rates anyone chose.
+
+- **Clusters.** A medium cluster has twice the resources of a small one in every dimension, so with linear rates its sum is twice the small sum. 4,995 is not 2 × 2,495. The rounding `up_to_95` still reproduces both prices whenever the small sum lies between 2,448 and 2,495 cents. For example, 1,000 cents per core, 100 per GiB of memory and 3 per GiB of storage give sums of 2,460 and 4,920, which round to 2,495 and 4,995. Every rate card whose small sum falls in that 48-cent band does the same, and nothing picks one card over the others.
+- **Database.** There is one size, and its price ends in 10. The cluster card gives 2,490, so the database needs a card of its own. With a single price, any card that sums to 2,510 fits, for example 1,000, 90 and 5 with `none`.
+
+Such rates would be numbers fitted to today's prices, not a policy the prices follow. They are the kind of number nobody published that this decision removes elsewhere. So the target stays as above, and the prices become a transitional decision until the owner sets the rates.
+
+### Transitional price decision
+
+Until the owner sets the rates, today's prices form a dated, transitional price decision. This section is its origin.
+
+| Item, size | Monthly price (EUR cents) |
+| --- | --- |
+| cluster, small | 2,495 |
+| cluster, medium | 4,995 |
+| database, medium | 2,510 |
+
+The owner took it on 2026-11-20, in force from that day. The first pricing decision with rates supersedes it. Nothing in the catalogue changes now: its fourth number is this decision's price.
+
+### Steps
+
+1. **Sources.** The owner's pricing decision is added:
+   - a decision file with a head, recorded as a std-decision `Decision` that supersedes the transitional one;
+   - its binding with area `pricing`;
+   - its `PricingRate` and `PricingRounding` rows in `facts/pricing.yaml`, which cite it.
+
+   If the rates change a price, that decision says so. The planner then restates the expected prices and tenant costs in this step, in `platform-tenants.md` and `tenant-rows.json`. The planner also restates three things in the same pull request:
+   - `tenant_oracle.py` reads the fourth number as the price. It changes to compute the price from the parameters when a size has three numbers, and to read the fourth number otherwise.
+   - `test_platform_reference.py::test_monthly_cost_is_derived_by_the_pack` raises a price in the catalogue. It changes to raise a rate or a quantity.
+   - `test_request_input.py` asserts the `monthly_cents` input of `database/medium`.
+2. **Rules.** A worker adds `tenant_catalog_price` and makes `tenant_monthly_cost` read it. The worker also drops the fourth number from the catalogue sizes, makes `request_preview.py` read three numbers, and removes `TenantCatalogOffer.monthly_cents`. The red test turns green in this step.
+3. **Retire.** A planner removes the oracle's fourth-number path.
+
+### Equivalence
+
+`tenant_catalog_price` gives 2,495, 4,995 and 2,510. `tenant_monthly_cost` stays elm 7,505 and reed 2,495, as `tenant-rows.json` holds them. If the owner's rates change a price, step 1 says so.
+
+### Specified, not tested
+
+- **Rates from cost.** Later, a rate can follow from what the platform pays. A provider's prices are captured with their sources under `run/` and divided by the planned capacity. The pricing decision then cites that derivation instead of setting a number.
+- **Recovery.** Compare the list-price income of a month (`tenant_monthly_cost` summed over that month) with `shared_cost_share` for the same month. The difference is an over- or under-recovery finding, with its proof. It needs both charges for one month, and it stays apart from the allocation itself.
+
+## 10. Not decided here
 
 - `VendorSupportStatement` in `schema/core.yaml` (read by `rules/support_unknown.dl`, with no rows) and `SeriesSupportSource` (`facts/kubernetes_support_source.yaml`) both hold a maker's support end. After point 4, `support_unknown` reports `cp` while a series statement for 1.32 exists. Whether one kind replaces the other is a later decision.
 - `SupportQuery.as_of_day` belongs to [standard packs everywhere](standard-packs-everywhere.md).
 - The origin of `Offer` rows (which product offers which function) is the same question as point 7 and follows the same split.
 
-## 10. Red tests
+## 11. Red tests
 
-Each test takes its expectations from this decision, from the pinned vendor statements in `facts/`, and from the independent reference rows in `oracle-rows.json` and `acceptance/product-evidence.json`. Each fails today with an `AssertionError`, or with `MissingDemandOrigin`, a subclass of it.
+Each test takes its expectations from this decision, from the pinned vendor statements in `facts/`, and from the independent reference rows in `oracle-rows.json`, `tenant-rows.json` and `acceptance/product-evidence.json`. Each fails today with an `AssertionError`, or with `MissingDemandOrigin`, a subclass of it.
 
 | Test | Mark | Ready | Expects |
 | --- | --- | --- | --- |
@@ -288,6 +365,7 @@ Each test takes its expectations from this decision, from the pinned vendor stat
 | `test_platform_support_window_runs.py::test_support_window_reads_the_release_the_service_runs` | `M2` | after the sources steps of sections 4 and 6 | `cp` runs one release, version 1.32.13; the same `support_window_result` for the four windows; another patch version on that release gives that version; another version on the retired row changes nothing |
 | `test_platform_signature_observations.py::test_supply_is_verified_from_observed_signatures` | `M2` | now | the observation kinds of section 7; `verified` `{shop}`, `unverified_supply` as in `oracle-rows.json`, no `supply_unknown`; flipped `signed` values change nothing; without `a-lab` in the scan `lab` is unknown; without the signature on `a-shop`, `shop` is unverified |
 | `test_platform_demand_origins.py::test_demands_cite_the_vendor_or_a_decision` | `M2` | now | the split of section 8 for every `demand` row; Keycloak's database demand cites Keycloak's page |
+| `test_platform_catalogue_prices.py::test_catalogue_prices_follow_the_pricing_policy` | `M2` | after the owner's pricing decision and the sources step of section 9 | catalogue sizes hold three numbers and no price is an input; the pricing parameters are bound to a decision; `tenant_catalog_price` gives 2,495, 4,995 and 2,510 and equals the rates times the quantities, rounded as section 9 defines; tenant costs elm 7,505 and reed 2,495; one more core in the small cluster is priced by the rates |
 
 Tests that already exist and change with these steps, each restated by a planner in the step named:
 
@@ -298,14 +376,16 @@ Tests that already exist and change with these steps, each restated by a planner
 | `proof_cases/test_registry_release_licence.py`, `proof_cases/test_support_version_policy.py` | sources, section 4 |
 | `acceptance/test_kubernetes_support.py`, `acceptance/test_support_unknown.py`, the licence proof cases that read `cp`'s basis | sources, section 6 |
 | `test_platform_reference.py` through `oracle.py` and `oracle-rows.json` | sources, section 4 (a release without a day number); retire, every section |
+| `tenant_oracle.py`, `test_platform_reference.py::test_monthly_cost_is_derived_by_the_pack`, `test_request_input.py` | sources, section 9 |
 
-## 11. Order
+## 12. Order
 
 1. Section 5 (start order), section 7 (signatures) and section 8 (demands): workers, now.
 2. The sources step of section 3, then its rules step.
 3. The sources step of section 4, then the sources step of section 6, then the rules step of section 6.
 4. The rules step of section 4, once red test A of [standard packs everywhere](standard-packs-everywhere.md) is green.
-5. Each retire step after its rules step, one planner pull request per point.
+5. The sources step of section 9 once the owner has set the rates, then its rules step.
+6. Each retire step after its rules step, one planner pull request per point.
 
 ## Alternatives
 
@@ -315,4 +395,6 @@ Tests that already exist and change with these steps, each restated by a planner
 - **Port decisions for every product, with the vendor statements only as a check.** Five of the thirteen would repeat a pinned statement, which the vision rules out.
 - **Derive the start order in the platform's own rules.** A closure of its own would be a variant beside `std-order`, which [standard packs everywhere](standard-packs-everywhere.md) rules out, and it would not get `std-order`'s cycle invariant.
 - **Keep `kubernetes` as the product id and rename `kube-control`.** The service, the offer, the demands, the transport statement, the licence notice and their tests name `kube-control`; the support register and its source are the smaller side.
+- **Pricing parameters under the area `shared_cost`.** That area holds what the platform spends; a list price is a different charge ([core-day shares](platform-core-day-shares.md)), and the recovery finding compares the two.
+- **Choose rates now that reproduce today's prices.** They exist (section 9), but they would be fitted to the prices, and nothing would pick one card from the band that fits. Recording the prices as a transitional decision keeps the numbers honest until the owner sets rates.
 - **Record a signature as a fact with a `tool` source.** It would have an origin, but a missing row would still read as "not signed". Only the scan's coverage turns an absent signature into a known one.
