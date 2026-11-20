@@ -178,14 +178,6 @@ class InSetWorstError(AssertionError):
     """`x in S` did not include `S`'s states in `worst` when `x` is not `known`."""
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=CountPredParityError,
-    reason="M3: decisions/language-rezono-1-refinements.md: Fix `S.count(pred)` in rezono/src/evaluate.ts so it is "
-           "identically equal to `S.where(pred).count()` (`n/a` predicate results are excluded, `unknown` and "
-           "`invalid` leave the count undecided with Appendix A.4 reason precedence), while keeping zero-argument "
-           "`S.count()` strict in member states. Read section 3.1.",
-)
 def test_count_pred_matches_where_count_with_na_unknown_invalid():
     res = run_node(COUNT_PROBE)
     problems = []
@@ -214,14 +206,6 @@ def test_count_pred_matches_where_count_with_na_unknown_invalid():
         raise CountPredParityError(json.dumps(problems, indent=2))
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=InSetWorstError,
-    reason="M3: decisions/language-rezono-1-refinements.md: Fix `isIn` in rezono/src/evaluate.ts so `x in S` with "
-           "non-known `x` inspects `S`'s member states and undecided memberships and returns `worst([x, ...])` "
-           "(`n/a in [invalid] = invalid`, `n/a in [unknown] = unknown`, `unknown in [invalid] = invalid`), while "
-           "preserving `n/a in [known] = n/a` and decisive `known k in [known k, invalid] = true`. Read section 3.2.",
-)
 def test_in_set_takes_worst_over_set_when_lhs_not_known():
     res = run_node(IN_PROBE)
     problems = []
