@@ -152,6 +152,16 @@ class _GroupClause:
             self.refuse(f"{operator} needs a ranged integer key column of {name!r}")
         return column
 
+    def aggregate(self, invocation: list) -> tuple[str, Atom, str | None]:
+        if not isinstance(invocation, list) or len(invocation) not in (2, 3):
+            self.refuse("an aggregate invocation needs a function, a domain and an optional measure")
+        function, domain, *measure = invocation
+        if function not in rules.FUNCTIONS or len(measure) > 1:
+            self.refuse(f"{function!r} is not a supported aggregate invocation")
+        atom = self.range(domain)
+        over = self.measure(function, measure[0] if measure else None, atom)
+        return function, atom, over
+
     def body(self, guard: dict) -> tuple[list[tuple], list[str | None]]:
         statements: list[tuple] = []
         measures: list[str | None] = []
@@ -167,12 +177,9 @@ class _GroupClause:
             elif "cmp" in node:
                 operator, left, right = node["cmp"]
                 if operator == "=" and "agg" in right:
-                    function, domain, *measure = right["agg"]
-                    if function not in rules.FUNCTIONS or len(measure) > 1:
-                        self.refuse(f"{function!r} is not a supported aggregate invocation")
-                    atom = self.range(domain)
+                    function, atom, over = self.aggregate(right["agg"])
                     groups.append(atom)
-                    measures.append(self.measure(function, measure[0] if measure else None, atom))
+                    measures.append(over)
                     # The native measure names a column. There is no local Datalog variable to recover.
                     statements.append(("agg", self.result(left), function, None, atom))
                 elif operator == "=" and "arith" in right:
@@ -198,6 +205,17 @@ class _GroupClause:
                 if term[0] == "var" and term[1] not in positive:
                     self.refuse(f"{term[1]} in the group over {name} needs a positive premise")
         return statements, measures
+
+
+def lower_aggregate(invocation: list, relations: Iterable[dict], *,
+                    origin: Mapping[str, str]) -> tuple[str, Atom, str | None]:
+    """Lower one checked native aggregate invocation `(fn, domain[, measure])` to `(fn, atom, over)`.
+
+    Uses the same fixed-key filter and measure rules as `lower_group_clause`, returning the resolved
+    relation atom (with wildcards replaced by any fixed-column filter terms) and the measured column
+    name (or None for `count`).
+    """
+    return _GroupClause(relations, origin).aggregate(invocation)
 
 
 def lower_group_clause(clause: dict, relations: Iterable[dict], *, module: str, origin: Mapping[str, str]) -> dict:

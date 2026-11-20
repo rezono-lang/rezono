@@ -23,7 +23,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import cast
 
-from . import rezono_alias, rezono_enum, rezono_extend, rezono_key, rezono_kind, rezono_metadata, rezono_slot, rezono_unit, strict_yaml
+from . import rezono_alias, rezono_calc, rezono_enum, rezono_extend, rezono_key, rezono_kind, rezono_metadata, rezono_slot, rezono_unit, strict_yaml
 from .native_literals import NATIVE_FORMAT, native_literal_errors
 from .schemaview import SchemaView
 from linkml_runtime.linkml_model import SchemaDefinition
@@ -509,6 +509,11 @@ def lower(pack_dir: Path, d: Declared, form: dict, pack: str, owners: dict[str, 
     enums: dict[str, dict] = {}
     classes: dict[str, dict] = {}
     aliases: dict[str, dict] = {}
+    # The slots of each kind of this module, which an inverse slot reads (decisions/language-inverse-references.md).
+    kinds: dict[str, list] = {}
+    for decl in module["decls"]:
+        if isinstance(decl, dict) and isinstance(decl.get("kind"), str):
+            kinds.setdefault(decl["kind"], decl.get("slots") or [])
     for i, decl in enumerate(module["decls"]):
         at = f"/decls/{i}"
         if not isinstance(decl, dict):
@@ -538,7 +543,7 @@ def lower(pack_dir: Path, d: Declared, form: dict, pack: str, owners: dict[str, 
                     continue
             lowered_kind = rezono_kind.lower(
                 decl, at, own, owners, declared_names, uses, refuse,
-                extended_format=extended_format, aliases=prefixes,
+                extended_format=extended_format, aliases=prefixes, kinds=kinds,
             )
             if lowered_kind is not None:
                 if keys:
@@ -551,7 +556,9 @@ def lower(pack_dir: Path, d: Declared, form: dict, pack: str, owners: dict[str, 
         elif "rule" in decl and native_rules:
             continue  # The rule assembler needs the checked schema and pinned imports.
         elif "extend" in decl:
-            rezono_extend.validate(decl, at, imported, refuse)
+            rezono_extend.validate(decl, at, imported, refuse, extended_format=extended_format)
+        elif "asOf" in decl and extended_format:
+            rezono_calc.validate_as_of(decl, at, refuse)
         elif "rules" in decl and form["format"] == IDENTIFIER_FORMAT:
             from .rezono_relational import valid_block
 
@@ -574,6 +581,8 @@ def lower(pack_dir: Path, d: Declared, form: dict, pack: str, owners: dict[str, 
             continue  # The fact loader reads the dataset's tables (decisions/language-library-datasets.md).
         else:
             refuse(at, *next((REFUSED[k] for k in REFUSED if k in decl), ("not a declaration this compiler reads",)))
+    if extended_format:
+        rezono_calc.validate_module(module["decls"], refuse)
     schema = {"id": f"https://rezono.org/rezono/{pack}/{d.id}", "name": d.id.replace("/", "_"),
               "imports": ["linkml:types"], "default_range": "string", "annotations": {"layer": d.layer},
               "enums": enums, "classes": classes}

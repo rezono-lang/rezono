@@ -4,7 +4,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { test } from 'node:test';
 import { parse as yaml } from 'yaml';
-import { answer, check, isError, load, type Schema, type SlotDef, type StateName, type World } from '../src/index.ts';
+import { answer, check, isAsk, isCheck, isError, load, outputSchema, publish, type Schema, type SlotDef, type StateName, type World } from '../src/index.ts';
 
 interface Case {
 	id: string;
@@ -13,6 +13,9 @@ interface Case {
 		rows: Record<string, unknown>[];
 		select?: { kind: string; id: string };
 		language?: string;
+		check?: string;
+		ask?: string;
+		role?: string;
 	};
 	expect: { value: unknown; state: StateName; reason: string | null; witness: unknown };
 	unsupported?: { language?: string };
@@ -95,7 +98,7 @@ const cases = readdirSync(root)
 		if (reason !== undefined) assert.ok(typeof reason === 'string' && reason.trim(), `${entry.id}: give the specific language limitation`);
 		return entry;
 	})
-	.filter((entry) => entry.input.language !== undefined);
+	.filter((entry) => entry.input.language !== undefined || entry.input.check !== undefined || entry.input.ask !== undefined);
 
 test('the shared conformance corpus has a case for the language', () => {
 	assert.ok(cases.some((entry) => entry.unsupported?.language === undefined));
@@ -107,6 +110,7 @@ test('the shared conformance corpus has a case for the language', () => {
 // lifts its strict xfail, turns the comparison into a passing one. The task needs no change to this runner or to
 // the case file; its reason can be removed afterwards.
 const PENDING = 'Waits for rezono/test/test_conformance_language_outcomes.py--';
+const QUESTIONS_AND_CHECKS_TASK = 'rezono/test/test_conformance_language_outcomes.py--test_language_compares_question_and_check_cases';
 const board = JSON.parse(execFileSync('python', ['scripts/red_list.py', '--json'], {
 	cwd: fileURLToPath(new URL('../../', import.meta.url)), encoding: 'utf8',
 })) as { id: string }[];
@@ -116,20 +120,80 @@ const pendingTask = (reason: string | undefined) =>
 
 const schema = readFixture();
 for (const { id, input, expect, unsupported } of cases) {
-	const task = pendingTask(unsupported?.language);
+	const isQuestionOrCheck = input.language === undefined && (input.check !== undefined || input.ask !== undefined);
+	const task = pendingTask(unsupported?.language) ?? (isQuestionOrCheck && unsupported?.language === undefined ? QUESTIONS_AND_CHECKS_TASK : undefined);
 	const skip = task === undefined ? unsupported?.language : undefined;
+	const run = () => (input.language !== undefined ? compare(input, expect) : compareQuestionOrCheck(id, input, expect));
 	test(`shared conformance: ${id}`, { skip }, async (t) => {
 		if (task !== undefined && expectedRed.has(task)) {
 			try {
-				await compare(input, expect);
+				await run();
 				t.todo(`${id} passes; ${task} can lift its strict xfail`);
 			} catch (error) {
 				t.todo(`${task}: ${error instanceof Error ? error.message : String(error)}`);
 			}
 			return;
 		}
-		await compare(input, expect);
+		await run();
 	});
+}
+
+async function compareQuestionOrCheck(id: string, input: Case['input'], expect: Case['expect']) {
+	if (input.ask !== undefined) {
+		const checked = check(input.ask, schema);
+		assert.deepEqual(checked.diagnostics.filter(isError), []);
+		assert.ok(checked.tree && isAsk(checked.tree));
+		const answerSchema = await outputSchema(checked.tree, checked, schema);
+		assert.ok(answerSchema);
+		const columns = Object.fromEntries(
+			Object.entries(answerSchema.kinds.Answer.slots).map(([name, slot]) => [
+				name,
+				slot.ref !== undefined ? `ref ${slot.ref.replace(/^p\./, '')}` : slot.type!.toLowerCase(),
+			])
+		);
+		assert.deepEqual(columns, (expect.value as { columns: Record<string, string> }).columns);
+		assert.equal(expect.state, 'known');
+		assert.equal(expect.reason, null);
+		return;
+	}
+	assert.ok(typeof input.check === 'string' && input.check.trim(), 'a check case gives its check statement');
+	const checked = check(input.check, schema);
+	assert.deepEqual(checked.diagnostics.filter(isError), []);
+	assert.ok(checked.tree && isCheck(checked.tree));
+	const pub = publish(checked, schema, load(schema, input.rows));
+	assert.ok(pub);
+	const expectedValue = expect.value as Record<string, unknown>;
+	const blocked = pub.outcome === 'blocked';
+	if (id === 'value-warn-never-blocks') {
+		assert.ok(pub.violations.length > 0, 'warning case must include a false row');
+		assert.ok(pub.undecided.some((u) => u.state === 'unknown'), 'warning case must include an unknown row');
+		assert.ok(pub.undecided.some((u) => u.state === 'invalid'), 'warning case must include an invalid row');
+		assert.deepEqual({ false: blocked, unknown: blocked, invalid: blocked }, expectedValue.publication_blocked);
+	} else if ('publication_blocked' in expectedValue) {
+		assert.equal(blocked, expectedValue.publication_blocked);
+	}
+	if ('violations' in expectedValue) {
+		assert.deepEqual(pub.violations, expectedValue.violations);
+	}
+	if ('undecided' in expectedValue) {
+		assert.deepEqual(
+			pub.undecided.map((u) => ({ subject: u.id, state: u.state, reason: u.reason })),
+			expectedValue.undecided
+		);
+	}
+	if ('count_per_role' in expectedValue) {
+		assert.equal(String(pub.undecided.length), expectedValue.count_per_role);
+	}
+	const expectedWitness = expect.witness as { undecided?: unknown[] } | null;
+	if (expectedWitness && 'undecided' in expectedWitness) {
+		assert.deepEqual(
+			pub.undecided.map((u) => u.cause),
+			expectedWitness.undecided
+		);
+	}
+	const topState = !('undecided' in expectedValue) && pub.undecided.length === 1 ? pub.undecided[0].state : 'known';
+	const topReason = !('undecided' in expectedValue) && pub.undecided.length === 1 ? pub.undecided[0].reason : null;
+	assert.deepEqual({ state: topState, reason: topReason }, { state: expect.state, reason: expect.reason });
 }
 
 async function compare(input: Case['input'], expect: Case['expect']) {

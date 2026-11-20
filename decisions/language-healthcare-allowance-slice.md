@@ -69,7 +69,7 @@ The slice is a pack of its own beside the full example: `examples/zorgtoeslag-sl
 
 ## The oracle
 
-The oracle of the slice is `examples/zorgtoeslag-slice/reference.py`, an independent calculation in the manner of `examples/subsidy/reference.py`. It uses the standard library only and shares no code with the compiler or the reader. It reads the fact rows of `facts.rezono` with its own reading, and it states the parameter versions itself, from this decision, rather than reading the module. Its function `allowance(facts, household, as_of, known)` gives the monthly allowance in cents, or the pair of state and reason. The cases in `allowance-cases.yaml` were computed by hand, and the oracle must give each of them.
+The oracle of the slice is `examples/zorgtoeslag-slice/reference.py`, an independent calculation in the manner of `examples/subsidy/reference.py`. It uses the standard library only and shares no code with the compiler or the reader. It reads the fact rows of `facts.rezono` with its own reading, and it states the parameter versions itself, from this decision, rather than reading the module. Its function `allowance(facts, household, as_of, known)` gives the monthly allowance in cents, or the pair of state and reason. The cases in `allowance-cases.yaml` were computed by hand, and the oracle must give each of them. The oracle is evidence: it lands with the tests, apart from the module it checks, and was written without reading that module.
 
 A lowering test of each building block of the slice compares what the compiler publishes with the oracle, not with the compiler's own output.
 
@@ -81,7 +81,7 @@ Each building block of the slice gets its own decision on how it lowers and publ
 2. **Ordered exceptions.** The calculation model has no operator for `unless` yet. The decision gives one, or a lowering into the existing operators that keeps the states of v0 section 5b.
 3. **Dated facts.** The fact contracts need a place for versioned values ([dated facts](language-dated-facts.md)), which is the largest change of the three.
 
-After the third, the slice gets its `pack.yaml`, and a test publishes every case of `allowance-cases.yaml` and compares it with the oracle.
+After the third, the slice gets its `pack.yaml`, and a test publishes every case of `allowance-cases.yaml` and compares it with the oracle (`test_published_slice_gives_the_oracle`).
 
 Here the choice of the domain goes before usage. Otherwise the order of the language follows usage: a building block publishes when the conversion of a pack waits for it, as the pack table of `scripts/language_usage.py` and [first packs](language-first-packs.md) show. These three building blocks are used by no other pack, so that order would put them last.
 
@@ -95,7 +95,7 @@ Here the choice of the domain goes before usage. Otherwise the order of the lang
 
 ## Tests
 
-`compiler/tests/rezono/test_zorgtoeslag_slice.py` holds two red tests:
+`compiler/tests/rezono/test_zorgtoeslag_slice.py` holds two red tests. The oracle is not a task of its own: it is the expectation of the published module, and a test cannot wait for evidence it reads.
 
-- `test_slice_oracle_gives_the_cases`: the oracle, with the standard library only, gives every case of `allowance-cases.yaml`, and follows a change in the facts it reads.
+- `test_published_slice_gives_the_oracle`: first the oracle, with the standard library only, gives every case of `allowance-cases.yaml` and follows a change in the facts it reads; a wrong oracle fails the test outright rather than leaving it red. Then the published pack gives, for every case on its own `as of` day, the allowance the oracle gives, with both evaluators of the calculation agreeing. It stays red until the slice has its `pack.yaml`, after the three building blocks publish, so it is no task before then.
 - `test_slice_module_uses_only_the_first_slice`: the module reads, belongs to the pack `zorgtoeslag-slice`, uses the three building blocks with a parameter version per year and two `unless` blocks, and uses nothing outside the first slice.

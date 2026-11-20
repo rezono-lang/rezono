@@ -135,7 +135,14 @@ def test_std_access_publishes_through_its_consumer(tmp_path):
     "scripts/convert_pack.py proposes, so that examples/subsidy publishes the same files, bundle (places "
     "and the pin of std-access aside) and relations per role over it as over the oracle in "
     "compiler/tests/rezono/fixtures/std-access-legacy. Update the sha256 of std-access in every pack.yaml "
-    "that imports it, and onwards for their importers; this task may change those lines."))
+    "that imports it, and onwards for their importers; this task may change those lines. "
+    "Blocked on planner changes: compiler/tests/test_std_access.py, "
+    "compiler/tests/rezono/test_lower_schema_metadata.py, and compiler/tests/rezono/test_pack_converter.py "
+    "read packs/std-access/schema/access.yaml or rules/access.dl directly instead of fixtures/std-access-legacy, "
+    "and tests/fixtures/neutral/pack.yaml and tests/fixtures/slip/pack.yaml are protected paths under "
+    "scripts/red_guard.py that cannot be updated in the same PR that lifts this strict xfail mark. "
+    "Also note packs/std-access/ requires a p1-read-<head[:7]> review label and "
+    "compiler/rezono_compiler/standard_packs.py must regenerate TABLE."))
 def test_whole_std_access_has_the_same_meaning(tmp_path):
     expected = meaning(published(tmp_path, "legacy"))
     actual = meaning(published(tmp_path, "rezono"))

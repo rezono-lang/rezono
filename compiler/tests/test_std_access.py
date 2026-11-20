@@ -14,11 +14,17 @@ STD = REPO / "packs" / "std-access"
 
 
 def test_standard_access_declares_no_grants():
+    import souffle
     from rezono_compiler.rules_dl import parse_file
-    statements = parse_file((STD / "rules/access.dl").read_text(encoding="utf-8"), "rules/access.dl")
-    assert len(statements) == 1 and statements[0][0:2] == ("decl", "may_read")
-    assert statements[0][8] is True and statements[0][9] is None and statements[0][10] is False   # extend, no closes, no fold mark
-    assert statements[0][2] == [
+
+    texts = souffle.closure(STD)
+    assert texts
+    statements = [stmt for i, text in enumerate(texts) for stmt in parse_file(text, f"std-access:{i}")]
+    assert all(stmt[0] == "decl" for stmt in statements)
+    by_name = {stmt[1]: stmt for stmt in statements}
+    assert "may_read" in by_name
+    assert all(stmt[8] is True and stmt[9] is None and stmt[10] is False for stmt in statements)
+    assert by_name["may_read"][2] == [
         ("role", "string"), ("kind", "string"), ("element", "string")]
 
 

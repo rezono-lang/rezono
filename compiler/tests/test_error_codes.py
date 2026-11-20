@@ -15,6 +15,7 @@ from rezono_compiler import pack
 SOURCE = REPO / "compiler" / "rezono_compiler"
 BUDGET = REPO / "compiler" / "error-code-budget.json"
 CEILING = 869  # the total when the budget was set; a lower budget replaces it, a higher one is a new decision
+# Each cell (file, class) may not rise above the same cell on the base: scripts/test_error_code_budget.py in CI.
 COUNTED = ("CompileError", "LoadError", "OperationError", "WriteError", "RuleError", "ViewError", "ViewRuleError",
            "PatternError", "IdentityError", "Unmatched")
 FORWARDS = {"CompileError", "LoadError"}  # Diagnosed(message, diagnostics): a second argument forwards diagnostics
