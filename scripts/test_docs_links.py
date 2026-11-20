@@ -90,6 +90,20 @@ class DocsLinks(unittest.TestCase):
         self.assertEqual(result.returncode, 1, result.stdout)
         self.assertIn(f"{DOCS}/guide.md: observed=1 listed=0", result.stdout)
 
+    def test_a_generated_module_form_counts_once_with_its_source(self):
+        files = {
+            # The form written from its source beside it: counted once, through the source.
+            "packs/p/rezono/access.rezono": f"// See {DOCS}/guide.md\n",
+            "packs/p/rezono/access.json": f'{{"doc": "See {DOCS}/guide.md"}}\n',
+            # JSON without a source of the same name, or outside rezono/, still counts.
+            "packs/p/rezono/other.json": f'{{"doc": "See {DOCS}/guide.md"}}\n',
+            "packs/p/schema/access.json": f'{{"doc": "See {DOCS}/guide.md"}}\n',
+            "packs/p/schema/access.rezono": f"// See {DOCS}/guide.md\n",
+        }
+        result = self.run_check(files)
+        self.assertEqual(result.returncode, 1, result.stdout)
+        self.assertIn(f"{DOCS}/guide.md: observed=4 listed=0", result.stdout)
+
 
 if __name__ == "__main__":
     unittest.main()

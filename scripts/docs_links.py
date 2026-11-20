@@ -33,6 +33,17 @@ def references(path, text):
             yield target
 
 
+def generated_form(name, tracked):
+    """Whether a tracked file is the JSON form of a module whose `.rezono` source sits beside it.
+
+    The compiler writes a module's form `rezono/<path>.json` from its source `rezono/<path>.rezono`
+    (compiler/rezono_compiler/rezono_module.py), so the form repeats every reference of the source.
+    Only such a pair is skipped: a JSON file without a tracked source still counts.
+    """
+    folders = name.split("/")[:-1]
+    return name.endswith(".json") and "rezono" in folders and name[: -len(".json")] + ".rezono" in tracked
+
+
 def scan(root=Path(".")):
     """Count, per missing page under docs/, the references in tracked text files."""
     names = subprocess.check_output(["git", "ls-files", "-z"], cwd=root).decode("utf-8").split("\0")
@@ -41,7 +52,7 @@ def scan(root=Path(".")):
     found = {}
     for name in sorted(tracked - {BUDGET}):
         path = root / name
-        if path.is_symlink() or not path.is_file():
+        if path.is_symlink() or not path.is_file() or generated_form(name, tracked):
             continue
         data = path.read_bytes()
         if b"\0" in data:
