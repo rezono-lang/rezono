@@ -1,0 +1,192 @@
+rezono 0
+pack invoice-drift
+use std-time
+use std-decision
+
+schema invoice_drift
+  iri "https://rezono.org/examples/run/invoice-drift"
+  language en
+  import "linkml:types"
+  default range Text
+  annotation layer = "facts"
+
+type Digest = Text
+type CurrencyCode = Text
+
+enum CapBasis world closed = rated | billed
+
+enum LineRoundingMode world closed = half_even | half_up
+
+enum PriceSign world closed = negative | nonnegative
+
+enum ExactPart world closed = numerator | denominator | remainder | gap
+
+enum DigitEnd world closed = more | last
+
+enum WordPart world closed = units | floor
+
+enum RoundingEquation world closed = division | complement
+
+kind ExpectedLine world closed
+  description "An exact priced item with a candidate signed floor to verify against its rounding terms."
+  plan_hash: Digest
+    pattern "^[0-9a-f]{64}$"
+  item: Text
+  currency: CurrencyCode
+    pattern "^[A-Z]{3}$"
+  sign: PriceSign
+  floor_minor: Int
+  rounding_sha256: Digest
+    pattern "^[0-9a-f]{64}$"
+
+kind InvoiceLine world closed
+  description "An observed billed amount with its recorded plan tag when present."
+  plan_hash: Digest?
+    pattern "^[0-9a-f]{64}$"
+  item: Text
+  currency: CurrencyCode
+    pattern "^[A-Z]{3}$"
+  minor: Int
+
+kind Rounding world closed
+  description "An observed billing term identified by its verified content digest."
+  source_url: Text
+  currency: CurrencyCode
+    pattern "^[A-Z]{3}$"
+  boundary: Text
+  mode: LineRoundingMode
+  minor_per_unit: Int
+    minimum 1
+
+kind RoundingDigit world closed
+  description "A decimal digit of an exact price magnitude or its proposed remainder or gap."
+  line: Text
+  part: ExactPart
+  position: Int
+    minimum 0
+  digit: Int
+    minimum 0
+    maximum 9
+  last: DigitEnd
+
+kind RoundingWord world closed
+  description "A suffix obtained by truncating a signed machine word at a decimal position."
+  line: Text
+  part: WordPart
+  position: Int
+    minimum 0
+  remaining: Int
+
+kind RoundingCarry world closed
+  description "A signed carry into a decimal position in a proposed arithmetic equality."
+  line: Text
+  equation: RoundingEquation
+  position: Int
+    minimum 0
+  carry: Int
+
+kind ReconciliationPlan world closed
+  description "An approved run plan. Its digest identifies the prediction."
+  profile: Text
+  window: ReconciliationPlanWindow
+  reference_date: ReferenceDate
+  sha256: Digest?
+    pattern "^[0-9a-f]{64}$"
+
+kind ReconciliationPlanWindow is Interval world closed
+  description "The planned elapsed window of a run, in seconds on its axis."
+
+kind ReconciliationPlannedLine world closed
+  description "One planned instance of a supplier plan in an order slot."
+  plan: ReconciliationPlan
+  slot: Text
+  supplier_plan: Text
+  quantity: Int
+    minimum 1
+
+kind ReconciliationQuote world closed
+  description "A supplier quote, independent of the plan, valid on a reference date."
+  supplier_plan: Text
+  hourly_minor: Int
+    minimum 0
+  currency: CurrencyCode
+    pattern "^[A-Z]{3}$"
+  reference_date: ReferenceDate
+
+kind ReconciliationRun world closed
+  description "A recorded run of an approved plan."
+  profile: Text
+  plan: ReconciliationPlan
+  window: ReconciliationRunWindow
+
+kind ReconciliationRunWindow is Interval world closed
+  description "The measured elapsed window of a run, in seconds on its axis."
+
+kind ReconciliationActivity is Interval world closed
+  description "The measured interval in which one resource was active in a run."
+  resource: Text
+  run: ReconciliationRun
+
+kind ReconciliationDeployment world closed
+  description "The supplier plan a measured resource was deployed with."
+  run: ReconciliationRun
+  resource: Text
+  supplier_plan: Text
+
+kind ReconciliationRunCoverage world closed
+  description "A statement that the recorded activities cover every resource of the run."
+  run: ReconciliationRun
+
+kind ReconciliationRegistry world closed
+  description "A separately captured snapshot of the order registry, bound to a run and plan digest."
+  run: ReconciliationRun
+  plan_hash: Digest
+    pattern "^[0-9a-f]{64}$"
+  captured_at: Int
+  sha256: Digest
+    pattern "^[0-9a-f]{64}$"
+
+kind ReconciliationRegistryLine world closed
+  description "A registered order line with its selected plan, quantity and hourly rate."
+  registry: ReconciliationRegistry
+  resource: Text
+  slot: Text
+  supplier_plan: Text
+  quantity: Int
+    minimum 1
+  hourly_minor: Int
+    minimum 0
+  currency: CurrencyCode
+    pattern "^[A-Z]{3}$"
+
+kind ReconciliationRegistryCoverage world closed
+  description "A statement that the registry snapshot lists every order line of its scope."
+  registry: ReconciliationRegistry
+
+kind ReconciliationInvoiceCoverage world closed
+  description "A statement that the captured invoice lists every billed line of the run, with its digest."
+  run: ReconciliationRun
+  lines: InvoiceLine* world open
+    description "The invoice lines the capture lists for the run. Open world: a capture without this row has lines nobody recorded."
+  sha256: Digest
+    pattern "^[0-9a-f]{64}$"
+
+kind ReconciliationChargeTerms world closed
+  description "Decided terms under which usage is charged. The fee is one fixed amount per billed resource."
+  run: ReconciliationRun
+  decision: Decision
+  `unit`: Text
+  basis: Text
+  fee_minor: Int
+    minimum 0
+
+kind ReconciliationCeiling world closed
+  description "An approved cap on the rated or billed total of a run."
+  run: ReconciliationRun
+  basis: CapBasis
+  decision: Decision
+  currency: CurrencyCode
+    pattern "^[A-Z]{3}$"
+  minor: Int? world open
+    description "The approved cap. Open world, so a ceiling record without this row has a cap nobody recorded."
+    minimum 0

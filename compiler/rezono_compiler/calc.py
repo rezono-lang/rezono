@@ -515,6 +515,12 @@ def build(pack: Pack, doc: dict, derived: dict | None = None, files: list[tuple[
                    rule_types, facts, order, engine)
 
 
+def read(pack: Pack, doc: dict, _where: str | None = None, derived: dict | None = None,
+         files: list[tuple[str, Path]] | None = None) -> Program:
+    """Build a checked calculation program from a `rezono.calc/1` document."""
+    return build(pack, doc, derived=derived, files=files)
+
+
 def date_text(v, where: str) -> str:
     """A date, never a timestamp: a datetime is also a date in Python, so it is refused first."""
     if isinstance(v, datetime.datetime):

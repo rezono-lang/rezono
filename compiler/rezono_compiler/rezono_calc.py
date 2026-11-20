@@ -11,7 +11,7 @@ import re
 from collections.abc import Iterable, Mapping, Sequence, Set
 from typing import TYPE_CHECKING
 
-from . import rezono_module
+from . import rezono_exceptions, rezono_module
 from .diagnostics import Diagnostic
 from .names import ISO_DATE
 from .rezono_lowering import Refuse
@@ -40,6 +40,7 @@ DERIVED_MEMBERS = frozenset({
 VERSION_MEMBERS = frozenset({"version", "valid", "known", "value", "definitions"})
 DEFINITION_MEMBERS = frozenset({"name", "when", "value", "overrides"})
 OVERRIDE_MEMBERS = frozenset({"definition", "reason"})
+CLAUSE_MEMBERS = frozenset({"when", "then", "source"})
 PARAM_MEMBERS = frozenset({"param", "type", "per", "value", "source", "versions"})
 PARAM_SOURCE_MEMBERS = frozenset({"kind", "slot", "nameSlot"})
 
@@ -70,7 +71,7 @@ def _subject_of_decl(decl: object) -> tuple[str, list[tuple[int, dict]]] | None:
 
 def has_calculation(form: dict) -> bool:
     """Whether a module form carries an `as of` line, a row-backed parameter, or any non-table derived value."""
-    if form.get("format") not in (rezono_module.IDENTIFIER_FORMAT, rezono_module.NATIVE_FORMAT):
+    if form.get("format") not in (rezono_module.IDENTIFIER_FORMAT, *rezono_module.NATIVE_FORMATS):
         return False
     for decl in form["module"]["decls"]:
         if isinstance(decl, dict) and ("asOf" in decl or "param" in decl):
@@ -195,6 +196,38 @@ def _validate_definition(defn: object, at: str, refuse: Refuse) -> bool:
     return ok
 
 
+def _validate_unless(unless_blocks: object, at: str, refuse: Refuse) -> bool:
+    if not isinstance(unless_blocks, list) or not unless_blocks:
+        refuse(at, "unless must be a non-empty list of blocks (R050)", SECTION)
+        return False
+    ok = True
+    for bi, block in enumerate(unless_blocks):
+        bat = f"{at}/{bi}"
+        if not isinstance(block, list) or not block:
+            refuse(bat, "an unless block must be a non-empty list of clauses (R050)", SECTION)
+            ok = False
+            continue
+        for ci, clause in enumerate(block):
+            cat = f"{bat}/{ci}"
+            if not isinstance(clause, dict):
+                refuse(cat, "an unless clause must be an object (R050)", SECTION)
+                ok = False
+                continue
+            if extra := set(clause) - CLAUSE_MEMBERS:
+                refuse(cat, f"an unless clause with {', '.join(sorted(extra))} is not lowered (R050)", SECTION)
+                ok = False
+            if not isinstance(clause.get("when"), dict):
+                refuse(f"{cat}/when", "an unless clause needs a `when` expression (R050)", SECTION)
+                ok = False
+            if not isinstance(clause.get("then"), dict):
+                refuse(f"{cat}/then", "an unless clause needs a `then` expression (R050)", SECTION)
+                ok = False
+            if "source" in clause and (not isinstance(clause["source"], str) or not clause["source"]):
+                refuse(cat, "an unless source must be non-empty text (R050)", SECTION)
+                ok = False
+    return ok
+
+
 def validate_derived(dv: object, at: str, refuse: Refuse) -> bool:
     """Check the structure of a calculated derived value during module loading."""
     if not isinstance(dv, dict):
@@ -217,8 +250,14 @@ def validate_derived(dv: object, at: str, refuse: Refuse) -> bool:
         refuse(at, f"a derived value `{dv.get('type', '')}{dv['card']}` is not lowered in a calculation (R050)", SECTION)
         ok = False
     if "unless" in dv:
-        refuse(f"{at}/unless", "`unless` under a calculated value is not lowered (R050)", SECTION)
-        ok = False
+        if "definitions" in dv:
+            refuse(f"{at}/unless", "unless beside definitions (R050)", SECTION)
+            ok = False
+        if "versions" in dv:
+            refuse(f"{at}/unless", "unless beside versions (R050)", SECTION)
+            ok = False
+        if not _validate_unless(dv["unless"], f"{at}/unless", refuse):
+            ok = False
     if "definitions" in dv and "versions" in dv:
         refuse(at, "definitions beside versions (R050)", SECTION)
         ok = False
@@ -729,13 +768,35 @@ def lower_module(
                             ]
                         lowered_defs.append(entry)
                 elif raw_val is not None:
-                    val = lower_expression(
-                        raw_val, f"{ver_at}/value", pack, subject_cls, own_subject, root_subject,
-                        rule_name, subject_rules, in_scope_params, refuse,
-                        where_prefix=where, line_map=line_map, bare_leaves=bare_leaves,
-                    )
-                    if val is not None:
-                        lowered_defs.append({"name": rule_name, "when": {"boolean": True}, "value": val})
+                    if "unless" in dv and raw_val is dv.get("value"):
+                        expr_at: dict[int, str] = {id(raw_val): f"{ver_at}/value"}
+                        for bi, block in enumerate(dv["unless"]):
+                            for ci, clause in enumerate(block):
+                                expr_at[id(clause["when"])] = f"{dv_at}/unless/{bi}/{ci}/when"
+                                expr_at[id(clause["then"])] = f"{dv_at}/unless/{bi}/{ci}/then"
+
+                        def lower_expr(node: object) -> dict:
+                            result = lower_expression(
+                                node, expr_at.get(id(node), dv_at), pack, subject_cls, own_subject,
+                                root_subject, rule_name, subject_rules, in_scope_params, refuse,
+                                where_prefix=where, line_map=line_map, bare_leaves=bare_leaves,
+                            )
+                            return {} if result is None else result
+
+                        before_errors = len(errors)
+                        lowered = rezono_exceptions.lower_unless(
+                            f"{rule_name}@{v_str}", raw_val, dv["unless"], lower_expr,
+                        )
+                        if len(errors) == before_errors:
+                            lowered_defs.extend(lowered)
+                    else:
+                        val = lower_expression(
+                            raw_val, f"{ver_at}/value", pack, subject_cls, own_subject, root_subject,
+                            rule_name, subject_rules, in_scope_params, refuse,
+                            where_prefix=where, line_map=line_map, bare_leaves=bare_leaves,
+                        )
+                        if val is not None:
+                            lowered_defs.append({"name": rule_name, "when": {"boolean": True}, "value": val})
                 doc["rules"].append({
                     "id": f"{rule_name}@{v_str}",
                     "rule": rule_name,

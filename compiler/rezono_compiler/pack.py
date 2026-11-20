@@ -225,6 +225,14 @@ class AcceptanceQuestion(TypedDict):
     tests: list[str]
 
 
+@dataclass(frozen=True)
+class IntermediateInvariant:
+    """An intermediate-state invariant bound to its coverage relation and key columns."""
+    relation: str
+    coverage_relation: str
+    key_binding: tuple[tuple[str, str], ...]
+
+
 @dataclass
 class Pack:
     meta: dict
@@ -253,6 +261,7 @@ class Pack:
     # P10.3: the units the pack and the packs it imports declare, by the name of their LinkML type (`units`).
     units: dict[str, types.Unit] = field(default_factory=dict)
     acceptance_questions: list[AcceptanceQuestion] = field(default_factory=list)  # own source inventory
+    intermediate_invariants: tuple[IntermediateInvariant, ...] = ()
 
     def ancestors(self, kind: str) -> list[str]:
         """The kind itself, then its parent, up to the root."""
@@ -772,7 +781,11 @@ def read(pack_dir: str | Path) -> Pack:
         from . import native_rule_lowering
 
         try:
-            native = native_rule_lowering.lower_modules(meta, mods, packs, names)
+            intermediate_invariants: list[IntermediateInvariant] = []
+            native = native_rule_lowering.lower_modules(
+                meta, mods, packs, names, intermediate_invariants=intermediate_invariants,
+            )
+            pack.intermediate_invariants = tuple(intermediate_invariants)
             pack.rules, rule_warnings = rules_dl.read(pack, pack_dir, ordered, renames, calc_inputs=calc_inputs,
                                                       calc_parts=calc_parts, folds=pack.folds,
                                                       bodies=pack.rule_bodies, spans=pack.rule_spans,

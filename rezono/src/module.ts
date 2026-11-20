@@ -32,7 +32,7 @@
 //   W108  a declaration with versions has none before the earliest `valid` date: there its value is
 //         `unknown no_version_applies` (§5a rule 4). Only that first gap is reported here; a gap between two
 //         versions needs the order of their contexts, which the checker gives later.
-// As in a question, an R000, R014, R016, R018 or R021 leaves no module and no other diagnostic.
+// As in a question, an R000, R014, R016, R018, R021 or R029 leaves no module and no other diagnostic.
 import { grammar } from './grammar.ts';
 import { blockSyntax, declarationActions, declarations, verbatimBlocks, type Decl } from './module-components.ts';
 import type { Deprecation } from './module-deprecation.ts';
@@ -236,10 +236,11 @@ function readModule(text: string, bare: boolean): ParsedModule {
 	clearPendingDeprecated();
 	if (!bare && !module.pack && !errors.length) errors.push({ code: 'R000', span: { text: '', start: 0, end: 0 }, args: ['`pack`'] });
 	errors.push(...versionReplacements(module));
+	errors.push(...undeclaredReasonLabels(module, spans));
 	if (errors.length) return { diagnostics: errors.sort(inOrder), spans };
 	return {
 		module,
-		diagnostics: [...later, ...versionGaps(module, spans), ...undeclaredReasonLabels(module, spans)].sort(inOrder),
+		diagnostics: [...later, ...versionGaps(module, spans)].sort(inOrder),
 		spans
 	};
 }
