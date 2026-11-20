@@ -25,10 +25,19 @@ def reference():
     return module
 
 
+EPOCH = {"epoch": 1, "knowledge_time": "2026-11-10T00:00:00Z", "sources": [("rules", "test")]}
+
+
 def published(pack_dir: Path, root: Path):
+    """The pack published for the roles of `publication_roles` into a store at `root`. The committed pack is
+    published once per run and copied into `root` (examples/shared_builds.py); a changed copy is published here."""
     from rezono_publisher import batch, publish, store
 
-    e = batch.epoch(pack_dir, epoch=1, knowledge_time="2026-11-10T00:00:00Z", sources=[("rules", "test")])
+    if Path(pack_dir).resolve() == HERE.resolve():
+        import shared_builds
+
+        return shared_builds.publication(HERE, root, publication_roles(), **EPOCH)
+    e = batch.epoch(pack_dir, **EPOCH)
     s = store.FileStore(root)
     return s, publish.publish(e, s, publication_roles())
 

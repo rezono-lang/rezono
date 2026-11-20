@@ -21,9 +21,10 @@ pytest.importorskip("duckdb")
 pytest.importorskip("rezono_compiler")
 pytest.importorskip("rezono_publisher")
 
-from rezono_publisher import batch, publish, store  # noqa: E402
+from rezono_publisher import publish, store  # noqa: E402
 
-from subsidy_test_support import HERE, PACK, publication_roles, published, reference, rows
+import shared_builds  # noqa: E402
+from subsidy_test_support import EPOCH, HERE, PACK, publication_roles, published, reference, rows
 
 # What `public` reads, and what it does not: the kinds of a case (rules/access.dl).
 # The justification kinds (std-decision) are read with the decision, by every role.
@@ -99,7 +100,7 @@ def test_a_role_reads_how_each_parameter_stands_on_the_evaluation_day_down_to_it
     """std-time's rules run over the scheme's own facts (views.yaml): what the reference computes from the
     dates themselves, and a proof that ends at the parameter's own valid_until. A role that the pack grants
     nothing (it names no such role) reads no judgement, no day count and no proof of it."""
-    e = batch.epoch(HERE, epoch=1, knowledge_time="2026-11-10T00:00:00Z", sources=[("rules", "test")])
+    e = shared_builds.epoch(HERE, **EPOCH)  # the committed pack's epoch, made once per run; this is a copy
     s = store.FileStore(tmp_path)
     publish.publish(e, s, publication_roles() | {"outsider": "may_read"})
     ref = reference()

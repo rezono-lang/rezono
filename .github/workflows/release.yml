@@ -25,7 +25,7 @@ jobs:
           persist-credentials: false
           sparse-checkout: .node-version
           sparse-checkout-cone-mode: false
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
         with:
           name: checked-distributions
           path: dist
@@ -35,7 +35,7 @@ jobs:
           package-manager-cache: false
       - name: Select checked wheel for PyPI
         run: mkdir python-dist && mv dist/*.whl python-dist/
-      - uses: pypa/gh-action-pypi-publish@ed0c53931b1dc9bd32cbe73a98c7f6766f8a527e
+      - uses: pypa/gh-action-pypi-publish@7245906fb61fa33a13554f9d5fb856fe61758086
         with:
           packages-dir: python-dist/
           skip-existing: true
