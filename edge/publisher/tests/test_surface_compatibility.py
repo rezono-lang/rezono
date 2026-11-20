@@ -164,18 +164,6 @@ def test_compare_classifies_each_change_as_section_4c_does(tmp_path):
     assert all(r["changes"] == sorted(r["changes"], key=lambda c: (c["element"], c["change"])) for r in results)
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=(MissingSurfaceCheck, AssertionError),
-    reason=(
-        "M3: decisions/language-surface-compatibility.md: Builds on "
-        "test_compare_classifies_each_change_as_section_4c_does. Add compatibility(epoch, store) to "
-        "edge/publisher/rezono_publisher/publish.py (section 2): None for a proposal, a variant or a pack without a "
-        "main manifest; otherwise {\"against\", \"class\", \"changes\"}, comparing the bundle of the newest main "
-        "manifest (its compiled entry bundle/schema-bundle.json, read by its uri and held to its sha256) with the "
-        "epoch's bundle through surface.compare. A minor and a patch change keep publishing on a pack at 1.0.0."
-    ),
-)
 def test_compatibility_names_the_class_against_the_newest_main(tmp_path):
     check = compatibility()
     folder = with_facts(tmp_path / "1", "1.0.0")

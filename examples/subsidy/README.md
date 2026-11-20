@@ -71,7 +71,7 @@ What is deliberately **not** in the schema:
 
 ## Files
 
-The scheme's definition is the pack [`subsidy-scheme`](../subsidy-scheme/README.md), which `pack.yaml` imports by path and hash: its schema (`schema/subsidy.yaml`: the scheme, households, applications, quotes and the two registers), its rules (`costs.dl`, `assessment.dl`, `scheme.dl`, `findings.dl`), the award (`calc/award.yaml`) and their labels and sentences. It has no facts and no evaluation date. What is this pack's own:
+The scheme's definition is the pack [`subsidy-scheme`](../subsidy-scheme/README.md), which `pack.yaml` imports by path and hash: its schema (`schema/subsidy.yaml`: the scheme, households, applications, quotes and the two registers), its rules (`costs.dl`, `assessment.dl`, `scheme.dl`, `findings.dl`), the award (`rezono/award.rezono`) and their labels and sentences. It has no facts and no evaluation date. What is this pack's own:
 
 | File | Contents |
 |---|---|

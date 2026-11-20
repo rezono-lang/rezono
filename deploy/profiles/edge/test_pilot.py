@@ -165,3 +165,9 @@ def test_without_a_store_only_all_or_nothing():
                          ("auditor", [{"name": "a", "status": "green", "violations": 0}])):
         with pytest.raises(SystemExit, match="checks"):
             pilot.check_statuses(role, scoped(role, checks), None)
+
+
+def test_unhashable_check_status_exits_cleanly_without_store():
+    for bad_status in (["green"], {"status": "green"}):
+        with pytest.raises(SystemExit, match="checks"):
+            pilot.check_statuses("auditor", scoped("auditor", [{"name": "a", "status": bad_status}]), None)

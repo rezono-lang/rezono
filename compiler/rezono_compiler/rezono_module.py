@@ -643,6 +643,7 @@ def lower(pack_dir: Path, d: Declared, form: dict, pack: str, owners: dict[str, 
                 decl, at, own, owners, declared_names, uses, refuse,
                 extended_format=extended_format, aliases=prefixes, kinds=kinds,
                 integer_types=integer_types, own_module=d.id, rezono_1=rezono_1,
+                layer=d.layer,
             )
             if lowered_kind is not None:
                 if keys:
@@ -656,6 +657,10 @@ def lower(pack_dir: Path, d: Declared, form: dict, pack: str, owners: dict[str, 
             refuse(at, "a `rule` declaration is removed in `rezono 1` (R028)")
         elif "rule" in decl and native_rules:
             continue  # The rule assembler needs the checked schema and pinned imports.
+        elif "step" in decl:
+            if form["format"] not in (SAFE_STEP_FORMAT, REZONO_1_FORMAT):
+                refuse(at, "a step declaration requires rezono.module/4 or rezono.module/5", "§6")
+            continue  # Step declarations are lowered after native rules and schema resolution.
         elif "extend" in decl:
             rezono_extend.validate(decl, at, imported, refuse, extended_format=extended_format, rezono_1=rezono_1)
         elif "asOf" in decl and extended_format:

@@ -33,16 +33,6 @@ class MissingRightDeclarations(AssertionError):
     """std-access does not declare the rights to propose, review, publish and execute as the decision gives."""
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=MissingRightDeclarations,
-    reason="extra: decisions/review-and-rights.md: Declare in packs/std-access, beside may_read and "
-           "each as // @extend without a clause, may_propose(role: symbol, kind: symbol, element: symbol), "
-           "may_review(role: symbol, kind: symbol, element: symbol), may_publish(role: symbol, kind: symbol) and "
-           "may_execute(role: symbol, plugin: symbol); then regenerate the std-access row of "
-           "compiler/rezono_compiler/standard_packs.py and the std-access pins of the packs that import it. Read "
-           "section 1. Waits for compiler/tests/test_std_access_full.py, which changes the same file and pins.",
-)
 def test_standard_access_declares_the_four_rights():
     import souffle
     from rezono_compiler.rules_dl import parse_file

@@ -7,7 +7,7 @@ import sys
 from dataclasses import dataclass, field
 from importlib import resources
 from pathlib import Path
-from typing import TypedDict
+from typing import Literal, TypedDict
 
 import yaml
 from rezono_admission.schema import INPUT_FORMATS
@@ -234,6 +234,91 @@ class IntermediateInvariant:
     key_binding: tuple[tuple[str, str], ...]
 
 
+@dataclass(frozen=True)
+class StepOperand:
+    """A typed expression operand inside a compiled step declaration."""
+    expr: dict
+    type: str
+
+
+@dataclass(frozen=True)
+class StepCall:
+    """A resolved relation call with typed operands."""
+    relation: str
+    operands: tuple[StepOperand, ...]
+
+
+@dataclass(frozen=True)
+class StepBlocker:
+    """A scoped forbid clause pairing a forbidden pattern with its coverage call."""
+    pattern: StepCall
+    coverage: StepCall
+
+
+@dataclass(frozen=True)
+class StepOperation:
+    """The resolved effect port operation and optional atomic boundary evidence."""
+    port: str
+    apply: str
+    boundary: str | None = None
+    evidence: dict[str, str] | None = None
+
+
+@dataclass(frozen=True)
+class StepChange:
+    """One typed delta change template produced by a step effect."""
+    op: Literal["insert", "delete", "set", "unset"]
+    kind: str
+    key: StepOperand
+    slot: str | None = None
+    value: StepOperand | None = None
+    values: dict[str, StepOperand] | None = None
+
+
+@dataclass(frozen=True)
+class StepAttribute:
+    """Target attribute of a confirmation postcondition (slot None means record identity)."""
+    kind: str
+    slot: str | None = None
+
+
+@dataclass(frozen=True)
+class StepPostcondition:
+    """One expected post-state observation derived from a step's declared writes."""
+    subject: StepOperand
+    attribute: StepAttribute
+    state: Literal["present", "absent"]
+    value: StepOperand | None = None
+
+
+@dataclass(frozen=True)
+class StepReader:
+    """The resolved input port, call and scope columns for step confirmation."""
+    port: str
+    call: StepCall
+    scope: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class StepConfirmation:
+    """The confirmation reader, prerequisite token and derived postconditions of a step."""
+    reader: StepReader
+    token: StepOperand
+    postconditions: tuple[StepPostcondition, ...]
+
+
+@dataclass(frozen=True)
+class CompiledStep:
+    """A compiled safe-step declaration exposed on Pack.steps."""
+    id: tuple[str, str, str]
+    match_relation: str
+    columns: tuple[tuple[str, str, str], ...]
+    blockers: tuple[StepBlocker, ...]
+    operation: StepOperation
+    changes: tuple[StepChange, ...]
+    confirmation: StepConfirmation
+
+
 @dataclass
 class Pack:
     meta: dict
@@ -265,6 +350,7 @@ class Pack:
     units: dict[str, types.Unit] = field(default_factory=dict)
     acceptance_questions: list[AcceptanceQuestion] = field(default_factory=list)  # own source inventory
     intermediate_invariants: tuple[IntermediateInvariant, ...] = ()
+    steps: tuple[CompiledStep, ...] = ()
     language_version: str = "0"
 
     def ancestors(self, kind: str) -> list[str]:
@@ -786,14 +872,22 @@ def read(pack_dir: str | Path) -> Pack:
         forms = {m.rel: m.form for m in mods if m.pack_dir == pack_dir and m.form is not None}
         generated = rezono_table.lower_pack(pack, meta, pack_dir, errors, forms=forms)
     if not errors:
-        from . import native_rule_lowering
+        from . import native_rule_lowering, rezono_step
 
         try:
             intermediate_invariants: list[IntermediateInvariant] = []
+            steps: list[CompiledStep] = []
             native = native_rule_lowering.lower_modules(
-                meta, mods, packs, names, intermediate_invariants=intermediate_invariants,
+                meta, mods, packs, names,
+                intermediate_invariants=intermediate_invariants,
+                pack_dir=pack_dir,
+                pack_kinds=pack.kinds,
+                steps=steps,
             )
+            if not native:
+                rezono_step.validate_pack_bindings(pack_dir, meta, packs, pack.kinds)
             pack.intermediate_invariants = tuple(intermediate_invariants)
+            pack.steps = tuple(steps)
             pack.rules, rule_warnings = rules_dl.read(pack, pack_dir, ordered, renames, calc_inputs=calc_inputs,
                                                       calc_parts=calc_parts, folds=pack.folds,
                                                       bodies=pack.rule_bodies, spans=pack.rule_spans,

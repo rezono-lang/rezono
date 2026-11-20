@@ -48,15 +48,6 @@ class MissingRezono1WorldDefault(AssertionError):
     """A rezono 1 kind without a world line did not lower as closed, or a written default lowered differently."""
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=MissingRezono1WorldDefault,
-    reason="M3: decisions/language-rezono-1-defaults.md: Waits for "
-           "compiler/tests/rezono/test_rezono_1_compiler_version.py. In compiler/rezono_compiler/, lower a kind of a "
-           "rezono 1 module (rezono.module/5) without a `world` member as closed, a LinkML class without a world "
-           "annotation; keep `world open` on a kind and on a slot; give a slot without a world line the world of its "
-           "kind; and lower a written `world closed` byte for byte like the left-out line. Read sections 1 and 4.",
-)
 def test_rezono_1_kind_without_world_lowers_closed(tmp_path):
     decls = [
         kind("Zone", slot("name", "Text")),
@@ -89,15 +80,6 @@ class MissingObservationGuard(AssertionError):
     """An observed rezono 1 kind without `world open` was not refused with R051, or another kind was refused."""
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=MissingObservationGuard,
-    reason="M3: decisions/language-rezono-1-defaults.md: Waits for "
-           "compiler/tests/rezono/test_rezono_1_world_default.py--test_rezono_1_kind_without_world_lowers_closed. "
-           "In compiler/rezono_compiler/, refuse with R051, naming the kind, each kind of a rezono 1 module registered "
-           "in the `observation` layer that does not declare `world open`, also when it writes `world closed`; accept "
-           "`world open` there, and leave kinds of other layers to the closed default. Read section 2.",
-)
 def test_rezono_1_observed_kind_needs_open_world(tmp_path):
     decls = [
         kind("Reading", slot("value", "Text")),

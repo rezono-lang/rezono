@@ -56,16 +56,12 @@ advice_report:
   - {"id": "R001", "household": "H001"}
 ```
 
-The [award calculation](../examples/subsidy-scheme/calc/award.yaml) takes the partial rate when income is above the threshold and at or below the limit:
+The [award calculation](../examples/subsidy-scheme/rezono/award.rezono) takes the partial rate when income is above the threshold and at or below the limit:
 
-```yaml
-      - name: partial_rate
-        when:
-          op: and
-          args:
-            - {op: lt, args: [{rule: income_threshold}, {fact: assessed_income.cents}]}
-            - {op: lte, args: [{fact: assessed_income.cents}, {rule: income_limit}]}
-        value: {op: round, args: [{op: ratio, args: [{fact: assessed_costs.cents}, {parameter: partial_rate}, {integer: "1000000"}]}]}
+```rezono
+      definition partial_rate when income_threshold < assessed_income.cents
+        and assessed_income.cents <= income_limit
+        then round(assessed_costs.cents * partial_rate / 1000000)
 ```
 
 At the pack's evaluation date of 10 November 2026, the threshold for three people is €30,000 and the limit is €42,000. A001's income of €31,400 makes the 24% rate apply. Its cost share is €2,544. Adding the €150 advice allowance gives €2,694, below the €5,000 cap.

@@ -124,7 +124,8 @@ def lower(decl: dict, at: str, own: dict[str, str], owners: dict[str, list[str]]
           kinds: Mapping[str, list] | None = None,
           integer_types: Mapping[str, Set[str]] | None = None,
           own_module: str = "",
-          rezono_1: bool = False) -> dict | None:
+          rezono_1: bool = False,
+          layer: str = "") -> dict | None:
     """`kinds` holds the slots of each kind of the module, which an inverse slot reads."""
     ok = True
     allowed = (MEMBERS | {"checks", "deprecated", "embedded", "equations", "parent", "relationship"} | rezono_metadata.FIELDS
@@ -156,10 +157,23 @@ def lower(decl: dict, at: str, own: dict[str, str], owners: dict[str, list[str]]
     parent = parent_of(decl["parent"], decl["kind"], f"{at}/parent", own, owners, uses, refuse, aliases) if has_parent else None
     if has_parent and parent is None:
         ok = False
+    annotations = decl.get("annotations")
+    kind_layer = annotations.get("layer", layer) if isinstance(annotations, dict) else layer
     world = decl.get("world")
     if has_parent and world == "open":
         refuse(at, "a kind with a parent has the world of its root kind", "§5.1")
         ok = False
+    elif rezono_1:
+        if "world" in decl and world not in ("closed", "open"):
+            refuse(at, "a kind world is `open` or `closed`", "§5.1")
+            ok = False
+        elif kind_layer == "observation" and not has_parent and world != "open":
+            refuse(
+                at,
+                f"`{decl['kind']}` is observed: declare `world open`, and `complete by` the scope in which it is complete (R051)",
+                "§5.1",
+            )
+            ok = False
     elif not (world == "closed" or (extended_format and world == "open") or (has_parent and "world" not in decl)):
         refuse(at, "an open kind is refused: a kind says `world closed`", "§5.1")
         ok = False

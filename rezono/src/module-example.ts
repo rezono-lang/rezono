@@ -82,7 +82,7 @@ export function printExample(decl: ExampleDecl): string[] {
 	const ctx = printContext(decl.context);
 	const head = `example ${JSON.stringify(decl.example)}${ctx.length ? ` ${ctx.join(' ')}` : ''}`;
 	return block(head, [
-		...block('given', decl.given.map((g) => `${g.path.map((n) => spellName(n)).join('.')} = ${printExpr(g.value)}`)),
+		...block('given', decl.given.map((g) => `${g.path.map((n, at) => (at === 0 ? spellName(n) : n)).join('.')} = ${printExpr(g.value)}`)),
 		...block('expect', decl.expect.map(printExpect)),
 	]);
 }

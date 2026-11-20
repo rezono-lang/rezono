@@ -148,11 +148,13 @@ test('what passed unexamined: the mode of `round`, a date beside a truth value, 
 	assert.deepEqual(found('ask Plan where round(monthly_price, plan.memory) > € 1'), ['R030 at plan.memory']);
 	for (const mode of ['half_even', 'half_up', 'down', 'up']) clean(`ask Plan where round(monthly_price, ${mode}) > € 1`);
 	clean('ask Plan where round(hourly_price * 730 h) > € 500');
-	// A date takes a number or a date beside it; a date moved by a number is a date, so no condition.
+	// A date takes a time/calendar duration or a date beside it; a date moved by a duration is a date, so no condition.
 	assert.deepEqual(found('ask Host where 2026-11-01 + true'), ['R003 at 2026-11-01 + true']);
 	assert.deepEqual(found('ask Host where 2026-11-01 * 2 > 2026-11-01'), ['R003 at 2026-11-01 * 2']);
-	assert.deepEqual(found('ask Host where 2026-11-01 + 3'), ['R017 at 2026-11-01 + 3']);
-	clean('ask Host where 2026-11-01 + 3 > 2026-11-02');
+	assert.deepEqual(found('ask Host where 2026-11-01 + 3 > 2026-11-02'), ['R003 at 2026-11-01 + 3']);
+	assert.deepEqual(found('ask Host where 2026-11-01 + 5 GiB > 2026-11-02'), ['R003 at 2026-11-01 + 5 GiB']);
+	assert.deepEqual(found('ask Host where 2026-11-01 + 24 h'), ['R017 at 2026-11-01 + 24 h']);
+	clean('ask Host where 2026-11-01 + 24 h > 2026-11-02');
 	clean('ask Host where 2026-12-01 - 2026-11-01 > 3');
 	// Both branches of `when` are one value, or both a set.
 	assert.deepEqual(found('ask Host where (when true then clusters else HostCluster:`x2`).count() > 0'), ['R005 at when true then clusters else HostCluster:`x2`']);

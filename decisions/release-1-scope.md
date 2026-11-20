@@ -100,15 +100,14 @@ Release 1 says that the engines agree only when these four are green.
 
 ## 7. The language at the front door
 
-A newcomer meets Rezono in the root `README.md` and in the language guide `rezono/README.md`, and neither shows the language yet. [The front door](front-door.md) lets the readme show only what compiles and runs at the commit, and the award of `examples/subsidy-scheme` still runs from `calc/award.yaml`: its Rezono form is a staged candidate, `examples/subsidy-scheme/candidate/award.rezono`. Release 1 carries the language at the front door, in this order:
+A newcomer meets Rezono in the root `README.md` and in the language guide `rezono/README.md`, and neither shows the language yet. [The front door](front-door.md) lets the readme show only what compiles and runs at the commit. Release 1 carries the language at the front door, in this order:
 
-1. **The first real pack on the live path in Rezono.** `examples/subsidy-scheme` replaces `calc/award.yaml` with the module `rezono/award.rezono`, declared under `rezono:` in its `pack.yaml` and started from the candidate, with the same `ir/calc.json` and the same outcomes under `expected/calc/` of `examples/subsidy` ([calculations in Rezono](language-calculations.md)).
+1. **The first real pack on the live path in Rezono.** `examples/subsidy-scheme` replaces `calc/award.yaml` with the module `rezono/award.rezono`, declared under `rezono:` in its `pack.yaml`, with the same `ir/calc.json` and the same outcomes under `expected/calc/` of `examples/subsidy` ([calculations in Rezono](language-calculations.md)). Its test (`examples/subsidy/test_subsidy_scheme_award.py::test_subsidy_scheme_award_in_rezono`) is already green on `main`.
 2. **The rules in the readme.** `### The rules in Rezono` under `## Example`, as [the front door](front-door.md#the-language-in-the-readme) specifies: a literal excerpt of two `A001` rules, the same excerpt with one changed line beside its `R050` refusal, and one sentence that names the four value states. Each of its tests waits for step 1.
 3. **The language guide opens with the language.** `rezono/README.md` starts with a copyable excerpt of `examples/subsidy-scheme/rezono/award.rezono`, and its light and dark highlighted SVG with a colour legend ([language guide highlight](language-guide-highlight.md)). Its tests wait for step 1 and for `rezono/test/test_rezono_syntax_grammar.py::test_generated_syntax_highlighting_grammar`, which is green, as is the theme that colours every token kind (`test_highlight_theme_covers_every_token_kind_in_light_and_dark`).
 
 These red tests move from `extra` to `M3`:
 
-- `examples/subsidy/test_subsidy_scheme_award.py::test_subsidy_scheme_award_in_rezono`
 - `examples/test_readme_layout.py::test_the_readme_shows_a_literal_rezono_excerpt_of_a001_rules`
 - `examples/test_readme_layout.py::test_the_readme_changed_excerpt_is_refused_by_the_compiler`
 - `examples/test_readme_layout.py::test_the_readme_names_the_four_value_states_in_one_sentence`

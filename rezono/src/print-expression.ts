@@ -54,9 +54,9 @@ const whole = (e: Expr) => expr(e, COND, true);
 function bare(e: Expr, last: boolean): string {
 	if ('lit' in e) return e.lit;
 	if ('wildcard' in e) return '_';
-	if ('path' in e) return e.path.map(name => spellName(name)).join('.');
+	if ('path' in e) return e.path.map((name, at) => (at === 0 ? spellName(name) : name)).join('.');
 	if ('kind' in e) return spellQualifiedName(e.kind);
-	if ('dot' in e) return `${base(e.dot[0])}.${spellName(e.dot[1])}`;
+	if ('dot' in e) return `${base(e.dot[0])}.${e.dot[1]}`;
 	if ('agg' in e) {
 		const [name, of, arg] = e.agg;
 		return `${base(of)}.${name}(${arg ? whole(arg) : ''})`;

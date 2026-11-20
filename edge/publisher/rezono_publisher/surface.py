@@ -17,9 +17,14 @@ import datetime
 import re
 from typing import Any
 
-__all__ = ["compare"]
+from rezono_canon import sha256_hex
+from rezono_checker.canon import strict_json_loads
 
+__all__ = ["BUNDLE_FILE", "BUNDLE_FORMAT", "compare", "compatibility", "manifest_bundle_entry", "read_manifest_bundle"]
+
+BUNDLE_FILE = "bundle/schema-bundle.json"
 BUNDLE_FORMAT = "rezono.schema-bundle/1"
+_SHA256_HEX = re.compile(r"^[0-9a-f]{64}$")
 _CLASS_RANK = {"patch": 0, "minor": 1, "major": 2}
 _WORLDS = frozenset({"open", "closed"})
 _DECIMAL_INT = re.compile(r"^-?(0|[1-9][0-9]*)$")
@@ -755,3 +760,115 @@ def compare(before: dict[str, Any], after: dict[str, Any]) -> dict[str, Any]:
     ]
     overall = max((c["class"] for c in changes), key=_CLASS_RANK.__getitem__, default="patch")
     return {"class": overall, "changes": changes}
+
+
+def _parse_json_bundle(raw: Any, where: str) -> dict[str, Any]:
+    """Parse a strict JSON schema bundle document from UTF-8 bytes or text (fail closed)."""
+    if not isinstance(raw, (bytes, bytearray, str)) or not raw:
+        raise ValueError(f"{where}: missing compiled schema bundle")
+    try:
+        doc = strict_json_loads(raw)
+    except (UnicodeDecodeError, ValueError) as err:
+        raise ValueError(f"{where}: invalid schema bundle JSON: {err}") from err
+    return _require_dict(doc, where)
+
+
+def manifest_bundle_entry(manifest: Any) -> tuple[str, str]:
+    """Extract `(uri, sha256)` for `bundle/schema-bundle.json` from a published manifest (fail closed)."""
+    doc = _require_dict(manifest, "manifest")
+    mid = _require_str(doc.get("id"), "manifest.id")
+    compiled = _require_list(doc.get("compiled"), f"manifest {mid}.compiled")
+    matches: list[tuple[str, str]] = []
+    for i, item in enumerate(compiled):
+        where = f"manifest {mid}.compiled[{i}]"
+        entry = _require_dict(item, where)
+        if entry.get("file") != BUNDLE_FILE:
+            continue
+        uri = _require_str(entry.get("uri"), f"{where}.uri")
+        digest = _require_str(entry.get("sha256"), f"{where}.sha256")
+        if not _SHA256_HEX.fullmatch(digest):
+            raise ValueError(f"{where}.sha256: expected a 64-character lowercase hex digest")
+        matches.append((uri, digest))
+    if not matches:
+        raise ValueError(f"manifest {mid}: missing compiled entry for {BUNDLE_FILE}")
+    if len(matches) > 1:
+        raise ValueError(f"manifest {mid}: duplicate compiled entry for {BUNDLE_FILE}")
+    return matches[0]
+
+
+_UNSAFE_KEY_CHARS = frozenset({"\\", "%", "?", "#", ":"})
+
+
+def _has_unsafe_key_chars(text: str) -> bool:
+    return any(ch in _UNSAFE_KEY_CHARS or ord(ch) < 0x20 or ord(ch) == 0x7F for ch in text)
+
+
+def _store_key_for_uri(store, uri: str, where: str, pack: str | None = None) -> str:
+    """Resolve a manifest entry URI to a validated key within `store` (and `pack`, if given)."""
+    try:
+        prefix = store.uri("")
+    except AttributeError as err:
+        raise ValueError(f"{where}: store does not expose uri()") from err
+    if not isinstance(prefix, str) or not prefix.endswith("/") or not uri.startswith(prefix):
+        raise ValueError(f"{where}: uri {uri!r} does not belong to this store")
+    key = uri[len(prefix):]
+    if not key or _has_unsafe_key_chars(key):
+        raise ValueError(f"{where}: invalid store key from uri {uri!r}")
+    parts = key.split("/")
+    if any(not part or part in {".", ".."} for part in parts):
+        raise ValueError(f"{where}: invalid store key from uri {uri!r}")
+    if pack is not None:
+        pack_name = _require_str(pack, f"{where}.pack")
+        if "/" in pack_name or pack_name in {".", ".."} or _has_unsafe_key_chars(pack_name):
+            raise ValueError(f"{where}: invalid pack name {pack_name!r}")
+        if parts[0] != pack_name or len(parts) < 2:
+            raise ValueError(f"{where}: key {key!r} lies outside pack {pack_name!r}")
+    return key
+
+
+def read_manifest_bundle(manifest: Any, store, *, pack: str | None = None) -> dict[str, Any]:
+    """Read and verify the compiled schema bundle named by `manifest` from `store` (fail closed)."""
+    doc = _require_dict(manifest, "manifest")
+    mid = _require_str(doc.get("id"), "manifest.id")
+    uri, digest = manifest_bundle_entry(doc)
+    where = f"manifest {mid} {BUNDLE_FILE}"
+    key = _store_key_for_uri(store, uri, where, pack=pack)
+    data = store.get(key)
+    if data is None:
+        raise ValueError(f"{where}: bundle {key!r} is not in the store")
+    if not isinstance(data, (bytes, bytearray)):
+        raise ValueError(f"{where}: bundle {key!r} did not return bytes")
+    actual = sha256_hex(bytes(data))
+    if actual != digest:
+        raise ValueError(f"{where}: bundle {key!r} sha256 mismatch (expected {digest}, got {actual})")
+    return _parse_json_bundle(data, where)
+
+
+def compatibility(epoch, store, previous: Any) -> dict[str, Any] | None:
+    """Compare `epoch`'s compiled schema bundle against an earlier main `previous` manifest.
+
+    Returns None when `previous` is None or when `definition_sha256` and `compiler_sha256`
+    are valid 64-character lowercase SHA-256 hex digests matching `previous` (same bundle,
+    nothing to compare). Otherwise returns `{"against": <manifest id>, "class": ..., "changes": [...]}`.
+    Fails closed with `ValueError` on missing, mismatched, or malformed manifests or bundles.
+    """
+    if previous is None:
+        return None
+    prev_doc = _require_dict(previous, "previous manifest")
+    against = _require_str(prev_doc.get("id"), "previous manifest.id")
+    pack = _require_str(getattr(epoch, "pack", None), "epoch.pack")
+    cur_def = getattr(epoch, "definition_sha256", "")
+    cur_comp = getattr(epoch, "compiler_sha256", "")
+    if (
+        isinstance(cur_def, str)
+        and bool(_SHA256_HEX.fullmatch(cur_def))
+        and isinstance(cur_comp, str)
+        and bool(_SHA256_HEX.fullmatch(cur_comp))
+        and prev_doc.get("definition_sha256") == cur_def
+        and prev_doc.get("compiler_sha256") == cur_comp
+    ):
+        return None
+    before = read_manifest_bundle(prev_doc, store, pack=pack)
+    after = _parse_json_bundle(getattr(epoch, "bundle", ""), "epoch.bundle")
+    result = compare(before, after)
+    return {"against": against, "class": result["class"], "changes": result["changes"]}

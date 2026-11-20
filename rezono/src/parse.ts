@@ -31,7 +31,10 @@ const semantics = grammar.createSemantics();
 
 /** The text of a literal as it prints: its parts one space apart, digits normalized without grouping underscores (§9). */
 semantics.addOperation<string>('lit', {
-	num(_whole, _dot, _part, _slash, _under) {
+	num(_whole, _sep, _rest) {
+		if (run.version === '0' && this.sourceString.includes('_')) {
+			refused(this, 'R000', ['a number without digit grouping']);
+		}
 		return this.sourceString.replaceAll('_', '');
 	},
 	quantity: (n, _sp, unit) => `${n.lit()} ${unit.sourceString}`,
@@ -99,7 +102,7 @@ semantics.addOperation<unknown>('tree', {
 	Show: (_show, list) => all(list),
 	Tail_order: (_order, _by, list) => ({ order: all(list) }),
 	Tail_group: (_group, _by, list) => ({ group: all(list) }),
-	Tail_limit: (_limit, n) => ({ limit: n.sourceString }),
+	Tail_limit: (_limit, n) => ({ limit: n.lit() }),
 
 	Check(verb, name, _colon, cond) {
 		const decl: CheckDecl = { check: verb.sourceString as CheckDecl['check'], cond: undefined as unknown as Expr };
@@ -277,9 +280,9 @@ export interface Read<T> {
 export { semantics, placed, refused, reserved };
 
 /**
- * Reads `text` with one rule of the grammar, its result made by `read` from the match. module.ts reads one line
- * of a file this way: it passes the file with every other line blanked, so that offsets are those of the file,
- * and the code points of the file itself (`at`), since a blank has none of its astral characters.
+ * Reads `text` with one rule of the grammar, its result made by `read` from the match. module.ts reads one
+ * logical line of a file as a slice with `offset` set to the slice's UTF-16 start in the file, and passes
+ * the file's code-point map (`at`), so reported spans keep exact file code-point offsets in O(|line|) time.
  */
 const nativeRules = new Set(['NativeRuleLine', 'StepClauseLine', 'StepChangeLine']);
 
@@ -289,13 +292,15 @@ export function readRule<T>(
 	read: (node: Node) => T,
 	spans = new WeakMap<object, Span>(),
 	at = points(text),
-	native = nativeRules.has(rule)
+	native = nativeRules.has(rule),
+	version?: '0' | '1',
+	offset = 0
 ): Read<T> {
-	startRun(text, spans, at);
+	startRun(text, spans, at, version, offset);
 	const match = (native ? nativeRuleGrammar : grammar).match(text, rule);
 	if (match.failed()) {
-		const at = Math.min(match.getRightmostFailurePosition(), text.length);
-		return { errors: [{ code: 'R000', span: spanAt(...tokenAt(text, at)), args: [match.getExpectedText()] }], reserved: [], spans };
+		const failAt = Math.min(match.getRightmostFailurePosition(), text.length);
+		return { errors: [{ code: 'R000', span: spanAt(...tokenAt(text, failAt)), args: [match.getExpectedText()] }], reserved: [], spans };
 	}
 	const value = read((native ? nativeRuleSemantics : semantics)(match) as unknown as Node);
 	return { value, errors: run.errors, reserved: run.reserved, spans };
