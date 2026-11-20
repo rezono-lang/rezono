@@ -1,5 +1,8 @@
 quote_currency:
   - {id: quote, currency: USD}
 
+publication_currency:
+  - {id: publication, currency: EUR}
+
 rate_pair:
   - {id: usd_eur, base: USD, target: EUR}

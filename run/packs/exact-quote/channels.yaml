@@ -4,6 +4,7 @@ kinds:
   - {kind: quote_digit, shape: rect}
   - {kind: quote_carry, shape: rect}
   - {kind: quote_currency, shape: rect}
+  - {kind: publication_currency, shape: rect}
   - {kind: rate_pair, shape: rect}
   - {kind: rate_capture, shape: rect}
   - {kind: rate_digit, shape: rect}
