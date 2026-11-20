@@ -253,7 +253,10 @@ def test_three_source_packs_and_schema_drop_stored_partner_and_insured(tmp_path:
     insurer_ids = [k["id"] for k in kinds_by_pack.get("zorgtoeslag-insurer", [])]
     assert any(kid.endswith("polis") for kid in insurer_ids), insurer_ids
     enum_values = {
-        enum["id"]: {v["id"] for v in enum.get("values") or []}
+        enum["id"]: {
+            (v["id"] if isinstance(v, dict) else str(v)).rpartition(".")[2]
+            for v in enum.get("values") or []
+        }
         for enum in bundle.get("enums") or []
     }
     assert any({"basis", "aanvullend"} <= vals for vals in enum_values.values()), enum_values

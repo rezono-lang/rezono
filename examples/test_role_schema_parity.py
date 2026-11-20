@@ -143,10 +143,10 @@ def _assert_parity(bundle: dict, *, full: set[str] | None, label: str) -> bool:
     except publication.FormError as err:
         if "a second type named String" in str(err):
             assert ts["ok"], f"{label}: TS should serve packs with colliding plain-string inline patterns: {ts}"
-            return False
+            return "string_pattern_collision"
         assert not ts["ok"], f"{label}: Python refused ({err}) but TS succeeded with {ts['schema_id']}"
         assert ts["status"] == 501, f"{label}: expected TS AskError(501), got {ts}"
-        return False
+        return "agreed_refusal"
 
     assert ts["ok"], f"{label}: Python succeeded but TS refused: {ts}"
     py_sid = l0.check_schema(py_doc)
@@ -154,7 +154,7 @@ def _assert_parity(bundle: dict, *, full: set[str] | None, label: str) -> bool:
     py_bytes = canonical_bytes(py_doc)
     ts_bytes = ts["canonical"].encode("utf-8")
     assert ts_bytes == py_bytes, f"{label}: canonical JSON bytes differ"
-    return True
+    return "ok"
 
 
 def test_example_packs_are_discovered():
@@ -166,14 +166,14 @@ def test_role_schema_matches_publication_schema_document(pack_dir):
     bundle = json.loads(emit.compile_pack(packs.read(pack_dir))["bundle/schema-bundle.json"])
     pack_label = pack_dir.relative_to(EXAMPLES).as_posix()
 
-    complete_ok = _assert_parity(bundle, full=None, label=f"{pack_label} (complete)")
-    partial_ok = _assert_parity(bundle, full=set(), label=f"{pack_label} (partial)")
-    assert complete_ok == partial_ok
+    complete_status = _assert_parity(bundle, full=None, label=f"{pack_label} (complete)")
+    partial_status = _assert_parity(bundle, full=set(), label=f"{pack_label} (partial)")
+    assert complete_status == partial_status
 
-    if not complete_ok:
+    if complete_status == "string_pattern_collision":
         subset = _publishable_subset(bundle)
-        assert _assert_parity(subset, full=None, label=f"{pack_label} subset (complete)")
-        assert _assert_parity(subset, full=set(), label=f"{pack_label} subset (partial)")
+        assert _assert_parity(subset, full=None, label=f"{pack_label} subset (complete)") == "ok"
+        assert _assert_parity(subset, full=set(), label=f"{pack_label} subset (partial)") == "ok"
 
     # For a pack with a partial tenant role reading `request` (like Published role tools),
     # verify an ordinary language `/ask` over the full manifest's partial snapshots succeeds.
