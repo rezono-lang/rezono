@@ -25,7 +25,14 @@ METADATA = "ir/state-projections.json"
 
 STATE_TERMS = ("?subject", "?state", "?reason")
 GRANT_TERMS = ("?role", "?kind", "?subject")
-COLUMNS = {SOURCE: ("sensor",), PROJECTION: ("sensor", None, None), GRANT: (None, None, "sensor")}
+BUNDLE = {
+    "kinds": [{"id": "sensor"}],
+    "attributes": [
+        {"table": SOURCE, "kind": "sensor"},
+        {"table": PROJECTION, "kind": "sensor"},
+    ],
+    "enums": [{"id": GRANT}],
+}
 
 
 def relation(name, role, *columns):
@@ -122,7 +129,7 @@ def replay(directory, snapshots, witnesses, *, full=None, missing_descriptor=Fal
 def check_scope(whole, partial):
     complete, instances = whole
     claimed, witnesses = partial
-    return check_role("guest", complete, claimed, None, COLUMNS, ["sensor"], {}, IR,
+    return check_role("guest", complete, claimed, None, BUNDLE, IR,
                       instances=instances, witnesses=witnesses)
 
 

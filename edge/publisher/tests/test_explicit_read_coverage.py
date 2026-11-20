@@ -66,8 +66,8 @@ def filtered(epoch, role):
 def checked(epoch, role, readable, witnesses, full, evidence, instances):
     return checker_access.check_role(
         role, {r: publish.snapshot(rows) for r, rows in epoch.rows.items()},
-        {r: publish.snapshot(rows) for r, rows in readable.items()}, full, epoch.columns, epoch.kinds,
-        epoch.parents, json.loads(epoch.rules), instances=instances, witnesses=witnesses,
+        {r: publish.snapshot(rows) for r, rows in readable.items()}, full, json.loads(epoch.bundle),
+        json.loads(epoch.rules), instances=instances, witnesses=witnesses,
         claimed_evidence=evidence)
 
 

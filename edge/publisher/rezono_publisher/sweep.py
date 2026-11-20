@@ -110,6 +110,10 @@ def verify_status_readers(e: publish.Epoch, roles: dict[str, str], variant: dict
             raise publish.Blocked(f"{publish.PROOFS}: {len(bad)} malformed witness instances (first: {bad[0]})")
         calc_doc = publish.calc_ir(e)
         calcs = json.loads(json.dumps(e.calc_witnesses))
+        try:
+            bundle_doc = json.loads(e.bundle) if e.bundle else None
+        except (TypeError, ValueError):
+            bundle_doc = None
         complete = {rel: publish.snapshot(rs) for rel, rs in rows.items()}
         all_relations = frozenset(rows)
         for role in filtered_status:
@@ -121,7 +125,7 @@ def verify_status_readers(e: publish.Epoch, roles: dict[str, str], variant: dict
                 raise publish.Blocked(f"{publish.ACCESS_CHECK}: {err}") from err
             role_snaps = {rel: publish.snapshot(rs) for rel, rs in readable.items()}
             derived_full, role_findings = checker_access.check_role(
-                role, complete, role_snaps, claimed_full, e.columns, e.kinds, e.parents,
+                role, complete, role_snaps, claimed_full, bundle_doc,
                 doc, calc_doc, instances, calcs, sees.get("calc_witnesses") or (),
                 sees["witnesses"], claimed_evidence=getattr(claimed_full, "evidence", None),
             )
