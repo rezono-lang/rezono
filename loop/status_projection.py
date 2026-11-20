@@ -12,6 +12,7 @@ from rezono_compiler import batch, explain, facts, modules, pack, rules, scenari
 from loop.typed_recording import instant
 
 
+TimeState = Literal["known", "unknown"]
 StatusState = Literal["pending", "success", "failure"]
 Observation = Mapping[str, str]
 SCOPE = ("tenant", "delivery", "step", "run")
@@ -25,8 +26,9 @@ class StatusProjection:
     pack_sha256: str
     observations: tuple[dict[str, str | int], ...]
     proofs: tuple[dict, ...]
-    latest_at: str = ""
+    latest_at: str | None = None
     conflicts: frozenset[tuple[str, str]] = frozenset()
+    time_state: TimeState = "unknown"
 
 
 @cache
@@ -42,13 +44,18 @@ def _observations(step: Mapping[str, str], evidence: Iterable[Observation]) -> t
     for row in evidence:
         if not row.get("reason") or not row.get("relation") or any(row.get(key) != value for key, value in scope.items()):
             continue
-        at = row.get("at", "")
-        record = {**scope, "relation": row["relation"], "reason": row["reason"], "at": at}
-        records.append((row.get("id") or canonical_sha256(record), record, instant(at) if at else None))
+        raw_at = row.get("at")
+        at_text = raw_at if isinstance(raw_at, str) and raw_at else None
+        record: dict[str, str | int] = {**scope, "relation": row["relation"], "reason": row["reason"]}
+        if at_text is not None:
+            record["at"] = at_text
+        records.append((row.get("id") or canonical_sha256(record), record, instant(at_text) if at_text is not None else None))
     ordered_times = {at: index for index, at in enumerate(sorted({at for _, _, at in records if at is not None}))}
     by_id: dict[str, dict[str, str | int]] = {}
     for identity, record, at in records:
-        observed = {"id": identity, **record, "event_time": ordered_times[at] if at is not None else -1}
+        observed = {"id": identity, **record}
+        if at is not None:
+            observed["event_time"] = ordered_times[at]
         if by_id.setdefault(identity, observed) != observed:
             raise ValueError(f"conflicting status observations with event ID {identity!r}")
     return tuple(by_id[event] for event in sorted(by_id))
@@ -70,13 +77,19 @@ def project_status(step: Mapping[str, str], evidence: Iterable[Observation]) -> 
         witnesses = explain.Explainer(program, rows, batch.witnesses(connection, program))
     snapshot = canonical_sha256({"pack_sha256": pack_sha256, "observations": observations})
     proofs = tuple(witnesses.proof(RELATION, row, snapshot) for row in selected)
-    (*_, latest), = rows["status_latest"]
-    latest_rank = int(latest)
-    latest_at = next(cast(str, row["at"]) for row in observations if row["event_time"] == latest_rank)
+    latest_rows = rows["status_latest"]
+    if latest_rows:
+        (*_, latest), = latest_rows
+        latest_rank = int(latest)
+        latest_at: str | None = next(cast(str, row["at"]) for row in observations if row.get("event_time") == latest_rank)
+    else:
+        latest_at = None
+    time_states = {row[-1] for row in rows["status_time_state"]}
+    time_state: TimeState = "known" if time_states == {"known"} else "unknown"
     conflicts = (frozenset((state, reason) for *_, state, reason in rows["status_contender"])
                  if rows["status_conflict"] else frozenset())
     return StatusProjection(cast(StatusState, selected[0][-2]), frozenset(row[-1] for row in selected),
-                            pack_sha256, observations, proofs, latest_at, conflicts)
+                            pack_sha256, observations, proofs, latest_at, conflicts, time_state)
 
 
 def project_with_reasons(step: Mapping[str, str], evidence: Iterable[Observation]) -> tuple[StatusState, set[str]]:

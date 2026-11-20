@@ -78,8 +78,13 @@ loop_status_observation.reason: source evidence
 loop_status_observation.at: original event time
 loop_status_observation.event_time: ordered event instant
 status_observation_state: observed commit status
+status_observation_dated: status observation with recorded instant
 status_reading: scoped status reading
+status_reading_time_unknown: status reading with unknown instant
 status_latest: latest comparable status instant
+status_has_dated: scope with dated status reading
+status_has_undated: scope with undated status reading
+status_time_state: status event instant knowledge state
 status_contender: current or undated status reading
 status_disagreement: contradictory status evidence
 status_conflict: conflicted delivery step
@@ -104,8 +109,10 @@ sweep_flag: sweep completeness flag
 complete_current_sweep: complete current sweep
 deadline_until: deadline boundary
 deadline_foreign_start: deadline started in another run
+completion_invalidated_at: completion observation invalidated by conflict or regression
 done_in_time: step done by its deadline
 deadline_expired: expired step deadline
+ready_round_ambiguous: ambiguous verified rounds for run and cut
 expected_drift: declared expected drift
 round_failed: failed round
 round_unfinished: unfinished round
