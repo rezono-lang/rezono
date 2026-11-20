@@ -59,3 +59,25 @@ def test_observed_findings():
         "rule": "paired-port", "digest": DIGEST, "object": {"kind": "Pod", "namespace": "blue", "name": "p2"},
         "reason": "not_admitted", "relation": "pod_port", "row": ["blue", 8443],
     }]
+
+
+@pytest.mark.parametrize("bad_observation", [
+    {"object": {"kind": "Pod", "namespace": "blue", "name": "a"}, "missing": []},
+    {"object": {"kind": "Pod", "namespace": "blue", "name": "a"}, "rows": {}},
+    {"object": {"kind": "Pod", "namespace": "blue", "name": "a"}},
+    {"rows": {}, "missing": []},
+    {"object": {}, "rows": {}, "missing": []},
+    {"object": None, "rows": {}, "missing": []},
+    {"object": {"kind": "Pod", "namespace": "blue", "name": "a"}, "rows": None, "missing": []},
+    {"object": {"kind": "Pod", "namespace": "blue", "name": "a"}, "rows": {}, "missing": None},
+    {"object": {"kind": "Pod", "namespace": "blue", "name": "a"}, "rows": {}, "missing": "object.spec"},
+    {"object": {"kind": "Pod", "namespace": "blue", "name": "a"}, "rows": {"pod_image": "not-a-row-list"},
+     "missing": []},
+    "not-a-mapping",
+])
+def test_observed_findings_rejects_incomplete_or_malformed_observation(bad_observation):
+    from observed_findings import observed_findings
+
+    supply = load_program("verified-supply.rules.yaml")
+    with pytest.raises(ValueError):
+        observed_findings(supply, "allow_image", {}, [bad_observation], rule="verified-supply", digest=DIGEST)
