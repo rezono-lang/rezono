@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import json
 import re
 from typing import NoReturn
 
@@ -80,8 +81,9 @@ def lower_declaration(site: Site, linked: native_rule_signatures.Linked, module:
         for premises in branches:
             body: list[tuple] = []
             bound: set[str] = set()
+            used = mentioned(head) | mentioned([node for _, node in premises])
             for pointer, node in premises:
-                body.append(premise(site, linked, clause, pointer, node, bound, line))
+                body.extend(premise(site, linked, clause, pointer, node, bound, used, line))
             head_terms = []
             for index, argument in enumerate(head):
                 place = f"{at}/{names}/{index}"
@@ -120,8 +122,10 @@ def slot_row(clause: native_rule_signatures.LinkedClause, pointer: str, guard: d
     if set(guard) == {"cmp"} and guard["cmp"][0] == "=":
         _, left, right = guard["cmp"]
         for side, path, other in ((1, left, right), (2, right, left)):
-            table, _ = clause.paths.get(f"{pointer}/cmp/{side}", (None, None))
-            if table is not None and len(path.get("path", ())) == 2 and (value := operand(other)) is not None:
+            at = f"{pointer}/cmp/{side}"
+            table, _ = clause.paths.get(at, (None, None))
+            if (table is not None and at not in clause.collections
+                    and len(path.get("path", ())) == 2 and (value := operand(other)) is not None):
                 return table, [("var", path["path"][0]), value]
     elif set(guard) == {"in"}:
         subject, domain = guard["in"]
@@ -136,11 +140,23 @@ def slot_row(clause: native_rule_signatures.LinkedClause, pointer: str, guard: d
 
 
 def operand(node: dict) -> tuple | None:
-    """A variable or an integer literal as a rule term; anything else has no direct row term."""
+    """A variable or a representable literal as a rule term; anything else has no direct row term."""
     if node.keys() == {"path"} and len(node["path"]) == 1 and rules_dl.VARIABLE.fullmatch(node["path"][0]):
         return "var", node["path"][0]
-    if node.keys() == {"lit"} and re.fullmatch(r"-?[0-9]+", node["lit"]):
-        return "const", str(int(node["lit"])), "integer"
+    if node.keys() == {"neg"} and isinstance(node["neg"], dict) and node["neg"].keys() == {"lit"}:
+        if re.fullmatch(r"[0-9]+", node["neg"]["lit"]):
+            return "const", str(-int(node["neg"]["lit"])), "integer"
+    if node.keys() == {"lit"}:
+        token = node["lit"]
+        if re.fullmatch(r"-?[0-9]+", token):
+            return "const", str(int(token)), "integer"
+        if token.startswith('"'):
+            try:
+                value = json.loads(token)
+            except ValueError:
+                return None
+            if isinstance(value, str) and value != "_" and not value.startswith("?"):
+                return "const", value, "string"
     return None
 
 
@@ -158,29 +174,120 @@ class Site:
 
 
 def premise(site: Site, linked: native_rule_signatures.Linked, clause: native_rule_signatures.LinkedClause,
-            pointer: str, node: dict, bound: set[str], line: int) -> tuple:
+            pointer: str, node: dict, bound: set[str], used: set[str], line: int) -> list[tuple]:
     """Lower one premise of an alternative in binding order and add the names it binds to `bound`.
 
     A kind membership, a forward slot row or a relation call binds its variables. `n = k + 1` assigns a fresh
-    computed value from bound operands. A negated call exports no binding and needs every key bound before it.
+    computed value from bound operands. A scalar comparison or its negation reads positive slot rows and emits
+    an IR condition without exporting bindings. A negated call exports no binding and needs every key bound.
     """
     if set(node) == {"not"} and set(node["not"]) == {"call"} and (relation := clause.calls.get(f"{pointer}/not")):
-        return negated(site, linked, pointer, node["not"], relation, bound, line)
+        return [negated(site, linked, pointer, node["not"], relation, bound, line)]
     if set(node) == {"in"} and (kind := clause.memberships.get(pointer)) is not None:
         name = variable(node["in"][0])
         if name is None:
             refuse(site.file, pointer, *site.span(pointer)[1:], "A kind membership in a native rule takes a variable")
         bound.add(name)
-        return "lit", "positive", (kind, [("var", name)], line)
+        return [("lit", "positive", (kind, [("var", name)], line))]
     if (computed := assignment(site, pointer, node, bound)) is not None:
-        return computed
+        return [computed]
     table, terms = slot_row(clause, pointer, node)
-    if table is None:
-        refuse(site.file, pointer, *site.span(pointer)[1:],
-               "A native rule premise needs a kind membership, a slot row, a relation call, a negated relation call "
-               "or a computed assignment")
-    bound.update(term[1] for term in terms if term[0] == "var")
-    return "lit", "positive", (table, terms, line)
+    if table is not None:
+        bound.update(term[1] for term in terms if term[0] == "var")
+        return [("lit", "positive", (table, terms, line))]
+    if (compared := scalar_comparison(site, clause, pointer, node, bound, used, line)) is not None:
+        return compared
+    refuse(site.file, pointer, *site.span(pointer)[1:],
+           "A native rule premise needs a kind membership, a slot row, a relation call, a negated relation call, "
+           "a scalar comparison or a computed assignment")
+
+
+# Negation of a strict scalar comparison swaps T and F on known values while preserving undecided states.
+NEGATED_COMPARE = {"=": "!=", "!=": "=", "<": ">=", "<=": ">", ">": "<=", ">=": "<"}
+
+
+def scalar_comparison(site: Site, clause: native_rule_signatures.LinkedClause, pointer: str, node: dict,
+                      bound: set[str], used: set[str], line: int) -> list[tuple] | None:
+    """Lower a scalar comparison or its negation to positive slot rows and an IR condition.
+
+    Never lowers a scalar negation as an anti-join: an absent or undecided slot has no positive slot row, so
+    the rule derives nothing for it (decisions/language-expression-semantics.md §1, §2 rule 1).
+    """
+    flipped = False
+    at = pointer
+    inner = node
+    while set(inner) == {"not"}:
+        flipped = not flipped
+        at = f"{at}/not"
+        inner = inner["not"]
+    if set(inner) != {"cmp"}:
+        return None
+    symbol, left, right = inner["cmp"]
+    if symbol not in rules_dl.COMPARE:
+        refuse(site.file, at, *site.span(at)[1:], f"Comparison {symbol!r} is not lowered in a native rule")
+    operator = NEGATED_COMPARE[symbol] if flipped else symbol
+    items: list[tuple] = []
+    terms = []
+    for side, child in ((1, left), (2, right)):
+        term, reads = scalar_operand(site, clause, f"{at}/cmp/{side}", child, bound, used, line)
+        items.extend(reads)
+        terms.append(term)
+    items.append(("cmp", rules_dl.COMPARE[operator], terms[0], terms[1]))
+    return items
+
+
+def scalar_operand(site: Site, clause: native_rule_signatures.LinkedClause, at: str, node: dict,
+                   bound: set[str], used: set[str], line: int) -> tuple[tuple, list[tuple]]:
+    """Lower one operand of a scalar comparison: a single-hop scalar slot read, a bound variable or a literal."""
+    if at in clause.paths:
+        if at in clause.collections:
+            refuse(site.file, at, *site.span(at)[1:],
+                   "A scalar comparison cannot read a multivalued slot", "R005")
+        path = node.get("path", ())
+        if len(path) != 2 or not rules_dl.VARIABLE.fullmatch(path[0]):
+            refuse(site.file, at, *site.span(at)[1:],
+                   "A scalar comparison path in a native rule takes a single slot hop")
+        subject = path[0]
+        if subject not in bound:
+            refuse(site.file, at, *site.span(at)[1:],
+                   f"The subject {subject!r} has no positive binding before the comparison", "R042")
+        table, _ = clause.paths[at]
+        if table is None:
+            return ("var", subject), []
+        value = fresh_variable(used)
+        return ("var", value), [("lit", "positive", (table, [("var", subject), ("var", value)], line))]
+    term = operand(node)
+    if term is None:
+        refuse(site.file, at, *site.span(at)[1:],
+               "A scalar comparison operand in a native rule is a bound variable, a scalar slot path or a literal")
+    if term[0] == "var" and term[1] not in bound:
+        refuse(site.file, at, *site.span(at)[1:],
+               f"The operand {term[1]!r} has no positive binding before the comparison", "R042")
+    return term, []
+
+
+def mentioned(value: object) -> set[str]:
+    """Every root variable name written in a head or branch, so fresh slot variables never collide."""
+    names: set[str] = set()
+    if isinstance(value, dict):
+        path = value.get("path")
+        if isinstance(path, list) and path and isinstance(path[0], str):
+            names.add(path[0])
+        for child in value.values():
+            names.update(mentioned(child))
+    elif isinstance(value, list):
+        for item in value:
+            names.update(mentioned(item))
+    return names
+
+
+def fresh_variable(used: set[str]) -> str:
+    """Next deterministic rule variable name not yet used in this clause."""
+    index = 1
+    while (name := f"v{index}") in used:
+        index += 1
+    used.add(name)
+    return name
 
 
 def assignment(site: Site, pointer: str, node: dict, bound: set[str]) -> tuple | None:
@@ -200,7 +307,7 @@ def assignment(site: Site, pointer: str, node: dict, bound: set[str]) -> tuple |
         for index, child in enumerate(operands, 1):
             at = f"{place}/arith/{index}"
             term = operand(child)
-            if term is None:
+            if term is None or (term[0] == "const" and term[2] != "integer"):
                 refuse(site.file, at, *site.span(at)[1:],
                        "An arithmetic operand in a native rule is a variable or an integer literal")
             if term[0] == "var" and term[1] not in bound:

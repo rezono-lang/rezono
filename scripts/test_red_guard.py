@@ -4,7 +4,8 @@ from pathlib import Path
 import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from red_guard import DEFINITION, Change, Tree, allowed, pack_hash, pin_update, protected, review, source
+from red_guard import (DEFINITION, UNREADABLE_CONFIG, Change, Tree, allowed, pack_hash, pin_update, protected,
+                       review, source)
 
 
 def main():
@@ -44,6 +45,103 @@ def main():
     read_cases(function)
     pin_cases(function)
     table_cases()
+    pytest_config_cases(function)
+    green_to_red_cases()
+
+
+def pytest_config_cases(function):
+    """The pytest section of pyproject.toml, setup.cfg or tox.ini can drop a test from the run."""
+    lifted = function.split(b"\n", 1)[1]
+    project = b'[project]\nname = "demo"\n\n[tool.pytest.ini_options]\ntestpaths = ["tests"]\n'
+    ignored = project + b'addopts = "--ignore=tests/test_a.py"\n'
+    renamed = project.replace(b'"demo"', b'"demo2"')
+    cases = [
+        ("pytest section of pyproject.toml", "demo/pyproject.toml", project, ignored, True),
+        ("other section of pyproject.toml", "demo/pyproject.toml", project, renamed, False),
+        ("pytest section added to pyproject.toml", "pyproject.toml", b'[project]\nname = "demo"\n',
+         b'[project]\nname = "demo"\n\n[tool.pytest]\naddopts = ["--ignore=tests"]\n', True),
+        ("pytest section of setup.cfg", "demo/setup.cfg", b"[metadata]\nname = demo\n\n[tool:pytest]\naddopts = -q\n",
+         b"[metadata]\nname = demo\n\n[tool:pytest]\naddopts = -q --ignore=tests\n", True),
+        ("other section of setup.cfg", "demo/setup.cfg", b"[metadata]\nname = demo\n", b"[metadata]\nname = demo2\n",
+         False),
+        ("pytest section of tox.ini", "tox.ini", b"[pytest]\naddopts = -q\n", b"[pytest]\naddopts = -q -k 'not a'\n",
+         True),
+        ("pyproject.toml that no longer parses", "demo/pyproject.toml", project, project + b"[[[\n", True),
+        ("pyproject.toml replaced by a link", "demo/pyproject.toml", project, UNREADABLE_CONFIG, True),
+        ("new pyproject.toml as a link", "demo/pyproject.toml", None, UNREADABLE_CONFIG, True),
+        ("removed pyproject.toml with a pytest section", "demo/pyproject.toml", project, None, True),
+    ]
+    for label, path, before, after, expected in cases:
+        status = "A" if before is None else "D" if after is None else "M"
+        change = Change(path, status, before, after)
+        errors, notes = review([change], planner=False)
+        if bool(errors) != expected or (f"CHANGED {path} pytest configuration" in notes) != expected:
+            raise AssertionError(f"{label}: errors {errors}, notes {notes}")
+        errors, notes = review([change], planner=True)
+        if errors:
+            raise AssertionError(f"{label} with planner: errors {errors}")
+        print(f"{'DENY' if expected else 'ALLOW'} without planner, ALLOW with planner: {label}")
+    # Beside a lifted mark, a changed pytest section is another protected change.
+    errors, _ = review([Change("tests/test_count.py", "M", function, lifted),
+                        Change("demo/pyproject.toml", "M", project, ignored)], planner=True)
+    if not any("Lift marks in a pull request of their own" in e for e in errors):
+        raise AssertionError(f"lifted mark beside a pytest section: errors {errors}")
+    print("DENY with planner: lifted mark beside a changed pytest section")
+    # pytest 9 reads these before pyproject.toml, as its whole configuration: an added one that
+    # collects only some names hides a red test whose mark goes.
+    narrow = b'[pytest]\npython_functions = ["test_k*"]\n'
+    for name in ("pytest.toml", ".pytest.toml", ".pytest.ini"):
+        path = f"compiler/{name}"
+        if not protected(path):
+            raise AssertionError(f"{path} is not protected")
+        for status, before, after in (("A", None, narrow), ("M", narrow, narrow + b"addopts = '-q'\n"),
+                                      ("D", narrow, None)):
+            errors, _ = review([Change(path, status, before, after)], planner=False)
+            if errors != [f"ERROR planner label required for {ascii(path)}"]:
+                raise AssertionError(f"{status} {path} without planner: errors {errors}")
+        errors, _ = review([Change("tests/test_count.py", "M", function, lifted),
+                            Change(path, "A", None, narrow)], planner=False)
+        if not errors:
+            raise AssertionError(f"lifted mark beside an added {path} without planner passed")
+        errors, _ = review([Change("tests/test_count.py", "M", function, lifted),
+                            Change(path, "A", None, narrow)], planner=True)
+        if not any("Lift marks in a pull request of their own" in e for e in errors):
+            raise AssertionError(f"lifted mark beside an added {path}: errors {errors}")
+        print(f"DENY without planner (A, M, D) and beside a lifted mark with planner: {path}")
+
+
+def green_to_red_cases():
+    """A new red mark on a test that was green is reported, and needs the planner label."""
+    green = b"import pytest\n\n\ndef test_a():\n    assert f() == 1\n"
+    mark = b"@pytest.mark.xfail(strict=True, reason=\"M1: x\")\n"
+    other = b"\n\n" + mark + b"def test_b():\n    assert f() == 2\n"
+    top = b"import pytest\n\n\n"
+    param = (top + b"@pytest.mark.parametrize('v', [1, 2])\ndef test_a(v):\n    assert f(v)\n",
+             top + b"@pytest.mark.parametrize('v', [1, pytest.param(2, marks=pytest.mark.xfail("
+             b"strict=True, reason=\"M1: x\"))])\ndef test_a(v):\n    assert f(v)\n")
+    marked = green.replace(b"def test_a", mark + b"def test_a")
+    cases = [
+        ("function mark on a green test", green, marked),
+        ("same mark as a red test beside it", green + other, marked + other),
+        ("module mark over a green test", green,
+         green.replace(b"\n\n\ndef", b"\npytestmark = pytest.mark.xfail(strict=True, reason=\"M1: x\")\n\n\ndef")),
+        ("parameter mark on a green test", *param),
+    ]
+    for label, before, after in cases:
+        change = Change("tests/test_a.py", "M", before, after)
+        note = "CHANGED tests/test_a.py::test_a from green to red"
+        errors, notes = review([change], planner=False)
+        if note not in notes or not any("turn red" in e for e in errors):
+            raise AssertionError(f"{label} without planner: errors {errors}, notes {notes}")
+        errors, notes = review([change], planner=True)
+        if errors or note not in notes:
+            raise AssertionError(f"{label} with planner: errors {errors}, notes {notes}")
+        print(f"DENY without planner, ALLOW with planner and reported: {label}")
+    errors, notes = review([Change("tests/test_a.py", "M", green + other, green + other.replace(b"M1", b"M2"))],
+                           planner=True)
+    if any("from green to red" in n for n in notes):
+        raise AssertionError(f"a red test that stays red is not green to red: notes {notes}")
+    print("ALLOW: a red test that stays red is not reported as green to red")
 
 
 def table_cases():
@@ -53,7 +151,7 @@ def table_cases():
              b"@pytest.mark.parametrize('name', REFUSALS)\ndef test_refused(name):\n    assert REFUSALS[name]\n")
     shorter = table.replace(b"    'a reason': (2, 'reason'),\n", b"")
     longer = table.replace(b"    'a reason'", b"    'a third': (3, 'third'),\n    'a reason'")
-    listed = b"import pytest\n\n\n@pytest.mark.parametrize('v', [1, 2, 3])\ndef test_v(v):\n    assert v\n"
+    listed = b"import pytest\n\n\n" + b"@pytest.mark.parametrize('v', [1, 2, 3])\ndef test_v(v):\n    assert v\n"
     marked = table.replace(b"(2, 'reason')", b"pytest.param(2, 'reason', marks=pytest.mark.xfail("
                            b"strict=True, reason='M1: x'))")
     lifted = table.replace(b"(2, 'reason')", b"pytest.param(2, 'reason')")
@@ -95,9 +193,10 @@ def pin_cases(function):
     access, explain = "packs/std-access", "packs/std-explain"
     files = {f"{access}/pack.yaml": b"name: std-access\n", f"{access}/rules/access.dl": b"may_read(r, k).\n",
              f"{access}/expected/out.json": b"[]\n", f"{explain}/pack.yaml": b"name: std-explain\n"}
-    tree = Tree.of(files)
-    new, other = pack_hash(tree, access), pack_hash(tree, explain)
-    old = "cc" * 32
+    # At the base the imported pack's rules differ: its definition changes in the pull request.
+    before = dict(files, **{f"{access}/rules/access.dl": b"may_read(r).\n"})
+    tree, base = Tree.of(files), Tree.of(before)
+    new, old, other = pack_hash(tree, access), pack_hash(base, access), pack_hash(tree, explain)
 
     def fixture(digest, extra=b""):
         return (b"name: neutral\nimports:\n  - name: std-access\n    path: ../../../packs/std-access\n"
@@ -108,9 +207,8 @@ def pin_cases(function):
     pinned = Change("tests/fixtures/neutral/pack.yaml", "M", fixture(old), fixture(new))
     changed = Change(f"{access}/rules/access.dl", "M", None, None)
 
-    def run(label, changes, expected, planner=True, at=tree):
-        paths = {c.path for c in changes}
-        pins = frozenset(c.path for c in changes if pin_update(c, at, paths))
+    def run(label, changes, expected, planner=True, at=tree, since=base):
+        pins = frozenset(c.path for c in changes if pin_update(c, at, since))
         errors, notes = review(changes, planner=planner, pins=pins)
         allowed_ = not errors and "PINNED tests/fixtures/neutral/pack.yaml" in notes
         if allowed_ != expected:
@@ -125,24 +223,37 @@ def pin_cases(function):
         [lift, changed, Change(pinned.path, "M", fixture(old), fixture(new, b"  # moved\n"))], False)
     run("a pin update whose other lines change too", [lift, changed, Change(
         pinned.path, "M", fixture(old), fixture(new).replace(b"name: neutral", b"name: neutral2"))], False)
-    run("a pin update without a change in the imported pack", [lift, pinned], False)
-    run("a pin update beside a change outside the imported pack",
-        [lift, Change("packs/std-time/rules/time.dl", "M", None, None), pinned], False)
+    run("a pin update without a change in the imported pack", [lift, pinned], False, since=tree)
+    # A stale pin at the base, and a file outside the pack's definition added: the hash does
+    # not move in this pull request, so setting the pin right is no pin update.
+    noted = dict(files, **{f"{access}/NOTES.txt": b"notes\n"})
+    run("a stale pin set right beside a file outside the definition", [
+        lift, Change(f"{access}/NOTES.txt", "A", None, None),
+        Change(pinned.path, "M", fixture("cc" * 32), fixture(new))], False, at=Tree.of(noted), since=tree)
     run("a new fixture pack.yaml", [lift, changed, Change(pinned.path, "A", None, fixture(new))], False)
     run("a pin update outside a fixture or test directory",
         [lift, changed, Change("examples/demo/expected/pack.yaml", "M", fixture(old), fixture(new))], False)
     # The pinned pack imports the changed one: its hash moves with its own new pin.
     middle = "packs/std-middle"
-    deep = dict(files, **{f"{middle}/pack.yaml": b"name: std-middle\nimports:\n  - name: std-access\n"
-                          b"    path: ../std-access\n    sha256: " + new.encode() + b"\n"})
-    deep_tree = Tree.of(deep)
-    via = (b"name: neutral\nimports:\n  - name: std-middle\n    path: ../../../packs/std-middle\n    sha256: ")
+
+    def importer(digest):
+        return b"name: std-middle\nimports:\n  - name: std-access\n    path: ../std-access\n    sha256: " + digest
+
+    deep = Tree.of(dict(files, **{f"{middle}/pack.yaml": importer(new.encode())}))
+    deep_base = Tree.of(dict(before, **{f"{middle}/pack.yaml": importer(old.encode())}))
+    via = b"name: neutral\nimports:\n  - name: std-middle\n    path: ../../../packs/std-middle\n    sha256: "
     run("a pin update of a pack that imports the changed pack", [lift, changed, Change(
-        pinned.path, "M", via + old.encode() + b"\n", via + pack_hash(deep_tree, middle).encode() + b"\n")],
-        True, at=deep_tree)
+        pinned.path, "M", via + pack_hash(deep_base, middle).encode() + b"\n",
+        via + pack_hash(deep, middle).encode() + b"\n")], True, at=deep, since=deep_base)
     flow = b"imports:\n  - {name: std-access, path: ../../../packs/std-access, sha256: %s}\n"
     run("a pin update in a flow mapping", [lift, changed, Change(
         pinned.path, "M", flow % old.encode(), flow % new.encode())], True)
+    anchored = b"imports:\n  - &access {name: std-access, path: ../../../packs/std-access, sha256: %s}\n"
+    run("a pin update in a file with an anchor", [lift, changed, Change(
+        pinned.path, "M", anchored % old.encode(), anchored % new.encode())], False)
+    two = b"---\nname: other\n---\n" + flow
+    run("a pin update in a file with a second document", [lift, changed, Change(
+        pinned.path, "M", two % old.encode(), two % new.encode())], False)
     linked = Tree(dict(Tree.of(files).modes, **{f"{access}/rules/link.dl": "120000"}), files.__getitem__)
     run("a pin update of a pack that holds a symbolic link", [lift, changed, pinned], False, at=linked)
 
@@ -212,7 +323,8 @@ def read_cases(function):
                  "edge/gate/src/ask.ts", "edge/publisher/rezono_publisher/access.py",
                  "contracts/proof.yaml", "checker/rezono_checker/fixtures.py",
                  *(f"edge/publisher/rezono_publisher/{name}.py" for name in (
-                     "calc_scope", "sources", "sweep", "difference", "batch", "publish", "proof", "views"))):
+                     "calc_scope", "sources", "sweep", "difference", "batch", "publish", "proof", "views",
+                     "retained_calculation"))):
         for status in ("M", "A", "D"):
             run(f"{status} {path} without a read label", [Change(path, status, None, None)],
                 ["planner"], True)
@@ -319,6 +431,15 @@ def completion_cases(edit, function, lifted, other, reason):
         print(f"{'DENY' if expected else 'ALLOW'} {'with' if planner else 'without'} planner: {label}")
 
     run("one lifted mark beside evidence data only", [lift, outcome, case], True, False)
+    # A reviewer reads where the evidence came from before it lands: the read label for the head.
+    head = "0123456789abcdef" * 2 + "01234567"
+    for labels, expected in ((["planner"], True), (["planner", "p1-read-" + head[:7]], True),
+                             (["planner", "p1-read-" + head], False)):
+        errors, notes = review([lift, outcome, case], planner=True, head=head, labels=labels, packs=roots)
+        refused = any("p1-read-" + head in e and "completes" in e for e in errors)
+        if refused != expected or "COMPLETED tests/test_count.py::test_count" not in notes:
+            raise AssertionError(f"evidence completion with {labels}: errors {errors}, notes {notes}")
+        print(f"{'DENY' if expected else 'ALLOW'} with {labels}: an evidence completion needs the read label")
     run("one lifted mark beside evidence data, without the label", [lift, outcome], False, True)
     run("one lifted mark beside evidence data and another protected path",
         [lift, outcome, edit("tests/support.py", b"value = 2\n", b"value = 3\n")], True, True)

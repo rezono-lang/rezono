@@ -21,7 +21,10 @@ A pull request needs a review before it lands when it changes a file that is not
 | `edge/publisher/rezono_publisher/publish.py` | what the checker's `check_role` is handed: that column table, the kinds and their parents |
 | `edge/publisher/rezono_publisher/proof.py` | the piece size and fan-out of a role's proof graph (`PIECE`, `FANOUT`), bounds the checker is handed |
 | `edge/publisher/rezono_publisher/views.py` | which views a role gets, and the proof bounds it hands to the checker |
+| `edge/publisher/rezono_publisher/retained_calculation.py` | whether a selection from a retained publication is accepted: what it hands to the checker's `check_epoch` and `check_calc_bindings` |
 | `contracts/proof.yaml` | the witnesses and proofs the engine produces and the checker verifies |
+
+An evidence completion (`decisions/evidence-completion.md`) is read before it lands as well, because nothing else checks where its evidence came from.
 
 A test is a file that `scripts/red_guard.py` treats as test evidence: a `test_*` file, a fixture, a `conftest.py` and the like. A pull request that changes only tests under these paths needs no review label.
 

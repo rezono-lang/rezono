@@ -22,7 +22,9 @@ It applies to a change when all of these hold:
 - Each new value is the hash of the imported pack at the head of the pull request.
   The guard computes it itself from Git objects, with the definition files of the compiler (`DEFINITION`) and the canonical hash of `rezono_canon`, and refuses any other value.
   It refuses as well when a file in the imported pack is not a regular file, such as a symbolic link.
-- The pull request changes the imported pack, or a pack that it imports, directly or not.
+- Each old value is the hash of the imported pack at the base, computed the same way.
+  So the imported pack's definition changes in this pull request, or that of a pack it imports, directly or not, through its own pin; a file outside the definition does not count, and neither does a pin that was already stale.
+- The file holds no YAML anchor or alias and no second document, so each line means what it says.
 - The pull request carries the `planner` label. Without it, the change needs the label as before.
 
 Nothing else changes: the lifted mark still follows the rules for a lift, and any other protected change beside it is still refused.
