@@ -22,7 +22,13 @@ from round_visibility_rounds import singleton_rounds
         "pin in build/pack.yaml and the table in compiler/rezono_compiler/standard_packs.py). The same change turns "
         "loop/tests/test_overlapping_withdrawals_break_availability.py::"
         "test_overlapping_withdrawals_break_availability green: remove both marks in the same PR. Today ready.dl "
-        "still derives ready from eligible without a verified round (AssertionError)."
+        "still derives ready from eligible without a verified round (AssertionError). "
+        "Note: switching ready.dl to current_verified_round and verified_round_member (with fixed_point.dl, "
+        "loop/typed_recording.py, and build/rules/tasks.dl switched to unblocked) makes this test and "
+        "test_overlapping_withdrawals_break_availability pass, but breaks the green test "
+        "loop/tests/test_quiet_round.py::test_quiet_round_rules because it checks rows['ready'] instead of "
+        "rows['unblocked'] without a verified round. A planner PR must switch test_quiet_round_rules to "
+        "unblocked (and packs/std-loop/candidate/ also needs ready and fixed_point updated)."
     ),
 )
 def test_ready_requires_checked_batch_member(tmp_path):
