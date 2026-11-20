@@ -27,6 +27,7 @@
 //   R014, R016  as in a question (parse.ts)
 //   R018  `valid` or `known` twice on one version or fact row
 //   R015  a reserved construct
+//   R029  a state literal whose quoted label is the label of no `reason` declaration of the module
 //   W108  a declaration with versions has none before the earliest `valid` date: there its value is
 //         `unknown no_version_applies` (§5a rule 4). Only that first gap is reported here; a gap between two
 //         versions needs the order of their contexts, which the checker gives later.
@@ -36,6 +37,7 @@ import { blockSyntax, declarationActions, declarations, verbatimBlocks, type Dec
 import type { Deprecation } from './module-deprecation.ts';
 import { layout, only, type Logical } from './module-layout.ts';
 import { readSchema, type SchemaMetadata } from './module-metadata.ts';
+import { undeclaredReasonLabels } from './module-reason.ts';
 import type { BlockSyntax, Build, Line } from './module-support.ts';
 import { versionGaps } from './module-version.ts';
 import { inOrder, points, readRule, semantics, torn, tornAt, type Diagnostic, type Span } from './parse.ts';
@@ -233,5 +235,9 @@ function readModule(text: string, bare: boolean): ParsedModule {
 	clearPendingDeprecated();
 	if (!bare && !module.pack && !errors.length) errors.push({ code: 'R000', span: { text: '', start: 0, end: 0 }, args: ['`pack`'] });
 	if (errors.length) return { diagnostics: errors.sort(inOrder), spans };
-	return { module, diagnostics: [...later, ...versionGaps(module, spans)].sort(inOrder), spans };
+	return {
+		module,
+		diagnostics: [...later, ...versionGaps(module, spans), ...undeclaredReasonLabels(module, spans)].sort(inOrder),
+		spans
+	};
 }

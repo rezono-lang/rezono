@@ -15,6 +15,7 @@
 	"R018": "the context axis `{0}` is given twice",
 	"R021": "version {0} of `{2}` replaces {1}; there is no version {1}, or `replaces` lines form a cycle",
 	"R024": "`{0}` is `total`, and it has no known value when `{1}`",
+	"R029": "no reason has the label {0}",
 	"R030": "`{0}` is not a rounding; use `half_even`, `half_up`, `down` or `up`",
 	"R031": "`table unique` in `{0}`: rows {1} and {2} both apply when `{3}`",
 	"R040": "declare an owning signature for `{0}`",
