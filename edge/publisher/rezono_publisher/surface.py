@@ -796,20 +796,32 @@ def manifest_bundle_entry(manifest: Any) -> tuple[str, str]:
     return matches[0]
 
 
+_UNSAFE_KEY_CHARS = frozenset({"\\", "%", "?", "#", ":"})
+
+
+def _has_unsafe_key_chars(text: str) -> bool:
+    return any(ch in _UNSAFE_KEY_CHARS or ord(ch) < 0x20 or ord(ch) == 0x7F for ch in text)
+
+
 def _store_key_for_uri(store, uri: str, where: str, pack: str | None = None) -> str:
     """Resolve a manifest entry URI to a validated key within `store` (and `pack`, if given)."""
     try:
         prefix = store.uri("")
     except AttributeError as err:
         raise ValueError(f"{where}: store does not expose uri()") from err
-    if not isinstance(prefix, str) or not prefix or not uri.startswith(prefix):
+    if not isinstance(prefix, str) or not prefix.endswith("/") or not uri.startswith(prefix):
         raise ValueError(f"{where}: uri {uri!r} does not belong to this store")
     key = uri[len(prefix):]
-    if not key or key.startswith("/") or ".." in key.split("/"):
+    if not key or _has_unsafe_key_chars(key):
+        raise ValueError(f"{where}: invalid store key from uri {uri!r}")
+    parts = key.split("/")
+    if any(not part or part in {".", ".."} for part in parts):
         raise ValueError(f"{where}: invalid store key from uri {uri!r}")
     if pack is not None:
         pack_name = _require_str(pack, f"{where}.pack")
-        if not key.startswith(f"{pack_name}/"):
+        if "/" in pack_name or pack_name in {".", ".."} or _has_unsafe_key_chars(pack_name):
+            raise ValueError(f"{where}: invalid pack name {pack_name!r}")
+        if parts[0] != pack_name or len(parts) < 2:
             raise ValueError(f"{where}: key {key!r} lies outside pack {pack_name!r}")
     return key
 
@@ -836,26 +848,27 @@ def compatibility(epoch, store, previous: Any) -> dict[str, Any] | None:
     """Compare `epoch`'s compiled schema bundle against an earlier main `previous` manifest.
 
     Returns None when `previous` is None or when `definition_sha256` and `compiler_sha256`
-    are non-empty and match `previous` (same bundle, nothing to compare). Otherwise returns
-    `{"against": <manifest id>, "class": ..., "changes": [...]}`. Fails closed with
-    `ValueError` on missing, mismatched, or malformed manifests or bundles.
+    are valid 64-character lowercase SHA-256 hex digests matching `previous` (same bundle,
+    nothing to compare). Otherwise returns `{"against": <manifest id>, "class": ..., "changes": [...]}`.
+    Fails closed with `ValueError` on missing, mismatched, or malformed manifests or bundles.
     """
     if previous is None:
         return None
     prev_doc = _require_dict(previous, "previous manifest")
     against = _require_str(prev_doc.get("id"), "previous manifest.id")
+    pack = _require_str(getattr(epoch, "pack", None), "epoch.pack")
     cur_def = getattr(epoch, "definition_sha256", "")
     cur_comp = getattr(epoch, "compiler_sha256", "")
     if (
         isinstance(cur_def, str)
-        and cur_def
+        and bool(_SHA256_HEX.fullmatch(cur_def))
         and isinstance(cur_comp, str)
-        and cur_comp
+        and bool(_SHA256_HEX.fullmatch(cur_comp))
         and prev_doc.get("definition_sha256") == cur_def
         and prev_doc.get("compiler_sha256") == cur_comp
     ):
         return None
-    before = read_manifest_bundle(prev_doc, store, pack=getattr(epoch, "pack", None))
+    before = read_manifest_bundle(prev_doc, store, pack=pack)
     after = _parse_json_bundle(getattr(epoch, "bundle", ""), "epoch.bundle")
     result = compare(before, after)
     return {"against": against, "class": result["class"], "changes": result["changes"]}
