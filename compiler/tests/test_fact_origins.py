@@ -191,14 +191,6 @@ def test_a_citation_or_a_sidecar_entry_is_an_origin(tmp_path, capsys):
         raise MissingCitedOrigin("\n".join(problems))
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=MissingSyntheticOrigin,
-    reason="M3: decisions/fact-origin-required.md: Add `synthetic` to SourceKind in contracts/source.yaml (name the "
-           "generator, position the seed and part) and to KINDS in checker/rezono_checker/sources.py, and read a "
-           "synthetic source as an origin. Read section 3. Depends on "
-           "compiler/tests/test_fact_origins.py--test_rezono_0_warns_on_a_fact_row_without_origin.",
-)
 def test_a_synthetic_source_is_an_origin(tmp_path, capsys):
     problems = []
     contract = yaml.safe_load((REPO / "contracts" / "source.yaml").read_text(encoding="utf-8"))
