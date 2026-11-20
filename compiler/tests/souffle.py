@@ -15,7 +15,8 @@ from pathlib import Path
 
 from rezono_compiler.rules import COMPARE_AS, DAYS, const_type, is_var
 
-TYPE = {"string": "symbol", "integer": "number"}
+TYPE = {"string": "symbol", "integer": "number", "boolean": "symbol"}
+_BOOL = {"TRUE": "true", "FALSE": "false"}
 INPUT = ("base", "calc")  # what the rules read: a table, and a calculation selection with the rows given
 OPS = {"eq": "=", "ne": "!=", "lt": "<", "le": "<=", "gt": ">", "ge": ">=", "add": "+", "sub": "-", "mul": "*", "div": "/"}
 _DAY_SHAPE = r"[0-9]{4}-[0-9]{2}-[0-9]{2}"
@@ -37,12 +38,30 @@ def _quote(text):
     return f'"{escaped}"'
 
 
+def _bool_text(value):
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, str) and value.lower() in ("true", "false"):
+        return value.lower()
+    return _BOOL.get(value, str(value))
+
+
+def _fact_cell(value, typ):
+    if typ == "boolean" or isinstance(value, bool):
+        return _bool_text(value)
+    return str(value)
+
+
 def _term(t, typ):
     if t == "_":
         return "_"
-    if is_var(t):
+    if isinstance(t, str) and is_var(t):
         return "V_" + t[1:]
-    return t if typ == "integer" else _quote(t)
+    if typ == "boolean" or isinstance(t, bool):
+        return _quote(_bool_text(t))
+    if typ == "integer":
+        return str(t)
+    return _quote(t)
 
 
 def _atom(prog, atom, over=None):
@@ -215,6 +234,7 @@ _TOKEN = re.compile(r'//[^\n]*|/\*.*?\*/|"(?:[^"\\]|\\.)*"|[A-Za-z_][A-Za-z0-9_]
 _NAME = re.compile(r"[A-Za-z_][A-Za-z0-9_]*\Z")
 COMPARE = ("=", "!=", "<", "<=", ">", ">=")
 _DECL = re.compile(r"\.decl\s+([a-z0-9_]+)\s*\(([^)]*)\)")
+_DECL_BOOL = re.compile(r":\s*boolean\b")
 VIEW = "views.yaml"  # the origin of a rule the compiler lowers a view to (view_rules.bind): it is in no rule file
 
 
@@ -262,7 +282,7 @@ def bound(text, names):
             toks[i] = '"' + names[toks[i][1:-1]] + '"'
 
     def var(i):
-        return toks[i] != "_" and _NAME.match(toks[i])
+        return toks[i] != "_" and toks[i] not in _BOOL and _NAME.match(toks[i])
 
     def rule(s):
         """One rule, `s` its code tokens: the kind constants of its access atoms."""
@@ -388,7 +408,7 @@ def closure(pack_dir, prog=None):
 
 
 def _var(tok):
-    return tok != "_" and bool(_NAME.match(tok))
+    return tok != "_" and tok not in _BOOL and bool(_NAME.match(tok))
 
 
 def _operand(tok):
@@ -396,55 +416,59 @@ def _operand(tok):
 
 
 def _rewrite_source(text, counter):
-    """Rewrite typed scalar comparisons (`utc_instant`/`binary_text`) and `@days(text, origin)`
-    assignments in rule text into Soufflé constructs, preserving comments and surrounding layout."""
+    """Rewrite typed scalar comparisons (`utc_instant`/`binary_text`), `@days(text, origin)`
+    assignments, and `TRUE`/`FALSE` boolean literals in rule text into Soufflé constructs,
+    preserving comments and surrounding layout."""
     toks, code = _code(text)
     modes = set()
     has_days = False
     literals = {toks[i] for i in code if len(toks[i]) >= 2 and toks[i][0] == '"' and toks[i][-1] == '"'}
     p = 0
-    while p + 8 < len(code):
+    while p < len(code):
         tok0 = toks[code[p]]
-        if (tok0 in COMPARE_AS
-                and toks[code[p + 1]] == "("
-                and _operand(toks[code[p + 2]])
-                and toks[code[p + 3]] == ")"
-                and toks[code[p + 4]] in COMPARE
-                and toks[code[p + 5]] == tok0
-                and toks[code[p + 6]] == "("
-                and _operand(toks[code[p + 7]])
-                and toks[code[p + 8]] == ")"):
-            left, op, right = toks[code[p + 2]], toks[code[p + 4]], toks[code[p + 7]]
-            modes.add(tok0)
-            if tok0 == "utc_instant":
+        if p + 8 < len(code):
+            if (tok0 in COMPARE_AS
+                    and toks[code[p + 1]] == "("
+                    and _operand(toks[code[p + 2]])
+                    and toks[code[p + 3]] == ")"
+                    and toks[code[p + 4]] in COMPARE
+                    and toks[code[p + 5]] == tok0
+                    and toks[code[p + 6]] == "("
+                    and _operand(toks[code[p + 7]])
+                    and toks[code[p + 8]] == ")"):
+                left, op, right = toks[code[p + 2]], toks[code[p + 4]], toks[code[p + 7]]
+                modes.add(tok0)
+                if tok0 == "utc_instant":
+                    n = next(counter)
+                    left_k, right_k = f"UtcL_{n}_", f"UtcR_{n}_"
+                    replacement = f"UtcKey({left}, {left_k}), UtcKey({right}, {right_k}), {left_k} {op} {right_k}"
+                else:
+                    replacement = f"{left} {op} {right}"
+                toks[code[p]] = replacement
+                for j in range(code[p] + 1, code[p + 8] + 1):
+                    toks[j] = ""
+                p += 9
+                continue
+            if (_var(tok0)
+                    and toks[code[p + 1]] == "="
+                    and toks[code[p + 2]] == "@"
+                    and toks[code[p + 3]] == DAYS
+                    and toks[code[p + 4]] == "("
+                    and _operand(toks[code[p + 5]])
+                    and toks[code[p + 6]] == ","
+                    and _operand(toks[code[p + 7]])
+                    and toks[code[p + 8]] == ")"):
+                left, right = toks[code[p + 5]], toks[code[p + 7]]
+                has_days = True
                 n = next(counter)
-                left_k, right_k = f"UtcL_{n}_", f"UtcR_{n}_"
-                replacement = f"UtcKey({left}, {left_k}), UtcKey({right}, {right_k}), {left_k} {op} {right_k}"
-            else:
-                replacement = f"{left} {op} {right}"
-            toks[code[p]] = replacement
-            for j in range(code[p] + 1, code[p + 8] + 1):
-                toks[j] = ""
-            p += 9
-            continue
-        if (_var(tok0)
-                and toks[code[p + 1]] == "="
-                and toks[code[p + 2]] == "@"
-                and toks[code[p + 3]] == DAYS
-                and toks[code[p + 4]] == "("
-                and _operand(toks[code[p + 5]])
-                and toks[code[p + 6]] == ","
-                and _operand(toks[code[p + 7]])
-                and toks[code[p + 8]] == ")"):
-            left, right = toks[code[p + 5]], toks[code[p + 7]]
-            has_days = True
-            n = next(counter)
-            left_d, right_d = f"DayL_{n}_", f"DayR_{n}_"
-            toks[code[p]] = f"DayNum({left}, {left_d}), DayNum({right}, {right_d}), {tok0} = {left_d} - {right_d}"
-            for j in range(code[p] + 1, code[p + 8] + 1):
-                toks[j] = ""
-            p += 9
-            continue
+                left_d, right_d = f"DayL_{n}_", f"DayR_{n}_"
+                toks[code[p]] = f"DayNum({left}, {left_d}), DayNum({right}, {right_d}), {tok0} = {left_d} - {right_d}"
+                for j in range(code[p] + 1, code[p + 8] + 1):
+                    toks[j] = ""
+                p += 9
+                continue
+        if tok0 in _BOOL:
+            toks[code[p]] = _quote(_BOOL[tok0])
         p += 1
     return "".join(toks), modes, has_days, literals
 
@@ -463,7 +487,9 @@ def source(prog, texts):
         def once(m):
             name, cols = m.group(1), re.sub(r"\s+", "", m.group(2))
             columns.setdefault(name, cols)
-            return "" if earlier.get(name) == cols else m.group(0)
+            if earlier.get(name) == cols:
+                return ""
+            return f".decl {name}({_DECL_BOOL.sub(': symbol', m.group(2))})"
         rewritten, found, found_days, lits = _rewrite_source(_DECL.sub(once, text), counter)
         kept.append(rewritten)
         modes |= found
@@ -505,9 +531,11 @@ def run(prog, data, workdir=None, program_text=None):
         (d / "out").mkdir()
         for name, rel in prog.relations.items():
             if rel.role in INPUT:
+                cols = rel.key + rel.values
                 rows = data.get(name, [])
                 (d / "facts" / f"{name}.facts").write_text(
-                    "".join("\t".join(map(str, r)) + "\n" for r in rows), encoding="utf-8"
+                    "".join("\t".join(_fact_cell(v, c.type) for v, c in zip(r, cols)) + "\n" for r in rows),
+                    encoding="utf-8",
                 )
         text = program_text if program_text is not None else program(prog)
         if f".input {_PROBE}Symbol" in text:
