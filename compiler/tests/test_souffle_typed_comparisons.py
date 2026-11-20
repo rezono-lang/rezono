@@ -16,47 +16,47 @@ def _lower_decls(text: str) -> list[str]:
 
 
 REQUEST_ORDINAL_DL = """\
-.decl request_order_fields(request: symbol, submission: symbol, tenant: symbol, service: symbol)
-.decl request_predecessor(request: symbol, prior: symbol)
-.decl request_ordinal(request: symbol, ordinal: number)
+.decl item_order_fields(item: symbol, submission: symbol, group: symbol, label: symbol)
+.decl item_predecessor(item: symbol, prior: symbol)
+.decl item_ordinal(item: symbol, ordinal: number)
 
-request_order_fields(r, submission, tenant, service) :-
-    tenant_service_request(r),
-    tenant_service_request__submitted_at(r, submission),
-    tenant_service_request__tenant(r, tenant),
-    tenant_service_request__service(r, service),
+item_order_fields(r, submission, group, label) :-
+    item_order_request(r),
+    item_order_request__submitted_at(r, submission),
+    item_order_request__group(r, group),
+    item_order_request__label(r, label),
     utc_instant(submission) = utc_instant(submission).
 
-request_predecessor(r, prior) :-
-    request_order_fields(r, submission, _, _),
-    request_order_fields(prior, earlier, _, _),
+item_predecessor(r, prior) :-
+    item_order_fields(r, submission, _, _),
+    item_order_fields(prior, earlier, _, _),
     utc_instant(earlier) < utc_instant(submission).
 
-request_predecessor(r, prior) :-
-    request_order_fields(r, submission, tenant, _),
-    request_order_fields(prior, prior_submission, earlier, _),
+item_predecessor(r, prior) :-
+    item_order_fields(r, submission, group, _),
+    item_order_fields(prior, prior_submission, earlier, _),
     utc_instant(prior_submission) = utc_instant(submission),
-    binary_text(earlier) < binary_text(tenant).
+    binary_text(earlier) < binary_text(group).
 
-request_predecessor(r, prior) :-
-    request_order_fields(r, submission, tenant, service),
-    request_order_fields(prior, prior_submission, tenant, earlier),
+item_predecessor(r, prior) :-
+    item_order_fields(r, submission, group, label),
+    item_order_fields(prior, prior_submission, group, earlier),
     utc_instant(prior_submission) = utc_instant(submission),
-    binary_text(earlier) < binary_text(service).
+    binary_text(earlier) < binary_text(label).
 
-request_ordinal(r, ordinal) :-
-    request_order_fields(r, _, _, _),
-    predecessors = count : { request_predecessor(r, _) },
+item_ordinal(r, ordinal) :-
+    item_order_fields(r, _, _, _),
+    predecessors = count : { item_predecessor(r, _) },
     ordinal = predecessors + 1.
 
-.output request_ordinal
+.output item_ordinal
 """
 
 REQUEST_TABLES = {
-    "tenant_service_request": [("id", "string")],
-    "tenant_service_request__submitted_at": [("id", "string"), ("value", "string")],
-    "tenant_service_request__tenant": [("id", "string"), ("value", "string")],
-    "tenant_service_request__service": [("id", "string"), ("value", "string")],
+    "item_order_request": [("id", "string")],
+    "item_order_request__submitted_at": [("id", "string"), ("value", "string")],
+    "item_order_request__group": [("id", "string"), ("value", "string")],
+    "item_order_request__label": [("id", "string"), ("value", "string")],
 }
 
 
@@ -105,7 +105,7 @@ ok(c) :-
 
 
 def test_request_ordinal_source_and_program_declare_each_relation_once():
-    doc = rules_dl.read_program(REQUEST_ORDINAL_DL, "request_ordinal", REQUEST_TABLES, "platform")
+    doc = rules_dl.read_program(REQUEST_ORDINAL_DL, "item_ordinal", REQUEST_TABLES, "order_pack")
     prog = rules.load(doc)
     for text in (souffle.program(prog), souffle.source(prog, [REQUEST_ORDINAL_DL])):
         assert "utc_instant(" not in text and "binary_text(" not in text
@@ -145,11 +145,11 @@ def test_souffle_program_and_source_order_typed_scalars(tmp_path):
 
 @pytest.mark.skipif(shutil.which("souffle") is None, reason="needs souffle (the oracle)")
 def test_souffle_request_ordinal_with_self_equality_guard_and_ties(tmp_path):
-    doc = rules_dl.read_program(REQUEST_ORDINAL_DL, "request_ordinal", REQUEST_TABLES, "platform")
+    doc = rules_dl.read_program(REQUEST_ORDINAL_DL, "item_ordinal", REQUEST_TABLES, "order_pack")
     prog = rules.load(doc)
     data = {
-        "tenant_service_request": [("r1",), ("r2",), ("r3",), ("r4",), ("r_bad_leap",), ("r_bad_offset",)],
-        "tenant_service_request__submitted_at": [
+        "item_order_request": [("r1",), ("r2",), ("r3",), ("r4",), ("r_bad_leap",), ("r_bad_offset",)],
+        "item_order_request__submitted_at": [
             ("r1", "2024-02-29T12:00:00.1Z"),
             ("r2", "2024-02-29T12:00:00.100Z"),
             ("r3", "2024-02-29T12:00:00.09Z"),
@@ -157,7 +157,7 @@ def test_souffle_request_ordinal_with_self_equality_guard_and_ties(tmp_path):
             ("r_bad_leap", "2023-02-29T12:00:00Z"),
             ("r_bad_offset", "2024-02-29T12:00:00+00:00"),
         ],
-        "tenant_service_request__tenant": [
+        "item_order_request__group": [
             ("r1", "alpha"),
             ("r2", "alpha"),
             ("r3", "zeta"),
@@ -165,22 +165,22 @@ def test_souffle_request_ordinal_with_self_equality_guard_and_ties(tmp_path):
             ("r_bad_leap", "aaa"),
             ("r_bad_offset", "aaa"),
         ],
-        "tenant_service_request__service": [
-            ("r1", "svc-b"),
-            ("r2", "svc-a"),
-            ("r3", "svc-z"),
-            ("r4", "svc-a"),
-            ("r_bad_leap", "svc-a"),
-            ("r_bad_offset", "svc-a"),
+        "item_order_request__label": [
+            ("r1", "lbl-b"),
+            ("r2", "lbl-a"),
+            ("r3", "lbl-z"),
+            ("r4", "lbl-a"),
+            ("r_bad_leap", "lbl-a"),
+            ("r_bad_offset", "lbl-a"),
         ],
     }
-    # Expected global order: r3 (.09Z) < r2 (.100Z, alpha, svc-a) < r1 (.1Z, alpha, svc-b) < r4 (.10Z, alpha-next).
+    # Expected global order: r3 (.09Z) < r2 (.100Z, alpha, lbl-a) < r1 (.1Z, alpha, lbl-b) < r4 (.10Z, alpha-next).
     # Malformed timestamps (r_bad_leap, r_bad_offset) fail the self-equality guard and receive no ordinal.
     want_ordinals = {("r3", "1"), ("r2", "2"), ("r1", "3"), ("r4", "4")}
     with batch.connect(prog, data) as con:
         batch.compute(con, prog)
         derived = batch.read(con, prog)
-    assert derived["request_ordinal"] == want_ordinals
+    assert derived["item_ordinal"] == want_ordinals
     assert souffle.run(prog, data, tmp_path) == derived
     src = souffle.source(prog, [REQUEST_ORDINAL_DL])
     assert souffle.run(prog, data, tmp_path, program_text=src) == derived
