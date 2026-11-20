@@ -466,8 +466,7 @@ def _calc(ir: dict, views: set, every_witness, role_witnesses, derivable: set, f
 
 def check_role(role: str, complete: dict, snapshots: dict, claimed_full, bundle: dict,
                doc: dict, calc_ir: dict | None = None, instances=(), calc_all=(),
-               calc_witnesses=(), witnesses=(), claimed_evidence=None, *,
-               columns=None) -> tuple[frozenset, list[dict]]:
+               calc_witnesses=(), witnesses=(), claimed_evidence=None) -> tuple[frozenset, list[dict]]:
     """(the relations `role` reads in full, findings) for one filtered role.
 
     `complete` and `snapshots` are {relation: snapshot bytes}: every row, and the role's. `bundle` is the
@@ -476,8 +475,6 @@ def check_role(role: str, complete: dict, snapshots: dict, claimed_full, bundle:
     witness instance of the engine; `calc_all` every calculation witness and `calc_witnesses` the role's;
     `witnesses` the role's chosen proofs; `claimed_evidence` the publisher's evidence for the role's full kinds
     (`grants`), compared when given."""
-    if columns is not None:
-        raise TypeError("check_role derives schema columns from bundle; do not pass columns")
     try:
         kinds, parents, columns = _schema_from_bundle(bundle, doc)
     except ValueError as err:
