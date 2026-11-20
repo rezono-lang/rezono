@@ -482,6 +482,56 @@ def _compile_derived(
     return _join_or(branches)
 
 
+def _fixed_dyn_literal(value: Any, column_type: str) -> str:
+    if column_type == "integer":
+        if type(value) is not int:
+            raise ValueError(f"expected integer fixed value, got {value!r}")
+        return f"dyn({literal(str(value), 'integer')})"
+    return f"dyn({literal(value, column_type)})"
+
+
+def _homogeneous_parameter_tables(
+    binding: Mapping[str, Any], program: rules.Program, namespace: str
+) -> dict[str, dict[str, Any]]:
+    """Build CEL parameter tables whose map literals satisfy HomogeneousAggregateLiterals.
+
+    Kubernetes ValidatingAdmissionPolicy enables cel.HomogeneousAggregateLiterals(), which
+    rejects map literals mixing `dyn` field selections (`x.<col>`) with concrete fixed
+    literals (`"TCP"`). Wrapping fixed literals in `dyn(...)` keeps every map value `dyn`
+    in both plain cel-go and Kubernetes apiserver environments.
+    """
+    tables = parameter_tables(binding, program, namespace)
+    for name, spec in binding["parameters"].items():
+        lists = spec["lists"]
+        if not any(entry.get("fixed") for entry in lists):
+            continue
+        relation = program.relations[name]
+        scope = spec["scope"]
+        non_scope = [col for col in (relation.key + relation.values) if col.name != scope]
+        items = []
+        for entry in lists:
+            field = entry["field"]
+            base = (
+                f"(has(params.spec.{field}) ? params.spec.{field} : [])"
+                if entry.get("optional")
+                else f"params.spec.{field}"
+            )
+            written = set(entry["columns"])
+            fixed = entry.get("fixed", {})
+            parts = []
+            for col in non_scope:
+                if col.name in written:
+                    parts.append(f'"{col.name}": x.{col.name}')
+                else:
+                    parts.append(f'"{col.name}": {_fixed_dyn_literal(fixed[col.name], col.type)}')
+            items.append(f"{base}.map(x, {{{', '.join(parts)}}})")
+        expr = " + ".join(items)
+        if len(lists) > 1:
+            expr = f"({expr})"
+        tables[name] = {**tables[name], "list": expr}
+    return tables
+
+
 def translate(program: rules.Program, binding: Mapping[str, Any], digest: str) -> dict[str, Any]:
     """Compile a checked rule program and admission binding into a ValidatingAdmissionPolicy."""
     _validate_binding(binding, program)
@@ -518,7 +568,7 @@ def translate(program: rules.Program, binding: Mapping[str, Any], digest: str) -
                 f"{output}: request relation {rel_name} columns {req_types} do not match output {output_types}"
             )
 
-    tables = parameter_tables(binding, program, _NAMESPACE_EXPR)
+    tables = _homogeneous_parameter_tables(binding, program, _NAMESPACE_EXPR)
     roots = {
         "object": "object",
         "request": _request_root_expression(binding),
