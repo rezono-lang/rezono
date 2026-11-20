@@ -70,7 +70,7 @@ def _subject_of_decl(decl: object) -> tuple[str, list[tuple[int, dict]]] | None:
 
 def has_calculation(form: dict) -> bool:
     """Whether a module form carries an `as of` line, a row-backed parameter, or any non-table derived value."""
-    if form.get("format") not in (rezono_module.IDENTIFIER_FORMAT, rezono_module.NATIVE_FORMAT):
+    if form.get("format") not in (rezono_module.IDENTIFIER_FORMAT, *rezono_module.NATIVE_FORMATS):
         return False
     for decl in form["module"]["decls"]:
         if isinstance(decl, dict) and ("asOf" in decl or "param" in decl):

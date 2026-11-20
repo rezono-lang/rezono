@@ -31,6 +31,8 @@ from linkml_runtime.loaders.yaml_loader import YAMLLoader
 
 FORMAT = "rezono.module/1"
 IDENTIFIER_FORMAT = "rezono.module/2"
+SAFE_STEP_FORMAT = "rezono.module/4"
+NATIVE_FORMATS = (NATIVE_FORMAT, SAFE_STEP_FORMAT)
 DIR = "rezono"
 PACKAGED_READER = Path(__file__).with_name("module_reader") / "src" / "write-form.js"
 CHECKOUT_READER = Path(__file__).resolve().parents[2] / DIR / "src" / "write-form.ts"
@@ -130,10 +132,15 @@ def read_form(pack_dir: Path, d: Declared, errors: list[str],
     except (OSError, ValueError) as e:
         errors.append(f"{where}: not a JSON file ({e})")
         return None
-    module = module_body(doc, FORMAT) or module_body(doc, IDENTIFIER_FORMAT) or module_body(doc, NATIVE_FORMAT)
+    module = (
+        module_body(doc, FORMAT)
+        or module_body(doc, IDENTIFIER_FORMAT)
+        or module_body(doc, NATIVE_FORMAT)
+        or module_body(doc, SAFE_STEP_FORMAT)
+    )
     if module is None:
         errors.append(
-            f"{where}: not the form of a module ({FORMAT}, {IDENTIFIER_FORMAT}, or {NATIVE_FORMAT},"
+            f"{where}: not the form of a module ({FORMAT}, {IDENTIFIER_FORMAT}, {NATIVE_FORMAT}, or {SAFE_STEP_FORMAT},"
             " contracts/rezono-module.yaml)"
         )
         return None
@@ -484,8 +491,8 @@ def lower(pack_dir: Path, d: Declared, form: dict, pack: str, owners: dict[str, 
         n = at if isinstance(at, int) else line.get(at) or line.get("/".join(at.split("/")[:3])) or 1
         errors.append(f"{where}:{n}: {what} ({PAGE} {section})")
 
-    native_rules = form["format"] == NATIVE_FORMAT
-    extended_format = form["format"] in (IDENTIFIER_FORMAT, NATIVE_FORMAT)
+    native_rules = form["format"] in NATIVE_FORMATS
+    extended_format = form["format"] in (IDENTIFIER_FORMAT, *NATIVE_FORMATS)
     for key, message, section in header_errors(module, pack, native_rules=native_rules, schema=True):
         place = key if key.startswith("/") else header_line(pack_dir, d, key)
         refuse(place, message, section)

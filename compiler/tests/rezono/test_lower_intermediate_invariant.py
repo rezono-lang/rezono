@@ -86,17 +86,6 @@ def violation_rule(options: list[dict]) -> dict:
     }
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=MissingIntermediateInvariantLowering,
-    reason="extra: decisions/language-safe-steps.md: Admit rezono.module/4 in compiler/rezono_compiler/rezono_module.py "
-           "and lower rule heads with {invariant: intermediate, within: {relation: NAME}} into one publication "
-           "violation rule with invariant: true in ir/rules.json and an IntermediateInvariant(relation, "
-           "coverage_relation, key_binding) entry in Pack.intermediate_invariants (empty tuple when unused). "
-           "Require every violation column to match a coverage key column in name and resolved schema type, "
-           "allowing extra coverage columns for scopes/readings; refuse missing or incompatible coverage with "
-           "CompileError.",
-)
 def test_lower_intermediate_invariant(tmp_path):
     # Counter-case 1: a bare publication invariant lowers as before and leaves intermediate_invariants empty.
     bare_dir = make_plain_invariant_pack(tmp_path)
