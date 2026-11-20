@@ -22,6 +22,7 @@ In the merge queue no labels are read and this rule does not apply.
 import argparse
 import ast
 from collections import Counter, namedtuple
+import configparser
 import copy
 from fnmatch import fnmatchcase
 import hashlib
@@ -33,6 +34,7 @@ import re
 import subprocess
 import sys
 import tokenize
+import tomllib
 
 
 # The merge queue runs a candidate's own workflow files, so the workflows that define the
@@ -54,7 +56,7 @@ POLICY = SOURCE_POLICY | {
     ".github/workflows/ci.yml", ".github/workflows/disposable-cluster.yml",
     ".github/workflows/resume-feldera-review.yml", "scripts/feldera_admission.py",
     "scripts/red_guard.py", "scripts/test_red_guard.py",
-    "scripts/red_before.py", "scripts/test_red_before.py",
+    "scripts/red_before.py", "scripts/test_red_before.py", "scripts/pytest-plugins.txt",
 }
 EVIDENCE_DIRS = {
     "test", "tests", "__tests__", "__snapshots__", "fixture", "fixtures",
@@ -63,6 +65,9 @@ EVIDENCE_DIRS = {
 # Expectations recorded by hand outside an evidence directory, such as the slip an example
 # must render.
 EXPECTATIONS = {"slip.yaml"}
+# Files that pytest reads as its whole configuration (pytest 9 reads pytest.toml and the
+# hidden forms before pyproject.toml): a change there can drop a test from the run.
+PYTEST_FILES = {"pytest.toml", ".pytest.toml", ".pytest.ini"}
 # Evidence data that completes a red test: a new recorded outcome, snapshot or vector, not
 # code and not configuration. Only these directories hold it; a fixture, a conformance case,
 # a schema, a pack, a contract or a list of what is blocked or not yet supported does not.
@@ -84,9 +89,43 @@ def protected(path):
             or p.name == "conftest.py" or p.name.startswith("test_")
             or p.name.endswith(("_test.py", "_support.py", ".test.ts", ".spec.ts",
                                 ".test.js", ".spec.js", ".snap", ".golden"))
-            or p.name in {"frozen_baseline.py", "reference.py", "pytest.ini"} | EXPECTATIONS
+            or p.name in {"frozen_baseline.py", "reference.py", "pytest.ini"} | PYTEST_FILES | STARTUP | EXPECTATIONS
+            or p.suffix == ".pth" or p.name == "entry_points.txt"
+            or any(part.endswith((".dist-info", ".egg-info")) for part in p.parts[:-1])
             or "fixture" in p.stem or p.stem.endswith(("-cases", "_cases", "-vectors", "_vectors"))
             or p.parts[0] == "blocked")
+
+
+# Files that may hold pytest's configuration beside other settings. Their pytest section can
+# drop a test file from the run (`addopts = --ignore=...`), so a change to that section is
+# protected like pytest.ini; the rest of the file is not.
+PYTEST_CONFIG = {"pyproject.toml": None, "setup.cfg": "tool:pytest", "tox.ini": "pytest"}
+UNREADABLE_CONFIG = b"\xff"
+
+
+def pytest_config(path):
+    return PurePosixPath(path.lower()).name in PYTEST_CONFIG
+
+
+def pytest_section(path, blob):
+    """The pytest configuration in a pyproject.toml, setup.cfg or tox.ini blob.
+
+    An absent file or section gives None. A blob that does not parse gives its bytes, so that
+    any change to it counts.
+    """
+    if blob is None:
+        return None
+    try:
+        text = blob.decode("utf-8")
+        name = PurePosixPath(path.lower()).name
+        if name == "pyproject.toml":
+            return tomllib.loads(text).get("tool", {}).get("pytest")
+        parser = configparser.ConfigParser(interpolation=None, strict=False)
+        parser.read_string(text)
+        section = PYTEST_CONFIG[name]
+        return dict(parser.items(section)) if parser.has_section(section) else None
+    except (UnicodeError, tomllib.TOMLDecodeError, configparser.Error, AttributeError):
+        return blob
 
 
 # Changes here decide whether a proof is accepted or what a role may see. Nothing downstream
@@ -99,7 +138,7 @@ READ_FIRST_DIRS = ("checker/rezono_checker/", "packs/std-access/", "edge/gate/sr
 PUBLISHER = "edge/publisher/rezono_publisher/"
 READ_FIRST_FILES = {"contracts/proof.yaml", *(PUBLISHER + name for name in (
     "access.py", "calc_scope.py", "sources.py", "sweep.py", "difference.py", "batch.py",
-    "publish.py", "proof.py", "views.py"))}
+    "publish.py", "proof.py", "views.py", "retained_calculation.py"))}
 TEST_DIRS = {"test", "tests", "__tests__"}
 READ_LABEL = "p1-read-"
 
@@ -248,10 +287,52 @@ LIMIT = 2_000_000
 UNREADABLE = (SyntaxError, ValueError, UnicodeError, RecursionError)
 
 
+# Python runs these at start-up, before pytest collects anything; a .pth file may run a line of
+# code as well. setup.py is protected as well as source: it can register a pytest plugin.
+STARTUP = {"sitecustomize.py", "usercustomize.py", "setup.py"}
+# A package's metadata can register a pytest plugin (the `pytest11` entry point). CI installs
+# the candidate, so the plugin loads and its hooks can drop a red test from the collection.
+PLUGIN_CONFIG = {"pyproject.toml", "setup.cfg"}
+
+
+def plugin_config(path):
+    return PurePosixPath(path.lower()).name in PLUGIN_CONFIG
+
+
+def pytest_plugins(path, blob):
+    """What in a pyproject.toml or setup.cfg blob can register a pytest plugin.
+
+    That is the pytest11 entry points, and every way to give entry points from elsewhere:
+    `dynamic` entry points and their source in pyproject.toml, `entry_points` under
+    `[options]` in setup.cfg (`file: ...`). A blob that does not parse gives its bytes, so that
+    any change to it counts. CI also compares the installed plugins with a list from the base
+    (scripts/pytest-plugins.txt), which covers any other way.
+    """
+    if blob is None:
+        return None
+    try:
+        text = blob.decode("utf-8")
+        if PurePosixPath(path.lower()).name == "pyproject.toml":
+            data = tomllib.loads(text)
+            project, tool = data.get("project", {}), data.get("tool", {})
+            dynamic = project.get("dynamic", [])
+            return json.dumps([project.get("entry-points", {}).get("pytest11"),
+                               tool.get("poetry", {}).get("plugins", {}).get("pytest11"),
+                               "entry-points" in dynamic,
+                               tool.get("setuptools", {}).get("dynamic", {}).get("entry-points")], sort_keys=True)
+        parser = configparser.ConfigParser(interpolation=None, strict=False)
+        parser.read_string(text)
+        return json.dumps([parser.get(section, option, fallback=None) for section, option in (
+            ("options.entry_points", "pytest11"), ("options", "entry_points"))])
+    except (UnicodeError, tomllib.TOMLDecodeError, configparser.Error, AttributeError, TypeError, ValueError):
+        return blob
+
+
 def source(path):
     """A path the guard does not protect, or policy that is also source; not documentation."""
-    return path in SOURCE_POLICY or not (protected(path) or path.endswith(".md")
-                                         or PurePosixPath(path).parts[0] in {"docs", "decisions"})
+    if path in SOURCE_POLICY or PurePosixPath(path).name == "setup.py":
+        return True
+    return not (protected(path) or path.endswith(".md") or PurePosixPath(path).parts[0] in {"docs", "decisions"})
 
 
 def is_param(node):
@@ -584,28 +665,18 @@ def import_pins(text):
     return pins
 
 
-def imported_dirs(tree, pack_dir, seen=None):
-    """The pack directories that `pack_dir` imports at `tree`, directly or not."""
-    seen = set() if seen is None else seen
-    try:
-        text = tree.read(pack_dir + "/pack.yaml").decode("utf-8")
-    except (KeyError, UnicodeError, subprocess.CalledProcessError):
-        return seen
-    for _, path, _ in import_pins(text).values():
-        target = posixpath.normpath(posixpath.join(pack_dir, path))
-        if target not in seen and not target.startswith("../"):
-            seen.add(target)
-            imported_dirs(tree, target, seen)
-    return seen
+# YAML whose lines do not stand on their own: an anchor or alias, or a second document.
+NOT_PLAIN = re.compile(r"(^|[\s,\[{:-])[&*][^\s,\]}]+|^(---|\.\.\.)([ \t]|$)", re.M)
 
 
-def pin_update(change, tree, changed):
-    """Whether a change only re-pins imports of a fixture or test pack to their hash at `tree`.
+def pin_update(change, tree, base):
+    """Whether a change only re-pins imports of a fixture or test pack, from `base` to `tree`.
 
-    The pack.yaml exists already (status M) under a fixture or test directory. Only lines with
-    `sha256: <64 hex>` in its imports differ, each only in that value, and each new value is
-    the hash of the imported pack at `tree`. That pack, or one it imports, changes in this pull
-    request (`changed` holds every changed path).
+    The pack.yaml exists already (status M) under a fixture or test directory, and holds no
+    anchor, alias or second document. Only lines with `sha256: <64 hex>` in its imports differ,
+    each only in that value. Each old value is the hash of the imported pack at `base`, and each
+    new value its hash at `tree`: so the pack's definition, or that of a pack it imports,
+    changes in this pull request, and the pin follows it.
     """
     p = PurePosixPath(change.path)
     if not (change.status == "M" and p.name == "pack.yaml" and change.before is not None
@@ -614,6 +685,8 @@ def pin_update(change, tree, changed):
     try:
         before, after = change.before.decode("utf-8"), change.after.decode("utf-8")
     except UnicodeError:
+        return False
+    if NOT_PLAIN.search(before) or NOT_PLAIN.search(after):
         return False
     old_lines, new_lines = before.splitlines(keepends=True), after.splitlines(keepends=True)
     if len(old_lines) != len(new_lines):
@@ -628,24 +701,22 @@ def pin_update(change, tree, changed):
             return False
         _, path, digest = new_pins[i]
         target = posixpath.normpath(posixpath.join(str(p.parent), path))
-        if target.startswith("../") or target + "/pack.yaml" not in tree.modes:
+        if (target.startswith("../") or target + "/pack.yaml" not in tree.modes
+                or target + "/pack.yaml" not in base.modes):
             return False
-        if pack_hash(tree, target) != digest:
-            return False
-        dirs = {target} | imported_dirs(tree, target)
-        if not any(c.startswith(d + "/") for d in dirs for c in changed):
+        if pack_hash(tree, target) != digest or pack_hash(base, target) != old_pins[i][2]:
             return False
     return True
 
 
-def pin_updates(changes, rev):
-    """The paths of the changes that are pin updates at `rev`."""
+def pin_updates(changes, base, rev):
+    """The paths of the changes that are pin updates from `base` to `rev`."""
     candidates = [c for c in changes if c.status == "M" and PurePosixPath(c.path).name == "pack.yaml"
                   and protected(c.path)]
     if not candidates:
         return frozenset()
-    tree, changed = Tree.at(rev), {c.path for c in changes}
-    return frozenset(c.path for c in candidates if pin_update(c, tree, changed))
+    tree, before = Tree.at(rev), Tree.at(base)
+    return frozenset(c.path for c in candidates if pin_update(c, tree, before))
 
 
 def review(changes, planner=False, head=None, labels=(), packs=frozenset(), pins=frozenset()):
@@ -663,6 +734,16 @@ def review(changes, planner=False, head=None, labels=(), packs=frozenset(), pins
             unread.append(ascii(c.path))
         if c.path == CI_WORKFLOW:
             notes.append(f"CHANGED {CI_WORKFLOW}")
+        section = pytest_config(c.path) and pytest_section(c.path, c.before) != pytest_section(c.path, c.after)
+        plugins = plugin_config(c.path) and pytest_plugins(c.path, c.before) != pytest_plugins(c.path, c.after)
+        if not protected(c.path) and (section or plugins):
+            other.append(ascii(c.path))
+            for changed, what in ((section, "pytest configuration"), (plugins, "pytest plugins")):
+                if changed:
+                    notes.append(f"CHANGED {c.path} {what}")
+                    if not planner:
+                        errors.append(f"ERROR planner label required for the {what} in {ascii(c.path)}")
+            continue
         if not protected(c.path):
             continue
         quoted = ascii(c.path)
@@ -721,10 +802,21 @@ def review(changes, planner=False, head=None, labels=(), packs=frozenset(), pins
         # weakening an expectation on its own is the change a reviewer most needs to see.
         notes.extend(f"CHANGED {c.path}::{name}" for name, (shape, red) in new.tests.items()
                      if name in old.tests and not red and old.tests[name][0] != shape)
+        # A green test that a new mark turns red stops guarding what it guarded. Only a planner
+        # does that, and names the decision in the pull request.
+        reddened = [name for name, (_, red) in new.tests.items()
+                    if red and name in old.tests and not old.tests[name][1]]
+        notes.extend(f"CHANGED {c.path}::{name} from green to red" for name in reddened)
+        if reddened and not planner:
+            errors.append(f"ERROR green tests turn red in {quoted}: {', '.join(reddened)}. Only a pull request "
+                          "with the planner label marks a green test red, and it names the decision.")
     completed = completion(changes, packs) if planner and lifted and other else None
     if completed:
         path, names = completed
         notes.extend(f"COMPLETED {path}::{name}" for name in names)
+        # Nothing checks where the new evidence came from. A reviewer reads its source before
+        # it lands, so that no output of the engine becomes the test's own expectation.
+        unread.append(f"the evidence that completes {ascii(path)}")
     elif lifted and other:
         errors.append(f"ERROR red marks are lifted in {', '.join(lifted)} while protected paths "
                       f"also change: {', '.join(other)}. Lift marks in a pull request of their own, or, with the "
@@ -736,7 +828,8 @@ def review(changes, planner=False, head=None, labels=(), packs=frozenset(), pins
             errors.append(f"ERROR the head commit {ascii(head)} is not a full commit id, "
                           f"so no {READ_LABEL} label can apply to it")
         elif label not in labels:
-            errors.append(f"ERROR the checker or read access changes in {', '.join(unread)}: a reviewer "
+            errors.append(f"ERROR the checker, read access or completed evidence changes in {', '.join(unread)}: "
+                          "a reviewer "
                           f"reads it before it lands and then sets the label {label} for the head "
                           "commit. The planner label does not replace it, and a new push needs a new label.")
     return errors, notes
@@ -752,11 +845,15 @@ def changes(base, head):
         path = raw_path.decode("utf-8", "surrogateescape")
         old_mode, new_mode, old_id, new_id, status = header.decode().lstrip(":").split()
         sides = [None, None]
-        if protected(path):
+        if protected(path) or pytest_config(path) or plugin_config(path):
             # Git objects are data. Never open a path in the proposed revision.
             for i, (mode, oid) in enumerate(((old_mode, old_id), (new_mode, new_id))):
                 if mode == "100644" and int(git("cat-file", "-s", oid)) <= LIMIT:
                     sides[i] = git("cat-file", "blob", oid)
+                elif mode != "000000" and (pytest_config(path) or plugin_config(path)):
+                    # A link or an oversized file: not readable as configuration, so it counts
+                    # as a change of its pytest section and plugins (bytes that are not UTF-8).
+                    sides[i] = UNREADABLE_CONFIG
         yield Change(path, status[0], *sides)
 
 
@@ -766,7 +863,7 @@ def check(base, head, planner=False, labels=None):
     if labels is not None:
         pr_head = git("rev-parse", "--verify", "--end-of-options", head + "^{commit}").decode().strip()
     records = list(changes(base, head))
-    pins = pin_updates(records, head) if planner else frozenset()
+    pins = pin_updates(records, base, head) if planner else frozenset()
     return review(records, planner, pr_head, labels or (), pack_roots(head), pins)
 
 

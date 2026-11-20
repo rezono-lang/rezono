@@ -25,7 +25,7 @@ runs:
       run: npm ci
     - name: Cache locked Python environment
       id: environment
-      uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830  # v4.3.0
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
       with:
         path: .venv
         key: python-env-v2-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('requirements/.python-version', 'requirements/dev.txt') }}
@@ -46,7 +46,7 @@ runs:
         fi
     - name: Save locked environment before installing local packages
       if: steps.environment.outputs.cache-hit != 'true' && inputs.save-cache == 'true'
-      uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830  # v4.3.0
+      uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
       with:
         path: .venv
         key: ${{ steps.environment.outputs.cache-primary-key }}
@@ -61,9 +61,45 @@ runs:
         read -ra packages <<< "$EDITABLE"
         python -m pip install -q --no-deps --no-build-isolation "${packages[@]}"
         python scripts/check-pinned.py requirements/dev.txt
+    # A pytest plugin loads in every test run once it is installed, and its hooks could drop a
+    # red test from the collection. Only the plugins that the base lists may be installed; the
+    # list comes from the base, so the candidate cannot extend it.
+    - name: Allow only the pytest plugins the base lists
+      env:
+        POLICY: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.sha }}
+      shell: bash
+      run: |
+        set -euo pipefail
+        if ! git cat-file -e "$POLICY^{commit}" 2>/dev/null; then
+          for attempt in 1 2 3; do
+            git fetch --no-tags --depth=1 origin "$POLICY" && break
+            echo "Fetching the base $POLICY failed (attempt $attempt)"
+            sleep 10
+          done
+        fi
+        if ! git cat-file -e "$POLICY:scripts/pytest-plugins.txt" 2>/dev/null; then
+          echo "The base $POLICY lists no pytest plugins yet, so they are not checked."
+          exit 0
+        fi
+        git show "$POLICY:scripts/pytest-plugins.txt" > "$RUNNER_TEMP/pytest-plugins.txt"
+        # scripts/components.py loads only these plugins in every pytest run, from this copy.
+        echo "REZONO_PYTEST_PLUGINS=$RUNNER_TEMP/pytest-plugins.txt" >> "$GITHUB_ENV"
+        python -I -c '
+        import sys
+        from importlib.metadata import entry_points
+        with open(sys.argv[1], encoding="utf-8") as listed:
+            allowed = {line.strip() for line in listed if line.strip() and not line.lstrip().startswith("#")}
+        found = sorted({f"{e.name} = {e.value}" for e in entry_points(group="pytest11")})
+        print("Installed pytest plugins:", *found, sep="\n  ")
+        extra = [plugin for plugin in found if plugin not in allowed]
+        if extra:
+            print("::error::pytest plugins that the base does not list in scripts/pytest-plugins.txt: "
+                  + ", ".join(extra))
+            sys.exit(1)
+        ' "$RUNNER_TEMP/pytest-plugins.txt"
     - name: Cache generated contract types
       id: types
-      uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830  # v4.3.0
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
       with:
         path: |
           contracts/python/rezono_contracts/*.py
@@ -74,7 +110,7 @@ runs:
     - name: Cache the pinned oracle and its distribution packages
       if: inputs.oracle == 'true'
       id: oracle
-      uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830  # v4.3.0
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
       with:
         path: |
           ${{ runner.temp }}/oracle-debs/*.deb

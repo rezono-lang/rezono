@@ -26,20 +26,23 @@
 //   R001  the name after `->` in the header of a table that is not the name of its derived value
 //   R014, R016  as in a question (parse.ts)
 //   R018  `valid` or `known` twice on one version or fact row
+//   R021  a `replaces` number that names no version of the same declaration, or `replaces` lines that form a cycle
 //   R015  a reserved construct
 //   W108  a declaration with versions has none before the earliest `valid` date: there its value is
 //         `unknown no_version_applies` (§5a rule 4). Only that first gap is reported here; a gap between two
 //         versions needs the order of their contexts, which the checker gives later.
-// As in a question, an R000, R014, R016 or R018 leaves no module and no other diagnostic.
+// As in a question, an R000, R014, R016, R018 or R021 leaves no module and no other diagnostic.
 import { grammar } from './grammar.ts';
 import { blockSyntax, declarationActions, declarations, verbatimBlocks, type Decl } from './module-components.ts';
+import type { Deprecation } from './module-deprecation.ts';
 import { layout, only, type Logical } from './module-layout.ts';
 import { readSchema, type SchemaMetadata } from './module-metadata.ts';
 import type { BlockSyntax, Build, Line } from './module-support.ts';
-import { versionGaps } from './module-version.ts';
+import { versionGaps, versionReplacements } from './module-version.ts';
 import { inOrder, points, readRule, semantics, torn, tornAt, type Diagnostic, type Span } from './parse.ts';
 
 export type { Decl } from './module-components.ts';
+export type { Deprecation } from './module-deprecation.ts';
 export type { DerivedDecl } from './module-derived.ts';
 export type { FactRow, FactTable } from './module-facts.ts';
 export type { ExtendDecl, KindDecl } from './module-kind.ts';
@@ -150,6 +153,12 @@ function readModule(text: string, bare: boolean): ParsedModule {
 
 	const module: Module = { pack: '', use: [], decls: [] };
 	let stage = bare ? 2 : 0; // 0: before `pack`; 1: after it, `use` lines; 2: declarations
+	let pendingDeprecated: { line: Logical; note?: string; until: string } | undefined;
+	const clearPendingDeprecated = (reason = 'a kind or an enum declaration') => {
+		if (!pendingDeprecated) return;
+		build.refuse(pendingDeprecated.line, reason);
+		pendingDeprecated = undefined;
+	};
 	for (const line of lines) {
 		const r = line.read!;
 		if (r.line === 'rezono' && stage === 0 && module.rezono === undefined && !module.decls.length) {
@@ -164,33 +173,67 @@ function readModule(text: string, bare: boolean): ParsedModule {
 			continue;
 		}
 		if (r.line === 'use' && stage === 1) {
+			clearPendingDeprecated();
 			build.leaf(line);
 			module.use.push(build.strip(r));
 			continue;
 		}
 		if (r.line === 'schema' && stage === 1) {
+			clearPendingDeprecated();
 			if (module.schema !== undefined) build.refuse(line, 'one schema identity');
 			else readSchema(module, line, build);
 			continue;
 		}
+		if (r.line === 'deprecated') {
+			if (stage === 0) {
+				build.refuse(line, '`pack`');
+				continue;
+			}
+			build.leaf(line);
+			if (pendingDeprecated) {
+				// Two deprecated lines above one declaration: refuse at the second keyword.
+				build.refuse(line, 'a kind or an enum declaration');
+				continue;
+			}
+			if (typeof r.note !== 'string') build.refuse(line, 'a JSON string');
+			pendingDeprecated = { line, note: typeof r.note === 'string' ? r.note : undefined, until: r.until as string };
+			continue;
+		}
 		const declaration = declarations.get(r.line);
 		if (stage === 0 || !declaration) {
+			clearPendingDeprecated();
 			build.refuse(line, stage === 0 ? '`pack`' : 'a declaration');
 			continue;
 		}
 		// A dataset follows the declarations that its tables read, and nothing follows it.
 		if ((r.line === 'dataset' && bare) || module.decls.some(decl => 'dataset' in decl)) {
+			clearPendingDeprecated();
 			build.refuse(line, 'one dataset, after the other declarations of a module');
 			continue;
 		}
 		if (r.line === 'context' && module.decls.some(decl => 'asOf' in decl)) {
+			clearPendingDeprecated();
 			build.refuse(line, 'one evaluation date in a module');
 			continue;
 		}
+		let deprecated: Deprecation | undefined;
+		if (pendingDeprecated) {
+			const direct = (r.line === 'kind' || r.line === 'enum')
+				&& text.slice(pendingDeprecated.line.end, line.start).split('\n').length === 2;
+			if (!direct) clearPendingDeprecated('a kind or an enum declaration directly below `deprecated`');
+			else {
+				if (pendingDeprecated.note !== undefined) deprecated = { note: pendingDeprecated.note, until: pendingDeprecated.until };
+				pendingDeprecated = undefined;
+			}
+		}
 		stage = 2;
-		module.decls.push(declaration.read(line, build) as Decl);
+		const decl = declaration.read(line, build) as Decl;
+		if (deprecated && ('kind' in decl || 'enum' in decl)) decl.deprecated = deprecated;
+		module.decls.push(decl);
 	}
+	clearPendingDeprecated();
 	if (!bare && !module.pack && !errors.length) errors.push({ code: 'R000', span: { text: '', start: 0, end: 0 }, args: ['`pack`'] });
+	errors.push(...versionReplacements(module));
 	if (errors.length) return { diagnostics: errors.sort(inOrder), spans };
 	return { module, diagnostics: [...later, ...versionGaps(module, spans)].sort(inOrder), spans };
 }

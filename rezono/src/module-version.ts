@@ -1,10 +1,13 @@
 import { named, optSrc, optTree, printSource, printValue, type Build, type Line, type Logical, type ModuleComponent } from './module-support.ts';
-import { refused, type Diagnostic, type Span } from './parse-support.ts';
+import { refused, spanOf, type Diagnostic, type Span } from './parse-support.ts';
 import type { Node } from 'ohm-js';
 import type { Module } from './module.ts';
 import type { ParamDecl } from './module-parameter.ts';
 import type { DefinitionDecl, DerivedDecl } from './module-derived.ts';
 import type { Expr } from './tree.ts';
+
+/** Span of the version number after `replaces`, keyed by the version line / VersionDecl object. */
+const replacedSpans = new WeakMap<object, Span>();
 
 /** A validity range as written: a start and an end exclusive, or a start alone for an open range (§3). */
 export type Valid = [string] | [string, string];
@@ -50,6 +53,8 @@ export function readVersion(
 	readDefinitions?: (lines: Logical[], build: Build) => DefinitionDecl[] | undefined
 ): VersionDecl {
 	const decl = build.strip<VersionDecl>(line.read!);
+	const replacedSpan = replacedSpans.get(line.read!);
+	if (replacedSpan) replacedSpans.set(decl, replacedSpan);
 	if (!readDefinitions || decl.value !== undefined || !line.block.length) {
 		build.leaf(line);
 		return decl;
@@ -65,6 +70,54 @@ export const printContexts = (c: Contexts) =>
 export const printVersion = (v: VersionDecl) =>
 	`version ${v.version}${v.replaces !== undefined ? ` replaces ${v.replaces}` : ''}${printContexts(v)}${printValue(v.value)}${printSource(v.source)}`;
 
+function eachVersionedDecl(module: Module, visit: (decl: ParamDecl | DerivedDecl, name: string) => void): void {
+	for (const decl of module.decls) {
+		if ('param' in decl) visit(decl, decl.param);
+		if ('derived' in decl && Array.isArray(decl.derived)) for (const d of decl.derived) visit(d, d.derived);
+	}
+}
+
+/** R021: a `replaces` number that names no version of the same declaration, or `replaces` lines that form a cycle. */
+export function versionReplacements(module: Module): Diagnostic[] {
+	const out: Diagnostic[] = [];
+	const check = (decl: ParamDecl | DerivedDecl, name: string) => {
+		const versions = decl.versions;
+		if (!versions?.length) return;
+		const byNumber = new Map<string, number>();
+		versions.forEach((v, i) => {
+			if (!byNumber.has(v.version)) byNumber.set(v.version, i);
+		});
+		const state = new Uint8Array(versions.length); // 0: unvisited, 1: active, 2: done
+		for (let i = 0; i < versions.length; i++) {
+			const v = versions[i];
+			if (v.replaces !== undefined && !byNumber.has(v.replaces)) {
+				const span = replacedSpans.get(v);
+				if (span) out.push({ code: 'R021', span, args: [v.version, v.replaces, name] });
+				state[i] = 2;
+				continue;
+			}
+			if (state[i] !== 0) continue;
+			const path: number[] = [];
+			let cur: number | undefined = i;
+			while (cur !== undefined && state[cur] === 0) {
+				state[cur] = 1;
+				path.push(cur);
+				const nextNumber = versions[cur].replaces;
+				cur = nextNumber !== undefined ? byNumber.get(nextNumber) : undefined;
+			}
+			if (cur !== undefined && state[cur] === 1) {
+				const cycle = path.slice(path.indexOf(cur));
+				const first = versions[Math.min(...cycle)];
+				const span = replacedSpans.get(first);
+				if (span) out.push({ code: 'R021', span, args: [first.version, first.replaces!, name] });
+			}
+			for (const node of path) state[node] = 2;
+		}
+	};
+	eachVersionedDecl(module, check);
+	return out;
+}
+
 /** W108: a declaration whose versions all start at a `valid` date has no value before the earliest one. */
 export function versionGaps(module: Module, spans: WeakMap<object, Span>): Diagnostic[] {
 	const out: Diagnostic[] = [];
@@ -75,10 +128,7 @@ export function versionGaps(module: Module, spans: WeakMap<object, Span>): Diagn
 		const span = spans.get(decl);
 		if (span) out.push({ code: 'W108', span, args: [name, first] });
 	};
-	for (const decl of module.decls) {
-		if ('param' in decl) look(decl, decl.param);
-		if ('derived' in decl && Array.isArray(decl.derived)) for (const d of decl.derived) look(d, d.derived);
-	}
+	eachVersionedDecl(module, look);
 	return out;
 }
 
@@ -93,7 +143,11 @@ export const version = {
 	actions: {
 		VersionLine(_k, n, _r, replaced, _commas, ctxs, _eq, value, src) {
 			const decl: Line = { line: 'version', version: n.sourceString };
-			if (replaced.numChildren) decl.replaces = replaced.child(0).sourceString;
+			if (replaced.numChildren) {
+				const target = replaced.child(0);
+				decl.replaces = target.sourceString;
+				replacedSpans.set(decl, spanOf(target));
+			}
 			Object.assign(decl, contexts(ctxs));
 			if (value.numChildren) decl.value = optTree(value);
 			const source = optSrc(src);

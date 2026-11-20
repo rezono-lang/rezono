@@ -144,6 +144,11 @@ jobs:
       - name: Test the docs reference check on a throwaway repository
         working-directory: release-source
         run: python3 -I scripts/test_docs_links.py -v
+      - name: Check the compiler's error-code budget against the base, cell by cell
+        working-directory: release-source
+        env:
+          ERROR_CODE_BUDGET_BASE: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.event.before }}
+        run: python3 -I scripts/test_error_code_budget.py -v
       - name: Check Dependabot manifest coverage
         working-directory: release-source
         shell: bash
@@ -212,8 +217,25 @@ jobs:
         with:
           persist-credentials: false
           path: readme-source
-      - name: Run the README example
+      # The compiler reads authored .rezono pack sources through Node from the
+      # editable checkout, so the README example needs the runtime and the
+      # reader's locked packages in readme-source/rezono.
+      - id: readme_node
+        name: Set up Node for the README example
         if: ${{ !cancelled() && steps.readme_checkout.outcome == 'success' }}
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1  # v7.1.0
+        with:
+          node-version-file: readme-source/.node-version
+          cache: npm
+          cache-dependency-path: readme-source/rezono/package-lock.json
+      - id: readme_reader
+        name: Install the Rezono reader for the README example
+        if: ${{ !cancelled() && steps.readme_node.outcome == 'success' }}
+        working-directory: readme-source/rezono
+        shell: bash
+        run: npm ci
+      - name: Run the README example
+        if: ${{ !cancelled() && steps.readme_reader.outcome == 'success' }}
         working-directory: readme-source
         shell: bash
         run: bash scripts/check-quickstart.sh
@@ -374,7 +396,7 @@ jobs:
           done < <(find "$RUNNER_TEMP/inventory" -name collection.xml -print0)
       - name: Save the independent pytest inventory
         if: always() && steps.matrix.outputs.has_pytest == 'true'
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: pytest-inventory
           path: ${{ runner.temp }}/inventory
@@ -595,7 +617,7 @@ jobs:
           bash run/probes/worker-join/prepare-renderer.sh "$renderer"
           test -x "$renderer"
           printf 'REZONO_WORKER_RENDERER=%s\n' "$renderer" >> "$GITHUB_ENV"
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
         with:
           name: pytest-inventory
           path: ${{ runner.temp }}/inventory
@@ -620,7 +642,7 @@ jobs:
               "$RUNNER_TEMP/inventory" "$RUNNER_TEMP/reports" "$RUNNER_TEMP/receipts"
       - name: Save execution evidence
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: pytest-execution-${{ strategy.job-index }}
           path: ${{ runner.temp }}/receipts
@@ -715,7 +737,7 @@ jobs:
         if: matrix.component.pytest && needs.queue_evidence.outputs.tested != 'true'
         with:
           editable: ${{ needs.discover.outputs.python_editable }}
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
         if: matrix.component.pytest && needs.queue_evidence.outputs.tested != 'true'
         with:
           name: pytest-inventory
@@ -732,7 +754,7 @@ jobs:
           python scripts/components.py run-shard "$COMPONENT" 0 1             "$RUNNER_TEMP/inventory" "$RUNNER_TEMP/reports" "$RUNNER_TEMP/receipts"
       - name: Save execution evidence
         if: always() && matrix.component.pytest && needs.queue_evidence.outputs.tested != 'true'
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: pytest-execution-node-${{ strategy.job-index }}
           path: ${{ runner.temp }}/receipts
@@ -767,12 +789,12 @@ jobs:
           ref: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.sha }}
           sparse-checkout: scripts
           persist-credentials: false
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
         if: always() && needs.discover.outputs.has_pytest == 'true' && needs.queue_evidence.outputs.tested != 'true'
         with:
           name: pytest-inventory
           path: ${{ runner.temp }}/inventory
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
         if: always() && needs.discover.outputs.has_pytest == 'true' && needs.queue_evidence.outputs.tested != 'true'
         with:
           pattern: pytest-execution-*

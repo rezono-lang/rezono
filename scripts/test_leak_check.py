@@ -13,12 +13,12 @@ PACK_NAME = "".join(("at", "las"))
 
 
 class LeakCheck(unittest.TestCase):
-    def run_check(self, files):
+    def run_check(self, files, budget="{}\n"):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
             subprocess.check_call(["git", "init", "-q"], cwd=root)
             (root / "scripts").mkdir()
-            (root / "scripts" / "leak-budget.json").write_text("{}\n")
+            (root / "scripts" / "leak-budget.json").write_text(budget)
             for name, text in files.items():
                 (root / name).write_text(text)
             subprocess.check_call(["git", "add", "-A"], cwd=root)
@@ -38,6 +38,17 @@ class LeakCheck(unittest.TestCase):
         result = self.run_check({f"{PACK_NAME}.yaml": "pack: neutral\n"})
         self.assertEqual(result.returncode, 1)
         self.assertIn("[redacted filename] old_name: observed=1 listed=0", result.stdout)
+        self.assertNotIn(PACK_NAME, result.stdout.lower())
+
+    def test_budget_is_a_ceiling_that_may_fall(self):
+        # Two changes that each remove a finding from one file merge into fewer findings than listed: still green.
+        budget = '{"pack.yaml": {"old_name": 2}}\n'
+        result = self.run_check({"pack.yaml": f"pack: {PACK_NAME}\n"}, budget)
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertIn("pack.yaml old_name: observed=1 listed=2; lower the budget", result.stdout)
+        result = self.run_check({"pack.yaml": f"pack: {PACK_NAME}\nalso: {PACK_NAME}\nand: {PACK_NAME}\n"}, budget)
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("pack.yaml old_name: observed=3 listed=2", result.stdout)
         self.assertNotIn(PACK_NAME, result.stdout.lower())
 
     def test_longer_words_are_not_findings(self):
