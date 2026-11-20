@@ -35,6 +35,7 @@
 	"R049": "`{0}` heeft geen ondersteunde regelrepresentatie",
 	"R050": "`{0}` kan niet worden omgezet naar een berekening",
 	"W105": "`{0}` kan onbekend zijn; onbekende waarden worden met hun reden getoond",
+	"W106": "geen `rezono`-regel; gelezen als `rezono 0`",
 	"W107": "`{0}` is verouderd",
 	"W108": "`{0}` heeft geen versie vóór {1}; daar is het onbekend (`no_version_applies`)",
 	"W109": "`{0}` in `{1}` wordt door geen enkel voorbeeld gebruikt",

@@ -28,6 +28,8 @@ interface Run {
 	reserved: Diagnostic[];
 	/** Time selections on a literal: the writer meant the question's context (§4, E30). */
 	misplaced: [Diagnostic, 'at' | 'as_known'][];
+	/** Language version when reading a module; undefined for standalone questions. */
+	version?: '0' | '1';
 }
 export let run: Run;
 
@@ -73,6 +75,6 @@ export function refused(node: Node, code: string, args: string[]): void {
 	run.errors.push({ code, span: spanOf(node), args });
 }
 
-export function startRun(text: string, spans: WeakMap<object, Span>, at: number[] | undefined): void {
-	run = { text, points: at, spans, ids: new WeakSet(), errors: [], reserved: [], misplaced: [] };
+export function startRun(text: string, spans: WeakMap<object, Span>, at: number[] | undefined, version?: '0' | '1'): void {
+	run = { text, points: at, spans, ids: new WeakSet(), errors: [], reserved: [], misplaced: [], version };
 }

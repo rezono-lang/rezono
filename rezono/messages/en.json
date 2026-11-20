@@ -35,6 +35,7 @@
 	"R049": "`{0}` has no supported rule representation",
 	"R050": "`{0}` cannot be lowered to a calculation",
 	"W105": "`{0}` may be unknown; unknown values print with their reason",
+	"W106": "no `rezono` line; read as `rezono 0`",
 	"W107": "`{0}` is deprecated",
 	"W108": "`{0}` has no version before {1}; there it is unknown (`no_version_applies`)",
 	"W109": "`{0}` in `{1}` is exercised by no example",

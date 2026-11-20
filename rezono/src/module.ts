@@ -82,8 +82,13 @@ export interface ParsedModule {
 	spans: WeakMap<object, Span>;
 }
 
+export interface ParseModuleOptions {
+	/** Pack-level language version, when known: omitting `rezono` in a `rezono 1` pack is R028, a version mismatch is R027. */
+	packVersion?: LanguageVersion;
+}
+
 /** Reads one Rezono file into its module. */
-export const parseModule = (text: string): ParsedModule => readModule(text, false);
+export const parseModule = (text: string, options?: ParseModuleOptions): ParsedModule => readModule(text, false, options?.packVersion);
 
 /**
  * Reads declarations that stand without a header: what a conformance case declares on top of a schema
@@ -94,7 +99,7 @@ export function parseDeclarations(text: string): Omit<ParsedModule, 'module'> & 
 	return { ...(module ? { decls: module.decls } : {}), ...rest };
 }
 
-function readModule(text: string, bare: boolean): ParsedModule {
+function readModule(text: string, bare: boolean, packVersion?: LanguageVersion): ParsedModule {
 	const spans = new WeakMap<object, Span>();
 	const errors: Diagnostic[] = [];
 	const later: Diagnostic[] = [];
@@ -114,11 +119,11 @@ function readModule(text: string, bare: boolean): ParsedModule {
 			const statement = only(text, line);
 			const syntax = rule === 'Line' && /^rule(?![A-Za-z0-9_-])/.test(text.slice(line.start, line.end)) ? 'NativeRuleLine' : rule;
 			const useNative = declaredVersion === '1' && rule === 'Line' ? true : undefined;
-			const r = readRule(statement, syntax, (m) => m.decl() as Line, spans, map, useNative);
+			const r = readRule(statement, syntax, (m) => m.decl() as Line, spans, map, useNative, declaredVersion);
 			// The rest of the source is blank here. An incomplete statement fails where its line ends.
 			for (const e of r.errors) if (e.span.start > cp(line.end)) e.span = { text: '', start: cp(line.end), end: cp(line.end) };
 			const alternative = r.errors.length && invalidFirst?.(text, line, cp, (rule) =>
-				!readRule(statement, rule, () => undefined, new WeakMap(), map).errors.length
+				!readRule(statement, rule, () => undefined, new WeakMap(), map, undefined, declaredVersion).errors.length
 			);
 			if (alternative) errors.push(alternative);
 			else errors.push(...r.errors);
@@ -192,7 +197,7 @@ function readModule(text: string, bare: boolean): ParsedModule {
 		if (r.line === 'rezono' && stage === 0 && module.rezono === undefined && !module.decls.length) {
 			build.leaf(line);
 			const version = r.rezono as string;
-			if (!isLanguageVersion(version)) {
+			if (!isLanguageVersion(version) || (packVersion !== undefined && version !== packVersion)) {
 				const span = spans.get(r) ?? { text: text.slice(line.start, line.end), start: cp(line.start), end: cp(line.end) };
 				build.error({ code: 'R027', span, args: [version] });
 			} else {
@@ -204,12 +209,25 @@ function readModule(text: string, bare: boolean): ParsedModule {
 		if (r.line === 'pack' && stage === 0) {
 			build.leaf(line);
 			module.pack = r.pack as string;
+			if (module.rezono === undefined) {
+				if (packVersion === '1') {
+					build.version = '1';
+					build.removed(line, 'omitting `rezono`', firstWordSpan(line), { id: 'hint.use_instead', args: ['rezono 1'] });
+				} else {
+					later.push({ code: 'W106', span: firstWordSpan(line), args: [] });
+				}
+			}
 			stage = 1;
 			continue;
 		}
 		if (r.line === 'use' && stage === 1) {
 			clearPendingDeprecated();
 			build.leaf(line);
+			const useName = r.use as string;
+			if (build.version === '1' && useName.includes('.')) {
+				build.removed(line, `use ${useName}`, spans.get(r), { id: 'hint.use_instead', args: [`use ${useName.replaceAll('.', '-')}`] });
+				continue;
+			}
 			module.use.push(build.strip(r));
 			continue;
 		}

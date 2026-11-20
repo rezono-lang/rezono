@@ -25,7 +25,7 @@ export const header = {
   `,
 	actions: {
 		RezonoLine(_k, n) {
-			return placed(this, { line: 'rezono', rezono: n.sourceString });
+			return placed(this, { line: 'rezono', rezono: n.lit() });
 		},
 		PackLine: (_k, n) => ({ line: 'pack', pack: n.sourceString }),
 		UseLine: (_k, names, _as, alias) => named(names, { line: 'use', use: listOf(names).join('.'), ...(alias.numChildren ? { as: readRuleName(alias.child(0)) } : {}) })

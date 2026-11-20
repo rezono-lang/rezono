@@ -21,7 +21,7 @@
 import { grammar } from './grammar.ts';
 import { parse, type Diagnostic, type Span } from './parse.ts';
 import { printExpr } from './print.ts';
-import { baseTypeOf, dimText, inPart, mulDim, sameDim, slotType, snake, typeOf, unitOf, type Schema, type StateName, type Ty } from './schema.ts';
+import { baseTypeOf, dimText, inPart, isOrdered, mulDim, sameDim, slotType, snake, typeOf, unitOf, type Schema, type StateName, type Ty } from './schema.ts';
 import { isAsk, isCheck, type Ask, type CheckDecl, type Expr, type Question } from './tree.ts';
 
 /** What is known of an expression once its names and types are. */
@@ -181,6 +181,18 @@ export function typing(text: string, schema: Schema, spans: WeakMap<object, Span
 		(('lit' in node && /^[0-9]+$/.test(node.lit)) || ('agg' in node && node.agg[0] === 'count') || (v.ty.name !== undefined && baseTypeOf(schema, v.ty.name) === 'Integer'));
 	/** An amount of money or a quantity: a number with a dimension, which its type stores as an integer (publication §3.2). */
 	const stored = (ty: Ty): boolean => ty.t === 'num' && Object.keys(ty.dim).length > 0;
+	/** Whether a type supports ordering operators (`<`, `<=`, `>`, `>=`, `..`, `min`, `max`). */
+	const ordered = (ty: Ty): boolean => ty.t === 'err' || ty.t === 'state' || isOrdered(schema, ty);
+	/** Whether an expression is a constant numeric literal (possibly negated) whose value is non-zero. */
+	function nonZeroConst(node: Expr): boolean {
+		if ('neg' in node) return nonZeroConst(node.neg);
+		if (!('lit' in node)) return false;
+		const m = /^(?:\S+? ?)?([0-9]+(?:\.[0-9]+|\/[0-9]+)?)(?:[ \t]*%|[ \t]+[A-Za-z]\w*|\/[A-Za-z]\w*)?$/u.exec(node.lit);
+		if (!m) return false;
+		const num = m[1];
+		if (/\/0+$/.test(num)) return false;
+		return /[1-9]/.test(num.split('/')[0]);
+	}
 	const describe = (ty: Ty): string => (ty.t === 'bool' ? 'Bool' : ty.t === 'num' ? (ty.name ?? dimText(ty.dim)) : ty.t === 'ref' ? ty.kind : ty.t === 'val' ? ty.name : ty.t === 'id' || ty.t === 'tok' ? ty.text : '');
 	const slotsOf = (ty: Ty) => (ty.t === 'ref' ? (schema.kinds[ty.kind]?.slots ?? {}) : {});
 	/** The values of an enum type, by the type's name; undefined for a type that is no enum. */
@@ -293,18 +305,34 @@ export function typing(text: string, schema: Schema, spans: WeakMap<object, Span
 		if (is('datetime')) return value({ t: 'val', name: 'DateTime' });
 		if (is('date')) return value({ t: 'val', name: 'Date' });
 		if (is('money')) {
-			const [, symbol, , per] = /^(\S+?) ?([0-9][0-9.]*(?:\/[0-9]+)?)(?:\/([A-Za-z]\w*))?$/u.exec(e.lit)!;
+			const [, symbol, numText, per] = /^(\S+?) ?([0-9]+(?:\.[0-9]+|\/[0-9]+)?)(?:\/([A-Za-z]\w*))?$/u.exec(e.lit)!;
 			const currency = schema.symbols?.[symbol];
 			if (currency === undefined) return report('R001', within(e, symbol, 'start'), [symbol], { suggest: near(symbol, Object.keys(schema.symbols ?? {})) });
 			const unit = per === undefined ? undefined : unitOf(schema, per);
 			if (per !== undefined && !unit) return unknownUnit(e, per);
-			return value({ t: 'num', dim: mulDim({ [`money ${currency}`]: 1 }, unit?.dim ?? {}, -1) });
+			const ty: Ty = { t: 'num', dim: mulDim({ [`money ${currency}`]: 1 }, unit?.dim ?? {}, -1) };
+			if (/\/0+$/.test(numText)) return report('R012', spanOf(e), [e.lit, describe(ty)]);
+			const v = value(ty);
+			if (numText.includes('/')) v.inexact = true;
+			return v;
 		}
-		if (is('percent') || is('number')) return value({ t: 'num', dim: {} });
+		if (is('percent') || is('number')) {
+			const numText = e.lit.replace(/[ \t]*%$/, '');
+			if (/\/0+$/.test(numText)) return report('R012', spanOf(e), [e.lit, 'number']);
+			const v = value({ t: 'num', dim: {} });
+			if (numText.includes('/')) v.inexact = true;
+			return v;
+		}
 		if (is('quantity')) {
-			const word = e.lit.slice(e.lit.lastIndexOf(' ') + 1);
+			const cut = e.lit.lastIndexOf(' ');
+			const numText = e.lit.slice(0, cut).trim();
+			const word = e.lit.slice(cut + 1);
 			const unit = unitOf(schema, word);
-			return unit ? value({ t: 'num', dim: unit.dim, name: unit.name }) : unknownUnit(e, word);
+			if (!unit) return unknownUnit(e, word);
+			if (/\/0+$/.test(numText)) return report('R012', spanOf(e), [e.lit, unit.name]);
+			const v = value({ t: 'num', dim: unit.dim, name: unit.name });
+			if (numText.includes('/')) v.inexact = true;
+			return v;
 		}
 		if (is('text')) return value({ t: 'val', name: 'Text' });
 		if (is('typedText')) {
@@ -467,6 +495,7 @@ export function typing(text: string, schema: Schema, spans: WeakMap<object, Span
 			const [name, of, arg] = e.agg;
 			const base = settled(of);
 			if (base.ty.t === 'err') return value({ t: 'err' });
+			if (!base.set && base.ty.t !== 'state') return report('R003', spanOf(e), [name, describe(base.ty)]);
 			const element = { ...base, set: false };
 			if (name === 'one') {
 				const v = value(element.ty, [base]);
@@ -482,7 +511,10 @@ export function typing(text: string, schema: Schema, spans: WeakMap<object, Span
 				if (over.set) return report('R005', spanOf(arg ?? e), []);
 				const v = value(name === 'count' ? { t: 'num', dim: {} } : over.ty, [base, over]);
 				if (name === 'sum' && over.ty.t !== 'num' && over.ty.t !== 'err' && over.ty.t !== 'state') return report('R003', spanOf(arg ?? e), [name, describe(over.ty)]);
-				if (name === 'min' || name === 'max') v.states.add('not_applicable');
+				if (name === 'min' || name === 'max') {
+					if (!ordered(over.ty)) return report('R003', spanOf(arg ?? e), [name, describe(over.ty)]);
+					v.states.add('not_applicable');
+				}
 				// A count, a sum, the least and the greatest speak of every member: over a set that is not known
 				// complete they would read a missing row as "not there".
 				closed(v, e, true);
@@ -498,6 +530,7 @@ export function typing(text: string, schema: Schema, spans: WeakMap<object, Span
 		if ('filter' in e) {
 			const base = settled(e.filter[0]);
 			if (base.ty.t === 'err') return value({ t: 'err' });
+			if (!base.set && base.ty.t !== 'state') return report('R003', spanOf(e), ['where', describe(base.ty)]);
 			const cond = inside({ ...base, set: false }, () => truth(e.filter[1]));
 			const v = value(base.ty, [base, cond], true);
 			v.sure = new Set();
@@ -511,7 +544,6 @@ export function typing(text: string, schema: Schema, spans: WeakMap<object, Span
 			if (!meet(a, an, b, bn)) return report('R003', spanOf(e), [describe(a.ty), describe(b.ty)]);
 			// `in` asks whether a value is a member: its right side is a set or a range, never one value.
 			if ('in' in e && !b.set && b.ty.t !== 'err' && b.ty.t !== 'state') return report('R003', spanOf(e), [describe(a.ty), describe(b.ty)]);
-			const ordered = (ty: Ty) => ty.t !== 'ref' && ty.t !== 'bool';
 			if ('range' in e || ('cmp' in e && e.cmp[0] !== '=' && e.cmp[0] !== '!=')) if (!ordered(a.ty) || !ordered(b.ty)) return report('R003', spanOf(e), [describe(a.ty), describe(b.ty)]);
 			return 'range' in e ? value(a.ty.t === 'state' ? b.ty : a.ty, [a, b], true) : value({ t: 'bool' }, [a, b]);
 		}
@@ -520,6 +552,7 @@ export function typing(text: string, schema: Schema, spans: WeakMap<object, Span
 			// A state test is always true or false (A.3b): it is known whatever it reads.
 			v.states = new Set<StateName>(['known']);
 			for (const read of v.reads.keys()) v.reads.set(read, false);
+			v.opens = [];
 			v.sure = new Set();
 			return v;
 		}
@@ -542,19 +575,22 @@ export function typing(text: string, schema: Schema, spans: WeakMap<object, Span
 			const x = a.ty.t === 'state' ? b.ty : a.ty;
 			const y = b.ty.t === 'state' ? a.ty : b.ty;
 			if (x.t === 'err' || y.t === 'err' || x.t === 'state') return value({ t: 'err' }, [a, b]);
-			// Dates and their periods are typed with v0 §5f. Until then a date takes a number or a date beside it,
-			// and nothing else; a date moved by a number is a date, and what two dates give is not examined.
-			const date = (ty: Ty) => ty.t === 'val' && (ty.name === 'Date' || ty.name === 'DateTime');
+			// Dates and instants take a time/calendar duration for `+`/`-`, or another date/instant for `-` (v0 §5f).
+			const date = (ty: Ty) => ty.t === 'val' && (baseTypeOf(schema, ty.name) === 'Date' || baseTypeOf(schema, ty.name) === 'DateTime');
+			const duration = (ty: Ty) => ty.t === 'num' && (sameDim(ty.dim, { time: 1 }) || sameDim(ty.dim, { calendar: 1 }));
 			if (date(x)) {
-				if ((op !== '+' && op !== '-') || !(y.t === 'num' || (op === '-' && date(y)))) return report('R003', spanOf(e), [describe(a.ty), describe(b.ty)]);
+				if ('neg' in e) return report('R003', spanOf(e), ['-', describe(a.ty)]);
+				if (op !== '+' && op !== '-') return report('R003', spanOf(e), [describe(a.ty), describe(b.ty)]);
+				if (b.ty.t === 'state') return value(x, [a, b]);
+				if (!(duration(y) || (op === '-' && date(y)))) return report('R003', spanOf(e), [describe(a.ty), describe(b.ty)]);
 				return value(y.t === 'num' ? x : { t: 'err' }, [a, b]);
 			}
 			if (!together || x.t !== 'num' || y.t !== 'num') return report('R003', spanOf(e), [describe(a.ty), describe(b.ty)]);
 			if (op === '+' || op === '-') return value({ t: 'num', dim: x.dim, name: x.name ?? y.name }, [a, b]);
 			const plain = (ty: { dim: Record<string, number> }) => Object.keys(ty.dim).length === 0;
 			const v = value({ t: 'num', dim: mulDim(x.dim, y.dim, op === '*' ? 1 : -1), name: plain(y) ? x.name : plain(x) && op === '*' ? y.name : undefined }, [a, b]);
-			// A division by zero is invalid (S1 §2): the one state a calculation adds on its own.
-			if (op === '/') v.states.add('invalid');
+			// A division by zero is invalid (S1 §2): only when the divisor is not a constant non-zero literal.
+			if (op === '/' && !nonZeroConst(nodes[1])) v.states.add('invalid');
 			// A quotient, and a product with anything but a whole number, may be a value no decimal of its type holds.
 			if (op === '/' || !(whole(a, nodes[0]) || whole(b, nodes[1]))) v.inexact = true;
 			return v;
