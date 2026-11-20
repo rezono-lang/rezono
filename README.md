@@ -24,7 +24,47 @@ advice_report:
   - {"id": "R001", "household": "H001"}
 ```
 
-The answers. A001 gets € 2,694: a household of three with € 31,400 lies between the € 30,000 threshold and the € 42,000 limit, so the partial rate of 24% gives a cost share of € 2,544, plus the € 150 advice allowance. Each step names its calculation rule, version, evaluation date, definition and the parameters it read, and a parameter leads back to its article and council decision. For A003 the assessment is unknown with its reason, and the calculated award stays unknown, not zero, while the income statement is missing, even though the example's payment ledger records a payment for it.
+### The rules in Rezono
+
+Two of A001's calculation rules (`entitlement` and `award`) from the imported subsidy scheme — each names its output, unit, version with validity and knowledge dates, and definition (`when ... then ...`); see [examples/subsidy-scheme/rezono/award.rezono](examples/subsidy-scheme/rezono/award.rezono) for the other rules (`income_threshold`, `income_limit`, `cost_share`, `advice_allowance`):
+
+```haskell
+  -- What the household would receive without a maximum.
+  derived entitlement: Int
+    output entitlement.cents
+    unit cents
+    version 2026, valid 2026-01-01..<2027-01-01, known 2025-12-09
+      definition share_plus_allowance when true then cost_share + Application.advice_allowance
+
+  -- Article 7: the award is the entitlement, at most the maximum.
+  derived award: Int
+    output award.cents
+    unit cents
+    version 2026, valid 2026-01-01..<2027-01-01, known 2025-12-09
+      definition at_most_the_maximum when true then min(entitlement, maximum_award)
+```
+
+Every calculated value has one of four states — `known`, `unknown` (with a reason), `not_applicable`, or `invalid` — and Rezono never silently picks a fallback. Nor does the compiler guess when a rule is ambiguous: change one line in `entitlement` by writing `advice_allowance` bare instead of `Application.advice_allowance`, and the compiler refuses the pack with **`R050`** (`ambiguous leaf 'advice_allowance'`) before any calculation runs, because the pack declares both a scheme parameter and a derived rule with that name:
+
+```haskell
+  -- What the household would receive without a maximum.
+  derived entitlement: Int
+    output entitlement.cents
+    unit cents
+    version 2026, valid 2026-01-01..<2027-01-01, known 2025-12-09
+      definition share_plus_allowance when true then cost_share + advice_allowance
+
+  -- Article 7: the award is the entitlement, at most the maximum.
+  derived award: Int
+    output award.cents
+    unit cents
+    version 2026, valid 2026-01-01..<2027-01-01, known 2025-12-09
+      definition at_most_the_maximum when true then min(entitlement, maximum_award)
+```
+
+### The answers
+
+A001 gets € 2,694: a household of three with € 31,400 lies between the € 30,000 threshold and the € 42,000 limit, so the partial rate of 24% gives a cost share of € 2,544, plus the € 150 advice allowance. Each step names its calculation rule, version, evaluation date, definition and the parameters it read, and a parameter leads back to its article and council decision. For A003 the assessment is unknown with its reason, and the calculated award stays unknown, not zero, while the income statement is missing, even though the example's payment ledger records a payment for it.
 
 ```text
 A001: calculated award € 2,694
