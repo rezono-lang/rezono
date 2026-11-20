@@ -644,7 +644,8 @@ export function typing(text: string, schema: Schema, spans: WeakMap<object, Span
 		});
 		return { binder, kind: q.ask, shown };
 	}
-	/** Checks a slot assignment expression against its expected typed slot. */
+	/** Checks a slot assignment expression against its expected typed slot.
+	 * A state stands for the whole set on a many-valued slot, in both `set` and `insert_row` (evaluate.ts `Cell`). */
 	function assign(expr: Expr, expected: Typed, target: object): void {
 		const to = ex(expr);
 		if (to.set !== expected.set && to.ty.t !== 'err' && expected.ty.t !== 'err' && to.ty.t !== 'state') report('R005', spanOf(expr), []);
@@ -659,12 +660,12 @@ export function typing(text: string, schema: Schema, spans: WeakMap<object, Span
 		const start = span.start + [...span.text.slice(0, at)].length;
 		return { text: key, start, end: start + [...key].length };
 	}
-	/** Whether an authored record key matches the schema's identifier type. */
+	/** Whether an authored record key matches the schema's identifier type (canonical decimal text for Integer). */
 	function validKey(key: string, typeName: string): boolean {
 		const ty = typeOf(schema, typeName);
 		const of = schema.types?.[typeName]?.of ?? typeName;
 		if (ty.t === 'bool') return key === 'true' || key === 'false';
-		if (ty.t === 'num') return of === 'Integer' ? /^-?[0-9]+$/.test(key) : grammar.match(key, 'number').succeeded();
+		if (ty.t === 'num') return of === 'Integer' ? /^(?:0|-?[1-9][0-9]*)$/.test(key) : grammar.match(key, 'number').succeeded();
 		if (ty.t === 'val') {
 			if (of === 'Date') return grammar.match(key, 'date').succeeded();
 			if (of === 'DateTime') return grammar.match(key, 'datetime').succeeded();
