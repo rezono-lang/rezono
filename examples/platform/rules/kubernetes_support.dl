@@ -11,3 +11,19 @@ published_series_support(p, s, patch, end, url, sha) :-
     series_support_source__source_sha256(src, sha).
 
 .output published_series_support
+
+// When the platform register's planned support end differs from the maker's pinned statement for the same product and series, report drift.
+.decl series_support_end_drift(reference: symbol, source: symbol, product: symbol, series: symbol, expected: symbol, observed: symbol)
+series_support_end_drift(reference, source, p, s, expected, observed) :-
+    product(p),
+    series_support_reference(reference),
+    series_support_reference__product(reference, p),
+    series_support_reference__series(reference, s),
+    series_support_reference__support_end(reference, expected),
+    series_support_source(source),
+    series_support_source__product(source, p),
+    series_support_source__series(source, s),
+    series_support_source__support_end(source, observed),
+    expected != observed.
+
+.output series_support_end_drift
