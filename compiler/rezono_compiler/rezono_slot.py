@@ -20,7 +20,7 @@ def builtin_range(name: str, declared: bool) -> str | None:
     return BUILTIN_RANGES.get(name)
 
 
-def constraint_facets(slot: dict, range_name: str | None) -> dict[str, str | int | bool]:
+def constraint_facets(slot: dict, range_name: str | None, *, integer_types: Set[str] = frozenset()) -> dict[str, str | int | bool]:
     """Keep the written pattern and let the pack loader validate it as a LinkML facet."""
     facets: dict[str, str | int | bool] = {}
     constraints = slot["constraints"]
@@ -40,11 +40,11 @@ def constraint_facets(slot: dict, range_name: str | None) -> dict[str, str | int
                 raise ValueError("an identifier cannot be multivalued")
             return facets
         constraints = bounds
-    facets.update(bound_facets(slot, range_name, constraints))
+    facets.update(bound_facets(slot, range_name, constraints, integer_types=integer_types))
     return facets
 
 
-def bound_facets(slot: dict, range_name: str | None, constraints: object) -> dict[str, int | bool]:
+def bound_facets(slot: dict, range_name: str | None, constraints: object, *, integer_types: Set[str] = frozenset()) -> dict[str, int | bool]:
     """Resolve the authored bounds for a list or a single integer value."""
     card = slot.get("card", "?")
     explicit = slot.get("identifier") is True
@@ -55,7 +55,7 @@ def bound_facets(slot: dict, range_name: str | None, constraints: object) -> dic
         if explicit:
             raise ValueError("a bounded list cannot be an identifier")
         return facets
-    if range_name != "integer" or explicit or card != "?":
+    if (range_name != "integer" and range_name not in integer_types) or explicit or card != "?":
         raise ValueError("integer limits need an Int slot that is single-valued and is not an identifier")
     return rezono_numeric_limits.lower(constraints)
 
@@ -86,7 +86,8 @@ def resolve_prefixed(
     return None
 
 
-def lower(slots: list[dict], declared: Set[str], *, implicit_identifier: bool = True) -> dict[str, dict]:
+def lower(slots: list[dict], declared: Set[str], *, implicit_identifier: bool = True,
+          integer_types: Set[str] = frozenset()) -> dict[str, dict]:
     """Lower slots in written order, using an implicit identifier only when needed."""
     out: dict[str, dict] = {}
     if implicit_identifier and not any(slot.get("identifier") is True for slot in slots):
@@ -103,7 +104,7 @@ def lower(slots: list[dict], declared: Set[str], *, implicit_identifier: bool = 
         if "slotUri" in slot:
             attribute["slot_uri"] = slot["slotUri"]
         if "constraints" in slot:
-            attribute.update(constraint_facets(slot, range_name))
+            attribute.update(constraint_facets(slot, range_name, integer_types=integer_types))
         if slot.get("identifier") is True:
             attribute["identifier"] = True
         elif "card" not in slot or slot["card"] == "+":
@@ -144,7 +145,8 @@ def inverse_points_back(slot: dict, kind: str, here: str, kinds: Mapping[str, li
 def validate(slots: list, kind: str, at: str, own: Mapping[str, str], owners: Mapping[str, list[str]],
              uses: set[str], refuse: Refuse, *, extended: bool = False, open_kind: bool = False,
              aliases: Mapping[str, Mapping[str, list[str]]] | None = None,
-             kinds: Mapping[str, list] | None = None) -> bool:
+             kinds: Mapping[str, list] | None = None,
+             integer_types: Set[str] = frozenset()) -> bool:
     """Check slot forms and resolve references against all the modules of the pack."""
     ok = True
     seen: set[str] = set()
@@ -222,7 +224,7 @@ def validate(slots: list, kind: str, at: str, own: Mapping[str, str], owners: Ma
         range_name = builtin_range(name, name in own or bool(found))
         if has_constraints:
             try:
-                constraint_facets(slot, range_name)
+                constraint_facets(slot, range_name or name, integer_types=integer_types)
             except ValueError as error:
                 refuse(here, str(error), "§5.1")
                 ok = False

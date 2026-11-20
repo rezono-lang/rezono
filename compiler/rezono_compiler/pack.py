@@ -730,10 +730,18 @@ def read(pack_dir: str | Path) -> Pack:
         if "owner" in tags(c):
             kind.owner = plain(ann(c, "owner"))
 
+    schemas = [
+        {"name": m.sv.schema.name, "id": m.sv.schema.id, "file": m.rel, "module": m.id, "pack": m.pack}
+        for m in mods
+        if m.form is None
+        or "schema" in m.form["module"]
+        or m.sv.all_classes(imports=False)
+        or m.sv.all_enums(imports=False)
+        or m.sv.all_types(imports=False)
+    ]
     pack = Pack({"name": meta["name"], "version": str(meta["version"]), "default_language": meta["default_language"],
                  "theory": is_theory},
-                [{"name": m.sv.schema.name, "id": m.sv.schema.id, "file": m.rel, "module": m.id, "pack": m.pack}
-                 for m in mods],
+                schemas,
                 dict(sorted(kinds.items())), dict(sorted(enums.items())), warnings=warnings, units=declared,
                 imports=[{"name": p.name, "version": p.version, "sha256": p.sha256} for p in packs.values()])
     if not errors:
