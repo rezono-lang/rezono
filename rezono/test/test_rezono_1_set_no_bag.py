@@ -127,15 +127,6 @@ class MissingCollectionProjectionRefusal(AssertionError):
     """rezono 1 did not refuse collection path projection with R028 + hint or did not accept the explicit form."""
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=MissingCollectionProjectionRefusal,
-    reason="M3: decisions/language-rezono-1-refinements.md: Enforce set-only collections in rezono 1 in rezono/src/ "
-           "(parse.ts, check.ts, evaluate.ts, checkModule): refuse slot projection over any collection (`base.set`) "
-           "with R028 at the projected path and hint.use_instead naming the explicit row-oriented form (`S.sum(p)`, "
-           "`S.max(p)`, `S.count()`, `S.one(p)`), and support optional projection argument on `.one([expr])`. "
-           "Read section 3.3.",
-)
 @pytest.mark.parametrize(("refused_source", "bad_expr", "hint_text", "accepted_source"), CASES)
 def test_rezono_1_refuses_collection_path_projection(refused_source, bad_expr, hint_text, accepted_source):
     payload = check_sources(refused_source, accepted_source)

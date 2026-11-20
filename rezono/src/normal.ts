@@ -58,7 +58,7 @@ const sorted = (es: Expr[]): Expr[] =>
 		.map(([, e]) => e);
 
 /** A scope a path is written in, outermost first: the kind of the question's row or of an element, if it is one. */
-type Levels = (string | undefined)[];
+type Levels = { kind: string | undefined; binder?: string }[];
 
 /**
  * Rebuilds a tree bottom up, with `path` deciding each path from the scopes it is written in, as the check opens
@@ -71,10 +71,16 @@ function rebuild(e: Expr, levels: Levels, kindOf: (e: Expr) => string | undefine
 	if ('kind' in e) return { kind: e.kind };
 	if ('dot' in e) return { dot: [at(e.dot[0]), e.dot[1]] };
 	if ('agg' in e) {
-		const [name, of, arg] = e.agg;
-		return { agg: arg === undefined ? [name, at(of)] : [name, at(of), at(arg, [...levels, kindOf(of)])] };
+		const [name, of, arg, binder] = e.agg;
+		if (arg === undefined) return { agg: [name, at(of)] };
+		const inner = at(arg, [...levels, { kind: kindOf(of), binder }]);
+		return { agg: binder === undefined ? [name, at(of), inner] : [name, at(of), inner, binder] };
 	}
-	if ('filter' in e) return { filter: [at(e.filter[0]), at(e.filter[1], [...levels, kindOf(e.filter[0])])] };
+	if ('filter' in e) {
+		const [set, cond, binder] = e.filter;
+		const inner = at(cond, [...levels, { kind: kindOf(set), binder }]);
+		return { filter: binder === undefined ? [at(set), inner] : [at(set), inner, binder] };
+	}
 	if ('cmp' in e) {
 		const [op, a, b] = e.cmp;
 		const [x, y] = [at(a), at(b)];
@@ -92,6 +98,7 @@ function rebuild(e: Expr, levels: Levels, kindOf: (e: Expr) => string | undefine
 	if ('or' in e) return { or: sorted(e.or.map((x) => at(x))) };
 	if ('not' in e) return { not: at(e.not) };
 	if ('imply' in e) return { imply: [at(e.imply[0]), at(e.imply[1])] };
+	if ('otherwise' in e) return { otherwise: [at(e.otherwise[0]), at(e.otherwise[1])] };
 	if ('arith' in e) return { arith: [e.arith[0], at(e.arith[1]), at(e.arith[2])] };
 	if ('neg' in e) return { neg: at(e.neg) };
 	if ('when' in e) return { when: [at(e.when[0]), at(e.when[1]), at(e.when[2])] };
@@ -116,18 +123,25 @@ export function normalQuestion(checked: Checked, pack: Schema): Question {
 	// The question's row: the kind of an `ask`, or the kind a check statement ranges over, when it names one.
 	const row = !named ? undefined : isAsk(tree) ? tree.ask : isCheck(tree) ? checked.publication?.kind : undefined;
 	const exprs: Expr[] = isAsk(tree) ? [tree.where, ...(tree.show ?? [])] : isCheck(tree) ? [tree.cond] : 'set' in tree ? [tree.set[1]] : 'insert_row' in tree ? tree.insert_row.slots.map((s) => s.value) : [];
-	const top: Levels = row === undefined ? [] : [row];
+	const top: Levels = row === undefined ? [] : [{ kind: row }];
 
-	/** How a path is written in full: from the binder, from `it`, or as it stands. */
-	function form(p: { path: string[] }, levels: Levels): 'binder' | 'row slot' | 'it' | 'as written' {
+	/** How a path is written in full: from the binder, from `it`, from an explicit method binder, or as it stands. */
+	function form(p: { path: string[] }, levels: Levels): 'binder' | 'row slot' | 'it' | 'method' | 'as written' {
 		const head = named ? checked.heads.get(p) : undefined;
-		if (head?.as === 'row') return p.path[0] === 'it' ? 'as written' : 'binder';
+		if (head?.as === 'row') return head.level === 0 && p.path[0] !== 'it' ? 'binder' : 'as written';
 		if (head?.as === 'slot' && head.level === 0 && row !== undefined) return 'row slot';
-		if (head?.as === 'slot' && head.level === levels.length - 1) return 'it';
+		if (head?.as === 'slot' && head.level === levels.length - 1) return levels[head.level].binder !== undefined ? 'method' : 'it';
 		return 'as written';
 	}
-	/** The names that the binder's name must not be at a place it is written: the pack's slots of every kind in scope there, and its parameters. */
-	const taken = (levels: Levels): Set<string> => new Set([...levels.flatMap((k) => (k === undefined ? [] : Object.keys(pack.kinds[k]?.slots ?? {}))), ...Object.keys(pack.params ?? {})]);
+	/** The names that the binder's name must not be at a place it is written: the pack's slots of every kind in scope there, explicit method binders, and its parameters. */
+	const taken = (levels: Levels): Set<string> =>
+		new Set([
+			...levels.flatMap((l) => [
+				...(l.kind === undefined ? [] : Object.keys(pack.kinds[l.kind]?.slots ?? {})),
+				...(l.binder ? [l.binder] : []),
+			]),
+			...Object.keys(pack.params ?? {}),
+		]);
 
 	// The binder's name: the language's own for a check statement; for an `ask`, the first candidate that is no
 	// other name where the binder is written, and no name the normal form holds as written.
@@ -155,6 +169,7 @@ export function normalQuestion(checked: Checked, pack: Schema): Question {
 		// In a check statement the binder's name may be an element's slot here; then the bare slot is its only spelling.
 		if (how === 'row slot') return binder !== undefined && !taken(levels).has(binder) ? [binder, ...p.path] : [...p.path];
 		if (how === 'it') return ['it', ...p.path];
+		if (how === 'method') return [levels[levels.length - 1].binder!, ...p.path];
 		return [...p.path];
 	};
 	const normal = (e: Expr) => rebuild(e, top, kindOf, path);

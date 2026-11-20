@@ -78,17 +78,6 @@ def _svg_lines_and_fills(svg_bytes: bytes) -> tuple[list[str], set[str]]:
     return lines, fills
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=MissingLanguageGuideHighlight,
-    reason=(
-        "M3: decisions/language-guide-highlight.md: Waits for "
-        "rezono/test/test_rezono_syntax_grammar.py--test_generated_syntax_highlighting_grammar and "
-        "rezono/test/test_language_guide_excerpt.py--test_language_guide_starts_with_subsidy_award_excerpt. "
-        "Add rezono/src/render-excerpt-svg.ts (with `--out-dir`) and generate deterministic "
-        "rezono/assets/excerpt-light.svg and rezono/assets/excerpt-dark.svg directly from the reader's grammar."
-    ),
-)
 def test_regenerating_excerpt_svgs_produces_identical_bytes(tmp_path):
     missing = [str(p.relative_to(ROOT)) for p in (GENERATOR, THEME, LIGHT_SVG, DARK_SVG) if not p.is_file()]
     if missing:
@@ -127,17 +116,6 @@ def test_regenerating_excerpt_svgs_produces_identical_bytes(tmp_path):
         raise MissingLanguageGuideHighlight("\n".join(problems))
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=MissingLanguageGuideHighlight,
-    reason=(
-        "M3: decisions/language-guide-highlight.md: Waits for "
-        "rezono/test/test_rezono_syntax_grammar.py--test_generated_syntax_highlighting_grammar and "
-        "rezono/test/test_language_guide_excerpt.py--test_language_guide_starts_with_subsidy_award_excerpt. "
-        "Ensure the text content inside rezono/assets/excerpt-light.svg and excerpt-dark.svg matches the "
-        "opening excerpt in rezono/README.md verbatim with syntax-highlighted token fills."
-    ),
-)
 def test_excerpt_svg_text_matches_the_excerpt():
     guide = _normalise_lf(GUIDE.read_text(encoding="utf-8"))
     _, excerpt = _first_excerpt(guide)
@@ -220,17 +198,6 @@ def test_highlight_theme_covers_every_token_kind_in_light_and_dark():
         raise MissingLanguageGuideHighlight("\n".join(problems))
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=MissingLanguageGuideHighlight,
-    reason=(
-        "M3: decisions/language-guide-highlight.md: Waits for "
-        "rezono/test/test_rezono_syntax_grammar.py--test_generated_syntax_highlighting_grammar and "
-        "rezono/test/test_language_guide_excerpt.py--test_language_guide_starts_with_subsidy_award_excerpt. "
-        "Display the light and dark SVGs in rezono/README.md with <picture>, descriptive alt text, "
-        "and a one-line color legend directly underneath the opening code block."
-    ),
-)
 def test_language_guide_displays_highlighted_picture_and_color_legend():
     guide = _normalise_lf(GUIDE.read_text(encoding="utf-8"))
     first_block, _ = _first_excerpt(guide)

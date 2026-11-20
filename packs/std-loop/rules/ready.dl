@@ -3,12 +3,20 @@
 not_ready(r, s) :- waiting(r, s, _, _).
 not_ready(r, s) :- done(r, s, _).
 
-// Only members of the admitted verified round for the current run and cut enter ready.
+// Two distinct verified rounds for the same run and cut leave readiness undecided for that (run, cut),
+// even when both rounds carry the same batch label.
+.decl ready_round_ambiguous(run: symbol, cut: symbol)
+ready_round_ambiguous(run, cut) :-
+    current_verified_round(r1, run, cut, _),
+    current_verified_round(r2, run, cut, _),
+    r1 != r2.
+
+// Only members of the unique admitted verified round for the current run and cut enter ready.
 .decl ready(run: symbol, step: symbol, reason: symbol)
 ready(r, s, round) :-
-    current_verified_round(round, r, _, b),
+    current_verified_round(round, r, cut, _),
     verified_round_member(round, s),
-    !loop_batch_undecided(b),
+    !ready_round_ambiguous(r, cut),
     eligible(r, s, _),
     !not_ready(r, s).
 

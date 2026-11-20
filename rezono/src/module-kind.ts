@@ -1,4 +1,5 @@
 import { block, declaration, named, opt, printWorld, type Build, type Line, type Logical, type World, type ModuleComponent } from './module-support.ts';
+import { spanOf, type Span } from './parse-support.ts';
 import { printDeprecated, type Deprecation } from './module-deprecation.ts';
 import { printDerived, readDerived, type DerivedDecl } from './module-derived.ts';
 import { key, printKey, type KeyDecl } from './module-key.ts';
@@ -34,6 +35,7 @@ export interface KindDecl extends Metadata {
 export interface ExtendDecl {
 	extend: string;
 	binder?: string;
+	slots?: SlotDecl[];
 	derived: DerivedDecl[];
 }
 
@@ -46,9 +48,15 @@ function readConditionalCheck(line: Logical, build: Build): ConditionalCheckDecl
 	return decl;
 }
 
+const worldSpans = new WeakMap<Line, Span>();
+
 function readKind(line: Logical, build: Build): KindDecl {
 	const decl: KindDecl = { ...build.strip<KindDecl>(line.read!), slots: [], derived: [] };
 	build.spans.set(decl, build.spans.get(line.read!)!);
+	if (build.version === '1' && decl.world === 'closed') {
+		const span = worldSpans.get(line.read!);
+		if (span) build.later.push({ code: 'W114', span, args: [span.text], hint: { id: 'hint.leave_out', args: [] } });
+	}
 	for (const child of line.block) {
 		if (readMetadataLine(decl, child, build)) continue;
 		const member = child.read!;
@@ -87,7 +95,8 @@ function readExtension(line: Logical, build: Build): ExtendDecl {
 	}
 	for (const child of line.block) {
 		if (child.read!.line === 'derived') decl.derived.push(readDerived(child, build, 'member'));
-		else build.refuse(child, '`derived`');
+		else if (child.read!.line === 'slot' && build.version === '1') (decl.slots ??= []).push(readSlot(child, build));
+		else build.refuse(child, build.version === '1' ? 'a slot or `derived`' : '`derived`');
 	}
 	return decl;
 }
@@ -138,7 +147,10 @@ export const kind = {
 			if (kindModifier?.startsWith('abstract')) decl.abstract = true;
 			if (kindModifier?.endsWith('relationship')) decl.relationship = true;
 			if (parent.numChildren) decl.parent = opt(parent);
-			if (world.numChildren) decl.world = world.child(0).decl();
+			if (world.numChildren) {
+				decl.world = world.child(0).decl();
+				worldSpans.set(decl, spanOf(world.child(0)));
+			}
 			return named(t, decl);
 		},
 		ExtendLine(_k, binder, _colon, t) {
@@ -159,7 +171,10 @@ export const kind = {
 		extend: declaration<ExtendDecl>(
 			'extend',
 			readExtension,
-			d => block(`extend ${d.binder ? `${d.binder}: ` : ''}${d.extend}`, d.derived.flatMap(printDerived))
+			d => block(`extend ${d.binder ? `${d.binder}: ` : ''}${d.extend}`, [
+				...(d.slots ?? []).flatMap(printSlot),
+				...d.derived.flatMap(printDerived),
+			])
 		)
 	}
 } satisfies ModuleComponent;

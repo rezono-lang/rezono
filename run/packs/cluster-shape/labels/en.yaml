@@ -13,6 +13,7 @@ machine.boot_disk: Boot disk
 machine.data_disk: Data disk
 member: Cluster member
 ceph_device: Ceph device
+ceph_monitor_count: Ceph monitor count
 api_address: API address
 shape_problem: Cluster shape problem
 cluster_role: Cluster role

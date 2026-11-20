@@ -614,7 +614,7 @@ def iris(pack: Pack, meta: dict, packs: dict, owner: dict, errors: list[str]) ->
 
 def read(pack_dir: str | Path) -> Pack:
     pack_dir = Path(pack_dir)
-    errors: list[str] = []
+    errors: list[str | diagnostics.Diagnostic] = []
     typed: dict[str, tuple[diagnostics.Diagnostic, ...]] = {}  # D15: the diagnostics of an error that has its own
     warnings: list[str] = []
     meta = read_meta(pack_dir)
@@ -629,7 +629,10 @@ def read(pack_dir: str | Path) -> Pack:
         raise CompileError("\n".join(errors))
     mods, packs = modules.load(pack_dir, meta, errors)
     if errors:
-        raise CompileError("\n".join(errors))
+        raise CompileError(
+            "\n".join(map(str, errors)),
+            [d for e in errors for d in ((e,) if isinstance(e, diagnostics.Diagnostic) else diagnostics.of_text(e))],
+        )
     names = modules.Names(mods, snake, errors, warnings=warnings)
     found: dict = {}
 
@@ -730,6 +733,20 @@ def read(pack_dir: str | Path) -> Pack:
         if kind.parent and kind.parent not in kinds:
             errors.append(f"class {cname}: parent {kind.parent} is not a kind of this pack")
             continue
+        if (
+            kind.layer == "observation"
+            and kind.world != "open"
+            and m.form is not None
+            and m.form.get("format") == rezono_module.REZONO_1_FORMAT
+        ):
+            errors.append(
+                diagnostics.Diagnostic(
+                    "R051",
+                    f"class {cname}: `{cname}` is observed: declare `world open`, and `complete by` the scope in which it is complete (R051)",
+                    where=f"class {cname}",
+                    span=kind.span,
+                )
+            )
         c = sv.get_class(cname)
         inherited = {s.name for s in sv.class_induced_slots(c.is_a)} if kind.parent else set()
         for s in sv.class_induced_slots(cname):
@@ -835,7 +852,10 @@ def read(pack_dir: str | Path) -> Pack:
             kind.owner = plain(ann(c, "owner"))
 
     pack_language_version = rezono_module.pack_language_version(
-        m.form for m in mods if m.pack_dir == pack_dir and m.form is not None
+        [
+            *(m.form for m in mods if m.pack_dir == pack_dir and m.form is not None),
+            *rezono_module.dataset_forms(pack_dir, meta).values(),
+        ]
     )
     pack = Pack({"name": meta["name"], "version": str(meta["version"]), "default_language": meta["default_language"],
                  "theory": is_theory},
@@ -977,7 +997,14 @@ def read(pack_dir: str | Path) -> Pack:
     if not errors:
         fold.check(pack, errors)
     if errors:
-        raise CompileError("\n".join(errors), [d for e in errors for d in typed.get(e) or diagnostics.of_text(e)])
+        raise CompileError(
+            "\n".join(map(str, errors)),
+            [
+                d
+                for e in errors
+                for d in ((e,) if isinstance(e, diagnostics.Diagnostic) else typed.get(e) or diagnostics.of_text(e))
+            ],
+        )
     for w in pack.warnings:
         print(f"warning: {w}", file=sys.stderr)
     return pack

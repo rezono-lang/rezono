@@ -49,8 +49,10 @@ Rezono {
   SupposePath = rowId ("." identWord)+
   SupposeSlot = identWord "=" Expr
 
-  Expr = Cond | Imply
+  Expr = Cond | Otherwise
   Cond = when Expr then Expr else Expr
+  Otherwise = Imply otherwise Expr  -- otherwise
+            | Imply
   Imply = Or "=>" Imply  -- imply
         | Or
   Or = NonemptyListOf<And, or>
@@ -70,11 +72,12 @@ Rezono {
   Unary = "-" Unary  -- neg
         | Post
   Post = Dotted TimeAt? TimeKnown? Filter?
-  Dotted = Dotted "." where "(" Expr ")"  -- where
-         | Dotted "." Agg                 -- agg
-         | Dotted "." identWord           -- name
+  Dotted = Dotted "." where "(" AggArg ")"  -- where
+         | Dotted "." Agg                   -- agg
+         | Dotted "." identWord             -- name
          | Atom
-  Agg = aggName "(" Expr? ")"
+  Agg = aggName "(" AggArg? ")"
+  AggArg = (name ":")? Expr
   TimeAt = at Atom
   TimeKnown = as known Atom
   Filter = where Expr
@@ -118,6 +121,7 @@ ${moduleGrammar}
   when = "when" wordEnd
   then = "then" wordEnd
   else = "else" wordEnd
+  otherwise = "otherwise" wordEnd
   not = "not" wordEnd
   and = "and" wordEnd
   or = "or" wordEnd
