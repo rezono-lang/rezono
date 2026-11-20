@@ -11,8 +11,9 @@ import tempfile
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
-from red_guard import Change
-from red_before import added_tests, listed_plugins
+import red_guard
+from red_guard import Change, listed_plugins
+from red_before import added_tests
 
 SCRIPT = HERE / "red_before.py"
 BUGGY = b"def double(x):\n    return x + 2\n"
@@ -202,7 +203,10 @@ def completion(label, test, case, run_code, green_code, verdict, lifted=None):
 
 
 def base_list_cases():
-    """In CI the plugin list comes from the base revision under GITHUB_SHA, not the checkout."""
+    """In CI the plugin list comes from the base revision under GITHUB_SHA, not the checkout.
+
+    red_guard.listed_plugins is the one reading of the list for components.py and red_before.py.
+    """
     keys = ("GITHUB_ACTIONS", "GITHUB_EVENT_PATH", "GITHUB_SHA", "GITHUB_EVENT_NAME")
     saved = {key: os.environ.get(key) for key in keys}
     with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as directory:
@@ -246,6 +250,12 @@ def base_list_cases():
                 raise AssertionError("an event that names another base moved the list")
             print("BASE: an event that names another base does not move the list")
             refused("GitHub Actions without an event file", "pull_request", {}, path=None)
+            # A base that cannot be fetched after three attempts stops the run.
+            sleep, red_guard.time.sleep = red_guard.time.sleep, lambda seconds: None
+            try:
+                refused("a base that cannot be fetched", "push", {}, sha="0" * 40)
+            finally:
+                red_guard.time.sleep = sleep
             if listed("pull_request", {}, actions="false", path=None) != {"listed = listed", "added = added"}:
                 raise AssertionError("outside CI the checkout's list applies")
             print("LOCAL: outside CI the checkout's plugin list applies")

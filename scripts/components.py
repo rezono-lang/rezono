@@ -979,39 +979,11 @@ def inventory_path(directory: Path, folder: str) -> Path:
 PLUGIN_LIST = ROOT / "scripts/pytest-plugins.txt"
 
 
-def listed_plugins(local, root):
-    """The allowed pytest plugins (`name = value`): from the base revision in CI, else `local`.
-
-    In GitHub Actions the base is the first parent of GITHUB_SHA for a pull request (whose
-    GITHUB_SHA merges it into its base) and for a merge group (whose commit sits on its
-    base), and GITHUB_SHA itself otherwise. A step can set no GITHUB_* variable, so nothing
-    a candidate runs earlier in the job can redirect it. The event file is not read for the
-    base: the job could rewrite it, and a pull request's `base.sha` is the base when the event
-    fired, older than the base GitHub merged onto. Replace refs are ignored. In GitHub Actions
-    without an event file this fails rather than trusting the checkout.
-    """
-    if os.environ.get("GITHUB_ACTIONS") != "true":
-        text = Path(local).read_text(encoding="utf-8")
-    else:
-        event, sha = os.environ.get("GITHUB_EVENT_PATH"), os.environ.get("GITHUB_SHA")
-        if not (event and sha):
-            raise SystemExit("ERROR GitHub Actions without GITHUB_EVENT_PATH and GITHUB_SHA: "
-                             "no base revision for the list of allowed pytest plugins")
-        env = dict(os.environ, GIT_NO_REPLACE_OBJECTS="1")
-
-        def run(*args, check=True):
-            return subprocess.run(["git", *args], cwd=root, env=env, capture_output=True, text=True, check=check)
-
-        merged = os.environ.get("GITHUB_EVENT_NAME") in {"pull_request", "pull_request_target", "merge_group"}
-        target = f"{sha}^1" if merged else sha
-        if run("cat-file", "-e", f"{target}^{{commit}}", check=False).returncode:
-            run("fetch", "--no-tags", "--depth=2", "origin", sha)
-        base = run("rev-parse", "--verify", "--end-of-options", f"{target}^{{commit}}").stdout.strip()
-        text = run("show", f"{base}:scripts/pytest-plugins.txt").stdout
-    return {line.strip() for line in text.splitlines() if line.strip() and not line.lstrip().startswith("#")}
-
-
 def allowed_plugins() -> set[str]:
+    # One reading of the list for this script and red_before.py, beside this file.
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from red_guard import listed_plugins
+
     return listed_plugins(PLUGIN_LIST, ROOT)
 
 
