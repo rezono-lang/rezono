@@ -10,21 +10,19 @@ from round_visibility_rounds import singleton_rounds
 
 @pytest.mark.xfail(
     strict=True,
-    raises=(AssertionError, ImportError, TypeError),
+    raises=AssertionError,
     reason=(
         "M2: decisions/loop-certificate-admission.md: Read it and decisions/admission-transport.md sections 6 to 8. "
         "Only the members of an admitted verified round for the current run and cut enter ready: "
-        "ready(run, step, reason) needs verified_round(round, run, cut, batch) and "
+        "ready(run, step, reason) needs current_verified_round(round, run, cut, batch) and "
         "verified_round_member(round, step), and keeps a proof reason. Of the two claims in "
         "round_visibility_rounds only withdraw-a's is admitted. A supplied positive "
         "result is not a certificate. Write in packs/std-loop (ready.dl, fixed_point.dl) and switch the readers "
-        "of the old ready to unblocked (loop/typed_recording.py, build/rules/tasks.dl). Waits for "
-        "test_unblocked_evidence and test_verified_round_authorizes_steps (same std-loop files). Today "
-        "rezono_checker.evidence is missing (ImportError). "
-        "Waits for a planner to switch loop/tests/test_recorded_correction.py from reading state['ready'] "
-        "to state['unblocked'] (like test_eligibility_oracle.py), because requiring current_verified_round in "
-        "packs/std-loop/rules/ready.dl makes this test pass but breaks test_recorded_correction and turns "
-        "test_overlapping_withdrawals_break_availability XPASS(strict)."
+        "of the old ready to unblocked (loop/typed_recording.py, build/rules/tasks.dl, and refresh the std-loop "
+        "pin in build/pack.yaml and the table in compiler/rezono_compiler/standard_packs.py). The same change turns "
+        "loop/tests/test_overlapping_withdrawals_break_availability.py::"
+        "test_overlapping_withdrawals_break_availability green: remove both marks in the same PR. Today ready.dl "
+        "still derives ready from eligible without a verified round (AssertionError)."
     ),
 )
 def test_ready_requires_checked_batch_member(tmp_path):

@@ -7,4 +7,4 @@ imports:
     sha256: 2fd4cc60cc4f1c7dca42da2f5368a08a992de39df7cd7db205b9118dd1b8fe5a
   - name: std-loop
     path: ../packs/std-loop
-    sha256: 540bfe7462bc61e36e1bed81b2f4d8e377b8b0bd56105799c83a563eff10c23e
+    sha256: a9228c666424f293db74a7291069f455a1af7f9075f31bd52a65128d7e8674f9

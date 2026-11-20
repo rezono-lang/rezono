@@ -175,6 +175,40 @@ test('R005: a set where one value is needed', () => {
 	clean('ask Host where (Plan where memory >= host.memory_need).count() > 0');
 });
 
+test('suppose assignments: states stand for a many-valued slot; non-state cardinality mismatches report R005; Integer keys are canonical', () => {
+	const keyed = schemaWith((s) => {
+		s.types!.TicketNo = { of: 'Integer' };
+		s.kinds.Ticket = {
+			world: 'closed',
+			id: { type: 'Integer' },
+			slots: {
+				title: { type: 'Text', card: '1', states: ['known'] },
+				tags: { type: 'Text', card: '*', states: ['known', 'unknown'] },
+			},
+		};
+		s.kinds.AliasTicket = {
+			world: 'closed',
+			id: { type: 'TicketNo' },
+			slots: {},
+		};
+	});
+	// A state stands for the whole set on a many-valued slot in both `set` and `insert_row`.
+	clean('+ t-1.tags = unknown not_collected', keyed);
+	clean('+ Ticket 7 {title = "open", tags = unknown not_collected}', keyed);
+	// Non-state single-vs-set mismatches report R005 in both `set` and `insert_row`.
+	assert.deepEqual(found('+ t-1.tags = "single"', keyed), ['R005 at "single"']);
+	assert.deepEqual(found('+ Ticket 7 {title = "open", tags = "single"}', keyed), ['R005 at "single"']);
+	assert.deepEqual(found('+ t-1.title = Ticket.title', keyed), ['R005 at Ticket.title']);
+	assert.deepEqual(found('+ Ticket 7 {title = Ticket.title}', keyed), ['R005 at Ticket.title']);
+	// Integer keys must be in canonical decimal form: leading zeros are refused with R012.
+	clean('+ Ticket 0 {title = "zero"}', keyed);
+	clean('+ Ticket 7 {title = "seven"}', keyed);
+	clean('+ AliasTicket 42 {}', keyed);
+	assert.deepEqual(found('+ Ticket 007 {title = "padded"}', keyed), ['R012 at 007']);
+	assert.deepEqual(found('+ Ticket 00 {title = "zeros"}', keyed), ['R012 at 00']);
+	assert.deepEqual(found('+ AliasTicket 007 {}', keyed), ['R012 at 007']);
+});
+
 test('R011: nothing shadows silently (§5 rules 2 and 7)', () => {
 	assert.deepEqual(found('ask Host where Host.any(memory_need > 450 GiB)'), ['R011 at memory_need']);
 	assert.deepEqual(found('ask Host where clusters.any(host = host-a)'), ['R011 at host']);

@@ -647,7 +647,12 @@ def lower_module(
             continue
         local_params.add(pname)
         kind_cls, slot_name, name_slot = src
-        own_kind, _ = resolve_subject(pack, module.pack, kind_cls, renames)
+        try:
+            own_kind, _ = resolve_subject(pack, module.pack, kind_cls, renames)
+        except CompileError as err:
+            detail = err.diagnostics[0].message.removesuffix(" (R050)") if err.diagnostics else str(err)
+            refuse(decl_at, detail)
+            continue
         param_binding = f"{own_kind}.{slot_name}"
         choice_binding = {"name": name_slot}
         if ("parameters" in doc and doc["parameters"] != param_binding) or (

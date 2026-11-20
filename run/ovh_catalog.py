@@ -12,11 +12,24 @@ def _reject_constant(token: str) -> object:
     raise ValueError(f"invalid JSON constant: {token}")
 
 
+def _unique_object(pairs: list[tuple[str, object]]) -> dict[str, object]:
+    result: dict[str, object] = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError(f"duplicate catalog JSON key: {key!r}")
+        result[key] = value
+    return result
+
+
 def _parse_catalog(catalog: bytes) -> Mapping[str, object]:
     if not isinstance(catalog, bytes):
         raise ValueError("catalog must be bytes")
     try:
-        document = json.loads(catalog.decode("utf-8"), parse_constant=_reject_constant)
+        document = json.loads(
+            catalog.decode("utf-8"),
+            parse_constant=_reject_constant,
+            object_pairs_hook=_unique_object,
+        )
     except (UnicodeDecodeError, ValueError) as exc:
         raise ValueError("catalog is not valid UTF-8 JSON") from exc
     if not isinstance(document, Mapping):
@@ -52,10 +65,14 @@ def _select_candidates(pricings: list[object], mode: str) -> tuple[Mapping[str, 
         capacities = pricing.get("capacities")
         if not isinstance(capacities, list) or not all(isinstance(item, str) for item in capacities):
             raise ValueError("pricing capacities must be a list of strings")
-        if "installation" in capacities:
+        has_installation = "installation" in capacities
+        has_renew = "renew" in capacities
+        if has_installation and has_renew:
+            raise ValueError("pricing cannot combine installation and renew capacities")
+        if has_installation:
             installations.append(pricing)
         if (
-            "renew" in capacities
+            has_renew
             and type(pricing.get("interval")) is int
             and pricing["interval"] == 1
             and pricing.get("intervalUnit") == "month"

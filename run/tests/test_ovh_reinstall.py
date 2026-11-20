@@ -9,10 +9,6 @@ DIGEST = "0123456789abcdef" * 4
 IGNITION = '{"ignition": {"version": "3.4.0"},\n "passwd": {}}\n'
 
 
-@pytest.mark.xfail(strict=True, reason=(
-    "M4: decisions/run-price-enforcement.md: Read the section Installation. Implement body(operating_system, image_url, "
-    "image_sha256, ignition, hostname) in run/ovh_reinstall.py."
-))
 def test_ovh_reinstall():
     body = implementation("ovh_reinstall.py", "body")
 

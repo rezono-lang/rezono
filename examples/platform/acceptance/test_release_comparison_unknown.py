@@ -33,11 +33,6 @@ def _without(rows, *relations):
     return {relation: values for relation, values in rows.items() if relation not in relations}
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError, reason=(
-    "extra: Derive product_release_date_comparison_unknown(reference, product_id, version, reason) in "
-    "rules/keycloak_release.dl: 'register-date-missing' for a register reference without a published date, "
-    "'observation-missing' for one with no observed release of the same product and version. "
-    "Read decisions/platform-release-comparison-unknown.md."))
 def test_missing_ground_makes_the_release_comparison_unknown():
     model, program, (state,) = states(ROOT)
     assert UNKNOWN in program.relations, f"Missing derived relation: {UNKNOWN}"
