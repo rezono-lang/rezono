@@ -18,7 +18,7 @@ from rezono_canon import canonical_sha256, sha256_hex
 
 from . import calc, closure, completeness, metadata
 from . import evidence as admission
-from .canon import calc_value, encode_key, sha256_json, value_text
+from .canon import calc_value, encode_key, sha256_json, strict_json_loads, value_text
 from .evaluate import _arith, _fits, _fold, _holds, _value, cells
 from .snapshots import read_rows
 from .state_projections import check as check_state_projections
@@ -467,7 +467,7 @@ def recompute(spec, fixed, relation_rows, groups=None):
     members = aggregate_members(spec, fixed, relation_rows, groups)
     if spec.function == "count":
         return len(members), sha256_json([[k] for k, _ in members]), f"known:{len(members)}", False
-    read = cells(spec, [(json.loads(k), values) for k, values in members])
+    read = cells(spec, [(strict_json_loads(k), values) for k, values in members])
     contributors = sha256_json([[k, value_text(v)] for (k, _), v in zip(members, read)])
     result = _fold(spec.function, read)
     return len(members), contributors, result, result == "invalid"

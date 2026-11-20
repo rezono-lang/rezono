@@ -33,13 +33,6 @@ class PrematureNativeReadiness(AssertionError):
     """language_usage.py reported Ready for a ruled pack before rezono 1 lowering or omitted build/."""
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=PrematureNativeReadiness,
-    reason="M3: decisions/language-rezono-1.md: In scripts/language_usage.py, include build/ beside examples/, packs/ "
-           "and run/ in SCOPES, and gate the Native conversion column of ruled packs on rezono 1 derivation lowering "
-           "evidence so no ruled pack reports Ready while only rezono 0 native rules are supported. Read sections 5.10 and 6.",
-)
 def test_native_conversion_waits_for_rezono_1_and_includes_build(tmp_path):
     write(tmp_path, "packs/base/pack.yaml", "name: base\n")
     write(tmp_path, "packs/base/rules/sample.dl", ".decl listed(item: symbol)\nlisted(x) :- item(x).\n")

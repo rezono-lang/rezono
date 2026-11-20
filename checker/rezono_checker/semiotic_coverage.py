@@ -1,8 +1,8 @@
 """Warning-only registered-element coverage of a whole, unfiltered published Flow."""
 
 from dataclasses import dataclass
-import json
 
+from .canon import strict_json_loads
 from .semiotic import _finite
 from .views import Role, _placeholder, chain, check_view
 
@@ -42,7 +42,7 @@ def flow_element_coverage(sheet: str, role: Role, layout: bytes, tiles: dict[str
     kinds = _node_kinds(role.bundle, sheet)
     if kinds is None:
         return FlowElementCoverage((), reason="flow_element_binding_unavailable")
-    pieces = {path: json.loads(data) for path, data in tiles.items()}
+    pieces = {path: strict_json_loads(data) for path, data in tiles.items()}
     leaves = {path: piece for path, piece in pieces.items() if piece.get("level") == levels - 1}
     scope = tuple(sorted(leaves))
     if not scope:

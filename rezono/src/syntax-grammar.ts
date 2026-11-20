@@ -30,31 +30,27 @@ export interface TextMateGrammar {
 }
 
 const LOGICAL_OPERATORS = new Set(['not', 'and', 'or']);
-const WORD_OPERATORS = new Set([
-	'in', 'is', 'as', 'at', 'by', 'of', 'per', 'from',
-	'because', 'until', 'within', 'during', 'on', 'replaces', 'overrides', 'inverse',
-]);
+const WORD_OPERATORS = new Set(['in', 'is', 'at', 'as']);
+const DECLARATION_MODIFIERS = ['private', 'total', 'abstract', 'embedded', 'relationship'] as const;
+const DECLARATION_TARGETS = [
+	'kind', 'extend', 'derived', 'rule', 'step', 'param', 'enum', 'unit', 'type',
+	'check', 'warn', 'require', 'norm', 'fact', 'dataset', 'source', 'table',
+	'view', 'theory', 'example', 'schema',
+] as const;
+const STANDALONE_DECLARATIONS = ['given', 'expect', 'sealed'] as const;
+const EXTRA_DECLARATION_HEADERS = [
+	'private', 'suppose', 'propose', 'decide', 'assume', 'theory', 'view', 'exception',
+] as const;
+const DECLARATION_ENTRY_RULES = [
+	'Line', 'Question', 'ExampleSectionLine', 'ExampleExpectLine',
+	'StepClauseLine', 'StepEffectLine', 'RuleMeansLine', 'NativeRuleLine',
+] as const;
 
 const WORD_BEFORE = '(?<![A-Za-z0-9_])(?<![A-Za-z0-9_]-)';
+const WORD_BEFORE_NO_DOT = '(?<![A-Za-z0-9_.])(?<![A-Za-z0-9_]-)';
 const WORD_END = '(?![A-Za-z0-9_]|-[A-Za-z0-9_])';
+const HEADER_FOLLOW = '(?=[ \\t]+[A-Za-z0-9_"`(])';
 const NUMBER_CORE = String.raw`\d+(?:_\d+)*(?:\.\d+(?:_\d+)*)?(?:/\d+(?:_\d+)*)?`;
-
-/** Collect every terminal string inside a shallow Ohm expression (alternations/sequences). */
-function collectTerminals(expr: ohm.PExpr): string[] {
-	const out: string[] = [];
-	const visit = (node: ohm.PExpr) => {
-		if (node instanceof ohm.pexprs.Terminal) {
-			const obj = (node as unknown as { obj: unknown }).obj;
-			if (typeof obj === 'string') out.push(obj);
-		} else if (node instanceof ohm.pexprs.Alt) {
-			for (const term of node.terms) visit(term);
-		} else if (node instanceof ohm.pexprs.Seq) {
-			for (const factor of node.factors) visit(factor);
-		}
-	};
-	visit(expr);
-	return out;
-}
 
 /** Collect all terminals reachable through an Ohm rule's body. */
 function ruleTerminals(ruleName: string): string[] {
@@ -79,42 +75,50 @@ function ruleTerminals(ruleName: string): string[] {
 	return found;
 }
 
-/** Walk every rule in the Ohm grammar to extract all `kw<"...">` and `wordEnd`-terminated keywords. */
-function extractGrammarKeywords(): Set<string> {
-	const words = new Set<string>(keywords);
-	const visit = (node: unknown) => {
+/** Extract contextual declaration-header keywords from the leading tokens of grammar line rules. */
+function extractDeclarationHeaders(hardKeywords: ReadonlySet<string>): string[] {
+	const words = new Set<string>(EXTRA_DECLARATION_HEADERS);
+	const firstWords = (node: unknown, seen: Set<string>) => {
 		if (!node || typeof node !== 'object') return;
 		if (node instanceof ohm.pexprs.Apply) {
 			const { ruleName, args } = node as unknown as { ruleName: string; args: ohm.PExpr[] };
 			if (ruleName === 'kw' && args.length === 1) {
-				for (const term of collectTerminals(args[0])) words.add(term);
-			}
-			for (const arg of args) visit(arg);
-			return;
-		}
-		if (node instanceof ohm.pexprs.Seq) {
-			const last = node.factors[node.factors.length - 1];
-			if (last instanceof ohm.pexprs.Apply && (last as unknown as { ruleName: string }).ruleName === 'wordEnd') {
-				for (const factor of node.factors.slice(0, -1)) {
-					for (const term of collectTerminals(factor)) {
-						if (/^[a-z][a-z0-9_/-]*$/.test(term)) words.add(term);
-					}
+				const arg = args[0];
+				if (arg instanceof ohm.pexprs.Terminal) {
+					const obj = (arg as unknown as { obj: unknown }).obj;
+					if (typeof obj === 'string' && /^[a-z][a-z0-9_]*$/.test(obj)) words.add(obj);
 				}
+				return;
 			}
-			node.factors.forEach(visit);
+			if (seen.has(ruleName)) return;
+			const next = new Set(seen);
+			next.add(ruleName);
+			const rule = grammar.rules[ruleName];
+			if (rule) firstWords(rule.body, next);
 			return;
 		}
-		if (node instanceof ohm.pexprs.Alt) node.terms.forEach(visit);
-		else if (
-			node instanceof ohm.pexprs.Iter
-			|| node instanceof ohm.pexprs.Not
-			|| node instanceof ohm.pexprs.Lookahead
-		) {
-			visit((node as unknown as { expr: ohm.PExpr }).expr);
+		if (node instanceof ohm.pexprs.Terminal) {
+			const obj = (node as unknown as { obj: unknown }).obj;
+			if (typeof obj === 'string' && /^[a-z][a-z0-9_]*$/.test(obj)) words.add(obj);
+			return;
+		}
+		if (node instanceof ohm.pexprs.Alt) {
+			for (const term of node.terms) firstWords(term, seen);
+		} else if (node instanceof ohm.pexprs.Seq) {
+			for (const factor of node.factors) {
+				firstWords(factor, seen);
+				if (!(factor instanceof ohm.pexprs.Opt || factor instanceof ohm.pexprs.Star)) break;
+			}
+		} else if (node instanceof ohm.pexprs.Iter) {
+			firstWords((node as unknown as { expr: ohm.PExpr }).expr, seen);
 		}
 	};
-	for (const rule of Object.values(grammar.rules)) visit(rule.body);
-	return words;
+	for (const ruleName of DECLARATION_ENTRY_RULES) {
+		const rule = grammar.rules[ruleName];
+		if (rule) firstWords(rule.body, new Set([ruleName]));
+	}
+	for (const hard of hardKeywords) words.delete(hard);
+	return sortLongestFirst(words);
 }
 
 function escapeRegex(literal: string): string {
@@ -130,9 +134,9 @@ function sortLongestFirst(items: Iterable<string>): string[] {
 	return [...new Set(items)].sort((a, b) => b.length - a.length || (a < b ? -1 : a > b ? 1 : 0));
 }
 
-function wordAlternation(words: Iterable<string>): string {
+function wordAlternation(words: Iterable<string>, guardDot = false): string {
 	const sorted = sortLongestFirst(words).map(escapeRegex);
-	return `${WORD_BEFORE}(?:${sorted.join('|')})${WORD_END}`;
+	return `${guardDot ? WORD_BEFORE_NO_DOT : WORD_BEFORE}(?:${sorted.join('|')})${WORD_END}`;
 }
 
 function operatorAlternation(ruleNames: string[], extra: string[] = []): string {
@@ -149,19 +153,24 @@ function operatorAlternation(ruleNames: string[], extra: string[] = []): string 
 
 /** Build the TextMate grammar object deterministically from `grammar` and `rule-names`. */
 export function generateSyntaxGrammar(): TextMateGrammar {
-	const allKeywords = extractGrammarKeywords();
+	const hardKeywords = new Set<string>(keywords);
 	const boolWords = new Set(ruleTerminals('boolLit'));
-	const stateWords = new Set([...ruleTerminals('stateWord'), ...ruleTerminals('known')]);
+	const stateWords = sortLongestFirst([...ruleTerminals('stateWord'), ...ruleTerminals('known')]);
+	const stateAlternation = stateWords.map(escapeRegex).join('|');
 	const contextualWords = new Set(ruleTerminals('contextual'));
 	const aggregateWords = sortLongestFirst([...aggregates, ...ruleTerminals('aggName')]);
-	const nonUnitWords = sortLongestFirst([...allKeywords, ...contextualWords]).map(escapeRegex).join('|');
+	const nonUnitWords = sortLongestFirst([...hardKeywords, ...contextualWords]).map(escapeRegex).join('|');
 	const nonUnitGuard = `(?!(?:${nonUnitWords})${WORD_END})`;
 
-	const logicalOps = [...allKeywords].filter((w) => LOGICAL_OPERATORS.has(w));
-	const wordOps = [...allKeywords].filter((w) => WORD_OPERATORS.has(w));
-	const controlKeywords = [...allKeywords].filter(
-		(w) => !boolWords.has(w) && !stateWords.has(w) && !LOGICAL_OPERATORS.has(w) && !WORD_OPERATORS.has(w),
+	const logicalOps = [...hardKeywords].filter((w) => LOGICAL_OPERATORS.has(w));
+	const wordOps = [...hardKeywords].filter((w) => WORD_OPERATORS.has(w));
+	const controlKeywords = [...hardKeywords].filter(
+		(w) => !boolWords.has(w) && !LOGICAL_OPERATORS.has(w) && !WORD_OPERATORS.has(w),
 	);
+	const declarationHeaders = extractDeclarationHeaders(hardKeywords);
+	const modifierAlternation = sortLongestFirst(DECLARATION_MODIFIERS).map(escapeRegex).join('|');
+	const targetAlternation = sortLongestFirst(DECLARATION_TARGETS).map(escapeRegex).join('|');
+	const standaloneAlternation = sortLongestFirst(STANDALONE_DECLARATIONS).map(escapeRegex).join('|');
 
 	const commentPrefix = escapeRegex(ruleTerminals('comment')[0] ?? '--');
 	const sourcePrefix = escapeRegex(ruleTerminals('Src')[0] ?? '@');
@@ -181,6 +190,8 @@ export function generateSyntaxGrammar(): TextMateGrammar {
 			{ include: '#datetimes' },
 			{ include: '#dates' },
 			{ include: '#numbers' },
+			{ include: '#declarations' },
+			{ include: '#member-access' },
 			{ include: '#constants' },
 			{ include: '#aggregates' },
 			{ include: '#keywords' },
@@ -273,35 +284,118 @@ export function generateSyntaxGrammar(): TextMateGrammar {
 					},
 				],
 			},
+			declarations: {
+				patterns: [
+					{
+						match: `^[ \\t]*(${modifierAlternation})[ \\t]+(${targetAlternation})${WORD_END}${HEADER_FOLLOW}`,
+						captures: {
+							'1': { name: 'keyword.control.declaration.rezono' },
+							'2': { name: 'keyword.control.declaration.rezono' },
+						},
+					},
+					{
+						match: `^[ \\t]*(default[ \\t]+range|(?:exact|close|broad)[ \\t]+mapping)${WORD_END}${HEADER_FOLLOW}`,
+						captures: {
+							'1': { name: 'keyword.control.declaration.rezono' },
+						},
+					},
+					{
+						match: `^[ \\t]*(${standaloneAlternation})${WORD_END}(?=[ \\t]*(?:${commentPrefix}|$))`,
+						captures: {
+							'1': { name: 'keyword.control.declaration.rezono' },
+						},
+					},
+					{
+						match: `^[ \\t]*(${declarationHeaders.map(escapeRegex).join('|')})${WORD_END}${HEADER_FOLLOW}`,
+						captures: {
+							'1': { name: 'keyword.control.declaration.rezono' },
+						},
+					},
+				],
+			},
+			'member-access': {
+				patterns: [
+					{
+						match: '(?<!\\.)(\\.)(where)(?=\\s*\\()',
+						captures: {
+							'1': { name: 'punctuation.separator.rezono' },
+							'2': { name: 'keyword.control.rezono' },
+						},
+					},
+					{
+						match: `(?<!\\.)(\\.)(${aggregateWords.map(escapeRegex).join('|')})(?=\\s*\\()`,
+						captures: {
+							'1': { name: 'punctuation.separator.rezono' },
+							'2': { name: 'support.function.aggregate.rezono' },
+						},
+					},
+					{
+						match: '(?<!\\.)(\\.)([a-z][a-z0-9_]*)(?=\\s*\\()',
+						captures: {
+							'1': { name: 'punctuation.separator.rezono' },
+							'2': { name: 'entity.name.function.rezono' },
+						},
+					},
+					{
+						match: `(?<!\\.)(\\.)([a-z][a-z0-9_]*)${WORD_END}`,
+						captures: {
+							'1': { name: 'punctuation.separator.rezono' },
+							'2': { name: 'variable.other.member.rezono' },
+						},
+					},
+				],
+			},
 			constants: {
 				patterns: [
 					{
 						name: 'constant.language.boolean.rezono',
-						match: wordAlternation(boolWords),
+						match: wordAlternation(boolWords, true),
+					},
+					{
+						match: `${WORD_BEFORE_NO_DOT}(is)[ \\t]+(${stateAlternation})${WORD_END}`,
+						captures: {
+							'1': { name: 'keyword.operator.word.rezono' },
+							'2': { name: 'constant.language.state.rezono' },
+						},
+					},
+					{
+						match: `${WORD_BEFORE_NO_DOT}(as)[ \\t]+(known)${WORD_END}`,
+						captures: {
+							'1': { name: 'keyword.operator.word.rezono' },
+							'2': { name: 'constant.language.state.rezono' },
+						},
 					},
 					{
 						name: 'constant.language.state.rezono',
-						match: wordAlternation(stateWords),
+						match: `${WORD_BEFORE_NO_DOT}n/a${WORD_END}`,
+					},
+					{
+						name: 'constant.language.state.rezono',
+						match: `${WORD_BEFORE_NO_DOT}unknown(?=[ \\t]+(?:"|${nonUnitGuard}[a-z][a-z0-9_]*${WORD_END}))`,
+					},
+					{
+						name: 'constant.language.state.rezono',
+						match: `${WORD_BEFORE_NO_DOT}invalid(?=[ \\t]+${nonUnitGuard}[a-z][a-z0-9_]*${WORD_END})`,
 					},
 				],
 			},
 			aggregates: {
 				name: 'support.function.aggregate.rezono',
-				match: `(?<![A-Za-z0-9_])(?:${aggregateWords.map(escapeRegex).join('|')})(?=\\s*\\()`,
+				match: `(?<![A-Za-z0-9_.])(?:${aggregateWords.map(escapeRegex).join('|')})(?=\\s*\\()`,
 			},
 			keywords: {
 				patterns: [
 					{
 						name: 'keyword.operator.logical.rezono',
-						match: wordAlternation(logicalOps),
+						match: wordAlternation(logicalOps, true),
 					},
 					{
 						name: 'keyword.operator.word.rezono',
-						match: wordAlternation(wordOps),
+						match: wordAlternation(wordOps, true),
 					},
 					{
 						name: 'keyword.control.rezono',
-						match: wordAlternation(controlKeywords),
+						match: wordAlternation(controlKeywords, true),
 					},
 				],
 			},
@@ -331,7 +425,7 @@ export function generateSyntaxGrammar(): TextMateGrammar {
 			},
 			calls: {
 				name: 'entity.name.function.rezono',
-				match: '(?<![A-Za-z0-9_])[a-z][a-z0-9_]*(?=\\s*\\()',
+				match: '(?<![A-Za-z0-9_.])[a-z][a-z0-9_]*(?=\\s*\\()',
 			},
 			identifiers: {
 				patterns: [

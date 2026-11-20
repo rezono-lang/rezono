@@ -28,9 +28,6 @@ def certificate_inputs():
     return records
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError, reason=(
-    "M2: Implement caller-bound certificate findings over actual presentation, trust paths and dates in "
-    "schema/management_certificates.yaml and rules/management_certificates.dl. Read decisions/platform-management-certificates.md. Waits for compiler/tests/test_boolean_rule_inputs.py--test_native_boolean_rule_inputs (track kern): a missing certificate requires an explicitly complete read, and the rule compiler cannot yet consume the observed boolean."))
 def test_management_certificate_findings():
     from management_probes import compiled
 
@@ -46,6 +43,27 @@ def test_management_certificate_findings():
         leaves = verified("managed_tls_finding", ("missing", "missing"), state=(model, state))
         assert any(rel.startswith("tls_read__") and key[0] == "read-missing" for rel, key in leaves)
     imported("std-time")
+
+
+@pytest.mark.parametrize("clocks", [
+    [],
+    [
+        {"id": "policy-a", "day": "2026-06-10", "warning_days": 7},
+        {"id": "policy-b", "day": "2026-06-11", "warning_days": 7},
+    ],
+], ids=["missing-clock", "duplicate-clock"])
+def test_management_certificate_missing_or_duplicate_clock_marks_presented_leaves_unknown(clocks):
+    from management_probes import compiled
+
+    data = certificate_inputs()
+    data["tls_clock"] = clocks
+    _, state = compiled(data)
+    assert state.derived.get("managed_tls_finding") == {
+        ("missing", "missing"), ("wrong", "wrong-name"), ("untrusted", "untrusted-chain"),
+    }
+    assert state.derived.get("managed_tls_unknown") == {
+        ("unread",), ("near",), ("wrong",), ("untrusted",), ("future",), ("expired",), ("renewed",),
+    }
 
 
 @pytest.mark.cluster

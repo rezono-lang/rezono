@@ -6,7 +6,7 @@ import sys
 from collections.abc import Sequence
 
 from loop.recording_input import load_recording
-from loop.replay import replay, replay_report
+from loop.replay import replay, replay_certified_report, replay_report
 from loop.typed_recording import TypedRecording
 
 
@@ -16,11 +16,19 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     fixed_point = []
+    submissions = None
+    certified_rounds = None
     try:
         recording = load_recording(args.recording)
         if isinstance(recording, TypedRecording):
-            plans, outcome, fixed_point = replay_report(
-                recording.run, recording.limit, recording.snapshots(), report_limit=True)
+            if recording.certified_rounds is not None:
+                plans, outcome, fixed_point, submissions, certified_rounds = replay_certified_report(
+                    recording.run, recording.limit, recording.snapshots(), recording.certified_rounds,
+                    report_limit=True,
+                )
+            else:
+                plans, outcome, fixed_point = replay_report(
+                    recording.run, recording.limit, recording.snapshots(), report_limit=True)
         else:
             plans, outcome = replay(**recording)
     except (OSError, ValueError) as error:
@@ -31,6 +39,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     if fixed_point:
         columns = ("run", "sweep", "step", "token", "requirement")
         report["fixed_point"] = [dict(zip(columns, row, strict=True)) for row in fixed_point]
+    if certified_rounds is not None:
+        report["submissions"] = submissions
+        report["certified_rounds"] = certified_rounds
     print(json.dumps(report))
     return 0 if outcome == "success" else 1
 

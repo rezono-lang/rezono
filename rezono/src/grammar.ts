@@ -46,8 +46,8 @@ Rezono {
           | "+" typeName rowId "{" ListOf<SupposeSlot, ","> "}"  -- insert_row
           | "-" typeName rowId                                 -- retract_row
           | "-" SupposePath                                    -- retract
-  SupposePath = rowId ("." name)+
-  SupposeSlot = name "=" Expr
+  SupposePath = rowId ("." identWord)+
+  SupposeSlot = identWord "=" Expr
 
   Expr = Cond | Imply
   Cond = when Expr then Expr else Expr
@@ -70,8 +70,9 @@ Rezono {
   Unary = "-" Unary  -- neg
         | Post
   Post = Dotted TimeAt? TimeKnown? Filter?
-  Dotted = Dotted "." Agg   -- agg
-         | Dotted "." name  -- name
+  Dotted = Dotted "." where "(" Expr ")"  -- where
+         | Dotted "." Agg                 -- agg
+         | Dotted "." identWord           -- name
          | Atom
   Agg = aggName "(" Expr? ")"
   TimeAt = at Atom
@@ -132,11 +133,14 @@ ${moduleGrammar}
   limit = "limit" wordEnd
   checkVerb (check, require, warn or norm) = ("check" | "require" | "warn" | "norm") wordEnd
 
-  // The keywords of v0 §3, with the two literals of Bool (§3 here). None of them is a name.
+  // The 15 hard expression keywords (decisions/language-contextual-keywords.md). None of them is a bare name.
   keyword = (${keywords.map(word => '"' + word + '"').join(' | ')}) wordEnd
-  // A contextual word is a name wherever it is not expected as a word; it is never a unit.
-  contextual = ("during" | "order" | "group" | "limit" | "overrides" | "means") wordEnd
+  // Clause-following contextual words are names wherever they are not expected as words; never units or reason codes.
+  contextual = ("during" | "order" | "group" | "limit" | "overrides" | "means"
+              | "because" | "until" | "on" | "within" | "by" | "replaces"
+              | "unknown" | "invalid") wordEnd
 
+  identWord (a member name) = az (az | d | "_")* ~wordChar ~("-" wordChar)
   name (a name) = ~keyword az (az | d | "_")* ~wordChar ~("-" wordChar)
   typeName (a kind name) = cap (az | cap | d)* ~wordChar ~("-" wordChar)
   idTok (an id) = (az | cap) wordChar* ("-" wordChar+)+
@@ -154,7 +158,8 @@ ${moduleGrammar}
 
   literal (a value) = stateLit | boolLit | datetime | date | money | percent | quantity | number | text | typedText
           | typedId | numTok
-  num = d+ ("." d+)? ("/" d+)?
+  digits = d ("_"? d)*
+  num = digits ("." digits | "/" digits)?
   tokCont = wordChar | joint
   joint = ("-" | "." | "/" | ":") wordChar
   number (a number) = num ~tokCont
@@ -177,10 +182,10 @@ ${moduleGrammar}
   stateLit = "n/a" wordEnd                     -- na
            | "unknown" hsp+ (reasonCode | text)  -- unknown
            | "invalid" hsp+ reasonCode           -- invalid
-  reasonCode = ~keyword az (az | d | "_")* ~wordChar
+  reasonCode = ~(keyword | contextual) az (az | d | "_")* ~wordChar
   boolLit = ("true" | "false") wordEnd
-  numTok = d (wordChar | inner)*
-  inner = ("-" | "." | "/" | ":") &wordChar
+  numTok = ~(digits "." digits "/" digits ~tokCont) d (az | cap | d | inner)*
+  inner = ("-" | "." | "/" | ":") &(az | cap | d)
 }
 `;
 
@@ -190,7 +195,7 @@ export const grammar = ohm.grammar(source);
 /** Native rules reuse the expression precedence and add pattern atoms only in rule lines. */
 export const nativeRuleGrammar = ohm.grammar(String.raw`
 NativeRules <: Rezono {
-  Dotted_name := Dotted "." rName
+  Dotted_name := Dotted "." (identWord | quotedName)
   Atom := literal | Call | QualifiedKind | quotedName | wildcard | Atom_paren | idTok | typeName | name | oddWord
   Call := NativeCallName "(" ListOf<Expr, ","> ")"
   NativeCallName = QualifiedKind "." RuleCallMember    -- schema

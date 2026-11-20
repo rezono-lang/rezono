@@ -14,7 +14,7 @@ A `trace` step is a rule program over `step`, `start` and the filters `keep` and
 A depth of k is unrolled into k strata, so the distance of a node is its stratum and no arithmetic runs in
 recursion; depth `all` is plain linear recursion, without a distance. The program is Soufflé text: the
 compiler reads it into the rule IR (rules_dl.read_program) and the batch backend runs it; the tests run
-the same text in Soufflé, as the oracle (docs/gui.md, "trace is Datalog").
+the same text in Soufflé, as the oracle (docs/formal.md, section 11, row Explanation).
 """
 
 from __future__ import annotations

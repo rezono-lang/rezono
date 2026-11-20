@@ -199,8 +199,8 @@ def test_nonfinite_band_geometry_is_unmeasurable_without_a_fraction(coordinate):
     piece = json.loads(args["tiles"][args["root"]])
     piece["bands"][0]["to"] = coordinate
     args["tiles"][args["root"]] = encoded(piece)
-    result = lane_order(**args)
-    assert (result.state, result.eligible, result.preserved) == ("unmeasurable", None, None)
+    with pytest.raises(ValueError, match="^containment requires a valid role view$"):
+        lane_order(**args)
 
 
 def test_conflicting_cross_tile_band_geometry_is_not_a_stable_lane_order():

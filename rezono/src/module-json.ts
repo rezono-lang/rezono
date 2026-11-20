@@ -22,7 +22,7 @@ import { canonicalJson } from '../../viewer/src/lib/canon.ts';
 import { isError } from './check.ts';
 import { JsonFormError } from './json.ts';
 import { hasMetadata } from './module-metadata.ts';
-import { parseModule, type Module } from './module.ts';
+import { parseModule, type Module, type ParseModuleOptions } from './module.ts';
 import type { Diagnostic, Span } from './parse.ts';
 import { printModule } from './print.ts';
 
@@ -122,10 +122,10 @@ function places(module: Module, spans: WeakMap<object, Span>, text: string): Pla
  * printed text: that is checked here for every form made, so a tree the printer and the reader do not agree on
  * is refused, never written.
  */
-export function moduleForm(text: string): FormOf {
-	const { module, diagnostics, spans } = parseModule(text);
+export function moduleForm(text: string, options?: ParseModuleOptions): FormOf {
+	const { module, diagnostics, spans } = parseModule(text, options);
 	if (!module || diagnostics.some(isError)) return { diagnostics };
-	const again = parseModule(printModule(module));
+	const again = parseModule(printModule(module), options);
 	if (!again.module || again.diagnostics.some(isError) || canonicalJson(again.module) !== canonicalJson(module))
 		throw new JsonFormError('the module is not the tree of its own printed text');
 	return { form: { format: formatOf(module), module, spans: places(module, spans, text) }, diagnostics };

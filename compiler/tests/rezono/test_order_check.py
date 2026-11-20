@@ -184,13 +184,6 @@ def publish_both_epochs(tmp_path, directory):
     return bucket, m1, m2
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=OrderCheckMismatch,
-    reason="extra: Make the native order-check pack publish the §5 observations on the ordinary path. Read "
-           "decisions/language-expression-semantics.md §5. Waits for test_expression_python_branch_bindings, "
-           "test_expression_python_scalar_negation and test_order_check_ordinary_filtered_count for lowering.",
-)
 def test_order_check_publication(tmp_path):
     # The independently authored legacy representation shows the same rows, groups and role views.
     legacy = order_check_pack(tmp_path, "legacy")

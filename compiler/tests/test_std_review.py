@@ -356,14 +356,6 @@ class MissingReadToJudgeCheck(AssertionError):
     """std-review lacks review_blind, or does not require the reviewer to read what the change rests on."""
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=MissingReadToJudgeCheck,
-    reason="extra: decisions/review-and-rights.md: Write packs/std-review/rules/blind.dl: the invariant "
-           "review_blind(review) when the role the review names lacks may_read over one change_member or "
-           "change_support of its change, and add !review_blind(r) to review_valid in rules/state.dl. Read "
-           "sections 4 and 8. Waits for test_review_self, which edits the same rule.",
-)
 def test_review_blind(tmp_path):
     p = Probe(tmp_path, MissingReadToJudgeCheck)
     p.invariant("review_blind")

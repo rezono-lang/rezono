@@ -341,3 +341,91 @@ def test_mapped_reader_requires_both_reader_inventories():
     assert complete["build_selected_job"] == {("current", "alpha", "p1")}
     assert not complete["build_full_selection"]
     assert not complete["build_readerless_path"]
+
+
+def test_manifest_and_file_dependencies_require_terminal_markers():
+    """An admitted manifest or file-dependency edge narrows selection only with its terminal dependency marker."""
+    from rezono_compiler import batch as compiler_batch, facts, pack, rules
+
+    model = pack.read(ROOT / "build")
+    program = rules.load(model.rules)
+    receipt = "r1"
+    base_sha = "a" * 40
+    head_sha = "b" * 40
+
+    def run_selection(*, include_manifest_deps, include_file_dep=False, include_file_deps=False):
+        data = {
+            "build_run": [{
+                "id": "current", "event": "pull_request", "base_sha": base_sha, "head_sha": head_sha,
+                "engine_sha": "e" * 40, "observed_at": OBSERVED_AT, "receipt": receipt,
+            }],
+            "loop_sweep_receipt": [{"id": receipt, "run": "current", "event_time": OBSERVED_AT}],
+            "build_component": [
+                {"id": "alpha", "run": "current", "kind": "python", "folder": "alpha"},
+                {"id": "beta", "run": "current", "kind": "python", "folder": "beta"},
+            ],
+            "build_manifest": [{
+                "id": "base-beta", "component": "beta", "path": "beta/pyproject.toml",
+                "revision": base_sha, "blob": "c" * 40,
+            }],
+            "build_path": [{"id": "p1", "run": "current", "path": SOURCE, "coverage": "mapped"}],
+            "build_path_reader": [
+                {"id": "pr1", "path": "p1", "component": "alpha", "kind": "direct", "source": "alpha"},
+            ],
+        }
+        members = [
+            (receipt, "m-changed", 0, "changed-path"), (receipt, "m-changed", 1, SOURCE),
+            (receipt, "m-readers-direct", 0, "path-readers"), (receipt, "m-readers-direct", 1, SOURCE),
+            (receipt, "m-readers-direct", 2, "direct"),
+            (receipt, "m-readers-transitive", 0, "path-readers"), (receipt, "m-readers-transitive", 1, SOURCE),
+            (receipt, "m-readers-transitive", 2, "transitive"),
+            (receipt, "m-edge", 0, "path-reader"), (receipt, "m-edge", 1, SOURCE),
+            (receipt, "m-edge", 2, "direct"), (receipt, "m-edge", 3, "alpha"),
+            (receipt, "m-manifest", 0, "manifest"), (receipt, "m-manifest", 1, base_sha),
+            (receipt, "m-manifest", 2, "beta/pyproject.toml"),
+            (receipt, "m-suite-alpha", 0, "suite"), (receipt, "m-suite-alpha", 1, "alpha"),
+            (receipt, "m-suite-beta", 0, "suite"), (receipt, "m-suite-beta", 1, "beta"),
+        ]
+        if include_manifest_deps:
+            members.extend([
+                (receipt, "m-manifest-deps", 0, "manifest-dependencies"),
+                (receipt, "m-manifest-deps", 1, base_sha),
+                (receipt, "m-manifest-deps", 2, "beta/pyproject.toml"),
+            ])
+        if include_file_dep:
+            data["build_dependency"] = [{
+                "id": "fd1", "dependency": "alpha", "consumer": "beta",
+                "kind": "file_reader", "source": "alpha",
+            }]
+            members.extend([
+                (receipt, "m-file-dep", 0, "file-dependency"),
+                (receipt, "m-file-dep", 1, "alpha"),
+                (receipt, "m-file-dep", 2, "beta"),
+            ])
+        if include_file_deps:
+            members.append((receipt, "m-file-deps", 0, "file-dependencies"))
+        rows = facts.rows_of(model, data)
+        rows["verified_receipt"] = [(receipt, "git", "build-selection", "cut1", "inv1", "cnt1")]
+        rows["verified_member"] = members
+        con, _, _ = compiler_batch.run(model, program, rows)
+        try:
+            return compiler_batch.read(con, program, ["build_selected_job", "build_full_selection", "build_readerless_path"])
+        finally:
+            con.close()
+
+    missing_manifest_deps = run_selection(include_manifest_deps=False)
+    assert missing_manifest_deps["build_full_selection"] == {("current", "m-manifest")}
+    assert {component for _, component, _ in missing_manifest_deps["build_selected_job"]} == {"alpha", "beta"}
+    assert not missing_manifest_deps["build_readerless_path"]
+
+    with_manifest_deps = run_selection(include_manifest_deps=True)
+    assert with_manifest_deps["build_selected_job"] == {("current", "alpha", "p1")}
+    assert not with_manifest_deps["build_full_selection"]
+
+    missing_file_deps = run_selection(include_manifest_deps=True, include_file_dep=True, include_file_deps=False)
+    assert missing_file_deps["build_full_selection"] == {("current", "m-file-dep")}
+    assert {component for _, component, _ in missing_file_deps["build_selected_job"]} == {"alpha", "beta"}
+
+    with_file_deps = run_selection(include_manifest_deps=True, include_file_dep=True, include_file_deps=True)
+    assert with_file_deps["build_selected_job"] == {("current", "alpha", "p1")}
+    assert not with_file_deps["build_full_selection"]

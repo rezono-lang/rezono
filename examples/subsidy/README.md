@@ -71,7 +71,7 @@ What is deliberately **not** in the schema:
 
 ## Files
 
-The scheme's definition is the pack [`subsidy-scheme`](../subsidy-scheme/README.md), which `pack.yaml` imports by path and hash: its schema (`schema/subsidy.yaml`: the scheme, households, applications, quotes and the two registers), its rules (`costs.dl`, `assessment.dl`, `scheme.dl`, `findings.dl`), the award (`calc/award.yaml`) and their labels and sentences. It has no facts and no evaluation date. What is this pack's own:
+The scheme's definition is the pack [`subsidy-scheme`](../subsidy-scheme/README.md), which `pack.yaml` imports by path and hash: its schema (`schema/subsidy.yaml`: the scheme, households, applications, quotes and the two registers), its rules (`costs.dl`, `assessment.dl`, `scheme.dl`, `findings.dl`), the award (`rezono/award.rezono`) and their labels and sentences. It has no facts and no evaluation date. What is this pack's own:
 
 | File | Contents |
 |---|---|
@@ -87,7 +87,7 @@ The scheme's definition is the pack [`subsidy-scheme`](../subsidy-scheme/README.
 | `calc/date.yaml` | the evaluation date of every calculation, the scheme's included (`as_of`) |
 | `calc/drift.yaml` | `payment_difference`: the ledger minus the award |
 | `scenarios/*.yaml` | an income statement arrives; October is closed; a late payment is refused; the threshold is supposed otherwise |
-| `labels/en.yaml`, `messages/en.mf2` | the labels and sentences of the ledger, the roles and the rules above, and the English of std-explain's questions |
+| `labels/en.yaml`, `messages/en.mf2` | the labels and sentences of the ledger, the roles and the rules above |
 | `messages/en.mf2`, `specimen/nl.mf2` | the subsidy specimen texts under `subsidy.specimen.*`. The English messages are part of the pack bundle, and the Dutch file retains the matching translation for this example |
 | `reference.py` | an independent computation in exact fractions, standard library only: writes `expected/rules`, `expected/calc` and `expected/violations`, and recomputes the seal with its own row hash |
 | `test_subsidy.py` | the generator gives the same bytes; the evaluation date picks the rate; who gains and loses; access per role; the invariant blocks; the credentials are what the port observes, a changed byte is refused, and `attested` rests on its three grounds; two identifiers are one person only by a statement that holds, and without one the join is `unknown` with its reason |
@@ -196,6 +196,5 @@ Recorded here instead of worked around in the pack.
 - **A calculation cannot ask whether a decision is in force.** A calculation rule chooses a parameter row by its name and validity; it cannot read `in_force_on` for the decision behind that row. So the proof of an award ends in the parameter row, and the rule `decided_parameter` proves beside it that the row stands on a decision in force; a supposed amount is computed all the same and reported by `undecided_parameter`. For the same reason the day is said twice: `as_of` in `calc/date.yaml` and an `evaluation_day` row for the rules.
 - **One evaluation date for all applications.** An award under the rules in force on the day of application needs an evaluation date per subject, which calculation rules do not have yet.
 - **Rules cannot read dates.** No rule here says "October": `ledger_paid` adds up every accepted payment, and the ledger of this pack holds October only. The seal decides which payments still count once the month is closed; it does not pick a month. Validity is chosen by the calculation.
-- **Two standard packs have no English texts.** `std-explain` and `std-access` carry Dutch only (`std-decision` has both), so `messages/en.mf2` and `labels/en.yaml` hold the English for their questions and kinds.
 - **A profile cannot say that its role reads as a role of the pack.** A role of the deployment profile that the pack does not name reads nothing. Profile `edge` names `viewer` and `propose`, so the pack names those two itself beside `case_officer` and `policy_adviser`, with three read rules for `propose` ([above](#who-reads-what)). A mapping in the profile would keep a deployment's roles out of a pack's facts.
 - **A sweep's grid is per slot.** All parameters share `scheme_parameter.value`, so one grid would have to fit cents and rates alike. The pack has no sweep; the supposition is a scenario.

@@ -1,6 +1,6 @@
 """Staged schema-and-rules candidate acceptance for examples/subsidy-scheme.
 
-Compares examples/subsidy-scheme in its existing LinkML + Datalog form (keeping calc/award.yaml intact in both
+Compares examples/subsidy-scheme in its existing LinkML + Datalog form (keeping the award calculation intact in both
 forms while calculations lower separately) against the staged Rezono candidate in
 examples/subsidy-scheme/candidate/ holding subsidy.{rezono,json} and the rule modules
 assessment, costs, findings and scheme.

@@ -27,7 +27,7 @@ alternative:
 exception:
   - {"id": "exc-01", "decision": "2025-112", "title": "Costs that only make the work possible, such as scaffolding"}
 # The day for which "in force" is read: a choice of the pack, never the clock. It is the evaluation date
-# of the calculation (calc/award.yaml, as_of).
+# of the calculation (calc/date.yaml, as_of).
 # It is stated as the scheme's evaluation day, a ReferenceDate with the calendar its day is a day of and a
 # horizon: an amount that ends within ninety days of it is one to decide about now (a design choice of this
 # example). std-time reads it as its reference point (views.yaml); there is one day, not two.

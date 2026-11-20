@@ -1,16 +1,12 @@
 import type { Node } from 'ohm-js';
 
-/** The bare names reserved by the existing language. */
+/** The 15 hard expression keywords reserved as bare identifiers in expression and declaration-name positions. */
 export const keywords = [
-	'pack', 'use', 'as', 'private', 'unit', 'enum', 'param', 'kind', 'extend', 'derived',
-	'rule', 'check', 'warn', 'require', 'fact', 'decide', 'assume', 'theory', 'view',
-	'example', 'ask', 'suppose', 'propose', 'when', 'then', 'else', 'unless', 'where', 'show',
-	'not', 'and', 'or', 'in', 'is', 'version', 'valid', 'known', 'at', 'by', 'on',
-	'because', 'until', 'requires', 'sources', 'world', 'open', 'closed', 'inverse', 'rezono',
-	'norm', 'exception', 'applies', 'replaces', 'deprecated', 'true', 'false'
+	'when', 'then', 'else', 'unless', 'where', 'show',
+	'not', 'and', 'or', 'in', 'is', 'at', 'as', 'true', 'false'
 ] as const;
 
-export const aggregates = ['sum', 'count', 'min', 'max', 'any', 'all', 'none'] as const;
+export const aggregates = ['sum', 'count', 'min', 'max', 'any', 'all', 'none', 'one'] as const;
 const reservedNames = new Set<string>(keywords);
 const aggregateNames = new Set<string>(aggregates);
 

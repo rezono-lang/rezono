@@ -166,3 +166,49 @@ def test_a_definition_without_a_subkind_has_no_parent_and_one_kind_per_family():
     assert not any("parent" in k for k in doc["kinds"].values())
     assert all(family == [name] for name, family in plan["family"].items())
     assert set(doc["kinds"]["Part"]["slots"]) == set()
+
+
+def test_boolean_attributes_write_bool_slots_and_exact_boolean_values():
+    bundle = copy.deepcopy(BUNDLE)
+    bundle["attributes"].append({"id": "holder.active", "kind": "holder", "name": "active", "table": "holder__active",
+                                 "type": "boolean", "required": False, "multivalued": False, "world": "closed"})
+    rows = {**WIDE["rows"], "holder__active": [("h1", "true")]}
+    doc, plan, out = form_of({**WIDE, "rows": rows}, bundle=bundle, full=None)
+    assert doc["kinds"]["Holder"]["slots"]["active"] == {"type": "Bool", "card": "?",
+                                                         "states": ["known", "not_applicable"]}
+    assert by_id(out)["h1"]["active"] is True
+    assert publication.differences(doc, plan, out, rows) == []
+
+    for literal, expected in (("false", False), (True, True), (False, False)):
+        alt_rows = {**WIDE["rows"], "holder__active": [("h1", literal)]}
+        _, _, alt_out = form_of({**WIDE, "rows": alt_rows}, bundle=bundle, full=None)
+        assert by_id(alt_out)["h1"]["active"] is expected
+
+    # Invalid boolean values (including ints, None, and non-canonical case) fail closed instead of coercing.
+    for bad in ("yes", "True", "False", 0, 1, None):
+        bad_rows = {**WIDE["rows"], "holder__active": [("h1", bad)]}
+        with pytest.raises(publication.FormError, match="holder__active.*not a boolean value"):
+            publication.row_json(doc, plan, {"rows": bad_rows, "witnesses": [], "sources": []})
+
+    # Derived relations with boolean columns round-trip through schema, rows, and differences.
+    bundle["relations"] = [
+        *bundle.get("relations", []),
+        {"id": "flag_check", "world": "closed", "columns": [
+            {"name": "subject", "type": "string"},
+            {"name": "complete", "type": "boolean"},
+        ]},
+    ]
+    derived_rows = {**rows, "flag_check": [("h1", "true"), ("h2", "false")]}
+    doc2, plan2, out2 = form_of({**WIDE, "rows": derived_rows}, bundle=bundle, full=None)
+    assert doc2["kinds"]["FlagCheck"]["slots"]["complete"] == {
+        "type": "Bool", "card": "1", "states": ["known"], "derived": True,
+    }
+    flag_rows = [r for r in out2 if r["$kind"] == "FlagCheck"]
+    assert flag_rows == [
+        {"$kind": "FlagCheck", "$id": '["h1","true"]', "subject": "h1", "complete": True},
+        {"$kind": "FlagCheck", "$id": '["h2","false"]', "subject": "h2", "complete": False},
+    ]
+    assert publication.differences(doc2, plan2, out2, derived_rows) == []
+    with pytest.raises(publication.FormError, match=r"flag_check\.complete.*not a boolean value"):
+        publication.row_json(doc2, plan2, {"rows": {**rows, "flag_check": [("h1", "yes")]},
+                                           "witnesses": [], "sources": []})

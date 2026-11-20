@@ -3,8 +3,8 @@
 from dataclasses import dataclass
 from fractions import Fraction
 from itertools import combinations
-import json
 
+from .canon import strict_json_loads
 from .semiotic import _containers, _finite, containment
 from .views import Role, _placeholder, chain
 
@@ -42,7 +42,7 @@ def lane_order(sheet: str, kind: str, role: Role, layout: bytes, tiles: dict[str
         return LaneOrder(scope, reason="ordered_enum_binding_unavailable")
     flow, attribute, values = binding
     ranks = {v: i for i, v in enumerate(values)}
-    pieces = [json.loads(tiles[path]) for path in scope]
+    pieces = [strict_json_loads(tiles[path]) for path in scope]
     bands = _containers([b for piece in pieces for b in piece.get("bands", [])], "key", ("axis", "from", "to"))
     if bands is None:
         return LaneOrder(scope, reason="lane_geometry_conflict")

@@ -1,14 +1,14 @@
 """A row-backed parameter written in Rezono lowers to the parameters and parameter_choice of the calculation
-program (decisions/language-calculations.md, section Parameters). The oracle is calc/award.yaml of the
-scheme that examples/subsidy imports: two of its rules move to a module form, the rest stays in the YAML file."""
+program (decisions/language-calculations.md, section Parameters). The oracle is the award calculation of the
+scheme that examples/subsidy imports: two of its rules move to a module form, the rest stays in YAML."""
 
 from types import SimpleNamespace
 
 import pytest
 import yaml
 
-from calc_packs import (SCHEME, MissingCalculationLowering, calc_ir, definition, derived, examples, form, lit,
-                        lowered, path, row_parameter)
+from calc_packs import (ROOT, SCHEME, MissingCalculationLowering, calc_ir, definition, derived, examples, form, lit,
+                        lowered, path, row_parameter, strip_award)
 from rezono_compiler import pack, rezono_calc, rezono_module
 from support import FIXTURE
 
@@ -17,10 +17,13 @@ MOVED = ("income_threshold@2026", "income_limit@2026")
 
 
 def split(root):
-    """The scheme with the two rules of MOVED taken out of calc/award.yaml, and written as a module form."""
+    """The scheme with the two rules of MOVED taken out of the award YAML, and written as a module form."""
     scheme = examples(root) / SCHEME
     award = scheme / "calc" / "award.yaml"
-    doc = yaml.safe_load(award.read_bytes())
+    source = award if award.is_file() else ROOT / "examples" / "subsidy" / "fixtures" / "award-legacy.yaml"
+    doc = yaml.safe_load(source.read_bytes())
+    strip_award(scheme)
+    award.parent.mkdir(exist_ok=True)
     doc["rules"] = [rule for rule in doc["rules"] if rule["id"] not in MOVED]
     award.write_text(yaml.safe_dump(doc, sort_keys=False), encoding="utf-8")
     values = [

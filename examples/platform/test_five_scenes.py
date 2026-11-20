@@ -211,15 +211,6 @@ def test_platform_imports_std_loop():
     assert required <= derived, f"Compiled platform pack missing std-loop relations: {sorted(required - derived)}"
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason=(
-        "M2: decisions/platform-five-scenes.md: Author std-decision facts (decision, subject, reference_date, "
-        "and platform_decision_binding) in examples/platform/facts/ covering all five scenes with decider and "
-        "decided_on, and verify in_force_on and effective_platform_decision with zero in_force_without_decider."
-    ),
-)
 def test_scene_decisions_are_std_decision_facts(tmp_path):
     fact_rows = _load_platform_facts()
     decisions = fact_rows.get("decision", [])
@@ -279,15 +270,6 @@ def test_scene_decisions_are_std_decision_facts(tmp_path):
     )
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason=(
-        "M2: decisions/platform-five-scenes.md: Add examples/platform/README.md naming all five scenes and "
-        "reporting '<D> decisions produce <O> produced objects' matching the complete live publication "
-        "(depends on test_scene_decisions_are_std_decision_facts)."
-    ),
-)
 def test_platform_readme_names_five_scenes_and_matches_publication_counts(tmp_path):
     assert README_FILE.is_file(), "examples/platform/README.md must exist"
     text = README_FILE.read_text(encoding="utf-8")

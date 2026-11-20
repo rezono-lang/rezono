@@ -11,7 +11,7 @@ application_count(h, n) :- household(h), n = count : { application__household(_,
 repeat_application(h, n) :- application_count(h, n), n >= 2.
 
 // An application whose award is below its entitlement: the maximum of article 7 cut in. It reads two results of
-// calc/award.yaml, both known: `entitlement` (the cost share of articles 3 to 5 plus the allowance of article 6)
+// rezono/award.rezono, both known: `entitlement` (the cost share of articles 3 to 5 plus the allowance of article 6)
 // and `award` (the entitlement, at most the parameter `maximum_award` of article 7, whose row the award's proof
 // names). Only a known value is a fact for a rule, so an application whose award is unknown is not in it
 // (docs/compiler/rules.md, "Calculation values in rules"). Worth a look before deciding: the household asked

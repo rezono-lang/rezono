@@ -9,6 +9,7 @@ from dataclasses import dataclass
 
 from . import rules as ir
 from . import amounts, calc, calc_sql, checks as bundled, feldera_names, normalise, rules_split, rules_sql, seal, spans, types
+from .diagnostics import Diagnostic
 from .pack import LAYERS, CompileError, Pack
 from .sqltext import literal, q
 
@@ -645,14 +646,29 @@ def rule_bundle(pack: Pack, prog) -> tuple[list, list]:
                               "origin": {"file": r.origin[0], "line": str(r.origin[1])}}))
     held = amounts.columns(pack.rules, amounts.tables(pack))
     relations = [present({"id": n, "module": r.module, "explain": r.explain,
-                          "columns": [present({"name": c.name, "type": c.type, "currency": amount})
-                                      for c, amount in zip(r.key, held[n])],
+                          "columns": [rule_column(n, c, semantic, amount)
+                                      for c, semantic, amount in zip(
+                                          r.key,
+                                          pack.rule_semantics.get(n, (None,) * len(r.key)),
+                                          held[n],
+                                          strict=True,
+                                      )],
                           "world": r.world, "absence": True if r.absence else None, "outcome": r.outcome,
                           "extend": True if r.extend else None, "closes": r.closes,
                           "checks": [v for v, _ in rules_sql.checks(prog, n)] or None,
-                          "fold": True if n in folds else None})
+                          "fold": True if n in folds else None,
+                          "kind": getattr(r, "kind", None),
+                          "property": getattr(r, "property", None)})
                  for n, r in sorted(prog.relations.items()) if r.role == "derived"]
     return rules, relations
+
+
+def rule_column(relation: str, column: ir.Column, semantic: dict | None, amount: str | None) -> dict:
+    """One derived relation column of the schema bundle, keeping physical type and optional logical semantic."""
+    if semantic is not None and semantic.get("base") != column.type:
+        message = f"{relation}.{column.name}: semantic base {semantic.get('base')!r} does not match {column.type!r}"
+        raise CompileError(message, [Diagnostic("R049", message)])
+    return present({"name": column.name, "type": column.type, "semantic": semantic, "currency": amount})
 
 
 CALC_COLUMNS = [{"name": c, "type": "string"} for c in ("subject", "value", "state", "reason")]
@@ -745,7 +761,9 @@ def bundle(pack: Pack, checks, prog=None, calc_prog=None) -> dict:
     return {
         "format": "rezono.schema-bundle/1",
         "pack": present({"id": pack.meta["name"], "version": pack.meta["version"],
-                         "default_language": pack.meta["default_language"], "base": pack.iri.get("base")}),
+                         "default_language": pack.meta["default_language"],
+                         "language_version": pack.language_version,
+                         "base": pack.iri.get("base")}),
         "imports": pack.imports,
         "schemas": pack.schemas,
         "layers": list(LAYERS),

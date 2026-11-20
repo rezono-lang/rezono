@@ -24,20 +24,27 @@ ACCESS = "may_read"
 METADATA = "ir/state-projections.json"
 
 STATE_TERMS = ("?subject", "?state", "?reason")
-GRANT_TERMS = ("?role", "?kind", "?subject")
-COLUMNS = {SOURCE: ("sensor",), PROJECTION: ("sensor", None, None), GRANT: (None, None, "sensor")}
+GRANT_TERMS = ("?subject", "?role")
+BUNDLE = {
+    "kinds": [{"id": "sensor"}, {"id": SOURCE, "parent": "sensor"}],
+    "attributes": [
+        {"table": "sensor__estimate", "kind": "sensor"},
+        {"table": GRANT, "kind": "sensor"},
+    ],
+}
 
 
 def relation(name, role, *columns):
     return {"name": name, "role": role, "key": [{"name": column, "type": "string"} for column in columns]}
 
 
-def rule(head, premise, terms):
+def rule(head, premise, head_terms, body_terms=None):
     return {
         "id": head,
         "stratum": "1",
-        "head": {"relation": head, "terms": list(terms)},
-        "body": [{"relation": premise, "terms": list(terms), "polarity": "positive", "stratum": "0"}],
+        "head": {"relation": head, "terms": list(head_terms)},
+        "body": [{"relation": premise, "terms": list(head_terms if body_terms is None else body_terms),
+                  "polarity": "positive", "stratum": "0"}],
     }
 
 
@@ -48,10 +55,13 @@ IR = {
         relation(SOURCE, "base", "subject"),
         relation(PROJECTION, "base", "subject", "state", "reason"),
         relation(CONCLUSION, "derived", "subject", "state", "reason"),
-        relation(GRANT, "base", "role", "kind", "subject"),
+        relation(GRANT, "base", "subject", "role"),
         relation(ACCESS, "derived", "role", "kind", "subject"),
     ],
-    "rules": [rule(CONCLUSION, PROJECTION, STATE_TERMS), rule(ACCESS, GRANT, GRANT_TERMS)],
+    "rules": [
+        rule(CONCLUSION, PROJECTION, STATE_TERMS),
+        rule(ACCESS, GRANT, ("?role", "sensor", "?subject"), GRANT_TERMS),
+    ],
 }
 DESCRIPTOR = [{
     "relation": PROJECTION,
@@ -82,15 +92,23 @@ def witness(head, premise, terms, row):
 
 def evidence(source, projection, grants):
     """The claim's reported downstream rows and proofs agree with its supplied projection."""
+    grant_rows = [{"key": [row["key"][2], row["key"][0]]} for row in grants]
     snapshots = {
         SOURCE: as_bytes(source),
         PROJECTION: as_bytes(projection),
         CONCLUSION: as_bytes([{"key": row["key"]} for row in projection]),
-        GRANT: as_bytes(grants),
+        GRANT: as_bytes(grant_rows),
         ACCESS: as_bytes(grants),
     }
     witnesses = [witness(CONCLUSION, PROJECTION, STATE_TERMS, row) for row in projection]
-    witnesses.extend(witness(ACCESS, GRANT, GRANT_TERMS, row) for row in grants)
+    for grant, base in zip(grants, grant_rows, strict=True):
+        role, _, subject = grant["key"]
+        witnesses.append({
+            "rule_id": ACCESS,
+            "bindings": [{"variable": "?role", "value": role}, {"variable": "?subject", "value": subject}],
+            "premises": [{"row": {"relation": GRANT, "key": encode_key(base["key"])}, "polarity": "positive", "stratum": 0}],
+            "conclusion": {"relation": ACCESS, "key": encode_key(grant["key"])},
+        })
     return snapshots, witnesses
 
 
@@ -122,7 +140,7 @@ def replay(directory, snapshots, witnesses, *, full=None, missing_descriptor=Fal
 def check_scope(whole, partial):
     complete, instances = whole
     claimed, witnesses = partial
-    return check_role("guest", complete, claimed, None, COLUMNS, ["sensor"], {}, IR,
+    return check_role("guest", complete, claimed, None, BUNDLE, IR,
                       instances=instances, witnesses=witnesses)
 
 

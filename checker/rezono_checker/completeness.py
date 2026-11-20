@@ -26,9 +26,9 @@ trusted inventory and contents. `admit` gives those rows;
 `check` holds the published `verified_receipt` snapshot against them.
 """
 
-import json
-
 from rezono_canon import canonical_bytes, canonical_json, canonical_sha256, sha256_hex
+
+from .canon import strict_json_loads
 
 FORMAT = "rezono.completeness-receipt/1"
 RELATION = "verified_receipt"
@@ -142,7 +142,7 @@ def _read(reference, read_bytes, what):
     if sha256_hex(data) != reference["sha256"]:
         raise Unverified(f"{what}_hash_mismatch", reference["file"])
     try:
-        value = json.loads(data)
+        value = strict_json_loads(data)
         canonical = canonical_bytes(value) == data
     except (ValueError, RecursionError):  # bad UTF-8, bad JSON and CanonError are ValueErrors
         canonical = False

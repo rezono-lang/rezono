@@ -543,6 +543,8 @@ def _tuple_id(kind: dict, row: dict, payloads: dict, where: str):
     parts = []
     for column in kind["tuple_key"]:
         part = row[column]["$ref"] if "ref" in kind["slots"][column] else payloads[column]
+        if isinstance(part, bool):
+            part = "true" if part else "false"
         if not isinstance(part, str):
             _fail(f"{where}.{column}", "a tuple cell is text in the row key")
         parts.append(part)

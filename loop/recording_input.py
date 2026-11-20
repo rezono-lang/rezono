@@ -44,8 +44,11 @@ def load_recording(path: str | Path) -> Recording | TypedRecording:
     path = Path(path)
     data = json.loads(path.read_text(encoding="utf-8"), object_pairs_hook=unique_object)
     typed_keys = {"run", "limit", "ports", "pack", "records", "initial", "sweeps"}
-    if not isinstance(data, dict) or set(data) not in (typed_keys, typed_keys | {"clock"},
-                                                       set(Recording.__annotations__)):
+    optional_typed_keys = {"clock", "evidence", "certified_rounds"}
+    if not isinstance(data, dict) or not (
+        set(data) == set(Recording.__annotations__)
+        or typed_keys <= set(data) <= (typed_keys | optional_typed_keys)
+    ):
         raise ValueError("recording must contain run, limit, requirements, completion, initial and sweeps")
     run, limit = data["run"], data["limit"]
     if not nonempty_text(run) or type(limit) is not int or limit <= 0:

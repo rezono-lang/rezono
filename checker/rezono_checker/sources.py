@@ -21,11 +21,11 @@ from __future__ import annotations
 
 import datetime
 import hashlib
-import json
 import re
 
 from rezono_canon import canonical_json
 
+from .canon import strict_json_loads
 from .snapshots import read_rows
 
 # contracts/source.yaml, restated so the oracle does not read the publisher's or compiler's copy
@@ -46,7 +46,7 @@ def utf16(text: str) -> bytes:
 
 def tables(bundle) -> set:
     """The base tables of facts: those of the kinds, arrows and attributes. Enum and parameter rows are schema."""
-    doc = json.loads(bundle) if isinstance(bundle, (str, bytes)) else bundle
+    doc = strict_json_loads(bundle) if isinstance(bundle, (str, bytes)) else bundle
     return {s["table"] for part in ("kinds", "arrows", "attributes") for s in doc.get(part) or []}
 
 
@@ -95,7 +95,7 @@ def check_role_sources(data: bytes, bundle, snapshots: dict) -> list[dict]:
     try:
         facts = tables(bundle)
         rows = {(t, k) for t in sorted(facts & set(snapshots)) for k in read_rows(snapshots[t], "json")}
-        entries = json.loads(data)
+        entries = strict_json_loads(data)
     except (ValueError, KeyError, TypeError):
         return [{"reason": "sources_unreadable", "severity": "error"}]
     if not isinstance(entries, list):

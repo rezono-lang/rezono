@@ -62,7 +62,7 @@ def rules(full=False, function=FUNCTION, role_rule=True):
         "format": "rezono.rules/1",
         "relations": [relation(n, "base", a) for n, a in BASE] + [relation(n, "derived", a) for n, a in DERIVED],
         "rules": [
-            rule("a1", ("may_read", "?r", "node", "?x"), [lit("grant", "?r", "?x")]),
+            rule("a1", ("may_read", "?r", "node", "?x"), [lit("grant", "?x", "?r")]),
             *([rule("a2", ("may_read", "?r", "node", "?x"), [lit("role", "?r"), lit("node", "?x")])] if full else []),
             *([rule("a3", ("may_read", "?r", "role", "?x"), [lit("role", "?r"), lit("role", "?x")])] if full and role_rule else []),
             rule("r1", ("path", "?x", "?y"), [lit("edge", "?x", "?y")]),
@@ -93,7 +93,7 @@ def group(rows, function):
 
 def toy(nodes, edges, salaries, grants, roles=("guest",), full=False, function=FUNCTION, role_rule=True):
     """The rows and every witness instance of the toy rules, as the engine would give them."""
-    ws = [witness("may_read", [r, "node", x], "a1", [("r", r), ("x", x)], [("grant", [r, x])]) for r, x in grants]
+    ws = [witness("may_read", [r, "node", x], "a1", [("r", r), ("x", x)], [("grant", [x, r])]) for r, x in grants]
     if full:
         ws += [witness("may_read", [r, "node", x], "a2", [("r", r), ("x", x)], [("role", [r]), ("node", [x])])
                for r in roles for x in nodes]
@@ -127,7 +127,7 @@ def toy(nodes, edges, salaries, grants, roles=("guest",), full=False, function=F
             {"relation": "salary", "position": 0, "group_key": "[]", "count": count,
              "contributors_sha256": contributors, "result": f"known:{t}"}]))
     rows = {"node": [(n,) for n in nodes], "role": [(r,) for r in roles], "edge": list(edges),
-            "salary": list(salaries), "grant": list(grants)}
+            "salary": list(salaries), "grant": [(x, r) for r, x in grants]}
     for rel, _ in DERIVED:
         rows[rel] = sorted({tuple(json.loads(w["conclusion"]["key"])) for w in ws if w["conclusion"]["relation"] == rel})
     return rows, ws
@@ -139,7 +139,17 @@ GRANTS = [("guest", "a"), ("guest", "b"), ("guest", "c")]
 # The same epoch with more hidden rows: a hidden node, two edges to it (one from a readable node that had
 # none, so `isolated(c)` would go; one that gives reach(a) an earlier-ranked hidden proof) and a salary.
 MORE = {"nodes": NODES + [HIDDEN], "edges": EDGES + [("a", HIDDEN), ("c", HIDDEN)], "salaries": SALARIES + [(HIDDEN, "7")]}
-COLUMNS = {"node": ("node",), "role": ("role",), "edge": ("node", "node"), "salary": ("node", None), "grant": (None, "node")}
+COLUMNS = {"node": ("node",), "role": ("role",), "edge": ("node", "node"), "salary": ("node", None), "grant": ("node", None)}
+TOY_ARROWS = [
+    {"id": "node.edge", "kind": "node", "name": "edge", "table": "edge", "target": "node",
+     "required": False, "multivalued": True, "world": "closed"},
+]
+TOY_ATTRIBUTES = [
+    {"id": "node.salary", "kind": "node", "name": "salary", "table": "salary", "type": "text",
+     "required": False, "multivalued": False, "world": "closed"},
+    {"id": "node.grant", "kind": "node", "name": "grant", "table": "grant", "type": "text",
+     "required": False, "multivalued": True, "world": "closed"},
+]
 
 
 # The questions of packs/std-explain the gate answers, as the compiler puts them in the bundle.
@@ -151,12 +161,18 @@ QUESTIONS = [
 ]
 
 
-def bundle(kinds, parents=None) -> str:
+def bundle(kinds, parents=None, arrows=None, attributes=None, enums=None) -> str:
     """A schema bundle with the kinds and the questions: what the gate reads of it (fail closed without kinds).
     Plain sorted JSON, as the compiler writes it: a limit is a number there (canonical JSON writes text)."""
-    return json.dumps({"format": "rezono.schema-bundle/1", "questions": QUESTIONS, "checks": [], "kinds": [
-        {"id": k, **({"parent": (parents or {})[k]} if k in (parents or {}) else {})} for k in sorted(kinds)]},
-        sort_keys=True, separators=(",", ":")) + "\n"
+    doc = {"format": "rezono.schema-bundle/1", "questions": QUESTIONS, "checks": [], "kinds": [
+        {"id": k, **({"parent": (parents or {})[k]} if k in (parents or {}) else {})} for k in sorted(kinds)]}
+    if arrows:
+        doc["arrows"] = list(arrows)
+    if attributes:
+        doc["attributes"] = list(attributes)
+    if enums:
+        doc["enums"] = [{"id": e} for e in enums]
+    return json.dumps(doc, sort_keys=True, separators=(",", ":")) + "\n"
 
 
 def epoch(full=False, function=FUNCTION, nodes=NODES, edges=EDGES, salaries=SALARIES, grants=GRANTS, roles=("guest",),
@@ -169,7 +185,8 @@ def epoch(full=False, function=FUNCTION, nodes=NODES, edges=EDGES, salaries=SALA
         sources=[("rules", "abc")],
         checks=[{"name": "node__unique", "status": "green", "violations": 0}],
         kinds=frozenset({"node", "role"}), rows=rows, witnesses=ws, columns=COLUMNS,
-        rules=json.dumps(rules(full, function, role_rule)), definition_sha256="4" * 64, bundle=bundle({"node", "role"}),
+        rules=json.dumps(rules(full, function, role_rule)), definition_sha256="4" * 64,
+        bundle=bundle({"node", "role"}, arrows=TOY_ARROWS, attributes=TOY_ATTRIBUTES),
     )
     if "bundle" in changes and "check_metadata" not in changes:
         changes["check_metadata"] = loaded(changes["bundle"])
@@ -363,7 +380,7 @@ def test_manifest_lists_every_file_with_its_hash(tmp_path):
 
 def test_the_manifest_names_its_access_semantics_and_a_definition_hash(tmp_path):
     """O8: the gate serves only manifests with access_semantics 2; the bundle path never names the facts."""
-    s, m = published(epoch(bundle='{"format":"rezono.schema-bundle/1"}\n'), tmp_path)
+    s, m = published(epoch(), tmp_path)
     assert m["access_semantics"] == publish.ACCESS_SEMANTICS == 2
     assert m["definition_sha256"] == "4" * 64
     for c in m["compiled"]:
@@ -375,18 +392,18 @@ def test_the_manifest_names_its_access_semantics_and_a_definition_hash(tmp_path)
 
 def test_bundle_is_shared_by_definition_and_compiler(tmp_path):
     s = store.FileStore(tmp_path)
-    publish.publish(epoch(bundle='{"format":"rezono.schema-bundle/1"}\n'), s, ROLES)
-    publish.publish(epoch(epoch=2, bundle='{"format":"rezono.schema-bundle/1"}\n'), s, ROLES)
+    publish.publish(epoch(), s, ROLES)
+    publish.publish(epoch(epoch=2), s, ROLES)
     assert s.list("toy/bundles/") == [f"toy/bundles/{'4' * 64}/{'2' * 64}.json", f"toy/bundles/{'4' * 64}/{'2' * 64}.rules.json"]
 
 
 def test_bundle_and_rule_ir_are_archived_with_their_hash(tmp_path):
-    s, m = published(epoch(bundle='{"format":"rezono.schema-bundle/1"}\n'), tmp_path)
+    s, m = published(epoch(), tmp_path)
     assert [c["file"] for c in m["compiled"]] == ["bundle/schema-bundle.json", "ir/rules.json"]
     for c in m["compiled"]:
         assert hashlib.sha256(s.get(c["uri"].removeprefix("s3://rezono/"))).hexdigest() == c["sha256"]
     # The rule IR the proofs were checked against is always archived; the bundle only when there is one.
-    assert [c["file"] for c in publish.publish(epoch(epoch=2, bundle=""), s, ROLES)["compiled"]] == ["ir/rules.json"]
+    assert [c["file"] for c in publish.publish(epoch(epoch=2, bundle=""), s, {"checker": "complete"})["compiled"]] == ["ir/rules.json"]
 
 
 def test_the_build_record_holds_the_profile_and_names_the_build(tmp_path):
@@ -619,7 +636,8 @@ def test_an_element_is_typed():
 
 def test_a_rule_reads_only_the_calculation_the_role_can_prove():
     selection = "calc__amount"
-    doc = {"relations": [relation(selection, "calc", 4), relation("notice", "derived", 2)],
+    doc = {"relations": [relation(selection, "calc", 4), relation("notice", "derived", 2),
+                         relation("may_read", "derived", 3)],
            "rules": [
                rule("public_node", ("may_read", "?r", "node", "?x"), [lit("role", "?r"), lit("node", "?x")]),
                rule("private_entry", ("may_read", "finance", "entry", "?x"), [lit("entry", "?x")]),
@@ -632,7 +650,12 @@ def test_a_rule_reads_only_the_calculation_the_role_can_prove():
         "facts": [{"id": "private_amount", "reads": "attribute", "table": "entry__amount"}],
     }
     columns = {"node": ("node",), "entry": ("entry",), "entry__amount": ("entry", None),
-               "role": (None,), "may_read": (None, None, None)}
+               "role": (None,)}
+    schema_bundle = {
+        "kinds": [{"id": "node"}, {"id": "entry"}],
+        "attributes": [{"table": "entry__amount", "kind": "entry"}],
+        "enums": [{"id": "role"}],
+    }
 
     def visible(role, amount, forge_notice=False):
         calc_row = ("n", amount, "known", "")
@@ -641,16 +664,25 @@ def test_a_rule_reads_only_the_calculation_the_role_can_prove():
                 "may_read": [("guest", "node", "n"), ("finance", "node", "n"), ("finance", "entry", "e")],
                 "notice": [("n", amount)]}
         proof = {"conclusion": ref(selection, *calc_row), "rule": "amount", "version": "v"}
+        may_read_witnesses = [
+            witness("may_read", ("guest", "node", "n"), "public_node", [("r", "guest"), ("x", "n")],
+                    premises=[("role", ("guest",)), ("node", ("n",))]),
+            witness("may_read", ("finance", "node", "n"), "public_node", [("r", "finance"), ("x", "n")],
+                    premises=[("role", ("finance",)), ("node", ("n",))]),
+            witness("may_read", ("finance", "entry", "e"), "private_entry", [("x", "e")],
+                    premises=[("entry", ("e",))]),
+        ]
         notice = witness("notice", ("n", amount), "notice", [], premises=[(selection, calc_row)])
+        instances = [*may_read_witnesses, notice]
         kinds = {"node", "entry"}
-        readable, proofs, full = access.for_role(rows, kinds, {}, columns, doc, [notice], role, calc_ir, [proof])
+        readable, proofs, full = access.for_role(rows, kinds, {}, columns, doc, instances, role, calc_ir, [proof])
         snapshots = {name: publish.snapshot(rs) for name, rs in readable.items()}
         if forge_notice:
             snapshots["notice"] = publish.snapshot(rows["notice"])
         _, findings = checker_access.check_role(
-            role, {name: publish.snapshot(rs) for name, rs in rows.items()}, snapshots, full, columns, kinds, {},
-            doc, calc_ir, [notice], [proof], proofs["calc_witnesses"],
-            [notice] if forge_notice else proofs["witnesses"]
+            role, {name: publish.snapshot(rs) for name, rs in rows.items()}, snapshots, full, schema_bundle,
+            doc, calc_ir, instances, [proof], proofs["calc_witnesses"],
+            [*proofs["witnesses"], notice] if forge_notice else proofs["witnesses"]
         )
         if forge_notice:
             assert any(f["reason"] == "not_derivable" and f["relation"] == "notice" for f in findings)
@@ -662,12 +694,14 @@ def test_a_rule_reads_only_the_calculation_the_role_can_prove():
     assert (guest_rows, guest_proofs, guest_full) == visible("guest", "31")
     assert guest_rows["node"] == [("n",)]
     assert guest_rows[selection] == guest_rows["notice"] == []
-    assert guest_proofs["witnesses"] == guest_proofs["calc_witnesses"] == []
+    assert [w for w in guest_proofs["witnesses"] if w["conclusion"]["relation"] == "notice"] == []
+    assert guest_proofs["calc_witnesses"] == []
     assert selection not in guest_full
     finance_rows, finance_proofs, _ = visible("finance", "12")
     assert finance_rows[selection] == [("n", "12", "known", "")]
     assert finance_rows["notice"] == [("n", "12")]
-    assert len(finance_proofs["witnesses"]) == len(finance_proofs["calc_witnesses"]) == 1
+    assert len([w for w in finance_proofs["witnesses"] if w["conclusion"]["relation"] == "notice"]) == 1
+    assert len(finance_proofs["calc_witnesses"]) == 1
     visible("guest", "12", forge_notice=True)
 
 
@@ -676,7 +710,7 @@ def calculated(role, publisher_sources=None, checker_sources=None):
     as a premise. Every role reads every node; only `finance` reads the entries. Gives the role's rows, its
     full relations, every row, and the findings of the checker's own derivation."""
     amount, twice = "calc__amount", "calc__twice"
-    doc = {"relations": [],
+    doc = {"relations": [relation("may_read", "derived", 3)],
            "rules": [rule("public_node", ("may_read", "?r", "node", "?x"), [lit("role", "?r"), lit("node", "?x")]),
                      rule("private_entry", ("may_read", "finance", "entry", "?x"), [lit("entry", "?x")])]}
     one = {"when": {"boolean": True}}
@@ -686,13 +720,25 @@ def calculated(role, publisher_sources=None, checker_sources=None):
                "versions": [{"id": "amount@v", "view": "calc__amount__v", "definitions": [one | {"value": {"fact": "held"}}]},
                             {"id": "twice@v", "view": "calc__twice__v", "definitions": [one | {"value": {"rule": "amount"}}]}],
                "facts": [{"id": "held", "reads": "attribute", "table": "entry__amount"}]}
-    columns = {"node": ("node",), "entry": ("entry",), "entry__amount": ("entry", None), "role": (None,),
-               "may_read": (None, None, None)}
+    columns = {"node": ("node",), "entry": ("entry",), "entry__amount": ("entry", None), "role": (None,)}
+    schema_bundle = {
+        "kinds": [{"id": "node"}, {"id": "entry"}],
+        "attributes": [{"table": "entry__amount", "kind": "entry"}],
+        "enums": [{"id": "role"}],
+    }
     kinds = {"node", "entry"}
     held, doubled = [(n, "12", "known", "") for n in ("n", "m")], [(n, "24", "known", "") for n in ("n", "m")]
     rows = {"node": [("n",), ("m",)], "entry": [("e",)], "entry__amount": [("e", "12")],
             "role": [("guest",), ("finance",)], "calc__as_of": [], amount: held, twice: doubled,
             "may_read": [(r, "node", n) for r in ("guest", "finance") for n in ("n", "m")] + [("finance", "entry", "e")]}
+    instances = [
+        witness("may_read", (r, "node", n), "public_node", [("r", r), ("x", n)],
+                premises=[("role", (r,)), ("node", (n,))])
+        for r in ("guest", "finance") for n in ("n", "m")
+    ] + [
+        witness("may_read", ("finance", "entry", "e"), "private_entry", [("x", "e")],
+                premises=[("entry", ("e",))])
+    ]
     proofs = [{"conclusion": ref(amount, *r), "rule": "amount", "version": "v"} for r in held]
     proofs += [{"conclusion": ref(twice, *r), "rule": "twice", "version": "v", "premises": [ref(amount, *h)]}
                for r, h in zip(doubled, held)]
@@ -701,11 +747,11 @@ def calculated(role, publisher_sources=None, checker_sources=None):
             patch.setattr(access.calc_scope, "view_sources", publisher_sources)
         if checker_sources:
             patch.setattr(checker_access, "calc_sources", checker_sources)
-        readable, sees, full = access.for_role(rows, kinds, {}, columns, doc, [], role, calc_ir, proofs)
+        readable, sees, full = access.for_role(rows, kinds, {}, columns, doc, instances, role, calc_ir, proofs)
         _, findings = checker_access.check_role(
             role, {name: publish.snapshot(rs) for name, rs in rows.items()},
-            {name: publish.snapshot(rs) for name, rs in readable.items()}, full, columns, kinds, {}, doc, calc_ir,
-            [], proofs, sees["calc_witnesses"], sees["witnesses"])
+            {name: publish.snapshot(rs) for name, rs in readable.items()}, full, schema_bundle, doc, calc_ir,
+            instances, proofs, sees["calc_witnesses"], sees["witnesses"])
     return readable, full, rows, {(f["reason"], f.get("relation")) for f in findings}
 
 
@@ -1126,20 +1172,42 @@ def guest(e):
     return access.for_role(rows, e.kinds, e.parents, e.columns, json.loads(e.rules), instances, "guest")
 
 
-TREE = {"format": "rezono.rules/1", "relations": [relation(n, "base", 1) for n in ("top", "mid", "leaf", "role")]
-        + [relation("may_read", "base", 3)], "rules": []}
+TREE = {
+    "format": "rezono.rules/1",
+    "relations": [relation(n, "base", 1) for n in ("top", "mid", "leaf", "role")]
+    + [relation("top_grant", "base", 2), relation("leaf_grant", "base", 2), relation("may_read", "derived", 3)],
+    "rules": [
+        rule("gt", ("may_read", "?r", "top", "?x"), [lit("top_grant", "?x", "?r")]),
+        rule("gl", ("may_read", "?r", "leaf", "?x"), [lit("leaf_grant", "?x", "?r")]),
+    ],
+}
 
 
 def inheritance_epoch() -> Epoch:
     """O7: top > mid > leaf, with a right on top(x) and one on leaf(y). Also published for the gate's tests."""
+    tree_bundle = bundle(
+        {"top", "mid", "leaf", "role"}, {"mid": "top", "leaf": "mid"},
+        attributes=[
+            {"id": "top.top_grant", "kind": "top", "name": "top_grant", "table": "top_grant"},
+            {"id": "leaf.leaf_grant", "kind": "leaf", "name": "leaf_grant", "table": "leaf_grant"},
+        ],
+    )
     return dataclasses.replace(
         epoch(), kinds=frozenset({"top", "mid", "leaf", "role"}), parents={"mid": "top", "leaf": "mid"},
-        columns={"top": ("top",), "mid": ("mid",), "leaf": ("leaf",), "role": ("role",), "may_read": (None, None, None)},
+        columns={"top": ("top",), "mid": ("mid",), "leaf": ("leaf",), "role": ("role",),
+                 "top_grant": ("top", None), "leaf_grant": ("leaf", None)},
         rows={"top": [("x",), ("y",)], "mid": [("x",), ("y",)], "leaf": [("x",), ("y",)], "role": [],
+              "top_grant": [("x", "guest")], "leaf_grant": [("y", "guest")],
               "may_read": [("guest", "top", "x"), ("guest", "leaf", "y")]},
-        witnesses=[], rules=json.dumps(TREE),
-        bundle=bundle({"top", "mid", "leaf", "role"}, {"mid": "top", "leaf": "mid"}),
-        check_metadata=loaded(bundle({"top", "mid", "leaf", "role"}, {"mid": "top", "leaf": "mid"})))
+        witnesses=[
+            witness("may_read", ("guest", "top", "x"), "gt", [("r", "guest"), ("x", "x")],
+                    premises=[("top_grant", ("x", "guest"))]),
+            witness("may_read", ("guest", "leaf", "y"), "gl", [("r", "guest"), ("x", "y")],
+                    premises=[("leaf_grant", ("y", "guest"))]),
+        ],
+        rules=json.dumps(TREE),
+        bundle=tree_bundle,
+        check_metadata=loaded(tree_bundle))
 
 
 def test_a_right_on_a_kind_holds_for_its_subkinds_on_every_level(tmp_path):
@@ -1150,11 +1218,10 @@ def test_a_right_on_a_kind_holds_for_its_subkinds_on_every_level(tmp_path):
     s, _ = published(e, tmp_path)
     assert keys(s, "guest", "top") == [["x"]] and keys(s, "guest", "mid") == [["x"]]
     assert keys(s, "guest", "leaf") == [["x"], ["y"]]
-    full = {**ir, "relations": ir["relations"][:-1] + [relation("may_read", "derived", 3)], "rules": [
+    full = {**ir, "rules": [
         rule("g", ("may_read", "?r", "top", "?x"), [lit("role", "?r"), lit("top", "?x")])]}
     e = dataclasses.replace(e, rows={**e.rows, "role": [("guest",)], "may_read": [("guest", "top", "x"), ("guest", "top", "y")]},
-                            rules=json.dumps(full),
-                            columns={k: v for k, v in e.columns.items() if k != "may_read"})
+                            rules=json.dumps(full))
     _, _, scope = guest(e)
     assert {"top", "mid", "leaf"} <= scope
 
@@ -1167,8 +1234,12 @@ def test_a_broken_parent_chain_is_refused(parents):
 
 def test_relation_named_like_the_witness_file_does_not_collide(tmp_path):
     e = epoch()
-    _, m = published(dataclasses.replace(e, rows={**e.rows, "witnesses": [("a",)]},
-                                         columns={**COLUMNS, "witnesses": ("node",)}), tmp_path)
+    doc = json.loads(e.bundle)
+    doc["attributes"] = [*doc.get("attributes", []), {"id": "node.witnesses", "kind": "node", "name": "witnesses", "table": "witnesses"}]
+    updated = json.dumps(doc, sort_keys=True, separators=(",", ":")) + "\n"
+    _, m = published(dataclasses.replace(e, rows={**e.rows, "witnesses": [("a", "v")]},
+                                         columns={**COLUMNS, "witnesses": ("node", None)},
+                                         bundle=updated, check_metadata=metadata.expected(doc)), tmp_path)
     # An object's key is the hash of its bytes, so a name cannot collide; one uri, one content.
     named = {(x["uri"], x["sha256"]) for x in m["snapshots"] + m["witnesses"]}
     assert len(named) == len({u for u, _ in named})
@@ -1290,8 +1361,9 @@ def with_images(e, named, objects=None):
     data = {f: svg(f) for f in sorted(set(named.values()))} | (objects or {})
     assets = {f: {"sha256": hashlib.sha256(b).hexdigest(), "media_type": "image/svg+xml",
                   "source": f"example/x@0123abc:{f}", "licence": "CC0-1.0", "bytes": b} for f, b in data.items()}
-    doc = json.loads(e.bundle) | {"attributes": [{"id": "node.image", "kind": "node", "name": "image", "table": "node__image"}],
-                                  "channels": {"images": [{"kind": "node", "slot": "node.image"}]}}
+    doc = json.loads(e.bundle)
+    doc = doc | {"attributes": [*doc.get("attributes", []), {"id": "node.image", "kind": "node", "name": "image", "table": "node__image"}],
+                 "channels": {"images": [{"kind": "node", "slot": "node.image"}]}}
     return dataclasses.replace(e, rows=dict(e.rows, node__image=sorted(named.items())),
                                columns=dict(e.columns, node__image=("node", None)), assets=assets,
                                bundle=json.dumps(doc, sort_keys=True, separators=(",", ":")) + "\n",

@@ -72,17 +72,6 @@ def compile_legacy_oracle(tmp_path: Path) -> dict[str, str]:
     return emit.compile_pack(pack.read(scheme))
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=MissingSubsidyAwardInRezono,
-    reason=(
-        "extra: decisions/language-calculations.md: Convert examples/subsidy-scheme/calc/award.yaml "
-        "to examples/subsidy-scheme/rezono/award.rezono (starting from candidate/award.rezono) with "
-        "its generated rezono/award.json and rezono: entry in pack.yaml, remove calc/award.yaml, "
-        "verify identical ir/calc.json and examples/subsidy expected/calc/ outcomes, re-pin "
-        "examples/subsidy/pack.yaml sha256, and update every listed reference to calc/award.yaml."
-    ),
-)
 def test_subsidy_scheme_award_in_rezono(tmp_path):
     problems: list[str] = []
 

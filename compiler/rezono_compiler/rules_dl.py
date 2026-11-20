@@ -119,6 +119,7 @@ class NativeSource:
     statements: tuple[tuple, ...]
     columns: tuple[int, ...]
     notes: tuple[RuleNote | None, ...] = ()
+    semantics: tuple[tuple[str, tuple[dict | None, ...]], ...] = ()
 
 
 @dataclass
@@ -324,7 +325,7 @@ def parse_file(text: str, where: str, columns: list | None = None):
                     if re.match(r"^//\s*@extend\b", c.strip()) and not EXTEND.match(c.strip()):
                         p.fail(f"{name}: @extend takes no argument", t)
                     if RELEASE.match(c.strip()):
-                        p.fail(f"{name}: @release is not supported yet: a role reads a negation or an aggregate only over relations it reads in full (docs/architecture.md, delimited release)", t)
+                        p.fail(f"{name}: @release is not supported yet: a role reads a negation or an aggregate only over relations it reads in full (docs/formal.md, section 3; decisions/language-native-rules.md: delimited release stays reserved)", t)
                     m = EXPLAIN.match(c.strip())
                     if m and m.group(1) == FOLD:
                         fold = True
@@ -443,7 +444,7 @@ def remap_statement(stmt, names):
         n, terms, line = a
         terms = list(terms)
         # The access vocabulary's second column names a schema kind, rather than an ordinary value.
-        if n in ("may_read", "may_propose", "may_review", "may_publish") and len(terms) > 1:
+        if n in ("may_read", "may_read_full", "may_propose", "may_review", "may_publish") and len(terms) > 1:
             t = terms[1]
             terms[1] = kind_constant(t)
         return name(n), terms, line
@@ -459,7 +460,7 @@ def remap_statement(stmt, names):
     if stmt[0] == "io":
         return stmt[0], stmt[1], [name(n) for n in stmt[2]], stmt[3]
     atoms = [stmt[1]] + [s[-1] for s in stmt[2] if s[0] in ("lit", "agg")]
-    kind_vars = {a[1][1][1] for a in atoms if a[0] in ("may_read", "may_propose", "may_review", "may_publish")
+    kind_vars = {a[1][1][1] for a in atoms if a[0] in ("may_read", "may_read_full", "may_propose", "may_review", "may_publish")
                  and len(a[1]) > 1 and a[1][1][0] == "var"}
     # Equality aliases keep the typed meaning of an access-kind column.
     changed = True
@@ -504,7 +505,8 @@ def read(pack, pack_dir: Path, imports=None, renames=None, *, calc_inputs=None, 
          rule_sources: dict[str, str] | None = None,
          rule_sentences: dict[str, tuple[str, RuleNote, str]] | None = None,
          generated: list | None = None, embedded: tuple[Embedded, ...] = (),
-         native: tuple[NativeSource, ...] = ()) -> tuple[dict | None, list[str]]:
+         native: tuple[NativeSource, ...] = (),
+         semantics: dict | None = None) -> tuple[dict | None, list[str]]:
     """The IR of the pinned rule closure (None when every rules/ is empty), and warnings. Raises RuleError.
 
     `calc_parts` is each imported pack's part of the calculation (`calc.read_closure`): a rule reads a
@@ -565,6 +567,8 @@ def read(pack, pack_dir: Path, imports=None, renames=None, *, calc_inputs=None, 
             if isinstance(contents, NativeSource):
                 text, stmts, starts = contents.text, contents.statements, list(contents.columns)
                 notes: list[RuleNote | None] = list(contents.notes) if contents.notes else [None] * len(starts)
+                if semantics is not None:
+                    semantics.update(contents.semantics)
             else:
                 text = contents.read_text(encoding="utf-8") if isinstance(contents, Path) else contents
                 starts = []

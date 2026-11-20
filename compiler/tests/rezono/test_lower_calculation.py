@@ -7,7 +7,7 @@ from types import SimpleNamespace
 import pytest
 
 from calc_packs import (SCHEME, SUBSIDY, MissingCalculationLowering, calc_ir, definition, derived, examples, form,
-                        lit, lowered, path, row_parameter)
+                        lit, lowered, path, row_parameter, strip_award)
 from rezono_compiler import pack, rezono_calc, rezono_module
 
 
@@ -42,7 +42,7 @@ def test_lower_calculation(tmp_path):
 
 
 def award() -> list:
-    """calc/award.yaml of the scheme that examples/subsidy imports. Inside entitlement the derived value advice_allowance is
+    """The award calculation of the scheme that examples/subsidy imports. Inside entitlement the derived value advice_allowance is
     written Application.advice_allowance, because a parameter has the same name (the section Leaves)."""
     rule_leaf = {"dot": [{"kind": "Application"}, "advice_allowance"]}
     income, costs = path("assessed_income", "cents"), path("assessed_costs", "cents")
@@ -77,13 +77,13 @@ def test_lower_calculation_award(tmp_path):
     assert len(expected["ir/calc.json"]["rules"]) == 6
 
     candidate = examples(tmp_path / "candidate") / SCHEME
-    (candidate / "calc" / "award.yaml").unlink()
+    strip_award(candidate)
     form(candidate, award())
     assert lowered(candidate) == expected
 
     # Counter-case: written bare, advice_allowance inside entitlement names both the parameter and the value.
     bare = examples(tmp_path / "bare") / SCHEME
-    (bare / "calc" / "award.yaml").unlink()
+    strip_award(bare)
     decls = award()
     entitlement = decls[-1]["derived"][4]["versions"][0]["definitions"][0]
     entitlement["value"]["arith"][2] = path("advice_allowance")

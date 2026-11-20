@@ -1,5 +1,5 @@
 import type { Place } from './module-json.ts';
-import { knownType, type Schema, type World } from './schema.ts';
+import { isOrdered, knownType, typeOf, type Schema, type World } from './schema.ts';
 import type { Path, State } from './tree.ts';
 
 type Expression =
@@ -343,6 +343,10 @@ class ClauseCheck {
 		return type === 'Int' || type === 'Integer' || this.schema.types?.[type]?.of === 'Integer';
 	}
 
+	private ordered(type: string): boolean {
+		return this.whole(type) || isOrdered(this.schema, typeOf(this.schema, type));
+	}
+
 	private requireType(actual: string, expected: string, at: string): void {
 		if (actual !== expected && !(this.whole(actual) && this.whole(expected))) refuse('R003', at, actual, expected);
 	}
@@ -365,7 +369,7 @@ class ClauseCheck {
 		const b = knownRight ?? this.value(right, rhs, flow, a.type);
 		if (a.set || b.set) refuse('R005', at);
 		if (!['=', '!=', '<', '<=', '>', '>='].includes(op)) refuse('R049', at, op);
-		if (op !== '=' && op !== '!=' && !(this.whole(a.type) && this.whole(b.type))) refuse('R003', at, a.type, b.type);
+		if (op !== '=' && op !== '!=' && !(this.ordered(a.type) && this.ordered(b.type))) refuse('R003', at, a.type, b.type);
 		this.requireType(a.type, b.type, at);
 	}
 

@@ -46,7 +46,7 @@ from rezono_checker.sources import check_role_sources, check_source_sets
 from rezono_checker.check import shaped
 from rezono_checker.rules import check_calc_bindings, derived_relations, load_rules, load_seals
 
-from . import access, pointers, timing
+from . import access, pointers, surface, timing
 from . import sources as fact_sources
 from .calc_scope import published_views
 from .store import put_all
@@ -291,7 +291,11 @@ def verify(e: Epoch, snapshots=None, witnesses=None, full=None, calc_witnesses=N
             raise ValueError("a role's proofs need the role and the complete snapshots: the checker derives its scope")
         if instances is None:
             instances = frozen(e)[1]
-        full, scope = checker_access.check_role(role, complete, snapshots, full, e.columns, e.kinds, e.parents,
+        try:
+            bundle_doc = json.loads(e.bundle) if e.bundle else None
+        except (TypeError, ValueError):
+            bundle_doc = None
+        full, scope = checker_access.check_role(role, complete, snapshots, full, bundle_doc,
                                                 doc, calculation, instances, e.calc_witnesses, calc_witnesses or (),
                                                 witnesses, claimed_evidence=getattr(full, "evidence", None))
     if snapshots is None:
@@ -602,6 +606,23 @@ def newest_main(store, pack: str) -> dict | None:
         return json.loads(data)
     except (TypeError, KeyError, ValueError) as err:
         raise ValueError(f"{keys[0]} is not a head: {err}") from err
+
+
+def compatibility(e: Epoch, store) -> dict | None:
+    """Classify the public-surface change of a main epoch against the newest main manifest
+    (decisions/language-surface-compatibility.md, section 2).
+
+    Returns None for a proposal, a variant, an epoch with a base manifest, a pack without an earlier
+    main manifest, or an epoch whose definition_sha256 and compiler_sha256 match the newest main
+    manifest. Otherwise returns {"against": <manifest id>, "class": ..., "changes": [...]}, reading
+    the earlier bundle through its compiled entry uri and holding it to its sha256.
+    """
+    if e.proposal or e.variant or e.base_manifest:
+        return None
+    previous = newest_main(store, e.pack)
+    if previous is None:
+        return None
+    return surface.compatibility(e, store, previous)
 
 
 def unchanged(head: dict | None, *, pack_sha256: str, engine: dict, build: dict, roles: dict[str, str]) -> bool:

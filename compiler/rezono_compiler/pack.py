@@ -7,7 +7,7 @@ import sys
 from dataclasses import dataclass, field
 from importlib import resources
 from pathlib import Path
-from typing import TypedDict
+from typing import Literal, TypedDict
 
 import yaml
 from rezono_admission.schema import INPUT_FORMATS
@@ -156,7 +156,7 @@ class Kind:
     spans: dict = field(default_factory=dict)  # MOD2: where its unique keys (`key:<name>`) and path equations (`eq:<name>`) are
 
 
-ACCESS = ("may_read", "may_propose", "may_review", "may_publish")  # std-access; their `kind` column names kinds
+ACCESS = ("may_read", "may_read_full", "may_propose", "may_review", "may_publish")  # std-access; their `kind` column names kinds
 CLOSE = "period_close"  # the kind of the closing fact of a seal, with these slots
 CLOSED_UNTIL, COVERS, ELEMENT, SHA256 = "closed_until", "covers", "element", "sha256"
 
@@ -234,6 +234,91 @@ class IntermediateInvariant:
     key_binding: tuple[tuple[str, str], ...]
 
 
+@dataclass(frozen=True)
+class StepOperand:
+    """A typed expression operand inside a compiled step declaration."""
+    expr: dict
+    type: str
+
+
+@dataclass(frozen=True)
+class StepCall:
+    """A resolved relation call with typed operands."""
+    relation: str
+    operands: tuple[StepOperand, ...]
+
+
+@dataclass(frozen=True)
+class StepBlocker:
+    """A scoped forbid clause pairing a forbidden pattern with its coverage call."""
+    pattern: StepCall
+    coverage: StepCall
+
+
+@dataclass(frozen=True)
+class StepOperation:
+    """The resolved effect port operation and optional atomic boundary evidence."""
+    port: str
+    apply: str
+    boundary: str | None = None
+    evidence: dict[str, str] | None = None
+
+
+@dataclass(frozen=True)
+class StepChange:
+    """One typed delta change template produced by a step effect."""
+    op: Literal["insert", "delete", "set", "unset"]
+    kind: str
+    key: StepOperand
+    slot: str | None = None
+    value: StepOperand | None = None
+    values: dict[str, StepOperand] | None = None
+
+
+@dataclass(frozen=True)
+class StepAttribute:
+    """Target attribute of a confirmation postcondition (slot None means record identity)."""
+    kind: str
+    slot: str | None = None
+
+
+@dataclass(frozen=True)
+class StepPostcondition:
+    """One expected post-state observation derived from a step's declared writes."""
+    subject: StepOperand
+    attribute: StepAttribute
+    state: Literal["present", "absent"]
+    value: StepOperand | None = None
+
+
+@dataclass(frozen=True)
+class StepReader:
+    """The resolved input port, call and scope columns for step confirmation."""
+    port: str
+    call: StepCall
+    scope: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class StepConfirmation:
+    """The confirmation reader, prerequisite token and derived postconditions of a step."""
+    reader: StepReader
+    token: StepOperand
+    postconditions: tuple[StepPostcondition, ...]
+
+
+@dataclass(frozen=True)
+class CompiledStep:
+    """A compiled safe-step declaration exposed on Pack.steps."""
+    id: tuple[str, str, str]
+    match_relation: str
+    columns: tuple[tuple[str, str, str], ...]
+    blockers: tuple[StepBlocker, ...]
+    operation: StepOperation
+    changes: tuple[StepChange, ...]
+    confirmation: StepConfirmation
+
+
 @dataclass
 class Pack:
     meta: dict
@@ -261,10 +346,14 @@ class Pack:
     rule_spans: dict[str, tuple | None] = field(default_factory=dict)
     # Per rule id, the optional source reference carried by a native rule clause (`@ <source>`).
     rule_sources: dict[str, str] = field(default_factory=dict)
+    # Per derived relation name, the SemanticType of each column when richer than its physical rule type.
+    rule_semantics: dict[str, tuple[dict | None, ...]] = field(default_factory=dict)
     # P10.3: the units the pack and the packs it imports declare, by the name of their LinkML type (`units`).
     units: dict[str, types.Unit] = field(default_factory=dict)
     acceptance_questions: list[AcceptanceQuestion] = field(default_factory=list)  # own source inventory
     intermediate_invariants: tuple[IntermediateInvariant, ...] = ()
+    steps: tuple[CompiledStep, ...] = ()
+    language_version: str = "0"
 
     def ancestors(self, kind: str) -> list[str]:
         """The kind itself, then its parent, up to the root."""
@@ -747,6 +836,9 @@ def read(pack_dir: str | Path) -> Pack:
         if "owner" in tags(c):
             kind.owner = plain(ann(c, "owner"))
 
+    pack_language_version = rezono_module.pack_language_version(
+        m.form for m in mods if m.pack_dir == pack_dir and m.form is not None
+    )
     pack = Pack({"name": meta["name"], "version": str(meta["version"]), "default_language": meta["default_language"],
                  "theory": is_theory},
                 [{"name": m.sv.schema.name, "id": m.sv.schema.id, "file": m.rel, "module": m.id, "pack": m.pack}
@@ -754,7 +846,8 @@ def read(pack_dir: str | Path) -> Pack:
                  if m.form is None or "schema" in m.form["module"]
                  or m.sv.schema.classes or m.sv.schema.enums or m.sv.schema.types],
                 dict(sorted(kinds.items())), dict(sorted(enums.items())), warnings=warnings, units=declared,
-                imports=[{"name": p.name, "version": p.version, "sha256": p.sha256} for p in packs.values()])
+                imports=[{"name": p.name, "version": p.version, "sha256": p.sha256} for p in packs.values()],
+                language_version=pack_language_version)
     if not errors:
         check(pack, errors)
     if not errors:
@@ -782,21 +875,29 @@ def read(pack_dir: str | Path) -> Pack:
         generated = rezono_table.lower_pack(pack, meta, pack_dir, errors, forms=forms)
     rule_sentences: dict[str, tuple[str, rules_dl.RuleNote, str]] = {}
     if not errors:
-        from . import native_rule_lowering
+        from . import native_rule_lowering, rezono_step
 
         try:
             intermediate_invariants: list[IntermediateInvariant] = []
+            steps: list[CompiledStep] = []
             native = native_rule_lowering.lower_modules(
-                meta, mods, packs, names, intermediate_invariants=intermediate_invariants,
+                meta, mods, packs, names,
+                intermediate_invariants=intermediate_invariants,
+                pack_dir=pack_dir,
+                pack_kinds=pack.kinds,
+                steps=steps,
             )
+            if not native:
+                rezono_step.validate_pack_bindings(pack_dir, meta, packs, pack.kinds)
             pack.intermediate_invariants = tuple(intermediate_invariants)
+            pack.steps = tuple(steps)
             pack.rules, rule_warnings = rules_dl.read(pack, pack_dir, ordered, renames, calc_inputs=calc_inputs,
                                                       calc_parts=calc_parts, folds=pack.folds,
                                                       bodies=pack.rule_bodies, spans=pack.rule_spans,
                                                       rule_sources=pack.rule_sources,
                                                       rule_sentences=rule_sentences,
                                                       generated=generated, embedded=rezono_relational.sources(mods),
-                                                      native=native)
+                                                      native=native, semantics=pack.rule_semantics)
             pack.warnings += rule_warnings
             if pack.rules:   # a variable or a column that joins two currencies is an error
                 amounts.columns(pack.rules, amounts.tables(pack))
@@ -848,8 +949,9 @@ def read(pack_dir: str | Path) -> Pack:
                     raise CompileError(f"rules: a calculation input needs a numeric selection: {', '.join(sorted(invalid))}")
                 program = rule_ir.load(pack.rules)
                 _, after = program.partition_at_calc(used, calc_sql.derived_reads(calculation))
-                if "may_read" in after:
-                    raise CompileError("rules: may_read cannot depend on a calculation selection")
+                for rel in ("may_read", "may_read_full"):
+                    if rel in after:
+                        raise CompileError(f"rules: {rel} cannot depend on a calculation selection")
         except (CompileError, rule_ir.IRError) as e:
             errors.append(str(e))
             if isinstance(e, CompileError):

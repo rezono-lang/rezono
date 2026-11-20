@@ -1,12 +1,11 @@
 """Authenticate state projections against the epoch's independently archived Values."""
 
-import json
 from collections.abc import Callable, Collection, Mapping
 from dataclasses import dataclass
 
 from rezono_canon import sha256_hex
 
-from .canon import encode_key
+from .canon import encode_key, strict_json_loads
 
 
 FILE = "ir/state-projections.json"
@@ -24,7 +23,7 @@ class Projection:
 
 
 def _projections(data: bytes) -> list[Projection]:
-    descriptors = json.loads(data)
+    descriptors = strict_json_loads(data)
     if not isinstance(descriptors, list):
         raise ValueError("state projections must be a list")
     projections = []
