@@ -10,7 +10,7 @@ import re
 
 import yaml
 
-from . import modules, pack, rezono_module, rules, rules_dl, spans, types
+from . import modules, pack, rezono_module, rezono_step, rules, rules_dl, spans, types
 from .diagnostics import Diagnostic
 
 Column = tuple[str, str, str]
@@ -54,6 +54,8 @@ class Linked:
     signatures: dict[str, Signature]
     clauses: dict[ClauseKey, LinkedClause]
     intermediate_invariants: tuple[pack.IntermediateInvariant, ...] = ()
+    steps: tuple[pack.CompiledStep, ...] = ()
+    step_clauses: dict[ClauseKey, str] = field(default_factory=dict)
 
 
 class Refusal(Exception):
@@ -585,20 +587,24 @@ def resolve_intermediate_invariants(
 
 
 def link_modules(meta: dict, definitions: list[modules.Module], imported: dict[str, modules.Imported],
-                 names: modules.Names, forms: Mapping[tuple[str, str], dict]) -> Linked:
+                 names: modules.Names, forms: Mapping[tuple[str, str], dict],
+                 *, pack_dir: Path | None = None,
+                 pack_kinds: Mapping[str, pack.Kind] | None = None) -> Linked:
     """Link native forms using the schema and import pins already read by pack compilation."""
     root = meta["name"]
     schema_errors = names.errors
     schema = Schema(definitions, names, root)
     errors: list[Diagnostic] = []
-    rules: list[tuple[Source, str, dict]] = []
+    rules_list: list[tuple[Source, str, dict]] = []
+    step_decls_raw: list[tuple[Source, str, dict]] = []
     for (owner, path), form in sorted(forms.items()):
         dependencies = modules.direct(meta) if owner == root else imported[owner].imports if owner in imported else []
         source, declarations = source_for(owner, path, form, root, modules.dependency_order(imported, dependencies), errors)
         if owner != root and owner not in imported:
             errors.append(source.diagnose(Refusal("R046", f"{owner!r} is not a pinned pack", "/decls/0")))
             continue
-        rules.extend((source, f"/decls/{i}", decl) for i, decl in enumerate(declarations) if "rule" in decl)
+        rules_list.extend((source, f"/decls/{i}", decl) for i, decl in enumerate(declarations) if "rule" in decl)
+        step_decls_raw.extend((source, f"/decls/{i}", decl) for i, decl in enumerate(declarations) if "step" in decl)
     if schema_errors:
         errors.extend(Diagnostic("R046", message) for message in schema_errors)
     if errors:
@@ -607,7 +613,7 @@ def link_modules(meta: dict, definitions: list[modules.Module], imported: dict[s
     signatures: dict[str, Signature] = {}
     owners: dict[str, tuple[Source, str]] = {}
     intermediate_specs: list[tuple[str, Source, str, str]] = []
-    for source, at, declaration in rules:
+    for source, at, declaration in rules_list:
         if "columns" not in declaration:
             continue
         rule = declaration["rule"]
@@ -633,11 +639,49 @@ def link_modules(meta: dict, definitions: list[modules.Module], imported: dict[s
         except Refusal as error:
             errors.append(source.diagnose(error))
 
+    step_specs: list[tuple[Source, str, dict, str, tuple[Column, ...]]] = []
+    step_clauses: dict[ClauseKey, str] = {}
+    seen_steps: dict[tuple[str, str, str], tuple[Source, str]] = {}
+    for source, at, decl in step_decls_raw:
+        try:
+            if source.format != rezono_module.SAFE_STEP_FORMAT:
+                raise Refusal("R048", "Step declaration requires rezono.module/4", at)
+            if (set(decl) - {"step", "columns", "when", "forbid", "effect", "confirm"}
+                    or not {"step", "columns", "when", "effect", "confirm"} <= set(decl)):
+                raise Refusal("R048", "Invalid step declaration shape", at)
+            step_name = decl["step"]
+            if not rules.NAME.match(step_name) or "__" in step_name:
+                raise Refusal("R040", f"Step name {step_name!r} must be lower snake case without '__'", at)
+            step_key = (source.owner, source.path, step_name)
+            if step_key in seen_steps:
+                other, pointer = seen_steps[step_key]
+                errors.append(other.diagnose(Refusal("R040", f"Duplicate step {step_name!r} in module", pointer)))
+                raise Refusal("R040", f"Duplicate step {step_name!r} in module", at)
+            seen_steps[step_key] = (source, at)
+            key = columns(schema, source, decl["columns"], f"{at}/columns")
+            semantics = tuple(schema.column_semantic(logical, physical, f"{at}/columns/{index}")
+                              for index, (_, logical, physical) in enumerate(key))
+            try:
+                match_relation = rezono_step.match_relation_name(
+                    source.owner, root, source.path, step_name, signatures,
+                )
+            except ValueError as error:
+                raise Refusal("R040", str(error), at) from None
+            owners[match_relation] = source, at
+            signatures[match_relation] = Signature(
+                key, source.module, source.owner, source.path, semantics=semantics,
+            )
+            step_specs.append((source, at, decl, match_relation, key))
+            step_clauses[source.owner, source.path, at] = match_relation
+            rules_list.append((source, at, {"rule": match_relation, "columns": decl["columns"], "when": decl["when"]}))
+        except Refusal as error:
+            errors.append(source.diagnose(error))
+
     intermediate, intermediate_errors = resolve_intermediate_invariants(intermediate_specs, signatures)
     errors.extend(intermediate_errors)
 
     clauses: dict[ClauseKey, LinkedClause] = {}
-    for source, at, decl in rules:
+    for source, at, decl in rules_list:
         try:
             if "when" in decl:
                 clauses[source.owner, source.path, at] = read_clause(schema, source, at, decl, signatures)
@@ -645,6 +689,9 @@ def link_modules(meta: dict, definitions: list[modules.Module], imported: dict[s
                 raise Refusal("R040", "A positional rule head needs a guard", at)
         except Refusal as error:
             errors.append(source.diagnose(error))
+    compiled_steps = rezono_step.lower_steps(
+        meta, pack_dir, imported, schema, signatures, step_specs, pack_kinds, errors,
+    )
     errors.extend(Diagnostic("R046", message) for message in schema_errors)
     defined = {clause.relation for clause in clauses.values()}
     if not errors:
@@ -655,9 +702,15 @@ def link_modules(meta: dict, definitions: list[modules.Module], imported: dict[s
     if errors:
         raise pack.CompileError("\n".join(map(str, errors)), errors)
     places = Places(definitions, forms)
-    guards = {key: (source, decl["when"]) for source, at, decl in rules
+    guards = {key: (source, decl["when"]) for source, at, decl in rules_list
               if (key := (source.owner, source.path, at)) in clauses}
-    return Linked(predicates(schema, signatures, clauses, guards, places, defined), clauses, intermediate)
+    return Linked(
+        predicates(schema, signatures, clauses, guards, places, defined),
+        clauses,
+        intermediate,
+        compiled_steps,
+        step_clauses,
+    )
 
 
 class Places:

@@ -625,6 +625,10 @@ def lower(pack_dir: Path, d: Declared, form: dict, pack: str, owners: dict[str, 
                 enums[decl["enum"]] = lowered_enum
         elif "rule" in decl and native_rules:
             continue  # The rule assembler needs the checked schema and pinned imports.
+        elif "step" in decl:
+            if form["format"] != SAFE_STEP_FORMAT:
+                refuse(at, "a step declaration requires rezono.module/4", "§6")
+            continue  # Step declarations are lowered after native rules and schema resolution.
         elif "extend" in decl:
             rezono_extend.validate(decl, at, imported, refuse, extended_format=extended_format)
         elif "asOf" in decl and extended_format:
