@@ -23,7 +23,7 @@ The public surface of a pack is every declaration visible to other packs, each w
 | check | `checks[]` | that it is there |
 | pack | `pack.base`, `kinds[].iri`, `reasons[]` | the base, each namespace and each reason code |
 
-- **Identity.** An element is matched by its id. A kind or slot whose `stable_id` the earlier bundle has under another id is renamed; the bundle records its first name in `renamed_from` (docs/compiler.md, stable ids and spans).
+- **Identity.** An element is matched by its id. A kind or slot whose `stable_id` the earlier bundle has under another id is renamed; the bundle records its first name in `renamed_from` (contracts/bundle.yaml, `stable_id` and `renamed_from` of `Kind` and `Slot`).
 - **Rules.** A rule is compared through the relation it derives. Its body, its runtime id and its stable id are not surface: the runtime id renumbers when a rule is added, and what a rule derives from facts is data, held by the proofs.
 - **Enum world.** The bundle carries an enum's openness only on the slots that take it (`semantic.open`, contracts/bundle.yaml `SemanticType`), so closing or opening an enum is reported on each such slot.
 - **Not surface.** Spans, sentences, labels, messages, channels, pages, the kind order, questions and reader questions: text and layout for people. Doc comments do not reach the bundle at all.
