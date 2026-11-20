@@ -1061,6 +1061,22 @@ def _expected_protections(run: str, topology: StartupTopology) -> dict[str, Endp
     return protections
 
 
+def _policy_applies_to_ingress(policy_types: Any) -> bool | None:
+    """Return whether a NetworkPolicy's policyTypes applies to Ingress, or None if malformed.
+
+    Per Kubernetes networking.k8s.io/v1 semantics, omitted or empty policyTypes
+    always applies to Ingress. Ingress is inactive only when policyTypes is a
+    non-empty list of valid policy types that omits "Ingress" (i.e. Egress-only).
+    """
+    if policy_types is None or policy_types == []:
+        return True
+    if not isinstance(policy_types, list):
+        return None
+    if not all(isinstance(pt, str) and pt in {"Ingress", "Egress"} for pt in policy_types):
+        return None
+    return "Ingress" in policy_types
+
+
 def _read_protected_endpoints(
     policies: list[dict[str, Any]],
     run: str,
@@ -1071,63 +1087,88 @@ def _read_protected_endpoints(
     unsafe_ns: set[str] = set()
     matched_endpoints: set[str] = set()
     compromised_endpoints: set[str] = set()
-
-    expected_by_ns_selector: dict[tuple[str, str], str] = {
-        (_namespace_name(run, spec.zone), canonical_json({"matchLabels": {SERVICE_LABEL: spec.service}})): ep
-        for ep, spec in expected_protections.items()
-    }
+    seen_policy_names: set[tuple[str, str]] = set()
 
     for policy in policies:
-        meta = policy.get("metadata", {})
-        if type(meta.get("generation")) is not int or meta["generation"] <= 0 or not meta.get("uid"):
+        if not isinstance(policy, dict):
+            return []
+        meta = policy.get("metadata")
+        if not isinstance(meta, dict):
+            return []
+        if (
+            type(meta.get("generation")) is not int
+            or meta["generation"] <= 0
+            or not isinstance(meta.get("uid"), str)
+            or not meta["uid"]
+        ):
             continue
         ns = meta.get("namespace")
         name = meta.get("name")
         if not isinstance(ns, str) or not isinstance(name, str):
+            return []
+        if (ns, name) in seen_policy_names:
+            unsafe_ns.add(ns)
             continue
-        spec = policy.get("spec", {})
-        policy_types = spec.get("policyTypes", ())
-        if not isinstance(policy_types, list) or "Ingress" not in policy_types:
+        seen_policy_names.add((ns, name))
+
+        spec = policy.get("spec")
+        if not isinstance(spec, dict):
+            unsafe_ns.add(ns)
+            continue
+
+        applies_to_ingress = _policy_applies_to_ingress(spec.get("policyTypes"))
+        if applies_to_ingress is None:
+            unsafe_ns.add(ns)
             continue
         raw_ingress = spec.get("ingress")
+        if not applies_to_ingress:
+            if raw_ingress is not None and raw_ingress != []:
+                unsafe_ns.add(ns)
+            continue
+
         if raw_ingress is None:
             actual_ingress: list[Any] = []
         elif isinstance(raw_ingress, list):
             actual_ingress = raw_ingress
         else:
+            unsafe_ns.add(ns)
             continue
         pod_selector = spec.get("podSelector")
 
-        if name == "rezono-default-deny" and pod_selector == {}:
-            if not actual_ingress:
+        if name == "rezono-default-deny":
+            if pod_selector == {} and not actual_ingress:
                 default_deny_ns.add(ns)
             else:
                 unsafe_ns.add(ns)
             continue
 
-        if pod_selector == {} and actual_ingress:
+        annotations = meta.get("annotations")
+        ep = annotations.get("rezono.org/protected-endpoint") if isinstance(annotations, dict) else None
+        if isinstance(ep, str) and ep in expected_protections:
+            expected = expected_protections[ep]
+            expected_ns = _namespace_name(run, expected.zone)
+            expected_name = f"rezono-protect-{expected.service}"
+            expected_selector = {"matchLabels": {SERVICE_LABEL: expected.service}}
+            if ns != expected_ns:
+                unsafe_ns.add(ns)
+                continue
+            if name == expected_name and pod_selector == expected_selector:
+                actual_rules = sorted(canonical_json(rule) for rule in actual_ingress)
+                expected_rules = sorted(canonical_json(rule) for rule in expected.ingress)
+                if actual_rules == expected_rules:
+                    matched_endpoints.add(ep)
+                else:
+                    compromised_endpoints.add(ep)
+                continue
+            compromised_endpoints.add(ep)
             unsafe_ns.add(ns)
             continue
 
-        ep = meta.get("annotations", {}).get("rezono.org/protected-endpoint")
-        if ep in expected_protections:
-            expected = expected_protections[ep]
-            expected_ns = _namespace_name(run, expected.zone)
-            expected_selector = {"matchLabels": {SERVICE_LABEL: expected.service}}
-            if ns != expected_ns:
-                continue
-            actual_rules = sorted(canonical_json(rule) for rule in actual_ingress)
-            expected_rules = sorted(canonical_json(rule) for rule in expected.ingress)
-            if pod_selector == expected_selector and actual_rules == expected_rules:
-                matched_endpoints.add(ep)
-            else:
-                compromised_endpoints.add(ep)
-            continue
-
-        if isinstance(pod_selector, dict):
-            selected_ep = expected_by_ns_selector.get((ns, canonical_json(pod_selector)))
-            if selected_ep is not None and actual_ingress:
-                compromised_endpoints.add(selected_ep)
+        # Any other ingress NetworkPolicy in the namespace is unrecognized.
+        # Because Kubernetes NetworkPolicy allow rules are additive across any
+        # matching podSelector (empty, matchLabels, matchExpressions, etc.),
+        # fail closed for the entire namespace.
+        unsafe_ns.add(ns)
 
     return sorted(
         ep
