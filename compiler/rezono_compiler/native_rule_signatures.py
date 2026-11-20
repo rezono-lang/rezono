@@ -188,14 +188,26 @@ class Schema:
     def storage(self, name: str, at: str) -> str:
         if name in self.enums:
             return "string"
-        definition, authored = self.classes[name]
-        view = definition.sv
-        identifiers = [slot for slot in view.class_induced_slots(authored) if slot.identifier]
+        _, authored = self.classes[name]
+        identifiers: list[tuple[modules.Module, str, object]] = []
+        seen_slots: set[str] = set()
+        for _, owner_mod, ancestor in self._ancestors(name):
+            cls = owner_mod.sv.get_class(ancestor, imports=False)
+            if cls is None:
+                continue
+            for slot in pack.own_class_slots(owner_mod.sv, cls):
+                if slot.name in seen_slots:
+                    continue
+                seen_slots.add(slot.name)
+                if slot.identifier:
+                    identifiers.append((owner_mod, ancestor, slot))
         if len(identifiers) != 1:
             raise Refusal("R049", f"{authored} needs exactly one identifier to be used in a rule", at)
-        identifier = identifiers[0]
+        id_mod, id_cls, identifier = identifiers[0]
+        slot_owner = id_mod.slot_targets.get((id_cls, identifier.name))
+        id_view = self.names.modules[slot_owner].sv if slot_owner in self.names.modules else id_mod.sv
         errors: list[str] = []
-        sql = pack.identifier_type(view, identifier, identifier.range or view.schema.default_range,
+        sql = pack.identifier_type(id_view, identifier, identifier.range or id_mod.sv.schema.default_range,
                                    f"{authored}.{identifier.name}", errors)
         storage = types.rule_type(sql)
         if errors or storage is None:
@@ -210,7 +222,7 @@ class Schema:
             seen.add(current)
             definition, authored = self.classes[current]
             yield current, definition, authored
-            cls = definition.sv.get_class(authored)
+            cls = definition.sv.get_class(authored, imports=False)
             if cls is None or not cls.is_a:
                 break
             parent_owner = definition.parent_targets.get(authored)
@@ -231,12 +243,12 @@ class Schema:
             raise Refusal("R003", f"{subject} is a value and has no slot {name!r}", at)
         _, authored = self.classes[subject]
         for owner, owner_mod, ancestor in self._ancestors(subject):
-            kind = owner_mod.sv.get_class(ancestor)
-            if name in (kind.attributes or {}) or name in (kind.slots or []):
+            kind = owner_mod.sv.get_class(ancestor, imports=False)
+            if kind is not None and (name in (kind.attributes or {}) or name in (kind.slots or [])):
                 break
         else:
             raise Refusal("R001", f"{authored} has no slot {name!r}", at)
-        slot = owner_mod.sv.induced_slot(name, ancestor)
+        slot = pack.own_class_slot(owner_mod.sv, kind, name)
         if slot.identifier:
             scalar = "Int" if self.storage(subject, at) == "integer" else "Text"
             return (None, scalar), False
@@ -254,9 +266,9 @@ class Schema:
         A missing required scalar is unknown and a missing optional one is not applicable. An identifier is
         always known, and a multivalued hop gives a collection whose fold decides its own state."""
         for _, owner_mod, ancestor in self._ancestors(subject):
-            kind = owner_mod.sv.get_class(ancestor)
-            if name in (kind.attributes or {}) or name in (kind.slots or []):
-                slot = owner_mod.sv.induced_slot(name, ancestor)
+            kind = owner_mod.sv.get_class(ancestor, imports=False)
+            if kind is not None and (name in (kind.attributes or {}) or name in (kind.slots or [])):
+                slot = pack.own_class_slot(owner_mod.sv, kind, name)
                 if slot.identifier or slot.multivalued:
                     return ("known",), None
                 return (
@@ -377,7 +389,7 @@ def literal_type(schema: Schema, source: Source, literal: str, at: str) -> str |
                 member = json.loads(match[2])
             except ValueError:
                 raise Refusal("R012", f"Invalid literal of type {match[1]}", at) from None
-            if member not in (definition.sv.get_enum(authored).permissible_values or {}):
+            if member not in (definition.sv.get_enum(authored, imports=False).permissible_values or {}):
                 raise Refusal("R012", f"{member!r} is not a member of {match[1]}", at)
             return name
     return None
