@@ -28,6 +28,7 @@ release.series: selected release series
 pin: pin
 pin.service: service
 pin.release: release
+pin.same_product: the service product equals the release product
 choice: choice
 choice.service: service
 choice.function: function
@@ -102,3 +103,7 @@ product_licence_gap_reason: reason for missing product evidence
 product_has_licence_gap: product has an identified evidence gap
 component_product_licence: component source licence
 component_licence_state: component licence evidence status
+cluster_worker_node: cluster worker node
+cluster_worker_node.owner: owner cluster
+cluster_worker_node.endpoint: worker endpoint
+cluster_worker_node.same_cluster: the worker endpoint belongs to the owner cluster
