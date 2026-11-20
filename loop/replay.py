@@ -2,15 +2,54 @@
 
 from collections.abc import Collection, Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass
+from functools import cache
 from itertools import chain
-from typing import Any, Literal
+from pathlib import Path
+from typing import Any, Literal, cast
+
+from rezono_compiler import batch, facts, pack, rules, scenarios
 
 from loop.frontier import frontier
 from loop.round_limit import can_continue
-from loop.round_outcome import outcome
 
 RESERVED_STATES = frozenset({"applying", "unknown"})
 RELEASED_STATES = frozenset({"failed", "cleaned"})
+_UNBLOCKED_RELATIONS = ("declared", "unblocked", "done", "stuck", "drift", "round_outcome")
+
+
+@cache
+def _loop_theory() -> tuple[pack.Pack, rules.Program]:
+    path = Path(__file__).resolve().parents[1] / "packs" / "std-loop"
+    model = pack.read(path)
+    return model, rules.load(model.rules)
+
+
+def _require_round_outcome(snapshot: "Snapshot") -> Literal["success", "pending", "failure"]:
+    if snapshot.round_outcome is None:
+        raise ValueError("snapshot is missing round outcome")
+    return snapshot.round_outcome
+
+
+def snapshot_from_rows(
+    run: str,
+    selected: Mapping[str, Collection[tuple[str, ...]]],
+    *,
+    frontier_relation: Literal["unblocked", "ready"] = "unblocked",
+) -> "Snapshot":
+    """Build one run-scoped Snapshot from selected std-loop relations."""
+    outcomes = {row[1] for row in selected["round_outcome"]}
+    if len(outcomes) != 1 or not outcomes <= {"pending", "success", "failure"}:
+        raise ValueError(f"expected one round outcome for {run!r}, got {sorted(outcomes)}")
+    round_outcome = cast(Literal["success", "pending", "failure"], next(iter(outcomes)))
+    return Snapshot(
+        {row[1] for row in selected["declared"]},
+        cast(Collection[tuple[str, str, str]], selected[frontier_relation]),
+        {row[1] for row in selected["done"]},
+        {row[1] for row in selected["stuck"]},
+        selected["drift"],
+        cast(Collection[tuple[str, str, str, str, str]], selected.get("fixed_point", ())),
+        round_outcome,
+    )
 
 
 @dataclass
@@ -30,11 +69,7 @@ def replay_report(run: str, limit: int, snapshots: Iterator[Snapshot], *, report
     trace: list[list[str]] = []
     current = next(snapshots)
     while True:
-        state = (
-            current.round_outcome
-            if current.round_outcome is not None
-            else outcome(declared=current.declared, done=current.done, stuck=current.stuck, drift=current.drift)
-        )
+        state = _require_round_outcome(current)
         if current.fixed_point:
             return trace, "failure", sorted(current.fixed_point)
         if state != "pending":
@@ -83,11 +118,7 @@ def replay_certified_report(
                 if (attempt.state == "applied" and attempt.step in current.done) or attempt.state in RELEASED_STATES:
                     reserved.pop(attempt.plan_hash, None)
 
-        state = (
-            current.round_outcome
-            if current.round_outcome is not None
-            else outcome(declared=current.declared, done=current.done, stuck=current.stuck, drift=current.drift)
-        )
+        state = _require_round_outcome(current)
         if current.fixed_point:
             record_round(current_round, current)
             return trace, "failure", sorted(current.fixed_point), submissions, round_reports
@@ -128,6 +159,46 @@ def replay_snapshots(run: str, limit: int, snapshots: Iterator[Snapshot], *, rep
     return plans, state
 
 
+def _untyped_records(
+    run: str,
+    requirements: Mapping[str, Collection[str]],
+    completion: Mapping[str, str],
+) -> tuple[dict[str, list[dict[str, object]]], set[str]]:
+    """Build base std-loop records for an untyped recording."""
+    completions = [
+        {
+            "id": f"completion-{step}",
+            "run": run,
+            "step": step,
+            "token": token,
+            "reason": f"completion-{step}",
+        }
+        for step, token in sorted(completion.items())
+    ]
+    reqs = []
+    tokens = set(completion.values())
+    for step in sorted(requirements):
+        for token in requirements[step]:
+            idx = len(reqs)
+            reqs.append({
+                "id": f"requirement-{idx}",
+                "run": run,
+                "step": step,
+                "token": token,
+                "reason": f"requirement-{idx}",
+            })
+            tokens.add(token)
+    records: dict[str, list[dict[str, object]]] = {
+        "loop_active_run": [{"id": run}],
+        "loop_step": [{"id": step} for step in sorted(requirements)],
+        "loop_completion": completions,
+        "loop_requirement": reqs,
+        "loop_expectation": [{"id": token, "value": "known"} for token in sorted(tokens)],
+        "loop_observation": [],
+    }
+    return records, tokens
+
+
 def replay(
     run: str,
     requirements: Mapping[str, Collection[str]],
@@ -141,13 +212,40 @@ def replay(
     if requirements.keys() != completion.keys():
         raise ValueError("each declared step needs one completion token")
 
-    def snapshots():
-        known = set()
-        declared = set(requirements)
-        for evidence in chain((initial,), sweeps):
-            known.update(token for row_run, token, _ in evidence if row_run == run)
-            done = {step for step, token in completion.items() if token in known}
-            ready = [(run, step, step) for step in declared - done if known.issuperset(requirements[step])]
-            yield Snapshot(declared, ready, done, set(), ())
+    model, program = _loop_theory()
+    base_records, expected_tokens = _untyped_records(run, requirements, completion)
+
+    def snapshots() -> Iterator[Snapshot]:
+        observations: list[dict[str, object]] = []
+        expectations = list(base_records["loop_expectation"])
+        seen_tokens = set(expected_tokens)
+        for sweep_index, evidence in enumerate(chain((initial,), sweeps)):
+            for row_run, token, reason in evidence:
+                if token not in seen_tokens:
+                    seen_tokens.add(token)
+                    expectations.append({"id": token, "value": "known"})
+                observations.append({
+                    "id": f"observation-{len(observations)}",
+                    "run": row_run,
+                    "token": token,
+                    "event_time": sweep_index,
+                    "state": "known",
+                    "value": "known",
+                    "reason": reason,
+                })
+            records = {
+                **base_records,
+                "loop_expectation": expectations,
+                "loop_observation": observations,
+            }
+            inputs = scenarios.rule_rows(model, program, facts.rows_of(model, records))
+            with batch.connect(program, inputs) as connection:
+                batch.compute(connection, program)
+                rows = batch.read(connection, program, _UNBLOCKED_RELATIONS)
+            selected = {
+                name: {row for row in relation if row[0] == run}
+                for name, relation in rows.items()
+            }
+            yield snapshot_from_rows(run, selected)
 
     return replay_snapshots(run, limit, snapshots(), report_limit=False)
