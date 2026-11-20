@@ -35,20 +35,6 @@ def times(readings, sweeps):
     return waited, completed
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason=(
-        "M2: decisions/code-does-not-decide.md, row loop/status_times.py. Derive "
-        "delivery_waiting_time(tenant, delivery, step, run, elapsed) and "
-        "delivery_completed_at(tenant, delivery, step, run, at) in packs/std-loop/rules/delivery_status.dl from "
-        "loop_status_observation and loop_sweep. event_time is read on one clock in seconds, as the typed "
-        "recording's run clock gives it; the end is the earliest done reading of the same run, else the latest "
-        "sweep of that run, and the start is the latest waiting reading at or before the end. No waiting reading "
-        "gives no row, never zero. Publishing both through loop/status_projection.py is the next step. Today "
-        "std-loop derives neither relation (AssertionError)."
-    ),
-)
 def test_delivery_times_are_rows_of_the_loop_pack():
     waiting = reading("waiting", "waiting", 240)
     watermark = sweep("watermark", 420)
