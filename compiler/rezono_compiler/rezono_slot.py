@@ -86,7 +86,8 @@ def resolve_prefixed(
     return None
 
 
-def lower(slots: list[dict], declared: Set[str], *, implicit_identifier: bool = True) -> dict[str, dict]:
+def lower(slots: list[dict], declared: Set[str], *, implicit_identifier: bool = True,
+          integer_types: Set[str] = frozenset()) -> dict[str, dict]:
     """Lower slots in written order, using an implicit identifier only when needed."""
     out: dict[str, dict] = {}
     if implicit_identifier and not any(slot.get("identifier") is True for slot in slots):
@@ -103,7 +104,8 @@ def lower(slots: list[dict], declared: Set[str], *, implicit_identifier: bool = 
         if "slotUri" in slot:
             attribute["slot_uri"] = slot["slotUri"]
         if "constraints" in slot:
-            attribute.update(constraint_facets(slot, range_name))
+            effective = "integer" if range_name in integer_types else range_name
+            attribute.update(constraint_facets(slot, effective))
         if slot.get("identifier") is True:
             attribute["identifier"] = True
         elif "card" not in slot or slot["card"] == "+":
@@ -144,7 +146,8 @@ def inverse_points_back(slot: dict, kind: str, here: str, kinds: Mapping[str, li
 def validate(slots: list, kind: str, at: str, own: Mapping[str, str], owners: Mapping[str, list[str]],
              uses: set[str], refuse: Refuse, *, extended: bool = False, open_kind: bool = False,
              aliases: Mapping[str, Mapping[str, list[str]]] | None = None,
-             kinds: Mapping[str, list] | None = None) -> bool:
+             kinds: Mapping[str, list] | None = None,
+             integer_types: Set[str] = frozenset()) -> bool:
     """Check slot forms and resolve references against all the modules of the pack."""
     ok = True
     seen: set[str] = set()
@@ -222,7 +225,8 @@ def validate(slots: list, kind: str, at: str, own: Mapping[str, str], owners: Ma
         range_name = builtin_range(name, name in own or bool(found))
         if has_constraints:
             try:
-                constraint_facets(slot, range_name)
+                effective = "integer" if range_name is None and name in integer_types else range_name
+                constraint_facets(slot, effective)
             except ValueError as error:
                 refuse(here, str(error), "§5.1")
                 ok = False

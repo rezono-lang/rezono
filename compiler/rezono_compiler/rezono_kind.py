@@ -18,6 +18,38 @@ def bare_name(expr: object) -> str | None:
     return None
 
 
+def when_conditions(expr: object, at: str, refuse: Refuse) -> dict[str, dict[str, object]] | None:
+    """Extract slot conditions from a single check clause or an `and` conjunction."""
+    terms = expr.get("and") if isinstance(expr, dict) and expr.keys() == {"and"} else [expr]
+    if not isinstance(terms, list) or not terms:
+        refuse(at, "expected one or more slot conditions joined by `and`", "§5.1")
+        return None
+    conditions: dict[str, dict[str, object]] = {}
+    for term in terms:
+        match term:
+            case {"cmp": ["=", left, right], **other} if not other:
+                slot, value = bare_name(left), bare_name(right)
+                if slot is None or value is None:
+                    refuse(at, "expected one slot equated to a bare value", "§5.1")
+                    return None
+                facets: dict[str, object] = {"equals_string": value}
+            case {"is": [target, "known"], **other} if not other:
+                slot = bare_name(target)
+                if slot is None:
+                    refuse(at, "expected one slot tested as known", "§5.1")
+                    return None
+                facets = {"value_presence": "PRESENT"}
+            case _:
+                refuse(at, "expected one slot equated to a bare value or tested as known", "§5.1")
+                return None
+        existing = conditions.setdefault(slot, {})
+        if existing.keys() & facets.keys():
+            refuse(at, f"slot {slot} has duplicate condition facets", "§5.1")
+            return None
+        existing.update(facets)
+    return conditions
+
+
 def lower_checks(checks: object, at: str, refuse: Refuse) -> list[dict] | None:
     """Lower the supported class requirements in order, using the existing rule facets."""
     if not isinstance(checks, list):
@@ -38,12 +70,8 @@ def lower_checks(checks: object, at: str, refuse: Refuse) -> list[dict] | None:
             continue
         names.add(name)
 
-        when_slot = value = None
-        match check.get("when"):
-            case {"cmp": ["=", left, right], **other} if not other:
-                when_slot, value = bare_name(left), bare_name(right)
-        if when_slot is None or value is None:
-            refuse(f"{here}/when", "expected one slot equated to a bare value", "§5.1")
+        preconditions = when_conditions(check.get("when"), f"{here}/when", refuse)
+        if preconditions is None:
             continue
         then_slot = None
         match check.get("then"):
@@ -53,7 +81,7 @@ def lower_checks(checks: object, at: str, refuse: Refuse) -> list[dict] | None:
             refuse(f"{here}/then", "expected one slot required to be known", "§5.1")
             continue
         rules.append(rezono_metadata.lower(check) | {
-            "preconditions": {"slot_conditions": {when_slot: {"equals_string": value}}},
+            "preconditions": {"slot_conditions": preconditions},
             "postconditions": {"slot_conditions": {then_slot: {"required": True}}},
         })
     return rules if len(rules) == len(checks) else None
@@ -86,7 +114,8 @@ def parent_of(value: object, kind: str, at: str, own: dict[str, str],
 def lower(decl: dict, at: str, own: dict[str, str], owners: dict[str, list[str]],
           declared: Set[str], uses: set[str], refuse: Refuse, *, extended_format: bool = False,
           aliases: Mapping[str, Mapping[str, list[str]]] | None = None,
-          kinds: Mapping[str, list] | None = None) -> dict | None:
+          kinds: Mapping[str, list] | None = None,
+          integer_types: Set[str] = frozenset()) -> dict | None:
     """`kinds` holds the slots of each kind of the module, which an inverse slot reads."""
     ok = True
     allowed = (MEMBERS | {"checks", "embedded", "equations", "parent", "relationship"} | rezono_metadata.FIELDS
@@ -149,8 +178,11 @@ def lower(decl: dict, at: str, own: dict[str, str], owners: dict[str, list[str]]
     if rezono_slot.validate(
         slots, decl["kind"], at, own, owners, uses, refuse,
         extended=extended_format, open_kind=world == "open", aliases=aliases, kinds=kinds,
+        integer_types=integer_types,
     ) and ok and equations is not None and rules is not None:
-        attributes = rezono_slot.lower(slots, declared, implicit_identifier=not embedded and parent is None)
+        attributes = rezono_slot.lower(
+            slots, declared, implicit_identifier=not embedded and parent is None, integer_types=integer_types,
+        )
         result = {"attributes": attributes} | rezono_metadata.lower(decl)
         if world == "open":
             result.setdefault("annotations", {})["world"] = "open"
