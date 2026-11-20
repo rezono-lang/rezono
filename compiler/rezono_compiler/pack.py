@@ -249,6 +249,8 @@ class Pack:
     rule_bodies: dict[str, tuple[str, ...]] = field(default_factory=dict)
     # Per rule id, where the rule is written (MOD2, spans.py): its head in a rule file, or the view that made it.
     rule_spans: dict[str, tuple | None] = field(default_factory=dict)
+    # Per derived relation name, the SemanticType of each column when richer than its physical rule type.
+    rule_semantics: dict[str, tuple[dict | None, ...]] = field(default_factory=dict)
     # P10.3: the units the pack and the packs it imports declare, by the name of their LinkML type (`units`).
     units: dict[str, types.Unit] = field(default_factory=dict)
     acceptance_questions: list[AcceptanceQuestion] = field(default_factory=list)  # own source inventory
@@ -772,7 +774,7 @@ def read(pack_dir: str | Path) -> Pack:
                                                       calc_parts=calc_parts, folds=pack.folds,
                                                       bodies=pack.rule_bodies, spans=pack.rule_spans,
                                                       generated=generated, embedded=rezono_relational.sources(mods),
-                                                      native=native)
+                                                      native=native, semantics=pack.rule_semantics)
             pack.warnings += rule_warnings
             if pack.rules:   # a variable or a column that joins two currencies is an error
                 amounts.columns(pack.rules, amounts.tables(pack))

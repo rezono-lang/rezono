@@ -107,6 +107,7 @@ class NativeSource:
     text: str
     statements: tuple[tuple, ...]
     columns: tuple[int, ...]
+    semantics: tuple[tuple[str, tuple[dict | None, ...]], ...] = ()
 
 
 @dataclass
@@ -490,7 +491,8 @@ def module_of(source: str, root: str, stem: str) -> str:
 def read(pack, pack_dir: Path, imports=None, renames=None, *, calc_inputs=None, calc_parts=None,
          folds: dict | None = None, bodies: dict | None = None, spans: dict | None = None,
          generated: list | None = None, embedded: tuple[Embedded, ...] = (),
-         native: tuple[NativeSource, ...] = ()) -> tuple[dict | None, list[str]]:
+         native: tuple[NativeSource, ...] = (),
+         semantics: dict | None = None) -> tuple[dict | None, list[str]]:
     """The IR of the pinned rule closure (None when every rules/ is empty), and warnings. Raises RuleError.
 
     `calc_parts` is each imported pack's part of the calculation (`calc.read_closure`): a rule reads a
@@ -550,6 +552,8 @@ def read(pack, pack_dir: Path, imports=None, renames=None, *, calc_inputs=None, 
         try:
             if isinstance(contents, NativeSource):
                 text, stmts, starts = contents.text, contents.statements, list(contents.columns)
+                if semantics is not None:
+                    semantics.update(contents.semantics)
             else:
                 text = contents.read_text(encoding="utf-8") if isinstance(contents, Path) else contents
                 starts = []

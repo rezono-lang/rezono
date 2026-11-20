@@ -38,22 +38,24 @@ def lower_source(module: modules.Module, form: dict, root: str,
     except (OSError, UnicodeError) as error:
         raise CompileError(f"{where}: cannot read the native rule positions") from error
     offsets = {place["at"]: place["start"] for place in form["spans"]}
-    statements, columns, refused = [], [], []
+    statements, columns, semantics, refused = [], [], {}, []
     site = Site(where, text, offsets)
     for at, declaration in declarations:
         # Every declaration is checked, so a refusal in one does not hide the refusal of another; a module with
         # any refusal lowers no rule at all.
         try:
-            lower_declaration(site, linked, module, at, declaration, statements, columns)
+            lower_declaration(site, linked, module, at, declaration, statements, columns, semantics)
         except CompileError as error:
             refused.extend(error.diagnostics)
     if refused:
         raise CompileError("\n".join(str(diagnostic) for diagnostic in refused), refused)
-    return rules_dl.NativeSource(module.pack, module.file.stem, where, text, tuple(statements), tuple(columns))
+    return rules_dl.NativeSource(module.pack, module.file.stem, where, text, tuple(statements), tuple(columns),
+                                 tuple(semantics.items()))
 
 
 def lower_declaration(site: Site, linked: native_rule_signatures.Linked, module: modules.Module, at: str,
-                      declaration: dict, statements: list, columns: list) -> None:
+                      declaration: dict, statements: list, columns: list,
+                      semantics: dict[str, tuple[dict | None, ...]]) -> None:
     where, text, offsets = site.file, site.text, site.offsets
     start = offsets[at]
     if len(start) > len(str(len(text))) or int(start) >= len(text):
@@ -72,6 +74,7 @@ def lower_declaration(site: Site, linked: native_rule_signatures.Linked, module:
         signature = linked.signatures[name]
         key = [(col, storage) for col, _, storage in signature.key]
         statements.append(("decl", name, key, line, None, False, False, None, signature.extend, None, False))
+        semantics[name] = signature.semantics
     if "when" in declaration:
         clause = linked.clauses[module.pack, module.rel, at]
         signature = linked.signatures[clause.relation]
