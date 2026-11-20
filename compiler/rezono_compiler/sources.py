@@ -350,7 +350,7 @@ class MissingOrigin:
     def place(self) -> str:
         if self.position.isdecimal():
             return f"{self.file}:{self.position}"
-        if self.position.startswith(f"{self.file}#") or self.position == self.file:
+        if self.position.startswith((f"{self.file}#", f"{self.file}:")) or self.position == self.file:
             return self.position
         return f"{self.file}:{self.position}" if self.file and self.position else (self.file or self.position)
 
@@ -361,31 +361,43 @@ class MissingOrigin:
         return None
 
 
+_GIT_LINE_SUFFIX = re.compile(r":L?[0-9]+(?:[-:]L?[0-9]+)*$")
+
+
+def _git_position_path(position: str) -> str:
+    """The file path part of a `git` source position, before `#...` or a trailing `:line` suffix."""
+    return _GIT_LINE_SUFFIX.sub("", position.partition("#")[0])
+
+
 def _own_fact_files(pack_dir: str | Path | None) -> list[tuple[tuple[str, ...], int]]:
-    """Resolved path parts and pack-relative depth of the pack's own fact files."""
+    """Resolved (or logical, for external symlinks) path parts and pack-relative depth of the pack's own fact files."""
     if pack_dir is None:
         return []
     resolved_pack = Path(pack_dir).resolve()
-    facts_dir = resolved_pack / "facts"
-    if not facts_dir.is_dir():
-        return []
-    out = []
-    for path in sorted(facts_dir.glob("*.yaml")):
-        if path.name.endswith(".sources.yaml"):
-            continue
+    out: list[tuple[tuple[str, ...], int]] = []
+    seen: set[tuple[tuple[str, ...], int]] = set()
+    for path in facts.source_paths(resolved_pack):
         resolved = path.resolve()
-        out.append((resolved.parts, len(resolved.relative_to(resolved_pack).parts)))
+        if resolved.is_relative_to(resolved_pack):
+            candidate = (resolved.parts, len(resolved.relative_to(resolved_pack).parts))
+        elif path.is_relative_to(resolved_pack):
+            candidate = (path.parts, len(path.relative_to(resolved_pack).parts))
+        else:
+            continue
+        if candidate not in seen:
+            seen.add(candidate)
+            out.append(candidate)
     return out
 
 
 def _is_own_fact_file(src: dict, own_files: list[tuple[tuple[str, ...], int]]) -> bool:
-    """A `git` source whose position before `#` names one of this pack's own fact files."""
+    """A `git` source whose position before `#` or `:line` names one of this pack's own fact files."""
     if src.get("kind") != "git" or not own_files:
         return False
-    raw_path = str(src.get("position", "")).partition("#")[0]
+    raw_path = _git_position_path(str(src.get("position", "")))
     if not raw_path or raw_path.startswith(("/", "\\")):
         return False
-    parts = tuple(p for p in Path(raw_path).parts if p not in ("", "."))
+    parts = tuple(p for p in Path(raw_path.replace("\\", "/")).parts if p not in ("", "."))
     if not parts or ".." in parts:
         return False
     return any(len(parts) >= min_depth and file_parts[-len(parts):] == parts for file_parts, min_depth in own_files)
@@ -421,7 +433,12 @@ def _source_places(entry: dict) -> list[tuple[str, str]]:
     for src in entry.get("sources", []):
         if src.get("kind") == "git":
             pos = str(src.get("position", ""))
-            pair = (pos.partition("#")[0] or str(src.get("name", "")), pos)
+            file_part = _git_position_path(pos)
+            line = pos[len(file_part) + 1:] if file_part and pos.startswith(f"{file_part}:") else ""
+            if line.isdecimal():
+                pair = (file_part, line)
+            else:
+                pair = (file_part or str(src.get("name", "")), pos)
         else:
             pair = (str(src.get("name", "")), str(src.get("position", "")))
         if pair not in seen:

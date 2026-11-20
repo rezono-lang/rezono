@@ -252,3 +252,260 @@ def test_a_decide_block_is_an_origin(tmp_path, capsys):
         problems.append("the size the decide block sets is not a row of generated/sources.json")
     if problems:
         raise MissingDecideOrigin("\n".join(problems))
+
+
+def test_self_citing_git_source_for_rezono_fact_module_is_no_origin(tmp_path, capsys, monkeypatch):
+    from rezono_compiler import pack, sources
+
+    def dataset_form(version: str, position: str, *, with_spans: bool = False) -> dict:
+        fmt = rezono_module.REZONO_1_FORMAT if version == "1" else rezono_module.DATASET_FORMAT
+        module = {
+            "rezono": version,
+            "pack": "minimal",
+            "use": [],
+            "decls": [{
+                "dataset": "items",
+                "decls": [
+                    {
+                        "source": "selfcite",
+                        "fields": {
+                            "kind": "git",
+                            "name": "rezono-lang/rezono",
+                            "revision": "deadbeef",
+                            "position": position,
+                        },
+                    },
+                    {
+                        "fact": "Alpha",
+                        "source": "selfcite",
+                        "columns": ["id", "title"],
+                        "rows": [[{"lit": "a-self"}, {"lit": '"Self"'}]],
+                    },
+                ],
+            }],
+        }
+        spans = (
+            [{"at": at, "line": "5", "start": "0", "end": "1"} for at in rezono_module.place_pointers(module)]
+            if with_spans else []
+        )
+        return {"format": fmt, "spans": spans, "module": module}
+
+    def make_rezono_pack(name: str, version: str, position: str) -> Path:
+        directory = Path(shutil.copytree(FIXTURE, tmp_path / name / "minimal"))
+        add_module(
+            directory,
+            "items",
+            f"rezono {version}\npack minimal\ndataset items\n",
+            dataset_form(version, position),
+        )
+        return directory
+
+    # Self-citations to the pack's own Rezono fact/dataset module must be rejected on rezono 1 (R053).
+    for case_name, position in (
+        ("v1_hash_line", "rezono/items.rezono#L5"),
+        ("v1_colon_line", "rezono/items.rezono:5"),
+        ("v1_repo_rel", "minimal/rezono/items.rezono#L5"),
+        ("v1_json_form", "rezono/items.json#/module/decls/0/decls/1/rows/0"),
+    ):
+        directory = make_rezono_pack(case_name, "1", position)
+        model = pack.read(directory)
+        entries = sources.read(model, directory)
+        missing = sources.missing_origins(model, entries, directory)
+        assert missing, f"{case_name}: expected missing origin for self-citing {position!r}"
+        assert missing[0].kind == "alpha" and missing[0].identifier == "a-self"
+        status, err, _ = compiled(directory, tmp_path, capsys)
+        assert status != 0, f"{case_name}: rezono 1 must refuse self-citing {position!r} with R053"
+        assert naming(lines(err, "R053"), "rezono/items.", "alpha", "a-self"), err
+        assert "W113" not in err, err
+
+    # On rezono 0, the same self-citation warns W113 and still compiles.
+    v0_dir = make_rezono_pack("v0_hash_line", "0", "rezono/items.rezono#L5")
+    status, err, _ = compiled(v0_dir, tmp_path, capsys)
+    assert status == 0, err
+    assert naming(lines(err, "W113"), "rezono/items.rezono#L5", "alpha", "a-self"), err
+    assert "R053" not in err, err
+
+    # Authored .rezono module (not form-only) self-citing its own file is also refused with R053 on rezono 1.
+    authored_dir = Path(shutil.copytree(FIXTURE, tmp_path / "authored_v1" / "minimal"))
+    authored_form = dataset_form("1", "rezono/items.rezono#L5", with_spans=True)
+    authored_text = (
+        'rezono 1\n'
+        'pack minimal\n'
+        'dataset items\n'
+        '  source selfcite\n'
+        '    kind git\n'
+        '    name "rezono-lang/rezono"\n'
+        '    revision "deadbeef"\n'
+        '    position "rezono/items.rezono#L5"\n'
+        '  fact Alpha @ selfcite\n'
+        '    | id | title |\n'
+        '    | a-self | "Self" |\n'
+    )
+    add_module(authored_dir, "items", authored_text, authored_form)
+    monkeypatch.setattr(rezono_module, "warm_pack_modules", lambda *args, **kwargs: None)
+    monkeypatch.setattr(rezono_module, "warm_packs", lambda *args, **kwargs: None)
+    monkeypatch.setattr(rezono_module, "authored_form", lambda *args, **kwargs: authored_form)
+    status, err, _ = compiled(authored_dir, tmp_path, capsys)
+    assert status != 0, "authored rezono 1 module self-citing rezono/items.rezono#L5 must fail with R053"
+    assert naming(lines(err, "R053"), "rezono/items.rezono#L5", "alpha", "a-self"), err
+
+    # Legacy YAML fact file self-citing with a :line suffix is also rejected on rezono 1.
+    yaml_colon = make_pack(
+        tmp_path,
+        "yaml_colon",
+        {"a.yaml": ALPHA},
+        {"a.sources.yaml": {"default": {
+            "kind": "git", "name": "rezono-lang/rezono", "revision": "deadbeef", "position": "facts/a.yaml:2",
+        }}},
+    )
+    on_rezono_1(yaml_colon)
+    status, err, _ = compiled(yaml_colon, tmp_path, capsys)
+    assert status != 0, "facts/a.yaml:2 self-citation must fail with R053 on rezono 1"
+    assert naming(lines(err, "R053"), "facts/a.yaml:2", "alpha", "a1"), err
+
+    # Counter-cases: citing another file or another pack's file with the same relative path is a valid origin.
+    for case_name, position in (
+        ("v1_decision_doc", "decisions/fact-origin-required.md#L25"),
+        ("v1_other_pack", "other-pack/rezono/items.rezono#L5"),
+    ):
+        directory = make_rezono_pack(case_name, "1", position)
+        model = pack.read(directory)
+        entries = sources.read(model, directory)
+        assert sources.missing_origins(model, entries, directory) == []
+        status, err, _ = compiled(directory, tmp_path, capsys)
+        assert status == 0, f"{case_name}: valid external git origin {position!r} must compile:\n{err}"
+        assert "R053" not in err and "W113" not in err, err
+
+
+def test_own_fact_files_handles_symlinked_facts_outside_pack(tmp_path):
+    from rezono_compiler import pack, sources
+
+    directory = Path(shutil.copytree(FIXTURE, tmp_path / "linked" / "minimal"))
+    outside = tmp_path / "elsewhere"
+    outside.mkdir()
+    (outside / "a.yaml").write_text(ALPHA, encoding="utf-8")
+    (outside / "a.sources.yaml").write_text(
+        yaml.safe_dump({"default": {
+            "kind": "git", "name": "rezono-lang/rezono", "revision": "deadbeef", "position": "facts/a.yaml#L2",
+        }}, sort_keys=True),
+        encoding="utf-8",
+    )
+    (outside / "b.yaml").write_text(BETA, encoding="utf-8")
+    (outside / "b.sources.yaml").write_text(yaml.safe_dump({"default": TOOL}, sort_keys=True), encoding="utf-8")
+    facts_link = directory / "facts"
+    try:
+        facts_link.symlink_to(outside, target_is_directory=True)
+    except OSError:
+        assert os.name == "nt"
+        subprocess.run(["cmd", "/c", "mklink", "/J", str(facts_link), str(outside)], check=True, capture_output=True)
+
+    assert not (facts_link / "a.yaml").resolve().is_relative_to(directory.resolve())
+    model = pack.read(directory)
+    entries = sources.read(model, directory)
+    missing = sources.missing_origins(model, entries, directory)
+    assert [(item.kind, item.identifier) for item in missing] == [("alpha", "a1")]
+
+
+def test_rezono_1_dataset_only_pack_sets_language_version_and_refuses_mixed_versions(tmp_path, capsys, monkeypatch):
+    from rezono_compiler import emit, pack
+
+    def make_dataset_pack(name: str, version: str, *, with_source: bool = False) -> Path:
+        fmt = rezono_module.REZONO_1_FORMAT if version == "1" else rezono_module.DATASET_FORMAT
+        decls: list[dict] = []
+        fact_table: dict = {
+            "fact": "Alpha",
+            "columns": ["id", "title"],
+            "rows": [[{"lit": "a-ds"}, {"lit": '"One"'}]],
+        }
+        if with_source:
+            decls.append({"source": "notices", "fields": TOOL})
+            fact_table["source"] = "notices"
+        decls.append(fact_table)
+        form = {
+            "format": fmt,
+            "spans": [],
+            "module": {
+                "rezono": version,
+                "pack": "minimal",
+                "use": [],
+                "decls": [{"dataset": "items", "decls": decls}],
+            },
+        }
+        directory = Path(shutil.copytree(FIXTURE, tmp_path / name / "minimal"))
+        add_module(directory, "items", f"rezono {version}\npack minimal\ndataset items\n", form)
+        return directory
+
+    # 1. A pack with schema/*.yaml + a rezono 1 dataset-only module has language_version == "1" and refuses with R053.
+    ds_only = make_dataset_pack("ds_only_v1", "1", with_source=False)
+    model = pack.read(ds_only)
+    assert model.language_version == "1"
+    bundle = json.loads(emit.compile_pack(model)["bundle/schema-bundle.json"])
+    assert bundle["pack"]["language_version"] == "1"
+    status, err, _ = compiled(ds_only, tmp_path, capsys)
+    assert status != 0, "rezono 1 dataset-only pack with uncited fact must be refused with R053"
+    assert naming(lines(err, "R053"), "rezono/items.json", "alpha", "a-ds"), err
+    assert "W113" not in err, err
+
+    # Counter-case: once every row has a valid origin, the rezono 1 dataset-only pack compiles.
+    ds_cited = make_dataset_pack("ds_cited_v1", "1", with_source=True)
+    assert pack.read(ds_cited).language_version == "1"
+    status, err, _ = compiled(ds_cited, tmp_path, capsys)
+    assert status == 0, err
+    assert "R053" not in err and "W113" not in err, err
+
+    # 2. A pack with schema/*.yaml + a rezono 1 fact-tables-only module also gets language_version == "1".
+    tables_dir = Path(shutil.copytree(FIXTURE, tmp_path / "tables_only_v1" / "minimal"))
+    tables_module = {
+        "rezono": "1",
+        "pack": "minimal",
+        "use": [],
+        "decls": [{"fact": "Alpha", "columns": ["id", "title"], "rows": [[{"lit": "t1"}, {"lit": '"One"'}]]}],
+    }
+    tables_form = {
+        "format": rezono_module.REZONO_1_FORMAT,
+        "module": tables_module,
+        "spans": [{"at": at, "line": "5", "start": "10", "end": "15"} for at in rezono_module.place_pointers(tables_module)],
+    }
+    add_module(
+        tables_dir,
+        "items",
+        'rezono 1\npack minimal\nfact Alpha\n  | id | title |\n  | t1 | "One" |\n',
+        tables_form,
+    )
+    monkeypatch.setattr(rezono_module, "warm_pack_modules", lambda *args, **kwargs: None)
+    monkeypatch.setattr(rezono_module, "warm_packs", lambda *args, **kwargs: None)
+    monkeypatch.setattr(rezono_module, "authored_form", lambda *args, **kwargs: tables_form)
+    assert pack.read(tables_dir).language_version == "1"
+
+    # 3. Mixed versions: rezono 0 schema + rezono 1 dataset is refused with R027.
+    mixed_s0_d1 = make_dataset_pack("mixed_s0_d1", "1", with_source=True)
+    v0_schema_mod = {"rezono": "0", "pack": "minimal", "use": [], "decls": [PANEL]}
+    v0_schema_form = {
+        "format": rezono_module.FORMAT,
+        "module": v0_schema_mod,
+        "spans": [{"at": at, "line": "1", "start": "0", "end": "1"} for at in rezono_module.place_pointers(v0_schema_mod)],
+    }
+    add_module(mixed_s0_d1, "panels", "rezono 0\npack minimal\n", v0_schema_form)
+    with pytest.raises(pack.CompileError, match="R027"):
+        pack.read(mixed_s0_d1)
+
+    # 4. Mixed versions: rezono 1 schema + rezono 0 dataset is refused with R027.
+    mixed_s1_d0 = make_dataset_pack("mixed_s1_d0", "0", with_source=True)
+    on_rezono_1(mixed_s1_d0)
+    with pytest.raises(pack.CompileError, match="R027"):
+        pack.read(mixed_s1_d0)
+
+    # 5. Mixed versions: rezono 0 dataset + rezono 1 dataset (no Rezono schema modules) is refused with R027.
+    mixed_d0_d1 = make_dataset_pack("mixed_d0_d1", "1", with_source=True)
+    add_module(
+        mixed_d0_d1,
+        "extra",
+        "rezono 0\npack minimal\ndataset extra\n",
+        {
+            "format": rezono_module.DATASET_FORMAT,
+            "spans": [],
+            "module": {"rezono": "0", "pack": "minimal", "use": [], "decls": [{"dataset": "extra", "decls": []}]},
+        },
+    )
+    with pytest.raises(pack.CompileError, match="R027"):
+        pack.read(mixed_d0_d1)
