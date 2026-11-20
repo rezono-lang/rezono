@@ -4,7 +4,7 @@ decisions/language-deprecation.md), instead of as unclassified syntax."""
 
 import pytest
 
-from language_usage import render
+from language_usage import EVIDENCE, render
 
 
 class MissingRegisteredBlock(AssertionError):
@@ -30,8 +30,10 @@ step install_policy(change: PolicyChange)
 EXPECTED = [
     "| deprecated-declaration | 1 | Pending ([reader](../../rezono/test/test_deprecated_declaration.py), "
     "[lowering](../../compiler/tests/rezono/test_lower_deprecated.py)) |",
-    "| intermediate-invariant | 1 | Pending ([reader](../../rezono/test/test_invariant_intermediate.py)) |",
-    "| step-declaration | 1 | Pending ([reader](../../rezono/test/test_step_declaration.py)) |",
+    "| intermediate-invariant | 1 | Pending ([reader](../../rezono/test/test_invariant_intermediate.py), "
+    "[lowering](../../compiler/tests/rezono/test_lower_intermediate_invariant.py)) |",
+    "| step-declaration | 1 | Pending ([reader](../../rezono/test/test_step_declaration.py), "
+    "[lowering](../../compiler/tests/rezono/test_lower_step_declaration.py)) |",
 ]
 
 
@@ -46,3 +48,12 @@ def test_language_usage_registered_blocks(tmp_path):
             if line.startswith(("| deprecated-declaration |", "| intermediate-invariant |", "| step-declaration |"))]
     if sorted(rows) != EXPECTED or "unclassified-authored-syntax" in output:
         raise MissingRegisteredBlock(output)
+
+
+def test_safe_step_blocks_require_lowering_evidence():
+    assert ("compiler/tests/rezono/test_lower_intermediate_invariant.py", "test_lower_intermediate_invariant") in (
+        EVIDENCE["intermediate-invariant"]
+    )
+    assert ("compiler/tests/rezono/test_lower_step_declaration.py", "test_lower_step_declaration") in (
+        EVIDENCE["step-declaration"]
+    )

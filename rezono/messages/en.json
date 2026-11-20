@@ -27,6 +27,7 @@
 	"R047": "the state `{0}` needs evidence this rule input does not supply",
 	"R048": "`{0}` does not fit its owning signature; put options on the typed head and give it a defining clause",
 	"R049": "`{0}` has no supported rule representation",
+	"R050": "`{0}` cannot be lowered to a calculation",
 	"W105": "`{0}` may be unknown; unknown values print with their reason",
 	"W108": "`{0}` has no version before {1}; there it is unknown (`no_version_applies`)",
 	"W112": "`table {0}` in `{1}`: no row applies when `{2}`; there it is unknown (`no_row_applies`)",

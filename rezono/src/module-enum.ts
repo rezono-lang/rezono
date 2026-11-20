@@ -1,8 +1,10 @@
+import { printDeprecated, type Deprecation } from './module-deprecation.ts';
 import { printMetadata, readMetadataLine, type Metadata } from './module-metadata.ts';
 import { block, listOf, printWorld, type World, declaration, named, type Build, type Logical, type ModuleComponent } from './module-support.ts';
 
 interface EnumerationDecl extends Metadata {
 	enum: string;
+	deprecated?: Deprecation;
 	world?: World;
 	values: string[];
 	memberMetadata?: Record<string, Metadata>;
@@ -34,11 +36,14 @@ function readEnumeration(line: Logical, build: Build): EnumerationDecl {
 }
 
 function printEnumeration(decl: EnumerationDecl): string[] {
-	return block(`enum ${decl.enum}${printWorld(decl.world)} = ${decl.values.join(' | ')}`, [
-		...printMetadata(decl),
-		...decl.values.flatMap(name => decl.memberMetadata && Object.hasOwn(decl.memberMetadata, name)
-			? block(`value ${name}`, printMetadata(decl.memberMetadata[name])) : [])
-	]);
+	return [
+		...printDeprecated(decl.deprecated),
+		...block(`enum ${decl.enum}${printWorld(decl.world)} = ${decl.values.join(' | ')}`, [
+			...printMetadata(decl),
+			...decl.values.flatMap(name => decl.memberMetadata && Object.hasOwn(decl.memberMetadata, name)
+				? block(`value ${name}`, printMetadata(decl.memberMetadata[name])) : [])
+		])
+	];
 }
 
 export const enumeration = {
