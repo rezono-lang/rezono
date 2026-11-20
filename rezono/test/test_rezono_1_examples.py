@@ -75,15 +75,6 @@ class MissingRezono1Examples(AssertionError):
     """The reader/runner did not parse, print, evaluate `example` blocks, or emit W109 for uncovered clauses."""
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=MissingRezono1Examples,
-    reason="M3: decisions/language-rezono-1.md: Waits for rezono/test/test_rezono_1_version_switch.py. "
-           "Read and print `example` blocks (`given`, `expect` values and `expect violation ... on ...`, plus "
-           "optional `at`/`as known` contexts per docs/rezono/v0.md §5e) in rezono/src/, and add example execution "
-           "with W109 coverage warnings for any uncovered version, `unless` line, table row or derivation in "
-           "rezono/src/examples.ts (`runExamples`). Read section 1.",
-)
 def test_rezono_1_example_blocks_and_w109_coverage():
     result = subprocess.run(
         ["node", "--input-type=module", "-e", PROBE, json.dumps([PARTIAL_COVERAGE_MODULE, FULL_COVERAGE_MODULE])],
