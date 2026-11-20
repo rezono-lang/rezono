@@ -3,8 +3,13 @@
 not_ready(r, s) :- waiting(r, s, _, _).
 not_ready(r, s) :- done(r, s, _).
 
-// Keep each eligibility witness for an unfinished step with no unmet requirements.
+// Only members of the admitted verified round for the current run and cut enter ready.
 .decl ready(run: symbol, step: symbol, reason: symbol)
-ready(r, s, w) :- eligible(r, s, w), !not_ready(r, s).
+ready(r, s, round) :-
+    current_verified_round(round, r, _, b),
+    verified_round_member(round, s),
+    !loop_batch_undecided(b),
+    eligible(r, s, _),
+    !not_ready(r, s).
 
 .output ready
