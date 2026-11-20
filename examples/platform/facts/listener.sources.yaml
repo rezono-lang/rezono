@@ -1,0 +1,4 @@
+default:
+  kind: synthetic
+  name: decisions/platform-published-listener-policies.md
+  position: reference-fixture

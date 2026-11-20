@@ -1,8 +1,34 @@
 default:
-  kind: pack
-  name: facts/core.yaml
-  position: facts/core.yaml
+  kind: git
+  name: rezono-lang/rezono
+  revision: 19949a346deba8fb46578da60148cba776a355d6
+  position: decisions/platform-inventory.md
 records:
+  - of: {kind: release, id: distribution-3.0.0}
+    kind: git
+    name: rezono-lang/rezono
+    revision: 0b9e8ffe2e9475f9591f58ea75d966de93818d1a
+    position: decisions/platform-registry-reference.md
+  - of: {kind: release, id: keycloak-27rc}
+    kind: synthetic
+    name: decisions/platform-facts-not-conclusions.md
+    revision: dbac8a77492843cfe1532f60e2959e3a9dd9696e
+    position: 4-release-dates-point-2
+  - of: {kind: pin, id: pin-reg}
+    kind: git
+    name: rezono-lang/rezono
+    revision: 0b9e8ffe2e9475f9591f58ea75d966de93818d1a
+    position: decisions/platform-registry-reference.md
+  - of: {kind: artifact, id: a-shop}
+    kind: synthetic
+    name: decisions/platform-facts-not-conclusions.md
+    revision: dbac8a77492843cfe1532f60e2959e3a9dd9696e
+    position: 7-signatures-point-5
+  - of: {kind: artifact, id: a-lab}
+    kind: synthetic
+    name: decisions/platform-facts-not-conclusions.md
+    revision: dbac8a77492843cfe1532f60e2959e3a9dd9696e
+    position: 7-signatures-point-5
   - of: {kind: demand, id: d-client-ingress}
     kind: git
     name: rezono-lang/rezono
