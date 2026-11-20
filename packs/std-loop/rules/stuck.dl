@@ -2,6 +2,7 @@
 .decl stuck(run: symbol, step: symbol, reason: symbol)
 stuck(run, step, reason) :- structural_stuck(run, step, reason).
 stuck(run, step, sweep) :- fixed_point(run, sweep, step, _, _).
+stuck(run, step, deadline) :- deadline_expired(run, step, _, deadline, _).
 
 // A cycle blocks each declared step it contains.
 structural_stuck(run, step, reason) :-

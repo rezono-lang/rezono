@@ -2,6 +2,7 @@
 .decl not_ready(run: symbol, step: symbol)
 not_ready(r, s) :- waiting(r, s, _, _).
 not_ready(r, s) :- done(r, s, _).
+not_ready(r, s) :- deadline_expired(r, s, _, _, _).
 
 // Keep each eligibility witness for an unfinished step with no unmet requirements.
 .decl ready(run: symbol, step: symbol, reason: symbol)
