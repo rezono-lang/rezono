@@ -773,7 +773,7 @@ def read(pack_dir: str | Path) -> Pack:
                 amounts.columns(pack.rules, amounts.tables(pack))
         except (rules_dl.RuleError, CompileError) as e:
             errors.append(str(e))
-            if isinstance(e, CompileError):
+            if isinstance(e, Diagnosed):
                 typed[str(e)] = e.diagnostics
     if not errors and (view_file := views.admit(pack_dir)) is not None:
         # A view that executes: typed against the theory as its own pack, then lowered to ordinary

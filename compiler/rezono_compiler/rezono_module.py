@@ -295,6 +295,31 @@ def named_dataset(module: dict) -> dict | None:
     return None
 
 
+def trailing_dataset(module: dict) -> bool:
+    """A module whose last declaration is its named dataset, after declarations that are none
+    (decisions/language-library-datasets.md): the declarations before it lower like any other module's."""
+    declarations = module["decls"]
+    return (len(declarations) > 1 and named_dataset(module | {"decls": declarations[-1:]}) is not None
+            and not any(isinstance(decl, dict) and "dataset" in decl for decl in declarations[:-1]))
+
+
+def dataset_only(form: dict) -> dict:
+    """The form of a module with its trailing dataset as the form of that dataset alone; the places of the dataset
+    keep their lines, and the places of the declarations before it are dropped. Any other form is returned as is."""
+    module = form["module"]
+    if not trailing_dataset(module):
+        return form
+    last = f"/decls/{len(module['decls']) - 1}"
+    spans = []
+    for span in form["spans"]:
+        at = span["at"]
+        if at == last or at.startswith(last + "/"):
+            spans.append(span | {"at": "/decls/0" + at[len(last):]})
+        elif not at.startswith("/decls/"):
+            spans.append(span)
+    return form | {"module": module | {"decls": module["decls"][-1:]}, "spans": spans}
+
+
 def fact_tables_only(module: dict) -> bool:
     """A module whose declarations are all fact tables (§5.3): the form of a base fact file."""
     declarations = module["decls"]
@@ -445,27 +470,50 @@ def lower(pack_dir: Path, d: Declared, form: dict, pack: str, owners: dict[str, 
         place = key if key.startswith("/") else header_line(pack_dir, d, key)
         refuse(place, message, section)
     pinned = pinned or {}
-    used: list[str] = []  # the pinned packs an unaliased `use` line makes visible, in the order of the lines
+    used: list[str] = []  # the pinned packs this module imports via `use`, in the order of the lines
+    unaliased: set[str] = set()
+    prefixes: dict[str, dict[str, list[str]]] = {}  # prefix -> {declared name -> [<pack>:<module>, ...]}
     if not native_rules:
         owners = {name: list(found) for name, found in owners.items()}
         for i, line_ in enumerate(module["use"]):
             at = f"/use/{i}"
             target = line_.get("use") if isinstance(line_, dict) else None
-            if not isinstance(target, str) or set(line_) - {"use"} or "." in target:
-                refuse(at, "a `use` line with a prefix or a dotted pack name is not lowered yet")
+            alias = line_.get("as") if isinstance(line_, dict) else None
+            if not isinstance(target, str) or set(line_) - {"use", "as"} or (
+                "as" in line_ and not isinstance(alias, str)
+            ):
+                refuse(at, "not a `use` line of the form")
+            elif "." in target:
+                refuse(at, "a `use` line with a dotted pack name is not lowered yet")
             elif target not in pinned:
                 refuse(at, f"{target} is not a pack that pack.yaml pins (R046)")
-            elif target not in used:
-                used.append(target)
-                for mid, ns in sorted(pinned[target].items()):
-                    for n in ns:
-                        owners.setdefault(n, []).append(f"{target}:{mid}")
+            elif alias is not None and alias in prefixes:
+                refuse(at, f"prefix {alias} is declared twice (R046)")
+            else:
+                if target not in used:
+                    used.append(target)
+                if alias is not None:
+                    prefixed: dict[str, list[str]] = {}
+                    for mid, ns in sorted(pinned[target].items()):
+                        for n in ns:
+                            prefixed.setdefault(n, []).append(f"{target}:{mid}")
+                    prefixes[alias] = prefixed
+                elif target not in unaliased:
+                    unaliased.add(target)
+                    for mid, ns in sorted(pinned[target].items()):
+                        for n in ns:
+                            owners.setdefault(n, []).append(f"{target}:{mid}")
     own = names(form)
     declared_names = own.keys() | owners.keys()
     uses: set[str] = set()
     enums: dict[str, dict] = {}
     classes: dict[str, dict] = {}
     aliases: dict[str, dict] = {}
+    # The slots of each kind of this module, which an inverse slot reads (decisions/language-inverse-references.md).
+    kinds: dict[str, list] = {}
+    for decl in module["decls"]:
+        if isinstance(decl, dict) and isinstance(decl.get("kind"), str):
+            kinds.setdefault(decl["kind"], decl.get("slots") or [])
     for i, decl in enumerate(module["decls"]):
         at = f"/decls/{i}"
         if not isinstance(decl, dict):
@@ -495,7 +543,7 @@ def lower(pack_dir: Path, d: Declared, form: dict, pack: str, owners: dict[str, 
                     continue
             lowered_kind = rezono_kind.lower(
                 decl, at, own, owners, declared_names, uses, refuse,
-                extended_format=extended_format,
+                extended_format=extended_format, aliases=prefixes, kinds=kinds,
             )
             if lowered_kind is not None:
                 if keys:
@@ -527,6 +575,8 @@ def lower(pack_dir: Path, d: Declared, form: dict, pack: str, owners: dict[str, 
                 refuse(at, "a scalar alias requires rezono.module/2", "§5.1")
             elif alias := rezono_alias.lower(decl, at, refuse):
                 aliases[decl["type"]] = alias
+        elif "dataset" in decl and form["format"] == DATASET_FORMAT and trailing_dataset(module):
+            continue  # The fact loader reads the dataset's tables (decisions/language-library-datasets.md).
         else:
             refuse(at, *next((REFUSED[k] for k in REFUSED if k in decl), ("not a declaration this compiler reads",)))
     schema = {"id": f"https://rezono.org/rezono/{pack}/{d.id}", "name": d.id.replace("/", "_"),

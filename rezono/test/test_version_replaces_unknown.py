@@ -54,13 +54,6 @@ def test_reader_refuses_a_missing_or_cyclic_replacement():
         raise MissingReplacedVersionCheck(json.dumps(differences, indent=2))
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=MissingR021Sentence,
-    reason="extra: decisions/language-parameters.md: Add the sentence of R021 to rezono/messages/en.json and "
-           "rezono/messages/nl.json, with the replacing version as {0}, the number it names as {1} and the "
-           "declaration as {2}, covering both a missing version and a cycle. Read section R021.",
-)
 def test_r021_has_a_sentence():
     messages = Path(__file__).parents[1] / "messages"
     missing = []

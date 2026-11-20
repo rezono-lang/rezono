@@ -25,7 +25,7 @@ runs:
       run: npm ci
     - name: Cache locked Python environment
       id: environment
-      uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830  # v4.3.0
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
       with:
         path: .venv
         key: python-env-v2-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('requirements/.python-version', 'requirements/dev.txt') }}
@@ -46,7 +46,7 @@ runs:
         fi
     - name: Save locked environment before installing local packages
       if: steps.environment.outputs.cache-hit != 'true' && inputs.save-cache == 'true'
-      uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830  # v4.3.0
+      uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
       with:
         path: .venv
         key: ${{ steps.environment.outputs.cache-primary-key }}
@@ -99,7 +99,7 @@ runs:
         ' "$RUNNER_TEMP/pytest-plugins.txt"
     - name: Cache generated contract types
       id: types
-      uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830  # v4.3.0
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
       with:
         path: |
           contracts/python/rezono_contracts/*.py
@@ -110,7 +110,7 @@ runs:
     - name: Cache the pinned oracle and its distribution packages
       if: inputs.oracle == 'true'
       id: oracle
-      uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830  # v4.3.0
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
       with:
         path: |
           ${{ runner.temp }}/oracle-debs/*.deb
