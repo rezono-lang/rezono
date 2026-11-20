@@ -103,8 +103,6 @@ def test_a_variant_pointer_must_bind_its_exact_bytes(sweep):
         pilot.checked_local_grid(local, "example", "a" * 40, 3, 64)
 
 
-@pytest.mark.xfail(strict=True, raises=AttributeError,
-                   reason="extra: Waits for deploy/profiles/edge/test_pilot.py--test_a_role_that_reads_in_part_sees_exactly_unavailable (same file). Add pilot.check_sweeps(reader, role, pack, sweeps): a generic sweep cell needs a computed status read through the role's reader at the variant's snapshot; an unavailable cell exits with a diagnostic.")
 def test_generic_sweep_still_requires_computed_status():
     class FullReader:
         def get(self, path):
