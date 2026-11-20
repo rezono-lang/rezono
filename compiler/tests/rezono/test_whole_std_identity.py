@@ -47,15 +47,6 @@ def test_std_identity_legacy_evaluates_scenarios(tmp_path):
     assert ("a", "solo") not in evaluated["equivalent"]
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=MissingCandidatePack,
-    reason="M3: decisions/language-standard-pack-candidates.md: Author packs/std-identity/candidate/identity.rezono "
-           "and generate packs/std-identity/candidate/identity.json with node rezono/src/write-form.ts so that the "
-           "isolated candidate matches packs/std-identity on semantic bundle, compiled SQL/IR and batch evaluation. "
-           "Keep schema/identity.yaml and rules/identity.dl untouched as the oracle. Read "
-           "decisions/language-standard-pack-candidates.md and decisions/language-first-packs.md.",
-)
 def test_whole_std_identity_candidate_has_the_same_meaning(tmp_path):
     actual = check_pack(tmp_path, "candidate")
     expected = check_pack(tmp_path, "legacy")

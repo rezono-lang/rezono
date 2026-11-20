@@ -13,17 +13,27 @@ PACK_NAME = "".join(("at", "las"))
 
 
 class LeakCheck(unittest.TestCase):
-    def run_check(self, files):
+    def run_check(self, files, budget="{}\n", base_files=None):
+        """Check the files; with base_files, first commit those under the same budget and check against that base."""
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
             subprocess.check_call(["git", "init", "-q"], cwd=root)
             (root / "scripts").mkdir()
-            (root / "scripts" / "leak-budget.json").write_text("{}\n")
+            (root / "scripts" / "leak-budget.json").write_text(budget)
+            options = []
+            if base_files is not None:
+                for name, text in base_files.items():
+                    (root / name).write_text(text)
+                subprocess.check_call(["git", "add", "-A"], cwd=root)
+                git = ["git", "-c", "user.name=Base", "-c", "user.email=base@example.org", "-c", "commit.gpgsign=false"]
+                subprocess.check_call([*git, "commit", "-q", "-m", "Base"], cwd=root)
+                base = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root, text=True).strip()
+                options = ["--base", base]
             for name, text in files.items():
                 (root / name).write_text(text)
             subprocess.check_call(["git", "add", "-A"], cwd=root)
             return subprocess.run(
-                [sys.executable, "-I", str(SCRIPT)], cwd=root, capture_output=True, text=True
+                [sys.executable, "-I", str(SCRIPT), *options], cwd=root, capture_output=True, text=True
             )
 
     def test_private_pack_name_is_found_in_any_case(self):
@@ -39,6 +49,33 @@ class LeakCheck(unittest.TestCase):
         self.assertEqual(result.returncode, 1)
         self.assertIn("[redacted filename] old_name: observed=1 listed=0", result.stdout)
         self.assertNotIn(PACK_NAME, result.stdout.lower())
+
+    def test_budget_is_a_ceiling_that_may_fall(self):
+        # Two changes that each remove a finding from one file merge into fewer findings than listed: still green.
+        budget = '{"pack.yaml": {"old_name": 2}}\n'
+        result = self.run_check({"pack.yaml": f"pack: {PACK_NAME}\n"}, budget)
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertIn("pack.yaml old_name: observed=1 listed=2; lower the budget", result.stdout)
+        result = self.run_check({"pack.yaml": f"pack: {PACK_NAME}\nalso: {PACK_NAME}\nand: {PACK_NAME}\n"}, budget)
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("pack.yaml old_name: observed=3 listed=2", result.stdout)
+        self.assertNotIn(PACK_NAME, result.stdout.lower())
+
+    def test_a_new_finding_in_a_file_with_slack_is_refused(self):
+        # The budget still lists 2 after one finding was removed; a new one may not fill that slack.
+        budget = '{"pack.yaml": {"old_name": 2}}\n'
+        result = self.run_check({"pack.yaml": f"pack: {PACK_NAME}\nalso: {PACK_NAME}\n"}, budget,
+                                base_files={"pack.yaml": f"pack: {PACK_NAME}\n"})
+        self.assertEqual(result.returncode, 1, result.stdout)
+        self.assertIn("pack.yaml old_name: observed=2 base=1 listed=2; a new finding is not allowed", result.stdout)
+        self.assertNotIn(PACK_NAME, result.stdout.lower())
+
+    def test_an_unchanged_count_against_the_base_passes(self):
+        budget = '{"pack.yaml": {"old_name": 2}}\n'
+        result = self.run_check({"pack.yaml": f"pack: {PACK_NAME}\nnote: changed\n"}, budget,
+                                base_files={"pack.yaml": f"pack: {PACK_NAME}\n"})
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertIn("pack.yaml old_name: observed=1 listed=2; lower the budget", result.stdout)
 
     def test_longer_words_are_not_findings(self):
         result = self.run_check({"pack.yaml": f"pack: {PACK_NAME}es x{PACK_NAME}\n"})

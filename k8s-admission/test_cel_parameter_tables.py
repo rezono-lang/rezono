@@ -23,12 +23,6 @@ def same_rows(table, expected):
     return f"size({mapped}) == {len(expected)} && {mapped}.all(r, r in {literal}) && {literal}.all(r, r in {mapped})"
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="M4: Write cel_parameter_tables.parameter_tables as decisions/k8s-admission-translator.md specifies under "
-           "Parameter table. Write in k8s-admission/cel_parameter_tables.py. Without Go the test checks the exact "
-           "text; the CI also runs cel-go.",
-)
 def test_cel_parameter_tables():
     from cel_parameter_tables import parameter_tables
 

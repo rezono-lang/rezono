@@ -24,6 +24,7 @@ is the first producer of the chain and every part reads the same accepted rows (
 """
 
 from . import feldera_names, rules_sql as sql
+from .rules import BOOLEAN
 from .sqltext import q
 
 EXPORT = "export__out"
@@ -206,7 +207,11 @@ def export_select(prog, part, relation=q):
     sel = []
     for r in part["exports"]:
         rel = prog.relations[r]
-        cols = [f"CAST({q(c.name)} AS VARCHAR)" for c in rel.key]
+        cols = [
+            f"CAST(CASE WHEN {q(c.name)} THEN 'true' ELSE 'false' END AS VARCHAR)"
+            if c.type == "boolean" else f"CAST({q(c.name)} AS VARCHAR)"
+            for c in rel.key
+        ]
         cols += ["CAST('' AS VARCHAR)"] * (width - len(cols))
         columns = ", ".join(f"{c} AS a{j}" for j, c in enumerate(cols))
         sel.append(f"SELECT CAST('{r}' AS VARCHAR) AS rel, {columns} FROM {relation(sql.relation_source(rel))}")
@@ -218,7 +223,8 @@ def export_select(prog, part, relation=q):
 
 def decode(prog, relation, cells):
     """An exported row back in the types of its relation: the text columns a0, a1, … in key order."""
-    return tuple(int(v) if c.type == "integer" else v for c, v in zip(prog.relations[relation].key, cells))
+    parse = {"integer": int, "boolean": BOOLEAN.__getitem__, "string": str}
+    return tuple(parse[c.type](v) for c, v in zip(prog.relations[relation].key, cells))
 
 
 def export_sql(prog, exports):
