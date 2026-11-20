@@ -38,11 +38,6 @@ def scope_rows(teams, catalog, relation):
         raise
 
 
-@pytest.mark.xfail(strict=True, raises=ScopeKindHiddenInNumber, reason=(
-    "extra: decisions/platform-delivery-inventory.md: Derive tenant_artifact_scope(tenant, artifact, kind) with kind "
-    "'tenant' or 'delivery' in examples/platform/rules/tenant_delivery_scope.dl, keep only delivery-scoped bindings "
-    "with their one-based number in tenant_delivery_scope, and drop the 0 sentinel and the tenant_delivery_scope "
-    "renaming in relation_rows of examples/platform/request_preview.py."))
 def test_delivery_scope_kind_is_a_column(tmp_path):
     teams, catalog = copy_requests(tmp_path)
     declarations = json.loads(catalog.read_text())
