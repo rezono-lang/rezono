@@ -138,20 +138,25 @@ def sidecar(pack: Pack, path: Path, doc) -> tuple[dict | None, dict, dict]:
     return default, entries, {(e["row"]["relation"], e["row"]["key"]): e for e in exact}
 
 
-def cited(form: dict, where: str) -> dict[tuple[str, int], dict]:
-    """The source of each row of a fact table that cites a source declaration (decisions/language-fact-provenance.md),
-    by kind and record index in the order of facts.located_scalar_dataset: the declaration's fields overridden by
-    the row's source cells, validated as a sidecar default and a record of that row would be."""
-    tables = facts.named_dataset_decls(form)
+def _declared_sources(tables: list, where: str) -> dict[str, dict]:
     declared = {}
     for decl in filter(facts.source_decl, tables):
         name, fields, at = decl["source"], decl["fields"], f"{where} source {decl['source']}"
         if not isinstance(name, str) or name in declared or not isinstance(fields, dict):
             raise facts.LoadError(f"{at}: a source is declared once, with its fields")
         declared[name] = source(fields, at)
+    return declared
+
+
+def cited(form: dict, where: str) -> dict[tuple[str, int], dict]:
+    """The source of each row of a fact table that cites a source declaration (decisions/language-fact-provenance.md),
+    by kind and record index in the order of facts.located_scalar_dataset: the declaration's fields overridden by
+    the row's source cells, validated as a sidecar default and a record of that row would be."""
+    tables = facts.named_dataset_decls(form)
+    declared = _declared_sources(tables, where)
     out, counts = {}, {}
     for decl in tables:
-        if facts.source_decl(decl):
+        if facts.source_decl(decl) or facts.fact_row_decl(decl) or facts.decide_decl(decl):
             continue
         kind, columns, rows, fields = facts.dataset_table(decl)
         start = counts.get(kind, 0)
@@ -174,6 +179,46 @@ def cited(form: dict, where: str) -> dict[tuple[str, int], dict]:
                 except ValueError:
                     raise facts.LoadError(f"{at}.@{field}: invalid quoted text literal") from None
             out[(kind, start + i)] = locator(declared[decl["source"]], override, at)
+    return out
+
+
+def _decide_sources(
+    form: dict,
+    where: str,
+    decided_cells: dict[tuple[str, int, str | None], tuple[int, int]],
+    dataset: facts.DatasetForm | None,
+    authored_lines: dict[str, str],
+    path: Path,
+) -> dict[tuple[str, int, str | None], list[dict]]:
+    """Sources for values set by `decide` blocks (decisions/fact-origin-required.md §1)."""
+    tables = facts.named_dataset_decls(form)
+    declared = _declared_sources(tables, where)
+    file_name = path.as_posix() if path.parent.parts else f"rezono/{path.name}"
+    out: dict[tuple[str, int, str | None], list[dict]] = {}
+    for cell_key, (decl_index, assign_index) in decided_cells.items():
+        decl = tables[decl_index]
+        assign_pointer = f"/decls/0/decls/{decl_index}/set/{assign_index}"
+        decl_pointer = f"/decls/0/decls/{decl_index}"
+        if dataset is not None and dataset.source is not None:
+            line_no = authored_lines.get(assign_pointer) or authored_lines.get(decl_pointer) or "1"
+            position = f"{dataset.source}:{line_no}"
+        else:
+            position = f"{file_name}#/module{assign_pointer}"
+        at = f"{where} decide {decl_index + 1}"
+        entry_sources = [source(
+            {"kind": "person", "name": decl["by"], "revision": decl["on"], "position": position},
+            at,
+        )]
+        ref = decl.get("source")
+        if isinstance(ref, str):
+            src_name, sep, frag = ref.partition("#")
+            if ref in declared:
+                entry_sources.append(declared[ref])
+            elif sep and src_name in declared and frag:
+                base = declared[src_name]
+                pos = f"{base['position'].partition('#')[0]}#{frag}" if base["kind"] in FILE_KINDS else frag
+                entry_sources.append(source(base | {"position": pos}, at))
+        out[cell_key] = entry_sources
     return out
 
 
@@ -220,9 +265,12 @@ def text_entries(pack: Pack, name: str, text: str, data: dict | None = None, *, 
     pointers = None
     authored_lines = {span["at"]: span["line"] for span in dataset.form["spans"]} if dataset and dataset.source else {}
     own_sources = {}
+    decided_sources: dict[tuple[str, int, str | None], list[dict]] = {}
     if isinstance(raw, dict) and raw.get("format") in facts.DATASET_FORMATS:
-        data, pointers = facts.located_scalar_dataset(judged, raw)
+        data, pointers, decided_cells = facts.located_scalar_dataset_with_decides(judged, raw)
         own_sources = cited(raw, path.name)
+        if decided_cells:
+            decided_sources = _decide_sources(raw, path.name, decided_cells, dataset, authored_lines, path)
     elif data is None:
         data = raw
     if not isinstance(data, dict):
@@ -262,7 +310,8 @@ def text_entries(pack: Pack, name: str, text: str, data: dict | None = None, *, 
                     name, position = f"facts/{path.name}", str(nodes[i].start_mark.line + 1)
                 elif dataset is not None and dataset.source is not None:
                     pointer = pointers[kind][i].removeprefix("/module")
-                    name, position = dataset.source, authored_lines[f"{pointer}/0"]
+                    name = dataset.source
+                    position = authored_lines.get(f"{pointer}/0") or authored_lines[pointer]
                 else:
                     name = path.as_posix() if path.parent.parts else f"rezono/{path.name}"
                     position = f"{name}#{pointers[kind][i]}"
@@ -272,6 +321,10 @@ def text_entries(pack: Pack, name: str, text: str, data: dict | None = None, *, 
                 if default:
                     raise both(kind, i)
                 fallback = [([own], None)]
+            id_key = judged.kinds[judged.root(kind)].identifier
+            rec_id = record.get(id_key) if id_key else None
+            if not explicit and own is None and (kind, i, None) in decided_sources:
+                fallback = [(decided_sources[(kind, i, None)], None)]
 
             def record_context(row_kind, row_key, parent):
                 selected = choices(row_kind, row_key, None)
@@ -294,7 +347,14 @@ def text_entries(pack: Pack, name: str, text: str, data: dict | None = None, *, 
                 selected = choices(row_kind, row_key, slot) if slot is not None else None
                 if selected and own is not None:
                     raise both(kind, i)
-                selected = selected or context
+                decided = (
+                    decided_sources.get((kind, i, slot))
+                    if row_kind == kind and row_key == rec_id else None
+                )
+                if decided is not None:
+                    selected = (selected or []) + [(decided, None)]
+                else:
+                    selected = selected or context
                 if not selected:
                     raise facts.LoadError(f"{companion.name}: no source for {row_kind} {row_key!r}")
                 for sources, reason in selected:

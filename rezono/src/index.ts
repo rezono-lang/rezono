@@ -10,7 +10,7 @@ export { checkModule } from './check-module.ts';
 export { amount, answer, byteOrder, load, NotEvaluated, NotLoaded, OverBudget, page, publish, suppose, tabulate, type Answer, type AnswerRow, type Cell, type Cursor, type Data, type Frac, type Publication, type Ref, type RowRef, type RowWitness, type Tabulated, type UndecidedRow, type UndecidedViolation, type V } from './evaluate.ts';
 export { grammar } from './grammar.ts';
 export { fromJson, JsonFormError, toJson } from './json.ts';
-export { parseDeclarations, parseModule, type Clause, type Decl, type DerivedDecl, type ExtendDecl, type FactRow, type FactTable, type KindDecl, type LanguageVersion, type Module, type ParamDecl, type ParsedModule, type ParseModuleOptions, type SlotDecl, type Table, type TableRow, type TableTest, type TableValue, type Valid, type VersionDecl } from './module.ts';
+export { parseDeclarations, parseModule, type Clause, type DecideAssign, type DecideDecl, type Decl, type DerivedDecl, type ExtendDecl, type FactRow, type FactTable, type KindDecl, type LanguageVersion, type Module, type ParamDecl, type ParsedModule, type ParseModuleOptions, type SlotDecl, type Table, type TableRow, type TableTest, type TableValue, type Valid, type VersionDecl } from './module.ts';
 export { MODULE_FORMAT, REZONO_1_MODULE_FORMAT, moduleForm, moduleFromJson, moduleToJson, type FormOf, type ModuleForm, type Place } from './module-json.ts';
 export { NORMAL_QUESTION, normalQuestion, questionHash } from './normal.ts';
 export { parse, type Diagnostic, type Parsed, type Span } from './parse.ts';

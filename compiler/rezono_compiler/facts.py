@@ -32,6 +32,7 @@ FORMAT = "rezono.schema-bundle/1"
 DATASET_FORMAT = rezono_module.DATASET_FORMAT
 DATASET_FORMATS = rezono_module.DATASET_FORMATS
 FACT_ROW_KEYS = frozenset({"fact", "id", "valid", "during", "in", "known", "set"})
+DECIDE_KEYS = frozenset({"decide", "by", "on", "valid", "during", "in", "known", "source", "set"})
 _OMITTED = object()
 # A schema without kinds: what admission refuses of a document against it, beside its unknown kinds, is the
 # document's own shape (sections).
@@ -151,6 +152,7 @@ def _declared_dataset(pack_dir: Path, meta: dict, declared: rezono_module.Declar
     except (OSError, ValueError) as error:
         raise LoadError(f"{declared.form}: cannot read module form ({error})") from error
     plain = (rezono_module.module_body(submitted, rezono_module.FORMAT)
+             or rezono_module.module_body(submitted, rezono_module.DATASET_FORMAT)
              or rezono_module.module_body(submitted, rezono_module.REZONO_1_FORMAT))
     if (plain is not None and rezono_module.fact_tables_only(plain)
             and not rezono_module.form_only_source(pack_dir / declared.module, submitted)):
@@ -205,6 +207,7 @@ def _fact_tables(pack_dir: Path, meta: dict, declared: rezono_module.Declared, s
     if effective is None:
         raise LoadError("\n".join(errors))
     authored = (rezono_module.module_body(effective, rezono_module.FORMAT)
+                or rezono_module.module_body(effective, rezono_module.DATASET_FORMAT)
                 or rezono_module.module_body(effective, rezono_module.REZONO_1_FORMAT))
     if authored is None or not rezono_module.fact_tables_only(authored):
         raise LoadError(f"{declared.module}: a module of fact tables declares nothing else")
@@ -269,7 +272,7 @@ def _document_with_dated_tables(
     dated_tables: set[str] = set()
     if isinstance(data, dict) and data.get("format") in DATASET_FORMATS:
         if pack is not None:
-            data, _, dated_tables = _located_scalar_dataset(schema(pack), data, as_of=as_of_date, known=known_date)
+            data, _, dated_tables, _ = _located_scalar_dataset(schema(pack), data, as_of=as_of_date, known=known_date)
         else:
             data = untyped_dataset(data, as_of=as_of_date, known=known_date)
     return sections(data), dated_tables
@@ -351,7 +354,7 @@ def named_dataset_decls(form: dict) -> list:
 def scalar_dataset(judged: FactSchema, form: dict, *,
                    as_of: datetime.date | None = None, known: datetime.date | None = None) -> dict[str, list]:
     """Decode a named module dataset into the records used by ordinary admission."""
-    records, _, _ = _located_scalar_dataset(judged, form, as_of=as_of, known=known)
+    records, _, _, _ = _located_scalar_dataset(judged, form, as_of=as_of, known=known)
     return records
 
 
@@ -359,8 +362,20 @@ def located_scalar_dataset(judged: FactSchema, form: dict, *,
                            as_of: datetime.date | None = None,
                            known: datetime.date | None = None) -> tuple[dict[str, list], dict[str, list[str]]]:
     """Decode each record with its JSON pointer for publication provenance."""
-    records, pointers, _ = _located_scalar_dataset(judged, form, as_of=as_of, known=known)
+    records, pointers, _, _ = _located_scalar_dataset(judged, form, as_of=as_of, known=known)
     return records, pointers
+
+
+def located_scalar_dataset_with_decides(
+    judged: FactSchema,
+    form: dict,
+    *,
+    as_of: datetime.date | None = None,
+    known: datetime.date | None = None,
+) -> tuple[dict[str, list], dict[str, list[str]], dict[tuple[str, int, str | None], tuple[int, int]]]:
+    """Decode each record with its JSON pointer and any per-cell decide block assignments."""
+    records, pointers, _, decided_cells = _located_scalar_dataset(judged, form, as_of=as_of, known=known)
+    return records, pointers, decided_cells
 
 
 def _located_scalar_dataset(
@@ -369,7 +384,7 @@ def _located_scalar_dataset(
     *,
     as_of: datetime.date | None = None,
     known: datetime.date | None = None,
-) -> tuple[dict[str, list], dict[str, list[str]], set[str]]:
+) -> tuple[dict[str, list], dict[str, list[str]], set[str], dict[tuple[str, int, str | None], tuple[int, int]]]:
     module = _dataset_body(form)
     if module is None:
         raise LoadError(f"expected {DATASET_FORMAT} or {rezono_module.REZONO_1_FORMAT} with a module header and spans")
@@ -385,11 +400,15 @@ def _located_scalar_dataset(
     records: dict[str, list] = {}
     pointers: dict[str, list[str]] = {}
     fact_rows: list[_ParsedFactRow] = []
+    decides: list[_ParsedDecide] = []
     for table_index, table in enumerate(tables):
         if source_decl(table):
             continue
         if fact_row_decl(table):
             fact_rows.append(_decode_fact_row(table, table_index, judged))
+            continue
+        if decide_decl(table):
+            decides.append(_decode_decide(table, table_index))
             continue
         kind, columns, rows, cited = dataset_table(table)
         if kind not in judged.kinds:
@@ -411,7 +430,9 @@ def _located_scalar_dataset(
             output.append(dataset_record(zip(columns, row[:len(columns)], strict=True), where, judged, kind))
             places.append(f"/module/decls/0/decls/{table_index}/rows/{row_index}")
     dated_tables = _resolve_fact_rows(fact_rows, records, pointers, judged, as_of, known)
-    return records, pointers, dated_tables
+    decide_dated, decided_cells = _resolve_decides(decides, records, pointers, judged, as_of, known)
+    dated_tables |= decide_dated
+    return records, pointers, dated_tables, decided_cells
 
 
 def untyped_dataset(form: dict, *,
@@ -432,11 +453,15 @@ def untyped_dataset(form: dict, *,
     records: dict[str, list] = {}
     pointers: dict[str, list[str]] = {}
     fact_rows: list[_ParsedFactRow] = []
+    decides: list[_ParsedDecide] = []
     for index, table in enumerate(_named_dataset(module)["decls"]):
         if source_decl(table):
             continue
         if fact_row_decl(table):
             fact_rows.append(_decode_fact_row(table, index, None))
+            continue
+        if decide_decl(table):
+            decides.append(_decode_decide(table, index))
             continue
         kind, columns, rows, cited = dataset_table(table)
         output = records.setdefault(kind, [])
@@ -448,6 +473,7 @@ def untyped_dataset(form: dict, *,
             output.append(dataset_record(zip(columns, row[:len(columns)], strict=True), where))
             places.append(f"/module/decls/0/decls/{index}/rows/{row_index}")
     _resolve_fact_rows(fact_rows, records, pointers, None, as_of, known)
+    _resolve_decides(decides, records, pointers, None, as_of, known)
     return records
 
 
@@ -716,6 +742,277 @@ def _resolve_fact_rows(
                 rec[slot_name] = val
 
     return dated_tables
+
+
+def decide_decl(decl) -> bool:
+    """A decide block in a dataset (docs/rezono/v0.md §5; decisions/fact-origin-required.md §1)."""
+    return isinstance(decl, dict) and "decide" in decl
+
+
+@dataclass(frozen=True)
+class _ParsedDecide:
+    index: int
+    title: str
+    by: str
+    on: datetime.date
+    valid: tuple[datetime.date, datetime.date | None] | None
+    known: datetime.date | None
+    source: str | None
+    assignments: list[tuple[int, str, str, object]]
+
+    @property
+    def dated(self) -> bool:
+        return self.valid is not None or self.known is not None
+
+
+def _decode_decide(decl: dict, index: int) -> _ParsedDecide:
+    where = f"decls[{index}]"
+    extra = decl.keys() - DECIDE_KEYS
+    if extra:
+        raise _load_error("invalid_decide", f"{where}: unexpected fields in decide block: {sorted(extra)}", where)
+    if not {"decide", "by", "on", "set"} <= decl.keys():
+        raise _load_error("invalid_decide", f"{where}: a decide block needs title, by, on and set", where)
+    title, decider = decl["decide"], decl["by"]
+    if not isinstance(title, str) or not title.strip():
+        raise _load_error("invalid_decide", f"{where}: decide title must be non-empty text", where)
+    if not isinstance(decider, str) or not decider.strip():
+        raise _load_error("invalid_decide", f"{where}: decide decider must be non-empty", where)
+    on_date = _parse_iso_date(decl["on"], f"{where}.on")
+    if "during" in decl or "in" in decl:
+        raise _load_error("unsupported_context", f"{where}: stage and setup contexts (during/in) are not lowered yet", where)
+    valid_range: tuple[datetime.date, datetime.date | None] | None = None
+    if "valid" in decl:
+        raw_valid = decl["valid"]
+        if not isinstance(raw_valid, list) or not (1 <= len(raw_valid) <= 2):
+            raise _load_error("invalid_date_range", f"{where}: valid must be one or two ISO dates", where)
+        start = _parse_iso_date(raw_valid[0], f"{where}.valid[0]")
+        end = _parse_iso_date(raw_valid[1], f"{where}.valid[1]") if len(raw_valid) == 2 else None
+        if end is not None and end <= start:
+            raise _load_error(
+                "invalid_date_range",
+                f"{where}: valid end date {raw_valid[1]!r} must be after start date {raw_valid[0]!r}",
+                f"{where}.valid",
+            )
+        valid_range = (start, end)
+    row_known = _parse_iso_date(decl["known"], f"{where}.known") if "known" in decl else None
+    src = decl.get("source")
+    if "source" in decl and (not isinstance(src, str) or not src.strip()):
+        raise _load_error("invalid_decide", f"{where}: decide source must be non-empty text", where)
+    raw_set = decl["set"]
+    if not isinstance(raw_set, list) or not raw_set:
+        raise _load_error("invalid_decide", f"{where}: decide block requires at least one assignment", where)
+    assignments: list[tuple[int, str, str, object]] = []
+    for pos, item in enumerate(raw_set):
+        item_where = f"{where}.set[{pos}]"
+        if not isinstance(item, dict) or item.keys() != {"path", "value"}:
+            raise _load_error("invalid_decide", f"{item_where}: expected path and value", item_where)
+        path = item["path"]
+        if not isinstance(path, list) or len(path) != 2 or not all(isinstance(part, str) and part for part in path):
+            raise _load_error("unsupported_decide_path", f"{item_where}: decide assignment must be <id>.<slot> = <value>", item_where)
+        assignments.append((pos, path[0], snake(path[1]), item["value"]))
+    return _ParsedDecide(index, title, decider, on_date, valid_range, row_known, src, assignments)
+
+
+def _try_parse_id(raw_id: str, sql_type: str) -> tuple[bool, object]:
+    if sql_type == "VARCHAR":
+        return (bool(raw_id), raw_id)
+    try:
+        return (True, scalar_cell({"lit": raw_id}, sql_type, "id"))
+    except LoadError:
+        return (False, None)
+
+
+def _decode_decide_value(slot, raw_value, field_where: str, judged: FactSchema) -> object:
+    if raw_value == {"lit": "n/a"}:
+        if slot.table not in judged.optional_slots:
+            raise _load_error("wrong_type", f"{field_where}: n/a requires an optional slot", field_where)
+        return _OMITTED
+    decoded = dataset_cell(
+        _normalize_fact_expr(raw_value),
+        field_where,
+        SQL_TYPES[slot.type],
+        judged,
+        slot.target if slot.inlined else None,
+    )
+    _check_slot_value(slot, decoded, field_where)
+    return decoded
+
+
+def _resolve_decides(
+    decides: list[_ParsedDecide],
+    records: dict[str, list],
+    pointers: dict[str, list[str]],
+    judged: FactSchema | None,
+    as_of: datetime.date | None,
+    known: datetime.date | None,
+) -> tuple[set[str], dict[tuple[str, int, str | None], tuple[int, int]]]:
+    if not decides:
+        return set(), {}
+
+    decided_cells: dict[tuple[str, int, str | None], tuple[int, int]] = {}
+    dated_tables: set[str] = set()
+    applying: dict[
+        tuple[str, object, str],
+        list[tuple[tuple[int, datetime.date], str, object, list[tuple[str, int, dict]], tuple[int, int]]],
+    ] = {}
+
+    def find_matches(raw_id: str, slot_name: str) -> list[tuple[str, int, dict, object]]:
+        found: list[tuple[str, int, dict, object]] = []
+        for rec_kind, rec_list in records.items():
+            if judged is not None:
+                root = judged.root(rec_kind)
+                identity = judged.kinds[root]
+                if identity.identifier is None or judged.slot(rec_kind, slot_name) is None:
+                    continue
+                ok, eid = _try_parse_id(raw_id, SQL_TYPES[identity.id_type])
+                if not ok:
+                    continue
+                id_key = identity.identifier
+            else:
+                id_key, eid = "id", raw_id
+            for rec_idx, rec in enumerate(rec_list):
+                if rec.get(id_key) == eid:
+                    found.append((rec_kind, rec_idx, rec, eid))
+        return found
+
+    for decide in decides:
+        for assign_index, raw_id, slot_name, raw_value in decide.assignments:
+            matches = find_matches(raw_id, slot_name)
+            if matches:
+                if judged is not None:
+                    roots = {judged.root(rk) for rk, _, _, _ in matches}
+                    if len(roots) > 1:
+                        raise _load_error(
+                            "ambiguous_decide_target",
+                            f"{raw_id}.{slot_name}: matches multiple kinds {sorted(roots)}",
+                            f"{raw_id}.{slot_name}",
+                        )
+                    rec_kind, _, _, eid = matches[0]
+                    root = judged.root(rec_kind)
+                    slot = judged.slot(rec_kind, slot_name)
+                    assert slot is not None
+                    field_where = f"{rec_kind}[{eid}].{slot_name}"
+                    decoded = _decode_decide_value(slot, raw_value, field_where, judged)
+                    table_name = slot.table
+                else:
+                    rec_kind, _, _, eid = matches[0]
+                    root = rec_kind
+                    field_where = f"{rec_kind}[{eid}].{slot_name}"
+                    decoded = _OMITTED if raw_value == {"lit": "n/a"} else dataset_cell(_normalize_fact_expr(raw_value), field_where)
+                    table_name = f"{rec_kind}__{slot_name}"
+
+                if not decide.dated:
+                    for mk, m_idx, rec, _ in matches:
+                        if slot_name in rec:
+                            raise _load_error(
+                                "duplicate_slot",
+                                f"{mk}[{eid}]: duplicate field '{slot_name}'",
+                                f"{mk}.{slot_name}",
+                            )
+                        if decoded is not _OMITTED:
+                            rec[slot_name] = decoded
+                            decided_cells[(mk, m_idx, slot_name)] = (decide.index, assign_index)
+                    continue
+
+                if decide.valid is not None and as_of is None:
+                    raise _load_error(
+                        "missing_as_of",
+                        f"{rec_kind}[{eid}]: dated decide block with valid range requires as_of",
+                        rec_kind,
+                    )
+                if decide.known is not None and known is None:
+                    raise _load_error(
+                        "missing_known",
+                        f"{rec_kind}[{eid}]: dated decide block with known date requires known",
+                        rec_kind,
+                    )
+                dated_tables.add(table_name)
+                if any(slot_name in rec for _, _, rec, _ in matches):
+                    raise _load_error(
+                        "versions_overlap",
+                        f"{table_name}: versions_overlap between undated and dated assignments for record {eid!r}",
+                        table_name,
+                    )
+                valid_ok = decide.valid is None or (
+                    decide.valid[0] <= as_of and (decide.valid[1] is None or as_of < decide.valid[1])  # type: ignore[operator]
+                )
+                known_ok = decide.known is None or decide.known <= known  # type: ignore[operator]
+                if not (valid_ok and known_ok):
+                    continue
+                rank = (1, decide.known) if decide.known is not None else (0, datetime.date.min)
+                target_recs = [(mk, m_idx, rec) for mk, m_idx, rec, _ in matches]
+                applying.setdefault((root, eid, table_name), []).append(
+                    (rank, slot_name, decoded, target_recs, (decide.index, assign_index))
+                )
+                continue
+
+            if decide.dated or judged is None:
+                raise _load_error(
+                    "unknown_record",
+                    f"{raw_id}.{slot_name}: decide block references unknown record {raw_id!r}",
+                    raw_id,
+                )
+
+            all_matching = [
+                k for k, kind_info in judged.kinds.items()
+                if not kind_info.abstract
+                and judged.kinds[judged.root(k)].identifier is not None
+                and judged.slot(k, slot_name) is not None
+                and _try_parse_id(raw_id, SQL_TYPES[judged.kinds[judged.root(k)].id_type])[0]
+            ]
+            candidates = [
+                k for k in all_matching
+                if not any(p != k and p in all_matching for p in judged.ancestors(k))
+            ]
+            if not candidates:
+                raise _load_error(
+                    "unknown_slot",
+                    f"{raw_id}.{slot_name}: unknown slot '{slot_name}'",
+                    f"{raw_id}.{slot_name}",
+                )
+            if len(candidates) > 1:
+                raise _load_error(
+                    "ambiguous_decide_target",
+                    f"{raw_id}.{slot_name}: cannot determine kind among {sorted(candidates)}",
+                    f"{raw_id}.{slot_name}",
+                )
+            kind = candidates[0]
+            root = judged.root(kind)
+            identity = judged.kinds[root]
+            assert identity.identifier is not None
+            _, eid = _try_parse_id(raw_id, SQL_TYPES[identity.id_type])
+            slot = judged.slot(kind, slot_name)
+            assert slot is not None
+            decoded = _decode_decide_value(slot, raw_value, f"{kind}[{eid}].{slot_name}", judged)
+            new_rec: dict[str, object] = {identity.identifier: eid}
+            if decoded is not _OMITTED:
+                new_rec[slot_name] = decoded
+            out_list = records.setdefault(kind, [])
+            rec_idx = len(out_list)
+            out_list.append(new_rec)
+            pointers.setdefault(kind, []).append(f"/module/decls/0/decls/{decide.index}/set/{assign_index}")
+            decided_cells[(kind, rec_idx, None)] = (decide.index, assign_index)
+            if decoded is not _OMITTED:
+                decided_cells[(kind, rec_idx, slot_name)] = (decide.index, assign_index)
+
+    for (root, eid, table_name), candidates in applying.items():
+        best_rank = max(item[0] for item in candidates)
+        winners = [item for item in candidates if item[0] == best_rank]
+        if len(winners) > 1:
+            raise _load_error(
+                "versions_overlap",
+                f"{table_name}: versions_overlap for record {eid!r}",
+                table_name,
+            )
+        _, slot_name, val, target_recs, origin = winners[0]
+        for mk, m_idx, rec in target_recs:
+            if val is _OMITTED:
+                rec.pop(slot_name, None)
+            else:
+                rec[slot_name] = val
+                decided_cells[(mk, m_idx, slot_name)] = origin
+
+    return dated_tables, decided_cells
 
 
 def source_decl(decl) -> bool:
