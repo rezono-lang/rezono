@@ -618,3 +618,112 @@ def test_platform_safe_rounds_recorded(tmp_path):
     rows, witnesses = role_evidence(bucket, partial, "checker")
     assert startup_goal in rows & witnesses.keys()
     assert recovery_goal not in rows and recovery_goal not in witnesses
+
+
+def test_restore_interval_broken_by_unknown_or_valueless_mid_interval_probe():
+    """Mid-interval management/availability probes that are unknown or lack a value must break the interval."""
+    from pathlib import Path
+
+    from rezono_compiler import batch as compiler_batch, pack as compiler_pack, rules as compiler_rules
+
+    pack_dir = Path(__file__).resolve().parents[1]
+    model = compiler_pack.read(pack_dir)
+    assert model.rules is not None
+    program = compiler_rules.load(model.rules)
+    derived_set = set(program.derived())
+    targets = ("platform_restore_interval_broken", "platform_restore_interval_verified")
+    needed: set[str] = set()
+    stack = list(targets)
+    while stack:
+        rel = stack.pop()
+        if rel in needed:
+            continue
+        needed.add(rel)
+        stack.extend(dep for dep in program.deps(rel) if dep in derived_set and dep not in needed)
+
+    run = "rec-run"
+    trial = "management-trial"
+    digest = sha256(b"authored management dataset\n").hexdigest()
+
+    def evaluate(mid_probe: tuple[str | None, str | None] | None) -> tuple[set[tuple[str, ...]], set[tuple[str, ...]]]:
+        obs_run = [
+            ("start-obs", run),
+            ("readback-obs", run),
+            ("end-obs", run),
+        ]
+        obs_token = [
+            ("start-obs", "management/availability"),
+            ("readback-obs", "management-copy/payload"),
+            ("end-obs", "management/availability"),
+        ]
+        obs_state = [
+            ("start-obs", "known"),
+            ("readback-obs", "known"),
+            ("end-obs", "known"),
+        ]
+        obs_value = [
+            ("start-obs", "unreachable"),
+            ("readback-obs", digest),
+            ("end-obs", "unreachable"),
+        ]
+        obs_time = [
+            ("start-obs", "9"),
+            ("readback-obs", "15"),
+            ("end-obs", "19"),
+        ]
+        obs_reason = [
+            ("start-obs", "start-obs"),
+            ("readback-obs", "readback-obs"),
+            ("end-obs", "end-obs"),
+        ]
+        obs_ids = [("start-obs",), ("readback-obs",), ("end-obs",)]
+
+        if mid_probe is not None:
+            mid_state, mid_value = mid_probe
+            obs_ids.append(("mid-obs",))
+            obs_run.append(("mid-obs", run))
+            obs_token.append(("mid-obs", "management/availability"))
+            obs_time.append(("mid-obs", "14"))
+            obs_reason.append(("mid-obs", "mid-obs"))
+            if mid_state is not None:
+                obs_state.append(("mid-obs", mid_state))
+            if mid_value is not None:
+                obs_value.append(("mid-obs", mid_value))
+
+        inputs: dict[str, list[tuple[str, ...]]] = {
+            "loop_active_run": [(run,)],
+            "loop_expectation": [("management/availability",)],
+            "loop_expectation__value": [("management/availability", "unreachable")],
+            "loop_observation": obs_ids,
+            "loop_observation__run": obs_run,
+            "loop_observation__token": obs_token,
+            "loop_observation__state": obs_state,
+            "loop_observation__value": obs_value,
+            "loop_observation__event_time": obs_time,
+            "loop_observation__reason": obs_reason,
+            "restore_offline_interval": [("fence-1",)],
+            "restore_offline_interval__run": [("fence-1", run)],
+            "restore_offline_interval__trial": [("fence-1", trial)],
+            "restore_offline_interval__start_evidence": [("fence-1", "start-obs")],
+            "restore_offline_interval__end_evidence": [("fence-1", "end-obs")],
+            "restore_offline_interval__readback_evidence": [("fence-1", "readback-obs")],
+        }
+        with compiler_batch.connect(program, inputs) as con:
+            compiler_batch.compute(con, program, relations=needed)
+            out = compiler_batch.read(con, program, targets)
+        return out["platform_restore_interval_broken"], out["platform_restore_interval_verified"]
+
+    expected_verified = {(run, trial, "readback-obs", digest)}
+
+    # Control: clean interval and a mid-interval known/unreachable probe stay verified.
+    assert evaluate(None) == (set(), expected_verified)
+    assert evaluate(("known", "unreachable")) == (set(), expected_verified)
+
+    # Mid-interval unknown probe without a value row must break the interval.
+    assert evaluate(("unknown", None)) == ({("fence-1",)}, set())
+
+    # Mid-interval unknown probe carrying value="unreachable" must still break the interval.
+    assert evaluate(("unknown", "unreachable")) == ({("fence-1",)}, set())
+
+    # Mid-interval known probe without a value row must break the interval.
+    assert evaluate(("known", None)) == ({("fence-1",)}, set())

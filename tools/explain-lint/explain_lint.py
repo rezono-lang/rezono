@@ -80,6 +80,20 @@ def _rezono_forms(pack: Path) -> list[dict]:
     return forms
 
 
+def _snake(name: str) -> str:
+    return re.sub(r"(?<=[a-z0-9])(?=[A-Z])", "_", name).lower()
+
+
+def _has_fold_mark(item: dict) -> bool:
+    return (
+        _annotation_value(item.get("annotations"), "explain") == "fold"
+        or any(
+            isinstance(opt, dict) and opt.get("explain") == "fold"
+            for opt in (item.get("options") or ())
+        )
+    )
+
+
 def _fold_marks_from_form(form: dict) -> set[str]:
     marks: set[str] = set()
     module = form.get("module")
@@ -94,11 +108,16 @@ def _fold_marks_from_form(form: dict) -> set[str]:
             marks.update(_folded_lines([line for line in decl["lines"] if isinstance(line, str)]))
         for key in ("rule", "derived"):
             name = decl.get(key)
-            if isinstance(name, str) and any(
-                isinstance(opt, dict) and opt.get("explain") == "fold"
-                for opt in (decl.get("options") or ())
-            ):
+            if isinstance(name, str) and _has_fold_mark(decl):
                 marks.add(name)
+        if ("kind" in decl or "extend" in decl) and isinstance(decl.get("derived"), list):
+            owner = decl.get("kind") if isinstance(decl.get("kind"), str) else decl.get("extend")
+            for item in decl["derived"]:
+                if isinstance(item, dict) and isinstance(item.get("derived"), str) and _has_fold_mark(item):
+                    name = item["derived"]
+                    marks.add(name)
+                    if isinstance(owner, str) and isinstance(item.get("table"), dict):
+                        marks.add(f"{_snake(owner)}_{name}")
     return marks
 
 
@@ -109,8 +128,9 @@ def _decl_has_rules(decl: object) -> bool:
         return True
     if isinstance(decl.get("derived"), str):
         return any(key in decl for key in ("params", "options", "over"))
-    if "extend" in decl:
-        return any(isinstance(item, dict) and "table" in item for item in (decl.get("derived") or ()))
+    if "kind" in decl or "extend" in decl:
+        derived = decl.get("derived")
+        return isinstance(derived, list) and any(isinstance(item, dict) for item in derived)
     return False
 
 

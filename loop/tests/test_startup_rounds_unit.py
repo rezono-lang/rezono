@@ -487,6 +487,27 @@ def test_load_startup_topology_evaluates_platform_pack_and_rejects_unknown_signe
         _select_topology_from_relations(relations_with_unknown_signed)
 
 
+def test_load_startup_topology_does_not_merge_pack_signatures_into_external_facts(tmp_path: Path) -> None:
+    # Default pack facts in examples/platform/facts/ still merge the sibling artifact_signature.yaml.
+    default_topo = load_startup_topology()
+    assert default_topo.unsigned_artifact == {"service": "lab", "artifact": "a-lab"}
+
+    # An external custom facts file without signature rows must not silently inherit
+    # pack_root/facts/artifact_signature.yaml.
+    raw = yaml.safe_load(PLATFORM_FACTS.read_text(encoding="utf-8"))
+    assert "artifact_signature" not in raw and "signature_scan" not in raw
+    external_without_sigs = tmp_path / "custom_core.yaml"
+    external_without_sigs.write_text(yaml.safe_dump(raw, sort_keys=False), encoding="utf-8")
+    with pytest.raises(RuntimeError, match="unverified_supply|verified workload"):
+        load_startup_topology(external_without_sigs)
+
+    # When the external facts file provides its own signature evidence, evaluation succeeds.
+    sig_raw = yaml.safe_load((PLATFORM_FACTS.parent / "artifact_signature.yaml").read_text(encoding="utf-8"))
+    external_with_sigs = tmp_path / "custom_core_with_sigs.yaml"
+    external_with_sigs.write_text(yaml.safe_dump(raw | sig_raw, sort_keys=False), encoding="utf-8")
+    assert load_startup_topology(external_with_sigs) == default_topo
+
+
 def test_build_snapshot_uses_compiler_program_and_certifies_rounds() -> None:
     # STARTUP_PROGRAM must be a valid rezono.rules/1 IR loadable by rezono_compiler.rules.
     loaded = compiler_rules.load(STARTUP_PROGRAM, require_witness=False)

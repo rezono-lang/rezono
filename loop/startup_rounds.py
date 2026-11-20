@@ -329,6 +329,7 @@ def load_startup_topology(
     sig_facts = pack_root / "facts" / "artifact_signature.yaml"
     if (
         sig_facts.is_file()
+        and facts_file.resolve().parent == sig_facts.resolve().parent
         and facts_file.resolve() != sig_facts.resolve()
         and not any(k in fact_rows for k in ("artifact_signature", "signature_scan"))
     ):

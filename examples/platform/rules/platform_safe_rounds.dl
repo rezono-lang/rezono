@@ -111,7 +111,7 @@ platform_restore_offline_obs(run, ev, event_time) :-
     loop_observation__value(ev, "unreachable"),
     loop_observation__event_time(ev, event_time).
 
-// An offline interval invalidated by any same-run observation that management was not unreachable.
+// An offline interval invalidated by any same-run observation that management was not known unreachable.
 .decl platform_restore_interval_broken(fence_interval: symbol)
 platform_restore_interval_broken(fence_interval) :-
     restore_offline_interval(fence_interval),
@@ -129,6 +129,37 @@ platform_restore_interval_broken(fence_interval) :-
     t_ev <= t_end,
     loop_observation__value(ev, val),
     val != "unreachable".
+platform_restore_interval_broken(fence_interval) :-
+    restore_offline_interval(fence_interval),
+    restore_offline_interval__run(fence_interval, run),
+    restore_offline_interval__start_evidence(fence_interval, start_ev),
+    restore_offline_interval__end_evidence(fence_interval, end_ev),
+    loop_observation__run(start_ev, run),
+    loop_observation__event_time(start_ev, t_start),
+    loop_observation__run(end_ev, run),
+    loop_observation__event_time(end_ev, t_end),
+    loop_observation__run(ev, run),
+    loop_observation__token(ev, "management/availability"),
+    loop_observation__event_time(ev, t_ev),
+    t_start <= t_ev,
+    t_ev <= t_end,
+    loop_observation__state(ev, st),
+    st != "known".
+platform_restore_interval_broken(fence_interval) :-
+    restore_offline_interval(fence_interval),
+    restore_offline_interval__run(fence_interval, run),
+    restore_offline_interval__start_evidence(fence_interval, start_ev),
+    restore_offline_interval__end_evidence(fence_interval, end_ev),
+    loop_observation__run(start_ev, run),
+    loop_observation__event_time(start_ev, t_start),
+    loop_observation__run(end_ev, run),
+    loop_observation__event_time(end_ev, t_end),
+    loop_observation__run(ev, run),
+    loop_observation__token(ev, "management/availability"),
+    loop_observation__event_time(ev, t_ev),
+    t_start <= t_ev,
+    t_ev <= t_end,
+    !platform_restore_offline_obs(run, ev, t_ev).
 
 // Verified offline fence interval covering the opening probe, readback and closing probe.
 .decl platform_restore_interval_verified(run: symbol, trial: symbol, readback: symbol, digest: symbol)
