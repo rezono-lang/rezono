@@ -246,3 +246,41 @@ def test_local_chained_integer_aliases_are_recognized(tmp_path):
         ["BaseWhole", "MidWhole", "LeafWhole", "LoopA"],
         {"BaseWhole": "integer", "MidWhole": "BaseWhole", "LeafWhole": "MidWhole", "LoopA": "LoopB", "LoopB": "LoopA"},
     ) == {"BaseWhole", "MidWhole", "LeafWhole"}
+
+
+def test_local_non_integer_type_shadows_imported_integer_type(tmp_path):
+    """A local non-integer type with the same name as an imported integer type is not treated as integer."""
+    assert rezono_module.integer_type_names(
+        ["Foo", "Bar", "ImportedAlias"],
+        {"Foo": "string", "Bar": "Foo", "ImportedAlias": "ExtInt"},
+        known_ints={"Foo", "ExtInt"},
+    ) == {"ImportedAlias"}
+    assert rezono_module.integer_type_names(
+        ["Foo", "Bar"],
+        {"Foo": "Bar", "Bar": "Foo"},
+        known_ints={"Foo"},
+    ) == set()
+
+    pack_dir = Path(shutil.copytree(FIXTURE, tmp_path / "shadow"))
+    rezono_v2(
+        pack_dir,
+        [
+            {"type": "Foo", "base": "Text"},
+            {"type": "Bar", "base": "Foo"},
+            {
+                "kind": "Item",
+                "world": "closed",
+                "slots": [
+                    {"slot": "code", "type": "Bar", "constraints": [{"minimum": "0"}]},
+                ],
+                "derived": [],
+            },
+        ],
+        pack_name="minimal",
+        name="shadow",
+    )
+    meta = yaml.safe_load((pack_dir / "pack.yaml").read_bytes())
+    errors: list[str] = []
+    rezono_module.lower_pack(pack_dir, meta, "minimal", {}, errors, integer_types={"lib:types": {"Foo"}})
+    limit_errors = [err for err in errors if "integer limits need an Int slot" in err]
+    assert len(limit_errors) == 1, errors

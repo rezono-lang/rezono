@@ -18,13 +18,24 @@ def _reject_constant(token: str) -> object:
     raise ValueError(f"invalid JSON constant: {token}")
 
 
+def _unique_object(pairs: list[tuple[str, object]]) -> dict[str, object]:
+    result: dict[str, object] = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError(f"duplicate ignition JSON key: {key!r}")
+        result[key] = value
+    return result
+
+
 def _validate_image_url(image_url: object) -> str:
     url = _nonempty_text(image_url, "image_url")
     if any(ch.isspace() for ch in url):
         raise ValueError("image_url must not contain whitespace")
     parsed = urlsplit(url)
-    if parsed.scheme != "https" or not parsed.netloc:
+    if parsed.scheme != "https" or not parsed.hostname:
         raise ValueError("image_url must be an https URL with a host")
+    if parsed.username is not None or parsed.password is not None:
+        raise ValueError("image_url must not contain credentials")
     return url
 
 
@@ -38,7 +49,11 @@ def _validate_ignition(ignition: object) -> str:
     if not isinstance(ignition, str):
         raise ValueError("ignition must be a string")
     try:
-        document = json.loads(ignition, parse_constant=_reject_constant)
+        document = json.loads(
+            ignition,
+            parse_constant=_reject_constant,
+            object_pairs_hook=_unique_object,
+        )
     except ValueError as exc:
         raise ValueError("ignition must be valid JSON") from exc
     if not isinstance(document, Mapping):

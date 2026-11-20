@@ -195,16 +195,21 @@ function publication(store: Store, pack: string, role: string) {
 type Current = NonNullable<Awaited<ReturnType<ReturnType<typeof publication>['current']>>>;
 
 /**
- * The historical view must still be readable as a whole. A current partial
- * snapshot can prove its retained keys, but cannot prove the earlier absence
- * claims of a snapshot that read the relation in full.
+ * The historical view must still be readable as a whole: complete snapshots
+ * require a current complete snapshot, full snapshots require current complete
+ * or full coverage, and a current full snapshot bypasses row-by-row key checks
+ * only when definition_sha256 is present and unchanged.
  */
 async function stillReadable(then: Current, now: Current): Promise<boolean> {
+	const sameDefinition = typeof then.manifest.definition_sha256 === 'string'
+		&& then.manifest.definition_sha256.length > 0
+		&& then.manifest.definition_sha256 === now.manifest.definition_sha256;
 	for (const [relation, past] of then.snaps) {
 		const present = now.snaps.get(relation);
 		if (!present) return false;
-		if (present.complete || present.full) continue;
-		if (past.complete || past.full) return false;
+		if (past.complete && !present.complete) return false;
+		if (past.full && !present.complete && !present.full) return false;
+		if (present.complete || (present.full && sameDefinition)) continue;
 		if (past.sha256 && past.sha256 === present.sha256) continue;
 		const visible = new Set((await now.rows(relation)).map(({ key }) => canonicalJson(key)));
 		if (!(await then.rows(relation)).every(({ key }) => visible.has(canonicalJson(key)))) return false;

@@ -36,14 +36,6 @@ class MissingRezonoFmt(AssertionError):
     """rezono/src/fmt.ts (and package.json `fmt` script) did not format canonically, check, or refuse invalid input."""
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=MissingRezonoFmt,
-    reason="M3: decisions/language-rezono-1.md: Add rezono/src/fmt.ts (wired as `fmt` in rezono/package.json) "
-           "exposing rezono/src/print.ts (`printModule`) as the canonical formatter: in-place idempotent formatting, "
-           "`--check` exiting 0 when canonical and 1 without modifying when unformatted, and non-zero exit with "
-           "diagnostics on stderr without modifying invalid files. Read sections 1 and 8.",
-)
 def test_rezono_fmt_formats_canonically(tmp_path):
     if not FMT.is_file():
         raise MissingRezonoFmt("missing rezono/src/fmt.ts")

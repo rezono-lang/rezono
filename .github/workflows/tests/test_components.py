@@ -763,6 +763,107 @@ class InventoryTests(unittest.TestCase):
         self.assertCountEqual((node for group in groups for node in group), items)
         self.assertEqual(ci.weighted_workers(items, 1, {}, 1), [items])
 
+    def test_profiled_shards_place_every_file_once_longest_first(self):
+        files = ["t/a.py", "t/b.py", "t/c.py", "t/d.py", "t/e.py"]
+        with tempfile.TemporaryDirectory() as tmp:
+            profile = Path(tmp) / "profile.json"
+            with patch.dict(ci.FILE_PROFILES, {"t": profile}):
+                # Without the profile file, round-robin in the given order.
+                self.assertEqual(ci.shard_files("t", files, 2), [files[0::2], files[1::2]])
+                profile.write_text(json.dumps({"default_s": 1, "seconds": {"t/c.py": 9, "t/e.py": 5}}),
+                                   encoding="utf-8")
+                groups = ci.shard_files("t", files, 2)
+                self.assertEqual(groups, [["t/c.py"], ["t/a.py", "t/b.py", "t/d.py", "t/e.py"]])
+                # The split depends on the file set, not on the order the inventory lists it in.
+                self.assertEqual(ci.shard_files("t", files[::-1], 2), groups)
+                items = [f"{f}::test_{n}" for f in files for n in range(2)]
+                # The shards follow the split the inventory recorded, never a profile of their own.
+                plan = {"files": files, "items": items, "shards": groups}
+                shards = [ci.shard_items(plan, shard, 2) for shard in range(2)]
+                self.assertEqual(shards[0], ["t/c.py::test_0", "t/c.py::test_1"])
+                self.assertCountEqual([node for shard in shards for node in shard], items)
+                with self.assertRaises(ValueError):
+                    ci.shard_items(plan, 0, 3)
+                # An inventory without a recorded split comes from an earlier base, which verifies round-robin.
+                legacy = {"files": files, "items": items}
+                first = {"t/a.py", "t/c.py", "t/e.py"}
+                self.assertEqual(ci.shard_items(legacy, 0, 2), [i for i in items if i.split("::")[0] in first])
+
+    def test_base_and_candidate_scripts_share_the_inventory_s_split(self):
+        """The base builds the matrix and the inventory and verifies the execution from a checkout of its
+        scripts alone; the candidate runs the shards. Each side reads its own profile, and they agree."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root, check = Path(tmp) / "repo", Path(tmp) / "check"
+            base, candidate = root / ".build-base", root / "scripts"
+            for scripts in (base, candidate, check / "scripts"):
+                scripts.mkdir(parents=True)
+                for name in ("components.py", "pytest-plugins.txt", "red_guard.py", "red_list.py"):
+                    shutil.copyfile(ROOT / "scripts" / name, scripts / name)
+            names = [f"loop/test_{letter}.py" for letter in "abcde"]
+            # The base weighs test_e heavily; the candidate has no profile and would split round-robin.
+            profile = json.dumps({"default_s": 1, "seconds": {names[4]: 50}})
+            for scripts in (base, check / "scripts"):
+                (scripts / "loop-duration-profile.json").write_text(profile, encoding="utf-8")
+            (root / "loop").mkdir()
+            for name in names:
+                (root / name).write_text("def test_one(): pass\ndef test_two(): pass\n", encoding="utf-8")
+            plans, reports, receipts = (Path(tmp) / d for d in ("plans", "reports", "receipts"))
+
+            def run(script, *args, total):
+                matrix = [{"kind": "python", "folder": "loop", "shard": n, "total": total} for n in range(total)]
+                env = dict(os.environ, PYTEST_DISABLE_PLUGIN_AUTOLOAD="1", PYTEST_PLUGINS="rezono_cluster",
+                           PYTHONPATH=str(ROOT / "loop"), PYTHON_MATRIX=json.dumps(matrix))
+                return subprocess.run([sys.executable, str(script / "components.py"), *map(str, args)], cwd=root,
+                                      env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+
+            def execute(total, shards):
+                shutil.rmtree(receipts, ignore_errors=True)
+                for shard in shards:
+                    proc = run(candidate, "run-shard", "loop", shard, total, plans, reports / str(shard), receipts,
+                               total=total)
+                    self.assertEqual(proc.returncode, 0, proc.stdout)
+                return run(check / "scripts", "verify-execution", plans, receipts, total=total)
+
+            proc = run(base, "inventory", plans, total=3)
+            self.assertEqual(proc.returncode, 0, proc.stdout)
+            inventory = json.loads((plans / "loop/items.json").read_text(encoding="utf-8"))
+            self.assertEqual(inventory["shards"][0], [names[4]])
+            verified = execute(3, range(3))
+            self.assertEqual(verified.returncode, 0, verified.stdout)
+            self.assertIn("inventoried 10, started 10, finished 10", verified.stdout)
+            # A shard that the matrix lists but that did not run still fails the verification.
+            self.assertNotEqual(execute(3, range(2)).returncode, 0)
+
+            # The transition: an earlier base records no split and verifies round-robin, so the
+            # candidate's shards run round-robin as well, whatever profile the candidate carries.
+            del inventory["shards"]
+            (plans / "loop/items.json").write_text(json.dumps(inventory), encoding="utf-8")
+            (candidate / "loop-duration-profile.json").write_text(profile, encoding="utf-8")
+            for total in (1, 3):
+                shutil.rmtree(reports, ignore_errors=True)
+                verified = execute(total, range(total))
+                self.assertEqual(verified.returncode, 0, verified.stdout)
+                journals = {shard: (receipts / "loop" / f"{shard}-0.jsonl").read_text(encoding="utf-8")
+                            for shard in range(total)}
+                for shard, journal in journals.items():
+                    started = {json.loads(row)[1].split("::")[0] for row in journal.splitlines()}
+                    self.assertEqual(started, set(sorted(names)[shard::total]))
+
+    def test_loop_shards_hold_every_test_file_exactly_once_within_budget(self):
+        files = ci.test_files("loop")
+        total = ci.shard_count("loop")
+        self.assertEqual(total, 3)
+        groups = ci.shard_files("loop", files, total)
+        placed = [name for group in groups for name in group]
+        self.assertEqual(sorted(placed), files)
+        self.assertEqual(len(placed), len(set(placed)))
+        profile = json.loads(ci.FILE_PROFILES["loop"].read_text(encoding="utf-8"))
+        loads = [sum(profile["seconds"].get(name, profile["default_s"]) for name in group) for group in groups]
+        # Each shard stays well inside the python job's 20-minute timeout on the measured profile.
+        self.assertLess(max(loads), 600, loads)
+        # The profile shapes the matrix, so a change to it selects every component.
+        self.assertTrue(ci.FILE_PROFILES["loop"].relative_to(ROOT).as_posix().startswith(ci.FULL_SELECTION_PATHS))
+
     def test_publication_fixture_is_built_once_and_read_from_isolated_stores(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -907,6 +1008,9 @@ class InventoryTests(unittest.TestCase):
             journal.write_text(original, encoding="utf-8")
             # Omit a whole originally inventoried file from the assignment metadata.
             inventory["files"].remove("compiler/test_states.py")
+            for files in inventory["shards"]:
+                if "compiler/test_states.py" in files:
+                    files.remove("compiler/test_states.py")
             (plans / "compiler/items.json").write_text(json.dumps(inventory), encoding="utf-8")
             for shard in range(2):
                 good("run-shard", "compiler", shard, 2, plans, reports / str(shard), receipts)

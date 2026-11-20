@@ -20,10 +20,10 @@ TABLE: dict[str, str] = {
     "std-decision": "2fd4cc60cc4f1c7dca42da2f5368a08a992de39df7cd7db205b9118dd1b8fe5a",
     "std-explain": "72e2897cd9baaa4962cf2235f83a332262b4da1e6d34e82d5f64d8335e27be0b",
     "std-identity": "129e5321602dea3b58ea5220103c4d313237d0dbf5e640c677b24fc98e5d265b",
-    "std-loop": "540bfe7462bc61e36e1bed81b2f4d8e377b8b0bd56105799c83a563eff10c23e",
+    "std-loop": "a9228c666424f293db74a7291069f455a1af7f9075f31bd52a65128d7e8674f9",
     "std-order": "4d119b21fa769b810dae065d4fc4ab5aaa1c2ada76b042052a4e4fcdd1031557",
     "std-part": "207f4f097f68e6dade792b714754e0f279ce2c948be8adce82108a3abc18cca9",
-    "std-review": "f3085ffb7d766e9997b317717f0be6ed4945ac0a63d6424c23ff56ddda0c5f66",
+    "std-review": "2e0e40960c884b8b90537245fb63158522e97c2edeea513fdb2ecdfb4986e87e",
     "std-time": "bb2863a03792228005fa6784ed1022c07ac82139cdbf0ff7914cd273b3e046a7",
     "std-view": "a544468e9e64efbe31dfc5ccf72f1eccbf508dafc55f7087a39ab9b4dd4bff60",
 }
