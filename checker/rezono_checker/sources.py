@@ -30,7 +30,7 @@ from .snapshots import read_rows
 
 # contracts/source.yaml, restated so the oracle does not read the publisher's or compiler's copy
 # (a test holds it to the contract).
-KINDS = {"git", "pack", "scenario", "proposal", "query", "tool", "person", "document"}
+KINDS = {"git", "pack", "scenario", "proposal", "query", "tool", "person", "document", "synthetic"}
 OWNERSHIP = {"first_party", "third_party"}
 FIELDS = {"kind", "name", "revision", "position", "url", "retrieved_at", "fragment_sha256", "ownership",
           "licence", "attribution"}
