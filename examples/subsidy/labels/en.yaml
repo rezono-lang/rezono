@@ -82,6 +82,7 @@ attested_here: attested of a person the municipality knows
 looked_up: status lookup of a credential or a statement
 status_lookup_not_of_one: status lookup not of exactly one credential or statement
 may_read: may read
+may_read_full: may read in full
 # The view of std-time (views.yaml): what the compiler makes from the scheme's own facts.
 std_time_axis: calendar read as a time axis
 std_time_interval: scheme parameter read as a period of validity

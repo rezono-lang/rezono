@@ -1,0 +1,12 @@
+// The four-eyes check (decisions/review-and-rights.md, sections 7, 8 and 10, and the open case of a beneficiary).
+// An author of a change may not review it: its author, and every beneficiary of a grant the change introduces. In
+// the lab phase the owner may accept their own work; a grant to the owner is no such work, so a beneficiary has no
+// lab exception.
+.decl review_lab_owner(subject: symbol)
+review_lab_owner(o) :- review_phase__phase(p, "lab"), review_phase__owner(p, o).
+// @invariant
+.decl review_self(review: symbol)
+review_self(r) :- review_active(r), review__change(r, c), review__reviewer(r, w), change__author(c, w),
+    !review_lab_owner(w).
+review_self(r) :- review_active(r), review__change(r, c), review__reviewer(r, w), role_grant__change(g, c),
+    role_grant__subject(g, w).

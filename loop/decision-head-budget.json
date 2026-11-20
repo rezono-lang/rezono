@@ -7,7 +7,6 @@
   "decisions/build-claim-release.md",
   "decisions/build-reconciliation.md",
   "decisions/build-rules-from-base.md",
-  "decisions/checker-and-access-review.md",
   "decisions/checker-refusal-register.md",
   "decisions/cluster-test-evidence.md",
   "decisions/compiler-error-codes.md",

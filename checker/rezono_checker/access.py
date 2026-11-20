@@ -54,6 +54,7 @@ from .evidence import PROTECTED
 from .check import _check_witness, _rows, shaped
 from .rules import load_rules
 from .snapshots import read_rows
+from .variant_access import check_variant_status_readers as check_variant_status_readers
 
 ACCESS = "may_read"
 READ_FULL = "may_read_full"
@@ -61,6 +62,134 @@ ROLE = "role"  # the kind of the roles: `role(r)` in a read rule means every rol
 # A role's generic capabilities (std-access): `role__capability(r, "c")` in a read rule means every role the
 # pack's facts map to capability `c`.
 CAPABILITY = "role__capability"
+SLOT_PARAMETER_SUFFIXES = (
+    "minimum",
+    "maximum",
+    "constant",
+    "minimum_cardinality",
+    "maximum_cardinality",
+)
+
+
+def _non_empty_str(value, what: str) -> str:
+    if not isinstance(value, str) or not value:
+        raise ValueError(f"{what} must be a non-empty string")
+    return value
+
+
+def _schema_from_bundle(bundle, doc: dict) -> tuple[frozenset[str], dict[str, str], dict[str, tuple]]:
+    """Derive (kinds, parents, columns) independently from the compiled schema bundle and rule IR."""
+    if not isinstance(bundle, dict):
+        raise ValueError("schema bundle must be a mapping")
+    raw_kinds = bundle.get("kinds")
+    if not isinstance(raw_kinds, list):
+        raise ValueError("schema bundle must list kinds")
+    kinds: set[str] = set()
+    parents: dict[str, str] = {}
+    columns: dict[str, tuple] = {}
+    for entry in raw_kinds:
+        if not isinstance(entry, dict):
+            raise ValueError("kind entry must be a mapping")
+        kid = _non_empty_str(entry.get("id"), "kind id")
+        if kid in kinds:
+            raise ValueError(f"duplicate kind {kid!r}")
+        kinds.add(kid)
+        columns[kid] = (kid,)
+        parent = entry.get("parent")
+        if parent is not None:
+            parents[kid] = _non_empty_str(parent, f"parent of kind {kid!r}")
+    for kid, parent in parents.items():
+        if parent not in kinds:
+            raise ValueError(f"kind {kid!r} names unknown parent {parent!r}")
+    for kid in kinds:
+        seen, cur = {kid}, parents.get(kid)
+        while cur is not None:
+            if cur in seen:
+                raise ValueError(f"parent cycle involving kind {kid!r}")
+            seen.add(cur)
+            cur = parents.get(cur)
+
+    def section(name: str) -> list:
+        value = bundle.get(name)
+        if value is None:
+            return []
+        if not isinstance(value, list):
+            raise ValueError(f"schema bundle {name} must be a list")
+        return value
+
+    slot_tables: list[str] = []
+    for entry in section("arrows"):
+        if not isinstance(entry, dict):
+            raise ValueError("arrow entry must be a mapping")
+        table = _non_empty_str(entry.get("table"), "arrow table")
+        kind = _non_empty_str(entry.get("kind"), f"arrow {table!r} kind")
+        target = _non_empty_str(entry.get("target"), f"arrow {table!r} target")
+        if kind not in kinds or target not in kinds:
+            raise ValueError(f"arrow {table!r} references unknown kind")
+        if table in columns:
+            raise ValueError(f"duplicate table {table!r}")
+        columns[table] = (kind, target)
+        slot_tables.append(table)
+
+    for entry in section("attributes"):
+        if not isinstance(entry, dict):
+            raise ValueError("attribute entry must be a mapping")
+        table = _non_empty_str(entry.get("table"), "attribute table")
+        kind = _non_empty_str(entry.get("kind"), f"attribute {table!r} kind")
+        if kind not in kinds:
+            raise ValueError(f"attribute {table!r} references unknown kind")
+        if table in columns:
+            raise ValueError(f"duplicate table {table!r}")
+        columns[table] = (kind, None)
+        slot_tables.append(table)
+
+    for entry in section("enums"):
+        if not isinstance(entry, dict):
+            raise ValueError("enum entry must be a mapping")
+        eid = _non_empty_str(entry.get("id"), "enum id")
+        if eid in columns:
+            raise ValueError(f"duplicate table {eid!r}")
+        columns[eid] = (None,)
+
+    relations = doc.get("relations", ()) if isinstance(doc, dict) else ()
+    base_relations = {
+        r["name"] for r in relations
+        if isinstance(r, dict) and r.get("role") == "base" and isinstance(r.get("name"), str)
+    }
+    for slot_table in slot_tables:
+        for suffix in SLOT_PARAMETER_SUFFIXES:
+            param_table = f"{slot_table}__{suffix}"
+            if param_table in base_relations and param_table not in columns:
+                columns[param_table] = (None,)
+
+    seals = doc.get("seals") if isinstance(doc, dict) else ()
+    if seals is None:
+        seals = ()
+    if not isinstance(seals, (list, tuple)):
+        raise ValueError("seals must be a list")
+    for seal in seals:
+        if not isinstance(seal, dict):
+            raise ValueError("seal entry must be a mapping")
+        kind = _non_empty_str(seal.get("kind"), "seal kind")
+        refused = _non_empty_str(seal.get("refused"), "seal refused")
+        accepted = _non_empty_str(seal.get("accepted"), "seal accepted")
+        row_sha = _non_empty_str(seal.get("row_sha256"), "seal row_sha256")
+        columns[refused] = (kind, "period_close")
+        columns[accepted] = (kind,)
+        columns[row_sha] = (kind, None)
+        parts = seal.get("parts")
+        if parts is None:
+            parts = ()
+        if not isinstance(parts, (list, tuple)):
+            raise ValueError("seal parts must be a list")
+        for part in parts:
+            if not isinstance(part, dict):
+                raise ValueError("seal part must be a mapping")
+            p_kind = _non_empty_str(part.get("kind"), "seal part kind")
+            p_accepted = _non_empty_str(part.get("accepted"), "seal part accepted")
+            columns[p_accepted] = (p_kind,)
+
+    return frozenset(kinds), parents, columns
 
 
 def _chains(kinds, parents: dict) -> dict[str, tuple[str, ...]]:
@@ -335,17 +464,24 @@ def _calc(ir: dict, views: set, every_witness, role_witnesses, derivable: set, f
     return visible, out
 
 
-def check_role(role: str, complete: dict, snapshots: dict, claimed_full, columns: dict, kinds, parents: dict,
+def check_role(role: str, complete: dict, snapshots: dict, claimed_full, bundle: dict,
                doc: dict, calc_ir: dict | None = None, instances=(), calc_all=(),
-               calc_witnesses=(), witnesses=(), claimed_evidence=None) -> tuple[frozenset, list[dict]]:
+               calc_witnesses=(), witnesses=(), claimed_evidence=None, *,
+               columns=None) -> tuple[frozenset, list[dict]]:
     """(the relations `role` reads in full, findings) for one filtered role.
 
-    `complete` and `snapshots` are {relation: snapshot bytes}: every row, and the role's. `columns` is the
-    kind per column of each base relation (None for a value), `kinds` the kinds and `parents` their parent,
-    all from the schema; `doc` is the rule IR; `claimed_full` the publisher's `full` for the role;
-    `instances` every witness instance of the engine; `calc_all` every calculation witness and
-    `calc_witnesses` the role's; `witnesses` the role's chosen proofs; `claimed_evidence` the publisher's
-    evidence for the role's full kinds (`grants`), compared when given."""
+    `complete` and `snapshots` are {relation: snapshot bytes}: every row, and the role's. `bundle` is the
+    compiled schema bundle (`schema-bundle.json`), from which the checker derives kinds, parents and per-column
+    kinds itself; `doc` is the rule IR; `claimed_full` the publisher's `full` for the role; `instances` every
+    witness instance of the engine; `calc_all` every calculation witness and `calc_witnesses` the role's;
+    `witnesses` the role's chosen proofs; `claimed_evidence` the publisher's evidence for the role's full kinds
+    (`grants`), compared when given."""
+    if columns is not None:
+        raise TypeError("check_role derives schema columns from bundle; do not pass columns")
+    try:
+        kinds, parents, columns = _schema_from_bundle(bundle, doc)
+    except ValueError as err:
+        return frozenset(), [{"reason": "malformed_bundle", "detail": str(err), "severity": "error"}]
     findings: list[dict] = []
 
     def rows(snaps: dict, whose: str) -> dict:
@@ -402,6 +538,10 @@ def check_role(role: str, complete: dict, snapshots: dict, claimed_full, columns
         findings += check_evidence(claimed_evidence, evidence)
     withheld = withheld_seals(doc, kinds_full) | withheld_admission()
     for rel in sorted((set(every) | set(mine)) - derived):
+        if rel in withheld:
+            got = set(mine.get(rel, {}))
+            findings += [{"reason": "not_readable", "relation": rel, "key": key} for key in sorted(got)]
+            continue
         if rel not in columns:
             findings.append({"reason": "no_columns", "relation": rel})
             continue

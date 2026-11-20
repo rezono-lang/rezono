@@ -19,6 +19,10 @@ from rezono_publisher.publish import snapshot
 
 KINDS = {"node", "role"}
 COLUMNS = {"node": ("node",), "role": ("role",), "role__capability": ("role", None)}
+BUNDLE = {
+    "kinds": [{"id": "node"}, {"id": "role"}],
+    "attributes": [{"table": "role__capability", "kind": "role"}],
+}
 ROLES = ("guest", "propose", "viewer")
 MAPPING = [("propose", "propose"), ("propose", "read"), ("viewer", "read")]
 
@@ -106,12 +110,12 @@ def test_the_checker_derives_the_same_evidence(role):
     assert list(full.evidence) == checker_access.grants(RULES, role, chains, True, capabilities)
     complete = {rel: snapshot(rs) for rel, rs in rows.items()}
     mine = {rel: snapshot(rs) for rel, rs in readable.items()}
-    found, findings = checker_access.check_role(role, complete, mine, full, COLUMNS,
-                                                KINDS, {}, RULES, witnesses=sees["witnesses"],
+    found, findings = checker_access.check_role(role, complete, mine, full, BUNDLE,
+                                                RULES, witnesses=sees["witnesses"],
                                                 claimed_evidence=full.evidence)
     assert (found, findings) == (full, [])
     forged = [*full.evidence, {"kind": "node", "rule": "readers", "ground": ["role__capability", role, "administer"]}]
-    _, findings = checker_access.check_role(role, complete, mine, full, COLUMNS,
-                                            KINDS, {}, RULES, witnesses=sees["witnesses"],
+    _, findings = checker_access.check_role(role, complete, mine, full, BUNDLE,
+                                            RULES, witnesses=sees["witnesses"],
                                             claimed_evidence=forged)
     assert [f["reason"] for f in findings] == ["evidence_mismatch"]

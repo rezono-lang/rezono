@@ -33,6 +33,7 @@ class Signature:
     # Linked evidence for a ground call: relation, owner, columns, world, the states it can take and the
     # places that explain each undecided state (decisions/language-expression-semantics.md section 2).
     predicate: dict | None = None
+    semantics: tuple[dict | None, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -99,6 +100,7 @@ class Schema:
         self.by_owner: dict[tuple[str, str], list[str]] = {}
         self.aliases: dict[tuple[str, str], list[modules.Module]] = {}
         self.scalar_storages: dict[str, str] = {}
+        self.scalars: dict[str, tuple[modules.Module, str]] = {}
         for definition in definitions:
             for authored, category in names.declared[definition.id].items():
                 engine = names.name(definition.id, authored)
@@ -141,7 +143,34 @@ class Schema:
         module = self.names.modules[owner]
         resolved = f"{module.pack}.{name}"
         self.scalar_storages[resolved] = storage
+        self.scalars[resolved] = (module, name)
         return resolved, storage
+
+    def column_semantic(self, logical: str, physical: str, at: str) -> dict | None:
+        """Project a linked rule column's logical type to its bundle SemanticType, or None for plain scalars."""
+        if logical in SCALARS:
+            return None
+        if logical in self.classes:
+            return types.ref(logical, physical).semantic
+        if logical in self.enums:
+            return types.enum(logical).semantic
+        if logical in self.scalars:
+            module, authored = self.scalars[logical]
+            seen: set[str] = set()
+            t = module.sv.get_type(authored)
+            while t is not None and t.name not in seen:
+                seen.add(t.name)
+                if (curr := pack.ann(t, "currency")) is not None:
+                    if not isinstance(curr, str) or not pack.CURRENCY.match(curr):
+                        raise Refusal("R049", f"{authored}: currency {curr!r} is not an ISO 4217 code", at)
+                    if physical != types.INTEGER:
+                        raise Refusal("R049", f"{authored}: a currency goes on whole numbers (minor units)", at)
+                    return types.money(curr, logical).semantic
+                if any(tag in pack.tags(t) for tag in ("dimension", "unit")) and physical == types.INTEGER:
+                    return types.quantity(t.name, physical, logical).semantic
+                t = module.sv.get_type(t.typeof) if t.typeof else None
+            return types.scalar(physical, logical).semantic
+        raise Refusal("R049", f"Unsupported rule column type {logical!r}", at)
 
     def is_text(self, value: str) -> bool:
         return value == "Text" or self.scalar_storages.get(value) == "string"
@@ -593,9 +622,12 @@ def link_modules(meta: dict, definitions: list[modules.Module], imported: dict[s
                 errors.append(other.diagnose(Refusal("R040", message, pointer)))
                 raise Refusal("R040", message, at)
             key = columns(schema, source, declaration["columns"], f"{at}/columns")
+            semantics = tuple(schema.column_semantic(logical, physical, f"{at}/columns/{index}")
+                              for index, (_, logical, physical) in enumerate(key))
             extend, invariant, intermediate_within = read_head_options(source, at, declaration)
             owners[rule] = source, at
-            signatures[rule] = Signature(key, source.module, source.owner, source.path, extend, invariant)
+            signatures[rule] = Signature(key, source.module, source.owner, source.path, extend, invariant,
+                                         semantics=semantics)
             if intermediate_within is not None:
                 intermediate_specs.append((rule, source, *intermediate_within))
         except Refusal as error:

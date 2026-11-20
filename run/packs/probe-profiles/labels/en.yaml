@@ -36,6 +36,7 @@ physical_requirement.optional: optional
 role: role
 role.title: title
 may_read: may read
+may_read_full: may read in full
 budget_conflict: conflicting budgets
 effective_budget: budget in force
 effective_physical: physical requirement in force

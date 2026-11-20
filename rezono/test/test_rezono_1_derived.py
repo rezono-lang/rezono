@@ -79,7 +79,7 @@ def test_rezono_1_unified_derived_reader():
         problems.append({"unified": unified})
     else:
         decls = unified["module"]["decls"]
-        module_derived = {d["derived"]: d for d in decls if "derived" in d}
+        module_derived = {d["derived"]: d for d in decls if isinstance(d.get("derived"), str)}
         if set(module_derived) != {"asks", "chosen", "needs", "within"}:
             problems.append({"module_derived_names": sorted(module_derived)})
         else:
