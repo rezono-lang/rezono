@@ -281,19 +281,6 @@ def test_rezono_1_extend_option_lowers_as_the_datalog_extension_point(tmp_path):
         raise MissingRezono1RuleConstruct(f"alone: {relations.get('stated')}, {sorted(derived.get('stated', ()))}")
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason=(
-        "M3: decisions/language-rezono-1-refinements.md: section 1. Lower an existential `Kind.any(pred)` and "
-        "`Kind.any(x: pred)` in a rezono 1 Bool derivation, also one that binds scalar parameters "
-        "(`derived has_entry(b: Text, c: Text): Bool = Entry.any(budget = b and cell = c)`) and one that recurses "
-        "(`reaches(a, b) = a.next = b or Item.any(m: reaches(a, m) and m.next = b)`), as the Datalog join with a "
-        "body-only variable. compiler/rezono_compiler/rezono_derived.py refuses it today with R049 \"this Bool "
-        "expression is not lowered to rezono.rules/2 yet\". Every standard pack with rules except std-order needs "
-        "it, and so do front-door example packs."
-    ),
-)
 def test_rezono_1_any_lowers_as_an_existential_join(tmp_path):
     native = _pack(tmp_path, "native", KINDS + (
         "\nderived has_entry(b: Text, c: Text): Bool = Entry.any(budget = b and cell = c)\n"
@@ -308,18 +295,6 @@ def test_rezono_1_any_lowers_as_an_existential_join(tmp_path):
     }, tmp_path)
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason=(
-        "M3: decisions/language-rezono-1.md: section 8 step 5, with decisions/language-rezono-1-refinements.md "
-        "section 1. Lower membership in a multivalued slot (`b in a.links`) in a rezono 1 Bool derivation, alone "
-        "and in a conjunction, as the Datalog read of the slot table. compiler/rezono_compiler/rezono_derived.py "
-        "refuses it today with R049 \"this Bool expression is not lowered to rezono.rules/2 yet\"; a comparison of "
-        "two slot paths (`a.area = b.area`) already lowers. The standard packs std-decision, std-identity and "
-        "std-order need it."
-    ),
-)
 def test_rezono_1_membership_in_a_multivalued_slot_lowers(tmp_path):
     native = _pack(tmp_path, "native", KINDS + (
         "\nderived linked(a: Item, b: Item): Bool = b in a.links\n"
