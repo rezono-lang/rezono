@@ -39,16 +39,6 @@ def entries(body: dict) -> list[dict]:
     return sorted(out, key=lambda e: (e["relation"], e["key"]))
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=(MissingVariantDifference, AssertionError),
-    reason=(
-        "extra: decisions/viewer-slip.md: Serve scenario for a variant of a sweep in the local reader (edge/gate/src/local.ts) from the difference "
-        "the publisher writes per filtered role, for a role that reads every relation in full, and shorten "
-        "blocked/edge-gate-variant-queries.txt by what then works (decisions/viewer-slip.md, What if, on the "
-        "line). Expectation: tests/fixtures/slip at amount 20, rows by hand."
-    ),
-)
 def test_variant_difference_local(tmp_path):
     store, manifest, done = publish_sweeps(tmp_path)
     variant = next(vid for vid, what in done if vid.startswith("v-item_amount-04-") and what == "manifest")
