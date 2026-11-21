@@ -148,9 +148,11 @@ def read_decision_work(
     if overlap:
         raise ValueError(f"decision(s) appear in multiple status relations: {', '.join(overlap)}")
 
-    headless_done = sorted(done_ids & headless_ids)
-    if headless_done:
-        raise ValueError(f"headless decision(s) cannot be marked done: {', '.join(headless_done)}")
+    headless_classified = sorted((open_ids | untested_ids | done_ids) & headless_ids)
+    if headless_classified:
+        raise ValueError(
+            f"headless decision(s) cannot appear in open, untested or done relations: {', '.join(headless_classified)}"
+        )
 
     worker_tasks = [
         {
