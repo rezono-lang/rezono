@@ -9,17 +9,6 @@ RESOURCES = [{"lang": lang, "resource": (FIXTURE / "messages" / f"{lang}.mf2").r
 FLAGGED = {"i": "item-a", "a": "12"}
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=(MissingMessageFiller, AssertionError),
-    reason=(
-        "M3: decisions/viewer-slip.md: Write viewer/messages/src/fill.ts, in a folder of its own with its own package.json and outside "
-        "viewer/src/lib: fill(resources, lang, id, args) returns the text with every {$name} replaced, undefined "
-        "for a message that is not there, and throws an error named MissingMessageArgument for a variable "
-        "without a value, never an empty text (decisions/viewer-slip.md, Filling a message). "
-        "tests/slip/fill.mjs drives it."
-    ),
-)
 def test_message_filled():
     got = fill([
         {"resources": RESOURCES, "lang": "en", "id": "rule.flagged", "args": FLAGGED},
