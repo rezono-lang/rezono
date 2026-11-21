@@ -14,18 +14,23 @@ from rezono_compiler import rules as ir
 STD = REPO / "packs" / "std-access"
 
 
-def test_standard_access_declares_no_grants():
-    import souffle
-    from rezono_compiler.rules_dl import parse_file
+def _imported_std_access_program(tmp_path: Path):
+    """Compile a minimal consumer importing live packs/std-access to inspect its declared relations and rules."""
+    d = Path(shutil.copytree(FIXTURE, tmp_path / "std-access-probe"))
+    f = d / "pack.yaml"
+    meta = yaml.safe_load(f.read_text(encoding="utf-8"))
+    meta["imports"] = [{"name": "std-access", "path": str(STD), "sha256": modules.pack_hash(STD)}]
+    f.write_text(yaml.safe_dump(meta), encoding="utf-8")
+    return ir.load(pack.read(d).rules)
 
-    texts = souffle.closure(STD)
-    assert texts
-    statements = [stmt for i, text in enumerate(texts) for stmt in parse_file(text, f"std-access:{i}")]
-    assert all(stmt[0] == "decl" for stmt in statements)
-    by_name = {stmt[1]: stmt for stmt in statements}
-    assert "may_read" in by_name
-    assert all(stmt[8] is True and stmt[9] is None and stmt[10] is False for stmt in statements)
-    assert by_name["may_read"][2] == [
+
+def test_standard_access_declares_no_grants(tmp_path):
+    prog = _imported_std_access_program(tmp_path)
+    assert prog.rules == {}
+    declared = {name: rel for name, rel in prog.relations.items() if rel.role != "base"}
+    assert "may_read" in declared
+    assert all(rel.extend is True and rel.closes is None and rel.explain != "fold" for rel in declared.values())
+    assert [(col.name, col.type) for col in declared["may_read"].key] == [
         ("role", "string"), ("kind", "string"), ("element", "string")]
 
 
@@ -33,13 +38,13 @@ class MissingRightDeclarations(AssertionError):
     """std-access does not declare the rights to propose, review, publish and execute as the decision gives."""
 
 
-def test_standard_access_declares_the_four_rights():
-    import souffle
-    from rezono_compiler.rules_dl import parse_file
-
-    texts = souffle.closure(STD)
-    statements = [stmt for i, text in enumerate(texts) for stmt in parse_file(text, f"std-access:{i}")]
-    got = {s[1]: s[2] for s in statements if s[0] == "decl"}
+def test_standard_access_declares_the_four_rights(tmp_path):
+    prog = _imported_std_access_program(tmp_path)
+    got = {
+        name: [(col.name, col.type) for col in rel.key]
+        for name, rel in prog.relations.items()
+        if rel.role != "base"
+    }
     want = {
         "may_propose": [("role", "string"), ("kind", "string"), ("element", "string")],
         "may_review": [("role", "string"), ("kind", "string"), ("element", "string")],

@@ -8,6 +8,7 @@ reference.{rezono,json} (schema/reference.yaml), and rule modules access, home a
 
 from __future__ import annotations
 
+from contextlib import ExitStack
 from pathlib import Path
 import json
 import shutil
@@ -20,6 +21,7 @@ from support import text, violations
 from candidate_pack import (
     MissingCandidatePack,
     REPO,
+    legacy_helpers,
     unplaced,
     verify_candidate_forms,
 )
@@ -44,17 +46,18 @@ SOURCES = {
 
 def isolated(tmp_path: Path, form: str) -> Path:
     root = tmp_path / form
-    for std in ("std-access", "std-decision", "std-time", "std-explain"):
-        shutil.copytree(REPO / "packs" / std, root / "packs" / std, ignore=shutil.ignore_patterns("candidate"))
-    shutil.copytree(REPO / "examples/subsidy-scheme", root / "examples/subsidy-scheme",
-                    ignore=shutil.ignore_patterns("candidate"))
+    legacy_helpers().materialize_legacy_packs(
+        root,
+        ("packs", "examples/subsidy-scheme", "examples/subsidy"),
+    )
     target = root / "examples/subsidy"
-    shutil.copytree(SUBSIDY, target, ignore=shutil.ignore_patterns("candidate"))
+    shutil.copytree(SUBSIDY / "facts", target / "facts", dirs_exist_ok=True)
     if form == "legacy":
         return target
     verify_candidate_forms(SUBSIDY, MODULE_NAMES, tmp_path)
     shutil.rmtree(target / "schema", ignore_errors=True)
     shutil.rmtree(target / "rules", ignore_errors=True)
+    shutil.rmtree(target / "rezono", ignore_errors=True)
     shutil.copytree(SUBSIDY / "candidate", target / "rezono")
     meta_path = target / "pack.yaml"
     meta = yaml.safe_load(meta_path.read_bytes())
@@ -68,8 +71,10 @@ def isolated(tmp_path: Path, form: str) -> Path:
 
 def check_pack(tmp_path: Path, form: str) -> dict:
     directory = isolated(tmp_path, form)
-    model = pack.read(directory)
-    files = emit.compile_pack(model)
+    with ExitStack() as stack:
+        legacy_helpers().admit_legacy_std_packs(stack, directory.parents[1])
+        model = pack.read(directory)
+        files = emit.compile_pack(model)
     checked_violations = {}
     for fact_file in sorted((directory / "facts").glob("*.yaml")):
         if fact_file.name.endswith(".sources.yaml"):

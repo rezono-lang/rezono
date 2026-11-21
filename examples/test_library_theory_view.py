@@ -42,7 +42,8 @@ def library(tmp_path):
 def test_library_parent_supplies_the_standard_part_relations(library):
     model = pack.read(library)
     prog = rules.load(model.rules)
-    rows = facts.load(model, library / "facts/valid.yaml")
+    valid = next(path for path in facts.files(library) if path.stem == "valid")
+    rows = facts.load(model, valid)
     con, _, _ = batch.run(model, prog, rows)
     try:
         # The example's only parent is c2 -> c1. The unrelated category c3 has no whole.

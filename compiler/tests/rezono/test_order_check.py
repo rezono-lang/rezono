@@ -229,15 +229,35 @@ def column_of(path: Path, line: int, text: str) -> int:
     return path.read_text(encoding="utf-8").splitlines()[line - 1].index(text) + 1
 
 
+def _std_order_rank_related() -> dict[str, str]:
+    std_order = ROOT / "packs/std-order"
+    schema = std_order / "schema/order.yaml"
+    if schema.is_file():
+        [rank_line] = [number for number, line in enumerate(schema.read_text(encoding="utf-8").splitlines(), 1)
+                       if line == "      rank:"]
+        return {"file": "std-order:schema/order.yaml", "line": str(rank_line), "column": "7"}
+    hits = [
+        (path, number)
+        for path in sorted((std_order / "rezono").rglob("*.rezono"))
+        for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1)
+        if line.lstrip().startswith("rank:")
+    ]
+    assert len(hits) == 1, f"expected one rank slot declaration in packs/std-order/rezono/: {hits}"
+    path, rank_line = hits[0]
+    rel = path.relative_to(std_order).as_posix()
+    return {
+        "file": f"std-order:{rel}",
+        "line": str(rank_line),
+        "column": str(column_of(path, rank_line, "rank:")),
+    }
+
+
 def test_order_check_rejects_partial_negation(tmp_path):
     directory = order_check_pack(tmp_path, "rejected")
     source = directory / "rezono/order.rezono"
-    schema = ROOT / "packs/std-order/schema/order.yaml"
-    [rank_line] = [number for number, line in enumerate(schema.read_text(encoding="utf-8").splitlines(), 1)
-                   if line == "      rank:"]
     expected_related = [
         {"file": "rezono/order.rezono", "line": "6", "column": str(column_of(source, 6, "x.rank = 0"))},
-        {"file": "std-order:schema/order.yaml", "line": str(rank_line), "column": "7"},
+        _std_order_rank_related(),
     ]
     with pytest.raises(pack.CompileError) as refused:
         pack_files(directory)
