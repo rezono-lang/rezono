@@ -492,14 +492,6 @@ def test_check_pinned_reads_exceptions_from_pack_facts():
     assert {row[0] for row in rows["build_unpinned_package"]} == {"pip"}
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason="extra: decisions/tooling-does-not-decide.md: loop/cluster/base_check.py must share its "
-           "selection/summary/base helpers with scripts/red_before.py instead of duplicating them, "
-           "while continuing to run both from loop/cluster/ and from the isolated policy directory "
-           "created by .github/workflows/disposable-cluster.yml.",
-)
 def test_cluster_base_check_shares_helpers_with_red_before(tmp_path: Path, monkeypatch):
     """loop/cluster/base_check.py delegates shared helpers to scripts/red_before.py (no duplicate copy)."""
     base_check_path = ROOT / "loop" / "cluster" / "base_check.py"

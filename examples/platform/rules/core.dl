@@ -1,10 +1,30 @@
 // The trial rules: from services, product knowledge and roles to needs, zones, flows, firewall rules and findings.
 
 // What a service offers and asks follows from its product.
-.decl provides(s: symbol, f: symbol, port: number)
-provides(s, f, p) :- service__product(s, pr), offer__product(o, pr), offer__function(o, f), offer__port(o, p).
 .decl provider(s: symbol, f: symbol)
-provider(s, f) :- provides(s, f, _).
+provider(s, f) :- service__product(s, pr), offer__product(o, pr), offer__function(o, f).
+.decl port_decided(p: symbol, f: symbol)
+port_decided(p, f) :- port_decision__product(d, p), port_decision__function(d, f).
+.decl release_names(r: symbol, x: symbol)
+release_names(r, x) :- release__version(r, x).
+release_names(r, x) :- release__series(r, x).
+.decl transport_series(p: symbol, x: symbol)
+transport_series(p, x) :- vendor_default_transport_source__product(v, p), vendor_default_transport_source__series(v, x).
+.decl transport_series_multiple(p: symbol)
+transport_series_multiple(p) :- transport_series(p, x), transport_series(p, y), x != y.
+.decl provides(s: symbol, f: symbol, port: number)
+provides(s, f, port) :- service__product(s, p), offer__product(o, p), offer__function(o, f),
+    port_decision__product(d, p), port_decision__function(d, f), port_decision__port(d, port).
+provides(s, f, port) :- service__product(s, p), offer__product(o, p), offer__function(o, f), !port_decided(p, f),
+    runs(s, r), release_names(r, x), vendor_default_transport_source__product(v, p),
+    vendor_default_transport_source__series(v, x), vendor_default_transport_source__port(v, port).
+provides(s, f, port) :- service__product(s, p), offer__product(o, p), offer__function(o, f), !port_decided(p, f),
+    !service_has_release(s), !transport_series_multiple(p), vendor_default_transport_source__product(v, p),
+    vendor_default_transport_source__series(v, x), vendor_default_transport_source__port(v, port).
+.decl port_known(s: symbol, f: symbol)
+port_known(s, f) :- provides(s, f, _).
+.decl port_unknown(s: symbol, f: symbol)
+port_unknown(s, f) :- provider(s, f), !port_known(s, f).
 .decl asks(s: symbol, f: symbol)
 asks(s, f) :- service__product(s, pr), demand__product(d, pr), demand__function(d, f).
 
