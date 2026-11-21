@@ -46,7 +46,7 @@ from rezono_checker.sources import check_role_sources, check_source_sets
 from rezono_checker.check import shaped
 from rezono_checker.rules import check_calc_bindings, derived_relations, load_rules, load_seals
 
-from . import access, pointers, surface, timing
+from . import access, pointers, surface, timing, witness_graph
 from . import sources as fact_sources
 from .calc_scope import published_views
 from .store import put_all
@@ -490,7 +490,29 @@ def plan(e: Epoch, store, roles: dict[str, str], base: dict | None = None,
             uri = put(object_key(e.pack, data[rel]), data[rel])
             snapshots.append({"relation": rel, "role": role, "complete": mode == access.COMPLETE, "full": rel in full,
                               "uri": uri, "sha256": sha256(data[rel]), "format": "json"})
-        body = canonical(sees)
+        sees_doc = dict(sees)
+        if sees["witnesses"]:
+            _, lb_rows = witness_graph.evaluate(sees["witnesses"], derived)
+            lb_entries = []
+            seen_prems: set[tuple[str, str, str, str, str]] = set()
+            for w in sees["witnesses"]:
+                c_rel, c_key = access.ref(w)
+                for p in w.get("premises", ()):
+                    entry = (c_rel, c_key, p["row"]["relation"], p["row"]["key"], p["polarity"])
+                    if entry not in seen_prems:
+                        seen_prems.add(entry)
+                        lb_entries.append((entry, entry in lb_rows))
+            lb_entries.sort(key=lambda item: item[0])
+            sees_doc["load_bearing_entries"] = [
+                {
+                    "conclusion": {"relation": c_rel, "key": c_key},
+                    "premise": {"relation": p_rel, "key": p_key},
+                    "how": how,
+                    "load_bearing": bool(flag),
+                }
+                for (c_rel, c_key, p_rel, p_key, how), flag in lb_entries
+            ]
+        body = canonical(sees_doc)
         uri = put(object_key(e.pack, body), body)
         witness_sets.append({"role": role, "uri": uri, "sha256": sha256(body)})
         if images:  # only the images this role's own rows name

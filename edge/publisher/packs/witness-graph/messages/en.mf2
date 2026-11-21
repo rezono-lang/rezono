@@ -1,0 +1,11 @@
+@locale en
+---
+arrow.total = Each {$kind} has exactly one {$arrow}.
+arrow.partial = Each {$kind} has at most one {$arrow}.
+attribute.total = Each {$kind} has exactly one {$attribute}.
+attribute.partial = Each {$kind} has at most one {$attribute}.
+is_a = Each {$kind} is a {$parent}.
+unique_key = Each {$key} belongs to at most one {$kind}.
+path_equation = For each {$kind}, {$equation} holds.
+witness_graph.founded = Witness {$witness} is a founded proof of {$conclusion}.
+witness_graph.load_bearing = Premise {$premise} is load-bearing for {$conclusion}.

@@ -136,6 +136,7 @@
   "proof_functional_key_malformed": "malformed functional conclusion key in witness for {rule}",
   "proof_piece_limit_invalid": "proof: a piece limit of {limit} bytes, not 1 to {bound}",
   "proof_rows_mismatch": "{tree}/{relation}: the rows are not the role's proof graph",
+  "load_bearing_mismatch": "the published load-bearing premise flags do not match the role's founded witnesses",
   "proof_steps_invalid": "proof: steps could not be reconstructed",
   "proof_tree_missing": "{tree}/{relation}: no tree",
   "proof_tree_unexpected": "{tree}/{relation}: a tree for nothing",
