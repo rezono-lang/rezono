@@ -1,5 +1,5 @@
 """The morphism from the symbolic to the geometric model of space, tested as a theory satisfaction
-(decisions/one-structure-space-and-readings.md, section 1 and red test 2; docs/theories.md, step 4).
+(decisions/one-structure-space-and-readings.md, section 1 and red test 2).
 
 std-geo binds std-space with a view of its own (`views.yaml`, theory std-space): a region is a place, and a
 place is `part_of` the smallest region that contains it on the same grid (closed containment: touching the
