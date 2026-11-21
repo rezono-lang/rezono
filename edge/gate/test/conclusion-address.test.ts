@@ -4,7 +4,6 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { test } from 'node:test';
-import { canonicalJson } from '../../../viewer/src/lib/canon.ts';
 import {
 	canonicalWitnessIri,
 	conclusionIri,
@@ -171,7 +170,7 @@ test('local gate lists multi-epoch manifests and resolves pinned conclusion IRIs
 	assert.equal((await operator(new Request(`http://rezono.local/${PACK}/resolve?iri=${encodeURIComponent(svcTupleMismatch)}`))).status, 404);
 
 	// Resolve tuple-keyed derived relation (`bundle.relations`: flow_drift -> FlowDrift) at current epoch (m-2)
-	const matchedId = canonicalJson(driftRowMatched.key);
+	const matchedId = JSON.stringify(driftRowMatched.key);
 	const matchedPinnedM2 = conclusionIri(BASE, { id: 'flow_drift', class: 'FlowDrift' }, matchedId, {
 		manifest: 'm-2',
 		dataset: m2Sha
@@ -185,7 +184,7 @@ test('local gate lists multi-epoch manifests and resolves pinned conclusion IRIs
 	assert.equal(matchedBody.pinned_iri, matchedPinnedM2);
 
 	// Resolve historical epoch (m-1) drift row via its m-1 pin
-	const excessId = canonicalJson(driftRowExcess.key);
+	const excessId = JSON.stringify(driftRowExcess.key);
 	const excessPinnedM1 = conclusionIri(BASE, { id: 'flow_drift', class: 'FlowDrift' }, excessId, {
 		manifest: 'm-1',
 		dataset: m1Sha
@@ -209,7 +208,7 @@ test('local gate lists multi-epoch manifests and resolves pinned conclusion IRIs
 	const tenantDeniedDrift = await tenant(new Request(`http://rezono.local/${PACK}/resolve?iri=${encodeURIComponent(excessPinnedM1)}`));
 	assert.equal(tenantDeniedDrift.status, 404);
 
-	const sweepIri = conclusionIri(BASE, { id: 'complete_sweep', class: 'CompleteSweep' }, canonicalJson(sweepRow.key), {
+	const sweepIri = conclusionIri(BASE, { id: 'complete_sweep', class: 'CompleteSweep' }, JSON.stringify(sweepRow.key), {
 		manifest: 'm-2',
 		dataset: m2Sha
 	});
