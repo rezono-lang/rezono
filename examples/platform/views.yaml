@@ -1,5 +1,17 @@
 format: rezono.views/1
 views:
+  - theory: std-part
+    kinds:
+      - name: constituent
+        union:
+          - populated_from: failure_domain
+    arrows:
+      - name: part_of
+        of: constituent
+        paths:
+          - populated_from: failure_domain
+            steps:
+              - slot: contained_in
   - theory: std-time
     kinds:
       - name: interval

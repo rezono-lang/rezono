@@ -3,11 +3,114 @@
 .decl withdrawn_cluster(cluster: symbol)
 withdrawn_cluster(c) :- cluster_withdrawal__cluster(_, c).
 
-.decl failure_domain(cluster: symbol, domain: symbol)
-failure_domain(c, d) :- failure_domain_membership__cluster(m, c), failure_domain_membership__domain(m, d).
+.decl cluster_failure_domain(cluster: symbol, domain: symbol)
+cluster_failure_domain(c, d) :- failure_domain_membership__cluster(m, c), failure_domain_membership__domain(m, d).
 
 .decl has_domain(cluster: symbol)
-has_domain(c) :- failure_domain(c, _).
+has_domain(c) :- cluster_failure_domain(c, _).
+
+.decl has_physical_domain(cluster: symbol)
+has_physical_domain(c) :-
+    cluster_failure_domain(c, d),
+    failure_domain__domain_kind(d, k),
+    k != "power_feed".
+
+// Domains reachable from a domain through std-identity aliases (equivalent) and std-part containment (within).
+.decl domain_link(from: symbol, to: symbol)
+domain_link(d, e) :- equivalent(d, e).
+domain_link(d, w) :- within(d, w).
+
+.decl domain_reaches(domain: symbol, target: symbol)
+domain_reaches(d, d) :- failure_domain(d).
+domain_reaches(d, target) :- domain_reaches(d, mid), domain_link(mid, target).
+
+.decl cluster_reaches_domain(cluster: symbol, domain: symbol)
+cluster_reaches_domain(c, target) :-
+    cluster_failure_domain(c, d),
+    domain_reaches(d, target).
+
+.decl has_building_domain(cluster: symbol)
+has_building_domain(c) :-
+    cluster_reaches_domain(c, b),
+    failure_domain__domain_kind(b, "building").
+
+// Power feed chains reachable from a domain via PowerFeedLink, std-identity aliases, and power-feed containment.
+.decl feed_step(from: symbol, to: symbol)
+feed_step(d, f) :- power_feed_link__domain(link, d), power_feed_link__feed(link, f).
+feed_step(f1, f2) :- equivalent(f1, f2).
+feed_step(f1, f2) :- within(f1, f2), failure_domain__domain_kind(f2, "power_feed").
+
+.decl domain_feed_reaches(domain: symbol, feed: symbol)
+domain_feed_reaches(d, f) :- power_feed_link__domain(link, d), power_feed_link__feed(link, f).
+domain_feed_reaches(d, f2) :- domain_feed_reaches(d, f1), feed_step(f1, f2).
+
+.decl cluster_reaches_feed(cluster: symbol, feed: symbol)
+cluster_reaches_feed(c, f) :- cluster_reaches_domain(c, d), domain_feed_reaches(d, f).
+
+.decl cluster_power_feed_evidence(cluster: symbol, feed: symbol)
+cluster_power_feed_evidence(c, f) :-
+    cluster_reaches_feed(c, f),
+    failure_domain__domain_kind(f, "power_feed").
+
+.decl cluster_power_receipt(cluster: symbol)
+cluster_power_receipt(c) :-
+    cluster_reaches_domain(c, d),
+    power_chain_receipt__domain(_, d).
+
+.decl power_separation_claimed(cluster: symbol, other: symbol)
+power_separation_claimed(c, o) :-
+    power_separation_claim__first(_, d1),
+    power_separation_claim__second(_, d2),
+    cluster_reaches_domain(c, d1),
+    cluster_reaches_domain(o, d2),
+    !equivalent(d1, d2),
+    c != o.
+power_separation_claimed(c, o) :-
+    power_separation_claim__first(_, d1),
+    power_separation_claim__second(_, d2),
+    cluster_reaches_domain(c, d2),
+    cluster_reaches_domain(o, d1),
+    !equivalent(d1, d2),
+    c != o.
+
+.decl shared_failure_domain(cluster: symbol, other: symbol, failure_type: symbol)
+shared_failure_domain(c, o, "building") :-
+    cluster_reaches_domain(c, b1),
+    failure_domain__domain_kind(b1, "building"),
+    cluster_reaches_domain(o, b2),
+    failure_domain__domain_kind(b2, "building"),
+    equivalent(b1, b2),
+    c != o.
+shared_failure_domain(c, o, "power") :-
+    cluster_power_feed_evidence(c, f1),
+    cluster_power_feed_evidence(o, f2),
+    equivalent(f1, f2),
+    c != o.
+
+.decl failure_domain_independent(cluster: symbol, other: symbol, failure_type: symbol)
+failure_domain_independent(c, o, "building") :-
+    has_building_domain(c),
+    has_building_domain(o),
+    !shared_failure_domain(c, o, "building"),
+    c != o.
+failure_domain_independent(c, o, "power") :-
+    power_separation_claimed(c, o),
+    !shared_failure_domain(c, o, "power").
+failure_domain_independent(c, o, "power") :-
+    cluster_power_receipt(c),
+    cluster_power_receipt(o),
+    cluster_power_feed_evidence(c, _),
+    cluster_power_feed_evidence(o, _),
+    !shared_failure_domain(c, o, "power"),
+    c != o.
+
+.decl failure_domain_independence_unknown(cluster: symbol, other: symbol, failure_type: symbol, reason: symbol)
+failure_domain_independence_unknown(c, o, "power", "power-chain-unproven") :-
+    has_physical_domain(c),
+    has_physical_domain(o),
+    c != o,
+    !shared_failure_domain(c, o, "power"),
+    !failure_domain_independent(c, o, "power").
 
 .decl function_covered(function: symbol)
 function_covered(f) :- function_inventory_receipt__function(_, f).
@@ -24,10 +127,23 @@ provider_affected(p) :- provider_withdrawn_placement(p, _).
 .decl surviving_placement(provider: symbol, cluster: symbol)
 surviving_placement(p, c) :- cluster_service_placement(p, c), !withdrawn_cluster(c).
 
+.decl has_surviving_placement(provider: symbol)
+has_surviving_placement(p) :- surviving_placement(p, _).
+
 .decl shares_withdrawn_domain(provider: symbol, cluster: symbol)
 shares_withdrawn_domain(p, alt) :-
-    surviving_placement(p, alt), failure_domain(alt, d),
-    provider_withdrawn_placement(p, w), failure_domain(w, d).
+    surviving_placement(p, alt), cluster_failure_domain(alt, d),
+    provider_withdrawn_placement(p, w), cluster_failure_domain(w, d).
+shares_withdrawn_domain(p, alt) :-
+    surviving_placement(p, alt),
+    provider_withdrawn_placement(p, w),
+    shared_failure_domain(alt, w, _).
+shares_withdrawn_domain(p, alt) :-
+    surviving_placement(p, alt),
+    provider_withdrawn_placement(p, w),
+    cluster_reaches_domain(alt, d1),
+    cluster_reaches_domain(w, d2),
+    equivalent(d1, d2).
 
 .decl missing_pair_domain(provider: symbol, cluster: symbol)
 missing_pair_domain(p, alt) :- surviving_placement(p, alt), !has_domain(alt).
@@ -58,6 +174,14 @@ dependency_gap(consumer, function, "no-placement") :-
 dependency_gap(consumer, function, "no-independent-placement") :-
     needs(consumer, provider, function),
     provider_affected(provider),
+    shares_withdrawn_domain(provider, _),
+    !has_independent_placement(provider),
+    !provider_domain_unknown(provider),
+    function_covered(function).
+dependency_gap(consumer, function, "no-independent-placement") :-
+    needs(consumer, provider, function),
+    provider_affected(provider),
+    !has_surviving_placement(provider),
     !has_independent_placement(provider),
     !provider_domain_unknown(provider),
     function_covered(function).
@@ -84,3 +208,6 @@ dependency_gap_unknown(consumer, function, "domain-not-recorded") :-
 
 .output dependency_gap
 .output dependency_gap_unknown
+.output shared_failure_domain
+.output failure_domain_independent
+.output failure_domain_independence_unknown
