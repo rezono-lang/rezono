@@ -872,7 +872,11 @@ def main() -> None:
         binding = cluster.make_event("backup", "management-dataset-bound", **binding_fields)
         events.append(binding)
 
-        watch_factory = None if hasattr(cluster, "start_pod_watch") else (lambda _cluster, _ns: None)
+        watch_factory = (
+            (lambda c, ns: c.start_pod_watch(ns))
+            if hasattr(cluster, "start_pod_watch")
+            else (lambda _c, _ns: None)
+        )
         fence = ManagementFence(cluster, f"management-fence-{run_key}", watch_factory=watch_factory)
         stack_fence = fence
         hold = cluster.make_event(
