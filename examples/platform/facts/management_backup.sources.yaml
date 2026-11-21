@@ -1,5 +1,0 @@
-default:
-  kind: git
-  name: rezono-lang/rezono
-  revision: 313322c946d24b139956cd4edb54d64b11462bd4
-  position: decisions/platform-management-backup.md

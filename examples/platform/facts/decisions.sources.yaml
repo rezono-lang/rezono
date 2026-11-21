@@ -3,3 +3,14 @@ default:
   name: rezono-lang/rezono
   revision: f676bf54fee01b9da206ac8b6713315e91bed864
   position: decisions/platform-five-scenes.md#4-scene-decisions-as-std-decision-facts
+records:
+  - of: {kind: backup_decision, id: daily}
+    kind: git
+    name: rezono-lang/rezono
+    revision: 313322c946d24b139956cd4edb54d64b11462bd4
+    position: decisions/platform-management-backup.md#backup-decision
+  - of: {kind: backup_plan, id: management-backup-plan}
+    kind: git
+    name: rezono-lang/rezono
+    revision: 313322c946d24b139956cd4edb54d64b11462bd4
+    position: decisions/platform-management-backup.md#backup-plan

@@ -154,3 +154,17 @@ platform_decision_binding:
     area: access_policy
     subject: cluster-and-tenant-reads
     value: scoped-non-withdrawn-grants
+
+backup_decision:
+  - id: daily
+    as_of: '2026-11-20'
+    max_age_days: 2
+
+backup_plan:
+  - id: management-backup-plan
+    service: management
+    dataset: management-catalog
+    target: rezono-mgmt-backup-store
+    decided_by: daily
+    interval_days: 1
+    retention_days: 14

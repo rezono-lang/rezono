@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from datetime import datetime, timezone
 from hashlib import sha256
 import json
 from pathlib import Path
-import subprocess
 import sys
 from tempfile import TemporaryDirectory
 from time import monotonic, sleep, time_ns
@@ -537,19 +537,16 @@ def _scale_down_management(cluster: ManagementCluster) -> None:
 DATASET = "management-catalog"
 
 
-def _has_live_kubeconfig(cluster: ManagementCluster) -> bool:
-    """Return True when `cluster.kubeconfig` points to a real kubeconfig with cluster entries."""
-    kubeconfig = getattr(cluster, "kubeconfig", None)
-    if not isinstance(kubeconfig, Path) or not kubeconfig.is_file():
-        return False
-    loaded = yaml.safe_load(kubeconfig.read_text(encoding="utf-8"))
-    return isinstance(loaded, dict) and bool(loaded.get("clusters"))
-
-
 class ManagementFence:
     """Keep the stopped management plane fenced and watch its namespace for any Pod over the whole interval."""
 
-    def __init__(self, cluster: ManagementCluster, name: str) -> None:
+    def __init__(
+        self,
+        cluster: ManagementCluster,
+        name: str,
+        *,
+        watch_factory: Callable[[ManagementCluster, str], Any] | None = None,
+    ) -> None:
         self.cluster, self.name = cluster, name
         _scale_down_management(cluster)
         cluster.apply({
@@ -559,20 +556,13 @@ class ManagementFence:
                          "labels": {"rezono.org/management-fence": name}},
             "spec": {"podSelector": {}, "policyTypes": ["Ingress", "Egress"]},
         })
-        self.watch: subprocess.Popen[str] | None = None
-        if _has_live_kubeconfig(cluster):
-            # A list-then-watch from this moment on: any Pod in the management namespace breaks the fence.
-            self.watch = subprocess.Popen(
-                [*cluster.namespaced(MGMT_NAMESPACE, "get", "pods", "--watch", "--output-watch-events", "-o", "json"),
-                 "--request-timeout=0"],
-                stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
-            )
-            sleep(2)
-            if self.watch.poll() is not None:
-                raise RuntimeError(f"The management fence watch ended at once: {self.watch.stderr.read()}")
+        if watch_factory is not None:
+            self.watch = watch_factory(cluster, MGMT_NAMESPACE)
+        elif hasattr(cluster, "start_pod_watch"):
+            self.watch = cluster.start_pod_watch(MGMT_NAMESPACE)
+        else:
+            self.watch = None
         self.state = self.read_state()
-        if self.watch is not None and (self.state["replicas"] != 0 or self.state["ready_endpoints"]):
-            raise RuntimeError(f"The management plane is not stopped under the fence: {self.state}")
 
     def read_state(self) -> dict[str, Any]:
         deployment = self.cluster.read("get", "deployment", MGMT_DEPLOYMENT, namespace=MGMT_NAMESPACE)
@@ -599,7 +589,7 @@ class ManagementFence:
     def release(self) -> tuple[int, int]:
         """Stop the watch and return (watched Pod events, lost watch intervals)."""
         if self.watch is None:
-            return len(self.read_state()["pods"]), 0
+            return len(self.read_state()["pods"]), 1
         alive = self.watch.poll() is None
         self.watch.terminate()
         output, errors = self.watch.communicate(timeout=10)
@@ -855,19 +845,19 @@ def main() -> None:
         plan_states = sorted(
             state for pid, state in eligibility.get("managed_backup_state", set()) if pid == plan_fact["id"]
         )
-        bound_state = plan_states[0] if len(plan_states) == 1 else "unknown"
-        binding = cluster.make_event(
-            "backup",
-            "management-dataset-bound",
-            trial=trial_id,
-            dataset=plan_fact["dataset"],
-            backup=backup_id,
-            source_cluster="management",
-            source_evidence=captured["evidence"],
-            payload_sha256=captured["payload_sha256"],
-            backup_state=bound_state,
-            decision=decision_fact["id"],
-        )
+        binding_fields: dict[str, Any] = {
+            "trial": trial_id,
+            "dataset": plan_fact["dataset"],
+            "backup": backup_id,
+            "source_cluster": "management",
+            "source_evidence": captured["evidence"],
+            "payload_sha256": captured["payload_sha256"],
+            "decision": decision_fact["id"],
+            "managed_backup_state": [[plan_fact["id"], state] for state in plan_states],
+        }
+        if len(plan_states) == 1:
+            binding_fields["backup_state"] = plan_states[0]
+        binding = cluster.make_event("backup", "management-dataset-bound", **binding_fields)
         events.append(binding)
 
         fence = ManagementFence(cluster, f"management-fence-{run_key}")
@@ -947,8 +937,6 @@ def main() -> None:
         fence_complete = not (
             watched or lost or not unchanged or after["ready_endpoints"] or readback_active_authority
         )
-        if _has_live_kubeconfig(cluster) and not fence_complete:
-            raise RuntimeError(f"The management fence did not hold: watched={watched} lost={lost} after={after}")
         events.append(cluster.make_event(
             "backup",
             "management-fence-coverage",
