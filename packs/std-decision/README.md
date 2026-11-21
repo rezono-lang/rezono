@@ -1,6 +1,6 @@
 # std-decision: the decision record
 
-A standard pack. Much of what a registration stores as a status or a policy row is a decision by a person, and a proof should end in one: a decision, a vendor fact, a design fact or an observation ([fact classes](../../docs/compiler/import.md#fact-classes-s32), class `decision`). This pack gives every domain the same kind for it, the rules for "in force on a date", four blocking axioms, five blocking schema rules, three findings and two explanation questions. It has no facts of its own. A domain imports it like `std-access`, and its decisions are rows of the kind `Decision`.
+A standard pack. Much of what a registration stores as a status or a policy row is a decision by a person, and a proof should end in one: a decision, a vendor fact, a design fact or an observation ([fact classes](../../docs/compiler/import.md#fact-classes-s32), class `decision`). This pack gives every domain the same kind for it, the rules for "in force on a date", four blocking axioms, one blocking schema rule, three findings and two explanation questions. It has no facts of its own. A domain imports it like `std-access`, and its decisions are rows of the kind `Decision`.
 
 ## Concepts
 
@@ -13,8 +13,8 @@ The fields follow [MADR](https://adr.github.io/madr/): title, status, deciders, 
 | `subject` | arrow `Decision → Subject` | the matter it is about; decisions that succeed each other share it | `dcterms:subject` |
 | `decider` | text, multivalued, open world | who took it: a person or a body, by the identifier the domain uses for its parties | `prov:wasAttributedTo` |
 | `decided_on` | date | the day it was taken; absent while it is proposed | knowledge time (`prov:generatedAtTime`) |
-| `valid_from`, `valid_until` | date | the first day it applies, and the first day it no longer does | validity (`schema:validFrom`, `schema:validThrough`) |
-| `valid_from_day`, `valid_until_day` | whole number `YYYYMMDD` | the same two days for the rules ([limits](#limits)) | |
+| `valid_from`, `valid_until` | date | the first day it applies, and the first day it no longer does; read directly by the rules | validity (`schema:validFrom`, `schema:validThrough`) |
+| `valid_from_day`, `valid_until_day` | whole number `YYYYMMDD` | retiring optional slots; no rule reads them ([limits](#limits)) | |
 | `state` | `proposed`, `in_force`, `superseded` or `withdrawn`, required | the standing the record gives it today | `schema:creativeWorkStatus` |
 | `supersedes` | arrow `Decision → Decision`, multivalued | an earlier decision this one replaces, from the day this one takes effect | `dcterms:replaces` |
 | `reassesses` | arrow `Decision → Decision`, multivalued | an earlier decision this one looked at again; it replaces nothing. Open world: no record of a reassessment leaves unknown whether there was one | |
@@ -28,7 +28,7 @@ The fields follow [MADR](https://adr.github.io/madr/): title, status, deciders, 
 | `Alternative` | kind, with an arrow to its `Decision` | an option that was weighed and rejected, with the `reason` | |
 | `Exception` | kind, with an arrow to its `Decision` | something the decision leaves out, in the words of the record | |
 | `Subject` | kind | a matter that is decided on, named by the domain | |
-| `ReferenceDate` | kind, with `day` as `YYYYMMDD` | a day for which the registration is read; a fact, never the clock | |
+| `ReferenceDate` | kind, with `date` (`Date`, required; `day` is retiring) | a day for which the registration is read; a fact, never the clock | |
 
 There is no free-text field that stands for structure: who, when, from when, until when, the state and the predecessor each have a typed slot. The rationale is text and stays text.
 
@@ -84,7 +84,7 @@ So a decision whose record says `superseded` is in force on a reference date bef
 | A decision does not end on or before the day it starts | `window_inverted(decision)` |
 | The grounds have no cycle | `ground_cycle(decision)`: a decision that rests on itself. A fact also changes through a proposal, so this is an axiom of the pack and not a test of one import |
 
-Five LinkML rules on `Decision` block too: a validity date and its day number come together (four rules, one per direction), and a decision that applied and was withdrawn names the day it stopped applying.
+One LinkML rule on `Decision` blocks too: a decision that applied and was withdrawn names the day it stopped applying.
 
 ## Findings
 
@@ -114,19 +114,18 @@ subject:
   - {id: opening-hours, title: Opening hours of the reading room}
 decision:
   - {id: hours-2024, title: The reading room is open on weekdays, subject: opening-hours, decider: [board],
-     decided_on: "2024-02-12", valid_from: "2024-03-01", valid_from_day: 20240301, state: superseded}
+     decided_on: "2024-02-12", valid_from: "2024-03-01", state: superseded}
   - {id: hours-2025, title: The reading room is also open on Saturday, subject: opening-hours, decider: [board],
-     decided_on: "2025-06-10", valid_from: "2025-07-01", valid_from_day: 20250701, state: in_force,
+     decided_on: "2025-06-10", valid_from: "2025-07-01", state: in_force,
      supersedes: [hours-2024], rationale: Visitors asked for it in the survey of 2025.}
   - {id: hours-2027, title: The reading room is closed on Monday, subject: opening-hours, state: proposed,
-     valid_from: "2027-01-01", valid_from_day: 20270101, supersedes: [hours-2025]}
+     valid_from: "2027-01-01", supersedes: [hours-2025]}
   - {id: summer-2026, title: Shorter hours in the summer of 2026, subject: opening-hours,
-     decided_on: "2026-05-20", valid_from: "2026-07-01", valid_from_day: 20260701,
-     valid_until: "2026-09-01", valid_until_day: 20260901, state: in_force}
+     decided_on: "2026-05-20", valid_from: "2026-07-01", valid_until: "2026-09-01", state: in_force}
 reference_date:
-  - {id: "2025-01-01", title: 1 January 2025, date: "2025-01-01", day: 20250101}
-  - {id: "2026-08-01", title: 1 August 2026, date: "2026-08-01", day: 20260801}
-  - {id: "2026-11-10", title: 10 November 2026, date: "2026-11-10", day: 20261110}
+  - {id: "2025-01-01", title: 1 January 2025, date: "2025-01-01"}
+  - {id: "2026-08-01", title: 1 August 2026, date: "2026-08-01"}
+  - {id: "2026-11-10", title: 10 November 2026, date: "2026-11-10"}
 ```
 
 | Reference date | In force | Why |
@@ -140,7 +139,7 @@ One finding: `in_force_without_decider(summer-2026, 2026-08-01)`, because that r
 ## Using it in a domain
 
 1. Import it in `pack.yaml`, pinned on its hash (`python -m rezono_compiler hash packs/std-decision`).
-2. Write decisions as rows of `decision`. Where the record gives only a date, `valid_from` is that date. Keep each `*_day` number equal to its date; an ingest writes both from one value.
+2. Write decisions as rows of `decision`. Where the record gives only a date, `valid_from` is that date.
 3. Point each domain kind that a decision sets to its decision with an arrow of range `Decision`.
 4. Add at least one `reference_date` row. It is a choice of the domain, not the clock.
 5. Rest conclusions on `in_force_on`, not on `decision__state`: `allowed(x, r) :- thing__decision(x, d), in_force_on(d, r).`
@@ -158,7 +157,7 @@ The paused branch `claude/ex9-justification` drafts a pack `std-justification` (
 
 ## Limits
 
-- **Days as whole numbers.** Rules cannot read a date yet ([roadmap](../../docs/roadmap.md#open-questions)). The date slots carry the slot roles, which the Timeline and calc read; the rules read `valid_from_day` and `valid_until_day`. The schema rules require each pair together; that the two say the same day is the ingest's duty, and a model check can hold it. When rules read dates, the `*_day` slots go and `ReferenceDate.day` becomes a date.
+- **Retiring day-number slots.** The rules compare `valid_from`, `valid_until` and `ReferenceDate.date` as native dates. The legacy `valid_from_day`, `valid_until_day` and `ReferenceDate.day` slots stay optional and unread during the migration and are removed in 0.3.0.
 - **In force is read on reference dates only.** Without a `reference_date` row nothing is in force, and `superseded_in_force` has no row.
 - **A stale `in_force`.** A record that still says `in_force` after its successor took effect is not reported: on a later reference date that is simply history, and the rules already leave it out of `in_force_on`.
 - **The proof-leaf check** (every leaf has a fact class) is a model check, not part of this pack.

@@ -946,13 +946,16 @@ def to_rule(rid, module, where, head, body, line, columns=lambda name: None, hea
             kinds = {typ(t) for t in (b[2], b[3])} - {None}
             if len(b) > 4 and kinds - {"string"}:
                 fail(f"{b[4]}(…) compares two text variables")
-            if len(b) == 4 and b[1] not in ("eq", "ne") and kinds - {"integer"}:
-                fail(f"{show(b[2])} {b[1]} {show(b[3])}: an order comparison needs whole numbers, not {next(iter(kinds - {'integer'}))}")
+            if len(b) == 4 and b[1] not in ("eq", "ne") and kinds - {"integer", "date"}:
+                fail(f"{show(b[2])} {b[1]} {show(b[3])}: an order comparison needs whole numbers or dates, "
+                     f"not {next(iter(kinds - {'integer', 'date'}))}")
             if len(kinds) > 1:
                 fail(f"{show(b[2])} and {show(b[3])} have different types")
+            if kinds == {"date"} and any(t[0] != "var" for t in (b[2], b[3])):
+                fail(f"{show(b[2])} {b[1]} {show(b[3])}: a date can only be compared with another date variable")
         elif b[0] == "arith" and b[2] == ir.DAYS:
-            if b[3][0] != "var" or typ(b[3]) not in (None, "string"):
-                fail(f"{b[1]} = @days(…): the first argument is a variable bound by a positive literal to text")
+            if b[3][0] != "var" or typ(b[3]) not in (None, "string", "date"):
+                fail(f"{b[1]} = @days(…): the first argument is a variable bound by a positive literal to text or a date")
             if b[4][0] != "const" or b[4][2] != "string":
                 fail(f"{b[1]} = @days(…): the origin is a constant ISO date in quotes")
         elif b[0] == "arith":

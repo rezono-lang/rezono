@@ -72,13 +72,13 @@ classes:
         minimum_value: 19000101
         maximum_value: 99991231
         description: >-
-          valid_from as the whole number YYYYMMDD, which orders as the calendar does. A stopgap: rules cannot
-          read a date yet (docs/roadmap.md, open questions), so the rules read this slot. It goes when they can.
+          Retiring: valid_from as the whole number YYYYMMDD. No rule reads this slot; write valid_from instead.
       valid_until_day:
         range: integer
         minimum_value: 19000101
         maximum_value: 99991231
-        description: valid_until as the whole number YYYYMMDD; the same stopgap as valid_from_day.
+        description: >-
+          Retiring: valid_until as the whole number YYYYMMDD. No rule reads this slot; write valid_until instead.
       state:
         range: DecisionState
         required: true
@@ -124,31 +124,6 @@ classes:
         range: date
         description: The day the decision is looked at again. Absent when the record names none.
     rules:
-      - description: A validity date and its day number come together (four rules, one per direction).
-        preconditions:
-          slot_conditions:
-            valid_from: {value_presence: PRESENT}
-        postconditions:
-          slot_conditions:
-            valid_from_day: {value_presence: PRESENT}
-      - preconditions:
-          slot_conditions:
-            valid_from_day: {value_presence: PRESENT}
-        postconditions:
-          slot_conditions:
-            valid_from: {value_presence: PRESENT}
-      - preconditions:
-          slot_conditions:
-            valid_until: {value_presence: PRESENT}
-        postconditions:
-          slot_conditions:
-            valid_until_day: {value_presence: PRESENT}
-      - preconditions:
-          slot_conditions:
-            valid_until_day: {value_presence: PRESENT}
-        postconditions:
-          slot_conditions:
-            valid_until: {value_presence: PRESENT}
       - description: A decision that applied and was withdrawn names the day it stopped applying.
         preconditions:
           slot_conditions:
@@ -280,10 +255,11 @@ classes:
         description: The day as people write it.
       date:
         range: date
+        required: true
         description: The day as a calendar date.
       day:
         range: integer
-        required: true
         minimum_value: 19000101
         maximum_value: 99991231
-        description: The day as the whole number YYYYMMDD (the stopgap of Decision.valid_from_day).
+        description: >-
+          Retiring: the day as the whole number YYYYMMDD. No rule reads this slot; write date instead.

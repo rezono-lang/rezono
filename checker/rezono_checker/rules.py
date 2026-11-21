@@ -24,17 +24,19 @@ cannot choose a value. What the loader does take on trust is in the checker's RE
 """
 
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 import re
 
 from .canon import INTEGER, CalcColumnType
+from .evaluate import _date
+from .refusals import Refusal, RefusalError
 
 FORMATS = ("rezono.rules/1", "rezono.rules/2")
 FUNCTIONS = ("count", "sum", "min", "max")
 COMPARISONS = ("eq", "ne", "lt", "le", "gt", "ge")
 COMPARE_AS = ("binary_text", "utc_instant")  # Condition.compare_as: how two bound text operands are ordered
-OPERATORS = ("add", "sub", "mul", "div", "days")  # days: a view's reading of an ISO date (evaluate._arith)
-VALUE_TYPES = ("string", "integer", "rational", "boolean")
+OPERATORS = ("add", "sub", "mul", "div", "days")  # days: a view's reading or @days of an ISO date (evaluate._arith)
+VALUE_TYPES = ("string", "integer", "rational", "boolean", "date")
 CONFLICT_POLICIES = ("publish", "block")
 EMPTY_STATES = ("unknown", "not_applicable")
 ACCESS_RELATIONS = ("may_read", "may_read_full")
@@ -87,6 +89,7 @@ class Calculation:
     right: str
     var: str | None = None
     compare_as: str | None = None  # a condition's typed comparison (decisions/ordered-rule-scalars.md)
+    operand_type: str | None = None  # resolved IR column type when known (e.g. "date" for native date comparisons)
 
 
 @dataclass(frozen=True)
@@ -361,6 +364,90 @@ def _check_rational_uses(rule: Rule, keys: dict[str, tuple[bool, ...]]) -> None:
         raise ValueError(f"{rule.id}: a rational premise must be positive")
 
 
+def _check_date_uses(rule: Rule, row_types: dict[str, tuple[str | None, ...]],
+                     head_types: dict[str, tuple[str | None, ...]]) -> tuple[Calculation, ...]:
+    """Validate native `date` column uses and tag date-variable conditions with `operand_type="date"`."""
+    var_types: dict[str, str] = {}
+    positive: set[str] = set()
+
+    def bind_atom(atom: Atom, cols: tuple[str | None, ...] | None, *, is_positive: bool) -> None:
+        if cols is None:
+            return
+        for term, col_type in zip(atom.terms, cols):
+            if term == "_":
+                continue
+            if not term.startswith("?"):
+                if col_type == "date":
+                    raise RefusalError(Refusal(
+                        "rule_date_constant_disallowed", rule=rule.id, relation=atom.relation, value=term
+                    ))
+                continue
+            if col_type is None:
+                continue
+            if is_positive:
+                positive.add(term)
+                prev = var_types.setdefault(term, col_type)
+                if prev != col_type and "date" in (prev, col_type):
+                    other = col_type if prev == "date" else prev
+                    raise RefusalError(Refusal("rule_date_type_conflict", rule=rule.id, variable=term, kind=other))
+            elif term in var_types and var_types[term] != col_type and "date" in (var_types[term], col_type):
+                other = col_type if var_types[term] == "date" else var_types[term]
+                raise RefusalError(Refusal("rule_date_type_conflict", rule=rule.id, variable=term, kind=other))
+
+    for b in rule.body:
+        if b.polarity == "positive":
+            bind_atom(b.atom, row_types.get(b.atom.relation), is_positive=True)
+    for b in rule.body:
+        if b.polarity != "positive":
+            bind_atom(b.atom, row_types.get(b.atom.relation), is_positive=False)
+    for a in rule.aggregates:
+        bind_atom(a.atom, row_types.get(a.atom.relation), is_positive=False)
+        if a.var is not None:
+            if var_types.get(a.var) == "date":
+                raise RefusalError(Refusal("rule_date_aggregate_result", rule=rule.id, variable=a.var))
+            var_types.setdefault(a.var, "integer")
+    for c in rule.assignments:
+        if c.op == "days":
+            if (not c.left.startswith("?") or c.left not in positive
+                    or (var_types.get(c.left) is not None and var_types[c.left] not in ("string", "date"))
+                    or c.right.startswith("?") or _date(c.right) is None):
+                raise RefusalError(Refusal("rule_date_days_operands_invalid", rule=rule.id, variable=c.var))
+        else:
+            for t in (c.left, c.right):
+                if t.startswith("?") and var_types.get(t) == "date":
+                    raise RefusalError(Refusal("rule_date_arithmetic_disallowed", rule=rule.id, variable=t, kind=c.op))
+        if c.var is not None:
+            if var_types.get(c.var) == "date":
+                raise RefusalError(Refusal("rule_date_assignment_result", rule=rule.id, variable=c.var))
+            var_types.setdefault(c.var, "integer")
+    bind_atom(rule.head, head_types.get(rule.head.relation), is_positive=False)
+
+    typed_conditions = []
+    for c in rule.conditions:
+        lt = var_types.get(c.left) if c.left.startswith("?") else None
+        rt = var_types.get(c.right) if c.right.startswith("?") else None
+        if lt == "date" or rt == "date":
+            date_var = c.left if lt == "date" else c.right
+            other_term = c.right if lt == "date" else c.left
+            if c.compare_as is not None:
+                raise RefusalError(Refusal(
+                    "rule_date_compare_as_disallowed", rule=rule.id, kind=c.compare_as, variable=date_var
+                ))
+            if not (c.left.startswith("?") and c.right.startswith("?")):
+                raise RefusalError(Refusal(
+                    "rule_date_compare_non_variable", rule=rule.id, variable=date_var, value=other_term
+                ))
+            if lt != "date" or rt != "date":
+                other_type = (rt if lt == "date" else lt) or "unknown"
+                raise RefusalError(Refusal(
+                    "rule_date_compare_type_mismatch", rule=rule.id, variable=other_term, kind=other_type
+                ))
+            typed_conditions.append(replace(c, operand_type="date"))
+        else:
+            typed_conditions.append(c)
+    return tuple(typed_conditions)
+
+
 def _check_access_boundary(rules: Rules) -> None:
     """Neither may_read nor may_read_full may depend (directly or transitively) on a functional derivation."""
     if not rules.functionals:
@@ -404,11 +491,20 @@ def load_rules(doc: dict) -> dict:
     if ir:
         _closes(doc, rules.invariants)
     keys = {}
+    row_types: dict[str, tuple[str | None, ...]] = {}
+    head_types: dict[str, tuple[str | None, ...]] = {}
     relations_by_name = {r["name"]: r for r in relations}
     for r in relations:
         col_names = [c["name"] for c in r.get("key", [])]
+        key_types = tuple(c.get("type") for c in r.get("key", []))
         if r.get("role") == "functional" and r["name"] in rules.functionals:
+            val_type = rules.functionals[r["name"]].value_type
             col_names = [*col_names, "state", "reason", rules.functionals[r["name"]].value_name]
+            row_types[r["name"]] = key_types + ("string", "string", val_type)
+            head_types[r["name"]] = key_types + (val_type,)
+        else:
+            row_types[r["name"]] = key_types
+            head_types[r["name"]] = key_types
         keys[r["name"]] = col_names
     for r in doc.get("rules", []):
         head_is_functional = r["head"]["relation"] in rules.functionals
@@ -472,6 +568,8 @@ def load_rules(doc: dict) -> dict:
             if a.var is not None and not a.var.startswith("?"):
                 raise ValueError(f"{rule.id}: aggregate result {a.var} is not a variable")
         _check_safety(rule)
+        if ir:
+            rule = replace(rule, conditions=_check_date_uses(rule, row_types, head_types))
         if rational_keys and fmt != "rezono.rules/2":
             _check_rational_uses(rule, rational_keys)
         rules[rule.id] = rule

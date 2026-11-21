@@ -22,7 +22,7 @@ from rezono_canon import canonical_bytes, canonical_sha256, sha256_hex
 from . import calc, closure, completeness, metadata
 from . import evidence as admission
 from .canon import INTEGER, calc_value, encode_key, sha256_json, strict_json_loads, value_text
-from .evaluate import _arith, _fits, _fold, _holds, _value, cells
+from .evaluate import _arith, _date, _fits, _fold, _holds, _value, cells
 from .snapshots import read_rows
 from .state_projections import check as check_state_projections
 
@@ -217,6 +217,8 @@ def _functional_value_ok(value: str, value_type: str) -> bool:
         return calc_value(value, "rational") and _classify_rational_candidate(value)[0] == "known"
     if value_type == "boolean":
         return value in ("true", "false")
+    if value_type == "date":
+        return _date(value) is not None
     return isinstance(value, str)
 
 
@@ -854,7 +856,7 @@ def _check_witness(i, w, rules, rows, findings, groups=None):
     for c in rule.conditions:
         if not all(t in theta for t in (c.left, c.right) if t.startswith("?")):
             continue
-        if not _holds(c.op, _value(c.left, theta), _value(c.right, theta), c.compare_as):
+        if not _holds(c.op, _value(c.left, theta), _value(c.right, theta), c.compare_as, c.operand_type):
             find("condition_false", detail=f"{c.left} {c.op} {c.right}")
 
 

@@ -30,16 +30,24 @@ def _fits(text):
 ISO_DATE = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}")
 
 
+def _date(text):
+    """A Gregorian calendar date written YYYY-MM-DD (years 0001..9999), else None."""
+    if not isinstance(text, str) or not ISO_DATE.fullmatch(text):
+        return None
+    try:
+        return datetime.date.fromisoformat(text)
+    except ValueError:
+        return None
+
+
 def _days(left, right):
     """The whole number of days from the ISO date `right` to the ISO date `left` in the proleptic Gregorian
     calendar, as canonical text; None if either is no calendar day written YYYY-MM-DD. Computed here from
     the text of the fact, apart from the engine that derived the row."""
-    try:
-        if not (ISO_DATE.fullmatch(left) and ISO_DATE.fullmatch(right)):
-            return None
-        return str(datetime.date.fromisoformat(left).toordinal() - datetime.date.fromisoformat(right).toordinal())
-    except ValueError:
+    a, b = _date(left), _date(right)
+    if a is None or b is None:
         return None
+    return str(a.toordinal() - b.toordinal())
 
 
 def _arith(op, left, right):
@@ -98,13 +106,18 @@ def _rational(text):
         return None
 
 
-def _holds(op, left, right, compare_as=None):
+def _holds(op, left, right, compare_as=None, operand_type=None):
     """A comparison of two canonical values: equality as text, order between exact canonical numbers
-    (integers and reduced rationals). With `compare_as` (decisions/ordered-rule-scalars.md) both
-    operands are read as that type and compared as bytes; an operand that is not of the type decides
-    no comparison, not even `ne`."""
+    (integers and reduced rationals), or native calendar dates when `operand_type == "date"`.
+    With `compare_as` (decisions/ordered-rule-scalars.md) both operands are read as that type and
+    compared as bytes; an operand that is not of the type decides no comparison, not even `ne`."""
     if compare_as is not None:
         a, b = TYPED_KEYS[compare_as](left), TYPED_KEYS[compare_as](right)
+        if a is None or b is None:
+            return False
+        return {"eq": a == b, "ne": a != b, "lt": a < b, "le": a <= b, "gt": a > b, "ge": a >= b}[op]
+    if operand_type == "date":
+        a, b = _date(left), _date(right)
         if a is None or b is None:
             return False
         return {"eq": a == b, "ne": a != b, "lt": a < b, "le": a <= b, "gt": a > b, "ge": a >= b}[op]

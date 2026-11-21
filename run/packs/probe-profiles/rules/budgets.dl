@@ -13,8 +13,8 @@ probe_member_of(p, c, k, m) :- probe_cluster_of(p, c, k), probe_member(m), const
 // An earlier snapshot is history; a term that ended since then is not in force.
 .decl probe_earlier_snapshot(snapshot: symbol)
 probe_earlier_snapshot(s) :- probe_snapshot__profile(s, p), probe_snapshot__reference_date(s, r),
-    reference_date__day(r, n), probe_snapshot__profile(t, p), probe_snapshot__reference_date(t, q),
-    reference_date__day(q, m), n < m.
+    reference_date__date(r, n), probe_snapshot__profile(t, p), probe_snapshot__reference_date(t, q),
+    reference_date__date(q, m), n < m.
 
 .decl probe_governing_day(profile: symbol, snapshot: symbol, on: symbol)
 probe_governing_day(p, s, r) :- probe_snapshot__profile(s, p), probe_snapshot__reference_date(s, r),
