@@ -9,10 +9,6 @@ from management_probes import live_events
 
 
 @pytest.mark.cluster
-@pytest.mark.xfail(strict=True, raises=AssertionError, reason=(
-    "M2: Depends on test_management_backup_restore_readback, recorded dataset-to-copy binding and management "
-    "fence coverage in the same disposable trial. Read decisions/safe-step-rounds.md, section 4. "
-    "Read named dataset bytes in isolated recovery through shared backup recorder evidence."))
 def test_management_dataset_restored_offline():
     events = live_events("backup")
 
