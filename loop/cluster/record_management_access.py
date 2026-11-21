@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import base64
+from datetime import datetime, timedelta, timezone
 import hashlib
 import json
 import os
@@ -15,15 +16,18 @@ import urllib.error
 import urllib.request
 
 ROOT = Path(__file__).resolve().parents[2]
-if str(ROOT) not in sys.path:
-    sys.path.insert(0, str(ROOT))
+for _path in (ROOT, ROOT / "examples", ROOT / "examples" / "platform" / "proof_cases"):
+    if str(_path) not in sys.path:
+        sys.path.insert(0, str(_path))
 
 from examples.rules_support import State  # noqa: E402
+from management_probes import compiled as compile_management_state  # noqa: E402
 from management_recorder import CONTEXT, ManagementCluster, run  # noqa: E402
 from rezono_canon import canonical_sha256  # noqa: E402
+from rezono_checker import difference as checker_difference  # noqa: E402
 from rezono_checker.check import check  # noqa: E402
 from rezono_checker.rules import load_rules  # noqa: E402
-from rezono_compiler import calc, facts, pack, rules  # noqa: E402
+from rezono_publisher import difference  # noqa: E402
 
 FEATURE = "access"
 TENANT_NS = "elm"
@@ -40,28 +44,49 @@ SCOPE_VALUE = "elm-access"
 PUBLICATION_ANNOTATION = "rezono.org/publication-sha256"
 TENANT_CONTEXT = "kind-rezono-fixture-tenant"
 TENANT_KUBECONFIG_NAME = "rezono-fixture-tenant.kubeconfig"
-BEFORE_DAY = "2026-06-09"
-EXPIRY_DAY = "2026-06-10"
 TOKEN_TTL_SECONDS = 3600
 
 
-def access_records(identity: str, day: str) -> dict[str, list[dict[str, str]]]:
+def _access_dates() -> tuple[str, str, str, str]:
+    """Return ISO calendar dates `(before_day, expiry_day, begins_day, peer_ends_day)` relative to UTC today."""
+    before_date = datetime.now(timezone.utc).date()
+    return (
+        before_date.isoformat(),
+        (before_date + timedelta(days=1)).isoformat(),
+        (before_date - timedelta(days=8)).isoformat(),
+        (before_date + timedelta(days=21)).isoformat(),
+    )
+
+
+def access_records(
+    identity: str,
+    day: str,
+    *,
+    begins_day: str | None = None,
+    expiry_day: str | None = None,
+    peer_ends_day: str | None = None,
+) -> dict[str, list[dict[str, str]]]:
     """Build management access input facts for `identity` at evaluation `day`."""
+    if begins_day is None or expiry_day is None or peer_ends_day is None:
+        _, default_expiry, default_begins, default_peer_ends = _access_dates()
+        begins_day = begins_day or default_begins
+        expiry_day = expiry_day or default_expiry
+        peer_ends_day = peer_ends_day or default_peer_ends
     return {
         "cluster_membership": [
             {
                 "id": "elm-lease",
                 "identity": identity,
                 "organization": TENANT_NS,
-                "begins": "2026-06-01",
-                "ends": EXPIRY_DAY,
+                "begins": begins_day,
+                "ends": expiry_day,
             },
             {
                 "id": "reed-lease",
                 "identity": "peer",
                 "organization": PEER_NS,
-                "begins": "2026-06-01",
-                "ends": "2026-06-30",
+                "begins": begins_day,
+                "ends": peer_ends_day,
             },
         ],
         "cluster_action_decision": [
@@ -103,14 +128,28 @@ def access_records(identity: str, day: str) -> dict[str, list[dict[str, str]]]:
     }
 
 
-def evaluate_state(model: Any, program: Any, calculation: Any, identity: str, day: str, label: str) -> State:
+def evaluate_state(
+    identity: str,
+    day: str,
+    *,
+    begins_day: str | None = None,
+    expiry_day: str | None = None,
+    peer_ends_day: str | None = None,
+) -> tuple[Any, State]:
     """Compile and evaluate `management_access.dl` for `identity` on `day`."""
-    rows = facts.rows_of(model, access_records(identity, day))
-    return State(model, program, label, rows, calculation)
+    return compile_management_state(
+        access_records(
+            identity,
+            day,
+            begins_day=begins_day,
+            expiry_day=expiry_day,
+            peer_ends_day=peer_ends_day,
+        )
+    )
 
 
-def verified_publication(model: Any, state: State, right: tuple[str, ...]) -> tuple[str, dict[str, Any]]:
-    """Verify the proof of `right` and return `(publication_sha256, witness_summary)`."""
+def verified_publication(model: Any, state: State, right: tuple[str, ...]) -> tuple[str, dict[str, Any], str]:
+    """Verify the proof of `right` and return `(publication_sha256, witness_summary, membership_id)`."""
     proof = state.proof("managed_cluster_right", right)
     manifest, read = state.manifest()
     report = check(proof, manifest, load_rules(model.rules), read)
@@ -122,14 +161,15 @@ def verified_publication(model: Any, state: State, right: tuple[str, ...]) -> tu
         for premise in witness["premises"]
         if premise["row"]["relation"] not in state.derived
     }
-    if not any(rel.startswith("cluster_membership__") and key[0] == "elm-lease" for rel, key in leaves):
-        raise RuntimeError("Access right proof does not cite elm-lease membership")
+    memberships = sorted(key[0] for rel, key in leaves if rel.startswith("cluster_membership__"))
+    if not memberships:
+        raise RuntimeError("Access right proof does not cite a cluster_membership")
     witness_summary = {
         "proof_sha256": canonical_sha256(proof),
         "root": proof["root"],
         "witnesses": proof["witnesses"],
     }
-    return canonical_sha256(manifest), witness_summary
+    return canonical_sha256(manifest), witness_summary, memberships[0]
 
 
 def ensure_fixture_objects(cluster: ManagementCluster) -> None:
@@ -303,10 +343,17 @@ def api_get_marker(
         sleep(0.25)
 
 
-def apply_rbac(cluster: ManagementCluster, publication_sha256: str) -> str:
+def apply_rbac(
+    cluster: ManagementCluster,
+    publication_sha256: str,
+    rights: list[tuple[str, ...]],
+) -> str:
     """Apply the derived Role and RoleBinding in `elm` and return the binding UID from readback."""
+    if not rights:
+        raise RuntimeError("Cannot render Role without derived managed_cluster_right rows")
+    namespace = rights[0][4]
     metadata_common = {
-        "namespace": TENANT_NS,
+        "namespace": namespace,
         "labels": {SCOPE_LABEL: SCOPE_VALUE},
         "annotations": {PUBLICATION_ANNOTATION: publication_sha256},
     }
@@ -314,12 +361,15 @@ def apply_rbac(cluster: ManagementCluster, publication_sha256: str) -> str:
         "apiVersion": "rbac.authorization.k8s.io/v1",
         "kind": "Role",
         "metadata": {"name": ROLE_NAME, **metadata_common},
-        "rules": [{
-            "apiGroups": [""],
-            "resources": ["configmaps"],
-            "resourceNames": [MARKER_NAME],
-            "verbs": ["get"],
-        }],
+        "rules": [
+            {
+                "apiGroups": [""],
+                "resources": [resource],
+                "resourceNames": [MARKER_NAME],
+                "verbs": [action],
+            }
+            for _, _, action, resource, _ in rights
+        ],
     })
     cluster.apply({
         "apiVersion": "rbac.authorization.k8s.io/v1",
@@ -328,7 +378,7 @@ def apply_rbac(cluster: ManagementCluster, publication_sha256: str) -> str:
         "subjects": [{
             "kind": "ServiceAccount",
             "name": SERVICE_ACCOUNT,
-            "namespace": TENANT_NS,
+            "namespace": namespace,
         }],
         "roleRef": {
             "apiGroup": "rbac.authorization.k8s.io",
@@ -336,20 +386,56 @@ def apply_rbac(cluster: ManagementCluster, publication_sha256: str) -> str:
             "name": ROLE_NAME,
         },
     })
-    readback = cluster.read("get", "rolebinding", BINDING_NAME, namespace=TENANT_NS)
+    readback = cluster.read("get", "rolebinding", BINDING_NAME, namespace=namespace)
     annotations = readback.get("metadata", {}).get("annotations", {})
     if annotations.get(PUBLICATION_ANNOTATION) != publication_sha256:
         raise RuntimeError("RoleBinding readback is missing the expected publication digest annotation")
     return readback["metadata"]["uid"]
 
 
-def remove_rbac_and_confirm_absence(cluster: ManagementCluster) -> bool:
+def remove_rbac_and_confirm_absence(cluster: ManagementCluster, namespace: str = TENANT_NS) -> bool:
     """Delete the managed RoleBinding/Role in `elm` and confirm complete absence under scope."""
-    cluster.delete("rolebinding,role", "-l", f"{SCOPE_LABEL}={SCOPE_VALUE}", namespace=TENANT_NS)
-    listing = cluster.read("get", "rolebindings", "-l", f"{SCOPE_LABEL}={SCOPE_VALUE}", namespace=TENANT_NS)
-    if listing.get("items"):
-        raise RuntimeError(f"Expected no RoleBindings remaining under {SCOPE_VALUE}, found {len(listing['items'])}")
-    return listing.get("metadata", {}).get("remainingItemCount") is None
+    cluster.delete("rolebinding,role", "-l", f"{SCOPE_LABEL}={SCOPE_VALUE}", namespace=namespace)
+    complete = True
+    for resource_kind, label in (("rolebindings", "RoleBindings"), ("roles", "Roles")):
+        listing = cluster.read("get", resource_kind, "-l", f"{SCOPE_LABEL}={SCOPE_VALUE}", namespace=namespace)
+        if listing.get("items"):
+            raise RuntimeError(f"Expected no {label} remaining under {SCOPE_VALUE}, found {len(listing['items'])}")
+        if listing.get("metadata", {}).get("remainingItemCount") is not None:
+            complete = False
+    return complete
+
+
+def _withdrawn_right_deltas(
+    before_state: State,
+    after_state: State,
+    identity: str,
+    cluster_name: str,
+    namespace: str,
+) -> list[tuple[tuple[str, ...], int]]:
+    """Derive withdrawn `(right_key, weight)` pairs for `identity` from publication snapshots."""
+    before_bytes = before_state.explainer.snapshot("managed_cluster_right").encode("utf-8")
+    after_bytes = after_state.explainer.snapshot("managed_cluster_right").encode("utf-8")
+    entries = difference.entries(before_bytes, after_bytes)
+    if entries != checker_difference.changes(before_bytes, after_bytes):
+        raise RuntimeError("Publication difference disagreement between publisher and checker")
+    deltas: list[tuple[tuple[str, ...], int]] = []
+    for entry in entries:
+        change = entry["change"]
+        if change == "removed":
+            deltas.append((tuple(entry["key"]), -1))
+        elif change == "changed":
+            deltas.append((tuple(entry["was"]), -1))
+            deltas.append((tuple(entry["key"]), 1))
+        elif change == "added":
+            deltas.append((tuple(entry["key"]), 1))
+        else:
+            raise RuntimeError(f"Unsupported publication difference change: {change!r}")
+    return [
+        (key, weight)
+        for key, weight in deltas
+        if weight < 0 and key[0] == identity and key[1] == cluster_name and key[4] == namespace
+    ]
 
 
 def main() -> None:
@@ -364,18 +450,27 @@ def main() -> None:
     if identity != expected_identity:
         raise RuntimeError(f"Expected tenant identity {expected_identity}, got {identity}")
 
-    model = pack.read(ROOT / "examples" / "platform")
-    program = rules.load(model.rules)
-    calculation = calc.build(model, model.calc) if program.calc_inputs() else None
+    before_day, expiry_day, begins_day, peer_ends_day = _access_dates()
+    model, before_state = evaluate_state(
+        identity,
+        before_day,
+        begins_day=begins_day,
+        expiry_day=expiry_day,
+        peer_ends_day=peer_ends_day,
+    )
+    before_rights = before_state.derived.get("managed_cluster_right", set())
+    tenant_rights = sorted(
+        row for row in before_rights if row[0] == identity and row[1] == TENANT_CLUSTER and row[4] == TENANT_NS
+    )
+    if not tenant_rights:
+        raise RuntimeError(f"No derived managed_cluster_right for {identity} before expiry: {before_rights}")
 
-    before_state = evaluate_state(model, program, calculation, identity, BEFORE_DAY, "before")
-    elm_right = (identity, TENANT_CLUSTER, "get", "configmaps", TENANT_NS)
-    reed_right = ("peer", PEER_CLUSTER, "get", "configmaps", PEER_NS)
-    if before_state.derived.get("managed_cluster_right") != {elm_right, reed_right}:
-        raise RuntimeError(f"Unexpected derived rights before expiry: {before_state.derived.get('managed_cluster_right')}")
+    primary_right = tenant_rights[0]
+    _, target_cluster, action, resource, target_namespace = primary_right
+    marker_resource = f"{resource}/{MARKER_NAME}"
 
-    publication_sha256, witness_summary = verified_publication(model, before_state, elm_right)
-    binding_uid = apply_rbac(cluster, publication_sha256)
+    publication_sha256, witness_summary, membership_id = verified_publication(model, before_state, primary_right)
+    binding_uid = apply_rbac(cluster, publication_sha256, tenant_rights)
 
     events: list[dict[str, Any]] = []
     events.append(
@@ -386,15 +481,15 @@ def main() -> None:
             binding_uid=binding_uid,
             publication_sha256=publication_sha256,
             identity=identity,
-            cluster=TENANT_CLUSTER,
-            namespace=TENANT_NS,
-            resource=MARKER_RESOURCE,
-            verb="get",
+            cluster=target_cluster,
+            namespace=target_namespace,
+            resource=marker_resource,
+            verb=action,
             managed_scope=SCOPE_VALUE,
         )
     )
 
-    before_status, before_reason = api_get_marker(server, ca_pem, token, TENANT_NS, 200)
+    before_status, before_reason = api_get_marker(server, ca_pem, token, target_namespace, 200)
     events.append(
         cluster.make_event(
             FEATURE,
@@ -404,10 +499,10 @@ def main() -> None:
             identity=identity,
             credential_ref=credential_ref,
             expires_at=expires_at,
-            cluster=TENANT_CLUSTER,
-            namespace=TENANT_NS,
-            resource=MARKER_RESOURCE,
-            verb="get",
+            cluster=target_cluster,
+            namespace=target_namespace,
+            resource=marker_resource,
+            verb=action,
         )
     )
 
@@ -423,63 +518,71 @@ def main() -> None:
             expires_at=expires_at,
             cluster=PEER_CLUSTER,
             namespace=PEER_NS,
-            resource=MARKER_RESOURCE,
-            verb="get",
+            resource=marker_resource,
+            verb=action,
         )
     )
 
-    after_state = evaluate_state(model, program, calculation, identity, EXPIRY_DAY, "after")
-    if after_state.derived.get("managed_cluster_right") != {reed_right}:
-        raise RuntimeError(f"Unexpected derived rights after expiry: {after_state.derived.get('managed_cluster_right')}")
-
-    events.append(
-        cluster.make_event(
-            FEATURE,
-            "right-withdrawn",
-            weight=-1,
-            membership="elm-lease",
-            source_manifest=publication_sha256,
-            previous_right_witness=witness_summary,
-            identity=identity,
-            cluster=TENANT_CLUSTER,
-            namespace=TENANT_NS,
-            resource=MARKER_RESOURCE,
-            verb="get",
-        )
+    _, after_state = evaluate_state(
+        identity,
+        expiry_day,
+        begins_day=begins_day,
+        expiry_day=expiry_day,
+        peer_ends_day=peer_ends_day,
     )
+    withdrawn = _withdrawn_right_deltas(before_state, after_state, identity, target_cluster, target_namespace)
 
-    complete = remove_rbac_and_confirm_absence(cluster)
-    events.append(
-        cluster.make_event(
-            FEATURE,
-            "binding-read-absent",
-            previous_binding_uid=binding_uid,
-            complete=complete,
-            managed_scope=SCOPE_VALUE,
-            cluster=TENANT_CLUSTER,
-            namespace=TENANT_NS,
+    if withdrawn:
+        for withdrawn_key, delta_weight in withdrawn:
+            _, w_cluster, w_action, w_resource, w_namespace = withdrawn_key
+            events.append(
+                cluster.make_event(
+                    FEATURE,
+                    "right-withdrawn",
+                    weight=delta_weight,
+                    membership=membership_id,
+                    source_manifest=publication_sha256,
+                    previous_right_witness=witness_summary,
+                    identity=identity,
+                    cluster=w_cluster,
+                    namespace=w_namespace,
+                    resource=f"{w_resource}/{MARKER_NAME}",
+                    verb=w_action,
+                )
+            )
+
+        complete = remove_rbac_and_confirm_absence(cluster, namespace=target_namespace)
+        events.append(
+            cluster.make_event(
+                FEATURE,
+                "binding-read-absent",
+                previous_binding_uid=binding_uid,
+                complete=complete,
+                managed_scope=SCOPE_VALUE,
+                cluster=target_cluster,
+                namespace=target_namespace,
+            )
         )
-    )
 
-    denied_status, denied_reason = api_get_marker(server, ca_pem, token, TENANT_NS, 403)
-    if whoami(tenant_kubeconfig) != identity:
-        raise RuntimeError("Tenant credential stopped authenticating after membership withdrawal")
+        denied_status, denied_reason = api_get_marker(server, ca_pem, token, target_namespace, 403)
+        if whoami(tenant_kubeconfig) != identity:
+            raise RuntimeError("Tenant credential stopped authenticating after membership withdrawal")
 
-    events.append(
-        cluster.make_event(
-            FEATURE,
-            "same-credential-read",
-            status=denied_status,
-            reason=denied_reason,
-            identity=identity,
-            credential_ref=credential_ref,
-            expires_at=expires_at,
-            cluster=TENANT_CLUSTER,
-            namespace=TENANT_NS,
-            resource=MARKER_RESOURCE,
-            verb="get",
+        events.append(
+            cluster.make_event(
+                FEATURE,
+                "same-credential-read",
+                status=denied_status,
+                reason=denied_reason,
+                identity=identity,
+                credential_ref=credential_ref,
+                expires_at=expires_at,
+                cluster=target_cluster,
+                namespace=target_namespace,
+                resource=marker_resource,
+                verb=action,
+            )
         )
-    )
 
     cluster.record_job(FEATURE, events)
 

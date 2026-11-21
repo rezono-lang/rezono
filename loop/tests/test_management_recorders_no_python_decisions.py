@@ -924,13 +924,6 @@ def test_backup_recorder_uses_object_timestamp_pack_params_and_compiled(
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason="M2: decisions/code-does-not-decide.md: record_management_access.py must render the K8s Role from "
-    "derived managed_cluster_right, contain no hardcoded calendar dates, compute weight=-1 via the publication "
-    "difference path, and observe completeness over both Roles and RoleBindings.",
-)
 def test_access_recorder_renders_role_from_derived_right_and_publication_diff(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
