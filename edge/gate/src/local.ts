@@ -7,6 +7,7 @@ import { canonicalJson } from '../../../viewer/src/lib/canon.ts';
 import { ask as trace, AskError, calcSteps, memoryGraph, parseAfter, questionOf, stepsOf, type RuleDoc, type Sources, type SourcesOf } from './ask.ts';
 import { catalogueQueryScope } from './catalogue-query.ts';
 import { roleBundle } from './catalogue.ts';
+import { matchKindConclusionIri, parsePinnedIri, pinIri } from './conclusion-address.ts';
 import { readPublishedVariantDifference, scenarioAnswer, type DifferenceCursor } from './difference.ts';
 import { ask as evaluate, roleSchema, type Asking } from './expr.ts';
 import { compareKey, pageByKey, type KeyRange } from './pieces.ts';
@@ -507,6 +508,79 @@ export async function openLocalGate(root: string, role: string): Promise<Handle>
 				const listing = await readSweepsChecked(current, withdrawals, pack, role);
 				if (!listing || await source.latest() !== headKey(pack, current.manifest.epoch)) return missing();
 				return json(listing, 200, standingHeaders(pack, current.manifest.epoch, current.manifest.id, current.manifest.epoch));
+			}
+			if (parts.length === 2 && id === 'manifests') {
+				const withdrawnCurrent = epochWithdrawal(withdrawals, current.manifest.id);
+				if (withdrawnCurrent) return gone(withdrawnCurrent);
+				const headKeys = await store.list(pack + '/heads/', { limit: LIMIT });
+				const items: { id: string; epoch: number; knowledge_time: string; manifest_sha256: string; witness_check?: WitnessCheckStatus }[] = [];
+				const prefix = pack + '/heads/';
+				for (const hk of headKeys) {
+					if (!hk.startsWith(prefix) || !hk.endsWith('.json')) continue;
+					const digits = hk.slice(prefix.length, -5);
+					if (!/^[0-9]{19}$/.test(digits)) continue;
+					const epochNum = Number(10n ** 19n - 1n - BigInt(digits));
+					if (!Number.isSafeInteger(epochNum) || epochNum < 0 || epochNum > current.manifest.epoch) continue;
+					const candidate = epochNum === current.manifest.epoch ? current : await source.current('m-' + epochNum);
+					if (!candidate) continue;
+					if (epochWithdrawal(withdrawals, candidate.manifest.id)) continue;
+					if (candidate !== current && !await stillReadable(candidate, current)) continue;
+					items.push({
+						id: candidate.manifest.id,
+						epoch: candidate.manifest.epoch,
+						knowledge_time: candidate.manifest.knowledge_time,
+						manifest_sha256: candidate.manifestSha256,
+						...(candidate.witnessCheck !== undefined && { witness_check: candidate.witnessCheck })
+					});
+				}
+				items.sort((a, b) => a.epoch - b.epoch);
+				if (await source.latest() !== headKey(pack, current.manifest.epoch)) return missing();
+				return json({ pack, manifests: items }, 200, standingHeaders(pack, current.manifest.epoch, current.manifest.id, current.manifest.epoch));
+			}
+			if (parts.length === 2 && id === 'resolve') {
+				const rawIri = url.searchParams.get('iri');
+				if (!rawIri) throw new AskError(400, 'expected an iri query parameter');
+				const { iri: unpinnedIri, pin: iriPin } = parsePinnedIri(rawIri);
+				let targetView = current;
+				if (iriPin?.manifest && iriPin.manifest !== current.manifest.id) {
+					const earlier = await source.current(iriPin.manifest);
+					if (!earlier || earlier.manifest.epoch >= current.manifest.epoch) {
+						throw new AskError(409, 'pin does not match publication');
+					}
+					const withdrawn = epochWithdrawal(withdrawals, earlier.manifest.id);
+					if (withdrawn) return gone(withdrawn);
+					if (!await stillReadable(earlier, current)) return missing();
+					targetView = earlier;
+				} else {
+					const withdrawn = epochWithdrawal(withdrawals, current.manifest.id);
+					if (withdrawn) return gone(withdrawn);
+				}
+				if (iriPin && iriPin.dataset !== targetView.manifestSha256) {
+					throw new AskError(409, 'pin does not match publication');
+				}
+				const matched = matchKindConclusionIri(targetView.bundle, new Set(targetView.snaps.keys()), unpinnedIri);
+				if (!matched) return missing();
+				const rows = await targetView.rows(matched.relation);
+				const found = rows.find((r) =>
+					matched.tupleKey
+						? canonicalJson(r.key) === matched.rowId
+						: r.key.length === 1 && r.key[0] === matched.rowId
+				);
+				if (!found) return missing();
+				const withdrawnRow = rowWithdrawal(withdrawals, targetView.manifest.id, matched.relation, found.key);
+				if (withdrawnRow) return gone(withdrawnRow);
+				if (targetView !== current && await source.latest() !== headKey(pack, current.manifest.epoch)) return missing();
+				const pinnedIri = pinIri(unpinnedIri, { manifest: targetView.manifest.id, dataset: targetView.manifestSha256 });
+				return json({
+					iri: unpinnedIri,
+					pinned_iri: pinnedIri,
+					manifest: targetView.manifest.id,
+					epoch: targetView.manifest.epoch,
+					manifest_sha256: targetView.manifestSha256,
+					relation: matched.relation,
+					key: found.key,
+					row: found
+				}, 200, standingHeaders(pack, targetView.manifest.epoch, current.manifest.id, current.manifest.epoch));
 			}
 			const pin = id === 'head' || id === 'bundle' ? url.searchParams.get('m') ?? undefined
 				: id === 'manifests' ? route : id;
