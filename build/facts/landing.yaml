@@ -1,0 +1,4 @@
+build_required_check:
+  - {id: check, check: check}
+  - {id: inspect-test-evidence, check: Inspect test evidence}
+  - {id: light-checks, check: Light checks}

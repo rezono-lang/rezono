@@ -1,0 +1,272 @@
+// PR landing gate: checks, correctness readings, open quality findings, and queue driver claims
+// (decisions/landing-gate-as-rule.md, sections 1-3).
+
+.decl build_pull_head_at_cut(run: symbol, change: symbol, head: symbol)
+build_pull_head_at_cut(run, change, head) :-
+    build_verified_cut(run),
+    build_run__observed_at(run, tick),
+    build_run__head_sha(run, head),
+    build_pull_head__run(pull, run),
+    build_pull_head__change(pull, change),
+    build_pull_head__head_sha(pull, head),
+    build_pull_head__observed_at(pull, tick),
+    build_pull_head__source(pull, source),
+    source != "".
+
+// Section 2.3: paths that need a correctness reading at the cut.
+.decl build_admitted_test_file(run: symbol, path: symbol)
+build_admitted_test_file(run, path) :-
+    build_covered(run, receipt),
+    verified_member(receipt, member, 0, "test-file"),
+    verified_member(receipt, member, 1, path),
+    path != "".
+
+.decl build_path_is_admitted_test(run: symbol, path_row: symbol)
+build_path_is_admitted_test(run, path_row) :-
+    build_path__run(path_row, run),
+    build_path__path(path_row, path),
+    build_admitted_test_file(run, path).
+
+.decl build_reading_needed(run: symbol, change: symbol, head: symbol, row: symbol)
+build_reading_needed(run, change, head, path_row) :-
+    build_pull_head_at_cut(run, change, head),
+    build_selection_covered(run),
+    build_path__run(path_row, run),
+    build_target_selected(run, "correctness-reading", path_row),
+    !build_path_is_admitted_test(run, path_row).
+build_reading_needed(run, change, head, reason) :-
+    build_pull_head_at_cut(run, change, head),
+    build_full_selection(run, reason).
+
+.decl build_has_reading_needed(run: symbol, change: symbol, head: symbol)
+build_has_reading_needed(run, change, head) :- build_reading_needed(run, change, head, _).
+
+// Section 2.2: required checks at the verified cut.
+.decl build_check_reading_at_cut(run: symbol, head: symbol, check: symbol, state: symbol, reading: symbol)
+build_check_reading_at_cut(run, head, check, state, reading) :-
+    build_pull_head_at_cut(run, _, head),
+    build_run__observed_at(run, tick),
+    build_check_reading__run(reading, run),
+    build_check_reading__head_sha(reading, head),
+    build_check_reading__check(reading, check),
+    build_check_reading__state(reading, state),
+    build_check_reading__observed_at(reading, tick),
+    build_check_reading__source(reading, source), source != "",
+    build_check_reading__receipt(reading, receipt), receipt != "",
+    loop_sweep_receipt__run(receipt, run),
+    loop_sweep_receipt__event_time(receipt, tick).
+
+.decl build_check_has_reading(run: symbol, head: symbol, check: symbol)
+build_check_has_reading(run, head, check) :-
+    build_check_reading_at_cut(run, head, check, _, _).
+
+.decl build_check_conflict(run: symbol, head: symbol, check: symbol)
+build_check_conflict(run, head, check) :-
+    build_check_reading_at_cut(run, head, check, s1, _),
+    build_check_reading_at_cut(run, head, check, s2, _),
+    s1 != s2.
+
+// Section 1: grounds from checks, correctness readings, and quality findings.
+.decl build_landing_ground(run: symbol, change: symbol, head: symbol, state: symbol, ground: symbol, row: symbol)
+
+// Checks grounds
+build_landing_ground(run, change, head, "invalid", "check-conflict", reading) :-
+    build_pull_head_at_cut(run, change, head),
+    build_required_check__check(_, check),
+    build_check_conflict(run, head, check),
+    build_check_reading_at_cut(run, head, check, _, reading).
+build_landing_ground(run, change, head, "no", "check-red", reading) :-
+    build_pull_head_at_cut(run, change, head),
+    build_required_check__check(_, check),
+    !build_check_conflict(run, head, check),
+    build_check_reading_at_cut(run, head, check, "red", reading).
+build_landing_ground(run, change, head, "unknown", "check-pending", reading) :-
+    build_pull_head_at_cut(run, change, head),
+    build_required_check__check(_, check),
+    !build_check_conflict(run, head, check),
+    build_check_reading_at_cut(run, head, check, "pending", reading).
+build_landing_ground(run, change, head, "unknown", "check-skipped", reading) :-
+    build_pull_head_at_cut(run, change, head),
+    build_required_check__check(_, check),
+    !build_check_conflict(run, head, check),
+    build_check_reading_at_cut(run, head, check, "skipped", reading).
+build_landing_ground(run, change, head, "unknown", "check-missing", req) :-
+    build_pull_head_at_cut(run, change, head),
+    build_required_check__check(req, check),
+    !build_check_has_reading(run, head, check).
+
+// Reading part helpers and grounds
+.decl build_head_has_clean_read(change: symbol, head: symbol)
+build_head_has_clean_read(change, head) :- head_read_clean(change, head, _).
+
+.decl build_head_has_found_read(change: symbol, head: symbol)
+build_head_has_found_read(change, head) :- head_read_found(change, head, _).
+
+build_landing_ground(run, change, head, "invalid", "reading-conflict", reading) :-
+    build_pull_head_at_cut(run, change, head),
+    head_read_conflict(change, head),
+    head_read_clean(change, head, reading).
+build_landing_ground(run, change, head, "invalid", "reading-conflict", reading) :-
+    build_pull_head_at_cut(run, change, head),
+    head_read_conflict(change, head),
+    head_read_found(change, head, reading).
+build_landing_ground(run, change, head, "no", "correctness-finding", finding) :-
+    build_pull_head_at_cut(run, change, head),
+    !head_read_conflict(change, head),
+    head_read_finding(change, head, finding).
+build_landing_ground(run, change, head, "unknown", "reading-missing", row) :-
+    build_reading_needed(run, change, head, row),
+    !build_head_has_clean_read(change, head),
+    !build_head_has_found_read(change, head).
+
+// Quality grounds
+.decl build_quality_finding_open(run: symbol, change: symbol, head: symbol, finding: symbol)
+build_quality_finding_open(run, change, head, finding) :-
+    build_pull_head_at_cut(run, change, head),
+    quality_finding(change, finding),
+    !quality_finding_resolved(finding, head).
+
+build_landing_ground(run, change, head, "no", "quality-finding", finding) :-
+    build_quality_finding_open(run, change, head, finding).
+
+// Reading part on its own (section 5 policy job reads this).
+.decl build_landing_read(run: symbol, change: symbol, head: symbol, state: symbol)
+build_landing_read(run, change, head, "invalid") :-
+    build_pull_head_at_cut(run, change, head),
+    head_read_conflict(change, head).
+build_landing_read(run, change, head, "no") :-
+    build_pull_head_at_cut(run, change, head),
+    build_head_has_found_read(change, head),
+    !head_read_conflict(change, head).
+build_landing_read(run, change, head, "unknown") :-
+    build_pull_head_at_cut(run, change, head),
+    build_has_reading_needed(run, change, head),
+    !build_head_has_clean_read(change, head),
+    !build_head_has_found_read(change, head).
+build_landing_read(run, change, head, "yes") :-
+    build_pull_head_at_cut(run, change, head),
+    !build_head_has_found_read(change, head),
+    build_head_has_clean_read(change, head).
+build_landing_read(run, change, head, "yes") :-
+    build_pull_head_at_cut(run, change, head),
+    !build_head_has_found_read(change, head),
+    !build_has_reading_needed(run, change, head).
+
+// Checks part state
+.decl build_checks_no(run: symbol, change: symbol, head: symbol)
+build_checks_no(run, change, head) :- build_landing_ground(run, change, head, "no", "check-red", _).
+
+.decl build_checks_invalid(run: symbol, change: symbol, head: symbol)
+build_checks_invalid(run, change, head) :- build_landing_ground(run, change, head, "invalid", "check-conflict", _).
+
+.decl build_checks_unknown(run: symbol, change: symbol, head: symbol)
+build_checks_unknown(run, change, head) :- build_landing_ground(run, change, head, "unknown", "check-missing", _).
+build_checks_unknown(run, change, head) :- build_landing_ground(run, change, head, "unknown", "check-pending", _).
+build_checks_unknown(run, change, head) :- build_landing_ground(run, change, head, "unknown", "check-skipped", _).
+
+.decl build_landing_checks(run: symbol, change: symbol, head: symbol, state: symbol)
+build_landing_checks(run, change, head, "no") :- build_checks_no(run, change, head).
+build_landing_checks(run, change, head, "invalid") :-
+    build_checks_invalid(run, change, head),
+    !build_checks_no(run, change, head).
+build_landing_checks(run, change, head, "unknown") :-
+    build_checks_unknown(run, change, head),
+    !build_checks_no(run, change, head),
+    !build_checks_invalid(run, change, head).
+build_landing_checks(run, change, head, "yes") :-
+    build_pull_head_at_cut(run, change, head),
+    !build_checks_no(run, change, head),
+    !build_checks_invalid(run, change, head),
+    !build_checks_unknown(run, change, head).
+
+// Quality part state
+.decl build_has_quality_finding_open(run: symbol, change: symbol, head: symbol)
+build_has_quality_finding_open(run, change, head) :- build_quality_finding_open(run, change, head, _).
+
+.decl build_landing_quality(run: symbol, change: symbol, head: symbol, state: symbol)
+build_landing_quality(run, change, head, "no") :- build_has_quality_finding_open(run, change, head).
+build_landing_quality(run, change, head, "yes") :-
+    build_pull_head_at_cut(run, change, head),
+    !build_has_quality_finding_open(run, change, head).
+
+// Combined four-valued and of (Checks, Reading, Quality).
+.decl build_landing_no(run: symbol, change: symbol, head: symbol)
+build_landing_no(run, change, head) :- build_landing_checks(run, change, head, "no").
+build_landing_no(run, change, head) :- build_landing_read(run, change, head, "no").
+build_landing_no(run, change, head) :- build_landing_quality(run, change, head, "no").
+
+.decl build_landing_invalid(run: symbol, change: symbol, head: symbol)
+build_landing_invalid(run, change, head) :- build_landing_checks(run, change, head, "invalid").
+build_landing_invalid(run, change, head) :- build_landing_read(run, change, head, "invalid").
+
+.decl build_landing_unknown(run: symbol, change: symbol, head: symbol)
+build_landing_unknown(run, change, head) :- build_landing_checks(run, change, head, "unknown").
+build_landing_unknown(run, change, head) :- build_landing_read(run, change, head, "unknown").
+
+.decl build_landing(run: symbol, change: symbol, head: symbol, state: symbol)
+build_landing(run, change, head, "no") :- build_landing_no(run, change, head).
+build_landing(run, change, head, "invalid") :-
+    build_landing_invalid(run, change, head),
+    !build_landing_no(run, change, head).
+build_landing(run, change, head, "unknown") :-
+    build_landing_unknown(run, change, head),
+    !build_landing_no(run, change, head),
+    !build_landing_invalid(run, change, head).
+build_landing(run, change, head, "yes") :-
+    build_pull_head_at_cut(run, change, head),
+    !build_landing_no(run, change, head),
+    !build_landing_invalid(run, change, head),
+    !build_landing_unknown(run, change, head).
+
+// Section 3: queue driver claim and std-loop effect_permitted extension.
+.decl build_queue_claim_at_cut(run: symbol, change: symbol, driver: symbol, claim: symbol)
+build_queue_claim_at_cut(run, change, driver, claim) :-
+    build_verified_cut(run),
+    build_run__observed_at(run, tick),
+    change(change),
+    loop_claim__subject(claim, change),
+    loop_claim__run(claim, driver), driver != "",
+    loop_claim__observed_at(claim, tick),
+    loop_claim__source(claim, source), source != "".
+
+.decl build_queue_driver_conflict(run: symbol, change: symbol)
+build_queue_driver_conflict(run, change) :-
+    build_queue_claim_at_cut(run, change, _, c1),
+    build_queue_claim_at_cut(run, change, _, c2),
+    c1 != c2.
+
+.decl build_queue_driver(run: symbol, change: symbol, driver: symbol)
+build_queue_driver(run, change, driver) :-
+    build_queue_claim_at_cut(run, change, driver, _),
+    !build_queue_driver_conflict(run, change).
+
+effect_permitted(driver, "enqueue", plan, reason) :-
+    build_queue_plan__plan(queue_plan, plan),
+    build_queue_plan__change(queue_plan, change),
+    build_queue_plan__head_sha(queue_plan, head),
+    build_queue_plan__action(queue_plan, "enqueue"),
+    build_queue_plan__gate_run(queue_plan, gate_run),
+    loop_effect_plan__run(plan, driver),
+    loop_effect_plan__step(plan, "enqueue"),
+    loop_effect_plan__reason(plan, reason),
+    build_queue_driver(gate_run, change, driver),
+    build_landing(gate_run, change, head, "yes").
+
+effect_permitted(driver, "dequeue", plan, reason) :-
+    build_queue_plan__plan(queue_plan, plan),
+    build_queue_plan__change(queue_plan, change),
+    build_queue_plan__head_sha(queue_plan, head),
+    build_queue_plan__action(queue_plan, "dequeue"),
+    build_queue_plan__gate_run(queue_plan, gate_run),
+    loop_effect_plan__run(plan, driver),
+    loop_effect_plan__step(plan, "dequeue"),
+    loop_effect_plan__reason(plan, reason),
+    build_queue_driver(gate_run, change, driver),
+    build_landing(gate_run, change, head, state),
+    state != "yes".
+
+.output build_landing
+.output build_landing_ground
+.output build_landing_read
+.output build_reading_needed
+.output build_queue_driver

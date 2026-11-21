@@ -24,6 +24,14 @@ enums:
     permissible_values:
       passed: {}
       failed: {}
+  ReadingScope:
+    permissible_values:
+      correctness: {}
+      quality: {}
+  FindingConcern:
+    permissible_values:
+      correctness: {}
+      quality: {}
 classes:
   Change:
     attributes:
@@ -89,4 +97,29 @@ classes:
       evidence_kind: {required: true}
       commit_sha: {required: true}
       outcome: {range: EvidenceOutcome, required: true}
+      source: {required: true}
+  Reading:
+    attributes:
+      id: {identifier: true}
+      change: {range: Change, required: true}
+      commit_sha: {required: true, pattern: "^[a-f0-9]{40}$"}
+      scope: {range: ReadingScope, required: true}
+      reader: {required: true}
+      source: {required: true}
+  ReadingFinding:
+    attributes:
+      id: {identifier: true}
+      reading: {range: Reading, required: true}
+      concern: {range: FindingConcern, required: true}
+      source: {required: true}
+  ReadingDismissal:
+    attributes:
+      id: {identifier: true}
+      reading: {range: Reading, required: true}
+      source: {required: true}
+  FindingResolution:
+    attributes:
+      id: {identifier: true}
+      finding: {range: ReadingFinding, required: true}
+      commit_sha: {required: true, pattern: "^[a-f0-9]{40}$"}
       source: {required: true}

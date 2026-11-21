@@ -10,3 +10,7 @@ kinds:
   - {kind: review_policy, shape: pill}
   - {kind: evidence_requirement, shape: pill}
   - {kind: evidence_attestation, shape: rect}
+  - {kind: reading, shape: rect}
+  - {kind: reading_finding, shape: bar}
+  - {kind: reading_dismissal, shape: bar}
+  - {kind: finding_resolution, shape: bar}

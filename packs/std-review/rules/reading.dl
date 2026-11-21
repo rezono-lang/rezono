@@ -1,0 +1,75 @@
+// Admitted readings and findings bound to a commit SHA (decisions/landing-gate-as-rule.md, section 2.4).
+// A reading counts only while it has a source and no active dismissal.
+
+.decl reading_dismissed(reading: symbol)
+reading_dismissed(r) :-
+    reading_dismissal__reading(d, r),
+    reading_dismissal__source(d, src),
+    src != "".
+
+.decl reading_active(reading: symbol)
+reading_active(r) :-
+    reading(r),
+    reading__source(r, src),
+    src != "",
+    !reading_dismissed(r).
+
+.decl reading_correctness_finding(reading: symbol, finding: symbol)
+reading_correctness_finding(r, f) :-
+    reading_active(r),
+    reading__scope(r, "correctness"),
+    reading_finding__reading(f, r),
+    reading_finding__concern(f, "correctness"),
+    reading_finding__source(f, src),
+    src != "".
+
+.decl reading_has_correctness_finding(reading: symbol)
+reading_has_correctness_finding(r) :- reading_correctness_finding(r, _).
+
+.decl reading_clean(reading: symbol)
+reading_clean(r) :-
+    reading_active(r),
+    reading__scope(r, "correctness"),
+    !reading_has_correctness_finding(r).
+
+.decl reading_found(reading: symbol)
+reading_found(r) :- reading_correctness_finding(r, _).
+
+.decl head_read_clean(change: symbol, commit_sha: symbol, reading: symbol)
+head_read_clean(c, sha, r) :-
+    reading_clean(r),
+    reading__change(r, c),
+    reading__commit_sha(r, sha).
+
+.decl head_read_found(change: symbol, commit_sha: symbol, reading: symbol)
+head_read_found(c, sha, r) :-
+    reading_found(r),
+    reading__change(r, c),
+    reading__commit_sha(r, sha).
+
+.decl head_read_finding(change: symbol, commit_sha: symbol, finding: symbol)
+head_read_finding(c, sha, f) :-
+    reading_correctness_finding(r, f),
+    reading__change(r, c),
+    reading__commit_sha(r, sha).
+
+.decl head_read_conflict(change: symbol, commit_sha: symbol)
+head_read_conflict(c, sha) :-
+    head_read_clean(c, sha, _),
+    head_read_found(c, sha, _).
+
+.decl quality_finding(change: symbol, finding: symbol)
+quality_finding(c, f) :-
+    reading_active(r),
+    reading__change(r, c),
+    reading_finding__reading(f, r),
+    reading_finding__concern(f, "quality"),
+    reading_finding__source(f, src),
+    src != "".
+
+.decl quality_finding_resolved(finding: symbol, commit_sha: symbol)
+quality_finding_resolved(f, sha) :-
+    finding_resolution__finding(res, f),
+    finding_resolution__commit_sha(res, sha),
+    finding_resolution__source(res, src),
+    src != "".

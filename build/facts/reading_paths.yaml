@@ -1,0 +1,19 @@
+build_target_rule:
+  - {id: correctness-reading-checker, target: correctness-reading, path_prefix: checker/rezono_checker/, kind: direct, upper_bound: checker/rezono_checker0}
+  - {id: correctness-reading-std-access, target: correctness-reading, path_prefix: packs/std-access/, kind: direct, upper_bound: packs/std-access0}
+  - {id: correctness-reading-edge-gate, target: correctness-reading, path_prefix: edge/gate/src/, kind: direct, upper_bound: edge/gate/src0}
+  - {id: correctness-reading-canon, target: correctness-reading, path_prefix: canon/rezono_canon/, kind: direct, upper_bound: canon/rezono_canon0}
+  - {id: correctness-reading-k8s-admission, target: correctness-reading, path_prefix: k8s-admission/, kind: direct, upper_bound: k8s-admission0}
+  - {id: correctness-reading-contracts-proof, target: correctness-reading, path_prefix: contracts/proof.yaml, kind: direct}
+  - {id: correctness-reading-network-policy, target: correctness-reading, path_prefix: examples/platform/network_policy.py, kind: direct}
+  - {id: correctness-reading-pub-access, target: correctness-reading, path_prefix: edge/publisher/rezono_publisher/access.py, kind: direct}
+  - {id: correctness-reading-pub-calc-scope, target: correctness-reading, path_prefix: edge/publisher/rezono_publisher/calc_scope.py, kind: direct}
+  - {id: correctness-reading-pub-sources, target: correctness-reading, path_prefix: edge/publisher/rezono_publisher/sources.py, kind: direct}
+  - {id: correctness-reading-pub-sweep, target: correctness-reading, path_prefix: edge/publisher/rezono_publisher/sweep.py, kind: direct}
+  - {id: correctness-reading-pub-difference, target: correctness-reading, path_prefix: edge/publisher/rezono_publisher/difference.py, kind: direct}
+  - {id: correctness-reading-pub-batch, target: correctness-reading, path_prefix: edge/publisher/rezono_publisher/batch.py, kind: direct}
+  - {id: correctness-reading-pub-publish, target: correctness-reading, path_prefix: edge/publisher/rezono_publisher/publish.py, kind: direct}
+  - {id: correctness-reading-pub-proof, target: correctness-reading, path_prefix: edge/publisher/rezono_publisher/proof.py, kind: direct}
+  - {id: correctness-reading-pub-views, target: correctness-reading, path_prefix: edge/publisher/rezono_publisher/views.py, kind: direct}
+  - {id: correctness-reading-pub-retained, target: correctness-reading, path_prefix: edge/publisher/rezono_publisher/retained_calculation.py, kind: direct}
+  - {id: correctness-reading-full-fallback, target: correctness-reading, path_prefix: "", kind: full_fallback}

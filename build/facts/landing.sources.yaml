@@ -1,0 +1,5 @@
+default:
+  kind: git
+  name: rezono-lang/rezono
+  revision: 83b577e42c8cc819cf97da03c3b92ea5bdebe475
+  position: decisions/landing-gate-as-rule.md#22-required-checks

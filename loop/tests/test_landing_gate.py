@@ -191,9 +191,6 @@ def premise_ids(program, explainer, relation, row):
     return ids
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError, reason=(
-    "M2: decisions/landing-gate-as-rule.md: build/ derives no landing state yet, so an unread head on a checker "
-    "path is not unknown with the reading-missing ground that names its path (sections 1 and 2.3)"))
 def test_unread_head_on_a_checker_path_is_unknown():
     gate_model()
     problems = []
@@ -220,10 +217,6 @@ def test_unread_head_on_a_checker_path_is_unknown():
         raise UnreadHeadNotUnknown("\n".join(problems))
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError, reason=(
-    "M2: decisions/landing-gate-as-rule.md: std-review records no readings or findings and build/ derives no "
-    "landing state, so a finding for the head is not a ground of no and contradicting readings are not invalid "
-    "(sections 1 and 2.4)"))
 def test_a_finding_for_the_head_blocks_landing():
     gate_model()
     problems = []
@@ -270,9 +263,6 @@ def test_a_finding_for_the_head_blocks_landing():
         raise FindingDoesNotBlock("\n".join(problems))
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError, reason=(
-    "M2: decisions/landing-gate-as-rule.md: build/ derives no landing state yet, so it cannot show that only a "
-    "correctness reading of exactly this head and change counts (section 2.4)"))
 def test_a_reading_of_another_sha_does_not_count():
     gate_model()
     problems = []
@@ -349,9 +339,6 @@ def dequeues(rows):
     return {row[:3] for row in rows.get("effect_planned", set()) if row[1] == "dequeue"}
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError, reason=(
-    "M2: decisions/landing-gate-as-rule.md: build/ declares no queue plan and does not extend effect_permitted, "
-    "so a driver gets no enqueue or dequeue effect through the claim and the landing state (section 3)"))
 def test_a_second_driver_without_the_claim_gets_no_enqueue():
     gate_model()
     problems = []

@@ -1,0 +1,55 @@
+id: https://rezono.org/build/landing
+name: build_landing
+description: Pull request heads, required checks, check readings and queue effect plans for the landing gate.
+imports: [linkml:types, selection, "std-review:review", "std-loop:round_progress", "std-loop:effect"]
+default_range: string
+annotations:
+  layer: facts
+
+enums:
+  BuildCheckState:
+    permissible_values:
+      green:
+      red:
+      pending:
+      skipped:
+  BuildQueueAction:
+    permissible_values:
+      enqueue:
+      dequeue:
+
+classes:
+  BuildPullHead:
+    description: A pull request head listed at the observation cut.
+    attributes:
+      id: {identifier: true}
+      run: {range: BuildRun, required: true}
+      change: {range: Change, required: true}
+      head_sha: {range: Commit, required: true}
+      observed_at: {range: integer, required: true}
+      source: {required: true}
+  BuildRequiredCheck:
+    description: A check required before a pull request may land on the default branch.
+    attributes:
+      id: {identifier: true}
+      check: {required: true}
+  BuildCheckReading:
+    description: One check reading for a head at the observation cut with its sweep receipt.
+    attributes:
+      id: {identifier: true}
+      run: {range: BuildRun, required: true}
+      head_sha: {range: Commit, required: true}
+      check: {required: true}
+      state: {range: BuildCheckState, required: true}
+      observed_at: {range: integer, required: true}
+      source: {required: true}
+      receipt: {range: LoopSweepReceipt}
+  BuildQueuePlan:
+    description: An enqueue or dequeue effect plan bound to one pull request head and gate run.
+    attributes:
+      id: {identifier: true}
+      plan: {range: LoopEffectPlan, required: true}
+      change: {range: Change, required: true}
+      head_sha: {range: Commit, required: true}
+      action: {range: BuildQueueAction, required: true}
+      gate_run: {range: BuildRun, required: true}
