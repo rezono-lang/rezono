@@ -2,14 +2,13 @@
 
 The file is Soufflé syntax, so Soufflé can serve as the oracle. What it may contain:
 
-    .decl relies_on(a: symbol, b: symbol)        derived relation: columns and types (symbol, number, boolean)
+    .decl relies_on(a: symbol, b: symbol)        derived relation: columns and types (symbol, number, boolean, date)
     .input k, k__a  /  .output relies_on         accepted; .input names a table, .output a derived relation
     head(x, y) :- p(x, z), !q(z), n = count : { r(x, _) }, s = sum v : { t(x, _, v) }, n > 1, m = n + 1.
 
 Base predicates are the tables of the schema (M1): `k(id)` per kind and `k__a(id, v)` per arrow or
 attribute, plus the parameter tables (enum values, bounds). A rule reads them by name; a `.decl` for a
-table is optional and must agree with the schema. Columns can hold text, whole numbers or booleans.
-A rule cannot read a date table yet.
+table is optional and must agree with the schema. Columns can hold text, whole numbers, booleans or dates.
 
 A variable inside an aggregate that no positive literal binds is local to the aggregate: it ranges over
 the group, like '_'. The variable after `sum`, `min` or `max` names the column that is aggregated.
@@ -42,9 +41,9 @@ TOKEN = re.compile(r"""
     (?P<ident>[A-Za-z_][A-Za-z0-9_]*) |
     (?P<op>:-|!=|<=|>=|[(),.:{}!=<>+\-*;|&^%/\[\]$@#])
 """, re.X | re.S)
-TYPES = {"symbol": "string", "number": "integer", "boolean": "boolean"}
+TYPES = {"symbol": "string", "number": "integer", "boolean": "boolean", "date": "date"}
 SYMBOLS = {t: s for s, t in TYPES.items()}
-SQL = {"VARCHAR": "string", "BIGINT": "integer", "BOOLEAN": "boolean"}
+SQL = {"VARCHAR": "string", "BIGINT": "integer", "BOOLEAN": "boolean", "DATE": "date"}
 BOOLEAN_LITERALS = {"TRUE": "true", "FALSE": "false"}
 COMPARE = {"=": "eq", "!=": "ne", "<": "lt", "<=": "le", ">": "gt", ">=": "ge"}
 COMPARE_AS = ir.COMPARE_AS  # `binary_text(x) < binary_text(y)`: a comparison type, written on both operands
@@ -294,7 +293,7 @@ def parse_file(text: str, where: str, columns: list | None = None):
                     p.take(":")
                     ty = p.take(kind="ident").text
                     if ty not in TYPES:
-                        p.fail(f"{name}.{c}: type '{ty}' is not supported (symbol, number or boolean)")
+                        p.fail(f"{name}.{c}: type '{ty}' is not supported (symbol, number, boolean or date)")
                     cols.append((c, TYPES[ty]))
                     if not p.at(")"):
                         p.take(",")
@@ -733,7 +732,7 @@ def read(pack, pack_dir: Path, imports=None, renames=None, *, calc_inputs=None, 
             continue
         bad = [c for c, t in tables[name] if t is None]
         if bad:
-            errors.append(f"rules: {name} has a column that is not text, a whole number or a boolean; "
+            errors.append(f"rules: {name} has a column that is not text, a whole number, a boolean or a date; "
                           "rules cannot read it yet")
             continue
         relations[name] = {"name": name, "role": "base", "key": [{"name": c, "type": t} for c, t in tables[name]],
@@ -901,11 +900,11 @@ def to_rule(rid, module, where, head, body, line, columns=lambda name: None) -> 
             if len(b) > 4 and kinds - {"string"}:
                 fail(f"{b[4]}(…) compares two text variables")
             if len(b) == 4 and b[1] not in ("eq", "ne") and kinds - {"integer"}:
-                fail(f"{show(b[2])} {b[1]} {show(b[3])}: an order comparison needs whole numbers, not text")
+                fail(f"{show(b[2])} {b[1]} {show(b[3])}: an order comparison needs whole numbers, not {next(iter(kinds - {'integer'}))}")
             if len(kinds) > 1:
                 fail(f"{show(b[2])} and {show(b[3])} have different types")
         elif b[0] == "arith" and b[2] == ir.DAYS:
-            if b[3][0] != "var" or typ(b[3]) == "integer":
+            if b[3][0] != "var" or typ(b[3]) not in (None, "string"):
                 fail(f"{b[1]} = @days(…): the first argument is a variable bound by a positive literal to text")
             if b[4][0] != "const" or b[4][2] != "string":
                 fail(f"{b[1]} = @days(…): the origin is a constant ISO date in quotes")

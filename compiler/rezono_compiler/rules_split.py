@@ -247,7 +247,7 @@ def export_select(prog, part, relation=q):
 
 def decode(prog, relation, cells):
     """An exported row back in the types of its relation: the text columns a0, a1, … in row-column order."""
-    parse = {"integer": int, "boolean": BOOLEAN.__getitem__, "string": str, "rational": str}
+    parse = {"integer": int, "boolean": BOOLEAN.__getitem__, "string": str, "rational": str, "date": str}
     return tuple(parse[c.type](v) for c, v in zip(prog.relations[relation].row_columns, cells))
 
 
