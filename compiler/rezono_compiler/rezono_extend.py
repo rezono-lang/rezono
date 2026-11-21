@@ -26,9 +26,12 @@ def validate(decl: dict, at: str, imported: bool, refuse: Refuse, *,
         return
     for index, derived in enumerate(decl.get("derived") or []):
         here = f"{at}/derived/{index}"
+        table = derived.get("table") if isinstance(derived, dict) else None
+        if rezono_1 and isinstance(table, dict) and table.get("table") == "priority":
+            refuse(here, "`table priority` is removed in `rezono 1` (R028); use `table first` instead", "§9.1")
+            continue
         if derivations[index]:
             continue
-        table = derived.get("table") if isinstance(derived, dict) else None
         if not isinstance(table, dict):
             if extended_format:
                 rezono_calc.validate_derived(derived, here, refuse)
@@ -36,8 +39,6 @@ def validate(decl: dict, at: str, imported: bool, refuse: Refuse, *,
                 refuse_derived(here, refuse)
         elif imported:
             refuse(at, "a decision table in a module of an imported pack is not lowered yet", "§9.1")
-        elif rezono_1 and table.get("table") == "priority":
-            refuse(here, "`table priority` is removed in `rezono 1` (R028); use `table first` instead", "§9.1")
         elif table.get("table") not in ("unique", "first", "priority", "collect"):
             refuse(here, f"a table `{table.get('table')}` is not lowered yet", "§9.1")
         elif "totality" in derived:
