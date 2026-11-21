@@ -65,26 +65,6 @@ def _load_exploration(tables: dict[str, list[tuple]], exploration_id: str) -> tu
 
 
 _VALID_ROLE_MODES = frozenset({access.COMPLETE, access.FILTERED})
-# Without a base manifest or explicit role_mode, only the standalone operator role (when not
-# declared as a pack role or named in access rules) defaults to complete; all other roles fail
-# closed to access.FILTERED.
-_STANDALONE_COMPLETE_ROLES = frozenset({"operator"})
-
-
-def _declared_filtered_roles(tables: dict[str, list[tuple]] | None, prog) -> set[str]:
-    """Roles named in pack role facts or as constants in may_read / may_read_full rules."""
-    roles: set[str] = set()
-    if tables:
-        roles |= {str(row[0]) for row in tables.get(access.ROLE, ()) if row}
-        roles |= {str(row[0]) for row in tables.get(access.CAPABILITY, ()) if row}
-    if prog is not None:
-        for rule in prog.rules.values():
-            head = rule.head
-            if head.relation in {access.ACCESS, access.READ_FULL} and head.terms:
-                first = head.terms[0]
-                if not ir.is_var(first):
-                    roles.add(str(first))
-    return roles
 
 
 def _role_mode(
@@ -92,8 +72,6 @@ def _role_mode(
     role: str,
     *,
     role_mode: str | None = None,
-    tables: dict[str, list[tuple]] | None = None,
-    prog=None,
 ) -> str:
     """Resolve the publication access mode for `role` fail-closed."""
     if role_mode is not None and role_mode not in _VALID_ROLE_MODES:
@@ -116,8 +94,6 @@ def _role_mode(
     if role_mode is not None:
         return role_mode
 
-    if role in _STANDALONE_COMPLETE_ROLES and role not in _declared_filtered_roles(tables, prog):
-        return access.COMPLETE
     return access.FILTERED
 
 
@@ -287,7 +263,7 @@ def publish_exploration(
     base_manifest = base["id"] if base is not None else ""
     base_epoch = int(base["epoch"]) if base is not None else 0
     knowledge_time = str(base["knowledge_time"]) if base is not None else KNOWLEDGE_TIME
-    resolved_role_mode = _role_mode(base, role, role_mode=role_mode, tables=merged_tables, prog=prog)
+    resolved_role_mode = _role_mode(base, role, role_mode=role_mode)
 
     prepared: list[tuple[int, str, Path, Path, set[str]]] = []
     candidate_inputs: list[tuple[dict[str, list[tuple[str, ...]]], dict[str, list], list[dict]]] = []

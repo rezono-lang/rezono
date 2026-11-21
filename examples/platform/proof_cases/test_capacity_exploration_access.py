@@ -110,35 +110,21 @@ def test_role_mode_blocks_unpublished_and_escalated_roles_with_base():
         mod._role_mode(inconsistent, "elm")
 
 
-def test_role_mode_without_base_fails_closed_for_filtered_roles():
+def test_role_mode_without_base_fails_closed_for_all_roles():
     mod = _load_capacity_exploration()
-    tables = {
-        "role": [("elm",), ("reed",)],
-        "role__capability": [("elm", "read"), ("reed", "read")],
-    }
-    prog = SimpleNamespace(
-        rules={
-            "r1": SimpleNamespace(
-                head=SimpleNamespace(relation="may_read", terms=("platform-catalogue", "product", "?p"))
-            )
-        }
-    )
 
-    for role in ("elm", "reed", "platform-catalogue", "guest", "unknown"):
-        assert mod._role_mode(None, role, tables=tables, prog=prog) == access.FILTERED
+    for role in ("operator", "elm", "reed", "platform-catalogue", "guest", "unknown"):
+        assert mod._role_mode(None, role) == access.FILTERED
 
-    assert mod._role_mode(None, "operator", tables=tables, prog=prog) == access.COMPLETE
-    assert mod._role_mode(None, "operator", role_mode=access.FILTERED, tables=tables, prog=prog) == access.FILTERED
-    assert mod._role_mode(None, "checker", role_mode=access.COMPLETE, tables=tables, prog=prog) == access.COMPLETE
-
-    operator_declared = {"role": [("operator",)]}
-    assert mod._role_mode(None, "operator", tables=operator_declared, prog=prog) == access.FILTERED
+    assert mod._role_mode(None, "operator", role_mode=access.FILTERED) == access.FILTERED
+    assert mod._role_mode(None, "operator", role_mode=access.COMPLETE) == access.COMPLETE
+    assert mod._role_mode(None, "checker", role_mode=access.COMPLETE) == access.COMPLETE
 
     with pytest.raises(ValueError, match="unknown role_mode"):
         mod._role_mode(None, "operator", role_mode="admin")
 
 
-def test_publish_exploration_blocks_role_missing_from_base_manifest(tmp_path):
+def test_publish_exploration_blocks_role_missing_or_escalated_against_base_manifest(tmp_path):
     mod = _load_capacity_exploration()
     model = _build_scenario(tmp_path, [10])
     bucket = store.FileStore(tmp_path / "published")
@@ -152,8 +138,41 @@ def test_publish_exploration_blocks_role_missing_from_base_manifest(tmp_path):
     for unauthorized in ("revoked-role", "operator"):
         with pytest.raises(publish.Blocked, match="not published in m-1"):
             mod.publish_exploration(model, bucket, "fern-grid", unauthorized)
+        with pytest.raises(publish.Blocked, match="not published in m-1"):
+            mod.publish_exploration(model, bucket, "fern-grid", unauthorized, role_mode=access.COMPLETE)
+
+    with pytest.raises(publish.Blocked, match="does not match m-1"):
+        mod.publish_exploration(model, bucket, "fern-grid", "elm", role_mode=access.COMPLETE)
 
     assert list(bucket.list("")) == before_keys
+
+
+def test_publish_exploration_without_base_defaults_operator_to_filtered_and_allows_explicit_complete(tmp_path):
+    mod = _load_capacity_exploration()
+    model = _build_scenario(tmp_path, [10])
+
+    filtered_bucket = store.FileStore(tmp_path / "published-filtered")
+    filtered_key = mod.publish_exploration(model, filtered_bucket, "fern-grid", "operator")
+    filtered_report = json.loads(filtered_bucket.get(filtered_key))
+    assert len(filtered_report["samples"]) == 1
+    filtered_mid = filtered_report["samples"][0]["manifest"]
+    filtered_manifest = json.loads(filtered_bucket.get(f"platform-core/manifests/{filtered_mid}.json"))
+    assert any(c["name"] == "rezono:proofs" and c["status"] == "green" for c in filtered_manifest["checks"])
+    operator_snaps = [s for s in filtered_manifest["snapshots"] if s["role"] == "operator"]
+    assert operator_snaps
+    assert all(s["complete"] is False for s in operator_snaps)
+
+    complete_bucket = store.FileStore(tmp_path / "published-complete")
+    complete_key = mod.publish_exploration(
+        model, complete_bucket, "fern-grid", "operator", role_mode=access.COMPLETE
+    )
+    complete_report = json.loads(complete_bucket.get(complete_key))
+    assert len(complete_report["samples"]) == 1
+    complete_mid = complete_report["samples"][0]["manifest"]
+    complete_manifest = json.loads(complete_bucket.get(f"platform-core/manifests/{complete_mid}.json"))
+    complete_snaps = [s for s in complete_manifest["snapshots"] if s["role"] == "operator"]
+    assert complete_snaps
+    assert all(s["complete"] is True for s in complete_snaps)
 
 
 def test_publish_exploration_without_base_never_grants_complete_to_filtered_role(tmp_path):
@@ -161,15 +180,18 @@ def test_publish_exploration_without_base_never_grants_complete_to_filtered_role
     model = _build_scenario(tmp_path, [10])
     bucket = store.FileStore(tmp_path / "published")
 
-    with pytest.raises((ValueError, KeyError, publish.Blocked)):
+    with pytest.raises(ValueError, match="expected unique request_outcome"):
         mod.publish_exploration(model, bucket, "fern-grid", "elm")
 
     assert list(bucket.list("platform-core/explorations/")) == []
-    for manifest_key in bucket.list("platform-core/manifests/"):
+    manifest_keys = list(bucket.list("platform-core/manifests/"))
+    assert manifest_keys
+    for manifest_key in manifest_keys:
         manifest = json.loads(bucket.get(manifest_key))
-        elm_snaps = [s for s in manifest.get("snapshots", ()) if s.get("role") == "elm"]
-        assert elm_snaps
-        assert all(s.get("complete") is False for s in elm_snaps)
+        snaps = manifest.get("snapshots", ())
+        assert snaps
+        assert all(s.get("complete") is False for s in snaps)
+        assert not any(s.get("role") == "elm" and s.get("complete") is True for s in snaps)
 
 
 def test_calc_only_candidate_closes_both_duckdb_connections(tmp_path, monkeypatch):
