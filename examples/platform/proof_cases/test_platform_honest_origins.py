@@ -1,8 +1,9 @@
 """Honest fact origins for examples/platform/facts/core.yaml (decisions/fact-origin-required.md).
 
-Verifies that examples/platform/facts/core.sources.yaml drops the catch-all `git` default for a
-mixed fact file (design choices, vendor facts, and synthetic fixtures) and removes duplicate
-record entries repeating `default` verbatim or targeting the same record twice.
+Verifies that examples/platform/facts/core.sources.yaml:
+- uses an honest default (never `pack`, `scenario`, `synthetic`, or self-citing `facts/core.yaml`;
+  and when `kind: git`, pointing to an existing `decisions/*.md` file in this repository), and
+- removes duplicate record entries repeating `default` verbatim or targeting the same record twice.
 """
 
 from __future__ import annotations
@@ -12,7 +13,9 @@ import yaml
 
 from case_support import ROOT
 
+REPO = ROOT.parents[1]
 FACTS = ROOT / "facts"
+FORBIDDEN_DEFAULT_KINDS = frozenset({"pack", "scenario", "synthetic"})
 
 
 def _strip_of(entry: dict) -> dict:
@@ -24,21 +27,33 @@ def _strip_of(entry: dict) -> dict:
     raises=AssertionError,
     reason=(
         "extra: decisions/fact-origin-required.md: examples/platform/facts/core.sources.yaml must "
-        "not use a catch-all git default for a mixed fact file and must not repeat default entries "
-        "verbatim or duplicate record selectors in records"
+        "keep an honest default (never pack/scenario/synthetic or self-citing facts/core.yaml, and "
+        "for kind='git' citing an existing decisions/*.md file) and must not repeat default "
+        "entries verbatim or duplicate record selectors in records"
     ),
 )
-def test_core_sources_has_no_catchall_git_default_or_duplicates():
+def test_core_sources_has_honest_default_without_duplicate_records():
     core_sources_yaml = FACTS / "core.sources.yaml"
 
     sidecar = yaml.safe_load(core_sources_yaml.read_text(encoding="utf-8")) or {}
     default = sidecar.get("default")
     records = sidecar.get("records") or []
 
-    # 1. No catch-all git default giving blanket git provenance to every row of mixed core.yaml.
-    assert not (isinstance(default, dict) and default.get("kind") == "git"), (
-        f"core.sources.yaml uses a catch-all git default giving blanket git provenance: {default}"
-    )
+    # 1. Honest default: no pack/scenario/synthetic, no self-citing facts/core.yaml,
+    #    and when kind == "git", must cite an existing decisions/*.md file.
+    if isinstance(default, dict):
+        kind = default.get("kind")
+        assert kind not in FORBIDDEN_DEFAULT_KINDS, (
+            f"core.sources.yaml default uses forbidden kind {kind!r}: {default}"
+        )
+        pos_path = str(default.get("position", "")).partition("#")[0]
+        assert pos_path not in {"facts/core.yaml", "examples/platform/facts/core.yaml"}, (
+            f"core.sources.yaml default self-cites facts/core.yaml: {default}"
+        )
+        if kind == "git":
+            assert pos_path.startswith("decisions/") and pos_path.endswith(".md") and (REPO / pos_path).is_file(), (
+                f"core.sources.yaml git default must cite an existing decisions/*.md file: {default}"
+            )
 
     # 2. No record entries repeating default verbatim.
     if isinstance(default, dict):
