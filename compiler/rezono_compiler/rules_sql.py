@@ -409,31 +409,51 @@ def functional_candidate_select(prog, rule, dialect="feldera"):
             if c.type == "string":
                 expr = f"CAST({expr} AS VARCHAR)"
             cols.append((expr, f"k{j}"))
-    if not r.agg_states:
-        st_expr, rsn_expr = "CAST(0 AS BIGINT)", "CAST('' AS VARCHAR)"
-    elif len(r.agg_states) == 1:
-        st_expr, rsn_expr = r.agg_states[0]
-    else:
-        worst = f"GREATEST({', '.join(s for s, _ in r.agg_states)})"
-        st_expr = f"CAST({worst} AS BIGINT)"
-        rsn_expr = ("CAST(CASE "
-                    + " ".join(f"WHEN {s} = {worst} THEN {rs}" for s, rs in r.agg_states)
-                    + " ELSE '' END AS VARCHAR)")
-    cols.append((st_expr, "__st"))
-    cols.append((rsn_expr, "__rsn"))
     vt, vc = rule.head.terms[-1], rel.value
+    states = list(r.agg_states)
     if vc.type == "rational":
         vn, vd = r.rat_term(vt)
-        cols.append((f"rezono_add_n({vn}, {vd}, CAST(0 AS BIGINT), CAST(1 AS BIGINT))", "__vn"))
-        cols.append((f"rezono_add_d({vn}, {vd}, CAST(0 AS BIGINT), CAST(1 AS BIGINT))", "__vd"))
+        norm_n = f"rezono_add_n({vn}, {vd}, CAST(0 AS BIGINT), CAST(1 AS BIGINT))"
+        norm_d = f"rezono_add_d({vn}, {vd}, CAST(0 AS BIGINT), CAST(1 AS BIGINT))"
+        # Non-positive denominator is an invalid input violation (empty reason: no core code);
+        # positive denominator whose reduced value exceeds BOUND (2^63 - 1) yields (0, 0) from
+        # rezono_add_d -> unknown / beyond_exact_bound (decisions/language-rezono-1-refinements.md §3.4C).
+        rat_st = (
+            f"CAST(CASE WHEN {vd} <= CAST(0 AS BIGINT) THEN 3 "
+            f"WHEN {norm_d} <= CAST(0 AS BIGINT) THEN 2 "
+            f"ELSE 0 END AS BIGINT)"
+        )
+        rat_rsn = (
+            f"CAST(CASE WHEN {vd} <= CAST(0 AS BIGINT) THEN '' "
+            f"WHEN {norm_d} <= CAST(0 AS BIGINT) THEN 'beyond_exact_bound' "
+            f"ELSE '' END AS VARCHAR)"
+        )
+        states.append((rat_st, rat_rsn))
+        val_cols = [(norm_n, "__vn"), (norm_d, "__vd")]
     elif vc.type == "string":
-        cols.append((f"CAST({r.term(vt, 'string')} AS VARCHAR)", "__v"))
+        val_cols = [(f"CAST({r.term(vt, 'string')} AS VARCHAR)", "__v")]
     elif vc.type == "integer":
-        cols.append((f"CAST({r.term(vt, 'integer')} AS BIGINT)", "__v"))
+        val_cols = [(f"CAST({r.term(vt, 'integer')} AS BIGINT)", "__v")]
     elif vc.type == "date":
-        cols.append((f"CAST({r.term(vt, 'date')} AS DATE)", "__v"))
+        val_cols = [(f"CAST({r.term(vt, 'date')} AS DATE)", "__v")]
     else:
-        cols.append((r.term(vt, "boolean"), "__v"))
+        val_cols = [(r.term(vt, "boolean"), "__v")]
+
+    if not states:
+        st_expr, rsn_expr = "CAST(0 AS BIGINT)", "CAST('' AS VARCHAR)"
+    elif len(states) == 1:
+        st_expr, rsn_expr = states[0]
+    else:
+        worst = f"GREATEST({', '.join(s for s, _ in states)})"
+        st_expr = f"CAST({worst} AS BIGINT)"
+        arms = []
+        for idx, (si, ri) in enumerate(states[:-1]):
+            beats = [f"({si} > {sj} OR ({si} = {sj} AND {ri} <= {rj}))" for sj, rj in states[idx + 1:]]
+            arms.append(f"WHEN {' AND '.join(beats)} THEN {ri}")
+        rsn_expr = f"CAST(CASE {' '.join(arms)} ELSE {states[-1][1]} END AS VARCHAR)"
+    cols.append((st_expr, "__st"))
+    cols.append((rsn_expr, "__rsn"))
+    cols.extend(val_cols)
     return r.select(cols)
 
 
@@ -448,6 +468,8 @@ def _empty_functional_candidates(rel, dialect):
             cols.append(f"CAST('' AS VARCHAR) AS {q(f'k{j}')}")
         elif c.type == "integer":
             cols.append(f'CAST(0 AS BIGINT) AS {q(f"k{j}")}')
+        elif c.type == "date":
+            cols.append(f"CAST(DATE '1970-01-01' AS DATE) AS {q(f'k{j}')}")
         else:
             cols.append(f'FALSE AS {q(f"k{j}")}')
     cols.append('CAST(0 AS BIGINT) AS "__st"')
@@ -460,6 +482,8 @@ def _empty_functional_candidates(rel, dialect):
         cols.append("CAST('' AS VARCHAR) AS \"__v\"")
     elif vtype == "integer":
         cols.append('CAST(0 AS BIGINT) AS "__v"')
+    elif vtype == "date":
+        cols.append("CAST(DATE '1970-01-01' AS DATE) AS \"__v\"")
     else:
         cols.append('FALSE AS "__v"')
     # Calcite requires a FROM clause before WHERE. The constant source contributes no facts.
@@ -515,7 +539,6 @@ def functional_select(prog, name, dialect="feldera"):
     empty_state = rel.empty_state or "unknown"
     empty_reason = rel.empty_reason or ("empty" if empty_state == "not_applicable" else "no_value")
     if vtype == "rational":
-        bad_rat = '(g."__known_cnt" > 0 AND g."__min_vd" <= 0)'
         conflict = '(g."__known_cnt" > 0 AND (g."__min_vn" <> g."__max_vn" OR g."__min_vd" <> g."__max_vd"))'
         is_known = ('(g."__cnt" IS NOT NULL AND g."__max_st" = 0 AND g."__known_cnt" > 0 '
                     'AND g."__min_vn" = g."__max_vn" AND g."__min_vd" = g."__max_vd" AND g."__min_vd" > 0)')
@@ -526,7 +549,6 @@ def functional_select(prog, name, dialect="feldera"):
              f'ELSE CAST(1 AS BIGINT) END AS BIGINT) AS {q(rel.value.name + "_d")}'),
         ]
     else:
-        bad_rat = None
         conflict = '(g."__known_cnt" > 0 AND g."__min_v" <> g."__max_v")'
         is_known = '(g."__cnt" IS NOT NULL AND g."__max_st" = 0 AND g."__known_cnt" > 0 AND g."__min_v" = g."__max_v")'
         if vtype == "string":
@@ -548,12 +570,9 @@ def functional_select(prog, name, dialect="feldera"):
                 f'CASE WHEN {is_known} THEN (COALESCE(g."__min_v", 0) = 1) ELSE FALSE END AS {q(rel.value.name)}'
             ]
 
-    bad_rat_state = f"WHEN {bad_rat} THEN 'invalid' " if bad_rat else ""
-    bad_rat_reason = f"WHEN {bad_rat} THEN 'invalid_rational' " if bad_rat else ""
     state_expr = (
         f'CAST(CASE WHEN g."__cnt" IS NULL THEN {literal(empty_state)} '
         f'WHEN g."__max_st" = 3 THEN \'invalid\' '
-        f'{bad_rat_state}'
         f'WHEN {conflict} THEN \'invalid\' '
         f'WHEN g."__max_st" = 2 THEN \'unknown\' '
         f'WHEN g."__max_st" = 1 THEN \'not_applicable\' '
@@ -561,8 +580,7 @@ def functional_select(prog, name, dialect="feldera"):
     )
     reason_expr = (
         f'CAST(CASE WHEN g."__cnt" IS NULL THEN {literal(empty_reason)} '
-        f'WHEN g."__max_st" = 3 THEN COALESCE(g."__rsn_inv", \'invalid\') '
-        f'{bad_rat_reason}'
+        f'WHEN g."__max_st" = 3 THEN COALESCE(g."__rsn_inv", \'\') '
         f'WHEN {conflict} THEN \'multiple_values\' '
         f'WHEN g."__max_st" = 2 THEN COALESCE(g."__rsn_unk", \'no_value\') '
         f'WHEN g."__max_st" = 1 THEN COALESCE(g."__rsn_na", \'empty\') '

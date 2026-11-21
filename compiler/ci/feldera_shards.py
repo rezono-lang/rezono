@@ -16,6 +16,14 @@ ORDERED_SCALARS = "compiler/tests/test_ordered_rule_scalars_engines.py::test_fel
 INTERFACE = f"{INCREMENTAL}[platform/tenant-capacity/interface]"
 BOOLEAN = "compiler/tests/test_boolean_rule_inputs.py::test_native_boolean_rule_inputs"
 RECORDED_DATES = "compiler/tests/test_recorded_dates.py::test_independent_date_equality"
+RATIONAL_GUARDS = (
+    "compiler/tests/test_rules_sql_and_access_guards.py"
+    "::test_rational_functional_overflow_unknown_and_invalid_denominator"
+)
+ZERO_RULE_FUNCTIONAL = (
+    "compiler/tests/test_rules_sql_and_access_guards.py"
+    "::test_zero_rule_functional_relation_emits_valid_sql_with_empty_state"
+)
 SHARDS = {
     "library": (f"{EXAMPLE}[library]",),
     "projects": (f"{EXAMPLE}[projects]",),
@@ -25,11 +33,11 @@ SHARDS = {
     "subsidy": (f"{INCREMENTAL}[subsidy]",),
     "compiler-calc": (f"{CALC}[full]", f"{CALC}[choice]"),
     "compiler-bound": ("compiler/tests/test_bound.py::test_the_check_view_on_feldera_holds_the_rows_past_the_bound",
-                       BOOLEAN, RECORDED_DATES),
+                       BOOLEAN, RECORDED_DATES, RATIONAL_GUARDS, ZERO_RULE_FUNCTIONAL),
     "compiler-rules": (f"{GENERATED}[0]", f"{GENERATED}[1]", ORDERED_SCALARS),
 }
 EXPECTED = {node for group in SHARDS.values() for node in group}
-ORIGINAL = EXPECTED - {INTERFACE, BOOLEAN, ORDERED_SCALARS, RECORDED_DATES}
+ORIGINAL = EXPECTED - {INTERFACE, BOOLEAN, ORDERED_SCALARS, RECORDED_DATES, RATIONAL_GUARDS, ZERO_RULE_FUNCTIONAL}
 
 
 def collection(path: Path) -> list[str]:

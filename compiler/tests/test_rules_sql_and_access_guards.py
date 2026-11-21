@@ -2,10 +2,14 @@
 
 from __future__ import annotations
 
+from uuid import uuid4
+
 import duckdb
 import pytest
 
+import feldera
 from rezono_compiler import calc_sql, rules as ir, rules_sql
+from rezono_publication import l0
 
 
 def _col(name: str, typ: str = "string") -> dict:
@@ -28,7 +32,13 @@ def _rule(rid: str, head_rel: str, head_terms: list[str], body: list[dict], *,
     }
 
 
-def test_rational_functional_invalid_denominator_and_overflow_mark_invalid():
+def test_rational_functional_overflow_unknown_and_invalid_denominator():
+    """Exact-bound exceedance yields unknown/beyond_exact_bound (decisions/language-rezono-1-refinements.md
+    §3.4C); non-positive denominators remain invalid with empty reason (no invented reason code);
+    multi-value conflicts remain invalid/multiple_values (invalid beats unknown per Appendix A.3)."""
+    assert l0.CORE_REASONS["beyond_exact_bound"] == ("unknown",)
+    assert "invalid_rational" not in l0.CORE_REASONS
+
     doc = {
         "format": "rezono.rules/2",
         "pack": "sample",
@@ -49,47 +59,98 @@ def test_rational_functional_invalid_denominator_and_overflow_mark_invalid():
     prog = ir.load(doc, require_witness=False)
 
     feldera_sql = rules_sql.feldera(prog, witnesses=False)
-    assert "invalid_rational" in feldera_sql
+    assert "beyond_exact_bound" in feldera_sql
+    assert "invalid_rational" not in feldera_sql
     assert "ratio_val__invalid" in feldera_sql
+
+    items = [
+        ("i_ok",),
+        ("i_unreduced",),
+        ("i_reducible_min",),
+        ("i_overflow",),
+        ("i_mixed_overflow",),
+        ("i_zero_den",),
+        ("i_neg_den",),
+        ("i_mixed_bad",),
+        ("i_conflict",),
+        ("i_conflict_overflow",),
+        ("i_empty",),
+    ]
+    ratio_in = [
+        ("i_ok", 3, 2),
+        ("i_unreduced", 4, 6),
+        ("i_reducible_min", -(2**63), 2),
+        ("i_overflow", -(2**63), 1),
+        ("i_mixed_overflow", 1, 2),
+        ("i_mixed_overflow", -(2**63), 1),
+        ("i_zero_den", 1, 0),
+        ("i_neg_den", 1, -2),
+        ("i_mixed_bad", 1, 2),
+        ("i_mixed_bad", 1, 0),
+        ("i_conflict", 1, 2),
+        ("i_conflict", 3, 4),
+        ("i_conflict_overflow", 1, 2),
+        ("i_conflict_overflow", 3, 4),
+        ("i_conflict_overflow", -(2**63), 1),
+    ]
 
     con = duckdb.connect()
     con.execute(calc_sql.DUCKDB_MACROS)
     for ddl in rules_sql.duckdb_tables(prog):
         con.execute(ddl)
-    con.executemany(
-        'INSERT INTO "item" VALUES (?)',
-        [("i_ok",), ("i_zero_den",), ("i_neg_den",), ("i_overflow",), ("i_mixed_bad",), ("i_conflict",)],
-    )
-    con.executemany(
-        'INSERT INTO "ratio_in" VALUES (?, ?, ?)',
-        [
-            ("i_ok", 3, 2),
-            ("i_zero_den", 1, 0),
-            ("i_neg_den", 1, -2),
-            ("i_overflow", -(2**63), 1),
-            ("i_mixed_bad", 1, 2),
-            ("i_mixed_bad", 1, 0),
-            ("i_conflict", 1, 2),
-            ("i_conflict", 3, 4),
-        ],
-    )
+    con.executemany('INSERT INTO "item" VALUES (?)', items)
+    con.executemany('INSERT INTO "ratio_in" VALUES (?, ?, ?)', ratio_in)
     for stmt in rules_sql.duckdb_program(prog, witnesses=False):
         con.execute(stmt)
 
     rows = con.execute('SELECT * FROM "ratio_val"').fetchall()
     assert all(cell is not None for row in rows for cell in row)
     by_id = {row[0]: row[1:] for row in rows}
-    assert by_id == {
+    expected = {
         "i_ok": ("known", "", 3, 2),
-        "i_zero_den": ("invalid", "invalid_rational", 0, 1),
-        "i_neg_den": ("invalid", "invalid_rational", 0, 1),
-        "i_overflow": ("invalid", "invalid_rational", 0, 1),
-        "i_mixed_bad": ("invalid", "invalid_rational", 0, 1),
+        "i_unreduced": ("known", "", 2, 3),
+        "i_reducible_min": ("known", "", -(2**62), 1),
+        "i_overflow": ("unknown", "beyond_exact_bound", 0, 1),
+        "i_mixed_overflow": ("unknown", "beyond_exact_bound", 0, 1),
+        "i_zero_den": ("invalid", "", 0, 1),
+        "i_neg_den": ("invalid", "", 0, 1),
+        "i_mixed_bad": ("invalid", "", 0, 1),
         "i_conflict": ("invalid", "multiple_values", 0, 1),
+        "i_conflict_overflow": ("invalid", "multiple_values", 0, 1),
+        "i_empty": ("unknown", "no_value", 0, 1),
     }
+    assert by_id == expected
 
+    # Every non-empty emitted reason must be a registered core reason permitted for its state.
+    for state, reason, _, den in by_id.values():
+        assert den > 0
+        if reason:
+            assert reason in l0.CORE_REASONS
+            assert state in l0.CORE_REASONS[reason]
+
+    expected_blocked = {"i_zero_den", "i_neg_den", "i_mixed_bad", "i_conflict", "i_conflict_overflow"}
     blocked = {row[0] for row in con.execute('SELECT * FROM "ratio_val__invalid"').fetchall()}
-    assert blocked == {"i_zero_den", "i_neg_den", "i_overflow", "i_mixed_bad", "i_conflict"}
+    assert blocked == expected_blocked
+
+    if feldera.URL:
+        pipeline = "rezono-rat-guard-" + uuid4().hex
+        feldera.deploy(pipeline, feldera_sql, profile="unoptimized", workers=2)
+        try:
+            updates = {
+                "item": [{"insert": {"id": iid}} for (iid,) in items],
+                "ratio_in": [{"insert": {"id": iid, "r_n": rn, "r_d": rd}} for iid, rn, rd in ratio_in],
+            }
+            feldera.processed(pipeline, feldera.push(pipeline, updates))
+            got_rows = {
+                r["id"]: (r["state"], r["reason"], r["value_n"], r["value_d"])
+                for r in feldera.read_relation(pipeline, "ratio_val")
+            }
+            got_blocked = {r["id"] for r in feldera.read_relation(pipeline, "ratio_val__invalid")}
+            with feldera.comparing():
+                assert got_rows == expected
+                assert got_blocked == expected_blocked
+        finally:
+            feldera.stop(pipeline, delete=True)
 
 
 def test_parse_rational_normalizes_fractions_and_rejects_zero_denominator():
@@ -216,23 +277,38 @@ def test_zero_rule_functional_relation_emits_valid_sql_with_empty_state():
     for stmt in rules_sql.duckdb_program(prog, witnesses=False):
         con.execute(stmt)
 
-    assert set(con.execute('SELECT * FROM "empty_str"').fetchall()) == {
-        ("a", "unknown", "no_value", ""),
-        ("b", "unknown", "no_value", ""),
-    }
-    assert set(con.execute('SELECT * FROM "empty_int"').fetchall()) == {
-        ("a", "not_applicable", "empty", 0),
-        ("b", "not_applicable", "empty", 0),
-    }
-    assert set(con.execute('SELECT * FROM "empty_bool"').fetchall()) == {
-        ("a", "unknown", "no_value", False),
-        ("b", "unknown", "no_value", False),
-    }
-    assert set(con.execute('SELECT * FROM "empty_rat"').fetchall()) == {
-        ("a", "not_applicable", "no_match", 0, 1),
-        ("b", "not_applicable", "no_match", 0, 1),
-    }
+    expected_str = {("a", "unknown", "no_value", ""), ("b", "unknown", "no_value", "")}
+    expected_int = {("a", "not_applicable", "empty", 0), ("b", "not_applicable", "empty", 0)}
+    expected_bool = {("a", "unknown", "no_value", False), ("b", "unknown", "no_value", False)}
+    expected_rat = {("a", "not_applicable", "no_match", 0, 1), ("b", "not_applicable", "no_match", 0, 1)}
+
+    assert set(con.execute('SELECT * FROM "empty_str"').fetchall()) == expected_str
+    assert set(con.execute('SELECT * FROM "empty_int"').fetchall()) == expected_int
+    assert set(con.execute('SELECT * FROM "empty_bool"').fetchall()) == expected_bool
+    assert set(con.execute('SELECT * FROM "empty_rat"').fetchall()) == expected_rat
     assert con.execute('SELECT * FROM "empty_rat__invalid"').fetchall() == []
+
+    if feldera.URL:
+        pipeline = "rezono-zero-rule-fn-" + uuid4().hex
+        feldera.deploy(pipeline, feldera_sql, profile="unoptimized", workers=2)
+        try:
+            feldera.processed(pipeline, feldera.push(pipeline, {"item": [{"insert": {"id": "a"}}, {"insert": {"id": "b"}}]}))
+            got_str = {(r["id"], r["state"], r["reason"], r["value"]) for r in feldera.read_relation(pipeline, "empty_str")}
+            got_int = {(r["id"], r["state"], r["reason"], r["value"]) for r in feldera.read_relation(pipeline, "empty_int")}
+            got_bool = {(r["id"], r["state"], r["reason"], r["value"]) for r in feldera.read_relation(pipeline, "empty_bool")}
+            got_rat = {
+                (r["id"], r["state"], r["reason"], r["value_n"], r["value_d"])
+                for r in feldera.read_relation(pipeline, "empty_rat")
+            }
+            got_invalid = feldera.read_relation(pipeline, "empty_rat__invalid")
+            with feldera.comparing():
+                assert got_str == expected_str
+                assert got_int == expected_int
+                assert got_bool == expected_bool
+                assert got_rat == expected_rat
+                assert got_invalid == []
+        finally:
+            feldera.stop(pipeline, delete=True)
 
 
 @pytest.mark.parametrize("access_rel", ["may_read", "may_read_full"])

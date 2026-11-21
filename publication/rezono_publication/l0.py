@@ -62,6 +62,7 @@ CORE_REASONS = {  # §2.3: always in scope, with the states each may label
     "no_value": ("not_applicable", "unknown"),
     "no_match": ("not_applicable", "unknown"),
     "multiple_values": ("invalid",),
+    "beyond_exact_bound": ("unknown",),
     "added_later": ("not_applicable", "unknown", "invalid"),
 }
 CORE_TYPES = {"Text", "Bool", "Integer", "Ratio", "Date", "DateTime", "Quantity", "Money", "Period", "Enum"}
