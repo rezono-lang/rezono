@@ -389,9 +389,9 @@ function inferExampleIdKinds(
 export function checkModule(text: string, options?: CheckModuleOptions): FormOf {
 	const parsed = parseModule(text, options);
 	if (!parsed.module || parsed.diagnostics.some(isError)) return { diagnostics: parsed.diagnostics };
-	const { module, spans } = parsed;
+	const { module, spans, memberSpans } = parsed;
 	if (module.rezono !== '1') {
-		return { form: formOfModule(text, module, spans, options), diagnostics: parsed.diagnostics };
+		return { form: formOfModule(text, module, spans, options, memberSpans), diagnostics: parsed.diagnostics };
 	}
 
 	const { schema, relations, kindNames } = buildModuleSchema(module, options?.symbols);
@@ -800,5 +800,5 @@ export function checkModule(text: string, options?: CheckModuleOptions): FormOf 
 
 	const diagnostics = [...parsed.diagnostics, ...t.found].sort(inOrder);
 	if (diagnostics.some(isError)) return { diagnostics };
-	return { form: formOfModule(text, module, spans, options), diagnostics };
+	return { form: formOfModule(text, module, spans, options, memberSpans), diagnostics };
 }
