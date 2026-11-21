@@ -1,0 +1,1470 @@
+{
+ "base_refused": [
+  "https://example.org/tree",
+  "HTTPS://example.org/tree/",
+  "urn:x/",
+  "https://example.org/a b/",
+  "https://example.org/a\u00a0b/",
+  "https://example.org/a\u001fb/",
+  "https:///",
+  "",
+  "1http://example.org/"
+ ],
+ "description": "Canonical IRI vectors (docs/publication/l0.md 3.4 and 6.4; decisions/publication-conclusion-addresses.md 1-3). Written by publication/tests/iri_vectors.py from rezono_publication.rdf, never by hand; the gate (edge/gate/src/iri.ts and roleSchema) must give the same. `spaces` gives, per schema bundle and role, the conclusion IRI of one id of each kind the role reads.",
+ "parse": [
+  {
+   "iri": "https://example.org/tree/Item/p1",
+   "unpinned": "https://example.org/tree/Item/p1"
+  },
+  {
+   "iri": "https://example.org/tree/Item/p1?pin=d-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+   "pin": {
+    "dataset": "d-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+   },
+   "unpinned": "https://example.org/tree/Item/p1"
+  },
+  {
+   "iri": "https://example.org/tree/Item/p1?pin=m-0@d-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+   "pin": {
+    "dataset": "d-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+    "manifest": "m-0"
+   },
+   "unpinned": "https://example.org/tree/Item/p1"
+  },
+  {
+   "iri": "https://example.org/tree/Item/p1?pin=m-12@d-ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+   "pin": {
+    "dataset": "d-ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+    "manifest": "m-12"
+   },
+   "unpinned": "https://example.org/tree/Item/p1"
+  },
+  {
+   "iri": "urn:x:y?pin=d-ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+   "pin": {
+    "dataset": "d-ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+   },
+   "unpinned": "urn:x:y"
+  },
+  {
+   "iri": "https://example.org/a\ufeffb",
+   "unpinned": "https://example.org/a\ufeffb"
+  }
+ ],
+ "parse_refused": [
+  "https://example.org/tree/Item/p1?pin=m-1",
+  "https://example.org/tree/Item/p1?pin=m-01",
+  "https://example.org/tree/Item/p1?pin=m-01@d-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+  "https://example.org/tree/Item/p1?pin=m-1@d-000000000000000000000000000000000000000000000000000000000000000",
+  "https://example.org/tree/Item/p1?pin=D-0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF",
+  "https://example.org/tree/Item/p1?pin=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+  "https://example.org/tree/Item/p1?pin=d-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef&x=1",
+  "https://example.org/tree/Item/p1?other=1",
+  "https://example.org/tree/Item/p1?pin=d-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef?",
+  "https://example.org/tree/Item/p1#frag",
+  "https://example.org/tree/Item/p1?pin=d-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef#frag",
+  "?pin=d-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+  "not an iri",
+  "https://example.org/a\u001fb",
+  ""
+ ],
+ "pin": [
+  {
+   "dataset": "d-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+   "iri": "https://example.org/tree/Item/p1",
+   "pinned": "https://example.org/tree/Item/p1?pin=d-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+  },
+  {
+   "dataset": "d-ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+   "iri": "https://example.org/tree/Item/p1",
+   "manifest": "m-0",
+   "pinned": "https://example.org/tree/Item/p1?pin=m-0@d-ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+  },
+  {
+   "dataset": "d-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+   "iri": "https://example.org/tree/Item/p1",
+   "manifest": "m-42",
+   "pinned": "https://example.org/tree/Item/p1?pin=m-42@d-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+  },
+  {
+   "dataset": "d-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+   "iri": "urn:x:y",
+   "pinned": "urn:x:y?pin=d-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+  },
+  {
+   "dataset": "d-ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+   "iri": "urn:x:y",
+   "manifest": "m-0",
+   "pinned": "urn:x:y?pin=m-0@d-ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+  },
+  {
+   "dataset": "d-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+   "iri": "urn:x:y",
+   "manifest": "m-42",
+   "pinned": "urn:x:y?pin=m-42@d-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+  },
+  {
+   "dataset": "d-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+   "iri": "https://example.org/a/b~20c",
+   "pinned": "https://example.org/a/b~20c?pin=d-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+  },
+  {
+   "dataset": "d-ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+   "iri": "https://example.org/a/b~20c",
+   "manifest": "m-0",
+   "pinned": "https://example.org/a/b~20c?pin=m-0@d-ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+  },
+  {
+   "dataset": "d-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+   "iri": "https://example.org/a/b~20c",
+   "manifest": "m-42",
+   "pinned": "https://example.org/a/b~20c?pin=m-42@d-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+  },
+  {
+   "dataset": "d-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+   "iri": "rezono:w/abc",
+   "pinned": "rezono:w/abc?pin=d-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+  },
+  {
+   "dataset": "d-ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+   "iri": "rezono:w/abc",
+   "manifest": "m-0",
+   "pinned": "rezono:w/abc?pin=m-0@d-ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+  },
+  {
+   "dataset": "d-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+   "iri": "rezono:w/abc",
+   "manifest": "m-42",
+   "pinned": "rezono:w/abc?pin=m-42@d-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+  }
+ ],
+ "pin_refused": [
+  {
+   "dataset": "d-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+   "iri": "https://example.org/tree/Item/p1",
+   "manifest": "m-01"
+  },
+  {
+   "dataset": "d-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+   "iri": "https://example.org/tree/Item/p1",
+   "manifest": "m-"
+  },
+  {
+   "dataset": "d-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+   "iri": "https://example.org/tree/Item/p1",
+   "manifest": "m-1x"
+  },
+  {
+   "dataset": "d-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+   "iri": "https://example.org/tree/Item/p1"
+  },
+  {
+   "dataset": "0000000000000000000000000000000000000000000000000000000000000000",
+   "iri": "https://example.org/tree/Item/p1"
+  },
+  {
+   "dataset": "d-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+   "iri": "https://example.org/tree/Item/p1?x"
+  },
+  {
+   "dataset": "d-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+   "iri": "https://example.org/tree/Item/p1#f"
+  },
+  {
+   "dataset": "d-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+   "iri": "no-scheme/p1"
+  },
+  {
+   "dataset": "d-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+   "iri": "https://example.org/a\u2028b"
+  }
+ ],
+ "spaces": [
+  {
+   "about": "default base, no kind iri; every relation",
+   "bundle": {
+    "arrows": [
+     {
+      "id": "item.inside",
+      "kind": "item",
+      "multivalued": false,
+      "name": "inside",
+      "required": false,
+      "table": "item__inside",
+      "target": "item",
+      "world": "closed"
+     },
+     {
+      "id": "holder.keeps",
+      "kind": "holder",
+      "multivalued": true,
+      "name": "keeps",
+      "required": false,
+      "table": "holder__keeps",
+      "target": "item",
+      "world": "closed"
+     }
+    ],
+    "attributes": [
+     {
+      "id": "item.label",
+      "kind": "item",
+      "multivalued": false,
+      "name": "label",
+      "required": true,
+      "table": "item__label",
+      "type": "text",
+      "world": "closed"
+     },
+     {
+      "id": "part.size",
+      "kind": "part",
+      "multivalued": false,
+      "name": "size",
+      "required": false,
+      "schema_type": "integer",
+      "table": "part__size",
+      "type": "integer",
+      "world": "closed"
+     }
+    ],
+    "kinds": [
+     {
+      "class": "Item",
+      "id": "item",
+      "world": "closed"
+     },
+     {
+      "class": "Part",
+      "id": "part",
+      "parent": "item",
+      "world": "closed"
+     },
+     {
+      "class": "Spare",
+      "id": "spare",
+      "parent": "part",
+      "world": "closed"
+     },
+     {
+      "class": "Tool",
+      "id": "tool",
+      "parent": "item",
+      "world": "closed"
+     },
+     {
+      "class": "Holder",
+      "id": "holder",
+      "world": "closed"
+     }
+    ],
+    "pack": {
+     "id": "tree-fixture"
+    },
+    "relations": [
+     {
+      "columns": [
+       {
+        "name": "holder",
+        "type": "string"
+       },
+       {
+        "name": "part",
+        "type": "string"
+       }
+      ],
+      "id": "kept_part",
+      "world": "closed"
+     }
+    ]
+   },
+   "conclusions": [
+    {
+     "id": "h~1",
+     "iri": "https://rezono.example/tree-fixture/Holder/h~7E1",
+     "kind": "Holder",
+     "pinned": "https://rezono.example/tree-fixture/Holder/h~7E1?pin=m-3@d-ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+    },
+    {
+     "id": "i1",
+     "iri": "https://rezono.example/tree-fixture/Item/i1",
+     "kind": "Item",
+     "pinned": "https://rezono.example/tree-fixture/Item/i1?pin=m-3@d-ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+    },
+    {
+     "id": "[\"h1\",\"p1\"]",
+     "iri": "https://rezono.example/tree-fixture/KeptPart/~5B~22h1~22~2C~22p1~22~5D",
+     "kind": "KeptPart",
+     "pinned": "https://rezono.example/tree-fixture/KeptPart/~5B~22h1~22~2C~22p1~22~5D?pin=m-3@d-ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+    },
+    {
+     "id": "p 1",
+     "iri": "https://rezono.example/tree-fixture/Item/p~201",
+     "kind": "Part",
+     "pinned": "https://rezono.example/tree-fixture/Item/p~201?pin=m-3@d-ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+    },
+    {
+     "id": "s.1",
+     "iri": "https://rezono.example/tree-fixture/Item/s.1",
+     "kind": "Spare",
+     "pinned": "https://rezono.example/tree-fixture/Item/s.1?pin=m-3@d-ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+    },
+    {
+     "id": "..",
+     "iri": "https://rezono.example/tree-fixture/Item/~2E~2E",
+     "kind": "Tool",
+     "pinned": "https://rezono.example/tree-fixture/Item/~2E~2E?pin=m-3@d-ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+    }
+   ],
+   "snapshots": [
+    {
+     "complete": false,
+     "full": true,
+     "relation": "holder"
+    },
+    {
+     "complete": false,
+     "full": true,
+     "relation": "holder__keeps"
+    },
+    {
+     "complete": false,
+     "full": true,
+     "relation": "item"
+    },
+    {
+     "complete": false,
+     "full": true,
+     "relation": "item__inside"
+    },
+    {
+     "complete": false,
+     "full": true,
+     "relation": "item__label"
+    },
+    {
+     "complete": false,
+     "full": true,
+     "relation": "kept_part"
+    },
+    {
+     "complete": false,
+     "full": true,
+     "relation": "part"
+    },
+    {
+     "complete": false,
+     "full": true,
+     "relation": "part__size"
+    },
+    {
+     "complete": false,
+     "full": true,
+     "relation": "spare"
+    },
+    {
+     "complete": false,
+     "full": true,
+     "relation": "tool"
+    }
+   ]
+  },
+  {
+   "about": "default base, no kind iri; a subkind without its root",
+   "bundle": {
+    "arrows": [
+     {
+      "id": "item.inside",
+      "kind": "item",
+      "multivalued": false,
+      "name": "inside",
+      "required": false,
+      "table": "item__inside",
+      "target": "item",
+      "world": "closed"
+     },
+     {
+      "id": "holder.keeps",
+      "kind": "holder",
+      "multivalued": true,
+      "name": "keeps",
+      "required": false,
+      "table": "holder__keeps",
+      "target": "item",
+      "world": "closed"
+     }
+    ],
+    "attributes": [
+     {
+      "id": "item.label",
+      "kind": "item",
+      "multivalued": false,
+      "name": "label",
+      "required": true,
+      "table": "item__label",
+      "type": "text",
+      "world": "closed"
+     },
+     {
+      "id": "part.size",
+      "kind": "part",
+      "multivalued": false,
+      "name": "size",
+      "required": false,
+      "schema_type": "integer",
+      "table": "part__size",
+      "type": "integer",
+      "world": "closed"
+     }
+    ],
+    "kinds": [
+     {
+      "class": "Item",
+      "id": "item",
+      "world": "closed"
+     },
+     {
+      "class": "Part",
+      "id": "part",
+      "parent": "item",
+      "world": "closed"
+     },
+     {
+      "class": "Spare",
+      "id": "spare",
+      "parent": "part",
+      "world": "closed"
+     },
+     {
+      "class": "Tool",
+      "id": "tool",
+      "parent": "item",
+      "world": "closed"
+     },
+     {
+      "class": "Holder",
+      "id": "holder",
+      "world": "closed"
+     }
+    ],
+    "pack": {
+     "id": "tree-fixture"
+    },
+    "relations": [
+     {
+      "columns": [
+       {
+        "name": "holder",
+        "type": "string"
+       },
+       {
+        "name": "part",
+        "type": "string"
+       }
+      ],
+      "id": "kept_part",
+      "world": "closed"
+     }
+    ]
+   },
+   "conclusions": [
+    {
+     "id": "p 1",
+     "iri": "https://rezono.example/tree-fixture/Item/p~201",
+     "kind": "Part",
+     "pinned": "https://rezono.example/tree-fixture/Item/p~201?pin=m-3@d-ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+    },
+    {
+     "id": "s.1",
+     "iri": "https://rezono.example/tree-fixture/Item/s.1",
+     "kind": "Spare",
+     "pinned": "https://rezono.example/tree-fixture/Item/s.1?pin=m-3@d-ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+    }
+   ],
+   "snapshots": [
+    {
+     "complete": false,
+     "full": true,
+     "relation": "part"
+    },
+    {
+     "complete": false,
+     "full": true,
+     "relation": "part__size"
+    },
+    {
+     "complete": false,
+     "full": true,
+     "relation": "spare"
+    }
+   ]
+  },
+  {
+   "about": "default base, no kind iri; a part of the tree, in part",
+   "bundle": {
+    "arrows": [
+     {
+      "id": "item.inside",
+      "kind": "item",
+      "multivalued": false,
+      "name": "inside",
+      "required": false,
+      "table": "item__inside",
+      "target": "item",
+      "world": "closed"
+     },
+     {
+      "id": "holder.keeps",
+      "kind": "holder",
+      "multivalued": true,
+      "name": "keeps",
+      "required": false,
+      "table": "holder__keeps",
+      "target": "item",
+      "world": "closed"
+     }
+    ],
+    "attributes": [
+     {
+      "id": "item.label",
+      "kind": "item",
+      "multivalued": false,
+      "name": "label",
+      "required": true,
+      "table": "item__label",
+      "type": "text",
+      "world": "closed"
+     },
+     {
+      "id": "part.size",
+      "kind": "part",
+      "multivalued": false,
+      "name": "size",
+      "required": false,
+      "schema_type": "integer",
+      "table": "part__size",
+      "type": "integer",
+      "world": "closed"
+     }
+    ],
+    "kinds": [
+     {
+      "class": "Item",
+      "id": "item",
+      "world": "closed"
+     },
+     {
+      "class": "Part",
+      "id": "part",
+      "parent": "item",
+      "world": "closed"
+     },
+     {
+      "class": "Spare",
+      "id": "spare",
+      "parent": "part",
+      "world": "closed"
+     },
+     {
+      "class": "Tool",
+      "id": "tool",
+      "parent": "item",
+      "world": "closed"
+     },
+     {
+      "class": "Holder",
+      "id": "holder",
+      "world": "closed"
+     }
+    ],
+    "pack": {
+     "id": "tree-fixture"
+    },
+    "relations": [
+     {
+      "columns": [
+       {
+        "name": "holder",
+        "type": "string"
+       },
+       {
+        "name": "part",
+        "type": "string"
+       }
+      ],
+      "id": "kept_part",
+      "world": "closed"
+     }
+    ]
+   },
+   "conclusions": [
+    {
+     "id": "[\"h1\",\"p1\"]",
+     "iri": "https://rezono.example/tree-fixture/KeptPart/~5B~22h1~22~2C~22p1~22~5D",
+     "kind": "KeptPart",
+     "pinned": "https://rezono.example/tree-fixture/KeptPart/~5B~22h1~22~2C~22p1~22~5D?pin=m-3@d-ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+    },
+    {
+     "id": "s.1",
+     "iri": "https://rezono.example/tree-fixture/Item/s.1",
+     "kind": "Spare",
+     "pinned": "https://rezono.example/tree-fixture/Item/s.1?pin=m-3@d-ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+    },
+    {
+     "id": "..",
+     "iri": "https://rezono.example/tree-fixture/Item/~2E~2E",
+     "kind": "Tool",
+     "pinned": "https://rezono.example/tree-fixture/Item/~2E~2E?pin=m-3@d-ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+    }
+   ],
+   "snapshots": [
+    {
+     "complete": false,
+     "full": false,
+     "relation": "kept_part"
+    },
+    {
+     "complete": false,
+     "full": false,
+     "relation": "spare"
+    },
+    {
+     "complete": false,
+     "full": false,
+     "relation": "tool"
+    }
+   ]
+  },
+  {
+   "about": "base and kind iris; every relation",
+   "bundle": {
+    "arrows": [
+     {
+      "id": "item.inside",
+      "kind": "item",
+      "multivalued": false,
+      "name": "inside",
+      "required": false,
+      "table": "item__inside",
+      "target": "item",
+      "world": "closed"
+     },
+     {
+      "id": "holder.keeps",
+      "kind": "holder",
+      "multivalued": true,
+      "name": "keeps",
+      "required": false,
+      "table": "holder__keeps",
+      "target": "item",
+      "world": "closed"
+     }
+    ],
+    "attributes": [
+     {
+      "id": "item.label",
+      "kind": "item",
+      "multivalued": false,
+      "name": "label",
+      "required": true,
+      "table": "item__label",
+      "type": "text",
+      "world": "closed"
+     },
+     {
+      "id": "part.size",
+      "kind": "part",
+      "multivalued": false,
+      "name": "size",
+      "required": false,
+      "schema_type": "integer",
+      "table": "part__size",
+      "type": "integer",
+      "world": "closed"
+     }
+    ],
+    "kinds": [
+     {
+      "class": "Item",
+      "id": "item",
+      "iri": "https://example.org/things/Item",
+      "world": "closed"
+     },
+     {
+      "class": "Part",
+      "id": "part",
+      "iri": "https://example.org/things/Part",
+      "parent": "item",
+      "world": "closed"
+     },
+     {
+      "class": "Spare",
+      "id": "spare",
+      "parent": "part",
+      "world": "closed"
+     },
+     {
+      "class": "Tool",
+      "id": "tool",
+      "parent": "item",
+      "world": "closed"
+     },
+     {
+      "class": "Holder",
+      "id": "holder",
+      "iri": "https://example.org/tree/Holder",
+      "world": "closed"
+     }
+    ],
+    "pack": {
+     "base": "https://example.org/tree/",
+     "id": "tree-fixture"
+    },
+    "relations": [
+     {
+      "columns": [
+       {
+        "name": "holder",
+        "type": "string"
+       },
+       {
+        "name": "part",
+        "type": "string"
+       }
+      ],
+      "id": "kept_part",
+      "world": "closed"
+     }
+    ]
+   },
+   "conclusions": [
+    {
+     "id": "h~1",
+     "iri": "https://example.org/tree/Holder/h~7E1",
+     "kind": "Holder",
+     "pinned": "https://example.org/tree/Holder/h~7E1?pin=m-3@d-ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+    },
+    {
+     "id": "i1",
+     "iri": "https://example.org/things/Item/i1",
+     "kind": "Item",
+     "pinned": "https://example.org/things/Item/i1?pin=m-3@d-ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+    },
+    {
+     "id": "[\"h1\",\"p1\"]",
+     "iri": "https://example.org/tree/KeptPart/~5B~22h1~22~2C~22p1~22~5D",
+     "kind": "KeptPart",
+     "pinned": "https://example.org/tree/KeptPart/~5B~22h1~22~2C~22p1~22~5D?pin=m-3@d-ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+    },
+    {
+     "id": "p 1",
+     "iri": "https://example.org/things/Item/p~201",
+     "kind": "Part",
+     "pinned": "https://example.org/things/Item/p~201?pin=m-3@d-ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+    },
+    {
+     "id": "s.1",
+     "iri": "https://example.org/things/Item/s.1",
+     "kind": "Spare",
+     "pinned": "https://example.org/things/Item/s.1?pin=m-3@d-ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+    },
+    {
+     "id": "..",
+     "iri": "https://example.org/things/Item/~2E~2E",
+     "kind": "Tool",
+     "pinned": "https://example.org/things/Item/~2E~2E?pin=m-3@d-ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+    }
+   ],
+   "snapshots": [
+    {
+     "complete": false,
+     "full": true,
+     "relation": "holder"
+    },
+    {
+     "complete": false,
+     "full": true,
+     "relation": "holder__keeps"
+    },
+    {
+     "complete": false,
+     "full": true,
+     "relation": "item"
+    },
+    {
+     "complete": false,
+     "full": true,
+     "relation": "item__inside"
+    },
+    {
+     "complete": false,
+     "full": true,
+     "relation": "item__label"
+    },
+    {
+     "complete": false,
+     "full": true,
+     "relation": "kept_part"
+    },
+    {
+     "complete": false,
+     "full": true,
+     "relation": "part"
+    },
+    {
+     "complete": false,
+     "full": true,
+     "relation": "part__size"
+    },
+    {
+     "complete": false,
+     "full": true,
+     "relation": "spare"
+    },
+    {
+     "complete": false,
+     "full": true,
+     "relation": "tool"
+    }
+   ]
+  },
+  {
+   "about": "base and kind iris; a subkind without its root",
+   "bundle": {
+    "arrows": [
+     {
+      "id": "item.inside",
+      "kind": "item",
+      "multivalued": false,
+      "name": "inside",
+      "required": false,
+      "table": "item__inside",
+      "target": "item",
+      "world": "closed"
+     },
+     {
+      "id": "holder.keeps",
+      "kind": "holder",
+      "multivalued": true,
+      "name": "keeps",
+      "required": false,
+      "table": "holder__keeps",
+      "target": "item",
+      "world": "closed"
+     }
+    ],
+    "attributes": [
+     {
+      "id": "item.label",
+      "kind": "item",
+      "multivalued": false,
+      "name": "label",
+      "required": true,
+      "table": "item__label",
+      "type": "text",
+      "world": "closed"
+     },
+     {
+      "id": "part.size",
+      "kind": "part",
+      "multivalued": false,
+      "name": "size",
+      "required": false,
+      "schema_type": "integer",
+      "table": "part__size",
+      "type": "integer",
+      "world": "closed"
+     }
+    ],
+    "kinds": [
+     {
+      "class": "Item",
+      "id": "item",
+      "iri": "https://example.org/things/Item",
+      "world": "closed"
+     },
+     {
+      "class": "Part",
+      "id": "part",
+      "iri": "https://example.org/things/Part",
+      "parent": "item",
+      "world": "closed"
+     },
+     {
+      "class": "Spare",
+      "id": "spare",
+      "parent": "part",
+      "world": "closed"
+     },
+     {
+      "class": "Tool",
+      "id": "tool",
+      "parent": "item",
+      "world": "closed"
+     },
+     {
+      "class": "Holder",
+      "id": "holder",
+      "iri": "https://example.org/tree/Holder",
+      "world": "closed"
+     }
+    ],
+    "pack": {
+     "base": "https://example.org/tree/",
+     "id": "tree-fixture"
+    },
+    "relations": [
+     {
+      "columns": [
+       {
+        "name": "holder",
+        "type": "string"
+       },
+       {
+        "name": "part",
+        "type": "string"
+       }
+      ],
+      "id": "kept_part",
+      "world": "closed"
+     }
+    ]
+   },
+   "conclusions": [
+    {
+     "id": "p 1",
+     "iri": "https://example.org/things/Item/p~201",
+     "kind": "Part",
+     "pinned": "https://example.org/things/Item/p~201?pin=m-3@d-ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+    },
+    {
+     "id": "s.1",
+     "iri": "https://example.org/things/Item/s.1",
+     "kind": "Spare",
+     "pinned": "https://example.org/things/Item/s.1?pin=m-3@d-ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+    }
+   ],
+   "snapshots": [
+    {
+     "complete": false,
+     "full": true,
+     "relation": "part"
+    },
+    {
+     "complete": false,
+     "full": true,
+     "relation": "part__size"
+    },
+    {
+     "complete": false,
+     "full": true,
+     "relation": "spare"
+    }
+   ]
+  },
+  {
+   "about": "base and kind iris; a part of the tree, in part",
+   "bundle": {
+    "arrows": [
+     {
+      "id": "item.inside",
+      "kind": "item",
+      "multivalued": false,
+      "name": "inside",
+      "required": false,
+      "table": "item__inside",
+      "target": "item",
+      "world": "closed"
+     },
+     {
+      "id": "holder.keeps",
+      "kind": "holder",
+      "multivalued": true,
+      "name": "keeps",
+      "required": false,
+      "table": "holder__keeps",
+      "target": "item",
+      "world": "closed"
+     }
+    ],
+    "attributes": [
+     {
+      "id": "item.label",
+      "kind": "item",
+      "multivalued": false,
+      "name": "label",
+      "required": true,
+      "table": "item__label",
+      "type": "text",
+      "world": "closed"
+     },
+     {
+      "id": "part.size",
+      "kind": "part",
+      "multivalued": false,
+      "name": "size",
+      "required": false,
+      "schema_type": "integer",
+      "table": "part__size",
+      "type": "integer",
+      "world": "closed"
+     }
+    ],
+    "kinds": [
+     {
+      "class": "Item",
+      "id": "item",
+      "iri": "https://example.org/things/Item",
+      "world": "closed"
+     },
+     {
+      "class": "Part",
+      "id": "part",
+      "iri": "https://example.org/things/Part",
+      "parent": "item",
+      "world": "closed"
+     },
+     {
+      "class": "Spare",
+      "id": "spare",
+      "parent": "part",
+      "world": "closed"
+     },
+     {
+      "class": "Tool",
+      "id": "tool",
+      "parent": "item",
+      "world": "closed"
+     },
+     {
+      "class": "Holder",
+      "id": "holder",
+      "iri": "https://example.org/tree/Holder",
+      "world": "closed"
+     }
+    ],
+    "pack": {
+     "base": "https://example.org/tree/",
+     "id": "tree-fixture"
+    },
+    "relations": [
+     {
+      "columns": [
+       {
+        "name": "holder",
+        "type": "string"
+       },
+       {
+        "name": "part",
+        "type": "string"
+       }
+      ],
+      "id": "kept_part",
+      "world": "closed"
+     }
+    ]
+   },
+   "conclusions": [
+    {
+     "id": "[\"h1\",\"p1\"]",
+     "iri": "https://example.org/tree/KeptPart/~5B~22h1~22~2C~22p1~22~5D",
+     "kind": "KeptPart",
+     "pinned": "https://example.org/tree/KeptPart/~5B~22h1~22~2C~22p1~22~5D?pin=m-3@d-ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+    },
+    {
+     "id": "s.1",
+     "iri": "https://example.org/things/Item/s.1",
+     "kind": "Spare",
+     "pinned": "https://example.org/things/Item/s.1?pin=m-3@d-ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+    },
+    {
+     "id": "..",
+     "iri": "https://example.org/things/Item/~2E~2E",
+     "kind": "Tool",
+     "pinned": "https://example.org/things/Item/~2E~2E?pin=m-3@d-ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+    }
+   ],
+   "snapshots": [
+    {
+     "complete": false,
+     "full": false,
+     "relation": "kept_part"
+    },
+    {
+     "complete": false,
+     "full": false,
+     "relation": "spare"
+    },
+    {
+     "complete": false,
+     "full": false,
+     "relation": "tool"
+    }
+   ]
+  }
+ ],
+ "spell": [
+  {
+   "id": "abc",
+   "segment": "abc"
+  },
+  {
+   "id": "A-Z_09.x",
+   "segment": "A-Z_09.x"
+  },
+  {
+   "id": ".",
+   "segment": "~2E"
+  },
+  {
+   "id": "..",
+   "segment": "~2E~2E"
+  },
+  {
+   "id": "...",
+   "segment": "..."
+  },
+  {
+   "id": "tilde~here",
+   "segment": "tilde~7Ehere"
+  },
+  {
+   "id": "~2E",
+   "segment": "~7E2E"
+  },
+  {
+   "id": "[\"run-1\",\"a/b\"]",
+   "segment": "~5B~22run-1~22~2C~22a~2Fb~22~5D"
+  },
+  {
+   "id": "caf\u00e9 \u20ac 12",
+   "segment": "caf~C3~A9~20~E2~82~AC~2012"
+  },
+  {
+   "id": "a b",
+   "segment": "a~20b"
+  },
+  {
+   "id": "100%",
+   "segment": "100~25"
+  },
+  {
+   "id": "\ud83d\ude00",
+   "segment": "~F0~9F~98~80"
+  },
+  {
+   "id": "x?y#z@w",
+   "segment": "x~3Fy~23z~40w"
+  },
+  {
+   "id": "",
+   "segment": ""
+  }
+ ],
+ "spell_refused": [
+  "\ud800",
+  "a\udc00b"
+ ],
+ "unspell_refused": [
+  "~41",
+  "~2e",
+  "a b",
+  "~",
+  "~4",
+  "%41",
+  "~C3",
+  "~C3~28",
+  "~2E~2E~2E",
+  ".",
+  "..",
+  "\u00e9",
+  "a/b",
+  "~7E~",
+  "~2F~",
+  "~ED~A0~80"
+ ],
+ "witness": [
+  {
+   "base": "https://example.org/tree/",
+   "iri": "https://example.org/tree/witness/f97dd685880a5dda4d4886e798f9436f14a447c18bbd61870465942638a0e665",
+   "pinned": "https://example.org/tree/witness/f97dd685880a5dda4d4886e798f9436f14a447c18bbd61870465942638a0e665?pin=m-1@d-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+   "witness": {
+    "aggregates": [],
+    "bindings": [
+     {
+      "value": "p-1",
+      "variable": "?p"
+     }
+    ],
+    "conclusion": {
+     "key": "[\"p-1\"]",
+     "relation": "eligible"
+    },
+    "premises": [
+     {
+      "polarity": "positive",
+      "row": {
+       "key": "[\"p-1\"]",
+       "relation": "member"
+      },
+      "stratum": 0
+     },
+     {
+      "polarity": "positive",
+      "row": {
+       "key": "[\"p-1\"]",
+       "relation": "income_ok"
+      },
+      "stratum": 0
+     }
+    ],
+    "rule_id": "r_income"
+   }
+  },
+  {
+   "base": "https://example.org/tree/",
+   "iri": "https://example.org/tree/witness/1fafa14ea7a062f05f6d6212044419a137f90a3180506f37dd6312a00247b86c",
+   "pinned": "https://example.org/tree/witness/1fafa14ea7a062f05f6d6212044419a137f90a3180506f37dd6312a00247b86c?pin=m-1@d-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+   "witness": {
+    "aggregates": [
+     {
+      "contributors_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "count": 2,
+      "group_key": "[\"group-a\"]",
+      "position": 0,
+      "relation": "item__group",
+      "result": "known:2"
+     }
+    ],
+    "bindings": [
+     {
+      "value": "group-a",
+      "variable": "?g"
+     },
+     {
+      "value": "2",
+      "variable": "?n"
+     }
+    ],
+    "conclusion": {
+     "key": "[\"group-a\",\"2\"]",
+     "relation": "group_size"
+    },
+    "premises": [
+     {
+      "polarity": "positive",
+      "row": {
+       "key": "[\"group-a\"]",
+       "relation": "group"
+      },
+      "stratum": 0
+     }
+    ],
+    "rule_id": "group_size"
+   }
+  },
+  {
+   "base": "https://example.org/tree/",
+   "iri": "https://example.org/tree/witness/1e307f86e1d348552f22aab75ae5b2918a35510d9b1254efb819d23b935201d4",
+   "pinned": "https://example.org/tree/witness/1e307f86e1d348552f22aab75ae5b2918a35510d9b1254efb819d23b935201d4?pin=m-1@d-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+   "witness": {
+    "aggregates": [],
+    "bindings": [],
+    "conclusion": {
+     "key": "[\"\u00e9\"]",
+     "relation": "caf\u00e9"
+    },
+    "premises": [],
+    "rule_id": "r\u00e9"
+   }
+  },
+  {
+   "base": "https://rezono.example/slip/",
+   "iri": "https://rezono.example/slip/witness/f97dd685880a5dda4d4886e798f9436f14a447c18bbd61870465942638a0e665",
+   "pinned": "https://rezono.example/slip/witness/f97dd685880a5dda4d4886e798f9436f14a447c18bbd61870465942638a0e665?pin=m-1@d-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+   "witness": {
+    "aggregates": [],
+    "bindings": [
+     {
+      "value": "p-1",
+      "variable": "?p"
+     }
+    ],
+    "conclusion": {
+     "key": "[\"p-1\"]",
+     "relation": "eligible"
+    },
+    "premises": [
+     {
+      "polarity": "positive",
+      "row": {
+       "key": "[\"p-1\"]",
+       "relation": "member"
+      },
+      "stratum": 0
+     },
+     {
+      "polarity": "positive",
+      "row": {
+       "key": "[\"p-1\"]",
+       "relation": "income_ok"
+      },
+      "stratum": 0
+     }
+    ],
+    "rule_id": "r_income"
+   }
+  },
+  {
+   "base": "https://rezono.example/slip/",
+   "iri": "https://rezono.example/slip/witness/1fafa14ea7a062f05f6d6212044419a137f90a3180506f37dd6312a00247b86c",
+   "pinned": "https://rezono.example/slip/witness/1fafa14ea7a062f05f6d6212044419a137f90a3180506f37dd6312a00247b86c?pin=m-1@d-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+   "witness": {
+    "aggregates": [
+     {
+      "contributors_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "count": 2,
+      "group_key": "[\"group-a\"]",
+      "position": 0,
+      "relation": "item__group",
+      "result": "known:2"
+     }
+    ],
+    "bindings": [
+     {
+      "value": "group-a",
+      "variable": "?g"
+     },
+     {
+      "value": "2",
+      "variable": "?n"
+     }
+    ],
+    "conclusion": {
+     "key": "[\"group-a\",\"2\"]",
+     "relation": "group_size"
+    },
+    "premises": [
+     {
+      "polarity": "positive",
+      "row": {
+       "key": "[\"group-a\"]",
+       "relation": "group"
+      },
+      "stratum": 0
+     }
+    ],
+    "rule_id": "group_size"
+   }
+  },
+  {
+   "base": "https://rezono.example/slip/",
+   "iri": "https://rezono.example/slip/witness/1e307f86e1d348552f22aab75ae5b2918a35510d9b1254efb819d23b935201d4",
+   "pinned": "https://rezono.example/slip/witness/1e307f86e1d348552f22aab75ae5b2918a35510d9b1254efb819d23b935201d4?pin=m-1@d-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+   "witness": {
+    "aggregates": [],
+    "bindings": [],
+    "conclusion": {
+     "key": "[\"\u00e9\"]",
+     "relation": "caf\u00e9"
+    },
+    "premises": [],
+    "rule_id": "r\u00e9"
+   }
+  },
+  {
+   "base": "urn://x/",
+   "iri": "urn://x/witness/f97dd685880a5dda4d4886e798f9436f14a447c18bbd61870465942638a0e665",
+   "pinned": "urn://x/witness/f97dd685880a5dda4d4886e798f9436f14a447c18bbd61870465942638a0e665?pin=m-1@d-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+   "witness": {
+    "aggregates": [],
+    "bindings": [
+     {
+      "value": "p-1",
+      "variable": "?p"
+     }
+    ],
+    "conclusion": {
+     "key": "[\"p-1\"]",
+     "relation": "eligible"
+    },
+    "premises": [
+     {
+      "polarity": "positive",
+      "row": {
+       "key": "[\"p-1\"]",
+       "relation": "member"
+      },
+      "stratum": 0
+     },
+     {
+      "polarity": "positive",
+      "row": {
+       "key": "[\"p-1\"]",
+       "relation": "income_ok"
+      },
+      "stratum": 0
+     }
+    ],
+    "rule_id": "r_income"
+   }
+  },
+  {
+   "base": "urn://x/",
+   "iri": "urn://x/witness/1fafa14ea7a062f05f6d6212044419a137f90a3180506f37dd6312a00247b86c",
+   "pinned": "urn://x/witness/1fafa14ea7a062f05f6d6212044419a137f90a3180506f37dd6312a00247b86c?pin=m-1@d-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+   "witness": {
+    "aggregates": [
+     {
+      "contributors_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "count": 2,
+      "group_key": "[\"group-a\"]",
+      "position": 0,
+      "relation": "item__group",
+      "result": "known:2"
+     }
+    ],
+    "bindings": [
+     {
+      "value": "group-a",
+      "variable": "?g"
+     },
+     {
+      "value": "2",
+      "variable": "?n"
+     }
+    ],
+    "conclusion": {
+     "key": "[\"group-a\",\"2\"]",
+     "relation": "group_size"
+    },
+    "premises": [
+     {
+      "polarity": "positive",
+      "row": {
+       "key": "[\"group-a\"]",
+       "relation": "group"
+      },
+      "stratum": 0
+     }
+    ],
+    "rule_id": "group_size"
+   }
+  },
+  {
+   "base": "urn://x/",
+   "iri": "urn://x/witness/1e307f86e1d348552f22aab75ae5b2918a35510d9b1254efb819d23b935201d4",
+   "pinned": "urn://x/witness/1e307f86e1d348552f22aab75ae5b2918a35510d9b1254efb819d23b935201d4?pin=m-1@d-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+   "witness": {
+    "aggregates": [],
+    "bindings": [],
+    "conclusion": {
+     "key": "[\"\u00e9\"]",
+     "relation": "caf\u00e9"
+    },
+    "premises": [],
+    "rule_id": "r\u00e9"
+   }
+  }
+ ]
+}

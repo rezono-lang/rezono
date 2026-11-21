@@ -8,7 +8,8 @@ import { ask as trace, AskError, calcSteps, memoryGraph, parseAfter, questionOf,
 import { catalogueQueryScope } from './catalogue-query.ts';
 import { roleBundle } from './catalogue.ts';
 import { readPublishedVariantDifference, scenarioAnswer, type DifferenceCursor } from './difference.ts';
-import { ask as evaluate, roleSchema, type Asking } from './expr.ts';
+import { ask as evaluate, roleSchema, schemaBase, type Asking, type View } from './expr.ts';
+import { checkBase, IriError, parsePin, pinIri, splitConclusion, witnessDigest } from './iri.ts';
 import { compareKey, pageByKey, type KeyRange } from './pieces.ts';
 import { rowQueryScope, type RowSelection } from './row-query.ts';
 import {
@@ -26,6 +27,8 @@ const PAIR_LIMIT = 2048;
 const EVALUATION_STEPS = 250_000;
 const SHA256 = /^[0-9a-f]{64}$/;
 const MAIN = /^m-[0-9]+$/;
+const DATASET = /^d-[0-9a-f]{64}$/;
+const FORM = 'rezono.publication-form/1';
 const SAFE = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
 const WITNESS_CHECK = 'rezono:proofs';
 const CHECK_STATUSES = new Set(['green', 'warning', 'red'] as const);
@@ -474,6 +477,86 @@ async function batch(view: Current, withdrawals: readonly WithdrawalRecord[], se
 	return { rows, ...(more.length && { more }) };
 }
 
+/** A main manifest id, `m-<epoch>` with the epoch in its one spelling. */
+function mainId(id: string): boolean {
+	const epoch = MAIN.test(id) ? Number(id.slice(2)) : Number.NaN;
+	return Number.isSafeInteger(epoch) && id === 'm-' + epoch;
+}
+
+type ListedManifest = {
+	id: string; epoch: number; knowledge_time: string; manifest_sha256: string; witness_check?: WitnessCheckStatus;
+	standing: 'current' | 'superseded' | 'withdrawn'; withdrawal?: ReturnType<typeof withdrawalBody>['withdrawal'];
+};
+
+/** An IRI a client gave that is not in its canonical form: 400, whatever the role reads. */
+function clientIri<T>(read: () => T): T {
+	try {
+		return read();
+	} catch (error) {
+		if (error instanceof IriError) throw new AskError(400, error.message);
+		throw error;
+	}
+}
+
+/**
+ * The dataset hash `d-…` of the role's publication form of a manifest, which the publisher pins with
+ * (edge/publisher/rezono_publisher/forms.py): the form's index, made from exactly the role's snapshots of that
+ * manifest, and its `hashes.json` by the sha256 the index names. Undefined while the role has no form; the role
+ * whose snapshots are complete never has one.
+ */
+async function datasetOf(view: Current, pack: string, role: string): Promise<string | undefined> {
+	const prefix = `${pack}/${view.manifest.id}/${role}/publication/`;
+	const index = await view.read(prefix + 'index.json', undefined, true);
+	if (index === undefined) return undefined;
+	const sources = [...view.snaps.values()].map(({ relation, sha256 }) => ({ relation, sha256 }))
+		.sort((a, b) => (a.relation < b.relation ? -1 : a.relation > b.relation ? 1 : 0));
+	if (!record(index) || index.format !== FORM || index.pack !== pack || index.role !== role
+		|| !record(index.manifest) || index.manifest.id !== view.manifest.id
+		|| typeof index.dataset !== 'string' || !DATASET.test(index.dataset)
+		|| !Array.isArray(index.sources) || canonicalJson(index.sources) !== canonicalJson(sources)
+		|| !Array.isArray(index.objects)) fault();
+	const named = index.objects.filter((entry) => record(entry) && entry.name === 'hashes.json');
+	if (named.length !== 1 || !record(named[0]) || typeof named[0].sha256 !== 'string') fault();
+	const hashes = await view.read(prefix + 'hashes.json', named[0].sha256);
+	if (!record(hashes) || hashes.dataset !== index.dataset) fault();
+	return index.dataset;
+}
+
+type Holder = { kind: string; relation: string; key: string[] };
+
+/**
+ * The rows of one element of the role's view in an IRI space (decision §4.3): every kind of the role's schema in
+ * that space whose relation holds the id. A subkind shares the space of its root (§1), and in Rezono an element of
+ * a subkind is a row of each kind above it, so one element may be held by several kinds of one tree; `most` is
+ * the most specific of them, as the role's publication form writes the element. A derived relation's id is the
+ * canonical JSON of its cells. Undefined when no kind holds it.
+ */
+async function element(view: Current, schema: View, space: string, id: string): Promise<{ holders: Holder[]; most: number } | undefined> {
+	const holders: Holder[] = [];
+	for (const [kind, at] of schema.spaces ?? []) {
+		if (at !== space) continue;
+		const { relation, columns } = schema.kinds.get(kind)!;
+		let key: string[] | undefined = [id];
+		if (columns) {
+			let cells: unknown;
+			try { cells = JSON.parse(id); } catch { cells = undefined; }
+			key = keyParts(cells) && cells.length > 0 && canonicalJson(cells) === id ? cells : undefined;
+		}
+		if (key && hasSortedKey(await view.rows(relation), key)) holders.push({ kind, relation, key });
+	}
+	if (!holders.length) return undefined;
+	const parents = new Map((view.bundle.kinds as { id: string; parent?: string }[]).map((k) => [k.id, k.parent]));
+	const above = (kind: string): string[] => {
+		const out: string[] = [];
+		for (let at: string | undefined = kind; at !== undefined && !out.includes(at); at = parents.get(at)) out.push(at);
+		return out;
+	};
+	// Two kinds that hold the id with neither above the other: two elements, or a space two trees share.
+	const most = holders.findIndex((h) => holders.every((o) => above(h.relation).includes(o.relation)));
+	if (most < 0) fault();
+	return { holders, most };
+}
+
 /** The caller that opens the local store chooses a role for this handler's lifetime. */
 export async function openLocalGate(root: string, role: string): Promise<Handle> {
 	if (!safe(role)) throw new TypeError('invalid local publication role');
@@ -507,6 +590,85 @@ export async function openLocalGate(root: string, role: string): Promise<Handle>
 				const listing = await readSweepsChecked(current, withdrawals, pack, role);
 				if (!listing || await source.latest() !== headKey(pack, current.manifest.epoch)) return missing();
 				return json(listing, 200, standingHeaders(pack, current.manifest.epoch, current.manifest.id, current.manifest.epoch));
+			}
+			if (parts.length === 2 && id === 'manifests') {
+				// The main manifests the role can cite, newest first (the order of `<pack>/heads/`), a page at a time:
+				// `after` is the last id of the page before. An epoch the role never had or can no longer read is not
+				// listed, as if it never was (central-read-access.md §5); a withdrawn one is listed with its withdrawal,
+				// as its own routes answer 410 (publication-supersession-and-withdrawal.md §2-§3).
+				const limit = limitOf(url.searchParams.get('limit'));
+				const after = url.searchParams.get('after');
+				if (after !== null && !mainId(after)) throw new AskError(400, 'invalid cursor');
+				const prefix = pack + '/heads/';
+				const items: ListedManifest[] = [];
+				let next: string | undefined;
+				scan: for (let from = after === null ? undefined : headKey(pack, Number(after.slice(2)));;) {
+					const keys = await store.list(prefix, { limit: LIMIT, after: from });
+					for (const key of keys) {
+						const digits = key.startsWith(prefix) && key.endsWith('.json') ? key.slice(prefix.length, -'.json'.length) : '';
+						if (!/^[0-9]{19}$/.test(digits)) fault();
+						const epoch = 10n ** 19n - 1n - BigInt(digits);
+						if (epoch > BigInt(current.manifest.epoch)) continue; // published after this request began
+						const view = epoch === BigInt(current.manifest.epoch) ? current : await source.current('m-' + epoch);
+						if (!view) continue;
+						const withdrawn = epochWithdrawal(withdrawals, view.manifest.id);
+						if (!withdrawn && view !== current && !await stillReadable(view, current)) continue;
+						if (items.length === limit) {
+							next = items.at(-1)!.id;
+							break scan;
+						}
+						items.push({
+							id: view.manifest.id, epoch: view.manifest.epoch, knowledge_time: view.manifest.knowledge_time,
+							manifest_sha256: view.manifestSha256,
+							...(view.witnessCheck !== undefined && { witness_check: view.witnessCheck }),
+							standing: withdrawn ? 'withdrawn' : view === current ? 'current' : 'superseded',
+							...(withdrawn && { withdrawal: withdrawalBody(withdrawn).withdrawal })
+						});
+					}
+					if (keys.length < LIMIT) break;
+					from = keys.at(-1);
+				}
+				if (await source.latest() !== headKey(pack, current.manifest.epoch)) return missing();
+				return json({ pack, manifests: items, ...(next !== undefined && { next }) });
+			}
+			if (parts.length === 2 && id === 'resolve') {
+				// One row from its canonical conclusion IRI (decisions/publication-conclusion-addresses.md §1, §3, §4).
+				const raw = url.searchParams.get('iri');
+				if (!raw) throw new AskError(400, 'expected an iri query parameter');
+				const { iri, pin } = clientIri(() => parsePin(raw));
+				// The epoch first, as on every route of a manifest: one the role never had, one that is not there and
+				// one the role can no longer read are the same 404 (central-read-access.md §5); a withdrawn one is 410.
+				let view = current;
+				if (pin?.manifest !== undefined && pin.manifest !== current.manifest.id) {
+					const earlier = await source.current(pin.manifest);
+					if (!earlier || earlier.manifest.epoch >= current.manifest.epoch) return missing();
+					const withdrawn = epochWithdrawal(withdrawals, earlier.manifest.id);
+					if (withdrawn) return gone(withdrawn);
+					if (!await stillReadable(earlier, current)) return missing();
+					view = earlier;
+				} else {
+					const withdrawn = epochWithdrawal(withdrawals, current.manifest.id);
+					if (withdrawn) return gone(withdrawn);
+				}
+				// A pin names the dataset of the role's publication form (`d-…`, l0.md §6.4), never the manifest's hash.
+				const dataset = await datasetOf(view, pack, role);
+				if (pin && pin.dataset !== dataset) throw new AskError(409, 'pin does not match publication');
+				const schema = roleSchema(view.bundle, [...view.snaps.values()]);
+				try { checkBase(schema.schema.base); } catch (error) { if (error instanceof IriError) fault(); throw error; }
+				if (clientIri(() => witnessDigest(schema.schema.base, iri)) !== undefined)
+					throw new AskError(501, 'a witness IRI is not resolved yet');
+				const { space, id: rowId } = clientIri(() => splitConclusion(iri));
+				const found = await element(view, schema, space, rowId);
+				if (!found) return missing();
+				const withdrawn = found.holders.reduce<WithdrawalRecord | undefined>((first, h) =>
+					earlierWithdrawal(first, rowWithdrawal(withdrawals, view.manifest.id, h.relation, h.key)), undefined);
+				if (withdrawn) return gone(withdrawn);
+				if (view !== current && await source.latest() !== headKey(pack, current.manifest.epoch)) return missing();
+				const { kind, relation, key } = found.holders[found.most];
+				return json({
+					iri, manifest: view.manifest.id, epoch: view.manifest.epoch, kind, relation, key,
+					...(dataset !== undefined && { dataset, pinned_iri: pinIri(iri, { manifest: view.manifest.id, dataset }) })
+				}, 200, standingHeaders(pack, view.manifest.epoch, current.manifest.id, current.manifest.epoch));
 			}
 			const pin = id === 'head' || id === 'bundle' ? url.searchParams.get('m') ?? undefined
 				: id === 'manifests' ? route : id;
