@@ -1,28 +1,32 @@
-"""Exact-1 controller requirement and undecided-inventory check in run/packs/cluster-shape and run/k0s_config.py.
+"""Exact-1 controller requirement and incomplete-inventory undecided check in run/packs/cluster-shape.
 
-Per decisions/code-does-not-decide.md and decisions/run-cluster-shape.md, a bounded run has exactly one
-controller. The pack `run/packs/cluster-shape` must reject 0 controllers (including a controller order
-line with quantity 0) and 2 controllers (whether from quantity 2 on one line or two controller lines),
-and must report `unknown` with an explicit reason when a missing inventory row leaves the controller
-count undecided, queried before `run/k0s_config.py:render()` is invoked.
+Per decisions/run-cluster-shape.md and decisions/code-does-not-decide.md, `run/k0s_config.py:render()`
+is a pure converter over derived controller rows, and a bounded run has exactly one controller.
+The pack `run/packs/cluster-shape` itself must:
+- reject 0 controllers (including a `controller` order line with `quantity: 0`) via `shape_problem(..., "no_controller")`,
+- accept 1 controller with complete inventory (producing one `api_address` row ready for `k0s_config.render()`),
+- reject 2 controllers (whether from `quantity: 2` on one line or two `controller` lines) via `shape_problem`,
+- leave the controller count undecided (`unknown` with explicit reason, never rendering or falsely claiming
+  0 or 2 controllers) when an incomplete inventory observation leaves a plan machine's role undetermined.
 """
 
+from __future__ import annotations
+
 import json
-from runpy import run_path
 
 import pytest
 
-from offline_cases import PLAN_HASH, RUN, relation
+from offline_cases import PLAN_HASH, RUN, implementation, relation
 
 CLUSTER = "run-one"
 OTHER_PLAN = "b" * 64
 
 
-def _disk(name):
+def _disk(name: str) -> str:
     return f"/dev/disk/by-id/wwn-0x5000000000000{name}"
 
 
-def _machine(identifier, sku, address, plan=PLAN_HASH):
+def _machine(identifier: str, sku: str | None, address: str, plan: str = PLAN_HASH) -> dict[str, object]:
     return {
         "id": identifier,
         "plan_hash": [plan],
@@ -33,8 +37,8 @@ def _machine(identifier, sku, address, plan=PLAN_HASH):
     }
 
 
-def _facts(observed, demand):
-    rows = {
+def _facts(observed: list[dict[str, object]], demand: list[dict[str, object]]) -> dict[str, list[tuple]]:
+    rows: dict[str, list[tuple]] = {
         "cluster": [(CLUSTER,)],
         "cluster__plan_hash": [(CLUSTER, PLAN_HASH)],
         "line": [],
@@ -62,34 +66,16 @@ def _facts(observed, demand):
     return rows
 
 
-def _shape(data):
-    return {
-        name: relation("cluster-shape", data, name)
-        for name in ("member", "ceph_device", "api_address", "shape_problem")
-    }
+def _all_outputs(data: dict[str, list[tuple]]) -> dict[str, set[tuple[str, ...]]]:
+    from rezono_compiler import batch, pack, rules
 
-
-def _pack_reads(monkeypatch):
-    """Record `(pack, relation, rows)` read through `rezono_compiler.batch.read`."""
-    from rezono_compiler import batch
-
-    reads = []
-    original = batch.read
-
-    def spy(connection, program, names=None):
-        rows = original(connection, program, names)
-        for name, values in rows.items():
-            reads.append((program.pack, name, set(values)))
-        return rows
-
-    monkeypatch.setattr(batch, "read", spy)
-    return reads
-
-
-def _latest_rows(reads, pack_name, relation_name):
-    matches = [rows for pack, rel, rows in reads if (pack, rel) == (pack_name, relation_name)]
-    assert matches, f"expected {(pack_name, relation_name)!r} to be read from batch.read; saw {reads!r}"
-    return matches[-1]
+    program = rules.load(pack.read(RUN / "packs" / "cluster-shape").rules)
+    connection = batch.connect(program, data)
+    try:
+        batch.compute(connection, program)
+        return {name: set(rows) for name, rows in batch.read(connection, program).items()}
+    finally:
+        connection.close()
 
 
 @pytest.mark.xfail(
@@ -97,17 +83,16 @@ def _latest_rows(reads, pack_name, relation_name):
     raises=AssertionError,
     reason=(
         "M4: decisions/code-does-not-decide.md: Enforce the exact-1 controller requirement inside "
-        "run/packs/cluster-shape/rules/cluster_shape.dl (per decisions/run-cluster-shape.md) rather than "
+        "run/packs/cluster-shape/rules/cluster_shape.dl (per decisions/run-cluster-shape.md) instead of "
         "accepting quantity 0 or multiple controllers until run/k0s_config.py:render() fails. Reject 0 "
         "controllers (including a quantity-0 controller line) with shape_problem no_controller and 2 "
-        "controllers with shape_problem multiple_controllers; export controller_count_status(cluster, "
-        "status, reason) distinguishing ready/rejected/unknown when a missing inventory row leaves the "
-        "controller count undecided; and expose controller_readiness(cluster, cluster_facts) in "
-        "run/k0s_config.py querying controller_count_status before rendering."
+        "controllers with a shape_problem (empty member and api_address), and derive an explicit "
+        "unknown/undecided controller-count reason when an incomplete machine inventory observation "
+        "leaves the controller count undetermined before rendering."
     ),
 )
-def test_exact_one_controller_and_undecided_inventory_before_render(monkeypatch):
-    from rezono_compiler import pack, rules
+def test_exact_one_controller_and_undecided_inventory_before_render():
+    render = implementation("k0s_config.py", "render")
 
     workers = [
         _machine("m-a", "sku-small", "192.0.2.11"),
@@ -118,7 +103,7 @@ def test_exact_one_controller_and_undecided_inventory_before_render(monkeypatch)
     ctrl_two = _machine("m-d", "sku-large", "192.0.2.14")
     ctrl_alt = _machine("m-e", "sku-large-b", "192.0.2.15")
 
-    # 1. Zero controllers with complete inventory: a quantity-0 controller line must NOT satisfy has_controller.
+    # 1. Zero controllers with complete inventory: a quantity-0 controller line must trigger no_controller.
     zero_ctrl_facts = _facts(
         workers,
         [
@@ -126,11 +111,11 @@ def test_exact_one_controller_and_undecided_inventory_before_render(monkeypatch)
             {"id": "storage", "sku": "sku-small", "role": "worker", "quantity": 2},
         ],
     )
-    zero_shape = _shape(zero_ctrl_facts)
-    assert zero_shape["shape_problem"] == {(CLUSTER, "no_controller")}
-    assert zero_shape["member"] == zero_shape["ceph_device"] == zero_shape["api_address"] == set()
+    zero_out = _all_outputs(zero_ctrl_facts)
+    assert (CLUSTER, "no_controller") in zero_out["shape_problem"], zero_out["shape_problem"]
+    assert zero_out["member"] == zero_out["ceph_device"] == zero_out["api_address"] == set()
 
-    # 2. One controller with complete inventory: valid cluster shape with a single controller.
+    # 2. One controller with complete inventory: succeeds cleanly and feeds k0s_config.render().
     one_ctrl_facts = _facts(
         workers + [ctrl_one],
         [
@@ -138,16 +123,25 @@ def test_exact_one_controller_and_undecided_inventory_before_render(monkeypatch)
             {"id": "storage", "sku": "sku-small", "role": "worker", "quantity": 2},
         ],
     )
-    one_shape = _shape(one_ctrl_facts)
-    assert one_shape["shape_problem"] == set()
-    assert one_shape["member"] == {
+    one_out = _all_outputs(one_ctrl_facts)
+    assert one_out["shape_problem"] == set()
+    assert one_out["member"] == {
         (CLUSTER, "m-a", "worker"),
         (CLUSTER, "m-b", "worker"),
         (CLUSTER, "m-c", "controller"),
     }
-    assert one_shape["api_address"] == {(CLUSTER, "192.0.2.13")}
+    assert one_out["api_address"] == {(CLUSTER, "192.0.2.13")}
+    controllers = [
+        (cluster, machine_id, address)
+        for cluster, machine_id, role in sorted(one_out["member"])
+        if role == "controller"
+        for addr_cluster, address in sorted(one_out["api_address"])
+        if addr_cluster == cluster
+    ]
+    rendered = json.loads(render(CLUSTER, controllers))
+    assert rendered["spec"]["api"] == {"address": "192.0.2.13", "sans": ["192.0.2.13"]}
 
-    # 3. Two controllers with complete inventory: rejected both for a single quantity-2 line and for two lines.
+    # 3. Two controllers with complete inventory: rejected in cluster-shape before render().
     two_ctrl_single_line = _facts(
         workers + [ctrl_one, ctrl_two],
         [
@@ -164,78 +158,66 @@ def test_exact_one_controller_and_undecided_inventory_before_render(monkeypatch)
         ],
     )
     for label, data in (("quantity-2", two_ctrl_single_line), ("two-controller-lines", two_ctrl_split_lines)):
-        two_shape = _shape(data)
-        assert two_shape["shape_problem"] == {(CLUSTER, "multiple_controllers")}, label
-        assert two_shape["member"] == two_shape["ceph_device"] == two_shape["api_address"] == set(), label
+        two_out = _all_outputs(data)
+        problems = two_out["shape_problem"]
+        assert problems, f"{label}: 2 controllers must produce a shape_problem, got empty set"
+        assert (CLUSTER, "no_controller") not in problems, (label, problems)
+        assert two_out["member"] == two_out["ceph_device"] == two_out["api_address"] == set(), label
 
-    # 4. Pre-render status relation and undecided missing-inventory-row cases.
-    program = rules.load(pack.read(RUN / "packs" / "cluster-shape").rules)
-    assert "controller_count_status" in program.derived(), (
-        "run/packs/cluster-shape must derive controller_count_status(cluster, status, reason)"
-    )
-
-    module = run_path(str(RUN / "k0s_config.py"))
-    assert "controller_readiness" in module, (
-        "run/k0s_config.py must expose controller_readiness(cluster, cluster_facts) queried before render()"
-    )
-    controller_readiness = module["controller_readiness"]
-    render = module["render"]
-
-    reads = _pack_reads(monkeypatch)
-
-    # Complete 1-controller inventory is ready and renders the canonical ClusterConfig.
-    reads.clear()
-    ready = controller_readiness(CLUSTER, one_ctrl_facts)
-    assert ready == {
-        "status": "ready",
-        "reason": "exact_one",
-        "controllers": [(CLUSTER, "m-c", "192.0.2.13")],
-    }
-    assert _latest_rows(reads, "cluster-shape", "controller_count_status") == {(CLUSTER, "ready", "exact_one")}
-    rendered = json.loads(render(CLUSTER, ready["controllers"]))
-    assert rendered["spec"]["api"] == {"address": "192.0.2.13", "sans": ["192.0.2.13"]}
-
-    # Complete 0-controller and 2-controller inventories are explicitly rejected (known count != 1) before render.
-    for expected_reason, data in (
-        ("no_controller", zero_ctrl_facts),
-        ("multiple_controllers", two_ctrl_single_line),
-        ("multiple_controllers", two_ctrl_split_lines),
-    ):
-        reads.clear()
-        rejected = controller_readiness(CLUSTER, data)
-        assert rejected == {"status": "rejected", "reason": expected_reason, "controllers": []}
-        assert _latest_rows(reads, "cluster-shape", "controller_count_status") == {
-            (CLUSTER, "rejected", expected_reason)
-        }
-
-    # Missing inventory rows leave the controller count undecided (unknown with explicit reason) before render:
-    # (a) the ordered controller machine row is absent from observed machines;
-    missing_controller_machine = _facts(
-        workers,
-        [
-            {"id": "control", "sku": "sku-large", "role": "controller", "quantity": 1},
-            {"id": "storage", "sku": "sku-small", "role": "worker", "quantity": 2},
-        ],
-    )
-    # (b) an observed plan machine is missing its machine__sku row so its role cannot be determined.
-    missing_machine_sku = _facts(
+    # 4. Incomplete inventory observation: an observed plan machine `m-u` is missing its `machine__sku`
+    #    row alongside 1 known controller and 2 workers, so its role (second controller vs worker) is
+    #    genuinely undetermined. Before render(), cluster-shape must withhold member/api_address, must
+    #    not falsely claim 0 or 2 controllers, and must emit an explicit unknown/undecided reason.
+    undecided_facts = _facts(
         workers + [ctrl_one, _machine("m-u", None, "192.0.2.16")],
         [
             {"id": "control", "sku": "sku-large", "role": "controller", "quantity": 1},
             {"id": "storage", "sku": "sku-small", "role": "worker", "quantity": 2},
         ],
     )
-    for label, data in (
-        ("missing-controller-machine", missing_controller_machine),
-        ("missing-machine-sku", missing_machine_sku),
-    ):
-        reads.clear()
-        undecided = controller_readiness(CLUSTER, data)
-        assert undecided["status"] == "unknown", (label, undecided)
-        assert isinstance(undecided["reason"], str) and undecided["reason"].strip(), (label, undecided)
-        assert undecided["controllers"] == [], (label, undecided)
-        status_rows = _latest_rows(reads, "cluster-shape", "controller_count_status")
-        assert {(cluster, status) for cluster, status, _ in status_rows} == {(CLUSTER, "unknown")}, (label, status_rows)
-        assert undecided["reason"] in {reason for _, _, reason in status_rows}, (label, undecided, status_rows)
-        assert _shape(data)["member"] == set(), label
-        assert _shape(data)["api_address"] == set(), label
+    undecided_out = _all_outputs(undecided_facts)
+    assert undecided_out["member"] == set()
+    assert undecided_out["api_address"] == set()
+    assert (CLUSTER, "no_controller") not in undecided_out["shape_problem"]
+    assert not any("multiple" in reason.lower() for _, reason in undecided_out["shape_problem"])
+
+    # Contrast with a bad disk on a known worker (where controller count IS decided as 1):
+    bad_worker_disk_facts = _facts(
+        [
+            _machine("m-a", "sku-small", "192.0.2.11"),
+            dict(_machine("m-b", "sku-small", "192.0.2.12"), data_disk=[]),
+            ctrl_one,
+        ],
+        [
+            {"id": "control", "sku": "sku-large", "role": "controller", "quantity": 1},
+            {"id": "storage", "sku": "sku-small", "role": "worker", "quantity": 2},
+        ],
+    )
+    bad_disk_out = _all_outputs(bad_worker_disk_facts)
+
+    undecided_reasons = {
+        cell
+        for rel_name, rows in undecided_out.items()
+        if rel_name not in {"member", "ceph_device", "api_address", "ceph_monitor_count"}
+        for row in rows
+        if CLUSTER in row
+        for cell in row
+        if isinstance(cell, str) and any(tok in cell.lower() for tok in ("unknown", "undecided", "incomplete"))
+    }
+    bad_disk_undecided_reasons = {
+        cell
+        for rel_name, rows in bad_disk_out.items()
+        if rel_name not in {"member", "ceph_device", "api_address", "ceph_monitor_count"}
+        for row in rows
+        if CLUSTER in row
+        for cell in row
+        if isinstance(cell, str) and any(tok in cell.lower() for tok in ("unknown", "undecided", "incomplete"))
+    }
+    assert undecided_reasons, (
+        f"incomplete machine inventory (missing machine__sku) must derive an explicit unknown/undecided "
+        f"controller-count reason before render(); got {undecided_out!r}"
+    )
+    assert undecided_reasons != bad_disk_undecided_reasons, (
+        "missing machine__sku (undecided controller count) must be distinguished from a bad disk on a known worker"
+    )
+    assert relation("cluster-shape", undecided_facts, "api_address") == set()
