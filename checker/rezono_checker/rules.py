@@ -29,6 +29,7 @@ import re
 
 from .canon import INTEGER, CalcColumnType
 from .evaluate import _date
+from .refusals import Refusal, RefusalError
 
 FORMATS = ("rezono.rules/1", "rezono.rules/2")
 FUNCTIONS = ("count", "sum", "min", "max")
@@ -377,7 +378,9 @@ def _check_date_uses(rule: Rule, row_types: dict[str, tuple[str | None, ...]],
                 continue
             if not term.startswith("?"):
                 if col_type == "date":
-                    raise ValueError(f"{rule.id}: {term!r} is not allowed in a date column")
+                    raise RefusalError(Refusal(
+                        "rule_date_constant_disallowed", rule=rule.id, relation=atom.relation, value=term
+                    ))
                 continue
             if col_type is None:
                 continue
@@ -385,9 +388,11 @@ def _check_date_uses(rule: Rule, row_types: dict[str, tuple[str | None, ...]],
                 positive.add(term)
                 prev = var_types.setdefault(term, col_type)
                 if prev != col_type and "date" in (prev, col_type):
-                    raise ValueError(f"{rule.id}: {term} is both {prev} and {col_type}")
+                    other = col_type if prev == "date" else prev
+                    raise RefusalError(Refusal("rule_date_type_conflict", rule=rule.id, variable=term, kind=other))
             elif term in var_types and var_types[term] != col_type and "date" in (var_types[term], col_type):
-                raise ValueError(f"{rule.id}: {term} is both {var_types[term]} and {col_type}")
+                other = col_type if var_types[term] == "date" else var_types[term]
+                raise RefusalError(Refusal("rule_date_type_conflict", rule=rule.id, variable=term, kind=other))
 
     for b in rule.body:
         if b.polarity == "positive":
@@ -399,22 +404,21 @@ def _check_date_uses(rule: Rule, row_types: dict[str, tuple[str | None, ...]],
         bind_atom(a.atom, row_types.get(a.atom.relation), is_positive=False)
         if a.var is not None:
             if var_types.get(a.var) == "date":
-                raise ValueError(f"{rule.id}: aggregate result {a.var} cannot bind a date variable")
+                raise RefusalError(Refusal("rule_date_aggregate_result", rule=rule.id, variable=a.var))
             var_types.setdefault(a.var, "integer")
     for c in rule.assignments:
         if c.op == "days":
             if (not c.left.startswith("?") or c.left not in positive
                     or (var_types.get(c.left) is not None and var_types[c.left] not in ("string", "date"))
                     or c.right.startswith("?") or _date(c.right) is None):
-                raise ValueError(f"{rule.id}: days reads a text or date variable bound by a positive literal "
-                                 f"and a constant ISO date: {c}")
+                raise RefusalError(Refusal("rule_date_days_operands_invalid", rule=rule.id, variable=c.var))
         else:
             for t in (c.left, c.right):
                 if t.startswith("?") and var_types.get(t) == "date":
-                    raise ValueError(f"{rule.id}: date variable {t} cannot be used in {c.op}")
+                    raise RefusalError(Refusal("rule_date_arithmetic_disallowed", rule=rule.id, variable=t, kind=c.op))
         if c.var is not None:
             if var_types.get(c.var) == "date":
-                raise ValueError(f"{rule.id}: assignment result {c.var} cannot bind a date variable")
+                raise RefusalError(Refusal("rule_date_assignment_result", rule=rule.id, variable=c.var))
             var_types.setdefault(c.var, "integer")
     bind_atom(rule.head, head_types.get(rule.head.relation), is_positive=False)
 
@@ -423,12 +427,21 @@ def _check_date_uses(rule: Rule, row_types: dict[str, tuple[str | None, ...]],
         lt = var_types.get(c.left) if c.left.startswith("?") else None
         rt = var_types.get(c.right) if c.right.startswith("?") else None
         if lt == "date" or rt == "date":
+            date_var = c.left if lt == "date" else c.right
+            other_term = c.right if lt == "date" else c.left
             if c.compare_as is not None:
-                raise ValueError(f"{rule.id}: {c.compare_as} cannot compare a date: {c}")
+                raise RefusalError(Refusal(
+                    "rule_date_compare_as_disallowed", rule=rule.id, kind=c.compare_as, variable=date_var
+                ))
             if not (c.left.startswith("?") and c.right.startswith("?")):
-                raise ValueError(f"{rule.id}: a date can only be compared with another date variable: {c}")
+                raise RefusalError(Refusal(
+                    "rule_date_compare_non_variable", rule=rule.id, variable=date_var, value=other_term
+                ))
             if lt != "date" or rt != "date":
-                raise ValueError(f"{rule.id}: cannot compare date with {rt if lt == 'date' else lt}: {c}")
+                other_type = (rt if lt == "date" else lt) or "unknown"
+                raise RefusalError(Refusal(
+                    "rule_date_compare_type_mismatch", rule=rule.id, variable=other_term, kind=other_type
+                ))
             typed_conditions.append(replace(c, operand_type="date"))
         else:
             typed_conditions.append(c)

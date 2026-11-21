@@ -862,6 +862,51 @@ enums:
         annotations:
           arguments: relation
           scope: role
+      rule_date_aggregate_result:
+        description: A rule aggregate binds its numeric result to a variable already typed as a date.
+        annotations:
+          arguments: rule variable
+          scope: epoch
+      rule_date_arithmetic_disallowed:
+        description: A rule uses a date variable as an operand of an arithmetic operator other than days.
+        annotations:
+          arguments: rule variable kind
+          scope: epoch
+      rule_date_assignment_result:
+        description: A rule assignment binds its numeric result to a variable already typed as a date.
+        annotations:
+          arguments: rule variable
+          scope: epoch
+      rule_date_compare_as_disallowed:
+        description: A rule condition applies a typed text comparison mode to a native date variable.
+        annotations:
+          arguments: rule kind variable
+          scope: epoch
+      rule_date_compare_non_variable:
+        description: A rule condition compares a native date variable with a non-variable constant.
+        annotations:
+          arguments: rule variable value
+          scope: epoch
+      rule_date_compare_type_mismatch:
+        description: A rule condition compares a native date variable with a variable of another type.
+        annotations:
+          arguments: rule variable kind
+          scope: epoch
+      rule_date_constant_disallowed:
+        description: A rule atom places a constant term in a native date column.
+        annotations:
+          arguments: rule relation value
+          scope: epoch
+      rule_date_days_operands_invalid:
+        description: A days assignment does not read a positive text or date variable and a constant ISO date.
+        annotations:
+          arguments: rule variable
+          scope: epoch
+      rule_date_type_conflict:
+        description: A rule binds the same variable in both a native date column and a column of another type.
+        annotations:
+          arguments: rule variable kind
+          scope: epoch
       seal_bad_date:
         description: A seal relation row has a malformed date.
         annotations:
