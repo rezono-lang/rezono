@@ -67,3 +67,5 @@ explain.time_reach.question = {{What holds at {$element}?}}
 explain.outside = Outside your view
 explain.more = More from here
 explain.empty = {{No answer for {$element}.}}
+# The standard bitemporal staircase reading.
+staircase.bitemporal = Bitemporal staircase

@@ -442,6 +442,7 @@ classes:
       timelines: {range: TimelineSheet, multivalued: true, inlined_as_list: true, description: "Timeline sheets, by element id (`<kind>.<slot>`), checked by the compiler."}
       nests: {range: NestSheet, multivalued: true, inlined_as_list: true, description: "Nest sheets, by element id (`<kind>.<slot>`) and relation name, checked by the compiler."}
       reports: {range: ReportSheet, multivalued: true, inlined_as_list: true, description: "Reports, by element id (`<kind>.<slot>`), checked by the compiler."}
+      staircases: {range: StaircaseReading, multivalued: true, inlined_as_list: true, description: "Bitemporal staircase readings, checked by the compiler."}
       home: {range: HomeSheet, inlined: true, description: "The pack home's hero and claim, from the pack's own channel table or one import's (one home per pack), checked by the compiler."}
       house_style: {range: HouseStyle, inlined: true, description: "The pack's house style, from the pack's own channel table or one import's (one house style per pack), checked by the compiler: palettes in the order light, dark, print, and in each the roles sorted by name."}
       images: {range: ImageBinding, multivalued: true, inlined_as_list: true, description: "The image slot per kind, by element id, sorted by kind."}
@@ -450,7 +451,7 @@ classes:
 
   ChannelSource:
     attributes:
-      id: {required: true, pattern: "^(relief|home|house_style|(kinds|arrows|flows|matrices|timelines|nests|reports|images)/.+)$", description: "The binding: `<section>/<kind, arrow or sheet id>`, or the section of the one relief, home or house style."}
+      id: {required: true, pattern: "^(relief|home|house_style|(kinds|arrows|flows|matrices|timelines|nests|reports|staircases|images)/.+)$", description: "The binding: `<section>/<kind, arrow or sheet id>`, or the section of the one relief, home or house style."}
       span: {range: Span, required: true, inlined: true}
 
   Icon:

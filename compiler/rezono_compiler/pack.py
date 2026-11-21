@@ -956,6 +956,8 @@ def read(pack_dir: str | Path) -> Pack:
             errors.append(str(e))
             if isinstance(e, Diagnosed):
                 typed[str(e)] = e.diagnostics
+    view_kind_maps: dict[tuple[str, str], str] = {}
+    calc_views: dict[str, list[str]] = {}
     if not errors and (view_file := views.admit(pack_dir)) is not None:
         # A view that executes: typed against the theory as its own pack, then lowered to ordinary
         # rules, and every rule that read a mapped theory table is bound to the view's relation.
@@ -977,6 +979,9 @@ def read(pack_dir: str | Path) -> Pack:
                 for r in (pack.rules or {}).get("rules", []):
                     if r["id"] not in before:
                         pack.rule_spans[r["id"]] = span
+                for kmap in view.kinds:
+                    if len(kmap.union) == 1:
+                        view_kind_maps[(view.theory, kmap.name)] = kmap.union[0].name
         except (views.ViewError, view_rules.ViewRuleError, CompileError) as e:
             errors.append(str(e))
             if isinstance(e, Diagnosed):
@@ -992,6 +997,8 @@ def read(pack_dir: str | Path) -> Pack:
             # every check now, so `check` reports it in seconds, a unit error at its place in a calc file (P10.3)
             calculation = calc.build(pack, pack.calc, files=calc.files_of(pack_dir, meta["name"], ordered))
             calc.check_imports(pack, calculation, calc_parts, ordered, renames)
+            calc_cols = ["subject", "value", "state", "reason"]
+            calc_views = {name: calc_cols for name in set(calculation.engine.values()) | {v.engine for v in calculation.versions.values()}}
             used = {r["name"] for r in (pack.rules or {}).get("relations", []) if r["role"] == "calc"}
             if used:
                 numeric = {name for rule, name in calculation.engine.items() if calculation.types[rule] == calc.NUMBER}
@@ -1022,7 +1029,8 @@ def read(pack_dir: str | Path) -> Pack:
             errors.append(f"calc.binding: parameters: kind '{parameters}' is {what}; a calculation reads it "
                           "through a rule that reads its accepted rows")
     if not errors:
-        pack.channels = channels(pack, pack_dir, ordered, renames, errors)
+        pack.channels = channels(pack, pack_dir, ordered, renames, errors,
+                                 view_kind_maps=view_kind_maps, calc_views=calc_views)
         pack.questions = questions(pack, pack_dir, ordered, errors)
         pack_reasons: dict[str, list[tuple[str, str]]] = {}
         for m in mods:
@@ -1711,7 +1719,9 @@ def path_end(pack: Pack, kind: str, path: list[str], where: str, errors: list[st
     return kind
 
 
-def channels(pack: Pack, pack_dir: Path, packs: dict, renames: dict, errors: list[str]) -> dict:
+def channels(pack: Pack, pack_dir: Path, packs: dict, renames: dict, errors: list[str], *,
+             view_kind_maps: dict[tuple[str, str], str] | None = None,
+             calc_views: dict[str, list[str]] | None = None) -> dict:
     """The pack's part of the key: a shape per kind, with an icon if it names one, and a dash per arrow, as in
     contracts/view.yaml. An icon is a file of the pack that names it, checked and carried as a tree (icons.py).
     Imported packs' signs come first, a dependency before the pack that imports it, under this pack's names;
@@ -1728,8 +1738,10 @@ def channels(pack: Pack, pack_dir: Path, packs: dict, renames: dict, errors: lis
     # A derived relation that a Flow draws as lines has a dash like an arrow (docs/gui.md, Edge source).
     arrows |= {r["name"] for r in derived_relations(pack)}
     kinds, signs, relief, relief_from, flows, matrices, reports, icons, images = {}, {}, None, None, {}, {}, {}, {}, {}
-    home, home_from, timelines, nests = None, None, {}, {}
+    home, home_from, timelines, nests, staircases = None, None, {}, {}, {}
     house_style, house_style_from = None, None
+    view_kind_maps = view_kind_maps or {}
+    relation_cols = {r["name"]: [c["name"] for c in r.get("key", [])] for r in derived_relations(pack)} | (calc_views or {})
     sources = [(p.dir / "channels.yaml", renames[name], name) for name, p in packs.items()]
     sources += [(path, {}, pack.meta["name"])]
     placed = {}  # binding id -> its span; a later table's binding wins, as its sign does
@@ -1748,8 +1760,8 @@ def channels(pack: Pack, pack_dir: Path, packs: dict, renames: dict, errors: lis
                 if isinstance(raw, dict) and key in raw:
                     target = renamed(str(raw[key]), names) if key != "id" else str(raw[key])
                     placed[f"{section}/{target}"] = spans.first(found, file, (section, i))
-        for section in sorted(set(data) - {"kinds", "arrows", "relief", "flows", "matrices", "timelines", "nests", "reports", "images", "home",
-                                           "house_style"}):
+        for section in sorted(set(data) - {"kinds", "arrows", "relief", "flows", "matrices", "timelines", "nests",
+                                           "reports", "staircases", "images", "home", "house_style"}):
             errors.append(f"{where}: unknown section '{section}' (colour roles and statuses belong to std-view; "
                           "a pack gives its own colour values only in house_style)")
         # One house style per pack, from its own table or one import's, as a home: a second is refused.
@@ -1778,19 +1790,35 @@ def channels(pack: Pack, pack_dir: Path, packs: dict, renames: dict, errors: lis
                 errors.append(f"{where}: a second matrix '{matrix['id']}' (a matrix's id names its sheet)")
             elif matrix:
                 matrices[matrix["id"]] = matrix
-        for section, form, check, found in (("timelines", "timeline", timeline_binding, timelines), ("nests", "nest", nest_binding, nests)):
+        for section, form, check, found_sheets in (("timelines", "timeline", timeline_binding, timelines), ("nests", "nest", nest_binding, nests)):
             for raw in data.get(section) or []:
                 sheet = check(pack, raw, names, where, errors)
-                if sheet and sheet["id"] in found:
+                if sheet and sheet["id"] in found_sheets:
                     errors.append(f"{where}: a second {form} '{sheet['id']}' (a {form}'s id names its sheet)")
                 elif sheet:
-                    found[sheet["id"]] = sheet
+                    found_sheets[sheet["id"]] = sheet
         for raw in data.get("reports") or []:
             report = report_binding(pack, raw, names, where, errors)
             if report and report["id"] in reports:
                 errors.append(f"{where}: a second report '{report['id']}' (a report's id names its sheet)")
             elif report:
                 reports[report["id"]] = report
+        seen_staircases: set[str] = set()
+        for i, raw in enumerate(data.get("staircases") or []):
+            if source != path and isinstance(raw, dict) and "subject" in raw:
+                raw_subject = str(raw["subject"])
+                mapped = view_kind_maps.get((owner, raw_subject))
+                effective = mapped or renamed(raw_subject, names)
+                bound_isa = effective in pack.kinds and any(k != effective and effective in pack.ancestors(k) for k in pack.kinds)
+                if mapped is None and not bound_isa:
+                    continue
+            sc = staircase_binding(pack, raw, names, view_kind_maps, owner, relation_cols, where, errors)
+            if sc and (sc["id"] in seen_staircases or (source != path and sc["id"] in staircases)):
+                errors.append(f"{where}: a second staircase '{sc['id']}' (a staircase's id names its reading)")
+            elif sc:
+                seen_staircases.add(sc["id"])
+                staircases[sc["id"]] = sc
+                placed[f"staircases/{sc['id']}"] = spans.first(found, file, ("staircases", i))
         for name, items, key in (("kind", data.get("kinds") or [], "kind"), ("arrow", data.get("arrows") or [], "arrow")):
             seen = [str(e.get(key)) for e in items]
             errors += [f"{where}: {name} '{x}' has two signs" for x in sorted({x for x in seen if seen.count(x) > 1})]
@@ -1829,6 +1857,7 @@ def channels(pack: Pack, pack_dir: Path, packs: dict, renames: dict, errors: lis
         {"timelines": [timelines[t] for t in sorted(timelines)]} if timelines else {}) | (
         {"nests": [nests[n] for n in sorted(nests)]} if nests else {}) | (
         {"reports": [reports[r] for r in sorted(reports)]} if reports else {}) | (
+        {"staircases": [staircases[s] for s in sorted(staircases)]} if staircases else {}) | (
         {"icons": [icons[i] for i in sorted(icons)]} if icons else {}) | (
         {"images": [images[k] for k in sorted(images)]} if images else {}) | ({"home": home} if home else {}) | (
         {"house_style": house_style} if house_style else {}) | (
@@ -2330,7 +2359,58 @@ def sheet_messages(pack: Pack) -> dict[str, str]:
         asked += [m for p in n.get("perspectives") or [] for m in (p["label_message"], (p.get("state") or {}).get("meaning_message"))]
         for m in asked:
             out.setdefault(m, f"nest '{n['id']}'")
+    for sc in table.get("staircases") or []:
+        out.setdefault(sc["title_message"], f"staircase '{sc['id']}'")
     out.pop(None, None)
+    return out
+
+
+def staircase_binding(pack: Pack, raw, names: dict, view_kind_maps: dict[tuple[str, str], str],
+                      owner: str, relation_cols: dict[str, list[str]], where: str,
+                      errors: list[str]) -> dict | None:
+    """A bitemporal staircase reading (`StaircaseReading` in contracts/view.yaml), checked against the schema and
+    the rules. Rewrites `subject` through `view_kind_maps` when inherited from a theory mapped by a view."""
+    need = {"id", "title_message", "subject", "relation"}
+    optional = {"subject_column", "valid_time_column", "valid_time_source", "state_column", "value_column", "reason_column"}
+    if not isinstance(raw, dict) or not need <= set(raw) or set(raw) - need - optional:
+        errors.append(f"{where}: a staircase needs id, title_message, subject and relation")
+        return None
+    where = f"{where}: staircase {raw['id']}"
+    if not isinstance(raw["id"], str) or not re.fullmatch(ID, raw["id"]):
+        errors.append(f"{where}: an id is lower case (a-z, 0-9, _)")
+        return None
+    if not isinstance(raw["title_message"], str) or not raw["title_message"]:
+        errors.append(f"{where}: title_message must be a message id")
+        return None
+    raw_subject = str(raw["subject"])
+    subject = view_kind_maps.get((owner, raw_subject)) or renamed(raw_subject, names)
+    if subject not in pack.kinds:
+        errors.append(f"{where}: subject '{raw['subject']}' is not a kind")
+        return None
+    relation = str(raw["relation"])
+    cols = relation_cols.get(relation)
+    if cols is None:
+        errors.append(f"{where}: relation '{relation}' is not a derived relation or calculation view")
+        return None
+    if ("valid_time_column" in raw) == ("valid_time_source" in raw):
+        errors.append(f"{where}: specify exactly one of valid_time_column or valid_time_source")
+        return None
+    if "valid_time_source" in raw and raw["valid_time_source"] != "as_of":
+        errors.append(f"{where}: valid_time_source must be 'as_of'")
+        return None
+    for field_ in ("subject_column", "valid_time_column", "state_column", "value_column", "reason_column"):
+        if field_ in raw and (not isinstance(raw[field_], str) or raw[field_] not in cols):
+            errors.append(f"{where}: {field_} '{raw[field_]}' is not a column of {relation}")
+            return None
+    out = {
+        "id": raw["id"],
+        "title_message": raw["title_message"],
+        "subject": subject,
+        "relation": relation,
+    }
+    for field_ in ("subject_column", "valid_time_column", "valid_time_source", "state_column", "value_column", "reason_column"):
+        if field_ in raw:
+            out[field_] = raw[field_]
     return out
 
 

@@ -67,3 +67,5 @@ explain.time_reach.question = {{Wat geldt op {$element}?}}
 explain.outside = Buiten je zicht
 explain.more = Verder vanaf hier
 explain.empty = {{Geen antwoord voor {$element}.}}
+# De standaard bitemporele traplezing.
+staircase.bitemporal = Bitemporele trap
