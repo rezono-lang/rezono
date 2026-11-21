@@ -19,7 +19,8 @@ Free `ask` questions already support single-binder filtering, four-valued logic,
 | Single-binder `ask [binder:] Kind where expr [show expr, …]` | Supported | Role-scoped pinned manifest (`m-N`), exact arithmetic, four-valued logic, deterministic key order, paged `rezono.answer/1`. |
 | Grouped aggregates (`group by` with `count`, `sum`, `min`, `max`) | Planned (`extra:`) | Closed role-readable sets only; preserves four value states, role filter, and contributor witnesses (section 3). |
 | Multi-binder joins across relations from multiple imported packs | Planned (`extra:`) | Joins kinds and derived relations declared by imported packs in the pinned bundle, under role filtering and published witnesses (section 4). |
-| Request-scoped local rules evaluated during asking | Planned (`extra:`) | Strictly read-only, safe (range-restricted), stratified, step/row-bounded, role-scoped, and witnessed (section 5). |
+| Request-scoped local derivations evaluated during asking | Planned (`extra:`) | Unified `rezono 1` `derived` syntax ([Rezono 1](language-rezono-1.md)); strictly read-only, safe, stratified, step/row-bounded, role-scoped, and witnessed (section 5). |
+| Optional context restrictions (`at <place>`, `during <period>`, `as known on <date>`) | Reserved (grammar kept open) | The `ask` grammar stays open for these three optional context restrictions between the binder list and `where`, without conflicting with `where`, `show`, or `group by`. |
 | Mutations, writes, or proposals (`propose`, `+ …`, `- …`, write HTTP methods) | Permanently refused | `ask` has effect class `reads` ([expressions reference](../docs/rezono/expressions.md#8b-effect-classes)). Fact changes belong to [local suppositions](local-suppose.md) (`rezono-suppose`) or reviewed proposals. |
 | Reading outside the authenticated role's view | Permanently refused | Unreadable kinds, slots, relations, rows, and witnesses are invisible (`R001` / 400); spoofed role parameters or headers are rejected or ignored. |
 | Silent coercion of missing, `n/a`, `unknown`, or `invalid` values | Permanently refused | Missing values never become `0` or `false`; partial snapshots downgrade the effective world to `open` (`not_read_in_full`) and refuse closed-world aggregates (`R004`). |
@@ -73,24 +74,24 @@ ask a: AlphaTag, b: BetaMetric where a.item = b.item show a.item, a.tag, b.tier
   - When the role reads both relations, only tuples present in the role's snapshots are joined. Hidden rows from either imported pack never appear in `nodes`, `dataset`, `undecided`, `counts`, `witnesses`, or `steps`.
 - **Witness linkage:** `POST /<pack>/<manifest>/ask` resolves published witnesses from the role's `manifest.witnesses` (and `fact_sources` for base rows) for every joined derived/base tuple and emits them in `answer.witnesses` and `answer.steps`, connecting each joined `Answer` row to its participating rows and published proofs from both imported packs.
 
-## 5. Local read-only rules defined during asking
+## 5. Local read-only derivations defined during asking
 
-A caller may define temporary local rules for one `ask` request over the role's pinned publication, analogous in witness and isolation discipline to [local suppositions](local-suppose.md) (`rezono-suppose`), without writing anything to the store:
+A caller may define temporary local derivations for one `ask` request over the role's pinned publication, analogous in witness and isolation discipline to [local suppositions](local-suppose.md) (`rezono-suppose`), without writing anything to the store. Local definitions use the unified `rezono 1` `derived` form ([Rezono 1](language-rezono-1.md)), never the `rezono 0` workbench `rule … when …` syntax:
 
 ```json
 {
   "rules": [
-    "rule high_score(x: Item) when x in Item and x.score >= 50"
+    "derived high_score(x: Item): Bool = x.score >= 50"
   ],
   "text": "ask x: Item where high_score(x) show x.score"
 }
 ```
 
-- **Request shape:** `POST /<pack>/<manifest>/ask` accepts an optional `rules` array of non-empty strings (each a single local rule declaration) alongside `text`. Local rules exist solely for the duration of that single request and are never persisted or shared across requests.
+- **Request shape:** `POST /<pack>/<manifest>/ask` accepts an optional `rules` array of non-empty strings, each a single `rezono 1` `derived` declaration (module-level `derived name(k: Kind, ...): Type = expr` or single-key `extend k: Kind` / `derived ...`), alongside `text`. Local derivations exist solely for the duration of that single request and are never persisted or shared across requests.
 - **Checking, authorization, and safety (before any row is read):**
-  - Every local rule is checked against the authenticated role's schema (`roleSchema`). Referencing any kind, slot, or relation not readable by the role is refused with `R001` (HTTP 400).
-  - Any write, mutation, or proposal statement (`+ …`, `- …`, `propose …`, or non-rule command) inside `rules` is refused with HTTP 400.
-  - Local `ask` rules follow the same positive `x in Kind` binding rule as [native rules](language-native-rules.md): every head variable must be bound by a positive premise (`x in Kind`; otherwise refused with `R042`, HTTP 400), and local rules must be stratified (no recursion through negation or aggregation, such as `rule bad(x: Item) when x in Item and not bad(x)`; otherwise refused with `R043`, HTTP 400).
+  - Every local derivation is checked against the authenticated role's schema (`roleSchema`). Referencing any kind, slot, or relation not readable by the role is refused with `R001` (HTTP 400).
+  - Any write, mutation, or proposal statement (`+ …`, `- …`, `propose …`, or non-derivation command) inside `rules` is refused with HTTP 400.
+  - Every parameter of a local `derived` declaration ranges over a finite closed kind or declared `over` domain (matching [Rezono 1](language-rezono-1.md#2-one-derivation-form-derived); unbound variables are refused with `R042`, HTTP 400), and local derivations must be stratified (no recursion through negation or aggregation, such as `derived bad(x: Item): Bool = not bad(x)`; otherwise refused with `R043`, HTTP 400).
 - **Bounded evaluation, four states, and witnesses:**
   - Local rules evaluate strictly over the role's readable snapshots under the shared `budget.rows` and `budget.steps` limits. Exceeding either budget aborts with HTTP 422 (`cut`) and returns no partial answer.
   - Four value states propagate through local rule bodies and heads: a row whose body evaluates to `unknown` or `invalid` produces an `Undecided` row with its `state`, `reason`, and `cause` rather than silently disappearing.
