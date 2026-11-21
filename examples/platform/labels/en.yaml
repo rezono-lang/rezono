@@ -12,6 +12,10 @@ offer: offer
 offer.product: product
 offer.function: function
 offer.port: port
+port_decision: port decision
+port_decision.product: product
+port_decision.function: function
+port_decision.port: port
 demand: demand
 demand.product: product
 demand.function: function

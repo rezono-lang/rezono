@@ -1,0 +1,15 @@
+kinds:
+  - {kind: epoch_run, shape: rect}
+  - {kind: epoch_role, shape: rect}
+  - {kind: epoch_role_step, shape: rect}
+  - {kind: epoch_engine_pin, shape: rect}
+  - {kind: epoch_tool, shape: rect}
+  - {kind: epoch_definition, shape: rect}
+  - {kind: epoch_surface, shape: rect}
+  - {kind: epoch_check, shape: rect}
+  - {kind: epoch_role_check, shape: rect}
+  - {kind: epoch_required_check, shape: rect}
+  - {kind: epoch_role_form, shape: rect}
+  - {kind: epoch_pack_facts, shape: rect}
+  - {kind: epoch_source, shape: rect}
+  - {kind: epoch_check_detail, shape: rect}

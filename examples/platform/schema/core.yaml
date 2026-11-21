@@ -48,6 +48,13 @@ classes:
       product: {range: Product, required: true}
       function: {range: Function, required: true}
       port: {range: integer, required: true}
+  PortDecision:
+    description: A platform decision setting the serving port of a product's function, overriding or standing in for a vendor default.
+    attributes:
+      id: {identifier: true}
+      product: {range: Product, required: true}
+      function: {range: Function, required: true}
+      port: {range: integer, minimum_value: 1, maximum_value: 65535, required: true}
   Demand:
     attributes:
       id: {identifier: true}

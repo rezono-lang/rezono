@@ -132,20 +132,6 @@ def planned(rows, step):
     return {row[:3] for row in rows.get("effect_planned", set()) if row[1] == step}
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=MissingEpochPack,
-    reason=(
-        "extra: decisions/loop-engine-epoch.md: sections 3.1 to 3.3. Waits for "
-        "loop/tests/test_shared_run_vocabulary.py--test_a_derived_refusal_makes_its_step_stuck and "
-        "loop/tests/test_shared_run_vocabulary.py--test_an_effect_is_attempted_once_per_plan. Build the pack epoch/ "
-        "(name engine-epoch, importing std-loop) with the kinds of section 3.2 and derive "
-        "publish_allowed(run, epoch, role, reason): done of every gate step, the EpochTool of each, the "
-        "EpochEnginePin, the EpochDefinition, the role's EpochRoleForm (the reason) and its green rezono:proofs and "
-        "rezono:access checks as positive premises, and no refusal in the run, recorded or derived; and "
-        "effect_permitted for write-forms only when every role of the run is allowed."
-    ),
-)
 def test_publish_allowed_cites_every_gate_and_pin():
     epoch = model()
     program, rows, explainer = evaluate(epoch, scenario())
@@ -228,21 +214,6 @@ REFUSALS = [
 ]
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=MissingEpochPack,
-    reason=(
-        "extra: decisions/loop-engine-epoch.md: section 3.4, the gates of fate (c). Waits for "
-        "loop/tests/test_engine_epoch.py--test_publish_allowed_cites_every_gate_and_pin. In epoch/, derive "
-        "derived_refusal(run, write-forms, reason) with the culprit record as the reason, only after the step that "
-        "produces the verdict is done: a run or role check that is red, unknown or green with violations; a required "
-        "check without a row once its step is done; and an EpochSurface of a stable pack (earlier major 1 or more) "
-        "whose class is major (R033) or whose version moves less than its class. A pack at 0.y.z is not refused. A "
-        "refusal writes nothing: no publish_allowed and no effect_planned for write-forms. An input-integrity check "
-        "of fate (d) reaches the run as a recorded LoopRefusal of its step, which leaves the step stuck and "
-        "publishes nothing either."
-    ),
-)
 def test_publication_gates_are_derived_refusals():
     epoch = model()
     _, rows, _ = evaluate(epoch, scenario())
@@ -281,16 +252,6 @@ def hidden_world(data):
     return data
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=MissingEpochPack,
-    reason=(
-        "extra: decisions/loop-engine-epoch.md: section 3.5. Waits for "
-        "loop/tests/test_engine_epoch.py--test_publish_allowed_cites_every_gate_and_pin. Two worlds that differ only "
-        "in EpochPackFacts, EpochSource and EpochCheckDetail give every role the same publish_allowed proof, byte for "
-        "byte, while epoch_allowed(run, epoch, reason) cites the pack facts and every source."
-    ),
-)
 def test_a_role_witness_ignores_complete_only_rows():
     epoch = model()
     proofs, complete = [], []

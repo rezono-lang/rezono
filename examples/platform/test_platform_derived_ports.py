@@ -48,12 +48,11 @@ def _decision_file(source: dict) -> bool:
 
 
 @pytest.mark.xfail(strict=True, raises=AssertionError, reason=(
-    "M2: decisions/platform-facts-not-conclusions.md, section 3. Derive provides from the PortDecision for the "
+    "M2: decisions/platform-facts-not-conclusions.md: section 3. Derive provides from the PortDecision for the "
     "product and function where one exists, else from each vendor_default_transport_source statement whose series "
     "is the version or series of the release the service runs, else from the product's one stated series, and add "
     "port_unknown; choice_evidence.dl and unique_evidence.dl read provides instead of offer__port. Keep Offer.port: "
-    "a planner retires it. Waits for the planner's sources step of section 3 (the eight port decisions with their "
-    "origin, the PostgreSQL 16 statement and the restated incremental proof tests)."))
+    "a planner retires it."))
 def test_service_port_follows_the_vendor_statement_unless_decided():
     from rezono_compiler import sources
 
@@ -108,3 +107,25 @@ def test_service_port_follows_the_vendor_statement_unless_decided():
     assert default, "Missing the registry transport statement"
     reg = {row for row in _derive(model, prog, label, changed)["provides"] if row[0] == "reg"}
     assert reg == {("reg", "registry", p) for p in default}
+
+
+@pytest.mark.xfail(strict=True, raises=AssertionError, reason=(
+    "M2: decisions/platform-facts-not-conclusions.md: section 3 (Retire). Remove Offer.port from "
+    "schema/core.yaml, all port fields on offer rows in facts/core.yaml, and the offer.port label "
+    "in labels/en.yaml once the rules step has landed. "
+    "Waits for examples/platform/test_platform_derived_ports.py--test_service_port_follows_the_vendor_statement_unless_decided."))
+def test_offer_port_is_retired():
+    schema = yaml.safe_load((PLATFORM / "schema/core.yaml").read_text(encoding="utf-8"))
+    assert "port" not in schema["classes"]["Offer"]["attributes"], "Offer.port is still declared in schema/core.yaml"
+
+    core = yaml.safe_load((PLATFORM / "facts/core.yaml").read_text(encoding="utf-8"))
+    with_port = [row["id"] for row in core.get("offer", []) if "port" in row]
+    assert not with_port, f"offer rows in facts/core.yaml still carry port: {with_port}"
+
+    model, prog, _, rows = _rows()
+    assert "port" not in model.kinds["offer"].slots, "Offer.port slot is still present in the compiled model"
+    assert "offer__port" not in rows, "offer__port rows are still present in the platform facts"
+    assert "offer__port" not in prog.relations, "rules still reference offer__port"
+
+    labels = yaml.safe_load((PLATFORM / "labels/en.yaml").read_text(encoding="utf-8"))
+    assert "offer.port" not in labels, "offer.port label is still present in labels/en.yaml"
